@@ -9,6 +9,7 @@ This keeps official commercial authority out of the downloadable app:
 - official `payTo` lives in Worker secrets or dashboard vars
 - facilitator credentials live in Worker secrets
 - optional Base Builder Code attribution lives in Worker vars
+- official Hyperliquid builder-code policy lives in Worker vars
 - upstream provider/runtime credentials live in Worker secrets
 - D1 stores official receipt metadata and idempotency keys
 - the local app only knows the public Worker URL
@@ -19,6 +20,7 @@ This keeps official commercial authority out of the downloadable app:
 |---|---|
 | `GET /health` | Worker health, configured agents, and missing key names |
 | `GET /api/platform-fees/config` | Public official platform-fee policy for local wallet rails |
+| `GET /api/hyperliquid/builder-policy` | Public official Hyperliquid builder-code policy |
 | `GET /api/paid-agents/<slug>/chat/completions` | Non-secret paid-agent readiness |
 | `POST /api/paid-agents/<slug>/chat/completions` | x402-protected OpenAI-compatible chat completion |
 
@@ -96,6 +98,27 @@ HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>
 ```
 
 The endpoint returns only public data: fee terms, supported local rails, and recipient addresses. It does not make local wallet actions tamper-proof; strong official enforcement still needs hosted/proxy execution or provider-native fee support.
+
+## Hyperliquid Builder Policy
+
+The Worker publishes the official HivemindOS Hyperliquid builder-code policy for locally signed perp orders:
+
+```txt
+GET /api/hyperliquid/builder-policy
+```
+
+Configure the public policy in Worker vars/secrets after the official builder wallet has at least 100 USDC in Hyperliquid perps account value:
+
+```txt
+HIVEMINDOS_HYPERLIQUID_BUILDER_ENABLED=true
+HIVEMINDOS_HYPERLIQUID_BUILDER_ADDRESS=<official-builder-evm-address>
+HIVEMINDOS_HYPERLIQUID_BUILDER_FEE_TENTH_BPS=5
+HIVEMINDOS_HYPERLIQUID_MAX_BUILDER_FEE_TENTH_BPS=5
+HIVEMINDOS_HYPERLIQUID_TESTNET=false
+HIVEMINDOS_HYPERLIQUID_API_URL=
+```
+
+The endpoint returns only public policy: builder address, fee, maximum approval fee, network, and optional API URL. Downloaded apps use this official endpoint by default. Self-hosted operators who want a different builder should fork/rebuild the app or point their own distribution at their own Worker/API; shared env in the official app is not the normal override path for official builder revenue.
 
 ## Upstream Runtime
 

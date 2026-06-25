@@ -105,7 +105,7 @@ export const layoutComponents: Registry = {
     if (!st.get(p.openPath)) return null;
     return (
       <div onClick={() => st.set(p.openPath, false)} style={{ position: "fixed", inset: 0, zIndex: 300, display: "grid", placeItems: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)", padding: 24 }}>
-        <div onClick={(e) => e.stopPropagation()} style={{ width: "min(440px, 100%)", borderRadius: "var(--radius-lg)", border: "1px solid var(--line-2)", background: "var(--panel)", boxShadow: "0 40px 90px -30px rgba(0,0,0,0.8)", padding: 22, display: "grid", gap: 14 }}>
+        <div role="dialog" aria-modal="true" aria-label={typeof p.title === "string" ? p.title : undefined} onClick={(e) => e.stopPropagation()} style={{ width: "min(440px, 100%)", borderRadius: "var(--radius-lg)", border: "1px solid var(--line-2)", background: "var(--panel)", boxShadow: "0 40px 90px -30px rgba(0,0,0,0.8)", padding: 22, display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 4 }}>
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 17, letterSpacing: "-0.01em" }}>{p.title}</div>
             {p.description && <div style={{ fontSize: 13, color: "var(--fg-3)", lineHeight: 1.5 }}>{p.description}</div>}
@@ -121,7 +121,7 @@ export const layoutComponents: Registry = {
     if (!st.get(p.openPath)) return null;
     return (
       <div onClick={() => st.set(p.openPath, false)} style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)" }}>
-        <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 100%)", borderRadius: "var(--radius-lg) var(--radius-lg) 0 0", border: "1px solid var(--line-2)", borderBottom: 0, background: "var(--panel)", boxShadow: "0 -30px 80px -30px rgba(0,0,0,0.8)", padding: "16px 22px 26px", display: "grid", gap: 14, animation: "fr-fade-up .26s ease" }}>
+        <div role="dialog" aria-modal="true" aria-label={typeof p.title === "string" ? p.title : undefined} onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 100%)", borderRadius: "var(--radius-lg) var(--radius-lg) 0 0", border: "1px solid var(--line-2)", borderBottom: 0, background: "var(--panel)", boxShadow: "0 -30px 80px -30px rgba(0,0,0,0.8)", padding: "16px 22px 26px", display: "grid", gap: 14, animation: "fr-fade-up .26s ease" }}>
           <div style={{ width: 40, height: 4, borderRadius: 99, background: "var(--line-3)", justifySelf: "center" }} />
           <div style={{ display: "grid", gap: 4 }}>
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 17, letterSpacing: "-0.01em" }}>{p.title}</div>
@@ -206,12 +206,17 @@ export const layoutComponents: Registry = {
 
   Badge({ props }: CompProps) {
     const p = props as any;
-    const map = ({
+    const tones = {
       default: { c: "var(--honey)", bg: "var(--honey-soft)", br: "var(--honey-line)" },
       secondary: { c: "var(--fg-2)", bg: "var(--panel-2)", br: "var(--line-2)" },
+      info: { c: "var(--honey)", bg: "var(--honey-soft)", br: "var(--honey-line)" },
+      success: { c: "var(--live)", bg: "var(--live-soft)", br: "color-mix(in srgb, var(--live) 38%, transparent)" },
+      warning: { c: "var(--honey)", bg: "var(--honey-soft)", br: "var(--honey-line)" },
+      danger: { c: "var(--danger)", bg: "var(--danger-soft)", br: "color-mix(in srgb, var(--danger) 42%, transparent)" },
       destructive: { c: "var(--danger)", bg: "var(--danger-soft)", br: "color-mix(in srgb, var(--danger) 42%, transparent)" },
       outline: { c: "var(--fg-2)", bg: "transparent", br: "var(--line-2)" },
-    } as Record<string, { c: string; bg: string; br: string }>)[p.variant || "default"];
+    } as Record<string, { c: string; bg: string; br: string }>;
+    const map = tones[p.variant || p.tone || "default"] ?? tones.default;
     return <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 99, fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase", color: map.c, background: map.bg, border: `1px solid ${map.br}` }}>{p.text || p.label}</span>;
   },
 

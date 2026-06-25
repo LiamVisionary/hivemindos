@@ -4738,11 +4738,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           return true;
         }}
       />
-      <ProgressRewardPopup
-        enabled={hydrated}
-        onOpenWork={() => setActiveView("kanban")}
-        onOpenCompanies={() => setActiveView("governance")}
-      />
+      <ProgressRewardPopup enabled={hydrated} />
       </div></main>
       {/* App-wide "Message the hive" pill — persists across every view, pairing
           with the always-mounted Queen transcript overlay. Hidden only on the

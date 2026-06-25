@@ -102,6 +102,60 @@ const catalogSpecs = [
       },
     },
   },
+  {
+    title: "State, Computed Values, And Watchers",
+    spec: {
+      root: "root",
+      state: { score: 74, enabled: true, dialogOpen: false },
+      elements: {
+        root: { type: "Panel", props: { title: "State, computed values, and watchers", tone: "info" }, children: ["controls", "summary", "actions", "dialog"] },
+        controls: { type: "Stack", props: { direction: "vertical", gap: "md" }, children: ["enabled", "score"] },
+        enabled: { type: "Switch", props: { label: "Enabled", checked: { $bindState: "/enabled" } }, children: [] },
+        score: {
+          type: "Slider",
+          props: { label: "Score", min: 0, max: 100, value: { $bindState: "/score" } },
+          watch: {
+            "/score": { action: "emit", params: { event: "scoreChanged", value: { $state: "/score" } } },
+          },
+          children: [],
+        },
+        summary: {
+          type: "Metric",
+          props: {
+            label: "Computed average",
+            value: { $format: "number", value: { $computed: "average", args: { values: [{ $state: "/score" }, 100] } } },
+            detail: { $cond: { $state: "/enabled" }, $then: "Visible while enabled", $else: "Disabled locally" },
+            tone: { $cond: { $state: "/score", gte: 70 }, $then: "success", $else: "warning" },
+          },
+          visible: { $or: [{ $state: "/enabled" }, { $state: "/score", gte: 90 }] },
+          children: [],
+        },
+        actions: { type: "Stack", props: { direction: "row", gap: "sm" }, children: ["openDialog", "copyState"] },
+        openDialog: {
+          type: "Button",
+          props: { label: "Open dialog", variant: "secondary" },
+          on: { press: { action: "setState", params: { path: "/dialogOpen", value: true } } },
+          children: [],
+        },
+        copyState: {
+          type: "Button",
+          props: { label: "Copy score", copyText: { $template: "Score: ${/score}" }, variant: "primary" },
+          children: [],
+        },
+        dialog: {
+          type: "Dialog",
+          props: { openPath: "/dialogOpen", title: "State changed", description: { $template: "Current score is ${/score}." } },
+          children: ["close"],
+        },
+        close: {
+          type: "Button",
+          props: { label: "Close", variant: "secondary" },
+          on: { press: { action: "setState", params: { path: "/dialogOpen", value: false } } },
+          children: [],
+        },
+      },
+    },
+  },
 ];
 
 export default function JsonRenderCatalogPage() {

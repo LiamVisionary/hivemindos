@@ -54,6 +54,11 @@ description: Local-first agent fleet control room documentation.
     <a href="features/wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">
+    <h3>Trading</h3>
+    <p>Every trading capability in one place — crypto swaps, sends, private transfers, x402, local Hyperliquid perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca or on-chain xStocks, with governance and agent access.</p>
+    <a href="trading/">Open trading docs</a>
+  </section>
+  <section class="docCard">
     <h3>GitLawb Code Proof</h3>
     <p>See how HivemindOS keeps the private agent work trail while GitLawb proves the code that shipped.</p>
     <a href="integrations/gitlawb.html">Open GitLawb docs</a>

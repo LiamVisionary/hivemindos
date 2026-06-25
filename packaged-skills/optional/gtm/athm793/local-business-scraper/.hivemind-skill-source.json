@@ -1,0 +1,37 @@
+{
+  "upstreamName": "local-business-scraper",
+  "upstreamSlug": "local-business-scraper",
+  "hiveSlug": "local-business-scraper",
+  "sourceLabel": "athm793",
+  "sourceUrl": "https://github.com/athm793/local-business-scraper/tree/60e42d903dc52f43dcc9964f2d1c3d491c15ab5c",
+  "repository": "https://github.com/athm793/local-business-scraper",
+  "installCommand": "git clone https://github.com/athm793/local-business-scraper.git && cd local-business-scraper && git checkout 60e42d903dc52f43dcc9964f2d1c3d491c15ab5c && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt && playwright install chromium",
+  "importedAt": "2026-06-25T05:31:38Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/gtm/athm793/local-business-scraper",
+  "packageGroup": "gtm",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "60e42d903dc52f43dcc9964f2d1c3d491c15ab5c",
+  "sourceArchiveSha256": "71c3a61d4f3a56fcc4ff5f80c2b489de6d4008be0cea215cc60d8b6b7ed774de",
+  "securityVerdict": "Conditionally approved for optional, consent-gated local use only.",
+  "auditSummary": {
+    "auditedAt": "2026-06-25T05:31:38Z",
+    "dependencyResolution": [
+      "playwright==1.60.0",
+      "customtkinter==6.0.0"
+    ],
+    "pipCheck": "passed",
+    "pipAudit": "no known vulnerabilities",
+    "bandit": "0 high, 1 medium, 52 low",
+    "dynamicInstall": "fresh temporary virtualenv with blank HOME; Docker unavailable"
+  },
+  "hivemindAdaptations": [
+    "Wraps the upstream scraper as an optional skill instead of auto-installing it.",
+    "Pins the audited upstream commit and records a deterministic source archive hash.",
+    "Adds explicit consent gates for install, Playwright Chromium download, browser automation, scraping volume, and output handling.",
+    "Forbids use of personal browser profiles, cookies, keychains, shared env, SSH files, cloud CLIs, wallet data, proxies, CAPTCHA solving, or unattended broad scraping.",
+    "Documents the Windows PowerShell shortcut helper as opt-in only."
+  ]
+}

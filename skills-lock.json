@@ -7,6 +7,15 @@
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
     },
+    "local-business-scraper": {
+      "source": "athm793/local-business-scraper",
+      "sourceType": "github",
+      "ref": "60e42d903dc52f43dcc9964f2d1c3d491c15ab5c",
+      "license": "MIT",
+      "skillPath": "README.md",
+      "packagedPath": "packaged-skills/optional/gtm/athm793/local-business-scraper/SKILL.md",
+      "computedHash": "b31d41763cb31524c77e0754d064d63b25c8226c97e2b5ceadf796f51d4eda94"
+    },
     "n8n-clay-integration": {
       "source": "forma-norden/n8n-gtm-workflow-pack",
       "sourceType": "github",

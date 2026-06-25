@@ -176,7 +176,7 @@ The preferred future reward framing is seasonal and tier-specific, not one vague
 Stake higher. Earn from a bigger bucket.
 ```
 
-Every reward season, eligible HivemindOS revenue can fund HIVE reward buckets for each staking tier. Each tier splits its own bucket, so Visionary wallets do not dilute Holders. The proposed display model sends up to `3.9375%` of eligible revenue into staker reward buckets:
+Every reward season, eligible HivemindOS revenue can fund HIVE reward buckets for each staking tier. Each tier splits its own bucket by time-weighted staking, so Visionary wallets do not dilute Holders and late stakes only earn for their active time. The display model sends up to `3.9375%` of eligible revenue into staker reward buckets:
 
 | Tier      | Bucket rate | Per `$1,000,000` eligible revenue |
 | --------- | ----------: | --------------------------------: |
@@ -188,7 +188,7 @@ Every reward season, eligible HivemindOS revenue can fund HIVE reward buckets fo
 | Visionary |          2% |                `$20,000` in HIVE  |
 | **Total** |  **3.9375%** |          **`$39,375` in HIVE rewards** |
 
-This is a proposed reward policy until implemented through a reviewed rewards contract, claim service, treasury process, or other explicit payout mechanism. Do not describe the current stake vault as paying HIVE rewards directly.
+The seasonal reward rules are now part of the product plan: no pre-season staking requirement, a 7 active-day minimum, rewards based on how much HIVE was staked and for how long, estimated HIVE reward amounts when a season publishes the conversion price, and reward credit ending when a wallet requests unstaking. Actual payout still needs an official claim or treasury process. Do not describe the current stake vault as paying HIVE rewards directly.
 
 Managed-service discounts should apply to HivemindOS platform margin, not raw third-party provider cost. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
 

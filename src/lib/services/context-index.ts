@@ -12,6 +12,7 @@ import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
 import { hiveActionContextIndexItems, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
+import { JSON_RENDER_COMPONENT_LIST } from "@/components/json-render/catalog";
 import {
   USEPOD_COMPATIBILITY_MATRIX,
   USEPOD_FUNDING_MATRIX,
@@ -553,9 +554,11 @@ function localCliToolItems(): ContextIndexItem[] {
       ],
       retrievalText: [
         "HivemindOS chat can render a fenced json-render spec returned by an assistant or tool output.",
-        "Use a fenced block labelled ```json-render containing a flat spec with root and elements. The dashboard only accepts the local guarded catalog: Stack, Panel, Heading, Text, Metric, Badge, Button, Divider, Callout, KeyValueList, DataTable, CodeBlock, Progress, and List.",
+        `Use a fenced block labelled \`\`\`json-render containing a flat spec with root and elements, or emit json-render SpecStream JSON patch lines. The dashboard only accepts the local guarded catalog: ${JSON_RENDER_COMPONENT_LIST}.`,
         "Every element must have a supported type, props object, and children array. Every child key must exist in elements. Optional top-level state is allowed for json-render dynamic values.",
-        "Use Callout for prominent notes, KeyValueList for labeled facts, DataTable for compact records, CodeBlock for specs or snippets, Progress for percentages, and List for ordered or unordered steps. Button props support label, optional safe url, optional copyText, and variant primary or secondary. Unknown component types and malformed specs are displayed as plain text instead of executed.",
+        "Dynamic values support $state, $bindState, $cond, $template, $computed, and directive-style helpers such as $format, $concat, $count, $truncate, $pluralize, $join, and $t. Element-level watch can fire guarded actions when a state path changes.",
+        "Use Callout for prominent notes, KeyValueList for labeled facts, DataTable for compact records, CodeBlock for specs or snippets, Progress for percentages, List for steps, and form controls only for local non-authoritative interaction. Button props support label, optional safe url, optional copyText, and variant primary/secondary/danger. Generated UI can open safe URLs, copy text, or emit local dashboard events; it must not claim to execute hidden wallet, file, shell, payment, or network mutations.",
+        "Unknown component types, invalid props, missing child references, and malformed specs are displayed as plain text instead of executed.",
       ].join(" "),
       path: absolutePath("src/components/json-render/JsonRenderSurface.tsx"),
       load: {
@@ -652,8 +655,8 @@ function localCliToolItems(): ContextIndexItem[] {
       id: "tool-schema:crypto-capability-router",
       kind: "tool-schema",
       title: "crypto capability router",
-      summary: "Unified agent-facing crypto router for Bankr, x402, Veil Cash, MoneyClaw, and UsePod readiness, route selection, clear-signing reviews, crosschain intent drafts, identity records, and risk checks.",
-      tags: ["crypto", "wallet", "payment", "capability", "router", "bankr", "x402", "veil", "moneyclaw", "usepod", "paid-api", "private-payment", "trade", "crosschain", "bridge", "clear-signing", "agent-identity", "risk", "agent", "tool"],
+      summary: "Unified agent-facing crypto router for Bankr, local Hyperliquid, x402, Veil Cash, MoneyClaw, and UsePod readiness, route selection, clear-signing reviews, crosschain intent drafts, identity records, and risk checks.",
+      tags: ["crypto", "wallet", "payment", "capability", "router", "bankr", "hyperliquid", "perps", "builder-code", "x402", "veil", "moneyclaw", "usepod", "paid-api", "private-payment", "trade", "crosschain", "bridge", "clear-signing", "agent-identity", "risk", "agent", "tool"],
       aliases: [
         "crypto router",
         "unified crypto mcp",
@@ -678,9 +681,9 @@ function localCliToolItems(): ContextIndexItem[] {
         "This is the unified capability layer for agent decisions: it reports provider readiness by key name only, selects the best configured rail for an intent, and prepares the existing provider endpoint request body without executing money movement itself.",
         "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|crosschain-swap|bridge|crosschain-payment|token-launch|polymarket|hyperliquid|automation|nft|agent-job|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset?, fromChain?, toChain?, fromAsset?, toAsset? } returns the endpoint, draft body, missing readiness, approval requirement, confirmation token, clear-signing review, and crosschain plan when relevant.",
         "MCP path: run hivemind-mcp as a stdio MCP server. It exposes crypto_capabilities for readiness, select_crypto_rail for no-side-effect provider selection, prepare_crypto_action for provider endpoint/request-body drafts, review_crypto_action for clear-signing, agent_crypto_identity for local identity/listing records, and crypto_risk_monitor for DARC-style control checks.",
-        "The router covers Bankr for wallet portfolio, swaps/trades, crosschain swaps/bridges/payments, token launches, Polymarket, Hyperliquid, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; x402 for public paid API fetches and local-wallet USDC sends; Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
-        "Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy, while fee-rate defaults alone keep using hosted policy. Locally signed USDC-capable rails such as /api/wallet/send, /api/trading/swap, and xStocks can quote and collect the policy fee as a separate USDC transfer. Bankr, MoneyClaw, and Alpaca brokerage revenue needs hosted/proxy or provider-native fee enforcement.",
-        "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, /api/crypto/clear-signing, /api/crypto/agent-identity, and /api/crypto/risk-monitor.",
+        "The router covers Bankr for wallet portfolio, swaps/trades, crosschain swaps/bridges/payments, token launches, Polymarket, Hyperliquid fallback, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; local Hyperliquid for governed EVM-wallet perp quotes/orders with server-configured builder codes; x402 for public paid API fetches and local-wallet USDC sends; Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
+        "Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy, while fee-rate defaults alone keep using hosted policy. Locally signed USDC-capable rails such as /api/wallet/send, /api/trading/swap, and xStocks can quote and collect the policy fee as a separate USDC transfer. Official Hyperliquid builder-code recipient, fee, max approval fee, network, and optional API URL are fetched from the HivemindOS-controlled builder-policy endpoint; client request bodies and shared env never choose the official builder recipient or fee. Bankr, MoneyClaw, and Alpaca brokerage revenue needs hosted/proxy or provider-native fee enforcement.",
+        "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/trading/hyperliquid, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, /api/crypto/clear-signing, /api/crypto/agent-identity, and /api/crypto/risk-monitor.",
         "Side-effect policy: call status/select/prepare first; do not execute sends, swaps, trades, token launches, bets, leverage positions, NFT mutations, automations, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it, the wallet's explicit auto-send/auto-use policy allows that action, or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
       ].join(" "),
       route: "/api/crypto/capabilities",
@@ -834,6 +837,37 @@ function localCliToolItems(): ContextIndexItem[] {
       load: {
         type: "none",
         note: "Stock buy/sell capability. Quote first, then execute with the matching confirmation token; live brokerage orders move real money.",
+      },
+    },
+    {
+      id: "tool-schema:hyperliquid-trading",
+      kind: "tool-schema",
+      title: "Hyperliquid perp trading",
+      summary: "Local EVM-wallet Hyperliquid perp quotes, builder-code approvals, and governed order execution through /api/trading/hyperliquid.",
+      tags: ["hyperliquid", "perps", "perpetuals", "leverage", "builder-code", "builder-fee", "wallet", "trade", "trading", "agent", "tool"],
+      aliases: [
+        "hyperliquid trade",
+        "hyperliquid order",
+        "perp trade",
+        "perps",
+        "builder codes",
+        "approve builder fee",
+        "hyperliquid builder",
+      ],
+      retrievalText: [
+        "Use this capability when a workflow needs to quote or place a Hyperliquid perpetual order from a local EVM wallet, inspect Hyperliquid account state, or approve the configured builder fee.",
+        "HTTP surface: GET /api/trading/hyperliquid?agentId=<id> returns non-secret readiness, configured builder details, confirmation tokens, and optional account status. POST /api/trading/hyperliquid accepts { action: 'status'|'positions'|'quote'|'approve-builder'|'order', agentId, coin, side: 'long'|'short', orderType: 'market'|'limit', notionalUsd, limitPrice?, reduceOnly?, slippageBps?, confirmation?, approvalToken? }.",
+        "Builder-code policy: builder address, per-order builder fee, max approval fee, testnet flag, and optional API URL are fetched server-side from the official HivemindOS builder-policy endpoint. Client request bodies and local/shared env never choose the official builder recipient or fee; self-hosters replace the policy by forking/rebuilding or pointing their own distribution at their own endpoint.",
+        "Approval sequence: first quote the order. If builderApproval.approved is false, action 'approve-builder' signs Hyperliquid ApproveBuilderFee from the selected main local EVM wallet and requires CONFIRM_HYPERLIQUID_BUILDER. Then action 'order' places the perp order with the configured builder payload and requires CONFIRM_HYPERLIQUID_ORDER.",
+        "Execution policy: the route resolves wallet address, network, secret, and max trade cap server-side from the local vault and governed wallet ledger. Orders pass the company kill switch, rolling budgets, approval escalation, maxTradeUsd/maxPaymentUsd cap, Hyperliquid tick/lot precision, and unified spend-ledger recording. Reduce-only orders evaluate governance with zero spend but still honor the kill switch.",
+        "MCP path: use hyperliquid_trade. action quote/status/positions are read-style; action approve-builder requires CONFIRM_HYPERLIQUID_BUILDER; action order requires CONFIRM_HYPERLIQUID_ORDER. Never request, print, store, or reveal private keys, seed phrases, or wallet secrets.",
+      ].join(" "),
+      route: "/api/trading/hyperliquid",
+      methods: ["GET", "POST"],
+      load: {
+        type: "api",
+        target: "/api/trading/hyperliquid",
+        note: "Quote/status first. Builder approval and orders are separately confirmed signed actions.",
       },
     },
     {

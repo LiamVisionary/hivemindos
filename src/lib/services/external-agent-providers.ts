@@ -3,6 +3,7 @@ import type { ContextIndexItem } from "@/lib/services/context-index";
 export type ExternalAgentProviderId =
   | "browser-use"
   | "awesome-mcp-servers"
+  | "agentmail"
   | "cloudflare-agentic-inbox"
   | "mcp-email-server"
   | "openhands"
@@ -61,6 +62,18 @@ export const EXTERNAL_AGENT_PROVIDERS: ExternalAgentProvider[] = [
     credentialKeys: ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"],
     sideEffectGate: "Use /api/cloudflare/agentic-inbox to scaffold/deploy; requires an onboarded domain and explicit deployment because email routing can receive real personal mail.",
     fallback: "Use local messaging channels or a webhook inbox until a Cloudflare email domain is ready.",
+  },
+  {
+    id: "agentmail",
+    name: "AgentMail",
+    sourceUrl: "https://www.agentmail.to/",
+    licenseNote: "Hosted provider API with official docs, SDKs, CLI, and MCP; use through the user's AgentMail account and API key.",
+    summary: "API-first email inboxes for AI agents, with inbox creation, send/receive, threads, attachments, webhooks, WebSockets, custom domains, hosted MCP, and CLI support.",
+    capabilities: ["email", "agent-inbox", "mcp", "webhooks", "custom-domains", "hosted-mail"],
+    installSurface: "mcp-catalog",
+    credentialKeys: ["AGENTMAIL_API_KEY", "AGENTMAIL_DOMAIN", "AGENTMAIL_API_BASE_URL"],
+    sideEffectGate: "Use Agent Settings Create mailbox or the /api/agents/mailbox route for one-click inbox provisioning. Direct send/reply actions should confirm recipient, subject, and body before sending live email.",
+    fallback: "Use Cloudflare Agentic Inbox for a self-hosted Cloudflare path, or MCP Email Server for BYO IMAP/SMTP mailboxes.",
   },
   {
     id: "mcp-email-server",

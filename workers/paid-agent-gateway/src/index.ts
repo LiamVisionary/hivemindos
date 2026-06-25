@@ -52,6 +52,12 @@ type Env = {
   HIVEMINDOS_PLATFORM_FEE_RECIPIENT?: string;
   HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA?: string;
   HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SVM?: string;
+  HIVEMINDOS_HYPERLIQUID_BUILDER_ENABLED?: string;
+  HIVEMINDOS_HYPERLIQUID_BUILDER_ADDRESS?: string;
+  HIVEMINDOS_HYPERLIQUID_BUILDER_FEE_TENTH_BPS?: string;
+  HIVEMINDOS_HYPERLIQUID_MAX_BUILDER_FEE_TENTH_BPS?: string;
+  HIVEMINDOS_HYPERLIQUID_TESTNET?: string;
+  HIVEMINDOS_HYPERLIQUID_API_URL?: string;
 };
 
 type OpenAIMessage = {
@@ -113,6 +119,8 @@ const DEFAULT_MAX_BODY_CHARS = 200_000;
 const DEFAULT_PLATFORM_FEE_BPS = 100;
 const DEFAULT_PLATFORM_MIN_FEE_USD = 0.01;
 const DEFAULT_PLATFORM_MAX_FEE_USD = 0;
+const DEFAULT_HYPERLIQUID_BUILDER_FEE_TENTH_BPS = 5;
+const MAX_HYPERLIQUID_PERP_BUILDER_FEE_TENTH_BPS = 100;
 
 const serverCache = new Map<string, Promise<x402HTTPResourceServer>>();
 
@@ -126,6 +134,9 @@ const worker: ExportedHandler<Env> = {
     }
     if (request.method === "GET" && url.pathname === "/api/platform-fees/config") {
       return json(env, publicPlatformFeePolicy(env));
+    }
+    if (request.method === "GET" && url.pathname === "/api/hyperliquid/builder-policy") {
+      return json(env, publicHyperliquidBuilderPolicy(env));
     }
 
     const paidAgent = paidAgentRoute(url.pathname);
@@ -395,6 +406,41 @@ function publicPlatformFeePolicy(env: Env) {
       ...(solana ? { solana } : {}),
     },
     supportedSources: ["wallet-send", "dex-swap", "xstocks"],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function publicHyperliquidBuilderPolicy(env: Env) {
+  const builderAddress = normalizeEvmAddress(env.HIVEMINDOS_HYPERLIQUID_BUILDER_ADDRESS || "");
+  const enabled = booleanValue(env.HIVEMINDOS_HYPERLIQUID_BUILDER_ENABLED, Boolean(builderAddress));
+  const builderFeeTenthBps = builderFeeTenthBpsValue(env.HIVEMINDOS_HYPERLIQUID_BUILDER_FEE_TENTH_BPS, DEFAULT_HYPERLIQUID_BUILDER_FEE_TENTH_BPS);
+  const maxBuilderFeeTenthBps = Math.max(
+    builderFeeTenthBps,
+    builderFeeTenthBpsValue(env.HIVEMINDOS_HYPERLIQUID_MAX_BUILDER_FEE_TENTH_BPS, builderFeeTenthBps),
+  );
+  const isTestnet = booleanValue(env.HIVEMINDOS_HYPERLIQUID_TESTNET, false);
+  const missing = [
+    ...(builderAddress ? [] : ["HIVEMINDOS_HYPERLIQUID_BUILDER_ADDRESS"]),
+    ...(builderFeeTenthBps > 0 ? [] : ["HIVEMINDOS_HYPERLIQUID_BUILDER_FEE_TENTH_BPS"]),
+  ];
+  const configured = enabled && missing.length === 0;
+  return {
+    ok: true,
+    service: "hivemindos-hyperliquid-builder-policy",
+    official: true,
+    enabled,
+    configured,
+    network: isTestnet ? "testnet" : "mainnet",
+    builderAddress: configured ? builderAddress : undefined,
+    builderFeeTenthBps,
+    builderFeeBps: builderFeeTenthBps / 10,
+    maxBuilderFeeTenthBps,
+    maxBuilderFeeRate: builderFeeTenthBpsToPercentString(maxBuilderFeeTenthBps),
+    apiUrl: env.HIVEMINDOS_HYPERLIQUID_API_URL || undefined,
+    missing,
+    detail: configured
+      ? `Official HivemindOS Hyperliquid ${isTestnet ? "testnet" : "mainnet"} builder ${shortAddress(builderAddress)} charges ${formatBuilderFee(builderFeeTenthBps)} per perp fill.`
+      : "Official HivemindOS Hyperliquid builder policy is not fully configured.",
     generatedAt: new Date().toISOString(),
   };
 }
@@ -685,6 +731,30 @@ function positiveInteger(value: unknown, fallback: number) {
 function positiveNumber(value: unknown, fallback: number) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
+}
+
+function builderFeeTenthBpsValue(value: unknown, fallback: number) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 0) return fallback;
+  return Math.min(numeric, MAX_HYPERLIQUID_PERP_BUILDER_FEE_TENTH_BPS);
+}
+
+function builderFeeTenthBpsToPercentString(feeTenthBps: number) {
+  return `${trimFixed(Math.max(0, feeTenthBps) / 1000, 3)}%`;
+}
+
+function formatBuilderFee(feeTenthBps: number) {
+  const bps = feeTenthBps / 10;
+  return `${trimFixed(bps, 1)} bps (${builderFeeTenthBpsToPercentString(feeTenthBps)})`;
+}
+
+function trimFixed(value: number, decimals: number) {
+  return value.toFixed(decimals).replace(/\.?0+$/, "");
+}
+
+function shortAddress(value?: string) {
+  if (!value) return "(none)";
+  return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
 function normalizeEvmAddress(value: string) {

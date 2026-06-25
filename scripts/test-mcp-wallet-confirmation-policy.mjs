@@ -94,6 +94,7 @@ try {
   assertExecutionToolMetadata(getTool(tools, "send_usdc"), ["SEND_USDC"]);
   assertExecutionToolMetadata(getTool(tools, "dex_swap"), ["CONFIRM_SWAP"]);
   assertExecutionToolMetadata(getTool(tools, "stock_trade"), ["CONFIRM_BUY", "CONFIRM_SELL"]);
+  assertExecutionToolMetadata(getTool(tools, "hyperliquid_trade"), ["CONFIRM_HYPERLIQUID_ORDER", "CONFIRM_HYPERLIQUID_BUILDER"]);
 
   await callToolExpectError(
     mcp,
@@ -140,6 +141,31 @@ try {
       confirmation: "CONFIRM_BUY",
     },
     /CONFIRM_SELL/,
+  );
+  await callToolExpectError(
+    mcp,
+    7,
+    "hyperliquid_trade",
+    {
+      action: "order",
+      agentId: "agent:test",
+      coin: "BTC",
+      side: "long",
+      notionalUsd: 1,
+      confirmation: "CONFIRM_HYPERLIQUID_BUILDER",
+    },
+    /CONFIRM_HYPERLIQUID_ORDER/,
+  );
+  await callToolExpectError(
+    mcp,
+    8,
+    "hyperliquid_trade",
+    {
+      action: "approve-builder",
+      agentId: "agent:test",
+      confirmation: "CONFIRM_HYPERLIQUID_ORDER",
+    },
+    /CONFIRM_HYPERLIQUID_BUILDER/,
   );
 } catch (error) {
   if (stderr.trim()) {

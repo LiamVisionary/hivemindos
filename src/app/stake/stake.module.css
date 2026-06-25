@@ -305,6 +305,46 @@
   height: 15px;
 }
 
+.rewardRules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.rewardRules span {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 3px 8px;
+  align-items: center;
+  border: 1px solid var(--s-border-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--s-teal) 7%, var(--s-surface-inset));
+  padding: 9px 10px;
+  color: var(--muted);
+  font-family: var(--s-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.rewardRules svg {
+  grid-row: span 2;
+  width: 14px;
+  height: 14px;
+  color: var(--s-teal-strong);
+}
+
+.rewardRules b {
+  color: var(--foreground);
+  font-family: var(--s-display);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-transform: none;
+}
+
 /* ── Hero progress panel ──────────────────────────────────────────────── */
 .progressPanel {
   display: grid;
@@ -601,6 +641,24 @@
   color: var(--muted);
 }
 
+.tierReward {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tierReward span {
+  border: 1px solid var(--s-border-soft);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--s-honey) 8%, transparent);
+  color: var(--s-honey);
+  padding: 4px 8px;
+  font-family: var(--s-mono);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .tierCard p {
   margin: 0;
   color: var(--muted);
@@ -813,5 +871,12 @@
 
   .stakeForm {
     grid-template-columns: 1fr max-content max-content;
+  }
+}
+
+@media (max-width: 560px) {
+  .rewardRules,
+  .miniGrid {
+    grid-template-columns: 1fr;
   }
 }

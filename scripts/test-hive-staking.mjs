@@ -13,6 +13,16 @@ const {
   scaleHiveAmount,
   isHiveEvmAddress,
 } = await import("../src/lib/services/hive-staking.ts");
+const {
+  BASE_CHAIN_ID_HEX,
+  stakeHiveWithBrowserWallet,
+} = await import("../src/lib/services/hive-staking-client.ts");
+const {
+  HIVE_STAKING_REWARD_MIN_ACTIVE_SECONDS,
+  HIVE_STAKING_REWARD_RATE_LABEL,
+  HIVE_STAKING_REWARD_USD_PER_MILLION,
+  calculateHiveStakingSeasonRewards,
+} = await import("../src/lib/services/hive-staking-rewards.ts");
 const { stakeHrefForPersonalToken } = await import("../src/features/dashboard/views/personal-stake-link.ts");
 const { mergeStakeWalletsByAccount } = await import("../src/app/stake/stake-wallets.ts");
 const { evmAccountFromLocalSecret } = await import("../src/lib/services/hive-staking-local.ts");
@@ -23,8 +33,19 @@ function check(label, condition) {
   passed += 1;
 }
 
+function approx(label, actual, expected, tolerance = 0.0001) {
+  assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: expected ${expected}, got ${actual}`);
+  passed += 1;
+}
+
 check("tier table starts with holder", HIVE_STAKING_TIERS[0].id === "holder");
 check("tier table ends with visionary", HIVE_STAKING_TIERS.at(-1).id === "visionary");
+check("tier table includes reward bucket metadata", HIVE_STAKING_TIERS.every((tier) => Number.isFinite(tier.rewardBucketUsdPerMillion) && tier.bucketRateLabel && tier.holderMultiple));
+check("reward buckets total 39375 per million", HIVE_STAKING_TIERS.reduce((total, tier) => total + tier.rewardBucketUsdPerMillion, 0) === 39_375);
+check("visionary exposes 32x bucket", HIVE_STAKING_TIERS.at(-1)?.holderMultiple === "32x");
+check("reward engine exports 3.9375% seasonal rate", HIVE_STAKING_REWARD_RATE_LABEL === "3.9375%");
+check("reward engine exports 39375 per million", HIVE_STAKING_REWARD_USD_PER_MILLION === 39_375);
+check("seasonal reward minimum is seven active days", HIVE_STAKING_REWARD_MIN_ACTIVE_SECONDS === 7 * 86_400);
 check("below holder has no tier", hiveTierForStakedHive(999_999n) === null);
 check("holder threshold resolves holder", hiveTierForStakedHive(1_000_000n)?.id === "holder");
 check("supporter threshold resolves supporter", hiveTierForStakedHive(10_000_000n)?.id === "supporter");
@@ -40,6 +61,45 @@ check("pending/raw below threshold resolves null", hiveTierForStakedRaw(scaleHiv
 check("valid evm address accepted", isHiveEvmAddress("0x0000000000000000000000000000000000000001"));
 check("invalid evm address rejected", !isHiveEvmAddress("0x123"));
 check("public Base staking vault default is configured", hiveStakingContractAddress() === DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS);
+
+const DAY = 86_400;
+const rewardSeasonStart = 1_000_000;
+const rewardSeason = {
+  id: "season-1",
+  label: "Season 1",
+  startAt: rewardSeasonStart,
+  endAt: rewardSeasonStart + 90 * DAY,
+  eligibleRevenueUsd: 1_000_000,
+  hivePriceUsd: 0.001,
+};
+const fullSeasonStaker = "0x0000000000000000000000000000000000000011";
+const midSeasonStaker = "0x0000000000000000000000000000000000000012";
+const lateStaker = "0x0000000000000000000000000000000000000013";
+const unstakingStaker = "0x0000000000000000000000000000000000000014";
+const seasonalRewards = calculateHiveStakingSeasonRewards({
+  season: rewardSeason,
+  events: [
+    { account: fullSeasonStaker, type: "stake", amountHive: 1_000_000, timestamp: rewardSeasonStart - 7 * DAY },
+    { account: midSeasonStaker, type: "stake", amountHive: 1_000_000, timestamp: rewardSeasonStart + 45 * DAY },
+    { account: lateStaker, type: "stake", amountHive: 1_000_000, timestamp: rewardSeasonStart + 86 * DAY },
+    { account: unstakingStaker, type: "stake", amountHive: 1_000_000, timestamp: rewardSeasonStart },
+    { account: unstakingStaker, type: "unstake-request", amountHive: 1_000_000, timestamp: rewardSeasonStart + 30 * DAY },
+  ],
+});
+const rewardAccount = (address) => seasonalRewards.accounts.find((account) => account.account === address);
+const holderRewardTier = seasonalRewards.tiers.find((tier) => tier.tier.id === "holder");
+check("season reward calculation returns holder tier summary", Boolean(holderRewardTier));
+check("season reward calculation returns HIVE-denominated total", seasonalRewards.totalRewardHive === 39_375_000);
+check("holder reward bucket converts to HIVE", holderRewardTier?.bucketHive === 625_000);
+check("stake before season start earns full-season active time", rewardAccount(fullSeasonStaker)?.activeSeconds === 90 * DAY);
+check("mid-season stake has no pre-season requirement", rewardAccount(midSeasonStaker)?.eligible === true && rewardAccount(midSeasonStaker)?.activeSeconds === 45 * DAY);
+check("last-minute stake below seven active days is ineligible", rewardAccount(lateStaker)?.eligible === false && rewardAccount(lateStaker)?.rewardUsd === 0);
+check("unstake request stops seasonal accrual", rewardAccount(unstakingStaker)?.activeSeconds === 30 * DAY);
+check("ineligible last-minute stake does not dilute eligible holder denominator", holderRewardTier?.eligibleAccountCount === 3);
+approx("full-season holder receives time-weighted share", rewardAccount(fullSeasonStaker)?.rewardUsd ?? 0, 340.909091);
+approx("full-season holder receives HIVE-denominated reward", rewardAccount(fullSeasonStaker)?.rewardHive ?? 0, 340_909.090909);
+approx("mid-season holder receives prorated share", rewardAccount(midSeasonStaker)?.rewardUsd ?? 0, 170.454545);
+approx("unstaking holder only earns until request time", rewardAccount(unstakingStaker)?.rewardUsd ?? 0, 113.636364);
 
 const oversizedIconUrl = `data:image/svg+xml;base64,${"A".repeat(500_000)}`;
 const stakeHref = stakeHrefForPersonalToken(
@@ -115,6 +175,43 @@ try {
   invalidSecretError = error instanceof Error ? error.message : String(error);
 }
 check("local staking rejects unsupported secret formats clearly", invalidSecretError.includes("private key or recovery phrase"));
+
+const fakeWalletAddress = "0x0000000000000000000000000000000000000001";
+const approvalHash = `0x${"a".repeat(64)}`;
+const stakeHash = `0x${"b".repeat(64)}`;
+const oneHiveAllowance = `0x${(10n ** 18n).toString(16).padStart(64, "0")}`;
+const requestOrder = [];
+const fakeProvider = {
+  async request({ method, params }) {
+    requestOrder.push(method);
+    if (method === "eth_requestAccounts") return [fakeWalletAddress];
+    if (method === "wallet_switchEthereumChain") {
+      assert.equal(params?.[0]?.chainId, BASE_CHAIN_ID_HEX);
+      return null;
+    }
+    if (method === "eth_chainId") return BASE_CHAIN_ID_HEX;
+    if (method === "eth_sendTransaction") {
+      const transaction = params?.[0] ?? {};
+      return transaction.to === DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS ? stakeHash : approvalHash;
+    }
+    if (method === "eth_getTransactionReceipt") return { status: "0x1" };
+    if (method === "eth_call") return oneHiveAllowance;
+    throw new Error(`unexpected fake provider method: ${method}`);
+  },
+};
+const browserStakeResult = await stakeHiveWithBrowserWallet({
+  provider: fakeProvider,
+  walletAddress: fakeWalletAddress,
+  tokenAddress: "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3",
+  stakingAddress: DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS,
+  amountText: "1",
+});
+check("browser staking returns approval hash", browserStakeResult.approveHash === approvalHash);
+check("browser staking returns stake hash", browserStakeResult.stakeHash === stakeHash);
+const sendIndexes = requestOrder.flatMap((method, index) => method === "eth_sendTransaction" ? [index] : []);
+check("browser staking sends approval and stake transactions", sendIndexes.length === 2);
+check("browser staking waits for approval receipt before allowance", requestOrder.indexOf("eth_getTransactionReceipt") < requestOrder.indexOf("eth_call"));
+check("browser staking reads allowance before stake transaction", requestOrder.indexOf("eth_call") < sendIndexes[1]);
 
 let threw = false;
 try {

@@ -1,6 +1,8 @@
 top_links:
   - title: Features
     url: /features/
+  - title: Trading
+    url: /trading/
   - title: Whole Brain
     url: /whole-brain/
   - title: Skills
@@ -94,6 +96,21 @@ sections:
             url: /packaged-skills/hive-skills.html
           - title: Third-party Skills
             url: /packaged-skills/third-party-skills.html
+
+  - title: Trading
+    items:
+      - title: Trading Home
+        url: /trading/
+      - title: Crypto Trading
+        url: /trading/crypto.html
+      - title: Hyperliquid Perps
+        url: /trading/hyperliquid.html
+      - title: Stock Trading
+        url: /trading/stocks.html
+      - title: Ways To Trade
+        url: /trading/agent-access.html
+      - title: Safety And Limits
+        url: /trading/governance.html
 
   - title: Architecture
     items:

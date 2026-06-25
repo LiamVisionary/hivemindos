@@ -126,7 +126,7 @@ const TOOLS = mergeToolDescriptors(
   await loadHiveActionMcpTools(),
 );
 const HIVE_ACTION_MCP_TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
-const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade"]);
+const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade"]);
 
 async function loadHiveActionMcpTools() {
   try {
@@ -152,6 +152,7 @@ function mergeToolDescriptors(manualTools, hiveActionTools) {
 
 function requireHiveActionExecutionPreflight(name, args = {}) {
   if (!EXECUTION_TOOL_NAMES.has(name)) return;
+  if (name === "hyperliquid_trade" && !["approve-builder", "order"].includes(String(args.action || "").toLowerCase())) return;
   const tool = HIVE_ACTION_MCP_TOOL_BY_NAME.get(name);
   const annotations = tool?.annotations || {};
   const sideEffects = Array.isArray(annotations["hivemindos/sideEffects"])
@@ -185,6 +186,12 @@ function expectedConfirmationsForExecutionTool(name, args, confirmation) {
   ].filter((token) => typeof token === "string" && token.length > 0);
   if (tokens.length === 0) {
     throw new Error(`${name} has no valid Hive action confirmation token; refusing MCP execution.`);
+  }
+  if (name === "hyperliquid_trade") {
+    const action = typeof args.action === "string" ? args.action.toLowerCase() : "";
+    if (action === "approve-builder" && tokens.includes("CONFIRM_HYPERLIQUID_BUILDER")) return ["CONFIRM_HYPERLIQUID_BUILDER"];
+    if (action === "order" && tokens.includes("CONFIRM_HYPERLIQUID_ORDER")) return ["CONFIRM_HYPERLIQUID_ORDER"];
+    return tokens;
   }
   if (name !== "stock_trade") return tokens;
 
@@ -224,7 +231,7 @@ function cryptoSchema(required) {
         description: "Natural payment intent to route.",
       },
       agentId: { type: "string", description: "Agent wallet/profile id, when the action belongs to a specific agent." },
-      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "venice", "veil"], description: "Optional explicit provider preference." },
+      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "venice", "veil", "hyperliquid"], description: "Optional explicit provider preference." },
       wallet: { type: "object", description: "Current agent wallet policy from the dashboard, including provider, Spend, caps, network, and auto-use settings." },
       amountUsd: { type: "number", description: "USD-denominated amount or cap for the intended action." },
       asset: { type: "string", enum: ["USDC", "ETH"], description: "Asset for private transfers." },
@@ -615,6 +622,24 @@ async function callTool(name, args = {}) {
       ticker: args.ticker,
       notionalUsd: args.notionalUsd,
       qty: args.qty,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "hyperliquid_trade") {
+    const action = args.action || (args.confirmation === "CONFIRM_HYPERLIQUID_BUILDER" ? "approve-builder" : args.confirmation === "CONFIRM_HYPERLIQUID_ORDER" ? "order" : "quote");
+    requireHiveActionExecutionPreflight(name, { ...args, action });
+    return callDashboard("/api/trading/hyperliquid", "POST", {
+      action,
+      agentId: args.agentId,
+      coin: args.coin,
+      side: args.side,
+      orderType: args.orderType,
+      notionalUsd: args.notionalUsd,
+      size: args.size,
+      limitPrice: args.limitPrice,
+      reduceOnly: args.reduceOnly,
+      slippageBps: args.slippageBps,
       confirmation: args.confirmation,
       approvalToken: args.approvalToken,
     });

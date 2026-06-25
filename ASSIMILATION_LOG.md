@@ -6489,3 +6489,18 @@
 - Reason: Root cause hypothesis: the previous detector accepted any two broadband high-frequency onsets in the window, so speech plosives, clicks, or startup analyser transients could still satisfy it. The fix adds clap-shape metrics, startup settling, tighter timing, and comparable second-clap checks.
 - Assimilated: src/features/queen-voice/clap-activation.ts crest factor/transient sharpness/comparable-pair gates; src/features/queen-voice/use-queen-clap-activation.ts startup settle guard; scripts/test-queen-clap-activation.mjs false-positive regressions
 - Verification: pnpm test:queen-clap passed 18 checks; pnpm test:queen-echo passed; focused ESLint passed.
+## 2026-06-25T05:33:48.780318+00:00 - implementation
+
+- Request: Add athm793/local-business-scraper as a HivemindOS optional skill after security audit
+- Source: pinned-github
+- Selected backbone: github:athm793/local-business-scraper@60e42d903dc52f43dcc9964f2d1c3d491c15ab5c
+
+### Candidates
+- athm793/local-business-scraper
+  - Decision: adapted_code
+  - Reason: wrapped as optional GTM skill with SECURITY_AUDIT.md and consent gates
+  - Path: `README.md,requirements.txt,scraper.py,stealth.py`
+- local-temp-venv-audit
+  - Decision: inspected
+  - Reason: pip check/pip-audit/bandit/compileall/help smoke informed conditional approval
+  - Path: `/tmp audit artifacts`

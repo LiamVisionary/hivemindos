@@ -11,8 +11,17 @@ import { hiveEnvPresence, hiveEnvValue } from "@/lib/services/shared-hive-env";
 const execFileAsync = promisify(execFile);
 const STORE_VERSION = 1;
 const DEFAULT_CLOUDFLARE_WORKER_NAME = "hivemindos-agentic-inbox";
+const DEFAULT_AGENTMAIL_API_BASE_URL = "https://api.agentmail.to";
+const DEFAULT_AGENTMAIL_DOMAIN = "agentmail.to";
+const AGENTMAIL_PROVIDER_KEYS = [
+  "AGENTMAIL_API_KEY",
+  "AGENTMAIL_API_BASE_URL",
+  "AGENTMAIL_API_URL",
+  "AGENTMAIL_DOMAIN",
+  "HIVEMINDOS_AGENTMAIL_DOMAIN",
+] as const;
 
-export type AgentMailboxProviderId = "cloudflare-agentic-inbox" | "hivemindos-managed" | "none";
+export type AgentMailboxProviderId = "agentmail" | "cloudflare-agentic-inbox" | "hivemindos-managed" | "none";
 export type AgentMailboxStatus = "ready" | "blocked";
 
 export type AgentMailbox = {
@@ -46,6 +55,9 @@ export type AgentMailboxProviderStatus = {
     zoneId?: string;
     workerName?: string;
     routingStatus?: string;
+  };
+  agentmail?: {
+    apiBaseUrl?: string;
   };
   blockers: string[];
   requiredActions: string[];
@@ -82,6 +94,21 @@ type CloudflareEnvelope<T> = {
   messages?: Array<{ code?: number; message?: string }>;
 };
 
+type AgentMailInbox = {
+  pod_id?: string;
+  inbox_id?: string;
+  id?: string;
+  email?: string;
+  client_id?: string;
+};
+
+type AgentMailErrorEnvelope = {
+  name?: string;
+  message?: string;
+  error?: string;
+  errors?: unknown;
+};
+
 type CommandResult = {
   ok: boolean;
   stdout: string;
@@ -104,6 +131,7 @@ export type AgentMailboxProvisionInput = {
 
 export type AgentMailboxProvisionResult = {
   detail: string;
+  address?: string;
   providerResourceIds?: Record<string, string>;
 };
 
@@ -170,13 +198,15 @@ export async function createAgentMailbox(input: AgentMailboxCreateInput, options
     domain: providerStatus.domain,
     providerStatus,
   });
+  const provisionedAddress = cleanMailboxAddress(provision.address) || address;
+  const provisionedAddressParts = splitMailboxAddress(provisionedAddress, localPart, providerStatus.domain);
   const mailbox: AgentMailbox = {
     id: `mailbox-${randomUUID()}`,
     agentId,
     agentName,
-    address,
-    localPart,
-    domain: providerStatus.domain,
+    address: provisionedAddress,
+    localPart: provisionedAddressParts.localPart,
+    domain: provisionedAddressParts.domain,
     providerId: providerStatus.id,
     status: "ready",
     canSendLiveInternetMail: providerStatus.canSendLiveInternetMail,
@@ -204,20 +234,96 @@ export async function readAgentMailboxProviderStatus(input: { liveCheck?: boolea
   const managed = await readManagedMailboxProviderStatus();
   if (managed.ready) return managed;
 
+  const agentmail = await readAgentMailProviderStatus({ liveCheck: Boolean(input.liveCheck) });
+  if (agentmail.ready || agentmail.canProvision) return agentmail;
+
   const cloudflare = await readCloudflareMailboxProviderStatus({ liveCheck: Boolean(input.liveCheck) });
   if (cloudflare.ready || cloudflare.canProvision) return cloudflare;
 
   return {
     ...cloudflare,
     blockers: [
+      ...agentmail.blockers,
       ...cloudflare.blockers,
       "No live mailbox provider is ready. The default user flow must provision mailboxes from a connected provider instead of asking for per-agent mail server settings.",
     ],
     requiredActions: [
+      ...agentmail.requiredActions,
       ...cloudflare.requiredActions,
-      "Connect a HivemindOS mailbox broker or a Cloudflare Email Service domain once at the provider level.",
+      "Connect AgentMail, a HivemindOS mailbox broker, or a Cloudflare Email Service domain once at the provider level.",
     ],
-    evidence: [...managed.evidence, ...cloudflare.evidence],
+    evidence: [...managed.evidence, ...agentmail.evidence, ...cloudflare.evidence],
+  };
+}
+
+async function readAgentMailProviderStatus(input: { liveCheck: boolean }): Promise<AgentMailboxProviderStatus> {
+  const evidence: AgentMailboxProviderStatus["evidence"] = [];
+  const blockers: string[] = [];
+  const requiredActions: string[] = [];
+  const presence = Object.fromEntries((await hiveEnvPresence([...AGENTMAIL_PROVIDER_KEYS])).map((item) => [item.key, item]));
+  const hasApiKey = Boolean(presence.AGENTMAIL_API_KEY?.present);
+  const domain = (await hiveEnvValue("HIVEMINDOS_AGENTMAIL_DOMAIN")) || (await hiveEnvValue("AGENTMAIL_DOMAIN")) || DEFAULT_AGENTMAIL_DOMAIN;
+  const apiBaseUrlValue = (await hiveEnvValue("AGENTMAIL_API_BASE_URL")) || (await hiveEnvValue("AGENTMAIL_API_URL")) || DEFAULT_AGENTMAIL_API_BASE_URL;
+  let apiBaseUrl = "";
+
+  try {
+    apiBaseUrl = normalizeAgentMailApiBaseUrl(apiBaseUrlValue);
+  } catch {
+    blockers.push("AgentMail API base URL is invalid.");
+    requiredActions.push("Fix AGENTMAIL_API_BASE_URL or AGENTMAIL_API_URL before creating AgentMail inboxes.");
+  }
+
+  evidence.push({
+    key: "agentmail-auth",
+    ok: hasApiKey,
+    detail: hasApiKey ? "AgentMail API key is present by name only." : "AgentMail API key is not configured.",
+  });
+  evidence.push({
+    key: "agentmail-domain",
+    ok: Boolean(domain),
+    detail: domain ? `AgentMail mailbox domain is ${domain}.` : "No AgentMail mailbox domain is configured.",
+  });
+  evidence.push({
+    key: "agentmail-api-base",
+    ok: Boolean(apiBaseUrl),
+    detail: apiBaseUrl ? `AgentMail API base is ${new URL(apiBaseUrl).hostname}.` : "AgentMail API base is not valid.",
+  });
+
+  if (!hasApiKey) {
+    blockers.push("AgentMail cannot provision live inboxes until AGENTMAIL_API_KEY is configured.");
+    requiredActions.push("Add AGENTMAIL_API_KEY to the shared hive env, then agents can create AgentMail inboxes without per-agent mail settings.");
+  }
+
+  if (hasApiKey && apiBaseUrl && input.liveCheck) {
+    const token = await hiveEnvValue("AGENTMAIL_API_KEY");
+    const response = token ? await agentMailRequest<{ inboxes?: AgentMailInbox[] }>(apiBaseUrl, "/v0/inboxes?limit=1", token) : { ok: false as const, error: "AgentMail API key is missing." };
+    evidence.push({
+      key: "agentmail-live-api",
+      ok: response.ok,
+      detail: response.ok ? "AgentMail API accepted the configured key." : response.error,
+    });
+    if (!response.ok) {
+      blockers.push(response.error);
+      requiredActions.push("Verify AGENTMAIL_API_KEY has inbox access in the AgentMail Console.");
+    }
+  }
+
+  const ready = Boolean(hasApiKey && domain && apiBaseUrl && blockers.length === 0);
+  return {
+    id: "agentmail",
+    name: "AgentMail",
+    ready,
+    canProvision: ready,
+    canSendLiveInternetMail: ready,
+    canReceiveLiveInternetMail: ready,
+    detail: ready
+      ? `AgentMail can create agent inboxes on ${domain}.`
+      : "AgentMail is not ready for one-click live sending and receiving yet.",
+    domain,
+    agentmail: { apiBaseUrl: apiBaseUrl || undefined },
+    blockers: dedupe(blockers),
+    requiredActions: dedupe(requiredActions),
+    evidence,
   };
 }
 
@@ -386,10 +492,48 @@ async function readCloudflareMailboxProviderStatus(input: { liveCheck: boolean }
 }
 
 async function provisionMailboxWithProvider(input: AgentMailboxProvisionInput): Promise<AgentMailboxProvisionResult> {
+  if (input.providerStatus.id === "agentmail") {
+    return provisionAgentMailMailbox(input);
+  }
   if (input.providerStatus.id === "cloudflare-agentic-inbox") {
     return provisionCloudflareMailbox(input);
   }
   throw new Error(`${input.providerStatus.name} does not expose a mailbox provisioner in this build.`);
+}
+
+async function provisionAgentMailMailbox(input: AgentMailboxProvisionInput): Promise<AgentMailboxProvisionResult> {
+  const token = await hiveEnvValue("AGENTMAIL_API_KEY");
+  const apiBaseUrl = input.providerStatus.agentmail?.apiBaseUrl
+    || normalizeAgentMailApiBaseUrl((await hiveEnvValue("AGENTMAIL_API_BASE_URL")) || (await hiveEnvValue("AGENTMAIL_API_URL")) || DEFAULT_AGENTMAIL_API_BASE_URL);
+  if (!token) throw new Error("AgentMail mailbox provider is missing AGENTMAIL_API_KEY.");
+  const clientId = agentMailClientId(input.agentId);
+  const response = await agentMailRequest<AgentMailInbox>(apiBaseUrl, "/v0/inboxes", token, {
+    method: "POST",
+    body: {
+      username: input.localPart,
+      domain: input.domain,
+      display_name: input.agentName,
+      client_id: clientId,
+      metadata: {
+        hivemindos_agent_id: input.agentId.slice(0, 256),
+        hivemindos_agent_name: input.agentName.slice(0, 256),
+        hivemindos_provider: "agentmail",
+      },
+    },
+  });
+  if (!response.ok) throw new Error(response.error);
+  const inbox = response.result ?? {};
+  const address = cleanMailboxAddress(inbox.email) || cleanMailboxAddress(inbox.inbox_id) || input.address;
+  return {
+    address,
+    detail: `Created AgentMail inbox ${address}.`,
+    providerResourceIds: compactRecord({
+      inboxId: inbox.inbox_id || inbox.id || address,
+      podId: inbox.pod_id,
+      clientId: inbox.client_id || clientId,
+      apiBaseUrl: new URL(apiBaseUrl).hostname,
+    }),
+  };
 }
 
 async function provisionCloudflareMailbox(input: AgentMailboxProvisionInput): Promise<AgentMailboxProvisionResult> {
@@ -514,6 +658,26 @@ async function cloudflareRequest<T>(
   return { ok: true, result: payload.result };
 }
 
+async function agentMailRequest<T>(
+  apiBaseUrl: string,
+  path: string,
+  token: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<{ ok: true; result?: T } | { ok: false; error: string }> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: init.method || "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+  }).catch((error: unknown) => error instanceof Error ? error : new Error("AgentMail request failed."));
+  if (response instanceof Error) return { ok: false, error: response.message };
+  const payload = await response.json().catch(() => ({})) as T & AgentMailErrorEnvelope;
+  if (!response.ok) return { ok: false, error: agentMailErrorMessage(payload, response.status) };
+  return { ok: true, result: payload };
+}
+
 async function run(command: string, args: string[], timeout: number, extraEnv: Record<string, string>): Promise<CommandResult> {
   return execFileAsync(command, args, {
     cwd: process.cwd(),
@@ -601,6 +765,41 @@ function slugLocalPart(value: string) {
     .replace(/-{2,}/g, "-");
 }
 
+function cleanMailboxAddress(value: unknown) {
+  if (typeof value !== "string") return "";
+  const cleaned = value.trim();
+  return /^[^@\s]+@[^@\s]+$/.test(cleaned) ? cleaned : "";
+}
+
+function splitMailboxAddress(address: string, fallbackLocalPart: string, fallbackDomain: string) {
+  const at = address.lastIndexOf("@");
+  if (at <= 0 || at >= address.length - 1) return { localPart: fallbackLocalPart, domain: fallbackDomain };
+  return {
+    localPart: address.slice(0, at),
+    domain: address.slice(at + 1).toLowerCase(),
+  };
+}
+
+function normalizeAgentMailApiBaseUrl(value: string) {
+  const url = new URL(value.trim() || DEFAULT_AGENTMAIL_API_BASE_URL);
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("AgentMail API base URL must use http or https.");
+  url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/v0$/, "");
+  url.search = "";
+  url.hash = "";
+  return url.toString().replace(/\/$/, "");
+}
+
+function agentMailClientId(agentId: string) {
+  return `hivemindos-agent-mailbox:${agentId}`;
+}
+
+function agentMailErrorMessage(payload: AgentMailErrorEnvelope, status: number) {
+  if (typeof payload.message === "string" && payload.message.trim()) return compactProviderDetail(payload.message);
+  if (typeof payload.error === "string" && payload.error.trim()) return compactProviderDetail(payload.error);
+  if (Array.isArray(payload.errors) && payload.errors.length) return compactProviderDetail(JSON.stringify(payload.errors).slice(0, 500));
+  return `AgentMail API returned HTTP ${status}.`;
+}
+
 function blockedProviderStatus(
   id: AgentMailboxProviderId,
   detail: string,
@@ -633,10 +832,22 @@ function compactCommandDetail(value: string) {
     .slice(0, 280) || "Cloudflare command failed.";
 }
 
+function compactProviderDetail(value: string) {
+  return value
+    .replace(/https:\/\/api\.agentmail\.[^\s/]+\/[^\s]+/g, "AgentMail API endpoint")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 280) || "Provider command failed.";
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function dedupe(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function compactRecord(values: Record<string, string | undefined>) {
+  return Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim())));
 }

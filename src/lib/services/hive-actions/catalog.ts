@@ -333,6 +333,48 @@ export const stockTradeAction = defineHiveAction({
   },
 });
 
+export const hyperliquidTradeAction = defineHiveAction({
+  id: "wallet.hyperliquid-trade",
+  title: "Hyperliquid trade",
+  description:
+    "Quote, approve builder fees, or execute a governed Hyperliquid perp trade from a local EVM wallet.",
+  schema: z.object({
+    action: z.enum(["quote", "approve-builder", "order", "status", "positions"]).optional(),
+    agentId: z.string().optional(),
+    wallet: z.record(z.string(), z.unknown()).optional(),
+    coin: z.string().optional(),
+    side: z.enum(["long", "short"]).optional(),
+    orderType: z.enum(["market", "limit"]).optional(),
+    notionalUsd: z.number().optional(),
+    size: z.number().optional(),
+    limitPrice: z.number().optional(),
+    reduceOnly: z.boolean().optional(),
+    slippageBps: z.number().optional(),
+    confirmation: z.string().optional(),
+    approvalToken: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  }),
+  sideEffects: ["wallet", "payment", "network"],
+  risk: "critical",
+  tags: ["wallet", "payment", "hyperliquid", "perps", "trade", "execution"],
+  aliases: ["hyperliquid_trade", "hyperliquid order", "perp trade", "perps trade"],
+  mcp: { expose: true, compact: true, toolName: "hyperliquid_trade" },
+  confirmation: {
+    tokens: ["CONFIRM_HYPERLIQUID_ORDER", "CONFIRM_HYPERLIQUID_BUILDER"],
+    reason:
+      "Hyperliquid orders can open leveraged positions, and builder fee approvals grant a fee allowance to the configured builder.",
+    when: "always",
+  },
+  contextIndex: {
+    summary:
+      "Critical governed Hyperliquid perp trading route with builder-code support.",
+    retrievalText:
+      "Use hyperliquid_trade only after quoting the order and showing the configured builder fee. action: approve-builder signs Hyperliquid ApproveBuilderFee with CONFIRM_HYPERLIQUID_BUILDER from the main local EVM wallet; action: order places the governed perp order with CONFIRM_HYPERLIQUID_ORDER. The server route remains authoritative for wallet secret access, builder address, builder fee, max trade cap, spend governance, market precision, and signing.",
+    route: "/api/trading/hyperliquid",
+    methods: ["GET", "POST"],
+  },
+});
+
 export const brainGraphOverviewAction = defineHiveAction({
   id: "brain.graph-overview",
   title: "Compiled brain graph overview",
@@ -640,6 +682,7 @@ export const HIVE_ACTIONS = [
   b20IssuerProofAction,
   dexSwapAction,
   stockTradeAction,
+  hyperliquidTradeAction,
   brainGraphOverviewAction,
   brainSearchKnowledgeAction,
   brainGetNodeAction,

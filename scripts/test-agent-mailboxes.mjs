@@ -66,13 +66,46 @@ try {
   assert.equal(listed.length, 1);
   assert.equal(listed[0].address, "agent-alpha-vision@agents.example.test");
 
+  const agentMailProvider = {
+    id: "agentmail",
+    name: "AgentMail",
+    ready: true,
+    canProvision: true,
+    canSendLiveInternetMail: true,
+    canReceiveLiveInternetMail: true,
+    detail: "AgentMail fixture is ready.",
+    domain: "agentmail.to",
+    agentmail: { apiBaseUrl: "https://api.agentmail.to" },
+    blockers: [],
+    requiredActions: [],
+    evidence: [{ key: "agentmail-fixture", ok: true, detail: "AgentMail fixture provider injected by test." }],
+  };
+  const agentMailCreated = await service.createAgentMailbox(
+    { agentId: "agent-beta", agentName: "Beta Mail" },
+    {
+      now: () => new Date("2026-06-25T03:00:57.000Z"),
+      providerStatus: agentMailProvider,
+      provisionMailbox: async (input) => {
+        assert.equal(input.address, "agent-beta-mail@agentmail.to");
+        assert.equal(input.providerStatus.agentmail.apiBaseUrl, "https://api.agentmail.to");
+        return { address: "agent-beta-mail@agentmail.to", detail: "Fixture AgentMail inbox created.", providerResourceIds: { inboxId: "agent-beta-mail@agentmail.to" } };
+      },
+    },
+  );
+  assert.equal(agentMailCreated.ok, true);
+  assert.equal(agentMailCreated.mailbox.providerId, "agentmail");
+  assert.equal(agentMailCreated.mailbox.providerResourceIds.inboxId, "agent-beta-mail@agentmail.to");
+
   const persisted = JSON.parse(await readFile(process.env.HIVEMINDOS_AGENT_MAILBOX_STORE_PATH, "utf8"));
-  assert.equal(persisted.mailboxes.length, 1);
+  assert.equal(persisted.mailboxes.length, 2);
   assert.doesNotMatch(JSON.stringify(persisted), /password|secret|token/i, "mailbox store should not persist provider secrets");
 
   const routeSource = readFileSync("src/app/api/agents/mailbox/route.ts", "utf8");
   assert.match(routeSource, /readAgentMailboxOverview/);
   assert.match(routeSource, /createAgentMailbox/);
+  const serviceSource = readFileSync("src/lib/services/agent-mailboxes.ts", "utf8");
+  assert.match(serviceSource, /AGENTMAIL_API_KEY/);
+  assert.match(serviceSource, /\/v0\/inboxes/);
 
   const modalSource = readFileSync("src/features/dashboard/views/chat/AgentSettingsModal.tsx", "utf8");
   assert.match(modalSource, /\/api\/agents\/mailbox/);

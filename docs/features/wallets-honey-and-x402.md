@@ -155,7 +155,7 @@ Shared vault access and agent wallet tools are off unless the paid-agent profile
 
 ## Crypto Capability Router
 
-Agents should start with `/api/crypto/capabilities` when they need a money rail but do not need to force a provider. The router reports readiness for Bankr, x402, Veil Cash, MoneyClaw, and UsePod, then maps a natural intent to the best configured rail.
+Agents should start with `/api/crypto/capabilities` when they need a money rail but do not need to force a provider. The router reports readiness for Bankr, local Hyperliquid, x402, Veil Cash, MoneyClaw, and UsePod, then maps a natural intent to the best configured rail.
 
 Supported intents:
 
@@ -185,7 +185,7 @@ The router has three modes:
 - `select`: choose a provider for an intent without side effects.
 - `prepare`: return the existing provider endpoint, draft request body, missing readiness, approval requirement, confirmation label, clear-signing review, and crosschain plan when relevant.
 
-It does not execute spending. Execution remains with the existing gated routes such as `/api/wallet/x402`, `/api/wallet/veil/x402`, `/api/wallet/veil/transfer`, `/api/wallet/send`, `/api/wallet/moneyclaw`, `/api/usepod/status`, `/api/usepod/deposit-transaction`, and `/api/bankr/llm-credits`, or with the Bankr skill/CLI for trades.
+It does not execute spending. Execution remains with the existing gated routes such as `/api/trading/hyperliquid`, `/api/wallet/x402`, `/api/wallet/veil/x402`, `/api/wallet/veil/transfer`, `/api/wallet/send`, `/api/wallet/moneyclaw`, `/api/usepod/status`, `/api/usepod/deposit-transaction`, and `/api/bankr/llm-credits`, or with the Bankr skill/CLI for provider-mediated trades.
 
 Crosschain support is intent-first:
 
@@ -216,6 +216,7 @@ For external agents, setup also installs the `hivemind-mcp` stdio server. Its cr
 - `select_crypto_rail`
 - `prepare_crypto_action`
 - `review_crypto_action`
+- `hyperliquid_trade`
 - `agent_crypto_identity`
 - `crypto_risk_monitor`
 
@@ -243,12 +244,33 @@ Token-facing surfaces:
 
 ## Trade Tab
 
+> For the full, dedicated trading reference — every crypto rail, stock venue, agent/MCP access path, and the governance model — see the [Trading docs](../trading/). This section is the wallet-context summary.
+
 The Trade tab is a dedicated action surface for buying, selling, and swapping. It is segmented into **Crypto** and **Stocks** and acts on a selected agent's governed wallet. It complements the Wallets tab, which stays focused on accounts, rails, balances, and governance.
 
-- **Crypto** is capability-first: it reads `/api/crypto/capabilities` to show every supported action (swap/trade, perps, prediction markets, bridge, token launch, NFT, send, receive, private transfer, paid API, fund LLM credits) with live readiness, lets the user prepare an action to see the clear-signing review, and executes through the same hardened provider endpoints (`/api/bankr/actions`, `/api/wallet/send`, `/api/wallet/x402`, `/api/wallet/veil/*`, and others). The capability router picks the configured provider, so users express intent rather than naming a rail.
+- **Crypto** is capability-first: it reads `/api/crypto/capabilities` to show every supported action (swap/trade, perps, prediction markets, bridge, token launch, NFT, send, receive, private transfer, paid API, fund LLM credits) with live readiness, lets the user prepare an action to see the clear-signing review, and executes through the same hardened provider endpoints (`/api/trading/hyperliquid`, `/api/bankr/actions`, `/api/wallet/send`, `/api/wallet/x402`, `/api/wallet/veil/*`, and others). The capability router picks the configured provider, so users express intent rather than naming a rail.
 - **Stocks** buys and sells through the unified trade rail below.
 
 The tab lives under `src/features/dashboard/views/trade/` and is reachable from the left navigation shelf.
+
+## Hyperliquid Perp Trading
+
+HivemindOS can trade Hyperliquid perpetual futures from a local EVM wallet. Local
+Hyperliquid uses the selected wallet's own Hyperliquid account and collateral, while
+Bankr-mediated Hyperliquid uses Bankr's connected trading wallet. The app should always
+show which source of funds is being used before you confirm.
+
+In the Trade tab, local Hyperliquid supports BTC, ETH, SOL, and HYPE perps; long and
+short direction; market and limit orders; slippage guards; reduce-only closes; status
+refresh; quotes; builder-fee approval; and final order confirmation.
+
+Official HivemindOS builds charge a small Hyperliquid builder fee on filled local perp
+orders: **0.5 bps (0.005%)** of filled notional. The builder fee is approved separately
+from an order, so a wallet that has not approved the current fee cannot trade until the
+approval step is complete.
+
+For the full user-facing guide, including fees, funding, liquidation risk, supported
+markets, agent behavior, and current limitations, see [Hyperliquid Perps](../trading/hyperliquid.html).
 
 ## Stock Trading (Alpaca And xStocks)
 

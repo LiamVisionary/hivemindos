@@ -22,6 +22,7 @@ type BankrActionBody = {
   draftMessage?: unknown;
   confirmation?: unknown;
   jobId?: unknown;
+  threadId?: unknown;
 };
 
 export async function GET(request: NextRequest) {
@@ -94,5 +95,6 @@ function draftFromBody(body: BankrActionBody) {
     prompt,
     readOnly: inferred?.readOnly ?? (intent === "portfolio" || (intent === "agent-job" && Boolean(body.jobId))),
     jobId: typeof body.jobId === "string" ? body.jobId.trim() : inferred?.jobId,
+    threadId: typeof body.threadId === "string" ? body.threadId.trim() : undefined,
   };
 }

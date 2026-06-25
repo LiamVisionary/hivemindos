@@ -17,8 +17,6 @@ const WEEKLY_REWARD_STATE_KEY = "hivemindos.progressRewards.weeklyShown.v1";
 
 type ProgressRewardPopupProps = {
   enabled?: boolean;
-  onOpenWork?: () => void;
-  onOpenCompanies?: () => void;
 };
 
 type RewardQueueItem = {
@@ -29,8 +27,6 @@ type RewardQueueItem = {
 
 export function ProgressRewardPopup({
   enabled = true,
-  onOpenWork,
-  onOpenCompanies,
 }: ProgressRewardPopupProps) {
   const [queue, setQueue] = useState<RewardQueueItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,16 +75,6 @@ export function ProgressRewardPopup({
     void saveDashboardStateValue(currentStateKey, current.id);
     setQueue((items) => items.slice(1));
   }, [current, currentStateKey]);
-
-  const openWork = useCallback(() => {
-    dismiss();
-    onOpenWork?.();
-  }, [dismiss, onOpenWork]);
-
-  const openCompanies = useCallback(() => {
-    dismiss();
-    onOpenCompanies?.();
-  }, [dismiss, onOpenCompanies]);
 
   if (!current || !copy) return null;
 
@@ -153,19 +139,9 @@ export function ProgressRewardPopup({
         ) : null}
 
         <div className={styles.actions}>
-          <button className={styles.primaryAction} type="button" onClick={openWork}>
-            <ListChecks size={15} aria-hidden="true" />
-            <span>Work Board</span>
-          </button>
-          {current.topCompanies.length ? (
-            <button className={styles.secondaryAction} type="button" onClick={openCompanies}>
-              <Trophy size={15} aria-hidden="true" />
-              <span>Companies</span>
-            </button>
-          ) : null}
           <button className={styles.secondaryAction} type="button" onClick={dismiss}>
             <CheckCircle2 size={15} aria-hidden="true" />
-            <span>{loading ? "Done" : "Nice"}</span>
+            <span>{loading ? "Done" : "Let's get buzzing."}</span>
           </button>
         </div>
       </section>

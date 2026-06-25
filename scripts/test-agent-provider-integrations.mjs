@@ -8,6 +8,7 @@ const providerIds = new Set(EXTERNAL_AGENT_PROVIDERS.map((provider) => provider.
 for (const id of [
   "browser-use",
   "awesome-mcp-servers",
+  "agentmail",
   "cloudflare-agentic-inbox",
   "mcp-email-server",
   "openhands",
@@ -23,6 +24,10 @@ for (const id of [
 const browserMcp = searchHiveMcpCatalog("browser forms", 5);
 assert.equal(browserMcp[0]?.id, "browser-use");
 assert.ok(browserMcp[0]?.credentialKeys.includes("BROWSER_USE_API_KEY"));
+
+const agentMailMcp = searchHiveMcpCatalog("agentmail email inbox", 5);
+assert.equal(agentMailMcp[0]?.id, "agentmail");
+assert.ok(agentMailMcp[0]?.credentialKeys.includes("AGENTMAIL_API_KEY"));
 
 const githubMcp = searchHiveMcpCatalog("github pull request", 5);
 assert.equal(githubMcp[0]?.id, "github");
@@ -121,6 +126,7 @@ assert.match(agenticInboxRoute, /action === "deploy"/);
 const appCatalog = readFileSync("src/features/dashboard/agent-capability-catalog.ts", "utf8");
 const myAppsPanel = readFileSync("src/features/dashboard/views/MyAppsPanel.tsx", "utf8");
 assert.match(appCatalog, /installableServiceId: "browser-use"/);
+assert.match(appCatalog, /id: "agentmail"/);
 assert.match(appCatalog, /installableServiceId: "agentic-inbox"/);
 assert.match(appCatalog, /installableServiceId: "mcp-email-server"/);
 assert.match(appCatalog, /installableServiceId: "openhands"/);

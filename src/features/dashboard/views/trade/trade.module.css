@@ -180,6 +180,17 @@
 .fieldRow { display: flex; gap: 10px; flex-wrap: wrap; }
 .fieldRow > .field { flex: 1 1 140px; margin-bottom: 0; }
 
+.checkboxLine {
+  flex: 1 1 140px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-top: 20px;
+  color: var(--fg-2, #cfc8ba);
+  font-size: 13px;
+}
+
 .textarea {
   background: var(--panel-hi, #1e222b);
   border: 1px solid var(--line-2, #2b3038);

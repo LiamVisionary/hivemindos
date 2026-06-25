@@ -14,6 +14,7 @@ The provider catalog makes external options retrievable by agents through `/api/
 - Browser Use for browser automation tasks such as navigation, forms, extraction, and screenshots.
 - Awesome MCP Servers as a curated MCP discovery lane for tools such as GitHub, Slack, Linear, Stripe, Postgres, and Notion.
 - Agent Mailboxes as the product-facing one-click mailbox flow for persistent agent email addresses.
+- AgentMail as a hosted inbox API backend for one-click agent mailboxes, plus its hosted MCP server for inbox/message tools.
 - Cloudflare Agentic Inbox as one provider backend for routable email-agent Workers.
 - MCP Email Server as an advanced local stdio bridge for existing IMAP and optional SMTP mailboxes.
 - OpenHands and Aider as optional coding runtime adapters.
@@ -45,6 +46,8 @@ The Browser Use provider card has a Full permissions toggle. Enabling it require
 
 `GET /api/mcp/catalog` returns a curated MCP server list with capability tags, credential key names, side-effect classes, install hints, and safety notes. Agents should verify credentials and side effects before installing or calling a server.
 
+AgentMail's hosted MCP endpoint is included for runtimes that prefer MCP. Use OAuth-capable clients against `https://mcp.agentmail.to/mcp` when available, or pass `AGENTMAIL_API_KEY` through the MCP client when OAuth is unavailable. Live send/reply tools remain write-capable email side effects and should confirm recipients, subject, body, and attachment intent before use.
+
 ## RentAHuman REST API
 
 `/api/rentahuman` is the HivemindOS REST facade for RentAHuman. It reads `RENTAHUMAN_API_KEY` and optional `RENTAHUMAN_API_URL` from shared env at runtime and reports only whether those keys are present. The default upstream base URL is `https://rentahuman.ai/api`.
@@ -71,7 +74,9 @@ Agent Settings exposes a mailbox action for existing agents. The intended user f
 
 `GET /api/agents/mailbox?agentId=<agent>` returns existing mailbox records plus provider readiness. `POST /api/agents/mailbox` with `action: "create"`, `agentId`, and `agentName` attempts live provisioning. A mailbox is marked ready only when the selected provider can both receive mail for the address and send live internet email from the same domain. If no provider is live-ready, the API returns a blocked provider report with concrete setup blockers instead of creating a fake mailbox.
 
-Cloudflare Agentic Inbox is one backend for this contract. It requires a Cloudflare DNS domain with Email Routing and Email Sending ready, and an Agentic Inbox Worker target for routing rules. The app may create the per-agent routing rule automatically once the provider is ready; the user should not configure IMAP or SMTP for each agent.
+AgentMail is one hosted backend for this contract. Configure `AGENTMAIL_API_KEY` in shared env; optional `AGENTMAIL_DOMAIN` or `HIVEMINDOS_AGENTMAIL_DOMAIN` selects a verified custom domain, otherwise the provider defaults to `agentmail.to`. HivemindOS creates each inbox with a deterministic `client_id` so retries do not create duplicate AgentMail inboxes. Optional `AGENTMAIL_API_BASE_URL` or `AGENTMAIL_API_URL` can point at another AgentMail-compatible API host.
+
+Cloudflare Agentic Inbox is another backend for this contract. It requires a Cloudflare DNS domain with Email Routing and Email Sending ready, and an Agentic Inbox Worker target for routing rules. The app may create the per-agent routing rule automatically once the provider is ready; the user should not configure IMAP or SMTP for each agent.
 
 MCP Email Server remains useful for advanced bring-your-own-mailbox deployments and regression tests. It is not the default mailbox creation UX.
 

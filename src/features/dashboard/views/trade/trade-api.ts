@@ -7,6 +7,8 @@
 // prepare response (prepared.confirmation), never assumed.
 export const BANKR_ACTION_CONFIRMATION_FALLBACK = "BANKR_ACTION";
 export const FUND_LLM_CREDITS_CONFIRMATION = "FUND_BANKR_LLM_CREDITS";
+export const HYPERLIQUID_ORDER_CONFIRMATION = "CONFIRM_HYPERLIQUID_ORDER";
+export const HYPERLIQUID_BUILDER_CONFIRMATION = "CONFIRM_HYPERLIQUID_BUILDER";
 
 export type CryptoProviderCapability = {
   provider: string;
@@ -225,6 +227,138 @@ export async function quoteSwap(params: { agentId: string; sellToken: string; bu
 
 export async function executeSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; confirmation: string; slippageBps?: number }): Promise<{ ok: boolean; error?: string; result?: DexSwapResult }> {
   return postJson("/api/trading/swap", { action: "execute", ...params });
+}
+
+// ---- Hyperliquid local perp rail -------------------------------------------
+export type HyperliquidBuilderConfig = {
+  configured: boolean;
+  official: boolean;
+  source: "official-policy";
+  policyUrl: string;
+  builderAddress?: string;
+  builderFeeTenthBps: number;
+  builderFeeBps: number;
+  maxBuilderFeeTenthBps: number;
+  maxBuilderFeeRate: string;
+  isTestnet: boolean;
+  missing: string[];
+  detail: string;
+};
+
+export type HyperliquidBuilderApproval = {
+  configured: boolean;
+  builderAddress?: string;
+  approved: boolean;
+  approvedMaxFeeTenthBps: number;
+  requiredFeeTenthBps: number;
+  maxApprovalFeeTenthBps: number;
+  maxApprovalFeeRate: string;
+  activeApprovalSlot: boolean;
+  approvedBuilders: string[];
+  missing: string[];
+  error?: string;
+  detail: string;
+};
+
+export type HyperliquidOrderSummary = {
+  coin: string;
+  assetId: number;
+  side: "long" | "short";
+  orderType: "market" | "limit";
+  timeInForce: "Gtc" | "Ioc";
+  reduceOnly: boolean;
+  price: string;
+  size: string;
+  midPrice: number;
+  notionalUsd: number;
+};
+
+export type HyperliquidQuote = {
+  network: "mainnet" | "testnet";
+  walletAddress: string;
+  order: HyperliquidOrderSummary;
+  builder?: { b: string; f: number };
+  builderConfig: HyperliquidBuilderConfig;
+  builderApproval: HyperliquidBuilderApproval;
+  detail: string;
+};
+
+export type HyperliquidAccountStatus = {
+  ok: true;
+  network: "mainnet" | "testnet";
+  walletAddress: string;
+  accountValueUsd?: number;
+  withdrawableUsd?: number;
+  positions: Array<{
+    coin: string;
+    side: "long" | "short" | "flat";
+    size: number;
+    entryPrice?: number;
+    positionValueUsd?: number;
+    unrealizedPnlUsd?: number;
+    liquidationPrice?: number;
+    leverage?: number;
+    marginMode?: string;
+  }>;
+  openOrders: unknown[];
+  builderConfig: HyperliquidBuilderConfig;
+  builderApproval: HyperliquidBuilderApproval;
+  detail: string;
+};
+
+export type HyperliquidOrderResult = {
+  network: "mainnet" | "testnet";
+  walletAddress: string;
+  order: HyperliquidOrderSummary;
+  builder?: { b: string; f: number };
+  statuses: unknown[];
+  reference: string;
+  detail: string;
+};
+
+export async function fetchHyperliquidStatus(agentId: string): Promise<{ ok: boolean; error?: string; status?: HyperliquidAccountStatus }> {
+  return postJson("/api/trading/hyperliquid", { action: "status", agentId });
+}
+
+export async function quoteHyperliquidTrade(params: {
+  agentId: string;
+  coin: string;
+  side: "long" | "short";
+  orderType: "market" | "limit";
+  notionalUsd?: number;
+  size?: number;
+  limitPrice?: number;
+  reduceOnly?: boolean;
+  slippageBps?: number;
+}): Promise<{ ok: boolean; error?: string; quote?: HyperliquidQuote; confirmation?: string; builderConfirmation?: string }> {
+  return postJson("/api/trading/hyperliquid", { action: "quote", ...params });
+}
+
+export async function approveHyperliquidBuilder(agentId: string): Promise<{ ok: boolean; error?: string; result?: { detail: string } }> {
+  return postJson("/api/trading/hyperliquid", {
+    action: "approve-builder",
+    agentId,
+    confirmation: HYPERLIQUID_BUILDER_CONFIRMATION,
+  });
+}
+
+export async function executeHyperliquidTrade(params: {
+  agentId: string;
+  coin: string;
+  side: "long" | "short";
+  orderType: "market" | "limit";
+  notionalUsd?: number;
+  size?: number;
+  limitPrice?: number;
+  reduceOnly?: boolean;
+  slippageBps?: number;
+  approvalToken?: string;
+}): Promise<{ ok: boolean; error?: string; result?: HyperliquidOrderResult }> {
+  return postJson("/api/trading/hyperliquid", {
+    action: "order",
+    ...params,
+    confirmation: HYPERLIQUID_ORDER_CONFIRMATION,
+  });
 }
 
 export async function fetchTradingReadiness(): Promise<TradingReadiness | null> {

@@ -124,7 +124,7 @@ The staking layer is boring on purpose. The interesting part is what HivemindOS 
 
 The product staking flow should be:
 
-1. Open the dedicated `/stake` route or the Wallets view.
+1. Open the Stake page or the Wallets view.
 2. Connect or add a Base-compatible wallet.
    - In the Tauri desktop app, staking uses a local HivemindOS wallet from the encrypted wallet vault.
    - In a normal browser build, staking can use an injected browser wallet when available.
@@ -163,7 +163,7 @@ These thresholds are fixed in HIVE at launch. They should not float minute-by-mi
 
 Early believers take more risk while the ecosystem is smaller, so they may earn meaningful status earlier. If HIVE appreciates later, those early locked positions become harder to replicate, which is part of the alignment mechanic.
 
-## Proposed Seasonal HIVE Reward Buckets
+## Seasonal HIVE Reward Buckets
 
 Staking should feel financially meaningful, not only like a badge system.
 
@@ -173,7 +173,7 @@ The preferred reward framing is:
 Stake higher. Earn from a bigger bucket.
 ```
 
-Every reward season, eligible HivemindOS revenue can fund HIVE reward buckets for stakers. Each tier gets its own bucket, and stakers inside that tier split it based on active stake.
+Every reward season, eligible HivemindOS revenue can fund HIVE reward buckets for stakers. Each tier gets its own bucket, and stakers inside that tier split it based on time-weighted active stake.
 
 This keeps the reward ladder easy to understand:
 
@@ -216,38 +216,46 @@ Each season should publish:
 - claim date
 - eligible revenue amount
 - HIVE reward amount
+- HIVE conversion price or funded HIVE amount
 - tier bucket rates
 - any per-wallet caps
 - any lock-duration bonuses
 
-The core formula is:
+Reward seasons use these timing rules:
 
-```text
-tier reward bucket = eligible revenue * tier bucket rate
-```
+- No wallet has to stake before a season starts.
+- A wallet staked before the season starts earns full-season weight.
+- A wallet that stakes mid-season earns prorated weight from the time the stake becomes active.
+- A wallet must have at least 7 active staking days during the season to claim seasonal HIVE rewards.
+- A wallet that requests unstaking stops earning seasonal reward weight for the requested amount at the request time, even though the withdrawal cooldown still has to finish before the HIVE can be withdrawn.
+- Last-minute staking below the 7 active-day minimum is ineligible and does not reduce the rewards available to eligible stakers.
 
-```text
-your reward = your active stake / total active stake in your tier * tier reward bucket
-```
+How your share is worked out:
+
+- First, the season sets a reward bucket for each tier.
+- Then each tier's bucket is split among eligible wallets in that tier.
+- The more HIVE you stake, and the longer it stays active during the season, the larger your share.
+- If the season publishes a HIVE price for rewards, your reward value can be shown as an estimated HIVE amount.
 
 Example:
 
 ```text
 Season revenue: $1,000,000
-Builder bucket: $2,500 in HIVE
+Holder bucket: $625 in HIVE
 
-You stake: 5,000,000 HIVE
-Total Builder stake: 50,000,000 HIVE
+You stake: 1,000,000 HIVE halfway through a 90-day season.
+Your stake counts for 45 days.
+Other eligible Holder wallets bring the total Holder staking time to the same as 165 full days of 1,000,000 HIVE.
 
-Your share: 10%
-Your reward: $250 in HIVE
+Your share: 27.27%
+Your reward: $170.45 in HIVE
 ```
 
 Public copy should lead with the total pool and the 32x ladder, not tiny percentages. For example:
 
 > Every `$1M` in eligible HivemindOS revenue can send `$39,375` worth of HIVE into staker reward buckets. Visionary gets the largest bucket: 32x the Holder bucket. Each tier splits its own bucket, so lower tiers are not diluted by higher-tier wallets.
 
-This should be treated as a proposed reward policy until implemented through a reviewed rewards contract, claim service, treasury process, or other explicit payout mechanism. Do not describe the existing stake vault as paying these rewards until that reward layer exists.
+The app follows these season rules when showing reward estimates. Actual HIVE payout still needs an official claim or treasury process. Do not describe the principal stake vault as paying rewards directly.
 
 ## Managed Service Discounts
 
@@ -592,7 +600,7 @@ The staking layer should avoid creating unnecessary security or governance risk.
 - Make benefit changes public before they take effect.
 - Treat staking as an alignment mechanism, not a promise of financial return.
 - Keep staking non-custodial and contract-readable.
-- Do not bolt automatic yield, emissions, slashing, or lock extensions into the principal staking vault until the simple staking layer is proven. The seasonal HIVE reward bucket proposal should remain a separate claim or treasury reward layer unless a later design explicitly changes that boundary.
+- Do not bolt automatic yield, emissions, slashing, or lock extensions into the principal staking vault until the simple staking layer is proven. Seasonal HIVE rewards should stay separate from the principal staking vault unless a later public design changes that boundary.
 - Do not deploy upgradeability unless the admin, timelock, and user notice model are explicit.
 
 ## Summary

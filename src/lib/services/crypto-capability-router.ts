@@ -10,6 +10,11 @@ import { resolveVeilCliPath, resolveVeilMcpPath } from "@/lib/services/wallet/ve
 import { buildClearSigningReview, type ClearSigningReview } from "@/lib/services/crypto/clear-signing";
 import { isCrosschainCryptoIntent, planCrosschainIntent, type CrosschainIntentPlan } from "@/lib/services/crypto/crosschain-intents";
 import { quoteTradingPlatformFee, type PlatformFeeQuote } from "@/lib/services/wallet/platform-fees";
+import {
+  HYPERLIQUID_ORDER_CONFIRMATION,
+  hyperliquidPolicyPresence,
+  readHyperliquidBuilderConfig,
+} from "@/lib/services/trading/hyperliquid";
 
 export type CryptoCapabilityIntent =
   | "status"
@@ -32,7 +37,7 @@ export type CryptoCapabilityIntent =
   | "card-payment"
   | "fund-llm-credits";
 
-export type CryptoCapabilityProvider = Exclude<AgentPaymentProvider, "manual" | "clawcard">;
+export type CryptoCapabilityProvider = Exclude<AgentPaymentProvider, "manual" | "clawcard"> | "hyperliquid";
 
 export type CryptoRouteMode = "read" | "prepare" | "execute";
 
@@ -105,7 +110,7 @@ const VENICE_ENV_KEYS = ["VENICE_API_KEY"] as const;
 const VEIL_ENV_KEYS = ["VEIL_KEY"] as const;
 
 const ROUTE_PRIORITY: Record<CryptoCapabilityIntent, CryptoCapabilityProvider[]> = {
-  status: ["moneyclaw", "x402", "veil", "usepod", "venice", "bankr"],
+  status: ["moneyclaw", "x402", "veil", "usepod", "venice", "hyperliquid", "bankr"],
   portfolio: ["bankr", "moneyclaw", "x402", "usepod"],
   receive: ["moneyclaw", "x402", "usepod", "veil"],
   send: ["x402", "moneyclaw", "veil"],
@@ -118,7 +123,7 @@ const ROUTE_PRIORITY: Record<CryptoCapabilityIntent, CryptoCapabilityProvider[]>
   "crosschain-payment": ["bankr"],
   "token-launch": ["bankr"],
   polymarket: ["bankr"],
-  hyperliquid: ["bankr"],
+  hyperliquid: ["hyperliquid", "bankr"],
   automation: ["bankr"],
   nft: ["bankr"],
   "agent-job": ["bankr"],
@@ -133,6 +138,7 @@ const PROVIDER_INTENTS: Record<CryptoCapabilityProvider, CryptoCapabilityIntent[
   usepod: ["status", "receive", "paid-api"],
   venice: ["status", "paid-api"],
   veil: ["status", "receive", "send", "private-transfer", "paid-api", "private-paid-api"],
+  hyperliquid: ["status", "hyperliquid"],
 };
 
 export function normalizeCryptoIntent(value: unknown): CryptoCapabilityIntent {
@@ -158,6 +164,7 @@ export function normalizeCryptoProvider(value: unknown): CryptoCapabilityProvide
   if (typeof value !== "string") return undefined;
   const normalized = value.trim().toLowerCase();
   if (normalized === "money-claw") return "moneyclaw";
+  if (normalized === "hl" || normalized === "hyper-liquid") return "hyperliquid";
   if (isCryptoCapabilityProvider(normalized)) return normalized;
   return undefined;
 }
@@ -171,6 +178,7 @@ export async function getCryptoCapabilityMap(input: CryptoCapabilityRouterInput 
     podProviderCapability(input.wallet),
     veniceCapability(input.wallet),
     veilCapability(input),
+    hyperliquidCapability(input),
   ]);
   const selected = selectCryptoProvider(providers, intent, input.preferredProvider);
   return {
@@ -444,6 +452,48 @@ async function veilCapability(input: CryptoCapabilityRouterInput): Promise<Crypt
   });
 }
 
+async function hyperliquidCapability(input: CryptoCapabilityRouterInput): Promise<CryptoProviderCapability> {
+  const [builderConfig, policy, walletInfo] = await Promise.all([
+    readHyperliquidBuilderConfig(),
+    hyperliquidPolicyPresence(),
+    input.agentId ? getWalletInfo(input.agentId).catch(() => null) : Promise.resolve(null),
+  ]);
+  const walletAddress = walletInfo?.address || input.wallet?.vaultAddress || input.wallet?.walletAddress;
+  const walletNetwork = walletInfo?.network || input.wallet?.network;
+  const hasLocalWallet = Boolean(walletInfo);
+  const evmWallet = typeof walletNetwork === "string" && walletNetwork.startsWith("eip155:");
+  const tradeCapUsd = Number(input.wallet?.maxTradeUsd) > 0
+    ? Number(input.wallet?.maxTradeUsd)
+    : Number(input.wallet?.maxPaymentUsd) || 0;
+  const configured = builderConfig.configured && Boolean(walletAddress) && evmWallet;
+  const spendReady = configured && hasLocalWallet && input.wallet?.enabled === true && tradeCapUsd > 0;
+  return providerCapability({
+    provider: "hyperliquid",
+    configured,
+    spendReady,
+    credentials: policy,
+    requiresApproval: true,
+    missing: [
+      ...builderConfig.missing,
+      ...(walletAddress ? [] : ["Create or import an encrypted local EVM wallet."]),
+      ...(hasLocalWallet ? [] : ["Hyperliquid execution needs an encrypted local signing wallet, not a watch-only address."]),
+      ...(evmWallet ? [] : ["Select an EVM wallet network for Hyperliquid."]),
+      ...(input.wallet?.enabled === true ? [] : ["Wallet policy was not supplied or is disabled."]),
+      ...(tradeCapUsd > 0 ? [] : ["Set maxTradeUsd or maxPaymentUsd before enabling Hyperliquid execution."]),
+    ],
+    evidence: [
+      ...(builderConfig.configured ? [builderConfig.detail] : []),
+      ...(hasLocalWallet ? [`Encrypted local EVM wallet exists for ${input.agentId}.`] : []),
+      ...(evmWallet ? [`Wallet network is ${walletNetwork}.`] : []),
+      ...(tradeCapUsd > 0 ? [`Wallet trade cap is $${tradeCapUsd.toFixed(2)}.`] : []),
+    ],
+    endpoints: [
+      { intent: "status", method: "GET", route: "/api/trading/hyperliquid", note: "Read Hyperliquid account state, open orders, and builder approval status." },
+      { intent: "hyperliquid", method: "POST", route: "/api/trading/hyperliquid", note: "Quote, approve builder fees, or place governed Hyperliquid perp orders with explicit confirmation." },
+    ],
+  });
+}
+
 function providerCapability(input: {
   provider: CryptoCapabilityProvider;
   configured: boolean;
@@ -454,7 +504,12 @@ function providerCapability(input: {
   endpoints: CryptoProviderCapability["endpoints"];
   requiresApproval?: boolean;
 }): CryptoProviderCapability {
-  const features = agentPaymentProviderFeatures(input.provider);
+  const features = input.provider === "hyperliquid"
+    ? {
+      label: "Hyperliquid",
+      summary: "Local Hyperliquid perp trading with official builder-policy routing and wallet governance.",
+    }
+    : agentPaymentProviderFeatures(input.provider);
   return {
     provider: input.provider,
     label: features.label,
@@ -522,6 +577,15 @@ function requestBodyForIntent(
       confirmation: confirmationForIntent(intent, provider, input.wallet),
     };
   }
+  if (provider === "hyperliquid" && intent === "hyperliquid") {
+    return {
+      action: "quote",
+      agentId: input.agentId,
+      coin: input.prompt,
+      notionalUsd: input.amountUsd,
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
+    };
+  }
   if (provider === "bankr" && intent !== "fund-llm-credits") {
     return {
       agentId: input.agentId,
@@ -541,6 +605,7 @@ function guidanceForIntent(intent: CryptoCapabilityIntent, selected: CryptoProvi
   if (!selected.ready) return `Configure ${selected.label}: ${selected.missing.join(" ")}`;
   if (intent === "private-transfer") return `Review recipient, asset, amount, and cap, then execute ${selected.endpoints.find((endpoint) => endpoint.intent === intent)?.route}.`;
   if (intent === "paid-api" || intent === "private-paid-api") return `Use ${selected.label} for this paid API call and keep the request under the supplied wallet policy cap.`;
+  if (selected.provider === "hyperliquid" && intent === "hyperliquid") return "Use /api/trading/hyperliquid to quote first, approve the configured builder fee if needed, then execute only after CONFIRM_HYPERLIQUID_ORDER.";
   if (selected.provider === "bankr" && intent === "portfolio") return "Use /api/bankr/actions for a read-only Bankr wallet portfolio check.";
   if (selected.provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return "Use /api/bankr/actions to prepare the Bankr action; execute only after the user confirms the reviewed draft.";
   return `Use ${selected.label} for ${intent}.`;
@@ -550,6 +615,7 @@ function confirmationForIntent(intent: CryptoCapabilityIntent, provider: CryptoC
   if (intent === "private-transfer") return canAutoSendVeilTransfer(wallet) ? undefined : VEIL_CASH_TRANSFER_CONFIRMATION_LABEL;
   if (intent === "private-paid-api" || (intent === "paid-api" && provider === "veil")) return "VEIL_X402";
   if (intent === "send") return "SEND_USDC";
+  if (provider === "hyperliquid" && intent === "hyperliquid") return HYPERLIQUID_ORDER_CONFIRMATION;
   if (provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return BANKR_ACTION_CONFIRMATION;
   if (intent === "fund-llm-credits") return "FUND_BANKR_LLM_CREDITS";
   return undefined;
@@ -608,7 +674,7 @@ function buildPreparedActionReview(input: {
   confirmation?: string;
 }) {
   return buildClearSigningReview({
-    kind: reviewKindForIntent(input.intent),
+    kind: reviewKindForIntent(input.intent, input.provider),
     intent: input.intent,
     provider: input.provider,
     agentId: input.input.agentId,
@@ -634,11 +700,12 @@ async function preparedPlatformFee(inputIntent: CryptoCapabilityIntent, input: C
   return quoteTradingPlatformFee({ source: "wallet-send", network, amountUsd });
 }
 
-function reviewKindForIntent(intent: CryptoCapabilityIntent) {
+function reviewKindForIntent(intent: CryptoCapabilityIntent, provider?: CryptoCapabilityProvider) {
   if (intent === "paid-api" || intent === "private-paid-api") return "x402";
   if (intent === "private-transfer") return "private-transfer";
   if (intent === "send") return "send";
   if (isCrosschainPreparedIntent(intent)) return "crosschain-intent";
+  if (intent === "hyperliquid" && provider === "hyperliquid") return "raw-transaction";
   if (["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "fund-llm-credits"].includes(intent)) return "bankr-action";
   return "raw-transaction";
 }
@@ -678,6 +745,7 @@ function isCryptoCapabilityIntent(value: string): value is CryptoCapabilityInten
 }
 
 function isCryptoCapabilityProvider(value: string): value is CryptoCapabilityProvider {
+  if (value === "hyperliquid") return true;
   return Object.keys(AGENT_PAYMENT_PROVIDER_FEATURES)
     .filter((provider) => provider !== "manual" && provider !== "clawcard")
     .includes(value);

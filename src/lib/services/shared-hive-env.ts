@@ -9,7 +9,7 @@ const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
 export type HiveEnvPresence = {
   key: string;
   present: boolean;
-  source: "process" | "shared-hive-env" | "missing";
+  source: "process" | "shared-hive-env" | "official-policy" | "missing";
 };
 
 export async function hiveEnvValue(key: string): Promise<string> {

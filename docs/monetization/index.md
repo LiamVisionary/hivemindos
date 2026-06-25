@@ -75,7 +75,7 @@ The proposed staking reward message is simple:
 Stake higher. Earn from a bigger bucket.
 ```
 
-Every reward season, eligible HivemindOS revenue can fund separate HIVE reward buckets for each staking tier. Each tier splits its own bucket, so higher-tier wallets do not dilute lower-tier wallets.
+Every reward season, eligible HivemindOS revenue can fund separate HIVE reward buckets for each staking tier. Each tier splits its own bucket by time-weighted staking, so higher-tier wallets do not dilute lower-tier wallets and late stakes only earn for the time they were active.
 
 For every `$1,000,000` in eligible HivemindOS revenue, the proposed display model is:
 
@@ -89,7 +89,7 @@ For every `$1,000,000` in eligible HivemindOS revenue, the proposed display mode
 | Visionary |          2% |                 `$20,000` in HIVE |
 | **Total** |  **3.9375%** |          **`$39,375` in HIVE rewards** |
 
-This is a proposed reward policy until implemented through a reviewed rewards contract, claim service, treasury process, or other explicit payout mechanism. The current staking vault should not be described as paying HIVE rewards directly.
+The seasonal reward rules are simple: there is no pre-season staking requirement, a wallet needs at least 7 active staking days in the season to qualify, rewards are based on how much HIVE was staked and for how long, and reward credit stops when a wallet requests unstaking. When a season publishes the HIVE price used for rewards, the page can show both the dollar value and the estimated HIVE amount. Actual payouts still need an official claim or treasury process. The current staking vault should not be described as paying HIVE rewards directly.
 
 ## Paid-Service Pages
 

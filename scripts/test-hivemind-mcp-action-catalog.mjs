@@ -65,7 +65,7 @@ try {
     );
   }
 
-  for (const existing of ["handoff_file_task", "send_usdc", "dex_swap", "stock_trade"]) {
+  for (const existing of ["handoff_file_task", "send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade"]) {
     assert.ok(actualByName.has(existing), `${existing} should remain exposed`);
   }
 } catch (error) {

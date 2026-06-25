@@ -10,17 +10,23 @@ import {
   SWAP_MAX_USD,
   SWAP_TOKENS_BASE,
   SWAP_TOKENS_SOLANA,
+  type HyperliquidAccountStatus,
+  type HyperliquidQuote,
   type CryptoCapabilityMap,
   type CryptoPreparedAction,
   type CryptoProviderCapability,
   type DexSwapQuote,
   type DexSwapResult,
+  approveHyperliquidBuilder,
   executeBankrDraft,
+  executeHyperliquidTrade,
   executePreparedRoute,
   executeSwap,
   fetchCryptoCapabilities,
+  fetchHyperliquidStatus,
   fundBankrLlmCredits,
   prepareCryptoAction,
+  quoteHyperliquidTrade,
   quoteSwap,
 } from "./trade-api";
 
@@ -118,8 +124,11 @@ export function CryptoTradeView({
   // The "trade" intent (swap) runs on the local DEX rail (0x) for a non-Bankr
   // wallet; the other Bankr-only intents still require the Bankr wallet.
   const useDexRail = selected.id === "trade" && Boolean(walletKind) && walletKind !== "bankr";
+  const useHyperliquidRail = selected.id === "hyperliquid" && Boolean(walletKind) && walletKind !== "bankr";
   const bankrWalletMismatch = fundingProvider === "bankr" && walletKind !== "bankr" && !useDexRail;
-  const isSolanaWallet = String((wallet as { network?: string } | null)?.network || "").includes("solana");
+  const walletNetwork = String((wallet as { network?: string } | null)?.network || "");
+  const isSolanaWallet = walletNetwork.includes("solana");
+  const isEvmWallet = walletNetwork.startsWith("eip155:");
   const dexTokens = isSolanaWallet ? SWAP_TOKENS_SOLANA : SWAP_TOKENS_BASE;
   const dexChainLabel = isSolanaWallet ? "Jupiter on Solana" : "0x on Base";
 
@@ -241,12 +250,16 @@ export function CryptoTradeView({
         <p className={styles.subtitle}>
           {useDexRail
             ? `Swap from ${agentName} via ${dexChainLabel} · $${SWAP_MAX_USD} cap`
+            : useHyperliquidRail
+              ? `Perps from ${agentName} via Hyperliquid`
             : selectedReadiness.provider ? `Routes via ${selectedReadiness.provider.label}` : "No configured provider for this action"}
         </p>
-        {fundingNote && !useDexRail ? <p className={styles.note} style={{ marginTop: 4 }}>{fundingNote}</p> : null}
+        {fundingNote && !useDexRail && !useHyperliquidRail ? <p className={styles.note} style={{ marginTop: 4 }}>{fundingNote}</p> : null}
 
         {useDexRail ? (
           <DexSwapForm agentId={agentId} agentName={agentName} tokens={dexTokens} chainLabel={dexChainLabel} setActiveView={setActiveView} />
+        ) : useHyperliquidRail ? (
+          <HyperliquidTradeForm agentId={agentId} agentName={agentName} isEvmWallet={isEvmWallet} setActiveView={setActiveView} />
         ) : (
         <>
         <div style={{ marginTop: 12 }}>
@@ -447,6 +460,237 @@ function DexSwapForm({ agentId, agentName, tokens, chainLabel, setActiveView }: 
         <div style={{ marginTop: 10 }}>
           <p className={styles.success}>{result.detail}</p>
           <p className={styles.note} style={{ marginTop: 4 }}>Tx: <span className={styles.mono}>{result.reference}</span></p>
+          {setActiveView ? <div className={styles.actions}><button type="button" className={styles.btn} onClick={() => setActiveView("wallet")}>View in Wallets · Activity</button></div> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function HyperliquidTradeForm({ agentId, agentName, isEvmWallet, setActiveView }: {
+  agentId: string;
+  agentName: string;
+  isEvmWallet: boolean;
+  setActiveView?: (view: DashboardView) => void;
+}) {
+  const [coin, setCoin] = useState("BTC");
+  const [side, setSide] = useState<"long" | "short">("long");
+  const [orderType, setOrderType] = useState<"market" | "limit">("market");
+  const [notional, setNotional] = useState("");
+  const [limitPrice, setLimitPrice] = useState("");
+  const [slippageBps, setSlippageBps] = useState(50);
+  const [reduceOnly, setReduceOnly] = useState(false);
+  const [status, setStatus] = useState<HyperliquidAccountStatus | null>(null);
+  const [quote, setQuote] = useState<HyperliquidQuote | null>(null);
+  const [busy, setBusy] = useState<"status" | "quote" | "approve" | "trade" | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const notionalUsd = Number(notional) || 0;
+  const limit = Number(limitPrice) || 0;
+  const canQuote = isEvmWallet && notionalUsd > 0 && (orderType === "market" || limit > 0) && !busy;
+  const needsBuilderApproval = Boolean(quote?.builder && quote.builderApproval.configured && !quote.builderApproval.approved);
+
+  const refreshStatus = useCallback(async () => {
+    if (!isEvmWallet) return;
+    setBusy("status");
+    setError("");
+    const response = await fetchHyperliquidStatus(agentId);
+    setBusy(null);
+    if (!response.ok || !response.status) {
+      setError(response.error || "Could not load Hyperliquid status.");
+      return;
+    }
+    setStatus(response.status);
+  }, [agentId, isEvmWallet]);
+
+  useEffect(() => {
+    let ignore = false;
+    if (!isEvmWallet) return () => { ignore = true; };
+    void fetchHyperliquidStatus(agentId).then((response) => {
+      if (ignore) return;
+      if (response.ok && response.status) {
+        setStatus(response.status);
+        return;
+      }
+      setError(response.error || "Could not load Hyperliquid status.");
+    });
+    return () => { ignore = true; };
+  }, [agentId, isEvmWallet]);
+
+  const clearDraft = () => {
+    setQuote(null);
+    setSuccess("");
+  };
+
+  const getQuote = async () => {
+    if (!canQuote) return;
+    setBusy("quote");
+    setError("");
+    setSuccess("");
+    const response = await quoteHyperliquidTrade({
+      agentId,
+      coin,
+      side,
+      orderType,
+      notionalUsd,
+      limitPrice: orderType === "limit" ? limit : undefined,
+      reduceOnly,
+      slippageBps,
+    });
+    setBusy(null);
+    if (!response.ok || !response.quote) {
+      setError(response.error || "Could not quote this Hyperliquid order.");
+      return;
+    }
+    setQuote(response.quote);
+  };
+
+  const approveBuilder = async () => {
+    setBusy("approve");
+    setError("");
+    setSuccess("");
+    const response = await approveHyperliquidBuilder(agentId);
+    setBusy(null);
+    if (!response.ok || !response.result) {
+      setError(response.error || "Builder approval failed.");
+      return;
+    }
+    setSuccess(response.result.detail);
+    await refreshStatus();
+    await getQuote();
+  };
+
+  const submit = async () => {
+    if (!canQuote) return;
+    if (needsBuilderApproval) {
+      setError("Approve the configured builder fee before placing this order.");
+      return;
+    }
+    setBusy("trade");
+    setError("");
+    setSuccess("");
+    const response = await executeHyperliquidTrade({
+      agentId,
+      coin,
+      side,
+      orderType,
+      notionalUsd,
+      limitPrice: orderType === "limit" ? limit : undefined,
+      reduceOnly,
+      slippageBps,
+    });
+    setBusy(null);
+    if (!response.ok || !response.result) {
+      setError(response.error || "Hyperliquid order failed.");
+      return;
+    }
+    setQuote(null);
+    setSuccess(response.result.detail);
+    await refreshStatus();
+  };
+
+  if (!isEvmWallet) {
+    return (
+      <div className={styles.warnCard} style={{ marginTop: 12 }}>
+        Hyperliquid trading requires a local EVM wallet. {setActiveView ? <button type="button" className={styles.btn} style={{ marginLeft: 8, padding: "4px 10px" }} onClick={() => setActiveView("wallet")}>Open Wallets</button> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className={styles.fieldRow}>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="hyperliquid-market">Market</label>
+          <select id="hyperliquid-market" className={styles.select} value={coin} onChange={(event) => { setCoin(event.target.value); clearDraft(); }}>
+            {["BTC", "ETH", "SOL", "HYPE"].map((symbol) => <option key={symbol} value={symbol}>{symbol}-PERP</option>)}
+          </select>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="hyperliquid-side">Side</label>
+          <select id="hyperliquid-side" className={styles.select} value={side} onChange={(event) => { setSide(event.target.value as "long" | "short"); clearDraft(); }}>
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+        </div>
+      </div>
+
+      <div className={styles.fieldRow}>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="hyperliquid-type">Order</label>
+          <select id="hyperliquid-type" className={styles.select} value={orderType} onChange={(event) => { setOrderType(event.target.value as "market" | "limit"); clearDraft(); }}>
+            <option value="market">Market IOC</option>
+            <option value="limit">Limit GTC</option>
+          </select>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="hyperliquid-notional">Notional (USD)</label>
+          <input id="hyperliquid-notional" className={styles.input} inputMode="decimal" value={notional} onChange={(event) => { setNotional(event.target.value.replace(/[^0-9.]/g, "")); clearDraft(); }} />
+        </div>
+      </div>
+
+      <div className={styles.fieldRow}>
+        {orderType === "limit" ? (
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="hyperliquid-limit">Limit price</label>
+            <input id="hyperliquid-limit" className={styles.input} inputMode="decimal" value={limitPrice} onChange={(event) => { setLimitPrice(event.target.value.replace(/[^0-9.]/g, "")); clearDraft(); }} />
+          </div>
+        ) : (
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="hyperliquid-slippage">Market slippage</label>
+            <select id="hyperliquid-slippage" className={styles.select} value={slippageBps} onChange={(event) => { setSlippageBps(Number(event.target.value)); clearDraft(); }}>
+              <option value={25}>0.25%</option>
+              <option value={50}>0.50%</option>
+              <option value={100}>1.00%</option>
+            </select>
+          </div>
+        )}
+        <label className={styles.checkboxLine}>
+          <input type="checkbox" checked={reduceOnly} onChange={(event) => { setReduceOnly(event.target.checked); clearDraft(); }} />
+          Reduce only
+        </label>
+      </div>
+
+      <div className={styles.actions}>
+        <button type="button" className={styles.btn} onClick={refreshStatus} disabled={busy != null}>{busy === "status" ? "Refreshing..." : "Refresh status"}</button>
+        <button type="button" className={styles.btn} onClick={getQuote} disabled={!canQuote}>{busy === "quote" ? "Quoting..." : "Get quote"}</button>
+        {needsBuilderApproval ? (
+          <button type="button" className={styles.btn} onClick={approveBuilder} disabled={busy != null}>{busy === "approve" ? "Approving..." : "Approve builder"}</button>
+        ) : null}
+        <button type="button" className={`${styles.btn} ${styles.btnPrimary}`} onClick={submit} disabled={!canQuote || !quote || needsBuilderApproval}>{busy === "trade" ? "Trading..." : "Confirm & trade"}</button>
+      </div>
+
+      <p className={styles.note} style={{ marginTop: 8 }}>Signs locally from {agentName}. Server policy controls wallet, cap, builder address, and builder fee.</p>
+
+      {status ? (
+        <div className={styles.card} style={{ marginTop: 10, background: "transparent" }}>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>Account value</span><span className={styles.reviewVal}>{status.accountValueUsd == null ? "Unavailable" : `$${status.accountValueUsd.toFixed(2)}`}</span></div>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>Builder</span><span className={styles.reviewVal}>{status.builderConfig.configured ? status.builderApproval.detail : status.builderConfig.missing.join(" ")}</span></div>
+          {status.positions.slice(0, 3).map((position) => (
+            <div className={styles.reviewLine} key={position.coin}>
+              <span className={styles.reviewKey}>{position.coin}</span>
+              <span className={styles.reviewVal}>{position.side} {Math.abs(position.size).toPrecision(6)}{position.unrealizedPnlUsd == null ? "" : ` · PnL $${position.unrealizedPnlUsd.toFixed(2)}`}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {quote ? (
+        <div className={styles.card} style={{ marginTop: 10, background: "transparent" }}>
+          <div className={styles.groupTitle}>Quote</div>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>Order</span><span className={styles.reviewVal}>{quote.order.side} {quote.order.size} {quote.order.coin} at {quote.order.price}</span></div>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>Notional</span><span className={styles.reviewVal}>${quote.order.notionalUsd.toFixed(2)}</span></div>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>Network</span><span className={styles.reviewVal}>{quote.network}</span></div>
+          <div className={styles.reviewLine}><span className={styles.reviewKey}>Builder fee</span><span className={styles.reviewVal}>{quote.builder ? `${(quote.builder.f / 10).toFixed(1).replace(/\.0$/, "")} bps` : "Disabled"}</span></div>
+          <p className={styles.note} style={{ marginTop: 8 }}>{quote.detail}</p>
+        </div>
+      ) : null}
+
+      {error ? <p className={styles.error} style={{ marginTop: 10 }}>{error}</p> : null}
+      {success ? (
+        <div style={{ marginTop: 10 }}>
+          <p className={styles.success}>{success}</p>
           {setActiveView ? <div className={styles.actions}><button type="button" className={styles.btn} onClick={() => setActiveView("wallet")}>View in Wallets · Activity</button></div> : null}
         </div>
       ) : null}

@@ -53,7 +53,10 @@ export async function POST(request: NextRequest) {
     // Personal (`user:`) wallets never auto-spend: explicit confirmation is always
     // required for a private transfer, regardless of any persisted policy.
     const isPersonalWallet = Boolean(body.agentId?.trim().startsWith("user:"));
-    const validation = validateTransferBody(body, { autoSendAllowed: !isPersonalWallet && canAutoSendVeilTransfer(persisted?.wallet) });
+    const validation = validateTransferBody(body, {
+      autoSendAllowed: !isPersonalWallet && canAutoSendVeilTransfer(persisted?.wallet),
+      wallet: persisted?.wallet,
+    });
     if (validation) return validation;
 
     const asset = normalizeAsset(body.asset);
@@ -125,7 +128,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function validateTransferBody(body: VeilTransferBody, options: { autoSendAllowed?: boolean } = {}) {
+function validateTransferBody(body: VeilTransferBody, options: { autoSendAllowed?: boolean; wallet?: AgentWalletConfig } = {}) {
   if (body.enabled !== true) return sendError("Wallet spending is off for this agent. Enable Spend on before executing private transfers.", 403);
   if (body.provider !== "veil") return sendError("Set this agent's payment provider to Veil Cash before private transfers.");
   if (body.network !== VEIL_CASH_NETWORK) return sendError("Veil Cash transfers are only supported on Base mainnet.");
@@ -144,7 +147,13 @@ function validateTransferBody(body: VeilTransferBody, options: { autoSendAllowed
       : "Amount must be a positive USDC value with up to 6 decimals.");
   }
 
-  const maxAssetAmount = Number(body.maxAssetAmount ?? body.maxPaymentUsd);
+  // Resolve the per-asset cap. The crypto-router's prepared body omits the cap
+  // for an asset the wallet has no explicit assetSpendCap for (e.g. a USDC
+  // transfer from a wallet that only set an ETH cap), so fall back to the
+  // persisted wallet's per-asset cap, then its USD payment cap. Without this the
+  // in-app Veil USDC transfer rejected with "USDC spend cap must be zero or greater."
+  const persistedCap = options.wallet ? (options.wallet.assetSpendCaps?.[asset] ?? options.wallet.maxPaymentUsd) : undefined;
+  const maxAssetAmount = Number(body.maxAssetAmount ?? body.maxPaymentUsd ?? persistedCap);
   if (!Number.isFinite(maxAssetAmount) || maxAssetAmount < 0) return sendError(`${asset} spend cap must be zero or greater.`);
   if (Number(amount) > maxAssetAmount) return sendError(`Amount exceeds this agent's ${asset} spend cap (${formatAssetAmount(maxAssetAmount, asset)}).`);
   if (normalizeRecipientMode(body.recipientMode) !== "registered" && asset === "USDC" && Number(amount) < VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM) {

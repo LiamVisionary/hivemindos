@@ -23,6 +23,9 @@ export type BankrActionDraft = {
   prompt: string;
   readOnly: boolean;
   jobId?: string;
+  /** Continue an existing Bankr conversation so multi-step flows (perps collateral
+   *  bridge → open, etc.) keep context across calls instead of starting fresh. */
+  threadId?: string;
 };
 
 export type BankrActionResult = {
@@ -149,6 +152,7 @@ export function parseBankrActionDraftMessage(text: string): BankrActionDraft | n
       prompt,
       readOnly: parsed.readOnly === true,
       jobId: typeof parsed.jobId === "string" ? parsed.jobId.trim() : undefined,
+      threadId: typeof parsed.threadId === "string" ? parsed.threadId.trim() : undefined,
     };
   } catch {
     return null;
@@ -272,7 +276,9 @@ async function readBankrJob(draft: BankrActionDraft, apiKey: string, deps: Bankr
 async function runBankrAgentPrompt(draft: BankrActionDraft, apiKey: string, deps: BankrActionDeps): Promise<BankrActionResult> {
   const submitted = await bankrFetch("/agent/prompt", apiKey, deps, {
     method: "POST",
-    body: JSON.stringify({ prompt: draft.prompt }),
+    // Forward threadId to continue an existing conversation (Bankr keeps context,
+    // e.g. collateral it just bridged), per the Agent API: { prompt, threadId? }.
+    body: JSON.stringify(draft.threadId ? { prompt: draft.prompt, threadId: draft.threadId } : { prompt: draft.prompt }),
   });
   const submittedRecord = asRecord(submitted);
   const jobId = stringValue(submittedRecord.jobId) || stringValue(submittedRecord.id);
