@@ -13,6 +13,7 @@ export const HYPERLIQUID_CANCEL_CONFIRMATION = "CONFIRM_HYPERLIQUID_CANCEL";
 export const HYPERLIQUID_ACCOUNT_CONFIRMATION = "CONFIRM_HYPERLIQUID_ACCOUNT";
 export const HYPERLIQUID_TRANSFER_CONFIRMATION = "CONFIRM_HYPERLIQUID_TRANSFER";
 export const HYPERLIQUID_TWAP_CONFIRMATION = "CONFIRM_HYPERLIQUID_TWAP";
+export const CRYPTO_PRACTICE_REPLAY_CONFIRMATION = "CONFIRM_CRYPTO_PRACTICE_REPLAY";
 
 export type CryptoProviderCapability = {
   provider: string;
@@ -447,6 +448,117 @@ export function confirmationForHyperliquidAction(action: HyperliquidActionName) 
   if (action === "twap-order" || action === "twap-cancel") return HYPERLIQUID_TWAP_CONFIRMATION;
   if (action === "order" || action === "modify") return HYPERLIQUID_ORDER_CONFIRMATION;
   return "";
+}
+
+// ---- Shared crypto practice book -------------------------------------------
+export type CryptoPracticeSource = "alpaca-paper" | "hyperliquid" | "manual";
+export type CryptoPracticeMarketType = "spot" | "perp";
+export type CryptoPracticeSide = "long" | "short";
+
+export type CryptoPracticeHolding = {
+  id: string;
+  symbol: string;
+  marketType: CryptoPracticeMarketType;
+  side: CryptoPracticeSide;
+  quantity: number;
+  notionalUsd: number;
+  avgEntryPrice?: number;
+  markPrice?: number;
+  unrealizedPnlUsd?: number;
+  source: CryptoPracticeSource;
+  sourceReference?: string;
+  updatedAt: string;
+  stale?: boolean;
+};
+
+export type CryptoPracticeSnapshot = {
+  id: string;
+  source: CryptoPracticeSource;
+  capturedAt: string;
+  holdings: CryptoPracticeHolding[];
+  accountValueUsd?: number;
+  cashUsd?: number;
+  walletAddress?: string;
+  network?: "mainnet" | "testnet";
+  stale?: boolean;
+  detail: string;
+};
+
+export type CryptoPracticeBook = {
+  version: 1;
+  agentId: string;
+  baseCurrency: "USD";
+  updatedAt: string;
+  targetSource: CryptoPracticeSource | "none";
+  targetUpdatedAt?: string;
+  targetHoldings: CryptoPracticeHolding[];
+  snapshots: Partial<Record<CryptoPracticeSource, CryptoPracticeSnapshot>>;
+};
+
+export type CryptoPracticeReplayOrder = {
+  sourceHoldingId: string;
+  coin: string;
+  marketType: CryptoPracticeMarketType;
+  side: "long" | "short" | "buy" | "sell";
+  notionalUsd: number;
+  reduceOnly: boolean;
+  supported: boolean;
+  reason: string;
+  missing?: string;
+};
+
+export type CryptoPracticeReplayPlan = {
+  agentId: string;
+  executionVenue: "hyperliquid";
+  generatedAt: string;
+  network?: "mainnet" | "testnet";
+  orders: CryptoPracticeReplayOrder[];
+  unsupported: CryptoPracticeReplayOrder[];
+  totalNotionalUsd: number;
+  confirmation: typeof CRYPTO_PRACTICE_REPLAY_CONFIRMATION;
+  detail: string;
+};
+
+export async function fetchCryptoPracticeBook(agentId: string): Promise<{ ok: boolean; error?: string; book?: CryptoPracticeBook }> {
+  const response = await fetch(`/api/trading/practice-book?agentId=${encodeURIComponent(agentId)}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
+  return asJson<{ book: CryptoPracticeBook }>(response);
+}
+
+export async function snapshotAlpacaPaperPracticeBook(agentId: string): Promise<{ ok: boolean; error?: string; book?: CryptoPracticeBook; snapshot?: CryptoPracticeSnapshot }> {
+  return postJson("/api/trading/practice-book", { action: "snapshot-alpaca-paper", agentId, replaceTarget: true });
+}
+
+export async function snapshotHyperliquidPracticeBook(agentId: string, replaceTarget = false): Promise<{ ok: boolean; error?: string; book?: CryptoPracticeBook; snapshot?: CryptoPracticeSnapshot; status?: HyperliquidAccountStatus }> {
+  return postJson("/api/trading/practice-book", { action: "snapshot-hyperliquid", agentId, replaceTarget });
+}
+
+export async function saveManualCryptoPracticeHolding(params: {
+  agentId: string;
+  symbol: string;
+  marketType: CryptoPracticeMarketType;
+  side: CryptoPracticeSide;
+  quantity?: number;
+  notionalUsd?: number;
+  avgEntryPrice?: number;
+  markPrice?: number;
+}): Promise<{ ok: boolean; error?: string; book?: CryptoPracticeBook }> {
+  return postJson("/api/trading/practice-book", { action: "manual-holding", ...params });
+}
+
+export async function clearCryptoPracticeTarget(agentId: string): Promise<{ ok: boolean; error?: string; book?: CryptoPracticeBook }> {
+  return postJson("/api/trading/practice-book", { action: "clear-target", agentId });
+}
+
+export async function planCryptoPracticeReplay(agentId: string): Promise<{ ok: boolean; error?: string; book?: CryptoPracticeBook; status?: HyperliquidAccountStatus; plan?: CryptoPracticeReplayPlan }> {
+  return postJson("/api/trading/practice-book", { action: "plan-hyperliquid", agentId, includeCurrent: true });
+}
+
+export async function executeCryptoPracticeReplay(agentId: string): Promise<{ ok: boolean; error?: string; book?: CryptoPracticeBook; plan?: CryptoPracticeReplayPlan; results?: HyperliquidOrderResult[]; message?: string }> {
+  return postJson("/api/trading/practice-book", {
+    action: "execute-hyperliquid-replay",
+    agentId,
+    confirmation: CRYPTO_PRACTICE_REPLAY_CONFIRMATION,
+  });
 }
 
 export async function fetchTradingReadiness(): Promise<TradingReadiness | null> {

@@ -49,6 +49,7 @@ confirmation before anything executes. Nothing moves silently.
 | Pay a pay-per-use API | x402 |
 | Bridge / move across chains | Bankr |
 | Trade Hyperliquid spot or perps with your wallet | Local Hyperliquid |
+| Carry crypto practice targets between venues | Shared practice book + Hyperliquid replay |
 | Trade perps through a provider | Bankr → Hyperliquid |
 | Bet on prediction markets | Bankr → Polymarket |
 | Buy or sell NFTs | Bankr |
@@ -80,6 +81,9 @@ confirmation before anything executes. Nothing moves silently.
 - **Local Hyperliquid** uses the selected wallet's own Hyperliquid account. Official
   HivemindOS builds ask for builder-fee approval once, then attach the builder code
   automatically to eligible orders.
+- **Shared crypto practice** is local target state, not shared custody. It can capture
+  Alpaca paper crypto positions and prepare a Hyperliquid replay plan, but the actual
+  Hyperliquid orders still spend from the selected wallet after confirmation.
 - Supported local-wallet actions may include a HivemindOS platform fee. It is shown
   in the preview and collected as a separate USDC transaction after the action
   succeeds.

@@ -644,15 +644,17 @@ export async function createTask(
   });
 }
 
-export async function patchTask(
-  slug: string | null,
+// Apply a single patch to an already-loaded board, mutating it in place and
+// returning the changed task. Shared by patchTask (single write) and
+// bulkPatchTasks (one write for K patches). Behavior is identical to the
+// inlined single-task path; the only thing hoisted out is the per-board project
+// map, which the caller computes once.
+function applyPatchToBoard(
+  board: KanbanBoard,
   taskId: string,
   patch: PatchTaskInput,
-  options: KanbanStorageOptions = {},
-) {
-  return withBoardMutation(slug, options, async () => {
-  const board = await readBoard(slug, options);
-  const projectsById = await projectMapForKanban(options);
+  projectsById: Map<string, HivemindProject>,
+): KanbanTask {
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const fromStatus = task.status;
@@ -794,19 +796,18 @@ export async function patchTask(
     createVisualHandoffChild(board, changed, changed.result);
     promoteReadyChildren(board, "dependency.auto-promote");
   }
-  await writeBoard(touch(board), options);
-  return { board, task: changed };
-  });
+  return changed;
 }
 
-export async function moveTask(
-  slug: string | null,
+// Apply a single status move to an already-loaded board, mutating it in place
+// and returning the moved task. Shared by moveTask (single write) and
+// bulkPatchTasks (one write for K moves). Behavior is identical to the inlined
+// single-task path.
+function applyMoveToBoard(
+  board: KanbanBoard,
   taskId: string,
   status: KanbanStatus,
-  options: KanbanStorageOptions = {},
-) {
-  return withBoardMutation(slug, options, async () => {
-  const board = await readBoard(slug, options);
+): KanbanTask {
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   board.tasks = moveTaskBetweenColumns(board.tasks, taskId, status);
@@ -871,8 +872,35 @@ export async function moveTask(
   );
   if (moved?.status === "done")
     promoteReadyChildren(board, "dependency.auto-promote");
-  await writeBoard(touch(board), options);
-  return { board, task: board.tasks.find((item) => item.id === taskId)! };
+  return board.tasks.find((item) => item.id === taskId)!;
+}
+
+export async function patchTask(
+  slug: string | null,
+  taskId: string,
+  patch: PatchTaskInput,
+  options: KanbanStorageOptions = {},
+) {
+  return withBoardMutation(slug, options, async () => {
+    const board = await readBoard(slug, options);
+    const projectsById = await projectMapForKanban(options);
+    const changed = applyPatchToBoard(board, taskId, patch, projectsById);
+    await writeBoard(touch(board), options);
+    return { board, task: changed };
+  });
+}
+
+export async function moveTask(
+  slug: string | null,
+  taskId: string,
+  status: KanbanStatus,
+  options: KanbanStorageOptions = {},
+) {
+  return withBoardMutation(slug, options, async () => {
+    const board = await readBoard(slug, options);
+    const moved = applyMoveToBoard(board, taskId, status);
+    await writeBoard(touch(board), options);
+    return { board, task: moved };
   });
 }
 
@@ -1472,29 +1500,38 @@ export async function bulkPatchTasks(
   patch: PatchTaskInput,
   options: KanbanStorageOptions = {},
 ) {
-  const results: Array<{
-    taskId: string;
-    ok: boolean;
-    task?: KanbanTask;
-    error?: string;
-  }> = [];
-  let latestBoard: KanbanBoard | null = null;
-  for (const taskId of [...new Set(ids)]) {
-    try {
-      const result = patch.status
-        ? await moveTask(slug, taskId, patch.status, options)
-        : await patchTask(slug, taskId, patch, options);
-      latestBoard = result.board;
-      results.push({ taskId, ok: true, task: result.task });
-    } catch (error) {
-      results.push({
-        taskId,
-        ok: false,
-        error: error instanceof Error ? error.message : "Task update failed.",
-      });
+  return withBoardMutation(slug, options, async () => {
+    const board = await readBoard(slug, options);
+    // Only patches (not pure status moves) consult the project map; compute it
+    // once per board instead of once per card.
+    const projectsById = patch.status
+      ? new Map<string, HivemindProject>()
+      : await projectMapForKanban(options);
+    const results: Array<{
+      taskId: string;
+      ok: boolean;
+      task?: KanbanTask;
+      error?: string;
+    }> = [];
+    let applied = 0;
+    for (const taskId of [...new Set(ids)]) {
+      try {
+        const task = patch.status
+          ? applyMoveToBoard(board, taskId, patch.status)
+          : applyPatchToBoard(board, taskId, patch, projectsById);
+        applied += 1;
+        results.push({ taskId, ok: true, task });
+      } catch (error) {
+        results.push({
+          taskId,
+          ok: false,
+          error: error instanceof Error ? error.message : "Task update failed.",
+        });
+      }
     }
-  }
-  return { board: latestBoard ?? (await readBoard(slug, options)), results };
+    if (applied) await writeBoard(touch(board), options);
+    return { board, results };
+  });
 }
 
 export async function deleteTask(
@@ -1577,6 +1614,41 @@ export async function addLink(
   });
 }
 
+// On-disk history caps. These are deliberately larger than the read-path caps
+// in trimKanbanBoardForResponse (events 160, runs 80, comments 120) so nothing
+// the dashboard can surface is ever lost — the read path re-sorts newest-first
+// and slices to its own caps regardless. events/runs are stored newest-first
+// (always .unshift), so we keep the head; comments are stored oldest-first
+// (.push), so we keep the tail.
+const MAX_PERSISTED_EVENTS = 500;
+const MAX_PERSISTED_RUNS = 200;
+const MAX_PERSISTED_COMMENTS = 1000;
+
+function trimBoardHistoryForWrite(board: KanbanBoard): KanbanBoard {
+  if (
+    board.events.length <= MAX_PERSISTED_EVENTS &&
+    board.runs.length <= MAX_PERSISTED_RUNS &&
+    board.comments.length <= MAX_PERSISTED_COMMENTS
+  ) {
+    return board;
+  }
+  return {
+    ...board,
+    events:
+      board.events.length > MAX_PERSISTED_EVENTS
+        ? board.events.slice(0, MAX_PERSISTED_EVENTS)
+        : board.events,
+    runs:
+      board.runs.length > MAX_PERSISTED_RUNS
+        ? board.runs.slice(0, MAX_PERSISTED_RUNS)
+        : board.runs,
+    comments:
+      board.comments.length > MAX_PERSISTED_COMMENTS
+        ? board.comments.slice(-MAX_PERSISTED_COMMENTS)
+        : board.comments,
+  };
+}
+
 async function writeBoard(
   board: KanbanBoard,
   options: KanbanStorageOptions = {},
@@ -1584,7 +1656,7 @@ async function writeBoard(
   const storage = resolveKanbanStorage(board.meta.slug, options);
   const dir = boardDirFor(storage.root, storage.boardsRoot, board.meta.slug);
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  const data = JSON.stringify(board, null, 2) + "\n";
+  const data = JSON.stringify(trimBoardHistoryForWrite(board), null, 2) + "\n";
   const tmp = `${storage.file}.tmp.${process.pid}.${Date.now()}`;
   await writeFile(tmp, data, { mode: 0o600 });
   await rename(tmp, storage.file);

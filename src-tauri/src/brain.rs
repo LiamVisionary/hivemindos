@@ -421,8 +421,8 @@ pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Va
     let vault = vault_root(vault_path);
     let skills_folder = vault.join("Skills");
     let shared = read_shared_skills(&skills_folder);
-    let (notes, graph_truncated) = if vault.is_dir() {
-        read_graph_notes(&vault).unwrap_or_else(|_| (Vec::new(), false))
+    let (note_paths, graph_truncated) = if vault.is_dir() {
+        count_graph_note_paths(&vault).unwrap_or_else(|_| (Vec::new(), false))
     } else {
         (Vec::new(), false)
     };
@@ -431,9 +431,9 @@ pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Va
     } else {
         Vec::new()
     };
-    let folders = notes
+    let folders = note_paths
         .iter()
-        .filter_map(|note| note.path.rsplit_once('/').map(|(folder, _)| folder.to_string()))
+        .filter_map(|path| path.rsplit_once('/').map(|(folder, _)| folder.to_string()))
         .collect::<HashSet<_>>();
 
     Ok(serde_json::json!({
@@ -444,7 +444,7 @@ pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Va
         "skillsFolder": skills_folder.to_string_lossy(),
         "totals": {
             "sharedSkills": shared.len(),
-            "notes": notes.len(),
+            "notes": note_paths.len(),
             "folders": folders.len(),
             "recentAccesses": accesses.len(),
         },
@@ -578,6 +578,28 @@ fn extract_tags(content: &str) -> Vec<String> {
     let mut tags = tags.into_iter().collect::<Vec<_>>();
     tags.sort();
     tags
+}
+
+/// Count-only variant of [`read_graph_notes`] for `brain_summary`, which needs
+/// only the note count, folder set, and truncation flag. It walks the markdown
+/// tree and applies the same `> MAX_NOTE_BYTES` size filter via a cheap
+/// `fs::metadata` stat — never reading any file body — and returns each kept
+/// note's vault-relative path (matching `GraphNote::path`).
+fn count_graph_note_paths(root: &Path) -> Result<(Vec<String>, bool), String> {
+    let mut paths = Vec::new();
+    walk_markdown(root, root, &mut paths)?;
+    let truncated = paths.len() >= MAX_GRAPH_NOTES;
+    let mut kept = Vec::new();
+    for path in paths {
+        let Ok(metadata) = fs::metadata(&path) else {
+            continue;
+        };
+        if metadata.len() > MAX_NOTE_BYTES {
+            continue;
+        }
+        kept.push(graph_relative_path(root, &path));
+    }
+    Ok((kept, truncated))
 }
 
 fn read_graph_notes(root: &Path) -> Result<(Vec<GraphNote>, bool), String> {

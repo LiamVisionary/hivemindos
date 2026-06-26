@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import styles from "./trade.module.css";
+import { CryptoPracticeBookPanel } from "./CryptoPracticeBookPanel";
 import { CRYPTO_INTENTS, CRYPTO_INTENT_GROUPS, type CryptoIntentDef } from "./trade-intents";
 import {
   BANKR_ACTION_CONFIRMATION_FALLBACK,
@@ -548,12 +549,13 @@ function HyperliquidTradeForm({ agentId, agentName, isEvmWallet, setActiveView }
     setSuccess("");
   };
 
-  useEffect(() => {
-    setCoin(marketType === "perp" ? "BTC" : "HYPE");
-    setSide(marketType === "perp" ? "long" : "buy");
+  const changeMarketType = (next: HyperliquidMarketType) => {
+    setMarketType(next);
+    setCoin(next === "perp" ? "BTC" : "HYPE");
+    setSide(next === "perp" ? "long" : "buy");
     setReduceOnly(false);
     clearDraft();
-  }, [marketType]);
+  };
 
   const getQuote = async () => {
     if (!canQuote) return;
@@ -685,7 +687,7 @@ function HyperliquidTradeForm({ agentId, agentName, isEvmWallet, setActiveView }
       <div className={styles.fieldRow}>
         <div className={styles.field}>
           <label className={styles.label} htmlFor="hyperliquid-market-type">Type</label>
-          <select id="hyperliquid-market-type" className={styles.select} value={marketType} onChange={(event) => setMarketType(event.target.value as HyperliquidMarketType)}>
+          <select id="hyperliquid-market-type" className={styles.select} value={marketType} onChange={(event) => changeMarketType(event.target.value as HyperliquidMarketType)}>
             <option value="perp">Perps</option>
             <option value="spot">Spot</option>
           </select>
@@ -920,6 +922,8 @@ function HyperliquidTradeForm({ agentId, agentName, isEvmWallet, setActiveView }
           ))}
         </div>
       ) : null}
+
+      <CryptoPracticeBookPanel agentId={agentId} isEvmWallet={isEvmWallet} />
 
       {quote ? (
         <div className={styles.card} style={{ marginTop: 10, background: "transparent" }}>

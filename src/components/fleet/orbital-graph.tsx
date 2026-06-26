@@ -53,19 +53,23 @@ function markerAngle(index: number, total: number) {
   return -Math.PI / 2 + (index / Math.max(1, total)) * Math.PI * 2;
 }
 
-/** HH:MM:SS.cs readout, rendered on a fast tick isolated from the rest of the HUD. */
+/** HH:MM:SS readout, rendered on a 1s tick isolated from the rest of the HUD. */
 export function HudClock() {
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 100);
+    const t = window.setInterval(() => {
+      // Don't churn state (and re-render) while the tab/window is hidden.
+      if (document.hidden) return;
+      setNow(new Date());
+    }, 1000);
     return () => window.clearInterval(t);
   }, []);
   const pad = (n: number, len = 2) => String(n).padStart(len, "0");
   return (
     <div style={{ fontSize: 19, color: "#dcebff", letterSpacing: "0.08em", textShadow: "0 0 14px rgba(130,190,255,0.6)" }}>
       {now
-        ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(Math.floor(now.getMilliseconds() / 10))}`
-        : "--:--:--.--"}
+        ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+        : "--:--:--"}
     </div>
   );
 }
@@ -122,6 +126,9 @@ export function OrbitalGraph({
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
+      // Skip the redraw entirely while the tab/window is hidden — keep the loop
+      // alive so it resumes instantly when the page becomes visible again.
+      if (document.hidden) return;
       if (!w || !h) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);

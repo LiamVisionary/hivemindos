@@ -46,6 +46,29 @@ after approval, HivemindOS attaches the builder code automatically to eligible o
 That approval does not let HivemindOS use your funds or withdraw from your account.
 See [Hyperliquid Trading](hyperliquid.html) for the full user guide.
 
+## Shared practice book
+
+HivemindOS can keep a local **shared practice book** for crypto targets. This is
+useful when you start in an Alpaca paper account and later want to practice or execute
+the same target exposure through Hyperliquid.
+
+The practice book can:
+
+- Capture open crypto positions from an Alpaca paper account and save them as the
+  shared target.
+- Capture Hyperliquid spot/perp status without replacing the target, or deliberately
+  make Hyperliquid the new target.
+- Add a manual target from supported assets when an old paper account is no longer
+  available.
+- Compare the shared target with the selected wallet's Hyperliquid account and prepare
+  the order differences needed to replay the target.
+
+The book does **not** merge custody between providers. Alpaca paper balances remain
+simulated inside Alpaca, and Hyperliquid balances remain in the selected wallet's own
+Hyperliquid account. HivemindOS stores the normalized target locally, shows the replay
+plan, and only places Hyperliquid orders after the explicit replay confirmation and the
+wallet's normal limits pass.
+
 ## Trade & explore with Bankr
 
 These run through **Bankr**, a connected trading service. Heads up: they use **Bankr's

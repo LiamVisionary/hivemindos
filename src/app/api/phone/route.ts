@@ -981,31 +981,35 @@ async function readFolderPrompts(
   } catch {
     return [];
   }
-  const prompts: CallPrompt[] = [];
-  for (const entry of entries) {
-    if (!entry.toLowerCase().endsWith(".md")) continue;
-    const filePath = join(dir, entry);
-    let content: string;
-    try {
-      content = await readFile(filePath, "utf8");
-    } catch {
-      continue;
-    }
-    const parsed = parsePrompt(content);
-    const baseName = entry.replace(/\.md$/i, "");
-    const id = parsed.title
-      ? slugifyTitle(parsed.title)
-      : slugifyTitle(baseName);
-    prompts.push({
-      id,
-      title: parsed.title || baseName,
-      time: parsed.time,
-      enabled: parsed.enabled,
-      instructions: parsed.instructions,
-      path: filePath,
-    });
-  }
-  return prompts;
+  // Each entry reads an independent file; nothing depends on a prior read, so
+  // run them in parallel. listPrompts re-sorts the result, so push order here
+  // does not affect the response. A read failure still skips that entry (null).
+  const prompts = await Promise.all(
+    entries.map(async (entry): Promise<CallPrompt | null> => {
+      if (!entry.toLowerCase().endsWith(".md")) return null;
+      const filePath = join(dir, entry);
+      let content: string;
+      try {
+        content = await readFile(filePath, "utf8");
+      } catch {
+        return null;
+      }
+      const parsed = parsePrompt(content);
+      const baseName = entry.replace(/\.md$/i, "");
+      const id = parsed.title
+        ? slugifyTitle(parsed.title)
+        : slugifyTitle(baseName);
+      return {
+        id,
+        title: parsed.title || baseName,
+        time: parsed.time,
+        enabled: parsed.enabled,
+        instructions: parsed.instructions,
+        path: filePath,
+      };
+    }),
+  );
+  return prompts.filter((prompt): prompt is CallPrompt => prompt !== null);
 }
 
 async function listPrompts(vaultPath: string): Promise<CallPrompt[]> {

@@ -136,6 +136,12 @@ export function MapView({
     let raf = 0;
     const SZ = 38;
     const tick = (now: number) => {
+      // Skip the bee animation while the tab/window is hidden; keep the loop
+      // scheduled so it resumes instantly when the page becomes visible again.
+      if (document.hidden) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       const { edges: currentEdges, pos: currentPos } = latestBeeMapRef.current;
       for (let i = 0; i < BEE_COUNT; i++) {
         const el = beeRefs.current[i];

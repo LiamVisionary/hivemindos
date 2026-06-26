@@ -401,6 +401,46 @@ export const hyperliquidTradeAction = defineHiveAction({
   },
 });
 
+export const cryptoPracticeBookAction = defineHiveAction({
+  id: "wallet.crypto-practice-book",
+  title: "Crypto practice book",
+  description:
+    "Maintain a shared crypto practice target book, snapshot Alpaca paper or Hyperliquid positions, plan a Hyperliquid replay, or execute the replay after confirmation.",
+  schema: z.object({
+    action: z.enum(["read", "snapshot-alpaca-paper", "snapshot-hyperliquid", "manual-holding", "clear-target", "plan-hyperliquid", "execute-hyperliquid-replay"]).optional(),
+    agentId: z.string().optional(),
+    replaceTarget: z.boolean().optional(),
+    symbol: z.enum(["BTC", "ETH", "SOL", "HYPE", "PURR"]).optional(),
+    marketType: z.enum(["spot", "perp"]).optional(),
+    side: z.enum(["long", "short"]).optional(),
+    quantity: z.number().optional(),
+    notionalUsd: z.number().optional(),
+    avgEntryPrice: z.number().optional(),
+    markPrice: z.number().optional(),
+    includeCurrent: z.boolean().optional(),
+    confirmation: z.string().optional(),
+  }),
+  sideEffects: ["wallet", "payment", "network"],
+  risk: "critical",
+  tags: ["crypto", "wallet", "paper", "practice", "alpaca", "hyperliquid", "migration", "execution"],
+  aliases: ["crypto_practice_book", "paper crypto book", "alpaca hyperliquid migration", "shared crypto holdings"],
+  mcp: { expose: true, compact: true, toolName: "crypto_practice_book" },
+  confirmation: {
+    token: "CONFIRM_CRYPTO_PRACTICE_REPLAY",
+    reason:
+      "Reading and planning are safe, but replay execution can place Hyperliquid orders and must pass an explicit replay confirmation plus wallet governance.",
+    when: "execute-hyperliquid-replay",
+  },
+  contextIndex: {
+    summary:
+      "Shared crypto practice target book that can bridge Alpaca paper snapshots and Hyperliquid replay plans.",
+    retrievalText:
+      "Use crypto_practice_book to read or update the local normalized crypto practice holdings book, snapshot Alpaca paper crypto positions, snapshot Hyperliquid status, add a manual target, plan the Hyperliquid order diff, or execute the replay only after CONFIRM_CRYPTO_PRACTICE_REPLAY. Provider accounts remain authoritative for custody; the practice book is local target state.",
+    route: "/api/trading/practice-book",
+    methods: ["GET", "POST"],
+  },
+});
+
 export const brainGraphOverviewAction = defineHiveAction({
   id: "brain.graph-overview",
   title: "Compiled brain graph overview",
@@ -898,6 +938,7 @@ export const HIVE_ACTIONS = [
   dexSwapAction,
   stockTradeAction,
   hyperliquidTradeAction,
+  cryptoPracticeBookAction,
   brainGraphOverviewAction,
   brainSearchKnowledgeAction,
   brainGetNodeAction,

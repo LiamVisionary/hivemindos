@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/utils/server-auth";
 import {
+  CLAWBANK_TOKEN_ENV_NAMES,
   clawbankMintApiToken,
   clawbankRequestCode,
   clawbankVerifyCode,
 } from "@/lib/services/clawbank";
+import { writeSharedHiveEnvValue } from "@/lib/services/hive-env-write";
+import { clearClawbankKeyPresenceCache } from "@/lib/services/chat/clawbank-capability-context";
 import { clawbankRouteError, readJsonBody, stringField } from "../_shared";
 
 export const runtime = "nodejs";
@@ -69,5 +72,33 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: false, error: `Unknown auth action "${action}". Use request_code, verify_code, or mint_token.` }, { status: 400 });
+  // Onboarding fast-path: mint the long-lived token AND persist it to the shared
+  // hive env in one server call, so the API key never returns to the browser.
+  if (action === "mint_and_store") {
+    const bootstrapToken = stringField(body, "bootstrapToken") || stringField(body, "bootstrap_token");
+    if (!bootstrapToken) return NextResponse.json({ ok: false, error: "A bootstrap token from verify_code is required to enable ClawBank." }, { status: 400 });
+    const result = await clawbankMintApiToken(bootstrapToken, {
+      name: stringField(body, "name") || "hivemindos-onboarding",
+      expiresAt: stringField(body, "expiresAt") || stringField(body, "expires_at") || undefined,
+    });
+    if (!result.ok) return clawbankRouteError(result);
+    const apiToken = stringField((result.data ?? {}) as Record<string, unknown>, "api_token");
+    if (!apiToken) {
+      return NextResponse.json({ ok: false, error: "ClawBank did not return an API token to store." }, { status: 502 });
+    }
+    try {
+      await writeSharedHiveEnvValue(CLAWBANK_TOKEN_ENV_NAMES[0], apiToken);
+    } catch (error) {
+      return NextResponse.json({
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not save the ClawBank credential.",
+      }, { status: 500 });
+    }
+    // Flip the chat capability briefing to "configured" without waiting for the cache TTL.
+    clearClawbankKeyPresenceCache();
+    const user = ((result.data ?? {}) as { user?: unknown }).user ?? null;
+    return NextResponse.json({ ok: true, action, stored: true, user });
+  }
+
+  return NextResponse.json({ ok: false, error: `Unknown auth action "${action}". Use request_code, verify_code, mint_token, or mint_and_store.` }, { status: 400 });
 }

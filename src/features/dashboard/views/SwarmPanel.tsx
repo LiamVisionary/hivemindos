@@ -454,38 +454,73 @@ export function SwarmPanel({
 
   const loading = mirosharkRunPending || mirosharkArchiveStatus === "Loading saved run...";
 
-  const dataset: SimDataset = {
+  // ── stable provider callbacks ──────────────────────────────────────────────
+  // Hoisted to useCallback so the SimDataProvider value identity is stable across
+  // renders (the 20s metadata poll re-renders this tree even when nothing changed).
+  // React-guaranteed-stable setters are omitted from deps; only prop/derived
+  // closures are listed so exhaustive-deps stays satisfied without suppression.
+  const onOpenWallets = React.useCallback(() => setActiveView("wallet"), [setActiveView]);
+
+  const onSelectRun = React.useCallback((run: Run) => {
+    if (run.id !== currentSwarmRun?.id) void loadMirosharkArchivedRun(run.id);
+  }, [currentSwarmRun?.id, loadMirosharkArchivedRun]);
+
+  const onLaunch = React.useCallback((payload: SimLaunchPayload) => {
+    if (payload.mode === "x402") {
+      // Compose → pick a wallet → confirm the $1 charge → POST /api/miroshark/x402.
+      setRunPhase("confirm");
+      setRunError(null);
+      setConfirmWalletId(null);
+      setPendingX402(payload);
+      setPickerOpen(true);
+      return;
+    }
+    // Local MiroShark — the existing deferred launch.
+    stageLocalLaunch(payload);
+  }, [stageLocalLaunch]);
+
+  const onPublish = React.useCallback((run: Run) => {
+    void runMirosharkExperiment("publish", run.id);
+  }, [runMirosharkExperiment]);
+
+  const onExport = React.useCallback((run: Run) => {
+    const source = swarmRuns.find((r) => r.id === run.id)
+      ?? (currentSwarmRun && currentSwarmRun.id === run.id ? currentSwarmRun : null)
+      ?? run;
+    downloadRunJson(run.id, source);
+  }, [swarmRuns, currentSwarmRun]);
+
+  const onStop = React.useCallback((run: Run) => {
+    void runMirosharkExperiment("stop", run.id);
+  }, [runMirosharkExperiment]);
+
+  const dataset = React.useMemo<SimDataset>(() => ({
     ...base,
     loading,
     loadingLabel: mirosharkArchiveStatus === "Loading saved run..." ? "Loading saved run" : (mirosharkProgressLabel || "MiroShark running"),
     emptyLabel: swarmStatusLabel ? `No swarm runs loaded · ${swarmStatusLabel}` : "No swarm runs loaded",
     launchModes: { local: localStatus, x402: x402Status },
-    onOpenWallets: () => setActiveView("wallet"),
-    onSelectRun: (run: Run) => {
-      if (run.id !== currentSwarmRun?.id) void loadMirosharkArchivedRun(run.id);
-    },
-    onLaunch: (payload: SimLaunchPayload) => {
-      if (payload.mode === "x402") {
-        // Compose → pick a wallet → confirm the $1 charge → POST /api/miroshark/x402.
-        setRunPhase("confirm");
-        setRunError(null);
-        setConfirmWalletId(null);
-        setPendingX402(payload);
-        setPickerOpen(true);
-        return;
-      }
-      // Local MiroShark — the existing deferred launch.
-      stageLocalLaunch(payload);
-    },
-    onPublish: (run: Run) => { void runMirosharkExperiment("publish", run.id); },
-    onExport: (run: Run) => {
-      const source = swarmRuns.find((r) => r.id === run.id)
-        ?? (currentSwarmRun && currentSwarmRun.id === run.id ? currentSwarmRun : null)
-        ?? run;
-      downloadRunJson(run.id, source);
-    },
-    onStop: (run: Run) => { void runMirosharkExperiment("stop", run.id); },
-  };
+    onOpenWallets,
+    onSelectRun,
+    onLaunch,
+    onPublish,
+    onExport,
+    onStop,
+  }), [
+    base,
+    loading,
+    mirosharkArchiveStatus,
+    mirosharkProgressLabel,
+    swarmStatusLabel,
+    localStatus,
+    x402Status,
+    onOpenWallets,
+    onSelectRun,
+    onLaunch,
+    onPublish,
+    onExport,
+    onStop,
+  ]);
 
   const blockReason = chosen ? x402WalletBlockReason(chosen.wallet) : "";
 

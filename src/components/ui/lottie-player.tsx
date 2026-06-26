@@ -33,8 +33,24 @@ const FIXED_CANVAS_RENDER_CONFIG = {
   autoResize: false,
   freezeOnOffscreen: false,
 } as const;
-const LOOP_PLAYBACK_WATCH_INTERVAL_MS = 120;
+const LOOP_PLAYBACK_WATCH_INTERVAL_MS = 500;
 const LOOP_PLAYBACK_RESTART_THROTTLE_MS = 180;
+
+// Point DotLottie at the locally served WASM (Next route at
+// src/app/loading/dotlottie-player.wasm/route.ts) instead of the default
+// public CDN, avoiding a cross-origin round-trip on first paint. Must run
+// once, before any player instance is constructed.
+const LOCAL_DOT_LOTTIE_WASM_URL = "/loading/dotlottie-player.wasm";
+let dotLottieWasmUrlConfigured = false;
+function configureLocalDotLottieWasm() {
+  if (dotLottieWasmUrlConfigured || typeof window === "undefined") return;
+  dotLottieWasmUrlConfigured = true;
+  try {
+    DotLottie.setWasmUrl(LOCAL_DOT_LOTTIE_WASM_URL);
+  } catch {
+    // Best effort: fall back to the library default if the setter is unavailable.
+  }
+}
 
 function fixedCanvasDevicePixelRatio() {
   return Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
@@ -257,6 +273,9 @@ export function LottiePlayer({
     };
     const watchLoopPlayback = () => {
       if (!player || !loop || !autoplay) return;
+      // Skip the playback check while the tab is hidden; the interval stays
+      // alive and resumes watching once the document becomes visible again.
+      if (typeof document !== "undefined" && document.hidden) return;
 
       try {
         if (player.isLoaded && !player.isPlaying) restartLoopPlayback();
@@ -283,6 +302,7 @@ export function LottiePlayer({
     };
 
     try {
+      configureLocalDotLottieWasm();
       const sourceConfig = cachedData
         ? { data: cachedData.slice(0) }
         : { src: normalizedSrc };

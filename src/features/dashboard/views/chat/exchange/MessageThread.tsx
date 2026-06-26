@@ -2,7 +2,7 @@
 // @ts-nocheck
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, memo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -292,7 +292,7 @@ function ResearchBriefTabs({ text, ChatMarkdown }: { text: string; ChatMarkdown?
   );
 }
 
-export function MessageThread({
+function MessageThreadBase({
   AgentResponseLoader,
   ChatMarkdown,
   FileText,
@@ -501,3 +501,7 @@ export function MessageThread({
     </>
   );
 }
+
+// Memoized so the transcript only re-renders when its own props change, not on
+// every parent (DashboardApp) re-render from streaming tokens / composer keystrokes.
+export const MessageThread = memo(MessageThreadBase);

@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { memo, useState, type MouseEvent, type ReactNode } from "react";
 
 import chatStyles from "@/app/chat.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
@@ -457,7 +457,7 @@ export function ChatInlineMarkdown({ text }: { text: string }) {
   return <>{renderInlineMarkdown(text.replace(/\s+/g, " "), { links: "text" })}</>;
 }
 
-export function ChatMarkdown({ text, className, headingClassName }: { text: string; className?: string; headingClassName?: string }) {
+function ChatMarkdownBase({ text, className, headingClassName }: { text: string; className?: string; headingClassName?: string }) {
   const [copiedCode, setCopiedCode] = useState("");
   if (!text.trim()) return null;
   const leadingDraft = splitLeadingDraftBlock(text);
@@ -622,3 +622,8 @@ export function ChatMarkdown({ text, className, headingClassName }: { text: stri
     </div>
   );
 }
+
+// Memoized so non-streaming bubbles skip re-parsing markdown when an ancestor
+// re-renders (e.g. on each streamed token or composer keystroke). text/className
+// props are primitive strings, so the default shallow compare is sufficient.
+export const ChatMarkdown = memo(ChatMarkdownBase);

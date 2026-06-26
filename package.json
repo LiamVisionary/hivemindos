@@ -117,6 +117,7 @@
     "test:clawbank": "node scripts/test-clawbank-client.mjs && node scripts/test-clawbank-actions.mjs",
     "test:crypto-gaps": "node scripts/test-crypto-gap-capabilities.mjs",
     "test:hyperliquid": "node scripts/test-hyperliquid-builder-codes.mjs",
+    "test:crypto-practice-book": "node scripts/test-crypto-practice-book.mjs",
     "test:buy-stock": "node scripts/test-buy-stock-xstocks.mjs",
     "test:wallet-vault": "node scripts/test-wallet-vault.mjs",
     "test:personal-wallet-grouping": "node scripts/test-personal-wallet-grouping.mjs",

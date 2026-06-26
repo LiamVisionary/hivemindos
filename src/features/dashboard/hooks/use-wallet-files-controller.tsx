@@ -2,6 +2,7 @@
 // @ts-nocheck
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import { nativeRuntimeFileRequest } from "@/lib/native/runtime-files";
 import { readNativeRuntimeUsage } from "@/lib/native/runtime-usage";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
@@ -31,6 +32,13 @@ export function useWalletFilesController(props: any) {
   const { buildAgentPaymentPrompt, createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, displayAgents, duplicateAgentDraft, agents, honeyLedgerEnabled, normalizeMoney, onAgentAdded, openAgentCreationModal, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, selectedAgent, selectedAgentId, setAgents, setDiscoveredMachines, setDuplicateAgentDraft, setFleetSnapshots, setHoneyLedgerEnabled, setHoneyTreasury, setMaintenanceBusy, setMaintenanceMessage, setMaintenanceReport, setMessagesByAgent, setMoneyClawLoadingEnvName, setMoneyClawStatusByEnvName, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setRuntimeFileRoots, setRuntimeFileStatus, setRuntimeFiles, setRuntimeUsage, setRuntimeUsageLoading, setSelectedAgentId, setSharedVault, setSuppressedDiscoveredAgentKeys, setWalletActionsByAgent, setWalletVaultBackupBusy, setWalletVaultBackupMessage, setWalletVaultBackupStatus, setWalletsByAgent, sharedVault, updateAgentProfile, walletActionsByAgent, walletsByAgent } = props;
   const deleteFetchTimeoutMs = 20_000;
   const duplicateFetchTimeoutMs = 180_000;
+  // Latest snapshot of the props/state and sibling local helpers that the
+  // stable useCallback handlers below read at call time (assigned in the effect
+  // near the end of this hook, matching use-fleet-auto-update.tsx). Reading
+  // through this ref lets those handlers keep an empty dep array — stable
+  // identity, so the memoized panels they are spread into can short-circuit —
+  // without ever observing stale props.
+  const liveRef = useRef<any>(null);
   function updateSharedVault(patch: Partial<SharedVaultConfig>) {
     setSharedVault((current) => ({ ...current, ...patch }));
   }
@@ -662,22 +670,23 @@ export function useWalletFilesController(props: any) {
     await refreshWalletBalance(agentId);
   }
 
-  function addAgentToMachine(machine: MachineGroup, runtime: AgentRuntime = "hermes") {
-    openAgentCreationModal(machine, runtime);
-  }
+  const addAgentToMachine = useCallback((machine: MachineGroup, runtime: AgentRuntime = "hermes") => {
+    liveRef.current.openAgentCreationModal(machine, runtime);
+  }, []);
 
-  function requestDuplicateAgent(agentId?: string) {
+  const requestDuplicateAgent = useCallback((agentId?: string) => {
+    const live = liveRef.current;
     const source = agentId
-      ? displayAgents.find((agent) => agent.id === agentId) ?? selectedAgent
-      : selectedAgent;
+      ? live.displayAgents.find((agent) => agent.id === agentId) ?? live.selectedAgent
+      : live.selectedAgent;
     if (!source) return;
-    setDuplicateAgentDraft({
+    live.setDuplicateAgentDraft({
       agentId: source.id,
       copyMemories: false,
       copyEnv: true,
       copyChats: false,
     });
-  }
+  }, []);
 
   function copyDuplicatedChats(sourceId: string, nextId: string) {
     setMessagesByAgent((current) => {
@@ -808,11 +817,13 @@ export function useWalletFilesController(props: any) {
     }
   }
 
-  async function deleteAgent(agentId = selectedAgent?.id, options?: DeleteAgentOptions) {
+  const deleteAgent = useCallback(async (agentIdArg?: string, options?: DeleteAgentOptions) => {
+    const live = liveRef.current;
+    const agentId = agentIdArg ?? live.selectedAgent?.id;
     if (!agentId) return;
-    const agent = displayAgents.find((item) => item.id === agentId)
-      ?? agents.find((item) => item.id === agentId)
-      ?? selectedAgent
+    const agent = live.displayAgents.find((item) => item.id === agentId)
+      ?? live.agents.find((item) => item.id === agentId)
+      ?? live.selectedAgent
       ?? (options?.fleetAgent?.id === agentId ? options.fleetAgent : null);
     if (agent?.runtime === "aeon" && options?.aeonDeleteDepth) {
       const staleLocalDeleteError = (message: string) => (
@@ -874,43 +885,66 @@ export function useWalletFilesController(props: any) {
     const suppressionKeys = suppressionKeysForRemovedAgent(
       agent,
       agentId,
-      agents.filter((candidate) => candidate.id !== agentId),
+      live.agents.filter((candidate) => candidate.id !== agentId),
     );
     if (suppressionKeys.length > 0) {
       const suppressedKeys = new Set(suppressionKeys);
-      setSuppressedDiscoveredAgentKeys?.((current) => {
+      live.setSuppressedDiscoveredAgentKeys?.((current) => {
         const nextSuppressedKeys = new Set([...current, ...suppressionKeys]);
         void saveDashboardStateValue(SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY, JSON.stringify([...nextSuppressedKeys].slice(-500)));
         return nextSuppressedKeys;
       });
-      setDiscoveredMachines?.((current) => current.map((machine) => ({
+      live.setDiscoveredMachines?.((current) => current.map((machine) => ({
         ...machine,
         agents: (machine.agents ?? []).filter((candidate) => candidate.id !== agentId && !agentMatchesSuppression(candidate, suppressedKeys)),
         snapshots: (machine.snapshots ?? []).filter((snapshot) => snapshot.agentId !== agentId),
       })));
     }
-    setFleetSnapshots?.((current) => Object.fromEntries(
+    live.setFleetSnapshots?.((current) => Object.fromEntries(
       Object.entries(current).filter(([snapshotAgentId]) => snapshotAgentId !== agentId),
     ));
-    const next = agents.filter((agent) => agent.id !== agentId);
-    setAgents(next);
+    const next = live.agents.filter((agent) => agent.id !== agentId);
+    live.setAgents(next);
     void saveDashboardStateValue(AGENT_PROFILES_STORAGE_KEY, JSON.stringify(next));
-    if (selectedAgentId === agentId) {
-      setSelectedAgentId(next[0]?.id ?? "");
+    if (live.selectedAgentId === agentId) {
+      live.setSelectedAgentId(next[0]?.id ?? "");
     }
-    setMessagesByAgent((current) => {
+    live.setMessagesByAgent((current) => {
       const nextMessages = { ...current };
       delete nextMessages[agentId];
       return nextMessages;
     });
-    void deleteRuntimeAgentAtSource(agent, options).catch((error) => {
+    void live.deleteRuntimeAgentAtSource(agent, options).catch((error) => {
       const message = error instanceof DOMException && error.name === "TimeoutError"
         ? `Runtime agent deletion timed out after ${Math.round(deleteFetchTimeoutMs / 1000)} seconds.`
         : error instanceof Error ? error.message : "Could not delete the runtime agent at its source.";
-      setMaintenanceMessage?.(message);
+      live.setMaintenanceMessage?.(message);
     });
     return { ok: true };
-  }
+  }, []);
+
+  // Refresh the live snapshot every render so the stable handlers above always
+  // read current props/state and the latest sibling-helper identity. Written in
+  // an effect (matching use-fleet-auto-update.tsx) rather than during render;
+  // these handlers are user-triggered and always fire after effects flush.
+  useEffect(() => {
+    liveRef.current = {
+      agents,
+      displayAgents,
+      openAgentCreationModal,
+      selectedAgent,
+      selectedAgentId,
+      setAgents,
+      setDiscoveredMachines,
+      setDuplicateAgentDraft,
+      setFleetSnapshots,
+      setMaintenanceMessage,
+      setMessagesByAgent,
+      setSelectedAgentId,
+      setSuppressedDiscoveredAgentKeys,
+      deleteRuntimeAgentAtSource,
+    };
+  });
 
   return { updateSharedVault, updateWallet, resetWalletBurnClock, copyPaymentPrompt, exportWalletSecrets, refreshMoneyClawStatus, saveMoneyClawKey, initializeCoreWalletRails, refreshHoneyLedger, observeHoneyUsage, refreshRuntimeUsage, refreshWalletVaultBackupStatus, runWalletVaultBackupAction, refreshMaintenanceReport, runMaintenanceAction, runtimeFileRequest, refreshRuntimeFileRoots, listRuntimeFiles, openRuntimeFile, saveRuntimeFile, returnAllHiveToHoney, claimAllHoneyToBankrHive, enableHoneyLedger, updateWalletAction, createLocalWallet, refreshWalletBalance, sendWalletUsdc, testX402Fetch, addAgentToMachine, requestDuplicateAgent, duplicateAgent, deleteAgent };
 }

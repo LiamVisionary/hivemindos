@@ -9,7 +9,7 @@
    `fr-shelf-app` modifier (fixed positioning + macOS drag region). onNavigate
    receives a DashboardView id; wire it to the dashboard view switch. */
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { Brain } from "lucide-react";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
@@ -134,7 +134,7 @@ function NavShelfItem({ id, label, active, onNavigate, onPrefetch, badge }: {
   );
 }
 
-export function AppNavShelf({
+function AppNavShelfBase({
   activeView,
   onNavigate,
   onPrefetch,
@@ -282,5 +282,10 @@ export function AppNavShelf({
     </div>
   );
 }
+
+// Memoized: this rail is always mounted, so without memo it reconciles its ~26
+// stable elements on every DashboardApp state change (each keystroke / voice tick).
+// Requires its onNavigate/onToggleTheme props to be useCallback-stable at the call site.
+export const AppNavShelf = memo(AppNavShelfBase);
 
 export default AppNavShelf;

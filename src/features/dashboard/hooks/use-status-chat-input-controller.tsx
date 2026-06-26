@@ -12,9 +12,10 @@ import { compactRepeatedAssistantText, extractGeneratedKanbanTask, kanbanBodyWit
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
 import { appendChatProcessState, finishChatStreamState, markChatStreamChunkState, startChatStreamState } from "./status-chat-stream-state";
+import { pushVoiceBands, resetVoiceBands } from "@/lib/stores/voice-bands-store";
 
 export function useStatusChatInputController(props: any) {
-  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
+  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
   const [chatKanbanGeneration, setChatKanbanGeneration] = useState(null);
   const [chatQueue, setChatQueue] = useState([]);
   const [flushingChatQueueId, setFlushingChatQueueId] = useState("");
@@ -693,7 +694,7 @@ export function useStatusChatInputController(props: any) {
     void voiceAudioContextRef.current?.close().catch(() => undefined);
     voiceAudioContextRef.current = null;
     voiceRecognitionRef.current = null;
-    setVoiceBands(Array(18).fill(0));
+    resetVoiceBands();
     setRecording(false);
     if (commitTranscript) appendVoiceTranscriptToInput();
   }
@@ -710,11 +711,10 @@ export function useStatusChatInputController(props: any) {
     voiceAudioContextRef.current = audioContext;
     const data = new Uint8Array(analyser.frequencyBinCount);
     const bands = 18;
-    // Throttle waveform state updates. The analyser ticks at ~60fps, but
-    // pushing setVoiceBands every frame re-renders DashboardApp (and every
-    // unmemoized view panel) 60x/second for the whole recording. Sampling every
-    // 5th frame (~12fps) is visually indistinguishable for a level meter and
-    // cuts the recording-time re-render load by 5x.
+    // Throttle waveform store updates. The analyser ticks at ~60fps, but pushing
+    // voice bands every frame re-renders the subscribed <VoiceWaveform/> bars
+    // 60x/second for the whole recording. Sampling every 5th frame (~12fps) is
+    // visually indistinguishable for a level meter and cuts the re-render load 5x.
     let frame = 0;
     const tick = () => {
       voiceAnimationRef.current = window.requestAnimationFrame(tick);
@@ -728,7 +728,7 @@ export function useStatusChatInputController(props: any) {
         const average = slice.reduce((total, value) => total + value, 0) / Math.max(1, slice.length);
         return Math.min(1, average / 180);
       });
-      setVoiceBands(next);
+      pushVoiceBands(next);
     };
     tick();
   }

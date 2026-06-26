@@ -319,6 +319,88 @@
 .gain { color: #6fe0b0; }
 .loss { color: #ef9a9a; }
 
+/* Shared crypto practice book. */
+.practiceBook {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2, #2b3038);
+  background: color-mix(in srgb, var(--panel-hi, #1e222b) 62%, transparent);
+}
+.practiceHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.practiceActions,
+.practiceSnapshots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.practiceTable {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--line-2, #2b3038);
+}
+.practiceRowHead,
+.practiceRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(70px, 0.7fr) minmax(90px, 0.8fr) minmax(90px, 0.8fr);
+  gap: 10px;
+  align-items: center;
+}
+.practiceRowHead {
+  padding: 8px 0 6px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-3, #867d6e);
+  border-bottom: 1px solid var(--line-2, #2b3038);
+}
+.practiceRow {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--fg-2, #cfc8ba);
+  border-bottom: 1px dashed var(--line-2, #2b3038);
+}
+.practiceRow:last-child { border-bottom: 0; }
+.practiceRow strong {
+  display: block;
+  color: var(--fg-1, #e9e4d8);
+}
+.practiceRow small {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-3, #867d6e);
+}
+.practiceManual {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.practiceManual .field {
+  margin-bottom: 0;
+}
+.practicePlan {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-2, #2b3038);
+}
+
+@media (max-width: 640px) {
+  .practiceRowHead { display: none; }
+  .practiceRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
 /* Acting-wallet button in the header (opens the selection modal). */
 .actingButton {
   display: inline-flex;

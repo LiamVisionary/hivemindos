@@ -52,6 +52,21 @@ HivemindOS has two Hyperliquid paths:
 
 The app should always make the funding source clear before you confirm.
 
+## Replaying A Shared Practice Book
+
+If you have been practicing crypto trades in another supported paper venue, HivemindOS
+can save those positions into a local shared practice book and prepare the Hyperliquid
+orders needed to match that target. The first supported bridge is Alpaca paper crypto:
+capture the paper positions, review the local target, then plan a Hyperliquid replay
+against the selected wallet's current Hyperliquid account.
+
+Replay is a diff, not a hidden account transfer. If Hyperliquid already has part of
+the target, HivemindOS prepares only the missing or reducing orders it can map to
+Hyperliquid markets. Unsupported assets remain in the review so you can decide what to
+do manually. Actual replay orders still use the selected wallet, require explicit
+confirmation, and pass the same builder-fee, cap, budget, and governance checks as a
+normal Hyperliquid order.
+
 ## The Builder Fee
 
 Official HivemindOS builds attach the HivemindOS Hyperliquid builder code to eligible local Hyperliquid fills. This is how HivemindOS earns a small routing fee when it helps place a Hyperliquid trade.
