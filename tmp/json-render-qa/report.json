@@ -1,0 +1,75 @@
+{
+  "url": "http://127.0.0.1:5022/json-render-catalog",
+  "screenshots": [
+    "/Users/liam/Documents/code/projects/hivemind-os/tmp/json-render-qa/desktop-top.png",
+    "/Users/liam/Documents/code/projects/hivemind-os/tmp/json-render-qa/desktop-state.png",
+    "/Users/liam/Documents/code/projects/hivemind-os/tmp/json-render-qa/desktop-dialog.png",
+    "/Users/liam/Documents/code/projects/hivemind-os/tmp/json-render-qa/mobile-top.png",
+    "/Users/liam/Documents/code/projects/hivemind-os/tmp/json-render-qa/mobile-state.png",
+    "/Users/liam/Documents/code/projects/hivemind-os/tmp/json-render-qa/mobile-dialog.png"
+  ],
+  "checks": {
+    "desktopKeyText": {
+      "hasCatalogIntro": true,
+      "hasStructuredData": true,
+      "hasCodeActions": true,
+      "hasComputedAverage": true
+    },
+    "desktopTop": {
+      "articleCount": 5,
+      "overflowing": [],
+      "rawFenceVisible": false,
+      "rawRootVisible": false,
+      "objectObjectVisible": false,
+      "nextErrorOverlay": false
+    },
+    "desktopState": {
+      "articleCount": 5,
+      "overflowing": [],
+      "rawFenceVisible": false,
+      "rawRootVisible": false,
+      "objectObjectVisible": false,
+      "nextErrorOverlay": false
+    },
+    "desktopInteraction": {
+      "rangeValue": "92",
+      "scoreUpdated": true,
+      "computedAverageUpdated": true,
+      "watcherEvents": 93,
+      "dialogText": true
+    },
+    "mobileTop": {
+      "articleCount": 5,
+      "overflowing": [],
+      "rawFenceVisible": false,
+      "rawRootVisible": false,
+      "objectObjectVisible": false,
+      "nextErrorOverlay": false
+    },
+    "mobileState": {
+      "articleCount": 5,
+      "overflowing": [],
+      "rawFenceVisible": false,
+      "rawRootVisible": false,
+      "objectObjectVisible": false,
+      "nextErrorOverlay": false
+    },
+    "mobileInteraction": {
+      "rangeValue": "91",
+      "scoreUpdated": true,
+      "computedAverageUpdated": true,
+      "dialogText": true
+    },
+    "noConsoleErrors": true,
+    "noPageErrors": true,
+    "noFailedCatalogResponses": true,
+    "noNextErrorOverlay": true,
+    "noObjectObject": true,
+    "noRawJsonRenderLeak": true,
+    "noUnexpectedHorizontalOverflow": true,
+    "articleCountsOk": true
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedResponses": []
+}

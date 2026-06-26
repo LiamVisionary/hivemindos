@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       toAddress: body.toAddress!.trim(),
       amountUsd: Number(body.amountUsd),
       approvalToken: body.approvalToken,
+      approvalThresholdSatisfied: true,
     });
     if (!result.ok) {
       const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;

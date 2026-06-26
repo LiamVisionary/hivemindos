@@ -29,7 +29,18 @@ const expectedExecutions = [
   { tool: "send_usdc", token: "SEND_USDC", route: "/api/wallet/send" },
   { tool: "dex_swap", token: "CONFIRM_SWAP", route: "/api/trading/swap" },
   { tool: "stock_trade", tokens: ["CONFIRM_BUY", "CONFIRM_SELL"], route: "/api/trading" },
-  { tool: "hyperliquid_trade", tokens: ["CONFIRM_HYPERLIQUID_ORDER", "CONFIRM_HYPERLIQUID_BUILDER"], route: "/api/trading/hyperliquid" },
+  {
+    tool: "hyperliquid_trade",
+    tokens: [
+      "CONFIRM_HYPERLIQUID_ORDER",
+      "CONFIRM_HYPERLIQUID_BUILDER",
+      "CONFIRM_HYPERLIQUID_CANCEL",
+      "CONFIRM_HYPERLIQUID_ACCOUNT",
+      "CONFIRM_HYPERLIQUID_TRANSFER",
+      "CONFIRM_HYPERLIQUID_TWAP",
+    ],
+    route: "/api/trading/hyperliquid",
+  },
 ];
 
 for (const expected of expectedExecutions) {

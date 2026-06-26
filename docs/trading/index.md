@@ -14,13 +14,13 @@ confirmation before anything executes. Nothing moves silently.
 <div class="docGrid">
   <section class="docCard">
     <h3>Crypto</h3>
-    <p>Swap tokens, send USDC, make a private transfer, pay an API, trade Hyperliquid perps, and use Bankr for prediction markets, NFTs, token launches, bridges, or recurring buys.</p>
+    <p>Swap tokens, send USDC, make a private transfer, pay an API, trade Hyperliquid spot or perps, and use Bankr for prediction markets, NFTs, token launches, bridges, or recurring buys.</p>
     <a href="crypto.html">What you can do with crypto</a>
   </section>
   <section class="docCard">
-    <h3>Hyperliquid Perps</h3>
-    <p>Go long or short from a local EVM wallet, quote market or limit orders, approve the HivemindOS builder fee, close positions reduce-only, and keep everything inside wallet limits.</p>
-    <a href="hyperliquid.html">Trade Hyperliquid perps</a>
+    <h3>Hyperliquid</h3>
+    <p>Trade spot or perps from a local EVM wallet, manage orders, leverage, margin, transfers, withdrawals, and TWAPs, and keep everything inside wallet limits.</p>
+    <a href="hyperliquid.html">Trade on Hyperliquid</a>
   </section>
   <section class="docCard">
     <h3>Stocks</h3>
@@ -48,7 +48,7 @@ confirmation before anything executes. Nothing moves silently.
 | Send privately | Veil (shielded transfer) |
 | Pay a pay-per-use API | x402 |
 | Bridge / move across chains | Bankr |
-| Trade Hyperliquid perps with your wallet | Local Hyperliquid |
+| Trade Hyperliquid spot or perps with your wallet | Local Hyperliquid |
 | Trade perps through a provider | Bankr → Hyperliquid |
 | Bet on prediction markets | Bankr → Polymarket |
 | Buy or sell NFTs | Bankr |
@@ -77,8 +77,12 @@ confirmation before anything executes. Nothing moves silently.
 
 - Crypto actions that run through **Bankr** use Bankr's own trading wallet, not the
   wallet you selected — the app tells you when that's the case.
-- **Local Hyperliquid** uses the selected wallet's own Hyperliquid account, with a
-  separate builder-fee approval the first time it is needed.
+- **Local Hyperliquid** uses the selected wallet's own Hyperliquid account. Official
+  HivemindOS builds ask for builder-fee approval once, then attach the builder code
+  automatically to eligible orders.
+- Supported local-wallet actions may include a HivemindOS platform fee. It is shown
+  in the preview and collected as a separate USDC transaction after the action
+  succeeds.
 - **Stock trading** defaults to a free **paper** (practice) account so you can try it
   with no real money; live trading is something you opt into.
 - One thing that doesn't fully work today: a **standalone "bridge X to another chain"**

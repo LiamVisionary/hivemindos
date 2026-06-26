@@ -34,6 +34,7 @@ export async function executeGovernedUsdcSend(input: {
   toAddress: string;
   amountUsd: number;
   approvalToken?: string;
+  approvalThresholdSatisfied?: boolean;
 }): Promise<GovernedUsdcSendResult> {
   const agentId = input.agentId.trim();
   const toAddress = input.toAddress.trim();
@@ -55,6 +56,7 @@ export async function executeGovernedUsdcSend(input: {
       amountUsd,
       target: toAddress,
       approvalToken: input.approvalToken,
+      approvalThresholdSatisfied: input.approvalThresholdSatisfied,
     });
     if (decision.decision === "block") {
       return { ok: false, status: "blocked", error: decision.reason };
@@ -97,6 +99,7 @@ export async function executeGovernedUsdcSend(input: {
     target: shortTarget(toAddress),
     status: "executed",
     approvalId: grantId,
+    transactionHash: result.signature,
   }).catch(() => {});
   return { ok: true, signature: result.signature, network: stored.info.network, platformFee };
 }

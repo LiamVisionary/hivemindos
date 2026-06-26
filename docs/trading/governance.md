@@ -38,17 +38,22 @@ you've deliberately set up with limits.
 
 ## Extra Hyperliquid protections
 
-Hyperliquid perps add market risk, so HivemindOS adds a few visible checkpoints:
+Hyperliquid spot/perp trading and account actions can change real exchange state, so
+HivemindOS adds a few visible checkpoints:
 
 - You get a quote before placing a local Hyperliquid order.
-- Builder-fee approval is separate from order confirmation.
+- Builder-fee approval, order confirmation, cancel confirmation, account changes,
+  transfers, withdrawals, and TWAPs each use their own confirmation step.
 - The official HivemindOS builder fee is shown before the trade.
+- After builder-fee approval, official HivemindOS orders attach the builder code
+  automatically when a fill is eligible.
 - Reduce-only trades are available for closing or shrinking a position.
-- Max trade limits apply before a new position can open or grow.
+- Max trade and max payment limits apply before a new position can open, grow, or move
+  funds.
 - The freeze switch still stops agents from trading.
 
-HivemindOS can enforce the wallet rules, but it cannot prevent normal perp risks like
-liquidation, funding payments, slippage, or fast market moves. Keep position size inside
+HivemindOS can enforce the wallet rules, but it cannot prevent normal market risks like
+liquidation, funding payments, slippage, or fast price moves. Keep position size inside
 what you are willing to actively manage.
 
 ## Agents within their limits

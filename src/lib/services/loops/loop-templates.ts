@@ -1,5 +1,6 @@
 import type { LoopSpec } from "@/lib/types/loops";
 import { withObservation } from "@/lib/services/loops/loop-engine";
+import { listLoopPatterns } from "@/lib/services/loops/pattern-registry";
 import { loopGateFromVerifier, type LoopVerifierId } from "@/lib/services/loops/verifier-registry";
 
 export type LoopTemplateId =
@@ -51,57 +52,18 @@ export type OperatingUnitLearningLoopInput = {
   now?: number;
 };
 
-export const LOOP_TEMPLATES: Record<LoopTemplateId, LoopTemplateDefinition> = {
-  "code-fix": {
-    id: "code-fix",
-    title: "Code Fix Loop",
-    description: "Repair code against tests, lint, and type gates with bounded retries.",
-    defaultMode: "closed",
-    verifierIds: ["command:test", "command:lint", "command:typecheck", "receipt:evidence"],
-  },
-  "app-build-harness": {
-    id: "app-build-harness",
-    title: "App Build Harness",
-    description: "Planner, builder, and judge loop for app-building work.",
-    defaultMode: "closed",
-    verifierIds: ["agent:judge", "command:lint", "command:typecheck", "command:playwright", "artifact:exists", "receipt:evidence"],
-  },
-  research: {
-    id: "research",
-    title: "Research Loop",
-    description: "Investigate a question until claims are backed by evidence receipts.",
-    defaultMode: "open",
-    verifierIds: ["receipt:evidence", "agent:judge"],
-  },
-  content: {
-    id: "content",
-    title: "Content Loop",
-    description: "Draft, judge, and revise content against explicit rubric criteria.",
-    defaultMode: "open",
-    verifierIds: ["agent:judge", "artifact:exists", "receipt:evidence"],
-  },
-  "daily-brief": {
-    id: "daily-brief",
-    title: "Daily Brief Loop",
-    description: "Recurring brief loop with evidence and delivery receipts.",
-    defaultMode: "open",
-    verifierIds: ["receipt:evidence", "artifact:exists"],
-  },
-  "operating-unit-learning": {
-    id: "operating-unit-learning",
-    title: "Operating Unit Learning Loop",
-    description: "Reusable learning loop for companies, teams, crews, and long-running goals.",
-    defaultMode: "optimizer",
-    verifierIds: ["receipt:evidence", "governance:policy"],
-  },
-  "evo-benchmark": {
-    id: "evo-benchmark",
-    title: "Evo Benchmark Loop",
-    description: "Benchmark-driven optimizer loop that can be handed to Evo.",
-    defaultMode: "optimizer",
-    verifierIds: ["evo:score", "command:test", "receipt:evidence"],
-  },
-};
+export const LOOP_TEMPLATES: Record<LoopTemplateId, LoopTemplateDefinition> = Object.fromEntries(
+  listLoopPatterns().map((pattern) => [
+    pattern.id,
+    {
+      id: pattern.id as LoopTemplateId,
+      title: pattern.name,
+      description: pattern.description,
+      defaultMode: pattern.defaultMode,
+      verifierIds: pattern.verifierIds,
+    },
+  ]),
+) as Record<LoopTemplateId, LoopTemplateDefinition>;
 
 export function listLoopTemplates(): LoopTemplateDefinition[] {
   return Object.values(LOOP_TEMPLATES);

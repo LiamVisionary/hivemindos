@@ -310,6 +310,11 @@
 .fw-banner svg { flex: 0 0 auto; margin-top: 1px; }
 .fw-banner[data-tone="danger"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 26%, transparent); background: var(--danger-soft); }
 .fw-banner[data-tone="danger"] strong { color: var(--danger); }
+.fw-action-status { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg-2); font-size: 11.5px; line-height: 1.45; word-break: break-word; }
+.fw-action-status svg, .fw-action-status .fw-loader { flex: 0 0 auto; margin-top: 1px; }
+.fw-action-status[data-tone="ok"] { color: var(--live); border-color: color-mix(in srgb, var(--live) 26%, transparent); background: var(--live-soft); }
+.fw-action-status[data-tone="working"] { color: var(--honey); border-color: var(--honey-line); background: var(--honey-soft); }
+.fw-action-status[data-tone="danger"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 26%, transparent); background: var(--danger-soft); }
 .fw-rtile { width: 30px; height: 30px; border-radius: 99px; display: grid; place-items: center; flex: 0 0 auto; }
 .fw-railcard { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 13px; }
 .fw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -328,12 +333,24 @@
 .fw-term { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-soft); padding: 11px 12px; }
 .fw-term strong { font-size: 11px; color: var(--fg-3); font-weight: 500; display: block; margin-bottom: 6px; }
 .fw-term code { font-family: var(--f-mono); font-size: 11.5px; color: var(--honey); word-break: break-all; }
-.fw-save { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; border: 0; border-radius: 99px; padding: 11px; font-family: var(--f-body); font-size: 13px; font-weight: 500; cursor: pointer; background: var(--honey); color: #1a1305; transition: filter .16s; }
+.fw-save { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; border: 0; border-radius: 99px; padding: 11px; font-family: var(--f-body); font-size: 13px; font-weight: 500; cursor: pointer; background: var(--honey); color: #1a1305; transition: filter .16s, background .18s, color .18s, box-shadow .18s; }
 .fw-save:hover:not(:disabled) { filter: brightness(1.06); }
 .fw-save:disabled { opacity: .5; cursor: default; }
 .fw-save[data-state="saved"] { background: var(--live); color: #06231d; }
 .fw-save:disabled { background: var(--panel-2); color: var(--fg-4); box-shadow: inset 0 0 0 1px var(--line-2); opacity: 1; cursor: default; }
 .fw-save:disabled svg { stroke: var(--fg-4); }
+.fw-save[data-state="funding"], .fw-save[data-state="funding"]:disabled { background: linear-gradient(90deg, var(--honey), color-mix(in srgb, var(--honey) 82%, white)); color: #1a1305; cursor: progress; box-shadow: 0 0 0 1px color-mix(in srgb, var(--honey) 34%, transparent), 0 0 26px color-mix(in srgb, var(--honey) 18%, transparent); opacity: 1; }
+.fw-save[data-state="funding"]::after { content: ""; position: absolute; inset: 0; transform: translateX(-120%); background: linear-gradient(100deg, transparent 18%, rgba(255,255,255,.42) 50%, transparent 82%); animation: fw-sheen 1.05s ease-in-out infinite; }
+.fw-save[data-state="funded"], .fw-save[data-state="funded"]:disabled { background: linear-gradient(90deg, color-mix(in srgb, var(--live) 30%, var(--panel-2)), color-mix(in srgb, var(--live) 48%, var(--panel-2))); color: var(--fg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--live) 45%, transparent), 0 0 24px color-mix(in srgb, var(--live) 20%, transparent); opacity: 1; }
+.fw-save[data-state="funding"] svg, .fw-save[data-state="funded"] svg, .fw-save[data-state="funding"]:disabled svg, .fw-save[data-state="funded"]:disabled svg { stroke: currentColor; }
+.fw-save[data-state="funding"] > *, .fw-save[data-state="funded"] > * { position: relative; z-index: 1; }
+.fw-loader { display: inline-flex; align-items: center; gap: 3px; }
+.fw-loader i { width: 4px; height: 4px; border-radius: 99px; background: currentColor; animation: fw-dot .72s ease-in-out infinite; }
+.fw-loader i:nth-child(2) { animation-delay: .11s; }
+.fw-loader i:nth-child(3) { animation-delay: .22s; }
+@keyframes fw-dot { 0%, 100% { transform: translateY(0); opacity: .52; } 50% { transform: translateY(-4px); opacity: 1; } }
+@keyframes fw-sheen { to { transform: translateX(120%); } }
+@media (prefers-reduced-motion: reduce) { .fw-loader i, .fw-save[data-state="funding"]::after { animation: none; } }
 .fw-kv { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
 .fw-kv > div { background: var(--panel-2); padding: 9px 11px; }
 .fw-kv span { font-size: 10px; color: var(--fg-4); font-family: var(--f-mono); letter-spacing: .08em; text-transform: uppercase; display: block; }
@@ -341,6 +358,8 @@
 .fw-fundgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-height: 300px; overflow-y: auto; padding: 1px; }
 .fw-fundcard { color: var(--fg); text-align: left; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: var(--radius-sm); padding: 11px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: .15s; }
 .fw-fundcard:hover { border-color: var(--line-3); }
+.fw-fundcard[aria-disabled="true"] { cursor: default; }
+.fw-fundcard[aria-disabled="true"]:not([data-sel]):hover { border-color: var(--line-2); }
 .fw-fundcard[data-sel] { border-color: var(--honey); background: var(--honey-soft); }
 .fw-fundcard .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fw-fundcard b { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; }
@@ -348,3 +367,7 @@
 .fw-fundcard .mn { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
 .fw-fundcard .check { color: var(--honey); display: grid; place-items: center; }
 .fw-fundfoot { display: flex; gap: 8px; align-items: center; }
+.fw-fundsuccess { display: flex; align-items: center; gap: 10px; border: 1px solid color-mix(in srgb, var(--live) 30%, transparent); border-radius: var(--radius-sm); padding: 11px 12px; background: var(--live-soft); color: var(--live); animation: fb-fadein .18s ease both; }
+.fw-fundsuccess .mark { width: 28px; height: 28px; border-radius: 99px; display: grid; place-items: center; flex: 0 0 auto; background: color-mix(in srgb, var(--live) 16%, transparent); }
+.fw-fundsuccess strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--fg); }
+.fw-fundsuccess small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.4; color: var(--fg-2); }

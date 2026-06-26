@@ -5,6 +5,12 @@ import { callVeilMcpTool } from "@/lib/services/wallet/veil-mcp";
 import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
 import { requireAuth } from "@/lib/utils/server-auth";
+import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  quoteTradingPlatformFee,
+} from "@/lib/services/wallet/platform-fees";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,9 +75,20 @@ export async function POST(request: NextRequest) {
     const validation = validateBody(body);
     if (validation) return validation;
 
+    const agentId = body.agentId!.trim();
     const policy = normalizePolicy(body.policy);
     const veilKey = await veilEnvValue("VEIL_KEY");
     if (!veilKey) return sendError("VEIL_KEY is not configured in the server environment. Run Veil setup before private x402 payments.", 424);
+
+    let feeWallet: Awaited<ReturnType<typeof getWalletSecret>> | null = null;
+    if (policy.maxPaymentUsd > 0) {
+      const feeQuote = await quoteTradingPlatformFee({ source: "veil-x402", network: VEIL_CASH_NETWORK, amountUsd: policy.maxPaymentUsd });
+      if (feeQuote.enabled) {
+        feeWallet = await getWalletSecret(agentId);
+        if (!feeWallet) return sendError("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.", 424);
+        await assertTradingPlatformFeeReady({ source: "veil-x402", network: feeWallet.info.network, amountUsd: policy.maxPaymentUsd });
+      }
+    }
 
     let result = await callVeilMcpTool<VeilMcpX402Result>("veil_pay_x402", {
       url: body.url!.trim(),
@@ -107,12 +124,24 @@ export async function POST(request: NextRequest) {
     if (result.success === false) {
       return sendError(result.message ?? "Veil private x402 payment was not submitted.");
     }
+    const amountUsd = Number(result.amount ?? result.receipt?.amount ?? 0);
+    const platformFee = feeWallet && amountUsd > 0
+      ? await collectTradingPlatformFee({
+        agentId,
+        network: feeWallet.info.network,
+        secret: feeWallet.secret,
+        fromAddress: feeWallet.info.address,
+        amountUsd,
+        source: "veil-x402",
+      })
+      : undefined;
 
     return NextResponse.json({
       ok: true,
       privateX402: {
         resource: result.url ?? body.url,
-        amountUsd: Number(result.amount ?? result.receipt?.amount ?? 0),
+        amountUsd,
+        platformFee,
         payerAddress: result.payerAddress ?? result.receipt?.payerAddress,
         payerIndex: result.payerIndex ?? result.receipt?.payerIndex,
         privateWithdraw: {

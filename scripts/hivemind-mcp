@@ -126,7 +126,24 @@ const TOOLS = mergeToolDescriptors(
   await loadHiveActionMcpTools(),
 );
 const HIVE_ACTION_MCP_TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
-const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade"]);
+const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade", "clawbank_send_usdc", "clawbank_trade", "clawbank_money_transfer", "clawbank_call"]);
+const HYPERLIQUID_READ_ACTIONS = new Set(["", "quote", "status", "positions", "open-orders", "fills", "fees", "order-status"]);
+const HYPERLIQUID_CONFIRMATION_BY_ACTION = new Map([
+  ["approve-builder", "CONFIRM_HYPERLIQUID_BUILDER"],
+  ["order", "CONFIRM_HYPERLIQUID_ORDER"],
+  ["modify", "CONFIRM_HYPERLIQUID_ORDER"],
+  ["cancel", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["cancel-by-cloid", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["schedule-cancel", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["leverage", "CONFIRM_HYPERLIQUID_ACCOUNT"],
+  ["margin", "CONFIRM_HYPERLIQUID_ACCOUNT"],
+  ["usd-class", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["usd-send", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["spot-send", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["withdraw", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["twap-order", "CONFIRM_HYPERLIQUID_TWAP"],
+  ["twap-cancel", "CONFIRM_HYPERLIQUID_TWAP"],
+]);
 
 async function loadHiveActionMcpTools() {
   try {
@@ -152,7 +169,7 @@ function mergeToolDescriptors(manualTools, hiveActionTools) {
 
 function requireHiveActionExecutionPreflight(name, args = {}) {
   if (!EXECUTION_TOOL_NAMES.has(name)) return;
-  if (name === "hyperliquid_trade" && !["approve-builder", "order"].includes(String(args.action || "").toLowerCase())) return;
+  if (name === "hyperliquid_trade" && HYPERLIQUID_READ_ACTIONS.has(String(args.action || "").toLowerCase())) return;
   const tool = HIVE_ACTION_MCP_TOOL_BY_NAME.get(name);
   const annotations = tool?.annotations || {};
   const sideEffects = Array.isArray(annotations["hivemindos/sideEffects"])
@@ -189,8 +206,8 @@ function expectedConfirmationsForExecutionTool(name, args, confirmation) {
   }
   if (name === "hyperliquid_trade") {
     const action = typeof args.action === "string" ? args.action.toLowerCase() : "";
-    if (action === "approve-builder" && tokens.includes("CONFIRM_HYPERLIQUID_BUILDER")) return ["CONFIRM_HYPERLIQUID_BUILDER"];
-    if (action === "order" && tokens.includes("CONFIRM_HYPERLIQUID_ORDER")) return ["CONFIRM_HYPERLIQUID_ORDER"];
+    const expected = HYPERLIQUID_CONFIRMATION_BY_ACTION.get(action);
+    if (expected && tokens.includes(expected)) return [expected];
     return tokens;
   }
   if (name !== "stock_trade") return tokens;
@@ -633,13 +650,40 @@ async function callTool(name, args = {}) {
       action,
       agentId: args.agentId,
       coin: args.coin,
+      marketType: args.marketType,
+      assetId: args.assetId,
       side: args.side,
       orderType: args.orderType,
       notionalUsd: args.notionalUsd,
       size: args.size,
       limitPrice: args.limitPrice,
+      timeInForce: args.timeInForce,
+      triggerPx: args.triggerPx,
+      triggerType: args.triggerType,
+      triggerIsMarket: args.triggerIsMarket,
+      grouping: args.grouping,
+      clientOrderId: args.clientOrderId,
       reduceOnly: args.reduceOnly,
       slippageBps: args.slippageBps,
+      orderId: args.orderId,
+      oid: args.oid,
+      cloid: args.cloid,
+      fastCancel: args.fastCancel,
+      alwaysPlace: args.alwaysPlace,
+      scheduleCancelTime: args.scheduleCancelTime,
+      leverage: args.leverage,
+      marginMode: args.marginMode,
+      marginDeltaUsd: args.marginDeltaUsd,
+      transferType: args.transferType,
+      amount: args.amount,
+      amountUsd: args.amountUsd,
+      destination: args.destination,
+      token: args.token,
+      toPerp: args.toPerp,
+      twapMinutes: args.twapMinutes,
+      twapRandomize: args.twapRandomize,
+      twapId: args.twapId,
+      aggregateByTime: args.aggregateByTime,
       confirmation: args.confirmation,
       approvalToken: args.approvalToken,
     });
@@ -679,6 +723,57 @@ async function callTool(name, args = {}) {
       operation: args.operation,
       readonly: args.readonly,
       optedInDomain: args.optedInDomain,
+    });
+  }
+  if (name === "clawbank_status") {
+    return callDashboard("/api/clawbank", "GET");
+  }
+  if (name === "clawbank_list_tools") {
+    return callDashboard("/api/clawbank/run", "GET");
+  }
+  if (name === "clawbank_read") {
+    return callDashboard("/api/clawbank/run", "POST", {
+      tool: args.tool,
+      args: clawbankToolArgs(args.args),
+      mode: "read",
+    });
+  }
+  if (name === "clawbank_send_usdc") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/wallet", "POST", {
+      action: "send_usdc",
+      toAddress: args.toAddress,
+      amount: args.amount,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_trade") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/trading", "POST", {
+      action: "swap",
+      baseToken: args.baseToken,
+      side: args.side,
+      amountUsdc: args.amountUsdc,
+      maxSlippageBps: args.maxSlippageBps,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_money_transfer") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/money", "POST", {
+      action: "transfer",
+      chain: args.chain,
+      toAddress: args.toAddress,
+      amount: args.amount,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_call") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/run", "POST", {
+      tool: args.tool,
+      args: clawbankToolArgs(args.args),
+      confirmation: args.confirmation,
     });
   }
   const actionByTool = {
@@ -738,6 +833,10 @@ function knowledgeArgs(args) {
     if (args[key] !== undefined) output[key] = args[key];
   }
   return output;
+}
+
+function clawbankToolArgs(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function expandHome(value) {

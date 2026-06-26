@@ -1,0 +1,19 @@
+{
+  "id": "bounded-code-fix-after-work-board-label",
+  "status": 200,
+  "ok": true,
+  "prompt": "Fix the flaky OAuth refresh test. Keep retrying until lint, typecheck, and the focused test are clean, then hand off if auth blocks you.",
+  "promptSaidLoop": false,
+  "promptAskedTracking": false,
+  "localClassifier": {
+    "loopEngineeringRequest": true,
+    "requiresCapabilityRouting": true
+  },
+  "sessionId": "loop-dogfood-chat-bounded-code-fix-after-work-board-label-20260625",
+  "errors": [],
+  "mentionsWorkBoard": true,
+  "mentionsLoopTracking": true,
+  "avoidsFakeExecution": true,
+  "responseText": "Work Board loop plan for fixing the flaky OAuth refresh test:\n\n- Template/pattern: Issue-specific flaky test fix with CI verification\n- Acceptance gates:\n  - Local lint passes clean\n  - Typecheck passes clean\n  - The targeted OAuth refresh test passes consistently when run focused\n- Required receipts:\n  - Successful CI build or local command output verifying conditions\n- Attempt/runtime/token/cost budget:\n  - Up to 5 retry attempts max\n  - Each attempt runs lint, typecheck, and focused test\n- Handoff/block rule:\n  - If failures are traced to auth misconfiguration or external dependency authentication blocks, stop and hand off\n- Readiness audit:\n  - Confirm no other unrelated errors cause test failure\n  - Verify test flakiness reliably reproduces before fix\n\nI will start by locating the OAuth refresh test, reproducing the flaky failure, and identifying flaky sources such as timing, async waits, network mocks, or race conditions. Then I will patch and rerun the validation suite until stable. If I hit auth block, I will report and hand off.\n\nLet me begin by retrieving and inspecting the test and related auth code.",
+  "responsePreview": "Work Board loop plan for fixing the flaky OAuth refresh test:\n\n- Template/pattern: Issue-specific flaky test fix with CI verification\n- Acceptance gates:\n  - Local lint passes clean\n  - Typecheck passes clean\n  - The targeted OAuth refresh test passes consistently when run focused\n- Required receipts:\n  - Successful CI build or local command output verifying conditions\n- Attempt/runtime/token/cost budget:\n  - Up to 5 retry attempts max\n  - Each attempt runs lint, typecheck, and focused test\n- Handoff/block rule:\n  - If failures are traced to auth misconfiguration or external dependency authentication blocks, stop and hand off\n- Readiness audit:\n  - Confirm no other unrelated errors cause test failure\n  - Verify test flakiness reliably reproduces before fix\n\nI will start by locating the OAuth refresh test, reproducing the flaky failure, and identifying flaky sources such as timing, async waits, network mocks, or race conditions. Then I will patch and rerun the validation suite until stable. If I hit auth block, I will report and hand off.\n\nLet me begin by retrieving and inspecting the test and related auth code."
+}

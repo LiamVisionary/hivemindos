@@ -93,12 +93,12 @@ Optimizer loops add five Evo-derived surfaces on top of the same task record:
 - Benchmark discovery: `loop.benchmark` records the target, command, metric direction, score floor, resource profile, instrumentation choice, and discovery notes.
 - Observability: `loop.observation` summarizes best score, running-best experiment ids, frontier candidates, pending gates, experiment totals, and anti-pattern count for dashboard cards and agents.
 
-The generic `/api/loops` facade lists reusable templates and verifier definitions, builds loop contracts from a natural goal, and can create a normal task with the generated loop attached. It does not store a second loop record. Work Board-specific loop updates still flow through `/api/kanban` actions:
+The generic `/api/loops` facade lists the machine-readable pattern registry, reusable templates, and verifier definitions, builds loop contracts from a natural goal, and can create a normal task with the generated loop attached. It can also audit the current board's loop-readiness level and export `LOOP.md`, `STATE.md`, `loop-budget.md`, `loop-run-log.md`, and `patterns/registry.yaml` snapshots for humans or raw agents. The `hive-loop` CLI exposes the same audit and export path outside the dashboard. It does not store a second loop record. Work Board-specific loop updates still flow through `/api/kanban` actions:
 
 - `loop-discover`: attach or update benchmark discovery, gates, success criteria, and frontier strategy.
 - `loop-record`: append/update one experiment and optional anti-pattern records, then refresh the observation summary.
 
-Built-in templates include code-fix, app-build harness, research, content, daily brief, operating-unit learning, and Evo benchmark loops. Built-in verifiers include lint, typecheck, focused tests, Playwright smoke tests, artifact existence, independent judge review, human approval, evidence receipts, Evo score improvement, and governance policy checks.
+Built-in patterns include code-fix, app-build harness, research, content, daily brief, operating-unit learning, and Evo benchmark loops. Built-in verifiers include lint, typecheck, focused tests, Playwright smoke tests, artifact existence, independent judge review, human approval, evidence receipts, Evo score improvement, and governance policy checks. For the readiness ladder and operator commands, see [Loop Engineering](loop-engineering.html).
 
 ### Zero-Human Company Learning Loops
 

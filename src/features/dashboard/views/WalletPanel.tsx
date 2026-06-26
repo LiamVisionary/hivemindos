@@ -7,11 +7,13 @@ import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/servi
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
 import { hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { exportAgentWalletSecret } from "./wallet-secret-export-actions";
 
 const RAIL_ENABLED_KEY_PREFIX = "hivemindos.walletRail.enabled.";
 const USEPOD_ROUTING_MODE_KEY = "hivemindos.walletRail.usepod.routingMode";
 const VEIL_TRANSFER_NETWORK = "eip155:8453";
 const BANKR_RECIPIENT_STORAGE_KEY = "hivemindos.bankrRecipientAddress";
+const BANKR_RAIL_ENV_NAMES = ["BANKR_API_KEY", "BANKR_LLM_KEY", "BANKR_MANAGEMENT_KEY"] as const;
 const PERSONAL_WALLET_TOKEN_REFRESH_MS = 15 * 60_000;
 
 type DropInTokenPrice = { price: number; name?: string; color?: string; chg?: number };
@@ -428,6 +430,7 @@ function mergePersonalWalletRecord(base: any, next: any): any {
   const baseUpdated = Number(base.updatedAt ?? base.lastOnchainSyncAt ?? 0) || 0;
   const nextUpdated = Number(next.updatedAt ?? next.lastOnchainSyncAt ?? 0) || 0;
   const preferNextBalance = nextUpdated >= baseUpdated || Number(base.currentBalanceUsd ?? 0) <= 0;
+  const nextHasTokenRows = Array.isArray(next.tokens);
   return {
     ...base,
     ...next,
@@ -436,9 +439,9 @@ function mergePersonalWalletRecord(base: any, next: any): any {
     name: preferredPersonalWalletRecordName(base, next),
     custodyMode: base.custodyMode === "local" || next.custodyMode === "local" ? "local" : "watch",
     importedFrom: base.importedFrom !== "watch" ? base.importedFrom : next.importedFrom,
-    currentBalanceUsd: preferNextBalance && Number(next.currentBalanceUsd ?? 0) > 0 ? Number(next.currentBalanceUsd) : Number(base.currentBalanceUsd ?? 0) || Number(next.currentBalanceUsd ?? 0) || 0,
-    nativeBalance: preferNextBalance && Number(next.nativeBalance ?? 0) > 0 ? Number(next.nativeBalance) : Number(base.nativeBalance ?? 0) || Number(next.nativeBalance ?? 0) || 0,
-    tokens: Array.isArray(next.tokens) && next.tokens.length ? next.tokens : Array.isArray(base.tokens) ? base.tokens : [],
+    currentBalanceUsd: preferNextBalance ? Math.max(0, Number(next.currentBalanceUsd ?? 0) || 0) : Number(base.currentBalanceUsd ?? 0) || Number(next.currentBalanceUsd ?? 0) || 0,
+    nativeBalance: preferNextBalance ? Math.max(0, Number(next.nativeBalance ?? 0) || 0) : Number(base.nativeBalance ?? 0) || Number(next.nativeBalance ?? 0) || 0,
+    tokens: preferNextBalance && nextHasTokenRows ? next.tokens : Array.isArray(base.tokens) ? base.tokens : [],
     lastOnchainSyncAt: Math.max(Number(base.lastOnchainSyncAt ?? 0) || 0, Number(next.lastOnchainSyncAt ?? 0) || 0),
     updatedAt: Math.max(baseUpdated, nextUpdated),
   };
@@ -466,6 +469,17 @@ function mergePersonalWalletList(wallets: any[]) {
     if (key) merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
   });
   return [...merged.values()];
+}
+
+function mergeWalletsByAgentWithFresh(base: Record<string, any> | undefined, fresh: Record<string, any>) {
+  const next = { ...(base ?? {}) };
+  for (const [agentId, wallet] of Object.entries(fresh)) {
+    const existing = next[agentId];
+    const existingUpdated = Number(existing?.updatedAt ?? existing?.lastOnchainSyncAt ?? 0) || 0;
+    const freshUpdated = Number(wallet?.updatedAt ?? wallet?.lastOnchainSyncAt ?? 0) || 0;
+    if (!existing || freshUpdated >= existingUpdated) next[agentId] = wallet;
+  }
+  return next;
 }
 
 function personalWalletNeedsTokenRefresh(wallet: any) {
@@ -590,6 +604,10 @@ function hasHiveEnvKey(props: any, key: string): boolean {
   });
 }
 
+function firstPresentHiveEnvKey(props: any, keys: readonly string[]): string {
+  return keys.find((key) => hasHiveEnvKey(props, key)) ?? "";
+}
+
 function shortPublicRef(value: unknown): string {
   const text = stringValue(value);
   return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text;
@@ -649,20 +667,22 @@ function buildRailRuntimeOverrides(props: any, agents: any[], railEnabledOverrid
   const veilCred = hasHiveEnvKey(props, "VEIL_KEY");
   const veniceEnv = firstStringValue(...agents.map((agent) => agent?.venice?.apiKeyEnvName), "VENICE_API_KEY");
   const veniceCred = hasHiveEnvKey(props, veniceEnv) || agents.some((agent) => agent?.venice?.lastKeyPresent === true || agent?.venice?.walletVaultId || agent?.venice?.walletAddress);
-  const bankrCred = hasHiveEnvKey(props, "BANKR_API_KEY");
+  const bankrEnv = firstPresentHiveEnvKey(props, BANKR_RAIL_ENV_NAMES);
+  const bankrCred = Boolean(bankrEnv);
   return {
     moneyclaw: { enabled: railEnabled("moneyclaw", moneyReady, railEnabledOverrides), setup: moneyReady ? "ready" : "needs", env: moneyClawEnv, cred: moneyCred, health: moneyError || (moneyCred ? "Configured" : `Missing ${moneyClawEnv}`) },
     x402: { enabled: railEnabled("x402", true, railEnabledOverrides), setup: "ready", cred: true, health: "Operational" },
     veil: { enabled: railEnabled("veil", veilCred, railEnabledOverrides), setup: veilCred ? "ready" : "needs", cred: veilCred, health: veilCred ? "Configured" : "Missing VEIL_KEY" },
     usepod: { enabled: railEnabled("usepod", usePodReady, railEnabledOverrides), setup: usePodReady ? "ready" : "needs", cred: usePod.credentialPresent, caps: [usePodModelCap, "Provider x402", "Price ceilings"], health: usePodHealth },
     venice: { enabled: railEnabled("venice", veniceCred, railEnabledOverrides), setup: veniceCred ? "ready" : "needs", env: veniceEnv, cred: veniceCred, health: veniceCred ? "Configured" : `Missing ${veniceEnv}` },
-    bankr: { enabled: railEnabled("bankr", bankrCred, railEnabledOverrides), setup: bankrCred ? "ready" : "needs", cred: bankrCred, health: bankrCred ? "Configured" : "Missing BANKR_API_KEY" },
+    bankr: { enabled: railEnabled("bankr", bankrCred, railEnabledOverrides), setup: bankrCred ? "ready" : "needs", env: bankrEnv || "BANKR_API_KEY", cred: bankrCred, health: bankrCred ? `Configured via ${bankrEnv}` : `Missing ${BANKR_RAIL_ENV_NAMES.join(", ")}` },
   };
 }
 
 function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railEnabledOverrides: Record<string, boolean>, usePodRoutingMode: string, walletActivity: WalletActivityRecord[] | null, honeyLedger: HoneyLedgerRuntime | null) {
   const agents = Array.isArray(props?.displayAgents) ? props.displayAgents : [];
   const walletsByAgent = props?.walletsByAgent ?? {};
+  const walletActionsByAgent = props?.walletActionsByAgent ?? {};
   const machineGroups = new Map<string, any[]>();
   const walletMeta: Record<string, any> = {};
   const balances: Record<string, Array<[string, number]>> = {};
@@ -703,6 +723,7 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
       const maxPay = Number(wallet?.maxPaymentUsd ?? wallet?.spendLimitUsd ?? wallet?.maxPayUsd ?? Math.max(10, burn * 2)) || 10;
       const enabled = wallet?.enabled !== false && !wallet?.disabled;
       const configured = hasConfiguredAgentWallet(agent, wallet);
+      const action = walletActionsByAgent[agent.id] ?? {};
 
       const row = {
         id: agent.id,
@@ -735,6 +756,9 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
         veilAutoSend: wallet?.veilAutoSendEnabled === true,
         assetSpendCaps: wallet?.assetSpendCaps ?? {},
         notes: wallet?.notes || "",
+        actionBusy: Boolean(action.busy),
+        actionMessage: action.message || "",
+        actionError: action.error || "",
       };
       balances[agent.id] = balanceRows;
       rewards[agent.id] = { gas: Number(wallet?.nativeBalance ?? wallet?.gasBalance ?? 0) || 0, used: usageTokensByAgent.get(agent.id) ?? (Number(wallet?.tokensUsed ?? 0) || 0) };
@@ -779,15 +803,18 @@ function WalletPanelComponent(props: any) {
   const [railEnabledOverrides, setRailEnabledOverrides] = useState<Record<string, boolean>>({});
   const [usePodRoutingMode, setUsePodRoutingMode] = useState("");
   const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
+  const [freshWalletsByAgent, setFreshWalletsByAgent] = useState<Record<string, any>>({});
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const refreshedPersonalWalletKeys = useRef<Set<string>>(new Set());
+  const refreshedAgentWalletKeys = useRef<Set<string>>(new Set());
   const vaultPath = props?.sharedVault?.enabled ? String(props.sharedVault.vaultPath || "").trim() : "";
-  const activeView = props.activeView, displayAgents = props.displayAgents, refreshRuntimeIntegrations = props.refreshRuntimeIntegrations, refreshRuntimeUsage = props.refreshRuntimeUsage, selectedAgent = props.selectedAgent;
+  const activeView = props.activeView, displayAgents = props.displayAgents, refreshRuntimeIntegrations = props.refreshRuntimeIntegrations, refreshRuntimeUsage = props.refreshRuntimeUsage, refreshWalletBalance = props.refreshWalletBalance, selectedAgent = props.selectedAgent;
   const refreshRuntimeUsageRef = useRef(refreshRuntimeUsage);
   useEffect(() => {
     refreshRuntimeUsageRef.current = refreshRuntimeUsage;
   }, [refreshRuntimeUsage]);
   const fetchPersonalWallets = useCallback(() => fetchPersonalWalletRecords(vaultPath), [vaultPath]);
+  const effectiveWalletsByAgent = useMemo(() => mergeWalletsByAgentWithFresh(props.walletsByAgent, freshWalletsByAgent), [freshWalletsByAgent, props.walletsByAgent]);
   const refreshPersonalWalletBalances = useCallback(async (targets: any[]) => {
     const refreshed = (await Promise.all(targets.map(async (wallet) => {
       const address = String(wallet?.address || "").trim();
@@ -819,6 +846,18 @@ function WalletPanelComponent(props: any) {
     }).catch(() => null);
   }, [vaultPath]);
   const loadPersonalWallets = useCallback(async () => setPersonalWallets(await fetchPersonalWallets()), [fetchPersonalWallets]);
+  const refreshPersonalWalletSourceBalance = useCallback(async (source: any) => {
+    const sourceId = String(source?.spendId || source?.id || "").trim();
+    if (!sourceId) { await loadPersonalWallets(); return; }
+    const matchesSource = (wallet: any) => wallet?.id === sourceId || wallet?.agentId === sourceId;
+    let targets = mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent).filter(matchesSource);
+    if (!targets.length) {
+      const latest = await fetchPersonalWallets();
+      targets = mergePersonalWalletSources(latest, effectiveWalletsByAgent).filter(matchesSource);
+      if (!targets.length) { setPersonalWallets(latest); return; }
+    }
+    await refreshPersonalWalletBalances(targets);
+  }, [effectiveWalletsByAgent, fetchPersonalWallets, loadPersonalWallets, personalWallets, refreshPersonalWalletBalances]);
   const loadWalletActivity = useCallback(async () => setWalletActivity(await fetchWalletActivityRecords()), []);
   const loadHoneyLedger = useCallback(async () => setHoneyLedger(await fetchHoneyLedger()), []);
   useEffect(() => {
@@ -828,7 +867,7 @@ function WalletPanelComponent(props: any) {
   }, [fetchPersonalWallets]);
   useEffect(() => {
     if (activeView !== "wallet" || !Array.isArray(personalWallets) || !personalWallets.length) return;
-    const targets = mergePersonalWalletSources(personalWallets, props.walletsByAgent)
+    const targets = mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent)
       .filter(personalWalletNeedsTokenRefresh)
       .filter((wallet) => {
         const key = personalWalletAccountKey(wallet);
@@ -837,7 +876,29 @@ function WalletPanelComponent(props: any) {
         return true;
       });
     if (targets.length) void refreshPersonalWalletBalances(targets);
-  }, [activeView, personalWallets, props.walletsByAgent, refreshPersonalWalletBalances]);
+  }, [activeView, effectiveWalletsByAgent, personalWallets, refreshPersonalWalletBalances]);
+  useEffect(() => {
+    if (activeView !== "wallet" || !refreshWalletBalance) return;
+    const targets = (Array.isArray(displayAgents) ? displayAgents : []).filter((agent: any) => {
+      const wallet = effectiveWalletsByAgent?.[agent.id];
+      const address = String(wallet?.walletAddress || wallet?.vaultAddress || wallet?.address || "").trim();
+      const network = String(wallet?.network || "eip155:8453").trim();
+      if (!address || !network) return false;
+      const key = `${agent.id}:${network}:${address.toLowerCase()}`;
+      if (refreshedAgentWalletKeys.current.has(key)) return false;
+      refreshedAgentWalletKeys.current.add(key);
+      return true;
+    });
+    if (!targets.length) return;
+    let ignore = false;
+    void Promise.all(targets.map(async (agent: any) => [agent.id, await refreshWalletBalance(agent.id)] as const))
+      .then((rows) => {
+        if (ignore) return;
+        const fresh = Object.fromEntries(rows.filter(([, wallet]) => Boolean(wallet)));
+        if (Object.keys(fresh).length) setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, fresh));
+      });
+    return () => { ignore = true; };
+  }, [activeView, displayAgents, effectiveWalletsByAgent, refreshWalletBalance]);
   useEffect(() => {
     if (activeView !== "wallet") return;
     let ignore = false;
@@ -886,9 +947,10 @@ function WalletPanelComponent(props: any) {
     honeyStats: props.honeyStats,
     moneyClawStatusByEnvName: props.moneyClawStatusByEnvName,
     runtimeUsage: props.runtimeUsage,
-    walletsByAgent: props.walletsByAgent,
-  }), [displayAgents, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletsByAgent]);
-  const mergedPersonalWallets = useMemo(() => mergePersonalWalletSources(personalWallets, props.walletsByAgent), [personalWallets, props.walletsByAgent]);
+    walletActionsByAgent: props.walletActionsByAgent,
+    walletsByAgent: effectiveWalletsByAgent,
+  }), [displayAgents, effectiveWalletsByAgent, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletActionsByAgent]);
+  const mergedPersonalWallets = useMemo(() => mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent), [effectiveWalletsByAgent, personalWallets]);
   const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
   const walletActions = useMemo(() => ({
     bankrRewards: { honeyStats: props.honeyStats, honeyLedgerEnabled: props.honeyLedgerEnabled },
@@ -924,13 +986,21 @@ function WalletPanelComponent(props: any) {
     onToggleAgentSpend: (agentId: string, enabled: boolean) => props.updateWallet?.(agentId, { enabled }),
     onUpdateAgentWallet: (agentId: string, patch: any) => props.updateWallet?.(agentId, patch),
     onCreateAgentWallet: (agentId: string, network: string) => props.createLocalWallet?.(agentId, chainToNetwork(network)),
-    onRefreshAgentWallet: (agentId: string) => props.refreshWalletBalance?.(agentId),
+    onRefreshAgentWallet: async (agentId: string) => {
+      const refreshed = await refreshWalletBalance?.(agentId);
+      if (refreshed) setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [agentId]: refreshed }));
+      return refreshed;
+    },
     onResetAgentRunway: (agentId: string) => props.resetWalletBurnClock?.(agentId),
-    onCopyAgentPrompt: (agentId: string) => props.walletsByAgent?.[agentId] ? props.copyPaymentPrompt?.(props.walletsByAgent[agentId]) : undefined,
-    onExportAgentWallet: (agentId: string) => props.exportWalletSecrets?.({ agentIds: [agentId], label: props.displayAgents?.find((agent: any) => agent.id === agentId)?.name || agentId }),
+    onCopyAgentPrompt: (agentId: string) => effectiveWalletsByAgent?.[agentId] ? props.copyPaymentPrompt?.(effectiveWalletsByAgent[agentId]) : undefined,
+    onExportAgentWallet: (agentId: string, confirmation?: string) => {
+      const agent = props.displayAgents?.find((item: any) => item.id === agentId);
+      if (!agent) return { ok: false, error: "Could not find this agent wallet." };
+      return exportAgentWalletSecret(agent, props.exportWalletSecrets, props.updateWalletAction, { confirmation });
+    },
     onSendAgentPayment: async (input: any) => {
-      const wallet = props.walletsByAgent?.[input.agentId] || {};
-      const recipientWallet = input.recipientAgentId ? props.walletsByAgent?.[input.recipientAgentId] : null;
+      const wallet = effectiveWalletsByAgent?.[input.agentId] || {};
+      const recipientWallet = input.recipientAgentId ? effectiveWalletsByAgent?.[input.recipientAgentId] : null;
       const recipient = input.toAddress || recipientWallet?.walletAddress || recipientWallet?.vaultAddress || recipientWallet?.address || "";
       const provider = walletProviderForDropIn(wallet);
       const asset = String(input.asset || "USDC").toUpperCase();
@@ -961,11 +1031,12 @@ function WalletPanelComponent(props: any) {
       }
       const tx = data.signature || data.transfer?.transactionHash || data.shield?.transactionHash || "";
       props.updateWalletAction?.(input.agentId, { busy: false, error: "", message: tx ? `Sent. Transaction: ${tx}` : data.status === "shielding" ? "Shielding started. HivemindOS will finish the private send after Veil accepts the deposit." : "Sent.", confirmation: "" });
-      await Promise.all([props.refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
+      const [refreshed] = await Promise.all([refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
+      if (refreshed) setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [input.agentId]: refreshed }));
       return data;
     },
     onSaveRailConfig: async (input: any) => {
-      const firstAgentId = props.displayAgents?.[0]?.id || Object.keys(props.walletsByAgent || {})[0] || "";
+      const firstAgentId = props.displayAgents?.[0]?.id || Object.keys(effectiveWalletsByAgent || {})[0] || "";
       if (input.rail?.id) {
         setRailEnabledOverrides((current) => ({ ...current, [input.rail.id]: Boolean(input.enabled) }));
         await saveDashboardStateValue(`${RAIL_ENABLED_KEY_PREFIX}${input.rail.id}`, input.enabled ? "1" : "0");
@@ -996,20 +1067,27 @@ function WalletPanelComponent(props: any) {
     onFundAgent: async (input: any) => {
       if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Agent funding is wired for USDC transfers only.");
       if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before funding agents.");
-      const wallet = props.walletsByAgent?.[input.agentId] || {};
+      const wallet = effectiveWalletsByAgent?.[input.agentId] || {};
       const toAddress = wallet.walletAddress || wallet.vaultAddress || wallet.address || "";
       if (!toAddress) throw new Error("That agent does not have a deposit address yet.");
       const data = await sendApprovedWalletUsdc({ agentId: input.source?.spendId || input.source?.id, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
       if (!data?.ok) throw new Error(data?.error || "Could not fund agent.");
-      await Promise.all([loadPersonalWallets(), props.refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
-      return data;
+      const [recipientWallet] = await Promise.all([refreshWalletBalance?.(input.agentId), refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
+      if (recipientWallet) {
+        setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [input.agentId]: recipientWallet }));
+      }
+      return {
+        ...data,
+        recipientWallet,
+        recipientBalanceUsd: Number(recipientWallet?.currentBalanceUsd ?? recipientWallet?.onchainBalanceUsd),
+      };
     },
     onSendPersonalWallet: async (input: any) => {
       if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Personal wallet send is wired for USDC transfers only.");
       if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before sending.");
       const data = await sendApprovedWalletUsdc({ agentId: input.source?.spendId || input.source?.id, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
       if (!data?.ok) throw new Error(data?.error || "Could not send USDC.");
-      await Promise.all([loadPersonalWallets(), loadWalletActivity()]);
+      await Promise.all([refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
       return data;
     },
     onCreateWallet: async (input: any) => {
@@ -1040,7 +1118,7 @@ function WalletPanelComponent(props: any) {
       nextUrl.searchParams.set("view", "chat");
       window.location.assign(nextUrl.toString());
     },
-  }), [bankrRecipientAddress, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, props, refreshUsePodTargets, vaultPath]);
+  }), [bankrRecipientAddress, effectiveWalletsByAgent, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, props, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, vaultPath]);
   const navigateFromDropInShelf = useCallback((id: string) => {
     if (typeof window === "undefined") return;
     const nextView = walletViewForShelf(id);

@@ -97,7 +97,7 @@ HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<base-or-evm-address>
 HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>
 ```
 
-The endpoint returns only public data: fee terms, supported local rails, and recipient addresses. It does not make local wallet actions tamper-proof; strong official enforcement still needs hosted/proxy execution or provider-native fee support.
+The endpoint returns only public data: fee terms, supported local rails, and recipient addresses. Current supported sources are local USDC sends, local DEX swaps, xStocks, live Alpaca fee collection, public x402, Veil private transfers, and Veil private x402. It does not make local wallet actions tamper-proof; strong official enforcement still needs hosted/proxy execution or provider-native fee support.
 
 ## Hyperliquid Builder Policy
 

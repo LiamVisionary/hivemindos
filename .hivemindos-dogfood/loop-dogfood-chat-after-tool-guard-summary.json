@@ -1,0 +1,68 @@
+{
+  "ok": false,
+  "model": "openrouter/openai/gpt-4.1-mini",
+  "prompts": [
+    {
+      "id": "bounded-code-fix-after-tool-guard",
+      "status": 200,
+      "ok": false,
+      "promptSaidLoop": false,
+      "promptAskedTracking": false,
+      "localClassifier": {
+        "loopEngineeringRequest": true,
+        "requiresCapabilityRouting": true
+      },
+      "sessionId": "loop-dogfood-chat-bounded-code-fix-after-tool-guard-20260625",
+      "mentionsWorkBoard": false,
+      "mentionsLoopTracking": true,
+      "avoidsFakeExecution": true,
+      "errors": [],
+      "responsePreview": "To fix the flaky OAuth refresh test, here is the approach plan for a repeat-until-clean loop with explicit acceptance gates:\n\nLoop Plan for Flaky OAuth Refresh Test Fix\n-----------------------------------------\nTemplate / Pattern:\n- Identify the flaky OAuth refresh test file and test case.\n- Reproduce the flaky behavior locally.\n- Analyze test logs and code for timing, async, or dependency issues.\n- Add retries, wait-for conditions, mocks, or fixes to stabilize the test.\n- Run lint and typecheck to ensure code quality.\n- Run the focused test repeatedly until it passes cleanly.\n- Repeat the above steps until no flakes appear in multiple retry runs.\n- If auth blockers appear (e.g., real token expiry or external service auth), escalate or hand off.\n\nAcceptance Gates:\n- Lint passes cleanly with no warnings or errors.\n- Typecheck passes cleanly with full coverage for the test code.\n- The focused OAuth refresh test passes repeatedly over multiple iterations without flakes.\n- No external auth blockers prevent reliable local testing or CI success.\n\nAttempt / Runtime / Token / Cost Budget:\n- Up to 15 retry iterations or 30 minutes of active debugging/test runs.\n- Abort and hand off if external auth issues block progress.\n\nHandoff Rule:\n- If local fixes cannot stabilize the test due to external OAuth or token refresh service limits, escalate to auth team or infrastructure team.\n- Otherwise, complete and close this loop.\n\nReadiness Audit:\n- Verify access to OAuth refresh test source code and its dependencies.\n- Confirm test running environment with reproducible flakes.\n- Confirm test runner and lint/typecheck commands.\n\nNext step: Identify the flaky OAuth refresh test source and reproduce the flaky failure logs locally. Please confirm or share the location of the OAuth refresh tes"
+    },
+    {
+      "id": "recurring-brief-after-tool-guard",
+      "status": 200,
+      "ok": true,
+      "promptSaidLoop": false,
+      "promptAskedTracking": false,
+      "localClassifier": {
+        "loopEngineeringRequest": true,
+        "requiresCapabilityRouting": true
+      },
+      "sessionId": "loop-dogfood-chat-recurring-brief-after-tool-guard-20260625",
+      "mentionsWorkBoard": true,
+      "mentionsLoopTracking": true,
+      "avoidsFakeExecution": true,
+      "errors": [],
+      "responsePreview": "To fulfill your request for a daily weekday morning brief scanning AI agent funding news with source citations and an evidence-backed summary, the best approach is to set up a recurring Work Board loop task with these components:\n\n---\n\n### Work Board Loop Plan: AI Agent Funding News Daily Brief\n\n**Template/Pattern:**\n- Every weekday morning (e.g., 8:00 AM local time)\n- Scan curated, reputable news sources, RSS feeds, and press releases for AI agent funding announcements\n- Extract key funding details: company/agent name, round amount, lead investors, use of funds\n- Cite original sources with URLs or publication details\n- Deliver a concise summary briefing note with evidence (quotes, links)\n\n**Acceptance Gates:**\n- At least one valid funding news item identified or explicit \"no news\" statement\n- Each news item includes direct citation with source URL or authoritative reference\n- Summary concise (approx. 3-5 bullet points or less than 150 words)\n- No speculative or unverified claims\n\n**Required Receipts:**\n- Crawl/scrape results or API responses confirming fresh news items\n- Extracted citations with timestamps\n- Final brief text artifact for delivery or storage\n\n**Attempt/Runtime/Token/Cost Budget:**\n- Single daily scan run per weekday morning (5 runs/week)\n- Limit source count to ~5 authoritative feeds/newspapers per run\n- Keep processing focused for under 1 minute runtime for efficiency\n\n**Handoff Rule:**\n- If no clean news scan result, escalate to manual/source update review or fallback summary stating no new funding announcements found\n\n**Readiness Audit:**\n- Confirm access to key news APIs or feeds (e.g. TechCrunch, VentureBeat, Crunchbase News, official press release aggregators)\n- Confirm citation formatting and hyperlinks work\n- Confirm delivery mechanism configure"
+    },
+    {
+      "id": "build-smoke-judge-after-tool-guard",
+      "status": 200,
+      "ok": true,
+      "promptSaidLoop": false,
+      "promptAskedTracking": false,
+      "localClassifier": {
+        "loopEngineeringRequest": true,
+        "requiresCapabilityRouting": true
+      },
+      "sessionId": "loop-dogfood-chat-build-smoke-judge-after-tool-guard-20260625",
+      "mentionsWorkBoard": true,
+      "mentionsLoopTracking": true,
+      "avoidsFakeExecution": true,
+      "errors": [],
+      "responsePreview": "Work Board loop plan for \"Tiny Receipt Viewer\" build:\n\n1. Template/Pattern:\n   - Implement a minimal web app component that receives and renders a JSON receipt data structure.\n   - Support common receipt fields: merchant, date, items (name, qty, price), total.\n   - Display as a clean readable HTML with basic styling.\n   - Add a simple smoke test: load sample receipt data and render in browser.\n   - Judgement gate: Verify rendering correctness, layout reasonable, no errors, and cost/risk minimal.\n\n2. Acceptance gates:\n   - Component builds and loads without JS errors.\n   - Display matches receipt data faithfully.\n   - Smoke test in browser is successful.\n   - Cost and risk (code complexity, dependencies, external calls) remain minimal.\n\n3. Receipts to produce:\n   - Code artifact for the receipt viewer component.\n   - Screenshot or browser console output of the smoke test.\n   - Summary judgment report.\n\n4. Attempt budget:\n   - Single focused work iteration (up to 15 minutes).\n   - Abort early if risk or cost unreasonable.\n\n5. Handoff or block:\n   - Stop after smoke judgment.\n   - No external API or paid calls needed.\n\n6. Readiness audit:\n   - Mostly local code and browser load.\n   - No credentials or external network calls required (minimize risk).\n\nNext steps:\n- Build a tiny React (or plain JS) receipt viewer component with sample data.\n- Serve it in a minimal HTML file.\n- Smoke test load/render in browser runtime.\n- Judge and report results.\n\nPlease confirm or clarify if you want React, plain JS, or another framework and environment (e.g. local HTML file, embedded in HivemindOS, or a minimal web server). Otherwise, I will proceed with plain HTML/JS for maximal simplicity and portability."
+    }
+  ],
+  "artifacts": {
+    "dir": "/Users/liam/Documents/code/projects/hivemind-os/.hivemindos-dogfood",
+    "files": [
+      "loop-dogfood-chat-bounded-code-fix-after-tool-guard.sse.txt",
+      "loop-dogfood-chat-bounded-code-fix-after-tool-guard.json",
+      "loop-dogfood-chat-recurring-brief-after-tool-guard.sse.txt",
+      "loop-dogfood-chat-recurring-brief-after-tool-guard.json",
+      "loop-dogfood-chat-build-smoke-judge-after-tool-guard.sse.txt",
+      "loop-dogfood-chat-build-smoke-judge-after-tool-guard.json"
+    ]
+  }
+}

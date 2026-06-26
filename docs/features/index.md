@@ -60,6 +60,11 @@ Looped work is where operator intent turns into agent execution. A loop contract
     <a href="work-and-scheduler.html">Open work docs</a>
   </section>
   <section class="docCard">
+    <h3>Loop Engineering</h3>
+    <p>Pattern registry, readiness levels, budgets, receipts, human gates, and exportable LOOP.md / STATE.md snapshots for bounded autonomous work.</p>
+    <a href="loop-engineering.html">Open loop docs</a>
+  </section>
+  <section class="docCard">
     <h3>MiroShark And Runtime Gateways</h3>
     <p>Simulation templates, `/swarm-sim` chat launches, swarm rehearsal, run intelligence, route catalogs, and the minimal runtime-gateway integration points HivemindOS owns.</p>
     <a href="miroshark-and-openclaw.html">Open gateway docs</a>
@@ -199,6 +204,7 @@ flowchart TD
   Chat --> Work["Work board"]
   Chat --> XRay["Context X-Ray"]
   Work --> Scheduler["Scheduler"]
+  Work --> LoopEngineering["Loop engineering"]
   Work --> VisualPlans["Visual plans and recaps"]
   Work --> Deliverables["Deliverables"]
   Work --> CodeProof["GitLawb Code Proof"]

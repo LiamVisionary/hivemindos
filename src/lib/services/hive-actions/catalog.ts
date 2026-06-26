@@ -337,39 +337,65 @@ export const hyperliquidTradeAction = defineHiveAction({
   id: "wallet.hyperliquid-trade",
   title: "Hyperliquid trade",
   description:
-    "Quote, approve builder fees, or execute a governed Hyperliquid perp trade from a local EVM wallet.",
+    "Quote, approve builder fees, trade spot/perps, manage orders, adjust account settings, transfer funds, or run TWAPs on Hyperliquid from a governed local EVM wallet.",
   schema: z.object({
-    action: z.enum(["quote", "approve-builder", "order", "status", "positions"]).optional(),
+    action: z.enum(["status", "positions", "open-orders", "fills", "fees", "order-status", "quote", "approve-builder", "order", "cancel", "cancel-by-cloid", "modify", "schedule-cancel", "leverage", "margin", "usd-class", "usd-send", "spot-send", "withdraw", "twap-order", "twap-cancel"]).optional(),
     agentId: z.string().optional(),
     wallet: z.record(z.string(), z.unknown()).optional(),
     coin: z.string().optional(),
-    side: z.enum(["long", "short"]).optional(),
-    orderType: z.enum(["market", "limit"]).optional(),
+    marketType: z.enum(["perp", "spot"]).optional(),
+    assetId: z.number().optional(),
+    side: z.enum(["long", "short", "buy", "sell"]).optional(),
+    orderType: z.enum(["market", "limit", "trigger"]).optional(),
     notionalUsd: z.number().optional(),
     size: z.number().optional(),
     limitPrice: z.number().optional(),
+    timeInForce: z.enum(["Gtc", "Ioc", "Alo", "FrontendMarket"]).optional(),
+    triggerPx: z.number().optional(),
+    triggerType: z.enum(["tp", "sl"]).optional(),
+    triggerIsMarket: z.boolean().optional(),
+    grouping: z.enum(["na", "normalTpsl", "positionTpsl"]).optional(),
+    clientOrderId: z.string().optional(),
     reduceOnly: z.boolean().optional(),
     slippageBps: z.number().optional(),
+    orderId: z.union([z.number(), z.string()]).optional(),
+    oid: z.union([z.number(), z.string()]).optional(),
+    cloid: z.string().optional(),
+    fastCancel: z.boolean().optional(),
+    alwaysPlace: z.boolean().optional(),
+    scheduleCancelTime: z.union([z.number(), z.null()]).optional(),
+    leverage: z.number().optional(),
+    marginMode: z.enum(["cross", "isolated"]).optional(),
+    marginDeltaUsd: z.number().optional(),
+    transferType: z.enum(["usd-class", "usd-send", "spot-send", "withdraw"]).optional(),
+    amount: z.number().optional(),
+    amountUsd: z.number().optional(),
+    destination: z.string().optional(),
+    token: z.string().optional(),
+    toPerp: z.boolean().optional(),
+    twapMinutes: z.number().optional(),
+    twapRandomize: z.boolean().optional(),
+    twapId: z.union([z.number(), z.string()]).optional(),
     confirmation: z.string().optional(),
     approvalToken: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }),
   sideEffects: ["wallet", "payment", "network"],
   risk: "critical",
-  tags: ["wallet", "payment", "hyperliquid", "perps", "trade", "execution"],
-  aliases: ["hyperliquid_trade", "hyperliquid order", "perp trade", "perps trade"],
+  tags: ["wallet", "payment", "hyperliquid", "perps", "spot", "trade", "execution"],
+  aliases: ["hyperliquid_trade", "hyperliquid order", "perp trade", "spot trade", "perps trade"],
   mcp: { expose: true, compact: true, toolName: "hyperliquid_trade" },
   confirmation: {
-    tokens: ["CONFIRM_HYPERLIQUID_ORDER", "CONFIRM_HYPERLIQUID_BUILDER"],
+    tokens: ["CONFIRM_HYPERLIQUID_ORDER", "CONFIRM_HYPERLIQUID_BUILDER", "CONFIRM_HYPERLIQUID_CANCEL", "CONFIRM_HYPERLIQUID_ACCOUNT", "CONFIRM_HYPERLIQUID_TRANSFER", "CONFIRM_HYPERLIQUID_TWAP"],
     reason:
-      "Hyperliquid orders can open leveraged positions, and builder fee approvals grant a fee allowance to the configured builder.",
+      "Hyperliquid orders, account changes, transfers, withdrawals, cancels, TWAPs, and builder approvals can change real exchange state or funds and require action-specific confirmation.",
     when: "always",
   },
   contextIndex: {
     summary:
-      "Critical governed Hyperliquid perp trading route with builder-code support.",
+      "Critical governed Hyperliquid spot/perp trading and account route with builder-code support.",
     retrievalText:
-      "Use hyperliquid_trade only after quoting the order and showing the configured builder fee. action: approve-builder signs Hyperliquid ApproveBuilderFee with CONFIRM_HYPERLIQUID_BUILDER from the main local EVM wallet; action: order places the governed perp order with CONFIRM_HYPERLIQUID_ORDER. The server route remains authoritative for wallet secret access, builder address, builder fee, max trade cap, spend governance, market precision, and signing.",
+      "Use hyperliquid_trade for Hyperliquid account status, open orders, fills, fees, order status, spot/perp quotes and orders, cancels, order modification, schedule-cancel, leverage, isolated margin, USDC spot/perp transfers, USDC sends, withdrawals, spot sends, and TWAPs. Builder approval requires CONFIRM_HYPERLIQUID_BUILDER; order/modify requires CONFIRM_HYPERLIQUID_ORDER; cancels require CONFIRM_HYPERLIQUID_CANCEL; leverage/margin require CONFIRM_HYPERLIQUID_ACCOUNT; transfers/withdrawals require CONFIRM_HYPERLIQUID_TRANSFER; TWAP orders/cancels require CONFIRM_HYPERLIQUID_TWAP. The server route remains authoritative for wallet secret access, builder address, builder fee, max trade cap, spend governance, market precision, and signing.",
     route: "/api/trading/hyperliquid",
     methods: ["GET", "POST"],
   },
@@ -672,6 +698,195 @@ export const brainReviewQueueAction = defineHiveAction({
   },
 });
 
+export const clawbankStatusAction = defineHiveAction({
+  id: "clawbank.status",
+  title: "ClawBank status",
+  description:
+    "Read ClawBank readiness and account status (credential presence, KYC, Bridge customer, trading enabled, self-custody wallet) without side effects.",
+  schema: z.object({}),
+  sideEffects: ["read", "network"],
+  risk: "low",
+  readOnly: true,
+  tags: ["clawbank", "status", "readiness", "wallet", "banking", "kyc"],
+  aliases: ["clawbank_status", "clawbank readiness", "clawbank me", "clawbank account"],
+  mcp: { expose: true, compact: true, toolName: "clawbank_status" },
+  contextIndex: {
+    summary: "Read-only ClawBank account readiness and credential presence.",
+    retrievalText:
+      "Use clawbank_status first for any ClawBank work. It reports whether a ClawBank credential is configured (by env-key name only) and the live /api/v1/me readiness flags: KYC approval, Bridge customer, trading enabled, and the self-custody wallet address/chain/provisioned state. It never moves funds.",
+    route: "/api/clawbank",
+    methods: ["GET"],
+  },
+});
+
+export const clawbankListToolsAction = defineHiveAction({
+  id: "clawbank.list-tools",
+  title: "ClawBank list tools",
+  description:
+    "Discover the live, per-account ClawBank tool catalog (MCP tools/list). This is the authoritative surface for coms, contracts, records, fight clubs, Wise, off-ramp, trading engines, and formation checkout that the partial REST docs defer to.",
+  schema: z.object({}),
+  sideEffects: ["read", "network"],
+  risk: "low",
+  readOnly: true,
+  tags: ["clawbank", "discovery", "tools", "catalog", "capability"],
+  aliases: ["clawbank_list_tools", "clawbank tools", "clawbank discover", "clawbank capabilities"],
+  mcp: { expose: true, compact: true, toolName: "clawbank_list_tools" },
+  contextIndex: {
+    summary: "Discover the live ClawBank per-account tool catalog.",
+    retrievalText:
+      "Use clawbank_list_tools to enumerate ClawBank's runtime-discovered capabilities before calling clawbank_read or clawbank_call. ClawBank's docs are discovery-first: the per-account tool catalog (with input schemas and read/write classification) is authoritative.",
+    route: "/api/clawbank/run",
+    methods: ["GET"],
+  },
+});
+
+export const clawbankReadAction = defineHiveAction({
+  id: "clawbank.read",
+  title: "ClawBank read tool",
+  description:
+    "Run a read-only ClawBank discovered tool by name (e.g. get_me, get_balance, get_trading_report, *_guide, inspect_* schema). Rejects state-changing tools — use clawbank_call for those.",
+  schema: z.object({
+    tool: z.string().describe("Read-only ClawBank tool name from clawbank_list_tools."),
+    args: z.record(z.string(), z.unknown()).optional().describe("Tool arguments matching its inputSchema."),
+  }),
+  sideEffects: ["read", "network"],
+  risk: "low",
+  readOnly: true,
+  tags: ["clawbank", "read", "discovery", "tools", "guide"],
+  aliases: ["clawbank_read", "clawbank get", "clawbank guide", "clawbank inspect"],
+  mcp: { expose: true, compact: true, toolName: "clawbank_read" },
+  contextIndex: {
+    summary: "Invoke a read-only ClawBank discovered tool.",
+    retrievalText:
+      "Use clawbank_read to call ClawBank read/discovery tools (balances, deposit instructions, reports, company records, capability guides, payload-schema inspectors). The server rejects non-read tools; state changes go through clawbank_call.",
+    route: "/api/clawbank/run",
+    methods: ["POST"],
+  },
+});
+
+export const clawbankSendUsdcAction = defineHiveAction({
+  id: "clawbank.send-usdc",
+  title: "ClawBank send USDC",
+  description:
+    "EXECUTE a gas-sponsored USDC transfer from the ClawBank self-custody wallet (Base). Moves REAL funds. Requires confirmation \"CLAWBANK_SEND_USDC\". Get the human's go-ahead first; consider clawbank_status to preview the wallet.",
+  schema: z.object({
+    toAddress: z.string().describe("Recipient address (0x… on Base)."),
+    amount: z.union([z.number(), z.string()]).describe("USDC amount to send (1:1 with USD)."),
+    confirmation: z.string().describe('Must be "CLAWBANK_SEND_USDC".'),
+  }),
+  sideEffects: ["wallet", "payment", "network"],
+  risk: "critical",
+  tags: ["clawbank", "wallet", "payment", "usdc", "send", "execution"],
+  aliases: ["clawbank_send_usdc", "clawbank send", "clawbank transfer usdc"],
+  mcp: { expose: true, compact: true, toolName: "clawbank_send_usdc" },
+  confirmation: {
+    token: "CLAWBANK_SEND_USDC",
+    reason:
+      "ClawBank self-custody USDC sends move real funds on Base and must pass an explicit confirmation gate.",
+    when: "always",
+  },
+  contextIndex: {
+    summary: "Critical ClawBank self-custody USDC send.",
+    retrievalText:
+      "Use clawbank_send_usdc only after a read-only status/preview and explicit CLAWBANK_SEND_USDC confirmation. The server route is authoritative for recipient, amount, and execution.",
+    route: "/api/clawbank/wallet",
+    methods: ["POST"],
+  },
+});
+
+export const clawbankTradeAction = defineHiveAction({
+  id: "clawbank.trade",
+  title: "ClawBank trade",
+  description:
+    "EXECUTE a one-off ClawBank spot swap against USDC from the self-custody wallet. Moves REAL funds. Requires confirmation \"CONFIRM_CLAWBANK_SWAP\". Get the human's go-ahead first.",
+  schema: z.object({
+    baseToken: z.string().describe("Token to trade against USDC (symbol or address from clawbank trading tokens)."),
+    side: z.enum(["buy", "sell"]).describe("buy spends USDC for the token; sell does the reverse."),
+    amountUsdc: z.number().describe("USDC amount for the swap."),
+    maxSlippageBps: z.number().optional().describe("Optional max slippage in basis points."),
+    confirmation: z.string().describe('Must be "CONFIRM_CLAWBANK_SWAP".'),
+  }),
+  sideEffects: ["wallet", "payment", "network"],
+  risk: "critical",
+  tags: ["clawbank", "wallet", "payment", "trade", "swap", "execution"],
+  aliases: ["clawbank_trade", "clawbank swap", "clawbank spot swap"],
+  mcp: { expose: true, compact: true, toolName: "clawbank_trade" },
+  confirmation: {
+    token: "CONFIRM_CLAWBANK_SWAP",
+    reason:
+      "ClawBank swaps trade real funds from the self-custody wallet and must pass an explicit confirmation gate.",
+    when: "always",
+  },
+  contextIndex: {
+    summary: "Critical ClawBank spot swap execution.",
+    retrievalText:
+      "Use clawbank_trade only after reviewing tradeable tokens and with explicit CONFIRM_CLAWBANK_SWAP confirmation. The server route is authoritative for side, amount, slippage, and settlement.",
+    route: "/api/clawbank/trading",
+    methods: ["POST"],
+  },
+});
+
+export const clawbankMoneyTransferAction = defineHiveAction({
+  id: "clawbank.money-transfer",
+  title: "ClawBank custodial transfer",
+  description:
+    "EXECUTE an on-chain USDC transfer from the ClawBank custodial (Bridge) bank account. KYC-required and moves REAL funds. Requires confirmation \"CONFIRM_CLAWBANK_TRANSFER\". This is the bank-rails wallet, distinct from the self-custody wallet (clawbank_send_usdc).",
+  schema: z.object({
+    chain: z.string().describe("Settlement chain/network for the transfer."),
+    toAddress: z.string().describe("Recipient address."),
+    amount: z.union([z.number(), z.string()]).describe("USDC amount to transfer."),
+    confirmation: z.string().describe('Must be "CONFIRM_CLAWBANK_TRANSFER".'),
+  }),
+  sideEffects: ["wallet", "payment", "network"],
+  risk: "critical",
+  tags: ["clawbank", "wallet", "payment", "bank", "transfer", "bridge", "execution"],
+  aliases: ["clawbank_money_transfer", "clawbank bank transfer", "clawbank custodial transfer"],
+  mcp: { expose: true, compact: true, toolName: "clawbank_money_transfer" },
+  confirmation: {
+    token: "CONFIRM_CLAWBANK_TRANSFER",
+    reason:
+      "ClawBank custodial transfers move real funds from the KYC bank account and must pass an explicit confirmation gate.",
+    when: "always",
+  },
+  contextIndex: {
+    summary: "Critical ClawBank custodial (bank-rails) USDC transfer.",
+    retrievalText:
+      "Use clawbank_money_transfer for the ClawBank bank-rails account (Bridge/KYC), not the self-custody wallet. Requires explicit CONFIRM_CLAWBANK_TRANSFER. The server route is authoritative for chain, recipient, amount, and execution.",
+    route: "/api/clawbank/money",
+    methods: ["POST"],
+  },
+});
+
+export const clawbankCallAction = defineHiveAction({
+  id: "clawbank.call",
+  title: "ClawBank call tool",
+  description:
+    "EXECUTE any state-changing ClawBank discovered tool by name (off-ramp, custodial transfer, contracts, coms, formation checkout, fight clubs, Wise). May move REAL funds or file a legal entity. Requires confirmation \"CONFIRM_CLAWBANK_CALL\". Inspect the tool with clawbank_list_tools / clawbank_read first and get the human's go-ahead.",
+  schema: z.object({
+    tool: z.string().describe("ClawBank tool name from clawbank_list_tools."),
+    args: z.record(z.string(), z.unknown()).optional().describe("Tool arguments matching its inputSchema."),
+    confirmation: z.string().describe('Must be "CONFIRM_CLAWBANK_CALL".'),
+  }),
+  sideEffects: ["wallet", "payment", "network"],
+  risk: "critical",
+  tags: ["clawbank", "wallet", "payment", "execution", "offramp", "formation", "contracts"],
+  aliases: ["clawbank_call", "clawbank run", "clawbank execute"],
+  mcp: { expose: true, compact: true, toolName: "clawbank_call" },
+  confirmation: {
+    token: "CONFIRM_CLAWBANK_CALL",
+    reason:
+      "The ClawBank generic runner can invoke money- or entity-moving tools (off-ramp, transfers, formation checkout) and must pass an explicit confirmation gate.",
+    when: "always",
+  },
+  contextIndex: {
+    summary: "Critical ClawBank generic write-tool runner.",
+    retrievalText:
+      "Use clawbank_call to execute non-read ClawBank tools discovered via clawbank_list_tools (off-ramp address minting, custodial transfers, contract create/sign, coms, formation checkout, fight-club writes, Wise sends). Requires CONFIRM_CLAWBANK_CALL; inspect schemas first.",
+    route: "/api/clawbank/run",
+    methods: ["POST"],
+  },
+});
+
 export const HIVE_ACTIONS = [
   listHivemindMachinesAction,
   planHandoffAction,
@@ -691,6 +906,13 @@ export const HIVE_ACTIONS = [
   visualArtifactsAction,
   dashboardPinsAction,
   brainReviewQueueAction,
+  clawbankStatusAction,
+  clawbankListToolsAction,
+  clawbankReadAction,
+  clawbankSendUsdcAction,
+  clawbankTradeAction,
+  clawbankMoneyTransferAction,
+  clawbankCallAction,
 ] as const;
 
 export function listHiveActions() {

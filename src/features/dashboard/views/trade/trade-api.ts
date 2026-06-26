@@ -9,6 +9,10 @@ export const BANKR_ACTION_CONFIRMATION_FALLBACK = "BANKR_ACTION";
 export const FUND_LLM_CREDITS_CONFIRMATION = "FUND_BANKR_LLM_CREDITS";
 export const HYPERLIQUID_ORDER_CONFIRMATION = "CONFIRM_HYPERLIQUID_ORDER";
 export const HYPERLIQUID_BUILDER_CONFIRMATION = "CONFIRM_HYPERLIQUID_BUILDER";
+export const HYPERLIQUID_CANCEL_CONFIRMATION = "CONFIRM_HYPERLIQUID_CANCEL";
+export const HYPERLIQUID_ACCOUNT_CONFIRMATION = "CONFIRM_HYPERLIQUID_ACCOUNT";
+export const HYPERLIQUID_TRANSFER_CONFIRMATION = "CONFIRM_HYPERLIQUID_TRANSFER";
+export const HYPERLIQUID_TWAP_CONFIRMATION = "CONFIRM_HYPERLIQUID_TWAP";
 
 export type CryptoProviderCapability = {
   provider: string;
@@ -229,7 +233,32 @@ export async function executeSwap(params: { agentId: string; sellToken: string; 
   return postJson("/api/trading/swap", { action: "execute", ...params });
 }
 
-// ---- Hyperliquid local perp rail -------------------------------------------
+// ---- Hyperliquid local rail -------------------------------------------------
+export type HyperliquidActionName =
+  | "status"
+  | "open-orders"
+  | "fills"
+  | "fees"
+  | "order-status"
+  | "quote"
+  | "order"
+  | "cancel"
+  | "cancel-by-cloid"
+  | "modify"
+  | "schedule-cancel"
+  | "leverage"
+  | "margin"
+  | "usd-class"
+  | "usd-send"
+  | "spot-send"
+  | "withdraw"
+  | "twap-order"
+  | "twap-cancel";
+
+export type HyperliquidMarketType = "perp" | "spot";
+export type HyperliquidSide = "long" | "short" | "buy" | "sell";
+export type HyperliquidOrderType = "market" | "limit" | "trigger";
+
 export type HyperliquidBuilderConfig = {
   configured: boolean;
   official: boolean;
@@ -263,9 +292,15 @@ export type HyperliquidBuilderApproval = {
 export type HyperliquidOrderSummary = {
   coin: string;
   assetId: number;
-  side: "long" | "short";
-  orderType: "market" | "limit";
-  timeInForce: "Gtc" | "Ioc";
+  marketType: HyperliquidMarketType;
+  side: HyperliquidSide;
+  orderType: HyperliquidOrderType;
+  timeInForce?: "Gtc" | "Ioc" | "Alo" | "FrontendMarket";
+  triggerPx?: string;
+  triggerType?: "tp" | "sl";
+  triggerIsMarket?: boolean;
+  grouping?: "na" | "normalTpsl" | "positionTpsl";
+  clientOrderId?: string;
   reduceOnly: boolean;
   price: string;
   size: string;
@@ -300,6 +335,7 @@ export type HyperliquidAccountStatus = {
     leverage?: number;
     marginMode?: string;
   }>;
+  spotBalances: Array<{ coin: string; token?: number; total: number; hold: number; available: number; entryNotionalUsd?: number }>;
   openOrders: unknown[];
   builderConfig: HyperliquidBuilderConfig;
   builderApproval: HyperliquidBuilderApproval;
@@ -316,21 +352,68 @@ export type HyperliquidOrderResult = {
   detail: string;
 };
 
+export type HyperliquidSignedActionResult = {
+  network: "mainnet" | "testnet";
+  walletAddress: string;
+  action: string;
+  response?: unknown;
+  order?: HyperliquidOrderSummary;
+  reference?: string;
+  detail: string;
+};
+
+export type HyperliquidTradeParams = {
+  agentId: string;
+  coin: string;
+  marketType?: HyperliquidMarketType;
+  side: HyperliquidSide;
+  orderType: HyperliquidOrderType;
+  notionalUsd?: number;
+  size?: number;
+  limitPrice?: number;
+  timeInForce?: "Gtc" | "Ioc" | "Alo" | "FrontendMarket";
+  triggerPx?: number;
+  triggerType?: "tp" | "sl";
+  triggerIsMarket?: boolean;
+  grouping?: "na" | "normalTpsl" | "positionTpsl";
+  clientOrderId?: string;
+  reduceOnly?: boolean;
+  slippageBps?: number;
+};
+
+export type HyperliquidActionParams = Partial<HyperliquidTradeParams> & {
+  action: HyperliquidActionName;
+  agentId: string;
+  assetId?: number;
+  orderId?: number | string;
+  oid?: number | string;
+  cloid?: string;
+  fastCancel?: boolean;
+  alwaysPlace?: boolean;
+  scheduleCancelTime?: number | null;
+  leverage?: number;
+  marginMode?: "cross" | "isolated";
+  isCross?: boolean;
+  marginDeltaUsd?: number;
+  transferType?: string;
+  amount?: number;
+  amountUsd?: number;
+  destination?: string;
+  token?: string;
+  toPerp?: boolean;
+  twapMinutes?: number;
+  twapRandomize?: boolean;
+  twapId?: number | string;
+  aggregateByTime?: boolean;
+  confirmation?: string;
+  approvalToken?: string;
+};
+
 export async function fetchHyperliquidStatus(agentId: string): Promise<{ ok: boolean; error?: string; status?: HyperliquidAccountStatus }> {
   return postJson("/api/trading/hyperliquid", { action: "status", agentId });
 }
 
-export async function quoteHyperliquidTrade(params: {
-  agentId: string;
-  coin: string;
-  side: "long" | "short";
-  orderType: "market" | "limit";
-  notionalUsd?: number;
-  size?: number;
-  limitPrice?: number;
-  reduceOnly?: boolean;
-  slippageBps?: number;
-}): Promise<{ ok: boolean; error?: string; quote?: HyperliquidQuote; confirmation?: string; builderConfirmation?: string }> {
+export async function quoteHyperliquidTrade(params: HyperliquidTradeParams): Promise<{ ok: boolean; error?: string; quote?: HyperliquidQuote; confirmation?: string; builderConfirmation?: string }> {
   return postJson("/api/trading/hyperliquid", { action: "quote", ...params });
 }
 
@@ -342,23 +425,28 @@ export async function approveHyperliquidBuilder(agentId: string): Promise<{ ok: 
   });
 }
 
-export async function executeHyperliquidTrade(params: {
-  agentId: string;
-  coin: string;
-  side: "long" | "short";
-  orderType: "market" | "limit";
-  notionalUsd?: number;
-  size?: number;
-  limitPrice?: number;
-  reduceOnly?: boolean;
-  slippageBps?: number;
-  approvalToken?: string;
-}): Promise<{ ok: boolean; error?: string; result?: HyperliquidOrderResult }> {
+export async function executeHyperliquidTrade(params: HyperliquidTradeParams & { approvalToken?: string }): Promise<{ ok: boolean; error?: string; result?: HyperliquidOrderResult }> {
   return postJson("/api/trading/hyperliquid", {
     action: "order",
     ...params,
     confirmation: HYPERLIQUID_ORDER_CONFIRMATION,
   });
+}
+
+export async function runHyperliquidAction(params: HyperliquidActionParams): Promise<{ ok: boolean; error?: string; result?: HyperliquidSignedActionResult; status?: HyperliquidAccountStatus }> {
+  return postJson("/api/trading/hyperliquid", {
+    ...params,
+    confirmation: params.confirmation ?? confirmationForHyperliquidAction(params.action),
+  });
+}
+
+export function confirmationForHyperliquidAction(action: HyperliquidActionName) {
+  if (action === "cancel" || action === "cancel-by-cloid" || action === "schedule-cancel") return HYPERLIQUID_CANCEL_CONFIRMATION;
+  if (action === "leverage" || action === "margin") return HYPERLIQUID_ACCOUNT_CONFIRMATION;
+  if (action === "usd-class" || action === "usd-send" || action === "spot-send" || action === "withdraw") return HYPERLIQUID_TRANSFER_CONFIRMATION;
+  if (action === "twap-order" || action === "twap-cancel") return HYPERLIQUID_TWAP_CONFIRMATION;
+  if (action === "order" || action === "modify") return HYPERLIQUID_ORDER_CONFIRMATION;
+  return "";
 }
 
 export async function fetchTradingReadiness(): Promise<TradingReadiness | null> {

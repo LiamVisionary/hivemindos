@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       agentId,
       network: stored.info.network,
       secret: stored.secret,
+      fromAddress: stored.info.address,
       url,
       method: body.method,
       headers: body.headers,

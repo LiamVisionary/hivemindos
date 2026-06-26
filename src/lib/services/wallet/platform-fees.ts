@@ -58,7 +58,9 @@ export type PlatformFeeSource =
   | "alpaca-live"
   | "bankr-action"
   | "moneyclaw"
-  | "x402-paid-api";
+  | "x402-paid-api"
+  | "veil-transfer"
+  | "veil-x402";
 
 export type PlatformFeeQuote = {
   enabled: boolean;
@@ -203,6 +205,7 @@ export async function collectTradingPlatformFee(input: {
       amountUsd: quote.amountUsd,
       target: shortTarget(quote.recipient),
       status: "executed",
+      transactionHash: result.signature,
     }).catch(() => {});
     return { ...quote, signature: result.signature };
   } catch (error) {

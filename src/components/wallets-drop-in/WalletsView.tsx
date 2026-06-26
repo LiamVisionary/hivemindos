@@ -6,6 +6,7 @@ import "./wallets.css";
 import * as D from "./wallet-data";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions } from "./WalletRewardsActions";
+import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
 const {
   FR_CCY, FR_MACHINES, frFmtAmount, frFmtUsd, frFmtUsdFull, frFmtChange, frTopBalances,
   frStateMeta, frFleetSummary, frMachineState,
@@ -461,7 +462,9 @@ function FundAgentModal({ source, onClose, actions }) {
   const ranked = source ? frMyRanked(source) : { total: 0, top: [] };
   const [fundSymState, setFundSym] = React.useState("");
   const [amount, setAmount] = React.useState("");
-  const [confirm, setConfirm] = React.useState(""); const [msg, setMsg] = React.useState("");
+  const [fundState, setFundState] = React.useState("idle");
+  const [msg, setMsg] = React.useState("");
+  const [fundResult, setFundResult] = React.useState(null);
   const transferable = ranked.top.filter((b) => b.sym === "USDC");
   const fundSym = fundSymState || (transferable[0] ? transferable[0].sym : "USDC");
   const fundBal = transferable.find((b) => b.sym === fundSym);
@@ -472,7 +475,34 @@ function FundAgentModal({ source, onClose, actions }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   const selected = agents.find((a) => a.id === sel);
-  const fundAmount = Number(amount), canSubmitFund = source?.canSpend !== false && Boolean(selected) && Boolean(fundBal) && Number.isFinite(fundAmount) && fundAmount > 0 && fundAmount <= fundBal.amount && confirm === "SEND_USDC";
+  const fundAmount = Number(amount);
+  const funding = fundState === "funding";
+  const funded = fundState === "funded";
+  const locked = funding || funded;
+  const recipientBalanceUsd = Number(fundResult?.recipientBalanceUsd);
+  const recipientBalanceText = Number.isFinite(recipientBalanceUsd) ? frFmtUsdFull(recipientBalanceUsd) : "";
+  const successDetail = recipientBalanceText
+    ? `${selected?.name || "Agent"} now has ${recipientBalanceText}.`
+    : "Refresh the wallet balance to verify the new total.";
+  const canSubmitFund = !locked && source?.canSpend !== false && Boolean(selected) && Boolean(fundBal) && Number.isFinite(fundAmount) && fundAmount > 0 && fundAmount <= fundBal.amount;
+  const resetFundState = () => { setFundState("idle"); setMsg(""); setFundResult(null); };
+  const submitFund = async (event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    if (funding) return;
+    if (funded) { onClose && onClose(); return; }
+    if (!canSubmitFund) return;
+    setFundState("funding");
+    setMsg("");
+    try {
+      if (!actions?.onFundAgent) throw new Error("Agent funding is not available in this build.");
+      const result = await actions.onFundAgent({ source, agentId: selected?.id, asset: fundSym, amount, confirmation: "SEND_USDC" });
+      setFundResult(result || null);
+      setFundState("funded");
+    } catch (e) {
+      setFundState("idle");
+      setMsg(e instanceof Error ? e.message : "Funding failed.");
+    }
+  };
   return (
     <div className="fw-modal-back" onMouseDown={onClose}>
       <section className="fw-modal" role="dialog" aria-modal="true" aria-label="Fund an agent" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
@@ -491,7 +521,7 @@ function FundAgentModal({ source, onClose, actions }) {
           {agents.map((a) => {
             const rw = frRunway(a);
             return (
-              <button key={a.id} type="button" className="fw-fundcard" data-sel={sel === a.id ? "" : undefined} onClick={() => setSel(a.id)}>
+              <button key={a.id} type="button" className="fw-fundcard" data-sel={sel === a.id ? "" : undefined} aria-disabled={locked ? "true" : undefined} onClick={() => { if (locked) return; setSel(a.id); resetFundState(); }}>
                 <div className="row">
                   <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <Dot state={a.state} />
@@ -509,13 +539,14 @@ function FundAgentModal({ source, onClose, actions }) {
           })}
         </div>
         <div className="fw-fundfoot">
-          {AssetSel ? <div style={{ width: 116, flex: "0 0 auto" }}><AssetSel holdings={transferable} value={fundSym} onChange={setFundSym} /></div> : null}
-          <input className="fb-field fb-mono" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={selected ? "Amount " + fundSym : "Select an agent first"} disabled={!selected || !fundBal} style={{ flex: 1 }} />
-          <input className="fb-field fb-mono" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="SEND_USDC" disabled={!selected || !fundBal} style={{ flex: 1 }} />
-          <button type="button" className="fw-save" style={{ width: "auto", padding: "11px 16px" }} disabled={!canSubmitFund} onClick={async () => { setMsg("Funding…"); try { if (!actions?.onFundAgent) throw new Error("Agent funding is not available in this build."); await actions.onFundAgent({ source, agentId: selected?.id, asset: fundSym, amount, confirmation: confirm }); setMsg("Funded."); setTimeout(() => onClose && onClose(), 850); } catch (e) { setMsg(e instanceof Error ? e.message : "Funding failed."); } }}>
-            <BIcon name="promote" size={15} color="#1a1305" /> {selected ? "Fund " + selected.name : "Fund agent"}
+          {AssetSel ? <div style={{ width: 116, flex: "0 0 auto" }}><AssetSel holdings={transferable} value={fundSym} disabled={locked} onChange={(value) => { setFundSym(value); resetFundState(); }} /></div> : null}
+          <input className="fb-field fb-mono" value={amount} onChange={(e) => { setAmount(e.target.value); resetFundState(); }} placeholder={selected ? "Amount " + fundSym : "Select an agent first"} disabled={!selected || !fundBal || locked} style={{ flex: 1 }} />
+          <button type="button" className="fw-save" data-state={fundState} aria-disabled={locked ? "true" : undefined} style={{ width: "auto", padding: "11px 16px" }} disabled={!canSubmitFund && !locked} onClick={submitFund}>
+            {funding ? <span className="fw-loader"><i /><i /><i /></span> : funded ? <BIcon name="check" size={15} color="currentColor" /> : <BIcon name="promote" size={15} color="#1a1305" />}
+            {funding ? "Funding..." : funded ? "Done" : selected ? "Fund " + selected.name : "Fund agent"}
           </button>
         </div>
+        {funded ? <div className="fw-fundsuccess"><span className="mark"><BIcon name="check" size={17} /></span><div><strong>{frFmtAmount(fundSym, fundAmount)} {fundSym} sent to {selected?.name || "agent"}</strong><small>{fundResult?.signature ? "Transaction " + frShortAddr(fundResult.signature) + " confirmed. " + successDetail : successDetail}</small></div></div> : null}
         {msg ? <p className="fw-sheet-help">{msg}</p> : null}
       </section>
     </div>
@@ -587,9 +618,10 @@ function NumField({ label, value, onCommit, readOnly }) {
     </label>
   );
 }
-function AssetSelect({ holdings, value, onChange }) {
+function AssetSelect({ holdings, value, disabled = false, onChange }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
+  React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   React.useEffect(() => {
     if (!open) return;
     const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -598,7 +630,7 @@ function AssetSelect({ holdings, value, onChange }) {
   }, [open]);
   return (
     <div className="fw-asset" ref={ref}>
-      <button type="button" className="fb-select fw-asset-btn fb-mono" onClick={() => setOpen((o) => !o)}>{value}</button>
+      <button type="button" className="fb-select fw-asset-btn fb-mono" disabled={disabled} onClick={() => setOpen((o) => !o)}>{value}</button>
       {open ? (
         <div className="fw-asset-menu">
           {holdings.map((b) => (
@@ -650,6 +682,8 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
     && sendAmount <= sendBal.amount && (!Number.isFinite(spendCap) || sendAmount <= spendCap)
     && (recipMode === "agent" ? Boolean(recipAgent || others[0]) : sendTo.trim())
     && (!requiresSendConfirmation || sendConfirm === confirmLabel);
+  const actionStatus = w.meta.actionError || w.meta.actionMessage || "";
+  const actionTone = w.meta.actionError ? "danger" : w.meta.actionBusy ? "working" : "ok";
   const toggleSheet = (s) => setSheet((c) => (c === s ? null : s));
   const copyAddr = () => { try { navigator.clipboard.writeText(w.meta.addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
   const flipEnabled = () => setEnabled((v) => { const next = !v; actions?.onToggleAgentSpend?.(w.id, next); return next; });
@@ -695,6 +729,12 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
         <div className="fw-banner" data-tone="danger">
           <BIcon name="alert" size={15} />
           <div><strong>Needs funding</strong>Top up before this agent runs out of runway.</div>
+        </div>
+      ) : null}
+      {actionStatus ? (
+        <div className="fw-action-status" data-tone={actionTone}>
+          {w.meta.actionBusy ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span> : <BIcon name={w.meta.actionError ? "alert" : "check"} size={13} />}
+          <span>{actionStatus}</span>
         </div>
       ) : null}
       <div className="fw-actions">
@@ -759,6 +799,9 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end" }}><BBtn variant="ghost" sm onClick={() => actions?.onResetAgentRunway?.(w.id)}><BIcon name="refresh" size={14} /> Reset runway clock</BBtn></div>
         </div>
+      ) : null}
+      {sheet === "export" ? (
+        <WalletSecretExportSheet walletId={w.id} actionBusy={w.meta.actionBusy} actionStatus={actionStatus} actions={actions} onClose={() => setSheet(null)} />
       ) : null}
       <div>
         {w.holdings.slice(0, 3).map((b) => <TokenRow key={b.sym} b={b} />)}
@@ -839,7 +882,7 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <BBtn variant="ghost" sm onClick={() => actions?.onCopyAgentPrompt?.(w.id)}><BIcon name="copy" size={14} /> Copy agent prompt</BBtn>
-            <BBtn variant="ghost" sm onClick={() => actions?.onExportAgentWallet?.(w.id)}><BIcon name="download" size={14} /> Export keys</BBtn>
+            <BBtn variant="ghost" sm data-active={sheet === "export" ? "" : undefined} onClick={() => toggleSheet("export")}><BIcon name="download" size={14} /> Export keys</BBtn>
           </div>
         </div>
       </Disclosure>

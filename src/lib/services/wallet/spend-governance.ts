@@ -42,6 +42,8 @@ export type SpendGovernanceInput = {
   target?: string;
   /** Granted approval id supplied by the agent when retrying an escalated spend. */
   approvalToken?: string;
+  /** True when the caller already completed a concrete server-side user approval for this exact spend. */
+  approvalThresholdSatisfied?: boolean;
   now?: number;
 };
 
@@ -190,6 +192,9 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
   // 3. Approval threshold.
   const threshold = Number(wallet.approvalRequiredOverUsd) || 0;
   if (threshold > 0 && amount > threshold) {
+    if (input.approvalThresholdSatisfied) {
+      return { decision: "allow", reason: "Approval threshold satisfied by the direct send action.", companyId, budget };
+    }
     const grant = await consumeApproval({ agentId: wallet.agentId, asset: input.asset, amountUsd: amount, token: input.approvalToken });
     if (grant) {
       return { decision: "allow", reason: `Authorised by approval ${grant.id}.`, companyId, grant, budget };

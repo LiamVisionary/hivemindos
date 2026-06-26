@@ -132,7 +132,7 @@ The downloadable app cannot be the authority for official HivemindOS revenue: us
 
 - `HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config`
 
-That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. When a hosted policy has a recipient for the acting wallet network, local USDC sends, local DEX swaps, and xStocks trades quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. The fee transfer is recorded in the spend ledger as `platform-fee` so it remains visible in wallet activity and budgets.
+That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. Today that includes local USDC sends, local DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, Veil private transfers, and Veil private x402 payments. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. The fee transfer is recorded in wallet activity as a platform-fee item so it remains visible to the user.
 
 Self-hosted operators can override the hosted policy for their own install by setting `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED` or local recipient variables. Fee-rate defaults alone keep using the hosted official policy:
 
@@ -140,10 +140,10 @@ Self-hosted operators can override the hosted policy for their own install by se
 - `HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=100` for a 1% fee
 - `HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD=0.01` for a minimum fee
 - Optional: `HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD=<max-fee>`
-- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<base-or-evm-address>` for Base wallet sends and Base DEX swaps
-- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>` for Solana DEX and xStocks swaps
+- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<base-or-evm-address>` for Base wallet sends, Base DEX swaps, live Alpaca fee collection, public x402, and Veil-backed private payments
+- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>` for Solana DEX, xStocks swaps, and Solana x402 payments
 
-Some Trading tab capabilities are not safely fee-able from the local app alone. Bankr actions, MoneyClaw card payments, and Alpaca brokerage orders need a hosted/proxy fee path, provider-native partner fee support, or a contract-based settlement layer. Do not present local fee settings as official HivemindOS-wide revenue enforcement: a downloaded app is user-controlled and can be modified. Strong official enforcement must happen in hosted HivemindOS infrastructure or in a verifiable third-party settlement flow that checks recipient, network, amount, resource, and receipt server-side.
+Some Trading tab capabilities are not safely fee-able from the local app alone. Bankr actions and MoneyClaw card payments need a hosted/proxy fee path, provider-native partner fee support, or a contract-based settlement layer because the local app does not own a deterministic local-wallet settlement for those rails. Do not present local fee settings as official HivemindOS-wide revenue enforcement: a downloaded app is user-controlled and can be modified. Strong official enforcement must happen in hosted HivemindOS infrastructure or in a verifiable third-party settlement flow that checks recipient, network, amount, resource, and receipt server-side.
 
 Runtime policy:
 
@@ -248,29 +248,32 @@ Token-facing surfaces:
 
 The Trade tab is a dedicated action surface for buying, selling, and swapping. It is segmented into **Crypto** and **Stocks** and acts on a selected agent's governed wallet. It complements the Wallets tab, which stays focused on accounts, rails, balances, and governance.
 
-- **Crypto** is capability-first: it reads `/api/crypto/capabilities` to show every supported action (swap/trade, perps, prediction markets, bridge, token launch, NFT, send, receive, private transfer, paid API, fund LLM credits) with live readiness, lets the user prepare an action to see the clear-signing review, and executes through the same hardened provider endpoints (`/api/trading/hyperliquid`, `/api/bankr/actions`, `/api/wallet/send`, `/api/wallet/x402`, `/api/wallet/veil/*`, and others). The capability router picks the configured provider, so users express intent rather than naming a rail.
+- **Crypto** is capability-first: it reads `/api/crypto/capabilities` to show every supported action (swap/trade, Hyperliquid spot/perps, prediction markets, bridge, token launch, NFT, send, receive, private transfer, paid API, fund LLM credits) with live readiness, lets the user prepare an action to see the clear-signing review, and executes through the same hardened provider endpoints (`/api/trading/hyperliquid`, `/api/bankr/actions`, `/api/wallet/send`, `/api/wallet/x402`, `/api/wallet/veil/*`, and others). The capability router picks the configured provider, so users express intent rather than naming a rail.
 - **Stocks** buys and sells through the unified trade rail below.
 
 The tab lives under `src/features/dashboard/views/trade/` and is reachable from the left navigation shelf.
 
-## Hyperliquid Perp Trading
+## Hyperliquid Trading
 
-HivemindOS can trade Hyperliquid perpetual futures from a local EVM wallet. Local
-Hyperliquid uses the selected wallet's own Hyperliquid account and collateral, while
-Bankr-mediated Hyperliquid uses Bankr's connected trading wallet. The app should always
-show which source of funds is being used before you confirm.
+HivemindOS can trade Hyperliquid spot and perpetual futures from a local EVM wallet.
+Local Hyperliquid uses the selected wallet's own Hyperliquid account and collateral,
+while Bankr-mediated Hyperliquid uses Bankr's connected trading wallet. The app should
+always show which source of funds is being used before you confirm.
 
-In the Trade tab, local Hyperliquid supports BTC, ETH, SOL, and HYPE perps; long and
-short direction; market and limit orders; slippage guards; reduce-only closes; status
-refresh; quotes; builder-fee approval; and final order confirmation.
+In the Trade tab, local Hyperliquid supports spot and perp markets; long/short and
+buy/sell direction; market, limit, trigger, and TWAP orders; slippage guards;
+reduce-only closes; open-order management; leverage and isolated margin controls;
+spot/perp transfers; USDC sends; spot sends; withdrawals; status refresh; quotes;
+builder-fee approval; and action-specific confirmations.
 
-Official HivemindOS builds charge a small Hyperliquid builder fee on filled local perp
+Official HivemindOS builds charge a small Hyperliquid builder fee on eligible filled local
 orders: **0.5 bps (0.005%)** of filled notional. The builder fee is approved separately
 from an order, so a wallet that has not approved the current fee cannot trade until the
-approval step is complete.
+approval step is complete. After approval, HivemindOS attaches the builder code
+automatically to eligible orders; users do not need to find or paste a builder code.
 
 For the full user-facing guide, including fees, funding, liquidation risk, supported
-markets, agent behavior, and current limitations, see [Hyperliquid Perps](../trading/hyperliquid.html).
+markets, and agent behavior, see [Hyperliquid Trading](../trading/hyperliquid.html).
 
 ## Stock Trading (Alpaca And xStocks)
 

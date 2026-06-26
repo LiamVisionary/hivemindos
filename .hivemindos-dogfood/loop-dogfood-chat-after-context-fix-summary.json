@@ -1,0 +1,65 @@
+{
+  "ok": false,
+  "model": "openrouter/openai/gpt-4.1-mini",
+  "prompts": [
+    {
+      "id": "bounded-code-fix-after-context-fix",
+      "status": 200,
+      "ok": false,
+      "promptSaidLoop": false,
+      "promptAskedTracking": false,
+      "localClassifier": {
+        "loopEngineeringRequest": true,
+        "requiresCapabilityRouting": true
+      },
+      "sessionId": "loop-dogfood-chat-bounded-code-fix-after-context-fix-20260625",
+      "mentionsWorkBoard": false,
+      "mentionsLoopTracking": false,
+      "errors": [],
+      "responsePreview": "Starting to address the flaky OAuth refresh test issue. I will:\n\n1. Locate the OAuth refresh test code.\n2. Reproduce the flaky behavior if possible.\n3. Identify and fix fragility (e.g., race conditions, timing issues, mocks).\n4. Run lint, typecheck, and the focused test repeatedly until clean success.\n5. If any auth dependency or external API blocks progress, I will report and hand off.\n\nFirst step: locating the OAuth refresh test.\n\nSearching test files for \"OAuth refresh\" or \"refresh token\" references to find the flaky test case now."
+    },
+    {
+      "id": "recurring-brief-after-context-fix",
+      "status": 200,
+      "ok": true,
+      "promptSaidLoop": false,
+      "promptAskedTracking": false,
+      "localClassifier": {
+        "loopEngineeringRequest": true,
+        "requiresCapabilityRouting": true
+      },
+      "sessionId": "loop-dogfood-chat-recurring-brief-after-context-fix-20260625",
+      "mentionsWorkBoard": true,
+      "mentionsLoopTracking": true,
+      "errors": [],
+      "responsePreview": "To set up a weekday morning loop task that scans AI agent funding news, cites sources, and delivers a concise brief with evidence, I'll propose a Work Board loop contract and task shape as follows:\n\n**Work Board Loop Plan: AI Agent Funding News Brief**\n\n- **Trigger:** Every weekday morning (e.g., 8:00 AM local time)\n- **Goal:** Scan top sources and feeds for AI agent funding announcements and related investment news\n- **Steps:**\n  1. Query configured news sources, APIs, and databases specialized in AI and startup funding (finance news, press releases, Crunchbase, PitchBook, AI news aggregators)\n  2. Extract relevant news focused on AI agents, agent startups, and funding rounds (seed, series A, etc.)\n  3. Summarize key details: who funded, amount, purpose, impact\n  4. Cite all sources with direct links or references\n  5. Compose a short briefing message (around 3-5 bullet points)\n  6. Deliver via configured communication channel (Slack, email, Telegram, dashboard, etc.)\n- **Acceptance Gates:** Brief matches expected format; citations present; no false positives\n- **Receipts:** Save a timestamped record of each brief in Shared Brain Memory (e.g. under daily note or folder)\n- **Budgets:** Limit on token usage, data fetches; run only on weekdays by scheduler\n- **Handoff:** If task fails or no news found, escalate or schedule retry next day\n\n---\n\nNext action: I will draft the loop contract and task template with scheduling instructions and source discovery. Also confirm which distribution channel you'd like for delivery.\n\nWould you prefer Slack message, Telegram message, email d"
+    },
+    {
+      "id": "build-smoke-judge-after-context-fix",
+      "status": 200,
+      "ok": false,
+      "promptSaidLoop": false,
+      "promptAskedTracking": false,
+      "localClassifier": {
+        "loopEngineeringRequest": true,
+        "requiresCapabilityRouting": true
+      },
+      "sessionId": "loop-dogfood-chat-build-smoke-judge-after-context-fix-20260625",
+      "mentionsWorkBoard": true,
+      "mentionsLoopTracking": false,
+      "errors": [],
+      "responsePreview": "Building a tiny receipt viewer involves:\n\n1. Creating a minimal HTML/JS/CSS page that can:\n   - Accept structured receipt data (e.g., JSON or CSV).\n   - Render the receipt in a readable format with line items, totals, and metadata.\n2. A quick testing plan:\n   - Load the receipt viewer in the browser.\n   - Load demo receipt data.\n   - Check layout, formatting, and interaction (if any).\n3. Judging the result by usability and correctness.\n4. Stop if the cost or complexity gets unreasonable (rare for such tiny task).\n\n---\n\n### Implementation plan:\n\n- Write a single HTML file with embedded CSS/JS.\n- JSON input of a receipt with fields like vendor, date, items (name, qty, price), total.\n- Render as a clean list with totals.\n- Add minimal style for clarity.\n- Open in a browser for smoke test.\n- Report findings.\n\n---\n\nI'll proceed to create the receipt viewer file and test it. Then summarize the outcome. Starting now."
+    }
+  ],
+  "artifacts": {
+    "dir": "/Users/liam/Documents/code/projects/hivemind-os/.hivemindos-dogfood",
+    "files": [
+      "loop-dogfood-chat-bounded-code-fix-after-context-fix.sse.txt",
+      "loop-dogfood-chat-bounded-code-fix-after-context-fix.json",
+      "loop-dogfood-chat-recurring-brief-after-context-fix.sse.txt",
+      "loop-dogfood-chat-recurring-brief-after-context-fix.json",
+      "loop-dogfood-chat-build-smoke-judge-after-context-fix.sse.txt",
+      "loop-dogfood-chat-build-smoke-judge-after-context-fix.json"
+    ]
+  }
+}

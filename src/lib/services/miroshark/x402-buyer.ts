@@ -153,6 +153,7 @@ export async function runMiroSharkX402(input: MiroSharkX402RunRequest): Promise<
     agentId,
     network: stored.info.network,
     secret: stored.secret,
+    fromAddress: stored.info.address,
     url: `${MIROSHARK_X402_BASE_URL}/run`,
     method: "POST",
     body: payload,

@@ -4,10 +4,18 @@
 
 import { nativeRuntimeFileRequest } from "@/lib/native/runtime-files";
 import { readNativeRuntimeUsage } from "@/lib/native/runtime-usage";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { VEIL_CASH_DEFAULT_X402_URL } from "@/lib/config/veil-cash";
 import { assetSpendCapFor } from "@/lib/utils/agent-wallet";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { sendApprovedWalletUsdc } from "@/lib/services/wallet/send-usdc-client";
+import {
+  dedupeWalletExportEntries,
+  renderWalletSecretExport,
+  slugifyWalletExportLabel,
+  WALLET_SECRET_EXPORT_CONFIRMATION,
+  walletSecretExportLabel,
+} from "@/lib/services/wallet/wallet-secret-export";
 import { agentMatchesSuppression, suppressionKeysForRemovedAgent, SUPPRESSED_DISCOVERED_AGENTS_STORAGE_KEY } from "@/features/fleet/fleet-identity";
 
 const AGENT_PROFILES_STORAGE_KEY = "hivemindos.agentProfiles.v1";
@@ -53,11 +61,15 @@ export function useWalletFilesController(props: any) {
     await navigator.clipboard?.writeText(buildAgentPaymentPrompt(config)).catch(() => undefined);
   }
 
-  async function exportWalletSecrets(input: { agentIds: string[]; label: string; filename?: string }) {
+  async function exportWalletSecrets(input: { agentIds: string[]; label: string; filename?: string; confirmation?: string }) {
     const agentIds = Array.from(new Set(input.agentIds.map((agentId) => agentId.trim()).filter(Boolean)));
     if (!agentIds.length) return { ok: false, error: "No local wallet was selected for export." };
-    const confirmation = window.prompt("Type EXPORT_WALLET_SECRET to download this wallet secret export.");
-    if (confirmation !== "EXPORT_WALLET_SECRET") return { ok: false, error: "Wallet secret export cancelled." };
+    const confirmation = input.confirmation?.trim()
+      || (typeof window !== "undefined" && typeof window.prompt === "function"
+        ? window.prompt(`Type ${WALLET_SECRET_EXPORT_CONFIRMATION} to download this wallet secret export.`)?.trim()
+        : "");
+    if (confirmation !== WALLET_SECRET_EXPORT_CONFIRMATION) return { ok: false, error: "Wallet secret export cancelled." };
+    const filename = input.filename || `${slugifyWalletExportLabel(input.label)}-wallet-secrets.txt`;
 
     const response = await fetch("/api/wallet/export", {
       method: "POST",
@@ -67,6 +79,8 @@ export function useWalletFilesController(props: any) {
     const data = await response?.json().catch(() => null) as {
       ok?: boolean;
       entries?: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string }>;
+      exportedCount?: number;
+      label?: string;
       error?: string;
     } | null;
     if (!response?.ok || !data?.ok || !data.entries?.length) {
@@ -74,15 +88,24 @@ export function useWalletFilesController(props: any) {
     }
 
     const dedupedEntries = dedupeWalletExportEntries(data.entries);
-    downloadTextFile(
-      input.filename || `${slugifyWalletExportLabel(input.label)}-wallet-secrets.txt`,
-      renderWalletSecretExport(input.label, dedupedEntries),
-    );
-    const phraseCount = dedupedEntries.filter((entry) => entry.kind === "recovery-phrase").length;
+    const content = renderWalletSecretExport(input.label, dedupedEntries);
+    const nativeSave = await saveNativeWalletSecretExport(filename, content);
+    if (nativeSave?.cancelled) return { ok: false, error: "Wallet secret export cancelled." };
+    if (nativeSave?.error) return { ok: false, error: nativeSave.error };
+    if (nativeSave?.path) {
+      return {
+        ok: true,
+        exportedCount: dedupedEntries.length,
+        label: walletSecretExportLabel(dedupedEntries),
+        savedPath: nativeSave.path,
+      };
+    }
+
+    downloadTextFile(filename, content);
     return {
       ok: true,
       exportedCount: dedupedEntries.length,
-      label: phraseCount > 0 ? "recovery phrase" : "private key",
+      label: walletSecretExportLabel(dedupedEntries),
     };
   }
 
@@ -481,7 +504,7 @@ export function useWalletFilesController(props: any) {
     const address = wallet.walletAddress || wallet.vaultAddress;
     if (!address) {
       updateWalletAction(agentId, { error: "Create or paste a wallet address first.", message: "" });
-      return;
+      return null;
     }
     updateWalletAction(agentId, { busy: true, error: "", message: "Checking on-chain balance..." });
     const response = await fetch("/api/wallet/balance", {
@@ -496,19 +519,32 @@ export function useWalletFilesController(props: any) {
     } | null;
     if (!response?.ok || !data?.ok || !data.balance) {
       updateWalletAction(agentId, { busy: false, error: data?.error ?? "Could not fetch balance.", message: "" });
-      return;
+      return null;
     }
     const totalValueUsd = Number(data.balance.totalValueUsd);
     const currentBalanceUsd = normalizeMoney(Number.isFinite(totalValueUsd) && totalValueUsd >= 0 ? totalValueUsd : data.balance.tokenBalance);
-    updateWallet(agentId, {
+    const refreshedWallet = {
+      ...wallet,
       currentBalanceUsd,
       onchainBalanceUsd: currentBalanceUsd,
       nativeBalance: data.balance.nativeBalance,
       tokens: Array.isArray(data.balance.tokens) ? data.balance.tokens : [],
       lastOnchainSyncAt: data.balance.fetchedAt,
       survivalStartedAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    setWalletsByAgent((current) => {
+      const existing = current[agentId] ?? createDefaultAgentWallet(agentId);
+      return {
+        ...current,
+        [agentId]: {
+          ...existing,
+          ...refreshedWallet,
+        },
+      };
     });
     updateWalletAction(agentId, { busy: false, error: "", message: `Balance refreshed: $${currentBalanceUsd.toFixed(2)} total · ${data.balance.tokenBalance.toFixed(6)} USDC.` });
+    return refreshedWallet;
   }
 
   async function sendWalletUsdc(agentId: string) {
@@ -879,43 +915,6 @@ export function useWalletFilesController(props: any) {
   return { updateSharedVault, updateWallet, resetWalletBurnClock, copyPaymentPrompt, exportWalletSecrets, refreshMoneyClawStatus, saveMoneyClawKey, initializeCoreWalletRails, refreshHoneyLedger, observeHoneyUsage, refreshRuntimeUsage, refreshWalletVaultBackupStatus, runWalletVaultBackupAction, refreshMaintenanceReport, runMaintenanceAction, runtimeFileRequest, refreshRuntimeFileRoots, listRuntimeFiles, openRuntimeFile, saveRuntimeFile, returnAllHiveToHoney, claimAllHoneyToBankrHive, enableHoneyLedger, updateWalletAction, createLocalWallet, refreshWalletBalance, sendWalletUsdc, testX402Fetch, addAgentToMachine, requestDuplicateAgent, duplicateAgent, deleteAgent };
 }
 
-function dedupeWalletExportEntries(entries: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string }>) {
-  const seen = new Set<string>();
-  return entries.filter((entry) => {
-    const key = `${entry.kind}:${entry.secret}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function renderWalletSecretExport(
-  label: string,
-  entries: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string }>,
-) {
-  const lines = [
-    "HivemindOS wallet secret export",
-    `Wallet: ${label}`,
-    `Created: ${new Date().toISOString()}`,
-    "",
-    "Keep this file offline. Anyone with these secrets can spend from the exported wallets.",
-    "",
-  ];
-  entries.forEach((entry, index) => {
-    lines.push(
-      `## Wallet ${index + 1}`,
-      `Agent id: ${entry.agentId}`,
-      `Network: ${entry.network}`,
-      `Address: ${entry.address}`,
-      `Secret type: ${entry.kind === "recovery-phrase" ? "Recovery phrase" : "Private key"}`,
-      "Secret:",
-      entry.secret,
-      "",
-    );
-  });
-  return `${lines.join("\n")}\n`;
-}
-
 function downloadTextFile(filename: string, content: string) {
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -928,7 +927,18 @@ function downloadTextFile(filename: string, content: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function slugifyWalletExportLabel(label: string) {
-  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
-  return slug || "hivemindos";
+async function saveNativeWalletSecretExport(filename: string, content: string): Promise<{ path?: string; cancelled?: boolean; error?: string } | null> {
+  if (!isTauriDesktopRuntime()) return null;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await invoke<{ ok?: boolean; path?: string; cancelled?: boolean; error?: string }>("wallet_secret_export_save", {
+      filename,
+      content,
+    });
+    if (result?.cancelled) return { cancelled: true };
+    if (result?.ok && result.path) return { path: result.path };
+    return { error: result?.error ?? "Could not save wallet secret export." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Native wallet secret export failed." };
+  }
 }

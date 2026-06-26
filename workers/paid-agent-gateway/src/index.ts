@@ -405,7 +405,7 @@ function publicPlatformFeePolicy(env: Env) {
       ...(evm ? { evm } : {}),
       ...(solana ? { solana } : {}),
     },
-    supportedSources: ["wallet-send", "dex-swap", "xstocks"],
+    supportedSources: ["wallet-send", "dex-swap", "xstocks", "alpaca-live", "x402-paid-api", "veil-transfer", "veil-x402"],
     generatedAt: new Date().toISOString(),
   };
 }

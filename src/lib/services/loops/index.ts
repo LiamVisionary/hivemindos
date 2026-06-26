@@ -13,6 +13,25 @@ export {
   type LoopExperimentInput,
 } from "@/lib/services/loops/loop-engine";
 export {
+  findLoopPattern,
+  listLoopPatterns,
+  LOOP_PATTERN_REGISTRY,
+  type LoopPatternCost,
+  type LoopPatternDefinition,
+  type LoopPatternRegistry,
+  type LoopPatternRisk,
+  type LoopReadinessLevel,
+} from "@/lib/services/loops/pattern-registry";
+export {
+  buildLoopReadinessReport,
+  renderLoopEngineeringArtifacts,
+  type LoopEngineeringArtifacts,
+  type LoopReadinessFinding,
+  type LoopReadinessReport,
+  type LoopReadinessSignal,
+  type LoopReadinessTotals,
+} from "@/lib/services/loops/loop-readiness";
+export {
   LOOP_TEMPLATES,
   buildLoopFromTemplate,
   buildOperatingUnitLearningLoop,

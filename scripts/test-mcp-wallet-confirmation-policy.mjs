@@ -94,7 +94,14 @@ try {
   assertExecutionToolMetadata(getTool(tools, "send_usdc"), ["SEND_USDC"]);
   assertExecutionToolMetadata(getTool(tools, "dex_swap"), ["CONFIRM_SWAP"]);
   assertExecutionToolMetadata(getTool(tools, "stock_trade"), ["CONFIRM_BUY", "CONFIRM_SELL"]);
-  assertExecutionToolMetadata(getTool(tools, "hyperliquid_trade"), ["CONFIRM_HYPERLIQUID_ORDER", "CONFIRM_HYPERLIQUID_BUILDER"]);
+  assertExecutionToolMetadata(getTool(tools, "hyperliquid_trade"), [
+    "CONFIRM_HYPERLIQUID_ORDER",
+    "CONFIRM_HYPERLIQUID_BUILDER",
+    "CONFIRM_HYPERLIQUID_CANCEL",
+    "CONFIRM_HYPERLIQUID_ACCOUNT",
+    "CONFIRM_HYPERLIQUID_TRANSFER",
+    "CONFIRM_HYPERLIQUID_TWAP",
+  ]);
 
   await callToolExpectError(
     mcp,
@@ -166,6 +173,58 @@ try {
       confirmation: "CONFIRM_HYPERLIQUID_ORDER",
     },
     /CONFIRM_HYPERLIQUID_BUILDER/,
+  );
+  await callToolExpectError(
+    mcp,
+    9,
+    "hyperliquid_trade",
+    {
+      action: "cancel",
+      agentId: "agent:test",
+      coin: "BTC",
+      orderId: 1,
+      confirmation: "CONFIRM_HYPERLIQUID_ORDER",
+    },
+    /CONFIRM_HYPERLIQUID_CANCEL/,
+  );
+  await callToolExpectError(
+    mcp,
+    10,
+    "hyperliquid_trade",
+    {
+      action: "leverage",
+      agentId: "agent:test",
+      coin: "BTC",
+      leverage: 3,
+      confirmation: "CONFIRM_HYPERLIQUID_ORDER",
+    },
+    /CONFIRM_HYPERLIQUID_ACCOUNT/,
+  );
+  await callToolExpectError(
+    mcp,
+    11,
+    "hyperliquid_trade",
+    {
+      action: "usd-send",
+      agentId: "agent:test",
+      destination: "0x0000000000000000000000000000000000000001",
+      amount: 1,
+      confirmation: "CONFIRM_HYPERLIQUID_ORDER",
+    },
+    /CONFIRM_HYPERLIQUID_TRANSFER/,
+  );
+  await callToolExpectError(
+    mcp,
+    12,
+    "hyperliquid_trade",
+    {
+      action: "twap-order",
+      agentId: "agent:test",
+      coin: "BTC",
+      notionalUsd: 1,
+      confirmation: "CONFIRM_HYPERLIQUID_ORDER",
+    },
+    /CONFIRM_HYPERLIQUID_TWAP/,
   );
 } catch (error) {
   if (stderr.trim()) {

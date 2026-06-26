@@ -13,6 +13,12 @@ import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/l
 import { requireAuth } from "@/lib/utils/server-auth";
 import { evaluateSpend, loadGovernanceWallet, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  quoteTradingPlatformFee,
+} from "@/lib/services/wallet/platform-fees";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,7 +55,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({})) as VeilTransferBody;
-    const persisted = body.agentId?.trim() ? await loadGovernanceWallet(body.agentId.trim()).catch(() => null) : null;
+    const agentId = body.agentId?.trim();
+    const persisted = agentId ? await loadGovernanceWallet(agentId).catch(() => null) : null;
     // Personal (`user:`) wallets never auto-spend: explicit confirmation is always
     // required for a private transfer, regardless of any persisted policy.
     const isPersonalWallet = Boolean(body.agentId?.trim().startsWith("user:"));
@@ -69,7 +76,7 @@ export async function POST(request: NextRequest) {
     // Governance: company kill switch, cumulative budgets, and approval escalation.
     // USDC is 1:1 USD; ETH uses the caller-supplied USD value when available.
     const usdValue = asset === "USDC" ? Number(amount) : Number(body.amountUsd ?? 0);
-    const governance = persisted ? { wallet: persisted.wallet, agentName: persisted.agentName } : body.agentId ? await resolveSpendGovernance(body.agentId.trim()) : null;
+    const governance = persisted ? { wallet: persisted.wallet, agentName: persisted.agentName } : agentId ? await resolveSpendGovernance(agentId) : null;
     let grantId: string | undefined;
     let companyId: string | undefined;
     if (governance) {
@@ -96,8 +103,20 @@ export async function POST(request: NextRequest) {
       companyId = decision.companyId;
     }
 
+    let feeWallet: Awaited<ReturnType<typeof getWalletSecret>> | null = null;
+    if (usdValue > 0) {
+      const feeNetwork = persisted?.wallet.network ?? VEIL_CASH_NETWORK;
+      const feeQuote = await quoteTradingPlatformFee({ source: "veil-transfer", network: feeNetwork, amountUsd: usdValue });
+      if (feeQuote.enabled) {
+        if (!agentId) return sendError("agentId is required to collect the HivemindOS platform fee for private transfers.");
+        feeWallet = await getWalletSecret(agentId);
+        if (!feeWallet) return sendError("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.", 424);
+        await assertTradingPlatformFeeReady({ source: "veil-transfer", network: feeWallet.info.network, amountUsd: usdValue });
+      }
+    }
+
     const result = await executeVeilPrivateTransfer({
-      agentId: body.agentId,
+      agentId,
       asset,
       amount,
       recipient,
@@ -119,8 +138,20 @@ export async function POST(request: NextRequest) {
         approvalId: grantId,
       }).catch(() => {});
     }
+    const platformFee = feeWallet && usdValue > 0
+      ? await collectTradingPlatformFee({
+        agentId: agentId!,
+        network: feeWallet.info.network,
+        secret: feeWallet.secret,
+        fromAddress: feeWallet.info.address,
+        amountUsd: usdValue,
+        source: "veil-transfer",
+        companyId,
+      })
+      : undefined;
     return NextResponse.json({
       ok: true,
+      platformFee,
       ...result,
     });
   } catch (error) {

@@ -23,6 +23,11 @@ import {
   X402_CLIENT_BUILDER_CODE_ENV_KEYS,
   x402BuilderCodeFromEnvForNetwork,
 } from "@/lib/services/wallet/x402-builder-code";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  type PlatformFeeCollection,
+} from "@/lib/services/wallet/platform-fees";
 
 export type X402Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -35,6 +40,7 @@ export type X402FetchInput = {
   agentId: string;
   network: string;
   secret: string;
+  fromAddress: string;
   url: string;
   method?: string;
   headers?: Record<string, string>;
@@ -71,6 +77,7 @@ export type X402FetchResult = {
   amountUsd: number;
   paid: boolean;
   builderCode?: string;
+  platformFee?: PlatformFeeCollection;
   paymentResponse?: string;
   contentType: string;
   bodyPreview: string;
@@ -264,6 +271,22 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   if (input.policy.network !== input.network) throw new Error("Stored wallet network does not match the x402 policy network.");
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
 
+  let discoveredAmountUsd: number | null | undefined;
+  const discoverAmount = async () => {
+    if (discoveredAmountUsd === undefined) {
+      discoveredAmountUsd = await discoverX402AmountUsd(input);
+    }
+    return discoveredAmountUsd;
+  };
+  const feePreflightAmountUsd = await discoverAmount();
+  if (feePreflightAmountUsd != null && feePreflightAmountUsd > 0) {
+    await assertTradingPlatformFeeReady({
+      source: "x402-paid-api",
+      network: input.network,
+      amountUsd: feePreflightAmountUsd,
+    });
+  }
+
   // Governance pre-flight: company kill switch, cumulative budgets, approval
   // escalation. Skipped for agents with no governance configured so default
   // behaviour and request count are unchanged.
@@ -273,7 +296,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   let approvalGrantId: string | undefined;
   let spendCompanyId: string | undefined;
   if (governance && (await shouldEvaluateSpend(governance.wallet, input.policy.maxPaymentUsd))) {
-    const preflightAmountUsd = await discoverX402AmountUsd(input);
+    const preflightAmountUsd = await discoverAmount();
     // Always evaluate (amount 0 when undiscoverable) so the company kill switch
     // blocks even when the paid amount can't be priced ahead of time.
     const decision = await evaluateSpend({
@@ -325,6 +348,17 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     signal: AbortSignal.timeout(60_000),
   });
   const preview = await responsePreview(response);
+  const platformFee = paid && selectedAmountUsd > 0
+    ? await collectTradingPlatformFee({
+      agentId: input.agentId,
+      network: input.network,
+      secret: input.secret,
+      fromAddress: input.fromAddress,
+      amountUsd: selectedAmountUsd,
+      source: "x402-paid-api",
+      companyId: spendCompanyId,
+    })
+    : undefined;
   const result: X402FetchResult = {
     ok: response.ok,
     status: response.status,
@@ -334,6 +368,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     amountUsd: selectedAmountUsd,
     paid,
     builderCode,
+    platformFee,
     paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
     ...preview,
   };

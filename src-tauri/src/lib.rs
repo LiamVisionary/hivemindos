@@ -28,6 +28,7 @@ mod runtime_files;
 mod runtime_usage;
 mod scheduler;
 mod setup;
+mod wallet_export;
 
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
@@ -1524,6 +1525,7 @@ pub fn run() {
             setup::native_setup_run,
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
+            wallet_export::wallet_secret_export_save,
             obsidian::obsidian_agents,
             obsidian::obsidian_personal_wallets,
             dashboard_state::dashboard_state_read,

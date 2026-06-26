@@ -1,0 +1,18 @@
+{
+  "id": "bounded-code-fix-after-context-fix",
+  "status": 200,
+  "ok": false,
+  "prompt": "Fix the flaky OAuth refresh test. Keep retrying until lint, typecheck, and the focused test are clean, then hand off if auth blocks you.",
+  "promptSaidLoop": false,
+  "promptAskedTracking": false,
+  "localClassifier": {
+    "loopEngineeringRequest": true,
+    "requiresCapabilityRouting": true
+  },
+  "sessionId": "loop-dogfood-chat-bounded-code-fix-after-context-fix-20260625",
+  "errors": [],
+  "mentionsWorkBoard": false,
+  "mentionsLoopTracking": false,
+  "responseText": "Starting to address the flaky OAuth refresh test issue. I will:\n\n1. Locate the OAuth refresh test code.\n2. Reproduce the flaky behavior if possible.\n3. Identify and fix fragility (e.g., race conditions, timing issues, mocks).\n4. Run lint, typecheck, and the focused test repeatedly until clean success.\n5. If any auth dependency or external API blocks progress, I will report and hand off.\n\nFirst step: locating the OAuth refresh test.\n\nSearching test files for \"OAuth refresh\" or \"refresh token\" references to find the flaky test case now.",
+  "responsePreview": "Starting to address the flaky OAuth refresh test issue. I will:\n\n1. Locate the OAuth refresh test code.\n2. Reproduce the flaky behavior if possible.\n3. Identify and fix fragility (e.g., race conditions, timing issues, mocks).\n4. Run lint, typecheck, and the focused test repeatedly until clean success.\n5. If any auth dependency or external API blocks progress, I will report and hand off.\n\nFirst step: locating the OAuth refresh test.\n\nSearching test files for \"OAuth refresh\" or \"refresh token\" references to find the flaky test case now."
+}

@@ -6,12 +6,14 @@ type WalletSecretExportResult = {
   error?: string;
   exportedCount?: number;
   label?: string;
+  savedPath?: string;
 };
 
 type ExportWalletSecrets = (input: {
   agentIds: string[];
   label: string;
   filename?: string;
+  confirmation?: string;
 }) => Promise<WalletSecretExportResult>;
 
 type ExportableWalletGroup = {
@@ -44,13 +46,16 @@ export async function exportAgentWalletSecret(
   agent: AgentProfile,
   exportWalletSecrets: ExportWalletSecrets,
   updateWalletAction: WalletActionUpdater,
+  options: { confirmation?: string } = {},
 ) {
   updateWalletAction(agent.id, { busy: true, error: "", message: "Preparing wallet secret export..." });
   const result = await exportWalletSecrets({
     agentIds: [agent.id],
     label: `${agent.name} agent wallet`,
+    confirmation: options.confirmation,
   });
   updateWalletAction(agent.id, exportResultAction(result, 1));
+  return result;
 }
 
 function exportResultAction(result: WalletSecretExportResult, fallbackCount: number): Partial<WalletActionState> {
@@ -59,7 +64,9 @@ function exportResultAction(result: WalletSecretExportResult, fallbackCount: num
     busy: false,
     error: result.ok ? "" : result.error ?? "Wallet secret export failed.",
     message: result.ok
-      ? `Downloaded ${exportedCount} ${result.label ?? "wallet secret"} export${exportedCount === 1 ? "" : "s"}.`
+      ? result.savedPath
+        ? `Saved ${exportedCount} ${result.label ?? "wallet secret"} export${exportedCount === 1 ? "" : "s"} to ${result.savedPath}.`
+        : `Downloaded ${exportedCount} ${result.label ?? "wallet secret"} export${exportedCount === 1 ? "" : "s"}.`
       : "",
   };
 }

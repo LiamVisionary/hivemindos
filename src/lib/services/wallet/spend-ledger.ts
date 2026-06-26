@@ -31,6 +31,8 @@ export type SpendLedgerRecord = {
   status: "executed" | "failed";
   /** Approval request id that authorised this spend, when it required escalation. */
   approvalId?: string;
+  /** Public chain transaction hash when the spend executed on-chain. */
+  transactionHash?: string;
   createdAt: string;
   createdAtMs: number;
 };

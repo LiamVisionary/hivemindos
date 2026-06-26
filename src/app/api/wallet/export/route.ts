@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import {
+  classifyWalletSecret,
+  dedupeWalletExportEntries,
+  WALLET_SECRET_EXPORT_CONFIRMATION,
+  walletSecretExportLabel,
+  type WalletSecretExportEntry,
+} from "@/lib/services/wallet/wallet-secret-export";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const EXPORT_CONFIRMATION = "EXPORT_WALLET_SECRET";
-
-type WalletExportEntry = {
-  agentId: string;
-  address: string;
-  network: string;
-  kind: "private-key" | "recovery-phrase";
-  secret: string;
-};
 
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
@@ -26,11 +23,11 @@ export async function POST(request: NextRequest) {
       agentIds?: string[];
       confirmation?: string;
     };
-    if (body.confirmation !== EXPORT_CONFIRMATION) {
+    if (body.confirmation !== WALLET_SECRET_EXPORT_CONFIRMATION) {
       return walletExportJson({
         ok: false,
-        error: `Type ${EXPORT_CONFIRMATION} to export wallet secrets.`,
-        confirmationRequired: EXPORT_CONFIRMATION,
+        error: `Type ${WALLET_SECRET_EXPORT_CONFIRMATION} to export wallet secrets.`,
+        confirmationRequired: WALLET_SECRET_EXPORT_CONFIRMATION,
       }, 400);
     }
 
@@ -52,7 +49,13 @@ export async function POST(request: NextRequest) {
       }, 404);
     }
 
-    return walletExportJson({ ok: true, entries: entries as WalletExportEntry[] });
+    const exportEntries = dedupeWalletExportEntries(entries as WalletSecretExportEntry[]);
+    return walletExportJson({
+      ok: true,
+      entries: exportEntries,
+      exportedCount: exportEntries.length,
+      label: walletSecretExportLabel(exportEntries),
+    });
   } catch (error) {
     return walletExportJson({
       ok: false,
@@ -68,7 +71,7 @@ function walletExportJson(body: unknown, status = 200) {
   });
 }
 
-async function readWalletExportEntry(agentId: string): Promise<WalletExportEntry | { agentId: string; missing: true }> {
+async function readWalletExportEntry(agentId: string): Promise<WalletSecretExportEntry | { agentId: string; missing: true }> {
   const stored = await getWalletSecret(agentId);
   if (!stored) return { agentId, missing: true };
   return {
@@ -78,12 +81,6 @@ async function readWalletExportEntry(agentId: string): Promise<WalletExportEntry
     kind: classifyWalletSecret(stored.secret),
     secret: stored.secret,
   };
-}
-
-function classifyWalletSecret(secret: string): WalletExportEntry["kind"] {
-  const normalized = secret.trim();
-  if (!normalized.startsWith("0x") && normalized.split(/\s+/).length >= 12) return "recovery-phrase";
-  return "private-key";
 }
 
 function uniqueStrings(values: string[]) {

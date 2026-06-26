@@ -32,6 +32,13 @@ import { resolveXStock, supportedXStockTickers } from "@/lib/config/xstocks-toke
 import type { AgentTradingVenue } from "@/lib/types/agent-wallet";
 import { getWalletInfo, getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  platformFeeReceiptDetail,
+  quoteTradingPlatformFee,
+  type PlatformFeeCollection,
+} from "@/lib/services/wallet/platform-fees";
 import { SWAP_CONFIRMATION, MAX_SWAP_USD, quoteDexSwap, executeDexSwap } from "@/lib/services/trading/dex-swap";
 import {
   SEND_CONFIRMATION,
@@ -99,6 +106,7 @@ import {
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
 import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capability-context";
+import { buildClawbankCapabilityContext } from "@/lib/services/chat/clawbank-capability-context";
 import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
 import {
   buildTaskRetrievalContextResult,
@@ -228,6 +236,8 @@ type VeilMcpX402Result = {
   paymentTransactionHash?: string;
   body?: unknown;
 };
+type VeilMcpX402ExecutionResult = VeilMcpX402Result & { platformFee?: PlatformFeeCollection };
+type PrivateTransferExecutionResult = Awaited<ReturnType<typeof executeVeilPrivateTransfer>> & { platformFee?: PlatformFeeCollection };
 
 type WorkspaceSnapshot = {
   head: string;
@@ -1111,11 +1121,20 @@ function buyStockExecutionSse(input: {
 
         let network: string | undefined;
         let secret: string | undefined;
+        let fromAddress: string | undefined;
         if (draft.venue === "xstocks") {
           const stored = await getWalletSecret(input.profile.id);
           if (!stored) throw new Error("No local Solana wallet exists for this agent.");
           network = stored.info.network;
           secret = stored.secret;
+          fromAddress = stored.info.address;
+        } else if (draft.venue === "alpaca" && wallet?.alpacaPaper === false) {
+          const stored = await getWalletSecret(input.profile.id).catch(() => null);
+          if (stored) {
+            network = stored.info.network;
+            secret = stored.secret;
+            fromAddress = stored.info.address;
+          }
         }
 
         await sendTool(
@@ -1136,6 +1155,7 @@ function buyStockExecutionSse(input: {
           confirmation: stockTradeConfirmation(side),
           network,
           secret,
+          fromAddress,
         });
         const message = buyStockResultMessage(result, Date.now() - startedAt);
         await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.completed", {
@@ -1513,8 +1533,18 @@ function privateX402ExecutionSse(input: {
           "Selecting a private payer EOA, then settling x402.",
           "running",
         );
+        let feeWallet: Awaited<ReturnType<typeof getWalletSecret>> | null = null;
+        const maxPaymentUsd = Number(input.draft.maxPayment);
+        if (Number.isFinite(maxPaymentUsd) && maxPaymentUsd > 0) {
+          const feeQuote = await quoteTradingPlatformFee({ source: "veil-x402", network: VEIL_CASH_NETWORK, amountUsd: maxPaymentUsd });
+          if (feeQuote.enabled) {
+            feeWallet = await getWalletSecret(input.profile.id);
+            if (!feeWallet) throw new Error("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.");
+            await assertTradingPlatformFeeReady({ source: "veil-x402", network: feeWallet.info.network, amountUsd: maxPaymentUsd });
+          }
+        }
         const startedAt = Date.now();
-        let result = await callVeilMcpTool<VeilMcpX402Result>("veil_pay_x402", {
+        let result: VeilMcpX402ExecutionResult = await callVeilMcpTool<VeilMcpX402Result>("veil_pay_x402", {
           url: input.draft.url,
           method: input.draft.method,
           maxPayment: input.draft.maxPayment,
@@ -1538,6 +1568,20 @@ function privateX402ExecutionSse(input: {
           });
         }
         if (result.success === false) throw new Error(result.message ?? "Veil private x402 payment was not submitted.");
+        const amountUsd = Number(result.amount ?? result.receipt?.amount ?? 0);
+        if (feeWallet && amountUsd > 0) {
+          result = {
+            ...result,
+            platformFee: await collectTradingPlatformFee({
+              agentId: input.profile.id,
+              network: feeWallet.info.network,
+              secret: feeWallet.secret,
+              fromAddress: feeWallet.info.address,
+              amountUsd,
+              source: "veil-x402",
+            }),
+          };
+        }
         await sendTool(
           RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
           "Execute Veil x402 payment",
@@ -1746,6 +1790,7 @@ function publicX402ExecutionSse(input: {
           agentId: input.profile.id,
           network: stored.info.network,
           secret: stored.secret,
+          fromAddress: stored.info.address,
           url: input.draft.url,
           method: input.draft.method,
           policy,
@@ -1818,6 +1863,7 @@ function publicX402ResultMessage(result: X402FetchResult, executionMs: number) {
     "",
     `Endpoint \`${result.url}\``,
     result.paid ? "Payment settled from the local wallet." : "No payment was required.",
+    platformFeeReceiptDetail(result.platformFee),
     `HTTP status \`${result.status}\``,
     "",
     body ? `Content received:\n${body}` : "Content received.",
@@ -1983,7 +2029,7 @@ async function maybeHandleNaturalBankrAction(input: {
   return bankrActionExecutionSse({ ...input, draft });
 }
 
-function privateX402ResultMessage(result: VeilMcpX402Result, draft: PrivateX402Draft, executionMs: number) {
+function privateX402ResultMessage(result: VeilMcpX402ExecutionResult, draft: PrivateX402Draft, executionMs: number) {
   const amount = result.amount ?? result.receipt?.amount ?? result.requiredAmount ?? "";
   const relayTx = result.relayTransactionHash ?? result.receipt?.relayTransactionHash ?? "";
   const paymentTx = result.paymentTransactionHash ?? result.receipt?.paymentTransactionHash ?? "";
@@ -1998,6 +2044,7 @@ function privateX402ResultMessage(result: VeilMcpX402Result, draft: PrivateX402D
     payerAddress ? `${payerLabel} \`${payerAddress}\`${payerIndex ? ` · index \`${payerIndex}\`` : ""}` : "",
     relayTx ? `Private withdraw ${baseScanTxUrl(relayTx)}` : "",
     paymentTx ? `x402 payment ${baseScanTxUrl(paymentTx)}` : "",
+    platformFeeReceiptDetail(result.platformFee),
     result.status ? `HTTP status \`${result.status}\`` : "",
     "",
     body ? `Content received:\n${body}` : "Content received.",
@@ -2199,7 +2246,17 @@ function privateTransferExecutionSse(input: {
           `Using the configured Veil rail on Base for ${input.draft.amount} ${input.draft.asset}.`,
           "completed",
         );
-        const result = await executeVeilPrivateTransfer({
+        let feeWallet: Awaited<ReturnType<typeof getWalletSecret>> | null = null;
+        const feeNotionalUsd = Number(input.draft.amount);
+        if (Number.isFinite(feeNotionalUsd) && feeNotionalUsd > 0) {
+          const feeQuote = await quoteTradingPlatformFee({ source: "veil-transfer", network: VEIL_CASH_NETWORK, amountUsd: feeNotionalUsd });
+          if (feeQuote.enabled) {
+            feeWallet = await getWalletSecret(input.profile.id);
+            if (!feeWallet) throw new Error("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.");
+            await assertTradingPlatformFeeReady({ source: "veil-transfer", network: feeWallet.info.network, amountUsd: feeNotionalUsd });
+          }
+        }
+        let result: PrivateTransferExecutionResult = await executeVeilPrivateTransfer({
           agentId: input.profile.id,
           asset: input.draft.asset,
           amount: input.draft.amount,
@@ -2220,6 +2277,19 @@ function privateTransferExecutionSse(input: {
             void appendRuntimeChatSessionEvent(input.runtimeSessionId, event.label, detail, { ...event, status }).catch(() => undefined);
           },
         });
+        if (feeWallet && feeNotionalUsd > 0) {
+          result = {
+            ...result,
+            platformFee: await collectTradingPlatformFee({
+              agentId: input.profile.id,
+              network: feeWallet.info.network,
+              secret: feeWallet.secret,
+              fromAddress: feeWallet.info.address,
+              amountUsd: feeNotionalUsd,
+              source: "veil-transfer",
+            }),
+          };
+        }
         await recordRouteTelemetry(input.request, input.telemetryType, {
           ...telemetryPayloadForProfile(input.profile),
           asset: input.draft.asset,
@@ -2283,7 +2353,7 @@ function privateTransferExecutionSse(input: {
 }
 
 function privateTransferResultMessage(
-  result: Awaited<ReturnType<typeof executeVeilPrivateTransfer>>,
+  result: PrivateTransferExecutionResult,
   draft: PrivateTransferDraft,
   remainingBalance?: string,
 ) {
@@ -2295,6 +2365,7 @@ function privateTransferResultMessage(
       result.shield.transactionHash ? `Shield proof ${baseScanTxUrl(result.shield.transactionHash)}` : "",
       result.shield.transactionHash ? `Shield tx \`${result.shield.transactionHash}\`` : "",
       result.shield.blockNumber ? `Shield block \`${result.shield.blockNumber}\`` : "",
+      platformFeeReceiptDetail(result.platformFee),
       "",
       "HivemindOS will complete the private send after Veil accepts the deposit into the private pool.",
       [remainingBalance ? `Remaining **${remainingBalance}**` : "", `Timing **${privateTransferTimingCompact(result.timings)}**`].filter(Boolean).join(" · "),
@@ -2307,6 +2378,7 @@ function privateTransferResultMessage(
     result.transfer.transactionHash ? `Proof ${baseScanTxUrl(result.transfer.transactionHash)}` : "",
     result.transfer.transactionHash ? `Tx \`${result.transfer.transactionHash}\`` : "",
     result.transfer.blockNumber ? `Block \`${result.transfer.blockNumber}\`` : "",
+    platformFeeReceiptDetail(result.platformFee),
     "",
     [remainingBalance ? `Remaining **${remainingBalance}**` : "", `Timing **${privateTransferTimingCompact(result.timings)}**`].filter(Boolean).join(" · "),
   ].filter(Boolean).join("\n");
@@ -5060,7 +5132,13 @@ export async function POST(request: NextRequest) {
   // can use the shared Bankr key, and the briefing must survive a timed-out
   // capability search, so it rides along with whatever retrieval produced
   // (results or the fallback notice). Presence check is cached; never the value.
-  const bankrCapabilityContext = await buildBankrCapabilityContext().catch(() => "");
+  // ClawBank knowledge is credential-gated like Bankr (not profile-gated): any
+  // runtime can use the shared ClawBank token, and the briefing must survive a
+  // timed-out capability search. Presence check is cached; never the value.
+  const [bankrCapabilityContext, clawbankCapabilityContext] = await Promise.all([
+    buildBankrCapabilityContext().catch(() => ""),
+    buildClawbankCapabilityContext().catch(() => ""),
+  ]);
   const taskRetrievalContext = [
     taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
       query: userPrompt,
@@ -5070,6 +5148,7 @@ export async function POST(request: NextRequest) {
       failed: taskRetrievalPreflight.failed,
     }),
     bankrCapabilityContext,
+    clawbankCapabilityContext,
   ].filter(Boolean).join("\n\n");
   await recordRouteTelemetry(request, "agent_runtime.capability_search.completed", {
     ...telemetryPayloadForProfile(profile),

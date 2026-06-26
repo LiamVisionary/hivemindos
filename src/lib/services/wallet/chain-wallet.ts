@@ -329,9 +329,10 @@ export async function getWalletBalance(address: string, networkInput: string): P
       iconUrl: USDC_ICON_URL,
     });
     const hydratedIndexedTokens = await hydrateEvmIndexedTokenQuotes(indexedTokens, network);
-    const indexedOrFallbackTokens = hydratedIndexedTokens.some((token) => tokenAddressEquals(token, evmUsdc(network)))
-      ? hydratedIndexedTokens
-      : [...hydratedIndexedTokens, fallbackUsdc];
+    const indexedOrFallbackTokens = [
+      ...hydratedIndexedTokens.filter((token) => !tokenAddressEquals(token, evmUsdc(network))),
+      fallbackUsdc,
+    ];
     const knownTokens = await fetchKnownEvmTokenBalances(address, network, indexedOrFallbackTokens);
     const tokens = mergeTokenRows([
       nativeToken,
@@ -438,6 +439,9 @@ export async function sendUsdc(params: {
       functionName: "transfer",
       args: [params.toAddress as `0x${string}`, parseUnits(params.amountUsd.toFixed(6), 6)],
     });
+    const publicClient = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status === "reverted") throw new Error("USDC transfer reverted on-chain.");
     return { signature: hash };
   }
 

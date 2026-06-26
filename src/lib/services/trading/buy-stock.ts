@@ -105,10 +105,12 @@ export type BuyStockInput = {
   confirmation?: string;
   /** Granted approval id supplied when retrying an escalated trade. */
   approvalToken?: string;
-  /** Wallet network (xstocks only) — must be solana:mainnet. */
+  /** Local wallet network used by xStocks, and by live Alpaca platform-fee collection. */
   network?: string;
-  /** base58 Solana secret key (xstocks only). Never logged. */
+  /** Local wallet secret used by xStocks, and by live Alpaca platform-fee collection. Never logged. */
   secret?: string;
+  /** Local wallet public address used for live Alpaca platform-fee collection. */
+  fromAddress?: string;
   /** Slippage override for the swap, in basis points. */
   slippageBps?: number;
 };
@@ -226,6 +228,18 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
   const underlying = alpacaSymbol(input.ticker);
   const paper = resolveAlpacaPaper(input);
   const { apiKey, apiSecret } = await resolveAlpacaCreds(input.policy, paper);
+  let shouldCollectPlatformFee = false;
+  if (!paper) {
+    const feeNetwork = input.network || input.policy.network;
+    const feeQuote = await quoteTradingPlatformFee({ source: "alpaca-live", network: feeNetwork, amountUsd: input.notionalUsd });
+    if (feeQuote.enabled) {
+      if (!input.network || !input.secret || !input.fromAddress) {
+        throw new Error("Live Alpaca trades need this agent's local wallet so HivemindOS can collect the platform fee.");
+      }
+      await assertTradingPlatformFeeReady({ source: "alpaca-live", network: input.network, amountUsd: input.notionalUsd });
+      shouldCollectPlatformFee = true;
+    }
+  }
   const base = paper ? ALPACA_PAPER_BASE : ALPACA_LIVE_BASE;
   const order = input.qty && input.qty > 0
     ? { symbol: underlying, qty: String(input.qty), side, type: "market", time_in_force: "day" }
@@ -247,6 +261,14 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
   if (!response.ok || !json?.id) {
     throw new Error(`Alpaca order rejected (HTTP ${response.status}): ${json?.message || "no order id returned"}.`);
   }
+  const platformFee = shouldCollectPlatformFee ? await collectTradingPlatformFee({
+    agentId: input.agentId,
+    network: input.network!,
+    secret: input.secret!,
+    fromAddress: input.fromAddress!,
+    amountUsd: input.notionalUsd,
+    source: "alpaca-live",
+  }) : undefined;
   const filled = Number(json.filled_qty || 0);
   return {
     ok: true,
@@ -258,8 +280,9 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
     reference: json.id,
     paper,
     acquired: Number.isFinite(filled) ? filled : undefined,
+    platformFee,
     status: json.status || "accepted",
-    detail: `${paper ? "Paper" : "LIVE"} market ${side} of ${underlying} submitted (order ${json.id}, status ${json.status || "accepted"}).`,
+    detail: `${paper ? "Paper" : "LIVE"} market ${side} of ${underlying} submitted (order ${json.id}, status ${json.status || "accepted"}).${platformFeeReceiptDetail(platformFee)}`,
   };
 }
 
@@ -379,13 +402,17 @@ async function quoteXStocksLeg(mint: string, side: StockTradeSide, usdcAtomic: n
   return fetchJupiterQuote(mint, SOLANA_USDC_MINT, mintAtomic, slippageBps);
 }
 
+function assertXStocksNetwork(network: string | undefined) {
+  if (network !== "solana:mainnet") throw new Error("xStocks swaps require a Solana mainnet wallet.");
+}
+
 async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult> {
   const side = input.side ?? "buy";
   const token = resolveXStock(input.ticker);
   if (!token) {
     throw new Error(`"${input.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`);
   }
-  if (input.network !== "solana:mainnet") throw new Error("xStocks swaps require a Solana mainnet wallet.");
+  assertXStocksNetwork(input.network);
   if (!input.secret) throw new Error("No local Solana wallet secret is available for the swap.");
 
   const slippageBps = input.slippageBps && input.slippageBps > 0 ? input.slippageBps : DEFAULT_SLIPPAGE_BPS;
@@ -529,13 +556,18 @@ export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" 
   if (venue === "alpaca") {
     const underlying = alpacaSymbol(input.ticker);
     const paper = resolveAlpacaPaper(input);
+    const platformFee = paper
+      ? undefined
+      : await quoteTradingPlatformFee({ source: "alpaca-live", network: input.policy.network, amountUsd: notionalUsd });
     return {
       venue,
       ticker: underlying,
       notionalUsd,
-      detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${paper ? "paper" : "LIVE"}.`,
+      platformFee,
+      detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${paper ? "paper" : "LIVE"}.${platformFeeDetail(platformFee)}`,
     };
   }
+  assertXStocksNetwork(input.policy.network);
   const token = resolveXStock(input.ticker);
   if (!token) throw new Error(`"${input.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`);
   const slippageBps = input.slippageBps && input.slippageBps > 0 ? input.slippageBps : DEFAULT_SLIPPAGE_BPS;

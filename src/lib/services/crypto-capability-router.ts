@@ -489,7 +489,7 @@ async function hyperliquidCapability(input: CryptoCapabilityRouterInput): Promis
     ],
     endpoints: [
       { intent: "status", method: "GET", route: "/api/trading/hyperliquid", note: "Read Hyperliquid account state, open orders, and builder approval status." },
-      { intent: "hyperliquid", method: "POST", route: "/api/trading/hyperliquid", note: "Quote, approve builder fees, or place governed Hyperliquid perp orders with explicit confirmation." },
+      { intent: "hyperliquid", method: "POST", route: "/api/trading/hyperliquid", note: "Quote, approve builder fees, trade spot/perps, manage orders, adjust account settings, transfer funds, withdraw, or run TWAPs with action-specific confirmation." },
     ],
   });
 }
@@ -507,7 +507,7 @@ function providerCapability(input: {
   const features = input.provider === "hyperliquid"
     ? {
       label: "Hyperliquid",
-      summary: "Local Hyperliquid perp trading with official builder-policy routing and wallet governance.",
+      summary: "Local Hyperliquid spot/perp trading, order management, transfers, and TWAPs with official builder-policy routing and wallet governance.",
     }
     : agentPaymentProviderFeatures(input.provider);
   return {
@@ -605,7 +605,7 @@ function guidanceForIntent(intent: CryptoCapabilityIntent, selected: CryptoProvi
   if (!selected.ready) return `Configure ${selected.label}: ${selected.missing.join(" ")}`;
   if (intent === "private-transfer") return `Review recipient, asset, amount, and cap, then execute ${selected.endpoints.find((endpoint) => endpoint.intent === intent)?.route}.`;
   if (intent === "paid-api" || intent === "private-paid-api") return `Use ${selected.label} for this paid API call and keep the request under the supplied wallet policy cap.`;
-  if (selected.provider === "hyperliquid" && intent === "hyperliquid") return "Use /api/trading/hyperliquid to quote first, approve the configured builder fee if needed, then execute only after CONFIRM_HYPERLIQUID_ORDER.";
+  if (selected.provider === "hyperliquid" && intent === "hyperliquid") return "Use /api/trading/hyperliquid to quote/read first. Builder approval, orders, cancels, account changes, transfers, and TWAPs each require their matching Hyperliquid confirmation.";
   if (selected.provider === "bankr" && intent === "portfolio") return "Use /api/bankr/actions for a read-only Bankr wallet portfolio check.";
   if (selected.provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return "Use /api/bankr/actions to prepare the Bankr action; execute only after the user confirms the reviewed draft.";
   return `Use ${selected.label} for ${intent}.`;

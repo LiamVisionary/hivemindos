@@ -79,6 +79,10 @@ assert.equal(hyperliquidAction.contextIndex?.route, "/api/trading/hyperliquid");
 assert.deepEqual(hyperliquidAction.confirmation?.tokens, [
   "CONFIRM_HYPERLIQUID_ORDER",
   "CONFIRM_HYPERLIQUID_BUILDER",
+  "CONFIRM_HYPERLIQUID_CANCEL",
+  "CONFIRM_HYPERLIQUID_ACCOUNT",
+  "CONFIRM_HYPERLIQUID_TRANSFER",
+  "CONFIRM_HYPERLIQUID_TWAP",
 ]);
 
 const serviceSource = fs.readFileSync(new URL("../src/lib/services/trading/hyperliquid.ts", import.meta.url), "utf8");

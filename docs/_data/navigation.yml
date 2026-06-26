@@ -50,6 +50,8 @@ sections:
             url: /features/calling.html
           - title: Work And Scheduler
             url: /features/work-and-scheduler.html
+          - title: Loop Engineering
+            url: /features/loop-engineering.html
           - title: Zero Human Companies
             url: /features/zero-human-companies.html
           - title: Brain, Vault, And Skills
@@ -103,7 +105,7 @@ sections:
         url: /trading/
       - title: Crypto Trading
         url: /trading/crypto.html
-      - title: Hyperliquid Perps
+      - title: Hyperliquid Trading
         url: /trading/hyperliquid.html
       - title: Stock Trading
         url: /trading/stocks.html

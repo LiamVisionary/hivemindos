@@ -24,24 +24,27 @@ These spend from the wallet you've selected.
   request. HivemindOS handles the payment and gets you the result.
 - **Receive** — show a deposit address so you (or anyone) can add funds to a wallet.
 
-## Trade Hyperliquid perps with your wallet
+## Trade Hyperliquid with your wallet
 
-HivemindOS can place local Hyperliquid perpetual futures trades from a selected EVM
-wallet. These trades use that wallet's own Hyperliquid account and collateral, not
-HivemindOS funds and not Bankr's wallet.
+HivemindOS can place local Hyperliquid spot and perpetual futures trades from a
+selected EVM wallet. These trades use that wallet's own Hyperliquid account and
+collateral, not HivemindOS funds and not Bankr's wallet.
 
 You can:
 
-- Go long or short on BTC, ETH, SOL, and HYPE perps.
-- Use market or limit orders.
+- Go long or short on perps, or buy and sell spot markets.
+- Use market, limit, trigger, and TWAP orders.
 - Set a market slippage guard.
 - Mark a trade as **reduce only** when you want to close or shrink a position.
-- Refresh account value, open positions, and builder-fee approval state.
+- Manage open orders, leverage, isolated margin, spot/perp transfers, USDC sends, spot sends, and withdrawals.
+- Refresh account value, open positions, spot balances, open orders, fills, fees, and builder-fee approval state.
 - Ask an agent to quote, review, and place the trade under the same wallet limits.
 
 The official HivemindOS builder fee is **0.5 bps (0.005%)** of filled notional. You
-approve that fee separately before the first local Hyperliquid trade that needs it.
-See [Hyperliquid Perps](hyperliquid.html) for the full user guide.
+approve that fee separately before the first local Hyperliquid trade that needs it;
+after approval, HivemindOS attaches the builder code automatically to eligible orders.
+That approval does not let HivemindOS use your funds or withdraw from your account.
+See [Hyperliquid Trading](hyperliquid.html) for the full user guide.
 
 ## Trade & explore with Bankr
 
@@ -65,11 +68,22 @@ choose one of these.
 The app is always upfront about this:
 
 - **Your selected wallet** pays for swaps, sends, private transfers, and x402.
-- **Your selected EVM wallet's Hyperliquid account** pays for local Hyperliquid perps.
+- **Your selected EVM wallet's Hyperliquid account** pays for local Hyperliquid spot/perp trades, transfers, and withdrawals.
 - **Bankr's wallet** is used for the Bankr actions above (perps, prediction, NFTs,
   token launches, bridges, automations).
 - A few rails route through other connected accounts (a card account for card
   checkouts, your prepaid runtime balance, etc.) — again, shown before you confirm.
+
+## HivemindOS fees
+
+Official HivemindOS builds may add a small platform fee on supported local-wallet
+actions such as sends, swaps, public x402 payments, and Veil private payments. The
+preview shows the fee before you confirm, and the fee is sent as its own USDC
+transaction after the main action succeeds.
+
+Local Hyperliquid trades use a separate builder fee, described in the Hyperliquid
+guide. Bankr and card-style provider flows may have their own provider fees instead
+of the local-wallet platform fee.
 
 ## One current limitation: standalone bridging
 

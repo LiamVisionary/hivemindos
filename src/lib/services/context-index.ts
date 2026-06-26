@@ -7,12 +7,18 @@ import {
   BANKR_REPO_REFERENCE_PATH,
   BANKR_VAULT_REFERENCE_PATH,
 } from "@/lib/services/chat/bankr-capability-context";
+import {
+  CLAWBANK_HIVEMIND_INTEGRATION_FACTS,
+  CLAWBANK_PLATFORM_FACTS,
+  CLAWBANK_REPO_REFERENCE_PATH,
+  CLAWBANK_VAULT_REFERENCE_PATH,
+} from "@/lib/services/chat/clawbank-capability-context";
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
+import { dashboardSwarmGoalContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem } from "@/lib/services/context-index/static-tool-items";
 import { hiveActionContextIndexItems, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
-import { JSON_RENDER_COMPONENT_LIST } from "@/components/json-render/catalog";
 import {
   USEPOD_COMPATIBILITY_MATRIX,
   USEPOD_FUNDING_MATRIX,
@@ -504,69 +510,9 @@ function localCliToolItems(): ContextIndexItem[] {
         note: "Use plan/dry-run first when the machine match is ambiguous. Use the CLI or MCP tool from raw runtimes.",
       },
     },
-    {
-      id: "tool-schema:dashboard-swarm-goal",
-      kind: "tool-schema",
-      title: "Dashboard /swarm-goal command",
-      summary: "Dashboard chat command that rewrites a loose build request into a richer build prompt, appends parallel-agent /goal instructions, and submits it to Queen Bee for Work Board delegation.",
-      tags: ["swarm-goal", "swarm", "goal", "slash-command", "dashboard", "chat", "queen-bee", "orchestration", "parallel-agents", "agent-routing", "build", "implementation", "work-board", "capability"],
-      aliases: [
-        "/swarm-goal",
-        "swarm goal",
-        "parallel agent goal",
-        "spawn agents with goals",
-        "build with swarm",
-        "queen bee build delegation",
-        "rewrite build prompt",
-        "agent swarm build",
-        "dedicated /goal",
-        "orchestrated build prompt",
-      ],
-      retrievalText: [
-        "Use the dashboard chat slash command /swarm-goal <build request> when the user gives a loose build/create/make request and wants Queen Bee to orchestrate multiple agents.",
-        "/swarm-goal rewrites the request into: Build [THING] in [TECH/FRAMEWORK]. It should include [MAIN FEATURES], with [INTERACTION/ANIMATION/BEHAVIOR DETAILS]. Make it feel [MOOD/QUALITY], using [VISUAL DETAILS], [ENVIRONMENT DETAILS], and [EXTRA EFFECTS].",
-        "The command appends: For this task, write yourself a new goal and spawn agents in parallel — as many as needed to do it better and faster. Split the work into independent pieces, dispatch them concurrently, and synthesize the results as they return. Give each agent its own dedicated /goal.",
-        "Dashboard implementation: src/features/chat/swarm-goal-prompt.ts builds the expanded prompt, src/features/dashboard/hooks/dashboard-swarm-goal-command.ts submits it to /api/queen-bee with mode act, priority high, and skills planner/code/qa.",
-        "Queen Bee route: POST /api/queen-bee creates or reuses a Work Board task, ranks chat-capable fleet agents, records receipts under Operations/Brain Services/Queen Bee, and schedules autonomous pickup for act-mode delegated tasks.",
-        "Side effects: this creates a Work Board task and may start autonomous agent pickup. Use a plan/dry-run or direct /api/queen-bee mode plan if you only need to inspect routing without launching work.",
-      ].join(" "),
-      route: "/api/queen-bee",
-      methods: ["POST"],
-      path: absolutePath("src/features/dashboard/hooks/dashboard-swarm-goal-command.ts"),
-      load: {
-        type: "file",
-        target: absolutePath("src/features/dashboard/hooks/dashboard-swarm-goal-command.ts"),
-        note: "Load with src/features/chat/swarm-goal-prompt.ts when checking the exact prompt rewrite and Queen Bee payload.",
-      },
-    },
-    {
-      id: "tool-schema:json-render-dashboard-ui",
-      kind: "tool-schema",
-      title: "json-render dashboard UI",
-      summary: "Guardrailed assistant-generated UI rendering in chat with @json-render/core and @json-render/react.",
-      tags: ["json-render", "generative-ui", "dynamic-ui", "dashboard", "chat", "renderer", "json", "react", "spec", "catalog", "tool"],
-      aliases: [
-        "json render",
-        "render json ui",
-        "generative ui",
-        "dynamic dashboard card",
-        "assistant generated ui",
-      ],
-      retrievalText: [
-        "HivemindOS chat can render a fenced json-render spec returned by an assistant or tool output.",
-        `Use a fenced block labelled \`\`\`json-render containing a flat spec with root and elements, or emit json-render SpecStream JSON patch lines. The dashboard only accepts the local guarded catalog: ${JSON_RENDER_COMPONENT_LIST}.`,
-        "Every element must have a supported type, props object, and children array. Every child key must exist in elements. Optional top-level state is allowed for json-render dynamic values.",
-        "Dynamic values support $state, $bindState, $cond, $template, $computed, and directive-style helpers such as $format, $concat, $count, $truncate, $pluralize, $join, and $t. Element-level watch can fire guarded actions when a state path changes.",
-        "Use Callout for prominent notes, KeyValueList for labeled facts, DataTable for compact records, CodeBlock for specs or snippets, Progress for percentages, List for steps, and form controls only for local non-authoritative interaction. Button props support label, optional safe url, optional copyText, and variant primary/secondary/danger. Generated UI can open safe URLs, copy text, or emit local dashboard events; it must not claim to execute hidden wallet, file, shell, payment, or network mutations.",
-        "Unknown component types, invalid props, missing child references, and malformed specs are displayed as plain text instead of executed.",
-      ].join(" "),
-      path: absolutePath("src/components/json-render/JsonRenderSurface.tsx"),
-      load: {
-        type: "file",
-        target: absolutePath("src/components/json-render/JsonRenderSurface.tsx"),
-        note: "Load for the exact supported component catalog and sanitizer before asking an agent to emit json-render UI.",
-      },
-    },
+    dashboardSwarmGoalContextIndexItem(absolutePath),
+    jsonRenderContextIndexItem(absolutePath),
+    loopEngineeringContextIndexItem(absolutePath),
     {
       id: "tool-schema:hive-brain-compiled-wiki",
       kind: "tool-schema",
@@ -652,6 +598,38 @@ function localCliToolItems(): ContextIndexItem[] {
       },
     },
     {
+      id: "tool-schema:clawbank-agent-platform",
+      kind: "tool-schema",
+      title: "ClawBank agent financial + legal OS",
+      summary: "ClawBank financial + legal OS for AI agents: self-custody wallet (Base/XRPL), KYC bank rails (Bridge), off-ramp, autonomous trading, real US LLC formation, contracts, comms, fight clubs, and Wise — over REST (/api/clawbank/*) and a discovery-first MCP tool catalog.",
+      tags: ["clawbank", "bank", "wallet", "llc", "formation", "off-ramp", "kyc", "bridge", "trading", "swap", "contracts", "coms", "self-custody", "usdc", "capability", "agent", "tool"],
+      aliases: [
+        "what can you do with clawbank",
+        "clawbank capabilities",
+        "clawbank wallet",
+        "clawbank bank account",
+        "form an llc",
+        "create a company",
+        "clawbank off-ramp",
+        "clawbank trading",
+        "clawbank contracts",
+        "clawbank formation",
+        "agent legal entity",
+      ],
+      retrievalText: [
+        ...CLAWBANK_PLATFORM_FACTS,
+        ...CLAWBANK_HIVEMIND_INTEGRATION_FACTS,
+        `Full imported ClawBank documentation lives at ${CLAWBANK_VAULT_REFERENCE_PATH} in the shared vault and ${CLAWBANK_REPO_REFERENCE_PATH} in the hivemind-os repo; search those for endpoint references, the MCP discovery flow, and capability details.`,
+      ].join(" "),
+      route: "/api/clawbank",
+      methods: ["GET"],
+      load: {
+        type: "file",
+        target: CLAWBANK_VAULT_REFERENCE_PATH,
+        note: "Vault-relative imported ClawBank docs. For live readiness use GET /api/clawbank; discover the per-account tool surface with GET /api/clawbank/run; money/entity actions need confirmation tokens.",
+      },
+    },
+    {
       id: "tool-schema:crypto-capability-router",
       kind: "tool-schema",
       title: "crypto capability router",
@@ -682,7 +660,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|crosschain-swap|bridge|crosschain-payment|token-launch|polymarket|hyperliquid|automation|nft|agent-job|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset?, fromChain?, toChain?, fromAsset?, toAsset? } returns the endpoint, draft body, missing readiness, approval requirement, confirmation token, clear-signing review, and crosschain plan when relevant.",
         "MCP path: run hivemind-mcp as a stdio MCP server. It exposes crypto_capabilities for readiness, select_crypto_rail for no-side-effect provider selection, prepare_crypto_action for provider endpoint/request-body drafts, review_crypto_action for clear-signing, agent_crypto_identity for local identity/listing records, and crypto_risk_monitor for DARC-style control checks.",
         "The router covers Bankr for wallet portfolio, swaps/trades, crosschain swaps/bridges/payments, token launches, Polymarket, Hyperliquid fallback, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; local Hyperliquid for governed EVM-wallet perp quotes/orders with server-configured builder codes; x402 for public paid API fetches and local-wallet USDC sends; Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
-        "Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy, while fee-rate defaults alone keep using hosted policy. Locally signed USDC-capable rails such as /api/wallet/send, /api/trading/swap, and xStocks can quote and collect the policy fee as a separate USDC transfer. Official Hyperliquid builder-code recipient, fee, max approval fee, network, and optional API URL are fetched from the HivemindOS-controlled builder-policy endpoint; client request bodies and shared env never choose the official builder recipient or fee. Bankr, MoneyClaw, and Alpaca brokerage revenue needs hosted/proxy or provider-native fee enforcement.",
+        "Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy, while fee-rate defaults alone keep using hosted policy. Locally signed USDC-capable rails such as /api/wallet/send, /api/trading/swap, xStocks, live Alpaca fee collection, /api/wallet/x402, /api/wallet/veil/transfer, and /api/wallet/veil/x402 can quote and collect the policy fee as a separate USDC transfer. Official Hyperliquid builder-code recipient, fee, max approval fee, network, and optional API URL are fetched from the HivemindOS-controlled builder-policy endpoint; client request bodies and shared env never choose the official builder recipient or fee. Bankr and MoneyClaw revenue needs hosted/proxy or provider-native fee enforcement.",
         "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/trading/hyperliquid, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, /api/crypto/clear-signing, /api/crypto/agent-identity, and /api/crypto/risk-monitor.",
         "Side-effect policy: call status/select/prepare first; do not execute sends, swaps, trades, token launches, bets, leverage positions, NFT mutations, automations, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it, the wallet's explicit auto-send/auto-use policy allows that action, or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
       ].join(" "),
@@ -855,12 +833,12 @@ function localCliToolItems(): ContextIndexItem[] {
         "hyperliquid builder",
       ],
       retrievalText: [
-        "Use this capability when a workflow needs to quote or place a Hyperliquid perpetual order from a local EVM wallet, inspect Hyperliquid account state, or approve the configured builder fee.",
-        "HTTP surface: GET /api/trading/hyperliquid?agentId=<id> returns non-secret readiness, configured builder details, confirmation tokens, and optional account status. POST /api/trading/hyperliquid accepts { action: 'status'|'positions'|'quote'|'approve-builder'|'order', agentId, coin, side: 'long'|'short', orderType: 'market'|'limit', notionalUsd, limitPrice?, reduceOnly?, slippageBps?, confirmation?, approvalToken? }.",
+        "Use this capability when a workflow needs to trade Hyperliquid spot or perps from a local EVM wallet, inspect account state, manage orders, adjust leverage or isolated margin, transfer/withdraw funds, place/cancel TWAPs, or approve the configured builder fee.",
+        "HTTP surface: GET /api/trading/hyperliquid?agentId=<id> returns non-secret readiness, configured builder details, confirmation tokens, and optional account status. POST /api/trading/hyperliquid accepts read actions status, positions, open-orders, fills, fees, order-status; quote/order actions for spot/perp marketType, trigger orders, timeInForce, clientOrderId; and signed actions approve-builder, cancel, cancel-by-cloid, modify, schedule-cancel, leverage, margin, usd-class, usd-send, spot-send, withdraw, twap-order, twap-cancel.",
         "Builder-code policy: builder address, per-order builder fee, max approval fee, testnet flag, and optional API URL are fetched server-side from the official HivemindOS builder-policy endpoint. Client request bodies and local/shared env never choose the official builder recipient or fee; self-hosters replace the policy by forking/rebuilding or pointing their own distribution at their own endpoint.",
-        "Approval sequence: first quote the order. If builderApproval.approved is false, action 'approve-builder' signs Hyperliquid ApproveBuilderFee from the selected main local EVM wallet and requires CONFIRM_HYPERLIQUID_BUILDER. Then action 'order' places the perp order with the configured builder payload and requires CONFIRM_HYPERLIQUID_ORDER.",
-        "Execution policy: the route resolves wallet address, network, secret, and max trade cap server-side from the local vault and governed wallet ledger. Orders pass the company kill switch, rolling budgets, approval escalation, maxTradeUsd/maxPaymentUsd cap, Hyperliquid tick/lot precision, and unified spend-ledger recording. Reduce-only orders evaluate governance with zero spend but still honor the kill switch.",
-        "MCP path: use hyperliquid_trade. action quote/status/positions are read-style; action approve-builder requires CONFIRM_HYPERLIQUID_BUILDER; action order requires CONFIRM_HYPERLIQUID_ORDER. Never request, print, store, or reveal private keys, seed phrases, or wallet secrets.",
+        "Approval sequence: first quote the order. If builderApproval.approved is false, action 'approve-builder' signs Hyperliquid ApproveBuilderFee from the selected main local EVM wallet and requires CONFIRM_HYPERLIQUID_BUILDER. Then action 'order' places the order with the configured builder payload and requires CONFIRM_HYPERLIQUID_ORDER.",
+        "Execution policy: the route resolves wallet address, network, secret, and max trade/payment caps server-side from the local vault and governed wallet ledger. Orders, transfers, TWAPs, and margin changes pass the company kill switch, rolling budgets, approval escalation, maxTradeUsd/maxPaymentUsd cap, Hyperliquid tick/lot precision, and unified spend-ledger recording.",
+        "MCP path: use hyperliquid_trade. quote/status/open-orders/fills/fees/order-status are read-style; approve-builder requires CONFIRM_HYPERLIQUID_BUILDER; order/modify requires CONFIRM_HYPERLIQUID_ORDER; cancels require CONFIRM_HYPERLIQUID_CANCEL; leverage/margin require CONFIRM_HYPERLIQUID_ACCOUNT; transfers/withdrawals require CONFIRM_HYPERLIQUID_TRANSFER; TWAPs require CONFIRM_HYPERLIQUID_TWAP. Never request, print, store, or reveal private keys, seed phrases, or wallet secrets.",
       ].join(" "),
       route: "/api/trading/hyperliquid",
       methods: ["GET", "POST"],

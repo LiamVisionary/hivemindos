@@ -55,7 +55,7 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Trading</h3>
-    <p>Every trading capability in one place — crypto swaps, sends, private transfers, x402, local Hyperliquid perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca or on-chain xStocks, with governance and agent access.</p>
+    <p>Every trading capability in one place — crypto swaps, sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca or on-chain xStocks, with governance and agent access.</p>
     <a href="trading/">Open trading docs</a>
   </section>
   <section class="docCard">

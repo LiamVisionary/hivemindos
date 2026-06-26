@@ -11,6 +11,10 @@ const files = {
   ledger: "src/lib/services/wallet/spend-ledger.ts",
   send: "src/lib/services/wallet/governed-send.ts",
   sendRoute: "src/app/api/wallet/send/route.ts",
+  x402: "src/lib/services/wallet/x402-agent-fetch.ts",
+  x402Route: "src/app/api/wallet/x402/route.ts",
+  veilTransferRoute: "src/app/api/wallet/veil/transfer/route.ts",
+  veilX402Route: "src/app/api/wallet/veil/x402/route.ts",
   swap: "src/lib/services/trading/dex-swap.ts",
   stocks: "src/lib/services/trading/buy-stock.ts",
   cryptoRouter: "src/lib/services/crypto-capability-router.ts",
@@ -56,9 +60,26 @@ assert.match(contents.swap, /platformFeeDetail/);
 assert.match(contents.swap, /platformFeeReceiptDetail/);
 
 assert.match(contents.stocks, /source: "xstocks"/);
+assert.match(contents.stocks, /source: "alpaca-live"/);
 assert.match(contents.stocks, /assertTradingPlatformFeeReady/);
 assert.match(contents.stocks, /platformFeeDetail/);
 assert.match(contents.stocks, /platformFeeReceiptDetail/);
+
+assert.match(contents.x402, /source: "x402-paid-api"/);
+assert.match(contents.x402, /assertTradingPlatformFeeReady/);
+assert.match(contents.x402, /collectTradingPlatformFee/);
+assert.match(contents.x402, /platformFee/);
+assert.match(contents.x402Route, /fromAddress: stored\.info\.address/);
+
+assert.match(contents.veilTransferRoute, /source: "veil-transfer"/);
+assert.match(contents.veilTransferRoute, /quoteTradingPlatformFee/);
+assert.match(contents.veilTransferRoute, /collectTradingPlatformFee/);
+assert.match(contents.veilTransferRoute, /platformFee/);
+
+assert.match(contents.veilX402Route, /source: "veil-x402"/);
+assert.match(contents.veilX402Route, /quoteTradingPlatformFee/);
+assert.match(contents.veilX402Route, /collectTradingPlatformFee/);
+assert.match(contents.veilX402Route, /platformFee/);
 
 assert.match(contents.cryptoRouter, /preparedPlatformFee/);
 assert.match(contents.cryptoRouter, /source: "wallet-send"/);
@@ -69,6 +90,10 @@ assert.match(contents.worker, /\/api\/platform-fees\/config/);
 assert.match(contents.worker, /publicPlatformFeePolicy/);
 assert.match(contents.worker, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM/);
 assert.match(contents.worker, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA/);
+assert.match(contents.worker, /"alpaca-live"/);
+assert.match(contents.worker, /"x402-paid-api"/);
+assert.match(contents.worker, /"veil-transfer"/);
+assert.match(contents.worker, /"veil-x402"/);
 assert.match(contents.workerReadme, /GET \/api\/platform-fees\/config/);
 
 assert.match(contents.env, /HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https:\/\/hivemindos-paid-agent-gateway\.hivemindos\.workers\.dev\/api\/platform-fees\/config/);

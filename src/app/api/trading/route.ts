@@ -146,14 +146,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, side, paper, quote, confirmation: stockTradeConfirmation(side) });
     }
 
-    // Execute: xStocks needs the agent's local Solana wallet secret.
+    // Execute: xStocks uses the agent's local Solana wallet for the swap; live
+    // Alpaca uses the local wallet only to collect the HivemindOS platform fee.
     let network: string | undefined;
     let secret: string | undefined;
+    let fromAddress: string | undefined;
     if (policy.tradingVenue === "xstocks") {
       const stored = await getWalletSecret(agentId);
       if (!stored) return NextResponse.json({ ok: false, error: "No local Solana wallet exists for this agent." }, { status: 404 });
       network = stored.info.network;
       secret = stored.secret;
+      fromAddress = stored.info.address;
+    } else if (policy.tradingVenue === "alpaca" && paper === false) {
+      const stored = await getWalletSecret(agentId).catch(() => null);
+      if (stored) {
+        network = stored.info.network;
+        secret = stored.secret;
+        fromAddress = stored.info.address;
+      }
     }
 
     const result = await executeStockTrade({
@@ -168,6 +178,7 @@ export async function POST(request: NextRequest) {
       approvalToken: body.approvalToken?.trim() || undefined,
       network,
       secret,
+      fromAddress,
       slippageBps,
     });
     return NextResponse.json({ ok: true, result });
