@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const INDEX_PATH = "Operations/Brain Services/Agent Memory Index.jsonl";
+const WORKSPACES_FILE = path.join(os.homedir(), ".hivemindos", "workspaces.json");
 const MAX_VAULT_FILES = 5000;
 const MAX_VAULT_BYTES = 256 * 1024;
 const LOW_SIGNAL_WORDS = new Set(["agent", "agents", "brain", "hivemindos", "memory", "memories", "note", "notes", "shared", "vault"]);
@@ -21,9 +22,9 @@ const EXCLUDE_PREFIXES = [
 
 function usage() {
   console.error(`Usage:
-  hive-brain answer "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--json]
-  hive-brain recall "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--json]
-  hive-brain remember --type TYPE --title TITLE --content TEXT [--tag TAG] [--source TEXT]
+  hive-brain answer "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--workspace ID] [--json]
+  hive-brain recall "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--workspace ID] [--json]
+  hive-brain remember --type TYPE --title TITLE --content TEXT [--workspace ID] [--tag TAG] [--source TEXT]
 
 Examples:
   hive-brain answer "what fruit does liam like?"
@@ -39,7 +40,27 @@ function expandHome(value) {
   return value;
 }
 
-function defaultVaultPath() {
+function readWorkspaces() {
+  try {
+    const data = JSON.parse(fs.readFileSync(process.env.HIVE_WORKSPACES_FILE ? expandHome(process.env.HIVE_WORKSPACES_FILE) : WORKSPACES_FILE, "utf8"));
+    return Array.isArray(data.workspaces) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+function workspaceById(id) {
+  const store = readWorkspaces();
+  if (!store) return null;
+  const requested = id || process.env.HIVE_WORKSPACE_ID || process.env.NEXT_PUBLIC_HIVE_WORKSPACE_ID || store.activeWorkspaceId || "main";
+  return store.workspaces.find((workspace) => workspace?.id === requested)
+    || store.workspaces.find((workspace) => workspace?.id === "main")
+    || null;
+}
+
+function defaultVaultPath(workspaceId) {
+  const workspace = workspaceById(workspaceId);
+  if (workspace?.vaultPath) return expandHome(workspace.vaultPath);
   return expandHome(process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH)
     || path.join(os.homedir(), "Documents", "Obsidian", "hivemindos-vault");
 }
@@ -52,7 +73,9 @@ function parseArgs(argv) {
     limit: 5,
     scope: undefined,
     json: false,
+    workspaceId: process.env.HIVE_WORKSPACE_ID || process.env.NEXT_PUBLIC_HIVE_WORKSPACE_ID || "",
     vaultPath: defaultVaultPath(),
+    vaultExplicit: false,
   };
   for (let index = 3; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -71,6 +94,10 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--vault") {
       input.vaultPath = expandHome(next);
+      input.vaultExplicit = true;
+      index += 1;
+    } else if (arg === "--workspace") {
+      input.workspaceId = next || "";
       index += 1;
     } else if (arg === "--type") {
       input.type = next;
@@ -127,6 +154,7 @@ function parseArgs(argv) {
     }
   }
   input.query = input.queryParts.join(" ").trim();
+  if (!input.vaultExplicit) input.vaultPath = defaultVaultPath(input.workspaceId);
   return input;
 }
 

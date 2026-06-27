@@ -43,6 +43,11 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
     <a href="shared-env.html">Open shared env</a>
   </section>
   <section class="docCard">
+    <h3>Workspaces</h3>
+    <p>Named whole-brain bundles for separate vaults, env files, skill shelves, and memory indexes.</p>
+    <a href="workspaces.html">Open workspaces</a>
+  </section>
+  <section class="docCard">
     <h3>Sync And Health</h3>
     <p>Hivemind Sync, vault doctor, conflict cleanup, secure backups, and migration manifests.</p>
     <a href="sync-and-health.html">Open sync docs</a>
@@ -120,5 +125,6 @@ The doctor is read only unless `--fix` is passed. Fixes move content into canoni
 - [Brain Services](brain-services.html)
 - [Packaged Skills](../packaged-skills/)
 - [Shared Env](shared-env.html)
+- [Workspaces](workspaces.html)
 - [Sync And Health](sync-and-health.html)
 - [Architecture Sync](architecture-sync.html)

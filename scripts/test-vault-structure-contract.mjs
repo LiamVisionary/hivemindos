@@ -71,6 +71,9 @@ for (const path of ["setup.sh", "setup.ps1"]) {
   has(path, "hive-env-delete", "shared env delete command installer");
   has(path, "hive-brain", "shared brain command installer");
   has(path, "hive-brain-hook", "shared brain hook command installer");
+  has(path, "hive-workspace", "workspace command installer");
+  has(path, "hive-workspace-switch", "workspace switch command installer");
+  has(path, "hive-workspace-add", "workspace add command installer");
   has(path, "hive-handoff", "handoff command installer");
   has(path, "hivemind-mcp", "Hivemind MCP command installer");
   has(path, "hive-pulse", "Hive Pulse command installer");
@@ -82,6 +85,9 @@ for (const path of ["uninstall.sh", "uninstall.ps1"]) {
   has(path, "hive-env-delete", "shared env delete command uninstaller");
   has(path, "hive-brain", "shared brain command uninstaller");
   has(path, "hive-brain-hook", "shared brain hook command uninstaller");
+  has(path, "hive-workspace", "workspace command uninstaller");
+  has(path, "hive-workspace-switch", "workspace switch command uninstaller");
+  has(path, "hive-workspace-add", "workspace add command uninstaller");
   has(path, "hive-handoff", "handoff command uninstaller");
   has(path, "hivemind-mcp", "Hivemind MCP command uninstaller");
   has(path, "hive-pulse", "Hive Pulse command uninstaller");
@@ -89,6 +95,9 @@ for (const path of ["uninstall.sh", "uninstall.ps1"]) {
 }
 
 assert.ok(existsSync(join(root, "scripts/hive-pulse")), "missing Hive Pulse command shim");
+assert.ok(existsSync(join(root, "scripts/hive-workspace")), "missing hive-workspace command");
+assert.ok(existsSync(join(root, "scripts/hive-workspace-switch")), "missing hive-workspace-switch command");
+assert.ok(existsSync(join(root, "scripts/hive-workspace-add")), "missing hive-workspace-add command");
 
 has("scripts/seed-vault-foundation.mjs", "vault-health-check");
 has("scripts/seed-vault-foundation.mjs", "vault-doctor.mjs");
@@ -161,6 +170,7 @@ for (const path of [
   "docs/whole-brain/brain-services.md",
   "docs/whole-brain/shared-skills.md",
   "docs/whole-brain/shared-env.md",
+  "docs/whole-brain/workspaces.md",
   "docs/whole-brain/sync-and-health.md",
   "docs/whole-brain/architecture-sync.md",
   "docs/whole-brain/code-map.md",
@@ -180,6 +190,7 @@ has("docs/whole-brain/sync-and-health.md", "Operations/Vault Migrations");
 has("docs/whole-brain/sync-and-health.md", ".hivemindos-transfers");
 has("docs/whole-brain/shared-skills.md", "Operations/Runtime Mirrors/AEON/.aeon");
 has("docs/whole-brain/index.md", "shared-env.html");
+has("docs/whole-brain/index.md", "workspaces.html");
 has("docs/whole-brain/index.md", "Shared Brain Memory");
 has("docs/whole-brain/index.md", "Raw runtime CLIs");
 has("docs/whole-brain/vault-map.md", "Agent Memory Proofs.jsonl");
@@ -275,6 +286,9 @@ for (const path of [
   "scripts/hive-env-delete",
   "scripts/hive-brain",
   "scripts/hive-brain-hook",
+  "scripts/hive-workspace",
+  "scripts/hive-workspace-switch",
+  "scripts/hive-workspace-add",
   "scripts/hive-handoff",
   "scripts/hivemind-mcp",
   "setup.sh",

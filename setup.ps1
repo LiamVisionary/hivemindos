@@ -299,12 +299,12 @@ function Ensure-HiveEnvAdd {
     Warn "Python is missing; hive env shims installed but will need Python to run."
     $pythonCommand = "python"
   }
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-pulse")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     $scriptPath = Join-Path $Root "scripts\$commandName"
     if ($commandName -eq "hive-transfer") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath.mjs`" %*`r`n" -Encoding ASCII
-    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook" -or $commandName -eq "hive-pulse") {
+    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook" -or $commandName -eq "hive-workspace" -or $commandName -eq "hive-workspace-switch" -or $commandName -eq "hive-workspace-add" -or $commandName -eq "hive-pulse") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath`" %*`r`n" -Encoding ASCII
     } elseif ($commandName -eq "hive-update") {
       Set-Content -Path $shimPath -Value "@echo off`r`nbash `"$scriptPath`" %*`r`n" -Encoding ASCII
@@ -321,7 +321,7 @@ function Ensure-HiveEnvAdd {
       Refresh-Path
       Ok "Added $binDir to user PATH"
     } else {
-      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, and hive-pulse from any folder"
+      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, and hive-pulse from any folder"
     }
   } else {
     Refresh-Path
