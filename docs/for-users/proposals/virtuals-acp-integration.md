@@ -76,7 +76,7 @@ agent-runtime endpoint and submits the result as the deliverable.
 - `POST /api/chat/agent-runtime` — accepts `{ agent: AgentProfile, messages: IncomingMessage[],
   wallet?, sharedVault?, agentMode? }` and streams **OpenAI-shaped SSE**
   (`choices[].delta.content`, `data: [DONE]`).
-  See [agent-runtime/route.ts:4265](../../src/app/api/chat/agent-runtime/route.ts#L4265).
+  See [agent-runtime/route.ts:4265](../../../src/app/api/chat/agent-runtime/route.ts#L4265).
 - Base + Solana wallet rails, x402, spend-governance and the encrypted wallet vault — reusable for
   paths 1 and 2.
 
@@ -93,7 +93,7 @@ Goal: prove "Hive is the brain behind a Virtuals-listed agent" end-to-end on **B
 (84532)**.
 
 1. **Install tooling** (pnpm; the seller script lives at
-   [scripts/virtuals-acp-seller.mjs](../../scripts/virtuals-acp-seller.mjs)):
+   [scripts/virtuals-acp-seller.mjs](../../../scripts/virtuals-acp-seller.mjs)):
    ```bash
    pnpm add -D @virtuals-protocol/acp-node-v2 viem
    npm i -g @virtuals-protocol/acp-cli   # or pnpm dlx

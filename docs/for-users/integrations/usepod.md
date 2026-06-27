@@ -9,7 +9,7 @@ UsePod is an OpenAI-compatible inference marketplace.
 In HivemindOS, it is treated as a prepaid runtime rail first. Provider hosting is documented separately because that path exposes local compute to a marketplace and deserves more care.
 
 <figure class="imagePlate">
-  <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with a UsePod prepaid lane from Agent Wallet to UsePod Prepaid, Deposit Address, and Proxy Runtime.">
+  <img src="../../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with a UsePod prepaid lane from Agent Wallet to UsePod Prepaid, Deposit Address, and Proxy Runtime.">
   <figcaption>UsePod is modeled as a prepaid runtime rail. It can share wallet funding context, but it is not the same path as x402 paid requests or Honey rewards.</figcaption>
 </figure>
 

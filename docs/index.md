@@ -9,8 +9,8 @@ description: Local-first agent fleet control room documentation.
     <h1>HivemindOS Documentation</h1>
     <p class="lede">A compact operator map for agent fleets: local machines, Tailnet collectors, shared Obsidian memory, runtime adapters, background work, wallets, token rails, Honey, HIVE, simulations, and integration surfaces.</p>
     <div class="actionRow">
-      <a href="features/">Read the feature guide</a>
-      <a href="architecture/">Trace the architecture</a>
+      <a href="./for-users/features/">Read the feature guide</a>
+      <a href="./for-users/architecture/">Trace the architecture</a>
     </div>
   </div>
 </section>
@@ -25,6 +25,21 @@ description: Local-first agent fleet control room documentation.
   <li>Compiled brain search</li>
 </ul>
 
+## Choose your path
+
+<div class="docGrid">
+  <section class="docCard">
+    <h3>For Users</h3>
+    <p>Run HivemindOS as a local-first agent fleet: fleet, agents, brain, work, wallets, trading, integrations, runtimes, and architecture.</p>
+    <a href="./for-users/">Open the product docs</a>
+  </section>
+  <section class="docCard">
+    <h3>For Investors</h3>
+    <p>The business model: revenue streams, trading and on-chain fees, the free-vs-paid boundary, Honey and HIVE, treasury, and buybacks.</p>
+    <a href="./for-investors/">Open the investor docs</a>
+  </section>
+</div>
+
 <figure class="imagePlate imagePlateHero">
   <img src="assets/img/diagrams/visual-atlas.jpg" alt="Generated HivemindOS visual atlas infographic showing Fleet, Agents, Brain, Work, Wallets, and Native around the dashboard.">
   <figcaption>The full control room map: fleet, agents, brain, work, wallets, and native desktop surfaces around the dashboard.</figcaption>
@@ -36,82 +51,82 @@ description: Local-first agent fleet control room documentation.
   <section class="docCard">
     <h3>Feature Guide</h3>
     <p>Tour the product surface by domain: Fleet, agents, chat, Zero Human Companies, work, scheduler, brain, env, files, notifications, MiroShark, wallets, token rails, Honey, HIVE, and x402.</p>
-    <a href="features/">Open features</a>
+    <a href="./for-users/features/">Open features</a>
   </section>
   <section class="docCard">
     <h3>Zero Human Companies</h3>
     <p>See how agent-run company cockpits connect charters, crews, apex goals, approvals, budgets, Work Board dispatch, and private learning loops.</p>
-    <a href="features/zero-human-companies.html">Open company docs</a>
+    <a href="./for-users/features/zero-human-companies.html">Open company docs</a>
   </section>
   <section class="docCard">
     <h3>Diagrams And Maps</h3>
     <p>Use the visual atlas for generated infographic plates, system flowcharts, wallet/token diagrams, trust boundaries, scheduler loops, runtime maps, and storage maps.</p>
-    <a href="diagrams.html">Open visual atlas</a>
+    <a href="./for-users/diagrams.html">Open visual atlas</a>
   </section>
   <section class="docCard">
     <h3>Wallets And Tokens</h3>
     <p>Follow agent wallets, Base/Solana token handling, UsePod prepaid deposits, MoneyClaw keys, Honey rewards, Bankr HIVE claims, and x402 payments.</p>
-    <a href="features/wallets-honey-and-x402.html">Open wallet docs</a>
+    <a href="./for-users/features/wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">
     <h3>Trading</h3>
     <p>Every trading capability in one place — crypto swaps, sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca or on-chain xStocks, with governance and agent access.</p>
-    <a href="trading/">Open trading docs</a>
+    <a href="./for-users/trading/">Open trading docs</a>
   </section>
   <section class="docCard">
     <h3>GitLawb Code Proof</h3>
     <p>See how HivemindOS keeps the private agent work trail while GitLawb proves the code that shipped.</p>
-    <a href="integrations/gitlawb.html">Open GitLawb docs</a>
+    <a href="for-users/integrations/gitlawb.html">Open GitLawb docs</a>
   </section>
   <section class="docCard">
     <h3>Architecture</h3>
     <p>Follow the process boundaries, route groups, collector responsibilities, storage model, and safety-sensitive networking paths.</p>
-    <a href="architecture/">Open architecture</a>
+    <a href="./for-users/architecture/">Open architecture</a>
   </section>
   <section class="docCard">
     <h3>Whole Brain</h3>
     <p>Understand the shared Obsidian vault, canonical folder map, entity-linked memory, temporal recall, compiled wiki search, brain services, OKF export, shared skills, sync health, and architecture sync rules.</p>
-    <a href="whole-brain/">Open whole brain</a>
+    <a href="./for-users/whole-brain/">Open whole brain</a>
   </section>
   <section class="docCard">
     <h3>Packaged Skills</h3>
     <p>Review HivemindOS Hive skills, third-party packaged skills, auto-install policy, and optional skill boundaries.</p>
-    <a href="packaged-skills/">Open packaged skills</a>
+    <a href="./for-users/packaged-skills/">Open packaged skills</a>
   </section>
   <section class="docCard">
     <h3>Slash Commands</h3>
     <p>See dashboard, Hermes, gateway, CLI-only, and dynamic skill slash commands in one reference.</p>
-    <a href="slash-commands.html">Open slash commands</a>
+    <a href="for-users/slash-commands.html">Open slash commands</a>
   </section>
   <section class="docCard">
     <h3>Hivemind Sync</h3>
     <p>See how shared brain files, shared env, and handoff transfers move between trusted machines.</p>
-    <a href="features/hivemind-sync.html">Open sync docs</a>
+    <a href="./for-users/features/hivemind-sync.html">Open sync docs</a>
   </section>
   <section class="docCard">
     <h3>Runtime Guides</h3>
     <p>Review runtime-specific setup and behavior for Hermes, AEON, and the adapter layer that keeps runtime surfaces consistent.</p>
-    <a href="runtimes/">Open runtimes</a>
+    <a href="./for-users/runtimes/">Open runtimes</a>
   </section>
   <section class="docCard">
     <h3>Token And Cost Savings</h3>
     <p>Learn how HivemindOS reduces repeated context, blank-page coding, workflow rediscovery, and paid-model spend.</p>
-    <a href="features/token-and-cost-savings.html">Open savings docs</a>
+    <a href="./for-users/features/token-and-cost-savings.html">Open savings docs</a>
   </section>
   <section class="docCard">
     <h3>Calling</h3>
     <p>Call HivemindOS agents from the dashboard or paired mobile app, with BYOK Realtime calls by default and Cloud/LiveKit rooms as the paid path.</p>
-    <a href="features/calling.html">Open calling docs</a>
+    <a href="./for-users/features/calling.html">Open calling docs</a>
   </section>
   <section class="docCard">
     <h3>Monetization</h3>
     <p>See the free-vs-paid boundary, ecosystem plan, Honey and HIVE model, treasury strategy, and premium service paths.</p>
-    <a href="monetization/">Open monetization docs</a>
+    <a href="./for-investors/">Open monetization docs</a>
   </section>
   <section class="docCard">
     <h3>Product Guidance</h3>
     <p>Keep the control room coherent with the design philosophy and UI rules that shape HivemindOS workflows.</p>
-    <a href="product/">Open product docs</a>
+    <a href="./for-users/product/">Open product docs</a>
   </section>
 </div>
 
@@ -143,12 +158,12 @@ One machine can work across many projects. Each project can link to its own GitL
   <section class="docCard">
     <h3>How It Fits</h3>
     <p>HivemindOS remembers the work. GitLawb proves the code. That is the trust layer for agent shipped software.</p>
-    <a href="integrations/gitlawb.html">Read the integration</a>
+    <a href="for-users/integrations/gitlawb.html">Read the integration</a>
   </section>
   <section class="docCard">
     <h3>Where It Shows Up</h3>
     <p>Setup prepares Code Proof, Work shows proof badges, Fleet can show Code Node status, and Integrations keeps the deeper controls out of the daily workflow.</p>
-    <a href="features/work-and-scheduler.html">See the Work loop</a>
+    <a href="./for-users/features/work-and-scheduler.html">See the Work loop</a>
   </section>
 </div>
 

@@ -80,6 +80,15 @@ Business customers can pay for:
 - Private deployments.
 - Support contracts.
 
+### Trading & On-Chain Fees
+
+HivemindOS earns a usage fee on supported on-chain and trading actions taken from a user's acting wallet:
+
+- A platform fee (policy-driven, currently about 1%) on local USDC sends, DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC transfer after the action succeeds.
+- A Hyperliquid builder fee of 0.5 bps (0.005%) on eligible filled local Hyperliquid orders, approved separately by the user.
+
+Paper trades, read-only checks, and no-payment x402 calls are never charged. The fee rate and recipient addresses are controlled by the official platform-fee policy (a Cloudflare Worker), not hardcoded in the app, and proceeds feed the same treasury and allocation below. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) for the mechanism.
+
 ## Contribution And Ownership
 
 Honey is the contribution layer. HIVE is the ownership layer.

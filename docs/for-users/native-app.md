@@ -9,7 +9,7 @@ HivemindOS has a Tauri desktop target.
 It runs the same Next.js dashboard in a native window without taking over the managed dashboard port `5020`. The goal is not to fork the product. The goal is to give This Mac better local file and setup access while keeping the browser app fully supported.
 
 <figure class="imagePlate">
-  <img src="assets/img/diagrams/aeon-native-desktop.jpg" alt="Generated AEON and native desktop infographic showing Tauri, Local Files, AEON Repo, GitHub Actions, Deliverables, and Shared Vault.">
+  <img src="../assets/img/diagrams/aeon-native-desktop.jpg" alt="Generated AEON and native desktop infographic showing Tauri, Local Files, AEON Repo, GitHub Actions, Deliverables, and Shared Vault.">
   <figcaption>The native shell keeps local file actions on This Mac. AEON repositories, GitHub Actions, deliverables, and the shared vault still run through the same dashboard.</figcaption>
 </figure>
 

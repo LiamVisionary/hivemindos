@@ -19,7 +19,7 @@ HivemindOS is built around five constraints:
 - Explicit safety surfaces: env sync, wallet actions, remote update, file access, and paid/API actions are routed through explicit APIs and UI controls.
 
 <figure class="imagePlate">
-  <img src="../assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers.">
+  <img src="../../assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers.">
 <figcaption>The boundaries are intentionally uneven. Public docs are public. Browser and API surfaces are local. Vault and wallet material stay private. Tailnet and Workers are explicit external edges.</figcaption>
 </figure>
 

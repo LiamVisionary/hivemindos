@@ -9,7 +9,7 @@ Fleet is the machine view.
 It shows what is online, what is reachable, which agents are running, which apps exist on the hive, and which machines need attention. The point is simple: before you ask an agent to do work, you should know where it lives and whether that machine is healthy.
 
 <figure class="imagePlate">
-  <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
+  <img src="../../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
   <figcaption>Fleet reads This Mac through the local collector, then reaches remote collectors over the private Tailnet or Hivemind Link path.</figcaption>
 </figure>
 

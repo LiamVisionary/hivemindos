@@ -613,5 +613,5 @@ That keeps the token attached to real community demand without turning HivemindO
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="honey-hive-treasury.html">Previous: Honey, HIVE, And Treasury</a>
-  <a href="paid-features/">Next: Paid Features</a>
+  <a href="./paid-features/">Next: Paid Features</a>
 </nav>

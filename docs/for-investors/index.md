@@ -1,9 +1,13 @@
 ---
-title: Monetization
-description: HivemindOS paid feature boundaries, Honey and HIVE rewards, staking tiers, and premium service notes.
+title: For Investors
+description: HivemindOS business model — revenue streams, trading and on-chain fees, paid-feature boundaries, Honey and HIVE rewards, staking tiers, treasury, and buybacks.
 ---
 
-# Monetization
+# For Investors
+
+This is the business side of HivemindOS: how it makes money, where the free-vs-paid line sits, and how the Honey/HIVE economy, treasury, and buybacks fit together. For the product itself, see the [For Users](../for-users/) docs.
+
+Revenue comes from optional premium services, trading and on-chain fees (a policy-driven platform fee on sends/swaps and stock/xStock trades, plus a Hyperliquid builder fee), the Agent Marketplace, and Enterprise — detailed in the [Ecosystem Plan](ecosystem-plan.html) and [Paid Features](paid-features/).
 
 HivemindOS should be useful before anyone pays for a cloud feature. Start here when you want to understand what stays free, what becomes paid, and how Honey and HIVE fit around the product without blocking it.
 
@@ -31,7 +35,7 @@ The ecosystem plan keeps that boundary explicit: HivemindOS remains free and ope
   </li>
   <li>
     <span>4</span>
-    <a href="paid-features/">Paid Features</a>
+    <a href="./paid-features/">Paid Features</a>
     <small>The rule for paid infrastructure and the current paid-feature shelf.</small>
   </li>
   <li>
@@ -97,7 +101,7 @@ The seasonal reward rules are simple: there is no pre-season staking requirement
   <section class="docCard">
     <h3>Paid Features</h3>
     <p>The current paid-feature shelf. Start here when a capability needs managed infrastructure, hosted reliability, or premium orchestration.</p>
-    <a href="paid-features/">Open paid features</a>
+    <a href="./paid-features/">Open paid features</a>
   </section>
   <section class="docCard">
     <h3>HivemindOS Cloud Agent Calls</h3>
@@ -155,6 +159,8 @@ The Agent Marketplace can support paid agents, swarms, workflows, and templates,
 Marketplace creators can choose pricing models such as free, pay-per-use, lifetime access, subscription access, bounty-funded creation, or commissions on revenue generated through a workflow.
 
 Enterprise covers SSO, teams, compliance, private deployments, and support contracts.
+
+Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven platform fee (currently about 1%) on supported local-wallet actions — USDC sends, DEX swaps, xStocks trades, live Alpaca orders, public x402 payments, and Veil private transfers — plus a 0.5 bps Hyperliquid builder fee on eligible local Hyperliquid fills. The fee is quoted before confirmation and taken as a separate USDC transfer to the platform treasury; paper trades and read-only checks are never charged. Rates and recipient addresses live in the official platform-fee policy, not the app. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
 
 ## HIVE Staker Discounts
 

@@ -157,7 +157,7 @@ Wallet and token features are explicit rails, not a background permission pool. 
   <section class="docCard">
     <h3>Monetization</h3>
     <p>The free-vs-paid product boundary, including HivemindOS Cloud Agent Calls as a premium managed LiveKit feature.</p>
-    <a href="../monetization/">Open monetization</a>
+    <a href="../../for-investors/">Open monetization</a>
   </section>
   <section class="docCard">
     <h3>Integrations And Work History</h3>

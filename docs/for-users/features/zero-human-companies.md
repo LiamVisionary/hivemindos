@@ -109,7 +109,7 @@ Self-hosted operators may configure their own wallets, pay-to addresses, provide
 - [Work Board And Scheduler](work-and-scheduler.html) covers task storage, dispatch, loop contracts, eval gates, deliverables, scheduler work, and work history.
 - [Evo Optimization Runtime](evo-optimization.html) covers benchmark-driven optimizer loops and frontier-style experiments.
 - [Wallets, Tokens, Honey, HIVE, And x402](wallets-honey-and-x402.html) covers agent wallets, payment rails, managed HONEY credits, and x402 paid requests.
-- [Monetization](../monetization/) covers the free-vs-paid product boundary for managed services.
+- [Monetization](../../for-investors/) covers the free-vs-paid product boundary for managed services.
 
 ## Main Code Paths
 

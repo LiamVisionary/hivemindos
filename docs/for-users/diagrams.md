@@ -13,33 +13,33 @@ description: Visual atlas for HivemindOS architecture, wallets, runtimes, fleet,
 ## Generated Infographic Plates
 
 <figure class="imagePlate imagePlateHero">
-  <img src="assets/img/diagrams/visual-atlas.jpg" alt="Generated HivemindOS visual atlas infographic showing Fleet, Agents, Brain, Work, Wallets, and Native around the dashboard.">
+  <img src="../assets/img/diagrams/visual-atlas.jpg" alt="Generated HivemindOS visual atlas infographic showing Fleet, Agents, Brain, Work, Wallets, and Native around the dashboard.">
   <figcaption>Generated overview plate for the full HivemindOS visual atlas.</figcaption>
 </figure>
 
 <div class="imagePlateGrid">
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
+    <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
     <figcaption>Wallet rails are three separate paths: wallet to x402, wallet to UsePod prepaid runtime, and runtime usage to Honey to Bankr HIVE claim.</figcaption>
   </figure>
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet or Link, remote collectors, apps, and runtimes.">
+    <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet or Link, remote collectors, apps, and runtimes.">
     <figcaption>Dashboard to local collector, then private Tailnet reachability out to remote collectors, machine health, apps, and runtimes.</figcaption>
   </figure>
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing ENV vault path, Obsidian Vault, Skills, GBrain, Syntho, Trading Brain, and Synthesis Folder.">
+    <img src="../assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing ENV vault path, Obsidian Vault, Skills, GBrain, Syntho, Trading Brain, and Synthesis Folder.">
     <figcaption>ENV vault path into Obsidian, shared skills, GBrain retrieval, Syntho reviewed output, Trading Brain, and the Synthesis folder.</figcaption>
   </figure>
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
+    <img src="../assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
     <figcaption>Workboard lanes, scheduler loop, deliverables, and history.</figcaption>
   </figure>
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers.">
+    <img src="../assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers.">
     <figcaption>Security boundaries across public docs, local APIs, wallet keys, Tailnet, and workers.</figcaption>
   </figure>
   <figure class="imagePlate">
-    <img src="assets/img/diagrams/aeon-native-desktop.jpg" alt="Generated AEON and native desktop infographic showing Tauri, Local Files, AEON Repo, GitHub Actions, Deliverables, and Shared Vault.">
+    <img src="../assets/img/diagrams/aeon-native-desktop.jpg" alt="Generated AEON and native desktop infographic showing Tauri, Local Files, AEON Repo, GitHub Actions, Deliverables, and Shared Vault.">
     <figcaption>AEON, Tauri native bridge, local files, GitHub Actions, deliverables, and shared vault.</figcaption>
   </figure>
 </div>

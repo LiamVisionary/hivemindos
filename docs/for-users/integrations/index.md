@@ -15,7 +15,7 @@ Integration docs are grouped by companion or external system.
   <section class="docCard">
     <h3>MiroShark</h3>
     <p>Simulation, rehearsal, and analysis workflows for agent swarms that need more than a single task run.</p>
-    <a href="miroshark/">Open MiroShark docs</a>
+    <a href="./miroshark/">Open MiroShark docs</a>
   </section>
   <section class="docCard">
     <h3>UsePod</h3>

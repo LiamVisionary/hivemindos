@@ -11,7 +11,7 @@ It is built around a normal Obsidian markdown vault, not a proprietary database.
 For the separated GitHub Pages guide, start with [Whole Brain](../whole-brain/). That section splits the brain into [Vault Map](../whole-brain/vault-map.html), [Brain Services](../whole-brain/brain-services.html), [Shared Skills](../whole-brain/shared-skills.html), [Shared Env](../whole-brain/shared-env.html), [Sync And Health](../whole-brain/sync-and-health.html), [Architecture Sync](../whole-brain/architecture-sync.html), and [Code Map](../whole-brain/code-map.html). For cross-machine movement, see [Hivemind Sync](hivemind-sync.html).
 
 <figure class="imagePlate">
-  <img src="../assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing ENV vault path, Obsidian Vault, Skills, GBrain, Syntho, Trading Brain, and Synthesis Folder.">
+  <img src="../../assets/img/diagrams/brain-services-vault.jpg" alt="Generated brain services and shared vault infographic showing ENV vault path, Obsidian Vault, Skills, GBrain, Syntho, Trading Brain, and Synthesis Folder.">
   <figcaption>The vault path anchors the shared brain. QMD, GBrain, Neo4j, Syntho, and Trading Brain stay optional service layers around it.</figcaption>
 </figure>
 

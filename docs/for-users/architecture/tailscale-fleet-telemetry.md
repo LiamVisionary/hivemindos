@@ -7,7 +7,7 @@ title: "Tailscale Fleet Telemetry"
 HivemindOS monitors agents across machines by polling a tiny read-only collector over a private Tailscale or Hivemind Link path.
 
 <figure class="imagePlate">
-  <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
+  <img src="../../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated Fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet link, remote collectors, machine health, apps, and runtimes.">
   <figcaption>The telemetry collector is the per-machine read surface. Tailnet or Hivemind Link keeps that path private between the dashboard and remote machines.</figcaption>
 </figure>
 

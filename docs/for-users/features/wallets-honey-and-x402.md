@@ -8,10 +8,10 @@ Wallets give agents controlled money rails.
 
 They can hold capped budgets, token balances, prepaid inference deposits, and paid-request paths. Honey and HIVE sit on top as optional reward and compute loops.
 
-For the ecosystem-level plan behind Honey, HIVE, premium services, treasury reserves, and buybacks, see [Honey, HIVE, And Treasury](../monetization/honey-hive-treasury.html).
+For the ecosystem-level plan behind Honey, HIVE, premium services, treasury reserves, and buybacks, see [Honey, HIVE, And Treasury](../../for-investors/honey-hive-treasury.html).
 
 <figure class="imagePlate">
-  <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
+  <img src="../../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
   <figcaption>Wallets, UsePod prepaid runtime deposits, and Honey/Bankr HIVE claims are separate rails. They have different trust and funding rules.</figcaption>
 </figure>
 

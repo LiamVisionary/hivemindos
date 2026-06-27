@@ -9,7 +9,7 @@ The Work board is where intent turns into agent work.
 It gives humans and agents the same shared task surface. Scheduler handles the work that should happen later or repeat in the background.
 
 <figure class="imagePlate">
-  <img src="../assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
+  <img src="../../assets/img/diagrams/workboard-scheduler-loop.jpg" alt="Generated workboard and scheduler loop infographic showing Ideas, Ready, Working, Done, Scheduler, Deliverables, and History.">
   <figcaption>Work moves from capture to assignment to deliverables and history, while Scheduler feeds repeatable background runs into the same shared record.</figcaption>
 </figure>
 
