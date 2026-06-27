@@ -827,6 +827,52 @@ fn has_packaged_next_server<R: Runtime>(app: &impl Manager<R>) -> bool {
         .unwrap_or(false)
 }
 
+/// Push the bundled brain content (skills, packaged skills, For Users / For
+/// Investors docs) into the user's shared vault on launch. The release bundle
+/// ships no setup scripts, so packaged installs that never run setup.sh would
+/// otherwise never get brain improvements after an update. The engine
+/// (resources/brain-seed/hive-brain-sync.mjs, run by the bundled node) is
+/// checksum-managed (updates managed-unedited content, preserves user edits,
+/// never duplicates) and version-gated (a no-op once this version has synced).
+/// Fire-and-forget and best-effort: it must never block or crash launch.
+#[cfg(not(debug_assertions))]
+fn start_bundled_brain_sync<R: Runtime>(app: &impl Manager<R>) {
+    let resource_dir = match app.path().resource_dir() {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
+    let brain_seed_dir = resource_dir.join("resources").join("brain-seed");
+    let script = brain_seed_dir.join("hive-brain-sync.mjs");
+    let node_path = resource_dir
+        .join("resources")
+        .join("hivemindos-node")
+        .join(if cfg!(target_os = "windows") { "node.exe" } else { "node" });
+    // Older bundles (or dev) ship no brain-seed; nothing to do.
+    if !script.exists() || !node_path.exists() {
+        return;
+    }
+    let log_path = native_server_log_path();
+    let (stdout, stderr) = native_server_log_stdio(log_path.as_deref());
+    let mut command = Command::new(&node_path);
+    command
+        .arg("--preserve-symlinks-main")
+        .arg(&script)
+        .arg("--content-base")
+        .arg(&brain_seed_dir)
+        .arg("--app-version")
+        .arg(env!("CARGO_PKG_VERSION"))
+        .arg("--quiet")
+        .current_dir(&brain_seed_dir)
+        .stdin(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+    if let Err(error) = command.spawn() {
+        eprintln!("HivemindOS: brain sync did not start: {error}");
+    }
+}
+
 /// Bridge the loopback dashboard onto the tailnet so a paired phone can reach
 /// it: bind this machine's 100.x tailnet IP at the SAME port the dashboard uses
 /// on loopback, and pipe bytes through. The LAN can't route to a 100.x socket,
@@ -1487,6 +1533,11 @@ pub fn run() {
                         }
                     }
                 }
+
+                // Packaged installs never run setup.sh, so seed/refresh the
+                // bundled brain content into the user's vault on launch. Version-
+                // gated, checksum-managed, idempotent; runs detached, never blocks.
+                start_bundled_brain_sync(app);
             }
 
             Ok(())

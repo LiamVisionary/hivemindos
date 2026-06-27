@@ -41,7 +41,7 @@ const VERSION_STAMP_FILE = ".hivemind-brain-sync.json";
 const SKIPPED = new Set([".git", "node_modules", ".next", "dist", "build", ".cache", ".archive"]);
 
 function parseArgs(argv) {
-  const a = { contentBase: REPO_ROOT, vault: "", appVersion: "", dry: false, quiet: false };
+  const a = { contentBase: REPO_ROOT, vault: "", appVersion: "", dry: false, quiet: false, force: false };
   for (let i = 0; i < argv.length; i++) {
     const v = argv[i];
     if (v === "--content-base") a.contentBase = resolve(argv[++i] ?? "");
@@ -49,6 +49,7 @@ function parseArgs(argv) {
     else if (v === "--app-version") a.appVersion = argv[++i] ?? "";
     else if (v === "--dry") a.dry = true;
     else if (v === "--quiet") a.quiet = true;
+    else if (v === "--force") a.force = true;
   }
   return a;
 }
@@ -148,6 +149,17 @@ function syncDocs() {
 if (!existsSync(join(args.contentBase, "skills")) && !existsSync(join(args.contentBase, "packaged-skills"))) {
   console.error(`hive-brain-sync: no brain content at ${args.contentBase} (expected skills/ + packaged-skills/). Nothing to sync.`);
   process.exit(0);
+}
+// Version gate: the packaged native first-run hook spawns this on every launch,
+// so skip the work when this app version already synced into this vault (unless
+// --force). The checksum logic below would no-op anyway; this just avoids
+// hashing the whole bundle each launch.
+if (args.appVersion && !args.force) {
+  const prior = readJson(join(vaultPath, VERSION_STAMP_FILE));
+  if (prior && prior.appVersion === args.appVersion) {
+    log(`hive-brain-sync: vault already synced for ${args.appVersion}; nothing to do.`);
+    process.exit(0);
+  }
 }
 log(`hive-brain-sync${args.dry ? " [DRY]" : ""}: ${args.contentBase} -> ${vaultPath}`);
 mkdirSync(join(vaultPath, "Skills"), { recursive: true });

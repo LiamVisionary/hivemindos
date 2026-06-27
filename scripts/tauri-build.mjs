@@ -484,6 +484,33 @@ function chmodExecutable(path) {
   chmodSync(path, 0o755);
 }
 
+// Bundle the canonical brain content (skills, packaged skills, For Users / For
+// Investors docs) + the sync engine into resources/brain-seed/ so the packaged
+// app can seed/refresh the user's vault on first run after an update — the
+// release bundle otherwise ships no setup scripts or brain content. The layout
+// mirrors what scripts/hive-brain-sync.mjs expects as its --content-base.
+function stageBrainSeed() {
+  const brainSeedDir = join(resourcesDir, "brain-seed");
+  rmSync(brainSeedDir, { force: true, recursive: true });
+  mkdirSync(brainSeedDir, { recursive: true });
+  const copyTree = (srcRel, destRel) => {
+    const src = join(projectRoot, srcRel);
+    if (!existsSync(src)) return;
+    const dest = join(brainSeedDir, destRel);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src, dest, { recursive: true });
+  };
+  copyTree("skills", "skills");
+  copyTree("packaged-skills/auto-install", "packaged-skills/auto-install");
+  copyTree("docs/for-users", "docs/for-users");
+  copyTree("docs/for-investors", "docs/for-investors");
+  copyFileSync(
+    join(projectRoot, "scripts", "hive-brain-sync.mjs"),
+    join(brainSeedDir, "hive-brain-sync.mjs"),
+  );
+  console.log("Staged brain-seed (skills, packaged skills, docs, sync engine) into resources/brain-seed/");
+}
+
 function runQuiet(command, args) {
   const result = spawnSync(command, args, {
     cwd: projectRoot,
@@ -1157,6 +1184,9 @@ function buildEmbeddedNextResources() {
   rmSync(staticResourceDir, { force: true, recursive: true });
   writeEmbeddedStaticStub();
   buildBackgroundHelpers();
+  // Always (re)stage brain-seed — it's cheap and must be present even when the
+  // heavy standalone resources are reused from a prior build.
+  stageBrainSeed();
 
   if (packagedEmbeddedResourcesAreReusable(fingerprint)) {
     console.log(
