@@ -2,6 +2,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_VAULT: &str = "~/Documents/Obsidian/hivemindos-vault";
@@ -10,6 +11,7 @@ const SKIPPED_DIRS: &[&str] = &[".git", "node_modules", ".next", "dist", "build"
 const GRAPH_SKIPPED_DIRS: &[&str] = &[".git", ".obsidian", ".trash", "node_modules"];
 const MAX_GRAPH_NOTES: usize = 260;
 const MAX_NOTE_BYTES: u64 = 524_288;
+const FAST_SKILL_SUMMARY_BYTES: u64 = 16 * 1024;
 const ACCESS_LOG_PATH: &str = "Operations/Brain Services/access-log.jsonl";
 const LEGACY_ACCESS_LOG_PATH: &str = "Projects/HivemindOS/Brain Access/access-log.jsonl";
 
@@ -31,6 +33,12 @@ struct BrainSkillSummary {
     imported: bool,
     #[serde(rename = "importedAs")]
     imported_as: Option<String>,
+    #[serde(rename = "auditStatus", skip_serializing_if = "Option::is_none")]
+    audit_status: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    capabilities: Vec<String>,
+    #[serde(rename = "envKeys", skip_serializing_if = "Vec::is_empty")]
+    env_keys: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -81,6 +89,14 @@ fn sha256(value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+fn read_text_head(path: &Path, max_bytes: u64) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let mut limited = file.take(max_bytes);
+    let mut text = String::new();
+    limited.read_to_string(&mut text).ok()?;
+    Some(text)
 }
 
 fn sanitize_slug(value: &str) -> String {
@@ -186,10 +202,22 @@ fn find_skill_files(root: &Path, max_depth: usize) -> Vec<PathBuf> {
     found
 }
 
-fn source_provider_label(skill_dir: &Path) -> Option<String> {
+fn source_metadata(skill_dir: &Path) -> Option<serde_json::Value> {
     let raw = fs::read_to_string(skill_dir.join(SOURCE_METADATA_FILE)).ok()?;
-    let parsed = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
-    parsed.get("providerLabel").and_then(serde_json::Value::as_str).map(str::to_string)
+    serde_json::from_str::<serde_json::Value>(&raw).ok()
+}
+
+fn source_metadata_array(metadata: Option<&serde_json::Value>, key: &str) -> Vec<String> {
+    metadata
+        .and_then(|item| item.get(key))
+        .and_then(serde_json::Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn is_managed_shared_skill_mirror(skill_path: &Path) -> bool {
@@ -206,6 +234,40 @@ fn is_managed_shared_skill_mirror(skill_path: &Path) -> bool {
         || parsed.get("managedBy").and_then(serde_json::Value::as_str) == Some("hivemindos")
 }
 
+fn normalized_skill_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn path_looks_inside_provider_skill_root(provider: &str, path: &Path) -> bool {
+    normalized_skill_path(path).contains(&format!("/.{provider}/skills/"))
+}
+
+fn slug_looks_provider_mirrored(provider: &str, slug: &str) -> bool {
+    if provider != "aeon" {
+        return false;
+    }
+    let normalized = sanitize_slug(slug);
+    if normalized.starts_with(&format!("{provider}-")) {
+        return true;
+    }
+    let Some(first_segment) = normalized.split('-').find(|part| !part.is_empty()) else {
+        return false;
+    };
+    matches!(first_segment, "aeon" | "claude" | "codex" | "hermes" | "gemini" | "openclaw" | "shared")
+}
+
+fn is_recursive_provider_mirror(provider: &str, skill_path: &Path) -> bool {
+    if provider != "aeon" || !path_looks_inside_provider_skill_root(provider, skill_path) {
+        return false;
+    }
+    let slug = skill_path
+        .parent()
+        .and_then(|path| path.file_name())
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    slug_looks_provider_mirrored(provider, slug)
+}
+
 fn skill_summary(
     skill_path: &Path,
     provider: &str,
@@ -214,16 +276,21 @@ fn skill_summary(
     shared_by_checksum: &HashMap<String, BrainSkillSummary>,
     shared_by_slug: &HashMap<String, BrainSkillSummary>,
 ) -> Option<BrainSkillSummary> {
-    let markdown = fs::read_to_string(skill_path).ok()?;
+    let metadata = fs::metadata(skill_path).ok();
+    let markdown = read_text_head(skill_path, FAST_SKILL_SUMMARY_BYTES)?;
     let fields = frontmatter(&markdown);
     let slug = if provider == "shared" {
         namespaced_shared_slug(base_path, skill_path)
     } else {
         sanitize_slug(skill_path.parent()?.file_name()?.to_str()?)
     };
-    let checksum = sha256(&markdown);
+    let checksum = sha256(&format!("{}:{markdown}", metadata.as_ref().map(|item| item.len()).unwrap_or(0)));
     let existing = shared_by_checksum.get(&checksum).or_else(|| shared_by_slug.get(&slug));
-    let metadata = fs::metadata(skill_path).ok();
+    let source_metadata = if provider == "shared" {
+        skill_path.parent().and_then(source_metadata)
+    } else {
+        None
+    };
     Some(BrainSkillSummary {
         id: format!("{provider}:{}", skill_path.to_string_lossy()),
         slug: slug.clone(),
@@ -231,7 +298,12 @@ fn skill_summary(
         description: fields.get("description").cloned().unwrap_or_else(|| first_paragraph(&markdown)),
         provider: provider.to_string(),
         provider_label: if provider == "shared" {
-            skill_path.parent().and_then(source_provider_label).unwrap_or_else(|| provider_label.to_string())
+            source_metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("providerLabel"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| provider_label.to_string())
         } else {
             provider_label.to_string()
         },
@@ -249,6 +321,13 @@ fn skill_summary(
             .unwrap_or(0),
         imported: provider == "shared" || existing.is_some(),
         imported_as: existing.map(|item| item.slug.clone()),
+        audit_status: source_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("auditStatus"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        capabilities: source_metadata_array(source_metadata.as_ref(), "capabilities"),
+        env_keys: source_metadata_array(source_metadata.as_ref(), "envKeys"),
     })
 }
 
@@ -307,6 +386,7 @@ pub(crate) fn brain_skill_inventory(vault_path: Option<String>, shared_only: Opt
                 .iter()
                 .filter(|path| !path.starts_with(&skills_folder))
                 .filter(|path| !is_managed_shared_skill_mirror(path))
+                .filter(|path| !is_recursive_provider_mirror(id, path))
                 .filter_map(|path| skill_summary(path, id, label, &base_path, &shared_by_checksum, &shared_by_slug))
                 .collect::<Vec<_>>();
             skills.sort_by(|left, right| left.name.cmp(&right.name));
@@ -341,8 +421,8 @@ pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Va
     let vault = vault_root(vault_path);
     let skills_folder = vault.join("Skills");
     let shared = read_shared_skills(&skills_folder);
-    let (notes, graph_truncated) = if vault.is_dir() {
-        read_graph_notes(&vault)
+    let (note_paths, graph_truncated) = if vault.is_dir() {
+        count_graph_note_paths(&vault).unwrap_or_else(|_| (Vec::new(), false))
     } else {
         (Vec::new(), false)
     };
@@ -351,9 +431,9 @@ pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Va
     } else {
         Vec::new()
     };
-    let folders = notes
+    let folders = note_paths
         .iter()
-        .filter_map(|note| note.path.rsplit_once('/').map(|(folder, _)| folder.to_string()))
+        .filter_map(|path| path.rsplit_once('/').map(|(folder, _)| folder.to_string()))
         .collect::<HashSet<_>>();
 
     Ok(serde_json::json!({
@@ -364,7 +444,7 @@ pub(crate) fn brain_summary(vault_path: Option<String>) -> Result<serde_json::Va
         "skillsFolder": skills_folder.to_string_lossy(),
         "totals": {
             "sharedSkills": shared.len(),
-            "notes": notes.len(),
+            "notes": note_paths.len(),
             "folders": folders.len(),
             "recentAccesses": accesses.len(),
         },
@@ -395,30 +475,31 @@ fn is_sync_conflict_file(name: &str) -> bool {
     name.to_lowercase().contains("sync-conflict-") && name.to_lowercase().ends_with(".md")
 }
 
-fn walk_markdown(root: &Path, current: &Path, output: &mut Vec<PathBuf>) {
+fn walk_markdown(root: &Path, current: &Path, output: &mut Vec<PathBuf>) -> Result<(), String> {
     if output.len() >= MAX_GRAPH_NOTES {
-        return;
+        return Ok(());
     }
-    let Ok(entries) = fs::read_dir(current) else {
-        return;
-    };
-    for entry in entries.filter_map(Result::ok) {
+    let entries = fs::read_dir(current)
+        .map_err(|error| format!("Could not read vault folder {}: {error}", current.display()))?;
+    for entry in entries {
         if output.len() >= MAX_GRAPH_NOTES {
             break;
         }
+        let entry = entry.map_err(|error| format!("Could not read a vault entry in {}: {error}", current.display()))?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
-        let Ok(file_type) = entry.file_type() else {
-            continue;
-        };
+        let file_type = entry
+            .file_type()
+            .map_err(|error| format!("Could not inspect vault entry {}: {error}", path.display()))?;
         if file_type.is_dir() {
             if !GRAPH_SKIPPED_DIRS.contains(&name.as_str()) {
-                walk_markdown(root, &path, output);
+                walk_markdown(root, &path, output)?;
             }
         } else if file_type.is_file() && name.to_lowercase().ends_with(".md") && !is_sync_conflict_file(&name) && path.starts_with(root) {
             output.push(path);
         }
     }
+    Ok(())
 }
 
 fn extract_wiki_links(content: &str) -> Vec<String> {
@@ -499,9 +580,31 @@ fn extract_tags(content: &str) -> Vec<String> {
     tags
 }
 
-fn read_graph_notes(root: &Path) -> (Vec<GraphNote>, bool) {
+/// Count-only variant of [`read_graph_notes`] for `brain_summary`, which needs
+/// only the note count, folder set, and truncation flag. It walks the markdown
+/// tree and applies the same `> MAX_NOTE_BYTES` size filter via a cheap
+/// `fs::metadata` stat — never reading any file body — and returns each kept
+/// note's vault-relative path (matching `GraphNote::path`).
+fn count_graph_note_paths(root: &Path) -> Result<(Vec<String>, bool), String> {
     let mut paths = Vec::new();
-    walk_markdown(root, root, &mut paths);
+    walk_markdown(root, root, &mut paths)?;
+    let truncated = paths.len() >= MAX_GRAPH_NOTES;
+    let mut kept = Vec::new();
+    for path in paths {
+        let Ok(metadata) = fs::metadata(&path) else {
+            continue;
+        };
+        if metadata.len() > MAX_NOTE_BYTES {
+            continue;
+        }
+        kept.push(graph_relative_path(root, &path));
+    }
+    Ok((kept, truncated))
+}
+
+fn read_graph_notes(root: &Path) -> Result<(Vec<GraphNote>, bool), String> {
+    let mut paths = Vec::new();
+    walk_markdown(root, root, &mut paths)?;
     let truncated = paths.len() >= MAX_GRAPH_NOTES;
     let mut notes = Vec::new();
     for path in paths {
@@ -525,7 +628,7 @@ fn read_graph_notes(root: &Path) -> (Vec<GraphNote>, bool) {
             content,
         });
     }
-    (notes, truncated)
+    Ok((notes, truncated))
 }
 
 fn read_access_events(root: &Path) -> Vec<serde_json::Value> {
@@ -581,7 +684,7 @@ pub(crate) fn brain_graph(vault_path: Option<String>, _force: Option<bool>) -> R
     if !vault.is_dir() {
         return Err("Vault path is not a directory.".to_string());
     }
-    let (notes, truncated) = read_graph_notes(&vault);
+    let (notes, truncated) = read_graph_notes(&vault)?;
     let accesses = read_access_events(&vault);
     let note_paths = notes.iter().map(|note| note.path.clone()).collect::<Vec<_>>();
     let mut accesses_by_note = HashMap::<String, Vec<serde_json::Value>>::new();
@@ -592,15 +695,22 @@ pub(crate) fn brain_graph(vault_path: Option<String>, _force: Option<bool>) -> R
     }
 
     let mut links = Vec::<serde_json::Value>::new();
+    let mut link_keys = HashSet::<String>::new();
     let mut unresolved = HashSet::<String>::new();
     for note in &notes {
         for target in extract_wiki_links(&note.content) {
             if let Some(resolved) = resolve_graph_link(&target, &note_paths) {
-                links.push(serde_json::json!({ "source": note.path, "target": resolved }));
+                let key = format!("{}\u{0}{resolved}", note.path);
+                if link_keys.insert(key) {
+                    links.push(serde_json::json!({ "source": note.path, "target": resolved }));
+                }
             } else {
                 let id = format!("unresolved:{target}");
                 unresolved.insert(id.clone());
-                links.push(serde_json::json!({ "source": note.path, "target": id, "unresolved": true }));
+                let key = format!("{}\u{0}{id}", note.path);
+                if link_keys.insert(key) {
+                    links.push(serde_json::json!({ "source": note.path, "target": id, "unresolved": true }));
+                }
             }
         }
     }

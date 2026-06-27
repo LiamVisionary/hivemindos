@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
 import {
@@ -19,6 +20,13 @@ import {
   sseTextFromPayload,
   voiceOptimizedAgent,
 } from "@/lib/services/phone/runtime-voice-turn";
+import {
+  errorDetail,
+  handleVoiceRunGetAction,
+  handleVoiceRunPostAction,
+  recordVoiceRunEvent,
+  voiceRunIdFromBody,
+} from "@/lib/services/phone/voice-run-route-actions";
 import {
   createRealtimeTranscriptionClientSecret,
   transcribeAudioWithWhisper,
@@ -141,6 +149,15 @@ function safeVoiceConfigPayload(
   const callModes = Array.isArray(config.callModes)
     ? config.callModes.filter((mode) => mode && typeof mode === "object")
     : [];
+  const providerCapabilities = Array.isArray(config.providerCapabilities)
+    ? config.providerCapabilities.filter((capability) => capability && typeof capability === "object")
+    : [];
+  const toolBundles = Array.isArray(config.toolBundles)
+    ? config.toolBundles.filter((bundle) => bundle && typeof bundle === "object")
+    : [];
+  const recipes = Array.isArray(config.recipes)
+    ? config.recipes.filter((recipe) => recipe && typeof recipe === "object")
+    : [];
   return {
     ...result,
     result: {
@@ -171,6 +188,9 @@ function safeVoiceConfigPayload(
         voiceOptions: [...voiceOptions, ...extraVoiceOptions],
         localTtsCandidates,
         callModes,
+        providerCapabilities,
+        toolBundles,
+        recipes,
       },
     },
   };
@@ -300,6 +320,39 @@ function spokenVoiceRuntimeFailure(error: unknown) {
   return "I couldn't reach that agent for this call. Try again in a moment.";
 }
 
+// The voice-turn pipeline (dashboard agent call + telephony, both via this
+// route) used to swallow the real upstream error into a generic spoken line,
+// leaving no trace to debug from. Record the actual failure so a dropped turn
+// has a telemetry breadcrumb (agent, stage, error, whether it was aborted).
+function recordVoiceTurnFailure(
+  agent: AgentProfile | null,
+  stage: "runtime-connect" | "stream",
+  detail: { error: unknown; appId?: string; model?: string; voice?: string; aborted?: boolean; spoke?: boolean; httpStatus?: number },
+) {
+  const reason = detail.error instanceof Error ? detail.error.message : String(detail.error || "");
+  console.error(`[phone-voice] ${stage} failed for ${agent?.name || agent?.id || "agent"}: ${reason}`);
+  void recordTelemetryBatch([{
+    source: "route",
+    type: "phone.voice.turn_failed",
+    threadId: agent?.id ? `voice-${agent.id}` : null,
+    runId: null,
+    payload: {
+      stage,
+      agentId: agent?.id ?? null,
+      agentName: agent?.name ?? null,
+      runtime: agent?.runtime ?? null,
+      provider: agent?.provider ?? null,
+      appId: detail.appId ?? null,
+      model: detail.model ?? null,
+      voice: detail.voice ?? null,
+      aborted: detail.aborted ?? false,
+      spoke: detail.spoke ?? false,
+      httpStatus: detail.httpStatus ?? null,
+      error: reason.slice(0, 600),
+    },
+  }]).catch(() => undefined);
+}
+
 async function fetchRuntimeVoiceTurn(
   request: NextRequest,
   body: Record<string, unknown>,
@@ -315,6 +368,17 @@ async function fetchRuntimeVoiceTurn(
   if (!agent?.id || !agent.runtime)
     throw new Error("A voice-call agent target is required.");
   if (!message) throw new Error("A spoken request is required.");
+  await recordVoiceRunEvent(voiceRunIdFromBody(body), {
+    type: "runtime.turn.started",
+    speaker: "system",
+    text: "Runtime voice turn started.",
+    payload: {
+      agentId: agent.id,
+      agentName: agent.name,
+      runtime: agent.runtime,
+      message,
+    },
+  });
   return fetch(new URL("/api/chat/agent-runtime", request.url), {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -346,19 +410,54 @@ async function runAgentVoiceTurn(
   request: NextRequest,
   body: Record<string, unknown>,
 ) {
-  const runtimeResponse = await fetchRuntimeVoiceTurn(request, body);
-  const text = await readRuntimeResponseText(runtimeResponse);
-  return {
-    ok: true,
-    text: text || "The agent completed the request without a spoken response.",
-  };
+  const voiceRunId = voiceRunIdFromBody(body);
+  try {
+    const runtimeResponse = await fetchRuntimeVoiceTurn(request, body);
+    const text = await readRuntimeResponseText(runtimeResponse);
+    const spokenText = text || "The agent completed the request without a spoken response.";
+    await recordVoiceRunEvent(voiceRunId, {
+      type: "runtime.turn.completed",
+      speaker: "system",
+      text: "Runtime voice turn completed.",
+      payload: { httpStatus: runtimeResponse.status },
+    });
+    await recordVoiceRunEvent(voiceRunId, {
+      type: "agent.caption",
+      speaker: "agent",
+      text: spokenText,
+    });
+    return {
+      ok: true,
+      text: spokenText,
+    };
+  } catch (error) {
+    await recordVoiceRunEvent(voiceRunId, {
+      type: "runtime.turn.failed",
+      speaker: "system",
+      text: "Runtime voice turn failed.",
+      detail: errorDetail(error),
+    });
+    throw error;
+  }
 }
 
 async function streamAgentVoiceTurn(
   request: NextRequest,
   body: Record<string, unknown>,
 ) {
-  const runtimeResponse = await fetchRuntimeVoiceTurn(request, body);
+  const voiceRunId = voiceRunIdFromBody(body);
+  let runtimeResponse: Response;
+  try {
+    runtimeResponse = await fetchRuntimeVoiceTurn(request, body);
+  } catch (error) {
+    await recordVoiceRunEvent(voiceRunId, {
+      type: "runtime.turn.failed",
+      speaker: "system",
+      text: "Runtime voice turn failed.",
+      detail: errorDetail(error),
+    });
+    throw error;
+  }
   const headers = new Headers({
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
@@ -373,6 +472,27 @@ async function streamAgentVoiceTurn(
           ? error.message
           : `Runtime returned HTTP ${runtimeResponse.status}.`,
     );
+    await recordVoiceRunEvent(voiceRunId, runtimeResponse.ok
+      ? {
+        type: "runtime.turn.completed",
+        speaker: "system",
+        text: "Runtime voice turn completed.",
+        payload: { httpStatus: runtimeResponse.status },
+      }
+      : {
+        type: "runtime.turn.failed",
+        speaker: "system",
+        text: "Runtime voice turn failed.",
+        detail: text,
+        payload: { httpStatus: runtimeResponse.status },
+      });
+    if (runtimeResponse.ok) {
+      await recordVoiceRunEvent(voiceRunId, {
+        type: "agent.caption",
+        speaker: "agent",
+        text,
+      });
+    }
     return new Response(
       `data: ${JSON.stringify(runtimeResponse.ok ? { choices: [{ delta: { content: text } }] } : { error: text })}\n\ndata: [DONE]\n\n`,
       {
@@ -381,6 +501,12 @@ async function streamAgentVoiceTurn(
       },
     );
   }
+  await recordVoiceRunEvent(voiceRunId, {
+    type: "runtime.turn.completed",
+    speaker: "system",
+    text: "Runtime voice stream handed off.",
+    payload: { httpStatus: runtimeResponse.status },
+  });
   return new Response(runtimeResponse.body, {
     status: runtimeResponse.status,
     headers,
@@ -459,8 +585,15 @@ async function streamAgentLocalTtsAudio(
   const model = typeof localTts.model === "string" ? localTts.model.trim() : "";
   const voice = typeof localTts.voice === "string" ? localTts.voice.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
+  const voiceRunId = voiceRunIdFromBody(body);
+  const voiceAgent = body.agent && typeof body.agent === "object" ? (body.agent as AgentProfile) : null;
   if (!appId) throw new Error("A validated local TTS app is required.");
   if (!message) throw new Error("A spoken request is required.");
+  await recordVoiceRunEvent(voiceRunId, {
+    type: "user.transcript",
+    speaker: "user",
+    text: message,
+  });
 
   const streamAbort = new AbortController();
   const streamSignal = linkedAbortSignal(
@@ -488,6 +621,20 @@ async function streamAgentLocalTtsAudio(
           ? error.message
           : `Runtime returned HTTP ${runtimeResponse.status}.`,
     );
+    recordVoiceTurnFailure(voiceAgent, "runtime-connect", {
+      error: text || `Runtime returned HTTP ${runtimeResponse.status}.`,
+      appId,
+      model,
+      voice,
+      httpStatus: runtimeResponse.status,
+    });
+    await recordVoiceRunEvent(voiceRunId, {
+      type: "runtime.turn.failed",
+      speaker: "system",
+      text: "Runtime voice turn failed.",
+      detail: text || `Runtime returned HTTP ${runtimeResponse.status}.`,
+      payload: { httpStatus: runtimeResponse.status },
+    });
     return Response.json(
       {
         ok: false,
@@ -535,6 +682,7 @@ async function streamAgentLocalTtsAudio(
       const decoder = new TextDecoder();
       let buffer = "";
       let pendingText = "";
+      let spokenText = "";
       let spoke = false;
 
       const speakSegment = async (segment: string) => {
@@ -543,6 +691,7 @@ async function streamAgentLocalTtsAudio(
         if (isUnspeakableVoicePreamble(text)) return;
         spoke = true;
         const ttsText = /[.!?。！？]$/.test(text) ? text : `${text}.`;
+        spokenText = `${spokenText} ${ttsText}`.trim().slice(-2_000);
         const ttsResponse = await streamLocalTtsSpeech({
           origin: request.nextUrl.origin,
           appId,
@@ -614,10 +763,49 @@ async function streamAgentLocalTtsAudio(
             "The agent completed the request without a spoken response.",
           );
         controller.close();
+        await recordVoiceRunEvent(voiceRunId, {
+          type: "agent.caption",
+          speaker: "agent",
+          text: spokenText || "The agent completed the request without a spoken response.",
+        });
+        await recordVoiceRunEvent(voiceRunId, {
+          type: "runtime.turn.completed",
+          speaker: "system",
+          text: "Local TTS runtime turn completed.",
+          payload: { appId, model, voice },
+        });
       } catch (error) {
+        recordVoiceTurnFailure(voiceAgent, "stream", {
+          error,
+          appId,
+          model,
+          voice,
+          aborted: streamSignal.aborted,
+          spoke,
+        });
+        await recordVoiceRunEvent(voiceRunId, {
+          type: "runtime.turn.failed",
+          speaker: "system",
+          text: "Local TTS runtime turn failed.",
+          detail: errorDetail(error),
+          payload: { appId, model, voice, spoke },
+        });
+        if (spokenText) {
+          await recordVoiceRunEvent(voiceRunId, {
+            type: "agent.caption",
+            speaker: "agent",
+            text: spokenText,
+          });
+        }
         if (!spoke && !streamSignal.aborted) {
           try {
-            await speakSegment(spokenVoiceRuntimeFailure(error));
+            const fallbackText = spokenVoiceRuntimeFailure(error);
+            await speakSegment(fallbackText);
+            await recordVoiceRunEvent(voiceRunId, {
+              type: "agent.caption",
+              speaker: "agent",
+              text: fallbackText,
+            });
             controller.close();
             return;
           } catch {
@@ -670,6 +858,7 @@ async function streamLocalTtsAudioTurnFromForm(
     agent: formJsonValue(form, "agent"),
     machine: formJsonValue(form, "machine"),
     runtimeSessionId: formValue(form, "runtimeSessionId"),
+    voiceRunId: formValue(form, "voiceRunId"),
     message,
   };
   const response = await streamAgentLocalTtsAudio(request, body);
@@ -792,31 +981,35 @@ async function readFolderPrompts(
   } catch {
     return [];
   }
-  const prompts: CallPrompt[] = [];
-  for (const entry of entries) {
-    if (!entry.toLowerCase().endsWith(".md")) continue;
-    const filePath = join(dir, entry);
-    let content: string;
-    try {
-      content = await readFile(filePath, "utf8");
-    } catch {
-      continue;
-    }
-    const parsed = parsePrompt(content);
-    const baseName = entry.replace(/\.md$/i, "");
-    const id = parsed.title
-      ? slugifyTitle(parsed.title)
-      : slugifyTitle(baseName);
-    prompts.push({
-      id,
-      title: parsed.title || baseName,
-      time: parsed.time,
-      enabled: parsed.enabled,
-      instructions: parsed.instructions,
-      path: filePath,
-    });
-  }
-  return prompts;
+  // Each entry reads an independent file; nothing depends on a prior read, so
+  // run them in parallel. listPrompts re-sorts the result, so push order here
+  // does not affect the response. A read failure still skips that entry (null).
+  const prompts = await Promise.all(
+    entries.map(async (entry): Promise<CallPrompt | null> => {
+      if (!entry.toLowerCase().endsWith(".md")) return null;
+      const filePath = join(dir, entry);
+      let content: string;
+      try {
+        content = await readFile(filePath, "utf8");
+      } catch {
+        return null;
+      }
+      const parsed = parsePrompt(content);
+      const baseName = entry.replace(/\.md$/i, "");
+      const id = parsed.title
+        ? slugifyTitle(parsed.title)
+        : slugifyTitle(baseName);
+      return {
+        id,
+        title: parsed.title || baseName,
+        time: parsed.time,
+        enabled: parsed.enabled,
+        instructions: parsed.instructions,
+        path: filePath,
+      };
+    }),
+  );
+  return prompts.filter((prompt): prompt is CallPrompt => prompt !== null);
 }
 
 async function listPrompts(vaultPath: string): Promise<CallPrompt[]> {
@@ -1010,6 +1203,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const voiceRunResponse = await handleVoiceRunGetAction(action, request);
+    if (voiceRunResponse) return voiceRunResponse;
+
     const vaultPath = resolveObsidianVaultPath(
       request.nextUrl.searchParams.get("vaultPath") ?? undefined,
     );
@@ -1051,6 +1247,9 @@ export async function POST(request: NextRequest) {
           undefined,
         { requireWritable: true },
       );
+
+    const voiceRunResponse = await handleVoiceRunPostAction(body);
+    if (voiceRunResponse) return voiceRunResponse;
 
     if (body.action === "save") {
       const vaultPath = writableVaultPath();

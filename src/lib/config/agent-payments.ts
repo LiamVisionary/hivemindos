@@ -1,6 +1,6 @@
 import type { AgentPaymentProvider, AgentSpendCapAsset } from "@/lib/types/agent-wallet";
 
-export type AgentPaymentProviderBalanceSource = "manual-ledger" | "local-wallet" | "moneyclaw" | "x402-wallet" | "usepod-runtime";
+export type AgentPaymentProviderBalanceSource = "manual-ledger" | "local-wallet" | "moneyclaw" | "x402-wallet" | "usepod-runtime" | "venice-runtime";
 export type AgentPaymentProviderAdvancedSection =
   | "provider"
   | "wallet-address"
@@ -127,6 +127,23 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     privateTransferAssets: [],
     advancedSetup: {
       sections: ["usepod-status", "usepod-connection", "usepod-routing", "usepod-repair", "copy-prompt"],
+    },
+  },
+  venice: {
+    label: "Venice prepaid",
+    summary: "Wallet-authenticated Venice AI inference: a Base or Solana wallet signs requests and spends a prepaid USDC balance held at Venice, or an API key bills a Venice account funded by card.",
+    setup: "Connect or create a wallet from Venice setup in agent settings, top up the Venice balance with Base USDC over x402, and pick a model. Or save VENICE_API_KEY and buy credits with a card at venice.ai/settings/api.",
+    balanceSource: "venice-runtime",
+    addressSource: "local-wallet",
+    localWalletRequired: false,
+    canReceive: true,
+    canSend: false,
+    canRunway: true,
+    canAutopay: true,
+    canX402: true,
+    privateTransferAssets: [],
+    advancedSetup: {
+      sections: ["provider", "wallet-address", "network-token", "notes", "copy-prompt"],
     },
   },
   veil: {

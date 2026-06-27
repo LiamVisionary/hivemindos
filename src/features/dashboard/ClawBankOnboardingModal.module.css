@@ -1,0 +1,490 @@
+.backdrop {
+  --cyan: #2dd4bf;
+  --cyan-2: #5eead4;
+  --cyan-glow: rgba(45, 212, 191, 0.32);
+  --honey: #f2b705;
+  --honey-2: #ffd45a;
+  --honey-glow: rgba(242, 183, 5, 0.3);
+  --panel: #14161c;
+  --panel-2: #1b1e26;
+  --fg: #f4f7fb;
+  --muted: rgba(244, 247, 251, 0.62);
+  --line: rgba(244, 247, 251, 0.1);
+  --line-2: rgba(244, 247, 251, 0.16);
+  --danger: #f8a3a3;
+  --fd: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --fm: ui-monospace, "JetBrains Mono", "SFMono-Regular", monospace;
+
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(120% 120% at 50% 0%, rgba(8, 12, 20, 0.78), rgba(2, 4, 8, 0.86));
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  backdrop-filter: blur(10px) saturate(1.15);
+  animation: cbFade 220ms ease both;
+}
+
+.modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(452px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--fd);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line-2);
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+  animation: cbIn 380ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.close:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--line-2);
+}
+
+/* --- Hero (dark, ClawBank-branded) --------------------------------------- */
+.hero {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 30px 24px 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(80% 130% at 50% -10%, rgba(242, 183, 5, 0.18), transparent 62%),
+    linear-gradient(180deg, #0c0d11, #101218);
+  border-bottom: 1px solid var(--line);
+}
+.heroGlow {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  width: 240px;
+  height: 240px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(242, 183, 5, 0.22), transparent 68%);
+  filter: blur(6px);
+  pointer-events: none;
+  animation: cbGlow 5.5s ease-in-out infinite;
+}
+.logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(180deg, #1c1d22, #121319);
+  border: 1px solid rgba(240, 237, 230, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 24px rgba(242, 183, 5, 0.12);
+}
+.logo :global(img) {
+  filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.4));
+}
+.heroEyebrow {
+  margin: 0;
+  font-family: var(--fm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(240, 237, 230, 0.78);
+}
+
+/* --- Body / steps -------------------------------------------------------- */
+.body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 20px 24px 8px;
+}
+.body::-webkit-scrollbar { width: 8px; }
+.body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 999px; }
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: cbStepIn 320ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.centerStep {
+  align-items: center;
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.lede {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.lede strong { color: var(--fg); font-weight: 600; }
+
+/* --- Capability list (intro) -------------------------------------------- */
+.capList {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.capItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  animation: cbStepIn 360ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.capItem:nth-child(1) { animation-delay: 40ms; }
+.capItem:nth-child(2) { animation-delay: 80ms; }
+.capItem:nth-child(3) { animation-delay: 120ms; }
+.capItem:nth-child(4) { animation-delay: 160ms; }
+.capItem:nth-child(5) { animation-delay: 200ms; }
+.capIcon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--honey-2);
+  background: rgba(242, 183, 5, 0.1);
+  border: 1px solid rgba(242, 183, 5, 0.22);
+  border-radius: 9px;
+}
+.capText { display: flex; flex-direction: column; gap: 2px; }
+.capText strong { font-size: 13.5px; font-weight: 600; }
+.capText small { font-size: 12px; line-height: 1.4; color: var(--muted); }
+
+/* --- Fields -------------------------------------------------------------- */
+.field { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.fieldLabel {
+  font-family: var(--fm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.input {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--fd);
+  font-size: 15px;
+  color: var(--fg);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line-2);
+  border-radius: 11px;
+  outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.input::placeholder { color: rgba(244, 247, 251, 0.34); }
+.input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-glow);
+}
+.codeInput {
+  font-family: var(--fm);
+  font-size: 22px;
+  letter-spacing: 0.4em;
+  text-align: center;
+}
+
+/* --- Verified: animated checkmark (honey) -------------------------------- */
+.verifiedMark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  margin: 6px 0 4px;
+  color: var(--honey-2);
+}
+.verifiedRing {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(242, 183, 5, 0.5);
+  border-radius: 999px;
+  animation: cbRing 2.4s ease-out infinite;
+}
+.verifiedRing[data-delay="true"] { animation-delay: 1.2s; }
+.verifiedCheck {
+  position: relative;
+  filter: drop-shadow(0 0 12px var(--honey-glow));
+  animation: cbPop 460ms cubic-bezier(0.2, 0.9, 0.2, 1.4) both;
+}
+.verifiedCircle {
+  opacity: 0.55;
+  stroke-dasharray: 145;
+  stroke-dashoffset: 145;
+  animation: cbDraw 520ms cubic-bezier(0.5, 0, 0.3, 1) 140ms forwards;
+}
+.verifiedTick {
+  stroke-dasharray: 52;
+  stroke-dashoffset: 52;
+  animation: cbDraw 420ms cubic-bezier(0.5, 0, 0.3, 1) 420ms forwards;
+}
+
+/* --- Initializing: orbit ------------------------------------------------- */
+.initOrbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  margin: 6px 0 4px;
+}
+.orbitRing {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid transparent;
+  border-top-color: var(--cyan);
+  border-right-color: rgba(45, 212, 191, 0.3);
+  border-radius: 999px;
+  animation: cbSpin 1.5s linear infinite;
+}
+.orbitRing[data-reverse="true"] {
+  inset: 12px;
+  border-top-color: var(--honey-2);
+  border-right-color: rgba(242, 183, 5, 0.3);
+  animation: cbSpin 2.4s linear infinite reverse;
+}
+.orbitCore {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(180deg, #1c1d22, #121319);
+  border: 1px solid rgba(240, 237, 230, 0.18);
+  border-radius: 14px;
+  box-shadow: 0 0 26px rgba(242, 183, 5, 0.18);
+  animation: cbPulseCore 1.6s ease-in-out infinite;
+}
+.spark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px;
+  border-radius: 999px;
+  background: var(--cyan-2);
+  box-shadow: 0 0 10px var(--cyan-glow);
+  animation: cbOrbitSpark 2.1s linear infinite;
+  animation-delay: calc(var(--i) * -0.7s);
+}
+
+/* --- Success ------------------------------------------------------------- */
+.successMark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  margin: 6px 0 4px;
+  color: var(--cyan-2);
+}
+.successRing {
+  position: absolute;
+  inset: 6px;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.16), transparent 70%);
+  border: 1.5px solid rgba(45, 212, 191, 0.5);
+  border-radius: 999px;
+  animation: cbPop 520ms cubic-bezier(0.2, 0.9, 0.2, 1.4) both;
+}
+.successCheck { position: relative; filter: drop-shadow(0 0 10px var(--cyan-glow)); }
+.successCheck path {
+  stroke-dasharray: 52;
+  stroke-dashoffset: 52;
+  animation: cbDraw 480ms cubic-bezier(0.5, 0, 0.3, 1) 220ms forwards;
+}
+.successList {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+  align-self: stretch;
+}
+.successList li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--fg);
+  animation: cbStepIn 360ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+.successList li svg { flex: 0 0 auto; color: var(--cyan-2); }
+.successList li:nth-child(1) { animation-delay: 120ms; }
+.successList li:nth-child(2) { animation-delay: 200ms; }
+.successList li:nth-child(3) { animation-delay: 280ms; }
+.successList li:nth-child(4) { animation-delay: 360ms; }
+.successList li:nth-child(5) { animation-delay: 440ms; }
+.swarmLine {
+  margin: 12px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--honey-2);
+  text-shadow: 0 0 18px var(--honey-glow);
+  animation: cbStepIn 360ms 520ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* --- Error --------------------------------------------------------------- */
+.error {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--danger);
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 10px;
+}
+
+/* --- Footer -------------------------------------------------------------- */
+.foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--line);
+}
+.disclaimer {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.footActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.primary, .ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 116px;
+  padding: 11px 20px;
+  font-family: var(--fd);
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 120ms ease, box-shadow 140ms ease, background 140ms ease, opacity 140ms ease;
+}
+/* On very narrow widths the two intro buttons split the row evenly instead of
+   wrapping on top of each other. */
+@media (max-width: 380px) {
+  .footActions { flex-wrap: nowrap; }
+  .footActions .primary, .footActions .ghost { flex: 1 1 0; min-width: 0; }
+}
+.primary {
+  color: #06241f;
+  background: linear-gradient(180deg, var(--cyan-2), var(--cyan));
+  border: 1px solid rgba(94, 234, 212, 0.5);
+  box-shadow: 0 0 22px var(--cyan-glow);
+}
+.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 26px var(--cyan-glow); }
+.primary:disabled { cursor: default; opacity: 0.55; box-shadow: none; }
+.primary[data-ready="true"] { animation: cbReady 480ms cubic-bezier(0.2, 0.9, 0.2, 1.3) both; }
+.ghost {
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-2);
+}
+.ghost:hover { color: var(--fg); border-color: var(--cyan); background: rgba(45, 212, 191, 0.06); }
+
+.spin { animation: cbSpin 0.9s linear infinite; }
+
+/* --- Keyframes ----------------------------------------------------------- */
+@keyframes cbFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cbIn { from { opacity: 0; transform: translateY(16px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes cbStepIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes cbSpin { to { transform: rotate(360deg); } }
+@keyframes cbGlow { 0%, 100% { opacity: 0.7; transform: translateX(-50%) scale(0.96); } 50% { opacity: 1; transform: translateX(-50%) scale(1.06); } }
+@keyframes cbRing { 0% { transform: scale(0.7); opacity: 0.85; } 100% { transform: scale(1.25); opacity: 0; } }
+@keyframes cbPop { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
+@keyframes cbPulseCore { 0%, 100% { box-shadow: 0 0 20px rgba(242, 183, 5, 0.14); } 50% { box-shadow: 0 0 32px rgba(242, 183, 5, 0.3); } }
+@keyframes cbOrbitSpark {
+  from { transform: rotate(0deg) translateX(50px) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(50px) rotate(-360deg); }
+}
+@keyframes cbDraw { to { stroke-dashoffset: 0; } }
+@keyframes cbReady { 0% { transform: scale(0.92); } 60% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+/* --- Reduced motion ------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .backdrop, .modal, .step, .capItem, .successList li, .swarmLine,
+  .verifiedCheck, .verifiedRing, .verifiedCircle, .verifiedTick,
+  .orbitRing, .spark, .orbitCore, .successRing, .successCheck path,
+  .heroGlow, .spin, .primary[data-ready="true"] {
+    animation: none !important;
+  }
+  .successCheck path, .verifiedCircle, .verifiedTick { stroke-dashoffset: 0; }
+}
+
+/* --- Hive-light mirror --------------------------------------------------- */
+:global([data-theme="hive-light"]) .backdrop {
+  --panel: #fbf6ea;
+  --panel-2: #ffffff;
+  --fg: #1c160a;
+  --muted: rgba(28, 22, 10, 0.62);
+  --line: rgba(28, 22, 10, 0.1);
+  --line-2: rgba(28, 22, 10, 0.16);
+  --cyan: #0d8e7e;
+  --cyan-2: #0d5a4e;
+  --cyan-glow: rgba(13, 142, 126, 0.24);
+  --honey: #8c5e0a;
+  --honey-2: #6a4505;
+  --honey-glow: rgba(140, 94, 10, 0.2);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(60, 50, 30, 0.34), rgba(20, 16, 8, 0.5));
+}
+/* The ClawBank hero stays dark/premium in both themes (brand surface), so its
+   white mark and warm glow read correctly. */
+:global([data-theme="hive-light"]) .primary { color: #ffffff; }
+:global([data-theme="hive-light"]) .capText small,
+:global([data-theme="hive-light"]) .lede { color: rgba(28, 22, 10, 0.7); }

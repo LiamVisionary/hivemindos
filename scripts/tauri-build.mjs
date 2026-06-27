@@ -27,8 +27,60 @@ const appApiDir = join(projectRoot, "src", "app", "api");
 const staticHiddenApiDir = join(projectRoot, ".next-tauri", "hidden-app-api");
 const resourcesDir = join(projectRoot, "src-tauri", "resources");
 const staticResourceDir = join(projectRoot, "src-tauri", "static");
+const startupLoadingAssetDirName = "loading";
+const startupBeeLottieSource = join(
+  projectRoot,
+  "public",
+  "animations",
+  "Honey bee.lottie",
+);
+const startupBeeLoaderSource = join(
+  projectRoot,
+  "src-tauri",
+  "loading",
+  "bee-lottie-loader.js",
+);
+const dotLottieWebDistDir = join(
+  projectRoot,
+  "node_modules",
+  "@lottiefiles",
+  "dotlottie-web",
+  "dist",
+);
+const dotLottieRuntimeSource = join(dotLottieWebDistDir, "index.js");
+const dotLottieWasmSource = join(dotLottieWebDistDir, "dotlottie-player.wasm");
+// The same entitlements the Tauri bundler signs the app with. The bundled node
+// sidecar JIT-compiles, so it must be signed WITH these (allow-jit /
+// allow-unsigned-executable-memory) under the hardened runtime or macOS kills it
+// on boot. Keep this in lockstep with tauri.conf.json's bundle.macOS.entitlements.
+const macEntitlementsPath = join(projectRoot, "src-tauri", "Entitlements.plist");
 const serverResourceDir = join(resourcesDir, "hivemindos-next");
 const nodeResourceDir = join(resourcesDir, "hivemindos-node");
+const backgroundHelperSource = join(
+  projectRoot,
+  "scripts",
+  "hivemindos-background-helper.c",
+);
+const backgroundHelpers =
+  process.platform === "darwin"
+    ? [
+        {
+          resourceDir: "hivemindos-collector-helper",
+          binaryName: "HivemindOS Collector",
+          identifier: "com.hivemindos.collector-helper",
+        },
+        {
+          resourceDir: "hivemindos-sync-helper",
+          binaryName: "HivemindOS Sync",
+          identifier: "com.hivemindos.sync-helper",
+        },
+        {
+          resourceDir: "hivemindos-voice-worker-helper",
+          binaryName: "HivemindOS Voice Worker",
+          identifier: "com.hivemindos.voice-worker-helper",
+        },
+      ]
+    : [];
 const standaloneDir = join(nextBuildDir, "standalone");
 const standaloneServer = join(standaloneDir, "server.js");
 const embeddedFingerprintFile = join(
@@ -40,24 +92,88 @@ const packagedFingerprintFile = join(
   ".hivemindos-embedded-fingerprint.json",
 );
 const nodeBinaryName = process.platform === "win32" ? "node.exe" : "node";
-const buildMemoryMb = process.env.TAURI_NEXT_BUILD_MEMORY_MB || "12000";
-// V8 old-space heap for the EMBEDDED build's `next build`. The embedded build
-// compiles all ~155 API routes (the static build hides them), which exceeds
-// Node's ~4 GB default heap and OOMs. 8 GB is comfortable on a dev Mac; lower
-// it (e.g. on a small CI runner) via TAURI_NEXT_BUILD_HEAP_MB. Keep it well
-// under buildMemoryMb so the RSS watchdog above doesn't kill the build.
-const buildHeapMb = process.env.TAURI_NEXT_BUILD_HEAP_MB || "8192";
-const buildTimeoutSeconds =
-  process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS || "1800";
 const embeddedNextMode = process.env.HIVEMINDOS_TAURI_EMBEDDED_NEXT === "1";
 const forceEmbeddedNextBuild =
   process.env.HIVEMINDOS_TAURI_FORCE_NEXT_BUILD === "1";
 const reuseEmbeddedNextBuild =
   process.env.HIVEMINDOS_TAURI_REUSE_EMBEDDED_NEXT !== "0";
+// Build ONLY the arch-independent Next standalone (no per-platform staging), so
+// a single CI job can produce it once and share it to every platform build.
+const standaloneOnly =
+  process.env.HIVEMINDOS_TAURI_STANDALONE_ONLY === "1";
+// A platform build trusts a standalone that a prior job already built and
+// downloaded here, skipping its own ~20-min `next build`. The fingerprint is
+// platform-specific so the normal reuse check can't match across jobs — this
+// flag is the explicit cross-job handoff.
+const usePrebuiltStandalone =
+  process.env.HIVEMINDOS_TAURI_PREBUILT_STANDALONE === "1";
+const embeddedBuildHeapFloorMb = 12288;
+const embeddedBuildMemoryReserveMb = 1024;
+const buildMemoryMb = String(
+  parsePositiveIntegerEnv(
+    "TAURI_NEXT_BUILD_MEMORY_MB",
+    process.env.TAURI_NEXT_BUILD_MEMORY_MB ||
+      (embeddedNextMode ? "14000" : "12000"),
+  ),
+);
+// V8 old-space heap for the EMBEDDED build's `next build`. The embedded build
+// compiles all API routes (the static build hides them), which exceeds Node's
+// default heap and the old 10 GB local override. Keep it below buildMemoryMb so
+// the RSS watchdog has room for non-heap process memory.
+const buildHeapMb = String(
+  resolveBuildHeapMb(
+    parsePositiveIntegerEnv(
+      "TAURI_NEXT_BUILD_HEAP_MB",
+      process.env.TAURI_NEXT_BUILD_HEAP_MB ||
+        (embeddedNextMode ? String(embeddedBuildHeapFloorMb) : "8192"),
+    ),
+    Number(buildMemoryMb),
+  ),
+);
+const buildTimeoutSeconds =
+  process.env.TAURI_NEXT_BUILD_TIMEOUT_SECONDS ||
+  (embeddedNextMode ? "3600" : "1800");
 const optimizePngAssets = process.env.HIVEMINDOS_TAURI_OPTIMIZE_PNGS === "1";
 const originalNextEnv = existsSync(nextEnvPath)
   ? readFileSync(nextEnvPath, "utf8")
   : null;
+
+function parsePositiveIntegerEnv(name, value) {
+  if (!/^[0-9]+$/.test(value) || Number(value) <= 0) {
+    throw new Error(`${name} must be a positive integer, got ${value}.`);
+  }
+  return Number(value);
+}
+
+function resolveBuildHeapMb(requestedHeapMb, memoryLimitMb) {
+  if (!embeddedNextMode) {
+    return requestedHeapMb;
+  }
+
+  const maxHeapMb = memoryLimitMb - embeddedBuildMemoryReserveMb;
+  if (maxHeapMb < embeddedBuildHeapFloorMb) {
+    throw new Error(
+      `Embedded Tauri production builds need at least ${embeddedBuildHeapFloorMb} MB of V8 heap plus ${embeddedBuildMemoryReserveMb} MB RSS reserve. ` +
+        `Set TAURI_NEXT_BUILD_MEMORY_MB to ${embeddedBuildHeapFloorMb + embeddedBuildMemoryReserveMb} or higher.`,
+    );
+  }
+
+  if (requestedHeapMb < embeddedBuildHeapFloorMb) {
+    console.warn(
+      `TAURI_NEXT_BUILD_HEAP_MB=${requestedHeapMb} is below the embedded production floor; using ${embeddedBuildHeapFloorMb} MB.`,
+    );
+    return embeddedBuildHeapFloorMb;
+  }
+
+  if (requestedHeapMb > maxHeapMb) {
+    throw new Error(
+      `TAURI_NEXT_BUILD_HEAP_MB=${requestedHeapMb} leaves less than ${embeddedBuildMemoryReserveMb} MB RSS reserve under TAURI_NEXT_BUILD_MEMORY_MB=${memoryLimitMb}. ` +
+        `Increase TAURI_NEXT_BUILD_MEMORY_MB or lower TAURI_NEXT_BUILD_HEAP_MB.`,
+    );
+  }
+
+  return requestedHeapMb;
+}
 
 const embeddedFingerprintInputs = [
   "components.json",
@@ -388,6 +504,36 @@ function optimizeMacosNodeBinary(path) {
 
   runQuiet("/usr/bin/strip", ["-x", path]);
   const signingIdentity = process.env.APPLE_SIGNING_IDENTITY?.trim();
+  // Sign node WITH the app entitlements (allow-jit etc.). Without them a
+  // hardened-runtime node is killed by the kernel the instant V8 JITs, so the
+  // embedded server never opens its port and the app crashes on launch. Ad-hoc
+  // local builds (no Developer ID) also get the entitlements so a self-signed
+  // dev DMG behaves like the released one.
+  const entitlementsArgs = existsSync(macEntitlementsPath)
+    ? ["--entitlements", macEntitlementsPath]
+    : [];
+  const signArgs = signingIdentity
+    ? [
+        "--force",
+        "--timestamp",
+        "--options",
+        "runtime",
+        ...entitlementsArgs,
+        "--sign",
+        signingIdentity,
+        path,
+      ]
+    : ["--force", "--options", "runtime", ...entitlementsArgs, "--sign", "-", path];
+  runQuiet("/usr/bin/codesign", signArgs);
+  chmodExecutable(path);
+}
+
+function signMacosBackgroundHelper(path, identifier) {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  const signingIdentity = process.env.APPLE_SIGNING_IDENTITY?.trim();
   const signArgs = signingIdentity
     ? [
         "--force",
@@ -396,11 +542,53 @@ function optimizeMacosNodeBinary(path) {
         "runtime",
         "--sign",
         signingIdentity,
+        "-i",
+        identifier,
         path,
       ]
-    : ["--force", "--sign", "-", path];
+    : [
+        "--force",
+        "--options",
+        "runtime",
+        "--sign",
+        "-",
+        "-i",
+        identifier,
+        path,
+      ];
   runQuiet("/usr/bin/codesign", signArgs);
-  chmodExecutable(path);
+}
+
+function buildBackgroundHelpers() {
+  for (const helper of backgroundHelpers) {
+    rmSync(join(resourcesDir, helper.resourceDir), {
+      force: true,
+      recursive: true,
+    });
+  }
+  if (process.platform !== "darwin") {
+    return;
+  }
+  if (!existsSync(backgroundHelperSource)) {
+    throw new Error(`Missing background helper source at ${backgroundHelperSource}`);
+  }
+
+  for (const helper of backgroundHelpers) {
+    const helperResourceDir = join(resourcesDir, helper.resourceDir);
+    const helperTarget = join(helperResourceDir, helper.binaryName);
+    mkdirSync(helperResourceDir, { recursive: true });
+    run("cc", [
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      backgroundHelperSource,
+      "-o",
+      helperTarget,
+    ]);
+    chmodExecutable(helperTarget);
+    signMacosBackgroundHelper(helperTarget, helper.identifier);
+  }
 }
 
 function scrubPackagedResources() {
@@ -640,7 +828,6 @@ function pruneStaticNativeResources(root) {
     "AppIcon-variation-1.icon",
     "AppIcon.icon",
     "app-icon-1024-imagegen-backup.png",
-    "app-icon-1024.png",
     "app-icon-large-bee-1024.png",
     "app-icon-variation-1-1024.png",
     "favicon copy.png",
@@ -697,34 +884,106 @@ function materializeResourceSymlinks(root) {
   }
 }
 
-function copyRequiredRuntimePackage(packageName) {
-  const source = join(
-    projectRoot,
-    "node_modules",
-    ".pnpm",
-    "node_modules",
-    ...packageName.split("/"),
-  );
-  const target = join(
-    serverResourceDir,
-    "node_modules",
-    ...packageName.split("/"),
-  );
+function readRuntimePackageDependencies(packageDir) {
+  const packageJsonPath = join(packageDir, "package.json");
+  if (!existsSync(packageJsonPath)) {
+    return [];
+  }
 
-  if (!existsSync(source)) {
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  return Object.keys(packageJson.dependencies ?? {});
+}
+
+function packageNodeModulesDirForSource(packageDir, packageName) {
+  const segments = packageName.split("/");
+  return segments.length === 2 && segments[0].startsWith("@")
+    ? dirname(dirname(packageDir))
+    : dirname(packageDir);
+}
+
+function resolveRuntimePackageSource(packageName, sourceNodeModulesDirs = []) {
+  // Resolve the package's REAL directory. pnpm puts DIRECT deps (react,
+  // react-dom) behind a top-level symlink and hoists TRANSITIVE deps
+  // (scheduler, @next/env, ...) under .pnpm/node_modules — check both, then
+  // dereference the symlink so we copy real files, not a (possibly dangling)
+  // link. This is why the original `.pnpm/node_modules`-only lookup could never
+  // stage react/react-dom: they don't live there.
+  const segments = packageName.split("/");
+  const candidates = [
+    ...sourceNodeModulesDirs.map((nodeModulesDir) => join(nodeModulesDir, ...segments)),
+    join(projectRoot, "node_modules", ...segments),
+    join(projectRoot, "node_modules", ".pnpm", "node_modules", ...segments),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
     throw new Error(
-      `Unable to find required runtime package ${packageName} at ${source}`,
+      `Unable to find required runtime package ${packageName} (looked in: ${candidates.join(", ")})`,
     );
   }
-  if (existsSync(target)) {
+  return realpathSync(found);
+}
+
+function copyRuntimePackageIntoNodeModules(packageName, targetNodeModulesDir, seen = new Set(), options = {}) {
+  const seenKey = `${targetNodeModulesDir}\0${packageName}`;
+  if (seen.has(seenKey)) {
+    return;
+  }
+  seen.add(seenKey);
+
+  const segments = packageName.split("/");
+  const source = resolveRuntimePackageSource(packageName, options.sourceNodeModulesDirs ?? []);
+  const target = join(targetNodeModulesDir, ...segments);
+
+  if (!existsSync(target)) {
+    mkdirSync(dirname(target), { recursive: true });
+    // Skip native addons (*.node) when staging the runtime closure. An UNSIGNED
+    // .node anywhere in the .app fails Apple notarization ("binary is not signed
+    // with a valid Developer ID certificate") and rejects the whole archive.
+    // The staged crypto packages fall back to pure JS when their native addon is
+    // absent (e.g. bigint-buffer: try require('bindings') -> catch -> JS path),
+    // so dropping the .node keeps the runtime working AND lets the app notarize.
+    // (If a future dep hard-requires its addon, codesign it here instead.)
+    cpSync(source, target, {
+      dereference: true,
+      recursive: true,
+      filter: (src) => !src.endsWith(".node"),
+    });
+  }
+
+  if (options.sourceStack?.includes(source)) {
     return;
   }
 
-  mkdirSync(dirname(target), { recursive: true });
-  cpSync(source, target, { dereference: true, recursive: true });
+  const sourceNodeModulesDir = packageNodeModulesDirForSource(source, packageName);
+  const sourceStack = [...(options.sourceStack ?? []), source];
+  for (const dependencyName of readRuntimePackageDependencies(source)) {
+    copyRuntimePackageIntoNodeModules(dependencyName, targetNodeModulesDir, seen, {
+      sourceNodeModulesDirs: [sourceNodeModulesDir, ...(options.sourceNodeModulesDirs ?? [])],
+      sourceStack,
+    });
+  }
+}
+
+function copyRequiredRuntimePackage(packageName, seen = new Set()) {
+  copyRuntimePackageIntoNodeModules(packageName, join(serverResourceDir, "node_modules"), seen);
+}
+
+function copyPackageLocalRuntimeDependencyIsland(packageName, dependencyNames, seen = new Set()) {
+  const packageSource = resolveRuntimePackageSource(packageName);
+  const packageTarget = join(serverResourceDir, "node_modules", ...packageName.split("/"));
+  const sourceNodeModulesDir = packageNodeModulesDirForSource(packageSource, packageName);
+  const targetNodeModulesDir = join(packageTarget, "node_modules");
+
+  for (const dependencyName of dependencyNames) {
+    copyRuntimePackageIntoNodeModules(dependencyName, targetNodeModulesDir, seen, {
+      sourceNodeModulesDirs: [sourceNodeModulesDir],
+      sourceStack: [packageSource],
+    });
+  }
 }
 
 function copyRequiredRuntimePackages() {
+  const seen = new Set();
   for (const packageName of [
     "@next/env",
     "@swc/helpers",
@@ -732,17 +991,70 @@ function copyRequiredRuntimePackages() {
     "caniuse-lite",
     "postcss",
     "styled-jsx",
+    // Wallet/trading routes are imported by shared chat/status modules at
+    // route-load time. Stage the root packages and their dependency closure so
+    // production chat cannot crash before the route handler starts.
+    "@solana/kit",
+    "@solana/spl-token",
+    "@solana/web3.js",
+    "viem",
+    "@noble/curves",
+    "@noble/hashes",
+    "@scure/base",
+    "@scure/bip32",
+    "@scure/bip39",
+    // React runtime — required for SSR / RSC. materializeResourceSymlinks drops
+    // these as dangling pnpm symlinks and the standalone trace does not re-add
+    // them, so the embedded server crashed on boot with "Cannot find module
+    // 'react'" (verified: staging react + react-dom + scheduler makes server.js
+    // boot and serve / + /api/* correctly). react / react-dom are direct deps
+    // (top-level symlinks); scheduler is react-dom's hoisted transitive dep.
+    "react",
+    "react-dom",
+    "scheduler",
   ]) {
-    copyRequiredRuntimePackage(packageName);
+    copyRequiredRuntimePackage(packageName, seen);
   }
+  copyPackageLocalRuntimeDependencyIsland("@solana/spl-token-metadata", ["@solana/codecs"], seen);
+}
+
+function copyStartupBeeLottieAssets(destinationRoot) {
+  const loadingAssetDir = join(destinationRoot, startupLoadingAssetDirName);
+  mkdirSync(loadingAssetDir, { recursive: true });
+  copyFileSync(
+    startupBeeLoaderSource,
+    join(loadingAssetDir, "bee-lottie-loader.js"),
+  );
+  copyFileSync(
+    startupBeeLottieSource,
+    join(loadingAssetDir, "Honey bee.lottie"),
+  );
+  copyFileSync(dotLottieRuntimeSource, join(loadingAssetDir, "dotlottie.js"));
+  copyFileSync(
+    dotLottieWasmSource,
+    join(loadingAssetDir, "dotlottie-player.wasm"),
+  );
 }
 
 function writeEmbeddedStaticStub() {
   mkdirSync(staticResourceDir, { recursive: true });
-  writeFileSync(
-    join(staticResourceDir, "README.md"),
-    "# Static Tauri UI\n\nRun `pnpm tauri:prepare` without `HIVEMINDOS_TAURI_EMBEDDED_NEXT=1` to regenerate this directory.\n",
-  );
+  // In embedded mode the real UI is served by the bundled Node server, which
+  // takes ~1-3s to boot. Rust's setup() now spawns that server on a BACKGROUND
+  // thread and navigates the window to it once ready, so the Tauri window needs
+  // an instant frontendDist to paint meanwhile. Ship the branded loading shell
+  // (src-tauri/loading-shell/) as that frontendDist so first paint is immediate
+  // (and it reads live native data via window.__TAURI__) instead of a blank page.
+  const loadingShellDir = join(projectRoot, "src-tauri", "loading-shell");
+  if (existsSync(join(loadingShellDir, "index.html"))) {
+    cpSync(loadingShellDir, staticResourceDir, { recursive: true });
+    copyStartupBeeLottieAssets(staticResourceDir);
+  } else {
+    // Fallback: never ship a window with no index.html (blank/404 on boot).
+    writeFileSync(
+      join(staticResourceDir, "index.html"),
+      '<!doctype html><meta charset="utf-8"><title>HivemindOS</title><body style="margin:0;height:100vh;background:#080a0f"></body>',
+    );
+  }
 }
 
 function runEmbeddedNextBuild(fingerprint) {
@@ -753,33 +1065,45 @@ function runEmbeddedNextBuild(fingerprint) {
     return;
   }
 
+  if (usePrebuiltStandalone) {
+    if (!existsSync(standaloneServer)) {
+      throw new Error(
+        `HIVEMINDOS_TAURI_PREBUILT_STANDALONE=1 but no prebuilt standalone at ${standaloneServer} — the shared standalone artifact was not downloaded into ${nextBuildDir}.`,
+      );
+    }
+    console.log(
+      `Using prebuilt Next standalone at ${standaloneServer} (skipping the ~20-min next build).`,
+    );
+    return;
+  }
+
   try {
     writeBuildNextEnv();
-    run(
-      "scripts/run-with-memory-limit.sh",
-      [
-        "--limit-mb",
-        buildMemoryMb,
-        "--timeout-seconds",
-        buildTimeoutSeconds,
-        "--",
-        "pnpm",
-        "exec",
-        "next",
-        "build",
-        // Use webpack like the static build does. Turbopack rejects this
-        // codebase's `:global {}` CSS module block and the API routes' dynamic
-        // execFile/fs patterns; webpack tolerates them.
-        "--webpack",
-      ],
-      {
-        env: {
-          HIVEMINDOS_TAURI_BUILD: "1",
-          NODE_OPTIONS:
-            `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
-        },
-      },
-    );
+    const embeddedEnv = {
+      HIVEMINDOS_TAURI_BUILD: "1",
+      NODE_OPTIONS:
+        `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
+    };
+    // Use webpack like the static build does. Turbopack rejects this codebase's
+    // `:global {}` CSS module block and the API routes' dynamic execFile/fs
+    // patterns; webpack tolerates them.
+    const nextBuildArgs = ["exec", "next", "build", "--webpack"];
+    if (process.platform === "win32") {
+      // Windows can't exec the bash run-with-memory-limit.sh wrapper (the static
+      // path handles this the same way). Run next directly via cmd; the
+      // NODE_OPTIONS heap cap still bounds memory.
+      run(
+        process.env.ComSpec || "cmd.exe",
+        ["/d", "/c", "pnpm", ...nextBuildArgs],
+        { env: embeddedEnv },
+      );
+    } else {
+      run(
+        "scripts/run-with-memory-limit.sh",
+        ["--limit-mb", buildMemoryMb, "--timeout-seconds", buildTimeoutSeconds, "--", "pnpm", ...nextBuildArgs],
+        { env: embeddedEnv },
+      );
+    }
   } finally {
     restoreNextEnv();
   }
@@ -832,6 +1156,7 @@ function buildEmbeddedNextResources() {
   mkdirSync(resourcesDir, { recursive: true });
   rmSync(staticResourceDir, { force: true, recursive: true });
   writeEmbeddedStaticStub();
+  buildBackgroundHelpers();
 
   if (packagedEmbeddedResourcesAreReusable(fingerprint)) {
     console.log(
@@ -844,6 +1169,31 @@ function buildEmbeddedNextResources() {
   copyEmbeddedNextResources(fingerprint);
 }
 
+function buildEmbeddedNextStandaloneOnly() {
+  // Produce ONLY the arch-independent Next standalone (server.js + traced
+  // node_modules) plus the .next static assets, so ONE CI job can build it and
+  // every platform job consumes it via HIVEMINDOS_TAURI_PREBUILT_STANDALONE=1.
+  // No node binary copy / signing here — those are per-platform and run in the
+  // platform job's staging step (copyEmbeddedNextResources).
+  const fingerprint = buildEmbeddedFingerprint();
+  mkdirSync(nextBuildDir, { recursive: true });
+  runEmbeddedNextBuild(fingerprint);
+  if (!existsSync(standaloneServer)) {
+    throw new Error(
+      `Standalone-only build did not produce ${standaloneServer}`,
+    );
+  }
+  // Dereference pnpm symlinks NOW so the uploaded artifact is portable across
+  // OSes — Windows artifact extraction can't restore Unix symlinks, which would
+  // leave node_modules dangling on the Windows platform build. After this the
+  // standalone is plain files; the platform job's own materialize is then a
+  // no-op. (Skipped on a cache hit where it's already materialized.)
+  materializeResourceSymlinks(standaloneDir);
+  console.log(
+    `Standalone-only build ready (symlinks materialized): ${standaloneServer} (+ ${join(nextBuildDir, "static")})`,
+  );
+}
+
 function buildStaticNativeResources() {
   rmSync(staticResourceDir, { force: true, recursive: true });
   rmSync(serverResourceDir, { force: true, recursive: true });
@@ -852,6 +1202,7 @@ function buildStaticNativeResources() {
   rmSync(nextStaticBuildDir, { force: true, recursive: true });
   rmSync(nextStaticOutDir, { force: true, recursive: true });
   mkdirSync(resourcesDir, { recursive: true });
+  buildBackgroundHelpers();
 
   hideApiRoutesForStaticBuild();
   try {
@@ -880,7 +1231,14 @@ function buildStaticNativeResources() {
   );
 }
 
-if (embeddedNextMode) {
+if (standaloneOnly) {
+  if (!embeddedNextMode) {
+    throw new Error(
+      "HIVEMINDOS_TAURI_STANDALONE_ONLY=1 requires HIVEMINDOS_TAURI_EMBEDDED_NEXT=1",
+    );
+  }
+  buildEmbeddedNextStandaloneOnly();
+} else if (embeddedNextMode) {
   buildEmbeddedNextResources();
 } else {
   buildStaticNativeResources();

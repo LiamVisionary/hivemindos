@@ -1,0 +1,19 @@
+{
+  "upstreamName": "devops-troubleshooter",
+  "slug": "cicd-automation-devops-troubleshooter",
+  "label": "Devops Troubleshooter",
+  "domain": "cicd-automation",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/cicd-automation/agents/devops-troubleshooter.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent cicd-automation-devops-troubleshooter",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/cicd-automation-devops-troubleshooter",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert DevOps troubleshooter specializing in rapid incident response, advanced debugging, and modern observability. Masters log analysis, distributed tracing, Kubernetes debugging, performance optimization, and root cause analysis. Handles production outages, system reliability, and preventive monitoring. Use PROACTIVELY for debugging, incident response, or system troubleshooting."
+}

@@ -2,10 +2,19 @@ import "server-only";
 
 import type { AgentPaymentProvider, AgentSpendCapAsset, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { AGENT_PAYMENT_PROVIDER_FEATURES, agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
+import { BANKR_ACTION_CONFIRMATION } from "@/lib/services/bankr-actions";
 import { VEIL_CASH_NETWORK, VEIL_CASH_TRANSFER_CONFIRMATION_LABEL } from "@/lib/config/veil-cash";
 import { anyHiveEnvPresent, hiveEnvPresence, type HiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { getWalletInfo } from "@/lib/services/wallet/local-wallet-vault";
 import { resolveVeilCliPath, resolveVeilMcpPath } from "@/lib/services/wallet/veil-cli";
+import { buildClearSigningReview, type ClearSigningReview } from "@/lib/services/crypto/clear-signing";
+import { isCrosschainCryptoIntent, planCrosschainIntent, type CrosschainIntentPlan } from "@/lib/services/crypto/crosschain-intents";
+import { quoteTradingPlatformFee, type PlatformFeeQuote } from "@/lib/services/wallet/platform-fees";
+import {
+  HYPERLIQUID_ORDER_CONFIRMATION,
+  hyperliquidPolicyPresence,
+  readHyperliquidBuilderConfig,
+} from "@/lib/services/trading/hyperliquid";
 
 export type CryptoCapabilityIntent =
   | "status"
@@ -16,10 +25,19 @@ export type CryptoCapabilityIntent =
   | "paid-api"
   | "private-paid-api"
   | "trade"
+  | "crosschain-swap"
+  | "bridge"
+  | "crosschain-payment"
+  | "token-launch"
+  | "polymarket"
+  | "hyperliquid"
+  | "automation"
+  | "nft"
+  | "agent-job"
   | "card-payment"
   | "fund-llm-credits";
 
-export type CryptoCapabilityProvider = Exclude<AgentPaymentProvider, "manual" | "clawcard">;
+export type CryptoCapabilityProvider = Exclude<AgentPaymentProvider, "manual" | "clawcard"> | "hyperliquid";
 
 export type CryptoRouteMode = "read" | "prepare" | "execute";
 
@@ -69,6 +87,9 @@ export type CryptoPreparedAction = {
   confirmation?: string;
   missing: string[];
   guidance: string;
+  review?: ClearSigningReview;
+  crosschainPlan?: CrosschainIntentPlan;
+  platformFee?: PlatformFeeQuote;
 };
 
 export type CryptoCapabilityRouterInput = {
@@ -78,42 +99,63 @@ export type CryptoCapabilityRouterInput = {
   preferredProvider?: CryptoCapabilityProvider;
   amountUsd?: number;
   asset?: AgentSpendCapAsset;
+  prompt?: string;
   live?: boolean;
 };
 
 const BANKR_ENV_KEYS = ["BANKR_API_KEY", "BANKR_LLM_KEY", "BANKR_MANAGEMENT_KEY"] as const;
 const MONEYCLAW_ENV_KEYS = ["MONEYCLAW_API_KEY"] as const;
 const USEPOD_ENV_KEYS = ["USEPOD_TOKEN"] as const;
+const VENICE_ENV_KEYS = ["VENICE_API_KEY"] as const;
 const VEIL_ENV_KEYS = ["VEIL_KEY"] as const;
 
 const ROUTE_PRIORITY: Record<CryptoCapabilityIntent, CryptoCapabilityProvider[]> = {
-  status: ["moneyclaw", "x402", "veil", "usepod", "bankr"],
+  status: ["moneyclaw", "x402", "veil", "usepod", "venice", "hyperliquid", "bankr"],
   portfolio: ["bankr", "moneyclaw", "x402", "usepod"],
   receive: ["moneyclaw", "x402", "usepod", "veil"],
   send: ["x402", "moneyclaw", "veil"],
   "private-transfer": ["veil"],
-  "paid-api": ["veil", "x402", "usepod", "moneyclaw"],
+  "paid-api": ["veil", "x402", "usepod", "venice", "moneyclaw"],
   "private-paid-api": ["veil"],
   trade: ["bankr"],
+  "crosschain-swap": ["bankr"],
+  bridge: ["bankr"],
+  "crosschain-payment": ["bankr"],
+  "token-launch": ["bankr"],
+  polymarket: ["bankr"],
+  hyperliquid: ["hyperliquid", "bankr"],
+  automation: ["bankr"],
+  nft: ["bankr"],
+  "agent-job": ["bankr"],
   "card-payment": ["moneyclaw"],
   "fund-llm-credits": ["bankr"],
 };
 
 const PROVIDER_INTENTS: Record<CryptoCapabilityProvider, CryptoCapabilityIntent[]> = {
-  bankr: ["status", "portfolio", "trade", "fund-llm-credits"],
+  bankr: ["status", "portfolio", "trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "fund-llm-credits"],
   moneyclaw: ["status", "portfolio", "receive", "send", "paid-api", "card-payment"],
   x402: ["status", "portfolio", "receive", "send", "paid-api"],
   usepod: ["status", "receive", "paid-api"],
+  venice: ["status", "paid-api"],
   veil: ["status", "receive", "send", "private-transfer", "paid-api", "private-paid-api"],
+  hyperliquid: ["status", "hyperliquid"],
 };
 
 export function normalizeCryptoIntent(value: unknown): CryptoCapabilityIntent {
   if (typeof value !== "string") return "status";
-  const normalized = value.trim().toLowerCase().replace(/_/g, "-");
+  const normalized = value.trim().toLowerCase().replace(/[\s_]+/g, "-");
   if (normalized === "private" || normalized === "private-send" || normalized === "private-payment") return "private-transfer";
   if (normalized === "x402" || normalized === "paid-api-call" || normalized === "paywall") return "paid-api";
   if (normalized === "private-x402" || normalized === "private-paid-api-call") return "private-paid-api";
   if (normalized === "bankr-llm" || normalized === "llm-credits") return "fund-llm-credits";
+  if (isCrosschainCryptoIntent(normalized)) return normalized.includes("payment") ? "crosschain-payment" : normalized.includes("bridge") ? "bridge" : "crosschain-swap";
+  if (normalized === "swap" || normalized === "swaps" || normalized === "trading") return "trade";
+  if (normalized === "token" || normalized === "launch" || normalized === "deploy-token") return "token-launch";
+  if (normalized === "poly" || normalized === "prediction-market" || normalized === "prediction-markets") return "polymarket";
+  if (normalized === "hyper" || normalized === "perp" || normalized === "perps" || normalized === "leverage") return "hyperliquid";
+  if (normalized === "automations" || normalized === "recurring" || normalized === "dca" || normalized === "twap") return "automation";
+  if (normalized === "nfts") return "nft";
+  if (normalized === "bankr-agent" || normalized === "agent-api" || normalized === "job") return "agent-job";
   if (isCryptoCapabilityIntent(normalized)) return normalized;
   return "status";
 }
@@ -122,6 +164,7 @@ export function normalizeCryptoProvider(value: unknown): CryptoCapabilityProvide
   if (typeof value !== "string") return undefined;
   const normalized = value.trim().toLowerCase();
   if (normalized === "money-claw") return "moneyclaw";
+  if (normalized === "hl" || normalized === "hyper-liquid") return "hyperliquid";
   if (isCryptoCapabilityProvider(normalized)) return normalized;
   return undefined;
 }
@@ -133,7 +176,9 @@ export async function getCryptoCapabilityMap(input: CryptoCapabilityRouterInput 
     moneyClawCapability(input.wallet),
     x402Capability(input),
     podProviderCapability(input.wallet),
+    veniceCapability(input.wallet),
     veilCapability(input),
+    hyperliquidCapability(input),
   ]);
   const selected = selectCryptoProvider(providers, intent, input.preferredProvider);
   return {
@@ -143,9 +188,11 @@ export async function getCryptoCapabilityMap(input: CryptoCapabilityRouterInput 
     selected,
     providers,
     sideEffects: [
-      "Any send, trade, paid API call, card payment, private transfer, or LLM credit funding is a spend action.",
+      "Any send, trade, token launch, Polymarket bet, Hyperliquid position, NFT mutation, automation, paid API call, card payment, private transfer, or LLM credit funding is a spend or state-changing action.",
       "The router only selects and prepares; execution stays with the existing provider endpoint or skill approval gate.",
-      "Private transfers and private x402 require explicit reviewed confirmation.",
+      "Private x402 requires explicit reviewed confirmation; Veil private transfers require reviewed confirmation unless that wallet's Veil auto-send policy is on and the prepared send stays under the wallet cap.",
+      "Crosschain routes are modeled as intents first; Bankr is the active provider path while LI.FI and Open Intents stay explicit planned provider slots until adapters are configured.",
+      "Prepared actions include a clear-signing review so agents can show amount, network, recipient, endpoint, risks, and confirmation text before execution.",
     ],
     gaps: providers.flatMap((provider) => provider.missing.map((missing) => `${provider.label}: ${missing}`)),
   };
@@ -158,8 +205,16 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
   body?: unknown;
   recipientAddress?: string;
   amount?: number | string;
+  fromChain?: string;
+  toChain?: string;
+  fromAsset?: string;
+  toAsset?: string;
 }): Promise<CryptoPreparedAction> {
   const intent = normalizeCryptoIntent(input.intent);
+  // Personal (`user:`) wallets never auto-spend. An explicit, per-action request
+  // ("send X from my wallet") still works — it just always requires a fresh
+  // human confirmation and never takes the no-human-in-the-loop auto path.
+  const isPersonalWallet = String(input.agentId || "").startsWith("user:");
   const capabilityMap = await getCryptoCapabilityMap(input);
   const selected = capabilityMap.selected;
   if (!selected) {
@@ -177,17 +232,54 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
 
   const endpoint = selected.endpoints.find((item) => item.intent === intent) ?? selected.endpoints[0];
   const requestBody = requestBodyForIntent(selected.provider, intent, input);
+  // Personal wallets never take the auto-send/auto-pay bypass and always require
+  // a fresh per-action confirmation (mode stays "prepare", never "execute").
+  const autoSendPrivateTransfer = !isPersonalWallet && intent === "private-transfer" && canAutoSendVeilTransfer(input.wallet);
+  const requiresApproval = isPersonalWallet || (selected.requiresApproval && !autoSendPrivateTransfer) || bankrIntentRequiresApproval(intent, selected.provider);
+  const confirmation = confirmationForIntent(intent, selected.provider, input.wallet);
+  const crosschainPlan = isCrosschainPreparedIntent(intent)
+    ? planCrosschainIntent({
+      kind: intent,
+      preferredProvider: selected.provider,
+      fromChain: input.fromChain,
+      toChain: input.toChain,
+      fromAsset: input.fromAsset,
+      toAsset: input.toAsset,
+      amount: input.amount,
+      amountUsd: input.amountUsd,
+      recipientAddress: input.recipientAddress,
+      prompt: input.prompt,
+    })
+    : undefined;
+  const review = buildPreparedActionReview({
+    intent,
+    provider: selected.provider,
+    input,
+    requestBody,
+    confirmation,
+  });
+  // Non-breaking safety: flag a recipient that doesn't match the wallet network
+  // on a direct send / private transfer (the execute path also rejects it) so a
+  // wrong-network paste surfaces in the clear-signing review, not at confirm.
+  if ((intent === "send" || intent === "private-transfer") && input.recipientAddress && review) {
+    const mismatch = recipientNetworkMismatch(input.recipientAddress, input.wallet?.network);
+    if (mismatch) review.risks = [...(review.risks ?? []), { level: "warning", code: "recipient-network-mismatch", message: mismatch }];
+  }
+  const platformFee = await preparedPlatformFee(intent, input);
   return {
     intent,
     provider: selected.provider,
     ready: selected.ready,
-    mode: selected.requiresApproval || !selected.spendReady ? "prepare" : "execute",
+    mode: requiresApproval || !selected.spendReady ? "prepare" : "execute",
     endpoint: endpoint ? { method: endpoint.method, route: endpoint.route, skill: endpoint.skill } : undefined,
     requestBody,
-    requiresApproval: selected.requiresApproval,
-    confirmation: confirmationForIntent(intent, selected.provider),
+    requiresApproval,
+    confirmation,
     missing: selected.missing,
     guidance: guidanceForIntent(intent, selected),
+    review,
+    crosschainPlan,
+    platformFee,
   };
 }
 
@@ -223,9 +315,18 @@ async function bankrCapability(): Promise<CryptoProviderCapability> {
     missing: configured ? [] : [`Set one of ${BANKR_ENV_KEYS.join(", ")}.`],
     evidence: configured ? ["Bankr credential is present by key name."] : [],
     endpoints: [
-      { intent: "trade", skill: "bankr", note: "Use the Bankr skill or CLI for trading after policy approval." },
+      { intent: "portfolio", method: "POST", route: "/api/bankr/actions", note: "Read Bankr wallet portfolio with PnL and NFT context." },
+      { intent: "trade", method: "POST", route: "/api/bankr/actions", note: "Prepare or execute Bankr swaps/trades through the native approval gate." },
+      { intent: "crosschain-swap", method: "POST", route: "/api/bankr/actions", note: "Prepare a crosschain swap intent through Bankr, with LI.FI/Open Intents kept as planned provider slots." },
+      { intent: "bridge", method: "POST", route: "/api/bankr/actions", note: "Prepare a bridge/crosschain route draft through Bankr for explicit confirmation." },
+      { intent: "crosschain-payment", method: "POST", route: "/api/bankr/actions", note: "Prepare a crosschain payment draft through Bankr for explicit confirmation." },
+      { intent: "token-launch", method: "POST", route: "/api/bankr/actions", note: "Prepare a natural-language Bankr token launch for explicit user confirmation." },
+      { intent: "polymarket", method: "POST", route: "/api/bankr/actions", note: "Search Polymarket read-only or prepare a Bankr prediction-market action for confirmation." },
+      { intent: "hyperliquid", method: "POST", route: "/api/bankr/actions", note: "Read Hyperliquid state or prepare a leverage/spot action for confirmation." },
+      { intent: "automation", method: "POST", route: "/api/bankr/actions", note: "Prepare recurring Bankr automations such as DCA, TWAP, limit, stop, or scheduled agent commands." },
+      { intent: "nft", method: "POST", route: "/api/bankr/actions", note: "Read NFT data or prepare NFT buy/sell/mint/transfer actions through Bankr." },
+      { intent: "agent-job", method: "POST", route: "/api/bankr/actions", note: "Run a Bankr Agent API prompt or inspect an existing Agent API job." },
       { intent: "fund-llm-credits", method: "POST", route: "/api/bankr/llm-credits", note: "Requires FUND_BANKR_LLM_CREDITS confirmation." },
-      { intent: "portfolio", skill: "bankr", note: "Use Bankr wallet portfolio commands for read-only portfolio checks." },
     ],
   });
 }
@@ -299,6 +400,27 @@ async function podProviderCapability(wallet?: Partial<AgentWalletConfig>): Promi
   });
 }
 
+async function veniceCapability(wallet?: Partial<AgentWalletConfig>): Promise<CryptoProviderCapability> {
+  const credentials = await hiveEnvPresence([VENICE_ENV_KEYS[0]]);
+  const walletConnected = Boolean(wallet?.provider === "venice" && wallet.walletAddress);
+  const configured = credentials.some((item) => item.present) || walletConnected;
+  return providerCapability({
+    provider: "venice",
+    configured,
+    spendReady: configured,
+    credentials,
+    missing: configured ? [] : [`Set ${VENICE_ENV_KEYS[0]} or connect a wallet in Venice setup for the agent.`],
+    evidence: [
+      ...(credentials.some((item) => item.present) ? [`${VENICE_ENV_KEYS[0]} is present by key name.`] : []),
+      ...(walletConnected ? ["Venice x402 wallet is present in supplied wallet policy."] : []),
+    ],
+    endpoints: [
+      { intent: "status", method: "POST", route: "/api/venice/status", note: "Read Venice auth status, balance, and model availability." },
+      { intent: "paid-api", method: "POST", route: "/api/venice/wallet", note: "Venice charges inference to the wallet's prepaid x402 balance; top-ups use Base USDC." },
+    ],
+  });
+}
+
 async function veilCapability(input: CryptoCapabilityRouterInput): Promise<CryptoProviderCapability> {
   const [credentials, cliPath, mcpPath, walletInfo] = await Promise.all([
     anyHiveEnvPresent(VEIL_ENV_KEYS),
@@ -326,12 +448,55 @@ async function veilCapability(input: CryptoCapabilityRouterInput): Promise<Crypt
       ...(mcpPath ? ["Veil MCP CLI is installed."] : []),
       ...(walletInfo ? [`Encrypted local wallet exists for ${input.agentId}.`] : []),
       ...(input.wallet?.network === VEIL_CASH_NETWORK ? [`Wallet policy is on ${VEIL_CASH_NETWORK}.`] : []),
+      ...(canAutoSendVeilTransfer(input.wallet) ? ["Veil auto-send private transfer policy is on for this wallet."] : []),
     ],
     endpoints: [
-      { intent: "private-transfer", method: "POST", route: "/api/wallet/veil/transfer", note: `Requires ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} confirmation after user review.` },
+      { intent: "private-transfer", method: "POST", route: "/api/wallet/veil/transfer", note: canAutoSendVeilTransfer(input.wallet) ? "May execute without CONFIRM after reviewed draft when the wallet cap allows it." : `Requires ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} confirmation after user review.` },
       { intent: "private-paid-api", method: "POST", route: "/api/wallet/veil/x402", note: "Private x402 using Veil withdrawal into a fresh payer EOA." },
       { intent: "paid-api", method: "POST", route: "/api/wallet/veil/x402", note: "Selected when Auto Always Private or explicit private wording chooses Veil." },
       { intent: "status", method: "POST", route: "/api/wallet/veil/setup", note: "Setup/status surface for Veil CLI and keys." },
+    ],
+  });
+}
+
+async function hyperliquidCapability(input: CryptoCapabilityRouterInput): Promise<CryptoProviderCapability> {
+  const [builderConfig, policy, walletInfo] = await Promise.all([
+    readHyperliquidBuilderConfig(),
+    hyperliquidPolicyPresence(),
+    input.agentId ? getWalletInfo(input.agentId).catch(() => null) : Promise.resolve(null),
+  ]);
+  const walletAddress = walletInfo?.address || input.wallet?.vaultAddress || input.wallet?.walletAddress;
+  const walletNetwork = walletInfo?.network || input.wallet?.network;
+  const hasLocalWallet = Boolean(walletInfo);
+  const evmWallet = typeof walletNetwork === "string" && walletNetwork.startsWith("eip155:");
+  const tradeCapUsd = Number(input.wallet?.maxTradeUsd) > 0
+    ? Number(input.wallet?.maxTradeUsd)
+    : Number(input.wallet?.maxPaymentUsd) || 0;
+  const configured = builderConfig.configured && Boolean(walletAddress) && evmWallet;
+  const spendReady = configured && hasLocalWallet && input.wallet?.enabled === true && tradeCapUsd > 0;
+  return providerCapability({
+    provider: "hyperliquid",
+    configured,
+    spendReady,
+    credentials: policy,
+    requiresApproval: true,
+    missing: [
+      ...builderConfig.missing,
+      ...(walletAddress ? [] : ["Create or import an encrypted local EVM wallet."]),
+      ...(hasLocalWallet ? [] : ["Hyperliquid execution needs an encrypted local signing wallet, not a watch-only address."]),
+      ...(evmWallet ? [] : ["Select an EVM wallet network for Hyperliquid."]),
+      ...(input.wallet?.enabled === true ? [] : ["Wallet policy was not supplied or is disabled."]),
+      ...(tradeCapUsd > 0 ? [] : ["Set maxTradeUsd or maxPaymentUsd before enabling Hyperliquid execution."]),
+    ],
+    evidence: [
+      ...(builderConfig.configured ? [builderConfig.detail] : []),
+      ...(hasLocalWallet ? [`Encrypted local EVM wallet exists for ${input.agentId}.`] : []),
+      ...(evmWallet ? [`Wallet network is ${walletNetwork}.`] : []),
+      ...(tradeCapUsd > 0 ? [`Wallet trade cap is $${tradeCapUsd.toFixed(2)}.`] : []),
+    ],
+    endpoints: [
+      { intent: "status", method: "GET", route: "/api/trading/hyperliquid", note: "Read Hyperliquid account state, open orders, and builder approval status." },
+      { intent: "hyperliquid", method: "POST", route: "/api/trading/hyperliquid", note: "Quote, approve builder fees, trade spot/perps, manage orders, adjust account settings, transfer funds, withdraw, or run TWAPs with action-specific confirmation." },
     ],
   });
 }
@@ -346,7 +511,12 @@ function providerCapability(input: {
   endpoints: CryptoProviderCapability["endpoints"];
   requiresApproval?: boolean;
 }): CryptoProviderCapability {
-  const features = agentPaymentProviderFeatures(input.provider);
+  const features = input.provider === "hyperliquid"
+    ? {
+      label: "Hyperliquid",
+      summary: "Local Hyperliquid spot/perp trading, order management, transfers, and TWAPs with official builder-policy routing and wallet governance.",
+    }
+    : agentPaymentProviderFeatures(input.provider);
   return {
     provider: input.provider,
     label: features.label,
@@ -373,6 +543,10 @@ function requestBodyForIntent(
     body?: unknown;
     recipientAddress?: string;
     amount?: number | string;
+    fromChain?: string;
+    toChain?: string;
+    fromAsset?: string;
+    toAsset?: string;
   },
 ) {
   if (intent === "paid-api" || intent === "private-paid-api") {
@@ -383,7 +557,7 @@ function requestBodyForIntent(
       headers: input.headers,
       body: input.body,
       policy: input.wallet,
-      confirmation: confirmationForIntent(intent, provider),
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
     };
   }
   if (intent === "private-transfer") {
@@ -396,7 +570,7 @@ function requestBodyForIntent(
       recipientAddress: input.recipientAddress,
       amount: input.amount ?? input.amountUsd,
       maxAssetAmount: input.asset ? input.wallet?.assetSpendCaps?.[input.asset] : input.wallet?.maxPaymentUsd,
-      confirmation: confirmationForIntent(intent, provider),
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
       autoShield: true,
     };
   }
@@ -407,7 +581,25 @@ function requestBodyForIntent(
       amountUsd: input.amountUsd,
       maxPaymentUsd: input.wallet?.maxPaymentUsd,
       autoPayEnabled: input.wallet?.autoPayEnabled,
-      confirmation: confirmationForIntent(intent, provider),
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
+    };
+  }
+  if (provider === "hyperliquid" && intent === "hyperliquid") {
+    return {
+      action: "quote",
+      agentId: input.agentId,
+      coin: input.prompt,
+      notionalUsd: input.amountUsd,
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
+    };
+  }
+  if (provider === "bankr" && intent !== "fund-llm-credits") {
+    return {
+      agentId: input.agentId,
+      intent,
+      prompt: input.prompt ?? promptForCrosschainIntent(intent, input),
+      action: intent === "portfolio" ? "execute" : "prepare",
+      confirmation: confirmationForIntent(intent, provider, input.wallet),
     };
   }
   return {
@@ -420,16 +612,124 @@ function guidanceForIntent(intent: CryptoCapabilityIntent, selected: CryptoProvi
   if (!selected.ready) return `Configure ${selected.label}: ${selected.missing.join(" ")}`;
   if (intent === "private-transfer") return `Review recipient, asset, amount, and cap, then execute ${selected.endpoints.find((endpoint) => endpoint.intent === intent)?.route}.`;
   if (intent === "paid-api" || intent === "private-paid-api") return `Use ${selected.label} for this paid API call and keep the request under the supplied wallet policy cap.`;
-  if (intent === "trade") return "Use the Bankr skill/CLI after the user approves the trade intent, market, amount, and risk bounds.";
+  if (selected.provider === "hyperliquid" && intent === "hyperliquid") return "Use /api/trading/hyperliquid to quote/read first. Builder approval, orders, cancels, account changes, transfers, and TWAPs each require their matching Hyperliquid confirmation.";
+  if (selected.provider === "bankr" && intent === "portfolio") return "Use /api/bankr/actions for a read-only Bankr wallet portfolio check.";
+  if (selected.provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return "Use /api/bankr/actions to prepare the Bankr action; execute only after the user confirms the reviewed draft.";
   return `Use ${selected.label} for ${intent}.`;
 }
 
-function confirmationForIntent(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider) {
-  if (intent === "private-transfer") return VEIL_CASH_TRANSFER_CONFIRMATION_LABEL;
+function confirmationForIntent(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider, wallet?: Partial<AgentWalletConfig>) {
+  if (intent === "private-transfer") return canAutoSendVeilTransfer(wallet) ? undefined : VEIL_CASH_TRANSFER_CONFIRMATION_LABEL;
   if (intent === "private-paid-api" || (intent === "paid-api" && provider === "veil")) return "VEIL_X402";
   if (intent === "send") return "SEND_USDC";
+  if (provider === "hyperliquid" && intent === "hyperliquid") return HYPERLIQUID_ORDER_CONFIRMATION;
+  if (provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return BANKR_ACTION_CONFIRMATION;
   if (intent === "fund-llm-credits") return "FUND_BANKR_LLM_CREDITS";
   return undefined;
+}
+
+function canAutoSendVeilTransfer(wallet?: Partial<AgentWalletConfig>) {
+  return Boolean(
+    wallet?.veilAutoSendEnabled === true
+    && wallet.enabled === true
+    && wallet.provider === "veil"
+    && wallet.network === VEIL_CASH_NETWORK
+  );
+}
+
+function bankrIntentRequiresApproval(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider) {
+  return provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent);
+}
+
+function isCrosschainPreparedIntent(intent: CryptoCapabilityIntent) {
+  return intent === "crosschain-swap" || intent === "bridge" || intent === "crosschain-payment";
+}
+
+function promptForCrosschainIntent(
+  intent: CryptoCapabilityIntent,
+  input: CryptoCapabilityRouterInput & {
+    recipientAddress?: string;
+    amount?: number | string;
+    fromChain?: string;
+    toChain?: string;
+    fromAsset?: string;
+    toAsset?: string;
+  },
+) {
+  if (!isCrosschainPreparedIntent(intent)) return input.prompt;
+  return [
+    intent.replace(/-/g, " "),
+    input.amount ?? input.amountUsd,
+    input.fromAsset,
+    input.fromChain ? `from ${input.fromChain}` : undefined,
+    input.toAsset,
+    input.toChain ? `to ${input.toChain}` : undefined,
+    input.recipientAddress ? `recipient ${input.recipientAddress}` : undefined,
+  ].filter(Boolean).join(" ");
+}
+
+// "" when the recipient looks valid for the wallet network, else a warning. Name
+// services (ENS/SNS/Basenames) are allowed through — they resolve server-side.
+function recipientNetworkMismatch(addr: string, network?: string): string {
+  const to = (addr || "").trim();
+  if (!to || !network) return "";
+  if (/\.(eth|sol|base|box|cb\.id)$/i.test(to)) return "";
+  const isEvm = network.startsWith("eip155:");
+  const isSol = network.includes("solana");
+  const evmOk = /^0x[a-fA-F0-9]{40}$/.test(to);
+  const solOk = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(to);
+  if (isEvm && !evmOk) return `Recipient ${to} is not a valid address for ${network} — confirm before signing.`;
+  if (isSol && !solOk) return `Recipient ${to} is not a valid address for ${network} — confirm before signing.`;
+  return "";
+}
+
+function buildPreparedActionReview(input: {
+  intent: CryptoCapabilityIntent;
+  provider: CryptoCapabilityProvider;
+  input: CryptoCapabilityRouterInput & {
+    url?: string;
+    method?: string;
+    recipientAddress?: string;
+    amount?: number | string;
+  };
+  requestBody: Record<string, unknown>;
+  confirmation?: string;
+}) {
+  return buildClearSigningReview({
+    kind: reviewKindForIntent(input.intent, input.provider),
+    intent: input.intent,
+    provider: input.provider,
+    agentId: input.input.agentId,
+    network: input.input.wallet?.network,
+    asset: input.input.asset,
+    amount: input.input.amount,
+    amountUsd: input.input.amountUsd,
+    recipientAddress: input.input.recipientAddress,
+    url: input.input.url,
+    method: input.input.method,
+    prompt: input.input.prompt,
+    policy: input.input.wallet,
+    confirmation: input.confirmation,
+    metadata: { requestBody: input.requestBody },
+  });
+}
+
+async function preparedPlatformFee(inputIntent: CryptoCapabilityIntent, input: CryptoCapabilityRouterInput): Promise<PlatformFeeQuote | undefined> {
+  if (inputIntent !== "send") return undefined;
+  const network = input.wallet?.network;
+  const amountUsd = Number(input.amountUsd);
+  if (!network || !Number.isFinite(amountUsd) || amountUsd <= 0) return undefined;
+  return quoteTradingPlatformFee({ source: "wallet-send", network, amountUsd });
+}
+
+function reviewKindForIntent(intent: CryptoCapabilityIntent, provider?: CryptoCapabilityProvider) {
+  if (intent === "paid-api" || intent === "private-paid-api") return "x402";
+  if (intent === "private-transfer") return "private-transfer";
+  if (intent === "send") return "send";
+  if (isCrosschainPreparedIntent(intent)) return "crosschain-intent";
+  if (intent === "hyperliquid" && provider === "hyperliquid") return "raw-transaction";
+  if (["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "fund-llm-credits"].includes(intent)) return "bankr-action";
+  return "raw-transaction";
 }
 
 function walletSpendEnabled(wallet?: Partial<AgentWalletConfig>) {
@@ -452,12 +752,22 @@ function isCryptoCapabilityIntent(value: string): value is CryptoCapabilityInten
     "paid-api",
     "private-paid-api",
     "trade",
+    "crosschain-swap",
+    "bridge",
+    "crosschain-payment",
+    "token-launch",
+    "polymarket",
+    "hyperliquid",
+    "automation",
+    "nft",
+    "agent-job",
     "card-payment",
     "fund-llm-credits",
   ].includes(value);
 }
 
 function isCryptoCapabilityProvider(value: string): value is CryptoCapabilityProvider {
+  if (value === "hyperliquid") return true;
   return Object.keys(AGENT_PAYMENT_PROVIDER_FEATURES)
     .filter((provider) => provider !== "manual" && provider !== "clawcard")
     .includes(value);

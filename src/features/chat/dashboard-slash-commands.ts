@@ -22,6 +22,7 @@ export const DASHBOARD_SLASH_COMMANDS: DashboardSlashCommandAction[] = [
   { name: "work", aliases: ["kanban"], category: "HivemindOS", description: "Open the work board", view: "kanban", reply: "Opened Work." },
   { name: "handoff-task", category: "HivemindOS", description: "Send a task to the best agent on a target machine", argsHint: "<machine> <task>", view: "chat", reply: "Preparing handoff." },
   { name: "swarm", category: "HivemindOS", description: "Spawn the best-suited agent team for a task", argsHint: "[number] <task>", view: "chat", reply: "Preparing agent swarm." },
+  { name: "swarm-goal", category: "HivemindOS", description: "Rewrite a build prompt as a parallel agent goal and send it to Queen Bee", argsHint: "<build request>", view: "chat", reply: "Preparing swarm goal." },
   { name: "swarm-sim", category: "HivemindOS", description: "Launch a MiroShark simulation from chat", argsHint: "<scenario>", view: "chat", reply: "Preparing MiroShark simulation." },
   { name: "image-gen", aliases: ["imagine", "txt2img"], category: "HivemindOS", description: "Generate an image through a connected Image Studio, ComfyUI, or Z-Image app", argsHint: "<prompt>", view: "chat", reply: "Preparing image generation." },
 ];

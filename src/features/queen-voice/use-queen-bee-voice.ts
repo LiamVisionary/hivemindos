@@ -20,6 +20,8 @@ export type QueenVoiceTurn = {
   who: "you" | "queen";
   text: string;
   live?: boolean;
+  /** Richer findings (markdown) Queen Bee pulled, shown in a modal on demand. */
+  detail?: string;
 };
 
 type VoiceTurnResponse = {
@@ -154,7 +156,11 @@ async function playSpokenReply(
  * final transcript goes straight to the conversational Queen Bee turn. When
  * realtime STT is unavailable, falls back to MediaRecorder + Whisper.
  */
-export function useQueenBeeVoice(active: boolean, muted: boolean) {
+export function useQueenBeeVoice(
+  active: boolean,
+  muted: boolean,
+  openingLine = "",
+) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
   const [turns, setTurns] = React.useState<QueenVoiceTurn[]>([]);
@@ -187,6 +193,7 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
     const mimeType = pickRecorderMimeType();
     // Finalized turns for this session, sent so Queen Bee keeps conversational context.
     const history: { who: "you" | "queen"; text: string }[] = [];
+    const openingText = openingLine.trim();
 
     const addTurn = (
       who: QueenVoiceTurn["who"],
@@ -355,6 +362,18 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
             : "Queen Bee voice turn failed.",
         );
       }
+    };
+
+    const runOpeningTurn = async () => {
+      if (!openingText) {
+        startListening();
+        return;
+      }
+      addTurn("queen", openingText);
+      history.push({ who: "queen", text: openingText });
+      setPhase("speaking");
+      await playSpokenReply(openingText, abort.signal, audioContext);
+      if (!cancelled) startListening();
     };
 
     // Realtime path: stream PCM while listening; partial transcripts caption
@@ -644,7 +663,7 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
         sourceNode.connect(processor);
         processor.connect(silentGain);
         silentGain.connect(audioContext.destination);
-        startListening();
+        void runOpeningTurn();
       } catch (connectError) {
         if (!cancelled) {
           setPhase("error");
@@ -680,7 +699,7 @@ export function useQueenBeeVoice(active: boolean, muted: boolean) {
       void audioContext?.close().catch(() => undefined);
       if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     };
-  }, [active]);
+  }, [active, openingLine]);
 
   React.useEffect(() => {
     // Muting hard-disables the mic track; mutedRef also zeroes the VAD signal.

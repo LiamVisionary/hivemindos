@@ -7,7 +7,7 @@ import type {
   AgentWalletConfig,
   X402PaymentRequirement,
 } from "@/lib/types/agent-wallet";
-import type { AgentProfile, UsePodAgentConfig } from "@/lib/types/agent-runtime";
+import type { AgentProfile, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import {
   VEIL_CASH_TRANSFER_CONFIRMATION_LABEL,
@@ -30,12 +30,15 @@ export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
     ETH: 0.01,
   },
   approvalRequiredOverUsd: 2,
+  dailyBudgetUsd: 0,
+  monthlyBudgetUsd: 0,
   autoPayEnabled: false,
   duplicatePaymentGuardEnabled: true,
   duplicatePaymentGuardSeconds: DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS,
   clawCardEnvName: "CLAWCARD_API_KEY",
   moneyClawEnvName: "MONEYCLAW_API_KEY",
   x402BaseUrl: "",
+  veilAutoSendEnabled: false,
   veilAutoPrivateX402: true,
   survivalStartedAt: 0,
   updatedAt: 0,
@@ -139,6 +142,49 @@ function hasUsePodWalletEvidence(config?: UsePodAgentConfig, balance = getUsePod
   );
 }
 
+/** UsePod setup evidence, matching the Wallets screen's configured check. */
+export function hasUsePodSetupEvidence(config?: UsePodAgentConfig): boolean {
+  return Boolean(
+    config?.depositAddress?.trim()
+      || config?.depositCode?.trim()
+      || config?.dashboardUrl?.trim()
+      || config?.lastTestStatus === "ready",
+  );
+}
+
+/**
+ * Whether an agent's wallet is configured enough to act on — the same check the
+ * Wallets screen uses to decide a card is set up (an on-chain/vault address or
+ * UsePod setup evidence). Does not consider `setupRequired`, which callers that
+ * need it layer on separately.
+ */
+export function hasConfiguredAgentWallet(
+  agent: Pick<AgentProfile, "usePod">,
+  wallet?: (Partial<Pick<AgentWalletConfig, "walletAddress" | "vaultAddress">> & { address?: string }) | null,
+): boolean {
+  return Boolean(
+    wallet?.walletAddress?.trim?.()
+      || wallet?.vaultAddress?.trim?.()
+      || wallet?.address?.trim?.()
+      || hasUsePodSetupEvidence(agent?.usePod),
+  );
+}
+
+export function getVeniceBalanceUsd(config?: VeniceAgentConfig): number | null {
+  return parseWalletBalanceUsd(config?.lastBalanceUsd);
+}
+
+function hasVeniceWalletEvidence(config?: VeniceAgentConfig, balance = getVeniceBalanceUsd(config)) {
+  return Boolean(
+    config?.walletVaultId
+      || config?.walletAddress
+      || config?.lastTestStatus
+      || config?.lastStatusMessage
+      || typeof config?.lastModelCount === "number"
+      || balance !== null
+  );
+}
+
 function hasExplicitWalletProvider(wallet?: AgentWalletConfig) {
   if (!wallet) return false;
   if (wallet.providerSelectedAt) return true;
@@ -155,15 +201,37 @@ function hasExplicitWalletProvider(wallet?: AgentWalletConfig) {
   );
 }
 
-export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" | "usePod">, wallet?: AgentWalletConfig): AgentWalletConfig {
+export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" | "usePod" | "venice">, wallet?: AgentWalletConfig): AgentWalletConfig {
   const base = wallet ?? createDefaultAgentWallet(agent.id);
   const usePodBalance = getUsePodBalanceUsd(agent.usePod);
+  const veniceBalance = getVeniceBalanceUsd(agent.venice);
   const provider = hasExplicitWalletProvider(wallet)
     ? base.provider
     : agent.provider === "usepod" || hasUsePodWalletEvidence(agent.usePod, usePodBalance)
       ? "usepod"
-      : base.provider;
+      : agent.provider === "venice" || hasVeniceWalletEvidence(agent.venice, veniceBalance)
+        ? "venice"
+        : base.provider;
   const providerFeatures = agentPaymentProviderFeatures(provider);
+  if (providerFeatures.balanceSource === "venice-runtime") {
+    const venice = agent.venice ?? {};
+    const checkedAtMs = Date.parse(venice.lastCheckedAt ?? "");
+    const hasCheckedAt = Number.isFinite(checkedAtMs);
+    const setupVisible = hasVeniceWalletEvidence(venice, veniceBalance);
+    return {
+      ...base,
+      provider: "venice",
+      enabled: base.enabled || setupVisible || (veniceBalance !== null && veniceBalance > 0),
+      walletAddress: venice.walletAddress || base.walletAddress,
+      network: venice.walletNetwork || base.network || "eip155:8453",
+      tokenSymbol: "USDC",
+      currentBalanceUsd: veniceBalance ?? base.currentBalanceUsd,
+      onchainBalanceUsd: veniceBalance ?? base.onchainBalanceUsd,
+      lastOnchainSyncAt: hasCheckedAt ? checkedAtMs : base.lastOnchainSyncAt,
+      custodyMode: venice.walletVaultId ? "local" : "watch",
+      x402BaseUrl: base.x402BaseUrl || "https://api.venice.ai",
+    };
+  }
   if (providerFeatures.balanceSource !== "usepod-runtime") {
     return base.provider === provider ? base : { ...base, provider };
   }
@@ -189,7 +257,7 @@ export function resolveAgentWallet(agent: Pick<AgentProfile, "id" | "provider" |
 
 export function getDisplayWalletBalanceUsd(config: AgentWalletConfig, now = Date.now()): number {
   const providerFeatures = agentPaymentProviderFeatures(config.provider);
-  if (providerFeatures.balanceSource === "usepod-runtime") {
+  if (providerFeatures.balanceSource === "usepod-runtime" || providerFeatures.balanceSource === "venice-runtime") {
     return normalizeMoney(config.currentBalanceUsd);
   }
   return hasWalletBalanceEvidence(config) ? getEffectiveBalanceUsd(config, now) : 0;
@@ -354,6 +422,7 @@ export function maxAmount(maxBaseUnits: bigint | number): X402Policy {
 
 export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = getSurvivalSnapshot(config)): string {
   const veilAutoPrivateX402 = config.veilAutoPrivateX402 !== false;
+  const veilAutoSendEnabled = config.provider === "veil" && config.veilAutoSendEnabled === true;
   const duplicateGuardSeconds = Number.isFinite(Number(config.duplicatePaymentGuardSeconds))
     ? Math.max(0, Number(config.duplicatePaymentGuardSeconds))
     : DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS;
@@ -367,6 +436,8 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
         ? "x402 wallet payments"
         : config.provider === "usepod"
           ? "UsePod prepaid inference wallet with provider-managed x402 payments"
+          : config.provider === "venice"
+            ? "Venice AI wallet-authenticated inference with a prepaid x402 USDC balance"
           : config.provider === "veil"
             ? "private Base privacy-pool payments via the active privacy rail"
           : "manual wallet accounting";
@@ -374,6 +445,12 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
     `Payment mode: ${provider}.`,
     `Network: ${config.network}; token: ${config.tokenSymbol}; wallet: ${config.walletAddress || "not yet connected"}.`,
     `Spend cap: $${config.maxPaymentUsd.toFixed(2)} per payment; require approval over $${config.approvalRequiredOverUsd.toFixed(2)}.`,
+    config.approvalRequiredOverUsd > 0
+      ? `Approval is enforced: any single spend over $${config.approvalRequiredOverUsd.toFixed(2)} is paused and escalated to a human as a pending approval. After it is approved, retry the same payment once to execute it.`
+      : "",
+    (config.dailyBudgetUsd ?? 0) > 0 ? `Daily budget: $${(config.dailyBudgetUsd ?? 0).toFixed(2)} rolling 24h across every rail; cumulative spend is enforced, not just per-payment.` : "",
+    (config.monthlyBudgetUsd ?? 0) > 0 ? `Monthly budget: $${(config.monthlyBudgetUsd ?? 0).toFixed(2)} rolling 30d across every rail.` : "",
+    "If this agent is a member of a company, that company's shared budget rollup and kill switch also apply; a frozen company halts all spending regardless of this agent's own limits.",
     config.provider === "veil" ? `ETH transfer cap: ${assetSpendCapFor(config, "ETH").toFixed(6)} ETH.` : "",
     config.enabled ? "Wallet spending is on." : "Wallet spending is off; prepare drafts only and do not execute wallet tools.",
     `Allow auto-use is ${config.autoPayEnabled ? "on within the hard spend cap" : "off; ask before spending"}.`,
@@ -381,7 +458,7 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
     `Survival tier: ${snapshot.tier}; effective balance $${snapshot.effectiveBalanceUsd.toFixed(2)}; compute burn $${config.dailyComputeBurnUsd.toFixed(2)}/day.`,
     `Use ${snapshot.modelHint} model behavior and ${snapshot.heartbeatHint} heartbeat behavior.`,
     config.provider === "veil"
-      ? `Capability: private sends are available for USDC and ETH on Base. If the user asks to send privately, make a private payment, or privately pay an x402 endpoint, infer this active private rail automatically; do not require the user to name Veil Cash. ${veilAutoPrivateX402 ? "Auto Always Private is on: ordinary x402/pay-this endpoint requests should use Veil private x402 by default." : "Auto Always Private is off: ordinary x402/pay-this endpoint requests use the basic public x402 route, and only explicit private language such as privately, in private, private, or Veil should use Veil private x402."} Present one agent spend balance; public, queued, and ready private Veil balances are internal rail state. Dashboard execution uses POST /api/wallet/veil/transfer after the user confirms a reviewed transfer draft; use ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} as the internal route confirmation and autoShield for USDC sends. Private x402 drafts and confirmations are handled directly by the chat wallet capability; ask the user for plain confirmation such as "confirm" and map provider-specific confirmation tokens internally. By default private sends go to any public Ethereum address; current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. If ready private USDC is short, HivemindOS can shield from the agent's encrypted local Base wallet first and finish after Veil accepts the deposit. Only use registered-recipient mode for an explicit in-pool shielded transfer to a registered Veil recipient. VEIL_KEY and the Veil CLI must be configured on the server. Do not execute private actions without explicit setup and approval.`
+      ? `Capability: private sends are available for USDC and ETH on Base. If the user asks to send privately, make a private payment, or privately pay an x402 endpoint, infer this active private rail automatically; do not require the user to name Veil Cash. ${veilAutoPrivateX402 ? "Auto Always Private is on: ordinary x402/pay-this endpoint requests should use Veil private x402 by default." : "Auto Always Private is off: ordinary x402/pay-this endpoint requests use the basic public x402 route, and only explicit private language such as privately, in private, private, or Veil should use Veil private x402."} Present one agent spend balance; public, queued, and ready private Veil balances are internal rail state. Dashboard execution uses POST /api/wallet/veil/transfer${veilAutoSendEnabled ? " under the Veil auto-send asset caps without a CONFIRM token" : ` after the user confirms a reviewed transfer draft; use ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} as the internal route confirmation`} and autoShield for USDC sends. Private x402 drafts and confirmations are handled directly by the chat wallet capability; ask the user for plain confirmation such as "confirm" and map provider-specific confirmation tokens internally. By default private sends go to any public Ethereum address; current public-recipient USDC withdrawals require at least ${VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM} USDC. If ready private USDC is short, HivemindOS can shield from the agent's encrypted local Base wallet first and finish after Veil accepts the deposit. Only use registered-recipient mode for an explicit in-pool shielded transfer to a registered Veil recipient. VEIL_KEY and the Veil CLI must be configured on the server. ${veilAutoSendEnabled ? "Do not execute ambiguous private actions; auto-send only applies after recipient, asset, amount, and cap are explicit." : "Do not execute private actions without explicit setup and approval."}`
       : "",
     "Never expose private keys, card PAN/CVV, or billing identity in chat or durable shared notes.",
   ].filter(Boolean).join("\n");

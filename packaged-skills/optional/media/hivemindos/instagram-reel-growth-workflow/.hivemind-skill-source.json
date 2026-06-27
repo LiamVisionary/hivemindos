@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Instagram Reel Growth Workflow",
+  "upstreamSlug": "instagram-reel-growth-workflow",
+  "hiveSlug": "instagram-reel-growth-workflow",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/instagram-reel-growth-workflow",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-20T11:26:07.000Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/instagram-reel-growth-workflow",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Captures Liam's Instagram growth workflow for account study, niche research, reel scripting, hook engineering, and daily AI video output.",
+    "Centers the user's own public Instagram profile before generating niche angles or scripts.",
+    "Requires current-source browsing for last-30-days and trending claims when tools are available.",
+    "Adds human approval gates before publishing, scheduling, engagement actions, or account mutation."
+  ]
+}

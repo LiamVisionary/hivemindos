@@ -91,6 +91,7 @@ async function askComputerAgent(target, message) {
       machine: target.machine,
       message,
       runtimeSessionId: runtimeSessionIdFor(target),
+      voiceRunId: target.voiceRunId,
     }),
     signal: AbortSignal.timeout(DEFAULT_AGENT_TURN_TIMEOUT_MS),
   });
@@ -99,6 +100,18 @@ async function askComputerAgent(target, message) {
     return data?.error || `The computer agent returned HTTP ${response.status}.`;
   }
   return data?.text?.trim() || "The computer agent completed the request without a spoken response.";
+}
+
+async function postVoiceRunAction(target, body) {
+  const hubUrl = String(target?.hubUrl || "").replace(/\/+$/, "");
+  const voiceRunId = String(target?.voiceRunId || "").trim();
+  if (!hubUrl || !voiceRunId) return;
+  await fetch(`${hubUrl}/api/phone`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ voiceRunId, ...body }),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => undefined);
 }
 
 function buildHivemindAgentTools(target) {
@@ -168,8 +181,23 @@ export default defineAgent({
       tools,
     });
 
+    await postVoiceRunAction(runtimeAgent, {
+      action: "voice-run-event",
+      event: {
+        type: "call.connected",
+        speaker: "system",
+        text: "LiveKit worker joined the agent call.",
+        payload: { room: ctx.room.name },
+      },
+    });
+
     ctx.room.on(RoomEvent.ParticipantDisconnected, (participant) => {
       if (participant.identity === caller.identity || ctx.room.remoteParticipants.size === 0) {
+        void postVoiceRunAction(runtimeAgent, {
+          action: "voice-run-complete",
+          status: "ended",
+          reason: "LiveKit caller left the room.",
+        });
         void session.close().catch(() => {});
         ctx.shutdown("caller left");
       }

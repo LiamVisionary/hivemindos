@@ -3,6 +3,13 @@ import { createHash } from "crypto";
 import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, relative, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import {
+  isSkillSpectorAvailable,
+  readSkillSecuritySettings,
+  resolveSecurityLlmRouting,
+  scanWithSkillSpector,
+  type SkillSecurityEngine,
+} from "@/lib/services/skills/skillspector";
 import type { BrainSkillInventory, BrainSkillSummary } from "@/lib/services/obsidian/brain-skills";
 import type {
   SkillAnalyticsEvent,
@@ -568,6 +575,10 @@ export async function auditSkillInput(input: {
   markdown?: string;
   files?: Array<{ path: string; content: string }>;
   sourceRef?: string;
+  /** Override the configured detection engine for this audit. */
+  engine?: SkillSecurityEngine;
+  /** Override the configured LLM-semantic-pass toggle for this audit. */
+  llm?: boolean;
 }): Promise<SkillAuditResult> {
   const files = input.files?.length
     ? input.files
@@ -628,6 +639,62 @@ export async function auditSkillInput(input: {
     approvals.add("source-pinning-review");
   }
 
+  // Delegate to the SkillSpector sidecar for deeper detection (AST, YARA, CVE
+  // lookups, optional LLM pass). The regex findings above remain the fallback,
+  // and we fold the scanner's findings into the same list so status/score and
+  // the dashboard contract are unchanged. Engine resolution:
+  //   regex        -> skip the scanner entirely
+  //   skillspector -> require the scanner (throw if unavailable)
+  //   auto         -> use the scanner when available, else regex-only
+  const settings = await readSkillSecuritySettings().catch(() => null);
+  const engine = input.engine ?? settings?.engine ?? "auto";
+  const useLlm = input.llm ?? settings?.llm ?? false;
+  let resultEngine: SkillAuditResult["engine"] = "regex";
+  let scannerRecommendation: string | undefined;
+
+  if (engine !== "regex") {
+    const required = engine === "skillspector";
+    if (required && !(await isSkillSpectorAvailable())) {
+      throw new Error(
+        "SkillSpector engine is selected but the `skillspector` CLI was not found. Install it (https://github.com/NVIDIA/SkillSpector) or switch the skill-security engine to 'auto'/'regex'.",
+      );
+    }
+    // The LLM semantic pass has no hardcoded provider: it routes through the
+    // user's security-subclass agent, or the Queen Bee if none exists. If the
+    // toggle is on but no agent/credential resolves, we run static-only rather
+    // than invent a provider, and note why on scannerRecommendation.
+    let llmEnv: Record<string, string> | null = null;
+    if (useLlm) {
+      const routing = await resolveSecurityLlmRouting();
+      if (routing.ok) {
+        llmEnv = routing.env;
+      } else {
+        scannerRecommendation = `LLM security pass skipped — ${routing.reason}`;
+      }
+    }
+    try {
+      const scan = await scanWithSkillSpector({
+        files: filesAudited.map((path, index) => ({ path, content: files[index]?.content ?? "" })),
+        llmEnv,
+      });
+      if (scan) {
+        const seen = new Set(findings.map((finding) => `${finding.id}:${finding.file ?? ""}`));
+        for (const finding of scan.findings) {
+          const key = `${finding.id}:${finding.file ?? ""}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          findings.push(finding);
+          if (finding.severity !== "low") approvals.add("security-review");
+        }
+        scannerRecommendation = scan.riskRecommendation ?? scannerRecommendation;
+        resultEngine = scan.usedLlm ? "skillspector+llm" : "skillspector";
+      }
+    } catch (error) {
+      if (required) throw error;
+      // auto: a scanner crash must not block an import that regex would have passed.
+    }
+  }
+
   const status = auditStatus(findings);
   const score = Math.max(0, 100 - findings.reduce((total, finding) => total + severityCost(finding.severity), 0));
   return {
@@ -642,6 +709,8 @@ export async function auditSkillInput(input: {
     recommendedAction: recommendedAction(status),
     auditedAt: new Date().toISOString(),
     sourceRef: input.sourceRef,
+    engine: resultEngine,
+    scannerRecommendation,
   };
 }
 

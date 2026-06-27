@@ -1,0 +1,109 @@
+/* Zero Human Companies — scoped theme.
+   All tokens live under .zhc-root so they never clobber the dashboard's global
+   Tailwind tokens. Fonts (Space Grotesk / Geist / JetBrains Mono) are already
+   loaded app-wide in src/app/layout.tsx, so there is NO @import here. */
+
+.zhc-root {
+  /* type */
+  --f-display: "Space Grotesk", system-ui, sans-serif;
+  --f-body: "Geist", "Inter", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* dark (default) */
+  --bg-0: #06080d;
+  --bg-1: #0a0e16;
+  --bg-2: #10151f;
+  --bg-3: #161c2a;
+  --bg-4: #1d2334;
+  --line: rgba(148, 163, 184, 0.12);
+  --line-2: rgba(148, 163, 184, 0.22);
+  --fg: #f4f7fb;
+  --fg-2: #c6d1df;
+  --fg-3: #8e9bb1;
+  --fg-4: #5a6478;
+
+  --cyan: #2dd4bf;
+  --cyan-2: #5eead4;
+  --cyan-glow: rgba(45, 212, 191, 0.32);
+  --honey: #f2b705;
+  --honey-2: #ffd45a;
+  --honey-glow: rgba(242, 183, 5, 0.32);
+  --danger: #fb7185;
+  --danger-2: #fecdd3;
+  --warn: #facc15;
+
+  --panel-bg: rgba(16, 20, 29, 0.78);
+
+  color: var(--fg);
+  font-family: var(--f-body);
+}
+
+.zhc-root[data-theme="light"] {
+  --bg-0: #f1ede3;
+  --bg-1: #f6f2e9;
+  --bg-2: #fbf8f1;
+  --bg-3: #f4efe4;
+  --bg-4: #e8dfcf;
+  --line: rgba(54, 46, 30, 0.10);
+  --line-2: rgba(54, 46, 30, 0.16);
+  --fg: #221d14;
+  --fg-2: #5e574b;
+  --fg-3: #867d6e;
+  --fg-4: #a59b89;
+
+  --cyan: #5f8f5a;
+  --cyan-2: #4f7d4b;
+  --cyan-glow: rgba(95, 143, 90, 0.22);
+  --honey: #b07f1c;
+  --honey-2: #936811;
+  --honey-glow: rgba(176, 127, 28, 0.24);
+  --danger: #c0524d;
+  --danger-2: #963a37;
+  --warn: #936811;
+
+  --panel-bg: rgba(251, 248, 241, 0.94);
+}
+
+.zhc-root, .zhc-root * { box-sizing: border-box; }
+
+/* utility mono caps */
+.zhc-root .mono-cap {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* shared status dot */
+.zhc-root .dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+}
+.zhc-root .dot.live { animation: zhc-pulse-dot 1.6s ease-in-out infinite; }
+
+.zhc-root .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.zhc-root .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.zhc-root .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
+
+@keyframes zhc-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 6%, transparent); }
+}
+@keyframes zhcFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes zhcRise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes zhcLoadingSweep {
+  from { transform: translateX(-120%) skewX(-12deg); }
+  to { transform: translateX(220%) skewX(-12deg); }
+}
+
+.zhc-root .zhc-loading-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--honey) 8%, transparent), transparent);
+  animation: zhcLoadingSweep 1.6s ease-in-out infinite;
+  pointer-events: none;
+}

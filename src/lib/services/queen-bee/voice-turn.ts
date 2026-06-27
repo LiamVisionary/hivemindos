@@ -17,6 +17,7 @@ import {
   submitQueenBeeMessage,
   type QueenBeeFleetMachine,
 } from "@/lib/services/queen-bee/control-plane";
+import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
 
 // Spoken turns need tight budgets: a slow runtime attempt costs silence.
 const AGENT_TURN_TIMEOUT_MS = 10_000;
@@ -142,6 +143,11 @@ async function conversationTurnText(options: {
   vaultPath?: string;
   marks?: Record<string, number>;
 }) {
+  // Standing preferences ("call me boss") splice onto the system prompt so
+  // both the runtime brain and the OpenAI fallback honor them every turn. Note
+  // this fallback path can only HONOR stored preferences, not capture new ones
+  // (it has no tool to call); capture happens in the default realtime session.
+  const systemPreamble = await queenVoicePreferencePreamble();
   const agent = (await runtimeTurnCoolingDown())
     ? null
     : await pickConversationAgent(options.vaultPath);
@@ -153,6 +159,7 @@ async function conversationTurnText(options: {
         agent,
         options.transcript,
         options.history,
+        systemPreamble,
       );
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
@@ -170,7 +177,11 @@ async function conversationTurnText(options: {
   }
   const openAiStartedAt = Date.now();
   try {
-    return await runOpenAiConversationTurn(options.transcript, options.history);
+    return await runOpenAiConversationTurn(
+      options.transcript,
+      options.history,
+      systemPreamble,
+    );
   } catch (fallbackError) {
     console.warn(
       "[queen-bee-voice] OpenAI conversation fallback failed; submitting utterance to the control plane:",
@@ -186,13 +197,17 @@ async function conversationTurnText(options: {
 function conversationMessages(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
 ) {
   const historyMessages = history.slice(-MAX_HISTORY_TURNS).map((turn) => ({
     role: turn.who === "queen" ? "assistant" : "user",
     content: turn.text.slice(0, 600),
   }));
+  const system = systemPreamble?.trim()
+    ? `${QUEEN_VOICE_SYSTEM_PROMPT} ${systemPreamble.trim()}`
+    : QUEEN_VOICE_SYSTEM_PROMPT;
   return [
-    { role: "system", content: QUEEN_VOICE_SYSTEM_PROMPT },
+    { role: "system", content: system },
     ...historyMessages,
     { role: "user", content: transcript },
   ];
@@ -201,6 +216,7 @@ function conversationMessages(
 async function runOpenAiConversationTurn(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
 ) {
   const apiKey = await transcriptionApiKey();
   if (!apiKey) {
@@ -217,7 +233,7 @@ async function runOpenAiConversationTurn(
     body: JSON.stringify({
       model:
         process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
-      messages: conversationMessages(transcript, history),
+      messages: conversationMessages(transcript, history, systemPreamble),
       max_tokens: 300,
       temperature: 0.6,
     }),
@@ -236,19 +252,61 @@ async function runOpenAiConversationTurn(
   return data?.choices?.[0]?.message?.content?.trim() || "";
 }
 
+export type QueenAgentTurnResult = {
+  /** One to three short sentences, read aloud by Queen Bee. */
+  speech: string;
+  /** Fuller findings (markdown) to show on screen; empty when there's none. */
+  detail: string;
+};
+
+/** The user's selected acting wallet, relayed so the executing agent defaults
+ *  wallet/trade actions to it. `agentId` is its resolution id (agentId, a
+ *  `user:` personal id, or "bankr"); `kind` lets the local rails bow out for
+ *  Bankr-managed wallets so Bankr handles the action. */
+export type ActingWalletSource = {
+  agentId: string;
+  address: string;
+  network: string;
+  kind: string;
+};
+
+export function coerceActingWalletSource(value: unknown): ActingWalletSource | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const agentId = typeof record.agentId === "string" ? record.agentId.trim() : "";
+  if (!agentId) return undefined;
+  return {
+    agentId,
+    address: typeof record.address === "string" ? record.address.trim() : "",
+    network: typeof record.network === "string" ? record.network.trim() : "",
+    kind: typeof record.kind === "string" ? record.kind.trim() : "",
+  };
+}
+
 /**
  * Routes a spoken request through the full agent runtime harness (system
- * prompt, capabilities, vault/brain context) and returns the spoken-ready
- * answer. Used by the realtime session's ask_hivemind_agent tool, so Queen
- * Bee can reach the user's computer, notes, and shared memory mid-call.
+ * prompt, capabilities, vault/brain context). Used by the realtime session's
+ * ask_hivemind_agent tool, so Queen Bee can reach the user's computer, notes,
+ * and shared memory mid-call. Returns a short spoken summary plus an optional
+ * richer `detail` payload the overlay can surface in a "what she found" modal -
+ * the actual notes/values/files that the spoken reply only summarizes.
  */
-export async function runQueenBeeAgentTurn(origin: string, message: string) {
+export async function runQueenBeeAgentTurn(
+  origin: string,
+  message: string,
+  actingWallet?: ActingWalletSource,
+): Promise<QueenAgentTurnResult> {
   const request = message.trim();
-  if (!request) return "The request was empty, so nothing was done.";
+  if (!request) return { speech: "The request was empty, so nothing was done.", detail: "" };
   const agent = await pickConversationAgent();
   if (!agent) {
-    return "No chat-capable HivemindOS agent is configured yet, so the request could not be run.";
+    return {
+      speech:
+        "No chat-capable HivemindOS agent is configured yet, so the request could not be run.",
+      detail: "",
+    };
   }
+  const preferencePreamble = await queenVoicePreferencePreamble();
   try {
     const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
       method: "POST",
@@ -259,25 +317,61 @@ export async function runQueenBeeAgentTurn(origin: string, message: string) {
           {
             role: "system",
             content:
-              "You are handling a request relayed from Queen Bee's live voice chat. Do the work with your available capabilities, then answer in one to three short spoken sentences describing the outcome. No markdown, no preambles.",
+              "You are handling a request relayed from Queen Bee's live voice chat. Do the work with your available capabilities, then respond with STRICT JSON only, no markdown fences, matching: " +
+              '{"speech": string, "detail": string}. ' +
+              "speech: one to three short spoken sentences describing the outcome, no markdown, no preambles - this is read aloud. " +
+              "detail: the full content the user would want to SEE on screen (the actual notes, list, values, file names, or findings), as readable markdown; use an empty string when there is nothing substantial to show beyond the spoken reply." +
+              (preferencePreamble ? ` ${preferencePreamble}` : ""),
           },
           { role: "user", content: request },
         ],
         runtimeSessionId: "queen-bee-voice",
         agentMode: "act",
         latencyMode: "voice",
+        actingWalletSource: actingWallet,
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(45_000),
     });
     const text = await readRuntimeResponseText(response);
-    if (text.trim()) return text.trim();
-    return "The agent finished without a spoken result. The local runtime may be down - check the Hermes daemon.";
+    if (text.trim()) return parseAgentTurnResult(text);
+    return {
+      speech:
+        "The agent finished without a spoken result. The local runtime may be down - check the Hermes daemon.",
+      detail: "",
+    };
   } catch (turnError) {
     const detail =
       turnError instanceof Error ? turnError.message : "request failed";
-    return `The HivemindOS agent could not be reached (${detail}). The local runtime may need a restart.`;
+    return {
+      speech: `The HivemindOS agent could not be reached (${detail}). The local runtime may need a restart.`,
+      detail: "",
+    };
   }
+}
+
+// The agent is asked for {speech, detail} JSON, but runtimes vary; parse
+// leniently and fall back to treating the whole reply as spoken text.
+function parseAgentTurnResult(text: string): QueenAgentTurnResult {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(start, end + 1)) as {
+        speech?: unknown;
+        detail?: unknown;
+      };
+      const speech =
+        typeof parsed.speech === "string" ? parsed.speech.trim() : "";
+      const detail =
+        typeof parsed.detail === "string" ? parsed.detail.trim() : "";
+      if (speech) return { speech: speech.slice(0, 600), detail: detail.slice(0, 8_000) };
+    } catch {
+      // Not JSON - fall through to plain-text handling.
+    }
+  }
+  return { speech: trimmed.slice(0, 600), detail: "" };
 }
 
 // A live voice turn needs a runtime that answers chat requests directly;
@@ -298,7 +392,7 @@ function isLocalMachineProfile(profile: AgentProfile) {
   return !machine || machine === "this mac" || machine === "local";
 }
 
-async function pickConversationAgent(vaultPath?: string) {
+export async function pickConversationAgent(vaultPath?: string) {
   const profiles = await readVaultAgentProfiles(vaultPath).catch(
     () => [] as AgentProfile[],
   );
@@ -322,13 +416,14 @@ async function runRuntimeConversationTurn(
   agent: AgentProfile,
   transcript: string,
   history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
 ) {
   const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       agent: voiceOptimizedAgent(agent),
-      messages: conversationMessages(transcript, history),
+      messages: conversationMessages(transcript, history, systemPreamble),
       runtimeSessionId: "queen-bee-voice",
       agentMode: "act",
       latencyMode: "voice",

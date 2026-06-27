@@ -1,0 +1,19 @@
+{
+  "upstreamName": "implement",
+  "slug": "implement",
+  "label": "Implement",
+  "domain": "ship-mate",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/ship-mate/agents/implement.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent implement",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/implement",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Developer agent. Implements the architect plan step-by-step, guided by AGENTS.md guardrails. Writes tests, leaves no TODOs, and flags plan deviations rather than silently skipping them."
+}

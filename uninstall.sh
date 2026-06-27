@@ -132,24 +132,31 @@ agent_instruction_files() {
   esac
 }
 
-agent_skill_dirs() {
+agent_skill_roots() {
   local agent="$1"
   case "$agent" in
-    codex) printf "%s\n" "$HOME/.codex/skills/karpathy-guidelines" ;;
-    claude) printf "%s\n" "$HOME/.claude/skills/karpathy-guidelines" ;;
-    hermes) printf "%s\n" "$HOME/.hermes/skills/karpathy-guidelines" ;;
-    gemini) printf "%s\n" "$HOME/.gemini/skills/karpathy-guidelines" ;;
+    codex) printf "%s\n" "$HOME/.codex/skills" ;;
+    claude) printf "%s\n" "$HOME/.claude/skills" ;;
+    hermes) printf "%s\n" "$HOME/.hermes/skills" ;;
+    gemini) printf "%s\n" "$HOME/.gemini/skills" ;;
     openclaw)
-      printf "%s\n" "$HOME/.openclaw/skills/karpathy-guidelines"
+      printf "%s\n" "$HOME/.openclaw/skills"
       for workspace in "$HOME"/.openclaw/workspace-*; do
-        [[ -d "$workspace/skills" ]] && printf "%s\n" "$workspace/skills/karpathy-guidelines"
+        [[ -d "$workspace/skills" ]] && printf "%s\n" "$workspace/skills"
       done
       ;;
     aeon)
-      printf "%s\n" "$HOME/.aeon/skills/karpathy-guidelines"
-      [[ -n "${AEON_LOCAL_PATH:-}" ]] && printf "%s\n" "$AEON_LOCAL_PATH/skills/karpathy-guidelines"
+      printf "%s\n" "$HOME/.aeon/skills"
+      [[ -n "${AEON_LOCAL_PATH:-}" ]] && printf "%s\n" "$AEON_LOCAL_PATH/skills"
       ;;
   esac
+}
+
+is_hivemind_managed_skill_dir() {
+  local dir="$1"
+  local metadata="$dir/.hivemind-skill-source.json"
+  [[ -f "$metadata" ]] || return 1
+  grep -Eq '"managedBy"[[:space:]]*:[[:space:]]*"hivemindos"|"provider"[[:space:]]*:[[:space:]]*"(shared-brain|bundled|packaged-auto-install)"|"providerLabel"[[:space:]]*:[[:space:]]*"HivemindOS' "$metadata"
 }
 
 vault_path="${NEXT_PUBLIC_OBSIDIAN_VAULT_PATH:-$HOME/Documents/Obsidian/hivemindos-vault}"
@@ -199,7 +206,12 @@ if ask "Remove HivemindOS telemetry collector service?" "yes"; then
       rm -f "$plist"
       ok "Removed LaunchAgent $label"
     done
+    rm -f "$HOME/.hivemindos/bin/HivemindOS Collector"
+    ok "Removed HivemindOS Collector helper if present"
   elif run_if_exists systemctl; then
+    systemctl --user disable --now agent-telemetry-watchdog.timer >/dev/null 2>&1 || true
+    rm -f "$HOME/.config/systemd/user/agent-telemetry-watchdog.timer" \
+          "$HOME/.config/systemd/user/agent-telemetry-watchdog.service"
     systemctl --user disable --now agent-telemetry.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/agent-telemetry.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
@@ -247,17 +259,27 @@ fi
 
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    plist="$HOME/Library/LaunchAgents/com.hivemindos.claw-backend.plist"
-    if [[ -f "$plist" ]]; then
-      launchctl bootout "gui/$(id -u)/com.hivemindos.claw-backend" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
-      rm -f "$plist"
-      ok "Removed Claw backend LaunchAgent"
-    fi
+    # com.hivemindos.claw-backend = legacy headless gateway; com.hivemindos.claw-gateway
+    # = the app-signed login item that replaced it. voice-worker/claw-voice-worker = legacy voice helpers.
+    for label in com.hivemindos.claw-backend com.hivemindos.claw-gateway com.hivemindos.voice-worker com.hivemindos.claw-voice-worker; do
+      plist="$HOME/Library/LaunchAgents/$label.plist"
+      launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
+      if [[ -f "$plist" ]]; then
+        rm -f "$plist"
+        ok "Removed $label LaunchAgent"
+      fi
+    done
+    rm -f "$HOME/.hivemindos/bin/HivemindOS Voice Worker"
+    ok "Removed HivemindOS Voice Worker helper if present"
   elif run_if_exists systemctl; then
     systemctl --user disable --now hivemindos-claw-backend.service >/dev/null 2>&1 || true
+    systemctl --user disable --now hivemindos-voice-worker.service >/dev/null 2>&1 || true
+    systemctl --user disable --now hivemindos-claw-voice-worker.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/hivemindos-claw-backend.service"
+    rm -f "$HOME/.config/systemd/user/hivemindos-voice-worker.service"
+    rm -f "$HOME/.config/systemd/user/hivemindos-claw-voice-worker.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    ok "Removed Claw backend systemd service"
+    ok "Removed Claw backend and voice worker systemd services"
   fi
 fi
 
@@ -347,12 +369,15 @@ fi
 
 if ask "Stop and remove the HivemindOS Syncthing service wrapper?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
-    plist="$HOME/Library/LaunchAgents/com.hivemindos.syncthing.plist"
-    if [[ -f "$plist" ]]; then
-      launchctl bootout "gui/$(id -u)/com.hivemindos.syncthing" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
+    for label in com.hivemindos.syncthing com.omni-agent-hivemind.syncthing; do
+      plist="$HOME/Library/LaunchAgents/$label.plist"
+      [[ -f "$plist" ]] || continue
+      launchctl bootout "gui/$(id -u)/$label" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
       rm -f "$plist"
-      ok "Removed HivemindOS Syncthing LaunchAgent"
-    fi
+      ok "Removed HivemindOS Syncthing LaunchAgent $label"
+    done
+    rm -f "$HOME/.hivemindos/bin/HivemindOS Sync"
+    ok "Removed HivemindOS Sync helper if present"
   elif run_if_exists systemctl; then
     systemctl --user disable --now hivemindos-syncthing.service >/dev/null 2>&1 || true
     rm -f "$HOME/.config/systemd/user/hivemindos-syncthing.service"
@@ -371,17 +396,18 @@ if ask "Remove HivemindOS shared-skill instructions from agent files?" "yes"; th
   remove_claude_brain_hook
 fi
 
-if ask "Remove copied karpathy-guidelines skill from local agent skill folders?" "no"; then
+if ask "Remove HivemindOS-managed shared skill projections from local agent skill folders?" "no"; then
   for agent in codex claude hermes gemini openclaw aeon; do
-    while IFS= read -r dir; do
-      [[ -d "$dir" ]] || continue
-      if [[ -f "$dir/SKILL.md" ]] && grep -q "name: karpathy-guidelines" "$dir/SKILL.md"; then
-        rm -rf "$dir"
-        ok "Removed $dir"
-      else
-        warn "Skipped unmanaged skill directory: $dir"
-      fi
-    done < <(agent_skill_dirs "$agent")
+    while IFS= read -r root; do
+      [[ -d "$root" ]] || continue
+      while IFS= read -r dir; do
+        [[ -d "$dir" ]] || continue
+        if is_hivemind_managed_skill_dir "$dir"; then
+          rm -rf "$dir"
+          ok "Removed $dir"
+        fi
+      done < <(find "$root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+    done < <(agent_skill_roots "$agent")
   done
 fi
 
@@ -453,6 +479,11 @@ fi
 if ask "Remove optional GBrain service note from the Obsidian vault?" "no"; then
   rm -f "$vault_path/$brain_services_folder/GBrain.md"
   ok "Removed $vault_path/$brain_services_folder/GBrain.md"
+fi
+
+if ask "Remove optional Neo4j Brain Service note from the Obsidian vault?" "no"; then
+  rm -f "$vault_path/$brain_services_folder/Neo4j.md"
+  ok "Removed $vault_path/$brain_services_folder/Neo4j.md"
 fi
 
 if ask "Remove optional Syntho service note from the Obsidian vault?" "no"; then
@@ -590,6 +621,10 @@ fi
 if ask "Remove .env.local from this checkout?" "no"; then
   rm -f "$ROOT/.env.local"
   ok "Removed .env.local"
+fi
+
+if ask "Remove the HivemindOS MCP server from agent harness configs (Claude, Codex, Gemini, OpenClaw, Hermes, Aeon)?" "yes"; then
+  node "$ROOT/scripts/register-mcp-clients.mjs" --remove --targets all || true
 fi
 
 if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, and Hive Pulse commands from ~/.local/bin if they point to this checkout?" "yes"; then

@@ -1,0 +1,65 @@
+// Zero Human Companies — Linear-style issue board for a single colony.
+import React from "react";
+import { ISSUE_LANES } from "./data";
+import { PriTag, RoleGlyph } from "./primitives";
+import type { Agent, Colony, Issue } from "./types";
+
+function IssueCard({ issue, agents }: { issue: Issue; agents: Agent[] }) {
+  const a = issue.agent;
+  const stateAgent = a ? agents.find((x) => x.name === a) : null;
+  return (
+    <div style={{
+      borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)",
+      padding: "10px 11px", display: "flex", flexDirection: "column", gap: 8,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        <PriTag pri={issue.pri} />
+        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{issue.key}</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{issue.pts} pt</span>
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.35, color: "var(--fg)", fontWeight: 500, textWrap: "pretty" }}>{issue.title}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 1 }}>
+        {a ? (
+          <>
+            <RoleGlyph role={stateAgent ? stateAgent.role : "Engineer"} size={18} />
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>{a}</span>
+          </>
+        ) : (
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>unassigned</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function IssueBoard({ colony }: { colony: Colony }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${ISSUE_LANES.length}, minmax(168px, 1fr))`, gap: 12, minWidth: "min-content" }}>
+      {ISSUE_LANES.map((lane) => {
+        const items = colony.issues.filter((i) => i.status === lane.key);
+        const accent = lane.key === "done" ? "var(--cyan-2)"
+          : lane.key === "board_review" ? "var(--honey-2)"
+          : lane.key === "in_review" ? "var(--honey)" : "var(--fg-3)";
+        return (
+          <div key={lane.key} style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span className="mono-cap" style={{ color: accent }}>{lane.label}</span>
+                <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>{items.length}</span>
+              </div>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: "var(--fg-4)", letterSpacing: 0.04 }}>{lane.hint}</span>
+              <span style={{ height: 2, background: `color-mix(in srgb, ${accent} 45%, transparent)`, borderRadius: 999, marginTop: 4 }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
+              {items.map((i) => <IssueCard key={i.key} issue={i} agents={colony.agents} />)}
+              {items.length === 0 && (
+                <div style={{ borderRadius: 10, border: "1px dashed var(--line)", padding: "14px 10px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>empty</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

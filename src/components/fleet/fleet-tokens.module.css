@@ -34,6 +34,8 @@
 
   --edge-stroke-start: rgba(94, 234, 212, 0.50);
   --edge-stroke-end: rgba(255, 212, 90, 0.55);
+  --fleet-loading-sheen: rgba(94, 234, 212, 0.14);
+  --fleet-loading-sheen-tail: rgba(255, 212, 90, 0.07);
 }
 
 /* Hive-light overrides. Apply by toggling [data-theme="hive-light"] on
@@ -62,6 +64,8 @@
 
   --edge-stroke-start: rgba(13, 90, 78, 0.78);
   --edge-stroke-end: rgba(106, 69, 5, 0.78);
+  --fleet-loading-sheen: rgba(176, 127, 28, 0.16);
+  --fleet-loading-sheen-tail: rgba(95, 143, 90, 0.08);
 }
 
 /* Hover affordance for any interactive hex cell */
@@ -507,11 +511,12 @@
 .rosterLoadingBlock::after {
   content: "";
   position: absolute;
-  inset: 0;
-  transform: translateX(-120%);
+  inset: 0 auto 0 -42%;
+  width: 42%;
+  transform: translateX(0);
   animation: roster-loading-shimmer 1.55s ease-in-out infinite;
   animation-delay: var(--roster-loading-delay);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.13), transparent);
+  background: linear-gradient(90deg, transparent, var(--fleet-loading-sheen), var(--fleet-loading-sheen-tail), transparent);
 }
 
 .rosterLoadingHex {
@@ -1310,8 +1315,8 @@
 }
 
 @keyframes roster-loading-shimmer {
-  0% { transform: translateX(-120%); }
-  58%, 100% { transform: translateX(120%); }
+  0% { transform: translateX(0); }
+  58%, 100% { transform: translateX(340%); }
 }
 
 @keyframes fleet-loading-cell-glow {
@@ -1520,6 +1525,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .rosterLoadingBlock::after,
   .fleetLoadingHiveCell,
   .fleetLoadingEdges line,
   .fleetLoadingSkeletonBlock {

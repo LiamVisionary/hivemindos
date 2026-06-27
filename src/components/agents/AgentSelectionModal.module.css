@@ -438,3 +438,90 @@
     grid-template-columns: 1fr;
   }
 }
+
+:global(:root[data-theme="hive-light"]) .backdrop {
+  background: rgba(34, 29, 20, 0.34);
+  backdrop-filter: blur(16px);
+}
+
+:global(:root[data-theme="hive-light"]) .panel {
+  border-color: var(--line);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(185, 139, 47, 0.12), transparent 32%),
+    var(--surface);
+  box-shadow: 0 28px 80px rgba(82, 61, 22, 0.18);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .header {
+  border-bottom-color: var(--line);
+}
+
+:global(:root[data-theme="hive-light"]) .eyebrow,
+:global(:root[data-theme="hive-light"]) .classLabel,
+:global(:root[data-theme="hive-light"]) .selectedMark,
+:global(:root[data-theme="hive-light"]) .skills code {
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .titleRow p,
+:global(:root[data-theme="hive-light"]) .summary,
+:global(:root[data-theme="hive-light"]) .hint,
+:global(:root[data-theme="hive-light"]) .empty,
+:global(:root[data-theme="hive-light"]) .metaItem span {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .iconButton,
+:global(:root[data-theme="hive-light"]) .searchBox,
+:global(:root[data-theme="hive-light"]) .machineFilters button,
+:global(:root[data-theme="hive-light"]) .card,
+:global(:root[data-theme="hive-light"]) .avatar,
+:global(:root[data-theme="hive-light"]) .metaItem,
+:global(:root[data-theme="hive-light"]) .empty {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .searchBox input {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .searchBox input::placeholder {
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .machineFilters button:hover,
+:global(:root[data-theme="hive-light"]) .machineFilters .activeMachineFilter,
+:global(:root[data-theme="hive-light"]) .card:hover,
+:global(:root[data-theme="hive-light"]) .selected,
+:global(:root[data-theme="hive-light"]) .selectedMark,
+:global(:root[data-theme="hive-light"]) .machineFilters .activeMachineFilter strong {
+  border-color: var(--accent-strong);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .expanded {
+  border-color: rgba(185, 139, 47, 0.42);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(212, 180, 111, 0.2), transparent 42%),
+    var(--surface-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .agentName,
+:global(:root[data-theme="hive-light"]) .metaItem strong {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .prompt {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .selectButton {
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: var(--button-primary-foreground);
+}

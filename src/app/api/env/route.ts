@@ -2,8 +2,16 @@ import { execFile, spawn } from "child_process";
 import { join } from "path";
 import { promisify } from "util";
 import { requireAuth } from "@/lib/utils/server-auth";
+import { cachedCall, invalidateCachedCall } from "@/lib/services/async-cache";
 
 export const runtime = "nodejs";
+
+// readEnvPayload spawns ~5 `hive-env-add` subprocesses per call. Coalesce
+// concurrent GETs and serve rapid repeat reads from memory for a short window.
+// Successful reads only — cachedCall evicts rejections. Mutations below call
+// invalidateCachedCall so a write is reflected on the next read.
+const ENV_PAYLOAD_CACHE_KEY = "env-payload";
+const ENV_PAYLOAD_CACHE_MS = 8_000;
 
 const execFileAsync = promisify(execFile);
 
@@ -204,6 +212,14 @@ async function readEnvPayload() {
   };
 }
 
+function readCachedEnvPayload() {
+  return cachedCall(ENV_PAYLOAD_CACHE_KEY, ENV_PAYLOAD_CACHE_MS, readEnvPayload);
+}
+
+function invalidateEnvPayload() {
+  invalidateCachedCall(ENV_PAYLOAD_CACHE_KEY);
+}
+
 function restoreSharedBackup() {
   return new Promise<void>((resolve, reject) => {
     const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), [
@@ -275,7 +291,7 @@ function syncSharedEnvMachines() {
 export async function GET(request: Request) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
-  return Response.json(await readEnvPayload());
+  return Response.json(await readCachedEnvPayload());
 }
 
 export async function POST(request: Request) {
@@ -287,7 +303,8 @@ export async function POST(request: Request) {
   if (body.action === "restoreBackup") {
     try {
       await restoreSharedBackup();
-      return Response.json(await readEnvPayload());
+      invalidateEnvPayload();
+      return Response.json(await readCachedEnvPayload());
     } catch (error) {
       return Response.json({
         ok: false,
@@ -299,7 +316,8 @@ export async function POST(request: Request) {
   if (body.action === "syncMachines") {
     try {
       await syncSharedEnvMachines();
-      return Response.json(await readEnvPayload());
+      invalidateEnvPayload();
+      return Response.json(await readCachedEnvPayload());
     } catch (error) {
       return Response.json({
         ok: false,
@@ -331,7 +349,8 @@ export async function POST(request: Request) {
       } else {
         await importHiveEnvSource(source, entries, { backup: false });
       }
-      return Response.json(await readEnvPayload());
+      invalidateEnvPayload();
+      return Response.json(await readCachedEnvPayload());
     } catch (error) {
       return Response.json({
         ok: false,
@@ -352,7 +371,8 @@ export async function POST(request: Request) {
     } else {
       await updateHiveEnvSource(source, key, value, { backup: false });
     }
-    return Response.json(await readEnvPayload());
+    invalidateEnvPayload();
+    return Response.json(await readCachedEnvPayload());
   } catch (error) {
     return Response.json({
       ok: false,

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "data-engineer",
+  "slug": "data-engineer",
+  "label": "Data Engineer",
+  "domain": "data-engineering",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/data-engineering/agents/data-engineer.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent data-engineer",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/data-engineer",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Build scalable data pipelines, modern data warehouses, and real-time streaming architectures. Implements Apache Spark, dbt, Airflow, and cloud-native data platforms. Use PROACTIVELY for data pipeline design, analytics infrastructure, or modern data stack implementation."
+}

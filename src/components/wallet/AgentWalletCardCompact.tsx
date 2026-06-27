@@ -16,8 +16,16 @@ export type AgentWalletCardCompactProps = {
   agentUsePod?: AgentProfile["usePod"];
   wallet: AgentWalletConfig;
   survival: AgentSurvivalSnapshot;
-  onOpen: () => void;
-  onInitialize: () => Promise<void>;
+  onOpen?: () => void;
+  onInitialize?: () => Promise<void>;
+  /** Render as a selectable picker tile: clicking selects (outline) instead of
+   *  opening the wallet, and the setup/initialize flow is suppressed. */
+  selectable?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
+  /** Replace the computed provider status chip — used for user/personal wallets
+   *  whose status is custody-based (e.g. "Local wallet") rather than rail-based. */
+  statusOverride?: { tone: ChipTone; text: string };
 };
 
 type ChipTone = "ok" | "warn" | "danger" | "off" | "muted";
@@ -71,7 +79,7 @@ function formatMoney(value: number): string {
   return `$${Math.max(0, value).toFixed(2)}`;
 }
 
-export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, survival, onOpen, onInitialize }: AgentWalletCardCompactProps) {
+export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, survival, onOpen, onInitialize, selectable, selected, onSelect, statusOverride }: AgentWalletCardCompactProps) {
   const tier = wallet.enabled ? survival.tier : "off";
   const safeBalance = getDisplayWalletBalanceUsd(wallet);
   const status = statusFor(wallet, survival, agentUsePod);
@@ -87,27 +95,33 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
     : wallet.provider === "veil"
       ? Boolean(wallet.walletAddress || wallet.vaultAddress)
       : !needsInitialization;
-  const walletLabel = showsSpendStatus
-    ? `Open ${agentName} wallet, ${spendLabel.toLowerCase()}`
-    : `Open ${agentName} wallet`;
+  const walletLabel = selectable
+    ? `Select ${agentName} wallet`
+    : showsSpendStatus
+      ? `Open ${agentName} wallet, ${spendLabel.toLowerCase()}`
+      : `Open ${agentName} wallet`;
 
   const openOrConfirm = () => {
+    if (selectable) {
+      onSelect?.();
+      return;
+    }
     if (needsInitialization) {
       setSetupStage("confirm");
       return;
     }
-    onOpen();
+    onOpen?.();
   };
 
   const initialize = async () => {
     setSetupStage("loading");
     const startedAt = Date.now();
-    await onInitialize();
+    await onInitialize?.();
     const remaining = Math.max(0, 2000 - (Date.now() - startedAt));
     if (remaining > 0) await new Promise((resolve) => window.setTimeout(resolve, remaining));
     setSetupStage("done");
     window.setTimeout(() => {
-      onOpen();
+      onOpen?.();
       setSetupStage("idle");
     }, 1000);
   };
@@ -149,6 +163,8 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
       className={styles.card}
       data-tier={tier}
       data-funded={hasWalletFunds ? "true" : undefined}
+      data-selected={selectable && selected ? "true" : undefined}
+      aria-pressed={selectable ? Boolean(selected) : undefined}
       onClick={openOrConfirm}
       aria-label={walletLabel}
     >
@@ -164,7 +180,11 @@ export function AgentWalletCardCompact({ agentName, agentUsePod, wallet, surviva
 
       <div className={styles.statusRow}>
         <span className={styles.statusChips}>
-          {showsSpendStatus ? (
+          {statusOverride ? (
+            <span className={styles.statusChip} data-tone={statusOverride.tone}>
+              {statusOverride.text}
+            </span>
+          ) : showsSpendStatus ? (
             <span className={styles.spendChip} data-on={wallet.enabled}>
               {spendLabel}
             </span>

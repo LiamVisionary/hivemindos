@@ -6,6 +6,87 @@
       "sourceType": "github",
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
+    },
+    "local-business-scraper": {
+      "source": "athm793/local-business-scraper",
+      "sourceType": "github",
+      "ref": "60e42d903dc52f43dcc9964f2d1c3d491c15ab5c",
+      "license": "MIT",
+      "skillPath": "README.md",
+      "packagedPath": "packaged-skills/optional/gtm/athm793/local-business-scraper/SKILL.md",
+      "computedHash": "b31d41763cb31524c77e0754d064d63b25c8226c97e2b5ceadf796f51d4eda94"
+    },
+    "n8n-clay-integration": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-clay-integration.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-clay-integration/SKILL.md",
+      "computedHash": "40bb82d640b195c578f40aca4f921f79aa9d674dad5f40a4ed186423a6a7ee3a"
+    },
+    "n8n-cold-outreach-orchestrator": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-cold-outreach-orchestrator.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-cold-outreach-orchestrator/SKILL.md",
+      "computedHash": "a7d8d8c75bdb795ce75f0fe4d35bcd74aef1716648eb221439e48b0eac2851ea"
+    },
+    "n8n-crm-conversation-sync": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-crm-conversation-sync.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-crm-conversation-sync/SKILL.md",
+      "computedHash": "3f4a26dd9ef03655b36d00a568927a6fb0e10a3f779b0ab9c8c59209374636d2"
+    },
+    "n8n-lead-ingestion-enrichment": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-lead-ingestion-enrichment.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-lead-ingestion-enrichment/SKILL.md",
+      "computedHash": "1b1e91903322f7f133ac0df98c22003dd8c812ce0642e9f19c74dcfbe9812b85"
+    },
+    "n8n-lead-scoring-routing": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-lead-scoring-routing.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-lead-scoring-routing/SKILL.md",
+      "computedHash": "2b9f3c18846d45f370137900f2dee31382b8092e500ceae20af868663374a983"
+    },
+    "n8n-observability-cost-control": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-observability-cost-control.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-observability-cost-control/SKILL.md",
+      "computedHash": "797dfb3c2e94e7f0b4931ed93a790183399984dc26115250734b26d4aca8dff2"
+    },
+    "n8n-self-hosting-guide": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-self-hosting-guide.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-self-hosting-guide/SKILL.md",
+      "computedHash": "ba29be839bf81fdded4584afa70d954173e22caf20cfb79eb95db2539104d20e"
+    },
+    "n8n-workflow-reliability-guardrails": {
+      "source": "forma-norden/n8n-gtm-workflow-pack",
+      "sourceType": "github",
+      "ref": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+      "license": "MIT",
+      "skillPath": ".agents/skills/n8n-workflow-reliability-guardrails.md",
+      "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-workflow-reliability-guardrails/SKILL.md",
+      "computedHash": "163efb0b83c7d5150b7181ce137abd78a025260f84303f0f2c6c67b34b286044"
     }
   }
 }

@@ -25,6 +25,11 @@ HivemindOS is a local-first control room for private agent fleets. It connects a
 ## Next
 
 - Polish first-run onboarding around HivemindOS naming, repo rename redirects, default vault migration, Tailscale status, missing Node.js/pnpm, and collector reachability.
+- Add an operator health cockpit backed by `/api/system/health`, then expand it with bounded provider, model-server, collector, Syncthing, shared-brain, wallet, and runtime probes.
+- Add a first-run smoke checklist that verifies dashboard auth, collector readiness, shared vault/indexes, shared env presence, one runtime chat, one Work Board task, and one handoff path.
+- Add a self-host troubleshooting cookbook for Link, collectors, Syncthing, Obsidian vault indexes, runtime bridges, local model servers, shared env sync, and common port/auth failures.
+- Add Fleet-powered model-fit recommendations that map each machine's CPU/GPU/RAM/runtime facts to local model, hosted provider, UsePod, Bankr LLM, or OpenRouter routing suggestions.
+- Add blind model compare for Hive Fusion and adaptive routing so operators can compare answers without model labels, reveal identities after voting, and feed results into reliability stats.
 - Add workspace/profile isolation for operators who need separate agent fleets, vault targets, provider defaults, wallet policies, allowed tools, and runtime session stores for different projects or clients.
 - Expand the native first-run path into a guided setup and repair wizard that classifies fresh, update, replace, remote, and existing-install states before running actions.
 - Make the native first-run wizard show Code Proof as an explicit recommended setup row before the terminal command opens.

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "ml-engineer",
+  "slug": "ml-engineer",
+  "label": "Ml Engineer",
+  "domain": "machine-learning-ops",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/machine-learning-ops/agents/ml-engineer.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent ml-engineer",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/ml-engineer",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Build production ML systems with PyTorch 2.x, TensorFlow, and modern ML frameworks. Implements model serving, feature engineering, A/B testing, and monitoring. Use PROACTIVELY for ML model deployment, inference optimization, or production ML infrastructure."
+}

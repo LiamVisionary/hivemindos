@@ -6,6 +6,7 @@ import { join, resolve } from "path";
 import { promisify } from "util";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter, RuntimeRun, RuntimeRunLog } from "./types";
+import { runtimeInstallSpec } from "@/lib/services/runtime-install-catalog";
 
 const execFileAsync = promisify(execFile);
 
@@ -189,5 +190,25 @@ export const evoAdapter: RuntimeAdapter = {
       node.commit ? `commit: ${node.commit}` : "",
     ].filter(Boolean).join("\n");
     return { id: runId, summary, logs: JSON.stringify(node, null, 2) };
+  },
+  // Drives the in-app installer for Evo on the local machine. Evo runs on top of
+  // another runtime's credentials, so it has no runtime-auth step.
+  async runIntegrationAction(_profile, action) {
+    if (action !== "install-runtime") return { ok: false, error: `Unsupported Evo action: ${action}` };
+    const spec = runtimeInstallSpec("evo");
+    if (!spec?.uvPackage) return { ok: false, error: "Evo install is not available here." };
+    const env = {
+      ...process.env,
+      PATH: [join(homedir(), ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin", process.env.PATH || ""].filter(Boolean).join(":"),
+    };
+    const uv = await execFileAsync("uv", ["--version"], { timeout: 5_000, maxBuffer: 100_000, env }).catch(() => null);
+    if (!uv) return { ok: false, error: "Evo needs the uv package manager. Install uv (astral.sh/uv) on the machine, then retry." };
+    try {
+      const out = await execFileAsync("uv", ["tool", "install", spec.uvPackage], { timeout: 300_000, maxBuffer: 2_000_000, env });
+      return { ok: true, message: "Evo installed.", output: `${out.stdout}${out.stderr}`.trim() };
+    } catch (error: unknown) {
+      const maybe = error as { stdout?: string; stderr?: string; message?: string };
+      return { ok: false, error: (maybe.stderr || maybe.stdout || maybe.message || "Evo install failed.").slice(0, 1200) };
+    }
   },
 };

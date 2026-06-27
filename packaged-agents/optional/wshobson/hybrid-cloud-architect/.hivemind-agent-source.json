@@ -1,0 +1,19 @@
+{
+  "upstreamName": "hybrid-cloud-architect",
+  "slug": "hybrid-cloud-architect",
+  "label": "Hybrid Cloud Architect",
+  "domain": "cloud-infrastructure",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/cloud-infrastructure/agents/hybrid-cloud-architect.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent hybrid-cloud-architect",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/hybrid-cloud-architect",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert hybrid cloud architect specializing in complex multi-cloud solutions across AWS/Azure/GCP/OCI and private clouds (OpenStack/VMware). Masters hybrid connectivity, workload placement optimization, edge computing, and cross-cloud automation. Handles compliance, cost optimization, disaster recovery, and migration strategies. Use PROACTIVELY for hybrid architecture, multi-cloud strategy, or complex infrastructure integration."
+}

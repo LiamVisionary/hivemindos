@@ -1,0 +1,56 @@
+/* Selection-only styling for the wallet picker tile. The card body reuses the
+   global `.fw-cc` look from wallets.css; this just adds the selected ring and
+   the corner check so the wallets.css source of truth stays untouched. */
+.card[data-selected="true"] {
+  box-shadow: 0 0 0 2px var(--honey);
+  border-color: color-mix(in srgb, var(--honey) 40%, var(--line));
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 99px;
+  background: var(--honey);
+  color: var(--panel);
+}
+
+/* Loading placeholder shown in place of the balance while it is still being
+   fetched, so a stale $0 never flashes before the real amount arrives. */
+.balanceSkeleton {
+  display: inline-block;
+  width: 88px;
+  height: 0.9em;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--line) 25%, var(--line-2) 37%, var(--line) 63%);
+  background-size: 400% 100%;
+  animation: walletPickerShimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes walletPickerShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .balanceSkeleton { animation: none; }
+}
+
+/* Display-only chain tag inside a grouped user wallet card (the chain itself is
+   chosen later, in the trade action view). */
+.chainTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}

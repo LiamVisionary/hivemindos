@@ -6,6 +6,8 @@ import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { getHoneyWorkspaceId } from "@/lib/services/wallet/honey-ledger";
+import { honeyComputeGatewayUrl, isHoneyEconomyEnabledCached } from "@/lib/services/wallet/honey-economy-config";
 
 export const BANKR_LLM_BASE_URL = "https://llm.bankr.bot";
 export const BANKR_LLM_CHAT_PATH = "/v1/chat/completions";
@@ -158,6 +160,11 @@ export function bankrLlmModelOptions(modelIds: string[], error = "", access: Ban
 export async function bankrCommandEnv() {
   const { env } = await bankrCommandCredentials();
   return env;
+}
+
+export async function bankrApiKey() {
+  const { apiKey } = await bankrCommandCredentials();
+  return apiKey;
 }
 
 async function bankrCommandCredentials() {
@@ -439,8 +446,32 @@ async function writeBankrModelDiskCache(models: string[]) {
 
 export async function resolveBankrLlmRuntimeProfile(profile: AgentProfile) {
   const headers = await bankrLlmAuthHeaders(profile);
-  if (!headers["X-API-Key"]) {
+  const apiKey = headers["X-API-Key"];
+  if (!apiKey) {
     return { profile, headers, error: "BANKR_LLM_KEY is required for Bankr LLM agents." };
+  }
+  // Spoof-proof Honey earning, gated behind the remote economy kill-switch (default off).
+  // When enabled, route Bankr LLM calls through the compute gateway: it proxies to Bankr
+  // (paid by this key), reads the real provider token usage, and mints server-signed
+  // Honey — so usage cannot be faked. When off, call Bankr directly exactly as before
+  // (no extra hop, no official Honey for this usage).
+  if (isHoneyEconomyEnabledCached()) {
+    const workspaceId = await getHoneyWorkspaceId();
+    return {
+      profile: {
+        ...profile,
+        gatewayUrl: honeyComputeGatewayUrl(),
+        chatPath: BANKR_LLM_CHAT_PATH,
+        statusPath: BANKR_LLM_MODELS_PATH,
+        token: "",
+      },
+      headers: {
+        Authorization: `Bearer hive-v1.${workspaceId}.${apiKey}`,
+        ...(profile.id ? { "X-Hivemind-Agent-Id": profile.id } : {}),
+        ...(profile.name ? { "X-Hivemind-Agent-Name": profile.name } : {}),
+      },
+      error: "",
+    };
   }
   return {
     profile: {

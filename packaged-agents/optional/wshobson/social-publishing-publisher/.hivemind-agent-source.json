@@ -1,0 +1,19 @@
+{
+  "upstreamName": "social-publishing-publisher",
+  "slug": "social-publishing-publisher",
+  "label": "Social Publishing Publisher",
+  "domain": "social-publishing",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/social-publishing/agents/social-publishing-publisher.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent social-publishing-publisher",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/social-publishing-publisher",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": ">"
+}

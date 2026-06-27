@@ -135,7 +135,7 @@ export function Btn({ variant = "secondary", icon, size = "md", sheen, children,
 export function Pill({ tone = "muted", icon, dot, children, style }: { tone?: Tone; icon?: IconName; dot?: boolean; children: React.ReactNode; style?: React.CSSProperties }) {
   const t = TONE[tone];
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 999,
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 9px", borderRadius: 999, whiteSpace: "nowrap",
       fontSize: 11, fontWeight: 600, fontFamily: "var(--f-mono)", letterSpacing: 0,
       color: t.fg, background: t.bg, border: `1px solid ${t.bd}`, ...style }}>
       {dot && <span className={styles.dot} style={{ width: 6, height: 6 }} />}

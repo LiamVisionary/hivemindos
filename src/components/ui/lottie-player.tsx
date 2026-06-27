@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DotLottie } from "@lottiefiles/dotlottie-web";
+import { DotLottie, type Layout } from "@lottiefiles/dotlottie-web";
 
-import { getCachedLottieAssetData, normalizeLottieSource, warmLottieAsset } from "@/components/ui/lottie-asset-cache";
+import {
+  getCachedLottieAssetData,
+  normalizeLottieSource,
+  warmLottieAsset,
+} from "@/components/ui/lottie-asset-cache";
 import { cn } from "@/lib/utils/cn";
 
 type LottiePlayerProps = {
@@ -12,6 +16,9 @@ type LottiePlayerProps = {
   loop?: boolean;
   autoplay?: boolean;
   size?: number;
+  width?: number;
+  height?: number;
+  layout?: Layout;
   ariaLabel?: string;
 };
 
@@ -26,14 +33,50 @@ const FIXED_CANVAS_RENDER_CONFIG = {
   autoResize: false,
   freezeOnOffscreen: false,
 } as const;
+const LOOP_PLAYBACK_WATCH_INTERVAL_MS = 500;
+const LOOP_PLAYBACK_RESTART_THROTTLE_MS = 180;
+
+// Point DotLottie at the locally served WASM (Next route at
+// src/app/loading/dotlottie-player.wasm/route.ts) instead of the default
+// public CDN, avoiding a cross-origin round-trip on first paint. Must run
+// once, before any player instance is constructed.
+const LOCAL_DOT_LOTTIE_WASM_URL = "/loading/dotlottie-player.wasm";
+let dotLottieWasmUrlConfigured = false;
+function configureLocalDotLottieWasm() {
+  if (dotLottieWasmUrlConfigured || typeof window === "undefined") return;
+  dotLottieWasmUrlConfigured = true;
+  try {
+    DotLottie.setWasmUrl(LOCAL_DOT_LOTTIE_WASM_URL);
+  } catch {
+    // Best effort: fall back to the library default if the setter is unavailable.
+  }
+}
 
 function fixedCanvasDevicePixelRatio() {
   return Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
 }
 
-function createFixedCanvasRect(rect: DOMRect, pixelSize: number): DOMRect {
+function ignorePlayerCommand(command: () => void | Promise<unknown>) {
+  try {
+    void Promise.resolve(command()).catch(() => {
+      // Best effort: players can be torn down during route swaps.
+    });
+  } catch {
+    // Best effort only; playback guards should never break rendering.
+  }
+}
+
+function normalizeFixedCanvasDimension(value: number | undefined) {
+  return value ? Math.max(1, Math.round(value)) : undefined;
+}
+
+function createFixedCanvasRect(
+  rect: DOMRect,
+  pixelWidth: number,
+  pixelHeight: number,
+): DOMRect {
   if (typeof DOMRect === "function") {
-    return new DOMRect(rect.left, rect.top, pixelSize, pixelSize);
+    return new DOMRect(rect.left, rect.top, pixelWidth, pixelHeight);
   }
 
   const fixedRect = {
@@ -41,10 +84,10 @@ function createFixedCanvasRect(rect: DOMRect, pixelSize: number): DOMRect {
     y: rect.top,
     left: rect.left,
     top: rect.top,
-    width: pixelSize,
-    height: pixelSize,
-    right: rect.left + pixelSize,
-    bottom: rect.top + pixelSize,
+    width: pixelWidth,
+    height: pixelHeight,
+    right: rect.left + pixelWidth,
+    bottom: rect.top + pixelHeight,
     toJSON() {
       return {
         x: this.x,
@@ -62,22 +105,37 @@ function createFixedCanvasRect(rect: DOMRect, pixelSize: number): DOMRect {
   return fixedRect as DOMRect;
 }
 
-function applyFixedCanvasSize(canvas: HTMLCanvasElement, pixelSize: number, devicePixelRatio: number) {
-  const cssSize = `${pixelSize}px`;
-  const backingSize = Math.max(1, Math.round(pixelSize * devicePixelRatio));
-  if (canvas.width !== backingSize) canvas.width = backingSize;
-  if (canvas.height !== backingSize) canvas.height = backingSize;
-  if (canvas.style.width !== cssSize) canvas.style.width = cssSize;
-  if (canvas.style.height !== cssSize) canvas.style.height = cssSize;
+function applyFixedCanvasSize(
+  canvas: HTMLCanvasElement,
+  pixelWidth: number,
+  pixelHeight: number,
+  devicePixelRatio: number,
+) {
+  const cssWidth = `${pixelWidth}px`;
+  const cssHeight = `${pixelHeight}px`;
+  const backingWidth = Math.max(1, Math.round(pixelWidth * devicePixelRatio));
+  const backingHeight = Math.max(1, Math.round(pixelHeight * devicePixelRatio));
+  if (canvas.width !== backingWidth) canvas.width = backingWidth;
+  if (canvas.height !== backingHeight) canvas.height = backingHeight;
+  if (canvas.style.width !== cssWidth) canvas.style.width = cssWidth;
+  if (canvas.style.height !== cssHeight) canvas.style.height = cssHeight;
 }
 
-function pinCanvasRect(canvas: HTMLCanvasElement, pixelSize: number) {
-  const ownDescriptor = Object.getOwnPropertyDescriptor(canvas, "getBoundingClientRect");
+function pinCanvasRect(
+  canvas: HTMLCanvasElement,
+  pixelWidth: number,
+  pixelHeight: number,
+) {
+  const ownDescriptor = Object.getOwnPropertyDescriptor(
+    canvas,
+    "getBoundingClientRect",
+  );
   const getBoundingClientRect = canvas.getBoundingClientRect.bind(canvas);
 
   Object.defineProperty(canvas, "getBoundingClientRect", {
     configurable: true,
-    value: () => createFixedCanvasRect(getBoundingClientRect(), pixelSize),
+    value: () =>
+      createFixedCanvasRect(getBoundingClientRect(), pixelWidth, pixelHeight),
   });
 
   return () => {
@@ -96,27 +154,37 @@ export function LottiePlayer({
   loop = true,
   autoplay = true,
   size,
+  width,
+  height,
+  layout,
   ariaLabel,
 }: LottiePlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const playerRef = useRef<DotLottiePlayer | null>(null);
-  const pixelSize = size ? Math.max(1, Math.round(size)) : undefined;
-  const style = useMemo(() => pixelSize
-    ? {
-        width: pixelSize,
-        height: pixelSize,
-        minWidth: pixelSize,
-        minHeight: pixelSize,
-        aspectRatio: "1 / 1",
-        lineHeight: 0,
-      }
-    : { lineHeight: 0 }, [pixelSize]);
+  const pixelWidth = normalizeFixedCanvasDimension(width ?? size ?? height);
+  const pixelHeight = normalizeFixedCanvasDimension(height ?? size ?? width);
+  const style = useMemo(() => {
+    if (pixelWidth === undefined || pixelHeight === undefined)
+      return { lineHeight: 0 };
+
+    return {
+      width: pixelWidth,
+      height: pixelHeight,
+      minWidth: pixelWidth,
+      minHeight: pixelHeight,
+      aspectRatio: `${pixelWidth} / ${pixelHeight}`,
+      lineHeight: 0,
+    };
+  }, [pixelHeight, pixelWidth]);
   const normalizedSrc = normalizeLottieSource(src);
-  const [cachedAsset, setCachedAsset] = useState<CachedLottieAssetState | null>(() => {
-    const data = getCachedLottieAssetData(normalizedSrc);
-    return data ? { src: normalizedSrc, data } : null;
-  });
-  const cachedData = cachedAsset?.src === normalizedSrc ? cachedAsset.data : null;
+  const [cachedAsset, setCachedAsset] = useState<CachedLottieAssetState | null>(
+    () => {
+      const data = getCachedLottieAssetData(normalizedSrc);
+      return data ? { src: normalizedSrc, data } : null;
+    },
+  );
+  const cachedData =
+    cachedAsset?.src === normalizedSrc ? cachedAsset.data : null;
 
   useEffect(() => {
     let mounted = true;
@@ -151,34 +219,90 @@ export function LottiePlayer({
 
     let restoreCanvasRect: (() => void) | null = null;
     let syncAnimationFrame: number | null = null;
+    let playbackWatchTimer: number | null = null;
+    let lastPlaybackRestartAt = Number.NEGATIVE_INFINITY;
     let player: DotLottiePlayer | null = null;
     const devicePixelRatio = fixedCanvasDevicePixelRatio();
+    const fixedWidth = pixelWidth;
+    const fixedHeight = pixelHeight;
 
-    if (pixelSize) {
-      applyFixedCanvasSize(canvas, pixelSize, devicePixelRatio);
-      restoreCanvasRect = pinCanvasRect(canvas, pixelSize);
+    if (fixedWidth !== undefined && fixedHeight !== undefined) {
+      applyFixedCanvasSize(canvas, fixedWidth, fixedHeight, devicePixelRatio);
+      restoreCanvasRect = pinCanvasRect(canvas, fixedWidth, fixedHeight);
     }
 
     const syncFixedCanvasSize = () => {
       syncAnimationFrame = null;
-      if (!player || !pixelSize) return;
+      if (!player || fixedWidth === undefined || fixedHeight === undefined)
+        return;
 
-      applyFixedCanvasSize(canvas, pixelSize, devicePixelRatio);
+      applyFixedCanvasSize(canvas, fixedWidth, fixedHeight, devicePixelRatio);
       try {
         player.resize();
       } catch {
         // DotLottie may still be waiting on WASM or animation data during early frames.
       }
-      applyFixedCanvasSize(canvas, pixelSize, devicePixelRatio);
+      applyFixedCanvasSize(canvas, fixedWidth, fixedHeight, devicePixelRatio);
     };
 
     const scheduleFixedCanvasSync = () => {
-      if (!pixelSize) return;
-      if (syncAnimationFrame !== null) window.cancelAnimationFrame(syncAnimationFrame);
+      if (fixedWidth === undefined || fixedHeight === undefined) return;
+      if (syncAnimationFrame !== null)
+        window.cancelAnimationFrame(syncAnimationFrame);
       syncAnimationFrame = window.requestAnimationFrame(syncFixedCanvasSize);
+    };
+    const restartLoopPlayback = () => {
+      if (!player || !loop || !autoplay) return;
+
+      const now = window.performance.now();
+      if (now - lastPlaybackRestartAt < LOOP_PLAYBACK_RESTART_THROTTLE_MS)
+        return;
+      lastPlaybackRestartAt = now;
+
+      const current = player;
+      ignorePlayerCommand(async () => {
+        if (!current) return;
+        await current.setLoop(true);
+        await current.setLoopCount(0);
+        if (layout) await current.setLayout(layout);
+        await current.stop();
+        await current.setFrame(0);
+        await current.unfreeze();
+        await current.play();
+      });
+    };
+    const watchLoopPlayback = () => {
+      if (!player || !loop || !autoplay) return;
+      // Skip the playback check while the tab is hidden; the interval stays
+      // alive and resumes watching once the document becomes visible again.
+      if (typeof document !== "undefined" && document.hidden) return;
+
+      try {
+        if (player.isLoaded && !player.isPlaying) restartLoopPlayback();
+      } catch {
+        // Best effort only while WASM-backed player state settles.
+      }
+    };
+    const startPlaybackWatch = () => {
+      if (!loop || !autoplay || playbackWatchTimer !== null) return;
+      playbackWatchTimer = window.setInterval(
+        watchLoopPlayback,
+        LOOP_PLAYBACK_WATCH_INTERVAL_MS,
+      );
+    };
+    const ensurePlaybackConfig = () => {
+      if (!player) return;
+      ignorePlayerCommand(() => player?.setLoop(loop));
+      if (loop) ignorePlayerCommand(() => player?.setLoopCount(0));
+      if (layout) ignorePlayerCommand(() => player?.setLayout(layout));
+      if (autoplay && !player.isPlaying) restartLoopPlayback();
+    };
+    const restartLoopOnComplete = () => {
+      restartLoopPlayback();
     };
 
     try {
+      configureLocalDotLottieWasm();
       const sourceConfig = cachedData
         ? { data: cachedData.slice(0) }
         : { src: normalizedSrc };
@@ -186,7 +310,9 @@ export function LottiePlayer({
       player = new DotLottie({
         canvas,
         ...sourceConfig,
+        layout,
         loop,
+        loopCount: loop ? 0 : undefined,
         autoplay,
         renderConfig: {
           ...FIXED_CANVAS_RENDER_CONFIG,
@@ -195,8 +321,13 @@ export function LottiePlayer({
       });
       player.addEventListener("ready", scheduleFixedCanvasSync);
       player.addEventListener("load", scheduleFixedCanvasSync);
+      player.addEventListener("ready", ensurePlaybackConfig);
+      player.addEventListener("load", ensurePlaybackConfig);
+      player.addEventListener("complete", restartLoopOnComplete);
       playerRef.current = player;
       scheduleFixedCanvasSync();
+      ensurePlaybackConfig();
+      startPlaybackWatch();
     } catch {
       playerRef.current = null;
     }
@@ -208,26 +339,33 @@ export function LottiePlayer({
         window.cancelAnimationFrame(syncAnimationFrame);
         syncAnimationFrame = null;
       }
+      if (playbackWatchTimer !== null) {
+        window.clearInterval(playbackWatchTimer);
+        playbackWatchTimer = null;
+      }
       restoreCanvasRect?.();
       if (!current) return;
       current.removeEventListener("ready", scheduleFixedCanvasSync);
       current.removeEventListener("load", scheduleFixedCanvasSync);
+      current.removeEventListener("ready", ensurePlaybackConfig);
+      current.removeEventListener("load", ensurePlaybackConfig);
+      current.removeEventListener("complete", restartLoopOnComplete);
       // DotLottie's destroy path can remove an already-detached canvas during
       // fast route changes. Keep React in charge of DOM removal and only stop
       // playback here so the real .lottie animation stays intact.
-      try {
-        current.pause();
-      } catch (error) {
-        console.warn("Failed to pause lottie animation before unmount.", error);
-      }
-      try {
-        current.freeze();
-      } catch {
-        // Best-effort only: some unmounts happen before the WASM player is ready.
-      }
+      ignorePlayerCommand(() => current.pause());
+      ignorePlayerCommand(() => current.freeze());
       if (playerRef.current === current) playerRef.current = null;
     };
-  }, [autoplay, cachedData, loop, normalizedSrc, pixelSize]);
+  }, [
+    autoplay,
+    cachedData,
+    layout,
+    loop,
+    normalizedSrc,
+    pixelHeight,
+    pixelWidth,
+  ]);
 
   return (
     <span
@@ -239,12 +377,12 @@ export function LottiePlayer({
     >
       <canvas
         ref={canvasRef}
-        width={pixelSize}
-        height={pixelSize}
+        width={pixelWidth}
+        height={pixelHeight}
         style={{
           display: "block",
-          width: pixelSize ?? "100%",
-          height: pixelSize ?? "100%",
+          width: pixelWidth ?? "100%",
+          height: pixelHeight ?? "100%",
         }}
       />
     </span>

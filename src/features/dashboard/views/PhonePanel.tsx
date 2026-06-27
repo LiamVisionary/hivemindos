@@ -19,6 +19,7 @@ import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { readNativePhonePrompts } from "@/lib/native/phone";
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 
@@ -197,7 +198,7 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
   }, [refresh]);
 
   const removePrompt = useCallback(async (prompt: CallPrompt) => {
-    if (typeof window !== "undefined" && !window.confirm(`Delete the call prompt "${prompt.title}"?`)) return;
+    if (!(await confirmUserAction(`Delete the call prompt "${prompt.title}"?`))) return;
     setBusyId(prompt.id);
     try {
       const response = await fetch("/api/phone", {
@@ -389,8 +390,8 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
 
       {draftOpen && portalTarget ? createPortal((
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8" role="dialog" aria-modal="true" aria-label={draft.id ? "Edit call prompt" : "New call prompt"}>
-          <div className="grid max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-md border border-[rgba(148,163,184,0.20)] bg-[rgba(5,8,13,0.98)] shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-[rgba(148,163,184,0.14)] p-6">
+          <div className="grid max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)] shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--line)] p-6">
               <div>
                 <p className="eyebrow">Phone</p>
                 <h3 className="m-0 text-2xl font-bold">{draft.id ? "Edit call prompt" : "New call prompt"}</h3>
@@ -407,7 +408,7 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
                   value={draft.title}
                   onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
                   placeholder="Morning briefing"
-                  className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
+                  className="rounded-md border border-[var(--line)] bg-[var(--field)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent-strong)]"
                 />
               </label>
               <div className="grid gap-4 sm:grid-cols-[160px_minmax(0,1fr)] sm:items-center">
@@ -417,7 +418,7 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
                     type="time"
                     value={draft.time}
                     onChange={(event) => setDraft((current) => ({ ...current, time: event.target.value }))}
-                    className="rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
+                    className="rounded-md border border-[var(--line)] bg-[var(--field)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent-strong)]"
                   />
                 </label>
                 <label className="mt-5 flex items-center gap-3 text-sm text-[var(--foreground)]">
@@ -427,7 +428,7 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
                     aria-checked={draft.enabled}
                     aria-label={draft.enabled ? "Disable prompt" : "Enable prompt"}
                     onClick={() => setDraft((current) => ({ ...current, enabled: !current.enabled }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${draft.enabled ? "border-[rgba(94,234,212,0.45)] bg-[rgba(20,184,166,0.35)]" : "border-[rgba(148,163,184,0.22)] bg-[rgba(15,23,42,0.72)]"}`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${draft.enabled ? "border-[rgba(64,111,83,0.38)] bg-[rgba(64,111,83,0.18)]" : "border-[var(--line)] bg-[var(--surface-soft)]"}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${draft.enabled ? "translate-x-6" : "translate-x-1"}`} />
                   </button>
@@ -440,11 +441,11 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
                   value={draft.instructions}
                   onChange={(event) => setDraft((current) => ({ ...current, instructions: event.target.value }))}
                   placeholder="What should the voice agent say or ask when it calls?"
-                  className="min-h-48 resize-y rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.66)] p-3 font-mono text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
+                  className="min-h-48 resize-y rounded-md border border-[var(--line)] bg-[var(--field)] p-3 font-mono text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent-strong)]"
                 />
               </label>
             </div>
-            <div className="flex flex-wrap items-center gap-3 border-t border-[rgba(148,163,184,0.14)] px-6 py-5">
+            <div className="flex flex-wrap items-center gap-3 border-t border-[var(--line)] px-6 py-5">
               <Button type="button" size="sm" onClick={() => void saveDraft()} disabled={saving || !draft.title.trim()}>
                 {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Check aria-hidden="true" />}
                 {draft.id ? "Save" : "Create"}

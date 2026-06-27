@@ -119,18 +119,34 @@ function AgentInstructionFiles {
     ForEach-Object { Join-Path $_.FullName "AGENTS.md" }
 }
 
-function AgentSkillDirs {
+function AgentSkillRoots {
   $homeDir = [Environment]::GetFolderPath("UserProfile")
   @(
-    "$homeDir\.codex\skills\karpathy-guidelines",
-    "$homeDir\.claude\skills\karpathy-guidelines",
-    "$homeDir\.hermes\skills\karpathy-guidelines",
-    "$homeDir\.gemini\skills\karpathy-guidelines",
-    "$homeDir\.openclaw\skills\karpathy-guidelines",
-    "$homeDir\.aeon\skills\karpathy-guidelines"
+    "$homeDir\.codex\skills",
+    "$homeDir\.claude\skills",
+    "$homeDir\.hermes\skills",
+    "$homeDir\.gemini\skills",
+    "$homeDir\.openclaw\skills",
+    "$homeDir\.aeon\skills"
   )
   Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
-    ForEach-Object { Join-Path $_.FullName "skills\karpathy-guidelines" }
+    ForEach-Object { Join-Path $_.FullName "skills" }
+}
+
+function Test-HivemindManagedSkillDir {
+  param([string]$Path)
+  $metadataPath = Join-Path $Path ".hivemind-skill-source.json"
+  if (-not (Test-Path $metadataPath)) { return $false }
+  try {
+    $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+  } catch {
+    return $false
+  }
+  $provider = [string]($metadata.provider)
+  $providerLabel = [string]($metadata.providerLabel)
+  return $metadata.managedBy -eq "hivemindos" `
+    -or @("shared-brain", "bundled", "packaged-auto-install") -contains $provider `
+    -or $providerLabel.StartsWith("HivemindOS")
 }
 
 function Uninstall-WingetPackage($Name, $Id) {
@@ -263,13 +279,15 @@ if (Ask-YesNo "Remove HivemindOS shared-skill instructions from agent files?" $t
   Remove-ClaudeBrainHook
 }
 
-if (Ask-YesNo "Remove copied karpathy-guidelines skill from local agent skill folders?" $false) {
-  AgentSkillDirs | ForEach-Object {
-    if (Test-Path (Join-Path $_ "SKILL.md")) {
-      $content = Get-Content (Join-Path $_ "SKILL.md") -Raw
-      if ($content -match "name:\s*karpathy-guidelines") {
-        Remove-Item $_ -Recurse -Force
-        Ok "Removed $_"
+if (Ask-YesNo "Remove HivemindOS-managed shared skill projections from local agent skill folders?" $false) {
+  AgentSkillRoots | ForEach-Object {
+    $root = $_
+    if (Test-Path $root) {
+      Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        if (Test-HivemindManagedSkillDir -Path $_.FullName) {
+          Remove-Item $_.FullName -Recurse -Force
+          Ok "Removed $($_.FullName)"
+        }
       }
     }
   }
@@ -330,6 +348,12 @@ if (Ask-YesNo "Remove optional GBrain service note from the Obsidian vault?" $fa
   $gbrainServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "GBrain.md")
   Remove-Item $gbrainServiceNote -Force -ErrorAction SilentlyContinue
   Ok "Removed $gbrainServiceNote"
+}
+
+if (Ask-YesNo "Remove optional Neo4j Brain Service note from the Obsidian vault?" $false) {
+  $neo4jServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "Neo4j.md")
+  Remove-Item $neo4jServiceNote -Force -ErrorAction SilentlyContinue
+  Ok "Removed $neo4jServiceNote"
 }
 
 if (Ask-YesNo "Remove optional Syntho service note from the Obsidian vault?" $false) {
@@ -482,6 +506,10 @@ if (Ask-YesNo "Remove local Hivemind Link Tailscale state from ~/.hivemindos/lin
 if (Ask-YesNo "Remove .env.local from this checkout?" $false) {
   Remove-Item ".env.local" -Force -ErrorAction SilentlyContinue
   Ok "Removed .env.local"
+}
+
+if (Ask-YesNo "Remove the HivemindOS MCP server from agent harness configs (Claude, Codex, Gemini, OpenClaw, Hermes, Aeon)?" $true) {
+  & node (Join-Path $Root "scripts\register-mcp-clients.mjs") --remove --targets all
 }
 
 if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, and Hive Pulse commands from ~/.local/bin if they point to this checkout?" $true) {

@@ -1,4 +1,4 @@
-import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, UsePodAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, ResearchMethod, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 export type AgentCreateDraft = {
   name: string;
@@ -8,14 +8,17 @@ export type AgentCreateDraft = {
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
   adaptiveRouting?: AdaptiveRoutingConfig;
   usePod?: UsePodAgentConfig;
+  venice?: VeniceAgentConfig;
   calls?: AgentCallPreferences;
   workerClass: BeeWorkerClass;
   customWorkerClass?: CustomWorkerClassProfile;
   customWorkerClasses: CustomWorkerClassProfile[];
   selectedCustomWorkerClassId?: string;
+  soulPrompt?: string;
   skillProfilePrompt: string;
   preferredSkillSlugs: string[];
   taskPreferences?: WorkerTaskPreference[];
+  researchMethod?: ResearchMethod;
   useSharedVault: boolean;
   aeonLocalPath?: string;
   aeonRepo?: string;

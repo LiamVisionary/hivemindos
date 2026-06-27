@@ -4,7 +4,14 @@ import {
   readQueenBeeState,
   submitQueenBeeMessage,
 } from "@/lib/services/queen-bee/control-plane";
+import { rememberActionAgentMemory } from "@/lib/services/obsidian/agent-memory";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
+import { createQueenBeePrdTasks } from "@/lib/services/queen-bee/prd-decomposition";
+import {
+  createQueenBeePrdVisualPlan,
+  createQueenBeeVisualPlan,
+  visualPlanReceipt,
+} from "@/lib/services/visual-plan";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +34,44 @@ export async function POST(request: NextRequest) {
       const result = await initializeQueenBeeControlPlane(options);
       return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...publicState(result) });
     }
+    const fleetSnapshot = Array.isArray(body.fleetSnapshot)
+      ? body.fleetSnapshot
+      : await discoverQueenBeeFleetSnapshot(request.nextUrl.origin, request.headers.get("x-hivemindos-device-token"));
+    if (body.action === "decompose-prd") {
+      const result = await createQueenBeePrdTasks({
+        ...options,
+        prd: body.prd ?? body.message,
+        title: body.title ?? body.taskTitle,
+        source: body.source,
+        priority: body.priority,
+        projectId: body.projectId,
+        maxTasks: body.maxTasks,
+        preview: Boolean(body.preview),
+        fleetSnapshot,
+      });
+      if (!body.preview && Array.isArray(result.tasks) && result.tasks.length) {
+        await recordQueenBeeActionMemory(options.vaultPath, {
+          title: `Queen Bee decomposed ${result.tasks.length} PRD task${result.tasks.length === 1 ? "" : "s"}`,
+          content: [
+            `Queen Bee decomposed a PRD into ${result.tasks.length} Work Board task${result.tasks.length === 1 ? "" : "s"}.`,
+            result.epic?.id ? `Epic task: ${result.epic.id}.` : "",
+            result.tasks.slice(0, 6).map((task: { id?: string; title?: string }) => `Task: ${task.id ?? "unknown"} - ${task.title ?? "Untitled"}.`).join("\n"),
+          ].filter(Boolean).join("\n"),
+          source: "Queen Bee PRD receipt",
+        });
+      }
+      const visualPlan = !body.preview && Array.isArray(result.tasks) && result.tasks.length
+        ? await createQueenBeePrdVisualPlan({
+          title: result.decomposition?.title ?? body.title ?? body.taskTitle,
+          source: result.decomposition?.source ?? body.source,
+          decomposition: result.decomposition,
+          epic: result.epic,
+          tasks: result.tasks,
+          vaultPath: options.vaultPath,
+        }).then(visualPlanReceipt, () => undefined)
+        : undefined;
+      return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...result, visualPlan });
+    }
     const result = await submitQueenBeeMessage({
       ...options,
       message: body.message,
@@ -37,14 +82,56 @@ export async function POST(request: NextRequest) {
       taskTitle: body.taskTitle,
       agentId: body.agentId,
       machineId: body.machineId,
-      fleetSnapshot: Array.isArray(body.fleetSnapshot)
-        ? body.fleetSnapshot
-        : await discoverQueenBeeFleetSnapshot(request.nextUrl.origin, request.headers.get("x-hivemindos-device-token")),
+      skills: Array.isArray(body.skills) ? body.skills.filter((skill: unknown) => typeof skill === "string") : undefined,
+      fleetSnapshot,
     });
-    return NextResponse.json({ ok: true, ...result });
+    if (result.created) {
+      await recordQueenBeeActionMemory(options.vaultPath, {
+        title: `Queen Bee queued ${result.task.title}`,
+        content: [
+          result.receipt?.summary || "Queen Bee queued a Work Board task.",
+          `Task: ${result.task.id}.`,
+          `Assignee: ${result.route?.assignee ?? result.task.assignee ?? "queen-bee"}.`,
+          result.route?.targetMachine?.name ? `Machine: ${result.route.targetMachine.name}.` : "",
+          result.route?.delegation?.workerClass ? `Worker class: ${result.route.delegation.workerClass}.` : "",
+        ].filter(Boolean).join("\n"),
+        source: "Queen Bee receipt",
+      });
+    }
+    const visualPlan = result.created
+      ? await createQueenBeeVisualPlan({
+        title: result.task?.title ?? body.taskTitle,
+        message: body.message,
+        source: body.source,
+        mode: body.mode,
+        fingerprint: result.fingerprint,
+        task: result.task,
+        route: result.route,
+        receipt: result.receipt,
+        vaultPath: options.vaultPath,
+      }).then(visualPlanReceipt, () => undefined)
+      : undefined;
+    return NextResponse.json({ ok: true, ...result, visualPlan });
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+async function recordQueenBeeActionMemory(vaultPath: string | undefined, input: { title: string; content: string; source: string }) {
+  await rememberActionAgentMemory({
+    vaultPath,
+    title: input.title,
+    content: input.content,
+    source: input.source,
+    agentName: "Queen Bee",
+    agentId: "queen-bee",
+    runtime: "hivemindos",
+    project: "HivemindOS",
+    tags: ["queen-bee", "receipt"],
+    entities: ["Queen Bee", "Work Board", "HivemindOS"],
+    memoryOrigin: "system-receipt",
+    actorRole: "agent",
+  }).catch(() => undefined);
 }
 
 function optionsFromRequest(request: NextRequest, body?: { vaultPath?: string; brainServicesFolder?: string; kanbanFolder?: string }) {

@@ -291,7 +291,10 @@ fn note_root() -> Option<PathBuf> {
         })
 }
 
-fn backup_dir() -> Option<PathBuf> {
+fn backup_dir(allow_private_filesystem: bool) -> Option<PathBuf> {
+    if !allow_private_filesystem {
+        return None;
+    }
     env_or_local("HIVE_ENV_BACKUP_DIR")
         .map(|value| expand_home(&value))
         .or_else(|| {
@@ -311,8 +314,8 @@ fn command_exists(name: &str) -> bool {
     std::env::split_paths(&paths).any(|path| path.join(name).is_file())
 }
 
-fn read_backup_status() -> Value {
-    let path = backup_dir().map(|directory| directory.join("hive.env.gpg"));
+fn read_backup_status(allow_private_filesystem: bool) -> Value {
+    let path = backup_dir(allow_private_filesystem).map(|directory| directory.join("hive.env.gpg"));
     serde_json::json!({
         "version": 1,
         "scope": SHARED_SOURCE.scope,
@@ -326,7 +329,8 @@ fn read_backup_status() -> Value {
 }
 
 #[tauri::command]
-pub(crate) fn hive_env_read() -> Result<Value, String> {
+pub(crate) fn hive_env_read(allow_private_filesystem: Option<bool>) -> Result<Value, String> {
+    let allow_private_filesystem = allow_private_filesystem.unwrap_or(false);
     let shared_source = read_source(SHARED_SOURCE);
     let shared_keys = shared_source.values.keys().cloned().collect::<HashSet<_>>();
     let runtime_sources = RUNTIME_SOURCES
@@ -342,7 +346,7 @@ pub(crate) fn hive_env_read() -> Result<Value, String> {
         "ok": true,
         "sharedSource": shared_source,
         "runtimeSources": runtime_sources,
-        "backupStatus": read_backup_status(),
+        "backupStatus": read_backup_status(allow_private_filesystem),
         "total": total,
     }))
 }

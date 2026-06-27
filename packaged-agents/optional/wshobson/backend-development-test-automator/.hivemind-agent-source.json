@@ -1,0 +1,19 @@
+{
+  "upstreamName": "test-automator",
+  "slug": "backend-development-test-automator",
+  "label": "Test Automator",
+  "domain": "backend-development",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/backend-development/agents/test-automator.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent backend-development-test-automator",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/backend-development-test-automator",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Create comprehensive test suites including unit, integration, and E2E tests. Supports TDD/BDD workflows. Use for test creation during feature development."
+}

@@ -32,7 +32,7 @@ export default function RootLayout({
       <head>
         <style
           dangerouslySetInnerHTML={{
-            __html: "html,body{background:#080a0f;color:#f4f7fb;}",
+            __html: "html,body{background:var(--background,#080a0f);color:var(--foreground,#f4f7fb);}",
           }}
         />
         <link rel="preconnect" href="https://fonts.googleapis.com" />

@@ -30,6 +30,26 @@ const loadingHtmlPath = fileURLToPath(
 const loadingIconPath = fileURLToPath(
   new URL("../src-tauri/loading/icon-192.png", import.meta.url),
 );
+const loadingBeeLottiePath = fileURLToPath(
+  new URL("../public/animations/Honey bee.lottie", import.meta.url),
+);
+const dotLottieRuntimePath = fileURLToPath(
+  new URL(
+    "../node_modules/@lottiefiles/dotlottie-web/dist/index.js",
+    import.meta.url,
+  ),
+);
+const dotLottieWasmPath = fileURLToPath(
+  new URL(
+    "../node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm",
+    import.meta.url,
+  ),
+);
+const loadingAssetPaths = new Map([
+  ["Honey bee.lottie", loadingBeeLottiePath],
+  ["dotlottie.js", dotLottieRuntimePath],
+  ["dotlottie-player.wasm", dotLottieWasmPath],
+]);
 const upstreamHost = "localhost";
 const proxyBindHost = process.env.HIVEMINDOS_TAURI_PROXY_BIND_HOST || "0.0.0.0";
 const browserHost = "localhost";
@@ -162,8 +182,11 @@ function writeDevServerInfo() {
 
 function contentType(path) {
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
+  if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (path.endsWith(".wasm")) return "application/wasm";
   if (path.endsWith(".png")) return "image/png";
   if (path.endsWith(".ico")) return "image/x-icon";
+  if (path.endsWith(".lottie")) return "application/octet-stream";
   return "application/octet-stream";
 }
 
@@ -186,7 +209,7 @@ const devRecoveryScript = String.raw`
   var reloading = false;
   var lastReloadAt = 0;
   var reloadCooldownMs = 20000;
-  var routeLoadingTimeoutMs = 12000;
+  var routeLoadingTimeoutMs = 30000;
 
   function forceReload(reason, ignoreCooldown) {
     if (reloading || (!ignoreCooldown && Date.now() - lastReloadAt < reloadCooldownMs)) return;
@@ -330,6 +353,10 @@ function proxyTimeoutForRequest(clientRequest) {
     return 4 * 60_000;
   // Fleet updates run a remote update plus a verification poll (route maxDuration 360s).
   if (clientRequest.url?.startsWith("/api/fleet/update")) return 7 * 60_000;
+  // Nango self-host setup clones the repo and runs `docker compose up` on the host,
+  // then polls health (route maxDuration 360s, collector fetch 360s).
+  if (clientRequest.url?.startsWith("/api/integrations/nango/setup"))
+    return 7 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;
   if (clientRequest.headers.accept?.includes("text/html")) return 15_000;
   return 2_500;
@@ -445,8 +472,23 @@ const proxyServer = createServer((request, response) => {
   }
 
   if (request.url && request.url.startsWith("/loading/")) {
-    const fileName = request.url.slice("/loading/".length).split("?")[0];
-    if (!fileName.includes("/") && extname(fileName)) {
+    const rawFileName = request.url.slice("/loading/".length).split("?")[0];
+    let fileName = rawFileName;
+    try {
+      fileName = decodeURIComponent(rawFileName);
+    } catch {
+      fileName = rawFileName;
+    }
+    const mappedAssetPath = loadingAssetPaths.get(fileName);
+    if (mappedAssetPath) {
+      sendFile(response, mappedAssetPath);
+      return;
+    }
+    if (
+      !fileName.includes("/") &&
+      !fileName.includes("\\") &&
+      extname(fileName)
+    ) {
       sendFile(
         response,
         fileURLToPath(new URL(fileName, `file://${loadingDir}`)),
@@ -482,9 +524,16 @@ proxyServer.on("upgrade", (request, socket, head) => {
 rmSync(tauriNextDir, { force: true, recursive: true });
 writeDevServerInfo();
 
-const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
-  stdio: "inherit",
-  env: {
+const DEV_SERVER_RESPAWN_WINDOW_MS = 2 * 60_000;
+const DEV_SERVER_RESPAWN_BASE_DELAY_MS = 1_000;
+const DEV_SERVER_RESPAWN_MAX_DELAY_MS = 30_000;
+let child = null;
+let stopping = false;
+let devServerRespawnTimer = null;
+let devServerExitTimestamps = [];
+
+function devServerEnv() {
+  return {
     ...process.env,
     PORT: String(nextPort),
     HIVEMINDOS_DASHBOARD_PORT: String(proxyPort),
@@ -492,8 +541,50 @@ const child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
     HIVEMINDOS_DASHBOARD_HOST: upstreamHost,
     HIVEMINDOS_TAURI_DEV: "1",
     HIVEMINDOS_TAURI_NEXT_DIST_DIR: tauriNextDistDir,
-  },
-});
+  };
+}
+
+function spawnDevServer() {
+  if (stopping) return;
+  child = spawn(process.execPath, ["scripts/dev-server.mjs"], {
+    stdio: "inherit",
+    env: devServerEnv(),
+  });
+  child.on("exit", handleDevServerExit);
+  child.on("error", handleDevServerError);
+}
+
+function scheduleDevServerRespawn(reason) {
+  if (stopping || devServerRespawnTimer) return;
+  const now = Date.now();
+  devServerExitTimestamps = [...devServerExitTimestamps, now]
+    .filter((at) => now - at < DEV_SERVER_RESPAWN_WINDOW_MS);
+  const delay = Math.min(
+    DEV_SERVER_RESPAWN_MAX_DELAY_MS,
+    DEV_SERVER_RESPAWN_BASE_DELAY_MS * (2 ** Math.max(0, devServerExitTimestamps.length - 1)),
+  );
+  console.warn(
+    `HivemindOS Tauri dev server ${reason}; keeping proxy ${browserHost}:${proxyPort} alive and restarting backend in ${Math.round(delay / 1000)}s.`,
+  );
+  devServerRespawnTimer = setTimeout(() => {
+    devServerRespawnTimer = null;
+    spawnDevServer();
+  }, delay);
+  devServerRespawnTimer.unref?.();
+}
+
+function handleDevServerExit(code, signal) {
+  child = null;
+  if (stopping) return;
+  scheduleDevServerRespawn(signal ? `exited from ${signal}` : `exited with status ${code ?? 0}`);
+}
+
+function handleDevServerError(error) {
+  child = null;
+  if (stopping) return;
+  console.warn("HivemindOS Tauri dev server could not start.", error);
+  scheduleDevServerRespawn("failed to start");
+}
 
 const voiceWorkerEnabled = process.env.HIVEMINDOS_VOICE_WORKER !== "0";
 const voiceWorker = voiceWorkerEnabled
@@ -516,7 +607,12 @@ const voiceWorker = voiceWorkerEnabled
   : null;
 
 function stopChildren(signal = "SIGTERM") {
-  child.kill(signal);
+  stopping = true;
+  if (devServerRespawnTimer) {
+    clearTimeout(devServerRespawnTimer);
+    devServerRespawnTimer = null;
+  }
+  if (child && !child.killed) child.kill(signal);
   if (voiceWorker && !voiceWorker.killed) voiceWorker.kill(signal);
 }
 
@@ -541,20 +637,7 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   });
 }
 
-child.on("exit", (code) => {
-  proxyServer.close();
-  if (voiceWorker && !voiceWorker.killed) voiceWorker.kill("SIGTERM");
-  restoreGeneratedTypeReferences();
-  process.exit(code ?? 0);
-});
-
-child.on("error", (error) => {
-  proxyServer.close();
-  if (voiceWorker && !voiceWorker.killed) voiceWorker.kill("SIGTERM");
-  restoreGeneratedTypeReferences();
-  console.error(error);
-  process.exit(1);
-});
+spawnDevServer();
 
 voiceWorker?.on("exit", (code) => {
   if (code && code !== 0) {

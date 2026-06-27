@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "patterns": [
+    {
+      "id": "code-fix",
+      "name": "Code Fix Loop",
+      "description": "Repair code against tests, lint, and type gates with bounded retries.",
+      "defaultMode": "closed",
+      "cadence": "on-demand",
+      "risk": "medium",
+      "verifierIds": ["command:test", "command:lint", "command:typecheck", "receipt:evidence"],
+      "phases": ["scope", "fix", "verify", "record"],
+      "humanGates": ["auth", "payments", "security", "max-attempts"],
+      "weekOneMode": "L2",
+      "tokenCost": "medium",
+      "cost": {
+        "tokensNoop": 3000,
+        "tokensReport": 30000,
+        "tokensAction": 180000,
+        "suggestedDailyCap": 500000,
+        "earlyExitRequired": true
+      }
+    },
+    {
+      "id": "app-build-harness",
+      "name": "App Build Harness",
+      "description": "Planner, builder, and judge loop for app-building work.",
+      "defaultMode": "closed",
+      "cadence": "on-demand",
+      "risk": "medium",
+      "verifierIds": ["agent:judge", "command:lint", "command:typecheck", "command:playwright", "artifact:exists", "receipt:evidence"],
+      "phases": ["plan", "build", "browser-smoke", "judge", "handoff"],
+      "humanGates": ["external-actions", "large-diffs", "design-ambiguity", "max-attempts"],
+      "weekOneMode": "L2",
+      "tokenCost": "high",
+      "cost": {
+        "tokensNoop": 5000,
+        "tokensReport": 50000,
+        "tokensAction": 300000,
+        "suggestedDailyCap": 1000000,
+        "earlyExitRequired": true
+      }
+    },
+    {
+      "id": "research",
+      "name": "Research Loop",
+      "description": "Investigate a question until claims are backed by evidence receipts.",
+      "defaultMode": "open",
+      "cadence": "on-demand",
+      "risk": "low",
+      "verifierIds": ["receipt:evidence", "agent:judge"],
+      "phases": ["question", "source", "synthesize", "judge", "distill"],
+      "humanGates": ["uncited-claims", "sensitive-advice", "outward-actions"],
+      "weekOneMode": "L1",
+      "tokenCost": "medium",
+      "cost": {
+        "tokensNoop": 3000,
+        "tokensReport": 60000,
+        "tokensAction": 120000,
+        "suggestedDailyCap": 200000,
+        "earlyExitRequired": false
+      }
+    },
+    {
+      "id": "content",
+      "name": "Content Loop",
+      "description": "Draft, judge, and revise content against explicit rubric criteria.",
+      "defaultMode": "open",
+      "cadence": "on-demand",
+      "risk": "low",
+      "verifierIds": ["agent:judge", "artifact:exists", "receipt:evidence"],
+      "phases": ["brief", "draft", "judge", "revise", "deliver"],
+      "humanGates": ["brand-risk", "legal-risk", "publication"],
+      "weekOneMode": "L1",
+      "tokenCost": "low",
+      "cost": {
+        "tokensNoop": 3000,
+        "tokensReport": 25000,
+        "tokensAction": 90000,
+        "suggestedDailyCap": 150000,
+        "earlyExitRequired": false
+      }
+    },
+    {
+      "id": "daily-brief",
+      "name": "Daily Brief Loop",
+      "description": "Recurring brief loop with evidence and delivery receipts.",
+      "defaultMode": "open",
+      "cadence": "1d",
+      "risk": "low",
+      "verifierIds": ["receipt:evidence", "artifact:exists"],
+      "phases": ["scan", "prioritize", "brief", "deliver", "log"],
+      "humanGates": ["human-decision-required", "sensitive-finding"],
+      "weekOneMode": "L1",
+      "tokenCost": "low",
+      "cost": {
+        "tokensNoop": 3000,
+        "tokensReport": 50000,
+        "tokensAction": 80000,
+        "suggestedDailyCap": 100000,
+        "earlyExitRequired": false
+      }
+    },
+    {
+      "id": "operating-unit-learning",
+      "name": "Operating Unit Learning Loop",
+      "description": "Reusable learning loop for companies, teams, crews, and long-running goals.",
+      "defaultMode": "optimizer",
+      "cadence": "continuous",
+      "risk": "medium",
+      "verifierIds": ["receipt:evidence", "governance:policy"],
+      "phases": ["dispatch", "execute", "measure", "distill", "frontier"],
+      "humanGates": ["budget-exception", "external-spend", "policy-exception"],
+      "weekOneMode": "L2",
+      "tokenCost": "high",
+      "cost": {
+        "tokensNoop": 5000,
+        "tokensReport": 60000,
+        "tokensAction": 250000,
+        "suggestedDailyCap": 1000000,
+        "earlyExitRequired": true
+      }
+    },
+    {
+      "id": "evo-benchmark",
+      "name": "Evo Benchmark Loop",
+      "description": "Benchmark-driven optimizer loop that can be handed to Evo.",
+      "defaultMode": "optimizer",
+      "cadence": "experiment-batch",
+      "risk": "medium",
+      "verifierIds": ["evo:score", "command:test", "receipt:evidence"],
+      "phases": ["discover-benchmark", "branch", "score", "select-frontier", "record"],
+      "humanGates": ["benchmark-drift", "unsafe-candidate", "max-spend"],
+      "weekOneMode": "L2",
+      "tokenCost": "very-high",
+      "cost": {
+        "tokensNoop": 5000,
+        "tokensReport": 60000,
+        "tokensAction": 350000,
+        "suggestedDailyCap": 1200000,
+        "earlyExitRequired": true
+      }
+    }
+  ]
+}

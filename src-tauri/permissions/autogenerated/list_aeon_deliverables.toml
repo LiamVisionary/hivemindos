@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-aeon-deliverables"
+description = "Enables the list_aeon_deliverables command without any pre-configured scope."
+commands.allow = ["list_aeon_deliverables"]
+
+[[permission]]
+identifier = "deny-list-aeon-deliverables"
+description = "Denies the list_aeon_deliverables command without any pre-configured scope."
+commands.deny = ["list_aeon_deliverables"]

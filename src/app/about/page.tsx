@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { getNativeAppVersion } from "@/lib/native/desktop-status";
+import type { Update } from "@tauri-apps/plugin-updater";
+import { getNativeAppVersion, isPackagedDesktopRuntime, isReleaseUpdaterDesktopRuntime } from "@/lib/native/desktop-status";
+import { installNativeUpdate, updaterErrorText } from "@/lib/native/updater";
 import type { AppVersion } from "@/features/dashboard/dashboard-types";
 import styles from "./about.module.css";
 
@@ -36,13 +38,17 @@ async function fetchAppVersion(signal?: AbortSignal): Promise<AppVersion | null>
 
 export default function AboutPage() {
   const [version, setVersion] = useState<AppVersion | null>(null);
+  const [packaged, setPackaged] = useState(false);
   const [checkState, setCheckState] = useState<UpdateCheckState>("idle");
   const [runState, setRunState] = useState<UpdateRunState>("idle");
   const [message, setMessage] = useState("Checking for updates...");
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+  const pendingUpdate = useRef<Update | null>(null);
 
-  const updateAvailable = isUpdateAvailable(version);
-  const testUpdateAvailable = !updateAvailable && checkState === "current";
+  const updateAvailable = packaged
+    ? checkState === "available"
+    : isUpdateAvailable(version);
+  const testUpdateAvailable = !packaged && !updateAvailable && checkState === "current";
   const canCheck = checkState !== "checking" && runState !== "running";
   const canUpdate = (updateAvailable || testUpdateAvailable) && runState !== "running" && checkState !== "checking";
   const statusLabel = checkState === "checking"
@@ -51,7 +57,9 @@ export default function AboutPage() {
       ? "Update Check Failed"
       : updateAvailable
         ? "Update Available"
-        : "Test Update Available";
+        : packaged
+          ? "Up to Date"
+          : "Test Update Available";
   const versionLine = useMemo(() => {
     const displayVersion = version?.version ?? "0.1.0";
     const commit = short(version?.commit);
@@ -64,9 +72,37 @@ export default function AboutPage() {
     setUpdateResult(null);
     setMessage("Checking for updates...");
     try {
+      const [isPackaged, isReleaseUpdaterEligible] = await Promise.all([
+        isPackagedDesktopRuntime(signal),
+        isReleaseUpdaterDesktopRuntime(signal),
+      ]);
+      if (signal?.aborted) return;
+      setPackaged(isPackaged);
       const nextVersion = await fetchAppVersion(signal);
       if (signal?.aborted) return;
       setVersion(nextVersion);
+
+      if (isReleaseUpdaterEligible) {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const update = await check();
+        if (signal?.aborted) return;
+        pendingUpdate.current = update;
+        if (update) {
+          setCheckState("available");
+          setMessage(`Version ${update.version} is ready to install.`);
+        } else {
+          setCheckState("current");
+          setMessage("HivemindOS is up to date.");
+        }
+        return;
+      }
+
+      if (isPackaged) {
+        setCheckState("current");
+        setMessage("Local source build; release updater is disabled for this bundle.");
+        return;
+      }
+
       if (isUpdateAvailable(nextVersion)) {
         setCheckState("available");
         setMessage(`Update available: ${short(nextVersion?.latestCommit)} is ready.`);
@@ -77,11 +113,39 @@ export default function AboutPage() {
     } catch (error) {
       if (signal?.aborted) return;
       setCheckState("error");
-      setMessage(error instanceof Error ? error.message : "Could not check for updates.");
+      setMessage(updaterErrorText(error, "Could not check for updates."));
     }
   }, []);
 
-  async function runUpdate() {
+  async function runNativeUpdate() {
+    const update = pendingUpdate.current;
+    if (!update) {
+      setRunState("error");
+      setMessage("No downloaded update is pending. Check for updates again.");
+      return;
+    }
+    setRunState("running");
+    setMessage("Downloading update...");
+    try {
+      await installNativeUpdate(update, (progress) => {
+        if (progress.phase === "downloading") {
+          setMessage(progress.percent !== null
+            ? `Downloading update... ${progress.percent}%`
+            : "Downloading update...");
+        } else if (progress.phase === "installing") {
+          setMessage("Installing update...");
+        } else {
+          setRunState("success");
+          setMessage("Update installed. Restarting HivemindOS...");
+        }
+      });
+    } catch (error) {
+      setRunState("error");
+      setMessage(updaterErrorText(error, "Update failed."));
+    }
+  }
+
+  async function runCheckoutUpdate() {
     if (!version?.appDir) {
       setRunState("error");
       setMessage("Could not find the local HivemindOS checkout for update.");
@@ -110,6 +174,14 @@ export default function AboutPage() {
     }
     setRunState("error");
     setMessage(data?.error ?? "Update failed.");
+  }
+
+  function runUpdate() {
+    if (packaged) {
+      void runNativeUpdate();
+      return;
+    }
+    void runCheckoutUpdate();
   }
 
   useEffect(() => {
@@ -147,9 +219,11 @@ export default function AboutPage() {
               Check again
             </button>
           ) : null}
-          <button className={styles.updateButton} type="button" disabled={!canUpdate} onClick={() => void runUpdate()}>
-            {runState === "running" ? "Updating..." : "Update"}
-          </button>
+          {packaged && !updateAvailable ? null : (
+            <button className={styles.updateButton} type="button" disabled={!canUpdate} onClick={runUpdate}>
+              {runState === "running" ? "Updating..." : updateAvailable ? "Update" : "Run test update"}
+            </button>
+          )}
         </div>
       </section>
       {updateResult?.method || updateResult?.fallbackCommand ? (

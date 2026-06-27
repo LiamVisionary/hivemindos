@@ -1,13 +1,17 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
-import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
+import { FleetHiveView } from "@/components/fleet-hive";
+import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
+import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { DashboardView, HivemindLinkClientStatus, MachineGroup } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 type IconComponent = ElementType<{
@@ -22,6 +26,8 @@ type FleetViewData = {
   ticker: NonNullable<FleetViewProps["ticker"]>;
   edges: NonNullable<FleetViewProps["edges"]>;
 };
+type FleetHiveViewMode = "hive" | "graph" | "map" | "list";
+type FleetChatTone = "hive" | "legacy";
 
 type TailnetCleanupBanner = {
   visible: boolean;
@@ -66,6 +72,8 @@ type AgentsPanelProps = {
   machineGroups: MachineGroup[];
   markNotificationRead: (id: string) => void;
   openMachineInitModal: () => void;
+  onChatOpenSpaceRightInsetChange?: (inset: number) => void;
+  onChatToneChange?: (tone: FleetChatTone) => void;
   onFixSyncIssue: NonNullable<FleetViewProps["onFixSyncIssue"]>;
   onRecentAgentArrivalSeen?: FleetViewProps["onRecentAgentArrivalSeen"];
   onToggleFleetAutoUpdatePaused?: () => void;
@@ -89,6 +97,7 @@ type AgentsPanelProps = {
   showHivemindLinkSignInBanner: boolean;
   startAgentChat: (agentId: string, options?: { fresh?: boolean }) => void;
   startAgentWorkChat: (agentId: string, task?: string) => void;
+  walletsByAgent: Record<string, AgentWalletConfig>;
 };
 
 type FleetPanelMachine = FleetViewData["machines"][number];
@@ -108,9 +117,12 @@ type AgentPhoneCallResult = {
       runtimeAgent?: AgentCallRuntimeAgent;
       room?: string;
       voiceReady?: boolean;
+      voiceRun?: AgentCallVoiceRun;
     };
   };
 };
+
+const FLEET_LAYOUT_STORAGE_KEY = "hivemindos.fleet.layout.v1";
 
 function resultHasDashboardVoice(data: AgentPhoneCallResult | null) {
   const call = data?.result?.call;
@@ -145,7 +157,13 @@ function findCallProfile(input: {
   return contextualAeons.length === 1 ? contextualAeons[0] : undefined;
 }
 
-export function AgentsPanel(props: AgentsPanelProps) {
+export const AgentsPanel = memo(AgentsPanelComponent);
+
+// Wrapped in memo above so background re-renders of DashboardApp (fleet polls,
+// chat streams, the voice waveform) skip this panel when its own props are
+// referentially unchanged. Function declaration is hoisted, so the memo() call
+// above resolves it fine.
+function AgentsPanelComponent(props: AgentsPanelProps) {
   const {
     Button,
     Check,
@@ -170,6 +188,8 @@ export function AgentsPanel(props: AgentsPanelProps) {
     machineGroups,
     markNotificationRead,
     openMachineInitModal,
+    onChatOpenSpaceRightInsetChange,
+    onChatToneChange,
     onFixSyncIssue,
     onRecentAgentArrivalSeen,
     onToggleFleetAutoUpdatePaused,
@@ -193,6 +213,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
     showHivemindLinkSignInBanner,
     startAgentChat,
     startAgentWorkChat,
+    walletsByAgent,
   } = props;
   const [agentCallSession, setAgentCallSession] = useState<{
     machine: FleetPanelMachine;
@@ -204,11 +225,44 @@ export function AgentsPanel(props: AgentsPanelProps) {
     realtime?: AgentCallRealtime;
     localTts?: AgentCallLocalTts;
     runtimeAgent?: AgentCallRuntimeAgent;
+    voiceRun?: AgentCallVoiceRun;
   } | null>(null);
 
   // The single logical Queen Bee — drives the central hive cell in the graph.
   const queenAgent = displayAgents.find((agent) => agent.beeRole === "queen")
     ?? displayAgents.find((agent) => /queen/i.test(agent.name));
+
+  // Fleet layout: the redesigned "hive" is the default; "classic" falls back to
+  // the legacy three-column FleetView. The choice is persisted across sessions.
+  const [fleetLayout, setFleetLayout] = useState<"hive" | "classic">("hive");
+  const [fleetHiveViewMode, setFleetHiveViewMode] = useState<FleetHiveViewMode>("hive");
+  useEffect(() => {
+    let cancelled = false;
+    void loadDashboardStateSnapshot().then((snapshot) => {
+      if (cancelled) return;
+      const stored = dashboardStateValue(snapshot, FLEET_LAYOUT_STORAGE_KEY);
+      if (stored === "classic" || stored === "hive") setFleetLayout(stored);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const chooseFleetLayout = useCallback((layout: "hive" | "classic") => {
+    setFleetLayout(layout);
+    if (layout === "hive") setFleetHiveViewMode("hive");
+    void saveDashboardStateValue(FLEET_LAYOUT_STORAGE_KEY, layout);
+  }, []);
+
+  // "Message the hive" now lives app-wide (PersistentHiveChat at the dashboard
+  // root) and routes straight to the Queen, so the fleet view no longer owns it.
+  useEffect(() => {
+    const rightInset = fleetLayout === "hive" && fleetHiveViewMode === "hive" ? 340 : 0;
+    onChatOpenSpaceRightInsetChange?.(rightInset);
+  }, [fleetHiveViewMode, fleetLayout, onChatOpenSpaceRightInsetChange]);
+  useEffect(() => () => onChatOpenSpaceRightInsetChange?.(0), [onChatOpenSpaceRightInsetChange]);
+  useEffect(() => {
+    const tone: FleetChatTone = fleetLayout === "hive" && fleetHiveViewMode === "graph" ? "legacy" : "hive";
+    onChatToneChange?.(tone);
+  }, [fleetHiveViewMode, fleetLayout, onChatToneChange]);
+  useEffect(() => () => onChatToneChange?.("hive"), [onChatToneChange]);
 
   const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
     const profile = findCallProfile({
@@ -275,6 +329,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
           phase: "ringing",
           realtime: call.realtime,
           runtimeAgent: call.runtimeAgent,
+          voiceRun: call.voiceRun,
         } : current);
         return;
       }
@@ -284,12 +339,13 @@ export function AgentsPanel(props: AgentsPanelProps) {
           phase: "ringing",
           localTts: call.localTts,
           runtimeAgent: call.runtimeAgent,
+          voiceRun: call.voiceRun,
         } : current);
         return;
       }
       if (livekit) {
         const notice = result.error ? "Dashboard audio joined the agent room, but setup reported a warning." : undefined;
-        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "ringing" } : current);
+        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "ringing", runtimeAgent: call?.runtimeAgent, voiceRun: call?.voiceRun } : current);
       } else {
         throw new Error("HivemindOS did not return dashboard call credentials.");
       }
@@ -302,6 +358,76 @@ export function AgentsPanel(props: AgentsPanelProps) {
       });
     }
   }, [callAgentOnDashboard]);
+
+  // Shared props consumed by both the new Hive layout and the legacy FleetView.
+  const fleetProps: FleetViewProps = {
+    machines: fleetViewData.machines,
+    tasks: fleetViewData.tasks,
+    alerts: fleetViewData.alerts,
+    ticker: fleetViewData.ticker,
+    edges: fleetViewData.edges,
+    hostedApps: fleetHostedApps,
+    loading: fleetDiscoveryLoading,
+    mastheadMode: "mobile",
+    recentAgentArrival,
+    onRecentAgentArrivalSeen,
+    onAddAgent: (machine) => {
+      const group = machineGroups.find((item) => item.key === machine.id);
+      if (group) addAgentToMachine(group);
+    },
+    onAddMachine: openMachineInitModal,
+    autoUpdatePaused: fleetAutoUpdatePaused,
+    onToggleAutoUpdatePaused: onToggleFleetAutoUpdatePaused,
+    updateStatusByMachine: fleetUpdateStatusByMachine,
+    updateDetailByMachine: fleetUpdateDetailByMachine,
+    walletsByAgent,
+    onUpdateMachine: (machine) => {
+      const group = machineGroups.find((item) => item.key === machine.id);
+      if (group) void runMachineUpdate(group);
+    },
+    onDismissAlert: (alert) => {
+      if (alert.id.startsWith("notification-")) {
+        markNotificationRead(alert.id.slice("notification-".length));
+      }
+    },
+    onRenameMachine: renameMachine,
+    onOpenCodeProof: () => setActiveView("integrations"),
+    onFixSyncIssue,
+    onOpenChat: (_, agent) => startAgentChat(agent.id, { fresh: true }),
+    onOpenTaskChat: (_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task),
+    onCallAgent: openAgentPhoneCall,
+    onOpenWallet: (_, agent) => {
+      setSelectedAgentId(agent.id);
+      setActiveView("wallet");
+    },
+    onEditSettings: (_, agent) => {
+      setSelectedAgentId(agent.id);
+      setAgentRenameDraft(agent.name);
+      setAgentRenameEditing(false);
+      setAgentRuntimeFolderEditing(false);
+      setAgentRuntimeFolderStatus("");
+      setAgentRuntimeAdvancedOpen(false);
+      setAgentSettingsPanel("role");
+      setAgentRoleModalId(agent.id);
+    },
+    onOpenQueenSettings: queenAgent ? () => {
+      setSelectedAgentId(queenAgent.id);
+      setAgentRenameDraft(queenAgent.name);
+      setAgentRenameEditing(false);
+      setAgentRuntimeFolderEditing(false);
+      setAgentRuntimeFolderStatus("");
+      setAgentRuntimeAdvancedOpen(false);
+      setAgentSettingsPanel("role");
+      setAgentRoleModalId(queenAgent.id);
+    } : undefined,
+    onDuplicate: (_, agent) => requestDuplicateAgent(agent.id),
+    onRemove: (machine, agent, depth, onProgress) => deleteAgent(agent.id, {
+      ...(depth ? { aeonDeleteDepth: depth, onProgress } : {}),
+      machine,
+      fleetAgent: agent,
+    }),
+  };
+  const layoutToggle = <FleetLayoutToggle layout={fleetLayout} onChoose={chooseFleetLayout} />;
 
   return (
     <>
@@ -393,73 +519,12 @@ export function AgentsPanel(props: AgentsPanelProps) {
               />
             </div>
           ) : null}
-          <div className={`${fleetClass("fleetViewport")} fleetViewportShell`}>
-            <FleetView
-              machines={fleetViewData.machines}
-              tasks={fleetViewData.tasks}
-              alerts={fleetViewData.alerts}
-              ticker={fleetViewData.ticker}
-              edges={fleetViewData.edges}
-              hostedApps={fleetHostedApps}
-              loading={fleetDiscoveryLoading}
-              mastheadMode="mobile"
-              recentAgentArrival={recentAgentArrival}
-              onRecentAgentArrivalSeen={onRecentAgentArrivalSeen}
-              onAddAgent={(machine) => {
-                const group = machineGroups.find((item) => item.key === machine.id);
-                if (group) addAgentToMachine(group);
-              }}
-              onAddMachine={openMachineInitModal}
-              autoUpdatePaused={fleetAutoUpdatePaused}
-              onToggleAutoUpdatePaused={onToggleFleetAutoUpdatePaused}
-              updateStatusByMachine={fleetUpdateStatusByMachine}
-              updateDetailByMachine={fleetUpdateDetailByMachine}
-              onUpdateMachine={(machine) => {
-                const group = machineGroups.find((item) => item.key === machine.id);
-                if (group) void runMachineUpdate(group);
-              }}
-              onDismissAlert={(alert) => {
-                if (alert.id.startsWith("notification-")) {
-                  markNotificationRead(alert.id.slice("notification-".length));
-                }
-              }}
-              onRenameMachine={renameMachine}
-              onOpenCodeProof={() => setActiveView("integrations")}
-              onFixSyncIssue={onFixSyncIssue}
-              onOpenChat={(_, agent) => startAgentChat(agent.id, { fresh: true })}
-              onOpenTaskChat={(_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task)}
-              onCallAgent={openAgentPhoneCall}
-              onOpenWallet={(_, agent) => {
-                setSelectedAgentId(agent.id);
-                setActiveView("wallet");
-              }}
-              onEditSettings={(_, agent) => {
-                setSelectedAgentId(agent.id);
-                setAgentRenameDraft(agent.name);
-                setAgentRenameEditing(false);
-                setAgentRuntimeFolderEditing(false);
-                setAgentRuntimeFolderStatus("");
-                setAgentRuntimeAdvancedOpen(false);
-                setAgentSettingsPanel("role");
-                setAgentRoleModalId(agent.id);
-              }}
-              onOpenQueenSettings={queenAgent ? () => {
-                setSelectedAgentId(queenAgent.id);
-                setAgentRenameDraft(queenAgent.name);
-                setAgentRenameEditing(false);
-                setAgentRuntimeFolderEditing(false);
-                setAgentRuntimeFolderStatus("");
-                setAgentRuntimeAdvancedOpen(false);
-                setAgentSettingsPanel("role");
-                setAgentRoleModalId(queenAgent.id);
-              } : undefined}
-              onDuplicate={(_, agent) => requestDuplicateAgent(agent.id)}
-              onRemove={(machine, agent, depth, onProgress) => deleteAgent(agent.id, {
-                ...(depth ? { aeonDeleteDepth: depth, onProgress } : {}),
-                machine,
-                fleetAgent: agent,
-              })}
-            />
+          <div className={`${fleetClass("fleetViewport")} fleetViewportShell`} style={{ position: "relative" }}>
+            {fleetLayout === "hive" ? (
+              <FleetHiveView {...fleetProps} layoutToggle={layoutToggle} onViewModeChange={setFleetHiveViewMode} />
+            ) : (
+              <FleetView {...fleetProps} layoutToggle={layoutToggle} />
+            )}
           </div>
           {agentCallSession ? (
             <AgentCallModal
@@ -472,6 +537,7 @@ export function AgentsPanel(props: AgentsPanelProps) {
               realtime={agentCallSession.realtime}
               localTts={agentCallSession.localTts}
               runtimeAgent={agentCallSession.runtimeAgent}
+              voiceRun={agentCallSession.voiceRun}
               onVoiceConnected={() => {
                 setAgentCallSession((current) => (
                   current?.agent.id === agentCallSession.agent.id && (current.phase === "ringing" || current.phase === "answered")
@@ -497,5 +563,62 @@ export function AgentsPanel(props: AgentsPanelProps) {
         </section>
       ) : null}
     </>
+  );
+}
+
+function FleetLayoutToggle({ layout, onChoose }: { layout: "hive" | "classic"; onChoose: (layout: "hive" | "classic") => void }) {
+  const isLight = useFrTheme() === "light";
+  const options: Array<{ id: "hive" | "classic"; label: string; title: string }> = [
+    { id: "hive", label: "Hive", title: "Redesigned hive layout" },
+    { id: "classic", label: "Classic", title: "Legacy three-column layout" },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Fleet layout"
+      style={{
+        display: "inline-flex",
+        gap: 2,
+        padding: 2,
+        borderRadius: 9999,
+        border: isLight ? "1px solid rgba(54,46,30,0.18)" : "1px solid rgba(148,163,184,0.28)",
+        background: isLight ? "rgba(251,248,241,0.72)" : "rgba(12,13,17,0.55)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+      }}
+    >
+      {options.map((option) => {
+        const active = layout === option.id;
+        return (
+          <button
+            key={option.id}
+            type="button"
+            aria-pressed={active}
+            title={option.title}
+            onClick={() => onChoose(option.id)}
+            style={{
+              cursor: "pointer",
+              border: 0,
+              borderRadius: 9999,
+              padding: "4px 12px",
+              fontFamily: "var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              background: active
+                ? (isLight ? "rgba(176,127,28,0.16)" : "rgba(231,180,92,0.16)")
+                : "transparent",
+              color: active
+                ? (isLight ? "#936811" : "#e7b45c")
+                : (isLight ? "#5e574b" : "rgba(148,163,184,0.9)"),
+              transition: "background 140ms ease, color 140ms ease",
+            }}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

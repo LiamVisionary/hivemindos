@@ -11,6 +11,10 @@ on:
         description: Branch, tag, or SHA to build
         required: true
         default: main
+      prerelease:
+        description: Publish as a pre-release (downloadable, but does NOT move the updater / auto-update installs)
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -50,37 +54,108 @@ jobs:
           fi
           echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+  standalone:
+    name: Build embedded Next standalone (shared)
+    needs: resolve
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Stamp release version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+        run: node scripts/bump-app-version.mjs --set "$RELEASE_VERSION"
+
+      # The Next standalone (server.js + traced node_modules + static assets) is
+      # architecture-independent JS. Build it ONCE here and hand it to every
+      # platform job, instead of each of the 4 platforms re-running the ~20-min
+      # `next build`. This also removes the next build from the slow Intel runner
+      # (which previously TIMED OUT building it). Cache keyed on the build inputs
+      # (stamped package.json included) so an unchanged source skips even this.
+      - name: Cache embedded Next standalone
+        uses: actions/cache@v4
+        with:
+          path: .next-tauri-build
+          key: next-standalone-v1-${{ hashFiles('components.json', 'next.config.ts', 'package.json', 'pnpm-lock.yaml', 'postcss.config.mjs', 'scripts/tauri-build.mjs', 'tsconfig.json', 'src/**', 'public/**') }}
+
+      - name: Build standalone (symlinks materialized for cross-OS portability)
+        env:
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          HIVEMINDOS_TAURI_STANDALONE_ONLY: "1"
+          TAURI_NEXT_BUILD_HEAP_MB: "12288"
+          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
+        run: node scripts/tauri-build.mjs
+
+      - name: Upload standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-standalone
+          # CRITICAL: upload-artifact@v4 defaults include-hidden-files to false and
+          # prunes any dot-prefixed directory + its entire subtree. The Next standalone
+          # nests its compiled server output in standalone/.next-tauri-build/ (distDir)
+          # and traced packages in node_modules/.pnpm/ — both dot-dirs. Without this,
+          # server.js uploads but the server chunks/required-server-files.json do NOT,
+          # so the downloaded standalone has no server behind it (green CI, broken app).
+          include-hidden-files: true
+          path: |
+            .next-tauri-build/standalone
+            .next-tauri-build/static
+          if-no-files-found: error
+          retention-days: 3
+
   build:
     name: Build ${{ matrix.label }}
-    needs: resolve
+    needs: [resolve, standalone]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Native Apple Silicon (arm64). NOTE: free macos-14 runners have only
-          # ~7 GB RAM, and the embedded Next build needs a ~6-8 GB Node heap
-          # (TAURI_NEXT_BUILD_HEAP_MB), so it may OOM here. For a reliable arm64
-          # dashboard build, use a paid macos-14-xlarge runner; fail-fast:false
-          # keeps the other legs running so the failure is fully diagnosed.
+          # FULL matrix. Every platform job DOWNLOADS the single shared Next
+          # standalone built once by the `standalone` job (ubuntu) and consumes
+          # it via HIVEMINDOS_TAURI_PREBUILT_STANDALONE=1 — so no platform runs
+          # its own ~20-min next build (this is what fixed the Intel timeout).
+          # The standalone job materializes symlinks before upload so Windows,
+          # which can't restore Unix symlinks, gets real files. Silicon is the
+          # only platform runtime-verified by boot test; the others are CI-green.
           - label: macOS Apple Silicon
             artifact_key: macos-arm64
-            os: macos-14
+            os: macos-14-xlarge
             app_arch: -arm64
-            bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
+            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           - label: macOS Intel
             artifact_key: macos-x64
             os: macos-15-intel
             app_arch: -x64
-            bundle_glob: src-tauri/target/release/bundle/macos/*.app src-tauri/target/release/bundle/dmg/*.dmg
+            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
           - label: Windows x64
             artifact_key: windows-x64
             os: windows-latest
-            bundle_glob: src-tauri/target/release/bundle/msi/*.msi src-tauri/target/release/bundle/nsis/*.exe
+            bundle_glob: src-tauri/target/release/bundle/msi/*.msi src-tauri/target/release/bundle/nsis/*.exe src-tauri/target/release/bundle/nsis/*.exe.sig
           - label: Linux x64
             artifact_key: linux-x64
             os: ubuntu-22.04
-            bundle_glob: src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/rpm/*.rpm
+            bundle_glob: src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/appimage/*.AppImage.sig src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/rpm/*.rpm
 
     steps:
       - name: Checkout release source
@@ -117,8 +192,32 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # Caches the cargo registry/git AND the compiled src-tauri/target, so the
+      # release build doesn't recompile every Tauri dependency crate from
+      # scratch on each run (the dominant cost). Keyed on the Rust toolchain +
+      # Cargo.lock; only the app crate itself recompiles after a version stamp.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Fetch Rust dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src-tauri
+          for attempt in 1 2 3 4; do
+            if cargo fetch --locked; then
+              exit 0
+            fi
+            sleep_seconds=$((attempt * 15))
+            echo "cargo fetch failed on attempt ${attempt}; retrying in ${sleep_seconds}s..." >&2
+            sleep "$sleep_seconds"
+          done
+          cargo fetch --locked
 
       - name: Stamp release version
         shell: bash
@@ -163,6 +262,18 @@ jobs:
             -k "$keychain_password" \
             "$keychain_path"
 
+      - name: Download prebuilt Next standalone
+        uses: actions/download-artifact@v4
+        with:
+          name: next-standalone
+          path: .next-tauri-build
+
+      - name: Verify Tauri command ACL surface is in lockstep
+        # Fails the build with a readable diff if a #[tauri::command] is missing
+        # from build.rs / capabilities (would crash at runtime with "not allowed
+        # by ACL"). Cheap insurance against the per-command declaration tax.
+        run: node scripts/check-tauri-command-acl.mjs
+
       - name: Build Tauri app
         env:
           # macOS Developer ID code signing + notarization. These are read by
@@ -174,13 +285,23 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Build the full embedded Next server (all API routes -> a working
-          # dashboard) instead of the static export, which strips API routes.
-          HIVEMINDOS_TAURI_EMBEDDED_NEXT: ${{ runner.os != 'Windows' && '1' || '' }}
-          # Standard macOS runners need more time for embedded Next build traces
-          # and signed/notarized packaging.
-          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '1800' }}
-        run: pnpm tauri:build
+          # Updater artifact signing (createUpdaterArtifacts). The build fails
+          # if this secret is unset — a release without signed updater
+          # artifacts would silently strand existing installs.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # Embedded mode (serve /api/* at runtime, no endpoint gaps) — but
+          # CONSUME the standalone the `standalone` job already built and we just
+          # downloaded into .next-tauri-build/, so this job skips the ~20-min
+          # next build and only stages the per-platform node binary + compiles
+          # Rust + bundles + signs. The heap/memory/timeout vars are now moot for
+          # platform jobs (no next build here) but kept harmless.
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          HIVEMINDOS_TAURI_PREBUILT_STANDALONE: "1"
+          TAURI_NEXT_BUILD_HEAP_MB: "12288"
+          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '2700' }}
+        run: pnpm tauri:build:release
 
       - name: Collect bundle assets
         shell: bash
@@ -189,44 +310,50 @@ jobs:
           mkdir -p release-assets
           shopt -s nullglob
           for item in ${{ matrix.bundle_glob }}; do
-            if [ -d "$item" ]; then
-              base="$(basename "$item")"
-              # Arch-tag the .app zip so Intel + arm64 macOS builds do not
-              # overwrite each other. DMG names already carry arch.
-              zipname="${base%.app}${{ matrix.app_arch }}.app.zip"
-              ditto -c -k --keepParent "$item" "release-assets/${zipname}" 2>/dev/null || zip -r "release-assets/${zipname}" "$item"
-            else
-              cp "$item" release-assets/
-            fi
-          done
-          for asset in release-assets/*; do
-            case "$(basename "$asset")" in
+            case "$(basename "$item")" in
               *_aarch64.dmg)
-                cp "$asset" release-assets/HivemindOS-macos-aarch64.dmg
+                cp "$item" release-assets/HivemindOS-macos-apple-silicon.dmg
                 ;;
               *_x64.dmg)
-                cp "$asset" release-assets/HivemindOS-macos-x64.dmg
+                cp "$item" release-assets/HivemindOS-macos-intel.dmg
                 ;;
-              *-arm64.app.zip)
-                cp "$asset" release-assets/HivemindOS-macos-arm64.app.zip
+              *.app.tar.gz)
+                if [ "${{ matrix.app_arch }}" = "-arm64" ]; then
+                  cp "$item" release-assets/HivemindOS-updater-macos-apple-silicon.app.tar.gz
+                else
+                  cp "$item" release-assets/HivemindOS-updater-macos-intel.app.tar.gz
+                fi
                 ;;
-              *-x64.app.zip)
-                cp "$asset" release-assets/HivemindOS-macos-x64.app.zip
+              *.app.tar.gz.sig)
+                if [ "${{ matrix.app_arch }}" = "-arm64" ]; then
+                  cp "$item" release-assets/HivemindOS-updater-macos-apple-silicon.app.tar.gz.sig
+                else
+                  cp "$item" release-assets/HivemindOS-updater-macos-intel.app.tar.gz.sig
+                fi
                 ;;
               *_x64-setup.exe)
-                cp "$asset" release-assets/HivemindOS-windows-x64-setup.exe
+                cp "$item" release-assets/HivemindOS-windows-x64-setup.exe
+                ;;
+              *_x64-setup.exe.sig)
+                cp "$item" release-assets/HivemindOS-windows-x64-setup.exe.sig
                 ;;
               *_x64_en-US.msi)
-                cp "$asset" release-assets/HivemindOS-windows-x64.msi
+                cp "$item" release-assets/HivemindOS-windows-x64.msi
                 ;;
               *_amd64.AppImage)
-                cp "$asset" release-assets/HivemindOS-linux-x64.AppImage
+                cp "$item" release-assets/HivemindOS-linux-x64.AppImage
+                ;;
+              *_amd64.AppImage.sig)
+                cp "$item" release-assets/HivemindOS-linux-x64.AppImage.sig
                 ;;
               *_amd64.deb)
-                cp "$asset" release-assets/HivemindOS-linux-x64.deb
+                cp "$item" release-assets/HivemindOS-linux-x64.deb
                 ;;
               *-1.x86_64.rpm)
-                cp "$asset" release-assets/HivemindOS-linux-x64.rpm
+                cp "$item" release-assets/HivemindOS-linux-x64.rpm
+                ;;
+              *)
+                echo "Skipping non-release bundle asset: $item"
                 ;;
             esac
           done
@@ -264,11 +391,26 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Build updater manifest
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-updater-manifest.mjs \
+            --version "$RELEASE_VERSION" \
+            --repo "$REPOSITORY" \
+            --assets release-assets \
+            --out release-assets/latest.json
+          cat release-assets/latest.json
+
       - name: Create tag and publish release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
           REPOSITORY: ${{ github.repository }}
+          PRERELEASE: ${{ github.event.inputs.prerelease }}
         shell: bash
         run: |
           set -euo pipefail
@@ -296,7 +438,18 @@ jobs:
           git tag -a "$release_tag" -m "HivemindOS ${release_tag}"
           git push origin "$release_tag"
 
+          # A pre-release stays OFF GitHub's /releases/latest/ pointer, so the
+          # updater (releases/latest/download/latest.json) does NOT pick it up and
+          # existing installs do not auto-update. Promote later with
+          # `gh release edit <tag> --prerelease=false` to make it Latest.
+          prerelease_flag=()
+          if [ "${PRERELEASE:-false}" = "true" ]; then
+            prerelease_flag=(--prerelease)
+            echo "Publishing ${release_tag} as a PRE-RELEASE (no auto-update)."
+          fi
+
           gh release create "$release_tag" release-assets/* \
             --repo "$REPOSITORY" \
             --title "$release_tag" \
+            "${prerelease_flag[@]}" \
             --generate-notes

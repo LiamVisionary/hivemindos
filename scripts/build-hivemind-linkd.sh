@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/macos-background-helpers.sh
+. "$ROOT/scripts/macos-background-helpers.sh"
 OUT_DIR="$ROOT/bin"
 OUT="$OUT_DIR/hivemind-linkd"
 
@@ -14,4 +16,5 @@ fi
 mkdir -p "$OUT_DIR"
 cd "$ROOT"
 go build -o "$OUT" ./cmd/hivemind-linkd
+hivemindos_sign_macos_binary "$OUT" "com.hivemindos.linkd"
 echo "$OUT"

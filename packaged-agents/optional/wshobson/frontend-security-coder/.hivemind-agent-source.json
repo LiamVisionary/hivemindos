@@ -1,0 +1,19 @@
+{
+  "upstreamName": "frontend-security-coder",
+  "slug": "frontend-security-coder",
+  "label": "Frontend Security Coder",
+  "domain": "frontend-mobile-security",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/frontend-mobile-security/agents/frontend-security-coder.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent frontend-security-coder",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/frontend-security-coder",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert in secure frontend coding practices specializing in XSS prevention, output sanitization, and client-side security patterns. Use PROACTIVELY for frontend security implementations or client-side security code reviews."
+}

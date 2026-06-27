@@ -65,9 +65,17 @@ function PersonalWalletCardLoading({ index }: { index: number }) {
   );
 }
 
-function AgentWalletTileLoading({ index }: { index: number }) {
+export function PersonalWalletsChecking() {
   return (
-    <article className={walletClass("walletSkeletonTile")} role="listitem" style={{ opacity: 1 - index * 0.06 }}>
+    <div className={personalClass("personalWalletGrid")} role="list" aria-label="Checking local wallets" aria-busy="true">
+      <PersonalWalletCardLoading index={0} />
+    </div>
+  );
+}
+
+export function AgentWalletTileLoading({ index, role }: { index: number; role?: "listitem" }) {
+  return (
+    <article className={walletClass("walletSkeletonTile")} role={role} style={{ opacity: 1 - index * 0.06 }}>
       <div className={walletClass("walletSkeletonTileHead")}>
         <Skeleton className={walletClass("walletSkeletonCircle")} style={{ width: 8, height: 8 }} />
         <Skeleton style={{ width: 118, height: 14 }} />
@@ -81,6 +89,14 @@ function AgentWalletTileLoading({ index }: { index: number }) {
         <Skeleton className={walletClass("walletSkeletonCircle")} style={{ width: 18, height: 18 }} />
       </div>
     </article>
+  );
+}
+
+export function AgentWalletsChecking() {
+  return (
+    <div className={walletClass("walletGridList")} role="list" aria-label="Loading agent wallets" aria-busy="true">
+      {Array.from({ length: 4 }, (_, index) => <AgentWalletTileLoading key={index} index={index} role="listitem" />)}
+    </div>
   );
 }
 

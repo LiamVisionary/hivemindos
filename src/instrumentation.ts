@@ -67,6 +67,52 @@ export async function register() {
     }
   })();
 
+  // Auto-start the perpetual company-autonomy driver so launched "zero human
+  // companies" keep working toward their apex goal across restarts. Same
+  // no-app-imports constraint as above: read the disable flag via getBuiltinModule
+  // and start the driver by POSTing to our own API route. The driver is a no-op
+  // unless a company has been explicitly launched (autonomy=true) and is not
+  // frozen; spend stays bounded by company budgets. Disable with
+  // HIVEMINDOS_COMPANY_AUTONOMY_DRIVER=0.
+  void (async () => {
+    try {
+      const builtin = (process as unknown as { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule;
+      const fs = builtin?.("node:fs") as { readFileSync?: (path: string, enc: string) => string } | undefined;
+      const os = builtin?.("node:os") as { homedir?: () => string } | undefined;
+      const envFile = (() => {
+        try {
+          return fs?.readFileSync?.(`${os?.homedir?.() ?? ""}/.hivemindos/.env`, "utf8") ?? "";
+        } catch {
+          return "";
+        }
+      })();
+      const flag = "HIVEMINDOS_COMPANY_AUTONOMY_DRIVER";
+      const fromProcess = process.env[flag]?.trim();
+      const fromFile = envFile.match(new RegExp(`^\\s*(?:export\\s+)?${flag}\\s*=\\s*(.+)\\s*$`, "m"))?.[1]?.trim();
+      const value = (fromProcess || fromFile || "").replace(/^["']|["']$/g, "").toLowerCase();
+      if (value === "0" || value === "false") return; // default ON
+      const port = process.env.PORT?.trim();
+      if (!port) return;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 4_000));
+        const started = await fetch(`http://127.0.0.1:${port}/api/company-autonomy-driver`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+        })
+          .then((response) => response.ok)
+          .catch(() => false);
+        if (started) {
+          console.log("[company-autonomy-driver] auto-started");
+          return;
+        }
+      }
+      console.error("[company-autonomy-driver] autostart gave up after 5 attempts");
+    } catch (error) {
+      console.error("[company-autonomy-driver] autostart failed:", error instanceof Error ? error.message : error);
+    }
+  })();
+
   if (process.env.NODE_ENV !== "development") return;
   const { registerDevMemoryGuard } = await import("@/lib/services/dev-memory-guard");
   registerDevMemoryGuard();

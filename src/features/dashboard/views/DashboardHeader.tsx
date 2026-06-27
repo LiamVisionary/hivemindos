@@ -1,6 +1,8 @@
 "use client";
 
 import { startTransition, useEffect, useState, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { useNativeUpdate } from "@/lib/native/use-native-update";
 import type { AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard } from "@/lib/types/kanban";
 import type { FleetActiveApp } from "@/components/fleet/fleet-data";
@@ -56,6 +58,19 @@ export function DashboardHeader(props: DashboardHeaderProps) {
   } = props;
   const [mobileRoutesOpen, setMobileRoutesOpen] = useState(false);
   const [fallbackVersion, setFallbackVersion] = useState("");
+  const nativeUpdate = useNativeUpdate();
+  const showUpdateAction = nativeUpdate.available || nativeUpdate.busy;
+  const updateLabel = nativeUpdate.error
+    ? "Update · retry"
+    : nativeUpdate.phase === "downloading"
+      ? (nativeUpdate.percent !== null ? `Updating ${nativeUpdate.percent}%` : "Updating…")
+      : nativeUpdate.phase === "installing"
+        ? "Installing…"
+        : nativeUpdate.phase === "relaunching"
+          ? "Restarting…"
+          : nativeUpdate.version
+            ? `Update to ${nativeUpdate.version}`
+            : "Update ready";
   const showFleetHeader = activeView === "agents";
   const displayVersion = appVersion?.version ?? fallbackVersion;
   const topbarClassName = [
@@ -68,7 +83,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     .filter((item): item is (typeof navItems)[number] => Boolean(item));
   const isActiveRoute = (id: DashboardView) => id === activeView
     || (id === "kanban" && isWorkView(activeView))
-    || (id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion"));
+    || (id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion" || activeView === "governance"));
   const activeNavLabel = navItems.find((item) => item.id === activeView)?.label
     ?? primaryNavItems.find((item) => isActiveRoute(item.id))?.label
     ?? activeHeader.title;
@@ -82,6 +97,17 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     });
     closeMobileRoutes();
   };
+  // macOS desktop: the window uses a transparent title bar, so make the top bar
+  // a drag region and inset it clear of the traffic lights (Codex-style chrome).
+  useEffect(() => {
+    if (!isTauriDesktopRuntime()) return;
+    const isMac = navigator.userAgent.includes("Mac") || navigator.platform.toLowerCase().includes("mac");
+    if (!isMac) return;
+    const root = document.documentElement;
+    root.classList.add("macDesktopChrome");
+    return () => root.classList.remove("macDesktopChrome");
+  }, []);
+
   useEffect(() => {
     if (!showFleetHeader || appVersion?.version || fallbackVersion) return;
     let cancelled = false;
@@ -98,7 +124,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
 
   return (
     <TooltipProvider delayDuration={120}>
-      <header className={topbarClassName} aria-label="Control room navigation">
+      <header className={topbarClassName} aria-label="Control room navigation" data-tauri-drag-region="deep">
         <div id="mobile-route-drawer-shell" className={`mobileRouteShell ${mobileRoutesOpen ? "open" : ""}`}>
           <button
             type="button"
@@ -157,7 +183,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
           </div>
         </div>
 
-        <div className="topbarMasthead">
+        <div className={showUpdateAction ? "topbarMasthead hasUpdateAction" : "topbarMasthead"}>
           <div className="brandIntro">
             <button
               type="button"
@@ -196,6 +222,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
                         className={`viewTab ${active ? "active" : ""}`}
                         aria-pressed={active}
                         title={`${item.label}: ${item.detail}`}
+                        data-bee-nav={item.id}
                         onClick={() => selectRoute(item.id)}
                       >
                         {viewIcon(item.id)}
@@ -217,6 +244,19 @@ export function DashboardHeader(props: DashboardHeaderProps) {
                 );
               })}
           </nav>
+          {showUpdateAction ? (
+            <button
+              type="button"
+              className="appUpdateButton"
+              onClick={nativeUpdate.install}
+              disabled={nativeUpdate.busy}
+              title={nativeUpdate.error
+                ?? (nativeUpdate.version ? `HivemindOS ${nativeUpdate.version} is ready to install` : "Install the latest HivemindOS")}
+            >
+              <span className="appUpdateDot" aria-hidden="true" />
+              {updateLabel}
+            </button>
+          ) : null}
         </div>
         {appCompletionNotification ? (
           <DashboardAppCompletionToast key={appCompletionNotification.id} notification={appCompletionNotification} />
@@ -226,7 +266,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
   );
 }
 
-function DashboardAppCompletionToast({ notification }: { notification: DashboardAppCompletionNotification }) {
+export function DashboardAppCompletionToast({ notification }: { notification: DashboardAppCompletionNotification }) {
   const [brokenIcon, setBrokenIcon] = useState(false);
   const iconUrl = notification.app?.iconUrl;
   const initials = notification.app?.initials ?? notification.initials ?? "HM";

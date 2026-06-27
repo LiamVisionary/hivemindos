@@ -1,0 +1,114 @@
+.brainLoader {
+  --brain-loader-rail-sheen: rgba(94, 234, 212, 0.34);
+  --brain-loader-rail-tail: rgba(212, 180, 111, 0.16);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px;
+  background: rgba(6, 10, 16, 0.72);
+  box-shadow: inset 0 0 140px rgba(0, 0, 0, 0.24);
+  color: var(--foreground);
+  text-align: center;
+}
+
+.brainLoader.compact {
+  inset: 0;
+  align-content: center;
+  justify-items: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 0;
+  background: rgba(6, 10, 16, 0.42);
+  box-shadow: none;
+  padding: 28px;
+  text-align: center;
+}
+
+.brainLoader.inline {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  width: min(100%, 320px);
+  align-content: center;
+  gap: 9px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.brainLoaderCopy {
+  display: grid;
+  gap: 3px;
+}
+
+.brainLoader strong {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brainLoader span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.brainLoaderBee {
+  display: block;
+  min-height: 0;
+  overflow: visible;
+  cursor: default;
+  pointer-events: none;
+  touch-action: auto;
+  filter: drop-shadow(0 0 18px rgba(45, 212, 191, 0.16))
+    drop-shadow(0 8px 18px rgba(242, 183, 5, 0.14));
+  user-select: none;
+}
+
+.brainLoadingRail {
+  position: relative;
+  width: min(220px, 100%);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.13);
+}
+
+.brainLoader.compact .brainLoadingRail {
+  display: none;
+}
+
+.brainLoadingRail span {
+  position: absolute;
+  inset: 0 15%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--brain-loader-rail-sheen),
+    var(--brain-loader-rail-tail),
+    transparent
+  );
+  opacity: 0.72;
+}
+
+:global(:root[data-theme="hive-light"]) .brainLoader {
+  --brain-loader-rail-sheen: rgba(176, 127, 28, 0.22);
+  --brain-loader-rail-tail: rgba(95, 143, 90, 0.14);
+  background: rgba(248, 244, 232, 0.78);
+  box-shadow: inset 0 0 140px rgba(92, 75, 45, 0.08);
+}
+
+:global(:root[data-theme="hive-light"]) .brainLoader.compact {
+  background: rgba(248, 244, 232, 0.5);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .brainLoaderBee {
+  filter: drop-shadow(0 0 18px rgba(13, 142, 126, 0.12))
+    drop-shadow(0 8px 18px rgba(176, 127, 28, 0.16));
+}

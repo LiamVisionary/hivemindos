@@ -1,0 +1,19 @@
+{
+  "upstreamName": "legacy-modernizer",
+  "slug": "code-refactoring-legacy-modernizer",
+  "label": "Legacy Modernizer",
+  "domain": "code-refactoring",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/code-refactoring/agents/legacy-modernizer.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent code-refactoring-legacy-modernizer",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/code-refactoring-legacy-modernizer",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Refactor legacy codebases, migrate outdated frameworks, and implement gradual modernization. Handles technical debt, dependency updates, and backward compatibility. Use PROACTIVELY for legacy system updates, framework migrations, or technical debt reduction."
+}

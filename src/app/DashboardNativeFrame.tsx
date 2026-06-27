@@ -52,6 +52,7 @@ type DashboardNativeFrameProps = {
 export default function DashboardNativeFrame(props: DashboardNativeFrameProps) {
   return (
     <>
+      <div className="desktopWindowDragStrip" aria-hidden="true" data-tauri-drag-region="deep" />
       <DashboardApp {...props} />
       <NativeFirstRunOnboarding />
     </>
@@ -73,12 +74,12 @@ function DashboardFrameLoading() {
         position: "relative",
         overflow: "hidden",
         padding: 24,
-        background: "#080a0f",
-        color: "#f4f7fb",
+        background: "var(--background, #090b10)",
+        color: "var(--foreground, #f4f7fb)",
         fontFamily: "Geist, system-ui, sans-serif",
       }}
     >
-      <DashboardHiveLoader title={routeTitle} detail={routeDetail} />
+      <DashboardHiveLoader compact prominent title={routeTitle} detail={routeDetail} />
     </main>
   );
 }

@@ -47,6 +47,21 @@ export const MODEL_PROVIDER_GATEWAYS: Record<string, ModelProviderGateway> = {
       models: [],
     },
   },
+  venice: {
+    slug: "venice",
+    name: "Venice AI",
+    detail: "Private inference · x402",
+    iconPath: "/icons/runtimes/venice-keys.svg",
+    iconMode: "image",
+    fallback: "VE",
+    defaultModel: "llama-3.3-70b",
+    hermes: {
+      name: "Venice AI",
+      baseUrl: "https://api.venice.ai/api/v1",
+      keyEnv: "VENICE_API_KEY",
+      models: ["llama-3.3-70b"],
+    },
+  },
   usepod: {
     slug: "usepod",
     name: "UsePod",
@@ -61,6 +76,31 @@ export const MODEL_PROVIDER_GATEWAYS: Record<string, ModelProviderGateway> = {
       keyEnv: "USEPOD_TOKEN",
       models: ["gpt-5.5"],
     },
+  },
+  openrouter: {
+    slug: "openrouter",
+    name: "OpenRouter",
+    detail: "Hosted models · incl. Fusion",
+    iconPath: "/icons/runtimes/openrouter.svg",
+    iconMode: "mask",
+    fallback: "OR",
+    // Surfaced as a picker tile on every runtime, keyed off OPENROUTER_API_KEY in
+    // the shared hive env. The model dropdown also offers Adaptive (best free
+    // route). Served by the existing OpenRouter path; no `hermes` block so it is
+    // not auto-registered into Hermes provider setup (Hermes manages its own).
+    defaultModel: "openrouter/fusion",
+  },
+  "hive-fusion": {
+    slug: "hive-fusion",
+    name: "Hive Fusion",
+    detail: "Compound model · panel → judge → synthesis",
+    iconPath: "/icons/runtimes/hive-fusion.svg",
+    iconMode: "mask",
+    fallback: "HF",
+    // Native compound model: fans out to a panel of your configured providers,
+    // judges their answers, then synthesizes. OpenRouter's hosted compound model
+    // is offered separately as `openrouter/fusion` under the OpenRouter provider.
+    defaultModel: "hive-fusion-native",
   },
 };
 

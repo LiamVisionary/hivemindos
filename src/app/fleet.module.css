@@ -4357,3 +4357,365 @@
   background: var(--field);
   color: var(--foreground);
 }
+
+:global(:root[data-theme="hive-light"]) .fleetConstellationPanel,
+:global(:root[data-theme="hive-light"]) .taskBubble,
+:global(:root[data-theme="hive-light"]) .historyItem,
+:global(:root[data-theme="hive-light"]) .emptyState,
+:global(:root[data-theme="hive-light"]) .emptyHistory,
+:global(:root[data-theme="hive-light"]) .agentSettingsTabs,
+:global(:root[data-theme="hive-light"]) .schedulerSegment,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSegments button,
+:global(:root[data-theme="hive-light"]) .runtimeIconMark,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassGrid button,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassDetail,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassCreator,
+:global(:root[data-theme="hive-light"]) .agentWorkerImagePicker button,
+:global(:root[data-theme="hive-light"]) .agentWorkerSkillChooser button,
+:global(:root[data-theme="hive-light"]) .aeonConnectionPanel,
+:global(:root[data-theme="hive-light"]) .aeonModeCards button,
+:global(:root[data-theme="hive-light"]) .aeonOauthCard,
+:global(:root[data-theme="hive-light"]) .agentMemoryFolderRow,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAeonPanel,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAeonChecklist span,
+:global(:root[data-theme="hive-light"]) .agentRuntimeGroupHeader button,
+:global(:root[data-theme="hive-light"]) .agentRuntimeProviderCard,
+:global(:root[data-theme="hive-light"]) .agentRuntimeModelCard,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAddCard,
+:global(:root[data-theme="hive-light"]) .agentRuntimeEmptyCard,
+:global(:root[data-theme="hive-light"]) .adaptiveAdvanced,
+:global(:root[data-theme="hive-light"]) .guidedProviderStatus,
+:global(:root[data-theme="hive-light"]) .agentRuntimeCapabilityCard,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSetupPanel,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolWorkbench section,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSessionResults article,
+:global(:root[data-theme="hive-light"]) .schedulerPanel,
+:global(:root[data-theme="hive-light"]) .schedulerMiniStats span,
+:global(:root[data-theme="hive-light"]) .schedulerComposer,
+:global(:root[data-theme="hive-light"]) .scheduleCard,
+:global(:root[data-theme="hive-light"]) .scheduleEmpty,
+:global(:root[data-theme="hive-light"]) .skillBrowserCard,
+:global(:root[data-theme="hive-light"]) .schedulerSection,
+:global(:root[data-theme="hive-light"]) .schedulerStepItem,
+:global(:root[data-theme="hive-light"]) .schedulerStepPreview,
+:global(:root[data-theme="hive-light"]) .skillBrowserSearch,
+:global(:root[data-theme="hive-light"]) .skillWriterPanel textarea,
+:global(:root[data-theme="hive-light"]) .setupCommandBox {
+  border-color: var(--comb-line);
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .taskPanelHeader button,
+:global(:root[data-theme="hive-light"]) .agentViewMore,
+:global(:root[data-theme="hive-light"]) .agentWalletShortcut,
+:global(:root[data-theme="hive-light"]) .machineHeaderActions > strong,
+:global(:root[data-theme="hive-light"]) .agentNameEdit button,
+:global(:root[data-theme="hive-light"]) .setupModalHeader .agentNameEdit button:not([data-slot="button"]),
+:global(:root[data-theme="hive-light"]) .agentMemoryFolderActions button,
+:global(:root[data-theme="hive-light"]) .agentMemoryPathEditor button,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSummary button,
+:global(:root[data-theme="hive-light"]) .agentRuntimeGroupHeader button,
+:global(:root[data-theme="hive-light"]) .schedulerPresetRow button,
+:global(:root[data-theme="hive-light"]) .schedulerSkillPicker button,
+:global(:root[data-theme="hive-light"]) .scheduleSkillRow span,
+:global(:root[data-theme="hive-light"]) .schedulerAttachButton,
+:global(:root[data-theme="hive-light"]) .schedulerAttachPopover button,
+:global(:root[data-theme="hive-light"]) .schedulerAttachChoices button,
+:global(:root[data-theme="hive-light"]) .schedulerAttachmentBadge,
+:global(:root[data-theme="hive-light"]) .schedulerStepInputRow > span,
+:global(:root[data-theme="hive-light"]) .schedulerModelCluster > button,
+:global(:root[data-theme="hive-light"]) .schedulerAddStepButton,
+:global(:root[data-theme="hive-light"]) .skillBrowserSearch button,
+:global(:root[data-theme="hive-light"]) .setupCommandBox > span,
+:global(:root[data-theme="hive-light"]) .machineInitTokenOk,
+:global(:root[data-theme="hive-light"]) .agentSettingsInfo,
+:global(:root[data-theme="hive-light"]) .agentSecurityGrid article,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSummary,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolStatus,
+:global(:root[data-theme="hive-light"]) .schedulerImportStatus {
+  border-color: var(--line);
+  background: var(--button-accent);
+  color: var(--text-soft);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .setupModalBackdrop {
+  background: rgba(34, 29, 20, 0.34);
+  backdrop-filter: blur(16px);
+}
+
+:global(:root[data-theme="hive-light"]) .machineHeader span,
+:global(:root[data-theme="hive-light"]) .machineVersion,
+:global(:root[data-theme="hive-light"]) .agentCard span,
+:global(:root[data-theme="hive-light"]) .agentSelect span,
+:global(:root[data-theme="hive-light"]) .agentBubble span,
+:global(:root[data-theme="hive-light"]) .taskBubbleFooter span:first-child,
+:global(:root[data-theme="hive-light"]) .machineInitCommand > span,
+:global(:root[data-theme="hive-light"]) .machineInitCost strong,
+:global(:root[data-theme="hive-light"]) .agentWorkerCapabilityBadges span,
+:global(:root[data-theme="hive-light"]) .agentWorkerAddSkillBadge,
+:global(:root[data-theme="hive-light"]) .aeonOauthIcon,
+:global(:root[data-theme="hive-light"]) .agentRuntimeCapabilityBadges > span,
+:global(:root[data-theme="hive-light"]) .runtimeSetupBadge,
+:global(:root[data-theme="hive-light"]) .schedulerMiniStats svg,
+:global(:root[data-theme="hive-light"]) .schedulerStepPreview span,
+:global(:root[data-theme="hive-light"]) .scheduleCardTop span,
+:global(:root[data-theme="hive-light"]) .skillBrowserCard span,
+:global(:root[data-theme="hive-light"]) .skillUpdateBadge,
+:global(:root[data-theme="hive-light"]) .setupCommandBox > span {
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .machineHeader p,
+:global(:root[data-theme="hive-light"]) .machineHeader small,
+:global(:root[data-theme="hive-light"]) .agentCard small,
+:global(:root[data-theme="hive-light"]) .agentSelect small,
+:global(:root[data-theme="hive-light"]) .agentBubble p,
+:global(:root[data-theme="hive-light"]) .agentBubble small,
+:global(:root[data-theme="hive-light"]) .activityMarkdown,
+:global(:root[data-theme="hive-light"]) .taskBubbleMeta,
+:global(:root[data-theme="hive-light"]) .taskBubbleFooter,
+:global(:root[data-theme="hive-light"]) .taskBubble p,
+:global(:root[data-theme="hive-light"]) .historyItem span,
+:global(:root[data-theme="hive-light"]) .historyItem small,
+:global(:root[data-theme="hive-light"]) .setupModalHeader p,
+:global(:root[data-theme="hive-light"]) .agentRoleBadge,
+:global(:root[data-theme="hive-light"]) .machineInitStep,
+:global(:root[data-theme="hive-light"]) .machineInitCost p,
+:global(:root[data-theme="hive-light"]) .machineInitSpecs dt,
+:global(:root[data-theme="hive-light"]) .agentSettingsField span,
+:global(:root[data-theme="hive-light"]) .runtimeSegmentSubcopy,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassDetail p,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassDetail small,
+:global(:root[data-theme="hive-light"]) .aeonConnectionHeader span,
+:global(:root[data-theme="hive-light"]) .aeonConnectionHeader p,
+:global(:root[data-theme="hive-light"]) .aeonModeCards small,
+:global(:root[data-theme="hive-light"]) .aeonOauthCard p,
+:global(:root[data-theme="hive-light"]) .agentMemoryFolderRow p,
+:global(:root[data-theme="hive-light"]) .agentMemoryStatus,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSummary p,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAeonHeader p,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAeonStatus p,
+:global(:root[data-theme="hive-light"]) .agentRuntimeProviderCard small,
+:global(:root[data-theme="hive-light"]) .agentRuntimeModelCard small,
+:global(:root[data-theme="hive-light"]) .agentRuntimeEmptyCard small,
+:global(:root[data-theme="hive-light"]) .agentRuntimeModelSetup p,
+:global(:root[data-theme="hive-light"]) .guidedProviderHeader p,
+:global(:root[data-theme="hive-light"]) .guidedProviderStatus p,
+:global(:root[data-theme="hive-light"]) .guidedProviderMessage,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolsHeader p,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolWorkbench p,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolStatus,
+:global(:root[data-theme="hive-light"]) .agentRuntimeCapabilityCard p,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSetupPanel p,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSetupPanel li,
+:global(:root[data-theme="hive-light"]) .agentSecurityGrid p,
+:global(:root[data-theme="hive-light"]) .schedulerStudioHeader p,
+:global(:root[data-theme="hive-light"]) .schedulerComposerTop span,
+:global(:root[data-theme="hive-light"]) .schedulerInstructionHeader small,
+:global(:root[data-theme="hive-light"]) .schedulerField span,
+:global(:root[data-theme="hive-light"]) .schedulerTinyLabel,
+:global(:root[data-theme="hive-light"]) .schedulerStepCounts,
+:global(:root[data-theme="hive-light"]) .schedulerStepSummary,
+:global(:root[data-theme="hive-light"]) .schedulerStepPreview p,
+:global(:root[data-theme="hive-light"]) .emptyStepPreview p,
+:global(:root[data-theme="hive-light"]) .scheduleCardTop small,
+:global(:root[data-theme="hive-light"]) .scheduleCard p,
+:global(:root[data-theme="hive-light"]) .scheduleEmpty p,
+:global(:root[data-theme="hive-light"]) .skillBrowserCard p,
+:global(:root[data-theme="hive-light"]) .skillBrowserStatus,
+:global(:root[data-theme="hive-light"]) .setupCommandHeader p,
+:global(:root[data-theme="hive-light"]) .setupAfterCopy,
+:global(:root[data-theme="hive-light"]) .connectionSummary dt {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .taskBubble strong,
+:global(:root[data-theme="hive-light"]) .historyItem strong,
+:global(:root[data-theme="hive-light"]) .machineInitSpecs dd,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassGrid strong,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassDetail strong,
+:global(:root[data-theme="hive-light"]) .agentWorkerCreatorHeader strong,
+:global(:root[data-theme="hive-light"]) .aeonConnectionHeader strong,
+:global(:root[data-theme="hive-light"]) .aeonModeCards span,
+:global(:root[data-theme="hive-light"]) .aeonOauthCard strong,
+:global(:root[data-theme="hive-light"]) .agentMemoryFolderRow strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSummary strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAeonHeader strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeGroupHeader span,
+:global(:root[data-theme="hive-light"]) .agentRuntimeProviderCard strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeModelCard strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAddCard strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeEmptyCard strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeModelSetup strong,
+:global(:root[data-theme="hive-light"]) .guidedProviderHeader strong,
+:global(:root[data-theme="hive-light"]) .guidedProviderStatus strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolsHeader strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolWorkbench strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeCapabilityCard strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSetupPanel strong,
+:global(:root[data-theme="hive-light"]) .agentSecurityGrid strong,
+:global(:root[data-theme="hive-light"]) .schedulerComposerTop strong,
+:global(:root[data-theme="hive-light"]) .scheduleCard h3,
+:global(:root[data-theme="hive-light"]) .skillBrowserCard strong,
+:global(:root[data-theme="hive-light"]) .setupCommandHeader strong {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .activityMarkdown code,
+:global(:root[data-theme="hive-light"]) .activityMarkdown pre,
+:global(:root[data-theme="hive-light"]) .machineUpdateStatus pre,
+:global(:root[data-theme="hive-light"]) .machineInitCommand pre,
+:global(:root[data-theme="hive-light"]) .setupCommandBox pre,
+:global(:root[data-theme="hive-light"]) .adaptiveTooltip {
+  border-color: var(--line);
+  background: var(--field);
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .schedulerField input,
+:global(:root[data-theme="hive-light"]) .schedulerField select,
+:global(:root[data-theme="hive-light"]) .schedulerSection textarea,
+:global(:root[data-theme="hive-light"]) .schedulerAttachSearch input,
+:global(:root[data-theme="hive-light"]) .schedulerStepInputRow input,
+:global(:root[data-theme="hive-light"]) .skillBrowserSearch input,
+:global(:root[data-theme="hive-light"]) .skillBrowserGithubForm input,
+:global(:root[data-theme="hive-light"]) .agentRuntimeToolWorkbench input,
+:global(:root[data-theme="hive-light"]) .agentWorkerSkillChooser input {
+  border-color: var(--line);
+  background: var(--field);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .schedulerField input::placeholder,
+:global(:root[data-theme="hive-light"]) .schedulerSection textarea::placeholder,
+:global(:root[data-theme="hive-light"]) .schedulerAttachSearch input::placeholder,
+:global(:root[data-theme="hive-light"]) .schedulerStepInputRow input::placeholder,
+:global(:root[data-theme="hive-light"]) .skillBrowserSearch input::placeholder,
+:global(:root[data-theme="hive-light"]) .skillBrowserGithubForm input::placeholder,
+:global(:root[data-theme="hive-light"]) .agentNameEdit input::placeholder {
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .agentCard.active,
+:global(:root[data-theme="hive-light"]) .agentBubble.active,
+:global(:root[data-theme="hive-light"]) .agentBubble.primary,
+:global(:root[data-theme="hive-light"]) .taskBubble.active,
+:global(:root[data-theme="hive-light"]) .machineInitStep.active,
+:global(:root[data-theme="hive-light"]) .machineInitStep.done,
+:global(:root[data-theme="hive-light"]) .agentSettingsTabs button.activeSegment,
+:global(:root[data-theme="hive-light"]) .schedulerSegment button.activeSegment,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSegments button:hover,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSegments button.selectedRuntimeSegment,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassGrid button:hover,
+:global(:root[data-theme="hive-light"]) .agentWorkerClassGrid button.selectedWorkerClass,
+:global(:root[data-theme="hive-light"]) .agentWorkerImagePicker button.selectedWorkerClass,
+:global(:root[data-theme="hive-light"]) .agentWorkerSkillChooser button.selectedSkillBadge,
+:global(:root[data-theme="hive-light"]) .aeonModeCards button:hover,
+:global(:root[data-theme="hive-light"]) .aeonModeCards button.selectedAeonModeCard,
+:global(:root[data-theme="hive-light"]) .selectedRuntimeCard,
+:global(:root[data-theme="hive-light"]) .guidedProviderStatus.ready,
+:global(:root[data-theme="hive-light"]) .agentRuntimeCapabilityCard.supported,
+:global(:root[data-theme="hive-light"]) .schedulerPresetRow button.selectedSkillChip,
+:global(:root[data-theme="hive-light"]) .schedulerSkillPicker button.selectedSkillChip,
+:global(:root[data-theme="hive-light"]) .schedulerAttachButton:hover,
+:global(:root[data-theme="hive-light"]) .schedulerAttachButton.active,
+:global(:root[data-theme="hive-light"]) .schedulerStepItem.selected,
+:global(:root[data-theme="hive-light"]) .scheduleCard.enabled {
+  border-color: var(--accent-strong);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .machineConnectFab,
+:global(:root[data-theme="hive-light"]) .machineUpdateFab,
+:global(:root[data-theme="hive-light"]) .setupModalActions button:not([data-slot="button"]):not([data-slot="close-icon-button"]),
+:global(:root[data-theme="hive-light"]) .agentWorkerCreatorActions button:last-child,
+:global(:root[data-theme="hive-light"]) .setupCopyIconButton {
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: var(--button-primary-foreground);
+  box-shadow: 0 14px 30px rgba(185, 139, 47, 0.2);
+}
+
+:global(:root[data-theme="hive-light"]) .agentState.ready,
+:global(:root[data-theme="hive-light"]) .agentState.working,
+:global(:root[data-theme="hive-light"]) .machineUpdateStatus.success,
+:global(:root[data-theme="hive-light"]) .machineInitTokenOk,
+:global(:root[data-theme="hive-light"]) .adaptiveRuntimeModelCard,
+:global(:root[data-theme="hive-light"]) .adaptiveFreeBadge {
+  border-color: rgba(64, 111, 83, 0.32);
+  background: rgba(64, 111, 83, 0.12);
+  color: var(--success, #406f53) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .agentState.setup,
+:global(:root[data-theme="hive-light"]) .machineVersion.stale,
+:global(:root[data-theme="hive-light"]) .machineVersion.unknown,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAeonStatus,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAeonStatus strong,
+:global(:root[data-theme="hive-light"]) .agentRuntimeCapabilityBadges > span.needsHermesUpdate,
+:global(:root[data-theme="hive-light"]) .runtimeSetupBadge:hover,
+:global(:root[data-theme="hive-light"]) .runtimeSetupBadge[aria-pressed="true"],
+:global(:root[data-theme="hive-light"]) .schedulerAttachmentBadge.path,
+:global(:root[data-theme="hive-light"]) .skillBrowserWarning,
+:global(:root[data-theme="hive-light"]) .skillUpdateBadge {
+  border-color: rgba(185, 139, 47, 0.32);
+  background: rgba(212, 180, 111, 0.16);
+  color: var(--warning, #8a641f) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .machineVersion.dirty,
+:global(:root[data-theme="hive-light"]) .machineUpdateStatus.error,
+:global(:root[data-theme="hive-light"]) .taskBubble.failed,
+:global(:root[data-theme="hive-light"]) .taskBubble.failed .taskBubbleFooter span:first-child,
+:global(:root[data-theme="hive-light"]) .agentBubble.failed,
+:global(:root[data-theme="hive-light"]) .agentWalletShortcut.dead,
+:global(:root[data-theme="hive-light"]) .agentRemove,
+:global(:root[data-theme="hive-light"]) .agentRemove:hover,
+:global(:root[data-theme="hive-light"]) .machineInitTokenError,
+:global(:root[data-theme="hive-light"]) .machineInitError,
+:global(:root[data-theme="hive-light"]) .agentWorkerSkillBadge:hover,
+:global(:root[data-theme="hive-light"]) .skillBrowserRemoveSkillButton,
+:global(:root[data-theme="hive-light"]) .skillBrowserRemoveSkillButton:hover,
+:global(:root[data-theme="hive-light"]) .schedulerStepInputRow > button:hover {
+  border-color: rgba(192, 82, 77, 0.32) !important;
+  background: rgba(192, 82, 77, 0.12) !important;
+  color: var(--danger, #a23a35) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .agentRuntimeSegments button:disabled,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSegments button:disabled:hover,
+:global(:root[data-theme="hive-light"]) .agentRuntimeCapabilityCard.unsupported,
+:global(:root[data-theme="hive-light"]) .scheduleCard.paused {
+  border-color: rgba(137, 119, 91, 0.2);
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--muted);
+  opacity: 0.78;
+}
+
+:global(:root[data-theme="hive-light"]) .schedulerAttachPopover {
+  border-color: var(--comb-line);
+  background: var(--surface-strong);
+  box-shadow: 0 18px 50px rgba(71, 55, 31, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .schedulerAttachPopover button:hover,
+:global(:root[data-theme="hive-light"]) .schedulerAttachFooter button,
+:global(:root[data-theme="hive-light"]) .schedulerAddStepButton:hover,
+:global(:root[data-theme="hive-light"]) .agentRuntimeGroupHeader button:hover,
+:global(:root[data-theme="hive-light"]) .agentRuntimeAddCard:hover,
+:global(:root[data-theme="hive-light"]) .agentRuntimeProviderCard:hover,
+:global(:root[data-theme="hive-light"]) .agentRuntimeModelCard:hover,
+:global(:root[data-theme="hive-light"]) .agentMemoryFolderActions button:hover,
+:global(:root[data-theme="hive-light"]) .agentMemoryPathEditor button:hover,
+:global(:root[data-theme="hive-light"]) .agentRuntimeSummary button:hover,
+:global(:root[data-theme="hive-light"]) .agentViewMore:hover,
+:global(:root[data-theme="hive-light"]) .agentWalletShortcut:hover {
+  border-color: var(--accent-strong);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+}

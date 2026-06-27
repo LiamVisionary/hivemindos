@@ -24,6 +24,7 @@ const expected = [
   "artist",
   "ops",
   "qa",
+  "security",
 ];
 
 function assert(condition, message) {
@@ -69,6 +70,7 @@ const sourceFiles = [
   "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
   "scripts/agent-telemetry-collector.mjs",
   "src/features/dashboard/hooks/use-agent-settings-controller.tsx",
+  "src/lib/services/chat/hivemind-system-prompt.ts",
 ];
 const source = (
   await Promise.all(
@@ -88,8 +90,16 @@ assert(
   "agent create/settings flows must render class soul templates.",
 );
 assert(
-  source.includes("currentPrompt"),
-  "settings controller must preserve existing prompts when changing class.",
+  source.includes("currentSoul") && source.includes("currentSuitedFor"),
+  "settings controller must preserve existing souls and suited-for prompts when changing class.",
+);
+assert(
+  source.includes("Agent soul (identity, voice, boundaries)") && source.includes("Suited for"),
+  "runtime prompts must combine Soul and Suited for as separate fields.",
+);
+assert(
+  source.includes("soulPrompt: soul") && source.includes("skillProfilePrompt: suitedForPrompt"),
+  "collector must import/write SOUL.md content into soulPrompt, not skillProfilePrompt.",
 );
 
 console.log(`Verified ${expected.length} bee SOUL.md templates.`);

@@ -1,0 +1,478 @@
+/* Trade tab styling. The root wraps content in the global `.fr-root` class (see
+   fleet-hive.css) so the hive design tokens (--honey, --panel-hi, --line-2, …)
+   resolve and the panel matches the nav shelf and Wallets island in both themes. */
+
+/* .commandMain is height:100% + overflow:hidden and hugs the nav rail (margin:0),
+   so each view supplies its own inset and scrolls internally. Match that here:
+   inset from the rail + top, and own the vertical scroll. */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px 32px 96px;
+  color: var(--fg-1, #e9e4d8);
+  font: inherit;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--fg-1, #e9e4d8);
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--fg-3, #867d6e);
+}
+
+.actingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-3, #867d6e);
+}
+
+.select,
+.input {
+  appearance: none;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  color: var(--fg-1, #e9e4d8);
+  border-radius: 9px;
+  padding: 8px 10px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--honey, #e7b45c);
+}
+
+/* Segmented control — mirrors the data-active button idiom used elsewhere. */
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 11px;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  width: fit-content;
+}
+
+.segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--fg-3, #867d6e);
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.segmented button[data-active] {
+  background: var(--honey, #e7b45c);
+  color: #1a1206;
+}
+
+.card {
+  background: var(--panel, #14171d);
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.1fr);
+  align-items: start;
+}
+
+@media (max-width: 880px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* Each intent group is its own wrapper so the top spacing lands between groups
+   (a :first-child rule on the title alone misfires — every title is the first
+   child of its own group div). */
+.intentGroup { margin-top: 22px; }
+.intentGroup:first-child { margin-top: 0; }
+
+.groupTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-3, #867d6e);
+  margin: 0 0 10px;
+}
+
+.intentGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.intentTile {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  border: 1px solid var(--line-2, #2b3038);
+  background: var(--panel-hi, #1e222b);
+  color: var(--fg-1, #e9e4d8);
+  cursor: pointer;
+}
+
+.intentTile[data-active] {
+  border-color: var(--honey, #e7b45c);
+  box-shadow: inset 0 0 0 1px var(--honey, #e7b45c);
+}
+
+.intentTile:disabled { cursor: not-allowed; opacity: 0.55; }
+
+.intentName { font-size: 13px; font-weight: 600; }
+.intentDesc { font-size: 11px; color: var(--fg-3, #867d6e); line-height: 1.35; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.badgeReady { background: rgba(111, 224, 176, 0.16); color: #6fe0b0; }
+.badgeSetup { background: rgba(231, 180, 92, 0.16); color: var(--honey, #e7b45c); }
+.badgeOff { background: rgba(255, 255, 255, 0.07); color: var(--fg-3, #867d6e); }
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.fieldRow { display: flex; gap: 10px; flex-wrap: wrap; }
+.fieldRow > .field { flex: 1 1 140px; margin-bottom: 0; }
+
+.checkboxLine {
+  flex: 1 1 140px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin-top: 20px;
+  color: var(--fg-2, #cfc8ba);
+  font-size: 13px;
+}
+
+.textarea {
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  color: var(--fg-1, #e9e4d8);
+  border-radius: 10px;
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  min-height: 76px;
+  resize: vertical;
+}
+
+.btn {
+  border: 1px solid var(--line-2, #2b3038);
+  background: var(--panel-hi, #1e222b);
+  color: var(--fg-1, #e9e4d8);
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btnPrimary {
+  background: var(--honey, #e7b45c);
+  border-color: var(--honey, #e7b45c);
+  color: #1a1206;
+}
+
+.btnDanger {
+  background: rgba(229, 115, 115, 0.16);
+  border-color: rgba(229, 115, 115, 0.5);
+  color: #ef9a9a;
+}
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+.reviewLine { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 5px 0; border-bottom: 1px dashed var(--line-2, #2b3038); }
+.reviewLine:last-child { border-bottom: 0; }
+.reviewKey { color: var(--fg-3, #867d6e); }
+.reviewVal { color: var(--fg-1, #e9e4d8); text-align: right; word-break: break-word; }
+
+.risk { font-size: 12px; color: var(--honey, #e7b45c); display: flex; gap: 6px; padding: 3px 0; }
+
+.note { font-size: 12px; color: var(--fg-3, #867d6e); line-height: 1.45; }
+.error { font-size: 12.5px; color: #ef9a9a; line-height: 1.45; }
+.success { font-size: 12.5px; color: #6fe0b0; line-height: 1.45; }
+
+.empty { padding: 28px 16px; text-align: center; color: var(--fg-3, #867d6e); font-size: 13px; }
+
+.pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  color: var(--fg-3, #867d6e);
+}
+
+.warnCard {
+  border: 1px solid rgba(231, 180, 92, 0.4);
+  background: rgba(231, 180, 92, 0.08);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--honey, #e7b45c);
+  line-height: 1.45;
+}
+
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+
+/* Paper / live account switch. */
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2, #2b3038);
+  background: var(--panel-hi, #1e222b);
+}
+.switchLabel { display: flex; flex-direction: column; gap: 2px; }
+.switchTitle { font-size: 12.5px; font-weight: 600; color: var(--fg-1, #e9e4d8); }
+.switchHint { font-size: 11px; color: var(--fg-3, #867d6e); }
+.switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2, #2b3038);
+  background: var(--panel, #14171d);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+.switch[data-on] { background: var(--honey, #e7b45c); border-color: var(--honey, #e7b45c); }
+.switch:disabled { opacity: 0.5; cursor: not-allowed; }
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.switch[data-on] .switchThumb { transform: translateX(18px); }
+
+/* Paper / live portfolio panel. */
+.accountGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 10px; }
+.accountStat { display: flex; flex-direction: column; gap: 2px; }
+.accountStatVal { font-size: 16px; font-weight: 650; color: var(--fg-1, #e9e4d8); }
+.accountStatKey { font-size: 10.5px; color: var(--fg-3, #867d6e); text-transform: uppercase; letter-spacing: 0.04em; }
+.posTable { margin-top: 12px; display: flex; flex-direction: column; }
+.posHead, .posRow { display: grid; grid-template-columns: 1.2fr 0.8fr 1fr 1fr; gap: 10px; align-items: center; }
+.posHead { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-3, #867d6e); padding-bottom: 6px; border-bottom: 1px solid var(--line-2, #2b3038); }
+.posRow { font-size: 12.5px; padding: 7px 0; border-bottom: 1px dashed var(--line-2, #2b3038); }
+.posRow:last-child { border-bottom: 0; }
+.posSym { font-weight: 600; color: var(--fg-1, #e9e4d8); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.gain { color: #6fe0b0; }
+.loss { color: #ef9a9a; }
+
+/* Shared crypto practice book. */
+.practiceBook {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2, #2b3038);
+  background: color-mix(in srgb, var(--panel-hi, #1e222b) 62%, transparent);
+}
+.practiceHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.practiceActions,
+.practiceSnapshots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.practiceTable {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--line-2, #2b3038);
+}
+.practiceRowHead,
+.practiceRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(70px, 0.7fr) minmax(90px, 0.8fr) minmax(90px, 0.8fr);
+  gap: 10px;
+  align-items: center;
+}
+.practiceRowHead {
+  padding: 8px 0 6px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-3, #867d6e);
+  border-bottom: 1px solid var(--line-2, #2b3038);
+}
+.practiceRow {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--fg-2, #cfc8ba);
+  border-bottom: 1px dashed var(--line-2, #2b3038);
+}
+.practiceRow:last-child { border-bottom: 0; }
+.practiceRow strong {
+  display: block;
+  color: var(--fg-1, #e9e4d8);
+}
+.practiceRow small {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-3, #867d6e);
+}
+.practiceManual {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.practiceManual .field {
+  margin-bottom: 0;
+}
+.practicePlan {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-2, #2b3038);
+}
+
+@media (max-width: 640px) {
+  .practiceRowHead { display: none; }
+  .practiceRow {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* Acting-wallet button in the header (opens the selection modal). */
+.actingButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-hi, #1e222b);
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 11px;
+  padding: 7px 12px;
+  color: var(--fg-1, #e9e4d8);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  max-width: 280px;
+}
+.actingButton:hover { border-color: var(--honey, #e7b45c); }
+.actingButton:disabled { opacity: 0.6; cursor: not-allowed; }
+.actingName { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.actingChange { font-size: 11px; color: var(--honey, #e7b45c); white-space: nowrap; }
+
+/* Wallet selection modal. */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal {
+  width: 100%;
+  max-width: 760px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #14171d);
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.modalHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line-2, #2b3038);
+}
+.modalBody { padding: 16px 18px; overflow-y: auto; }
+.modalCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.modalFoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line-2, #2b3038);
+}
+.iconBtn {
+  background: transparent;
+  border: 0;
+  color: var(--fg-3, #867d6e);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 6px;
+}
+.iconBtn:hover { color: var(--fg-1, #e9e4d8); }

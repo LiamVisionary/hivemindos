@@ -1,0 +1,19 @@
+{
+  "upstreamName": "review",
+  "slug": "review",
+  "label": "Review",
+  "domain": "ship-mate",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/ship-mate/agents/review.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent review",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/review",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "PR Reviewer agent. Reviews implemented code using a 3-tier taxonomy (🔴 Critical / 🟡 Should Fix / 💡 Consider). Auto-resolves minor issues, pauses on critical ones. Applies security guardrails. Outputs review-report.md."
+}

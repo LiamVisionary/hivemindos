@@ -76,11 +76,11 @@ export function LmStudioModelManager({
     key: model.id,
     displayName: model.name || model.id,
     type: "llm",
-    loaded: model.subtitle === "Loaded" || model.badge === "Loaded",
+    loaded: model.subtitle === "Loaded",
     loadedInstanceIds: [] as string[],
     paramsString: model.group,
     format: null,
-    remote: false,
+    remote: model.badge === "LM Link",
   }));
   const models = inventoryModels.length ? inventoryModels : fallbackModels;
   const actionBusy = busy === "load-model" || busy === "unload-model";
@@ -128,9 +128,14 @@ export function LmStudioModelManager({
           return (
             <div key={model.key} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, alignItems: "center", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "rgba(2,6,23,0.24)" }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: "var(--fg)", fontSize: 12.5, fontWeight: 750, overflowWrap: "anywhere" }}>{model.displayName || model.key}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                  <span style={{ color: "var(--fg)", fontSize: 12.5, fontWeight: 750, overflowWrap: "anywhere" }}>{model.displayName || model.key}</span>
+                  <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", padding: "1px 6px", borderRadius: 999, border: `1px solid ${model.remote ? "var(--aeon-line)" : "var(--line)"}`, color: model.remote ? "var(--cyan-3)" : "var(--fg-4)", background: model.remote ? "var(--aeon-soft)" : "transparent" }}>
+                    {model.remote ? "LM Link" : "Local"}
+                  </span>
+                </div>
                 <div style={{ marginTop: 2, color: "var(--fg-4)", fontSize: 11, lineHeight: 1.35, overflowWrap: "anywhere" }}>
-                  {[model.key, model.paramsString, model.format, model.remote ? "Remote device" : model.loaded ? "Loaded" : loading ? "Loading" : "Downloaded"].filter(Boolean).join(" · ")}
+                  {[model.key, model.paramsString, model.format, model.loaded ? "Loaded" : loading ? "Loading" : model.remote ? "Available" : "Downloaded"].filter(Boolean).join(" · ")}
                 </div>
               </div>
               {model.remote ? (

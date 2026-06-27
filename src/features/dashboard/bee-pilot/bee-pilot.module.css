@@ -1,0 +1,277 @@
+.beeLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.beeCursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+  will-change: transform;
+}
+
+.beeRipple {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid rgba(250, 204, 21, 0.85);
+  border-radius: 50%;
+  animation: beePilotRipple 0.7s ease-out forwards;
+}
+
+@keyframes beePilotRipple {
+  from {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.4);
+  }
+}
+
+.pilotOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding: min(16vh, 140px) 16px 16px;
+  background: rgba(3, 6, 12, 0.6);
+  backdrop-filter: blur(10px);
+}
+
+.pilotPanel {
+  display: grid;
+  gap: 12px;
+  width: min(560px, 100%);
+  padding: 16px;
+  border: 1px solid rgba(250, 204, 21, 0.22);
+  border-radius: 12px;
+  background: rgba(9, 13, 20, 0.98);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+}
+
+.pilotHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pilotHeader img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.pilotHeader strong {
+  color: var(--foreground);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pilotHeader kbd {
+  margin-left: auto;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+}
+
+.pilotInputRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 20, 30, 0.9);
+}
+
+.pilotInputRow:focus-within {
+  border-color: rgba(250, 204, 21, 0.45);
+}
+
+.pilotInputRow input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 15px;
+}
+
+.pilotInputRow input::placeholder {
+  color: var(--muted);
+}
+
+.pilotSuggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pilotSuggestions button {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease;
+}
+
+.pilotSuggestions button:hover {
+  border-color: rgba(250, 204, 21, 0.5);
+  color: var(--foreground);
+}
+
+.pilotError {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 12px;
+}
+
+.pilotThinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 2px 2px;
+}
+
+.pilotThinkingLabel {
+  color: var(--foreground);
+  font-size: 13px;
+  background: linear-gradient(90deg, var(--muted) 0%, var(--foreground) 50%, var(--muted) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: beePilotShimmer 1.4s linear infinite;
+}
+
+.pilotDots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pilotDots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(250, 204, 21, 0.85);
+  animation: beePilotDot 1.2s ease-in-out infinite;
+}
+
+.pilotDots i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.pilotDots i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+.pilotInlineMessage {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 9px;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pilotInlineMessage[data-state="error"] {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+}
+
+@keyframes beePilotShimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes beePilotDot {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+.pilotStatusPill {
+  position: fixed;
+  top: 28px;
+  left: 50%;
+  z-index: 96;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 10px 16px 10px 10px;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  border-radius: 999px;
+  background: rgba(9, 13, 20, 0.96);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  transform: translateX(-50%);
+  animation: beePilotPillIn 320ms cubic-bezier(0.2, 1.35, 0.36, 1);
+}
+
+.pilotStatusPill span {
+  color: var(--foreground);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pilotStatusPill[data-state="error"] {
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.pilotStatusPill button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.pilotStatusPill button:hover {
+  color: var(--foreground);
+}
+
+@keyframes beePilotPillIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-14px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}

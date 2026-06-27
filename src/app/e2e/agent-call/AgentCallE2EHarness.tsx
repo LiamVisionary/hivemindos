@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AgentCallModal, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
 import type { FleetAgent, FleetMachine } from "@/components/fleet/fleet-data";
 
 type AgentPhoneCallResult = {
@@ -13,6 +13,7 @@ type AgentPhoneCallResult = {
       localTts?: AgentCallLocalTts;
       realtime?: AgentCallRealtime;
       runtimeAgent?: AgentCallRuntimeAgent;
+      voiceRun?: AgentCallVoiceRun;
     };
   };
 };
@@ -140,6 +141,45 @@ async function discoverHarnessLocalTtsCandidate(): Promise<HarnessLocalTtsCandid
     ?? null;
 }
 
+const harnessPageStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "grid",
+  placeItems: "center",
+  color: "var(--foreground, #221d14)",
+  background:
+    "radial-gradient(circle at 20% 18%, rgba(176, 127, 28, 0.12), transparent 24rem), radial-gradient(circle at 80% 76%, rgba(95, 143, 90, 0.14), transparent 24rem), linear-gradient(180deg, var(--bg-0, #f1ede3), var(--bg-1, #f8f4ec))",
+};
+
+const harnessControlsStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 12,
+  justifyItems: "center",
+  padding: 24,
+  border: "1px solid var(--border, #d8cdbb)",
+  borderRadius: 8,
+  background: "var(--surface, #fbf8f1)",
+  boxShadow: "0 18px 42px rgba(82, 61, 22, 0.14)",
+};
+
+const startButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(95, 143, 90, 0.55)",
+  borderRadius: 7,
+  padding: "10px 14px",
+  background: "rgba(95, 143, 90, 0.13)",
+  color: "var(--foreground, #221d14)",
+  fontWeight: 700,
+  opacity: 0.72,
+};
+
+const localTtsButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(176, 127, 28, 0.52)",
+  borderRadius: 7,
+  padding: "10px 14px",
+  background: "rgba(176, 127, 28, 0.16)",
+  color: "var(--foreground, #221d14)",
+  fontWeight: 700,
+};
+
 export default function AgentCallE2EHarness() {
   const startButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const [target, setTarget] = React.useState<HarnessTarget | null>(null);
@@ -152,6 +192,7 @@ export default function AgentCallE2EHarness() {
     localTts?: AgentCallLocalTts;
     realtime?: AgentCallRealtime;
     runtimeAgent?: AgentCallRuntimeAgent;
+    voiceRun?: AgentCallVoiceRun;
   } | null>(null);
 
   React.useEffect(() => {
@@ -195,7 +236,7 @@ export default function AgentCallE2EHarness() {
       if (!response.ok || data?.ok === false) throw new Error(data?.error || `Call setup returned HTTP ${response.status}.`);
       const call = data?.result?.call;
       if (call?.mode !== "byok" || !call.realtime?.clientSecret) throw new Error("Harness did not receive BYOK Realtime credentials.");
-      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", realtime: call.realtime, runtimeAgent: call.runtimeAgent });
+      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", realtime: call.realtime, runtimeAgent: call.runtimeAgent, voiceRun: call.voiceRun });
     } catch (error) {
       setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "failed", error: error instanceof Error ? error.message : "Could not start harness call." });
     }
@@ -228,22 +269,22 @@ export default function AgentCallE2EHarness() {
       if (!response.ok || data?.ok === false) throw new Error(data?.error || `Call setup returned HTTP ${response.status}.`);
       const call = data?.result?.call;
       if (call?.mode !== "local-tts" || !call.localTts?.appId) throw new Error("Harness did not receive Local TTS call config.");
-      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", localTts: call.localTts, runtimeAgent: call.runtimeAgent });
+      setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "ringing", localTts: call.localTts, runtimeAgent: call.runtimeAgent, voiceRun: call.voiceRun });
     } catch (error) {
       setSession({ agent: currentTarget.agent, machine: currentTarget.machine, phase: "failed", error: error instanceof Error ? error.message : "Could not start harness Local TTS call." });
     }
   }
 
   return (
-    <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#07111f", color: "#f8fafc" }}>
-      <div style={{ display: "grid", gap: 12, justifyItems: "center" }}>
+    <main style={harnessPageStyle}>
+      <div style={harnessControlsStyle}>
         <button
           ref={startButtonRef}
           type="button"
           data-testid="agent-call-harness-start"
           data-hydrated="false"
           onClick={() => void startByokCall()}
-          style={{ border: "1px solid rgba(94,234,212,0.5)", borderRadius: 7, padding: "10px 14px", background: "rgba(20,184,166,0.18)", color: "#f8fafc", fontWeight: 700, opacity: 0.6 }}
+          style={startButtonStyle}
         >
           Start BYOK call
         </button>
@@ -251,7 +292,7 @@ export default function AgentCallE2EHarness() {
           type="button"
           data-testid="agent-call-harness-local-tts-start"
           onClick={() => void startLocalTtsCall()}
-          style={{ border: "1px solid rgba(96,165,250,0.5)", borderRadius: 7, padding: "10px 14px", background: "rgba(37,99,235,0.22)", color: "#f8fafc", fontWeight: 700 }}
+          style={localTtsButtonStyle}
         >
           Start Local TTS call
         </button>
@@ -268,6 +309,7 @@ export default function AgentCallE2EHarness() {
           localTts={session.localTts}
           realtime={session.realtime}
           runtimeAgent={session.runtimeAgent}
+          voiceRun={session.voiceRun}
           onVoiceConnected={() => {
             setSession((current) => current && (current.phase === "ringing" || current.phase === "answered")
               ? { ...current, phase: "talking" }

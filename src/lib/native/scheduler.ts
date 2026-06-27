@@ -1,4 +1,4 @@
-import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
+import { nativePrivateFilesystemAccessGranted, readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 
 export type NativeSharedSchedulesPayload = {
@@ -18,11 +18,13 @@ export async function readNativeSharedSchedules(input: {
   try {
     if (!input.force) {
       const bootstrap = await readNativeDashboardBootstrap({
+        allowPrivateFilesystem: true,
         vaultPath: input.vaultPath,
         scheduledFolder: input.scheduledFolder,
       });
       if (bootstrap?.schedulerShared?.ok) return bootstrap.schedulerShared;
     }
+    if (!nativePrivateFilesystemAccessGranted()) return null;
     const { invoke } = await import("@tauri-apps/api/core");
     return await invoke<NativeSharedSchedulesPayload>("scheduler_shared_schedules", {
       vaultPath: input.vaultPath,

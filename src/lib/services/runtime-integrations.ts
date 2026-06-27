@@ -63,6 +63,23 @@ export type RuntimeIntegrationStatus = {
       httpStatus?: number;
       modelCount?: number;
     };
+    venice?: {
+      authMode?: string;
+      walletVaultId?: string;
+      walletAddress?: string;
+      walletNetwork?: string;
+      apiKeyEnvName?: string;
+      keyPresent?: boolean;
+      balanceUsd?: string;
+      diemBalanceUsd?: string;
+      minimumTopUpUsd?: string;
+      suggestedTopUpUsd?: string;
+      checkedAt?: string;
+      status?: string;
+      message?: string;
+      httpStatus?: number;
+      modelCount?: number;
+    };
     bankr?: {
       creditsBalanceUsd?: number | null;
       balanceLabel?: string;
@@ -281,33 +298,37 @@ async function augmentGatewayModelProviders(
 ) {
   if (!agent) return { modelSelection, providerStatus };
   const bankrGateway = MODEL_PROVIDER_GATEWAYS.bankr;
-  const bankr = await listBankrLlmModels(agent).catch((error) => ({
-    models: [],
-    error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
-  }));
-  const bankrAccess = await bankrLlmAccessStatus().catch((error) => ({
+  const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
+  // Run the independent gateway probes concurrently: Bankr model discovery +
+  // Bankr access status (network) and LM Studio discovery (`lms ls`/REST,
+  // memoized per resolved endpoint) no longer serialize, so the settings status
+  // sweep waits the slowest probe instead of their sum.
+  const lmStudioProfile = localOpenAIProviderProfile(agent);
+  const [bankr, bankrAccess, lmStudio] = await Promise.all([
+    listBankrLlmModels(agent).catch((error) => ({
+      models: [],
+      error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
+    })),
+    bankrLlmAccessStatus().catch((error) => ({
       clubActive: null,
       creditsBalanceUsd: null,
       error: error instanceof Error ? error.message : "Bankr access check failed.",
-    }));
+    })),
+    catalogMemo(
+      `lm-studio::${lmStudioProfile.gatewayUrl ?? ""}::${lmStudioProfile.token ?? ""}`,
+      () => discoverLmStudioProviderModels(lmStudioProfile),
+    ).catch((error) => ({
+      runtimeProfile: lmStudioProfile,
+      lmStudioModels: [],
+      modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
+      lmStudioModelSource: "",
+      models: [],
+    })),
+  ]);
   if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
   if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
-  const providers = [...(modelSelection?.providers ?? [])];
-  const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
-  // Memoized per resolved endpoint: the discovery spawns `lms ls` / hits the
-  // REST inventory, and for most agents it resolves to the same local URL.
-  const lmStudioProfile = localOpenAIProviderProfile(agent);
-  const lmStudio = await catalogMemo(
-    `lm-studio::${lmStudioProfile.gatewayUrl ?? ""}::${lmStudioProfile.token ?? ""}`,
-    () => discoverLmStudioProviderModels(lmStudioProfile)
-  ).catch((error) => ({
-    runtimeProfile: lmStudioProfile,
-    lmStudioModels: [],
-    modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
-    lmStudioModelSource: "",
-    models: [],
-  }));
   if (lmStudio.modelDiscoveryError) diagnostics.push(`Local OpenAI model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
+  const providers = [...(modelSelection?.providers ?? [])];
   const lmStudioModels = lmStudio.models.length
     ? lmStudio.models
     : agent.provider === "lm-studio" && agent.model?.trim()
@@ -322,9 +343,9 @@ async function augmentGatewayModelProviders(
         ? {
           id,
           name: model.displayName,
-          subtitle: model.remote ? "Remote" : model.loaded ? "Loaded" : "Downloaded",
+          subtitle: model.loaded ? "Loaded" : model.remote ? "Available" : "Downloaded",
           group: model.paramsString || undefined,
-          badge: model.remote ? "Remote" : model.loaded ? "Loaded" : undefined,
+          badge: model.remote ? "LM Link" : "Local",
         }
         : { id };
     }),
@@ -391,6 +412,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const provider = String(input.provider ?? "").trim();
     const model = String(input.model ?? "").trim();
     if (!provider || !model) return { ok: false, error: "Provider and model are required." };
+    if (provider === "hive-fusion") return { ok: false, error: "Hive Fusion is a HivemindOS-native compound model and cannot be set as a CLI runtime model." };
     await setOpenClawModel(provider, model);
     return { ok: true, message: `OpenClaw default model set to ${provider}/${model}.` };
   }
@@ -430,13 +452,19 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const provider = String(input.provider ?? "").trim();
     const model = String(input.model ?? "").trim();
     if (!provider || !model) return { ok: false, error: "Provider and model are required." };
+    if (provider === "hive-fusion") return { ok: false, error: "Hive Fusion is a HivemindOS-native compound model and cannot be set as a CLI runtime model." };
     // The shared gateway default in ~/.hermes/config.yaml is owned by the
     // gateway, never by the app. Model picks are agent-scoped: agents with
     // their own profile home get model.default in that profile's config.yaml,
     // and every hermes chat also passes the model per-run via `-m/--provider`.
     const profileEnv = hermesProfileEnv(agent);
-    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) await addHermesProvider(provider, model, profileEnv);
-    else await addHermesModel(provider, model, undefined, profileEnv);
+    // Venice x402 wallet mode can't be reached with a bearer key — Hermes must
+    // route through the collector's local signing proxy, which injects the
+    // SIWX header. Point the provider's base_url there with no key_env.
+    const veniceProxyBase = provider === "venice" ? veniceWalletProxyBase(agent) : null;
+    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) {
+      await addHermesProvider(provider, model, profileEnv, veniceProxyBase ? { base_url: veniceProxyBase, key_env: "" } : undefined);
+    } else await addHermesModel(provider, model, undefined, profileEnv);
     if (profileEnv) {
       await setHermesProfileModel(provider, model, profileEnv);
       return { ok: true, message: `Hermes model set to ${provider}/${model} for ${agent?.name || "this agent"} only. Gateway default unchanged.` };
@@ -625,6 +653,24 @@ print(json.dumps(payload))
  * when the agent lives in the shared gateway home. Config writes against the
  * shared home's model default are forbidden — the gateway owns that file.
  */
+// Venice x402 wallet-mode agents route through the collector's local signing
+// proxy (it injects the SIWX header). The proxy runs on the collector host
+// where Hermes also runs, so 127.0.0.1:<collectorPort> is correct regardless
+// of how the dashboard reaches the collector. Returns null for api-key mode.
+function veniceWalletProxyBase(agent?: AgentProfile): string | null {
+  const venice = agent?.venice;
+  const vaultId = String(venice?.walletVaultId ?? "").trim();
+  if (!vaultId || venice?.authMode === "api-key") return null;
+  let port = 8787;
+  try {
+    const parsed = new URL(String(agent?.telemetryUrl ?? ""));
+    if (parsed.port) port = Number(parsed.port);
+  } catch {
+    // No/invalid telemetry URL → default collector port.
+  }
+  return `http://127.0.0.1:${port}/venice-x402/${encodeURIComponent(vaultId)}`;
+}
+
 function hermesProfileEnv(agent?: AgentProfile): Record<string, string> | undefined {
   const raw = String(agent?.localDataDir ?? "").trim();
   if (!raw) return undefined;
@@ -810,7 +856,7 @@ print(json.dumps(payload.get("providers", [])))
   return mapped;
 }
 
-async function addHermesProvider(provider: string, model: string, env?: Record<string, string>) {
+async function addHermesProvider(provider: string, model: string, env?: Record<string, string>, providerOverride?: { base_url?: string; key_env?: string }) {
   const script = `
 from hermes_cli.config import load_config, save_config
 from hermes_cli.models import provider_model_ids
@@ -877,6 +923,12 @@ save_config(cfg)
       key_env: gateway.hermes?.keyEnv,
       models: gateway.hermes?.models,
     }]));
+  // Wallet-mode Venice (and similar) override the base_url to the local signing
+  // proxy and clear key_env so Hermes sends no bearer.
+  if (providerOverride && gatewayDefaults[provider]) {
+    if (typeof providerOverride.base_url === "string") gatewayDefaults[provider].base_url = providerOverride.base_url;
+    if (typeof providerOverride.key_env === "string") gatewayDefaults[provider].key_env = providerOverride.key_env;
+  }
   await runHermesPython(script, {
     __PROVIDER__: provider,
     __MODEL__: model,

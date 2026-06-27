@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { isLikelyEcho } from "./echo-detection";
 import {
   closeRealtimeSttSocket,
   pcm16ToBase64,
@@ -28,6 +29,11 @@ const ECHO_CANCELLED_AUDIO: MediaTrackConstraints = {
 // Past this, give up and let the overlay fall back to the STT+TTS pipeline
 // instead of holding the user on "Connecting...".
 const CONNECT_TIMEOUT_MS = 12_000;
+
+// How long after the Queen stops speaking a transcribed "user" turn is still
+// checked for being her own echo. The mic stays open for barge-in, so her
+// loudspeaker tail can keep landing as input for a beat after she finishes.
+const RECENT_QUEEN_ECHO_MS = 3_000;
 
 function parseFunctionCall(
   event: RealtimeEvent,
@@ -75,9 +81,17 @@ function parseFunctionCall(
   return null;
 }
 
-async function askHivemindAgent(args: Record<string, unknown>) {
+// Returns the spoken summary fed back to the model, plus an optional richer
+// `detail` (markdown) the overlay can surface in a "what she found" modal.
+async function askHivemindAgent(
+  args: Record<string, unknown>,
+): Promise<{ speech: string; detail: string }> {
   const message = typeof args.message === "string" ? args.message.trim() : "";
-  if (!message) return "The relayed request was empty, so nothing was done.";
+  if (!message)
+    return {
+      speech: "The relayed request was empty, so nothing was done.",
+      detail: "",
+    };
   try {
     const response = await fetch("/api/queen-bee/voice", {
       method: "POST",
@@ -89,16 +103,65 @@ async function askHivemindAgent(args: Record<string, unknown>) {
     const data = (await response.json().catch(() => null)) as {
       ok?: boolean;
       text?: string;
+      detail?: string;
       error?: string;
     } | null;
     if (!response.ok || !data?.ok) {
-      return `The HivemindOS agent could not handle that: ${data?.error || `HTTP ${response.status}`}.`;
+      return {
+        speech: `The HivemindOS agent could not handle that: ${data?.error || `HTTP ${response.status}`}.`,
+        detail: "",
+      };
     }
-    return (
-      data.text || "The agent completed the request without a spoken result."
-    );
+    return {
+      speech:
+        data.text || "The agent completed the request without a spoken result.",
+      detail: typeof data.detail === "string" ? data.detail : "",
+    };
   } catch (turnError) {
-    return `The HivemindOS agent could not be reached: ${turnError instanceof Error ? turnError.message : "request failed"}.`;
+    return {
+      speech: `The HivemindOS agent could not be reached: ${turnError instanceof Error ? turnError.message : "request failed"}.`,
+      detail: "",
+    };
+  }
+}
+
+async function driveDashboard(
+  args: Record<string, unknown>,
+  pilot: ((command: string) => Promise<string>) | undefined,
+) {
+  const command = typeof args.command === "string" ? args.command.trim() : "";
+  if (!command) return "No on-screen command was given.";
+  if (!pilot) return "The dashboard isn't available to drive right now.";
+  try {
+    const reply = await pilot(command);
+    return reply || "Done.";
+  } catch (driveError) {
+    return `I couldn't do that on screen: ${driveError instanceof Error ? driveError.message : "request failed"}.`;
+  }
+}
+
+async function rememberPreference(args: Record<string, unknown>) {
+  const preference =
+    typeof args.preference === "string" ? args.preference.trim() : "";
+  if (!preference) return "Nothing was saved: the preference was empty.";
+  try {
+    const response = await fetch("/api/queen-bee/voice", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "remember-preference", preference }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    const data = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+    } | null;
+    if (!response.ok || !data?.ok) {
+      return `That preference could not be saved: ${data?.error || `HTTP ${response.status}`}.`;
+    }
+    return "Saved - I'll remember that for our future chats.";
+  } catch (prefError) {
+    return `That preference could not be saved: ${prefError instanceof Error ? prefError.message : "request failed"}.`;
   }
 }
 
@@ -141,6 +204,8 @@ export function useQueenBeeRealtime(
   active: boolean,
   muted: boolean,
   onFailed?: () => void,
+  onDriveDashboard?: (command: string) => Promise<string>,
+  openingLine = "",
 ) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
@@ -150,10 +215,15 @@ export function useQueenBeeRealtime(
   const mutedRef = React.useRef(muted);
   const trackRef = React.useRef<MediaStreamTrack | null>(null);
   const onFailedRef = React.useRef(onFailed);
+  const onDriveDashboardRef = React.useRef(onDriveDashboard);
 
   React.useEffect(() => {
     onFailedRef.current = onFailed;
   }, [onFailed]);
+
+  React.useEffect(() => {
+    onDriveDashboardRef.current = onDriveDashboard;
+  }, [onDriveDashboard]);
 
   React.useEffect(() => {
     mutedRef.current = muted;
@@ -181,12 +251,13 @@ export function useQueenBeeRealtime(
       who: QueenVoiceTurn["who"],
       text: string,
       live = false,
+      detail?: string,
     ) => {
       const id = nextTurnId;
       nextTurnId += 1;
       setTurns((current) => [
         ...current.map((turn) => ({ ...turn, live: false })),
-        { id, who, text, live },
+        { id, who, text, live, detail },
       ]);
       return id;
     };
@@ -203,6 +274,14 @@ export function useQueenBeeRealtime(
 
     let liveQueenTurnId = 0;
     let liveQueenText = "";
+    // Detail content from a tool call, attached to the spoken turn it produces
+    // so the overlay can offer a "what she found" modal on that turn.
+    let pendingQueenDetail = "";
+    // The Queen's last words linger briefly after she stops so a just-committed
+    // input turn can still be matched against them (liveQueenText is cleared the
+    // instant her response ends).
+    let lastQueenUtterance = "";
+    let lastQueenEndedAt = 0;
     let liveUserTurnId = 0;
     let liveUserText = "";
     let speechActive = false;
@@ -225,8 +304,16 @@ export function useQueenBeeRealtime(
         channel.send(JSON.stringify(payload));
       }
     };
+    const createQueenResponse = (instructions?: string) => {
+      send(
+        instructions
+          ? { type: "response.create", response: { instructions } }
+          : { type: "response.create" },
+      );
+    };
 
     let sessionInfo: RealtimeSessionInfo = {};
+    const openingText = openingLine.trim();
 
     const ensureUserTurn = () => {
       if (!liveUserTurnId) liveUserTurnId = addTurn("you", "...", true);
@@ -316,11 +403,25 @@ export function useQueenBeeRealtime(
             : {}),
           audio: {
             input: {
+              // Far-field reduction filters laptop/loudspeaker-mic bleed before
+              // it reaches VAD and the model, cutting false turn detections on
+              // the Queen's own echo (per OpenAI's near_field/far_field guide).
+              noise_reduction: { type: "far_field" },
               transcription: {
                 model: "gpt-4o-mini-transcribe",
                 language: "en",
               },
-              turn_detection: { type: "semantic_vad" },
+              // create_response:false makes the CLIENT the sole trigger of a
+              // reply (see the echo gate in the transcription-completed handler)
+              // so the Queen can never auto-answer her own loudspeaker bleed.
+              // interrupt_response stays true so the server still natively
+              // truncates her in-flight audio when the user genuinely barges in
+              // — the only reliable way to stop buffered audio over WebRTC.
+              turn_detection: {
+                type: "semantic_vad",
+                create_response: false,
+                interrupt_response: true,
+              },
             },
           },
           ...(sessionInfo.tools?.length
@@ -328,6 +429,11 @@ export function useQueenBeeRealtime(
             : {}),
         },
       });
+      if (openingText) {
+        createQueenResponse(
+          `Say exactly this brief opening line, then wait for Liam: ${JSON.stringify(openingText)}`,
+        );
+      }
     });
 
     channel.addEventListener("message", async (event) => {
@@ -381,14 +487,34 @@ export function useQueenBeeRealtime(
           (typeof payload.transcript === "string" ? payload.transcript : "") ||
           liveUserText
         ).trim();
+        // Is this really the user, or the Queen's own loudspeaker audio bleeding
+        // back into the still-open mic? Compare against what she's saying right
+        // now, or just said within the recency window.
+        const queenReference =
+          liveQueenTurnId !== 0 ? liveQueenText : lastQueenUtterance;
+        const withinEchoWindow =
+          liveQueenTurnId !== 0 ||
+          Date.now() - lastQueenEndedAt < RECENT_QUEEN_ECHO_MS;
+        const isEcho =
+          !finalTranscript ||
+          (withinEchoWindow && isLikelyEcho(finalTranscript, queenReference));
+        if (isEcho) {
+          // Drop the ghost row and stay silent: she never answers herself.
+          if (liveUserTurnId) dropTurn(liveUserTurnId);
+          liveUserTurnId = 0;
+          liveUserText = "";
+          return;
+        }
         if (liveUserTurnId) {
-          if (finalTranscript) updateTurn(liveUserTurnId, finalTranscript);
-          else dropTurn(liveUserTurnId);
-        } else if (finalTranscript) {
+          updateTurn(liveUserTurnId, finalTranscript);
+        } else {
           addTurn("you", finalTranscript);
         }
         liveUserTurnId = 0;
         liveUserText = "";
+        // With create_response:false the server no longer auto-replies, so the
+        // client is now the sole trigger for the Queen's spoken answer.
+        createQueenResponse();
       }
       if (
         payload.type === "response.output_audio.delta" ||
@@ -403,13 +529,23 @@ export function useQueenBeeRealtime(
       ) {
         liveQueenText = `${liveQueenText}${payload.delta}`.slice(-1_000);
         if (!liveQueenTurnId) {
-          liveQueenTurnId = addTurn("queen", liveQueenText, true);
+          liveQueenTurnId = addTurn(
+            "queen",
+            liveQueenText,
+            true,
+            pendingQueenDetail || undefined,
+          );
+          pendingQueenDetail = "";
         } else {
           updateTurn(liveQueenTurnId, liveQueenText, true);
         }
       }
       if (payload.type === "response.done") {
         if (liveQueenTurnId) updateTurn(liveQueenTurnId, liveQueenText);
+        if (liveQueenText) {
+          lastQueenUtterance = liveQueenText;
+          lastQueenEndedAt = Date.now();
+        }
         liveQueenTurnId = 0;
         liveQueenText = "";
         setPhase("listening");
@@ -418,12 +554,25 @@ export function useQueenBeeRealtime(
       if (call && !handledFunctionCalls.has(call.callId)) {
         handledFunctionCalls.add(call.callId);
         setPhase("thinking");
-        const output =
-          call.name === "create_hive_task"
-            ? await createHiveTask(call.args)
-            : call.name === "ask_hivemind_agent"
-              ? await askHivemindAgent(call.args)
-              : `Unknown tool: ${call.name}`;
+        let output: string;
+        if (call.name === "create_hive_task") {
+          output = await createHiveTask(call.args);
+        } else if (call.name === "ask_hivemind_agent") {
+          const result = await askHivemindAgent(call.args);
+          output = result.speech;
+          // Hold the findings for the spoken turn this tool call triggers.
+          if (result.detail.trim()) {
+            pendingQueenDetail = pendingQueenDetail
+              ? `${pendingQueenDetail}\n\n---\n\n${result.detail.trim()}`
+              : result.detail.trim();
+          }
+        } else if (call.name === "drive_dashboard") {
+          output = await driveDashboard(call.args, onDriveDashboardRef.current);
+        } else if (call.name === "remember_preference") {
+          output = await rememberPreference(call.args);
+        } else {
+          output = `Unknown tool: ${call.name}`;
+        }
         send({
           type: "conversation.item.create",
           item: {
@@ -432,7 +581,7 @@ export function useQueenBeeRealtime(
             output,
           },
         });
-        send({ type: "response.create" });
+        createQueenResponse();
       }
     });
 
@@ -569,7 +718,7 @@ export function useQueenBeeRealtime(
       audio.srcObject = null;
       audio.remove();
     };
-  }, [active]);
+  }, [active, openingLine]);
 
   return { phase, error, turns, speechDetected, failed };
 }

@@ -202,6 +202,12 @@ const MAX_GITHUB_SKILL_FILES = 120;
 const MAX_GITHUB_SKILL_FILE_BYTES = 5 * 1024 * 1024;
 const FAST_SKILL_SUMMARY_BYTES = 16 * 1024;
 const SKILL_FILE_LIST_CACHE_MS = 60_000;
+const SKILL_SUMMARY_CACHE_MS = 60_000;
+const SKILL_SUMMARY_READ_CONCURRENCY = 64;
+const SHARED_BRAIN_MIRROR_STATUS = "shared-brain-mirror";
+const RECURSIVE_PROVIDER_MIRROR_STATUS = "recursive-provider-mirror";
+const MIRROR_LOOP_STATUSES = new Set([SHARED_BRAIN_MIRROR_STATUS, RECURSIVE_PROVIDER_MIRROR_STATUS]);
+const KNOWN_PROVIDER_SLUG_PREFIXES = new Set(["aeon", "claude", "codex", "hermes", "gemini", "openclaw", "shared", "shared-brain"]);
 const BUNDLED_SHARED_SKILLS = [
   {
     slug: "karpathy-guidelines",
@@ -211,9 +217,11 @@ const BUNDLED_SHARED_SKILLS = [
 ];
 
 const skillFileListCache = new Map<string, { at: number; files: string[] }>();
+const sharedSkillSummaryCache = new Map<string, { at: number; summary: BrainSkillSummary }>();
 
 export function invalidateSkillFileListCache() {
   skillFileListCache.clear();
+  sharedSkillSummaryCache.clear();
 }
 
 function expandHome(path: string) {
@@ -291,6 +299,93 @@ function namespacedSharedSlug(basePath: string, skillPath: string) {
   return relativeDir.map((part) => sanitizeSlug(part)).join("/");
 }
 
+function normalizedSkillPath(value: string | undefined) {
+  return String(value || "").replace(/\\/g, "/");
+}
+
+function skillDirSlugFromPath(value: string | undefined) {
+  const normalized = normalizedSkillPath(value);
+  if (!normalized) return "";
+  const parts = normalized.split("/").filter(Boolean);
+  if (!parts.length) return "";
+  const last = parts[parts.length - 1]?.toLowerCase();
+  return sanitizeSlug(last === "skill.md" ? parts[parts.length - 2] ?? "" : parts[parts.length - 1] ?? "");
+}
+
+function pathLooksInsideProviderSkillRoot(provider: BrainSkillProviderId | "shared", value: string | undefined) {
+  if (provider === "shared") return false;
+  return normalizedSkillPath(value).includes(`/.${provider}/skills/`);
+}
+
+function slugLooksProviderMirrored(provider: BrainSkillProviderId | "shared", slug: string | undefined) {
+  if (provider !== "aeon") return false;
+  const normalized = sanitizeSlug(slug || "");
+  if (!normalized) return false;
+  if (normalized.startsWith(`${provider}-`)) return true;
+  const firstSegment = normalized.split("-").find(Boolean);
+  return Boolean(firstSegment && KNOWN_PROVIDER_SLUG_PREFIXES.has(firstSegment));
+}
+
+function providerPathLooksMirrored(provider: BrainSkillProviderId | "shared", path: string | undefined, slug?: string) {
+  if (provider !== "aeon") return false;
+  if (!pathLooksInsideProviderSkillRoot(provider, path)) return false;
+  return slugLooksProviderMirrored(provider, slug) || slugLooksProviderMirrored(provider, skillDirSlugFromPath(path));
+}
+
+function managedMetadataStatus(
+  metadata: Record<string, unknown> | null | undefined,
+  provider?: BrainSkillProviderId | "shared",
+  path?: string,
+  slug?: string,
+) {
+  if (!metadata) return undefined;
+  const metadataProvider = typeof metadata.provider === "string" ? metadata.provider : "";
+  const managedBy = typeof metadata.managedBy === "string" ? metadata.managedBy : "";
+  if (metadataProvider === "shared-brain" || managedBy === "hivemindos") return SHARED_BRAIN_MIRROR_STATUS;
+  const sourcePath = typeof metadata.sourcePath === "string" ? metadata.sourcePath : path;
+  if (provider && providerPathLooksMirrored(provider, sourcePath, slug)) return RECURSIVE_PROVIDER_MIRROR_STATUS;
+  return undefined;
+}
+
+function sourceMetadataFromFiles(sourceFiles: BrainSkillSourceFile[] | undefined) {
+  const metadataFile = sourceFiles?.find((file) => file.path.split("/").pop() === SOURCE_METADATA_FILE);
+  if (!metadataFile?.contentBase64) return null;
+  try {
+    return JSON.parse(Buffer.from(metadataFile.contentBase64, "base64").toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function providerMirrorLoopStatusForPath(provider: BrainSkillProviderId | "shared", skillPath: string) {
+  if (provider === "shared") return undefined;
+  const metadata = await readManagedMetadata(dirname(skillPath));
+  return managedMetadataStatus(metadata, provider, skillPath, basename(dirname(skillPath)))
+    ?? (providerPathLooksMirrored(provider, skillPath) ? RECURSIVE_PROVIDER_MIRROR_STATUS : undefined);
+}
+
+function providerMirrorLoopStatusForSkill(skill: BrainSkillSummary) {
+  if (MIRROR_LOOP_STATUSES.has(skill.sourceStatus || "")) return skill.sourceStatus;
+  if (skill.provider === "shared") return undefined;
+  const metadataStatus = managedMetadataStatus(
+    sourceMetadataFromFiles(skill.sourceFiles),
+    skill.provider,
+    skill.sourcePath ?? skill.path,
+    skill.slug,
+  );
+  return metadataStatus
+    ?? (providerPathLooksMirrored(skill.provider, skill.sourcePath ?? skill.path, skill.slug)
+      ? RECURSIVE_PROVIDER_MIRROR_STATUS
+      : undefined);
+}
+
+function providerMirrorSkipReason(skill: BrainSkillSummary) {
+  const status = providerMirrorLoopStatusForSkill(skill);
+  if (status === SHARED_BRAIN_MIRROR_STATUS) return "shared-brain mirror";
+  if (status === RECURSIVE_PROVIDER_MIRROR_STATUS) return "recursive provider mirror";
+  return "";
+}
+
 async function findSkillFiles(root: string, maxDepth: number, options: { cache?: boolean } = {}) {
   const resolvedRoot = resolve(expandHome(root));
   if (!(await canRead(resolvedRoot))) return [];
@@ -325,6 +420,24 @@ async function findSkillFiles(root: string, maxDepth: number, options: { cache?:
   return found;
 }
 
+async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index]);
+    }
+  }));
+  return results;
+}
+
 async function skillSummary(input: {
   skillPath: string;
   provider: BrainSkillProviderId | "shared";
@@ -336,16 +449,28 @@ async function skillSummary(input: {
 }): Promise<BrainSkillSummary> {
   const mode = input.mode ?? "full";
   const fileStats = await stat(input.skillPath).catch(() => null);
+  const updatedAt = fileStats?.mtimeMs ?? 0;
+  const fileSize = fileStats?.size ?? 0;
+  const cacheKey = input.provider === "shared" ? `${mode}:${input.skillPath}:${updatedAt}:${fileSize}` : "";
+  if (cacheKey) {
+    const hit = sharedSkillSummaryCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < SKILL_SUMMARY_CACHE_MS) return { ...hit.summary };
+  }
   const markdown = mode === "fast" ? await readTextHead(input.skillPath) : await readText(input.skillPath);
   const frontmatter = parseFrontmatter(markdown);
   const slug = input.provider === "shared"
     ? namespacedSharedSlug(input.basePath, input.skillPath)
     : sanitizeSlug(basename(dirname(input.skillPath)));
   const sourceMetadata = input.provider === "shared" ? await readSourceMetadata(dirname(input.skillPath)) : null;
-  const skillChecksum = mode === "fast" ? checksum(`${fileStats?.size ?? 0}:${markdown}`) : checksum(markdown);
+  // A NON-shared (e.g. aeon) skill that carries our shared-brain provenance
+  // marker is a MIRROR we previously synced OUT of the shelf — not a native
+  // provider skill. Re-importing it re-namespaces the slug (aeon- -> aeon-aeon-)
+  // and feeds an unbounded duplication loop. Treat it as already-imported so the
+  // import/auto-sync loops skip it (content/slug-independent loop breaker).
+  const mirrorLoopStatus = await providerMirrorLoopStatusForPath(input.provider, input.skillPath);
+  const skillChecksum = mode === "fast" ? checksum(`${fileSize}:${markdown}`) : checksum(markdown);
   const existing = input.sharedByChecksum.get(skillChecksum) ?? input.sharedBySlug.get(slug);
-  const updatedAt = fileStats?.mtimeMs ?? 0;
-  return {
+  const summary = {
     id: `${input.provider}:${input.skillPath}`,
     slug,
     name: frontmatter.get("name") || slugToName(slug),
@@ -356,10 +481,12 @@ async function skillSummary(input: {
     relativePath: relative(input.basePath, input.skillPath),
     checksum: skillChecksum,
     updatedAt,
-    imported: input.provider === "shared" || Boolean(existing),
+    imported: input.provider === "shared" || Boolean(existing) || Boolean(mirrorLoopStatus),
     importedAs: existing?.slug,
-    sourceStatus: sourceMetadata?.status,
+    sourceStatus: sourceMetadata?.status ?? mirrorLoopStatus,
   };
+  if (cacheKey) sharedSkillSummaryCache.set(cacheKey, { at: Date.now(), summary });
+  return summary;
 }
 
 async function readSourceMetadata(skillDir: string): Promise<{ providerLabel?: string; status?: string } | null> {
@@ -567,15 +694,17 @@ async function readSharedSkills(vaultPath: string, mode: SkillSummaryMode = "ful
   const skillsFolder = join(vaultPath, "Skills");
   const files = await findSkillFiles(skillsFolder, 3, { cache: mode === "fast" });
   const blank = new Map<string, BrainSkillSummary>();
-  const summaries = await Promise.all(files.map((skillPath) => skillSummary({
-    skillPath,
-    provider: "shared",
-    providerLabel: "Shared brain",
-    basePath: skillsFolder,
-    sharedByChecksum: blank,
-    sharedBySlug: blank,
-    mode,
-  })));
+  const summaries = await mapConcurrent(files, SKILL_SUMMARY_READ_CONCURRENCY, (skillPath) => {
+    return skillSummary({
+      skillPath,
+      provider: "shared",
+      providerLabel: "Shared brain",
+      basePath: skillsFolder,
+      sharedByChecksum: blank,
+      sharedBySlug: blank,
+      mode,
+    });
+  });
   const unique = new Map<string, BrainSkillSummary>();
   for (const skill of summaries.sort((a, b) => (
     sourcePriority(a) - sourcePriority(b)
@@ -586,6 +715,29 @@ async function readSharedSkills(vaultPath: string, mode: SkillSummaryMode = "ful
     if (!unique.has(key)) unique.set(key, skill);
   }
   return [...unique.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function countSharedBrainSkills(vaultPath?: string) {
+  return cachedCall(`${SHARED_BRAIN_CACHE_PREFIX}count:${vaultPath ?? ""}`, 60_000, async () => {
+    const resolvedVault = resolveObsidianVaultPath(vaultPath);
+    const skillsFolder = join(resolvedVault, "Skills");
+    const files = await findSkillFiles(skillsFolder, 3, { cache: true });
+    const blank = new Map<string, BrainSkillSummary>();
+    const summaries = await mapConcurrent(files, SKILL_SUMMARY_READ_CONCURRENCY, (skillPath) => {
+      return skillSummary({
+        skillPath,
+        provider: "shared",
+        providerLabel: "Shared brain",
+        basePath: skillsFolder,
+        sharedByChecksum: blank,
+        sharedBySlug: blank,
+        mode: "fast",
+      });
+    });
+    const unique = new Set<string>();
+    for (const skill of summaries) unique.add(skill.slug.includes("/") ? skill.slug : sanitizeSlug(skill.name || skill.slug));
+    return { vaultPath: resolvedVault, skillsFolder, readmePath: join(skillsFolder, "README.md"), count: unique.size };
+  });
 }
 
 async function ensureSharedSkillsFolder(vaultPath: string) {
@@ -638,10 +790,12 @@ function markProviderSkillImports(
   sharedBySlug: Map<string, BrainSkillSummary>,
 ): BrainSkillSummary {
   const existing = sharedByChecksum.get(skill.checksum) ?? sharedBySlug.get(skill.slug);
+  const mirrorLoopStatus = providerMirrorLoopStatusForSkill(skill);
   return {
     ...skill,
-    imported: Boolean(existing),
-    importedAs: existing?.slug,
+    imported: skill.imported || Boolean(existing) || Boolean(mirrorLoopStatus),
+    importedAs: existing?.slug ?? skill.importedAs,
+    sourceStatus: skill.sourceStatus ?? mirrorLoopStatus,
   };
 }
 
@@ -709,15 +863,17 @@ export async function getBrainSkillInventory(
     const skillFiles = [...new Set((await Promise.all(
       provider.roots.map((root) => findSkillFiles(root.path, root.maxDepth, { cache: summaryMode === "fast" })),
     )).flat())];
-    const summaries = await Promise.all(skillFiles.map((skillPath) => skillSummary({
-      skillPath,
-      provider: provider.id,
-      providerLabel: provider.label,
-      basePath: resolve(expandHome(provider.home)),
-      sharedByChecksum,
-      sharedBySlug,
-      mode: summaryMode,
-    })));
+    const summaries = await mapConcurrent(skillFiles, SKILL_SUMMARY_READ_CONCURRENCY, (skillPath) => {
+      return skillSummary({
+        skillPath,
+        provider: provider.id,
+        providerLabel: provider.label,
+        basePath: resolve(expandHome(provider.home)),
+        sharedByChecksum,
+        sharedBySlug,
+        mode: summaryMode,
+      });
+    });
     const managedMirrorPaths = summaryMode === "fast"
       ? new Set<string>()
       : new Set((await Promise.all(skillFiles.map(async (skillPath) => (
@@ -867,7 +1023,8 @@ export async function importBrainSkills(input: {
 
   for (const source of selectedProviders.flatMap((item) => item.skills)) {
     const existingSharedSkill = sharedBySlug.get(source.slug);
-    if (source.imported || existingSharedSkill) {
+    const mirrorSkipReason = providerMirrorSkipReason(source);
+    if (mirrorSkipReason || source.imported || existingSharedSkill) {
       skipped.push(source);
       continue;
     }
@@ -911,9 +1068,21 @@ export async function reconcileBrainSkills(input: {
     const policy = input.policies?.[provider.id];
     if (!policy?.autoImport && !policy?.autoUpdate && !policy?.trackRemovals) continue;
     for (const source of provider.skills) {
+      const mirrorSkipReason = providerMirrorSkipReason(source);
+      if (mirrorSkipReason) {
+        skipped.push({ ...source, imported: true, sourceStatus: source.sourceStatus ?? providerMirrorLoopStatusForSkill(source), reason: mirrorSkipReason });
+        continue;
+      }
       activeSources.set(`${source.provider}:${source.slug}`, source);
       const shared = sharedBySlug.get(source.slug);
       if (!shared) {
+        // Never import-new a source that's already a shelf mirror / a checksum
+        // duplicate of an existing shelf skill — that's what re-namespaced the
+        // slug (aeon- -> aeon-aeon-) into an unbounded duplication loop.
+        if (source.imported) {
+          skipped.push({ ...source, reason: "shared-brain mirror" });
+          continue;
+        }
         if (!policy.autoImport) {
           skipped.push({ ...source, reason: "auto-import disabled" });
           continue;

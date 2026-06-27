@@ -82,11 +82,68 @@ export function tailnetPeerTrafficLooksStalled(machine: MachineGroup) {
   );
 }
 
+function isWindowsOs(os?: string): boolean {
+  return /^(windows|win32)$/i.test(os ?? "");
+}
+
+// Self/this-machine device noun, mirroring displayMachineName's OS mapping
+// (windows/win32 -> "PC", linux -> "computer", else "Mac") so recovery copy
+// shown to a Windows or Linux user never calls their own box a "Mac".
+function deviceNounForOs(os?: string): string {
+  const value = (os ?? "").toLowerCase();
+  if (value === "windows" || value === "win32") return "PC";
+  if (value === "linux") return "computer";
+  return "Mac";
+}
+
+// Per-OS commands to repair / re-run setup for a machine's agent bridge.
+// Mac/Linux re-run the collector install script. Windows has no
+// install-telemetry-collector.ps1 yet, so it re-runs setup.ps1 (the closest
+// available Windows setup path); note setup.ps1 does not yet auto-install the
+// collector daemon on Windows — that path is still a follow-up.
+function agentBridgeRepairCommands(machine: MachineGroup): string[] {
+  if (isWindowsOs(machine.os)) {
+    return [
+      "cd $env:USERPROFILE\\hivemindos",
+      "git pull --ff-only",
+      "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild",
+    ];
+  }
+  return [
+    "cd ~/hivemindos",
+    "git pull --ff-only",
+    "./scripts/install-telemetry-collector.sh",
+  ];
+}
+
+function tailscaleRestartCommands(os?: string): string[] {
+  if (isWindowsOs(os)) {
+    return [
+      "tailscale status --self",
+      "tailscale netcheck",
+      "# Open the Tailscale app from the system tray, or restart the transport:",
+      "tailscale down",
+      "tailscale up",
+    ];
+  }
+  return [
+    "tailscale status --self",
+    "tailscale netcheck",
+    "open -a Tailscale",
+    "",
+    "# If the GUI still shows connected but peers time out",
+    "tailscale down",
+    "tailscale up",
+  ];
+}
+
 function collectorHealthCommand(machine: MachineGroup) {
   const collectorUrl = machine.collectorUrl?.replace(/\/+$/, "");
   if (collectorUrl) return `curl --max-time 5 '${collectorUrl}/health'`;
   if (machine.self)
-    return 'source ~/.hivemindos/collector.env && curl --max-time 5 "http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health"';
+    return isWindowsOs(machine.os)
+      ? 'curl.exe --max-time 5 "http://127.0.0.1:8787/health"'
+      : 'source ~/.hivemindos/collector.env && curl --max-time 5 "http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health"';
   return "# No verified collector URL yet; run the collector health command on the target machine after sourcing ~/.hivemindos/collector.env";
 }
 
@@ -100,23 +157,16 @@ export function machineNetworkIssue(
     machine.collector !== "ready"
   )
     return undefined;
+  // Self branches describe THIS machine, so its noun follows machine.os.
+  const selfNoun = deviceNounForOs(machine.os);
   if (machine.self && tailscaleStatus.includes("peer traffic stalled")) {
     return {
       label: "Tailscale traffic stalled. Fix?",
       title: "Tailscale peer traffic is stalled",
-      detail:
-        "Tailscale is signed in and has the Tailnet route, but this Mac is not receiving peer traffic. Restart or reconnect Tailscale on this Mac before reinstalling any agent bridges.",
+      detail: `Tailscale is signed in and has the Tailnet route, but this ${selfNoun} is not receiving peer traffic. Restart or reconnect Tailscale on this ${selfNoun} before reinstalling any agent bridges.`,
       fixAction: "restart-local-tailnet",
       fixLabel: "Fix Tailnet now",
-      commands: [
-        "tailscale status --self",
-        "tailscale netcheck",
-        "open -a Tailscale",
-        "",
-        "# If the GUI still shows connected but peers time out",
-        "tailscale down",
-        "tailscale up",
-      ],
+      commands: tailscaleRestartCommands(machine.os),
     };
   }
   if (machine.self && tailscaleStatus.startsWith("Tailscale not configured")) {
@@ -125,26 +175,32 @@ export function machineNetworkIssue(
       title: "Tailscale is not configured",
       detail:
         "This dashboard is running locally. That is fine for single-machine use, but Fleet discovery, Hivemind Sync, remote updates, and shared-brain pairing need this machine signed in to Tailscale or connected through Hivemind Link.",
-      commands: [
-        "# macOS GUI/VPN only",
-        "brew install --cask tailscale",
-        "open -a Tailscale",
-        "",
-        "# macOS Tailscale SSH host",
-        "brew install --formula tailscale",
-        "sudo brew services start tailscale",
-        "sudo /opt/homebrew/opt/tailscale/bin/tailscale up",
-        "sudo /opt/homebrew/opt/tailscale/bin/tailscale set --ssh",
-        "",
-        "# Linux",
-        "curl -fsSL https://tailscale.com/install.sh | sh",
-        "sudo tailscale up",
-        "sudo tailscale set --ssh",
-      ],
+      commands: isWindowsOs(machine.os)
+        ? [
+            "# Windows: install Tailscale, then sign in",
+            "# Download from https://tailscale.com/download/windows",
+            "tailscale up",
+          ]
+        : [
+            "# macOS GUI/VPN only",
+            "brew install --cask tailscale",
+            "open -a Tailscale",
+            "",
+            "# macOS Tailscale SSH host",
+            "brew install --formula tailscale",
+            "sudo brew services start tailscale",
+            "sudo /opt/homebrew/opt/tailscale/bin/tailscale up",
+            "sudo /opt/homebrew/opt/tailscale/bin/tailscale set --ssh",
+            "",
+            "# Linux",
+            "curl -fsSL https://tailscale.com/install.sh | sh",
+            "sudo tailscale up",
+            "sudo tailscale set --ssh",
+          ],
     };
   }
   if (machine.collector === "unknown") return undefined;
-  if (!machine.online) {
+  if (!machine.online && machine.collector !== "ready") {
     return {
       label: "Tailscale disconnected. Fix?",
       title: "Machine is offline in Tailscale",
@@ -152,9 +208,8 @@ export function machineNetworkIssue(
         "This machine is known to the Tailnet but is not online, so HivemindOS cannot reach its agent bridge or update it remotely.",
       commands: [
         "tailscale status",
-        "sudo tailscale up",
-        "cd ~/hivemindos",
-        "./scripts/install-telemetry-collector.sh",
+        ...(isWindowsOs(machine.os) ? ["tailscale up"] : ["sudo tailscale up"]),
+        ...agentBridgeRepairCommands(machine),
       ],
     };
   }
@@ -163,15 +218,11 @@ export function machineNetworkIssue(
       return {
         label: "Agent bridge not reachable. Fix?",
         title: "Local agent bridge is not reachable",
-        detail:
-          "This dashboard cannot reach the local agent bridge on this Mac at its configured collector URL. Start or reinstall the local agent bridge, then refresh Fleet.",
+        detail: `This dashboard cannot reach the local agent bridge on this ${selfNoun} at its configured collector URL. Start or reinstall the local agent bridge, then refresh Fleet.`,
         commands: [
-          "# On this Mac",
-          "cd ~/hivemindos",
-          "git pull --ff-only",
-          "./scripts/install-telemetry-collector.sh",
-          "source ~/.hivemindos/collector.env",
-          'curl "http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health"',
+          `# On this ${selfNoun}`,
+          ...agentBridgeRepairCommands(machine),
+          collectorHealthCommand(machine),
         ],
       };
     }
@@ -181,17 +232,20 @@ export function machineNetworkIssue(
         label: "Tailnet unreachable. Fix?",
         title: "Tailnet peer is not reachable",
         detail:
-          "Tailscale lists this machine as online, but this dashboard has never completed a peer handshake with it. Restart or reconnect Tailscale on both Macs before reinstalling the agent bridge.",
+          "Tailscale lists this machine as online, but this dashboard has never completed a peer handshake with it. Restart or reconnect Tailscale on both machines before reinstalling the agent bridge.",
         commands: [
           "# From this dashboard machine",
           `tailscale ping ${tailnetTarget}`,
           "",
           "# On the other machine",
           "tailscale status",
-          "tailscale debug prefs | grep ShieldsUp",
+          isWindowsOs(machine.os)
+          ? "tailscale debug prefs | Select-String ShieldsUp"
+          : "tailscale debug prefs | grep ShieldsUp",
           "tailscale set --shields-up=false",
-          "sudo tailscale down",
-          "sudo tailscale up",
+          ...(isWindowsOs(machine.os)
+            ? ["tailscale down", "tailscale up"]
+            : ["sudo tailscale down", "sudo tailscale up"]),
           "",
           "# Then retry from this dashboard machine",
           collectorHealthCommand(machine),
@@ -204,16 +258,15 @@ export function machineNetworkIssue(
         label: "Tailnet traffic stalled. Fix?",
         title: "Tailnet peer traffic is stalled",
         detail:
-          "Tailscale lists this machine as online, but this Mac has no peer receive traffic or current handshake for it. Fix the Tailscale transport first; reinstalling the agent bridge will not help until Tailnet traffic works again.",
+          "Tailscale lists this machine as online, but this dashboard has no peer receive traffic or current handshake for it. Fix the Tailscale transport first; reinstalling the agent bridge will not help until Tailnet traffic works again.",
         fixAction: "restart-local-tailnet",
         fixLabel: "Fix Tailnet now",
         commands: [
           "# From this dashboard machine",
           `tailscale ping ${tailnetTarget}`,
           "tailscale netcheck",
-          "open -a Tailscale",
           "",
-          "# If peers still time out",
+          "# If peers still time out, restart the Tailscale transport",
           "tailscale down",
           "tailscale up",
           "",
@@ -227,7 +280,7 @@ export function machineNetworkIssue(
       label: "Agent bridge not reachable. Fix?",
       title: "Agent bridge is not reachable",
       detail:
-        "Tailscale lists this machine, but this dashboard cannot reach a verified HivemindOS agent bridge for it. The automatic fix restarts local Tailnet connectivity on this dashboard Mac only. If the bridge is still unreachable after that, run the remote-machine commands below for Shields Up, service install, or firewall repair.",
+        "Tailscale lists this machine, but this dashboard cannot reach a verified HivemindOS agent bridge for it. The automatic fix restarts local Tailnet connectivity on this dashboard machine only. If the bridge is still unreachable after that, run the remote-machine commands below for Shields Up, service install, or firewall repair.",
       fixAction: "restart-local-tailnet",
       fixLabel: "Restart local Tailnet",
       commands: [
@@ -237,20 +290,23 @@ export function machineNetworkIssue(
         "",
         "# On the other machine",
         "tailscale status",
-        "tailscale debug prefs | grep ShieldsUp",
+        isWindowsOs(machine.os)
+          ? "tailscale debug prefs | Select-String ShieldsUp"
+          : "tailscale debug prefs | grep ShieldsUp",
         "tailscale set --shields-up=false",
-        "sudo tailscale up",
-        "cd ~/hivemindos",
-        "git pull --ff-only",
-        "./scripts/install-telemetry-collector.sh",
-        "source ~/.hivemindos/collector.env",
-        'curl "http://127.0.0.1:${AGENT_TELEMETRY_PORT}/health"',
-        'curl "http://${HIVE_LINK_CONTROL:-127.0.0.1:8788}/status"',
-        "lsof -nP -iTCP:${AGENT_TELEMETRY_PORT} -sTCP:LISTEN",
-        "",
-        "# If local health works but remote curl times out on macOS",
-        'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$(command -v node)"',
-        'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(command -v node)"',
+        ...(isWindowsOs(machine.os) ? ["tailscale up"] : ["sudo tailscale up"]),
+        ...agentBridgeRepairCommands(machine),
+        collectorHealthCommand(machine),
+        ...(isWindowsOs(machine.os)
+          ? []
+          : [
+              'curl "http://${HIVE_LINK_CONTROL:-127.0.0.1:8788}/status"',
+              "lsof -nP -iTCP:${AGENT_TELEMETRY_PORT} -sTCP:LISTEN",
+              "",
+              "# If local health works but remote curl times out on macOS (collector inbound firewall)",
+              'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$(command -v node)"',
+              'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(command -v node)"',
+            ]),
       ],
     };
   }
@@ -261,12 +317,18 @@ export function machineNetworkIssue(
       detail:
         machine.envSync.error ||
         "The local agent bridge is online, but it does not report a working hive-env-add command for env reconciliation.",
-      commands: [
-        "cd ~/hivemindos",
-        "./setup.sh",
-        "sudo tailscale set --ssh",
-        "hive-env-add --reconcile",
-      ],
+      commands: isWindowsOs(machine.os)
+        ? [
+            "cd $env:USERPROFILE\\hivemindos",
+            "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild",
+            "hive-env-add --reconcile",
+          ]
+        : [
+            "cd ~/hivemindos",
+            "./setup.sh",
+            "sudo tailscale set --ssh",
+            "hive-env-add --reconcile",
+          ],
     };
   }
   return undefined;
@@ -384,6 +446,40 @@ export function discoveredMachineIdentity(machine: DiscoveredMachine) {
   });
 }
 
+function discoveredMachineTransportIdentity(machine: DiscoveredMachine) {
+  return machineIdentityFromParts({
+    self: machine.device.self,
+    name: machine.device.name,
+    dnsName: machine.device.dnsName,
+    collectorUrl: machine.device.collectorUrl,
+    ip: machine.device.ip,
+  });
+}
+
+function isDeviceOnlyDiscovery(machine: DiscoveredMachine) {
+  return (
+    machine.collector === "unknown" &&
+    machine.agents.length === 0 &&
+    machine.snapshots.length === 0 &&
+    !machine.machineId &&
+    !machine.version &&
+    !machine.capabilities &&
+    !machine.envSync &&
+    !machine.system
+  );
+}
+
+function mergeTransportDevice(
+  previous: DiscoveredMachine["device"],
+  incoming: DiscoveredMachine["device"],
+): DiscoveredMachine["device"] {
+  return {
+    ...previous,
+    ...incoming,
+    collectorUrl: previous.collectorUrl || incoming.collectorUrl,
+  };
+}
+
 export function discoveredMachineScore(machine: DiscoveredMachine) {
   return (
     (machine.device.self ? 10_000 : 0) +
@@ -453,8 +549,25 @@ export function mergeDiscoveredMachines(
   const currentByKey = new Map(
     current.map((machine) => [discoveredMachineIdentity(machine), machine]),
   );
+  const currentByTransportIdentity = new Map<string, DiscoveredMachine>();
+  for (const machine of current) {
+    const key = discoveredMachineTransportIdentity(machine);
+    if (!key) continue;
+    const previous = currentByTransportIdentity.get(key);
+    if (
+      !previous ||
+      discoveredMachineScore(machine) > discoveredMachineScore(previous)
+    ) {
+      currentByTransportIdentity.set(key, machine);
+    }
+  }
   const incomingKeys = new Set(
     incoming.map((machine) => discoveredMachineIdentity(machine)),
+  );
+  const incomingTransportIdentities = new Set(
+    incoming
+      .map((machine) => discoveredMachineTransportIdentity(machine))
+      .filter(Boolean),
   );
   const incomingHasTailnetSelf = incoming.some(
     (machine) =>
@@ -470,7 +583,12 @@ export function mergeDiscoveredMachines(
 
   const merged = incoming.map((machine) => {
     const key = discoveredMachineIdentity(machine);
-    const previous = currentByKey.get(key);
+    const transportKey = discoveredMachineTransportIdentity(machine);
+    const previousByKey = currentByKey.get(key);
+    const previousByTransport = transportKey
+      ? currentByTransportIdentity.get(transportKey)
+      : undefined;
+    const previous = previousByKey ?? previousByTransport;
     const hasFreshAgentData =
       machine.collector === "ready" && machine.agents.length > 0;
     const mergedSnapshots = mergeMachineSnapshots(
@@ -492,9 +610,20 @@ export function mergeDiscoveredMachines(
       return { ...machine, lastSeenAt: previous.lastSeenAt };
     }
 
+    if (!previousByKey && previousByTransport && isDeviceOnlyDiscovery(machine)) {
+      return {
+        ...previous,
+        device: mergeTransportDevice(previous.device, machine.device),
+        lastSeenAt: previous.lastSeenAt,
+      };
+    }
+
     return {
       ...machine,
-      collector: previous.collector === "ready" ? "ready" : machine.collector,
+      collector:
+        previousByKey && previous.collector === "ready"
+          ? "ready"
+          : machine.collector,
       agents: previous.agents,
       snapshots: previous.snapshots,
       lastSeenAt: previous.lastSeenAt,
@@ -503,6 +632,12 @@ export function mergeDiscoveredMachines(
 
   const preserved = current
     .filter((machine) => !incomingKeys.has(discoveredMachineIdentity(machine)))
+    .filter(
+      (machine) =>
+        !incomingTransportIdentities.has(
+          discoveredMachineTransportIdentity(machine),
+        ),
+    )
     .filter(shouldPreserveMissingDiscoveredMachine)
     .filter(
       (machine) =>
@@ -566,7 +701,15 @@ export function machineVersionState(
   };
 }
 
-export function setupCollectorCommand() {
+export function setupCollectorCommand(os?: string) {
+  if (isWindowsOs(os)) {
+    return [
+      `if (-not (Test-Path hivemindos)) { git clone ${REPO_CLONE_URL} hivemindos }`,
+      "cd hivemindos",
+      "git pull --ff-only",
+      "powershell -ExecutionPolicy Bypass -File setup.ps1",
+    ].join("\n");
+  }
   return [
     `git clone ${REPO_CLONE_URL} hivemindos 2>/dev/null || true`,
     "cd hivemindos",
@@ -654,7 +797,7 @@ export function brainLoaderEdgeLines() {
 export const BRAIN_LOADER_EDGES = brainLoaderEdgeLines();
 
 export function BrainGraphLoader({
-  compact = false,
+  compact = true,
   detail = "Reading vault notes and link edges",
   inline = false,
   title = "Mapping shared brain",
@@ -1168,7 +1311,7 @@ export function fleetMachineLocation(machine: MachineGroup, index: number) {
   void index;
   if (machine.self) {
     const local = localTimezoneLocation();
-    if (local) return { ...local, location: "This Mac" };
+    if (local) return { ...local, location: `This ${deviceNounForOs(machine.os)}` };
   }
   return (
     machineRegionLocation(machine) ??

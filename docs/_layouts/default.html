@@ -6,6 +6,8 @@
   <meta name="color-scheme" content="light">
   <title>{% if page.title %}{{ page.title | escape }} | {% endif %}{{ site.title | escape }}</title>
   <meta name="description" content="{{ page.description | default: site.description | escape }}">
+  <link rel="icon" type="image/png" href="{{ '/assets/img/app-icon-1024.png' | relative_url }}">
+  <link rel="apple-touch-icon" href="{{ '/assets/img/app-icon-1024.png' | relative_url }}">
   <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
 </head>
 <body>
@@ -14,88 +16,81 @@
   <header class="siteHeader">
     <nav class="topNav" aria-label="Primary">
       <a class="brandMark" href="{{ '/' | relative_url }}" aria-label="HivemindOS Docs home">
-        <span class="brandGlyph" aria-hidden="true">H</span>
+        <img class="brandIcon" src="{{ '/assets/img/app-icon-1024.png' | relative_url }}" alt="" width="40" height="40" aria-hidden="true">
         <span>
           <strong>HivemindOS</strong>
-          <small>Docs</small>
+          <small>Operator Docs</small>
         </span>
       </a>
       <div class="topLinks">
-        <a href="{{ '/features/' | relative_url }}">Features</a>
-        <a href="{{ '/diagrams.html' | relative_url }}">Diagrams</a>
-        <a href="{{ '/whole-brain/' | relative_url }}">Whole Brain</a>
-        <a href="{{ '/packaged-skills/' | relative_url }}">Skills</a>
-        <a href="{{ '/architecture/' | relative_url }}">Architecture</a>
-        <a href="{{ '/product/' | relative_url }}">Product</a>
-        <a href="{{ '/integrations/' | relative_url }}">Integrations</a>
-        <a href="{{ '/monetization/' | relative_url }}">Monetization</a>
-        <a href="{{ '/runtimes/' | relative_url }}">Runtimes</a>
-        <a class="previewLink" href="{{ '/preview.html' | relative_url }}">Preview</a>
+        {% for link in site.data.navigation.top_links %}
+          <a{% if page.url == link.url %} aria-current="page"{% endif %} href="{{ link.url | relative_url }}">{{ link.title }}</a>
+        {% endfor %}
+      </div>
+      <div class="searchShell">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter docs..." autocomplete="off">
+        <kbd>/</kbd>
       </div>
     </nav>
   </header>
 
   <div class="docFrame">
     <aside class="docSidebar" aria-label="Documentation navigation">
-      <div class="sidebarKicker">Control room map</div>
+      <div class="sidebarKicker">Documentation</div>
       <nav class="sideNav">
-        <section>
-          <h2>Start</h2>
-          <a href="{{ '/' | relative_url }}">Overview</a>
-          <a href="{{ '/features/' | relative_url }}">Feature guide</a>
-          <a href="{{ '/diagrams.html' | relative_url }}">Diagrams and maps</a>
-          <a href="{{ '/architecture/' | relative_url }}">Architecture</a>
-          <a href="{{ '/packaged-skills/' | relative_url }}">Packaged skills</a>
-          <a href="{{ '/slash-commands.html' | relative_url }}">Slash commands</a>
-          <a href="{{ '/native-app.html' | relative_url }}">Native app</a>
-        </section>
-        <section>
-          <h2>Core Systems</h2>
-          <a href="{{ '/features/fleet.html' | relative_url }}">Fleet</a>
-          <a href="{{ '/features/runtimes-and-chat.html' | relative_url }}">Agents and chat</a>
-          <a href="{{ '/features/calling.html' | relative_url }}">Calling</a>
-          <a href="{{ '/features/work-and-scheduler.html' | relative_url }}">Work board</a>
-          <a href="{{ '/features/brain-vault-and-skills.html' | relative_url }}">Brain and vault</a>
-          <a href="{{ '/packaged-skills/' | relative_url }}">Packaged skills</a>
-          <a href="{{ '/features/hive-fusion.html' | relative_url }}">Hive Fusion</a>
-          <a href="{{ '/features/token-and-cost-savings.html' | relative_url }}">Token savings</a>
-          <a href="{{ '/features/hivemind-sync.html' | relative_url }}">Hivemind Sync</a>
-          <a href="{{ '/whole-brain/' | relative_url }}">Whole Brain</a>
-          <a href="{{ '/features/wallets-honey-and-x402.html' | relative_url }}">Wallets and tokens</a>
-        </section>
-        <section>
-          <h2>Safety Boundaries</h2>
-          <a href="{{ '/architecture/api-and-storage.html' | relative_url }}">API and storage</a>
-          <a href="{{ '/architecture/syncing-and-tailscale.html' | relative_url }}">Hivemind Sync</a>
-          <a href="{{ '/architecture/tailscale-fleet-telemetry.html' | relative_url }}">Fleet telemetry</a>
-        </section>
-        <section>
-          <h2>Integrations</h2>
-          <a href="{{ '/integrations/gitlawb.html' | relative_url }}">GitLawb Code Proof</a>
-          <a href="{{ '/integrations/miroshark/' | relative_url }}">MiroShark</a>
-          <a href="{{ '/integrations/usepod.html' | relative_url }}">UsePod</a>
-          <a href="{{ '/runtimes/hermes/local-setup.html' | relative_url }}">Hermes setup</a>
-          <a href="{{ '/runtimes/aeon/github-actions-brain-access.html' | relative_url }}">AEON brain access</a>
-        </section>
-        <section>
-          <h2>Monetization</h2>
-          <a href="{{ '/monetization/' | relative_url }}">Monetization</a>
-          <a href="{{ '/monetization/ecosystem-plan.html' | relative_url }}">Ecosystem plan</a>
-          <a href="{{ '/monetization/honey-hive-treasury.html' | relative_url }}">Honey and HIVE</a>
-          <a href="{{ '/monetization/paid-features/' | relative_url }}">Paid features</a>
-          <a href="{{ '/monetization/paid-features/hivemind-cloud-agent-calls.html' | relative_url }}">Cloud agent calls</a>
-        </section>
-        <section>
-          <h2>Product</h2>
-          <a href="{{ '/product/design-philosophy.html' | relative_url }}">Design philosophy</a>
-          <a href="{{ '/product/ui-rules.html' | relative_url }}">UI rules</a>
-        </section>
+        {% for section in site.data.navigation.sections %}
+          <section class="navSection">
+            <h2>{{ section.title }}</h2>
+            {% for item in section.items %}
+              {% assign group_active = false %}
+              {% if page.url == item.url %}
+                {% assign group_active = true %}
+              {% endif %}
+              {% for child in item.children %}
+                {% if page.url == child.url %}
+                  {% assign group_active = true %}
+                {% endif %}
+              {% endfor %}
+
+              {% if item.children %}
+                <details class="navGroup"{% if group_active %} open{% endif %}>
+                  <summary>{{ item.title }}</summary>
+                  <div class="navChildren">
+                    {% if item.url %}
+                      <a class="navLink{% if page.url == item.url %} isActive{% endif %}"{% if page.url == item.url %} aria-current="page"{% endif %} href="{{ item.url | relative_url }}">Overview</a>
+                    {% endif %}
+                    {% for child in item.children %}
+                      <a class="navLink{% if page.url == child.url %} isActive{% endif %}"{% if page.url == child.url %} aria-current="page"{% endif %} href="{{ child.url | relative_url }}">{{ child.title }}</a>
+                    {% endfor %}
+                  </div>
+                </details>
+              {% else %}
+                <a class="navLink{% if page.url == item.url %} isActive{% endif %}"{% if page.url == item.url %} aria-current="page"{% endif %} href="{{ item.url | relative_url }}">{{ item.title }}</a>
+              {% endif %}
+            {% endfor %}
+          </section>
+        {% endfor %}
       </nav>
     </aside>
 
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">{{ page.section | default: site.title }}</p>
+          <button class="copyPageButton" type="button" data-copy-page>Copy link</button>
+        </div>
         {{ content }}
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
       </article>
     </main>
   </div>
@@ -106,6 +101,86 @@
   </footer>
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+    const primaryDocRoutes = [
+      '/for-users/whole-brain/',
+      '/for-users/features/hivemind-sync.html',
+      '/for-users/packaged-skills/',
+      '/for-users/slash-commands.html',
+      '/for-users/features/token-and-cost-savings.html'
+    ];
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+
+      if (pageNav && (previous || next)) {
+        pageNav.hidden = false;
+      }
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = !query;
+        section.querySelectorAll(".navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch = sectionHasMatch || matches;
+        });
+        section.hidden = !sectionHasMatch;
+        if (query) {
+          section.querySelectorAll("details").forEach((details) => details.setAttribute("open", ""));
+        }
+      });
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "/" && document.activeElement !== navSearch) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+    });
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        button.textContent = "Copied";
+        window.setTimeout(() => {
+          button.textContent = "Copy link";
+        }, 1400);
+      } catch {
+        button.textContent = "Copy failed";
+      }
+    });
 
     const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
     mermaidBlocks.forEach((code, index) => {

@@ -1,0 +1,465 @@
+.envPanel {
+  --brain-bg: #0c0d11;
+  --brain-panel: #14161c;
+  --brain-panel-2: #181b22;
+  --brain-line: rgba(238, 232, 220, 0.1);
+  --brain-line-2: rgba(238, 232, 220, 0.16);
+  --brain-fg: #f3f0e9;
+  --brain-fg-2: #a7a39a;
+  --brain-fg-3: #76726a;
+  --brain-honey: #e7b45c;
+  --brain-honey-soft: rgba(231, 180, 92, 0.13);
+  --brain-honey-line: rgba(231, 180, 92, 0.32);
+  --brain-live: #6fcdba;
+  --brain-radius: 14px;
+  --brain-radius-sm: 9px;
+  border-color: var(--brain-line);
+  background: var(--brain-bg);
+  color: var(--brain-fg);
+  box-shadow: none;
+}
+
+.envHeader {
+  margin: -1rem -1rem 0;
+  border-bottom: 1px solid var(--brain-line);
+  background: linear-gradient(180deg, rgba(20, 22, 28, 0.98), rgba(12, 13, 17, 0.98));
+  padding: 20px 24px;
+}
+
+.envHeader h2 {
+  color: var(--brain-fg);
+}
+
+.envHeader p {
+  color: var(--brain-fg-3);
+}
+
+.envToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid var(--brain-line);
+  border-radius: 8px;
+  background: var(--brain-panel);
+  padding: 11px 14px;
+}
+
+.envSearch {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 300px;
+  max-width: 460px;
+  min-width: min(100%, 220px);
+}
+
+.envSearch svg {
+  position: absolute;
+  left: 12px;
+  width: 15px;
+  height: 15px;
+  color: var(--brain-fg-3);
+  pointer-events: none;
+}
+
+.envSearch input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--brain-line-2);
+  border-radius: 999px;
+  background: var(--brain-panel-2);
+  color: var(--brain-fg);
+  outline: none;
+  padding: 8px 38px 8px 34px;
+  font-size: 12.5px;
+}
+
+.envSearch input:focus {
+  border-color: rgba(231, 180, 92, 0.38);
+  box-shadow: 0 0 0 3px var(--brain-honey-soft);
+}
+
+.envSearch button {
+  position: absolute;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg-3);
+}
+
+.envSearch button:hover,
+.envSearch button:focus-visible {
+  background: var(--brain-honey-soft);
+  color: var(--brain-honey);
+  outline: none;
+}
+
+.envSearch button svg {
+  position: static;
+  width: 14px;
+  height: 14px;
+  pointer-events: auto;
+}
+
+.envSearchCount {
+  color: var(--brain-fg-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.envWrap {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.envIntro {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.envIntro h3 {
+  margin: 0;
+  color: var(--brain-fg);
+  font-family: var(--f-display, system-ui, sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.envIntro p {
+  max-width: 62ch;
+  margin: 8px 0 0;
+  color: var(--brain-fg-3);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.envActions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.envActionButton {
+  display: inline-flex;
+  min-width: auto;
+  min-height: 31px;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--brain-line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 7px 12px;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.envActionButton svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.envActionButton:hover:not(:disabled),
+.envActionButton:focus-visible:not(:disabled) {
+  border-color: var(--brain-line-2);
+  background: var(--brain-panel-2);
+  color: var(--brain-fg);
+  outline: none;
+}
+
+.envActionButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.envActionPrimary {
+  border-color: var(--brain-honey);
+  background: var(--brain-honey);
+  color: #1a1305;
+}
+
+.envActionPrimary:hover:not(:disabled),
+.envActionPrimary:focus-visible:not(:disabled) {
+  border-color: var(--brain-honey);
+  background: color-mix(in srgb, var(--brain-honey) 88%, white);
+  color: #1a1305;
+}
+
+.envNotice {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  margin: 0 0 12px;
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32)) !important;
+  background: var(--brain-honey-soft) !important;
+}
+
+.envStatusCard {
+  margin: 0 0 12px;
+}
+
+.envListHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--brain-line);
+  padding: 11px 16px;
+}
+
+.envListHeader strong {
+  color: var(--brain-fg);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.envRow {
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid var(--brain-line);
+  padding: 13px 16px;
+}
+
+.envRow:first-of-type {
+  border-top: 0;
+}
+
+.envRowTop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.envDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--brain-live);
+}
+
+.envKey {
+  flex: 1 1 140px;
+  min-width: 0;
+  color: var(--brain-fg);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.envScope {
+  border: 1px solid var(--brain-line-2);
+  border-radius: 999px;
+  color: var(--brain-fg-3);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  text-transform: uppercase;
+}
+
+.envScopeHoney {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  background: var(--brain-honey-soft);
+  color: var(--brain-honey);
+}
+
+.envIconActions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.envIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--brain-line-2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--brain-fg-3);
+  cursor: pointer;
+}
+
+.envIcon:hover,
+.envIcon:focus-visible {
+  border-color: var(--brain-line-2);
+  background: var(--brain-panel-2);
+  color: var(--brain-fg);
+}
+
+.envIconOn {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  background: var(--brain-honey-soft);
+  color: var(--brain-honey);
+}
+
+.envIconOk {
+  border-color: color-mix(in srgb, var(--brain-live) 35%, transparent);
+  background: var(--brain-live-soft, rgba(111, 205, 186, 0.14));
+  color: var(--brain-live);
+}
+
+.envIconDanger:hover,
+.envIconDanger:focus-visible {
+  border-color: color-mix(in srgb, #e58e85 38%, transparent);
+  background: rgba(229, 142, 133, 0.13);
+  color: #e58e85;
+}
+
+.envField,
+.envTextarea {
+  width: 100%;
+  border: 1px solid var(--brain-line-2);
+  border-radius: 9px;
+  background: var(--brain-panel-2);
+  color: var(--brain-fg-2);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12px;
+  outline: none;
+  padding: 8px 11px;
+}
+
+.envTextarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.envField:focus,
+.envTextarea:focus {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  box-shadow: 0 0 0 3px var(--brain-honey-soft);
+}
+
+.envEditCard {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.envEditGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.envRuntimeTabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  border: 1px solid var(--brain-line-2);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel) 70%, transparent);
+  padding: 4px;
+}
+
+.envRuntimeTabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg-3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 7px 12px;
+}
+
+.envRuntimeTabs button[aria-selected="true"] {
+  background: var(--brain-honey);
+  color: #1a1305;
+}
+
+.envSubsection {
+  display: grid;
+  gap: 12px;
+}
+
+.envSubHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.envSubHeader h3 {
+  margin: 0;
+  color: var(--brain-fg);
+  font-size: 16px;
+}
+
+.envGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.envEmpty {
+  margin: 0;
+  border: 1px dashed var(--brain-line-2);
+  border-radius: 9px;
+  color: var(--brain-fg-3);
+  font-size: 12.5px;
+  padding: 18px 16px;
+  text-align: center;
+}
+
+.envCard {
+  overflow: hidden;
+  border: 1px solid var(--brain-line) !important;
+  border-radius: var(--brain-radius);
+  background: var(--brain-panel) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+}
+
+.envSharedCard {
+  border-color: rgba(111, 205, 186, 0.22) !important;
+  background:
+    radial-gradient(520px 260px at 12% 0%, rgba(111, 205, 186, 0.1), transparent 72%),
+    var(--brain-panel) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .envPanel {
+  --brain-bg: #f1ede3;
+  --brain-panel: #fbf8f1;
+  --brain-panel-2: #f4efe4;
+  --brain-line: rgba(54, 46, 30, 0.12);
+  --brain-line-2: rgba(54, 46, 30, 0.18);
+  --brain-fg: #221d14;
+  --brain-fg-2: #5e574b;
+  --brain-fg-3: #867d6e;
+  --brain-honey: #b07f1c;
+  --brain-honey-soft: rgba(176, 127, 28, 0.12);
+  --brain-live: #1d8e7c;
+}
+
+:global(:root[data-theme="hive-light"]) .envHeader {
+  background: linear-gradient(180deg, rgba(251, 248, 241, 0.98), rgba(241, 237, 227, 0.98));
+}

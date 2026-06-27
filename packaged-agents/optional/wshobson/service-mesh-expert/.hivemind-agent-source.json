@@ -1,0 +1,19 @@
+{
+  "upstreamName": "service-mesh-expert",
+  "slug": "service-mesh-expert",
+  "label": "Service Mesh Expert",
+  "domain": "cloud-infrastructure",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/cloud-infrastructure/agents/service-mesh-expert.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent service-mesh-expert",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/service-mesh-expert",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert service mesh architect specializing in Istio, Linkerd, and cloud-native networking patterns. Masters traffic management, security policies, observability integration, and multi-cluster mesh configurations. Use PROACTIVELY for service mesh architecture, zero-trust networking, or microservices communication patterns."
+}

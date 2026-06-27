@@ -130,9 +130,7 @@ export function SchedulerView({
         }} />
 
         {/* BODY */}
-        {selected ? <div className="relative z-10 grid" style={{
-          gridTemplateColumns: "300px minmax(0, 1fr) 360px", height: "100%", minHeight: 0, overflow: "hidden",
-        }}>
+        {selected ? <div className={`${styles.schedulerBody} relative z-10`}>
           <Jobs jobs={jobs} selectedId={effectiveSelectedId}
             onSelect={setSelectedId} onToggle={toggleJob} onNewJob={onNewJob}
             controls={runtimeControls} />

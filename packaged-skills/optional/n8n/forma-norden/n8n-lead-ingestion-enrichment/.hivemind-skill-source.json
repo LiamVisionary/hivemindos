@@ -1,0 +1,20 @@
+{
+  "upstreamName": "n8n-lead-ingestion-enrichment",
+  "upstreamSlug": "n8n-lead-ingestion-enrichment",
+  "hiveSlug": "n8n-lead-ingestion-enrichment",
+  "sourceLabel": "forma-norden",
+  "sourceUrl": "https://github.com/forma-norden/n8n-gtm-workflow-pack/blob/main/.agents/skills/n8n-lead-ingestion-enrichment.md",
+  "repository": "https://github.com/forma-norden/n8n-gtm-workflow-pack",
+  "installCommand": "npx skills add https://github.com/forma-norden/n8n-gtm-workflow-pack --skill n8n-lead-ingestion-enrichment",
+  "importedAt": "2026-06-19T03:07:29.307Z",
+  "refreshedAt": "2026-06-19T03:07:29.307Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/n8n/forma-norden/n8n-lead-ingestion-enrichment",
+  "packageGroup": "n8n",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+  "normalized": "frontmatter-synthesized-by-importer",
+  "description": "Build reliable n8n workflows that ingest leads from multiple sources, deduplicate records, enrich account and contact fields, and output a route-ready schema. Use for: lead ingestion, enrich leads, webhook-to-enrichment, dedupe, schema validation."
+}

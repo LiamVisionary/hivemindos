@@ -1,0 +1,19 @@
+{
+  "upstreamName": "reference-builder",
+  "slug": "reference-builder",
+  "label": "Reference Builder",
+  "domain": "documentation-generation",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/documentation-generation/agents/reference-builder.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent reference-builder",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/reference-builder",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Creates exhaustive technical references and API documentation. Generates comprehensive parameter listings, configuration guides, and searchable reference materials. Use PROACTIVELY for API docs, configuration references, or complete technical specifications."
+}

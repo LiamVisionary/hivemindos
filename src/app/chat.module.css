@@ -3612,8 +3612,57 @@ details[open] > summary .treeDisclosure::before {
 }
 
 :global(:root[data-theme="hive-light"]) .composerIconButton.sendButton {
-  background: #171b22;
-  color: #f8fafc;
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: var(--button-primary-foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .workingDirectoryTooltip,
+:global(:root[data-theme="hive-light"]) .workingDirectoryPanel,
+:global(:root[data-theme="hive-light"]) .agentModeTooltip,
+:global(:root[data-theme="hive-light"]) .agentModeList,
+:global(:root[data-theme="hive-light"]) .modelPickerTooltip,
+:global(:root[data-theme="hive-light"]) .modelPickerList button,
+:global(:root[data-theme="hive-light"]) .voiceRecorder,
+:global(:root[data-theme="hive-light"]) .messageAttachment,
+:global(:root[data-theme="hive-light"]) .chatRuntimeMeta {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .composerModeButton,
+:global(:root[data-theme="hive-light"]) .composerDirectoryButton,
+:global(:root[data-theme="hive-light"]) .composerIconButton,
+:global(:root[data-theme="hive-light"]) .workingDirectoryPanel button,
+:global(:root[data-theme="hive-light"]) .agentModeList button,
+:global(:root[data-theme="hive-light"]) .modelPickerRefresh,
+:global(:root[data-theme="hive-light"]) .attachmentMenu button {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .composerModeButton:hover,
+:global(:root[data-theme="hive-light"]) .composerModeButton[aria-expanded="true"],
+:global(:root[data-theme="hive-light"]) .composerDirectoryButton:hover,
+:global(:root[data-theme="hive-light"]) .composerDirectoryButton[aria-expanded="true"],
+:global(:root[data-theme="hive-light"]) .agentModeList button:hover,
+:global(:root[data-theme="hive-light"]) .agentModeList button[aria-selected="true"],
+:global(:root[data-theme="hive-light"]) .modelPickerList button:hover,
+:global(:root[data-theme="hive-light"]) .modelPickerList button[aria-selected="true"],
+:global(:root[data-theme="hive-light"]) .workingDirectoryPanel button:hover {
+  border-color: rgba(176, 127, 28, 0.34);
+  background: rgba(176, 127, 28, 0.12);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .agentModeList small,
+:global(:root[data-theme="hive-light"]) .modelPickerList small,
+:global(:root[data-theme="hive-light"]) .modelPickerEmpty,
+:global(:root[data-theme="hive-light"]) .attachmentMenu button small,
+:global(:root[data-theme="hive-light"]) .messageAttachment figcaption,
+:global(:root[data-theme="hive-light"]) .voiceRecorder > span {
+  color: var(--text-soft);
 }
 
 :global(:root[data-theme="hive-light"]) .runtimeBadge,

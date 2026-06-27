@@ -43,13 +43,13 @@ function TooltipContent({
         data-slot="tooltip-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 max-w-[260px] rounded-md border border-[rgba(148,163,184,0.22)] bg-[#0b1018] px-3 py-1.5 text-xs text-[#dbe7f3] shadow-xl animate-in fade-in-0 zoom-in-95",
+          "z-50 max-w-[260px] rounded-md border border-[var(--line)] bg-[var(--button-popover)] px-3 py-1.5 text-xs text-[var(--button-popover-foreground)] shadow-xl animate-in fade-in-0 zoom-in-95",
           className,
         )}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className={cn("fill-[#0b1018]", arrowClassName)} />
+        <TooltipPrimitive.Arrow className={cn("fill-[var(--button-popover)]", arrowClassName)} />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );

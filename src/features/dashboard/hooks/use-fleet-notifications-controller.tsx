@@ -2,8 +2,9 @@
 // @ts-nocheck
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
+import { getNativeFleetDiscovery } from "@/lib/native/fleet";
 import { readNativeKanban } from "@/lib/native/kanban";
 
 export function useFleetNotificationsController(props: any) {
@@ -60,12 +61,20 @@ export function useFleetNotificationsController(props: any) {
     summarizeHermesAuthError,
     updateStatusByMachine,
   } = props;
-  function openMachineInitModal() {
-    setMachineInitOpen(true);
-    setMachineInitStatus({});
-    setMachineInitCopiedKey("");
-    setMachineInitTokenStatus({});
-  }
+  // Latest snapshot of the props/state and sibling local helpers that the
+  // stable useCallback handlers below read at call time (see liveRef.current
+  // assignment near the end of this hook). Reading through this ref lets those
+  // handlers keep an empty dep array (stable identity, so the memoized panels
+  // they are spread into can short-circuit) without ever observing stale props.
+  const liveRef = useRef<any>(null);
+
+  const openMachineInitModal = useCallback(() => {
+    const live = liveRef.current;
+    live.setMachineInitOpen(true);
+    live.setMachineInitStatus({});
+    live.setMachineInitCopiedKey("");
+    live.setMachineInitTokenStatus({});
+  }, []);
 
   async function saveHetznerToken() {
     const token = machineInitToken.trim();
@@ -187,11 +196,12 @@ export function useFleetNotificationsController(props: any) {
   }
 
   async function refreshDiscoveryNow() {
-    const response = await fetch(
+    const nativeData = await getNativeFleetDiscovery();
+    const response = nativeData?.machines ? null : await fetch(
       "/api/fleet/discover?includeSnapshots=0&fresh=1",
       { cache: "no-store" },
     ).catch(() => null);
-    const data = (await response?.json().catch(() => null)) as {
+    const data = (nativeData?.machines ? nativeData : await response?.json().catch(() => null)) as {
       machines?: DiscoveredMachine[];
     } | null;
     if (!data?.machines) return;
@@ -208,26 +218,28 @@ export function useFleetNotificationsController(props: any) {
     }
   }
 
-  async function runMachineUpdate(machine: MachineGroup) {
-    const versionCopy = machineVersionCopy(
+  const runMachineUpdate = useCallback(async (machine: MachineGroup) => {
+    const live = liveRef.current;
+    const { appVersion } = live;
+    const versionCopy = live.machineVersionCopy(
       machine,
       appVersion?.latestCommit || appVersion?.commit,
     );
-    const needsChatBridgeRepair = machineNeedsChatBridgeRepair(machine);
-    const needsEnvHttpSyncRepair = machineNeedsEnvHttpSyncRepair(machine);
-    const needsSkillSyncRepair = machineNeedsSkillSyncRepair(machine);
+    const needsChatBridgeRepair = live.machineNeedsChatBridgeRepair(machine);
+    const needsEnvHttpSyncRepair = live.machineNeedsEnvHttpSyncRepair(machine);
+    const needsSkillSyncRepair = live.machineNeedsSkillSyncRepair(machine);
     if (
       (needsChatBridgeRepair ||
         needsEnvHttpSyncRepair ||
         needsSkillSyncRepair) &&
-      localDashboardHasUnpublishedChanges(appVersion)
+      live.localDashboardHasUnpublishedChanges(appVersion)
     ) {
       const missingFeature = needsSkillSyncRepair
         ? "shared skills bridge"
         : needsEnvHttpSyncRepair
           ? "shared-env sync endpoint"
           : "Hermes chat bridge";
-      setUpdateStatusByMachine((current) => ({
+      live.setUpdateStatusByMachine((current) => ({
         ...current,
         [machine.key]: {
           label: "Publish update first",
@@ -238,12 +250,12 @@ export function useFleetNotificationsController(props: any) {
       return;
     }
     if (
-      !isCollectorAutoUpdateable(versionCopy) &&
+      !live.isCollectorAutoUpdateable(versionCopy) &&
       !needsChatBridgeRepair &&
       !needsEnvHttpSyncRepair &&
       !needsSkillSyncRepair
     ) {
-      setUpdateStatusByMachine((current) => ({
+      live.setUpdateStatusByMachine((current) => ({
         ...current,
         [machine.key]: {
           label: "Already up to date",
@@ -254,7 +266,7 @@ export function useFleetNotificationsController(props: any) {
       }));
       return;
     }
-    setUpdateStatusByMachine((current) => ({
+    live.setUpdateStatusByMachine((current) => ({
       ...current,
       [machine.key]: { label: "Updating...", tone: "working" },
     }));
@@ -300,7 +312,7 @@ export function useFleetNotificationsController(props: any) {
         ]
           .filter(Boolean)
           .join("\n\n");
-    setUpdateStatusByMachine((current) => ({
+    live.setUpdateStatusByMachine((current) => ({
       ...current,
       [machine.key]: {
         label: verified ? "Updated!" : "Update failed",
@@ -309,42 +321,55 @@ export function useFleetNotificationsController(props: any) {
       },
     }));
     if (verified) {
-      void refreshAppVersionNow();
-      void refreshDiscoveryNow();
+      void live.refreshAppVersionNow();
+      void live.refreshDiscoveryNow();
     }
-  }
+  }, []);
 
-  async function copyUpdateDetail(machineKey: string) {
-    const detail = updateStatusByMachine[machineKey]?.detail;
+  const copyUpdateDetail = useCallback(async (machineKey: string) => {
+    const live = liveRef.current;
+    const detail = live.updateStatusByMachine[machineKey]?.detail;
     if (!detail) return;
     await navigator.clipboard?.writeText(detail).catch(() => undefined);
-    setCopiedUpdateDetailKey(machineKey);
+    live.setCopiedUpdateDetailKey(machineKey);
     window.setTimeout(
       () =>
-        setCopiedUpdateDetailKey((current) =>
+        live.setCopiedUpdateDetailKey((current) =>
           current === machineKey ? "" : current,
         ),
       2500,
     );
-  }
+  }, []);
 
-  async function refreshKanbanOnce() {
+  async function refreshKanbanOnce(overrides: any = {}) {
+    const includeArchived =
+      typeof overrides.includeArchived === "boolean"
+        ? overrides.includeArchived
+        : kanbanIncludeArchived;
+    const tenantFilter =
+      typeof overrides.tenant === "string" ? overrides.tenant : kanbanTenantFilter;
+    const assigneeFilter =
+      typeof overrides.assignee === "string"
+        ? overrides.assignee
+        : kanbanAssigneeFilter;
+    const queryFilter =
+      typeof overrides.query === "string" ? overrides.query : kanbanSearch;
     const params = new URLSearchParams({
       board: kanbanBoardSlug,
-      include_archived: String(kanbanIncludeArchived),
+      include_archived: String(includeArchived),
       include_boards: "false",
     });
     addKanbanStorageParams(params);
-    if (kanbanTenantFilter) params.set("tenant", kanbanTenantFilter);
-    if (kanbanAssigneeFilter) params.set("assignee", kanbanAssigneeFilter);
-    if (kanbanSearch) params.set("q", kanbanSearch);
+    if (tenantFilter) params.set("tenant", tenantFilter);
+    if (assigneeFilter) params.set("assignee", assigneeFilter);
+    if (queryFilter) params.set("q", queryFilter);
     const nativeData = await readNativeKanban({
       board: kanbanBoardSlug,
-      includeArchived: kanbanIncludeArchived,
+      includeArchived,
       includeBoards: false,
-      tenant: kanbanTenantFilter || undefined,
-      assignee: kanbanAssigneeFilter || undefined,
-      query: kanbanSearch || undefined,
+      tenant: tenantFilter || undefined,
+      assignee: assigneeFilter || undefined,
+      query: queryFilter || undefined,
       vaultPath: sharedVault.enabled
         ? sharedVault.vaultPath?.trim()
         : undefined,
@@ -352,17 +377,23 @@ export function useFleetNotificationsController(props: any) {
         ? sharedVault.kanbanFolder?.trim() || DEFAULT_SHARED_VAULT.kanbanFolder
         : undefined,
     });
-    const response =
-      nativeData?.ok && nativeData.board
-        ? null
-        : await fetch(`/api/kanban?${params.toString()}`, {
-            cache: "no-store",
-          });
+    const nativeBoardTaskCount = nativeData?.board?.tasks?.length ?? 0;
+    const shouldFetchWebBoard = !(nativeData?.ok && nativeData.board && nativeBoardTaskCount > 0);
+    const response = shouldFetchWebBoard
+      ? await fetch(`/api/kanban?${params.toString()}`, {
+          cache: "no-store",
+        }).catch(() => null)
+      : null;
+    const webData = response?.ok
+      ? ((await response.json().catch(() => null)) as KanbanResponse | null)
+      : null;
     const data =
-      nativeData?.ok && nativeData.board
-        ? nativeData
-        : ((await response.json().catch(() => null)) as KanbanResponse | null);
-    if ((!nativeData?.ok && !response.ok) || !data?.ok || !data.board)
+      webData?.ok && webData.board
+        ? webData
+        : nativeData?.ok && nativeData.board
+          ? nativeData
+          : webData;
+    if (!data?.ok || !data.board)
       throw new Error(data?.error ?? "Kanban refresh failed.");
     setKanbanError("");
     setKanbanBoard(data.board);
@@ -370,6 +401,11 @@ export function useFleetNotificationsController(props: any) {
     setKanbanTenants(data.tenants ?? []);
     setKanbanAssignees(data.assignees ?? []);
     setKanbanStorage(data.storage ?? null);
+    setSelectedKanbanTaskId((current) =>
+      current && data.board.tasks.some((task: any) => task.id === current)
+        ? current
+        : data.board.tasks[0]?.id ?? "",
+    );
   }
 
   function kanbanStorageBody() {
@@ -565,29 +601,30 @@ export function useFleetNotificationsController(props: any) {
     sharedVault.vaultPath,
   ]);
 
-  async function markNotificationRead(id: string) {
+  const markNotificationRead = useCallback(async (id: string) => {
+    const live = liveRef.current;
     const response = await fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...notificationStorageBody(), id }),
+      body: JSON.stringify({ ...live.notificationStorageBody(), id }),
     }).catch(() => null);
     const data = (await response
       ?.json()
       .catch(() => null)) as NotificationsResponse | null;
     if (!response?.ok || !data?.ok) {
-      setNotificationsStatus(
+      live.setNotificationsStatus(
         data?.error ?? "Could not mark notification read.",
       );
       return;
     }
-    setNotifications((current) =>
+    live.setNotifications((current) =>
       current.map((notification) =>
         notification.id === id
           ? { ...notification, read: true, readAt: new Date().toISOString() }
           : notification,
       ),
     );
-    setNotificationSummary((current) =>
+    live.setNotificationSummary((current) =>
       current
         ? {
             ...current,
@@ -595,7 +632,7 @@ export function useFleetNotificationsController(props: any) {
             highUnread: Math.max(
               0,
               current.highUnread -
-                (notifications.find((item) => item.id === id)?.priority ===
+                (live.notifications.find((item) => item.id === id)?.priority ===
                 "high"
                   ? 1
                   : 0),
@@ -603,7 +640,7 @@ export function useFleetNotificationsController(props: any) {
             urgentUnread: Math.max(
               0,
               current.urgentUnread -
-                (notifications.find((item) => item.id === id)?.priority ===
+                (live.notifications.find((item) => item.id === id)?.priority ===
                 "urgent"
                   ? 1
                   : 0),
@@ -611,7 +648,7 @@ export function useFleetNotificationsController(props: any) {
           }
         : current,
     );
-  }
+  }, []);
 
   async function markAllNotificationsRead() {
     const response = await fetch("/api/notifications", {
@@ -689,11 +726,12 @@ export function useFleetNotificationsController(props: any) {
     }
   }
 
-  async function trackAgentTaskOnKanban(
+  const trackAgentTaskOnKanban = useCallback(async (
     agent: AgentProfile,
     taskRow: AgentTaskRow,
     task?: AgentTask,
-  ) {
+  ) => {
+    const live = liveRef.current;
     const status: KanbanStatus =
       taskRow.status === "active"
         ? "working"
@@ -703,13 +741,13 @@ export function useFleetNotificationsController(props: any) {
             ? "needs-human"
             : "ideas";
     const response = await fetch(
-      `/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`,
+      `/api/kanban?board=${encodeURIComponent(live.kanbanBoardSlug)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...kanbanStorageBody(),
-          title: cleanActivityTitle(task?.title ?? taskRow.title),
+          ...live.kanbanStorageBody(),
+          title: live.cleanActivityTitle(task?.title ?? taskRow.title),
           body: [
             task?.lastMessage ? `Latest agent note: ${task.lastMessage}` : "",
             task?.source
@@ -733,24 +771,63 @@ export function useFleetNotificationsController(props: any) {
       .json()
       .catch(() => null)) as KanbanResponse | null;
     if (!response.ok || !data?.ok) {
-      setKanbanError(
+      live.setKanbanError(
         data?.error ?? "Could not track agent task on the Work board.",
       );
-      setActiveView("kanban");
+      live.setActiveView("kanban");
       return;
     }
     if (data.board) {
-      setKanbanBoard(data.board);
-      setKanbanStorage(data.storage ?? null);
+      live.setKanbanBoard(data.board);
+      live.setKanbanStorage(data.storage ?? null);
     }
-    if (data.task?.id) setSelectedKanbanTaskId(data.task.id);
-    setActiveView("kanban");
-    await refreshKanbanOnce().catch((error) =>
-      setKanbanError(
+    if (data.task?.id) live.setSelectedKanbanTaskId(data.task.id);
+    live.setActiveView("kanban");
+    await live.refreshKanbanOnce().catch((error) =>
+      live.setKanbanError(
         error instanceof Error ? error.message : "Kanban refresh failed.",
       ),
     );
-  }
+  }, []);
+
+  // Refresh the live snapshot every render so the stable handlers above always
+  // read current props/state and the latest sibling-helper identities. Written
+  // in an effect (matching use-fleet-auto-update.tsx) rather than during render,
+  // since these handlers are user-triggered and always fire after effects flush.
+  useEffect(() => {
+    liveRef.current = {
+      appVersion,
+      cleanActivityTitle,
+      isCollectorAutoUpdateable,
+      kanbanBoardSlug,
+      localDashboardHasUnpublishedChanges,
+      machineNeedsChatBridgeRepair,
+      machineNeedsEnvHttpSyncRepair,
+      machineNeedsSkillSyncRepair,
+      machineVersionCopy,
+      notifications,
+      setActiveView,
+      setCopiedUpdateDetailKey,
+      setKanbanBoard,
+      setKanbanError,
+      setKanbanStorage,
+      setMachineInitCopiedKey,
+      setMachineInitOpen,
+      setMachineInitStatus,
+      setMachineInitTokenStatus,
+      setNotificationSummary,
+      setNotifications,
+      setNotificationsStatus,
+      setSelectedKanbanTaskId,
+      setUpdateStatusByMachine,
+      updateStatusByMachine,
+      kanbanStorageBody,
+      notificationStorageBody,
+      refreshAppVersionNow,
+      refreshDiscoveryNow,
+      refreshKanbanOnce,
+    };
+  });
 
   return {
     openMachineInitModal,

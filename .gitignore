@@ -12,6 +12,8 @@ bin/
 /public/remotion/
 /out/remotion/
 
+promo-videos/
+
 .env
 .env.*
 !.env.example
@@ -50,9 +52,23 @@ strix_runs/
 src-tauri/binaries/
 
 # Local build/cache outputs
-hivemind-linkd
+# NOTE: anchor to the built binary paths only. A bare `hivemind-linkd` also
+# matched the cmd/hivemind-linkd/ SOURCE directory, which silently un-tracked
+# shell.go (defining shellPathPrefix etc.) and broke the hivemind-linkd build
+# on every clean checkout.
+/bin/hivemind-linkd
+/cmd/hivemind-linkd/hivemind-linkd
+# Root-level built linkd binary (Mach-O), not the cmd/ source dir.
+/hivemind-linkd
+# Foundry/Solidity compiler cache with machine-local absolute paths.
+/contracts/cache/
+# Rust build output for the gateway-host crate (sibling of the ignored target/).
+src-tauri/target-gwhost/
+# Jekyll/sass build cache for the docs site.
+.sass-cache/
 __pycache__/
 *.pyc
 
 # Evo optimization workspace (worktrees + experiment state)
 .evo/
+.e2e-loop-templates-*.json

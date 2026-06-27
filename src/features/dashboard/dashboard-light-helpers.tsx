@@ -1,4 +1,4 @@
-import { Activity, AppWindow, Bell, Bot, BrainCircuit, Cpu, FolderOpen, KanbanSquare, KeyRound, Layers3, MessageSquare, Network, PhoneCall, PlugZap, Repeat2, Search, ShieldCheck, Sparkles, WalletCards, Wrench } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, Brain, CandlestickChart, Cpu, FolderOpen, KanbanSquare, KeyRound, Landmark, Layers3, MessageSquare, Network, PhoneCall, PlugZap, Repeat2, Search, ShieldCheck, Sparkles, WalletCards, Wrench } from "lucide-react";
 
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { RUNTIME_LABELS, type AgentProfile, type BeeWorkerClass } from "@/lib/types/agent-runtime";
@@ -318,7 +318,8 @@ export function viewIcon(view: DashboardView) {
   if (view === "swarm") return <Activity aria-hidden="true" />;
   if (view === "history") return <KanbanSquare aria-hidden="true" />;
   if (view === "wallet") return <WalletCards aria-hidden="true" />;
-  if (view === "vault") return <BrainCircuit aria-hidden="true" />;
+  if (view === "trade") return <CandlestickChart aria-hidden="true" />;
+  if (view === "vault") return <Brain aria-hidden="true" />;
   if (view === "integrations") return <PlugZap aria-hidden="true" />;
   if (view === "maintenance") return <ShieldCheck aria-hidden="true" />;
   if (view === "sessions") return <Search aria-hidden="true" />;
@@ -332,6 +333,7 @@ export function viewIcon(view: DashboardView) {
   if (view === "phone") return <PhoneCall aria-hidden="true" />;
   if (view === "aeon") return <Bot aria-hidden="true" />;
   if (view === "fusion") return <Sparkles aria-hidden="true" />;
+  if (view === "governance") return <Landmark aria-hidden="true" />;
   return <MessageSquare aria-hidden="true" />;
 }
 

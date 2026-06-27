@@ -1331,7 +1331,17 @@ configure_shared_skills() {
 
   imports="$(normalize_agent_list "${imports:-none}")"
   targets="$(normalize_agent_list "${targets:-none}")"
+  info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
   ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
+  # Tools, not just skills: register the HivemindOS MCP server into each targeted
+  # harness so its agents get HivemindOS tools (fleet, brain, crypto read/prepare,
+  # and the governed send/swap/stock execute tools) regardless of runtime. The
+  # device token stays out of the harness config — the server reads it from the
+  # checkout via HIVE_ENV_PROJECT_ROOT. Only installed harnesses are touched.
+  if [[ "$targets" != "none" ]]; then
+    info "→ Registering the HivemindOS MCP tool server into installed agent harnesses…"
+    node "$ROOT/scripts/register-mcp-clients.mjs" --targets "$targets" || warn "MCP client registration reported issues; harness tools may need a manual re-run"
+  fi
 }
 
 tailnet_peer_collector_urls() {
@@ -1760,12 +1770,19 @@ ensure_gitlawb_code_proof() {
       set_env_local "GITLAWB_NODE" "$gitlawb_node"
       printf "%s\n" "$gitlawb_node" > "$HOME/.hivemindos/gitlawb/node-url"
       local should_register="true"
+      if setup_is_interactive && [[ -z "${HIVE_GITLAWB_REGISTER:-}" ]]; then
+        info "GitLawb (\"Code Proof\") gives this machine a verifiable identity (a DID) so the work"
+        info "your agents push can carry a tamper-proof signature of where it came from."
+        info "Registering publishes only this machine's PUBLIC id to ${gitlawb_node}; no private"
+        info "keys leave this computer. Optional - skip it and set it up later from Integrations."
+      fi
       if [[ "${HIVE_GITLAWB_REGISTER:-}" =~ ^(0|false|no|off)$ ]]; then
         should_register="false"
       elif setup_is_interactive && [[ -z "${HIVE_GITLAWB_REGISTER:-}" ]] && ! prompt_yes_no "Register this machine's GitLawb DID with $gitlawb_node?" "yes"; then
         should_register="false"
       fi
       if [[ "$should_register" == "true" ]]; then
+        info "→ Registering with the GitLawb network (${gitlawb_node})… (this can take a moment)"
         if GITLAWB_NODE="$gitlawb_node" gl register >/dev/null 2>&1; then
           ok "GitLawb DID registered with $gitlawb_node"
         else
@@ -1888,7 +1905,7 @@ if [[ ! -f "$shared_vault_path/$brain_services_folder/README.md" ]]; then
   cat > "$shared_vault_path/$brain_services_folder/README.md" <<'EOF'
 # Brain Services
 
-Status notes for optional HivemindOS brain services. GBrain and Syntho can be connected from the dashboard without storing provider secrets in the vault.
+Status notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; QMD, GBrain, Neo4j, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
 EOF
 fi
 
@@ -1910,6 +1927,28 @@ mcpMode: stdio
 Optional HivemindOS retrieval, graph, MCP, and dream-cycle service. Install or connect it from the dashboard when ready.
 
 No provider secrets are stored in this note.
+EOF
+fi
+
+if [[ ! -f "$shared_vault_path/$brain_services_folder/Neo4j.md" ]]; then
+  cat > "$shared_vault_path/$brain_services_folder/Neo4j.md" <<'EOF'
+---
+type: brain-service
+service: neo4j
+enabled: false
+installMode: optional
+uriEnvKey: NEO4J_URI
+usernameEnvKey: NEO4J_USERNAME
+passwordEnvKey: NEO4J_PASSWORD
+databaseEnvKey: NEO4J_DATABASE
+queryLimit: 100
+---
+
+# Neo4j Brain Service
+
+Optional derived graph service for Shared Brain Memory. Obsidian Agent Memory remains canonical; Neo4j receives MERGE-only nodes and relationships marked `source: "hivemindos-derived"`.
+
+No plaintext Neo4j URI, username, password, or private connection string is stored in this note. Store connection values in shared hive env by key name only.
 EOF
 fi
 
@@ -1935,6 +1974,7 @@ No provider secrets are stored in this note.
 EOF
 fi
 
+info "→ Seeding the shared brain vault (notes, skills, context)… (this can take a moment)"
 node "$ROOT/scripts/seed-vault-foundation.mjs" \
   --vault "$shared_vault_path" \
   --scheduled-folder "$scheduled_folder" \
@@ -1984,12 +2024,13 @@ else
   if setup_is_interactive; then
     hermes_restart_mode="ask"
   fi
+  info "→ Building and installing the collector and Hivemind Link… (this can take a minute)"
   HIVE_SETUP_NETWORK_MANAGED="true" HIVE_SETUP_TAILNET_SYNC_ENABLED="$tailnet_sync_enabled" HIVE_LINK_ENABLED="$hivemind_link_enabled" AGENT_TELEMETRY_PORT="$COLLECTOR_PORT" AGENT_TELEMETRY_HERMES_RESTART="${AGENT_TELEMETRY_HERMES_RESTART:-$hermes_restart_mode}" ./scripts/install-telemetry-collector.sh
-  # Install + supervise the Claw backend so the Claw Code Mobile app works on a
+  # Install + supervise the mobile backend so the HivemindOS Mobile app works on a
   # machine that only ran HivemindOS setup (its coding agent runs here, reached
   # by the app over the tailnet). Non-fatal: a failure just leaves the app's
   # remote-agent features unavailable until it's retried.
-  ./scripts/install-claw-backend.sh || warn "Claw backend install failed — the Claw Code Mobile app's remote-agent features will be unavailable until it succeeds"
+  ./scripts/install-claw-backend.sh || warn "HivemindOS Mobile backend install failed — the app's remote-agent features will be unavailable until it succeeds"
   if [[ -f "$HOME/.hivemindos/collector.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.hivemindos/collector.env" >/dev/null 2>&1 || true
@@ -2065,40 +2106,11 @@ copy_dashboard_token_if_requested() {
   [[ -f "$env_file" ]] || return 0
   token="$(awk -F= '$1 == "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN" { sub(/^[^=]*=/, ""); print; exit }' "$env_file")"
   [[ -n "$token" ]] || return 0
-
-  if [[ "$(uname -s)" == "Darwin" && -n "$(command -v pbcopy 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | pbcopy
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v wl-copy 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | wl-copy
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v xclip 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | xclip -selection clipboard
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  if [[ -n "$(command -v xsel 2>/dev/null || true)" ]]; then
-    if setup_is_interactive && prompt_yes_no "Copy the dashboard unlock token to your clipboard now?" "yes"; then
-      printf "%s" "$token" | xsel --clipboard --input
-      ok "Copied dashboard unlock token to clipboard"
-    fi
-    return 0
-  fi
-
-  warn "No clipboard command found; use the copy command printed below."
+  # No prompt: the desktop app unlocks itself with this token automatically (it's
+  # saved to your env), so there's nothing to copy to continue. The token is only
+  # needed to open the dashboard in a BROWSER; grab it from the env file if so.
+  info "Dashboard unlock token is saved in ${env_file} under HIVEMINDOS_DASHBOARD_DEVICE_TOKEN (the app uses it automatically; copy it from there only for browser access)."
+  return 0
 }
 
 dashboard_openable="false"

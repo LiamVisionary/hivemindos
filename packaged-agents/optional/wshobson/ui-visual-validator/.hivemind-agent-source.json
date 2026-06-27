@@ -1,0 +1,19 @@
+{
+  "upstreamName": "ui-visual-validator",
+  "slug": "ui-visual-validator",
+  "label": "Ui Visual Validator",
+  "domain": "accessibility-compliance",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/accessibility-compliance/agents/ui-visual-validator.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent ui-visual-validator",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/ui-visual-validator",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Rigorous visual validation expert specializing in UI testing, design system compliance, and accessibility verification. Masters screenshot analysis, visual regression testing, and component validation. Use PROACTIVELY to verify UI modifications have achieved their intended goals through comprehensive visual analysis."
+}

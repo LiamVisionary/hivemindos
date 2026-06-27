@@ -1,0 +1,19 @@
+{
+  "upstreamName": "seo-authority-builder",
+  "slug": "seo-authority-builder",
+  "label": "Seo Authority Builder",
+  "domain": "seo-analysis-monitoring",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/seo-analysis-monitoring/agents/seo-authority-builder.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent seo-authority-builder",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/seo-authority-builder",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Analyzes content for E-E-A-T signals and suggests improvements to build authority and trust. Identifies missing credibility elements. Use PROACTIVELY for YMYL topics."
+}

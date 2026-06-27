@@ -1,11 +1,31 @@
-import { Activity, AppWindow, Bell, Bot, FolderOpen, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { Activity, AppWindow, Bell, Bot, Coins, FolderOpen, Landmark, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 
 import fleetStyles from "@/app/fleet.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 
 const fleetClass = createStyleClass(fleetStyles);
+const moreCardClass = "grid gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] p-4 text-left text-[var(--foreground)] transition hover:border-[var(--accent-strong)] hover:bg-[var(--surface-strong)]";
+const moreIconClass = "flex h-9 w-9 items-center justify-center rounded-md border border-[var(--comb-line)] bg-[var(--button-accent)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4";
 
-type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "messaging" | "memory" | "my-apps" | "phone" | "aeon" | "fusion";
+type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "messaging" | "memory" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
+
+type MorePanelCard = {
+  icon: ReactNode;
+  eyebrow: string;
+  title: string;
+  body: string;
+};
+
+type MorePanelNavigationItem = MorePanelCard & {
+  id: MorePanelTarget;
+};
+
+type MorePanelRouteItem = MorePanelCard & {
+  id: "stake";
+  href: "/stake";
+};
 
 export type MorePanelProps = {
   sharedEnvCount?: number;
@@ -28,7 +48,7 @@ export function MorePanel({
   memoryGrowthMb,
   onNavigate,
 }: MorePanelProps) {
-  const fusionItems = [
+  const fusionItems: MorePanelNavigationItem[] = [
     {
       id: "fusion" as const,
       icon: <Sparkles aria-hidden="true" />,
@@ -37,13 +57,28 @@ export function MorePanel({
       body: "Create reusable skills from selected skills, tools, apps, agents, and workflows.",
     },
   ];
-  const systemItems = [
+  const systemItems: Array<MorePanelNavigationItem | MorePanelRouteItem> = [
     {
       id: "aeon" as const,
       icon: <Bot aria-hidden="true" />,
       eyebrow: "Autopilot",
       title: "Aeon",
       body: "Manage unattended skills, schedules, workflow runs, and outputs.",
+    },
+    {
+      id: "governance" as const,
+      icon: <Landmark aria-hidden="true" />,
+      eyebrow: "Companies & budgets",
+      title: "Zero Human Company",
+      body: "Group agents into companies, set shared budgets and kill switches, and clear spend approvals.",
+    },
+    {
+      id: "stake",
+      icon: <Coins aria-hidden="true" />,
+      eyebrow: "Community tiers",
+      title: "Stake HIVE",
+      body: "Lock HIVE for Holder through Visionary status, alpha rooms, governance, and curator rights.",
+      href: "/stake",
     },
     {
       id: "integrations" as const,
@@ -90,9 +125,9 @@ export function MorePanel({
     {
       id: "memory" as const,
       icon: <Activity aria-hidden="true" />,
-      eyebrow: memoryRssMb ? `${Math.round(memoryRssMb)} MB RSS` : "RAM sampler",
-      title: "Memory",
-      body: memoryGrowthMb && memoryGrowthMb > 0 ? `Growing ${memoryGrowthMb.toFixed(1)} MB in the sample window.` : "Track process RSS growth and leak suspects.",
+      eyebrow: memoryRssMb ? `${Math.round(memoryRssMb)} MB RSS` : "Review queue",
+      title: "Memory & Review",
+      body: memoryGrowthMb && memoryGrowthMb > 0 ? `Growing ${memoryGrowthMb.toFixed(1)} MB in the sample window, with review and Context X-Ray tools below.` : "Review proposed brain writes, inspect Context X-Ray manifests, and track process RSS growth.",
     },
     {
       id: "files" as const,
@@ -135,9 +170,9 @@ export function MorePanel({
                 type="button"
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4 text-left text-[var(--foreground)] transition hover:border-[rgba(94,234,212,0.35)] hover:bg-[rgba(20,184,166,0.08)]"
+                className={moreCardClass}
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4">
+                <span className={moreIconClass}>
                   {item.icon}
                 </span>
                 <span className="grid gap-1">
@@ -153,21 +188,38 @@ export function MorePanel({
           <p className="eyebrow">Utilities</p>
           <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {systemItems.map((item) => (
-          <button
-            type="button"
-            key={item.id}
-            onClick={() => onNavigate(item.id)}
-            className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4 text-left text-[var(--foreground)] transition hover:border-[rgba(94,234,212,0.35)] hover:bg-[rgba(20,184,166,0.08)]"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(94,234,212,0.24)] bg-[rgba(20,184,166,0.10)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4">
-              {item.icon}
-            </span>
-            <span className="grid gap-1">
-              <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
-              <strong>{item.title}</strong>
-              <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
-            </span>
-          </button>
+              "href" in item ? (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className={moreCardClass}
+                >
+                  <span className={moreIconClass}>
+                    {item.icon}
+                  </span>
+                  <span className="grid gap-1">
+                    <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
+                    <strong>{item.title}</strong>
+                    <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
+                  </span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() => onNavigate(item.id)}
+                  className={moreCardClass}
+                >
+                  <span className={moreIconClass}>
+                    {item.icon}
+                  </span>
+                  <span className="grid gap-1">
+                    <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
+                    <strong>{item.title}</strong>
+                    <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
+                  </span>
+                </button>
+              )
             ))}
           </div>
         </div>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dashboard-bootstrap"
+description = "Enables the dashboard_bootstrap command without any pre-configured scope."
+commands.allow = ["dashboard_bootstrap"]
+
+[[permission]]
+identifier = "deny-dashboard-bootstrap"
+description = "Denies the dashboard_bootstrap command without any pre-configured scope."
+commands.deny = ["dashboard_bootstrap"]

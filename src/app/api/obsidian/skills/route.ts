@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  countSharedBrainSkills,
   getBrainSkillInventory,
   getSharedBrainSkillsCached,
   invalidateSkillFileListCache,
@@ -9,8 +10,11 @@ import {
   importRemoteBrainSkill,
   writeBrainSkill,
   SHARED_BRAIN_CACHE_PREFIX,
+  type BrainSkillInventory,
   type BrainSkillProviderId,
 } from "@/lib/services/obsidian/brain-skills";
+import { enrichBrainSkillInventory, enrichBrainSkillSummaries } from "@/lib/services/obsidian/brain-skill-metadata";
+import { removeSharedBrainSkill } from "@/lib/services/obsidian/brain-skill-removal";
 import { remoteSkillProviders } from "@/lib/services/fleet/remote-skill-providers";
 import { cachedCall, invalidateCachedCall } from "@/lib/services/async-cache";
 
@@ -20,6 +24,10 @@ export const dynamic = "force-dynamic";
 const BRAIN_SKILL_INVENTORY_CACHE_PREFIX = "brain-skill-inventory:";
 const BRAIN_SKILL_INVENTORY_CACHE_MS = 60_000;
 
+async function inventoryResponse<T extends BrainSkillInventory>(inventory: T, extra: Record<string, unknown> = {}) {
+  return NextResponse.json({ ok: true, ...await enrichBrainSkillInventory(inventory), ...extra });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const vaultPath = request.nextUrl.searchParams.get("vaultPath") ?? undefined;
@@ -27,7 +35,21 @@ export async function GET(request: NextRequest) {
     // shared list (e.g. the AEON ready check) skip the expensive per-provider
     // directory scan and remote-provider fetch that the full inventory performs.
     if (request.nextUrl.searchParams.get("shared") === "1") {
+      if (request.nextUrl.searchParams.get("count") === "1") {
+        const shared = await countSharedBrainSkills(vaultPath);
+        return NextResponse.json({
+          ok: true,
+          vaultPath: shared.vaultPath,
+          skillsFolder: shared.skillsFolder,
+          readmePath: shared.readmePath,
+          shared: [],
+          sharedTotal: shared.count,
+          providers: [],
+          totals: { shared: shared.count, providerSkills: 0, importable: 0 },
+        });
+      }
       const shared = await getSharedBrainSkillsCached(vaultPath, { summaryMode: "fast" });
+      const enrichedShared = await enrichBrainSkillSummaries(shared.shared);
       // Optional `offset`/`limit` page the (cached) shelf so thin clients —
       // the phone paints its first screen from ~20 skills — don't transfer
       // the whole list. Without `limit` the response is unchanged.
@@ -36,7 +58,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         ok: true,
         ...shared,
-        shared: limit > 0 ? shared.shared.slice(offset, offset + limit) : shared.shared,
+        shared: limit > 0 ? enrichedShared.slice(offset, offset + limit) : enrichedShared,
         sharedTotal: shared.shared.length,
         providers: [],
         totals: { shared: shared.shared.length, providerSkills: 0, importable: 0 },
@@ -58,7 +80,7 @@ export async function GET(request: NextRequest) {
         : { fleetTimeoutMs: 2_500, collectorTimeoutMs: 2_500 }).catch(() => []);
       return getBrainSkillInventory(vaultPath, remoteProviders, { summaryMode: "fast" });
     });
-    return NextResponse.json({ ok: true, ...inventory });
+    return inventoryResponse(inventory);
   } catch (error) {
     return errorResponse(error);
   }
@@ -67,11 +89,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as {
-      action?: "import-github" | "import-remote" | "write-skill";
+      action?: "import-github" | "import-remote" | "write-skill" | "remove-skill";
       vaultPath?: string;
       provider?: BrainSkillProviderId | "all";
       githubUrl?: string;
       markdown?: string;
+      skillSlug?: string;
+      confirm?: boolean;
       files?: Array<{ path?: string; content?: string }>;
       name?: string;
       skill?: {
@@ -94,7 +118,7 @@ export async function POST(request: NextRequest) {
       invalidateSkillFileListCache();
       invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
       invalidateCachedCall(BRAIN_SKILL_INVENTORY_CACHE_PREFIX);
-      return NextResponse.json({ ok: true, ...result, imported: [], skipped: [] });
+      return inventoryResponse(result, { imported: [], skipped: [] });
     }
     if (body.action === "import-remote") {
       if (!body.skill) throw new Error("Missing skill to import.");
@@ -105,7 +129,7 @@ export async function POST(request: NextRequest) {
       invalidateSkillFileListCache();
       invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
       invalidateCachedCall(BRAIN_SKILL_INVENTORY_CACHE_PREFIX);
-      return NextResponse.json({ ok: true, ...result, imported: [body.skill], skipped: [] });
+      return inventoryResponse(result, { imported: [body.skill], skipped: [] });
     }
     if (body.action === "write-skill") {
       const result = await writeBrainSkill({
@@ -115,7 +139,19 @@ export async function POST(request: NextRequest) {
       invalidateSkillFileListCache();
       invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
       invalidateCachedCall(BRAIN_SKILL_INVENTORY_CACHE_PREFIX);
-      return NextResponse.json({ ok: true, ...result, imported: [], skipped: [] });
+      return inventoryResponse(result, { imported: [], skipped: [] });
+    }
+    if (body.action === "remove-skill") {
+      if (!body.confirm) throw new Error("Skill removal requires confirmation.");
+      if (!body.skillSlug?.trim()) throw new Error("Missing skill to remove.");
+      const result = await removeSharedBrainSkill({
+        vaultPath: body.vaultPath,
+        slug: body.skillSlug,
+      });
+      invalidateSkillFileListCache();
+      invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
+      invalidateCachedCall(BRAIN_SKILL_INVENTORY_CACHE_PREFIX);
+      return inventoryResponse(result, { imported: [], skipped: [] });
     }
     if (Array.isArray(body.files) && body.files.length) {
       const result = await importUploadedBrainSkill({
@@ -128,7 +164,7 @@ export async function POST(request: NextRequest) {
       invalidateSkillFileListCache();
       invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
       invalidateCachedCall(BRAIN_SKILL_INVENTORY_CACHE_PREFIX);
-      return NextResponse.json({ ok: true, ...result, imported: [], skipped: [] });
+      return inventoryResponse(result, { imported: [], skipped: [] });
     }
     const result = await importBrainSkills({
       vaultPath: body.vaultPath,
@@ -138,7 +174,7 @@ export async function POST(request: NextRequest) {
     invalidateSkillFileListCache();
     invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
     invalidateCachedCall(BRAIN_SKILL_INVENTORY_CACHE_PREFIX);
-    return NextResponse.json({ ok: true, ...result });
+    return inventoryResponse(result);
   } catch (error) {
     return errorResponse(error);
   }

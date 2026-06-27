@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Local-only capability placeholder. The remote Tailnet page is intentionally not granted Tauri API permissions.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

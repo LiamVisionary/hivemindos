@@ -1,0 +1,19 @@
+{
+  "upstreamName": "seo-meta-optimizer",
+  "slug": "seo-meta-optimizer",
+  "label": "Seo Meta Optimizer",
+  "domain": "seo-technical-optimization",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/seo-technical-optimization/agents/seo-meta-optimizer.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent seo-meta-optimizer",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/seo-meta-optimizer",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Creates optimized meta titles, descriptions, and URL suggestions based on character limits and best practices. Generates compelling, keyword-rich metadata. Use PROACTIVELY for new content."
+}

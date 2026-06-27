@@ -131,8 +131,12 @@ export function ConstellationHero({
   fusionError?: string;
 }) {
   const caps = capabilities;
+  const selectedCaps = caps.filter((capability) => capability.used);
+  const orbitCaps = selectedCaps.length ? selectedCaps : caps;
+  const orbitIndexById = new Map(orbitCaps.map((capability, index) => [capability.id, index]));
   const activeMachines = machines;
   const n = caps.length;
+  const orbitCount = orbitCaps.length;
   const carrying = stage.at("carry");
   const showConn = stage.at("fuse") && !stage.at("reveal");
   const coreGone = stage.at("verify");
@@ -184,12 +188,12 @@ export function ConstellationHero({
               <div style={{ position: "relative", width: SW, height: 580, maxWidth: "100%", margin: "0 auto", transform: `translateY(${SCENE_OFFSET_Y}px)` }}>
                 {/* beams */}
                 <svg viewBox={`0 0 ${SW} 580`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none", opacity: showConn ? 1 : 0, transition: "opacity .5s ease" }}>
-                  {caps.map((c, i) => <Beam key={c.id} c={c} i={i} n={n} />)}
+                  {orbitCaps.map((c, i) => <Beam key={c.id} c={c} i={i} n={orbitCount} />)}
                 </svg>
 
                 {/* sunken shelf */}
                 <div className={styles.shelf} style={{ position: "absolute", left: 18, right: 18, top: SHELF_TOP, height: SHELF_H }}>
-                  <span className={styles.monoCap} style={{ position: "absolute", left: 16, top: 14, color: "var(--fz-fg-3)", fontSize: 8.5 }}>discovered shelf</span>
+                  <span className={styles.monoCap} style={{ position: "absolute", left: 16, top: 14, color: "var(--fz-fg-3)", fontSize: 8.5 }}>discovered candidates</span>
                 </div>
                 {caps.map((c, i) => {
                   const s = shelfPos(i, n);
@@ -218,16 +222,19 @@ export function ConstellationHero({
 
                 {/* capability tiles */}
                 {shelfCaps.map((c, i) => {
-                  const s = shelfPos(i, n), o = orbitPos(i, n);
-                  const target = carrying ? o : s;
+                  const s = shelfPos(i, n);
+                  const orbitIndex = orbitIndexById.get(c.id);
+                  const inOrbit = carrying && c.used && orbitIndex !== undefined;
+                  const o = inOrbit ? orbitPos(orbitIndex, orbitCount) : s;
+                  const target = inOrbit ? o : s;
                   const dx = o.x - s.x;
                   return (
                     <div key={c.id} style={{
-                      position: "absolute", left: 0, top: 0, width: AS, height: AS, zIndex: c.used ? 3 : 2,
+                      position: "absolute", left: 0, top: 0, width: AS, height: AS, zIndex: inOrbit ? 3 : 2,
                       transform: `translate(${target.x - AS / 2}px, ${target.y - AS / 2}px)`,
-                      transition: carrying ? `transform 900ms cubic-bezier(.34,1.32,.42,1) ${i * 300}ms` : "none",
+                      transition: inOrbit ? `transform 900ms cubic-bezier(.34,1.32,.42,1) ${i * 300}ms` : "none",
                     }}>
-                      {stage.is("carry") ? (
+                      {stage.is("carry") && inOrbit ? (
                         <div style={{
                           position: "absolute", left: "50%", top: -34, width: 42, height: 42, pointerEvents: "none",
                           transform: `translateX(-50%) scaleX(${dx < 0 ? -1 : 1})`,

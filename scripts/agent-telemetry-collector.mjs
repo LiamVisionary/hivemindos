@@ -3,7 +3,9 @@ import { createServer, request as httpRequest } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import {
   constants as cryptoConstants,
+  createDecipheriv,
   createHash,
+  createSecretKey,
   generateKeyPairSync,
   privateDecrypt,
   publicEncrypt,
@@ -57,6 +59,18 @@ import {
 import { agentDid, signWorkReceipt } from "./agent-identity.mjs";
 import { createConfigureSyncthingFolder } from "./syncthing-configure.mjs";
 import { createSyncthingRepair } from "./syncthing-repair.mjs";
+import {
+  RUNTIME_PORTABLE_STATE,
+  portableStateManifest,
+  portableStateRuntimes,
+  packPortableState,
+  importPortableTar,
+  backupPortableState,
+  restorePortableState,
+  listBackups,
+  reconcilePortableState,
+  unpackTarToDir,
+} from "./lib/runtime-portable-state.mjs";
 import bonjourService from "bonjour-service";
 
 const { Bonjour } = bonjourService;
@@ -217,6 +231,19 @@ const skippedSkillDirs = new Set([
   ".cache",
   ".archive",
 ]);
+const skillSourceMetadataFile = ".hivemind-skill-source.json";
+const sharedBrainMirrorStatus = "shared-brain-mirror";
+const recursiveProviderMirrorStatus = "recursive-provider-mirror";
+const knownProviderSlugPrefixes = new Set([
+  "aeon",
+  "claude",
+  "codex",
+  "hermes",
+  "gemini",
+  "openclaw",
+  "shared",
+  "shared-brain",
+]);
 const maxSkillFiles = Number(
   process.env.AGENT_TELEMETRY_MAX_SKILL_FILES || 160,
 );
@@ -355,6 +382,30 @@ function runtimeProcessEnv(extra = {}) {
     PATH: pathParts.join(delimiter),
     ...extra,
   };
+}
+
+// The collector captures process.env at startup, so shared credentials added
+// later (e.g. VENICE_API_KEY saved from the app) never reach spawned runtime
+// children — causing stale/missing-key 401s. Read ~/.hivemindos/.env fresh at
+// spawn time so the latest shared creds win over the stale process env.
+async function readSharedHiveEnvForSpawn() {
+  const raw = await readFile(join(homedir(), ".hivemindos", ".env"), "utf8").catch(() => "");
+  const values = {};
+  for (const rawLine of raw.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("export ")) line = line.slice("export ".length).trim();
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))) {
+      value = value.slice(1, -1);
+    }
+    if (value) values[key] = value;
+  }
+  return values;
 }
 
 function hermesContextEnv(agentEnv, context) {
@@ -501,6 +552,67 @@ function skillSlug(value) {
       .replace(/^-+|-+$/g, "")
       .slice(0, 80) || "skill"
   );
+}
+
+function normalizedSkillPath(value) {
+  return String(value || "").replace(/\\/g, "/");
+}
+
+function skillDirSlugFromPath(value) {
+  const parts = normalizedSkillPath(value).split("/").filter(Boolean);
+  if (!parts.length) return "";
+  const last = String(parts[parts.length - 1] || "").toLowerCase();
+  return skillSlug(last === "skill.md" ? parts[parts.length - 2] : parts[parts.length - 1]);
+}
+
+function pathLooksInsideProviderSkillRoot(providerId, value) {
+  return normalizedSkillPath(value).includes(`/.${providerId}/skills/`);
+}
+
+function slugLooksProviderMirrored(providerId, slug) {
+  if (providerId !== "aeon") return false;
+  const normalized = skillSlug(slug);
+  if (normalized.startsWith(`${providerId}-`)) return true;
+  const firstSegment = normalized.split("-").find(Boolean);
+  return Boolean(firstSegment && knownProviderSlugPrefixes.has(firstSegment));
+}
+
+function providerPathLooksMirrored(providerId, path, slug) {
+  if (providerId !== "aeon") return false;
+  if (!pathLooksInsideProviderSkillRoot(providerId, path)) return false;
+  return (
+    slugLooksProviderMirrored(providerId, slug) ||
+    slugLooksProviderMirrored(providerId, skillDirSlugFromPath(path))
+  );
+}
+
+async function readSkillSourceMetadata(skillDir) {
+  const raw = await readFile(join(skillDir, skillSourceMetadataFile), "utf8").catch(
+    () => "",
+  );
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function providerMirrorLoopStatus(providerId, skillPath, metadata = null) {
+  const metadataProvider =
+    metadata && typeof metadata.provider === "string" ? metadata.provider : "";
+  const managedBy =
+    metadata && typeof metadata.managedBy === "string" ? metadata.managedBy : "";
+  if (metadataProvider === "shared-brain" || managedBy === "hivemindos")
+    return sharedBrainMirrorStatus;
+  const metadataSourcePath =
+    metadata && typeof metadata.sourcePath === "string" ? metadata.sourcePath : "";
+  const sourcePath = metadataSourcePath || skillPath;
+  if (providerPathLooksMirrored(providerId, sourcePath, skillDirSlugFromPath(skillPath)))
+    return recursiveProviderMirrorStatus;
+  if (providerPathLooksMirrored(providerId, skillPath, skillDirSlugFromPath(skillPath)))
+    return recursiveProviderMirrorStatus;
+  return "";
 }
 
 function titleFromSlug(slug) {
@@ -822,13 +934,13 @@ async function readHermesSoul(profileDir) {
 }
 
 async function importHermesAgentSoul(agent) {
-  if (agent.runtime !== "hermes" || agent.skillProfilePrompt?.trim()) {
+  if (agent.runtime !== "hermes" || agent.soulPrompt?.trim()) {
     return agent;
   }
   const profileDir = expandHome(agent.localDataDir || "");
   if (!profileDir) return agent;
   const soul = await readHermesSoul(profileDir);
-  return soul ? { ...agent, skillProfilePrompt: soul } : agent;
+  return soul ? { ...agent, soulPrompt: soul } : agent;
 }
 
 async function importHermesAgentSouls(agents) {
@@ -1280,6 +1392,202 @@ async function detectedOpenClawAgent() {
   });
 }
 
+// ===========================================================================
+// Venice x402 local signing proxy
+// ---------------------------------------------------------------------------
+// Hermes (and any OpenAI-compatible client) can't generate Venice's per-request
+// `X-Sign-In-With-X` wallet signature. This local proxy bridges that: Hermes
+// POSTs plain OpenAI-compatible requests to the collector, which signs a fresh
+// SIWX header with the agent's local wallet and forwards to Venice. This lets a
+// Hermes-runtime agent use Venice x402 WALLET mode (no API key) end to end.
+// ===========================================================================
+const VENICE_API_BASE = "https://api.venice.ai/api/v1";
+const VENICE_SIWX_DOMAIN = "api.venice.ai";
+const VENICE_SIWX_STATEMENT = "Sign in to Venice AI";
+const VENICE_SIWX_EXPIRY_MS = 5 * 60 * 1000;
+const VENICE_SOLANA_CAIP2 = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+const WALLET_VAULT_DIR = join(homedir(), ".hivemindos");
+const WALLET_VAULT_PATH = join(WALLET_VAULT_DIR, "wallet-vault.json");
+const WALLET_VAULT_KEY_PATH = join(WALLET_VAULT_DIR, "wallet-vault.key");
+
+// Mirrors local-wallet-vault.ts: AES-256-GCM, key = sha256(env or keyfile).
+async function veniceVaultKey() {
+  const envKey = process.env.HIVEMINDOS_WALLET_VAULT_KEY?.trim();
+  if (envKey) return createHash("sha256").update(envKey).digest();
+  const existing = await readFile(WALLET_VAULT_KEY_PATH, "utf8");
+  return createHash("sha256").update(existing.trim()).digest();
+}
+
+async function veniceWalletFromVault(vaultId) {
+  const raw = await readFile(WALLET_VAULT_PATH, "utf8").catch(() => "");
+  const vault = raw ? JSON.parse(raw) : null;
+  const record = vault?.records?.[vaultId];
+  if (!record) throw new Error(`No local wallet found for "${vaultId}".`);
+  const key = await veniceVaultKey();
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    createSecretKey(key),
+    Buffer.from(record.iv, "base64url"),
+  );
+  decipher.setAuthTag(Buffer.from(record.tag, "base64url"));
+  const secret = Buffer.concat([
+    decipher.update(Buffer.from(record.encryptedSecret, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
+  return { address: record.address, network: String(record.network || ""), secret };
+}
+
+function veniceSiwxMessage({ accountKind, address, uri, chainId, issuedAt, expirationTime, nonce }) {
+  return [
+    `${VENICE_SIWX_DOMAIN} wants you to sign in with your ${accountKind} account:`,
+    address,
+    "",
+    VENICE_SIWX_STATEMENT,
+    "",
+    `URI: ${uri}`,
+    "Version: 1",
+    `Chain ID: ${chainId}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${issuedAt}`,
+    `Expiration Time: ${expirationTime}`,
+  ].join("\n");
+}
+
+// Builds the base64 X-Sign-In-With-X header for a Base (EVM) or Solana wallet,
+// signing the exact resource URL. Mirrors venice.ts buildVeniceSiwxHeader.
+async function veniceSiwxHeader(wallet, resourceUrl) {
+  const now = Date.now();
+  const issuedAt = new Date(now).toISOString();
+  const expirationTime = new Date(now + VENICE_SIWX_EXPIRY_MS).toISOString();
+  const nonce = randomBytes(12).toString("hex").slice(0, 16);
+  if (wallet.network.startsWith("eip155:")) {
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const account = privateKeyToAccount(wallet.secret);
+    const message = veniceSiwxMessage({ accountKind: "Ethereum", address: account.address, uri: resourceUrl, chainId: 8453, issuedAt, expirationTime, nonce });
+    const signature = await account.signMessage({ message });
+    return Buffer.from(JSON.stringify({ address: account.address, message, signature, timestamp: now, chainId: 8453 }), "utf8").toString("base64");
+  }
+  if (wallet.network.startsWith("solana:")) {
+    const { base58 } = await import("@scure/base");
+    const { createKeyPairSignerFromBytes, createSignableMessage } = await import("@solana/kit");
+    const signer = await createKeyPairSignerFromBytes(base58.decode(wallet.secret));
+    const message = veniceSiwxMessage({ accountKind: "Solana", address: signer.address, uri: resourceUrl, chainId: VENICE_SOLANA_CAIP2, issuedAt, expirationTime, nonce });
+    const [signatures] = await signer.signMessages([createSignableMessage(new TextEncoder().encode(message))]);
+    const sigBytes = signatures[signer.address];
+    if (!sigBytes) throw new Error("Solana wallet did not return a Sign-In-With-X signature.");
+    return Buffer.from(JSON.stringify({ address: signer.address, message, signature: base58.encode(new Uint8Array(sigBytes)), timestamp: now, chainId: VENICE_SOLANA_CAIP2, type: "ed25519" }), "utf8").toString("base64");
+  }
+  throw new Error(`Venice x402 supports Base and Solana wallets; got "${wallet.network}".`);
+}
+
+function isLoopbackRemote(request) {
+  const addr = request.socket?.remoteAddress || "";
+  return addr === "127.0.0.1" || addr === "::1" || addr === "::ffff:127.0.0.1";
+}
+
+// Handles /venice-x402/<walletVaultId>/<venice-subpath>. Signs and forwards to
+// Venice with the wallet's SIWX header, streaming the response back verbatim.
+async function handleVeniceX402Proxy(request, response, pathname, search) {
+  if (!isLoopbackRemote(request)) {
+    jsonResponse(response, 403, { ok: false, error: "Venice x402 proxy is local-only." });
+    return;
+  }
+  const rest = pathname.slice("/venice-x402/".length);
+  const slash = rest.indexOf("/");
+  if (slash <= 0) {
+    jsonResponse(response, 400, { ok: false, error: "Venice x402 proxy path must be /venice-x402/<wallet>/<endpoint>." });
+    return;
+  }
+  const vaultId = decodeURIComponent(rest.slice(0, slash));
+  const subPath = rest.slice(slash + 1).replace(/^\/+/, "");
+  const targetUrl = `${VENICE_API_BASE}/${subPath}${search || ""}`;
+  let wallet;
+  try {
+    wallet = await veniceWalletFromVault(vaultId);
+  } catch (error) {
+    jsonResponse(response, 404, { ok: false, error: error instanceof Error ? error.message : "Wallet not found." });
+    return;
+  }
+  let body;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    body = Buffer.concat(chunks);
+  }
+  let signInHeader;
+  try {
+    signInHeader = await veniceSiwxHeader(wallet, targetUrl);
+  } catch (error) {
+    jsonResponse(response, 400, { ok: false, error: error instanceof Error ? error.message : "Could not sign the Venice request." });
+    return;
+  }
+  let upstream;
+  try {
+    upstream = await fetch(targetUrl, {
+      method: request.method,
+      headers: {
+        "X-Sign-In-With-X": signInHeader,
+        ...(request.headers["content-type"] ? { "Content-Type": String(request.headers["content-type"]) } : {}),
+        ...(request.headers.accept ? { Accept: String(request.headers.accept) } : {}),
+      },
+      body,
+      signal: AbortSignal.timeout(180_000),
+    });
+  } catch (error) {
+    jsonResponse(response, 502, { ok: false, error: error instanceof Error ? error.message : "Could not reach Venice." });
+    return;
+  }
+  const headers = { "content-type": upstream.headers.get("content-type") || "application/json" };
+  const balance = upstream.headers.get("x-balance-remaining");
+  if (balance) headers["x-balance-remaining"] = balance;
+  response.writeHead(upstream.status, headers);
+  if (upstream.body) {
+    for await (const chunk of upstream.body) response.write(chunk);
+  } else {
+    response.write(Buffer.from(await upstream.arrayBuffer()));
+  }
+  response.end();
+}
+
+// Hermes profiles do NOT inherit provider definitions from the root
+// ~/.hermes/config.yaml, so a profile that selects a custom gateway provider
+// must define it inline or Hermes rejects it ("Unknown provider"). These are
+// the OpenAI-compatible gateway providers HivemindOS offers that Hermes can
+// reach with a bearer key. Mirrors MODEL_PROVIDER_GATEWAYS[*].hermes.
+const HERMES_GATEWAY_PROVIDERS = {
+  venice: { name: "Venice AI", baseUrl: "https://api.venice.ai/api/v1", keyEnv: "VENICE_API_KEY", models: ["llama-3.3-70b"] },
+  bankr: { name: "Bankr LLM", baseUrl: "https://llm.bankr.bot/v1", keyEnv: "BANKR_LLM_KEY", models: [] },
+};
+
+function hermesProvidersBlock(provider, model, agentConfig) {
+  const gateway = HERMES_GATEWAY_PROVIDERS[provider];
+  if (!gateway) return [];
+  let baseUrl = gateway.baseUrl;
+  let keyEnv = gateway.keyEnv;
+  // Venice x402 wallet mode: point Hermes at the local signing proxy (which
+  // injects the SIWX header) instead of api.venice.ai, and send no bearer key.
+  if (provider === "venice") {
+    const venice = agentConfig && typeof agentConfig === "object" ? agentConfig : {};
+    const walletVaultId = String(venice.walletVaultId || "").trim();
+    if (walletVaultId && venice.authMode !== "api-key") {
+      baseUrl = `http://127.0.0.1:${port}/venice-x402/${encodeURIComponent(walletVaultId)}`;
+      keyEnv = "";
+    }
+  }
+  if (!baseUrl) return [];
+  const models = Array.from(new Set([model, ...gateway.models].filter(Boolean)));
+  return [
+    "providers:",
+    `  ${provider}:`,
+    `    name: ${yamlScalar(gateway.name)}`,
+    `    base_url: ${yamlScalar(baseUrl)}`,
+    ...(keyEnv ? [`    key_env: ${yamlScalar(keyEnv)}`] : []),
+    `    default_model: ${yamlScalar(model)}`,
+    "    models:",
+    ...models.map((id) => `      ${yamlScalar(id)}: {}`),
+  ];
+}
+
 async function createHermesProfileAgent(input) {
   const profile = slugify(input.profile || input.name);
   if (profile === "default" || profile === "hermes")
@@ -1304,10 +1612,13 @@ async function createHermesProfileAgent(input) {
   );
   const provider = String(input.provider || "openai-codex").trim();
   const model = String(input.model || "gpt-5.5").trim();
-  const profilePrompt = String(input.skillProfilePrompt || "").trim();
-  const soulPrompt = profilePrompt
-    ? renderBeeSoulTemplateText(profilePrompt, input.name)
-    : existingSoul || (await defaultBeeSoulMarkdown(input));
+  const suitedForPrompt = String(input.skillProfilePrompt || "").trim();
+  const incomingSoul = String(input.soulPrompt || "").trim();
+  const soulPrompt =
+    existingSoul ||
+    (incomingSoul
+      ? renderBeeSoulTemplateText(incomingSoul, input.name)
+      : await defaultBeeSoulMarkdown(input));
   await writeFile(
     join(profileDir, "config.yaml"),
     [
@@ -1317,6 +1628,10 @@ async function createHermesProfileAgent(input) {
       provider === "openai-codex"
         ? "  base_url: https://chatgpt.com/backend-api/codex"
         : "",
+      // Gateway providers (Venice, Bankr) need an inline definition; profiles
+      // don't inherit the root config's providers. Venice wallet mode points
+      // at the local x402 signing proxy.
+      ...hermesProvidersBlock(provider, model, input.venice),
       "image_gen:",
       "  provider: openai-codex",
       "  model: gpt-image-2-medium",
@@ -1330,7 +1645,7 @@ async function createHermesProfileAgent(input) {
       .join("\n"),
     { mode: 0o600 },
   );
-  if (profilePrompt || !existingSoul) {
+  if (!existingSoul) {
     await writeFile(join(profileDir, "SOUL.md"), `${soulPrompt.trim()}\n`, {
       mode: 0o600,
     });
@@ -1341,7 +1656,7 @@ async function createHermesProfileAgent(input) {
       {
         name: profile,
         display_name: input.name,
-        description: soulPrompt,
+        description: suitedForPrompt || soulPrompt,
         description_auto: false,
       },
       null,
@@ -1354,7 +1669,8 @@ async function createHermesProfileAgent(input) {
     profileDir,
     provider,
     model,
-    skillProfilePrompt: soulPrompt,
+    soulPrompt,
+    skillProfilePrompt: suitedForPrompt,
   };
 }
 
@@ -1413,6 +1729,7 @@ async function createRuntimeAgent(input) {
     customWorkerClass: input.customWorkerClass,
     customWorkerClasses: input.customWorkerClasses,
     selectedCustomWorkerClassId: input.selectedCustomWorkerClassId,
+    soulPrompt: runtimeResult.soulPrompt || input.soulPrompt,
     skillProfilePrompt:
       runtimeResult.skillProfilePrompt || input.skillProfilePrompt,
     preferredSkillSlugs: input.preferredSkillSlugs,
@@ -1885,15 +2202,21 @@ async function syncthingInstalled() {
 }
 
 async function resolveHiveEnvAdd() {
+  // On Windows hive-env-add is a Python script with no extension, so it can't be
+  // spawned directly; setup.ps1 installs a hive-env-add.cmd wrapper. Prefer the
+  // .cmd there (run via shell — see runHiveEnvImport) so env writes work.
+  const isWin = process.platform === "win32";
   const candidates = [
     process.env.HIVE_ENV_ADD_BIN,
+    ...(isWin ? [join(homedir(), ".local", "bin", "hive-env-add.cmd")] : []),
     join(homedir(), ".local", "bin", "hive-env-add"),
+    ...(isWin ? [join(appDir, "scripts", "hive-env-add.cmd")] : []),
     join(appDir, "scripts", "hive-env-add"),
   ].filter(Boolean);
   for (const path of candidates) {
     try {
       await access(path, constants.X_OK);
-      return { ready: true, command: path };
+      return { ready: true, command: path, shell: isWin && path.toLowerCase().endsWith(".cmd") };
     } catch {
       // try next
     }
@@ -1938,6 +2261,8 @@ function runHiveEnvImport({ entries, scope = "agent", runtime = "generic" }) {
       ],
       {
         stdio: ["pipe", "ignore", "pipe"],
+        // .cmd wrappers (Windows) must run through the shell to be spawnable.
+        shell: Boolean(envSync.shell),
       },
     );
     let errorText = "";
@@ -2181,6 +2506,65 @@ async function tailnetPeerHosts() {
   return hosts;
 }
 
+// The tailnet owner (LoginName) of THIS node, used to gate cross-machine runtime
+// state transfers to the node owner's own fleet. Cached; mirrors the trust model
+// of hivemind-linkd shell.go requireTailnetSelfUser.
+let selfTailnetOwnerCache = { value: "", checkedAt: 0 };
+async function selfTailnetOwner() {
+  const now = Date.now();
+  if (selfTailnetOwnerCache.value && now - selfTailnetOwnerCache.checkedAt < 300_000) {
+    return selfTailnetOwnerCache.value;
+  }
+  try {
+    const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
+      timeout: 5000,
+      maxBuffer: 1_500_000,
+    });
+    const status = JSON.parse(stdout);
+    const selfUserId = status?.Self?.UserID;
+    const login = String(status?.User?.[selfUserId]?.LoginName || "").trim();
+    if (login) selfTailnetOwnerCache = { value: login, checkedAt: now };
+    return login;
+  } catch {
+    return selfTailnetOwnerCache.value || "";
+  }
+}
+
+// Gate for cross-machine runtime-state transfers (the first authenticated
+// mutation endpoints on this collector). Trust model:
+//   - A request carrying x-hivemind-link-user / x-tailscale-user came through a
+//     hivemind-linkd / tailscale-serve front, which DELETES any inbound copy and
+//     re-stamps the value from a verified WhoIs — so the header is unforgeable.
+//     Allow only when it matches THIS node's own tailnet owner (same-user fleet).
+//   - A request with NO such header from loopback is the local app/script on
+//     this machine — trusted (same user, same box).
+//   - A request with NO such header from a non-loopback address is a raw tailnet
+//     dial that bypassed the identity front (e.g. collector bound 0.0.0.0 with no
+//     linkd). FAIL CLOSED — we cannot attribute it.
+async function requireLinkOwner(request) {
+  const user = String(
+    request.headers["x-hivemind-link-user"] || request.headers["x-tailscale-user"] || "",
+  ).trim();
+  if (user) {
+    const self = await selfTailnetOwner();
+    if (!self) {
+      return { ok: false, status: 503, error: "Runtime-state transfer unavailable: this node's tailnet owner is unknown." };
+    }
+    if (user.toLowerCase() !== self.toLowerCase()) {
+      return { ok: false, status: 403, error: "Runtime-state transfer is limited to this node's owner." };
+    }
+    return { ok: true, user, via: "linkd" };
+  }
+  if (isLoopbackRemote(request)) {
+    return { ok: true, user: "local", via: "loopback" };
+  }
+  return {
+    ok: false,
+    status: 403,
+    error: "Runtime-state transfer requires a hivemind-linkd-fronted tailnet identity.",
+  };
+}
+
 async function runReliabilitySync(reason) {
   if (reliabilitySyncRunning) return reliabilitySyncStatus;
   reliabilitySyncRunning = true;
@@ -2268,6 +2652,193 @@ function startReliabilitySync() {
   setInterval(() => {
     void runReliabilitySync("interval");
   }, reliabilitySyncIntervalMs);
+}
+
+// ---------------------------------------------------------------------------
+// Runtime-state sync (Mechanism C) — off by default. Pull-only: each machine
+// pulls every same-owner peer's portable runtime state and reconciles it into
+// its OWN runtime dirs (backup-first, 3-way merge, conflict-copies). No machine
+// writes another's disk; every transport is linkd-owner-gated (requireLinkOwner
+// on the peer's export endpoint). Mirrors runReliabilitySync's loop/gossip shape.
+// ---------------------------------------------------------------------------
+const runtimeStateSyncConfigPath = join(homedir(), ".hivemindos", "runtime-state-sync.json");
+const runtimeStateSyncIntervalMs = Number(
+  process.env.AGENT_TELEMETRY_RUNTIME_SYNC_INTERVAL_MS || 10 * 60_000,
+);
+const runtimeStatePeerPort = Number(process.env.AGENT_TELEMETRY_RUNTIME_SYNC_PEER_PORT || 0);
+let runtimeStateSyncConfig = null;
+let runtimeStateSyncRunning = false;
+let runtimeStateSyncTimer = null;
+let runtimeStateSyncStatus = {
+  enabled: false,
+  intervalMs: runtimeStateSyncIntervalMs,
+  lastRunAt: null,
+  lastReason: null,
+  lastSummary: null,
+  lastError: null,
+};
+
+function isRuntimeStateSyncEnabled() {
+  return runtimeStateSyncConfig?.enabled === true;
+}
+
+function syncableRuntimes(config = runtimeStateSyncConfig) {
+  const all = portableStateRuntimes();
+  const wanted = Array.isArray(config?.runtimes) && config.runtimes.length ? config.runtimes : all;
+  return all.filter((r) => wanted.includes(r));
+}
+
+async function readRuntimeStateSyncConfig() {
+  const raw = await readFile(runtimeStateSyncConfigPath, "utf-8").catch(() => "");
+  if (!raw.trim()) return { enabled: false, runtimes: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      enabled: parsed.enabled === true,
+      runtimes: Array.isArray(parsed.runtimes) ? parsed.runtimes.map(String) : [],
+    };
+  } catch {
+    return { enabled: false, runtimes: [] };
+  }
+}
+
+async function writeRuntimeStateSyncConfig(config) {
+  await mkdir(dirname(runtimeStateSyncConfigPath), { recursive: true, mode: 0o700 });
+  await writeFile(runtimeStateSyncConfigPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
+// Pull one peer's export for one runtime and reconcile it locally.
+async function reconcileRuntimeFromPeer(runtime, host, selfMachineId, seen) {
+  let response;
+  try {
+    response = await fetch(
+      `http://${host}:${runtimeStatePeerPort || port}/runtimes/${runtime}/export-runtime-state`,
+      { method: "POST", signal: AbortSignal.timeout(30_000) },
+    );
+  } catch {
+    return null; // peer offline / not reachable
+  }
+  if (!response.ok) return null; // 403/404/etc — not a same-owner runtime-state collector
+  const peerMachineId = String(response.headers.get("x-hivemind-machine-id") || "").trim();
+  if (peerMachineId) {
+    if (peerMachineId === selfMachineId || seen.has(peerMachineId)) return null;
+    seen.add(peerMachineId);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const tmpTar = join(
+    homedir(),
+    ".hivemindos",
+    "runtime-sync-tmp",
+    `${runtime}-${randomBytes(6).toString("hex")}.tar.gz`,
+  );
+  await mkdir(dirname(tmpTar), { recursive: true, mode: 0o700 });
+  await writeFile(tmpTar, buffer);
+  const snapDir = join(dirname(tmpTar), `snap-${randomBytes(6).toString("hex")}`);
+  try {
+    await unpackTarToDir(tmpTar, snapDir);
+    const result = await reconcilePortableState(runtime, snapDir, {
+      peerKey: peerMachineId || host,
+      peerLabel: String(host).split(".")[0] || host,
+      sharedVaultPath: defaultSyncPath,
+    });
+    return result;
+  } finally {
+    await rm(tmpTar, { force: true });
+    await rm(snapDir, { recursive: true, force: true });
+  }
+}
+
+async function runRuntimeStateSync(reason) {
+  if (runtimeStateSyncRunning) return runtimeStateSyncStatus;
+  runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+  if (!isRuntimeStateSyncEnabled()) return runtimeStateSyncStatus;
+  runtimeStateSyncRunning = true;
+  try {
+    const [selfMachineId, hosts] = await Promise.all([
+      stableMachineId().catch(() => ""),
+      tailnetPeerHosts().catch(() => []),
+    ]);
+    const runtimes = syncableRuntimes();
+    const seen = new Set();
+    let adopted = 0;
+    let deleted = 0;
+    let conflicts = 0;
+    let peersConsulted = 0;
+    for (const runtime of runtimes) {
+      const perRuntimeSeen = new Set(seen);
+      for (const host of hosts) {
+        const result = await reconcileRuntimeFromPeer(runtime, host, selfMachineId, perRuntimeSeen).catch(
+          () => null,
+        );
+        if (!result) continue;
+        peersConsulted += 1;
+        adopted += result.adopted.length;
+        deleted += result.deleted.length;
+        conflicts += result.conflicts.length;
+      }
+    }
+    runtimeStateSyncStatus = {
+      ...runtimeStateSyncStatus,
+      enabled: true,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastSummary: { runtimes, peersConsulted, adopted, deleted, conflicts },
+      lastError: null,
+    };
+    if (adopted || deleted || conflicts) {
+      console.log(
+        `runtime-state sync (${reason}): adopted ${adopted}, deleted ${deleted}, conflicts ${conflicts} across ${runtimes.length} runtime(s)`,
+      );
+    }
+  } catch (error) {
+    runtimeStateSyncStatus = {
+      ...runtimeStateSyncStatus,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    runtimeStateSyncRunning = false;
+  }
+  return runtimeStateSyncStatus;
+}
+
+function stopRuntimeStateSync() {
+  if (runtimeStateSyncTimer) clearInterval(runtimeStateSyncTimer);
+  runtimeStateSyncTimer = null;
+}
+
+function startRuntimeStateSync() {
+  stopRuntimeStateSync();
+  runtimeStateSyncStatus = { ...runtimeStateSyncStatus, enabled: isRuntimeStateSyncEnabled() };
+  if (!isRuntimeStateSyncEnabled()) return;
+  setTimeout(() => {
+    void runRuntimeStateSync("startup");
+  }, 60_000);
+  runtimeStateSyncTimer = setInterval(() => {
+    void runRuntimeStateSync("interval");
+  }, runtimeStateSyncIntervalMs);
+}
+
+async function configureRuntimeStateSync(input) {
+  runtimeStateSyncConfig = {
+    enabled: input.enabled === true,
+    runtimes: Array.isArray(input.runtimes) ? input.runtimes.map(String) : [],
+    updatedAt: new Date().toISOString(),
+  };
+  await writeRuntimeStateSyncConfig(runtimeStateSyncConfig);
+  startRuntimeStateSync();
+  return {
+    ok: true,
+    host: hostname(),
+    enabled: isRuntimeStateSyncEnabled(),
+    runtimes: syncableRuntimes(runtimeStateSyncConfig),
+  };
+}
+
+async function initializeRuntimeStateSync() {
+  runtimeStateSyncConfig = await readRuntimeStateSyncConfig();
+  startRuntimeStateSync();
 }
 
 function startSyncthingDetached() {
@@ -3555,6 +4126,114 @@ function collectorRunProcess(command, args, stdin, timeoutMs) {
   });
 }
 
+// Minimal mirror of src/lib/services/runtime-install-catalog.ts for the
+// standalone collector (which cannot import the TS catalog). Keep the package
+// names in sync with the catalog. Only runtimes with a real in-app installer
+// appear here; openclaw/hermes/aeon are handled by their own flows.
+const COLLECTOR_RUNTIME_INSTALL = {
+  "claude-code": { kind: "npm", pkg: "@anthropic-ai/claude-code" },
+  codex: { kind: "npm", pkg: "@openai/codex" },
+  opencode: { kind: "npm", pkg: "opencode-ai" },
+  openhands: { kind: "uv", pkg: "openhands", python: "3.12" },
+  aider: { kind: "uv", pkg: "aider-chat" },
+  evo: { kind: "uv", pkg: "evo-hq-cli" },
+};
+
+// Builds the OS-appropriate, server-side install invocation for a fixed runtime
+// id. The runtime id is validated against COLLECTOR_RUNTIME_INSTALL before this
+// runs and the package name is a hardcoded constant — there is no
+// caller-supplied command, so this is not a passthrough-exec surface.
+// Windows: deliver the script via -EncodedCommand (base64 UTF-16LE) rather than
+// piping to `powershell -Command -`. The stdin form silently no-ops multi-line
+// scripts (validated on a real Windows box: exit 0, nothing installed);
+// EncodedCommand runs the full script reliably.
+function powershellEncoded(script) {
+  return {
+    command: "powershell",
+    args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")],
+    stdin: "",
+  };
+}
+
+function buildRuntimeInstallInvocation(spec) {
+  const isWin = process.platform === "win32";
+  if (spec.kind === "npm") {
+    if (isWin) {
+      return powershellEncoded(`$ErrorActionPreference='Stop'\nnpm install -g ${spec.pkg}\n`);
+    }
+    return {
+      command: "bash",
+      args: ["-s"],
+      stdin: [
+        "set -e",
+        'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"',
+        `npm install -g ${shellQuote(spec.pkg)}`,
+      ].join("\n"),
+    };
+  }
+  // uv tool — bootstrap uv first if it is missing.
+  const pyArgs = spec.python ? ` --python ${spec.python}` : "";
+  if (isWin) {
+    return powershellEncoded([
+      "$ErrorActionPreference='Stop'",
+      "if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {",
+      "  irm https://astral.sh/uv/install.ps1 | iex",
+      '  $env:Path = "$env:USERPROFILE\\.local\\bin;$env:Path"',
+      "}",
+      "$uvexe = Join-Path $env:USERPROFILE '.local\\bin\\uv.exe'",
+      "if (Test-Path $uvexe) { & $uvexe tool install " + spec.pkg + pyArgs + " } else { uv tool install " + spec.pkg + pyArgs + " }",
+    ].join("\n"));
+  }
+  return {
+    command: "bash",
+    args: ["-s"],
+    stdin: [
+      "set -e",
+      'export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"',
+      "if ! command -v uv >/dev/null 2>&1; then",
+      "  curl -LsSf https://astral.sh/uv/install.sh | sh",
+      '  export PATH="$HOME/.local/bin:$PATH"',
+      "fi",
+      `uv tool install ${shellQuote(spec.pkg)}${pyArgs}`,
+    ].join("\n"),
+  };
+}
+
+async function collectorInstallRuntime(runtimeName) {
+  const spec = COLLECTOR_RUNTIME_INSTALL[runtimeName];
+  if (!spec) return { ok: false, error: `${runtimeName} cannot be installed by this collector.` };
+  const { command, args, stdin } = buildRuntimeInstallInvocation(spec);
+  try {
+    // Heavy uv installs (e.g. OpenHands: CPython 3.12 + a large dep tree) can run
+    // well past several minutes on a cold cache, so allow up to 15 minutes.
+    const result = await collectorRunProcess(command, args, stdin, 900_000);
+    return {
+      ok: true,
+      message: `${runtimeName} installed.`,
+      output: `${result.stdout}${result.stderr}`.trim().slice(0, 1500),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: (error instanceof Error ? error.message : `${runtimeName} install failed.`).slice(0, 1500),
+    };
+  }
+}
+
+async function collectorSaveRuntimeAuth(env, value) {
+  const key = String(env || "").trim();
+  const secret = String(value || "").trim();
+  if (!/^[A-Z][A-Z0-9_]*$/.test(key)) return { ok: false, error: "Invalid credential variable name." };
+  if (!secret) return { ok: false, error: "A credential value is required." };
+  if (/\s/.test(secret)) return { ok: false, error: "The credential must not contain spaces or line breaks." };
+  try {
+    await runHiveEnvImport({ entries: { [key]: secret }, scope: "agent", runtime: "generic" });
+    return { ok: true, message: `Saved ${key} to the shared hive env.` };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not save the credential." };
+  }
+}
+
 function nangoSetupScript(baseUrl) {
   const normalized = normalizeNangoBaseUrl(baseUrl);
   const portValue = new URL(normalized).port || "3003";
@@ -3584,7 +4263,15 @@ function nangoSetupScript(baseUrl) {
     '  rm -rf "$NANGO_DIR"',
     '  git clone https://github.com/NangoHQ/nango.git "$NANGO_DIR"',
     "else",
-    '  git -C "$NANGO_DIR" pull --ff-only',
+    "  # Prior runs perl-edit the tracked docker-compose.yaml in place, so a plain",
+    "  # git pull --ff-only would refuse on the dirty tree. Restore tracked files and",
+    "  # clear the .bak first, then fast-forward; if history diverged, reset to upstream.",
+    '  git -C "$NANGO_DIR" checkout -- docker-compose.yaml >/dev/null 2>&1 || true',
+    '  rm -f "$NANGO_DIR/docker-compose.yaml.bak"',
+    '  if ! git -C "$NANGO_DIR" pull --ff-only; then',
+    "    log 'Fast-forward not possible; resetting Nango checkout to upstream'",
+    "    git -C \"$NANGO_DIR\" reset --hard '@{u}'",
+    "  fi",
     "fi",
     'cd "$NANGO_DIR"',
     "if [ ! -f .env ]; then cp .env.example .env; fi",
@@ -3922,6 +4609,8 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
   const stats = await stat(skillPath).catch(() => null);
   const slug = skillSlug(basename(dirname(skillPath)));
   const frontmatter = parseSkillFrontmatter(markdown);
+  const metadata = await readSkillSourceMetadata(dirname(skillPath));
+  const mirrorLoopStatus = providerMirrorLoopStatus(provider.id, skillPath, metadata);
   const summary = {
     id: `${provider.id}:${hostname()}:${skillPath}`,
     slug,
@@ -3936,8 +4625,9 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
     relativePath: relative(resolve(expandHome(provider.home)), skillPath),
     checksum: skillChecksum(markdown),
     updatedAt: stats?.mtimeMs ?? 0,
-    imported: false,
+    imported: Boolean(mirrorLoopStatus),
   };
+  if (mirrorLoopStatus) summary.sourceStatus = mirrorLoopStatus;
   if (options.includeSourceFiles) {
     summary.sourceFiles = await collectSkillFiles(dirname(skillPath));
   }
@@ -4601,6 +5291,85 @@ async function processSeen(agent) {
     );
 }
 
+// Reads model.default / model.provider / model.base_url from a Hermes
+// config.yaml's top-level `model:` block (no YAML dependency). Lets the
+// collector report a Hermes agent's real provider/model instead of leaving the
+// dashboard to fall back to a default (which surfaced as a wrong "Local OpenAI"
+// provider for codex agents).
+async function readHermesModelConfig(configDir) {
+  const raw = await readFile(join(configDir, "config.yaml"), "utf8").catch(
+    () => "",
+  );
+  if (!raw) return null;
+  let inModelBlock = false;
+  const out = {};
+  for (const line of raw.split(/\r?\n/)) {
+    if (/^model:\s*$/.test(line)) {
+      inModelBlock = true;
+      continue;
+    }
+    if (!inModelBlock) continue;
+    if (/^\S/.test(line)) break; // dedent — end of the model: block
+    const match = line.match(/^\s+(default|provider|base_url):\s*(.+?)\s*$/);
+    if (!match) continue;
+    const value = match[2]
+      .replace(/\s+#.*$/, "")
+      .replace(/^["']|["']$/g, "")
+      .trim();
+    if (!value) continue;
+    if (match[1] === "default") out.model = value;
+    else if (match[1] === "provider") out.provider = value;
+    else out.baseUrl = value;
+  }
+  return out.model || out.provider ? out : null;
+}
+
+// Hermes profiles under ~/.hermes/profiles/* are distinct agents, but the
+// runtime-agents registry that normally surfaces them can be missing or wiped.
+// Enumerate the profiles not already covered by the registry so each persona
+// shows up with its real provider/model. Reserved/internal profiles are skipped.
+const RESERVED_HERMES_PROFILE_SLUGS = new Set([
+  "default",
+  "hermes",
+  "runtime-capability-probe",
+]);
+
+async function detectedHermesProfileAgents(coveredAgentIds) {
+  const entries = await readdir(hermesProfilesDir, {
+    withFileTypes: true,
+  }).catch(() => []);
+  const agents = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const slug = entry.name;
+    if (RESERVED_HERMES_PROFILE_SLUGS.has(slug)) continue;
+    if (coveredAgentIds.has(slug)) continue;
+    const profileDir = join(hermesProfilesDir, slug);
+    const model = await readHermesModelConfig(profileDir);
+    if (!model) continue; // not a configured Hermes profile
+    const profileJson = await readJsonFile(join(profileDir, "profile.json"));
+    const name =
+      (profileJson?.display_name && String(profileJson.display_name)) ||
+      (profileJson?.name && String(profileJson.name)) ||
+      slug;
+    agents.push(
+      normalizeRuntimeAgent({
+        id: `hermes-${slug}`,
+        name,
+        runtime: "hermes",
+        agentId: slug,
+        gatewayUrl: "",
+        chatPath: "/chat",
+        statusPath: "/health",
+        provider: model.provider,
+        model: model.model,
+        localDataDir: profileDir,
+      }),
+    );
+  }
+  return agents;
+}
+
 async function localAgents() {
   const agents = [];
   const hermesDb = join(defaultHermesDir, "state.db");
@@ -4608,6 +5377,7 @@ async function localAgents() {
     .then(() => true)
     .catch(() => false);
   if (hermesAvailable) {
+    const rootModel = await readHermesModelConfig(defaultHermesDir);
     agents.push({
       id: `hermes-${hostname()
         .toLowerCase()
@@ -4618,9 +5388,20 @@ async function localAgents() {
       agentId: "local-hermes",
       localDataDir: defaultHermesDir,
       machineName: hostname(),
+      ...(rootModel?.provider ? { provider: rootModel.provider } : {}),
+      ...(rootModel?.model ? { model: rootModel.model } : {}),
     });
   }
-  agents.push(...(await configuredRuntimeAgents()));
+  const configuredAgents = await configuredRuntimeAgents();
+  agents.push(...configuredAgents);
+  if (hermesAvailable) {
+    const coveredHermesProfiles = new Set(
+      configuredAgents
+        .filter((agent) => agent.runtime === "hermes")
+        .map((agent) => agent.agentId),
+    );
+    agents.push(...(await detectedHermesProfileAgents(coveredHermesProfiles)));
+  }
   const openClawAgent = await detectedOpenClawAgent();
   if (openClawAgent && !agents.some((agent) => agent.runtime === "openclaw")) {
     agents.push(openClawAgent);
@@ -4923,6 +5704,15 @@ async function installedRuntimes() {
         ),
       ).then((ok) => (ok ? "claude-code" : "")),
       detectAeonInstalled().then((ok) => (ok ? "aeon" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.OPENHANDS_BIN, "openhands"),
+      ).then((ok) => (ok ? "openhands" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.AIDER_BIN, "aider"),
+      ).then((ok) => (ok ? "aider" : "")),
+      anyBinaryInstalled(
+        cliRuntimeCandidates(process.env.EVO_BIN, "evo"),
+      ).then((ok) => (ok ? "evo" : "")),
     ]);
     const value = checks.filter(Boolean);
     installedRuntimesCache = { checkedAt: Date.now(), value };
@@ -4989,6 +5779,9 @@ async function collectorHealthPayload() {
         skillAutoSync: true,
         fileTransfers: true,
         workReceipts: true,
+        runtimeState: true,
+        runtimeStateRuntimes: portableStateRuntimes(),
+        runtimeStateSync: isRuntimeStateSyncEnabled(),
         syncthing: syncthing.installed,
         defaultSyncPath,
       },
@@ -5028,22 +5821,47 @@ async function sendHermesChat(body) {
     agent.localDataDir || body.localDataDir || defaultHermesDir,
   );
   const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
-  const args = hermesCliArgs(agent, ["-z", text]);
-  const { stdout, stderr } = await execFileAsync(
-    await resolveHermesBin(),
-    args,
-    {
+  const bin = await resolveHermesBin();
+  const env = runtimeProcessEnv({
+    ...agentEnv,
+    ...hermesModelHostEnv(body, agent),
+    HERMES_HOME: hermesHome,
+    PAGER: "cat",
+  });
+  const runHermes = async (cliArgs) => {
+    const { stdout, stderr } = await execFileAsync(bin, cliArgs, {
       timeout: chatTimeoutMs,
       maxBuffer: 3_000_000,
-      env: runtimeProcessEnv({
-        ...agentEnv,
-        ...hermesModelHostEnv(body, agent),
-        HERMES_HOME: hermesHome,
-        PAGER: "cat",
-      }),
-    },
-  );
-  const content = stdout.trim() || stderr.trim();
+      env,
+    });
+    return (stdout.trim() || stderr.trim());
+  };
+
+  // `hermes -z` can exit 0 with NO stdout/stderr (a silent failure) when the agent's
+  // model/provider combo is invalid (e.g. an unsupported model id) or a tool loop ends
+  // without emitting final text. Treat empty output as a failure to recover from — first
+  // retry with the agent's DEFAULT config (no -m/--provider, which is the robust path), and
+  // only then report an honest error instead of returning ok:true with empty text.
+  const primaryArgs = hermesCliArgs(agent, ["-z", text]);
+  const fallbackArgs = ["-z", text];
+  let content = "";
+  try {
+    content = await runHermes(primaryArgs);
+  } catch (error) {
+    if (JSON.stringify(primaryArgs) === JSON.stringify(fallbackArgs)) throw error;
+  }
+  if (!content && JSON.stringify(primaryArgs) !== JSON.stringify(fallbackArgs)) {
+    content = await runHermes(fallbackArgs).catch(() => "");
+  }
+  if (!content) {
+    return {
+      ok: false,
+      status: 502,
+      error:
+        "Hermes produced no output (silent failure). Check the agent's model/provider config or simplify the prompt.",
+      host: hostname(),
+    };
+  }
   return {
     ok: true,
     text: content,
@@ -5743,9 +6561,12 @@ async function streamHermesChat(body, response) {
   const cwd = await resolveChatWorkingDirectory(body.workingDirectory);
   const requestStartedAt = Date.now();
 
+  // Latest shared creds (provider keys) win over the collector's startup env.
+  const sharedHiveEnv = await readSharedHiveEnvForSpawn();
   const child = spawn(await resolveHermesBin(), args, {
     cwd,
     env: runtimeProcessEnv({
+      ...sharedHiveEnv,
       ...agentEnv,
       ...hermesModelHostEnv(body, agent),
       HERMES_HOME: hermesHome,
@@ -6134,6 +6955,10 @@ const telemetryServer = createServer(async (request, response) => {
         error: "App asset is no longer available.",
       });
     }
+    return;
+  }
+  if (pathname.startsWith("/venice-x402/")) {
+    await handleVeniceX402Proxy(request, response, pathname, requestUrl.search);
     return;
   }
   if (pathname.startsWith("/lmstudio/")) {
@@ -6542,6 +7367,152 @@ const telemetryServer = createServer(async (request, response) => {
     }
     return;
   }
+  const runtimeStateMatch = pathname.match(
+    /^\/runtimes\/([^/]+)\/(export-runtime-state|import-runtime-state|backup-runtime-state|restore-runtime-state|runtime-state-backups)$/,
+  );
+  if (runtimeStateMatch) {
+    const runtimeName = runtimeStateMatch[1];
+    const op = runtimeStateMatch[2];
+    const manifest = portableStateManifest(runtimeName);
+    if (!manifest) {
+      jsonResponse(response, 404, {
+        ok: false,
+        error: `${runtimeName} has no portable-state manifest.`,
+      });
+      return;
+    }
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      if (op === "export-runtime-state" && request.method === "POST") {
+        // Pack the redacted portable subset and stream it back as a gzip tar.
+        const pack = await packPortableState(runtimeName, { sharedVaultPath: defaultSyncPath });
+        try {
+          const buffer = await readFile(pack.tarPath);
+          response.writeHead(200, {
+            "content-type": "application/gzip",
+            "content-length": buffer.length,
+            "x-hivemind-runtime": runtimeName,
+            "x-hivemind-machine-id": await stableMachineId().catch(() => ""),
+            "x-hivemind-file-count": String(pack.fileCount),
+            "x-hivemind-redactions": String(pack.redactions),
+          });
+          response.end(buffer);
+        } finally {
+          await rm(dirname(pack.tarPath), { recursive: true, force: true });
+        }
+        return;
+      }
+      if (op === "import-runtime-state" && request.method === "POST") {
+        // Overlay an incoming gzip-tar onto this machine's runtime home,
+        // backing up the current subset first. Used by clone-seeding.
+        const body = await readBodyBuffer(request);
+        if (!body || body.length === 0) {
+          jsonResponse(response, 400, { ok: false, error: "A gzip tar body is required." });
+          return;
+        }
+        const tmpPath = join(
+          homedir(),
+          ".hivemindos",
+          "runtime-import-tmp",
+          `${runtimeName}-${randomBytes(6).toString("hex")}.tar.gz`,
+        );
+        await mkdir(dirname(tmpPath), { recursive: true, mode: 0o700 });
+        await writeFile(tmpPath, body);
+        try {
+          const result = await importPortableTar(runtimeName, tmpPath, {
+            sharedVaultPath: defaultSyncPath,
+          });
+          jsonResponse(response, 200, { ...result, host: hostname() });
+        } finally {
+          await rm(tmpPath, { force: true });
+        }
+        return;
+      }
+      if (op === "backup-runtime-state" && request.method === "POST") {
+        const result = await backupPortableState(runtimeName, { sharedVaultPath: defaultSyncPath });
+        jsonResponse(response, 200, { ok: true, ...result, host: hostname() });
+        return;
+      }
+      if (op === "restore-runtime-state" && request.method === "POST") {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        const backups = await listBackups(runtimeName);
+        const name = String(body.backup || backups[backups.length - 1] || "");
+        if (!name || !backups.includes(name)) {
+          jsonResponse(response, 404, { ok: false, error: "No matching runtime-state backup found." });
+          return;
+        }
+        const backupPath = join(homedir(), ".hivemindos", "runtime-backups", runtimeName, name);
+        const result = await restorePortableState(runtimeName, backupPath);
+        jsonResponse(response, 200, { ...result, backup: name, host: hostname() });
+        return;
+      }
+      if (op === "runtime-state-backups" && request.method === "GET") {
+        jsonResponse(response, 200, {
+          ok: true,
+          host: hostname(),
+          runtime: runtimeName,
+          backups: await listBackups(runtimeName),
+        });
+        return;
+      }
+      jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    } catch (error) {
+      jsonResponse(response, 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Runtime-state operation failed.",
+      });
+    }
+    return;
+  }
+  if (pathname === "/runtimes/state-sync") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+    if (request.method === "GET") {
+      jsonResponse(response, 200, {
+        ok: true,
+        host: hostname(),
+        enabled: isRuntimeStateSyncEnabled(),
+        runtimes: syncableRuntimes(),
+        status: runtimeStateSyncStatus,
+      });
+      return;
+    }
+    if (request.method === "POST") {
+      try {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        jsonResponse(response, 200, await configureRuntimeStateSync(body));
+      } catch (error) {
+        jsonResponse(response, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not configure runtime-state sync.",
+        });
+      }
+      return;
+    }
+    jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    return;
+  }
+  if (pathname === "/runtimes/state-sync/run" && request.method === "POST") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+    const status = await runRuntimeStateSync("manual");
+    jsonResponse(response, 200, { ok: true, host: hostname(), status });
+    return;
+  }
   const runtimeIntegrationMatch = pathname.match(
     /^\/runtimes\/([^/]+)\/integrations$/,
   );
@@ -6584,6 +7555,33 @@ const telemetryServer = createServer(async (request, response) => {
         jsonResponse(response, 200, {
           ok: true,
           status: await localOpenAiIntegrationStatus(body.agent || {}),
+        });
+        return;
+      }
+      if (COLLECTOR_RUNTIME_INSTALL[runtimeName]) {
+        if (body.action === "install-runtime") {
+          jsonResponse(response, 200, await collectorInstallRuntime(runtimeName));
+          return;
+        }
+        if (body.action === "runtime-auth") {
+          jsonResponse(
+            response,
+            200,
+            await collectorSaveRuntimeAuth(body.input?.env, body.input?.value),
+          );
+          return;
+        }
+        const installed = await installedRuntimes().catch(() => []);
+        jsonResponse(response, 200, {
+          ok: true,
+          status: {
+            ok: true,
+            runtime: runtimeName,
+            installed: installed.includes(runtimeName),
+            detail: installed.includes(runtimeName)
+              ? `${runtimeName} is installed on this machine.`
+              : `${runtimeName} is not installed on this machine.`,
+          },
         });
         return;
       }
@@ -6949,4 +7947,55 @@ telemetryServer.listen(port, host, () => {
   void installedRuntimes().catch(() => {});
   startEnvSyncMaintenance();
   startReliabilitySync();
+  void initializeRuntimeStateSync();
+  startSelfReloadWatcher();
 });
+
+// launchd's WatchPaths is unreliable for in-place edits, so the collector
+// watches its own source instead: on a real code change it exits cleanly and
+// launchd's KeepAlive relaunches it with the new code — no manual kickstart.
+//
+// IMPORTANT: gate on CONTENT HASH, not raw fs events. fs.watch fires on mtime
+// touches, atomic-save renames, and Syncthing/editor writes that don't change
+// content; reacting to every event sent this into a restart LOOP (hundreds of
+// reloads) that knocked the collector offline and broke in-flight voice calls.
+// A startup grace period also breaks any tight relaunch loop.
+async function startSelfReloadWatcher() {
+  if (process.env.AGENT_TELEMETRY_DISABLE_SELF_RELOAD === "1") return;
+  let selfPath;
+  try {
+    selfPath = fileURLToPath(import.meta.url);
+  } catch {
+    return;
+  }
+  const hashSelf = async () => {
+    try {
+      return createHash("sha256").update(await readFile(selfPath)).digest("hex");
+    } catch {
+      return "";
+    }
+  };
+  const baselineHash = await hashSelf();
+  if (!baselineHash) return;
+  const startedAt = Date.now();
+  let pending = null;
+  let reloading = false;
+  try {
+    watch(selfPath, { persistent: false }, () => {
+      if (reloading) return;
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(async () => {
+        pending = null;
+        // Ignore events right after launch so a misbehaving write can't loop us.
+        if (Date.now() - startedAt < 5_000) return;
+        const nextHash = await hashSelf();
+        if (!nextHash || nextHash === baselineHash) return; // content unchanged
+        reloading = true;
+        console.log("[collector] source changed — exiting for KeepAlive reload");
+        process.exit(0);
+      }, 1_000);
+    });
+  } catch {
+    // Auto-reload is a convenience; never block startup on it.
+  }
+}

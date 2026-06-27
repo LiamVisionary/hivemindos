@@ -1,0 +1,16 @@
+{
+  "id": "build-smoke-judge",
+  "status": 200,
+  "ok": true,
+  "prompt": "Build a tiny receipt viewer, smoke it in the browser, judge the result, and stop if cost or risk gets weird. Tell me how HivemindOS should track this work.",
+  "promptSaidLoop": false,
+  "localClassifier": {
+    "loopEngineeringRequest": true,
+    "requiresCapabilityRouting": true
+  },
+  "sessionId": "loop-dogfood-chat-build-smoke-judge-20260625",
+  "errors": [],
+  "mentionsLoopSystem": true,
+  "responseText": "I will build a minimal receipt viewer as a small React web app that accepts JSON receipt data and renders it nicely. After building, I will run a smoke test in a browser environment to verify rendering correctness and no errors. Then I will report the result and how to track the task through HivemindOS.\n\nPlan:\n- Implement ReceiptViewer component: takes receipt JSON props, renders line items, totals, and vendor/date info.\n- Build a minimal React app to host the component with example data.\n- Launch the app in a browser with source maps/console open.\n- Interact and verify receipt renders correctly and layout is clean.\n- Confirm no errors or warnings.\n- Report status.\n- Recommend Work Board tracking metadata (epic/task labels, agent routing hints).\n\nConfirming: The build is simple UI code, low cost and risk. Browser smoke test is lightweight. No external dependencies or secrets.\n\nStarting code build now.",
+  "responsePreview": "I will build a minimal receipt viewer as a small React web app that accepts JSON receipt data and renders it nicely. After building, I will run a smoke test in a browser environment to verify rendering correctness and no errors. Then I will report the result and how to track the task through HivemindOS.\n\nPlan:\n- Implement ReceiptViewer component: takes receipt JSON props, renders line items, totals, and vendor/date info.\n- Build a minimal React app to host the component with example data.\n- Launch the app in a browser with source maps/console open.\n- Interact and verify receipt renders correctly and layout is clean.\n- Confirm no errors or warnings.\n- Report status.\n- Recommend Work Board tracking metadata (epic/task labels, agent routing hints).\n\nConfirming: The build is simple UI code, low cost and risk. Browser smoke test is lightweight. No external dependencies or secrets.\n\nStarting code build now."
+}

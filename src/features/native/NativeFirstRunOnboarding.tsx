@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Check, ChevronLeft, Clipboard, Copy, FolderOpen, HelpCircle, LoaderCircle, Lock, Network, RefreshCcw, ShieldCheck, Smartphone, Sparkles, Terminal, X } from "lucide-react";
+import { Check, ChevronLeft, Copy, LoaderCircle, Lock, Network, RefreshCcw, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
-import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, openFullDiskAccessSettings, readNativeSetupStatus, revealGatewayForFullDiskAccess, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
+import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
+import { requestGuidedTour } from "@/lib/native/guided-tour";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
+import { grantNativePrivateFilesystemAccess } from "@/lib/native/dashboard-bootstrap";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 
-const DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
+const DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v3";
+const LEGACY_DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
 const DISMISS_FALLBACK_KEY = `${DISMISS_KEY}.localFallback`;
 
 type InstallMode = "local" | "link" | "system-tailscale";
@@ -24,43 +27,58 @@ const DEMO_RUN_MESSAGES = [
   "Setup has started. Follow any permission prompts that appear.",
 ];
 
-const INSTALL_MODES: Array<{
+// "this Mac" / "this PC" / "this computer", from the platform reported by native_setup_status.
+function deviceNoun(platform: string | undefined) {
+  if (platform === "windows") return "PC";
+  if (platform === "macos" || platform === "demo") return "Mac";
+  return "computer";
+}
+
+function installModes(device: string): Array<{
   id: InstallMode;
   title: string;
   detail: string;
-  highlights: string[];
-  capabilities: string[];
-  info: string;
+  badge: string | null;
   command: string;
-}> = [
-  {
-    id: "local",
-    title: "Just this Mac",
-    detail: "Only agents on this device share memories, skills, and env. Nothing syncs to your other computers.",
-    highlights: ["This device only", "No cross-machine sharing"],
-    capabilities: ["Local agent sharing", "No other devices", "Can upgrade later"],
-    info: "Choose this when you only want this Mac involved right now. Agents on this machine can share hive context with each other, and you can add other computers later.",
-    command: "./setup.sh --local-only",
-  },
-  {
-    id: "link",
-    title: "Private Hive Link",
-    detail: "Your devices share memories, skills, env, and handoffs through Hivemind Sync, without a separate folder sync app.",
-    highlights: ["Easiest multi-device", "No folder sync app"],
-    capabilities: ["Hivemind Sync across devices", "HivemindOS handles the link", "No always-on vault folder sync"],
-    info: "Best default for most people. HivemindOS manages remote app access through its private bridge, so you can add machines without first configuring Tailscale, Syncthing, SSH, or background sync services. It does not install Syncthing-style always-on vault folder sync.",
-    command: "./setup.sh --link",
-  },
-  {
-    id: "system-tailscale",
-    title: "Full Tailnet Hive",
-    detail: "Your devices share memories, skills, env, and handoffs through Hivemind Sync, plus always-on vault folder sync.",
-    highlights: ["Most complete", "Always-on sync"],
-    capabilities: ["Share across devices", "Sync vault folders", "Best for power users"],
-    info: "Choose this if you already use Tailscale or want the full system-level setup: Syncthing folder sync, SSH pull/repair fallback, collector services, and persistent remote access between your machines.",
-    command: "./setup.sh --system-tailscale",
-  },
-];
+}> {
+  return [
+    {
+      id: "local",
+      title: `Just this ${device}`,
+      detail: "Everything stays on this computer. You can add your other devices later.",
+      badge: null,
+      command: "./setup.sh --local-only",
+    },
+    {
+      id: "link",
+      title: `This ${device} + my other devices`,
+      detail: "Your computers stay in sync automatically. HivemindOS handles the connection — nothing extra to install.",
+      badge: "Recommended",
+      command: "./setup.sh --link",
+    },
+    {
+      id: "system-tailscale",
+      title: "Full Tailnet Hive",
+      detail: "Always-on folder sync between machines, on top of everything above.",
+      badge: "Advanced",
+      command: "./setup.sh --system-tailscale",
+    },
+  ];
+}
+
+function stepHeaders(device: string, isMac: boolean, isWindows: boolean): Record<WizardStep, { title: string; subtitle: string }> {
+  return {
+    mode: { title: "Welcome to HivemindOS", subtitle: "One quick question: which computers should be in your hive?" },
+    agents: { title: "Connect your AI helpers", subtitle: `We found these on your ${device}. They'll share what they know through the hive.` },
+    // On Windows, "run" is the first screen: setup.ps1 makes the mode and import choices itself.
+    run: isWindows
+      ? { title: "Welcome to HivemindOS", subtitle: "One click and your hive sets itself up." }
+      : { title: "You're all set", subtitle: "HivemindOS takes care of everything from here." },
+    pairing: isMac
+      ? { title: "You're all set", subtitle: "Your phone reaches this Mac automatically — even when the app is closed." }
+      : { title: "All set", subtitle: "Setup is running in the background." },
+  };
+}
 
 function agentIconId(agentId: string) {
   if (agentId === "codex" || agentId === "claude" || agentId === "gemini") return "hivemind-os";
@@ -80,8 +98,7 @@ function AgentIcon({ agent, compact = false }: { agent: NativeDetectedAgentRunti
   return <span className={`grid ${fallbackSize} place-items-center rounded-full bg-[rgba(148,163,184,0.15)] font-semibold`}>{runtimeIconFallback(iconId, agent.label)}</span>;
 }
 
-function StepDots({ step }: { step: WizardStep }) {
-  const steps: WizardStep[] = ["mode", "agents", "run", "pairing"];
+function StepDots({ step, steps }: { step: WizardStep; steps: WizardStep[] }) {
   const activeIndex = steps.indexOf(step);
   return (
     <div className="flex items-center gap-1.5" aria-hidden="true">
@@ -122,15 +139,12 @@ export function NativeFirstRunOnboarding() {
   const demoMode = NATIVE_SETUP_DEMO_ENABLED;
   const [status, setStatus] = useState<NativeSetupStatus | null>(null);
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<WizardStep>("mode");
+  const [rawStep, setStep] = useState<WizardStep>("mode");
   const [mode, setMode] = useState<InstallMode>("link");
   const [skillAgents, setSkillAgents] = useState<string[]>(ALL_AGENT_IDS);
   const [memoryAgents, setMemoryAgents] = useState<string[]>(ALL_AGENT_IDS);
-  const [infoCard, setInfoCard] = useState("");
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
-  const [pairingExpanded, setPairingExpanded] = useState(false);
-  const [pairingStatus, setPairingStatus] = useState("");
   const [stepHeight, setStepHeight] = useState<number | null>(null);
   const stepContentRef = useRef<HTMLDivElement | null>(null);
 
@@ -138,8 +152,23 @@ export function NativeFirstRunOnboarding() {
     ? status.detected_agents
     : ALL_AGENT_IDS.map((id) => ({ id, label: id[0].toUpperCase() + id.slice(1), installed: false, detail: "Not checked" })),
   [status]);
-  const selectedMode = INSTALL_MODES.find((item) => item.id === mode) ?? INSTALL_MODES[1];
+  const device = deviceNoun(status?.platform);
+  const isWindows = status?.platform === "windows";
+  const isMac = device === "Mac";
+  const modes = useMemo(() => installModes(device), [device]);
+  const headers = useMemo(() => stepHeaders(device, isMac, isWindows), [device, isMac, isWindows]);
+  // setup.ps1 ignores mode and import selections, so Windows skips straight to the run step.
+  const wizardSteps = useMemo<WizardStep[]>(() => isWindows ? ["run", "pairing"] : ["mode", "agents", "run", "pairing"], [isWindows]);
+  const step = wizardSteps.includes(rawStep) ? rawStep : wizardSteps[0];
+  const selectedMode = modes.find((item) => item.id === mode) ?? modes[1];
   const stepShellStyle = stepHeight === null ? undefined : { height: `min(${stepHeight + 40}px, calc(100vh - 15rem))` };
+  // The local collector starts only near the END of setup.ps1, so its check
+  // flips to installed once setup has actually finished. Gate the "pairing"
+  // step's "all set / take the tour" UI on it — otherwise the tour appears the
+  // instant setup is *launched* (while the terminal is still mid-install), which
+  // reads as "done" when it is not.
+  const collectorReady = Boolean(status?.checks?.find((check) => check.id === "collector")?.installed);
+  const setupSettled = demoMode || collectorReady;
 
   const refreshStatus = useCallback(async () => {
     if (!demoMode && !isTauriDesktopRuntime()) return;
@@ -160,16 +189,30 @@ export function NativeFirstRunOnboarding() {
         return;
       }
       if (!isTauriDesktopRuntime()) return;
+      void refreshStatus();
+      const locallyDismissed = readLocalDismissal();
+      setOpen(!locallyDismissed);
       void loadDashboardStateSnapshot().then((snapshot) => {
         const dismissedInDashboardState = dashboardStateValue(snapshot, DISMISS_KEY) === "1";
-        const dismissed = dismissedInDashboardState || readLocalDismissal();
+        const legacyDismissed = dashboardStateValue(snapshot, LEGACY_DISMISS_KEY) === "1";
+        const dismissed = dismissedInDashboardState || locallyDismissed;
+        if (legacyDismissed && !dismissed) void removeDashboardStateValue(LEGACY_DISMISS_KEY);
         setOpen(!dismissed);
         if (dismissed && !dismissedInDashboardState) void saveDashboardStateValue(DISMISS_KEY, "1");
-        void refreshStatus();
       });
     }, 0);
     return () => window.clearTimeout(handle);
   }, [demoMode, refreshStatus]);
+
+  // While the "pairing" step waits for setup to finish, keep refreshing status
+  // so the screen flips from "finishing setup" to "all set" the moment the
+  // local collector comes up.
+  useEffect(() => {
+    if (step !== "pairing" || setupSettled) return;
+    if (!demoMode && !isTauriDesktopRuntime()) return;
+    const id = window.setInterval(() => { void refreshStatus(); }, 4000);
+    return () => window.clearInterval(id);
+  }, [step, setupSettled, demoMode, refreshStatus]);
 
   useEffect(() => {
     if (!isTauriDesktopRuntime()) return;
@@ -210,15 +253,21 @@ export function NativeFirstRunOnboarding() {
       observer?.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, [open, step, infoCard, status, skillAgents, memoryAgents, running, runStatus, pairingExpanded, pairingStatus]);
+  }, [open, step, status, skillAgents, memoryAgents, running, runStatus]);
 
   if (!open || !status) return null;
 
-  const commandPreview = `${selectedMode.command} ${skillAgents.length ? `--import-skills=${skillAgents.join(",")} --share-skills=all` : "--no-shared-skills"} --skip-dashboard${memoryAgents.length ? `\n./scripts/import-agent-memory.sh --sources ${memoryAgents.join(",")}` : ""}`;
+  // setup.ps1 has no mode/import flags (it detects Tailscale and seeds vault/skills itself),
+  // so the Windows backup command mirrors build_setup_invocation in src-tauri/src/setup.rs.
+  const commandPreview = isWindows
+    ? "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild"
+    : `${selectedMode.command} ${skillAgents.length ? `--import-skills=${skillAgents.join(",")} --share-skills=all` : "--no-shared-skills"} --skip-dashboard${memoryAgents.length ? `\n./scripts/import-agent-memory.sh --sources ${memoryAgents.join(",")}` : ""}`;
 
-  function toggleSelection(kind: "skills" | "memory", id: string) {
-    const setter = kind === "skills" ? setSkillAgents : setMemoryAgents;
-    setter((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  function toggleAgent(id: string) {
+    const active = skillAgents.includes(id) || memoryAgents.includes(id);
+    const update = (current: string[]) => active ? current.filter((item) => item !== id) : [...current.filter((item) => item !== id), id];
+    setSkillAgents(update);
+    setMemoryAgents(update);
   }
 
   async function persistDismissal() {
@@ -264,7 +313,10 @@ export function NativeFirstRunOnboarding() {
       force: false,
     }, { demoMode });
     setRunning(false);
-    if (result?.ok) void persistDismissal();
+    if (result?.ok) {
+      grantNativePrivateFilesystemAccess();
+      void persistDismissal();
+    }
     setRunStatus(result?.ok ? "Setup has started. Follow any permission prompts that appear." : result?.error ?? "Could not start setup.");
     return Boolean(result?.ok);
   }
@@ -278,26 +330,6 @@ export function NativeFirstRunOnboarding() {
     }
   }
 
-  async function openFolderAccessSettings() {
-    setPairingStatus("");
-    const ok = demoMode ? true : await openFullDiskAccessSettings();
-    if (!ok) {
-      setPairingStatus(
-        "Couldn't open Settings automatically — open System Settings → Privacy & Security → Full Disk Access.",
-      );
-    }
-  }
-
-  async function revealGatewayBinary() {
-    setPairingStatus("");
-    const ok = demoMode ? true : await revealGatewayForFullDiskAccess();
-    setPairingStatus(
-      ok
-        ? "Finder is highlighting “HivemindOS Gateway”. Drag it into the Full Disk Access list (or click +, then add it) and switch it on."
-        : "Couldn't reveal the file automatically. Make sure HivemindOS is installed on this Mac, then try again.",
-    );
-  }
-
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(20,184,166,0.18),rgba(2,6,23,0.82)_34%,rgba(2,6,23,0.92))] p-4 backdrop-blur-md">
       <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-[rgba(148,163,184,0.20)] bg-[rgba(8,13,22,0.96)] text-[var(--foreground)] shadow-2xl">
@@ -307,14 +339,14 @@ export function NativeFirstRunOnboarding() {
             <div className="min-w-0">
               <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-[rgba(45,212,191,0.26)] bg-[rgba(20,184,166,0.12)] px-2.5 py-1 text-xs font-medium text-[var(--accent-strong)]">
                 <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
-                Native setup
+                Guided setup
               </div>
-              <h2 className="text-xl font-semibold tracking-normal">Welcome to the HivemindOS</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">How would you like to install the hive?</p>
+              <h2 className="text-xl font-semibold tracking-normal">{headers[step].title}</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">{headers[step].subtitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <StepDots step={step} />
+            <StepDots step={step} steps={wizardSteps} />
             <CloseIconButton aria-label="Dismiss native setup" onClick={dismiss} />
           </div>
         </header>
@@ -322,124 +354,97 @@ export function NativeFirstRunOnboarding() {
         <div className="native-setup-step-shell min-h-0 p-4" style={stepShellStyle}>
           <div key={step} ref={stepContentRef} className={`native-setup-step ${step === "mode" ? "" : "min-h-[360px]"}`}>
           {step === "mode" ? (
-            <div className="grid gap-3 sm:grid-cols-3">
-              {INSTALL_MODES.map((item) => (
-                <div key={item.id} className={`relative min-h-[260px] rounded-lg border transition-all ${mode === item.id ? "border-[rgba(45,212,191,0.58)] bg-[rgba(20,184,166,0.13)]" : "border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.42)]"}`}>
-                  <button type="button" className="flex h-full min-h-[260px] w-full flex-col items-start justify-between p-5 text-left transition-all hover:-translate-y-0.5" onClick={() => { setMode(item.id); setStep("agents"); }}>
-                    <span className="grid h-10 w-10 place-items-center rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.30)] text-[var(--accent-strong)]">
-                      <Network aria-hidden="true" className="h-5 w-5" />
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {modes.filter((item) => item.id !== "system-tailscale").map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`flex min-h-[180px] w-full flex-col items-start justify-between gap-4 rounded-lg border p-5 text-left transition-all hover:-translate-y-0.5 ${mode === item.id ? "border-[rgba(45,212,191,0.58)] bg-[rgba(20,184,166,0.13)]" : "border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.42)]"}`}
+                    onClick={() => { setMode(item.id); setStep("agents"); }}
+                  >
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="grid h-10 w-10 place-items-center rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.30)] text-[var(--accent-strong)]">
+                        {item.id === "local" ? <Lock aria-hidden="true" className="h-5 w-5" /> : <Network aria-hidden="true" className="h-5 w-5" />}
+                      </span>
+                      {item.badge ? (
+                        <span className="rounded-md border border-[rgba(45,212,191,0.30)] bg-[rgba(20,184,166,0.14)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">{item.badge}</span>
+                      ) : null}
                     </span>
                     <span>
                       <span className="block text-lg font-semibold">{item.title}</span>
-                      <span className="mt-3 block text-sm leading-6 text-[var(--muted)]">{item.detail}</span>
-                      <span className="mt-4 flex flex-wrap gap-2">
-                        {item.highlights.map((highlight) => (
-                          <span key={highlight} className="rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.28)] px-2 py-1 text-xs font-medium text-[var(--muted)]">
-                            {highlight}
-                          </span>
-                        ))}
-                      </span>
-                      <span className="mt-5 block">
-                        <span className="block text-[0.68rem] font-semibold uppercase tracking-normal text-[var(--muted)]">Capabilities</span>
-                        <span className="mt-2 grid gap-1.5">
-                          {item.capabilities.map((capability) => (
-                            <span key={capability} className="flex items-start gap-2 text-xs leading-5 text-[var(--muted)]">
-                              <Check aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--accent-strong)]" />
-                              {capability}
-                            </span>
-                          ))}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="mt-5 inline-flex items-center gap-2 text-xs font-medium text-[var(--accent-strong)]">
-                      Choose this
-                      {mode === item.id ? <Check aria-hidden="true" className="h-4 w-4" /> : null}
+                      <span className="mt-2 block text-sm leading-6 text-[var(--muted)]">{item.detail}</span>
                     </span>
                   </button>
-                  <button type="button" className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.55)] text-[var(--muted)] transition-colors hover:text-[var(--foreground)]" aria-label={`Explain ${item.title}`} onClick={() => setInfoCard(infoCard === item.id ? "" : item.id)}>
-                    <HelpCircle aria-hidden="true" className="h-4 w-4" />
-                  </button>
-                  {infoCard === item.id ? (
-                    <div className="mx-4 mb-4 rounded-md border border-[rgba(45,212,191,0.24)] bg-[rgba(2,6,23,0.50)] p-3 text-xs leading-5 text-[var(--muted)]">
-                      {item.info}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+                ))}
+              </div>
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.28)] px-4 py-3 text-left text-sm text-[var(--muted)] transition-colors hover:border-[rgba(45,212,191,0.38)] hover:text-[var(--foreground)]"
+                onClick={() => { setMode("system-tailscale"); setStep("agents"); }}
+              >
+                <span>
+                  <span className="font-medium text-[var(--foreground)]">Power user?</span> Get the Full Tailnet Hive: always-on folder sync via Tailscale.
+                </span>
+                <span aria-hidden="true" className="shrink-0 text-[var(--accent-strong)]">→</span>
+              </button>
+              <p className="text-xs leading-5 text-[var(--muted)]">
+                Not sure? Pick “{modes[1].title}.” You can change this anytime by running setup again.
+              </p>
             </div>
           ) : null}
 
           {step === "agents" ? (
             <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold">Detected agents</h3>
+              <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.42)] p-4">
+                <p className="text-sm leading-6 text-[var(--muted)]">
+                  Everything is already turned on. Tap a helper only if you want to leave it out.
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {detectedAgents.map((agent) => (
-                    <span key={agent.id} className={`inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium leading-tight transition-all hover:-translate-y-px hover:shadow-[0_0_0_3px_rgba(45,212,191,0.08)] ${agent.installed ? "border-transparent bg-[var(--button-primary)] text-[var(--button-primary-foreground)] hover:brightness-105" : "border-[rgba(148,163,184,0.20)] bg-[var(--button-secondary)] text-[var(--button-secondary-foreground)] opacity-70 hover:border-[rgba(94,234,212,0.18)] hover:bg-[color-mix(in_srgb,var(--button-secondary)_88%,var(--button-primary))] hover:text-[var(--foreground)]"}`}>
-                      <AgentIcon agent={agent} compact />
-                      {agent.label}
-                    </span>
-                  ))}
+                  {detectedAgents.map((agent) => {
+                    const active = skillAgents.includes(agent.id) || memoryAgents.includes(agent.id);
+                    return (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        title={agent.installed ? undefined : `Not found on this ${device}`}
+                        className={`inline-flex min-h-7 max-w-full shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full border px-2.5 py-1 text-left text-xs font-medium leading-tight transition-all hover:-translate-y-px hover:shadow-[0_0_0_3px_rgba(45,212,191,0.08)] focus-visible:border-[var(--button-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--button-ring)_45%,transparent)] ${active ? "border-transparent bg-[var(--button-primary)] text-[var(--button-primary-foreground)] hover:brightness-105" : "border-transparent bg-[var(--button-secondary)] text-[var(--button-secondary-foreground)] hover:border-[rgba(94,234,212,0.18)] hover:bg-[color-mix(in_srgb,var(--button-secondary)_88%,var(--button-primary))] hover:text-[var(--foreground)]"} ${agent.installed ? "" : "opacity-60"}`}
+                        aria-pressed={active}
+                        onClick={() => toggleAgent(agent.id)}
+                      >
+                        <AgentIcon agent={agent} compact />
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{agent.label}</span>
+                        {active ? <Check aria-hidden="true" className="h-3 w-3 shrink-0" /> : null}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              {(["skills", "memory"] as const).map((kind) => {
-                const selected = kind === "skills" ? skillAgents : memoryAgents;
-                return (
-                  <div key={kind} className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.42)] p-4">
-                    <h4 className="text-sm font-semibold">{kind === "skills" ? "Import skills" : "Import memory"}</h4>
-                    <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{kind === "skills" ? "Bring over reusable agent abilities so HivemindOS can share them." : "Bring over saved agent context files so they can be reviewed in the hive."}</p>
-                    <div className="mt-3 flex flex-wrap gap-[7px]">
-                      {detectedAgents.map((agent) => {
-                        const active = selected.includes(agent.id);
-                        return (
-                          <button
-                            key={`${kind}-${agent.id}`}
-                            type="button"
-                            className={`inline-flex min-h-7 max-w-full shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full border px-2.5 py-1 text-left text-xs font-medium leading-tight transition-all hover:-translate-y-px hover:shadow-[0_0_0_3px_rgba(45,212,191,0.08)] focus-visible:border-[var(--button-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--button-ring)_45%,transparent)] ${active ? "border-transparent bg-[var(--button-primary)] text-[var(--button-primary-foreground)] hover:brightness-105" : "border-transparent bg-[var(--button-secondary)] text-[var(--button-secondary-foreground)] hover:border-[rgba(94,234,212,0.18)] hover:bg-[color-mix(in_srgb,var(--button-secondary)_88%,var(--button-primary))] hover:text-[var(--foreground)]"}`}
-                            aria-pressed={active}
-                            onClick={() => toggleSelection(kind, agent.id)}
-                          >
-                            <AgentIcon agent={agent} compact />
-                            <span className="min-w-0 [overflow-wrap:anywhere]">{agent.label}</span>
-                            {active ? <Check aria-hidden="true" className="h-3 w-3 shrink-0" /> : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+              <p className="text-xs leading-5 text-[var(--muted)]">
+                Don’t worry about getting this perfect — you can run setup again anytime.
+              </p>
             </div>
           ) : null}
 
           {step === "run" ? (
             <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
               <div className="flex items-center gap-3">
-                <Network aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
+                <Sparkles aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
                 <div>
-                  <h3 className="text-lg font-semibold">Ready to set up the hive</h3>
+                  <h3 className="text-lg font-semibold">{isWindows ? "HivemindOS sets everything up for you" : "That’s it — HivemindOS does the rest"}</h3>
                   <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                    HivemindOS will connect local agents, add missing pieces, and import your selected skills and memory.
+                    Click <span className="font-medium text-[var(--foreground)]">Start setup</span> below. If your {device} asks for permission along the way, just click OK or Allow.
                   </p>
                 </div>
               </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold"><Sparkles aria-hidden="true" className="h-4 w-4 text-[var(--accent-strong)]" />Handled for you</div>
-                  <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Setup uses the choices you already made.</p>
-                </div>
-                <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold"><Terminal aria-hidden="true" className="h-4 w-4 text-[var(--accent-strong)]" />Approve if asked</div>
-                  <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Only system permission steps need approval.</p>
-                </div>
-                <button type="button" className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-3 text-left transition-colors hover:border-[rgba(45,212,191,0.38)]" onClick={() => void copySetupCommand()}>
-                  <div className="flex items-center gap-2 text-sm font-semibold"><Copy aria-hidden="true" className="h-4 w-4 text-[var(--accent-strong)]" />Copy backup command</div>
-                  <p className="mt-2 text-xs leading-5 text-[var(--muted)]">Only needed if automatic setup cannot open your command line.</p>
-                </button>
-              </div>
-              <details className="mt-4 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.36)] p-3 text-xs text-[var(--muted)]">
-                <summary className="cursor-pointer text-sm font-medium text-[var(--foreground)]">Show backup command</summary>
-                <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-md bg-[rgba(2,6,23,0.50)] p-3">{commandPreview}</pre>
+              <details className="mt-5 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.36)] p-3 text-xs text-[var(--muted)]">
+                <summary className="cursor-pointer text-sm font-medium text-[var(--foreground)]">Setup didn’t start? Run it yourself</summary>
+                <p className="mt-3 leading-5">Copy this command and paste it into {isWindows ? "PowerShell" : "the Terminal app"}:</p>
+                <pre className="mt-2 overflow-auto whitespace-pre-wrap rounded-md bg-[rgba(2,6,23,0.50)] p-3">{commandPreview}</pre>
+                <Button type="button" variant="secondary" className="mt-3" onClick={() => void copySetupCommand()}>
+                  <Copy aria-hidden="true" />
+                  Copy command
+                </Button>
               </details>
               {runStatus ? <p className="mt-3 text-sm text-[var(--muted)]">{runStatus}</p> : null}
             </div>
@@ -448,96 +453,78 @@ export function NativeFirstRunOnboarding() {
           {step === "pairing" ? (
             <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
               <div className="flex items-center gap-3">
-                <Smartphone aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
+                {setupSettled ? (
+                  <Check aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
+                ) : (
+                  <LoaderCircle aria-hidden="true" className="h-6 w-6 animate-spin text-[var(--muted)]" />
+                )}
                 <div>
-                  <h3 className="text-lg font-semibold">Pair your phone</h3>
+                  <h3 className="text-lg font-semibold">{setupSettled ? "You're all set" : "Finishing setup…"}</h3>
                   <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                    Let the HivemindOS app on your phone browse and work with files on this Mac — your projects, Downloads, Desktop, and more. macOS needs a one-time OK on this computer.
+                    {setupSettled ? (
+                      <>
+                        You can close this window — HivemindOS finishes up in the background.
+                        {isMac
+                          ? " Your phone can reach this Mac automatically, even when the app is closed. The first time it opens a file, just tap “Allow” on the one-time prompt."
+                          : " If a window pops up asking for permission, just click OK or Allow."}
+                      </>
+                    ) : (
+                      "Setup is still running in the other window — this can take a few minutes while it installs dependencies and the local agent bridge. This screen updates on its own when it finishes."
+                    )}
                   </p>
                 </div>
               </div>
-
-              {!pairingExpanded ? (
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Button type="button" onClick={() => setPairingExpanded(true)}>
-                    <Lock aria-hidden="true" />
-                    Set it up
-                  </Button>
-                  <Button type="button" variant="secondary" onClick={dismiss}>
-                    Skip for now
-                  </Button>
-                </div>
-              ) : (
-                <div className="mt-5 space-y-3">
-                  <p className="text-sm leading-6 text-[var(--muted)]">
-                    Two quick steps, once. After this your phone can browse this Mac anytime — even when this app is closed.
-                  </p>
-                  <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--button-primary)] text-xs font-semibold text-[var(--button-primary-foreground)]">1</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold">Open the permission settings</div>
-                        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">Opens straight to Privacy &amp; Security → Full Disk Access.</p>
-                        <Button type="button" variant="secondary" className="mt-2" onClick={() => void openFolderAccessSettings()}>
-                          <ShieldCheck aria-hidden="true" />
-                          Open Full Disk Access
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.32)] p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--button-primary)] text-xs font-semibold text-[var(--button-primary-foreground)]">2</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold">Add “HivemindOS Gateway”</div>
-                        <p className="mt-1 text-xs leading-5 text-[var(--muted)]">We’ll highlight it in Finder. Drag it into the list (or click +, then add it) and switch it on.</p>
-                        <Button type="button" variant="secondary" className="mt-2" onClick={() => void revealGatewayBinary()}>
-                          <FolderOpen aria-hidden="true" />
-                          Show me the file
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  {pairingStatus ? <p className="text-sm leading-6 text-[var(--muted)]">{pairingStatus}</p> : null}
-                </div>
-              )}
             </div>
           ) : null}
           </div>
         </div>
 
         <footer className="shrink-0 flex flex-col gap-3 border-t border-[rgba(148,163,184,0.14)] p-4 sm:flex-row sm:items-center sm:justify-between">
-          <Button type="button" variant="ghost" disabled={step === "mode"} onClick={() => setStep(step === "pairing" ? "run" : step === "run" ? "agents" : "mode")}>
-            <ChevronLeft aria-hidden="true" />
-            Back
-          </Button>
+          {step === wizardSteps[0] ? <span aria-hidden="true" /> : (
+            <Button type="button" variant="ghost" onClick={() => setStep(wizardSteps[Math.max(0, wizardSteps.indexOf(step) - 1)])}>
+              <ChevronLeft aria-hidden="true" />
+              Back
+            </Button>
+          )}
           <div className="flex flex-wrap gap-2">
-            {step !== "pairing" ? (
+            {step === "agents" ? (
               <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>
                 <RefreshCcw aria-hidden="true" />
-                Rescan
+                Scan again
               </Button>
             ) : null}
             {step === "run" ? (
               <Button type="button" onClick={async () => { if (await launchSetup()) setStep("pairing"); }} disabled={running}>
-                {running ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Clipboard aria-hidden="true" />}
+                {running ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Sparkles aria-hidden="true" />}
                 Start setup
               </Button>
             ) : step === "pairing" ? (
-              <Button type="button" onClick={dismiss}>
-                <Check aria-hidden="true" />
-                Done
-              </Button>
-            ) : (
-              <Button type="button" onClick={() => setStep(step === "mode" ? "agents" : "run")}>
+              setupSettled ? (
+                <>
+                  <Button type="button" variant="secondary" onClick={dismiss}>
+                    I’ll explore on my own
+                  </Button>
+                  <Button type="button" onClick={() => { dismiss(); requestGuidedTour(); }}>
+                    <Sparkles aria-hidden="true" />
+                    Show me around
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="ghost" onClick={dismiss}>
+                  <X aria-hidden="true" />
+                  Close — I’ll come back
+                </Button>
+              )
+            ) : step === "agents" ? (
+              <Button type="button" onClick={() => setStep("run")}>
                 <Sparkles aria-hidden="true" />
                 Continue
               </Button>
-            )}
+            ) : null}
             {step !== "pairing" ? (
               <Button type="button" variant="secondary" onClick={dismiss}>
                 <X aria-hidden="true" />
-                Skip
+                Set up later
               </Button>
             ) : null}
           </div>

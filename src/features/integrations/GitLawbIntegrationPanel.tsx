@@ -52,9 +52,9 @@ export function GitLawbIntegrationPanel() {
         display: "grid",
         gap: 14,
         padding: 18,
-        border: "1px solid rgba(148,163,184,0.18)",
+        border: "1px solid var(--line)",
         borderRadius: 8,
-        background: "rgba(15,23,42,0.48)",
+        background: "var(--surface)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -62,7 +62,7 @@ export function GitLawbIntegrationPanel() {
           <ShieldCheck aria-hidden="true" size={20} />
           <div>
             <h2 style={{ margin: 0, fontSize: 16, letterSpacing: 0 }}>Code Proof</h2>
-            <p style={{ margin: "3px 0 0", color: "var(--muted-foreground, #94a3b8)", fontSize: 13 }}>
+            <p style={{ margin: "3px 0 0", color: "var(--text-soft, #5e574b)", fontSize: 13 }}>
               Signed code provenance for HivemindOS projects.
             </p>
           </div>
@@ -80,7 +80,7 @@ export function GitLawbIntegrationPanel() {
       </div>
 
       {status?.identity.did ? (
-        <code style={{ overflowWrap: "anywhere", color: "#cbd5e1", fontSize: 12 }}>{status.identity.did}</code>
+        <code style={{ overflowWrap: "anywhere", color: "var(--foreground, #221d14)", fontSize: 12 }}>{status.identity.did}</code>
       ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -98,21 +98,21 @@ export function GitLawbIntegrationPanel() {
         </ActionButton>
       </div>
 
-      <small style={{ color: "var(--muted-foreground, #94a3b8)", lineHeight: 1.5 }}>
+      <small style={{ color: "var(--text-soft, #5e574b)", lineHeight: 1.5 }}>
         {proofReady
           ? "Proof-ready mode is active. Local repo hosting remains lazy until a GitLawb-backed project needs it."
           : "Normal HivemindOS work keeps running if GitLawb is missing."}
       </small>
-      {message ? <small style={{ color: "#fde68a", lineHeight: 1.5 }}>{message}</small> : null}
+      {message ? <small style={{ color: "var(--warning, #8a641f)", lineHeight: 1.5 }}>{message}</small> : null}
     </section>
   );
 }
 
 function StatusPill({ label, tone }: { label: string; tone: "good" | "warn" | "neutral" }) {
   const colors = {
-    good: ["rgba(45,212,191,0.14)", "rgba(94,234,212,0.34)", "#99f6e4"],
-    warn: ["rgba(251,191,36,0.14)", "rgba(251,191,36,0.34)", "#fde68a"],
-    neutral: ["rgba(148,163,184,0.12)", "rgba(148,163,184,0.24)", "#cbd5e1"],
+    good: ["rgba(64,111,83,0.12)", "rgba(64,111,83,0.32)", "var(--success, #406f53)"],
+    warn: ["rgba(212,180,111,0.16)", "rgba(185,139,47,0.34)", "var(--warning, #8a641f)"],
+    neutral: ["var(--surface-soft)", "var(--line)", "var(--text-soft)"],
   }[tone];
   return (
     <span style={{ border: `1px solid ${colors[1]}`, background: colors[0], color: colors[2], borderRadius: 7, padding: "5px 8px", fontSize: 11, fontWeight: 700 }}>
@@ -136,7 +136,7 @@ const iconButtonStyle: React.CSSProperties = {
   placeItems: "center",
   border: "1px solid rgba(148,163,184,0.24)",
   borderRadius: 7,
-  background: "rgba(15,23,42,0.62)",
+  background: "var(--button-accent)",
   color: "inherit",
   cursor: "pointer",
 };
@@ -146,10 +146,10 @@ const buttonStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 7,
   minHeight: 34,
-  border: "1px solid rgba(94,234,212,0.34)",
+  border: "1px solid var(--accent-strong)",
   borderRadius: 7,
-  background: "rgba(45,212,191,0.12)",
-  color: "#99f6e4",
+  background: "var(--button-accent)",
+  color: "var(--accent-strong)",
   padding: "7px 10px",
   fontWeight: 800,
   cursor: "pointer",

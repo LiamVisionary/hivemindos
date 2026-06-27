@@ -5,9 +5,11 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 function isAutomationHydratedTranscript(messages: Array<{ content?: string }> = []) {
   const transcript = messages.slice(0, 8).map((message) => message.content ?? "").join("\n");
@@ -43,10 +45,14 @@ function hasReadableChatMessages(messages: ChatMessage[] = [], isManualAgentChat
 function chatSearchContent(messages: ChatMessage[] = []) {
   return messages
     .slice(-80)
-    .map((message) => message.content?.trim() ?? "")
+    .map((message) => stripJsonRenderPayload(message.content ?? "").trim())
     .filter(Boolean)
     .join("\n")
     .slice(0, 24000);
+}
+
+function chatPreviewContent(message?: ChatMessage) {
+  return stripJsonRenderPayload(message?.content ?? "").trim();
 }
 
 function chatLeafMatchesAgentId(leafKey: string, agentId: string) {
@@ -129,9 +135,9 @@ export function useChatTreeController(props: any) {
   }, [messagesByAgent]);
 
   const conversationTitle = useCallback((agentId: string) => {
-    const firstUserMessage = (messagesByAgent[agentId] ?? [])
+    const firstUser = (messagesByAgent[agentId] ?? [])
       .find((message) => message.role === "user" && isManualAgentChatMessage(message))
-      ?.content.trim();
+    const firstUserMessage = chatPreviewContent(firstUser);
     return firstUserMessage ? firstUserMessage.slice(0, 56) : "Previous chat";
   }, [messagesByAgent]);
 
@@ -341,15 +347,15 @@ export function useChatTreeController(props: any) {
       const { agentId, leafKey: storedLeafKey } = chatStorageIdentity(storageKey);
       if (!agentId || !storedLeafKey || storedLeafKey === `agent-${agentId}` || storedLeafKey.startsWith("task-")) continue;
       const manualMessages = storedMessages.filter(isManualAgentChatMessage);
-      if (!manualMessages.some((message) => message.content.trim())) continue;
+      if (!manualMessages.some((message) => chatPreviewContent(message))) continue;
       if (isAutomationHydratedTranscript(manualMessages)) continue;
-      const firstUser = manualMessages.find((message) => message.role === "user" && message.content.trim());
-      const lastMessage = [...manualMessages].reverse().find((message) => message.content.trim());
+      const firstUser = manualMessages.find((message) => message.role === "user" && chatPreviewContent(message));
+      const lastMessage = [...manualMessages].reverse().find((message) => chatPreviewContent(message));
       const item: ChatTreeItem = {
         agentId,
         key: storedLeafKey,
-        title: firstUser?.content.trim().slice(0, 56) || "Previous chat",
-        subtitle: lastMessage?.content.trim().slice(0, 80) || agentId,
+        title: chatPreviewContent(firstUser).slice(0, 56) || "Previous chat",
+        subtitle: chatPreviewContent(lastMessage).slice(0, 80) || agentId,
         updatedAt: Math.max(...manualMessages.map((message) => Number(message.createdAt || 0))),
         rank: 4,
         active: selectedAgentId === agentId && selectedChatLeafKey === storedLeafKey,
@@ -457,64 +463,66 @@ export function useChatTreeController(props: any) {
       name: machine.name,
       collectorUrl: machine.collectorUrl,
     }, (directory) => {
-      const path = directory.path?.trim();
-      if (!path) {
-        setStatus("The directory picker did not return a usable path.");
-        setStatusAgentId(selectedAgent.id);
-        return;
-      }
+      void (async () => {
+        const path = directory.path?.trim();
+        if (!path) {
+          setStatus("The directory picker did not return a usable path.");
+          setStatusAgentId(selectedAgent.id);
+          return;
+        }
 
-      const label = directory.name || workspaceLabelFromPath(path);
-      const linkedDirectory = { ...directory, name: label, path };
-      const existingFolder = chatCustomFolders.some((folder) => folder.machineKey === machine.key && folder.path === path)
-        || machine.version?.appDir === path;
-      const hasProjectChat = Boolean(selectedChatDirectoryPath && selectedChatLeafKey);
-      const sourceStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
-      const sourceMessages = messagesByAgent[sourceStorageKey] ?? [];
-      const hasMessages = sourceMessages.some((message) => isManualAgentChatMessage(message) && message.content.trim());
-      const nextLeafKey = `folder-${machine.key}-${chatDedupeKey(path)}-${selectedAgent.id}`;
-      const targetStorageKey = chatMessageStorageKey(selectedAgent.id, nextLeafKey);
-      const shouldMove = hasProjectChat && hasMessages && sourceStorageKey !== targetStorageKey
-        ? window.confirm(existingFolder
-          ? `Move this chat to ${label}?`
-          : `Create ${label} in chat history and move this chat there?`)
-        : false;
+        const label = directory.name || workspaceLabelFromPath(path);
+        const linkedDirectory = { ...directory, name: label, path };
+        const existingFolder = chatCustomFolders.some((folder) => folder.machineKey === machine.key && folder.path === path)
+          || machine.version?.appDir === path;
+        const hasProjectChat = Boolean(selectedChatDirectoryPath && selectedChatLeafKey);
+        const sourceStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
+        const sourceMessages = messagesByAgent[sourceStorageKey] ?? [];
+        const hasMessages = sourceMessages.some((message) => isManualAgentChatMessage(message) && message.content.trim());
+        const nextLeafKey = `folder-${machine.key}-${chatDedupeKey(path)}-${selectedAgent.id}`;
+        const targetStorageKey = chatMessageStorageKey(selectedAgent.id, nextLeafKey);
+        const shouldMove = hasProjectChat && hasMessages && sourceStorageKey !== targetStorageKey
+          ? await confirmUserAction(existingFolder
+            ? `Move this chat to ${label}?`
+            : `Create ${label} in chat history and move this chat there?`)
+          : false;
 
-      if (!existingFolder || shouldMove) {
-        const nextFolder: ChatCustomFolder = {
-          id: `${machine.key}-${Date.now()}`,
-          machineKey: machine.key,
-          label,
-          path,
-          agentId: selectedAgent.id,
-          createdAt: Date.now(),
-        };
-        setChatCustomFolders((current) => [
-          nextFolder,
-          ...current.filter((folder) => !(folder.machineKey === nextFolder.machineKey && folder.path === nextFolder.path)),
-        ]);
-      }
+        if (!existingFolder || shouldMove) {
+          const nextFolder: ChatCustomFolder = {
+            id: `${machine.key}-${Date.now()}`,
+            machineKey: machine.key,
+            label,
+            path,
+            agentId: selectedAgent.id,
+            createdAt: Date.now(),
+          };
+          setChatCustomFolders((current) => [
+            nextFolder,
+            ...current.filter((folder) => !(folder.machineKey === nextFolder.machineKey && folder.path === nextFolder.path)),
+          ]);
+        }
 
-      setSelectedChatDirectoryPath(path);
-      if (shouldMove) {
-        setSelectedChatLeafKey(nextLeafKey);
-        setChatMessageWindow(null);
-        setMessagesByAgent((current) => {
-          const movedMessages = current[sourceStorageKey] ?? [];
-          if (!movedMessages.length) return current;
-          const next = { ...current };
-          next[targetStorageKey] = movedMessages;
-          if (sourceStorageKey !== targetStorageKey) delete next[sourceStorageKey];
-          return next;
+        setSelectedChatDirectoryPath(path);
+        if (shouldMove) {
+          setSelectedChatLeafKey(nextLeafKey);
+          setChatMessageWindow(null);
+          setMessagesByAgent((current) => {
+            const movedMessages = current[sourceStorageKey] ?? [];
+            if (!movedMessages.length) return current;
+            const next = { ...current };
+            next[targetStorageKey] = movedMessages;
+            if (sourceStorageKey !== targetStorageKey) delete next[sourceStorageKey];
+            return next;
+          });
+          setSelectedChatPreview(sourceMessages.length ? { agentId: selectedAgent.id, leafKey: nextLeafKey, messages: sourceMessages } : null);
+        }
+
+        void recordRecentDirectory?.(linkedDirectory, {
+          machineName: linkedDirectory.machineName ?? machine.name,
+          machineKey: linkedDirectory.machineKey ?? machine.key,
+          source: "chat",
         });
-        setSelectedChatPreview(sourceMessages.length ? { agentId: selectedAgent.id, leafKey: nextLeafKey, messages: sourceMessages } : null);
-      }
-
-      void recordRecentDirectory?.(linkedDirectory, {
-        machineName: linkedDirectory.machineName ?? machine.name,
-        machineKey: linkedDirectory.machineKey ?? machine.key,
-        source: "chat",
-      });
+      })();
     });
   }
 
@@ -822,8 +830,10 @@ export function useChatTreeController(props: any) {
     setSetupCommandCopied(false);
   }
 
-  async function copySetupCommand() {
-    await navigator.clipboard?.writeText(setupCollectorCommand()).catch(() => undefined);
+  async function copySetupCommand(os?: string) {
+    await navigator.clipboard
+      ?.writeText(setupCollectorCommand(os))
+      .catch(() => undefined);
     setSetupCommandCopied(true);
     window.setTimeout(() => setSetupCommandCopied(false), 2500);
   }

@@ -1,0 +1,20 @@
+{
+  "upstreamName": "n8n-workflow-reliability-guardrails",
+  "upstreamSlug": "n8n-workflow-reliability-guardrails",
+  "hiveSlug": "n8n-workflow-reliability-guardrails",
+  "sourceLabel": "forma-norden",
+  "sourceUrl": "https://github.com/forma-norden/n8n-gtm-workflow-pack/blob/main/.agents/skills/n8n-workflow-reliability-guardrails.md",
+  "repository": "https://github.com/forma-norden/n8n-gtm-workflow-pack",
+  "installCommand": "npx skills add https://github.com/forma-norden/n8n-gtm-workflow-pack --skill n8n-workflow-reliability-guardrails",
+  "importedAt": "2026-06-19T03:07:29.307Z",
+  "refreshedAt": "2026-06-19T03:07:29.307Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/n8n/forma-norden/n8n-workflow-reliability-guardrails",
+  "packageGroup": "n8n",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "14b8cf6881a01cde96aee98281ff400b6ca72c1d",
+  "normalized": "frontmatter-synthesized-by-importer",
+  "description": "Prevent silent failures and unstable behavior in n8n production workflows by enforcing retries, error handling, timeout policy, and execution limits. Use for: error handling, retry, timeout, dead-letter, workflow reliability."
+}

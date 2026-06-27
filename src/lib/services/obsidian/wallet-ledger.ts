@@ -3,7 +3,7 @@ import { hostname } from "os";
 import { join } from "path";
 
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
-import type { AgentAssetSpendCaps, AgentSpendCapAsset, AgentWalletConfig } from "@/lib/types/agent-wallet";
+import type { AgentAssetSpendCaps, AgentSpendCapAsset, AgentWalletConfig, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 
 const WALLET_FOLDER = "Projects/HivemindOS/Wallets";
@@ -89,6 +89,40 @@ function parseAssetSpendCaps(value: string | number | boolean | undefined): Agen
   }
 }
 
+function parseWalletTokens(value: string | number | boolean | undefined): AgentWalletTokenBalance[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((token): AgentWalletTokenBalance[] => {
+      if (!token || typeof token !== "object" || Array.isArray(token)) return [];
+      const record = token as Record<string, unknown>;
+      const symbol = typeof record.symbol === "string" ? record.symbol.trim() : "";
+      const name = typeof record.name === "string" ? record.name.trim() : symbol;
+      const network = typeof record.network === "string" ? record.network.trim() : "";
+      const balance = Number(record.balance);
+      if (!symbol || !network || !Number.isFinite(balance) || balance <= 0) return [];
+      const priceUsd = Number(record.priceUsd);
+      const valueUsd = Number(record.valueUsd);
+      const priceChange24hPct = Number(record.priceChange24hPct);
+      return [{
+        symbol,
+        name,
+        balance,
+        network,
+        priceUsd: Number.isFinite(priceUsd) ? priceUsd : null,
+        valueUsd: Number.isFinite(valueUsd) ? valueUsd : null,
+        priceChange24hPct: Number.isFinite(priceChange24hPct) ? priceChange24hPct : null,
+        isNative: record.isNative === true,
+        tokenAddress: typeof record.tokenAddress === "string" ? record.tokenAddress : undefined,
+        iconUrl: typeof record.iconUrl === "string" ? record.iconUrl : null,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 /* ─── Record (de)serialisation ──────────────────────────────────── */
 
 function networkLabel(network: string): string {
@@ -130,12 +164,15 @@ function renderRecordMarkdown(record: WalletLedgerRecord): string {
     ["maxPaymentUsd", record.wallet.maxPaymentUsd],
     ["assetSpendCaps", record.wallet.assetSpendCaps],
     ["approvalRequiredOverUsd", record.wallet.approvalRequiredOverUsd],
+    ["dailyBudgetUsd", record.wallet.dailyBudgetUsd ?? 0],
+    ["monthlyBudgetUsd", record.wallet.monthlyBudgetUsd ?? 0],
     ["autoPayEnabled", record.wallet.autoPayEnabled],
     ["duplicatePaymentGuardEnabled", record.wallet.duplicatePaymentGuardEnabled !== false],
     ["duplicatePaymentGuardSeconds", record.wallet.duplicatePaymentGuardSeconds ?? DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS],
     ["clawCardEnvName", record.wallet.clawCardEnvName],
     ["moneyClawEnvName", record.wallet.moneyClawEnvName],
     ["x402BaseUrl", record.wallet.x402BaseUrl],
+    ["veilAutoSendEnabled", record.wallet.veilAutoSendEnabled === true],
     ["veilAutoPrivateX402", record.wallet.veilAutoPrivateX402 !== false],
     ["survivalStartedAt", record.wallet.survivalStartedAt],
     ["updatedAtMs", record.wallet.updatedAt],
@@ -144,8 +181,22 @@ function renderRecordMarkdown(record: WalletLedgerRecord): string {
     ["vaultAddress", record.wallet.vaultAddress],
     ["onchainBalanceUsd", record.wallet.onchainBalanceUsd],
     ["nativeBalance", record.wallet.nativeBalance],
+    ["tokens", record.wallet.tokens],
     ["lastOnchainSyncAt", record.wallet.lastOnchainSyncAt],
   ];
+
+  // Stock-trading config — only emitted for trading-enabled wallets so the other
+  // wallet files stay clean. Without this the venue/paper/cap silently never
+  // persisted, so the buy-stock rail saw "Stock buying is off" after a save.
+  if (record.wallet.tradingVenue) {
+    frontmatter.push(["tradingVenue", record.wallet.tradingVenue]);
+    frontmatter.push(["alpacaPaper", record.wallet.alpacaPaper !== false]);
+    if (record.wallet.alpacaKeyEnvName) frontmatter.push(["alpacaKeyEnvName", record.wallet.alpacaKeyEnvName]);
+    if (record.wallet.alpacaSecretEnvName) frontmatter.push(["alpacaSecretEnvName", record.wallet.alpacaSecretEnvName]);
+    if (typeof record.wallet.maxTradeUsd === "number" && record.wallet.maxTradeUsd > 0) {
+      frontmatter.push(["maxTradeUsd", record.wallet.maxTradeUsd]);
+    }
+  }
 
   const head = frontmatter.map(([key, value]) => `${key}: ${emitYamlValue(value)}`).join("\n");
   const balance = record.wallet.currentBalanceUsd.toFixed(2);
@@ -182,13 +233,21 @@ function parseRecordMarkdown(filename: string, content: string): WalletLedgerRec
       ...parseAssetSpendCaps(fm.assetSpendCaps),
     },
     approvalRequiredOverUsd: typeof fm.approvalRequiredOverUsd === "number" ? fm.approvalRequiredOverUsd : 0,
+    dailyBudgetUsd: typeof fm.dailyBudgetUsd === "number" ? Math.max(0, fm.dailyBudgetUsd) : 0,
+    monthlyBudgetUsd: typeof fm.monthlyBudgetUsd === "number" ? Math.max(0, fm.monthlyBudgetUsd) : 0,
     autoPayEnabled: Boolean(fm.autoPayEnabled),
     duplicatePaymentGuardEnabled: typeof fm.duplicatePaymentGuardEnabled === "boolean" ? fm.duplicatePaymentGuardEnabled : true,
     duplicatePaymentGuardSeconds: typeof fm.duplicatePaymentGuardSeconds === "number" ? Math.max(1, fm.duplicatePaymentGuardSeconds) : DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS,
     clawCardEnvName: typeof fm.clawCardEnvName === "string" ? fm.clawCardEnvName : "CLAWCARD_API_KEY",
     moneyClawEnvName: typeof fm.moneyClawEnvName === "string" ? fm.moneyClawEnvName : "MONEYCLAW_API_KEY",
     x402BaseUrl: typeof fm.x402BaseUrl === "string" ? fm.x402BaseUrl : "",
+    veilAutoSendEnabled: typeof fm.veilAutoSendEnabled === "boolean" ? fm.veilAutoSendEnabled : false,
     veilAutoPrivateX402: typeof fm.veilAutoPrivateX402 === "boolean" ? fm.veilAutoPrivateX402 : true,
+    tradingVenue: (fm.tradingVenue === "alpaca" || fm.tradingVenue === "xstocks") ? fm.tradingVenue : undefined,
+    alpacaKeyEnvName: typeof fm.alpacaKeyEnvName === "string" && fm.alpacaKeyEnvName ? fm.alpacaKeyEnvName : undefined,
+    alpacaSecretEnvName: typeof fm.alpacaSecretEnvName === "string" && fm.alpacaSecretEnvName ? fm.alpacaSecretEnvName : undefined,
+    alpacaPaper: typeof fm.alpacaPaper === "boolean" ? fm.alpacaPaper : undefined,
+    maxTradeUsd: typeof fm.maxTradeUsd === "number" && fm.maxTradeUsd > 0 ? fm.maxTradeUsd : undefined,
     survivalStartedAt: typeof fm.survivalStartedAt === "number" ? fm.survivalStartedAt : 0,
     updatedAt: typeof fm.updatedAtMs === "number" ? fm.updatedAtMs : 0,
     notes: typeof fm.notes === "string" ? fm.notes : "",
@@ -196,6 +255,7 @@ function parseRecordMarkdown(filename: string, content: string): WalletLedgerRec
     vaultAddress: typeof fm.vaultAddress === "string" ? fm.vaultAddress : "",
     onchainBalanceUsd: typeof fm.onchainBalanceUsd === "number" ? fm.onchainBalanceUsd : 0,
     nativeBalance: typeof fm.nativeBalance === "number" ? fm.nativeBalance : 0,
+    tokens: parseWalletTokens(fm.tokens),
     lastOnchainSyncAt: typeof fm.lastOnchainSyncAt === "number" ? fm.lastOnchainSyncAt : 0,
   };
   return {

@@ -66,6 +66,18 @@
   transform: translateY(-1px) scale(0.99);
 }
 
+/* Selected state for picker/selectable mode (wallet selection modal). */
+.card[data-selected="true"] {
+  border-color: rgba(94, 234, 212, 0.7);
+  box-shadow:
+    0 0 0 2px rgba(45, 212, 191, 0.55),
+    0 14px 32px rgba(0, 0, 0, 0.4);
+}
+
+.card[data-selected="true"]::before {
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.16), rgba(45, 212, 191, 0.0) 60%);
+}
+
 .card[data-tier="critical"],
 .card[data-tier="dead"] {
   background:
@@ -376,4 +388,61 @@
 
 :global(:root[data-theme="hive-light"]) .card:hover::before {
   background: linear-gradient(135deg, rgba(185, 139, 47, 0.14), rgba(185, 139, 47, 0.0) 55%);
+}
+
+:global(:root[data-theme="hive-light"]) .name,
+:global(:root[data-theme="hive-light"]) .amount,
+:global(:root[data-theme="hive-light"]) .setupPrompt strong {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .unit,
+:global(:root[data-theme="hive-light"]) .balance,
+:global(:root[data-theme="hive-light"]) .openIcon {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .statusChip,
+:global(:root[data-theme="hive-light"]) .spendChip,
+:global(:root[data-theme="hive-light"]) .setupPrompt {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .statusChip[data-tone="ok"],
+:global(:root[data-theme="hive-light"]) .spendChip[data-on="true"],
+:global(:root[data-theme="hive-light"]) .setupStatusIcon[data-state="done"] {
+  border-color: rgba(95, 143, 90, 0.32);
+  background: rgba(95, 143, 90, 0.12);
+  color: #356b2f;
+}
+
+:global(:root[data-theme="hive-light"]) .statusChip[data-tone="warn"] {
+  border-color: rgba(176, 127, 28, 0.34);
+  background: rgba(176, 127, 28, 0.14);
+  color: #6f5625;
+}
+
+:global(:root[data-theme="hive-light"]) .statusChip[data-tone="danger"],
+:global(:root[data-theme="hive-light"]) .setupStatusIcon[data-state="loading"] {
+  border-color: rgba(192, 82, 77, 0.34);
+  background: rgba(192, 82, 77, 0.11);
+  color: #8e3328;
+}
+
+:global(:root[data-theme="hive-light"]) .confirmButton {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .confirmButton[data-tone="confirm"] {
+  border-color: rgba(176, 127, 28, 0.36);
+  background: rgba(176, 127, 28, 0.16);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .confirmButton[data-tone="cancel"] {
+  color: var(--text-soft);
 }

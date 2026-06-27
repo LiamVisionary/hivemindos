@@ -1,5 +1,5 @@
 .kanbanPanel {
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(238, 232, 220, 0.16);
   border-radius: 8px;
   background: linear-gradient(180deg, rgba(16, 20, 29, 0.72), rgba(11, 15, 22, 0.78));
   box-shadow: 0 18px 56px rgba(0, 0, 0, 0.18);
@@ -22,7 +22,7 @@
   align-items: start;
   justify-content: space-between;
   padding-bottom: 14px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: 1px solid rgba(238, 232, 220, 0.1);
 }
 
 .kanbanHeader > div:first-child {
@@ -65,7 +65,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 34px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(238, 232, 220, 0.18);
   border-radius: 999px;
   background: rgba(9, 13, 20, 0.52);
   color: var(--muted);
@@ -79,9 +79,9 @@
 }
 
 .kanbanSyncPill.synced {
-  border-color: rgba(94, 234, 212, 0.28);
-  background: rgba(20, 184, 166, 0.09);
-  color: #99f6e4;
+  border-color: rgba(111, 205, 186, 0.28);
+  background: rgba(111, 205, 186, 0.09);
+  color: #9fe0d3;
 }
 
 .kanbanSyncPill.local {
@@ -113,9 +113,9 @@
   display: grid;
   gap: 12px;
   width: min(520px, calc(100vw - 48px));
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(238, 232, 220, 0.18);
   border-radius: 8px;
-  background: rgba(8, 13, 20, 0.98);
+  background: rgba(16, 17, 22, 0.98);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
   padding: 14px;
 }
@@ -134,9 +134,9 @@
 .kanbanNoteIntake {
   display: grid;
   gap: 10px;
-  border: 1px solid rgba(94, 234, 212, 0.16);
+  border: 1px solid rgba(111, 205, 186, 0.16);
   border-radius: 7px;
-  background: rgba(20, 184, 166, 0.04);
+  background: rgba(111, 205, 186, 0.04);
   padding: 12px;
 }
 
@@ -172,7 +172,7 @@
   display: grid;
   gap: 2px;
   min-width: 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid rgba(238, 232, 220, 0.1);
   padding-top: 6px;
 }
 
@@ -187,9 +187,9 @@
   flex-wrap: wrap;
   align-items: end;
   margin-top: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(238, 232, 220, 0.1);
   border-radius: 8px;
-  background: rgba(8, 13, 20, 0.36);
+  background: rgba(16, 17, 22, 0.36);
   padding: 10px;
 }
 
@@ -226,9 +226,9 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   align-items: center;
-  border: 1px dashed rgba(94, 234, 212, 0.22);
+  border: 1px dashed rgba(111, 205, 186, 0.22);
   border-radius: 8px;
-  background: rgba(20, 184, 166, 0.06);
+  background: rgba(111, 205, 186, 0.06);
   color: var(--muted);
   margin-top: 12px;
   padding: 12px;
@@ -269,10 +269,10 @@
   gap: 14px;
   min-height: 300px;
   min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(238, 232, 220, 0.12);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(8, 13, 20, 0.62), rgba(8, 13, 20, 0.38)),
+    linear-gradient(180deg, rgba(16, 17, 22, 0.62), rgba(16, 17, 22, 0.38)),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%235eead4' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E");
   background-size: auto, 72px 41.569px;
   padding: 14px;
@@ -280,9 +280,9 @@
 }
 
 .kanbanColumn:hover {
-  border-color: rgba(148, 163, 184, 0.2);
+  border-color: rgba(238, 232, 220, 0.2);
   background:
-    linear-gradient(180deg, rgba(8, 13, 20, 0.68), rgba(8, 13, 20, 0.44)),
+    linear-gradient(180deg, rgba(16, 17, 22, 0.68), rgba(16, 17, 22, 0.44)),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%235eead4' stroke-opacity='.06' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E");
   background-size: auto, 72px 41.569px;
 }
@@ -293,10 +293,10 @@
   align-items: start;
   gap: 8px 10px;
   min-height: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: 1px solid rgba(238, 232, 220, 0.1);
   border-radius: 8px;
-  background: rgba(8, 13, 20, 0.4);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.06);
+  background: rgba(16, 17, 22, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(238, 232, 220, 0.06);
   padding: 10px;
 }
 
@@ -327,7 +327,7 @@
 
 .kanbanColumnHeader strong {
   min-width: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(238, 232, 220, 0.1);
   border-radius: 999px;
   background: rgba(9, 13, 20, 0.32);
   color: var(--accent-strong);
@@ -344,7 +344,7 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 6px;
   background: rgba(9, 13, 20, 0.3);
   color: #7dd3fc;
@@ -353,8 +353,8 @@
 
 .kanbanAddColumnTask:hover,
 .kanbanEmptyAction:hover {
-  border-color: rgba(94, 234, 212, 0.5);
-  background: rgba(20, 184, 166, 0.12);
+  border-color: rgba(111, 205, 186, 0.5);
+  background: rgba(111, 205, 186, 0.12);
 }
 
 .kanbanAddColumnTask svg,
@@ -372,11 +372,11 @@
   background: var(--muted);
 }
 
-.kanbanDot.ideas { background: #a78bfa; }
-.kanbanDot.ready { background: #5eead4; }
-.kanbanDot.working { background: #facc15; }
-.kanbanDot.needs-human { background: #fb7185; }
-.kanbanDot.done { background: #86efac; }
+.kanbanDot.ideas { background: #76726a; }
+.kanbanDot.ready { background: #a7a39a; }
+.kanbanDot.working { background: #6fcdba; }
+.kanbanDot.needs-human { background: #e58e85; }
+.kanbanDot.done { background: #e7b45c; }
 .kanbanDot.archived { background: #94a3b8; }
 
 .kanbanCards {
@@ -389,9 +389,9 @@
 .kanbanInlineAdd {
   display: grid;
   gap: 8px;
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  border: 1px solid rgba(111, 205, 186, 0.2);
   border-radius: 8px;
-  background: rgba(20, 184, 166, 0.06);
+  background: rgba(111, 205, 186, 0.06);
   padding: 10px;
 }
 
@@ -449,7 +449,7 @@
 }
 
 .kanbanCard.stale {
-  background: linear-gradient(180deg, rgba(251, 146, 60, 0.1), rgba(17, 23, 34, 0.96));
+  background: linear-gradient(180deg, rgba(251, 146, 60, 0.1), rgba(24, 27, 34, 0.96));
   box-shadow:
     0 0 16px rgba(0, 0, 0, 0.2),
     0 9px 20px rgba(0, 0, 0, 0.17);
@@ -480,7 +480,7 @@
   height: 16px;
   flex: 0 0 auto;
   margin: 3px auto 0 0;
-  accent-color: #5eead4;
+  accent-color: #6fcdba;
 }
 
 .kanbanBulkBar {
@@ -489,9 +489,9 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
-  border: 1px solid rgba(94, 234, 212, 0.22);
+  border: 1px solid rgba(111, 205, 186, 0.22);
   border-radius: 8px;
-  background: rgba(10, 18, 28, 0.84);
+  background: rgba(16, 17, 22, 0.84);
 }
 
 .kanbanBulkBar strong {
@@ -502,7 +502,7 @@
 .kanbanBulkBar button,
 .kanbanBulkBar select {
   min-height: 32px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(238, 232, 220, 0.18);
   border-radius: 7px;
   background: rgba(15, 23, 42, 0.84);
   color: var(--kb-fg);
@@ -588,10 +588,10 @@
   min-height: 28px;
   align-items: center;
   gap: 5px;
-  border: 1px solid rgba(94, 234, 212, 0.28);
+  border: 1px solid rgba(111, 205, 186, 0.28);
   border-radius: 999px;
-  background: rgba(20, 184, 166, 0.1);
-  color: #99f6e4;
+  background: rgba(111, 205, 186, 0.1);
+  color: #9fe0d3;
   cursor: pointer;
   font: inherit;
   font-size: 11px;
@@ -602,8 +602,8 @@
 
 .kanbanDeliverableBadge:hover,
 .kanbanDeliverableBadge:focus-visible {
-  border-color: rgba(94, 234, 212, 0.48);
-  background: rgba(20, 184, 166, 0.16);
+  border-color: rgba(111, 205, 186, 0.48);
+  background: rgba(111, 205, 186, 0.16);
   outline: none;
 }
 
@@ -620,16 +620,16 @@
   display: grid;
   width: min(340px, calc(100vw - 48px));
   gap: 8px;
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  border: 1px solid rgba(111, 205, 186, 0.2);
   border-radius: 8px;
-  background: rgba(6, 11, 18, 0.98);
+  background: rgba(14, 15, 19, 0.98);
   box-shadow: 0 18px 52px rgba(0, 0, 0, 0.38);
   padding: 9px;
 }
 
 .kanbanDeliverableMenu p {
   margin: 0 2px;
-  color: rgba(148, 163, 184, 0.84);
+  color: rgba(238, 232, 220, 0.84);
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
@@ -658,7 +658,7 @@
 }
 
 .kanbanDeliverableItem small {
-  color: rgba(148, 163, 184, 0.84);
+  color: rgba(238, 232, 220, 0.84);
   font-size: 11px;
   font-weight: 800;
 }
@@ -669,9 +669,9 @@
   justify-content: flex-start;
   gap: 7px;
   min-height: 30px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(238, 232, 220, 0.16);
   border-radius: 7px;
-  background: rgba(8, 13, 20, 0.52);
+  background: rgba(16, 17, 22, 0.52);
   color: rgba(226, 232, 240, 0.9);
   cursor: pointer;
   font: inherit;
@@ -682,9 +682,9 @@
 
 .kanbanDeliverableItem button:hover,
 .kanbanDeliverableItem button:focus-visible {
-  border-color: rgba(94, 234, 212, 0.36);
-  background: rgba(20, 184, 166, 0.11);
-  color: #ccfbf1;
+  border-color: rgba(111, 205, 186, 0.36);
+  background: rgba(111, 205, 186, 0.11);
+  color: #cdeae3;
   outline: none;
 }
 
@@ -714,7 +714,7 @@
   height: 24px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 6px;
   background: rgba(9, 13, 20, 0.34);
   color: var(--muted);
@@ -723,7 +723,7 @@
 
 .kanbanIconAction:hover,
 .kanbanIconAction:focus-visible {
-  background: rgba(148, 163, 184, 0.12);
+  background: rgba(238, 232, 220, 0.12);
   color: var(--accent-strong);
   outline: none;
 }
@@ -796,7 +796,7 @@
 .codeProofStatusPill.ready,
 .codeProofStatusPill.linked,
 .codeProofStatusPill.unavailable {
-  border-color: rgba(148, 163, 184, 0.24);
+  border-color: rgba(238, 232, 220, 0.24);
   background: rgba(15, 23, 42, 0.7);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.04),
@@ -838,7 +838,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid rgba(238, 232, 220, 0.1);
   padding-top: 9px;
 }
 
@@ -873,7 +873,7 @@
 
 .kanbanCardMarkdown code,
 .kanbanAgentMessageMarkdown code {
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(238, 232, 220, 0.16);
   border-radius: 5px;
   background: rgba(2, 6, 23, 0.52);
   color: #f8fafc;
@@ -886,7 +886,7 @@
 .kanbanAgentMessageMarkdown pre {
   max-width: 100%;
   overflow: auto;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 7px;
   background: rgba(2, 6, 23, 0.58);
   margin: 6px 0 0;
@@ -902,29 +902,29 @@
 }
 
 .workBoardPanel {
-  --kb-bg-0: #0a0c10;
-  --kb-bg-1: #0f1218;
-  --kb-bg-2: #141820;
-  --kb-bg-3: #1a1f29;
-  --kb-column: rgba(255, 255, 255, 0.022);
-  --kb-card: rgba(18, 21, 27, 0.94);
-  --kb-card-hover: rgba(22, 26, 34, 0.98);
-  --kb-line: rgba(170, 179, 193, 0.12);
-  --kb-line-strong: rgba(170, 179, 193, 0.2);
-  --kb-fg: #f2f4f7;
-  --kb-muted: #8f97a4;
-  --kb-muted-soft: rgba(143, 151, 164, 0.68);
-  --kb-cyan: #46c4b5;
-  --kb-cyan-2: #68d6ca;
-  --kb-cyan-3: #a8ebe3;
-  --kb-danger: #e57386;
-  --kb-danger-2: #ffc8d0;
-  --kb-honey: #d8a837;
-  --kb-honey-2: #f0ca72;
-  --kb-honey-3: #fff0c6;
+  --kb-bg-0: #0c0d11;
+  --kb-bg-1: #101116;
+  --kb-bg-2: #14161c;
+  --kb-bg-3: #1e222b;
+  --kb-column: rgba(238, 232, 220, 0.022);
+  --kb-card: #14161c;
+  --kb-card-hover: #181b22;
+  --kb-line: rgba(238, 232, 220, 0.10);
+  --kb-line-strong: rgba(238, 232, 220, 0.18);
+  --kb-fg: #f3f0e9;
+  --kb-muted: #76726a;
+  --kb-muted-soft: rgba(118, 114, 106, 0.7);
+  --kb-cyan: #6fcdba;
+  --kb-cyan-2: #6fcdba;
+  --kb-cyan-3: #9fe0d3;
+  --kb-danger: #e58e85;
+  --kb-danger-2: #f0b3ad;
+  --kb-honey: #e7b45c;
+  --kb-honey-2: #f0c879;
+  --kb-honey-3: #f7e0b4;
   height: 100%;
   min-height: 0;
-  border: 1px solid rgba(170, 179, 193, 0.09);
+  border: 1px solid rgba(238, 232, 220, 0.09);
   border-radius: 8px;
   background: linear-gradient(180deg, var(--kb-bg-1), var(--kb-bg-0));
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.2);
@@ -951,7 +951,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: 1px solid rgba(238, 232, 220, 0.1);
   padding-bottom: 16px;
 }
 
@@ -993,9 +993,9 @@
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 999px;
-  background: rgba(16, 21, 31, 0.72);
+  background: rgba(20, 22, 28, 0.72);
   padding: 0 10px;
 }
 
@@ -1012,9 +1012,9 @@
   gap: 8px;
   width: 102px;
   height: 30px;
-  border: 1px solid rgba(255, 212, 90, 0.48);
+  border: 1px solid rgba(231, 180, 92, 0.48);
   border-radius: 7px;
-  background: rgba(255, 212, 90, 0.16);
+  background: rgba(231, 180, 92, 0.16);
   color: var(--kb-honey-2);
   cursor: pointer;
   font-size: 12px;
@@ -1034,7 +1034,7 @@
   flex: 0 0 auto;
   border-radius: 999px;
   background: var(--kb-cyan-2);
-  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.12);
+  box-shadow: 0 0 0 4px rgba(111, 205, 186, 0.12);
 }
 
 .workBoardHero {
@@ -1043,7 +1043,7 @@
   gap: 14px;
   align-items: center;
   min-height: 72px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: 1px solid rgba(238, 232, 220, 0.1);
   padding: 8px 0 14px;
 }
 
@@ -1134,10 +1134,10 @@
 
 .workBoardControls {
   display: grid;
-  grid-template-columns: minmax(140px, 0.8fr) minmax(150px, 0.9fr) minmax(280px, 1.5fr) minmax(150px, 0.9fr) auto auto;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(150px, 0.9fr) minmax(260px, 1.4fr) minmax(150px, 0.9fr) auto auto auto;
   gap: 8px;
   align-items: end;
-  border: 1px solid rgba(170, 179, 193, 0.075);
+  border: 1px solid rgba(238, 232, 220, 0.075);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.012);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
@@ -1161,11 +1161,12 @@
 
 .workBoardControls select,
 .workBoardControls input,
+.workBoardActionButton,
 .workBoardOptions > summary {
   min-height: 36px;
-  border: 1px solid rgba(170, 179, 193, 0.095);
+  border: 1px solid rgba(238, 232, 220, 0.095);
   border-radius: 7px;
-  background: rgba(5, 7, 10, 0.48);
+  background: rgba(12, 13, 17, 0.48);
   color: var(--kb-fg);
   font-size: 13px;
   font-weight: 560;
@@ -1197,21 +1198,23 @@
   right: 11px;
   width: 14px;
   height: 14px;
-  color: rgba(143, 151, 164, 0.72);
+  color: rgba(118, 114, 106, 0.72);
   pointer-events: none;
   transform: translateY(-50%);
 }
 
 .workBoardControls select:hover,
 .workBoardControls input:hover,
+.workBoardActionButton:hover,
 .workBoardOptions > summary:hover,
 .workBoardToggle:hover {
-  border-color: rgba(170, 179, 193, 0.18);
+  border-color: rgba(238, 232, 220, 0.18);
   background: rgba(8, 11, 16, 0.58);
 }
 
 .workBoardControls select:focus,
 .workBoardControls input:focus,
+.workBoardActionButton:focus-visible,
 .workBoardOptions > summary:focus-visible,
 .workBoardToggle:focus-within {
   border-color: rgba(104, 214, 202, 0.34);
@@ -1239,7 +1242,7 @@
 }
 
 .workBoardSearch input::placeholder {
-  color: rgba(143, 151, 164, 0.62);
+  color: rgba(118, 114, 106, 0.62);
   font-weight: 520;
 }
 
@@ -1249,9 +1252,9 @@
   align-items: center;
   gap: 9px;
   min-height: 36px;
-  border: 1px solid rgba(170, 179, 193, 0.095);
+  border: 1px solid rgba(238, 232, 220, 0.095);
   border-radius: 7px;
-  background: rgba(5, 7, 10, 0.48);
+  background: rgba(12, 13, 17, 0.48);
   padding: 0 12px;
 }
 
@@ -1260,6 +1263,25 @@
   height: 16px;
   margin: 0;
   accent-color: var(--kb-cyan-2);
+}
+
+.workBoardActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 0 12px;
+}
+
+.workBoardActionButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.workBoardActionButton:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .workBoardOptions > summary {
@@ -1346,12 +1368,12 @@
   width: 40px;
   height: 40px;
   place-items: center;
-  border: 1px solid rgba(255, 212, 90, 0.34);
+  border: 1px solid rgba(231, 180, 92, 0.34);
   border-radius: 999px;
-  background: rgba(16, 21, 31, 0.92);
+  background: rgba(20, 22, 28, 0.92);
   color: var(--kb-honey-2);
   cursor: pointer;
-  box-shadow: rgba(0, 0, 0, 0.32) 0 10px 28px, rgba(255, 212, 90, 0.06) 0 0 0 4px;
+  box-shadow: rgba(0, 0, 0, 0.32) 0 10px 28px, rgba(231, 180, 92, 0.06) 0 0 0 4px;
   transform: translateY(-50%);
 }
 
@@ -1369,20 +1391,20 @@
 
 .kanbanBoardScrollFab:hover,
 .kanbanBoardScrollFab:focus-visible {
-  border-color: rgba(255, 212, 90, 0.68);
+  border-color: rgba(231, 180, 92, 0.68);
   outline: none;
 }
 
 .workBoardPanel .kanbanColumn {
   --lane-accent: var(--kb-cyan-2);
-  --lane-accent-rgb: 94, 234, 212;
+  --lane-accent-rgb: 111, 205, 186;
   --lane-title: var(--kb-fg);
   --lane-soft: rgba(var(--lane-accent-rgb), 0.055);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
-  border: 1px solid rgba(170, 179, 193, 0.085);
+  border: 1px solid rgba(238, 232, 220, 0.085);
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.035), transparent 112px),
@@ -1392,43 +1414,43 @@
 }
 
 .workBoardPanel .kanbanColumn.ideas {
-  --lane-accent: #a78bfa;
-  --lane-accent-rgb: 167, 139, 250;
-  --lane-title: #c4b5fd;
+  --lane-accent: #76726a;
+  --lane-accent-rgb: 118, 114, 106;
+  --lane-title: #a7a39a;
 }
 
 .workBoardPanel .kanbanColumn.ready {
-  --lane-accent: var(--kb-cyan-2);
-  --lane-accent-rgb: 94, 234, 212;
-  --lane-title: var(--kb-cyan-3);
+  --lane-accent: #a7a39a;
+  --lane-accent-rgb: 167, 163, 154;
+  --lane-title: #c9c5bb;
 }
 
 .workBoardPanel .kanbanColumn.working {
-  --lane-accent: var(--kb-honey-2);
-  --lane-accent-rgb: 255, 212, 90;
-  --lane-title: var(--kb-honey-2);
+  --lane-accent: var(--kb-cyan);
+  --lane-accent-rgb: 111, 205, 186;
+  --lane-title: var(--kb-cyan-2);
 }
 
 .workBoardPanel .kanbanColumn.needs-human {
   --lane-accent: var(--kb-danger);
-  --lane-accent-rgb: 251, 113, 133;
+  --lane-accent-rgb: 229, 142, 133;
   --lane-title: var(--kb-danger-2);
 }
 
 .workBoardPanel .kanbanColumn.done {
-  --lane-accent: #86efac;
-  --lane-accent-rgb: 134, 239, 172;
-  --lane-title: #bbf7d0;
+  --lane-accent: var(--kb-honey);
+  --lane-accent-rgb: 231, 180, 92;
+  --lane-title: var(--kb-honey-2);
 }
 
 .workBoardPanel .kanbanColumn.archived {
   --lane-accent: var(--kb-muted);
-  --lane-accent-rgb: 142, 155, 177;
-  --lane-title: #c6d1df;
+  --lane-accent-rgb: 118, 114, 106;
+  --lane-title: #a7a39a;
 }
 
 .workBoardPanel .kanbanColumn:hover {
-  border-color: rgba(170, 179, 193, 0.16);
+  border-color: rgba(238, 232, 220, 0.16);
   background:
     linear-gradient(180deg, rgba(var(--lane-accent-rgb), 0.05), transparent 112px),
     rgba(255, 255, 255, 0.032);
@@ -1441,7 +1463,7 @@
   gap: 8px 10px;
   min-height: 68px;
   border: 0;
-  border-bottom: 1px solid rgba(170, 179, 193, 0.085);
+  border-bottom: 1px solid rgba(238, 232, 220, 0.085);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -1492,7 +1514,7 @@
 .workBoardPanel .kanbanAddColumnTask {
   width: 24px;
   height: 24px;
-  border-color: rgba(170, 179, 193, 0.12);
+  border-color: rgba(238, 232, 220, 0.12);
   background: rgba(255, 255, 255, 0.026);
   color: var(--lane-title);
 }
@@ -1572,7 +1594,7 @@
 .kanbanSkeletonCard strong {
   display: block;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.12), rgba(var(--lane-accent-rgb), 0.26), rgba(148, 163, 184, 0.12));
+  background: linear-gradient(90deg, rgba(238, 232, 220, 0.12), rgba(var(--lane-accent-rgb), 0.26), rgba(238, 232, 220, 0.12));
 }
 
 .kanbanSkeletonPill {
@@ -1618,7 +1640,7 @@
   width: 22px;
   height: 22px;
   place-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--kb-muted);
@@ -1630,7 +1652,7 @@
 
 .kanbanCardMoveFabs button:hover:not(:disabled),
 .kanbanCardMoveFabs button:focus-visible {
-  border-color: rgba(94, 234, 212, 0.42);
+  border-color: rgba(111, 205, 186, 0.42);
   color: var(--kb-cyan-2);
   outline: none;
 }
@@ -1649,7 +1671,7 @@
 
 .workBoardPanel .kanbanMessageRow {
   grid-template-columns: minmax(0, 1fr) auto;
-  border-top: 1px solid rgba(170, 179, 193, 0.075);
+  border-top: 1px solid rgba(238, 232, 220, 0.075);
   padding-top: 8px;
 }
 
@@ -1703,7 +1725,7 @@
 
 .kanbanEmptyLaneMessage {
   align-self: center;
-  color: rgba(143, 151, 164, 0.56);
+  color: rgba(118, 114, 106, 0.56);
   font-size: 13px;
   line-height: 1.35;
   margin: 0;
@@ -1717,14 +1739,14 @@
   align-self: start;
   max-height: 100%;
   overflow: auto;
-  border: 1px solid rgba(255, 212, 90, 0.48);
+  border: 1px solid rgba(231, 180, 92, 0.48);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(255, 212, 90, 0.14), rgba(16, 21, 31, 0.94) 26%, rgba(8, 13, 20, 0.96));
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.26), 0 0 0 1px rgba(255, 212, 90, 0.08);
+  background: linear-gradient(180deg, rgba(231, 180, 92, 0.14), rgba(20, 22, 28, 0.94) 26%, rgba(16, 17, 22, 0.96));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.26), 0 0 0 1px rgba(231, 180, 92, 0.08);
 }
 
 .workBoardPanel .kanbanDrawerHeader {
-  border-bottom-color: rgba(148, 163, 184, 0.12);
+  border-bottom-color: rgba(238, 232, 220, 0.12);
   background: transparent;
 }
 
@@ -1735,7 +1757,7 @@
 .workBoardPanel .kanbanTaskSummary,
 .workBoardPanel .kanbanMetaGrid,
 .workBoardPanel .kanbanDrawerQuickActions {
-  border-color: rgba(148, 163, 184, 0.12);
+  border-color: rgba(238, 232, 220, 0.12);
 }
 
 .workBoardPanel .kanbanDrawerQuickActions {
@@ -1744,8 +1766,8 @@
   z-index: 2;
   grid-template-columns: repeat(3, minmax(0, 110px));
   justify-content: center;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
-  background: linear-gradient(180deg, rgba(16, 21, 31, 0.72), rgba(8, 13, 20, 0.98));
+  border-top: 1px solid rgba(238, 232, 220, 0.12);
+  background: linear-gradient(180deg, rgba(20, 22, 28, 0.72), rgba(16, 17, 22, 0.98));
   backdrop-filter: blur(12px);
   padding: 12px;
 }
@@ -1754,7 +1776,7 @@
   width: 110px;
   min-height: 34px;
   justify-content: center;
-  border-color: rgba(148, 163, 184, 0.14);
+  border-color: rgba(238, 232, 220, 0.14);
   background: rgba(255, 255, 255, 0.03);
   color: #c6d1df;
   font-size: 11px;
@@ -1763,7 +1785,7 @@
 .kanbanDrawerMovePanel {
   display: grid;
   gap: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid rgba(238, 232, 220, 0.12);
   padding: 12px;
 }
 
@@ -1775,7 +1797,7 @@
 
 .kanbanDrawerMovePanel button {
   min-height: 30px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.03);
   color: #c6d1df;
@@ -1787,7 +1809,7 @@
 
 .kanbanDrawerMovePanel button:hover:not(:disabled),
 .kanbanDrawerMovePanel button:focus-visible {
-  border-color: rgba(94, 234, 212, 0.42);
+  border-color: rgba(111, 205, 186, 0.42);
   color: var(--kb-cyan-2);
   outline: none;
 }
@@ -1795,15 +1817,15 @@
 .kanbanDrawerMovePanel button.active,
 .kanbanDrawerMovePanel button:disabled {
   cursor: default;
-  border-color: rgba(255, 212, 90, 0.32);
-  background: rgba(255, 212, 90, 0.1);
-  color: #fff6cf;
+  border-color: rgba(231, 180, 92, 0.32);
+  background: rgba(231, 180, 92, 0.1);
+  color: #f7e6c2;
 }
 
 .workBoardPanel .kanbanInlineAdd {
   position: relative;
-  border-color: rgba(94, 234, 212, 0.22);
-  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(111, 205, 186, 0.22);
+  background: rgba(111, 205, 186, 0.08);
 }
 
 .workBoardPanel .kanbanInlineAdd:has([aria-expanded="true"]) {
@@ -1817,7 +1839,7 @@
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  color: rgba(148, 163, 184, 0.82);
+  color: rgba(238, 232, 220, 0.82);
   font-size: 11px;
   font-weight: 850;
 }
@@ -1838,9 +1860,9 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 999px;
-  background: rgba(8, 13, 20, 0.46);
+  background: rgba(16, 17, 22, 0.46);
   color: rgba(203, 213, 225, 0.84);
   font: inherit;
   font-size: 10px;
@@ -1859,8 +1881,8 @@
 .kanbanMachineLabel:focus-visible,
 .kanbanCardAttachmentButton:focus-within,
 .kanbanCardAttachmentButton:hover {
-  border-color: rgba(94, 234, 212, 0.34);
-  color: #99f6e4;
+  border-color: rgba(111, 205, 186, 0.34);
+  color: #9fe0d3;
   outline: none;
 }
 
@@ -1875,7 +1897,7 @@
 .kanbanCardAttachmentButton {
   gap: 0;
   overflow: hidden;
-  color: rgba(148, 163, 184, 0.8);
+  color: rgba(238, 232, 220, 0.8);
   padding: 0;
 }
 
@@ -1901,7 +1923,7 @@
 }
 
 .kanbanAttachmentAddTrigger {
-  border-left: 1px solid rgba(148, 163, 184, 0.12);
+  border-left: 1px solid rgba(238, 232, 220, 0.12);
   padding-inline: 7px;
 }
 
@@ -1909,8 +1931,8 @@
 .kanbanAttachmentListTrigger:focus-visible,
 .kanbanAttachmentAddTrigger:hover,
 .kanbanAttachmentAddTrigger:focus-visible {
-  background: rgba(20, 184, 166, 0.1);
-  color: #ccfbf1;
+  background: rgba(111, 205, 186, 0.1);
+  color: #cdeae3;
   outline: none;
 }
 
@@ -1925,9 +1947,9 @@
   gap: 6px;
   min-width: min(300px, calc(100vw - 48px));
   max-width: min(360px, calc(100vw - 48px));
-  border: 1px solid rgba(94, 234, 212, 0.18);
+  border: 1px solid rgba(111, 205, 186, 0.18);
   border-radius: 8px;
-  background: rgba(6, 11, 18, 0.98);
+  background: rgba(14, 15, 19, 0.98);
   box-shadow: 0 18px 52px rgba(0, 0, 0, 0.36);
   padding: 8px;
   position: absolute;
@@ -1937,7 +1959,7 @@
 }
 
 .kanbanAttachmentListMenu p {
-  color: rgba(148, 163, 184, 0.82);
+  color: rgba(238, 232, 220, 0.82);
   font-size: 12px;
   font-weight: 800;
   margin: 4px 6px;
@@ -1956,7 +1978,7 @@
 .kanbanAttachmentListItem > svg {
   width: 14px;
   height: 14px;
-  color: rgba(94, 234, 212, 0.82);
+  color: rgba(111, 205, 186, 0.82);
 }
 
 .kanbanAttachmentListItem span {
@@ -1971,7 +1993,7 @@
 }
 
 .kanbanAttachmentListItem small {
-  color: rgba(148, 163, 184, 0.82);
+  color: rgba(238, 232, 220, 0.82);
   font-size: 11px;
   line-height: 1.2;
 }
@@ -2000,9 +2022,9 @@
   display: grid;
   gap: 4px;
   min-width: 180px;
-  border: 1px solid rgba(94, 234, 212, 0.18);
+  border: 1px solid rgba(111, 205, 186, 0.18);
   border-radius: 8px;
-  background: rgba(6, 11, 18, 0.98);
+  background: rgba(14, 15, 19, 0.98);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
   padding: 6px;
   position: absolute;
@@ -2050,9 +2072,9 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(560px, 100%);
   max-height: min(680px, calc(100vh - 48px));
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  border: 1px solid rgba(111, 205, 186, 0.2);
   border-radius: 10px;
-  background: rgba(6, 11, 18, 0.98);
+  background: rgba(14, 15, 19, 0.98);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.46);
   overflow: hidden;
 }
@@ -2061,7 +2083,7 @@
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid rgba(238, 232, 220, 0.14);
   padding: 18px;
 }
 
@@ -2073,7 +2095,7 @@
 }
 
 .directoryBrowserHeader span {
-  color: rgba(148, 163, 184, 0.86);
+  color: rgba(238, 232, 220, 0.86);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -2084,7 +2106,7 @@
   justify-content: center;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(238, 232, 220, 0.18);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.62);
   color: rgba(203, 213, 225, 0.9);
@@ -2115,19 +2137,19 @@
 .directoryBrowserList > button:hover,
 .directoryBrowserList > button:focus-visible,
 .directoryBrowserList > button[data-selected="true"] {
-  background: rgba(20, 184, 166, 0.12);
-  color: #ccfbf1;
+  background: rgba(111, 205, 186, 0.12);
+  color: #cdeae3;
   outline: none;
 }
 
 .directoryBrowserList > button[data-selected="true"] {
-  box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(111, 205, 186, 0.24);
 }
 
 .directoryBrowserList svg {
   width: 16px;
   height: 16px;
-  color: rgba(94, 234, 212, 0.86);
+  color: rgba(111, 205, 186, 0.86);
 }
 
 .directoryBrowserList span {
@@ -2143,7 +2165,7 @@
 
 .directoryBrowserList small,
 .directoryBrowserList p {
-  color: rgba(148, 163, 184, 0.82);
+  color: rgba(238, 232, 220, 0.82);
   font-size: 12px;
 }
 
@@ -2152,14 +2174,14 @@
 }
 
 .directoryBrowserParentButton {
-  color: rgba(148, 163, 184, 0.9) !important;
+  color: rgba(238, 232, 220, 0.9) !important;
 }
 
 .directoryBrowserActions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-top: 1px solid rgba(238, 232, 220, 0.14);
   padding: 12px;
 }
 
@@ -2168,7 +2190,7 @@
   align-items: center;
   justify-content: center;
   min-width: 84px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(238, 232, 220, 0.18);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.62);
   color: rgba(226, 232, 240, 0.92);
@@ -2180,9 +2202,9 @@
 }
 
 .directoryBrowserActions button:last-child {
-  border-color: rgba(94, 234, 212, 0.28);
-  background: rgba(20, 184, 166, 0.14);
-  color: #99f6e4;
+  border-color: rgba(111, 205, 186, 0.28);
+  background: rgba(111, 205, 186, 0.14);
+  color: #9fe0d3;
 }
 
 .directoryBrowserActions button:disabled {
@@ -2192,8 +2214,8 @@
 
 .kanbanMachineMenu button:hover,
 .kanbanMachineMenu button[aria-checked="true"] {
-  background: rgba(20, 184, 166, 0.12);
-  color: #ccfbf1;
+  background: rgba(111, 205, 186, 0.12);
+  color: #cdeae3;
 }
 
 .kanbanCardMeta {
@@ -2229,80 +2251,212 @@
 }
 .workHistoryList {
   display: grid;
+  align-content: start;
   grid-row: 4;
-  gap: 12px;
+  gap: 14px;
   min-height: 0;
-  overflow: auto;
-  padding: 2px 2px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 4px 16px;
 }
 
 .workHistoryItem {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: stretch;
-  border: 1px solid rgba(94, 234, 212, 0.13);
+  position: relative;
+  isolation: isolate;
+  min-height: 148px;
+  border: 1px solid rgba(238, 232, 220, 0.08);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(16, 21, 31, 0.86), rgba(10, 15, 23, 0.8));
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
-  padding: 14px;
+  background: rgba(16, 17, 22, 0.4);
+  box-shadow: none;
+  overflow: visible;
 }
 
 .workHistoryControls {
   grid-template-columns: 220px minmax(260px, 420px) minmax(0, 1fr);
 }
 
-.workHistoryItem > div:first-child {
-  display: grid;
-  gap: 8px;
+.workHistoryDetails {
   min-width: 0;
-  color: inherit;
-  text-align: left;
+  width: 100%;
 }
 
-.workHistoryItem strong {
+.workHistorySummaryLine {
+  display: grid;
+  position: relative;
+  z-index: 1;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  cursor: pointer;
+  list-style: none;
+  min-height: 148px;
+  padding: 20px 20px 22px;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.workHistorySummaryLine::-webkit-details-marker {
+  display: none;
+}
+
+.workHistorySummaryLine:hover,
+.workHistorySummaryLine:focus-visible {
+  background: rgba(111, 205, 186, 0.045);
+  outline: 0;
+}
+
+.workHistoryChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 1px solid rgba(238, 232, 220, 0.1);
+  border-radius: 999px;
+  color: var(--kb-muted);
+  transition: transform 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.workHistoryChevron svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2;
+}
+
+.workHistoryDetails[open] .workHistoryChevron {
+  border-color: rgba(111, 205, 186, 0.28);
+  color: var(--fc-live, var(--kb-cyan-2));
+  transform: rotate(90deg);
+}
+
+.workHistoryRowMain {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workHistoryRowMain > strong {
   color: var(--kb-fg);
-  font-size: 17px;
-  font-weight: 900;
+  font-size: 14.5px;
+  font-weight: 650;
   letter-spacing: 0;
-  line-height: 1.2;
+  line-height: 1.34;
 }
 
 .workHistoryAreas {
+  min-width: 0;
   color: var(--kb-muted);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .workHistoryMeta {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0 5px;
+  color: var(--kb-muted);
 }
 
 .workHistoryMeta span,
 .workHistoryMeta time {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 999px;
-  background: rgba(8, 13, 20, 0.64);
+  min-height: 0;
+  border: 0;
+  background: transparent;
   color: var(--kb-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 0 8px;
+  font-size: 9.75px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0;
   text-transform: uppercase;
 }
 
-.workHistoryMarkdown {
-  max-width: 980px;
+.workHistoryMeta > * + *::before {
+  content: "/";
+  margin-right: 5px;
+  color: rgba(238, 232, 220, 0.24);
+}
+
+.workHistoryRowState {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.workHistoryRowState span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border: 1px solid rgba(238, 232, 220, 0.1);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.18);
   color: var(--kb-muted);
-  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  padding: 0 7px;
+  text-transform: uppercase;
+}
+
+.workHistoryRowState span[data-kind="verified"] {
+  border-color: rgba(111, 205, 186, 0.22);
+  color: var(--fc-live, var(--kb-cyan-2));
+}
+
+.workHistoryRowState span[data-kind="commit"] {
+  border-color: rgba(231, 180, 92, 0.24);
+  color: var(--fc-honey, var(--kb-gold));
+}
+
+.workHistoryDetailsBody {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border-top: 1px solid rgba(238, 232, 220, 0.07);
+  padding: 14px 20px 20px 54px;
+  overflow-wrap: anywhere;
+}
+
+.workHistoryDetails:not([open]) > .workHistoryDetailsBody {
+  display: none;
+}
+
+.workHistoryMarkdown {
+  min-width: 0;
+  max-width: 920px;
+  color: var(--kb-muted);
+  font-size: 12.25px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.workHistoryAreas code,
+.workHistoryMarkdown code,
+.workHistoryDetailFacts code {
+  display: inline-block;
+  max-width: 100%;
+  border: 1px solid rgba(111, 205, 186, 0.12);
+  border-radius: 4px;
+  background: rgba(111, 205, 186, 0.055);
+  color: var(--fc-live, var(--kb-cyan-2));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 2px 6px;
+  white-space: normal;
+}
+
+.workHistoryMarkdown strong {
+  color: var(--kb-fg);
+  font-weight: 750;
 }
 
 .workHistoryMarkdown p,
@@ -2317,34 +2471,36 @@
   margin-top: 8px;
 }
 
-.workHistoryActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-content: start;
-  justify-content: end;
-}
-
-.workHistoryActions > button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 6px;
-  background: rgba(8, 13, 20, 0.62);
+.workHistoryDetailFacts {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 980px;
   color: var(--kb-muted);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 900;
-  padding: 0 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
-.workHistoryActions > button:hover,
-.workHistoryActions > button:focus-visible {
-  border-color: rgba(94, 234, 212, 0.38);
-  color: var(--kb-cyan-2);
-  outline: 0;
+.workHistoryDetailFacts > span {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.workHistoryDetailFacts > span > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workHistoryDetailFacts b {
+  color: var(--kb-fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .workHistoryLoadMore {
@@ -2353,9 +2509,9 @@
   justify-content: center;
   justify-self: center;
   min-height: 38px;
-  border: 1px solid rgba(94, 234, 212, 0.24);
+  border: 1px solid rgba(111, 205, 186, 0.24);
   border-radius: 6px;
-  background: rgba(8, 13, 20, 0.68);
+  background: rgba(16, 17, 22, 0.68);
   color: var(--kb-cyan-2);
   cursor: pointer;
   font-size: 12px;
@@ -2365,7 +2521,7 @@
 
 .workHistoryLoadMore:hover,
 .workHistoryLoadMore:focus-visible {
-  border-color: rgba(242, 183, 5, 0.4);
+  border-color: rgba(231, 180, 92, 0.4);
   color: var(--kb-gold);
   outline: 0;
 }
@@ -2382,19 +2538,19 @@
   gap: 8px;
   align-content: center;
   min-height: 180px;
-  border: 1px dashed rgba(148, 163, 184, 0.2);
+  border: 1px dashed rgba(238, 232, 220, 0.2);
   border-radius: 6px;
-  background: rgba(8, 13, 20, 0.48);
+  background: rgba(16, 17, 22, 0.48);
   color: var(--kb-muted);
   padding: 18px;
 }
 
 .workHistoryLoadingNotice {
   min-height: 104px;
-  border-color: rgba(94, 234, 212, 0.28);
+  border-color: rgba(111, 205, 186, 0.28);
   background:
-    linear-gradient(90deg, rgba(94, 234, 212, 0.08), rgba(242, 183, 5, 0.08), rgba(94, 234, 212, 0.08)),
-    rgba(8, 13, 20, 0.58);
+    linear-gradient(90deg, rgba(111, 205, 186, 0.08), rgba(231, 180, 92, 0.08), rgba(111, 205, 186, 0.08)),
+    rgba(16, 17, 22, 0.58);
   background-size: 220% 100%, auto;
   animation: workHistoryScan 1.4s ease-in-out infinite;
 }
@@ -2414,7 +2570,7 @@
 .workHistoryItem.loading p {
   min-height: 14px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.12), rgba(94, 234, 212, 0.16), rgba(148, 163, 184, 0.12));
+  background: linear-gradient(90deg, rgba(238, 232, 220, 0.12), rgba(111, 205, 186, 0.16), rgba(238, 232, 220, 0.12));
 }
 
 .workHistoryItem.loading strong {
@@ -2470,12 +2626,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .workHistoryItem {
-    grid-template-columns: 1fr;
+  .workHistorySummaryLine {
+    grid-template-columns: 20px minmax(0, 1fr);
   }
 
-  .workHistoryActions {
+  .workHistoryRowState {
+    grid-column: 2;
     justify-content: start;
+  }
+
+  .workHistoryDetailsBody {
+    padding-left: 54px;
   }
 
   .workBoardStats span,
@@ -2515,11 +2676,11 @@
   max-height: 82px;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgba(94, 234, 212, 0.14);
+  border: 1px solid rgba(111, 205, 186, 0.14);
   border-radius: 7px;
   background:
     linear-gradient(180deg, rgba(2, 6, 23, 0.94), rgba(2, 6, 23, 0.72));
-  color: #99f6e4;
+  color: #9fe0d3;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 11px;
   line-height: 1.55;
@@ -2547,9 +2708,9 @@
   width: 26px;
   height: 26px;
   place-items: center;
-  border: 1px solid rgba(94, 234, 212, 0.22);
+  border: 1px solid rgba(111, 205, 186, 0.22);
   border-radius: 6px;
-  background: rgba(8, 13, 20, 0.5);
+  background: rgba(16, 17, 22, 0.5);
   color: var(--accent-strong);
   padding: 0;
   cursor: pointer;
@@ -2558,8 +2719,8 @@
 
 .kanbanExpandMessage:hover,
 .kanbanExpandMessage:focus-visible {
-  border-color: rgba(94, 234, 212, 0.42);
-  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(111, 205, 186, 0.42);
+  background: rgba(111, 205, 186, 0.08);
   opacity: 1;
 }
 
@@ -2579,9 +2740,9 @@
   min-width: 0;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(238, 232, 220, 0.12);
   border-radius: 7px;
-  background: rgba(8, 13, 20, 0.48);
+  background: rgba(16, 17, 22, 0.48);
   padding: 6px 8px;
 }
 
@@ -2662,7 +2823,7 @@
   width: max-content;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: #090d14;
+  background: #101116;
   color: var(--muted);
   font-size: 10px;
   font-weight: 780;
@@ -2672,7 +2833,7 @@
 }
 
 .workBoardPanel .priorityPill {
-  border-color: rgba(170, 179, 193, 0.12);
+  border-color: rgba(238, 232, 220, 0.12);
   background: rgba(255, 255, 255, 0.026);
   color: var(--kb-muted);
 }
@@ -2702,7 +2863,7 @@
 .priorityPill.ready,
 .priorityPill.working,
 .priorityPill.normal {
-  border-color: rgba(94, 234, 212, 0.36);
+  border-color: rgba(111, 205, 186, 0.36);
   color: var(--accent-strong);
 }
 
@@ -2781,7 +2942,7 @@
 }
 
 .kanbanEmpty {
-  border: 1px dashed rgba(148, 163, 184, 0.18);
+  border: 1px dashed rgba(238, 232, 220, 0.18);
   border-radius: 8px;
   color: var(--muted);
   margin: 0;
@@ -2796,7 +2957,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(8, 13, 20, 0.24);
+  background: rgba(16, 17, 22, 0.24);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
@@ -2805,7 +2966,7 @@
 
 .kanbanEmptyAction:hover {
   color: var(--accent-strong);
-  background: rgba(20, 184, 166, 0.1);
+  background: rgba(111, 205, 186, 0.1);
 }
 
 .kanbanDrawer {
@@ -2815,9 +2976,9 @@
   min-width: 0;
   max-height: none;
   overscroll-behavior: contain;
-  border: 1px solid rgba(94, 234, 212, 0.18);
+  border: 1px solid rgba(111, 205, 186, 0.18);
   border-radius: 8px;
-  background: rgba(8, 13, 20, 0.82);
+  background: rgba(16, 17, 22, 0.82);
   box-shadow: 0 18px 52px rgba(0, 0, 0, 0.22);
   padding: 14px;
 }
@@ -2840,7 +3001,7 @@
   height: 30px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(238, 232, 220, 0.16);
   border-radius: 6px;
   background: rgba(9, 13, 20, 0.42);
   color: var(--muted);
@@ -2849,7 +3010,7 @@
 
 .kanbanDrawerClose:hover,
 .kanbanDrawerClose:focus-visible {
-  border-color: rgba(94, 234, 212, 0.38);
+  border-color: rgba(111, 205, 186, 0.38);
   color: var(--accent-strong);
   outline: none;
 }
@@ -2866,9 +3027,9 @@
 }
 
 .kanbanTaskSummary {
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(238, 232, 220, 0.1);
   border-radius: 8px;
-  background: rgba(17, 23, 34, 0.5);
+  background: rgba(24, 27, 34, 0.5);
   padding: 10px;
 }
 
@@ -2901,9 +3062,9 @@
 }
 
 .kanbanMetaGrid span {
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(238, 232, 220, 0.16);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(17, 23, 34, 0.84), rgba(10, 15, 23, 0.78));
+  background: linear-gradient(180deg, rgba(24, 27, 34, 0.84), rgba(16, 17, 22, 0.78));
   color: #f4f7fb;
   font-size: 12px;
   padding: 8px;
@@ -2967,7 +3128,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 7px;
   background: rgba(9, 13, 20, 0.44);
   color: #c6d1df;
@@ -2979,7 +3140,7 @@
 
 .kanbanDrawerQuickActions button:hover,
 .kanbanDrawerQuickActions button:focus-visible {
-  border-color: rgba(94, 234, 212, 0.34);
+  border-color: rgba(111, 205, 186, 0.34);
   color: var(--accent-strong);
   outline: none;
 }
@@ -2992,9 +3153,9 @@
 .kanbanAgentStream {
   display: grid;
   gap: 9px;
-  border: 1px solid rgba(94, 234, 212, 0.14);
+  border: 1px solid rgba(111, 205, 186, 0.14);
   border-radius: 8px;
-  background: rgba(17, 23, 34, 0.72);
+  background: rgba(24, 27, 34, 0.72);
   padding: 10px;
 }
 
@@ -3060,15 +3221,15 @@
 .kanbanAgentMessage {
   display: grid;
   gap: 5px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(238, 232, 220, 0.12);
   border-radius: 8px;
-  background: rgba(8, 13, 20, 0.48);
+  background: rgba(16, 17, 22, 0.48);
   padding: 9px;
 }
 
 .kanbanAgentMessage.user {
-  border-color: rgba(94, 234, 212, 0.22);
-  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(111, 205, 186, 0.22);
+  background: rgba(111, 205, 186, 0.08);
 }
 
 .kanbanAgentMessage div {
@@ -3135,9 +3296,9 @@
 .kanbanEvents article {
   display: grid;
   gap: 7px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(238, 232, 220, 0.12);
   border-radius: 8px;
-  background: rgba(17, 23, 34, 0.72);
+  background: rgba(24, 27, 34, 0.72);
   padding: 10px;
 }
 
@@ -3197,9 +3358,9 @@
   width: min(720px, 100%);
   max-height: min(760px, calc(100vh - 36px));
   overflow: hidden;
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  border: 1px solid rgba(111, 205, 186, 0.2);
   border-radius: 8px;
-  background: rgba(8, 13, 20, 0.98);
+  background: rgba(16, 17, 22, 0.98);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.44);
 }
 
@@ -3212,7 +3373,7 @@
   align-items: start;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid rgba(238, 232, 220, 0.12);
   padding: 14px;
 }
 
@@ -3227,7 +3388,7 @@
   width: 32px;
   height: 32px;
   place-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(238, 232, 220, 0.16);
   border-radius: 7px;
   background: rgba(9, 13, 20, 0.58);
   color: var(--muted);
@@ -3236,7 +3397,7 @@
 
 .kanbanModalHeader button:not([data-slot="close-icon-button"]):hover,
 .kanbanModalHeader button:not([data-slot="close-icon-button"]):focus-visible {
-  border-color: rgba(94, 234, 212, 0.38);
+  border-color: rgba(111, 205, 186, 0.38);
   color: var(--accent-strong);
   outline: none;
 }
@@ -3284,8 +3445,8 @@
 .kanbanModalBody select:focus-visible,
 .kanbanModalBody input:focus-visible,
 .kanbanModalBody textarea:focus-visible {
-  border-color: rgba(94, 234, 212, 0.44);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.08);
+  border-color: rgba(111, 205, 186, 0.44);
+  box-shadow: 0 0 0 3px rgba(111, 205, 186, 0.08);
 }
 
 .kanbanEditForm {
@@ -3307,7 +3468,7 @@
 
 .kanbanEditActions button {
   min-height: 38px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(238, 232, 220, 0.18);
   border-radius: 6px;
   background: rgba(9, 13, 20, 0.72);
   color: var(--foreground);
@@ -3317,8 +3478,8 @@
 }
 
 .kanbanEditActions button[type="submit"] {
-  border-color: rgba(94, 234, 212, 0.36);
-  background: rgba(20, 184, 166, 0.14);
+  border-color: rgba(111, 205, 186, 0.36);
+  background: rgba(111, 205, 186, 0.14);
   color: var(--accent-strong);
 }
 
@@ -3353,9 +3514,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(45, 212, 191, 0.24);
+  border: 1px solid rgba(111, 205, 186, 0.24);
   border-radius: 999px;
-  background: rgba(13, 148, 136, 0.08);
+  background: rgba(111, 205, 186, 0.08);
   color: rgba(153, 246, 228, 0.9);
   cursor: pointer;
   font: inherit;
@@ -3366,9 +3527,9 @@
 }
 
 .kanbanSteerTargetButton:hover {
-  border-color: rgba(94, 234, 212, 0.42);
-  background: rgba(13, 148, 136, 0.14);
-  color: #ccfbf1;
+  border-color: rgba(111, 205, 186, 0.42);
+  background: rgba(111, 205, 186, 0.14);
+  color: #cdeae3;
 }
 
 .kanbanSteerTargetButton svg {
@@ -3382,7 +3543,7 @@
   top: calc(100% + 8px);
   z-index: 60;
   max-width: 220px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border: 1px solid rgba(238, 232, 220, 0.22);
   border-radius: 8px;
   background: #0b1018;
   color: #dbe7f3;
@@ -3415,7 +3576,7 @@
 
 .kanbanSteerTargetMenu button:hover,
 .kanbanSteerTargetMenu button[aria-checked="true"] {
-  background: rgba(45, 212, 191, 0.12);
+  background: rgba(111, 205, 186, 0.12);
   color: var(--accent-strong);
 }
 
@@ -3427,9 +3588,9 @@
 
 .kanbanSteerForm.compact,
 .kanbanCommentForm.compact {
-  border: 1px solid rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(238, 232, 220, 0.12);
   border-radius: 8px;
-  background: rgba(17, 23, 34, 0.56);
+  background: rgba(24, 27, 34, 0.56);
   padding: 8px;
 }
 
@@ -3469,8 +3630,8 @@
 }
 
 .kanbanNoteActions button {
-  border: 1px solid rgba(94, 234, 212, 0.24);
-  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(111, 205, 186, 0.24);
+  background: rgba(111, 205, 186, 0.1);
   color: var(--accent-strong);
   padding: 0 12px;
 }
@@ -3514,8 +3675,8 @@
 .kanbanDrawer input:focus-visible,
 .kanbanDrawer select:focus-visible,
 .kanbanDrawer textarea:focus-visible {
-  border-color: rgba(94, 234, 212, 0.44);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.08);
+  border-color: rgba(111, 205, 186, 0.44);
+  box-shadow: 0 0 0 3px rgba(111, 205, 186, 0.08);
 }
 
 .kanbanInlineAdd input {
@@ -3528,9 +3689,9 @@
     grid-template-columns: auto minmax(0, 1fr);
     gap: 8px;
     align-items: center;
-    border: 1px solid rgba(148, 163, 184, 0.14);
+    border: 1px solid rgba(238, 232, 220, 0.14);
     border-radius: 7px;
-    background: rgba(8, 13, 20, 0.5);
+    background: rgba(16, 17, 22, 0.5);
     color: var(--muted);
     font-size: 11px;
     font-weight: 900;
@@ -3541,9 +3702,9 @@
   .kanbanMobileMove select {
     min-height: 34px;
     min-width: 0;
-    border: 1px solid rgba(94, 234, 212, 0.24);
+    border: 1px solid rgba(111, 205, 186, 0.24);
     border-radius: 6px;
-    background: #090d14;
+    background: #101116;
     color: var(--foreground);
     font: inherit;
     padding: 0 8px;
@@ -3718,26 +3879,26 @@
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel {
-  --kb-bg-0: #f5f2eb;
-  --kb-bg-1: #fbfaf6;
-  --kb-bg-2: #f1ece2;
-  --kb-bg-3: #e7dfd0;
+  --kb-bg-0: #f1ede3;
+  --kb-bg-1: #fbf8f1;
+  --kb-bg-2: #f4efe4;
+  --kb-bg-3: #e9e2d4;
   --kb-column: rgba(255, 255, 255, 0.58);
-  --kb-card: rgba(255, 255, 255, 0.86);
-  --kb-card-hover: rgba(255, 255, 255, 0.98);
-  --kb-line: rgba(79, 68, 52, 0.12);
-  --kb-line-strong: rgba(79, 68, 52, 0.2);
-  --kb-fg: #26221c;
-  --kb-muted: #746b5f;
-  --kb-muted-soft: rgba(116, 107, 95, 0.68);
-  --kb-cyan: #2d8f84;
-  --kb-cyan-2: #3aa99b;
-  --kb-cyan-3: #1d6f66;
-  --kb-danger: #b64558;
-  --kb-danger-2: #8f2f40;
-  --kb-honey: #b1842e;
-  --kb-honey-2: #916a22;
-  --kb-honey-3: #604617;
+  --kb-card: #fbf8f1;
+  --kb-card-hover: #ffffff;
+  --kb-line: rgba(54, 46, 30, 0.10);
+  --kb-line-strong: rgba(54, 46, 30, 0.16);
+  --kb-fg: #221d14;
+  --kb-muted: #867d6e;
+  --kb-muted-soft: rgba(134, 125, 110, 0.7);
+  --kb-cyan: #1d8e7c;
+  --kb-cyan-2: #1d8e7c;
+  --kb-cyan-3: #166b5d;
+  --kb-danger: #c0524d;
+  --kb-danger-2: #8f3a36;
+  --kb-honey: #b07f1c;
+  --kb-honey-2: #936811;
+  --kb-honey-3: #6b4d12;
   border-color: rgba(79, 68, 52, 0.12);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(245, 242, 235, 0.94)),
@@ -3769,6 +3930,7 @@
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls select,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls input,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardActionButton,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardOptions > summary,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardToggle {
   border-color: rgba(79, 68, 52, 0.14);
@@ -3825,4 +3987,535 @@
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workBoardControls label > span,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .kanbanCardId {
   color: var(--kb-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   "THE COMB" SKIN — fr- work-board redesign applied 1:1 to the live board.
+   Appended override layer scoped to .workBoardPanel so it wins over the
+   legacy hardcoded board styling above without editing those rules.
+   Matches: HivemindOS Work - The Comb.html (fr-work-card.jsx / fr-tokens.css).
+   ══════════════════════════════════════════════════════════════════════ */
+.workBoardPanel {
+  --fc-bg-soft: #101116;
+  --fc-panel: #14161c;
+  --fc-panel-2: #181b22;
+  --fc-line: rgba(238, 232, 220, 0.07);
+  --fc-line-2: rgba(238, 232, 220, 0.13);
+  --fc-line-3: rgba(238, 232, 220, 0.20);
+  --fc-fg: #f3f0e9;
+  --fc-fg-2: #a7a39a;
+  --fc-fg-3: #76726a;
+  --fc-fg-4: #545049;
+  --fc-honey: #e7b45c;
+  --fc-honey-soft: rgba(231, 180, 92, 0.13);
+  --fc-honey-line: rgba(231, 180, 92, 0.32);
+  --fc-live: #6fcdba;
+  --fc-live-soft: rgba(111, 205, 186, 0.14);
+  --fc-danger: #e58e85;
+  --fc-danger-soft: rgba(229, 142, 133, 0.13);
+  --fc-radius: 14px;
+  --fc-radius-sm: 9px;
+  --fc-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+  font-family: "Geist", "Inter", system-ui, sans-serif;
+  background: linear-gradient(180deg, #101116, #0c0d11) !important;
+  box-shadow: none !important;
+  border-color: var(--fc-line) !important;
+  border-radius: 12px !important;
+}
+.workBoardPanel .workBoardHeader { border-bottom-color: var(--fc-line) !important; }
+
+/* board + columns */
+.workBoardPanel .kanbanBoard {
+  grid-template-columns: repeat(auto-fit, minmax(252px, 1fr)) !important;
+  gap: 12px !important;
+}
+.workBoardPanel .kanbanColumn {
+  gap: 0 !important;
+  border: 1px solid var(--fc-line) !important;
+  border-radius: var(--fc-radius) !important;
+  background: color-mix(in srgb, var(--fc-panel) 55%, transparent) !important;
+  background-image: none !important;
+  padding: 14px 0 6px !important;
+}
+.workBoardPanel .kanbanColumn:hover {
+  border-color: var(--fc-line-2) !important;
+  background: color-mix(in srgb, var(--fc-panel) 64%, transparent) !important;
+  background-image: none !important;
+}
+.workBoardPanel .kanbanColumn[data-drop],
+.workBoardPanel .kanbanColumn.dragOver {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey-soft) !important;
+}
+
+/* column header — flat row, no boxed panel */
+.workBoardPanel .kanbanColumnHeader {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 14px !important;
+  gap: 6px 10px !important;
+  align-items: center !important;
+}
+.workBoardPanel .kanbanColumnHeader h3 {
+  font-family: "Space Grotesk", system-ui, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+  color: var(--fc-fg) !important;
+}
+.workBoardPanel .kanbanColumnHeader p {
+  margin-top: 5px !important;
+  color: var(--fc-fg-3) !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+.workBoardPanel .kanbanColumnDot {
+  width: 8px !important;
+  height: 8px !important;
+  margin-top: 0 !important;
+  box-shadow: none !important;
+}
+.workBoardPanel .kanbanColumnDot.ideas { background: #76726a !important; }
+.workBoardPanel .kanbanColumnDot.ready { background: #a7a39a !important; }
+.workBoardPanel .kanbanColumnDot.working { background: var(--fc-live) !important; }
+.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-danger) !important; }
+.workBoardPanel .kanbanColumnDot.done { background: var(--fc-honey) !important; }
+.workBoardPanel .kanbanColumnDot.archived { background: #545049 !important; }
+.workBoardPanel .kanbanColumnCount {
+  min-width: auto !important;
+  height: auto !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 999px !important;
+  background: var(--fc-panel-2) !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  padding: 1px 8px !important;
+}
+.workBoardPanel .kanbanAddColumnTask {
+  width: 26px !important;
+  height: 26px !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanAddColumnTask:hover {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey-soft) !important;
+  color: var(--fc-honey) !important;
+}
+.workBoardPanel .kanbanCards { padding: 12px 12px 4px !important; gap: 10px !important; }
+
+/* quick-add composer — match the flat Comb board skin */
+.workBoardPanel .kanbanInlineAdd {
+  --quick-add-accent: var(--lane-accent, var(--fc-live));
+  gap: 8px !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--quick-add-accent) 7%, transparent), transparent 58px),
+    var(--fc-panel) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--quick-add-accent) 20%, transparent) !important;
+  padding: 8px !important;
+}
+.workBoardPanel .kanbanInlineAdd:focus-within,
+.workBoardPanel .kanbanInlineAdd:has([aria-expanded="true"]) {
+  border-color: color-mix(in srgb, var(--quick-add-accent) 34%, var(--fc-line-3)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--quick-add-accent) 10%, transparent), transparent 58px),
+    var(--fc-panel) !important;
+}
+.workBoardPanel .kanbanInlineAddMeta {
+  justify-content: flex-start !important;
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanInlineAddMeta .kanbanMachinePicker {
+  max-width: 100%;
+}
+.workBoardPanel .kanbanInlineAddMeta .kanbanMachinePicker > button {
+  max-width: 100%;
+  min-height: 26px;
+  border-color: var(--fc-line-2) !important;
+  background: var(--fc-panel-2) !important;
+  color: var(--fc-fg-3) !important;
+  justify-content: space-between;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.workBoardPanel .kanbanInlineAddMeta .kanbanMachinePicker > button:hover,
+.workBoardPanel .kanbanInlineAddMeta .kanbanMachinePicker > button:focus-visible {
+  border-color: color-mix(in srgb, var(--quick-add-accent) 34%, var(--fc-line-3)) !important;
+  color: var(--fc-fg) !important;
+  outline: none;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="chatComposerField"]) {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-bg-soft) !important;
+  box-shadow: none !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="chatComposerField"]:focus-within) {
+  border-color: color-mix(in srgb, var(--quick-add-accent) 36%, var(--fc-line-3)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--quick-add-accent) 12%, transparent) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="chatComposerField"] textarea) {
+  min-height: 86px !important;
+  max-height: 160px !important;
+  color: var(--fc-fg) !important;
+  font-family: "Space Grotesk", system-ui, sans-serif !important;
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  padding: 11px 11px 42px !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="chatComposerField"] textarea::placeholder) {
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="composerTools"]) {
+  min-height: 32px !important;
+  margin-top: -39px !important;
+  padding: 0 7px 7px !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="composerIconButton"]) {
+  width: 28px !important;
+  height: 28px !important;
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="composerIconButton"]:hover:not(:disabled)),
+.workBoardPanel .kanbanInlineAdd :global([class*="composerIconButton"]:focus-visible) {
+  border-color: var(--fc-line-3) !important;
+  background: var(--fc-panel-2) !important;
+  color: var(--fc-fg) !important;
+  outline: none !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="composerIconButton"][class*="recording"]) {
+  border-color: color-mix(in srgb, var(--fc-danger) 34%, transparent) !important;
+  background: var(--fc-danger-soft) !important;
+  color: var(--fc-danger) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([data-bee-send]),
+.workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]) {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey-soft) !important;
+  color: var(--fc-honey) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([data-bee-send]:hover:not(:disabled)),
+.workBoardPanel .kanbanInlineAdd :global([data-bee-send]:focus-visible),
+.workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]:hover:not(:disabled)),
+.workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]:focus-visible) {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey) !important;
+  color: var(--fc-bg-soft) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([data-bee-send]:disabled),
+.workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]:disabled) {
+  border-color: var(--fc-line-2) !important;
+  background: transparent !important;
+  color: var(--fc-fg-4) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentTray"]) {
+  gap: 5px !important;
+  padding: 7px 7px 0 !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentPill"]) {
+  max-width: 100% !important;
+  border-color: var(--fc-line-2) !important;
+  border-radius: 7px !important;
+  background: var(--fc-panel-2) !important;
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentPill"] strong) {
+  color: var(--fc-fg) !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentPill"] small) {
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentMenu"]) {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-panel-2) !important;
+  box-shadow: var(--fc-shadow) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentMenu"] button) {
+  border-radius: 7px !important;
+  color: var(--fc-fg) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentMenu"] button:hover:not(:disabled)) {
+  background: var(--fc-honey-soft) !important;
+  color: var(--fc-honey) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentMenu"] svg) {
+  color: var(--fc-fg-3) !important;
+}
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentMenu"] strong),
+.workBoardPanel .kanbanInlineAdd :global([class*="attachmentMenu"] small) {
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+/* cards — flat fr surface */
+.workBoardPanel .kanbanCard {
+  gap: 9px !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-panel) !important;
+  box-shadow: none !important;
+  padding: 12px 13px 11px !important;
+}
+.workBoardPanel .kanbanCard:hover,
+.workBoardPanel .kanbanCard:focus-visible {
+  border-color: var(--fc-line-3) !important;
+  background: var(--fc-panel) !important;
+  box-shadow: var(--fc-shadow) !important;
+  transform: translateY(-1px) !important;
+}
+.workBoardPanel .kanbanCard.active {
+  border-color: var(--fc-honey-line) !important;
+  background: color-mix(in srgb, var(--fc-honey) 5%, var(--fc-panel)) !important;
+  box-shadow: 0 0 0 1px var(--fc-honey-line) !important;
+}
+.workBoardPanel .kanbanCard.working { box-shadow: none !important; }
+.workBoardPanel .kanbanCard.stale {
+  position: relative;
+  background: var(--fc-panel) !important;
+  box-shadow: none !important;
+}
+.workBoardPanel .kanbanCard.stale::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 11px;
+  bottom: 11px;
+  width: 2px;
+  border-radius: 99px;
+  background: var(--fc-danger);
+}
+
+/* card title + id */
+.workBoardPanel .kanbanCardTitle {
+  font-family: "Space Grotesk", system-ui, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.32 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--fc-fg) !important;
+}
+.workBoardPanel .kanbanCardId {
+  color: var(--fc-fg-4) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10.5px !important;
+}
+
+/* priority pill */
+.workBoardPanel .priorityPill {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 9.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  padding: 3px 8px !important;
+}
+.workBoardPanel .priorityPill.high,
+.workBoardPanel .priorityPill.urgent,
+.workBoardPanel .priorityPill.needs-human,
+.workBoardPanel .priorityPill.stale {
+  border-color: color-mix(in srgb, var(--fc-danger) 42%, transparent) !important;
+  background: var(--fc-danger-soft) !important;
+  color: var(--fc-danger) !important;
+}
+.workBoardPanel .priorityPill.ready,
+.workBoardPanel .priorityPill.working,
+.workBoardPanel .priorityPill.normal {
+  border-color: color-mix(in srgb, var(--fc-live) 36%, transparent) !important;
+  background: var(--fc-live-soft) !important;
+  color: var(--fc-live) !important;
+}
+.workBoardPanel .priorityPill.done {
+  border-color: var(--fc-honey-line) !important;
+  background: var(--fc-honey-soft) !important;
+  color: var(--fc-honey) !important;
+}
+.workBoardPanel .priorityPill.ideas {
+  border-color: var(--fc-line-2) !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+}
+
+/* machine + attachment chips */
+.workBoardPanel .kanbanMachineLabel,
+.workBoardPanel .kanbanMachinePicker > button,
+.workBoardPanel .kanbanCardAttachmentButton,
+.workBoardPanel .kanbanCardMoveFabs button {
+  border: 1px solid var(--fc-line-2) !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  border-radius: 7px !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10.5px !important;
+}
+.workBoardPanel .kanbanMachineLabel:hover,
+.workBoardPanel .kanbanMachinePicker > button:hover,
+.workBoardPanel .kanbanCardAttachmentButton:hover {
+  border-color: var(--fc-line-3) !important;
+  color: var(--fc-fg) !important;
+}
+
+/* message body + terminal */
+.workBoardPanel .kanbanMessageRow { border-top: 1px solid var(--fc-line) !important; }
+.workBoardPanel .kanbanCardMarkdown {
+  color: var(--fc-fg-2) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+.workBoardPanel .kanbanCardTerminal {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-bg-soft) !important;
+}
+.workBoardPanel .kanbanCardTerminal code { color: var(--fc-live) !important; }
+
+/* controls / filters bar */
+.workBoardPanel .workBoardControls select,
+.workBoardPanel .workBoardControls input,
+.workBoardPanel .workBoardActionButton,
+.workBoardPanel .workBoardOptions > summary,
+.workBoardPanel .workBoardToggle {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-panel-2) !important;
+  color: var(--fc-fg) !important;
+  font-family: "Geist", "Inter", system-ui, sans-serif !important;
+  font-size: 12.5px !important;
+}
+.workBoardPanel .workBoardControls select:hover,
+.workBoardPanel .workBoardControls input:hover,
+.workBoardPanel .workBoardActionButton:hover,
+.workBoardPanel .workBoardOptions > summary:hover,
+.workBoardPanel .workBoardToggle:hover {
+  border-color: var(--fc-line-3) !important;
+  background: var(--fc-panel-2) !important;
+}
+.workBoardPanel .workBoardControls select:focus,
+.workBoardPanel .workBoardControls input:focus,
+.workBoardPanel .workBoardActionButton:focus-visible,
+.workBoardPanel .workBoardToggle:focus-within {
+  border-color: var(--fc-honey-line) !important;
+  box-shadow: 0 0 0 3px var(--fc-honey-soft) !important;
+}
+.workBoardPanel .workBoardControls label > span,
+.workBoardPanel .monoCap {
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10px !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+}
+
+/* sync pill */
+.workBoardPanel .kanbanSyncPill {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10.5px !important;
+}
+.workBoardPanel .kanbanSyncPill.synced {
+  border-color: color-mix(in srgb, var(--fc-live) 30%, transparent) !important;
+  color: var(--fc-live) !important;
+}
+.workBoardPanel .kanbanSyncPill.local {
+  border-color: var(--fc-honey-line) !important;
+  color: var(--fc-honey) !important;
+}
+
+/* bulk bar */
+.workBoardPanel .kanbanBulkBar {
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: var(--fc-radius-sm) !important;
+  background: var(--fc-panel-2) !important;
+}
+
+/* light theme — re-point the Comb tokens to warm paper */
+:global(:root[data-theme="hive-light"]) .workBoardPanel {
+  --fc-bg-soft: #f6f2e9;
+  --fc-panel: #fbf8f1;
+  --fc-panel-2: #f4efe4;
+  --fc-line: rgba(54, 46, 30, 0.10);
+  --fc-line-2: rgba(54, 46, 30, 0.16);
+  --fc-line-3: rgba(54, 46, 30, 0.26);
+  --fc-fg: #221d14;
+  --fc-fg-2: #5e574b;
+  --fc-fg-3: #867d6e;
+  --fc-fg-4: #a59b89;
+  --fc-honey: #b07f1c;
+  --fc-honey-soft: rgba(176, 127, 28, 0.12);
+  --fc-honey-line: rgba(176, 127, 28, 0.34);
+  --fc-live: #1d8e7c;
+  --fc-live-soft: rgba(29, 142, 124, 0.12);
+  --fc-danger: #c0524d;
+  --fc-danger-soft: rgba(192, 82, 77, 0.12);
+  background: linear-gradient(180deg, #fbf8f1, #f1ede3) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryItem {
+  border-color: var(--fc-line-2);
+  background: color-mix(in srgb, var(--fc-panel) 88%, transparent);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryMeta span,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryMeta time {
+  color: var(--fc-fg-3);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistorySummaryLine:hover,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistorySummaryLine:focus-visible {
+  background: rgba(29, 142, 124, 0.06);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryChevron,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryRowState span {
+  border-color: var(--fc-line-2);
+  background: var(--fc-panel-2);
+  color: var(--fc-fg-3);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryDetailsBody {
+  border-top-color: var(--fc-line);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryAreas code,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryMarkdown code,
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryDetailFacts code {
+  border-color: color-mix(in srgb, var(--fc-live) 22%, transparent);
+  background: rgba(29, 142, 124, 0.08);
+  color: var(--fc-live);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryRowState span[data-kind="verified"] {
+  border-color: color-mix(in srgb, var(--fc-live) 26%, transparent);
+  background: var(--fc-live-soft);
+  color: var(--fc-live);
+}
+
+:global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryRowState span[data-kind="commit"] {
+  border-color: var(--fc-honey-line);
+  background: var(--fc-honey-soft);
+  color: var(--fc-honey);
 }

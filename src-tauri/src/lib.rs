@@ -15,17 +15,20 @@ use tauri::{Manager, RunEvent};
 use tauri::Runtime;
 
 mod brain;
+mod dashboard_state;
 mod desktop_navigation;
 mod deliverables;
 mod env;
 mod fleet;
 mod kanban;
 mod memory;
+mod obsidian;
 mod phone;
 mod runtime_files;
 mod runtime_usage;
 mod scheduler;
 mod setup;
+mod wallet_export;
 
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
@@ -37,6 +40,27 @@ use std::process::Stdio;
 
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Build a `Command` for a background/probe spawn that must NOT pop a console
+/// window on Windows. On Windows a plain `Command` flashes a black console
+/// window every time it runs; for one-off opens that's a blink, but for
+/// repeated probes it's a strobe. The native_setup_status command alone fires
+/// ~12 `where` probes per call, polled every 4s while setup finishes, which
+/// looked like "black screens popping up constantly" on a real Windows box.
+/// Routes every background/polled spawn through CREATE_NO_WINDOW. No-op off
+/// Windows. Do NOT use this for spawns that are *meant* to open a window (the
+/// setup terminal, "open in Terminal", reveal-in-Explorer).
+pub(crate) fn hidden_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    #[allow(unused_mut)]
+    let mut command = Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    command
+}
+
 // The embedded Next dashboard binds IPv4 loopback only (127.0.0.1 — NOT
 // "localhost", which resolves to IPv6 ::1 and breaks the IPv4 forwarder dial).
 // A paired phone reaches it over the tailnet via spawn_tailnet_forwarder, which
@@ -70,13 +94,14 @@ struct NativeCacheEntry {
 
 struct NativeServerState {
     child: Mutex<Option<Child>>,
-    // The claw gateway, when this app hosts it as a child process (Stage 1 of
-    // the signed-agent file-access work). None when the headless launchd agent
-    // owns it (the default).
-    gateway_child: Mutex<Option<Child>>,
     port: Mutex<Option<u16>>,
     dashboard_token: Mutex<Option<String>>,
     cache: Mutex<HashMap<String, NativeCacheEntry>>,
+    // Set (to the error + server-log tail) when the embedded server fails to
+    // boot. The loading shell polls `native_boot_status`; when this is Some it
+    // shows an interactive error screen (log + Copy + Retry) instead of a frozen
+    // loader. Always present (debug builds never set it; the shell is release-only).
+    boot_error: Mutex<Option<String>>,
 }
 
 #[cfg(not(debug_assertions))]
@@ -90,10 +115,10 @@ impl NativeServerState {
     fn new() -> Self {
         Self {
             child: Mutex::new(None),
-            gateway_child: Mutex::new(None),
             port: Mutex::new(None),
             dashboard_token: Mutex::new(None),
             cache: Mutex::new(HashMap::new()),
+            boot_error: Mutex::new(None),
         }
     }
 }
@@ -448,39 +473,6 @@ fn reveal_system_path(path: &Path) -> Result<(), String> {
     }
 }
 
-/// Open macOS System Settings → Privacy & Security → Full Disk Access so the
-/// user can grant the always-on gateway access to protected folders
-/// (Downloads/Desktop/Documents) for phone file browsing. TCC is macOS-only; a
-/// no-op elsewhere.
-#[tauri::command]
-fn open_full_disk_access_settings() -> Result<(), String> {
-    if cfg!(target_os = "macos") {
-        open_system_target(
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-        )
-    } else {
-        Ok(())
-    }
-}
-
-/// Reveal, in Finder, the exact gateway binary that needs Full Disk Access, so
-/// the user can drag it into the list. The installer records the path in
-/// ~/.hivemindos/claw/gateway-fda-target.txt; fall back to the claw install dir
-/// if it's missing.
-#[tauri::command]
-fn reveal_gateway_for_full_disk_access() -> Result<(), String> {
-    let home = home_dir().ok_or("Could not resolve home directory")?;
-    let claw_dir = home.join(".hivemindos").join("claw");
-    let target = std::fs::read_to_string(claw_dir.join("gateway-fda-target.txt"))
-        .ok()
-        .map(|raw| raw.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
-        .filter(|p| p.exists())
-        .unwrap_or(claw_dir);
-    reveal_system_path(&target)
-}
-
 fn contains_dashboard_auth_helper(path: &Path) -> bool {
     path.join("package.json").exists() && path.join("scripts").join("dashboard-auth.mjs").exists()
 }
@@ -591,6 +583,7 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
     let commit = optional_build_value(env!("HIVEMINDOS_GIT_COMMIT"));
     let branch = optional_build_value(env!("HIVEMINDOS_GIT_BRANCH"));
     let latest_commit = commit;
+    let source_build = env!("HIVEMINDOS_TAURI_SOURCE_BUILD") == "true";
     let app_dir = std::env::current_dir()
         .ok()
         .map(|path| path.display().to_string());
@@ -608,6 +601,9 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
         "latestShortCommit": latest_commit.map(short_commit),
         "updateCommand": "Install the latest HivemindOS desktop build.",
         "runtime": "tauri",
+        "packaged": !cfg!(debug_assertions),
+        "sourceBuild": source_build,
+        "releaseChannel": if source_build { "source" } else { "release" },
         "phase": if cfg!(debug_assertions) {
             "phase-1-dev"
         } else if port.is_some() {
@@ -685,6 +681,7 @@ fn join_scoped_payload(handle: std::thread::ScopedJoinHandle<'_, Value>) -> Valu
 fn dashboard_bootstrap(
     state: tauri::State<NativeServerState>,
     max_age_ms: Option<u64>,
+    allow_private_filesystem: Option<bool>,
     vault_path: Option<String>,
     kanban_folder: Option<String>,
     kanban_board: Option<String>,
@@ -701,10 +698,20 @@ fn dashboard_bootstrap(
     let runtime_usage_key = cache_key("runtime-usage", &[]);
     let scheduler_key = cache_key("scheduler", &[vault_path.as_deref(), scheduled_folder.as_deref()]);
     let desktop_status = desktop_status(state.clone());
+    let allow_private_filesystem = allow_private_filesystem.unwrap_or(false);
+
+    if !allow_private_filesystem {
+        return serde_json::json!({
+            "ok": true,
+            "checkedAt": chrono::Utc::now().to_rfc3339(),
+            "desktopStatus": desktop_status,
+            "appVersion": desktop_status,
+        });
+    }
 
     std::thread::scope(|scope| {
         let state_ref = &state;
-        let hive_env = scope.spawn(move || cached_payload(state_ref, hive_key, || native_payload(env::hive_env_read())));
+        let hive_env = scope.spawn(move || cached_payload(state_ref, hive_key, || native_payload(env::hive_env_read(Some(true)))));
         let fleet_apps = scope.spawn(move || cached_payload(state_ref, fleet_key, || native_payload(fleet::fleet_apps_cache(max_age_ms))));
         let tailscale_devices = scope.spawn(move || cached_payload(state_ref, tailscale_key, || native_payload(fleet::tailscale_devices())));
         let kanban_read = {
@@ -774,7 +781,16 @@ fn reserve_local_port() -> Result<u16, Box<dyn std::error::Error>> {
 
 #[cfg(not(debug_assertions))]
 fn wait_for_native_server(port: u16) -> Result<(), String> {
-    let deadline = Instant::now() + Duration::from_secs(25);
+    // 60s, not 25s: a fresh Windows install with Defender real-time scanning the
+    // just-extracted node.exe + thousands of node_modules files can take far
+    // longer than 25s on the very first boot. The window shows the animated
+    // loading shell the entire time (not a frozen blank), so a longer ceiling
+    // only helps. Overridable for CI/tests via HIVEMINDOS_NATIVE_BOOT_TIMEOUT_SECS.
+    let timeout_secs = std::env::var("HIVEMINDOS_NATIVE_BOOT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(60);
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
 
     while Instant::now() < deadline {
         if TcpStream::connect((NATIVE_BIND_HOST, port)).is_ok() {
@@ -783,11 +799,13 @@ fn wait_for_native_server(port: u16) -> Result<(), String> {
         std::thread::sleep(Duration::from_millis(150));
     }
 
-    Err(format!("Next server did not open port {port} within 25 seconds"))
+    Err(format!("Next server did not open port {port} within {timeout_secs} seconds"))
 }
 
 #[cfg(not(debug_assertions))]
-fn packaged_next_server_paths(app: &tauri::App) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
+fn packaged_next_server_paths<R: Runtime>(
+    app: &impl Manager<R>,
+) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
     let resource_dir = app.path().resource_dir()?;
     let server_dir = resource_dir.join("resources").join("hivemindos-next");
     let server_js = server_dir.join("server.js");
@@ -803,7 +821,7 @@ fn packaged_next_server_paths(app: &tauri::App) -> Result<(PathBuf, PathBuf), Bo
 }
 
 #[cfg(not(debug_assertions))]
-fn has_packaged_next_server(app: &tauri::App) -> bool {
+fn has_packaged_next_server<R: Runtime>(app: &impl Manager<R>) -> bool {
     packaged_next_server_paths(app)
         .map(|(server_js, node_path)| server_js.exists() && node_path.exists())
         .unwrap_or(false)
@@ -857,8 +875,54 @@ fn forward_between(client: TcpStream, upstream: TcpStream) {
     let _ = pump.join();
 }
 
+/// Where the embedded Next server's captured stdout/stderr is written.
 #[cfg(not(debug_assertions))]
-fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Box<dyn std::error::Error>> {
+fn native_server_log_path() -> Option<PathBuf> {
+    home_dir().map(|home| home.join(".hivemindos").join("native-server.log"))
+}
+
+/// Open (truncate) the server log and return stdout/stderr handles pointed at
+/// it. Best-effort: if the file can't be opened, fall back to /dev/null so a
+/// logging hiccup never blocks the server from starting.
+#[cfg(not(debug_assertions))]
+fn native_server_log_stdio(path: Option<&Path>) -> (Stdio, Stdio) {
+    let Some(path) = path else {
+        return (Stdio::null(), Stdio::null());
+    };
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    match fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)
+    {
+        Ok(file) => match file.try_clone() {
+            Ok(clone) => (Stdio::from(file), Stdio::from(clone)),
+            Err(_) => (Stdio::from(file), Stdio::null()),
+        },
+        Err(_) => (Stdio::null(), Stdio::null()),
+    }
+}
+
+/// Read the last ~4 KB of the server log for inclusion in an error message.
+#[cfg(not(debug_assertions))]
+fn read_native_server_log_tail(path: &Path) -> String {
+    const MAX: usize = 4000;
+    match fs::read(path) {
+        Ok(bytes) => {
+            let start = bytes.len().saturating_sub(MAX);
+            String::from_utf8_lossy(&bytes[start..]).into_owned()
+        }
+        Err(_) => String::new(),
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn start_native_next_server<R: Runtime>(
+    app: &impl Manager<R>,
+) -> Result<(Child, u16, String, Option<PathBuf>), Box<dyn std::error::Error>> {
     let (server_js, node_path) = packaged_next_server_paths(app)?;
     let server_dir = server_js
         .parent()
@@ -873,8 +937,29 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Bo
 
     let auth = ensure_native_dashboard_auth(app)?;
     let port = reserve_local_port()?;
+
+    // Capture the embedded server's own stdout/stderr. They used to both go to
+    // /dev/null, so a boot failure (a JIT-blocked node, a missing standalone
+    // trace file, a wrong-arch binary) left no trace and surfaced only as an
+    // opaque "port did not open in 25s". Now the cause lands in
+    // ~/.hivemindos/native-server.log and in the returned error.
+    let log_path = native_server_log_path();
+    let (stdout, stderr) = native_server_log_stdio(log_path.as_deref());
+
     let mut command = Command::new(&node_path);
     command
+        // Node realpath-resolves the main-module path at startup. On Windows,
+        // Tauri's resource_dir() yields an extended-length (verbatim) path
+        // (\\?\C:\...\server.js) and Node's realpathSync chokes on it with
+        // "EISDIR: illegal operation on a directory, lstat 'C:'", so the
+        // embedded server never starts and every launch lands on the
+        // "couldn't start its local server" page (Windows has been broken this
+        // way since the first embedded release). --preserve-symlinks-main skips
+        // that realpath of the entry script, fixing it while keeping the
+        // verbatim prefix (so deep node_modules paths stay long-path-safe).
+        // Reproduced + fix-validated on windows-latest. Harmless on macOS/Linux
+        // (the standalone's main path has no symlink to preserve).
+        .arg("--preserve-symlinks-main")
         .arg(&server_js)
         .current_dir(&server_dir)
         .env("HOSTNAME", NATIVE_BIND_HOST)
@@ -886,23 +971,117 @@ fn spawn_native_next_server(app: &tauri::App) -> Result<(Child, u16, String), Bo
         .env(DASHBOARD_DEVICE_TOKEN_KEY, &auth.token)
         .env(NATIVE_BOOTSTRAP_TOKEN_KEY, &auth.bootstrap_token)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(stdout)
+        .stderr(stderr);
 
     #[cfg(target_os = "windows")]
     command.creation_flags(CREATE_NO_WINDOW);
 
-    let mut child = command.spawn()?;
+    // Spawn only — do NOT block here waiting for the port to open. Blocking was
+    // done synchronously inside setup() on the main thread, which froze the whole
+    // app (no paint) for the 1-3s the Node server takes to boot. The readiness
+    // wait now happens on a background thread (await_native_server_then_navigate)
+    // so the window can paint the loading shell instantly.
+    let child = command.spawn()?;
 
-    if let Err(message) = wait_for_native_server(port) {
-        let _ = child.kill();
-        return Err(message.into());
+    Ok((child, port, auth.bootstrap_token, log_path))
+}
+
+/// Background-thread half of the embedded boot: wait for the Node server's port
+/// to open, then swap the loading shell for the real dashboard (or show the
+/// error page if it never comes up). Never blocks the main thread.
+#[cfg(not(debug_assertions))]
+fn await_native_server_then_navigate(
+    handle: tauri::AppHandle,
+    port: u16,
+    token: String,
+    log_path: Option<PathBuf>,
+) {
+    match wait_for_native_server(port) {
+        Ok(()) => {
+            // Publish port + token only now that the server is actually ready, then
+            // bridge it onto the tailnet for a paired phone and navigate to the app.
+            // The Child is already in NativeServerState (stored in setup() before
+            // this thread launched), so a quit during the boot wait still kills it.
+            let state = handle.state::<NativeServerState>();
+            if let Ok(mut guard) = state.port.lock() {
+                *guard = Some(port);
+            }
+            if let Ok(mut guard) = state.dashboard_token.lock() {
+                *guard = Some(token.clone());
+            }
+            spawn_tailnet_forwarder(port);
+            navigate_main_window_to_server(&handle, port, &token);
+        }
+        Err(message) => {
+            // Reclaim the child from shared state to capture its exit status and
+            // kill it. Surface why: if node already exited, include its status;
+            // always append the tail of its own log so the real error (not just
+            // "port never opened") reaches native-panic.log and the user.
+            let state = handle.state::<NativeServerState>();
+            let mut child = state.child.lock().ok().and_then(|mut guard| guard.take());
+            let exit = child.as_mut().and_then(|c| c.try_wait().ok().flatten());
+            if let Some(c) = child.as_mut() {
+                let _ = c.kill();
+            }
+            let exited = match exit {
+                Some(status) => format!(" (node process exited: {status})"),
+                None => " (node process still running but unresponsive)".to_string(),
+            };
+            let tail = log_path
+                .as_deref()
+                .map(read_native_server_log_tail)
+                .unwrap_or_default();
+            let where_log = log_path
+                .as_deref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "no log path".to_string());
+            let full = format!(
+                "embedded Next server did not become ready: {message}{exited}\n--- embedded server log tail ({where_log}) ---\n{tail}"
+            );
+            eprintln!("HivemindOS: {full}");
+            append_native_panic_log(
+                "embedded server start",
+                &full,
+                "kept app alive; showed local-server error page",
+            );
+            // Publish the failure to shared state. The loading shell is still on
+            // screen (we did NOT navigate away), and its native_boot_status poll
+            // picks this up and swaps to the interactive error screen (log + Copy
+            // + Retry) — which also reports the failure to telemetry from the
+            // webview, the one place that can reach the network here. Re-acquire
+            // state inline so its borrow drops with this statement (the `state`
+            // binding above is borrowed for the child reclaim and would outlive
+            // the lock guard otherwise -> E0597).
+            if let Ok(mut guard) = handle.state::<NativeServerState>().boot_error.lock() {
+                *guard = Some(full);
+            }
+        }
     }
+}
 
-    // Expose the loopback dashboard to a paired phone over the tailnet only.
-    spawn_tailnet_forwarder(port);
-
-    Ok((child, port, auth.bootstrap_token))
+/// Navigate the main window from the loading shell to the booted Node server,
+/// carrying the one-time bootstrap token in the URL fragment. Marshalled to the
+/// main thread because it is called from the boot background thread.
+#[cfg(not(debug_assertions))]
+fn navigate_main_window_to_server(handle: &tauri::AppHandle, port: u16, token: &str) {
+    let token = token.to_string();
+    let inner = handle.clone();
+    let _ = handle.run_on_main_thread(move || {
+        if let Some(window) = inner.get_webview_window("main") {
+            match url::Url::parse(&format!("http://{NATIVE_BIND_HOST}:{port}/")) {
+                Ok(mut url) => {
+                    url.set_fragment(Some(&format!("hivemindos_native_bootstrap={token}")));
+                    if let Err(error) = window.navigate(url) {
+                        eprintln!("HivemindOS: could not navigate to embedded server: {error}");
+                    }
+                }
+                Err(error) => {
+                    eprintln!("HivemindOS: bad embedded server URL: {error}");
+                }
+            }
+        }
+    });
 }
 
 /// The system-Tailscale IPv4 a paired phone should dial — the SAME address the
@@ -916,45 +1095,18 @@ fn native_pairing_host() -> Option<String> {
     fleet::self_tailnet_ipv4()
 }
 
-/// Whether this desktop app should host the claw gateway as a child process
-/// (instead of the headless launchd agent). OFF by default — opt in with the
-/// `HIVEMINDOS_APP_HOSTS_GATEWAY` env var (1/true/on) or a
-/// `~/.hivemindos/app-hosts-gateway` marker file. When on, the gateway's file
-/// access is attributed to this (signed) app, so macOS shows one-click "Allow"
-/// prompts for Downloads/Desktop/Documents instead of a silent EPERM.
-///
-/// NOTE: while opting in, stop the launchd gateway first
-/// (`launchctl bootout gui/$(id -u)/com.hivemindos.claw-backend`) so two
-/// gateways don't fight over the port. Stage 3 makes this the permanent path.
-fn app_should_host_gateway() -> bool {
-    if let Ok(raw) = std::env::var("HIVEMINDOS_APP_HOSTS_GATEWAY") {
-        match raw.trim().to_ascii_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" | "force" => return true,
-            "0" | "false" | "no" | "off" | "" => return false,
-            _ => {}
-        }
-    }
-    home_dir()
-        .map(|home| home.join(".hivemindos").join("app-hosts-gateway").exists())
-        .unwrap_or(false)
-}
-
-fn app_forces_host_gateway() -> bool {
-    std::env::var("HIVEMINDOS_APP_HOSTS_GATEWAY")
-        .map(|raw| raw.trim().eq_ignore_ascii_case("force"))
-        .unwrap_or(false)
-}
-
-/// The port the app-hosted gateway binds and the phone probes. NOT 5000 — that's
+/// The port the app-signed gateway login item binds and the phone probes. NOT 5000 — that's
 /// permanently held by Apple's ControlCenter / AirPlay receiver.
+#[cfg(target_os = "macos")]
 const HOSTED_GATEWAY_PORT: u16 = 5001;
 
+#[cfg(target_os = "macos")]
 fn claw_gateway_already_listening() -> bool {
     // Probe the GATEWAY port (5001), NOT 5000. Port 5000 is permanently held by
     // Apple's ControlCenter / AirPlay receiver, so probing it is a false positive
     // ("a gateway is already up") — which made the app skip hosting and leave the
     // phone on the launchd gateway (external claw, no Downloads grant). The hosted
-    // gateway binds 5001 (see spawn_hosted_gateway), so that's the port to check.
+    // gateway binds 5001 (see install_gateway_login_item), so that's the port to check.
     TcpStream::connect(("127.0.0.1", HOSTED_GATEWAY_PORT)).is_ok()
 }
 
@@ -965,6 +1117,7 @@ fn claw_gateway_already_listening() -> bool {
 /// line proves it is OUR installed gateway is stopped; any other squatter
 /// keeps the port and we fall back to skipping the host (never steal a port
 /// from an unrelated project). Returns true when the port is free to bind.
+#[cfg(target_os = "macos")]
 fn stop_stale_hosted_gateway() -> bool {
     let port_arg = format!("tcp:{HOSTED_GATEWAY_PORT}");
     let pids = Command::new("/usr/sbin/lsof")
@@ -979,7 +1132,10 @@ fn stop_stale_hosted_gateway() -> bool {
             .output()
             .map(|out| String::from_utf8_lossy(&out.stdout).to_string())
             .unwrap_or_default();
-        if !command_line.contains(".hivemindos/claw/backend") {
+        let is_our_gateway = command_line.contains(".hivemindos/claw")
+            || command_line.contains("hivemind-gateway-host")
+            || command_line.contains(GATEWAY_LOGIN_ITEM_LABEL);
+        if !is_our_gateway {
             eprintln!(
                 "HivemindOS: port {HOSTED_GATEWAY_PORT} is held by a non-gateway process (pid {pid}); leaving it alone"
             );
@@ -1010,62 +1166,227 @@ fn stop_stale_hosted_gateway() -> bool {
     false
 }
 
-/// Spawn the installed claw gateway launcher as a child of this app. Returns
-/// None if the launcher is missing (claw not installed) or the spawn fails.
-fn spawn_hosted_gateway() -> Option<Child> {
-    let launcher = home_dir()?
-        .join(".hivemindos")
-        .join("claw")
-        .join("launch-gateway.sh");
-    if !launcher.exists() {
-        eprintln!(
-            "HivemindOS: app-hosted gateway requested but launcher is missing at {}",
-            launcher.display()
-        );
-        return None;
+/// launchd label for the app-signed gateway login item.
+#[cfg(target_os = "macos")]
+const GATEWAY_LOGIN_ITEM_LABEL: &str = "com.hivemindos.claw-gateway";
+
+/// The current user's numeric uid via `id -u` (libc::getuid would need `unsafe`,
+/// which the crate forbids). Used to address the `gui/<uid>` launchd domain.
+#[cfg(target_os = "macos")]
+fn current_uid() -> Option<String> {
+    let output = Command::new("id").arg("-u").output().ok()?;
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
     }
-    let mut command = Command::new("/bin/bash");
-    command.arg(&launcher).stdin(std::process::Stdio::null());
-    // Prefer the `claw` binary bundled INSIDE this signed app (Contents/MacOS/claw,
-    // next to our own executable). A binary nested in the app bundle inherits the
-    // app's TCC identity, so the agent's file writes to protected folders are
-    // covered by the one-click "Allow <folder>" grant. An EXTERNAL claw
-    // (~/.hivemindos/claw/bin/claw) is its own TCC responsible process and gets
-    // denied. launch-gateway.sh honors an inherited CLAW_BINARY; it falls back to
-    // the installed copy when this isn't bundled (e.g. a dev build).
-    if let Some(bundled_claw) = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("claw")))
-        .filter(|path| path.exists())
-    {
-        command.env("CLAW_BINARY", bundled_claw);
-    }
-    // Pin the gateway to the port the phone probes (5001). 5000 is taken by Apple's
-    // ControlCenter, so the backend's EADDRINUSE walk-up would otherwise reach 5001
-    // only by luck. Making it deterministic means this signed, app-hosted gateway is
-    // the single owner of the port — the launchd gateway (external claw, denied
-    // ~/Downloads) can't win the race. launch-gateway.sh sets no PORT, so it inherits.
-    command.env("PORT", HOSTED_GATEWAY_PORT.to_string());
-    match command.spawn() {
-        Ok(child) => {
-            eprintln!("HivemindOS: hosting claw gateway as a child (pid {})", child.id());
-            Some(child)
+}
+
+#[cfg(target_os = "macos")]
+fn xml_escape(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// Boot out and remove the legacy headless launchd gateway
+/// (`com.hivemindos.claw-backend`). It runs the EXTERNAL claw/node, which is its
+/// own TCC subject and is denied protected folders — the exact failure this
+/// migration removes — and would otherwise co-bind 5001 with the new login item.
+/// Idempotent.
+#[cfg(target_os = "macos")]
+fn retire_legacy_launchd_gateway() {
+    let Some(uid) = current_uid() else {
+        return;
+    };
+    let service = format!("gui/{uid}/com.hivemindos.claw-backend");
+    let _ = Command::new("launchctl").args(["bootout", &service]).status();
+    // bootout is async — the legacy node (which binds 5001) may still be tearing
+    // down. WAIT for it to fully unload before we let the new login item bind
+    // 5001, so the two gateways can't double-bind / race the port. The legacy job
+    // has KeepAlive, so freeing the port by-PID before it's unloaded would just
+    // let it respawn.
+    for _ in 0..8 {
+        let still_loaded = Command::new("launchctl")
+            .args(["print", &service])
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false);
+        if !still_loaded {
+            break;
         }
-        Err(error) => {
-            eprintln!("HivemindOS: failed to spawn hosted gateway: {error}");
-            None
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    let _ = Command::new("launchctl").args(["disable", &service]).status();
+    if let Some(home) = home_dir() {
+        let plist = home
+            .join("Library")
+            .join("LaunchAgents")
+            .join("com.hivemindos.claw-backend.plist");
+        let _ = fs::remove_file(&plist);
+    }
+}
+
+/// Register (or refresh) the claw gateway as a launchd login item that runs the
+/// app-signed in-bundle helper (Contents/MacOS/hivemind-gateway-host). Because
+/// the helper carries the app's code identity, the gateway's file access is
+/// attributed to HivemindOS (one-click "Allow" prompts that persist across
+/// updates), while launchd RunAtLoad+KeepAlive keep it running at login and after
+/// the window closes. Idempotent: re-points the plist at the current app path on
+/// every launch (so app updates take effect) and relaunches via the same
+/// bootout → wait → bootstrap → kickstart sequence as install-claw-backend.sh.
+#[cfg(target_os = "macos")]
+fn install_gateway_login_item() -> Result<(), String> {
+    let helper = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("hivemind-gateway-host")))
+        .filter(|path| path.exists())
+        .ok_or("bundled gateway-host helper not found next to the app executable")?;
+
+    let home = home_dir().ok_or("Could not resolve home directory")?;
+    let launch_agents = home.join("Library").join("LaunchAgents");
+    let logs_dir = home.join("Library").join("Logs");
+    let _ = fs::create_dir_all(&launch_agents);
+    let _ = fs::create_dir_all(&logs_dir);
+    let plist_path = launch_agents.join(format!("{GATEWAY_LOGIN_ITEM_LABEL}.plist"));
+    let out_log = logs_dir.join("hivemindos-claw-gateway.out.log");
+    let err_log = logs_dir.join("hivemindos-claw-gateway.err.log");
+
+    let plist = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>{label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{helper}</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>{out}</string>
+  <key>StandardErrorPath</key>
+  <string>{err}</string>
+</dict>
+</plist>
+"#,
+        label = GATEWAY_LOGIN_ITEM_LABEL,
+        helper = xml_escape(&helper.to_string_lossy()),
+        out = xml_escape(&out_log.to_string_lossy()),
+        err = xml_escape(&err_log.to_string_lossy()),
+    );
+    fs::write(&plist_path, plist).map_err(|error| format!("write login item plist: {error}"))?;
+
+    let uid = current_uid().ok_or("Could not resolve current uid")?;
+    let domain = format!("gui/{uid}");
+    let service = format!("{domain}/{GATEWAY_LOGIN_ITEM_LABEL}");
+    let plist_str = plist_path.to_string_lossy().to_string();
+
+    // bootout is async: wait for the old instance to fully unload before
+    // bootstrapping, else the bootstrap silently no-ops and the job stays down.
+    let _ = Command::new("launchctl").args(["bootout", &service]).status();
+    for _ in 0..8 {
+        let still_loaded = Command::new("launchctl")
+            .args(["print", &service])
+            .output()
+            .map(|out| out.status.success())
+            .unwrap_or(false);
+        if !still_loaded {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
+    let bootstrapped = Command::new("launchctl")
+        .args(["bootstrap", &domain, &plist_str])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    if !bootstrapped {
+        let _ = Command::new("launchctl").args(["load", &plist_str]).status();
+    }
+    let _ = Command::new("launchctl")
+        .args(["kickstart", "-k", &service])
+        .status();
+    Ok(())
+}
+
+fn stop_native_server(state: tauri::State<NativeServerState>) {
+    // Only the embedded dashboard server is a child of this app. The gateway now
+    // runs as a launchd login item (com.hivemindos.claw-gateway) so it persists
+    // after the window closes and at login — quitting the app must NOT kill it.
+    if let Ok(mut guard) = state.child.lock() {
+        if let Some(mut child) = guard.take() {
+            let _ = child.kill();
+            let _ = child.wait();
         }
     }
 }
 
-fn stop_native_server(state: tauri::State<NativeServerState>) {
-    for lock in [&state.child, &state.gateway_child] {
-        if let Ok(mut guard) = lock.lock() {
+/// Boot status the loading shell polls. While the embedded server is still
+/// coming up this is "booting"; if it failed, "failed" plus the error + server
+/// log tail so the shell can render an interactive error screen (Copy + Retry).
+/// (Once the server is ready the window has navigated to it, so the shell never
+/// observes a "ready" here.)
+#[tauri::command]
+fn native_boot_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
+    let detail = state.boot_error.lock().ok().and_then(|guard| guard.clone());
+    match detail {
+        Some(detail) => serde_json::json!({ "state": "failed", "detail": detail }),
+        None => serde_json::json!({ "state": "booting" }),
+    }
+}
+
+/// Re-attempt the embedded server boot from the error screen's Retry button,
+/// WITHOUT restarting the whole app (the prior "rerun setup" menu item did
+/// nothing because it needed the server). Kills any old child, clears the prior
+/// error, and re-runs the spawn + background readiness wait (which navigates to
+/// the dashboard on success, or re-sets boot_error on failure).
+#[tauri::command]
+fn retry_native_server(app: tauri::AppHandle) -> serde_json::Value {
+    #[cfg(not(debug_assertions))]
+    {
+        let state = app.state::<NativeServerState>();
+        if let Ok(mut guard) = state.boot_error.lock() {
+            *guard = None;
+        }
+        if let Ok(mut guard) = state.child.lock() {
             if let Some(mut child) = guard.take() {
                 let _ = child.kill();
                 let _ = child.wait();
             }
         }
+        match start_native_next_server(&app) {
+            Ok((child, port, token, log_path)) => {
+                if let Ok(mut guard) = state.child.lock() {
+                    *guard = Some(child);
+                }
+                let handle = app.clone();
+                std::thread::spawn(move || {
+                    await_native_server_then_navigate(handle, port, token, log_path);
+                });
+                serde_json::json!({ "ok": true })
+            }
+            Err(error) => {
+                let message = format!("retry could not start the embedded server: {error}");
+                if let Ok(mut guard) = state.boot_error.lock() {
+                    *guard = Some(message.clone());
+                }
+                serde_json::json!({ "ok": false, "error": message })
+            }
+        }
+    }
+    #[cfg(debug_assertions)]
+    {
+        let _ = app;
+        serde_json::json!({ "ok": false, "error": "retry is only available in packaged builds" })
     }
 }
 
@@ -1075,6 +1396,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_liquid_glass::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(NativeServerState::new())
         .menu(desktop_navigation::app_menu)
         .on_menu_event(|app, event| {
@@ -1088,35 +1412,31 @@ pub fn run() {
             }
             desktop_navigation::restore_window_state(_app.handle());
 
-            // Stage 1: optionally host the claw gateway as a child of this
-            // (signed) app, so its filesystem access is attributed to
-            // HivemindOS and macOS shows one-click folder prompts. Opt-in;
-            // the default leaves the headless launchd gateway untouched.
-            if app_should_host_gateway() {
-                // Dev builds (and `force`) RESTART a stale gateway instead of
-                // adopting it, so every `pnpm tauri dev` run serves the current
-                // backend code. Release builds keep the adopt rule: a healthy
-                // production gateway shouldn't bounce on every app launch.
-                let restart_stale = cfg!(debug_assertions) || app_forces_host_gateway();
-                let port_free = if claw_gateway_already_listening() {
-                    if restart_stale {
-                        stop_stale_hosted_gateway()
-                    } else {
-                        eprintln!(
-                            "HivemindOS: app-hosted gateway skipped because a gateway is already listening on 127.0.0.1:5001"
-                        );
-                        false
+            // Run the claw gateway as an app-signed launchd login item
+            // (com.hivemindos.claw-gateway → Contents/MacOS/hivemind-gateway-host).
+            // It persists at login and with the window closed, AND its file access
+            // is attributed to this signed app (one-click TCC prompts, no manual
+            // Full Disk Access). Only when running from a bundle that actually
+            // contains the helper (release, or a dev-codesign-runner bundle); a
+            // plain `cargo run` has no nested helper and skips this.
+            #[cfg(target_os = "macos")]
+            {
+                let helper_bundled = std::env::current_exe()
+                    .ok()
+                    .and_then(|exe| exe.parent().map(|dir| dir.join("hivemind-gateway-host")))
+                    .map(|path| path.exists())
+                    .unwrap_or(false);
+                if helper_bundled {
+                    // Remove the old headless launchd gateway (external claw, denied
+                    // protected folders) so it can't co-bind 5001.
+                    retire_legacy_launchd_gateway();
+                    // Free 5001 from any pre-migration app-hosted child still holding
+                    // it (ownership-guarded; never steals an unrelated port).
+                    if claw_gateway_already_listening() {
+                        let _ = stop_stale_hosted_gateway();
                     }
-                } else {
-                    true
-                };
-                if port_free {
-                    if let Some(child) = spawn_hosted_gateway() {
-                        if let Ok(mut guard) =
-                            _app.state::<NativeServerState>().gateway_child.lock()
-                        {
-                            *guard = Some(child);
-                        }
+                    if let Err(error) = install_gateway_login_item() {
+                        eprintln!("HivemindOS: could not register gateway login item: {error}");
                     }
                 }
             }
@@ -1125,18 +1445,47 @@ pub fn run() {
             {
                 let app = _app;
                 if has_packaged_next_server(app) {
-                    let (child, port, token) = spawn_native_next_server(app)?;
-                    let state = app.state::<NativeServerState>();
-                    *state.child.lock().map_err(|_| "Native server lock poisoned")? = Some(child);
-                    *state.port.lock().map_err(|_| "Native server port lock poisoned")? = Some(port);
-                    *state.dashboard_token.lock().map_err(|_| "Native server token lock poisoned")? = Some(token.clone());
-
-                    let window = app
-                        .get_webview_window("main")
-                        .ok_or("Missing main HivemindOS window")?;
-                    let mut url = url::Url::parse(&format!("http://{NATIVE_BIND_HOST}:{port}/"))?;
-                    url.set_fragment(Some(&format!("hivemindos_native_bootstrap={token}")));
-                    window.navigate(url)?;
+                    // A failure here must NOT crash the app. Previously `?` bubbled
+                    // the error out of setup(), so `.build(...).expect(...)` panicked
+                    // and a server that couldn't boot took the whole window down with
+                    // it. Now we log the cause (with the server's own log tail) and
+                    // show a readable error page instead of dying on launch.
+                    match start_native_next_server(app) {
+                        Ok((child, port, token, log_path)) => {
+                            // Store the Child in shared state IMMEDIATELY — before the
+                            // boot thread launches — so quitting during the 1-3s boot
+                            // window still kills it (ExitRequested -> stop_native_server
+                            // takes + kills it). The old code blocked here until ready,
+                            // so this exit window did not exist; the async boot opens it.
+                            let state = app.state::<NativeServerState>();
+                            if let Ok(mut guard) = state.child.lock() {
+                                *guard = Some(child);
+                            }
+                            // Boot WITHOUT blocking setup(): the window paints the
+                            // loading shell instantly; a background thread publishes
+                            // port+token, swaps to the real dashboard once the server
+                            // is ready (or shows the error page if it never opens).
+                            let handle = app.handle().clone();
+                            std::thread::spawn(move || {
+                                await_native_server_then_navigate(handle, port, token, log_path);
+                            });
+                        }
+                        Err(error) => {
+                            let message = format!("embedded Next server did not start: {error}");
+                            eprintln!("HivemindOS: {message}");
+                            append_native_panic_log(
+                                "embedded server start",
+                                &message,
+                                "kept app alive; showed local-server error page",
+                            );
+                            // Surface to the loading shell (still on screen) via its
+                            // native_boot_status poll -> interactive error screen.
+                            if let Ok(mut guard) = app.state::<NativeServerState>().boot_error.lock()
+                            {
+                                *guard = Some(message);
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1152,8 +1501,6 @@ pub fn run() {
             display_local_path,
             open_deliverable,
             open_project_terminal,
-            open_full_disk_access_settings,
-            reveal_gateway_for_full_disk_access,
             deliverables::list_aeon_deliverables,
             deliverables::list_aeon_outputs,
             deliverables::list_aeon_schedules,
@@ -1166,15 +1513,23 @@ pub fn run() {
             brain::brain_graph,
             env::hive_env_read,
             fleet::fleet_apps_cache,
+            fleet::fleet_discover,
             fleet::tailscale_devices,
             kanban::kanban_read,
             memory::memory_telemetry,
             phone::phone_prompts,
+            native_boot_status,
+            retry_native_server,
             runtime_files::runtime_files,
             runtime_usage::runtime_usage,
             setup::native_setup_run,
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
+            wallet_export::wallet_secret_export_save,
+            obsidian::obsidian_agents,
+            obsidian::obsidian_personal_wallets,
+            dashboard_state::dashboard_state_read,
+            dashboard_state::dashboard_state_write,
             deliverables::download_aeon_deliverable,
             deliverables::send_aeon_deliverable,
             desktop_navigation::open_route_window

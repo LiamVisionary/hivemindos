@@ -1,0 +1,19 @@
+{
+  "upstreamName": "javascript-pro",
+  "slug": "javascript-pro",
+  "label": "Javascript Pro",
+  "domain": "javascript-typescript",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/javascript-typescript/agents/javascript-pro.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent javascript-pro",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/javascript-pro",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Master modern JavaScript with ES6+, async patterns, and Node.js APIs. Handles promises, event loops, and browser/Node compatibility. Use PROACTIVELY for JavaScript optimization, async debugging, or complex JS patterns."
+}

@@ -1,0 +1,19 @@
+{
+  "upstreamName": "firmware-analyst",
+  "slug": "firmware-analyst",
+  "label": "Firmware Analyst",
+  "domain": "reverse-engineering",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/reverse-engineering/agents/firmware-analyst.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent firmware-analyst",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/firmware-analyst",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert firmware analyst specializing in embedded systems, IoT security, and hardware reverse engineering. Masters firmware extraction, analysis, and vulnerability research for routers, IoT devices, automotive systems, and industrial controllers. Use PROACTIVELY for firmware security audits, IoT penetration testing, or embedded systems research."
+}

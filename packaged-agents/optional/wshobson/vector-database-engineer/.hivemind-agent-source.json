@@ -1,0 +1,19 @@
+{
+  "upstreamName": "vector-database-engineer",
+  "slug": "vector-database-engineer",
+  "label": "Vector Database Engineer",
+  "domain": "llm-application-dev",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/llm-application-dev/agents/vector-database-engineer.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent vector-database-engineer",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/vector-database-engineer",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert in vector databases, embedding strategies, and semantic search implementation. Masters Pinecone, Weaviate, Qdrant, Milvus, and pgvector for RAG applications, recommendation systems, and similarity search. Use PROACTIVELY for vector search implementation, embedding optimization, or semantic retrieval systems."
+}

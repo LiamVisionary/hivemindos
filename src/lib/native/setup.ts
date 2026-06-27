@@ -120,36 +120,6 @@ export async function runNativeSetup(input: NativeSetupRunInput, options?: Nativ
 }
 
 /**
- * Open macOS Privacy & Security → Full Disk Access (for phone file-pairing).
- * Returns false if not running in the desktop app or the command failed.
- */
-export async function openFullDiskAccessSettings(): Promise<boolean> {
-  if (!isTauriDesktopRuntime()) return false;
-  try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("open_full_disk_access_settings");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Reveal the gateway binary in Finder so the user can drag it into the Full
- * Disk Access list. Returns false if not in the desktop app or it failed.
- */
-export async function revealGatewayForFullDiskAccess(): Promise<boolean> {
-  if (!isTauriDesktopRuntime()) return false;
-  try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("reveal_gateway_for_full_disk_access");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * This machine's system-Tailscale IPv4 — the exact address the desktop app's
  * phone bridge binds. The pairing QR must use this rather than the dashboard's
  * device list, whose "self" can be a different (hivemind-linkd embedded-tsnet)

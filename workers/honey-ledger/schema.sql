@@ -90,3 +90,12 @@ CREATE INDEX IF NOT EXISTS idx_managed_billing_workspace_agent ON managed_billin
 CREATE UNIQUE INDEX IF NOT EXISTS idx_managed_billing_idempotency
   ON managed_billing_events(workspace_id, idempotency_key)
   WHERE idempotency_key IS NOT NULL AND idempotency_key != '';
+
+CREATE TABLE IF NOT EXISTS command_nonces (
+  event_id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_command_nonces_created_at ON command_nonces(created_at);

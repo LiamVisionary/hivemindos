@@ -105,7 +105,9 @@ function relatedQueries(prompt: string) {
   const normalized = prompt.toLowerCase();
   const queries = [prompt];
   if (/\b(x|twitter|tweet|post|social)\b/.test(normalized)) {
-    queries.push("x twitter search latest news social post xurl writer");
+    const socialTerms = ["x", "twitter", "social", "post", "xurl", "writer"];
+    if (/news|latest|current|trend|research/.test(normalized)) socialTerms.push("search", "latest", "news");
+    queries.push(socialTerms.join(" "));
   }
   if (/image|picture|photo|visual|render|generate|generation/.test(normalized)) {
     queries.push("image generation comfyui zimage imagegen visual creative");
@@ -119,7 +121,7 @@ function relatedQueries(prompt: string) {
   if (/brain|memory|vault|rag|style|obsidian|notes/.test(normalized)) {
     queries.push("shared brain obsidian rag memory style guide skill vault");
   }
-  if (/agent|worker|specialist|runtime|workflow|skill|aeon/.test(normalized)) {
+  if (/agent|worker|specialist|runtime|workflow|aeon/.test(normalized)) {
     queries.push("agent worker runtime capabilities skill workflow aeon scheduler");
   }
   return [...new Set(queries)].slice(0, 5);
@@ -144,9 +146,19 @@ function itemSearchText(item: ContextIndexItem) {
   return `${item.id} ${item.title} ${item.summary} ${item.tags.join(" ")} ${item.aliases?.join(" ") ?? ""} ${item.path ?? ""} ${item.route ?? ""}`.toLowerCase();
 }
 
+function promptAllowsBaseNews(prompt: string) {
+  return /\bbase\b|base chain|onchain|crypto|blockchain|news|latest|current|trend|research|ecosystem/.test(prompt.toLowerCase());
+}
+
+function isPromptSpecificNoise(prompt: string, text: string) {
+  if (!promptAllowsBaseNews(prompt) && /base[-\s]?news|base ecosystem|base chain|onchain/.test(text)) return true;
+  return false;
+}
+
 function boostForPrompt(prompt: string, item: ContextIndexItem) {
   const normalized = prompt.toLowerCase();
   const text = itemSearchText(item);
+  if (isPromptSpecificNoise(prompt, text)) return -220;
   let boost = 0;
   if (/kanban|task|tasks|board|work|priority|prioritized|brief|action item|todo|unfinished/.test(normalized)) {
     if (/kanban|orchestrator|task|work-history|work board|board/.test(text)) boost += 160;
@@ -167,6 +179,40 @@ function boostForPrompt(prompt: string, item: ContextIndexItem) {
     boost += 90;
   }
   return boost;
+}
+
+function promptIntentPatterns(prompt: string) {
+  const normalized = prompt.toLowerCase();
+  const patterns: RegExp[] = [];
+  if (/kanban|task|tasks|board|work|priority|prioritized|brief|action item|todo|unfinished/.test(normalized)) {
+    patterns.push(/kanban-orchestrator|\/api\/kanban|\/api\/orchestrator|kanban|task|work board/);
+  }
+  if (/telegram|message|send|deliver|delivery|notify|notification/.test(normalized)) {
+    patterns.push(/hermes send|telegram|send|message|notification|delivery/);
+  }
+  if (/brain|memory|vault|rag|style|obsidian|notes/.test(normalized)) {
+    patterns.push(/obsidian|brain|vault|rag|memory|note/);
+  }
+  if (/image|picture|photo|visual|render|generate|generation/.test(normalized)) {
+    patterns.push(/image|comfy|zimage|visual|render|diffusion|creative|generative/);
+  }
+  if (/\b(x|twitter|tweet|post|social)\b/.test(normalized)) {
+    patterns.push(/xurl|twitter|\bx\b|social|post|writer|writing|caption/);
+  }
+  if (/workflow|orchestrate|sequence|handoff/.test(normalized)) {
+    patterns.push(/workflow|orchestrator|sequence|handoff/);
+  }
+  if (/aeon|background|recurring|schedule|cadence|autopilot/.test(normalized)) {
+    patterns.push(/aeon|background|recurring|schedule|cadence|autopilot/);
+  }
+  return patterns;
+}
+
+function matchesPromptIntent(prompt: string, text: string) {
+  if (isPromptSpecificNoise(prompt, text)) return false;
+  const patterns = promptIntentPatterns(prompt);
+  if (!patterns.length) return true;
+  return patterns.some((pattern) => pattern.test(text));
 }
 
 function iconForItem(item: ContextIndexItem): FusionCapabilityIcon {
@@ -250,30 +296,23 @@ function prioritizeCapabilities(items: ContextIndexItem[], prompt: string) {
   const selected: ContextIndexItem[] = [];
   const seen = new Set<string>();
   const normalized = prompt.toLowerCase();
+  const intentPatterns = promptIntentPatterns(prompt);
   const pick = (pattern: RegExp) => {
-    const item = items.find((candidate) => !seen.has(candidate.id) && pattern.test(itemSearchText(candidate)));
+    const item = items.find((candidate) => {
+      const text = itemSearchText(candidate);
+      return !seen.has(candidate.id) && pattern.test(text) && !isPromptSpecificNoise(prompt, text);
+    });
     if (!item) return;
     selected.push(item);
     seen.add(item.id);
   };
-  if (/kanban|task|tasks|board|work|priority|prioritized|brief|action item|todo|unfinished/.test(normalized)) {
-    pick(/kanban-orchestrator|\/api\/kanban|\/api\/orchestrator|kanban|task|work board/);
-  }
-  if (/telegram|message|send|deliver|delivery|notify|notification/.test(normalized)) {
-    pick(/hermes send|telegram/);
-  }
-  if (/brain|memory|vault|rag|style|obsidian|notes/.test(normalized)) {
-    pick(/obsidian|brain|vault|rag|memory|note/);
-  }
-  if (/image|picture|photo|visual|render|generate|generation/.test(normalized)) {
-    pick(/image|comfy|zimage|visual|render|diffusion/);
-  }
-  if (/\b(x|twitter|tweet|post|social)\b/.test(normalized)) {
-    pick(/xurl|twitter|\bx\b|social|post/);
-  }
+  for (const pattern of intentPatterns) pick(pattern);
   const wantedKinds: ContextIndexKind[] = ["skill", "tool-schema", "connected-app", "app-endpoint", "runtime", "api-route"];
   for (const kind of wantedKinds) {
-    const item = items.find((candidate) => candidate.kind === kind && !seen.has(candidate.id));
+    const item = items.find((candidate) => {
+      const text = itemSearchText(candidate);
+      return candidate.kind === kind && !seen.has(candidate.id) && matchesPromptIntent(prompt, text);
+    });
     if (!item) continue;
     selected.push(item);
     seen.add(item.id);
@@ -281,12 +320,17 @@ function prioritizeCapabilities(items: ContextIndexItem[], prompt: string) {
   for (const item of items) {
     if (selected.length >= MAX_CAPABILITIES) break;
     if (seen.has(item.id)) continue;
+    const text = itemSearchText(item);
+    if (!matchesPromptIntent(prompt, text)) continue;
     selected.push(item);
     seen.add(item.id);
   }
   const ensure = (pattern: RegExp, index: number) => {
-    if (selected.some((item) => pattern.test(itemSearchText(item)))) return;
-    const item = items.find((candidate) => !seen.has(candidate.id) && pattern.test(itemSearchText(candidate)));
+    if (selected.some((item) => pattern.test(itemSearchText(item)) && !isPromptSpecificNoise(prompt, itemSearchText(item)))) return;
+    const item = items.find((candidate) => {
+      const text = itemSearchText(candidate);
+      return !seen.has(candidate.id) && pattern.test(text) && !isPromptSpecificNoise(prompt, text);
+    });
     if (!item) return;
     selected.splice(Math.min(index, selected.length), 0, item);
     seen.add(item.id);
@@ -300,6 +344,15 @@ function prioritizeCapabilities(items: ContextIndexItem[], prompt: string) {
   if (/kanban|task|tasks|board|work|priority|prioritized|brief|action item|todo|unfinished/.test(normalized)) {
     ensure(/kanban-orchestrator|\/api\/kanban|\/api\/orchestrator|kanban|task|work board/, 0);
   }
+  if (selected.length < MAX_CAPABILITIES && !intentPatterns.length) {
+    for (const item of items) {
+      if (selected.length >= MAX_CAPABILITIES) break;
+      if (seen.has(item.id)) continue;
+      if (isPromptSpecificNoise(prompt, itemSearchText(item))) continue;
+      selected.push(item);
+      seen.add(item.id);
+    }
+  }
   return selected.slice(0, MAX_CAPABILITIES);
 }
 
@@ -312,7 +365,10 @@ function fusedCapabilities(capabilities: FusionCapabilityRecord[], prompt: strin
   const selected: FusionCapabilityRecord[] = [];
   const selectedIds = new Set<string>();
   const pick = (pattern: RegExp) => {
-    const capability = capabilities.find((candidate) => !selectedIds.has(candidate.id) && pattern.test(capabilitySearchText(candidate)));
+    const capability = capabilities.find((candidate) => {
+      const text = capabilitySearchText(candidate);
+      return !selectedIds.has(candidate.id) && pattern.test(text) && !isPromptSpecificNoise(prompt, text);
+    });
     if (!capability) return;
     selected.push(capability);
     selectedIds.add(capability.id);
@@ -330,10 +386,11 @@ function fusedCapabilities(capabilities: FusionCapabilityRecord[], prompt: strin
     pick(/image|comfy|zimage|visual|render|diffusion/);
   }
   if (/\b(x|twitter|tweet|post|social)\b/.test(normalized)) {
-    pick(/xurl|twitter|\bx\b|social|post/);
+    pick(/xurl|twitter|\bx\b|social|post|writer|writing|caption/);
   }
   const preferred = capabilities.filter((capability) =>
-    ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime"].includes(capability.kind),
+    ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime"].includes(capability.kind)
+    && matchesPromptIntent(prompt, capabilitySearchText(capability)),
   );
   for (const capability of preferred.length ? preferred : capabilities) {
     if (selected.length >= MAX_FUSED) break;
@@ -411,6 +468,13 @@ function markdownForSkill(input: {
     "",
   ].join("\n");
 }
+
+export const fusionSkillTestHooks = {
+  capabilityFromItem,
+  fusedCapabilities,
+  prioritizeCapabilities,
+  relatedQueries,
+};
 
 export async function createFusionSkill(input: {
   prompt: string;

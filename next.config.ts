@@ -38,7 +38,24 @@ function detectedTailnetDevOrigins() {
 }
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true,
+  // Dev-only knob: React StrictMode double-invokes every render and effect under
+  // `next dev`, which roughly doubles the cost of a dashboard view switch.
+  // Production builds never double-invoke, so this flag has ZERO effect on the
+  // packaged app — it only changes the dev experience. StrictMode is a known
+  // dev-perf drag for this large dashboard, so default it OFF for snappier dev;
+  // set HIVEMINDOS_DEV_STRICT=1 to restore the double-invoke checks when hunting
+  // effect-cleanup / render-purity bugs.
+  reactStrictMode: process.env.HIVEMINDOS_DEV_STRICT === "1",
+  // Dev-only chrome: hide Next's floating tools badge so it doesn't cover
+  // dashboard UI while still keeping compile/runtime error overlays enabled.
+  devIndicators: false,
+  // The embedded build compiles all ~155 API routes and is memory-heavy; this
+  // trades a little build time to cut webpack's peak memory so it stays under
+  // the heap cap on CI runners (avoids the 8 GB OOM). Next 15.2+.
+  experimental:
+    isTauriBuild || isTauriStaticBuild
+      ? { webpackBuildWorker: true, webpackMemoryOptimizations: true }
+      : undefined,
   // Pin file tracing to the repo so Next never infers a wider root and walks
   // directories it cannot read (Windows profile junctions EPERM on scandir).
   outputFileTracingRoot: projectRoot,
@@ -53,6 +70,18 @@ const nextConfig: NextConfig = {
   },
   distDir: isTauriDev ? tauriDevDistDir : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
   output: isTauriStaticBuild ? "export" : isTauriBuild ? "standalone" : undefined,
+  serverExternalPackages: isTauriBuild
+    ? [
+        "@noble/curves",
+        "@noble/hashes",
+        "@scure/bip39",
+        "@solana/kit",
+        "@solana/spl-token",
+        "@solana/web3.js",
+        "bs58",
+        "viem",
+      ]
+    : undefined,
   // Tauri packaging builds (static export + embedded server) don't gate on
   // type errors — those are enforced in dev and the standalone `build`/
   // `lint` scripts + CI. The embedded build additionally compiles paths the
@@ -78,13 +107,21 @@ const nextConfig: NextConfig = {
           "./.git/**/*",
           "./.next/**/*",
           "./.next-tauri/**/*",
+          "./.next-tauri-build/**/*",
+          "./.next-tauri-static-build/**/*",
           "./artifacts/**/*",
           "./bin/**/*",
+          "./coverage/**/*",
           "./docs/**/*",
           "./emoji-atlas-visual-asset/**/*",
           "./emoji-site/**/*",
+          "./out/**/*",
+          "./promo-videos/**/*",
+          "./release-assets/**/*",
           "./skills/**/*",
           "./src-tauri/**/*",
+          "./tmp/**/*",
+          "./vendor/**/*",
           "./workers/**/*",
           "./*.md",
           "./*.log",

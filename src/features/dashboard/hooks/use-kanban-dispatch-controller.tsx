@@ -1066,6 +1066,14 @@ export function useKanbanDispatchController(props: any) {
     );
     if (pollable.length === 0) return;
     const poll = () => {
+      // Pause while the OS window is hidden/minimized — nobody is watching the
+      // board, and each pollable task forks a sqlite3 subprocess via
+      // /api/chat/agent-session. Resumes on visibilitychange (below). Matches the
+      // app-wide useVisibilityAwarePolling pattern. NOTE: intentionally NOT scoped
+      // by activeView — this poll also detects stalled sessions (-> needs-human)
+      // and syncs agent messages, which must keep working when the user is off the
+      // board (e.g. dispatched a task, then switched to chat).
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       pollable.forEach((task) => {
         const lastPoll = kanbanSessionPollRef.current.get(task.id) ?? 0;
         if (Date.now() - lastPoll < 4_000) return;
@@ -1075,7 +1083,12 @@ export function useKanbanDispatchController(props: any) {
     };
     poll();
     const timer = window.setInterval(poll, 6_000);
-    return () => window.clearInterval(timer);
+    const handleVisibility = () => { if (document.visibilityState === "visible") poll(); };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayAgents, hydrated, kanbanBoard]);
 

@@ -2,9 +2,13 @@
 
 import type { Dispatch, SetStateAction } from "react";
 import { openNativeDirectory } from "@/lib/native/filesystem";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus } from "@/lib/native/setup";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { DEFAULT_RESEARCH_METHOD } from "@/lib/config/research-methods";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { mruRuntime, rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { DEFAULT_MOBILE_AGENT_MODEL, mobileAgentMachineKey, mobileAgentProfileFromRecord, type MobileAgentHostRecord, type MobileAgentRecord } from "@/lib/types/mobile-agents";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
@@ -177,13 +181,53 @@ export function useAgentController(props: UseAgentControllerProps) {
       .catch(() => undefined);
   }
 
-  function openAgentCreationModal(machine: MachineGroup, runtime?: AgentRuntime, name = "") {
+  async function openAgentCreationModal(machine: MachineGroup, runtime?: AgentRuntime, name = "") {
     const mobileMachine = isMobileMachineOs(machine.os);
     if (!mobileMachine && (machine.collector !== "ready" || !machine.collectorUrl)) {
-      openSetupModal(machine);
-      return;
+      // The self machine is already running this app, so the remote "Connect
+      // machine" wizard (git clone + setup on another computer) makes no sense
+      // for it. In the Tauri desktop, re-open the native first-run setup wizard
+      // instead — it has the real per-OS install path (incl. Windows setup.ps1)
+      // and is the same flow the "Re-run Setup..." desktop menu emits, so the
+      // persistently-mounted NativeFirstRunOnboarding is listening. Off-desktop
+      // (dev/browser) the native event has no listener, so fall back to the
+      // setup modal (now Windows/self-aware).
+      if (machine.self && isTauriDesktopRuntime()) {
+        // The Fleet's collector status comes from an HTTP probe of the local
+        // bridge (server-side, in the bundled dashboard server). On Windows
+        // that can read "not ready" while the bridge is actually running —
+        // stale (probed before the bridge came up), or because the HTTP probe
+        // path differs from a raw TCP connect. Before bouncing back to setup,
+        // consult the SAME native local-bridge check onboarding uses to decide
+        // setup finished (a direct TCP connect to the collector port via
+        // native_setup_status). If the bridge is up, the Fleet status is just
+        // stale: fall through to the real add-agent flow. Only re-open setup
+        // when the bridge is genuinely down.
+        const bridgeUp = machine.collectorUrl
+          ? await readNativeSetupStatus()
+              .then((status) =>
+                Boolean(
+                  status?.checks?.find((check) => check.id === "collector")
+                    ?.installed,
+                ),
+              )
+              .catch(() => false)
+          : false;
+        if (!bridgeUp) {
+          void import("@tauri-apps/api/event")
+            .then(({ emit }) => emit(NATIVE_SETUP_RERUN_EVENT))
+            .catch(() => openSetupModal(machine));
+          return;
+        }
+        // Bridge is up — fall through and open the real add-agent modal.
+      } else {
+        openSetupModal(machine);
+        return;
+      }
     }
-    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? selectedAgent?.runtime ?? "hermes";
+    // Adding an agent (not editing): prefer the runtime the user reached for
+    // most recently, falling back to the selected agent's runtime, then Hermes.
+    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? mruRuntime() ?? selectedAgent?.runtime ?? "hermes";
     setAgentRoleModalId("");
     setAgentRenameEditing(false);
     setAgentRuntimeFolderEditing(false);
@@ -221,8 +265,10 @@ export function useAgentController(props: UseAgentControllerProps) {
       customWorkerClass: undefined,
       customWorkerClasses: [],
       selectedCustomWorkerClassId: undefined,
-      skillProfilePrompt: renderBeeSoulTemplate(defaultWorkerPreset.soulTemplate, defaultName),
+      soulPrompt: renderBeeSoulTemplate(defaultWorkerPreset.soulTemplate, defaultName),
+      skillProfilePrompt: defaultWorkerPreset.taskProfile,
       preferredSkillSlugs: defaultWorkerPreset.skillSlugs,
+      researchMethod: defaultWorkerClass === "research" ? DEFAULT_RESEARCH_METHOD : undefined,
       useSharedVault: true,
       aeonLocalPath: autopilotDefaults ? baseAgent.aeonLocalPath || autopilotDefaults.localPathFallback : undefined,
       aeonRepo: autopilotDefaults ? baseAgent.aeonRepo || "" : undefined,
@@ -334,6 +380,28 @@ export function useAgentController(props: UseAgentControllerProps) {
         },
       });
     }
+    const veniceStatus = data.status.providerStatus?.venice;
+    if (agent.id && agent.provider === "venice" && veniceStatus) {
+      updateAgentProfile(agent.id, {
+        venice: {
+          ...(agent.venice ?? {}),
+          walletVaultId: veniceStatus.walletVaultId || agent.venice?.walletVaultId || "",
+          walletAddress: veniceStatus.walletAddress || agent.venice?.walletAddress || "",
+          walletNetwork: veniceStatus.walletNetwork || agent.venice?.walletNetwork || "",
+          apiKeyEnvName: veniceStatus.apiKeyEnvName || agent.venice?.apiKeyEnvName || "",
+          lastBalanceUsd: veniceStatus.balanceUsd || agent.venice?.lastBalanceUsd || "",
+          lastDiemBalanceUsd: veniceStatus.diemBalanceUsd || agent.venice?.lastDiemBalanceUsd || "",
+          lastMinimumTopUpUsd: veniceStatus.minimumTopUpUsd || agent.venice?.lastMinimumTopUpUsd || "",
+          lastSuggestedTopUpUsd: veniceStatus.suggestedTopUpUsd || agent.venice?.lastSuggestedTopUpUsd || "",
+          lastCheckedAt: veniceStatus.checkedAt || agent.venice?.lastCheckedAt || "",
+          lastTestStatus: veniceStatus.status || agent.venice?.lastTestStatus || "",
+          lastStatusMessage: veniceStatus.message ?? "",
+          lastHttpStatus: veniceStatus.httpStatus ?? agent.venice?.lastHttpStatus,
+          lastModelCount: veniceStatus.modelCount ?? agent.venice?.lastModelCount,
+          lastKeyPresent: veniceStatus.keyPresent ?? agent.venice?.lastKeyPresent,
+        },
+      });
+    }
     if (runtimeIntegrationFeature(data.status.runtime).updateRequirementDetail === "hermes") {
       setHermesUpdateRequiredDetail(hermesUpdateDetail(data.status));
     }
@@ -387,7 +455,12 @@ export function useAgentController(props: UseAgentControllerProps) {
         machineName: mobileMachineTailnetName(machine),
         name: draftName,
         model: agentCreateDraft.model?.trim() || DEFAULT_MOBILE_AGENT_MODEL,
-        systemPrompt: agentCreateDraft.skillProfilePrompt?.trim() || undefined,
+        systemPrompt: [
+          agentCreateDraft.soulPrompt?.trim(),
+          agentCreateDraft.skillProfilePrompt?.trim()
+            ? `Suited for: ${agentCreateDraft.skillProfilePrompt.trim()}`
+            : "",
+        ].filter(Boolean).join("\n\n") || undefined,
       }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as { ok?: boolean; agent?: MobileAgentRecord; error?: string } | null;
@@ -396,12 +469,18 @@ export function useAgentController(props: UseAgentControllerProps) {
       setRuntimeIntegrationMessage(data?.error ?? "Could not create the phone-hosted agent on that machine.");
       return;
     }
-    const next = normalizeAgentProfile(mobileAgentProfileFromRecord(data.agent, {
-      machineName: machine.name,
-      // Phones expose no collector URL; the machine key (the raw fleet device
-      // name) is what the dashboard groups agents onto machines with.
-      telemetryUrl: machine.collectorUrl || machine.key,
-    }));
+    const next = normalizeAgentProfile({
+      ...mobileAgentProfileFromRecord(data.agent, {
+        machineName: machine.name,
+        // Phones expose no collector URL; the machine key (the raw fleet device
+        // name) is what the dashboard groups agents onto machines with.
+        telemetryUrl: machine.collectorUrl || machine.key,
+      }),
+      soulPrompt: agentCreateDraft.soulPrompt,
+      skillProfilePrompt: agentCreateDraft.skillProfilePrompt,
+      preferredSkillSlugs: agentCreateDraft.preferredSkillSlugs,
+      researchMethod: agentCreateDraft.researchMethod,
+    });
     setAgents((current) => [...current.filter((agent) => agent.id !== next.id), next]);
     setDiscoveredMachines((current) => current.map((discovered) => (
       discovered.device.name === machine.key || discovered.device.name === machine.name
@@ -442,6 +521,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
       adaptiveRouting: agentCreateDraft.adaptiveRouting,
       usePod: agentCreateDraft.usePod,
+      venice: agentCreateDraft.venice,
       calls: agentCreateDraft.calls,
       localDataDir: autopilotRuntime ? autopilotLocalPath : baseAgent.localDataDir || "",
       aeonLocalPath: autopilotRuntime ? autopilotLocalPath : undefined,
@@ -455,9 +535,11 @@ export function useAgentController(props: UseAgentControllerProps) {
       customWorkerClass: agentCreateDraft.customWorkerClass,
       customWorkerClasses: agentCreateDraft.customWorkerClasses,
       selectedCustomWorkerClassId: agentCreateDraft.selectedCustomWorkerClassId,
+      soulPrompt: agentCreateDraft.soulPrompt,
       skillProfilePrompt: agentCreateDraft.skillProfilePrompt,
       preferredSkillSlugs: agentCreateDraft.preferredSkillSlugs,
       taskPreferences: agentCreateDraft.taskPreferences,
+      researchMethod: agentCreateDraft.researchMethod,
       useSharedVault: agentCreateDraft.useSharedVault,
     };
     setRuntimeIntegrationBusy("create-agent");
@@ -494,6 +576,7 @@ export function useAgentController(props: UseAgentControllerProps) {
         : machine
     )));
     setSelectedAgentId(next.id);
+    rememberMruRuntime(runtime);
     closeAgentSettingsModal();
     void onAgentCreated?.(next);
     const postCreateAction = runtimePostCreateAction(runtime);

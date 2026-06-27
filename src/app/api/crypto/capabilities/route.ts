@@ -25,6 +25,10 @@ type CryptoCapabilityBody = {
   body?: unknown;
   recipientAddress?: string;
   amount?: number | string;
+  fromChain?: string;
+  toChain?: string;
+  fromAsset?: string;
+  toAsset?: string;
 };
 
 export async function GET(request: NextRequest) {
@@ -62,6 +66,10 @@ export async function POST(request: NextRequest) {
       body: body.body,
       recipientAddress: body.recipientAddress?.trim() || undefined,
       amount: body.amount,
+      fromChain: body.fromChain?.trim() || undefined,
+      toChain: body.toChain?.trim() || undefined,
+      fromAsset: body.fromAsset?.trim() || undefined,
+      toAsset: body.toAsset?.trim() || undefined,
     };
 
     if (body.action === "prepare") {

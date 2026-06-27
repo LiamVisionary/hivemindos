@@ -7,15 +7,15 @@ import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-co
 import { createFileReferenceAttachments } from "@/features/chat/chat-file-references";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
-import { handleDashboardHandoffTaskCommand } from "./dashboard-handoff-command";
-import { handleDashboardSwarmCommand, handleDashboardSwarmSimCommand } from "./dashboard-swarm-command";
+import { handleStatusChatDashboardCommand } from "./status-chat-dashboard-command-router";
 import { compactRepeatedAssistantText, extractGeneratedKanbanTask, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, yieldChatPaint } from "./status-chat-input-helpers";
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
 import { appendChatProcessState, finishChatStreamState, markChatStreamChunkState, startChatStreamState } from "./status-chat-stream-state";
+import { pushVoiceBands, resetVoiceBands } from "@/lib/stores/voice-bands-store";
 
 export function useStatusChatInputController(props: any) {
-  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceBands, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
+  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
   const [chatKanbanGeneration, setChatKanbanGeneration] = useState(null);
   const [chatQueue, setChatQueue] = useState([]);
   const [flushingChatQueueId, setFlushingChatQueueId] = useState("");
@@ -274,6 +274,70 @@ export function useStatusChatInputController(props: any) {
     sharedVault.vaultPath,
   ]);
 
+  // Runtime-state sync (Mechanism C). When the off-by-default toggle is on, turn
+  // on the runtime-state pull loop on THIS machine's collector and on each ready,
+  // same-owner peer that supports it (so flipping it on here syncs the fleet).
+  // When toggled off, turn the local loop back off. Deduped by collector key.
+  const runtimeStateSyncRef = useRef<Set<string>>(new Set());
+  const runtimeStateSyncPrevEnabledRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!hydrated || !sharedVault.enabled) return;
+    const enabled = sharedVault.runtimeStateSyncEnabled === true;
+    const configure = (body: Record<string, unknown>) =>
+      fetch("/api/runtimes/state-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    if (!enabled) {
+      if (runtimeStateSyncPrevEnabledRef.current === true) {
+        void configure({ enabled: false }).catch(() => {});
+      }
+      runtimeStateSyncRef.current.clear();
+      runtimeStateSyncPrevEnabledRef.current = false;
+      return;
+    }
+
+    // Ensure the local collector loop is on (once per enable).
+    if (!runtimeStateSyncRef.current.has("__local__")) {
+      runtimeStateSyncRef.current.add("__local__");
+      void configure({ enabled: true })
+        .then((res) => {
+          if (!res.ok) runtimeStateSyncRef.current.delete("__local__");
+        })
+        .catch(() => runtimeStateSyncRef.current.delete("__local__"));
+    }
+
+    // Enable on each ready, capable peer.
+    const peers = discoveredMachines.filter(
+      (machine) =>
+        machine.collector === "ready" &&
+        machine.device.online &&
+        !machine.device.self &&
+        Boolean(machine.device.collectorUrl) &&
+        machine.capabilities?.runtimeState === true,
+    );
+    peers.forEach((machine) => {
+      const key = collectorKey(machine.device.collectorUrl);
+      if (!key || runtimeStateSyncRef.current.has(key)) return;
+      runtimeStateSyncRef.current.add(key);
+      void configure({ enabled: true, collectorUrl: machine.device.collectorUrl })
+        .then((res) => {
+          if (!res.ok) runtimeStateSyncRef.current.delete(key);
+        })
+        .catch(() => runtimeStateSyncRef.current.delete(key));
+    });
+
+    runtimeStateSyncPrevEnabledRef.current = true;
+  }, [
+    collectorKey,
+    discoveredMachines,
+    hydrated,
+    sharedVault.enabled,
+    sharedVault.runtimeStateSyncEnabled,
+  ]);
+
   async function inspectBrainNode(node: BrainGraphNode) {
     if (brainDragMovedRef.current) {
       brainDragMovedRef.current = false;
@@ -333,16 +397,23 @@ export function useStatusChatInputController(props: any) {
 
   function startBrainPan(event: PointerEvent<SVGSVGElement>) {
     if (event.button !== 0) return;
+    event.preventDefault();
+    globalThis.getSelection?.()?.removeAllRanges();
     const ElementCtor = globalThis.Element;
     const target = ElementCtor && event.target instanceof ElementCtor
       ? event.target.closest("[data-brain-node-id]") as HTMLElement | null
       : null;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewBox = event.currentTarget.viewBox.baseVal;
     brainDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       panX: brainPan.x,
       panY: brainPan.y,
+      scale: brainPan.scale ?? 1,
+      unitX: rect.width ? viewBox.width / rect.width : 1,
+      unitY: rect.height ? viewBox.height / rect.height : 1,
       moved: false,
       nodeId: target?.dataset.brainNodeId ?? "",
     };
@@ -358,7 +429,11 @@ export function useStatusChatInputController(props: any) {
     if (!drag.moved && Math.hypot(dx, dy) < 4) return;
     drag.moved = true;
     brainDragMovedRef.current = true;
-    setBrainPan({ x: drag.panX - dx, y: drag.panY - dy });
+    setBrainPan({
+      x: drag.panX + dx * (drag.unitX ?? 1),
+      y: drag.panY + dy * (drag.unitY ?? 1),
+      scale: drag.scale ?? brainPan.scale ?? 1,
+    });
   }
 
   function endBrainPan(event: PointerEvent<SVGSVGElement>) {
@@ -619,7 +694,7 @@ export function useStatusChatInputController(props: any) {
     void voiceAudioContextRef.current?.close().catch(() => undefined);
     voiceAudioContextRef.current = null;
     voiceRecognitionRef.current = null;
-    setVoiceBands(Array(18).fill(0));
+    resetVoiceBands();
     setRecording(false);
     if (commitTranscript) appendVoiceTranscriptToInput();
   }
@@ -636,7 +711,15 @@ export function useStatusChatInputController(props: any) {
     voiceAudioContextRef.current = audioContext;
     const data = new Uint8Array(analyser.frequencyBinCount);
     const bands = 18;
+    // Throttle waveform store updates. The analyser ticks at ~60fps, but pushing
+    // voice bands every frame re-renders the subscribed <VoiceWaveform/> bars
+    // 60x/second for the whole recording. Sampling every 5th frame (~12fps) is
+    // visually indistinguishable for a level meter and cuts the re-render load 5x.
+    let frame = 0;
     const tick = () => {
+      voiceAnimationRef.current = window.requestAnimationFrame(tick);
+      frame = (frame + 1) % 5;
+      if (frame !== 0) return;
       analyser.getByteFrequencyData(data);
       const binSize = Math.max(1, Math.floor(data.length / bands));
       const next = Array.from({ length: bands }, (_, index) => {
@@ -645,8 +728,7 @@ export function useStatusChatInputController(props: any) {
         const average = slice.reduce((total, value) => total + value, 0) / Math.max(1, slice.length);
         return Math.min(1, average / 180);
       });
-      setVoiceBands(next);
-      voiceAnimationRef.current = window.requestAnimationFrame(tick);
+      pushVoiceBands(next);
     };
     tick();
   }
@@ -826,8 +908,12 @@ export function useStatusChatInputController(props: any) {
     const replaceActiveAssistantMessage = (items: ChatMessage[], message: ChatMessage) => {
       const next = [...items];
       const assistantIndex = findActiveAssistantIndex(next);
-      if (assistantIndex >= 0) next[assistantIndex] = withActiveProcessEvents(message);
-      else next.push(withActiveProcessEvents(message));
+      if (assistantIndex >= 0) {
+        const assistant = next[assistantIndex];
+        next[assistantIndex] = withActiveProcessEvents({ ...message, createdAt: message.createdAt ?? assistant.createdAt });
+      } else {
+        next.push(withActiveProcessEvents({ ...message, createdAt: message.createdAt ?? Date.now() }));
+      }
       return next;
     };
     const appendActiveAssistantText = (items: ChatMessage[], fullText: string) => {
@@ -855,31 +941,7 @@ export function useStatusChatInputController(props: any) {
     if (outgoingAttachments.length === 0 && outgoingDirectories.length === 0 && await handleNativeImageGenerationCommand({ rawPrompt: prompt, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey: chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey), chatAutoScrollRef, clearChatComposerDraft, appendMessage, appendPreviewMessages, setMessagesByAgent, setSelectedChatPreview })) return;
     if (dashboardCommand) {
       const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
-      const userMessage = { role: "user", content: prompt, surface: "chat" };
-      if (dashboardCommand.name === "handoff-task") {
-        await handleDashboardHandoffTaskCommand({ prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview });
-        return;
-      }
-      if (dashboardCommand.name === "swarm") {
-        await handleDashboardSwarmCommand({ agents: agents ?? [], prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, chatSetupIssue, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, sharedVault, workingDirectory: selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled });
-        return;
-      }
-      if (dashboardCommand.name === "swarm-sim") {
-        await handleDashboardSwarmSimCommand({ agents: agents ?? [], appOrigin: window.location.origin, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, chatSetupIssue, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, sharedVault, workingDirectory: selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled });
-        return;
-      }
-      const assistantMessage = { role: "assistant", content: dashboardCommand.reply, surface: "chat" };
-      appendMessage(selectedAgent.id, userMessage, selectedStorageKey);
-      appendMessage(selectedAgent.id, assistantMessage, selectedStorageKey);
-      appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [userMessage, assistantMessage]);
-      if (queuedMessage.clearComposer !== false) setText("");
-      setAttachmentError("");
-      setAttachmentMenuOpen(false);
-      setActiveView?.(dashboardCommand.view);
-      if (dashboardCommand.refresh === "diagnostics") void refreshMaintenanceReport?.();
-      if (dashboardCommand.refresh === "sessions") void searchAllRuntimeSessions?.("");
-      if (dashboardCommand.refresh === "usage") void refreshRuntimeUsage?.();
-      if (dashboardCommand.refresh === "notifications") void refreshNotifications?.();
+      await handleStatusChatDashboardCommand({ dashboardCommand, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, agents, chatSetupIssue, sharedVault, selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled, queuedMessage, setActiveView, refreshMaintenanceReport, searchAllRuntimeSessions, refreshRuntimeUsage, refreshNotifications });
       return;
     }
     const outgoingDirectorySummary = outgoingDirectories.length
@@ -961,8 +1023,8 @@ export function useStatusChatInputController(props: any) {
       updatedAt: Date.now(),
       workingDirectory,
     });
-    const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingAttachments, surface: "chat" };
-    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat" });
+    const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingAttachments, surface: "chat", createdAt: requestStartedAt };
+    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", createdAt: requestStartedAt + 1 });
     appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
     appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, pendingAssistantMessage]);
@@ -1032,7 +1094,7 @@ export function useStatusChatInputController(props: any) {
         return { ...current, messages: replaceActiveAssistantMessage(current.messages, message) };
       });
     };
-    const renderAssistantText = (content: string) => {
+    const renderAssistantText = (content: string, createdAt?: number) => {
       const nextText = compactRepeatedAssistantText(content).trim();
       if (!nextText) return;
       if (sawAssistantContent && nextText === streamedAssistantText.trim()) return;
@@ -1040,7 +1102,7 @@ export function useStatusChatInputController(props: any) {
       streamedAssistantText = nextText;
       sawAssistantContent = true;
       markChatStreamChunk(selectedStorageKey);
-      replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat" });
+      replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat", createdAt });
       updateTask(taskId, { lastMessage: nextText });
     };
     const abortController = new AbortController();
@@ -1108,7 +1170,7 @@ export function useStatusChatInputController(props: any) {
         if (String(sessionMessage?.role ?? "").toLowerCase() === "assistant") {
           const assistantText = String(sessionMessage?.content ?? "");
           recoveredAssistantText += assistantText;
-          renderAssistantText(assistantText);
+          renderAssistantText(assistantText, sessionMessageCreatedMs(sessionMessage) || undefined);
         }
       }
     };
@@ -1161,6 +1223,26 @@ export function useStatusChatInputController(props: any) {
 
       if (!response.ok || !response.body) {
         throw new Error(await responseErrorMessage(response, `Request failed with ${response.status}`));
+      }
+
+      // Prepaid inference providers report the remaining balance on the
+      // response, so the stored wallet balance stays fresh after every chat
+      // instead of waiting for a settings refresh.
+      const providerBalanceRemaining = response.headers.get("X-Provider-Balance-Remaining")?.trim() ?? "";
+      if (providerBalanceRemaining && selectedAgent.id && typeof updateAgentProfile === "function") {
+        const checkedAt = new Date().toISOString();
+        if (selectedAgent.provider === "venice") {
+          const numeric = providerBalanceRemaining.replace(/[^0-9.]/g, "");
+          if (numeric) {
+            updateAgentProfile(selectedAgent.id, {
+              venice: { ...(selectedAgent.venice ?? {}), lastBalanceUsd: numeric, lastCheckedAt: checkedAt },
+            });
+          }
+        } else if (selectedAgent.provider === "usepod") {
+          updateAgentProfile(selectedAgent.id, {
+            usePod: { ...(selectedAgent.usePod ?? {}), lastBalanceRemaining: providerBalanceRemaining, lastCheckedAt: checkedAt },
+          });
+        }
       }
 
       const reader = response.body.getReader();

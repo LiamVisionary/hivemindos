@@ -5,6 +5,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { BeeIcon } from "./bee-icon";
 import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
@@ -85,6 +86,12 @@ export interface FleetViewProps {
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
   /** When provided, the hive view renders a central Queen Bee cell connected to every machine; clicking it opens her settings. */
   onOpenQueenSettings?: () => void;
+  /** "Message the hive" composer (new Hive layout only; legacy FleetView ignores it). */
+  onSendMessage?: (text: string) => void;
+  /** Optional wallet configs used by the Fleet Hive selected-agent holdings panel. */
+  walletsByAgent?: Record<string, AgentWalletConfig>;
+  /** Optional host-provided Hive/Classic switcher, rendered in the classic stage toolbar. */
+  layoutToggle?: React.ReactNode;
   onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
   onRemove?: (m: FleetMachine, a: FleetAgent, depth?: AeonDeleteDepth, onProgress?: (progress: AeonDeleteProgress) => void) => void | Promise<AeonDeleteResult | void>;
   onDismissAlert?: (alert: FleetAlert) => void;
@@ -139,6 +146,7 @@ export function FleetView({
   onOpenWallet,
   onEditSettings,
   onOpenQueenSettings,
+  layoutToggle,
   onDuplicate,
   onRemove,
   onDismissAlert,
@@ -336,14 +344,12 @@ export function FleetView({
           display: "grid", gridTemplateRows: showMasthead ? "auto 1fr" : "1fr",
         }}
       >
-        {/* Decorative backdrop — radial honey/cyan glow + hex texture */}
+        {/* Decorative backdrop — low-contrast hex texture without a center bloom */}
         <div
           aria-hidden
           className="absolute inset-0 pointer-events-none"
           style={{
-            background:
-              "radial-gradient(circle at 50% 38%, rgba(255,212,90,0.10), transparent 50%)," +
-              "radial-gradient(circle at 80% 80%, rgba(45,212,191,0.08), transparent 50%)",
+            background: "transparent",
           }}
         />
         <svg
@@ -553,16 +559,18 @@ export function FleetView({
             style={{ minHeight: 0 }}
           >
             <div className={styles.stageToolbar}>
-              <div className={styles.monoCap} style={{ color: "var(--accent-strong)" }}>
-                <span className={`${styles.dot} ${styles.dotLive}`} style={{ color: "var(--accent)" }} />
-                &nbsp; {refreshing ? "scanning swarm" : "live swarm"}
-              </div>
+              {layoutToggle ? (
+                <div>{layoutToggle}</div>
+              ) : (
+                <div aria-hidden="true" />
+              )}
               <div className="flex" style={{ gap: 6 }}>
                 {(["hive", "graph", "map", "list"] as ViewMode[]).map((v) => (
                   <button
                     key={v}
                     onClick={() => setView(v)}
                     aria-pressed={view === v}
+                    data-bee={`fleet-view-${v}`}
                     className="uppercase cursor-pointer"
                     style={{
                       fontFamily: "var(--f-mono)", fontSize: 10,
@@ -583,8 +591,7 @@ export function FleetView({
               className={`${styles.stageFrame} relative grid overflow-hidden rounded-2xl`}
               style={{
                 border: "1px solid rgba(148,163,184,0.16)",
-                background:
-                  "radial-gradient(ellipse at center, rgba(255,212,90,0.06), transparent 60%), rgba(16,20,29,0.78)",
+                background: "rgba(16,20,29,0.78)",
                 placeItems: view === "list" ? "stretch" : "center",
               }}
             >
@@ -650,7 +657,6 @@ export function FleetView({
                   selectionTooltipKey={selectionTooltipKey}
                   onOpenSelectionTooltip={setSelectionTooltipKey}
                   onDismissSelectionTooltip={() => setSelectionTooltipKey(null)}
-                  width={840} height={840}
                 />
               )}
               {!initialLoading && view === "list" && (

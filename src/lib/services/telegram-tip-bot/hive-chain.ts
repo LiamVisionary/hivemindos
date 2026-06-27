@@ -1,9 +1,9 @@
 import "server-only";
 
 import { createPublicClient, createWalletClient, formatEther, http, parseAbiItem } from "viem";
-import { base } from "viem/chains";
 import { privateKeyToAccount } from "viem/accounts";
 
+import { base } from "@/lib/services/wallet/base-chain";
 import { generateWallet } from "@/lib/services/wallet/chain-wallet";
 import { getWalletInfo, getWalletSecret, storeWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 

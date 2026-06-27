@@ -40,8 +40,10 @@ const DETAIL_TABS: { id: AeonDetailView; label: string; detail: string; icon: Ic
   { id: "settings", label: "Settings", detail: "Repo, keys, memory", icon: "key" },
 ];
 
-function accentStyle(hex: string): React.CSSProperties {
+function accentStyle(hex?: string): React.CSSProperties {
+  if (!hex) return {};
   const h = hex.replace("#", "");
+  if (!/^[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(h)) return {};
   const n = parseInt(h.length === 3 ? h.split("").map((c) => c + c).join("") : h, 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   return {
@@ -365,7 +367,7 @@ function dedupeAeonAgents(list: AeonAgent[]) {
 function Modal({ title, eyebrow, subtitle, onClose, children, wide }: { title: string; eyebrow?: string; subtitle?: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 60, display: "grid", placeItems: "center", padding: 18, background: "rgba(2,6,12,0.7)", backdropFilter: "blur(4px)" }}>
-      <div onClick={(e) => e.stopPropagation()} className={`${styles.scroll} ${styles.rise}`} style={{ width: "100%", maxWidth: wide ? 720 : 560, maxHeight: "calc(100vh - 36px)", overflow: "auto",
+      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} className={`${styles.scroll} ${styles.rise}`} style={{ width: "100%", maxWidth: wide ? 720 : 560, maxHeight: "calc(100vh - 36px)", overflow: "auto",
         background: "var(--bg-1)", border: "1px solid var(--aeon-line)", borderRadius: "var(--r-lg)", padding: 22, boxShadow: "0 30px 90px rgba(0,0,0,0.5)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 16 }}>
           <div>
@@ -1132,7 +1134,7 @@ export interface AeonAutopilotPanelProps {
 
 export function AeonAutopilotPanel({
   agents, agentProfiles, sharedVault, machineGroups, skills = AEON_SKILLS, deliverables = AEON_DELIVERABLES, machines = AEON_MACHINES,
-  initialMode = "fleet", accent = "#5eead4", motion = true,
+  initialMode = "fleet", accent, motion = true,
   onToggleSkill, onRunSkill, onSendDeliverable, onCreateWorkspace, onWorkspaceCreated, chooseDirectoryForMachine,
 }: AeonAutopilotPanelProps = {}) {
   const [mode, setMode] = React.useState<"fleet" | "detail">(initialMode);
@@ -1183,28 +1185,28 @@ export function AeonAutopilotPanel({
         postJson<{ analytics?: RuntimeAnalytics }>("/api/runtimes/aeon/analytics", body),
         postJson<{ memory?: RuntimeMemorySnapshot }>("/api/runtimes/aeon/memory", body),
       ]);
-      const runtimeRuns = runsRes.runs ?? [];
-      const mappedOutputs = (outputsRes.outputs ?? []).map(runtimeOutputToAeon);
+      const runtimeRuns = runsRes?.runs ?? [];
+      const mappedOutputs = (outputsRes?.outputs ?? []).map(runtimeOutputToAeon);
       const mappedAgent = hydrateAgentWithRuntime(baseAgent, {
         ...emptyRuntimeData(),
-        status: statusRes.status,
+        status: statusRes?.status,
       });
       setRuntimeDataByAgent((current) => ({
         ...current,
         [profile.id]: {
           loading: false,
           error: "",
-          status: statusRes.status,
-          skills: (skillsRes.skills ?? []).map(runtimeSkillToAeon),
+          status: statusRes?.status,
+          skills: (skillsRes?.skills ?? []).map(runtimeSkillToAeon),
           runs: runtimeRuns.map(runtimeRunToAeon),
           runtimeRuns,
           outputs: mappedOutputs,
           deliverables: [...deliverables, ...mappedOutputs.map((output) => outputToDeliverable(output, mappedAgent))],
-          analytics: runtimeAnalyticsToAeon(analyticsRes.analytics),
+          analytics: runtimeAnalyticsToAeon(analyticsRes?.analytics),
           pulse: pulseFromRuns(runtimeRuns),
           secrets: current[profile.id]?.secrets ?? [],
-          paths: runtimePaths(mappedAgent, memoryRes.memory),
-          memory: runtimeMemoryToAeon(memoryRes.memory),
+          paths: runtimePaths(mappedAgent, memoryRes?.memory),
+          memory: runtimeMemoryToAeon(memoryRes?.memory),
           repoSync: current[profile.id]?.repoSync,
         },
       }));

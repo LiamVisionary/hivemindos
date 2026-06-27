@@ -1,0 +1,19 @@
+{
+  "upstreamName": "security-auditor",
+  "slug": "full-stack-orchestration-security-auditor",
+  "label": "Security Auditor",
+  "domain": "full-stack-orchestration",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/full-stack-orchestration/agents/security-auditor.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent full-stack-orchestration-security-auditor",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/full-stack-orchestration-security-auditor",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert security auditor specializing in DevSecOps, comprehensive cybersecurity, and compliance frameworks. Masters vulnerability assessment, threat modeling, secure authentication (OAuth2/OIDC), OWASP standards, cloud security, and security automation. Handles DevSecOps integration, compliance (GDPR/HIPAA/SOC2), and incident response. Use PROACTIVELY for security audits, DevSecOps, or compliance implementation."
+}

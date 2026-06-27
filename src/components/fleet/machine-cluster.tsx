@@ -70,6 +70,8 @@ function compactMachineLabel(name: string) {
   const suffix = normalized.match(/(?:^|[-_\s])(\d{1,3})$/)?.[1] ?? "";
 
   if (/^this\s+mac$/i.test(normalized)) return ["THIS", "MAC"];
+  if (/^this\s+pc$/i.test(normalized)) return ["THIS", "PC"];
+  if (/^this\s+computer$/i.test(normalized)) return ["THIS", "BOX"];
   if (/iphone|android|pixel|galaxy/i.test(normalized)) {
     const digits = normalized.match(/\d{1,4}/)?.[0] ?? "";
     return [lower.includes("iphone") ? "iP" : "PH", digits || "MOB"];
@@ -628,6 +630,7 @@ export function MachineCluster({
                 <TooltipTrigger asChild>
                   <AddHexCell
                     size={HEX_W}
+                    data-bee={`fleet-hive-add-${machine.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onAddAgent(machine);

@@ -1,8 +1,11 @@
-export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod" | "veil";
+export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod" | "venice" | "veil";
 
 export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" | "high";
 export type AgentSpendCapAsset = "USDC" | "ETH";
 export type AgentAssetSpendCaps = Partial<Record<AgentSpendCapAsset, number>>;
+
+/** Stock-buying rail: real brokerage (Alpaca) or on-chain tokenized equities (xStocks via Jupiter swap). */
+export type AgentTradingVenue = "alpaca" | "xstocks";
 
 export interface AgentWalletConfig {
   agentId: string;
@@ -18,13 +21,29 @@ export interface AgentWalletConfig {
   maxPaymentUsd: number;
   assetSpendCaps?: AgentAssetSpendCaps;
   approvalRequiredOverUsd: number;
+  /** Rolling 24h cumulative USD spend cap across all rails. 0/undefined = unlimited. */
+  dailyBudgetUsd?: number;
+  /** Rolling 30d cumulative USD spend cap across all rails. 0/undefined = unlimited. */
+  monthlyBudgetUsd?: number;
   autoPayEnabled: boolean;
   duplicatePaymentGuardEnabled?: boolean;
   duplicatePaymentGuardSeconds?: number;
   clawCardEnvName: string;
   moneyClawEnvName: string;
   x402BaseUrl: string;
+  /** When true, Veil private sends may execute under asset caps without typing CONFIRM. */
+  veilAutoSendEnabled?: boolean;
   veilAutoPrivateX402?: boolean;
+  /** Stock-buying rail selection. Absent = buy-stock disabled for this agent. */
+  tradingVenue?: AgentTradingVenue;
+  /** Shared-hive env var NAME holding the Alpaca API key id (value never stored in project files). */
+  alpacaKeyEnvName?: string;
+  /** Shared-hive env var NAME holding the Alpaca API secret. */
+  alpacaSecretEnvName?: string;
+  /** When false, Alpaca trades route to the live brokerage; defaults to paper (true). */
+  alpacaPaper?: boolean;
+  /** Hard per-trade USD ceiling for the buy-stock rail. 0/undefined falls back to maxPaymentUsd. */
+  maxTradeUsd?: number;
   survivalStartedAt: number;
   updatedAt: number;
   notes: string;
@@ -32,6 +51,7 @@ export interface AgentWalletConfig {
   vaultAddress?: string;
   onchainBalanceUsd?: number;
   nativeBalance?: number;
+  tokens?: AgentWalletTokenBalance[];
   lastOnchainSyncAt?: number;
 }
 
@@ -81,6 +101,7 @@ export interface AgentWalletTokenBalance {
 
 export interface AgentWalletVaultInfo {
   agentId: string;
+  name?: string;
   address: string;
   network: string;
   custodyMode: "local";

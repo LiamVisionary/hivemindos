@@ -1,0 +1,20 @@
+{
+  "upstreamName": "Brand Book Concept Page",
+  "upstreamSlug": "brand-book-concept-page",
+  "hiveSlug": "brand-book-concept-page",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/brand/hivemindos/brand-book-concept-page",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-25T06:07:40Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional brand skills",
+  "sourcePath": "packaged-skills/optional/brand/hivemindos/brand-book-concept-page",
+  "status": "optional",
+  "relatedPublicReference": "https://github.com/alexmcdonnell-airtable/hyperagent-public-skills",
+  "relatedPublicReferenceLicense": "No license detected on 2026-06-25; not vendored or copied.",
+  "hivemindAdaptations": [
+    "Uses HivemindOS capability discovery for image generation and frontend artifact creation.",
+    "Adds trademark and private-asset safety boundaries.",
+    "Makes the output installable as an optional local skill instead of a Hyperagent export."
+  ]
+}

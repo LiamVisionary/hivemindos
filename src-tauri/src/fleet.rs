@@ -3,9 +3,8 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::Duration;
 
 const APPS_CACHE_FILE: &str = "~/.hivemindos/fleet-apps-cache.json";
@@ -17,7 +16,7 @@ const TAILSCALE_CLI_CANDIDATES: &[&str] = &[
     "tailscale",
 ];
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct NativeDevice {
     #[serde(rename = "self")]
     is_self: bool,
@@ -91,7 +90,14 @@ fn local_collector_url() -> String {
 fn local_device() -> NativeDevice {
     NativeDevice {
         is_self: true,
-        name: "This Mac".to_string(),
+        name: if cfg!(target_os = "windows") {
+            "This PC"
+        } else if cfg!(target_os = "macos") {
+            "This Mac"
+        } else {
+            "This Machine"
+        }
+        .to_string(),
         dns_name: String::new(),
         os: std::env::consts::OS.to_string(),
         online: true,
@@ -122,6 +128,51 @@ fn http_get_local_json(path: &str) -> Option<Value> {
     stream.read_to_string(&mut response).ok()?;
     let (_, body) = response.split_once("\r\n\r\n")?;
     serde_json::from_str(body).ok()
+}
+
+fn http_get_json_url(raw_url: &str, timeout_ms: u64) -> Result<Value, String> {
+    let url = url::Url::parse(raw_url).map_err(|error| format!("Invalid collector URL: {error}"))?;
+    if url.scheme() != "http" {
+        return Err("Collector URL must use http.".to_string());
+    }
+    let host = url.host_str().ok_or_else(|| "Collector URL has no host.".to_string())?;
+    let port = url.port_or_known_default().ok_or_else(|| "Collector URL has no port.".to_string())?;
+    let mut path = url.path().to_string();
+    if path.is_empty() {
+        path = "/".to_string();
+    }
+    if let Some(query) = url.query() {
+        path.push('?');
+        path.push_str(query);
+    }
+
+    let timeout = Duration::from_millis(timeout_ms);
+    let mut addrs = (host, port)
+        .to_socket_addrs()
+        .map_err(|error| format!("Could not resolve collector host: {error}"))?;
+    let addr = addrs.next().ok_or_else(|| "Collector host resolved to no addresses.".to_string())?;
+    let mut stream = TcpStream::connect_timeout(&addr, timeout)
+        .map_err(|error| format!("Collector connection failed: {error}"))?;
+    let _ = stream.set_read_timeout(Some(timeout));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(timeout_ms.min(800))));
+    let request = format!(
+        "GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
+    );
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|error| format!("Collector request failed: {error}"))?;
+    let mut response = String::new();
+    stream
+        .read_to_string(&mut response)
+        .map_err(|error| format!("Collector response failed: {error}"))?;
+    let (head, body) = response
+        .split_once("\r\n\r\n")
+        .ok_or_else(|| "Collector returned an invalid HTTP response.".to_string())?;
+    if !(head.starts_with("HTTP/1.1 2") || head.starts_with("HTTP/1.0 2")) {
+        let status = head.lines().next().unwrap_or("HTTP error");
+        return Err(format!("Collector returned {status}."));
+    }
+    serde_json::from_str(body.trim()).map_err(|error| format!("Collector JSON parse failed: {error}"))
 }
 
 fn base64(input: &str) -> String {
@@ -341,7 +392,10 @@ fn status_from_cli() -> Result<Value, String> {
     }
     let mut last_error = "tailscale unavailable".to_string();
     for command in TAILSCALE_CLI_CANDIDATES {
-        let output = Command::new(command).args(["status", "--json"]).output();
+        // hidden_command: fleet status is polled; a plain `tailscale status`
+        // spawn flashes a console window on Windows each poll when the local
+        // API path is unavailable. See crate::hidden_command.
+        let output = crate::hidden_command(command).args(["status", "--json"]).output();
         let Ok(output) = output else {
             last_error = format!("{command} unavailable");
             continue;
@@ -459,6 +513,151 @@ pub(crate) fn tailscale_devices() -> Result<Value, String> {
             "devices": [local_device()],
         })),
     }
+}
+
+fn is_mobile_device(device: &NativeDevice) -> bool {
+    matches!(device.os.to_lowercase().as_str(), "ios" | "android")
+}
+
+fn collector_url_for_host(host: &str, port: u16) -> Option<String> {
+    let trimmed = host.trim().trim_end_matches('.');
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(format!("http://{trimmed}:{port}"))
+}
+
+fn push_unique(values: &mut Vec<String>, value: Option<String>) {
+    let Some(value) = value else {
+        return;
+    };
+    if !values.iter().any(|item| item == &value) {
+        values.push(value);
+    }
+}
+
+fn collector_url_candidates(device: &NativeDevice) -> Vec<String> {
+    if device.is_self {
+        return vec![local_collector_url()];
+    }
+    let mut values = Vec::new();
+    for port in 8787..=8810 {
+        push_unique(&mut values, collector_url_for_host(&device.ip, port));
+    }
+    let dns_name = device.dns_name.trim_end_matches('.');
+    let dns_short = dns_label(dns_name);
+    for port in 8787..=8810 {
+        push_unique(&mut values, collector_url_for_host(&dns_short, port));
+        push_unique(&mut values, collector_url_for_host(dns_name, port));
+    }
+    values
+}
+
+fn is_hivemind_collector_health(payload: &Value) -> bool {
+    payload
+        .get("version")
+        .and_then(|version| version.get("appDir"))
+        .is_some()
+        || payload
+            .get("machineId")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value.starts_with("hivemind-machine-"))
+        || payload
+            .get("capabilities")
+            .and_then(|capabilities| capabilities.get("runtimes"))
+            .is_some_and(Value::is_array)
+        || payload
+            .get("capabilities")
+            .and_then(|capabilities| capabilities.get("hostedApps"))
+            .and_then(Value::as_bool)
+            == Some(true)
+        || payload
+            .get("capabilities")
+            .and_then(|capabilities| capabilities.get("runtimeAgentCreation"))
+            .and_then(Value::as_bool)
+            == Some(true)
+}
+
+fn collector_agents(collector_url: &str, device: &NativeDevice, capabilities: &Value) -> Vec<Value> {
+    let agents_payload = http_get_json_url(&format!("{collector_url}/agents"), 1600).ok();
+    agents_payload
+        .and_then(|payload| payload.get("agents").and_then(Value::as_array).cloned())
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|agent| {
+            let mut object = agent.as_object()?.clone();
+            object.insert("telemetryUrl".to_string(), Value::String(collector_url.to_string()));
+            object.insert("machineName".to_string(), Value::String(device.name.clone()));
+            object.insert("collectorCapabilities".to_string(), capabilities.clone());
+            Some(Value::Object(object))
+        })
+        .collect()
+}
+
+fn probe_collector(device: &NativeDevice, collector_url: &str) -> Option<Value> {
+    let health = http_get_json_url(&format!("{collector_url}/health"), 1600).ok()?;
+    if !is_hivemind_collector_health(&health) {
+        return None;
+    }
+    let capabilities = health
+        .get("capabilities")
+        .cloned()
+        .unwrap_or_else(|| json!({ "chat": false, "runtimes": [] }));
+    let agents = collector_agents(collector_url, device, &capabilities);
+    let mut active_device = device.clone();
+    active_device.collector_url = collector_url.to_string();
+    Some(json!({
+        "device": active_device,
+        "collector": "ready",
+        "collectorHost": health.get("host").cloned().unwrap_or(Value::Null),
+        "machineId": health.get("machineId").cloned().unwrap_or(Value::Null),
+        "version": health.get("version").cloned().unwrap_or(Value::Null),
+        "capabilities": capabilities,
+        "envSync": health.get("envSync").cloned().unwrap_or(Value::Null),
+        "system": health.get("system").cloned().unwrap_or(Value::Null),
+        "agents": agents,
+        "snapshots": [],
+    }))
+}
+
+fn discover_machine(device: NativeDevice) -> Value {
+    if is_mobile_device(&device) {
+        return json!({
+            "device": device,
+            "collector": if device.online { "not-installed" } else { "offline" },
+            "agents": [],
+            "snapshots": [],
+        });
+    }
+    for collector_url in collector_url_candidates(&device) {
+        if let Some(machine) = probe_collector(&device, &collector_url) {
+            return machine;
+        }
+    }
+    json!({
+        "device": device,
+        "collector": if device.online { "not-installed" } else { "offline" },
+        "agents": [],
+        "snapshots": [],
+    })
+}
+
+#[tauri::command]
+pub(crate) fn fleet_discover() -> Result<Value, String> {
+    let status = status_from_cli().ok();
+    let devices = status
+        .as_ref()
+        .map(devices_from_status)
+        .unwrap_or_else(|| vec![local_device()]);
+    let machines = devices
+        .into_iter()
+        .map(discover_machine)
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "ok": true,
+        "source": "native-fleet",
+        "machines": machines,
+    }))
 }
 
 #[cfg(test)]

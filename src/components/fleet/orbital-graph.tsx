@@ -12,6 +12,11 @@ export interface OrbitalGraphProps {
   alerts: FleetAlert[];
   tasks: FleetTask[];
   ticker: string[];
+  showClock?: boolean;
+  leftHudInset?: number;
+  topLeftHudTop?: number;
+  selectedHudTop?: number;
+  topRightHudTop?: number;
 }
 
 const PARTICLE_COUNT = 850;
@@ -48,24 +53,40 @@ function markerAngle(index: number, total: number) {
   return -Math.PI / 2 + (index / Math.max(1, total)) * Math.PI * 2;
 }
 
-/** HH:MM:SS.cs readout, rendered on a fast tick isolated from the rest of the HUD. */
-function HudClock() {
+/** HH:MM:SS readout, rendered on a 1s tick isolated from the rest of the HUD. */
+export function HudClock() {
   const [now, setNow] = React.useState<Date | null>(null);
   React.useEffect(() => {
-    const t = window.setInterval(() => setNow(new Date()), 100);
+    const t = window.setInterval(() => {
+      // Don't churn state (and re-render) while the tab/window is hidden.
+      if (document.hidden) return;
+      setNow(new Date());
+    }, 1000);
     return () => window.clearInterval(t);
   }, []);
   const pad = (n: number, len = 2) => String(n).padStart(len, "0");
   return (
     <div style={{ fontSize: 19, color: "#dcebff", letterSpacing: "0.08em", textShadow: "0 0 14px rgba(130,190,255,0.6)" }}>
       {now
-        ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad(Math.floor(now.getMilliseconds() / 10))}`
-        : "--:--:--.--"}
+        ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+        : "--:--:--"}
     </div>
   );
 }
 
-export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, tasks, ticker }: OrbitalGraphProps) {
+export function OrbitalGraph({
+  machines,
+  selected,
+  onSelectMachine,
+  alerts,
+  tasks,
+  ticker,
+  showClock = true,
+  leftHudInset = 16,
+  topLeftHudTop = 14,
+  selectedHudTop = 84,
+  topRightHudTop = 14,
+}: OrbitalGraphProps) {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [size, setSize] = React.useState({ w: 0, h: 0 });
@@ -105,6 +126,9 @@ export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, task
 
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
+      // Skip the redraw entirely while the tab/window is hidden — keep the loop
+      // alive so it resumes instantly when the page becomes visible again.
+      if (document.hidden) return;
       if (!w || !h) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
@@ -216,7 +240,7 @@ export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, task
   const diagnostics = [
     ...alerts.map((al) => ({ key: `al-${al.id}`, since: al.since, text: `${al.machine} · ${al.text}` })),
     ...ticker.map((line, i) => ({ key: `tk-${i}`, since: "—", text: line })),
-  ].slice(0, 9);
+  ].slice(0, 6);
 
   const { cx, cy, R } = orbGeometry(size.w, size.h);
   const sessionId = (selectedMachine?.tailnet?.split(".")[0] || selectedMachine?.id || "fleet")
@@ -252,7 +276,7 @@ export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, task
       })}
 
       {/* Top-left — system title. */}
-      <div className={styles.panel} style={{ top: 14, left: 16, maxWidth: 360 }}>
+      <div className={styles.panel} style={{ top: topLeftHudTop, left: leftHudInset, maxWidth: 360 }}>
         <div className={styles.monoCap} style={{ color: "#a9c9f5", fontSize: 10 }}>
           H.I.V.E. · Hive &amp; machine intelligence system
         </div>
@@ -262,8 +286,8 @@ export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, task
       </div>
 
       {/* Top-right — clock + session. */}
-      <div className={styles.panel} style={{ top: 14, right: 16, alignItems: "flex-end", textAlign: "right" }}>
-        <HudClock />
+      <div className={styles.panel} style={{ top: topRightHudTop, right: 16, alignItems: "flex-end", textAlign: "right" }}>
+        {showClock ? <HudClock /> : null}
         <div className={styles.monoCap}>
           Session: {sessionId}
           {selectedMachine ? <> &nbsp;·&nbsp; lat {selectedMachine.lat.toFixed(3)} · lon {selectedMachine.lon.toFixed(3)}</> : null}
@@ -328,11 +352,44 @@ export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, task
             <div className={styles.logLine}>channel quiet · no diagnostics</div>
           )}
         </div>
+        <div className={`${styles.primaryCard} ${styles.primaryCardVertical}`}>
+          <div>
+            <div className={styles.monoCap}>Primary telemetry</div>
+            <div className={styles.monoCap}>Mission · {selectedMachine?.name ?? "fleet"}</div>
+          </div>
+          <div className={styles.primaryMetricList}>
+            <div className={styles.primaryMetricRow}>
+              <span className={styles.bigStat}>{totalAgents}</span>
+              <span className={styles.monoCap}>agents</span>
+            </div>
+            <div className={styles.primaryMetricRow}>
+              <span className={styles.smallStat}>{workingAgents}</span>
+              <span className={styles.monoCap}>working</span>
+            </div>
+            <div className={styles.primaryMetricRow}>
+              <span className={styles.smallStat}>{machines.length}</span>
+              <span className={styles.monoCap}>machines</span>
+            </div>
+            <div className={styles.primaryMetricRow}>
+              <span className={styles.smallStat}>{doingTasks}</span>
+              <span className={styles.monoCap}>tasks live</span>
+            </div>
+          </div>
+          <div className={styles.monoCap}>
+            swarm load {avgCpu}% · status {workingAgents ? "engaged" : "idle"} · str {avgPing} ms
+          </div>
+          <div className={styles.primaryLinkStats}>
+            <span>uplink: {avgPing ? "stable" : "—"}</span>
+            <span>nodes: {machines.length}</span>
+            <span>agents: {totalAgents}</span>
+            <span>packet loss: 0.00%</span>
+          </div>
+        </div>
       </div>
 
       {/* Left — selected-node telemetry. */}
       {selectedMachine ? (
-        <div className={`${styles.panel} ${styles.sideOnly}`} style={{ top: 84, left: 16, width: 196 }}>
+        <div className={`${styles.panel} ${styles.sideOnly}`} style={{ top: selectedHudTop, left: leftHudInset, width: 196 }}>
           <div className={styles.monoCap}>Node status</div>
           <div className={styles.row}>
             <span className={styles.monoCap}>node</span>
@@ -373,7 +430,7 @@ export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, task
       ) : null}
 
       {/* Left bottom — task feed. */}
-      <div className={`${styles.panel} ${styles.sideOnly}`} style={{ bottom: 64, left: 16, width: 250 }}>
+      <div className={`${styles.panel} ${styles.sideOnly}`} style={{ bottom: 64, left: leftHudInset, width: 250 }}>
         <div className={styles.monoCap}>Task channel</div>
         {tasks.slice(0, 6).map((t) => (
           <div
@@ -393,47 +450,8 @@ export function OrbitalGraph({ machines, selected, onSelectMachine, alerts, task
         {!tasks.length && <div className={styles.logLine}>no tasks in flight</div>}
       </div>
 
-      {/* Bottom center — primary readout. */}
-      <div className={styles.panel} style={{ bottom: 18, left: "50%", transform: "translateX(-50%)", alignItems: "center" }}>
-        <div className={styles.primaryCard}>
-          <div className={styles.row} style={{ marginBottom: 6 }}>
-            <span className={styles.monoCap}>Primary telemetry</span>
-            <span className={styles.monoCap}>Mission · {selectedMachine?.name ?? "fleet"}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 22 }}>
-            <div>
-              <div className={styles.bigStat}>{totalAgents}</div>
-              <div className={styles.monoCap}>agents</div>
-            </div>
-            <div>
-              <div className={styles.smallStat}>{workingAgents}</div>
-              <div className={styles.monoCap}>working</div>
-            </div>
-            <div>
-              <div className={styles.smallStat}>{machines.length}</div>
-              <div className={styles.monoCap}>machines</div>
-            </div>
-            <div>
-              <div className={styles.smallStat}>{doingTasks}</div>
-              <div className={styles.monoCap}>tasks live</div>
-            </div>
-          </div>
-          <div className={styles.monoCap} style={{ marginTop: 8 }}>
-            swarm load {avgCpu}% · status {workingAgents ? "engaged" : "idle"} · str {avgPing} ms
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom right — link stats. */}
-      <div className={`${styles.panel} ${styles.sideOnly}`} style={{ bottom: 18, right: 16, alignItems: "flex-end" }}>
-        <div className={styles.monoCap}>uplink: {avgPing ? "stable" : "—"}</div>
-        <div className={styles.monoCap}>nodes: {machines.length}</div>
-        <div className={styles.monoCap}>agents: {totalAgents}</div>
-        <div className={styles.monoCap}>packet loss: 0.00%</div>
-      </div>
-
       {/* Bottom left corner — mesh flavor. */}
-      <div className={`${styles.panel} ${styles.sideOnly}`} style={{ bottom: 18, left: 16 }}>
+      <div className={`${styles.panel} ${styles.sideOnly}`} style={{ bottom: 18, left: leftHudInset }}>
         <div className={styles.monoCap}>mesh link: stable</div>
         <div className={styles.monoCap}>rotation lock: auto</div>
       </div>

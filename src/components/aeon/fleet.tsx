@@ -16,19 +16,19 @@ const FLEET_HEX_CLIP = "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0%
 const FLEET_HEX_POINTS = "73 8 219 8 284 126 219 244 73 244 8 126";
 const FLEET_HEX_TONES: Record<FleetHexTone, { bg: string; border: string; glow: string }> = {
   default: {
-    bg: "linear-gradient(180deg, rgba(15,23,42,0.92), rgba(5,10,18,0.84))",
-    border: "rgba(148,163,184,0.38)",
-    glow: "rgba(45,212,191,0.05)",
+    bg: "var(--fleet-hex-default-bg)",
+    border: "var(--fleet-hex-default-border)",
+    glow: "var(--fleet-hex-default-glow)",
   },
   active: {
-    bg: "linear-gradient(180deg, rgba(20,184,166,0.28), rgba(8,47,73,0.30))",
+    bg: "var(--fleet-hex-active-bg)",
     border: "var(--aeon-line)",
-    glow: "rgba(45,212,191,0.28)",
+    glow: "var(--fleet-hex-active-glow)",
   },
   honey: {
-    bg: "linear-gradient(180deg, rgba(255,212,90,0.18), rgba(15,23,42,0.84))",
-    border: "rgba(255,212,90,0.48)",
-    glow: "rgba(255,212,90,0.20)",
+    bg: "var(--fleet-hex-honey-bg)",
+    border: "var(--fleet-hex-honey-border)",
+    glow: "var(--fleet-hex-honey-glow)",
   },
 };
 
@@ -131,7 +131,7 @@ function AeonFleetHex({
           inset: 8,
           clipPath: FLEET_HEX_CLIP,
           background: t.bg,
-          boxShadow: `0 0 ${hover ? 58 : 38}px ${t.glow}, inset 0 0 34px rgba(0,0,0,0.34)`,
+          boxShadow: `0 0 ${hover ? 58 : 38}px ${t.glow}, var(--fleet-hex-inset)`,
           opacity: hover ? 1 : 0.94,
           transition: "box-shadow 180ms ease, opacity 180ms ease",
         }}

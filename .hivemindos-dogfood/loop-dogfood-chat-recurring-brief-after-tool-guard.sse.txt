@@ -1,0 +1,1009 @@
+data: {"session":{"id":"loop-dogfood-chat-recurring-brief-after-tool-guard-20260625","runtime":"hivemind-os","source":"hivemindos-chat","startedAt":1782402759604},"event":{"type":"chat.session","id":"loop-dogfood-chat-recurring-brief-after-tool-guard-20260625","runtime":"hivemind-os","source":"hivemindos-chat","startedAt":1782402759604}}
+
+data: {"choices":[{"delta":{"content":"To"}}],"event":{"type":"chat.text","delta":"To"}}
+
+data: {"choices":[{"delta":{"content":" fulfill"}}],"event":{"type":"chat.text","delta":" fulfill"}}
+
+data: {"choices":[{"delta":{"content":" your"}}],"event":{"type":"chat.text","delta":" your"}}
+
+data: {"choices":[{"delta":{"content":" request"}}],"event":{"type":"chat.text","delta":" request"}}
+
+data: {"choices":[{"delta":{"content":" for"}}],"event":{"type":"chat.text","delta":" for"}}
+
+data: {"choices":[{"delta":{"content":" a"}}],"event":{"type":"chat.text","delta":" a"}}
+
+data: {"choices":[{"delta":{"content":" daily"}}],"event":{"type":"chat.text","delta":" daily"}}
+
+data: {"choices":[{"delta":{"content":" weekday"}}],"event":{"type":"chat.text","delta":" weekday"}}
+
+data: {"choices":[{"delta":{"content":" morning"}}],"event":{"type":"chat.text","delta":" morning"}}
+
+data: {"choices":[{"delta":{"content":" brief"}}],"event":{"type":"chat.text","delta":" brief"}}
+
+data: {"choices":[{"delta":{"content":" scanning"}}],"event":{"type":"chat.text","delta":" scanning"}}
+
+data: {"choices":[{"delta":{"content":" AI"}}],"event":{"type":"chat.text","delta":" AI"}}
+
+data: {"choices":[{"delta":{"content":" agent"}}],"event":{"type":"chat.text","delta":" agent"}}
+
+data: {"choices":[{"delta":{"content":" funding"}}],"event":{"type":"chat.text","delta":" funding"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" source"}}],"event":{"type":"chat.text","delta":" source"}}
+
+data: {"choices":[{"delta":{"content":" citations"}}],"event":{"type":"chat.text","delta":" citations"}}
+
+data: {"choices":[{"delta":{"content":" and"}}],"event":{"type":"chat.text","delta":" and"}}
+
+data: {"choices":[{"delta":{"content":" an"}}],"event":{"type":"chat.text","delta":" an"}}
+
+data: {"choices":[{"delta":{"content":" evidence"}}],"event":{"type":"chat.text","delta":" evidence"}}
+
+data: {"choices":[{"delta":{"content":"-backed"}}],"event":{"type":"chat.text","delta":"-backed"}}
+
+data: {"choices":[{"delta":{"content":" summary"}}],"event":{"type":"chat.text","delta":" summary"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" the"}}],"event":{"type":"chat.text","delta":" the"}}
+
+data: {"choices":[{"delta":{"content":" best"}}],"event":{"type":"chat.text","delta":" best"}}
+
+data: {"choices":[{"delta":{"content":" approach"}}],"event":{"type":"chat.text","delta":" approach"}}
+
+data: {"choices":[{"delta":{"content":" is"}}],"event":{"type":"chat.text","delta":" is"}}
+
+data: {"choices":[{"delta":{"content":" to"}}],"event":{"type":"chat.text","delta":" to"}}
+
+data: {"choices":[{"delta":{"content":" set"}}],"event":{"type":"chat.text","delta":" set"}}
+
+data: {"choices":[{"delta":{"content":" up"}}],"event":{"type":"chat.text","delta":" up"}}
+
+data: {"choices":[{"delta":{"content":" a"}}],"event":{"type":"chat.text","delta":" a"}}
+
+data: {"choices":[{"delta":{"content":" recurring"}}],"event":{"type":"chat.text","delta":" recurring"}}
+
+data: {"choices":[{"delta":{"content":" Work"}}],"event":{"type":"chat.text","delta":" Work"}}
+
+data: {"choices":[{"delta":{"content":" Board"}}],"event":{"type":"chat.text","delta":" Board"}}
+
+data: {"choices":[{"delta":{"content":" loop"}}],"event":{"type":"chat.text","delta":" loop"}}
+
+data: {"choices":[{"delta":{"content":" task"}}],"event":{"type":"chat.text","delta":" task"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" these"}}],"event":{"type":"chat.text","delta":" these"}}
+
+data: {"choices":[{"delta":{"content":" components"}}],"event":{"type":"chat.text","delta":" components"}}
+
+data: {"choices":[{"delta":{"content":":\n\n"}}],"event":{"type":"chat.text","delta":":\n\n"}}
+
+data: {"choices":[{"delta":{"content":"---\n\n"}}],"event":{"type":"chat.text","delta":"---\n\n"}}
+
+data: {"choices":[{"delta":{"content":"###"}}],"event":{"type":"chat.text","delta":"###"}}
+
+data: {"choices":[{"delta":{"content":" Work"}}],"event":{"type":"chat.text","delta":" Work"}}
+
+data: {"choices":[{"delta":{"content":" Board"}}],"event":{"type":"chat.text","delta":" Board"}}
+
+data: {"choices":[{"delta":{"content":" Loop"}}],"event":{"type":"chat.text","delta":" Loop"}}
+
+data: {"choices":[{"delta":{"content":" Plan"}}],"event":{"type":"chat.text","delta":" Plan"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":" AI"}}],"event":{"type":"chat.text","delta":" AI"}}
+
+data: {"choices":[{"delta":{"content":" Agent"}}],"event":{"type":"chat.text","delta":" Agent"}}
+
+data: {"choices":[{"delta":{"content":" Funding"}}],"event":{"type":"chat.text","delta":" Funding"}}
+
+data: {"choices":[{"delta":{"content":" News"}}],"event":{"type":"chat.text","delta":" News"}}
+
+data: {"choices":[{"delta":{"content":" Daily"}}],"event":{"type":"chat.text","delta":" Daily"}}
+
+data: {"choices":[{"delta":{"content":" Brief"}}],"event":{"type":"chat.text","delta":" Brief"}}
+
+data: {"choices":[{"delta":{"content":"\n\n"}}],"event":{"type":"chat.text","delta":"\n\n"}}
+
+data: {"choices":[{"delta":{"content":"**"}}],"event":{"type":"chat.text","delta":"**"}}
+
+data: {"choices":[{"delta":{"content":"Template"}}],"event":{"type":"chat.text","delta":"Template"}}
+
+data: {"choices":[{"delta":{"content":"/"}}],"event":{"type":"chat.text","delta":"/"}}
+
+data: {"choices":[{"delta":{"content":"Pattern"}}],"event":{"type":"chat.text","delta":"Pattern"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":"**\n"}}],"event":{"type":"chat.text","delta":"**\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Every"}}],"event":{"type":"chat.text","delta":" Every"}}
+
+data: {"choices":[{"delta":{"content":" weekday"}}],"event":{"type":"chat.text","delta":" weekday"}}
+
+data: {"choices":[{"delta":{"content":" morning"}}],"event":{"type":"chat.text","delta":" morning"}}
+
+data: {"choices":[{"delta":{"content":" ("}}],"event":{"type":"chat.text","delta":" ("}}
+
+data: {"choices":[{"delta":{"content":"e"}}],"event":{"type":"chat.text","delta":"e"}}
+
+data: {"choices":[{"delta":{"content":".g"}}],"event":{"type":"chat.text","delta":".g"}}
+
+data: {"choices":[{"delta":{"content":".,"}}],"event":{"type":"chat.text","delta":".,"}}
+
+data: {"choices":[{"delta":{"content":" "}}],"event":{"type":"chat.text","delta":" "}}
+
+data: {"choices":[{"delta":{"content":"8"}}],"event":{"type":"chat.text","delta":"8"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":"00"}}],"event":{"type":"chat.text","delta":"00"}}
+
+data: {"choices":[{"delta":{"content":" AM"}}],"event":{"type":"chat.text","delta":" AM"}}
+
+data: {"choices":[{"delta":{"content":" local"}}],"event":{"type":"chat.text","delta":" local"}}
+
+data: {"choices":[{"delta":{"content":" time"}}],"event":{"type":"chat.text","delta":" time"}}
+
+data: {"choices":[{"delta":{"content":")\n"}}],"event":{"type":"chat.text","delta":")\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Scan"}}],"event":{"type":"chat.text","delta":" Scan"}}
+
+data: {"choices":[{"delta":{"content":" curated"}}],"event":{"type":"chat.text","delta":" curated"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" reputable"}}],"event":{"type":"chat.text","delta":" reputable"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" sources"}}],"event":{"type":"chat.text","delta":" sources"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" RSS"}}],"event":{"type":"chat.text","delta":" RSS"}}
+
+data: {"choices":[{"delta":{"content":" feeds"}}],"event":{"type":"chat.text","delta":" feeds"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" and"}}],"event":{"type":"chat.text","delta":" and"}}
+
+data: {"choices":[{"delta":{"content":" press"}}],"event":{"type":"chat.text","delta":" press"}}
+
+data: {"choices":[{"delta":{"content":" releases"}}],"event":{"type":"chat.text","delta":" releases"}}
+
+data: {"choices":[{"delta":{"content":" for"}}],"event":{"type":"chat.text","delta":" for"}}
+
+data: {"choices":[{"delta":{"content":" AI"}}],"event":{"type":"chat.text","delta":" AI"}}
+
+data: {"choices":[{"delta":{"content":" agent"}}],"event":{"type":"chat.text","delta":" agent"}}
+
+data: {"choices":[{"delta":{"content":" funding"}}],"event":{"type":"chat.text","delta":" funding"}}
+
+data: {"choices":[{"delta":{"content":" announcements"}}],"event":{"type":"chat.text","delta":" announcements"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Extract"}}],"event":{"type":"chat.text","delta":" Extract"}}
+
+data: {"choices":[{"delta":{"content":" key"}}],"event":{"type":"chat.text","delta":" key"}}
+
+data: {"choices":[{"delta":{"content":" funding"}}],"event":{"type":"chat.text","delta":" funding"}}
+
+data: {"choices":[{"delta":{"content":" details"}}],"event":{"type":"chat.text","delta":" details"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":" company"}}],"event":{"type":"chat.text","delta":" company"}}
+
+data: {"choices":[{"delta":{"content":"/"}}],"event":{"type":"chat.text","delta":"/"}}
+
+data: {"choices":[{"delta":{"content":"agent"}}],"event":{"type":"chat.text","delta":"agent"}}
+
+data: {"choices":[{"delta":{"content":" name"}}],"event":{"type":"chat.text","delta":" name"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" round"}}],"event":{"type":"chat.text","delta":" round"}}
+
+data: {"choices":[{"delta":{"content":" amount"}}],"event":{"type":"chat.text","delta":" amount"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" lead"}}],"event":{"type":"chat.text","delta":" lead"}}
+
+data: {"choices":[{"delta":{"content":" investors"}}],"event":{"type":"chat.text","delta":" investors"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" use"}}],"event":{"type":"chat.text","delta":" use"}}
+
+data: {"choices":[{"delta":{"content":" of"}}],"event":{"type":"chat.text","delta":" of"}}
+
+data: {"choices":[{"delta":{"content":" funds"}}],"event":{"type":"chat.text","delta":" funds"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Cite"}}],"event":{"type":"chat.text","delta":" Cite"}}
+
+data: {"choices":[{"delta":{"content":" original"}}],"event":{"type":"chat.text","delta":" original"}}
+
+data: {"choices":[{"delta":{"content":" sources"}}],"event":{"type":"chat.text","delta":" sources"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" URLs"}}],"event":{"type":"chat.text","delta":" URLs"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" publication"}}],"event":{"type":"chat.text","delta":" publication"}}
+
+data: {"choices":[{"delta":{"content":" details"}}],"event":{"type":"chat.text","delta":" details"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Deliver"}}],"event":{"type":"chat.text","delta":" Deliver"}}
+
+data: {"choices":[{"delta":{"content":" a"}}],"event":{"type":"chat.text","delta":" a"}}
+
+data: {"choices":[{"delta":{"content":" concise"}}],"event":{"type":"chat.text","delta":" concise"}}
+
+data: {"choices":[{"delta":{"content":" summary"}}],"event":{"type":"chat.text","delta":" summary"}}
+
+data: {"choices":[{"delta":{"content":" briefing"}}],"event":{"type":"chat.text","delta":" briefing"}}
+
+data: {"choices":[{"delta":{"content":" note"}}],"event":{"type":"chat.text","delta":" note"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" evidence"}}],"event":{"type":"chat.text","delta":" evidence"}}
+
+data: {"choices":[{"delta":{"content":" ("}}],"event":{"type":"chat.text","delta":" ("}}
+
+data: {"choices":[{"delta":{"content":"quotes"}}],"event":{"type":"chat.text","delta":"quotes"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" links"}}],"event":{"type":"chat.text","delta":" links"}}
+
+data: {"choices":[{"delta":{"content":")\n\n"}}],"event":{"type":"chat.text","delta":")\n\n"}}
+
+data: {"choices":[{"delta":{"content":"**"}}],"event":{"type":"chat.text","delta":"**"}}
+
+data: {"choices":[{"delta":{"content":"Acceptance"}}],"event":{"type":"chat.text","delta":"Acceptance"}}
+
+data: {"choices":[{"delta":{"content":" Gates"}}],"event":{"type":"chat.text","delta":" Gates"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":"**\n"}}],"event":{"type":"chat.text","delta":"**\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" At"}}],"event":{"type":"chat.text","delta":" At"}}
+
+data: {"choices":[{"delta":{"content":" least"}}],"event":{"type":"chat.text","delta":" least"}}
+
+data: {"choices":[{"delta":{"content":" one"}}],"event":{"type":"chat.text","delta":" one"}}
+
+data: {"choices":[{"delta":{"content":" valid"}}],"event":{"type":"chat.text","delta":" valid"}}
+
+data: {"choices":[{"delta":{"content":" funding"}}],"event":{"type":"chat.text","delta":" funding"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" item"}}],"event":{"type":"chat.text","delta":" item"}}
+
+data: {"choices":[{"delta":{"content":" identified"}}],"event":{"type":"chat.text","delta":" identified"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" explicit"}}],"event":{"type":"chat.text","delta":" explicit"}}
+
+data: {"choices":[{"delta":{"content":" \""}}],"event":{"type":"chat.text","delta":" \""}}
+
+data: {"choices":[{"delta":{"content":"no"}}],"event":{"type":"chat.text","delta":"no"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":"\""}}],"event":{"type":"chat.text","delta":"\""}}
+
+data: {"choices":[{"delta":{"content":" statement"}}],"event":{"type":"chat.text","delta":" statement"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Each"}}],"event":{"type":"chat.text","delta":" Each"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" item"}}],"event":{"type":"chat.text","delta":" item"}}
+
+data: {"choices":[{"delta":{"content":" includes"}}],"event":{"type":"chat.text","delta":" includes"}}
+
+data: {"choices":[{"delta":{"content":" direct"}}],"event":{"type":"chat.text","delta":" direct"}}
+
+data: {"choices":[{"delta":{"content":" citation"}}],"event":{"type":"chat.text","delta":" citation"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" source"}}],"event":{"type":"chat.text","delta":" source"}}
+
+data: {"choices":[{"delta":{"content":" URL"}}],"event":{"type":"chat.text","delta":" URL"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" authoritative"}}],"event":{"type":"chat.text","delta":" authoritative"}}
+
+data: {"choices":[{"delta":{"content":" reference"}}],"event":{"type":"chat.text","delta":" reference"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Summary"}}],"event":{"type":"chat.text","delta":" Summary"}}
+
+data: {"choices":[{"delta":{"content":" concise"}}],"event":{"type":"chat.text","delta":" concise"}}
+
+data: {"choices":[{"delta":{"content":" ("}}],"event":{"type":"chat.text","delta":" ("}}
+
+data: {"choices":[{"delta":{"content":"approx"}}],"event":{"type":"chat.text","delta":"approx"}}
+
+data: {"choices":[{"delta":{"content":"."}}],"event":{"type":"chat.text","delta":"."}}
+
+data: {"choices":[{"delta":{"content":" "}}],"event":{"type":"chat.text","delta":" "}}
+
+data: {"choices":[{"delta":{"content":"3"}}],"event":{"type":"chat.text","delta":"3"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":"5"}}],"event":{"type":"chat.text","delta":"5"}}
+
+data: {"choices":[{"delta":{"content":" bullet"}}],"event":{"type":"chat.text","delta":" bullet"}}
+
+data: {"choices":[{"delta":{"content":" points"}}],"event":{"type":"chat.text","delta":" points"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" less"}}],"event":{"type":"chat.text","delta":" less"}}
+
+data: {"choices":[{"delta":{"content":" than"}}],"event":{"type":"chat.text","delta":" than"}}
+
+data: {"choices":[{"delta":{"content":" "}}],"event":{"type":"chat.text","delta":" "}}
+
+data: {"choices":[{"delta":{"content":"150"}}],"event":{"type":"chat.text","delta":"150"}}
+
+data: {"choices":[{"delta":{"content":" words"}}],"event":{"type":"chat.text","delta":" words"}}
+
+data: {"choices":[{"delta":{"content":")\n"}}],"event":{"type":"chat.text","delta":")\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" No"}}],"event":{"type":"chat.text","delta":" No"}}
+
+data: {"choices":[{"delta":{"content":" speculative"}}],"event":{"type":"chat.text","delta":" speculative"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" un"}}],"event":{"type":"chat.text","delta":" un"}}
+
+data: {"choices":[{"delta":{"content":"verified"}}],"event":{"type":"chat.text","delta":"verified"}}
+
+data: {"choices":[{"delta":{"content":" claims"}}],"event":{"type":"chat.text","delta":" claims"}}
+
+data: {"choices":[{"delta":{"content":"\n\n"}}],"event":{"type":"chat.text","delta":"\n\n"}}
+
+data: {"choices":[{"delta":{"content":"**"}}],"event":{"type":"chat.text","delta":"**"}}
+
+data: {"choices":[{"delta":{"content":"Required"}}],"event":{"type":"chat.text","delta":"Required"}}
+
+data: {"choices":[{"delta":{"content":" Rece"}}],"event":{"type":"chat.text","delta":" Rece"}}
+
+data: {"choices":[{"delta":{"content":"ipts"}}],"event":{"type":"chat.text","delta":"ipts"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":"**\n"}}],"event":{"type":"chat.text","delta":"**\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Crawl"}}],"event":{"type":"chat.text","delta":" Crawl"}}
+
+data: {"choices":[{"delta":{"content":"/s"}}],"event":{"type":"chat.text","delta":"/s"}}
+
+data: {"choices":[{"delta":{"content":"cr"}}],"event":{"type":"chat.text","delta":"cr"}}
+
+data: {"choices":[{"delta":{"content":"ape"}}],"event":{"type":"chat.text","delta":"ape"}}
+
+data: {"choices":[{"delta":{"content":" results"}}],"event":{"type":"chat.text","delta":" results"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" API"}}],"event":{"type":"chat.text","delta":" API"}}
+
+data: {"choices":[{"delta":{"content":" responses"}}],"event":{"type":"chat.text","delta":" responses"}}
+
+data: {"choices":[{"delta":{"content":" confirming"}}],"event":{"type":"chat.text","delta":" confirming"}}
+
+data: {"choices":[{"delta":{"content":" fresh"}}],"event":{"type":"chat.text","delta":" fresh"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" items"}}],"event":{"type":"chat.text","delta":" items"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Extract"}}],"event":{"type":"chat.text","delta":" Extract"}}
+
+data: {"choices":[{"delta":{"content":"ed"}}],"event":{"type":"chat.text","delta":"ed"}}
+
+data: {"choices":[{"delta":{"content":" citations"}}],"event":{"type":"chat.text","delta":" citations"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" timestamps"}}],"event":{"type":"chat.text","delta":" timestamps"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Final"}}],"event":{"type":"chat.text","delta":" Final"}}
+
+data: {"choices":[{"delta":{"content":" brief"}}],"event":{"type":"chat.text","delta":" brief"}}
+
+data: {"choices":[{"delta":{"content":" text"}}],"event":{"type":"chat.text","delta":" text"}}
+
+data: {"choices":[{"delta":{"content":" artifact"}}],"event":{"type":"chat.text","delta":" artifact"}}
+
+data: {"choices":[{"delta":{"content":" for"}}],"event":{"type":"chat.text","delta":" for"}}
+
+data: {"choices":[{"delta":{"content":" delivery"}}],"event":{"type":"chat.text","delta":" delivery"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" storage"}}],"event":{"type":"chat.text","delta":" storage"}}
+
+data: {"choices":[{"delta":{"content":"\n\n"}}],"event":{"type":"chat.text","delta":"\n\n"}}
+
+data: {"choices":[{"delta":{"content":"**"}}],"event":{"type":"chat.text","delta":"**"}}
+
+data: {"choices":[{"delta":{"content":"Attempt"}}],"event":{"type":"chat.text","delta":"Attempt"}}
+
+data: {"choices":[{"delta":{"content":"/"}}],"event":{"type":"chat.text","delta":"/"}}
+
+data: {"choices":[{"delta":{"content":"Runtime"}}],"event":{"type":"chat.text","delta":"Runtime"}}
+
+data: {"choices":[{"delta":{"content":"/"}}],"event":{"type":"chat.text","delta":"/"}}
+
+data: {"choices":[{"delta":{"content":"Token"}}],"event":{"type":"chat.text","delta":"Token"}}
+
+data: {"choices":[{"delta":{"content":"/"}}],"event":{"type":"chat.text","delta":"/"}}
+
+data: {"choices":[{"delta":{"content":"Cost"}}],"event":{"type":"chat.text","delta":"Cost"}}
+
+data: {"choices":[{"delta":{"content":" Budget"}}],"event":{"type":"chat.text","delta":" Budget"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":"**\n"}}],"event":{"type":"chat.text","delta":"**\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Single"}}],"event":{"type":"chat.text","delta":" Single"}}
+
+data: {"choices":[{"delta":{"content":" daily"}}],"event":{"type":"chat.text","delta":" daily"}}
+
+data: {"choices":[{"delta":{"content":" scan"}}],"event":{"type":"chat.text","delta":" scan"}}
+
+data: {"choices":[{"delta":{"content":" run"}}],"event":{"type":"chat.text","delta":" run"}}
+
+data: {"choices":[{"delta":{"content":" per"}}],"event":{"type":"chat.text","delta":" per"}}
+
+data: {"choices":[{"delta":{"content":" weekday"}}],"event":{"type":"chat.text","delta":" weekday"}}
+
+data: {"choices":[{"delta":{"content":" morning"}}],"event":{"type":"chat.text","delta":" morning"}}
+
+data: {"choices":[{"delta":{"content":" ("}}],"event":{"type":"chat.text","delta":" ("}}
+
+data: {"choices":[{"delta":{"content":"5"}}],"event":{"type":"chat.text","delta":"5"}}
+
+data: {"choices":[{"delta":{"content":" runs"}}],"event":{"type":"chat.text","delta":" runs"}}
+
+data: {"choices":[{"delta":{"content":"/week"}}],"event":{"type":"chat.text","delta":"/week"}}
+
+data: {"choices":[{"delta":{"content":")\n"}}],"event":{"type":"chat.text","delta":")\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Limit"}}],"event":{"type":"chat.text","delta":" Limit"}}
+
+data: {"choices":[{"delta":{"content":" source"}}],"event":{"type":"chat.text","delta":" source"}}
+
+data: {"choices":[{"delta":{"content":" count"}}],"event":{"type":"chat.text","delta":" count"}}
+
+data: {"choices":[{"delta":{"content":" to"}}],"event":{"type":"chat.text","delta":" to"}}
+
+data: {"choices":[{"delta":{"content":" ~"}}],"event":{"type":"chat.text","delta":" ~"}}
+
+data: {"choices":[{"delta":{"content":"5"}}],"event":{"type":"chat.text","delta":"5"}}
+
+data: {"choices":[{"delta":{"content":" authoritative"}}],"event":{"type":"chat.text","delta":" authoritative"}}
+
+data: {"choices":[{"delta":{"content":" feeds"}}],"event":{"type":"chat.text","delta":" feeds"}}
+
+data: {"choices":[{"delta":{"content":"/new"}}],"event":{"type":"chat.text","delta":"/new"}}
+
+data: {"choices":[{"delta":{"content":"spapers"}}],"event":{"type":"chat.text","delta":"spapers"}}
+
+data: {"choices":[{"delta":{"content":" per"}}],"event":{"type":"chat.text","delta":" per"}}
+
+data: {"choices":[{"delta":{"content":" run"}}],"event":{"type":"chat.text","delta":" run"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Keep"}}],"event":{"type":"chat.text","delta":" Keep"}}
+
+data: {"choices":[{"delta":{"content":" processing"}}],"event":{"type":"chat.text","delta":" processing"}}
+
+data: {"choices":[{"delta":{"content":" focused"}}],"event":{"type":"chat.text","delta":" focused"}}
+
+data: {"choices":[{"delta":{"content":" for"}}],"event":{"type":"chat.text","delta":" for"}}
+
+data: {"choices":[{"delta":{"content":" under"}}],"event":{"type":"chat.text","delta":" under"}}
+
+data: {"choices":[{"delta":{"content":" "}}],"event":{"type":"chat.text","delta":" "}}
+
+data: {"choices":[{"delta":{"content":"1"}}],"event":{"type":"chat.text","delta":"1"}}
+
+data: {"choices":[{"delta":{"content":" minute"}}],"event":{"type":"chat.text","delta":" minute"}}
+
+data: {"choices":[{"delta":{"content":" runtime"}}],"event":{"type":"chat.text","delta":" runtime"}}
+
+data: {"choices":[{"delta":{"content":" for"}}],"event":{"type":"chat.text","delta":" for"}}
+
+data: {"choices":[{"delta":{"content":" efficiency"}}],"event":{"type":"chat.text","delta":" efficiency"}}
+
+data: {"choices":[{"delta":{"content":"\n\n"}}],"event":{"type":"chat.text","delta":"\n\n"}}
+
+data: {"choices":[{"delta":{"content":"**"}}],"event":{"type":"chat.text","delta":"**"}}
+
+data: {"choices":[{"delta":{"content":"H"}}],"event":{"type":"chat.text","delta":"H"}}
+
+data: {"choices":[{"delta":{"content":"andoff"}}],"event":{"type":"chat.text","delta":"andoff"}}
+
+data: {"choices":[{"delta":{"content":" Rule"}}],"event":{"type":"chat.text","delta":" Rule"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":"**\n"}}],"event":{"type":"chat.text","delta":"**\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" If"}}],"event":{"type":"chat.text","delta":" If"}}
+
+data: {"choices":[{"delta":{"content":" no"}}],"event":{"type":"chat.text","delta":" no"}}
+
+data: {"choices":[{"delta":{"content":" clean"}}],"event":{"type":"chat.text","delta":" clean"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" scan"}}],"event":{"type":"chat.text","delta":" scan"}}
+
+data: {"choices":[{"delta":{"content":" result"}}],"event":{"type":"chat.text","delta":" result"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" escalate"}}],"event":{"type":"chat.text","delta":" escalate"}}
+
+data: {"choices":[{"delta":{"content":" to"}}],"event":{"type":"chat.text","delta":" to"}}
+
+data: {"choices":[{"delta":{"content":" manual"}}],"event":{"type":"chat.text","delta":" manual"}}
+
+data: {"choices":[{"delta":{"content":"/source"}}],"event":{"type":"chat.text","delta":"/source"}}
+
+data: {"choices":[{"delta":{"content":" update"}}],"event":{"type":"chat.text","delta":" update"}}
+
+data: {"choices":[{"delta":{"content":" review"}}],"event":{"type":"chat.text","delta":" review"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" fallback"}}],"event":{"type":"chat.text","delta":" fallback"}}
+
+data: {"choices":[{"delta":{"content":" summary"}}],"event":{"type":"chat.text","delta":" summary"}}
+
+data: {"choices":[{"delta":{"content":" stating"}}],"event":{"type":"chat.text","delta":" stating"}}
+
+data: {"choices":[{"delta":{"content":" no"}}],"event":{"type":"chat.text","delta":" no"}}
+
+data: {"choices":[{"delta":{"content":" new"}}],"event":{"type":"chat.text","delta":" new"}}
+
+data: {"choices":[{"delta":{"content":" funding"}}],"event":{"type":"chat.text","delta":" funding"}}
+
+data: {"choices":[{"delta":{"content":" announcements"}}],"event":{"type":"chat.text","delta":" announcements"}}
+
+data: {"choices":[{"delta":{"content":" found"}}],"event":{"type":"chat.text","delta":" found"}}
+
+data: {"choices":[{"delta":{"content":"\n\n"}}],"event":{"type":"chat.text","delta":"\n\n"}}
+
+data: {"choices":[{"delta":{"content":"**"}}],"event":{"type":"chat.text","delta":"**"}}
+
+data: {"choices":[{"delta":{"content":"Read"}}],"event":{"type":"chat.text","delta":"Read"}}
+
+data: {"choices":[{"delta":{"content":"iness"}}],"event":{"type":"chat.text","delta":"iness"}}
+
+data: {"choices":[{"delta":{"content":" Audit"}}],"event":{"type":"chat.text","delta":" Audit"}}
+
+data: {"choices":[{"delta":{"content":":"}}],"event":{"type":"chat.text","delta":":"}}
+
+data: {"choices":[{"delta":{"content":"**\n"}}],"event":{"type":"chat.text","delta":"**\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Confirm"}}],"event":{"type":"chat.text","delta":" Confirm"}}
+
+data: {"choices":[{"delta":{"content":" access"}}],"event":{"type":"chat.text","delta":" access"}}
+
+data: {"choices":[{"delta":{"content":" to"}}],"event":{"type":"chat.text","delta":" to"}}
+
+data: {"choices":[{"delta":{"content":" key"}}],"event":{"type":"chat.text","delta":" key"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" APIs"}}],"event":{"type":"chat.text","delta":" APIs"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" feeds"}}],"event":{"type":"chat.text","delta":" feeds"}}
+
+data: {"choices":[{"delta":{"content":" ("}}],"event":{"type":"chat.text","delta":" ("}}
+
+data: {"choices":[{"delta":{"content":"e"}}],"event":{"type":"chat.text","delta":"e"}}
+
+data: {"choices":[{"delta":{"content":".g"}}],"event":{"type":"chat.text","delta":".g"}}
+
+data: {"choices":[{"delta":{"content":"."}}],"event":{"type":"chat.text","delta":"."}}
+
+data: {"choices":[{"delta":{"content":" Tech"}}],"event":{"type":"chat.text","delta":" Tech"}}
+
+data: {"choices":[{"delta":{"content":"Crunch"}}],"event":{"type":"chat.text","delta":"Crunch"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" Venture"}}],"event":{"type":"chat.text","delta":" Venture"}}
+
+data: {"choices":[{"delta":{"content":"Beat"}}],"event":{"type":"chat.text","delta":"Beat"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" Crunch"}}],"event":{"type":"chat.text","delta":" Crunch"}}
+
+data: {"choices":[{"delta":{"content":"base"}}],"event":{"type":"chat.text","delta":"base"}}
+
+data: {"choices":[{"delta":{"content":" News"}}],"event":{"type":"chat.text","delta":" News"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" official"}}],"event":{"type":"chat.text","delta":" official"}}
+
+data: {"choices":[{"delta":{"content":" press"}}],"event":{"type":"chat.text","delta":" press"}}
+
+data: {"choices":[{"delta":{"content":" release"}}],"event":{"type":"chat.text","delta":" release"}}
+
+data: {"choices":[{"delta":{"content":" aggreg"}}],"event":{"type":"chat.text","delta":" aggreg"}}
+
+data: {"choices":[{"delta":{"content":"ators"}}],"event":{"type":"chat.text","delta":"ators"}}
+
+data: {"choices":[{"delta":{"content":")\n"}}],"event":{"type":"chat.text","delta":")\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Confirm"}}],"event":{"type":"chat.text","delta":" Confirm"}}
+
+data: {"choices":[{"delta":{"content":" citation"}}],"event":{"type":"chat.text","delta":" citation"}}
+
+data: {"choices":[{"delta":{"content":" formatting"}}],"event":{"type":"chat.text","delta":" formatting"}}
+
+data: {"choices":[{"delta":{"content":" and"}}],"event":{"type":"chat.text","delta":" and"}}
+
+data: {"choices":[{"delta":{"content":" hyperlinks"}}],"event":{"type":"chat.text","delta":" hyperlinks"}}
+
+data: {"choices":[{"delta":{"content":" work"}}],"event":{"type":"chat.text","delta":" work"}}
+
+data: {"choices":[{"delta":{"content":"\n"}}],"event":{"type":"chat.text","delta":"\n"}}
+
+data: {"choices":[{"delta":{"content":"-"}}],"event":{"type":"chat.text","delta":"-"}}
+
+data: {"choices":[{"delta":{"content":" Confirm"}}],"event":{"type":"chat.text","delta":" Confirm"}}
+
+data: {"choices":[{"delta":{"content":" delivery"}}],"event":{"type":"chat.text","delta":" delivery"}}
+
+data: {"choices":[{"delta":{"content":" mechanism"}}],"event":{"type":"chat.text","delta":" mechanism"}}
+
+data: {"choices":[{"delta":{"content":" configured"}}],"event":{"type":"chat.text","delta":" configured"}}
+
+data: {"choices":[{"delta":{"content":" ("}}],"event":{"type":"chat.text","delta":" ("}}
+
+data: {"choices":[{"delta":{"content":"e"}}],"event":{"type":"chat.text","delta":"e"}}
+
+data: {"choices":[{"delta":{"content":".g"}}],"event":{"type":"chat.text","delta":".g"}}
+
+data: {"choices":[{"delta":{"content":".,"}}],"event":{"type":"chat.text","delta":".,"}}
+
+data: {"choices":[{"delta":{"content":" message"}}],"event":{"type":"chat.text","delta":" message"}}
+
+data: {"choices":[{"delta":{"content":" via"}}],"event":{"type":"chat.text","delta":" via"}}
+
+data: {"choices":[{"delta":{"content":" chat"}}],"event":{"type":"chat.text","delta":" chat"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" email"}}],"event":{"type":"chat.text","delta":" email"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" dashboard"}}],"event":{"type":"chat.text","delta":" dashboard"}}
+
+data: {"choices":[{"delta":{"content":" update"}}],"event":{"type":"chat.text","delta":" update"}}
+
+data: {"choices":[{"delta":{"content":")\n\n"}}],"event":{"type":"chat.text","delta":")\n\n"}}
+
+data: {"choices":[{"delta":{"content":"---\n\n"}}],"event":{"type":"chat.text","delta":"---\n\n"}}
+
+data: {"choices":[{"delta":{"content":"If"}}],"event":{"type":"chat.text","delta":"If"}}
+
+data: {"choices":[{"delta":{"content":" you"}}],"event":{"type":"chat.text","delta":" you"}}
+
+data: {"choices":[{"delta":{"content":" approve"}}],"event":{"type":"chat.text","delta":" approve"}}
+
+data: {"choices":[{"delta":{"content":" this"}}],"event":{"type":"chat.text","delta":" this"}}
+
+data: {"choices":[{"delta":{"content":" loop"}}],"event":{"type":"chat.text","delta":" loop"}}
+
+data: {"choices":[{"delta":{"content":" plan"}}],"event":{"type":"chat.text","delta":" plan"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" I"}}],"event":{"type":"chat.text","delta":" I"}}
+
+data: {"choices":[{"delta":{"content":" can"}}],"event":{"type":"chat.text","delta":" can"}}
+
+data: {"choices":[{"delta":{"content":" prepare"}}],"event":{"type":"chat.text","delta":" prepare"}}
+
+data: {"choices":[{"delta":{"content":" the"}}],"event":{"type":"chat.text","delta":" the"}}
+
+data: {"choices":[{"delta":{"content":" concrete"}}],"event":{"type":"chat.text","delta":" concrete"}}
+
+data: {"choices":[{"delta":{"content":" Work"}}],"event":{"type":"chat.text","delta":" Work"}}
+
+data: {"choices":[{"delta":{"content":" Board"}}],"event":{"type":"chat.text","delta":" Board"}}
+
+data: {"choices":[{"delta":{"content":"/"}}],"event":{"type":"chat.text","delta":"/"}}
+
+data: {"choices":[{"delta":{"content":"Queen"}}],"event":{"type":"chat.text","delta":"Queen"}}
+
+data: {"choices":[{"delta":{"content":" Bee"}}],"event":{"type":"chat.text","delta":" Bee"}}
+
+data: {"choices":[{"delta":{"content":" task"}}],"event":{"type":"chat.text","delta":" task"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" the"}}],"event":{"type":"chat.text","delta":" the"}}
+
+data: {"choices":[{"delta":{"content":" required"}}],"event":{"type":"chat.text","delta":" required"}}
+
+data: {"choices":[{"delta":{"content":" source"}}],"event":{"type":"chat.text","delta":" source"}}
+
+data: {"choices":[{"delta":{"content":" list"}}],"event":{"type":"chat.text","delta":" list"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" parsing"}}],"event":{"type":"chat.text","delta":" parsing"}}
+
+data: {"choices":[{"delta":{"content":" logic"}}],"event":{"type":"chat.text","delta":" logic"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" and"}}],"event":{"type":"chat.text","delta":" and"}}
+
+data: {"choices":[{"delta":{"content":" format"}}],"event":{"type":"chat.text","delta":" format"}}
+
+data: {"choices":[{"delta":{"content":" template"}}],"event":{"type":"chat.text","delta":" template"}}
+
+data: {"choices":[{"delta":{"content":".\n\n"}}],"event":{"type":"chat.text","delta":".\n\n"}}
+
+data: {"choices":[{"delta":{"content":"Alternatively"}}],"event":{"type":"chat.text","delta":"Alternatively"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" if"}}],"event":{"type":"chat.text","delta":" if"}}
+
+data: {"choices":[{"delta":{"content":" you"}}],"event":{"type":"chat.text","delta":" you"}}
+
+data: {"choices":[{"delta":{"content":" want"}}],"event":{"type":"chat.text","delta":" want"}}
+
+data: {"choices":[{"delta":{"content":" me"}}],"event":{"type":"chat.text","delta":" me"}}
+
+data: {"choices":[{"delta":{"content":" to"}}],"event":{"type":"chat.text","delta":" to"}}
+
+data: {"choices":[{"delta":{"content":" start"}}],"event":{"type":"chat.text","delta":" start"}}
+
+data: {"choices":[{"delta":{"content":" a"}}],"event":{"type":"chat.text","delta":" a"}}
+
+data: {"choices":[{"delta":{"content":" first"}}],"event":{"type":"chat.text","delta":" first"}}
+
+data: {"choices":[{"delta":{"content":" one"}}],"event":{"type":"chat.text","delta":" one"}}
+
+data: {"choices":[{"delta":{"content":"-shot"}}],"event":{"type":"chat.text","delta":"-shot"}}
+
+data: {"choices":[{"delta":{"content":" scan"}}],"event":{"type":"chat.text","delta":" scan"}}
+
+data: {"choices":[{"delta":{"content":" of"}}],"event":{"type":"chat.text","delta":" of"}}
+
+data: {"choices":[{"delta":{"content":" recent"}}],"event":{"type":"chat.text","delta":" recent"}}
+
+data: {"choices":[{"delta":{"content":" AI"}}],"event":{"type":"chat.text","delta":" AI"}}
+
+data: {"choices":[{"delta":{"content":" agent"}}],"event":{"type":"chat.text","delta":" agent"}}
+
+data: {"choices":[{"delta":{"content":" funding"}}],"event":{"type":"chat.text","delta":" funding"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" I"}}],"event":{"type":"chat.text","delta":" I"}}
+
+data: {"choices":[{"delta":{"content":" can"}}],"event":{"type":"chat.text","delta":" can"}}
+
+data: {"choices":[{"delta":{"content":" do"}}],"event":{"type":"chat.text","delta":" do"}}
+
+data: {"choices":[{"delta":{"content":" a"}}],"event":{"type":"chat.text","delta":" a"}}
+
+data: {"choices":[{"delta":{"content":" live"}}],"event":{"type":"chat.text","delta":" live"}}
+
+data: {"choices":[{"delta":{"content":" scan"}}],"event":{"type":"chat.text","delta":" scan"}}
+
+data: {"choices":[{"delta":{"content":" now"}}],"event":{"type":"chat.text","delta":" now"}}
+
+data: {"choices":[{"delta":{"content":" from"}}],"event":{"type":"chat.text","delta":" from"}}
+
+data: {"choices":[{"delta":{"content":" known"}}],"event":{"type":"chat.text","delta":" known"}}
+
+data: {"choices":[{"delta":{"content":" public"}}],"event":{"type":"chat.text","delta":" public"}}
+
+data: {"choices":[{"delta":{"content":" sources"}}],"event":{"type":"chat.text","delta":" sources"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" summarize"}}],"event":{"type":"chat.text","delta":" summarize"}}
+
+data: {"choices":[{"delta":{"content":" with"}}],"event":{"type":"chat.text","delta":" with"}}
+
+data: {"choices":[{"delta":{"content":" citations"}}],"event":{"type":"chat.text","delta":" citations"}}
+
+data: {"choices":[{"delta":{"content":","}}],"event":{"type":"chat.text","delta":","}}
+
+data: {"choices":[{"delta":{"content":" and"}}],"event":{"type":"chat.text","delta":" and"}}
+
+data: {"choices":[{"delta":{"content":" deliver"}}],"event":{"type":"chat.text","delta":" deliver"}}
+
+data: {"choices":[{"delta":{"content":" a"}}],"event":{"type":"chat.text","delta":" a"}}
+
+data: {"choices":[{"delta":{"content":" brief"}}],"event":{"type":"chat.text","delta":" brief"}}
+
+data: {"choices":[{"delta":{"content":" immediately"}}],"event":{"type":"chat.text","delta":" immediately"}}
+
+data: {"choices":[{"delta":{"content":".\n\n"}}],"event":{"type":"chat.text","delta":".\n\n"}}
+
+data: {"choices":[{"delta":{"content":"Please"}}],"event":{"type":"chat.text","delta":"Please"}}
+
+data: {"choices":[{"delta":{"content":" confirm"}}],"event":{"type":"chat.text","delta":" confirm"}}
+
+data: {"choices":[{"delta":{"content":" how"}}],"event":{"type":"chat.text","delta":" how"}}
+
+data: {"choices":[{"delta":{"content":" you"}}],"event":{"type":"chat.text","delta":" you"}}
+
+data: {"choices":[{"delta":{"content":"’d"}}],"event":{"type":"chat.text","delta":"’d"}}
+
+data: {"choices":[{"delta":{"content":" like"}}],"event":{"type":"chat.text","delta":" like"}}
+
+data: {"choices":[{"delta":{"content":" to"}}],"event":{"type":"chat.text","delta":" to"}}
+
+data: {"choices":[{"delta":{"content":" proceed"}}],"event":{"type":"chat.text","delta":" proceed"}}
+
+data: {"choices":[{"delta":{"content":":\n"}}],"event":{"type":"chat.text","delta":":\n"}}
+
+data: {"choices":[{"delta":{"content":"1"}}],"event":{"type":"chat.text","delta":"1"}}
+
+data: {"choices":[{"delta":{"content":"."}}],"event":{"type":"chat.text","delta":"."}}
+
+data: {"choices":[{"delta":{"content":" Setup"}}],"event":{"type":"chat.text","delta":" Setup"}}
+
+data: {"choices":[{"delta":{"content":" and"}}],"event":{"type":"chat.text","delta":" and"}}
+
+data: {"choices":[{"delta":{"content":" run"}}],"event":{"type":"chat.text","delta":" run"}}
+
+data: {"choices":[{"delta":{"content":" recurring"}}],"event":{"type":"chat.text","delta":" recurring"}}
+
+data: {"choices":[{"delta":{"content":" daily"}}],"event":{"type":"chat.text","delta":" daily"}}
+
+data: {"choices":[{"delta":{"content":" brief"}}],"event":{"type":"chat.text","delta":" brief"}}
+
+data: {"choices":[{"delta":{"content":" loop"}}],"event":{"type":"chat.text","delta":" loop"}}
+
+data: {"choices":[{"delta":{"content":".\n"}}],"event":{"type":"chat.text","delta":".\n"}}
+
+data: {"choices":[{"delta":{"content":"2"}}],"event":{"type":"chat.text","delta":"2"}}
+
+data: {"choices":[{"delta":{"content":"."}}],"event":{"type":"chat.text","delta":"."}}
+
+data: {"choices":[{"delta":{"content":" Do"}}],"event":{"type":"chat.text","delta":" Do"}}
+
+data: {"choices":[{"delta":{"content":" an"}}],"event":{"type":"chat.text","delta":" an"}}
+
+data: {"choices":[{"delta":{"content":" initial"}}],"event":{"type":"chat.text","delta":" initial"}}
+
+data: {"choices":[{"delta":{"content":" live"}}],"event":{"type":"chat.text","delta":" live"}}
+
+data: {"choices":[{"delta":{"content":" AI"}}],"event":{"type":"chat.text","delta":" AI"}}
+
+data: {"choices":[{"delta":{"content":" agent"}}],"event":{"type":"chat.text","delta":" agent"}}
+
+data: {"choices":[{"delta":{"content":" funding"}}],"event":{"type":"chat.text","delta":" funding"}}
+
+data: {"choices":[{"delta":{"content":" news"}}],"event":{"type":"chat.text","delta":" news"}}
+
+data: {"choices":[{"delta":{"content":" brief"}}],"event":{"type":"chat.text","delta":" brief"}}
+
+data: {"choices":[{"delta":{"content":" scan"}}],"event":{"type":"chat.text","delta":" scan"}}
+
+data: {"choices":[{"delta":{"content":" now"}}],"event":{"type":"chat.text","delta":" now"}}
+
+data: {"choices":[{"delta":{"content":".\n\n"}}],"event":{"type":"chat.text","delta":".\n\n"}}
+
+data: {"choices":[{"delta":{"content":"Or"}}],"event":{"type":"chat.text","delta":"Or"}}
+
+data: {"choices":[{"delta":{"content":" provide"}}],"event":{"type":"chat.text","delta":" provide"}}
+
+data: {"choices":[{"delta":{"content":" any"}}],"event":{"type":"chat.text","delta":" any"}}
+
+data: {"choices":[{"delta":{"content":" other"}}],"event":{"type":"chat.text","delta":" other"}}
+
+data: {"choices":[{"delta":{"content":" preferences"}}],"event":{"type":"chat.text","delta":" preferences"}}
+
+data: {"choices":[{"delta":{"content":" or"}}],"event":{"type":"chat.text","delta":" or"}}
+
+data: {"choices":[{"delta":{"content":" source"}}],"event":{"type":"chat.text","delta":" source"}}
+
+data: {"choices":[{"delta":{"content":" feeds"}}],"event":{"type":"chat.text","delta":" feeds"}}
+
+data: {"choices":[{"delta":{"content":" you"}}],"event":{"type":"chat.text","delta":" you"}}
+
+data: {"choices":[{"delta":{"content":" want"}}],"event":{"type":"chat.text","delta":" want"}}
+
+data: {"choices":[{"delta":{"content":" included"}}],"event":{"type":"chat.text","delta":" included"}}
+
+data: {"choices":[{"delta":{"content":"."}}],"event":{"type":"chat.text","delta":"."}}
+
+data: [DONE]

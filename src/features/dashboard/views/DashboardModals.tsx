@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { MachineProvisionPanel } from "./MachineProvisionPanel";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type { ComponentType, Dispatch, ElementType, FormEvent, SetStateAction } from "react";
 import type { SetupCellProps, SetupStep } from "@/components/cells/SetupCell";
@@ -47,7 +48,7 @@ type DashboardModalsProps = {
   Plus: IconComponent;
   SetupCell: ComponentType<SetupCellProps>;
   copyMachineInitCommand: (key: string, command: string) => void;
-  copySetupCommand: () => void;
+  copySetupCommand: (os?: string) => void;
   displayAgents: AgentProfile[];
   duplicateAgent: () => void | Promise<void>;
   duplicateAgentDraft: DuplicateAgentDraft | null;
@@ -76,7 +77,7 @@ type DashboardModalsProps = {
   setMachineInitToken: Dispatch<SetStateAction<string>>;
   setMachineInitTokenStatus: Dispatch<SetStateAction<MachineInitTokenStatus>>;
   setSetupMachineKey: Dispatch<SetStateAction<string>>;
-  setupCollectorCommand: () => string;
+  setupCollectorCommand: (os?: string) => string;
   setupCommandCopied: boolean;
   setupMachine: MachineGroup | null;
 };
@@ -218,6 +219,7 @@ export function DashboardModals(props: DashboardModalsProps) {
             ) : null}
 
             {machineInitView === "create" || machineInitStatus.result ? (
+            <>
             <form className={fleetClass("machineInitForm")} onSubmit={initializeMachineProject}>
               <label className={fleetClass("agentSettingsField")}>
                 <span>Machine name</span>
@@ -304,10 +306,20 @@ export function DashboardModals(props: DashboardModalsProps) {
                 ) : null}
                 <Button type="submit" disabled={machineInitStatus.busy}>
                   {machineInitStatus.busy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
-                  {machineInitStatus.busy ? "Initializing" : "Initialize"}
+                  {machineInitStatus.busy ? "Initializing" : "Initialize (copy commands)"}
                 </Button>
               </div>
             </form>
+            {machineInitView === "create" && !machineInitStatus.result ? (
+              <MachineProvisionPanel
+                machineInitDraft={machineInitDraft}
+                fleetClass={fleetClass}
+                Button={Button}
+                LoaderCircle={LoaderCircle}
+                Plus={Plus}
+              />
+            ) : null}
+            </>
             ) : null}
 
             {machineInitStatus.error ? (
@@ -357,7 +369,11 @@ export function DashboardModals(props: DashboardModalsProps) {
               <div>
                 <p className="eyebrow">Connect machine</p>
                 <h2 id="setup-modal-title">{setupMachine.name}</h2>
-                <p>Use this when you are physically on the computer you want to add.</p>
+                <p>
+                  {setupMachine.self
+                    ? "This is the machine you are using now — it is already running HivemindOS."
+                    : "Use this when you are physically on the computer you want to add."}
+                </p>
               </div>
               <CloseIconButton aria-label="Close setup instructions" onClick={() => setSetupMachineKey("")} />
             </div>
@@ -378,7 +394,9 @@ export function DashboardModals(props: DashboardModalsProps) {
                     },
                     {
                       label: "Connect",
-                      hint: "Open Terminal on the machine and run the setup command.",
+                      hint: setupMachine?.self
+                        ? "This machine is already running HivemindOS — its agent bridge starts with local setup."
+                        : "Open a terminal (PowerShell on Windows) on the machine and run the setup command.",
                       state: "current",
                       action: (
                         <Button
@@ -386,7 +404,7 @@ export function DashboardModals(props: DashboardModalsProps) {
                           variant="secondary"
                           size="sm"
                           className="h-7 px-2.5 text-[0.7rem]"
-                          onClick={copySetupCommand}
+                          onClick={() => copySetupCommand(setupMachine?.os)}
                         >
                           {setupCommandCopied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
                           {setupCommandCopied ? "Copied" : "Copy command"}
@@ -408,20 +426,30 @@ export function DashboardModals(props: DashboardModalsProps) {
                   }
                   return steps;
                 })()}
-                details={(
-                  <div className="flex flex-col gap-2 text-xs">
-                    <p className="text-[var(--muted)]">
-                      Tailscale is optional. Install and sign in only if you want multi-machine collaboration and shared memory; without it, setup continues in local-only mode.
-                    </p>
-                    <p>
-                      Open Terminal on <strong className="text-[var(--foreground)]">{setupMachine?.name}</strong>, paste this command, then press Return:
-                    </p>
-                    <pre className="overflow-auto rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] p-3 text-[0.78rem] text-[var(--foreground)]">{setupCollectorCommand()}</pre>
-                    <p className="text-[var(--muted)]">
-                      When it finishes, come back here. The dashboard finds the machine on the next scan, and Chat becomes available.
-                    </p>
-                  </div>
-                )}
+                details={
+                  setupMachine?.self ? (
+                    <div className="flex flex-col gap-2 text-xs">
+                      <p className="text-[var(--muted)]">
+                        This is the machine running the HivemindOS dashboard you are using right now. Once an agent runtime is installed on this machine and its local bridge is running, it appears in the Fleet automatically.
+                      </p>
+                      <p>To re-run local setup from a source checkout:</p>
+                      <pre className="overflow-auto rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] p-3 text-[0.78rem] text-[var(--foreground)]">{setupCollectorCommand(setupMachine?.os)}</pre>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 text-xs">
+                      <p className="text-[var(--muted)]">
+                        Tailscale is optional. Install and sign in only if you want multi-machine collaboration and shared memory; without it, setup continues in local-only mode.
+                      </p>
+                      <p>
+                        Open a terminal on <strong className="text-[var(--foreground)]">{setupMachine?.name}</strong> (PowerShell on Windows), paste this command, then press Enter:
+                      </p>
+                      <pre className="overflow-auto rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] p-3 text-[0.78rem] text-[var(--foreground)]">{setupCollectorCommand(setupMachine?.os)}</pre>
+                      <p className="text-[var(--muted)]">
+                        When it finishes, come back here. The dashboard finds the machine on the next scan, and Chat becomes available.
+                      </p>
+                    </div>
+                  )
+                }
               />
             </div>
 

@@ -66,7 +66,14 @@ type SolanaWalletProvider = {
 
 type SpendPreset = "cheapest" | "balanced" | "fast" | "none" | "custom";
 type SetupStep = 1 | 2 | 3;
-type SetupView = "wallets" | "setup";
+type SetupView = "wallets" | "browse" | "setup" | "summary";
+
+type BrowseWallet = {
+  vaultId: string;
+  address: string;
+  network: string;
+  kind: "venice" | "personal" | "agent";
+};
 
 const SPEND_PRESETS: Array<{ id: SpendPreset; label: string; sub: string; input: string; output: string }> = [
   { id: "cheapest", label: "Cheapest", sub: "250 / 1k", input: "250", output: "1000" },
@@ -275,8 +282,11 @@ export function GuidedUsePodSetup({
     return [...wallets.values()];
   }, [existingWallets]);
   const shouldOfferWallets = !requireCurrentSetup && !hasUsePodSetup(agent?.usePod) && walletOptions.length > 0;
+  // A ready prepaid wallet collapses to a summary card; the full wizard stays
+  // one "Change model" / "Fund" click away.
+  const initiallyCollapsed = isUsePodSetupReady(agent?.usePod);
 
-  const [setupView, setSetupView] = useState<SetupView>(shouldOfferWallets ? "wallets" : "setup");
+  const [setupView, setSetupView] = useState<SetupView>(shouldOfferWallets ? "wallets" : initiallyCollapsed ? "summary" : "setup");
   const [currentStep, setCurrentStep] = useState<SetupStep>(initialStep);
   const [registering, setRegistering] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -301,6 +311,8 @@ export function GuidedUsePodSetup({
   const [depositAmount, setDepositAmount] = useState("5.00");
   const [walletMenuOpen, setWalletMenuOpen] = useState(false);
   const [walletProviders, setWalletProviders] = useState<SolanaWalletProvider[]>([]);
+  const [browseWallets, setBrowseWallets] = useState<BrowseWallet[] | null>(null);
+  const [vaultWallet, setVaultWallet] = useState<BrowseWallet | null>(null);
   const [transferBusy, setTransferBusy] = useState("");
   const [attachingWalletKey, setAttachingWalletKey] = useState("");
   const [showingSuccess, setShowingSuccess] = useState(false);
@@ -339,6 +351,8 @@ export function GuidedUsePodSetup({
 
   const headerCopy = useMemo(() => {
     if (setupView === "wallets") return { title: "UsePod wallet", body: "Attach an existing wallet or create a new one." };
+    if (setupView === "browse") return { title: "Other wallets", body: "Fund UsePod from a Solana wallet HivemindOS already holds keys for." };
+    if (setupView === "summary") return { title: "UsePod wallet", body: "Funded and ready for inference." };
     if (registering) return { title: "Creating token", body: "Setting up UsePod for this agent." };
     if (showingSuccess) return { title: "Success", body: "Loading UsePod models." };
     if (currentStep === 1) return { title: "Create UsePod token", body: "HivemindOS will create and save it automatically." };
@@ -588,7 +602,7 @@ export function GuidedUsePodSetup({
     successTimerRef.current = null;
   }
 
-  async function discoverModels() {
+  async function discoverModels(opts?: { quiet?: boolean }) {
     clearSuccessTimer();
     setShowingSuccess(false);
     setChecking(true);
@@ -632,17 +646,19 @@ export function GuidedUsePodSetup({
       };
       if (data.status === "ready" && data.models?.length) {
         setMessage("");
-        setShowingSuccess(true);
-        successTimerRef.current = window.setTimeout(() => {
-          setCurrentStep(3);
-          setShowingSuccess(false);
-          successTimerRef.current = null;
-        }, 1250);
+        if (!opts?.quiet) {
+          setShowingSuccess(true);
+          successTimerRef.current = window.setTimeout(() => {
+            setCurrentStep(3);
+            setShowingSuccess(false);
+            successTimerRef.current = null;
+          }, 1250);
+        }
         setChecking(false);
         await onComplete(completionPatch);
         return;
       }
-      if (data.status === "needs-funding") setCurrentStep(2);
+      if (data.status === "needs-funding" && !opts?.quiet) setCurrentStep(2);
       setMessage(data.message ?? "Funding may still be pending. Try again after UsePod confirms the top-up.");
       setChecking(false);
       await onComplete(completionPatch);
@@ -728,6 +744,69 @@ export function GuidedUsePodSetup({
       setMessage(error instanceof Error ? error.message : "Could not open the funding page.");
     } finally {
       setOpeningBrowser("");
+    }
+  }
+
+  async function openWalletBrowser() {
+    setMessage("");
+    setSetupView("browse");
+    if (browseWallets !== null) return;
+    try {
+      const response = await fetch("/api/wallet/browse");
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; wallets?: BrowseWallet[] } | null;
+      if (!data?.ok || !Array.isArray(data.wallets)) {
+        setBrowseWallets([]);
+        setMessage(data?.error ?? "Could not list local wallets.");
+        return;
+      }
+      // UsePod deposits are Solana USDC, so only Solana wallets can fund here.
+      setBrowseWallets(data.wallets.filter((wallet) => wallet.network.startsWith("solana:")));
+    } catch (error) {
+      setBrowseWallets([]);
+      setMessage(error instanceof Error ? error.message : "Could not list local wallets.");
+    }
+  }
+
+  function selectBrowseWallet(wallet: BrowseWallet) {
+    setVaultWallet(wallet);
+    setSetupView("setup");
+    if (depositCode) {
+      setCurrentStep(2);
+      setMessage(`Funding from ${shortUsePodValue(wallet.address)}. Enter an amount and transfer.`);
+      return;
+    }
+    setMessage(`Funding from ${shortUsePodValue(wallet.address)}. Create a token first, then transfer.`);
+  }
+
+  async function transferWithVaultWallet() {
+    if (!vaultWallet) return;
+    if (!depositCode) {
+      setMessage("Create a UsePod token first so HivemindOS has a funding reference.");
+      return;
+    }
+    setMessage("");
+    setTransferBusy("vault");
+    try {
+      const response = await fetch("/api/usepod/deposit-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountUsdc: depositAmount, depositCode, depositor: vaultWallet.address }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; transactionBase64?: string } | null;
+      if (!response.ok || !data?.ok || !data.transactionBase64) throw new Error(data?.error || "Could not prepare the UsePod deposit transaction.");
+      const signResponse = await fetch("/api/usepod/deposit-sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletVaultId: vaultWallet.vaultId, transactionBase64: data.transactionBase64 }),
+      });
+      const signData = await signResponse.json().catch(() => null) as { ok?: boolean; error?: string; signature?: string } | null;
+      if (!signResponse.ok || !signData?.ok) throw new Error(signData?.error || "Could not sign and send the UsePod deposit.");
+      setFundingOpened(true);
+      setMessage(signData.signature ? `Transfer submitted: ${shortUsePodValue(signData.signature)}` : "Transfer submitted. Check funding in a moment.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not send the UsePod transfer.");
+    } finally {
+      setTransferBusy("");
     }
   }
 
@@ -840,6 +919,74 @@ export function GuidedUsePodSetup({
                 </button>
               );
             })}
+          </div>
+        ) : null}
+
+        {setupView === "browse" ? (
+          <div className={styles.wallets} role="list" aria-label="Other local wallets">
+            {browseWallets === null ? (
+              <div className={styles.modelNotice}>
+                <span><LoaderCircle className={styles.spin} aria-hidden="true" /> Loading local wallets...</span>
+              </div>
+            ) : browseWallets.length ? browseWallets.map((wallet) => (
+              <button type="button" className={styles.wallet} key={wallet.vaultId} onClick={() => selectBrowseWallet(wallet)}>
+                <span className={styles.wname}>
+                  <b>{wallet.kind === "personal" ? "Personal wallet" : wallet.kind === "venice" ? "Venice wallet" : `Agent ${shortUsePodValue(wallet.vaultId)}`}</b>
+                  <small>{shortUsePodValue(wallet.address)}</small>
+                </span>
+                <span className={styles.wbal}>
+                  <b>Solana</b>
+                  <small>USDC funding</small>
+                </span>
+              </button>
+            )) : (
+              <div className={styles.modelNotice}>
+                <span>No local Solana wallets yet. Use the funding page or a wallet extension instead.</span>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {setupView === "summary" ? (
+          <div className={`${styles.panel} ${styles.accentCyan}`}>
+            <span className={styles.eyebrow}>Wallet funded</span>
+            <h3>UsePod is ready</h3>
+            <p>Inference is paid from this prepaid USDC balance with the spend caps below.</p>
+            {depositAddress ? <CodeLine label="Deposit address · Solana" value={depositAddress} /> : null}
+            <div className={styles.status}>
+              {(status?.balanceRemaining || agent?.usePod?.lastBalanceRemaining) ? (
+                <span className={styles.stat}><span className={styles.dot} />Balance <b>{status?.balanceRemaining || agent?.usePod?.lastBalanceRemaining}</b></span>
+              ) : null}
+              <span className={styles.stat}>Model <b>{selectedModel}</b></span>
+              <span className={styles.stat}>Caps <b>{activePreset?.label ?? "Custom"}</b></span>
+            </div>
+            <div className={styles.actionRow}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost}`}
+                disabled={isBusy}
+                onClick={() => {
+                  setMessage("");
+                  setSetupView("setup");
+                  setCurrentStep(3);
+                  void discoverModels({ quiet: true });
+                }}
+              >
+                <Search aria-hidden="true" /> Change model
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.ghost}`}
+                disabled={isBusy}
+                onClick={() => {
+                  setMessage("");
+                  setSetupView("setup");
+                  setCurrentStep(2);
+                }}
+              >
+                <ArrowUpRight aria-hidden="true" /> Fund
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -959,7 +1106,40 @@ export function GuidedUsePodSetup({
                 ) : (
                   <p className={styles.mutedMono}>Create a token to reveal the recipient address.</p>
                 )}
-                {!nativeRuntime ? (
+                {vaultWallet ? (
+                  <div className={styles.transferComposer}>
+                    <label className={styles.amountField}>
+                      <span>From {shortUsePodValue(vaultWallet.address)}</span>
+                      <div className={styles.amountInputWrap}>
+                        <input
+                          inputMode="decimal"
+                          min="0"
+                          pattern="^[0-9]+(\\.[0-9]{1,6})?$"
+                          value={depositAmount}
+                          onChange={(event) => setDepositAmount(event.target.value)}
+                          aria-label="USDC amount"
+                        />
+                        <strong>USDC</strong>
+                      </div>
+                    </label>
+                    <div className={styles.transferSplit}>
+                      <button type="button" className={`${styles.btn} ${styles.honey} ${styles.transferPrimary}`} disabled={!depositCode || Boolean(transferBusy)} onClick={() => void transferWithVaultWallet()}>
+                        {transferBusy === "vault" ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <ArrowUpRight aria-hidden="true" />}
+                        Transfer
+                      </button>
+                      <button type="button" className={`${styles.btn} ${styles.honey} ${styles.transferWalletButton}`} disabled={Boolean(transferBusy)} onClick={() => void openWalletBrowser()}>
+                        Change wallet
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.actionRow}>
+                    <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={Boolean(transferBusy)} onClick={() => void openWalletBrowser()}>
+                      Other wallets
+                    </button>
+                  </div>
+                )}
+                {!nativeRuntime && !vaultWallet ? (
                   <>
                     <div className={styles.transferComposer}>
                       <label className={styles.amountField}>
@@ -1138,9 +1318,21 @@ export function GuidedUsePodSetup({
         </span>
         <div className={styles.footActions}>
           {setupView === "setup" && currentStep === 1 && walletOptions.length ? <button type="button" className={styles.link} onClick={() => setSetupView("wallets")}>Attach existing wallet</button> : null}
-          {setupView === "wallets" ? <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => { setMessage(""); setSetupView("setup"); setCurrentStep(1); }}><Plus aria-hidden="true" /> New wallet</button> : null}
+          {setupView === "wallets" ? (
+            <>
+              <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => void openWalletBrowser()}>Other wallets</button>
+              <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => { setMessage(""); setSetupView("setup"); setCurrentStep(1); }}><Plus aria-hidden="true" /> New wallet</button>
+            </>
+          ) : null}
+          {setupView === "browse" ? (
+            <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => { setMessage(""); setSetupView(shouldOfferWallets ? "wallets" : "setup"); }}>Back</button>
+          ) : null}
           {setupView === "setup" && currentStep > 1 && !registering && !showingSuccess ? <button type="button" className={`${styles.btn} ${styles.ghost}`} onClick={() => setCurrentStep((currentStep - 1) as SetupStep)}>Back</button> : null}
-          {setupView === "setup" && currentStep === 3 ? <button type="button" className={`${styles.btn} ${styles.primary}`} disabled={isBusy || modelListUnavailable} onClick={onCancel}><Check aria-hidden="true" /> Done</button> : null}
+          {setupView === "setup" && currentStep === 3 ? (
+            <button type="button" className={`${styles.btn} ${styles.primary}`} disabled={isBusy || modelListUnavailable} onClick={() => { setMessage(""); setSetupView("summary"); }}>
+              <Check aria-hidden="true" /> Done
+            </button>
+          ) : null}
         </div>
       </footer>
     </section>

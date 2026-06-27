@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "hivemindos-paid-agent-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "CORS_ORIGIN": "*",
+    "HIVEMINDOS_PAID_AGENT_SLUG": "default",
+    "HIVEMINDOS_PAID_AGENT_DESCRIPTION": "Official HivemindOS paid agent",
+    "HIVEMINDOS_PAID_AGENT_PRICE_USD": "0.001",
+    "HIVEMINDOS_PAID_AGENT_TESTNET_MODE": "false",
+    "HIVEMINDOS_PAID_AGENT_UPSTREAM_TIMEOUT_MS": "120000"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hivemindos_paid_agent_gateway",
+      "database_id": "2e8378f9-561b-40b6-9bd6-d5a166465337"
+    }
+  ]
+}

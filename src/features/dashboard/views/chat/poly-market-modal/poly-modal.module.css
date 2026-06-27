@@ -33,16 +33,21 @@
 .root *, .root *::before, .root *::after { box-sizing: border-box; }
 
 :global([data-theme="hive-light"]) .root {
-  --bg-0: #f3ecd6; --bg-1: #ede4c8;
-  --line: rgba(92, 75, 45, 0.18); --line-2: rgba(92, 75, 45, 0.32);
-  --fg: #2a1c05; --fg-2: #4a3a1f; --fg-3: #6e5c3d; --fg-4: #8a7a5a;
-  --cyan: #0d8e7e; --cyan-2: #137e6c; --cyan-glow: rgba(13, 142, 126, 0.22);
-  --honey: #b88216; --honey-2: #8c5e0a; --honey-3: #6a4505;
-  --danger: #b42342; --danger-2: #8f1d2c;
-  --panel-grad: linear-gradient(180deg, rgba(240,232,216,0.94), rgba(223,212,190,0.86));
-  --panel-card-grad: linear-gradient(180deg, rgba(245,238,222,0.92), rgba(232,223,203,0.78));
-  --pm-mkt: #6e5c3d; --pm-no: #b42342;
-  background: rgba(40, 28, 5, 0.4);
+  --bg-0: #f1ede3; --bg-1: #f6f2e9;
+  --line: rgba(54, 46, 30, 0.10); --line-2: rgba(54, 46, 30, 0.16);
+  --fg: #221d14; --fg-2: #5e574b; --fg-3: #867d6e; --fg-4: #a59b89;
+  --cyan: #5f8f5a; --cyan-2: #4f7d4b; --cyan-glow: rgba(95, 143, 90, 0.22);
+  --honey: #b07f1c; --honey-2: #936811; --honey-3: #6f5011;
+  --danger: #c0524d; --danger-2: #963a37;
+  --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
+  --panel-card-grad: linear-gradient(180deg, rgba(255,252,246,0.88), rgba(244,239,228,0.76));
+  --pm-mkt: #867d6e; --pm-no: #c0524d;
+  background: rgba(54, 46, 30, 0.28);
+}
+
+:global([data-theme="hive-light"]) .root :global(.mm-modal) {
+  background: var(--panel-grad);
+  box-shadow: 0 40px 120px rgba(80, 60, 20, 0.20), 0 0 0 1px rgba(54, 46, 30, 0.08);
 }
 
 /* ── modal shell ── */

@@ -109,10 +109,13 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 fn command_exists(name: &str) -> bool {
+    // hidden_command: native_setup_status calls this ~12x per poll (every 4s
+    // while setup finishes); a plain `where` spawn flashes a console window
+    // each time on Windows. See crate::hidden_command.
     let status = if cfg!(target_os = "windows") {
-        Command::new("where").arg(name).output().map(|output| output.status)
+        crate::hidden_command("where").arg(name).output().map(|output| output.status)
     } else {
-        Command::new("sh")
+        crate::hidden_command("sh")
             .args(["-lc", &format!("command -v {name} >/dev/null 2>&1")])
             .status()
     };
@@ -181,10 +184,6 @@ fn open_local_collector_port() -> Option<u16> {
     local_collector_ports()
         .into_iter()
         .find(|port| tcp_port_open(*port))
-}
-
-fn default_vault_path() -> Option<PathBuf> {
-    home_dir().map(|home| home.join("Documents/Obsidian/hivemindos-vault"))
 }
 
 fn runtime_home(agent: &str) -> Option<PathBuf> {
@@ -268,6 +267,48 @@ fn app_source_root() -> PathBuf {
         .join(".hivemindos/app-source")
 }
 
+// GitHub serves a downloadable, extractable snapshot of any ref at these URLs.
+// We bootstrap the app source from the archive instead of `git clone` so a
+// fresh machine needs no `git` on PATH — a hard blocker on a stock Windows PC,
+// which (unlike macOS/Linux) ships no git. Tracks `main`, the same ref the old
+// git path pulled. NOTE: this still follows a moving branch; pinning the
+// archive to the installed app version is the proper follow-up.
+const APP_SOURCE_ARCHIVE_ZIP: &str =
+    "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.zip";
+const APP_SOURCE_ARCHIVE_TARBALL: &str =
+    "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.tar.gz";
+
+/// Download + extract the HivemindOS app source into `root` with no `git`
+/// dependency, using tools always present on a stock OS: PowerShell's
+/// Invoke-WebRequest/Expand-Archive on Windows, curl + tar on Unix. Replaces
+/// `root` wholesale each run (the previous git path re-cloned on any
+/// divergence anyway). The archive expands to a single `<repo>-main/` folder;
+/// both variants move that one extracted dir into place rather than hardcoding
+/// the prefix, so it stays correct if the default ref is ever renamed.
+fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String {
+    let parent = root.parent().unwrap_or_else(|| Path::new("."));
+    match platform {
+        SetupPlatform::Unix => format!(
+            "mkdir -p {parent} && _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && rm -rf \"$_hm_tmp\"",
+            parent = shell_quote(&parent.display().to_string()),
+            root = shell_quote(&root.display().to_string()),
+            url = APP_SOURCE_ARCHIVE_TARBALL,
+        ),
+        SetupPlatform::Windows => {
+            // The whole PowerShell program is ONE cmd-level double-quoted arg, so
+            // every inner string literal is single-quoted (no nested `"`). Single
+            // quotes also tolerate spaces in the user profile path. $ErrorAction
+            // 'Stop' makes any failure exit powershell non-zero for the caller's
+            // `if errorlevel 1`. Tls12 keeps the download working on older boxes.
+            format!(
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; Remove-Item -Recurse -Force $tmp\"",
+                root = root.display(),
+                url = APP_SOURCE_ARCHIVE_ZIP,
+            )
+        }
+    }
+}
+
 fn setup_root_command(platform: SetupPlatform) -> String {
     if let Ok(current_dir) = std::env::current_dir() {
         if current_dir.join(platform.script_name()).exists() {
@@ -279,18 +320,16 @@ fn setup_root_command(platform: SetupPlatform) -> String {
     }
 
     let root = app_source_root();
+    let bootstrap = bootstrap_app_source_command(platform, &root);
     match platform {
         SetupPlatform::Unix => format!(
-            "mkdir -p {parent} && if [ ! -d {root}/.git ]; then git clone https://github.com/LiamVisionary/hivemindos.git {root}; else git -C {root} pull --ff-only; fi && cd {root}",
-            parent = shell_quote(&root.parent().unwrap_or_else(|| Path::new(".")).display().to_string()),
+            "{bootstrap} && cd {root}",
             root = shell_quote(&root.display().to_string()),
         ),
-        SetupPlatform::Windows => {
-            let root = root.display();
-            format!(
-                "if not exist \"{root}\\.git\" (git clone https://github.com/LiamVisionary/hivemindos.git \"{root}\") else (git -C \"{root}\" pull --ff-only)\r\nif errorlevel 1 exit /b 1\r\ncd /d \"{root}\""
-            )
-        }
+        SetupPlatform::Windows => format!(
+            "{bootstrap}\r\nif errorlevel 1 exit /b 1\r\ncd /d \"{root}\"",
+            root = root.display(),
+        ),
     }
 }
 
@@ -362,10 +401,6 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
         .as_ref()
         .map(|dir| dir.join(platform.script_name()))
         .filter(|path| path.exists());
-    let vault_path = default_vault_path();
-    let vault_exists = vault_path
-        .as_ref()
-        .is_some_and(|path| path.exists() && path.is_dir());
     let package_manager_installed = command_exists(platform.pick("brew", "winget"));
     let pnpm_installed = command_exists("pnpm") || command_exists("corepack");
     let tailscale_installed = command_exists("tailscale") || mac_app_exists("Tailscale");
@@ -396,17 +431,8 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
             SetupCheck {
                 id: "vault",
                 label: "Local brain vault",
-                installed: vault_exists,
-                detail: vault_path
-                    .as_ref()
-                    .map(|path| {
-                        if vault_exists {
-                            format!("Found {}", path.display())
-                        } else {
-                            format!("Not found at {}", path.display())
-                        }
-                    })
-                    .unwrap_or_else(|| "No home directory was detected.".to_string()),
+                installed: false,
+                detail: "Checked during setup after you approve local file access.".to_string(),
                 install_command: None,
                 optional: false,
             },
@@ -649,7 +675,11 @@ mod tests {
         assert!(command.contains("where pwsh"));
         assert!(!command.contains("setup.sh"));
         assert!(!command.contains("--local-only"));
-        assert!(!command.contains("-Force"));
+        // Check the setup.ps1 flag segment specifically: the source-bootstrap
+        // PowerShell uses its own `-Force` params (Expand-Archive/Remove-Item)
+        // earlier in the command, which are unrelated to the setup.ps1 -Force.
+        let ps_flags = command.rsplit("-File setup.ps1").next().unwrap();
+        assert!(!ps_flags.contains("-Force"));
     }
 
     #[test]
@@ -659,8 +689,9 @@ mod tests {
         payload["installDeps"] = serde_json::json!(false);
         let request: NativeSetupRunRequest = serde_json::from_value(payload).unwrap();
         let (_, command) = build_setup_invocation(request, SetupPlatform::Windows);
-        assert!(command.contains("-Force"));
-        assert!(command.contains("-SkipDeps"));
+        let ps_flags = command.rsplit("-File setup.ps1").next().unwrap();
+        assert!(ps_flags.contains("-Force"));
+        assert!(ps_flags.contains("-SkipDeps"));
     }
 
     #[test]
@@ -674,14 +705,42 @@ mod tests {
     }
 
     #[test]
-    fn windows_root_command_clones_when_no_local_checkout() {
-        // The repo checkout contains setup.ps1, so the generated root command
-        // pins to the current directory; both variants must target the
-        // platform's own script and shell syntax.
+    fn root_command_targets_platform_script_and_shell() {
+        // The repo checkout contains setup.ps1/setup.sh, so the generated root
+        // command pins to the current directory; both variants must use the
+        // platform's own shell syntax to change into it.
         let root = setup_root_command(SetupPlatform::Windows);
-        assert!(root.contains("cd /d") || root.contains("git clone"));
+        assert!(root.contains("cd /d") || root.contains("Invoke-WebRequest"));
         let unix_root = setup_root_command(SetupPlatform::Unix);
-        assert!(unix_root.contains("cd ") || unix_root.contains("git clone"));
+        assert!(unix_root.contains("cd ") || unix_root.contains("curl -fsSL"));
+    }
+
+    #[test]
+    fn app_source_bootstrap_needs_no_git() {
+        // A fresh Windows PC has no git on PATH, so the source bootstrap must
+        // not shell out to git. Windows downloads via PowerShell; Unix via
+        // curl + tar. Both extract the single top-level archive folder.
+        // "github.com" in the archive URL legitimately contains the substring
+        // "git", so assert against actual git *invocations*, not the substring.
+        let git_invocations = ["git clone", "git -C", "git pull", "git fetch"];
+        let root = PathBuf::from("/home/user/.hivemindos/app-source");
+        let windows = bootstrap_app_source_command(SetupPlatform::Windows, &root);
+        for pat in git_invocations {
+            assert!(!windows.contains(pat), "windows bootstrap must not run `{pat}`: {windows}");
+        }
+        assert!(windows.contains("Invoke-WebRequest"));
+        assert!(windows.contains("Expand-Archive"));
+        assert!(windows.contains("Move-Item"));
+        assert!(windows.contains("archive/refs/heads/main.zip"));
+
+        let unix = bootstrap_app_source_command(SetupPlatform::Unix, &root);
+        for pat in git_invocations {
+            assert!(!unix.contains(pat), "unix bootstrap must not run `{pat}`: {unix}");
+        }
+        assert!(unix.contains("curl -fsSL"));
+        assert!(unix.contains("tar -xzf"));
+        assert!(unix.contains("--strip-components=1"));
+        assert!(unix.contains("archive/refs/heads/main.tar.gz"));
     }
 
     #[test]

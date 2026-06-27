@@ -520,6 +520,24 @@
   color: #c9fbd6;
 }
 
+.setupLog {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid rgba(246, 205, 103, 0.28);
+  background: #0a0d07;
+  color: #fde9aa;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  font-size: 12.5px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
 .badge,
 .pill {
   display: inline-flex;
@@ -607,4 +625,142 @@
   .toolbarButtons {
     align-items: stretch;
   }
+}
+
+:global(:root[data-theme="hive-light"]) .page {
+  background:
+    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.14), transparent 26rem),
+    radial-gradient(circle at 84% 18%, rgba(95, 143, 90, 0.10), transparent 28rem),
+    linear-gradient(140deg, #fbf8f1 0%, #f1ede3 52%, #f4efe4 100%);
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .topbar,
+:global(:root[data-theme="hive-light"]) .centerStage,
+:global(:root[data-theme="hive-light"]) .welcomeStage,
+:global(:root[data-theme="hive-light"]) .stage,
+:global(:root[data-theme="hive-light"]) .appsStage,
+:global(:root[data-theme="hive-light"]) .machineCard,
+:global(:root[data-theme="hive-light"]) .methodCard,
+:global(:root[data-theme="hive-light"]) .appCard,
+:global(:root[data-theme="hive-light"]) .manualBox,
+:global(:root[data-theme="hive-light"]) .connectionList,
+:global(:root[data-theme="hive-light"]) .emptyAccounts {
+  border-color: rgba(54, 46, 30, 0.16);
+  background: rgba(251, 248, 241, 0.88);
+  color: #221d14;
+  box-shadow: 0 18px 50px rgba(80, 60, 20, 0.12);
+}
+
+:global(:root[data-theme="hive-light"]) .embedded {
+  background: transparent;
+}
+
+:global(:root[data-theme="hive-light"]) .centerStage,
+:global(:root[data-theme="hive-light"]) .welcomeStage,
+:global(:root[data-theme="hive-light"]) .stage,
+:global(:root[data-theme="hive-light"]) .appsStage {
+  background:
+    linear-gradient(180deg, rgba(251, 248, 241, 0.9), rgba(244, 239, 228, 0.78)),
+    repeating-linear-gradient(135deg, rgba(54, 46, 30, 0.035) 0 1px, transparent 1px 18px);
+}
+
+:global(:root[data-theme="hive-light"]) .machineCard:hover,
+:global(:root[data-theme="hive-light"]) .machineCardSelected,
+:global(:root[data-theme="hive-light"]) .methodCard:hover,
+:global(:root[data-theme="hive-light"]) .methodCardSelected,
+:global(:root[data-theme="hive-light"]) .appCard:hover,
+:global(:root[data-theme="hive-light"]) .appCardEnabled {
+  border-color: rgba(95, 143, 90, 0.36);
+  background: rgba(95, 143, 90, 0.10);
+}
+
+:global(:root[data-theme="hive-light"]) .eyebrow,
+:global(:root[data-theme="hive-light"]) .stepHeader span:first-child,
+:global(:root[data-theme="hive-light"]) .methodCard svg,
+:global(:root[data-theme="hive-light"]) .bigSetupButton svg {
+  color: #936811;
+}
+
+:global(:root[data-theme="hive-light"]) .subtitle,
+:global(:root[data-theme="hive-light"]) .welcomeStage p,
+:global(:root[data-theme="hive-light"]) .centerStage p,
+:global(:root[data-theme="hive-light"]) .stepHeader p,
+:global(:root[data-theme="hive-light"]) .appsToolbar p,
+:global(:root[data-theme="hive-light"]) .machineCard span,
+:global(:root[data-theme="hive-light"]) .methodCard span,
+:global(:root[data-theme="hive-light"]) .connectionRow span,
+:global(:root[data-theme="hive-light"]) .emptyAccounts span,
+:global(:root[data-theme="hive-light"]) .appDetail {
+  color: #867d6e !important;
+}
+
+:global(:root[data-theme="hive-light"]) .nangoMark,
+:global(:root[data-theme="hive-light"]) .loadingMark,
+:global(:root[data-theme="hive-light"]) .machineIcon {
+  border-color: rgba(176, 127, 28, 0.26);
+  background: rgba(176, 127, 28, 0.12);
+  color: #936811;
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .bigSetupButton {
+  border-color: rgba(95, 143, 90, 0.30);
+  background:
+    linear-gradient(135deg, rgba(95, 143, 90, 0.14), rgba(176, 127, 28, 0.10)),
+    rgba(255, 252, 246, 0.86);
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .machineActions {
+  background: rgba(95, 143, 90, 0.14);
+  color: #376739 !important;
+}
+
+:global(:root[data-theme="hive-light"]) .setupRequired {
+  border-color: rgba(192, 82, 77, 0.28);
+  background: rgba(192, 82, 77, 0.10);
+}
+
+:global(:root[data-theme="hive-light"]) .setupRequired span,
+:global(:root[data-theme="hive-light"]) .badgeBad {
+  color: #963a37;
+}
+
+:global(:root[data-theme="hive-light"]) .manualBox pre {
+  background: rgba(255, 252, 246, 0.82);
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .note {
+  border-color: rgba(176, 127, 28, 0.28);
+  background: rgba(176, 127, 28, 0.10);
+  color: #936811;
+}
+
+:global(:root[data-theme="hive-light"]) .setupLog {
+  border-color: rgba(192, 82, 77, 0.28);
+  background: rgba(255, 252, 246, 0.92);
+  color: #7a2f2c;
+}
+
+:global(:root[data-theme="hive-light"]) .noteGood,
+:global(:root[data-theme="hive-light"]) .badgeGood,
+:global(:root[data-theme="hive-light"]) .pillGood,
+:global(:root[data-theme="hive-light"]) .validated {
+  border-color: rgba(95, 143, 90, 0.28);
+  background: rgba(95, 143, 90, 0.10);
+  color: #376739 !important;
+}
+
+:global(:root[data-theme="hive-light"]) .badgeWarn,
+:global(:root[data-theme="hive-light"]) .pillWarn {
+  border-color: rgba(176, 127, 28, 0.30);
+  background: rgba(176, 127, 28, 0.10);
+  color: #936811 !important;
+}
+
+:global(:root[data-theme="hive-light"]) .pillNeutral {
+  background: rgba(54, 46, 30, 0.08);
+  color: #867d6e !important;
 }

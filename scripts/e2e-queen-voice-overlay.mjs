@@ -85,11 +85,36 @@ const result = await page.evaluate(() => {
   const dialog = document.querySelector(
     '[role="dialog"][aria-label="Queen Bee voice chat"]',
   );
-  const glowLayers = document.querySelectorAll('[class*="glowLayer"]').length;
+  const glowRoot = document.querySelector("[data-queen-glow-root]");
+  const glowFrame = document.querySelector("[data-queen-glow-frame]");
+  const glowRootRect = glowRoot?.getBoundingClientRect();
+  const glowFrameRect = glowFrame?.getBoundingClientRect();
+  const glowFrameInset = Number(glowFrame?.getAttribute("data-queen-glow-inset"));
+  const glowFrameRadius = Number(glowFrame?.getAttribute("data-queen-glow-radius"));
+  const glowLayers = document.querySelectorAll("[data-queen-glow-layer]").length;
   const statusText = dialog?.textContent ?? "";
   return {
     overlayMounted: Boolean(dialog),
     glowLayers,
+    glowRootRect: glowRootRect
+      ? {
+          top: glowRootRect.top,
+          left: glowRootRect.left,
+          width: glowRootRect.width,
+          height: glowRootRect.height,
+        }
+      : null,
+    glowFrameRect: glowFrameRect
+      ? {
+          top: glowFrameRect.top,
+          left: glowFrameRect.left,
+          width: glowFrameRect.width,
+          height: glowFrameRect.height,
+          inset: glowFrameInset,
+          radius: glowFrameRadius,
+        }
+      : null,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
     statusText: statusText.slice(0, 300),
   };
 });
@@ -103,7 +128,22 @@ await page.screenshot({ path: "/tmp/queen-voice-e2e.png", fullPage: false });
 console.log("Screenshot: /tmp/queen-voice-e2e.png");
 await browser.close();
 
-if (!result.overlayMounted || result.glowLayers < 4) {
+const glowCoversViewport =
+  result.glowRootRect
+  && Math.abs(result.glowRootRect.top) <= 1
+  && Math.abs(result.glowRootRect.left) <= 1
+  && result.glowRootRect.width >= result.viewport.width - 2
+  && result.glowRootRect.height >= result.viewport.height - 2;
+const glowFrameFollowsAppChrome =
+  result.glowFrameRect
+  && result.glowFrameRect.inset >= 8
+  && result.glowFrameRect.inset <= 14
+  && result.glowFrameRect.radius >= 32
+  && result.glowFrameRect.radius <= 48
+  && result.glowFrameRect.width >= result.viewport.width - 2
+  && result.glowFrameRect.height >= result.viewport.height - 2;
+
+if (!result.overlayMounted || result.glowLayers < 3 || !glowCoversViewport || !glowFrameFollowsAppChrome) {
   console.error("FAIL: overlay did not mount or glow layers missing.");
   process.exit(1);
 }

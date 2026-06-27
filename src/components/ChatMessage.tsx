@@ -9,6 +9,7 @@ import {
 } from "ai";
 
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 
 function ToolBlock({ part }: { part: UIMessage["parts"][number] }) {
   if (!isToolOrDynamicToolUIPart(part)) {
@@ -21,6 +22,8 @@ function ToolBlock({ part }: { part: UIMessage["parts"][number] }) {
     errorText?: string;
   };
   const name = getToolOrDynamicToolName(part);
+  const inputJsonRender = extractJsonRenderPayload(p.input);
+  const outputJsonRender = extractJsonRenderPayload(p.output);
 
   return (
     <div className="my-2 rounded-lg border border-zinc-300 bg-zinc-100/80 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800/80">
@@ -31,16 +34,24 @@ function ToolBlock({ part }: { part: UIMessage["parts"][number] }) {
         </span>
       </div>
       {p.state === "input-available" || p.state === "input-streaming" ? (
-        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
-          {JSON.stringify(p.input, null, 2)}
-        </pre>
+        inputJsonRender ? (
+          <JsonRenderSurface value={p.input} />
+        ) : (
+          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
+            {JSON.stringify(p.input, null, 2)}
+          </pre>
+        )
       ) : null}
       {p.state === "output-available" && p.output != null ? (
-        <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
-          {typeof p.output === "string"
-            ? p.output
-            : JSON.stringify(p.output, null, 2)}
-        </pre>
+        outputJsonRender ? (
+          <JsonRenderSurface value={p.output} />
+        ) : (
+          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">
+            {typeof p.output === "string"
+              ? p.output
+              : JSON.stringify(p.output, null, 2)}
+          </pre>
+        )
       ) : null}
       {p.state === "output-error" && p.errorText ? (
         <p className="mt-1 text-xs text-red-600 dark:text-red-400">

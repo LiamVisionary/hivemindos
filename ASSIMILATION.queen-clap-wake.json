@@ -1,0 +1,97 @@
+{
+  "created_at": "2026-06-19T10:51:21.035680+00:00",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "audiojs/beat-detection",
+      "source_path": "util.js",
+      "target_path": "src/features/queen-voice/clap-activation.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted spectralFlux positive magnitude-difference and adaptive threshold idea into a live analyser-frame onset gate"
+    },
+    {
+      "source_repo": "audiojs/beat-detection",
+      "source_path": "onset/index.js",
+      "target_path": "src/features/queen-voice/clap-activation.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted onset detection function plus threshold peak-pick concept for clap-like transient gating"
+    },
+    {
+      "source_repo": "TzurSoffer/clapDetection",
+      "source_path": "src/clapDetector/clapDetector.py",
+      "target_path": "src/features/queen-voice/clap-activation.ts",
+      "reuse_type": "translated_code",
+      "note": "translated band-focused clap filtering, dynamic threshold, debounce, and pattern timing ideas into browser Web Audio metrics"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts",
+      "target_path": "src/features/queen-voice/use-queen-clap-activation.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused the existing silent ScriptProcessorNode microphone processing lifecycle so clap wake samples audio frames instead of requestAnimationFrame paint frames"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts",
+      "target_path": "src/features/queen-voice/clap-activation.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted voice VAD noise-floor and decay concepts into clap wake adaptive room-noise thresholding and relative re-arm after clap tails"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/queen-voice/use-queen-clap-activation.ts",
+      "target_path": "src/features/queen-voice/clap-activation.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused Web Audio analyser frequency data to add high-band ratio and high-band flux gates for broadband clap-like bursts"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/queen-voice/QueenBeeVoiceOverlay.tsx",
+      "target_path": "src/features/queen-voice/QueenBeeVoiceOverlay.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused existing Queen Bee voice event/open path and control bar, threading one shared opening line into both voice engines"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/test-queen-echo-detection.mjs",
+      "target_path": "scripts/test-queen-clap-activation.mjs",
+      "reuse_type": "test_adapted",
+      "note": "matched existing Queen voice regression script style and added onset/noise-shape clap coverage"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/dashboard/DashboardApp.tsx",
+      "target_path": "src/features/dashboard/DashboardApp.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused existing dashboard-state hydrate and persist pattern for shared clap wake preference"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/dashboard/views/chat/AgentSettingsModal.tsx",
+      "target_path": "src/features/dashboard/views/chat/AgentSettingsModal.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused existing Calls panel prop threading through Agent Settings modal"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx",
+      "target_path": "src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused existing Calls checkbox-row settings pattern for the Queen Bee clap wake toggle"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/queen-voice/use-queen-bee-realtime.ts",
+      "target_path": "src/features/queen-voice/use-queen-bee-realtime.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused existing response.create event helper path to trigger one assistant opening response in realtime sessions"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/queen-voice/use-queen-bee-voice.ts",
+      "target_path": "src/features/queen-voice/use-queen-bee-voice.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused existing addTurn, history, and playSpokenReply flow to speak the same opening line before fallback listening starts"
+    }
+  ]
+}

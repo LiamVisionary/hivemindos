@@ -24,20 +24,25 @@ export async function POST(request: NextRequest) {
     if (!agentId) return NextResponse.json({ ok: false, error: "agentId is required" }, { status: 400 });
     if (body.importKind === "recovery-phrase") {
       const importedWallets = importRecoveryPhraseWallets(body.secret || "");
-      const wallets = await Promise.all(importedWallets.map((wallet) => storeWalletSecret({
-        agentId: `${agentId}:${wallet.network.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`,
-        address: wallet.address,
-        network: wallet.network,
-        secret: wallet.secret,
-      })));
+      const wallets: Awaited<ReturnType<typeof storeWalletSecret>>[] = [];
+      const walletName = body.name?.trim() || "My wallet";
+      for (const wallet of importedWallets) {
+        wallets.push(await storeWalletSecret({
+          agentId: `${agentId}:${wallet.network.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`,
+          name: walletName,
+          address: wallet.address,
+          network: wallet.network,
+          secret: wallet.secret,
+        }));
+      }
       if (agentId.startsWith("user:")) {
         const now = Date.now();
         await Promise.all(wallets.map((wallet, index) => writeWalletRecord({
           vaultPath: body.vaultPath,
           agentId: wallet.agentId,
           agentName: importedWallets.length > 1
-            ? `${body.name?.trim() || "My wallet"} ${importedWallets[index]?.label || (wallet.network.startsWith("solana:") ? "Solana" : "Base")}`
-            : body.name?.trim() || `My ${wallet.network.startsWith("solana:") ? "Solana" : "Base"} wallet`,
+            ? `${walletName} ${importedWallets[index]?.label || (wallet.network.startsWith("solana:") ? "Solana" : "Base")}`
+            : walletName,
           wallet: {
             ...createDefaultAgentWallet(wallet.agentId),
             enabled: false,
@@ -68,8 +73,10 @@ export async function POST(request: NextRequest) {
     }
 
     const imported = importWalletSecret(body.network || "eip155:8453", body.secret || "", body.importKind || "private-key");
+    const singleWalletName = body.name?.trim() || `My ${imported.network.startsWith("solana:") ? "Solana" : "Base"} wallet`;
     const info = await storeWalletSecret({
       agentId,
+      name: singleWalletName,
       address: imported.address,
       network: imported.network,
       secret: imported.secret,
@@ -79,7 +86,7 @@ export async function POST(request: NextRequest) {
       await writeWalletRecord({
         vaultPath: body.vaultPath,
         agentId: info.agentId,
-        agentName: body.name?.trim() || `My ${info.network.startsWith("solana:") ? "Solana" : "Base"} wallet`,
+        agentName: singleWalletName,
         wallet: {
           ...createDefaultAgentWallet(info.agentId),
           enabled: false,

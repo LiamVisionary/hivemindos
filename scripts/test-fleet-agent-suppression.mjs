@@ -117,6 +117,43 @@ assert.equal(
   "an add that collides with nothing must leave the suppression set untouched",
 );
 
+// Regression: a remote collector can move between Hivemind Link peer target
+// ports. An old suppression tombstone for the same id must not permanently hide
+// a configured/live remote agent when its current workspace key no longer
+// matches the tombstoned workspace.
+const oldRemoteEmerson = {
+  id: "hermes-emerson-d7fee9",
+  name: "Emerson",
+  runtime: "hermes",
+  agentId: "emerson",
+  telemetryUrl: "http://127.0.0.1:8788/peer/ubuntu-agent.example%3A8789",
+  localDataDir: "/root/.hermes/profiles/emerson",
+};
+
+const currentRemoteEmerson = {
+  ...oldRemoteEmerson,
+  telemetryUrl: "http://127.0.0.1:8788/peer/ubuntu-agent.example%3A8787",
+};
+
+const staleRemoteTombstones = new Set(agentSuppressionKeys(oldRemoteEmerson));
+assert.equal(
+  agentMatchesSuppression(currentRemoteEmerson, staleRemoteTombstones),
+  false,
+  "a stale remote id tombstone must not hide an agent at a new collector workspace",
+);
+
+assert.equal(
+  agentMatchesSuppression(currentRemoteEmerson, new Set(agentSuppressionKeys(currentRemoteEmerson))),
+  true,
+  "an active tombstone for the current remote workspace must still suppress the agent",
+);
+
+assert.equal(
+  agentMatchesSuppression(unrelatedProfile, new Set([`id:${unrelatedProfile.id}`])),
+  true,
+  "local id-only suppressions must still suppress local agents",
+);
+
 // Regression: two saved duplicates of the same agent (same runtime/collector/
 // data dir, different ids) share the workspace tombstone. Deleting the stale
 // duplicate must not record keys that hide the profile the user kept.

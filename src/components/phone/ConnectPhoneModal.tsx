@@ -27,14 +27,14 @@ export function ConnectPhoneModal({ open, onClose }: { open: boolean; onClose: (
   return createPortal(
     (
       <div
-        className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-8"
+        className="fixed inset-0 z-50 grid place-items-center bg-[rgba(34,29,20,0.34)] px-4 py-8 backdrop-blur-md"
         role="dialog"
         aria-modal="true"
         aria-label="Connect your phone"
         onClick={onClose}
       >
         <div
-          className="grid w-full max-w-md gap-5 overflow-hidden rounded-md border border-[rgba(148,163,184,0.20)] bg-[rgba(5,8,13,0.98)] p-7 shadow-2xl"
+          className="grid w-full max-w-md gap-5 overflow-hidden rounded-md border border-[var(--line)] bg-[var(--surface)] p-7 shadow-2xl"
           onClick={(event) => event.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-4">

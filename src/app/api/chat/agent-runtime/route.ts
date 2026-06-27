@@ -20,13 +20,50 @@ import { callVeilMcpTool } from "@/lib/services/wallet/veil-mcp";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
 import { executeX402Fetch, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
-import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import {
+  executeStockTrade,
+  discoverStockTradeQuote,
+  stockTradeConfirmation,
+  type StockTradeSide,
+  type BuyStockPolicy,
+  type BuyStockResult,
+} from "@/lib/services/trading/buy-stock";
+import { resolveXStock, supportedXStockTickers } from "@/lib/config/xstocks-tokens";
+import type { AgentTradingVenue } from "@/lib/types/agent-wallet";
+import { getWalletInfo, getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  platformFeeReceiptDetail,
+  quoteTradingPlatformFee,
+  type PlatformFeeCollection,
+} from "@/lib/services/wallet/platform-fees";
+import { SWAP_CONFIRMATION, MAX_SWAP_USD, quoteDexSwap, executeDexSwap } from "@/lib/services/trading/dex-swap";
+import {
+  SEND_CONFIRMATION,
+  parseSendRequest,
+  isSendDraftText,
+  parseSendDraft,
+  buildSendDraftMessage,
+  validateSend,
+  sendCapUsd,
+  networkChainLabel,
+  parseSwapRequest,
+  hasLocalSwapIntent,
+  isSwapDraftText,
+  parseSwapDraft,
+  buildSwapDraftMessage,
+} from "@/lib/services/chat/wallet-action-intents";
+import { resolveWalletSource } from "@/lib/services/chat/wallet-source-resolver";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { chatTelemetrySession, chatTelemetryValue } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
+import { isFusionProfile, streamFusionResponse } from "@/lib/services/fusion/route-stream";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
+import { interpretVeniceError, isVeniceProfile, resolveVeniceRuntimeConfig, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
 import {
   bankrLlmModel,
   isBankrAdaptiveModel,
@@ -34,6 +71,20 @@ import {
   resolveBankrLlmRuntimeProfile,
   resolveAdaptiveBankrLlmModels,
 } from "@/lib/services/bankr-llm";
+import {
+  bankrActionDraftMessage,
+  bankrActionResultMessage,
+  bankrActionRequiresConfirmation,
+  bankrActionToolDefinition,
+  BANKR_ACTION_TOOL_NAME,
+  classifyBankrActionPrompt,
+  executeBankrAction,
+  isBankrActionConfirmationText,
+  parseBankrActionDraftMessage,
+  runBankrActionTool,
+  validateBankrActionReadiness,
+  type BankrActionDraft,
+} from "@/lib/services/bankr-actions";
 import {
   buildMiroSharkChatCard,
   executeMiroSharkChatRun,
@@ -43,9 +94,19 @@ import {
   waitForMiroSharkCompletion,
   type MiroSharkChatRunDraft,
 } from "@/lib/services/miroshark/x402-chat-run";
+import {
+  B20_ISSUER_CONFIRMATION,
+  b20IssuerResultMessage,
+  executeB20IssuerDraft,
+  hasB20IssuerConversationContext,
+  hasB20IssuerIntent,
+  parseB20IssuerDraftMessage,
+  prepareB20IssuerProofFromMessages,
+} from "@/lib/services/crypto/b20-issuer-proof";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
 import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capability-context";
+import { buildClawbankCapabilityContext } from "@/lib/services/chat/clawbank-capability-context";
 import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
 import {
   buildTaskRetrievalContextResult,
@@ -133,6 +194,7 @@ const execFileAsync = promisify(execFile);
 type PrivateTransferDraft = { asset: "USDC"; amount: string; recipient: string };
 type PrivateX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
 type PublicX402Draft = { url: string; method: "GET" | "POST"; maxPayment: string };
+type BuyStockDraft = { venue: AgentTradingVenue; ticker: string; notionalUsd?: number; qty?: number; side?: StockTradeSide };
 type VeilMcpX402Quote = {
   requiresPayment?: boolean;
   supported?: boolean;
@@ -174,6 +236,8 @@ type VeilMcpX402Result = {
   paymentTransactionHash?: string;
   body?: unknown;
 };
+type VeilMcpX402ExecutionResult = VeilMcpX402Result & { platformFee?: PlatformFeeCollection };
+type PrivateTransferExecutionResult = Awaited<ReturnType<typeof executeVeilPrivateTransfer>> & { platformFee?: PlatformFeeCollection };
 
 type WorkspaceSnapshot = {
   head: string;
@@ -543,6 +607,703 @@ async function maybePrepareNaturalPublicX402(input: {
   return privateTransferSse(message);
 }
 
+// ---- B20 issuer proof rail (Base Sepolia precompile) ------------------------
+
+async function maybePrepareNaturalB20Issuer(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages));
+  if (!hasB20IssuerIntent(latestText) && !hasB20IssuerConversationContext(chatMessagesForB20(input.messages))) return null;
+
+  const source = await resolveB20IssuerSource(input.profile, input.wallet);
+  let message: string;
+  if ("error" in source) {
+    message = source.error;
+  } else {
+    const prepared = await prepareB20IssuerProofFromMessages({
+      messages: chatMessagesForB20(input.messages),
+      agentId: source.agentId,
+      deployerAddress: source.address,
+    });
+    message = prepared.message;
+  }
+
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.b20_issuer.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    hasWallet: !("error" in source),
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+async function maybeExecuteConfirmedB20Issuer(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (!/^(confirm|confirmed|yes|yes,? confirm|go ahead|create it|deploy it|make it|execute)$/i.test(latestText)) return null;
+  const draft = findB20IssuerDraft(input.messages);
+  if (!draft) return null;
+
+  const signer = await getWalletSecret(draft.agentId);
+  if (!signer) {
+    const message = "**B20 creation failed**\n\nNo encrypted local signer exists for this agent wallet.";
+    await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+    await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+    return privateTransferSse(message);
+  }
+
+  let message: string;
+  let ok = false;
+  try {
+    const result = await executeB20IssuerDraft({
+      draft,
+      secret: signer.secret,
+      confirmation: B20_ISSUER_CONFIRMATION,
+    });
+    ok = result.ok;
+    message = b20IssuerResultMessage(result);
+  } catch (error) {
+    message = `**B20 creation failed**\n\n${error instanceof Error ? error.message : "Could not create the B20 token."}`;
+  }
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, ok ? "completed" : "failed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.b20_issuer.execute", {
+    ...telemetryPayloadForProfile(input.profile),
+    ok,
+    tokenAddress: draft.predictedAddress,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+function findB20IssuerDraft(messages: IncomingMessage[]) {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const draft = parseB20IssuerDraftMessage(messageText(message));
+    if (draft) return draft;
+  }
+  return null;
+}
+
+async function resolveB20IssuerSource(profile: AgentProfile, wallet?: AgentWalletConfig): Promise<{ agentId: string; address: string } | { error: string }> {
+  const agentId = profile.id;
+  if (wallet?.walletAddress?.startsWith("0x")) {
+    return { agentId, address: wallet.walletAddress };
+  }
+  const stored = await getWalletInfo(agentId);
+  if (stored?.address?.startsWith("0x")) {
+    return { agentId: stored.agentId, address: stored.address };
+  }
+  return {
+    error: "**B20 issuer setup**\n\nThis agent needs an encrypted EVM wallet before it can create a B20 token. Create or import a Base wallet for this agent in Wallets, then ask again.",
+  };
+}
+
+function chatMessagesForB20(messages: IncomingMessage[]) {
+  return messages.map((message) => ({ role: message.role, content: messageText(message) }));
+}
+
+// ---- Plain USDC send rail (/api/wallet/send, incl. personal wallets) --------
+
+function agentWalletFallback(profile: AgentProfile, wallet?: AgentWalletConfig) {
+  return wallet?.walletAddress
+    ? { agentId: profile.id, address: wallet.walletAddress, network: wallet.network }
+    : undefined;
+}
+
+/** The user's selected acting wallet (Trade desk / Wallets screen), relayed from
+ *  the app-wide hive chat so a "send/swap" with no explicit "from …" defaults to
+ *  it instead of the executing agent's own wallet. */
+type ActingWalletSourceHint = { agentId: string; address: string; network: string; kind: string };
+
+function coerceActingWalletSourceHint(value: unknown): ActingWalletSourceHint | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const agentId = typeof record.agentId === "string" ? record.agentId.trim() : "";
+  if (!agentId) return undefined;
+  return {
+    agentId,
+    address: typeof record.address === "string" ? record.address.trim() : "",
+    network: typeof record.network === "string" ? record.network.trim() : "",
+    kind: typeof record.kind === "string" ? record.kind.trim() : "",
+  };
+}
+
+/** Build a resolver fallback from the acting wallet. Bankr is managed (no local
+ *  signer), so it returns undefined for Bankr — those defer to the Bankr/LLM path. */
+function actingWalletFallback(source: ActingWalletSourceHint | undefined) {
+  if (source && source.kind !== "bankr" && source.address && source.agentId && source.network) {
+    return { agentId: source.agentId, address: source.address, network: source.network };
+  }
+  return undefined;
+}
+
+function findSendDraft(messages: IncomingMessage[]) {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (!isSendDraftText(text)) continue;
+    return parseSendDraft(text);
+  }
+  return null;
+}
+
+async function maybePrepareNaturalSend(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const parsed = parseSendRequest(messageText(latestUserMessage(input.messages)));
+  if (!parsed) return null;
+
+  // A Bankr-managed acting wallet has no local signer; with no explicit "from …"
+  // bow out so the Bankr/LLM path owns the send instead of drafting a local one.
+  const explicitSource = Boolean(parsed.source.address || parsed.source.personal || parsed.source.chain);
+  if (input.actingWalletSource?.kind === "bankr" && !explicitSource) return null;
+
+  // USDC to a 0x recipient must come from an EVM wallet. With no explicit "from",
+  // default to the user's acting wallet, else this agent's own wallet.
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource(parsed.source, fallback, "evm");
+  const error = "error" in resolved ? resolved.error : "";
+  const validation = error || validateSend(parsed.amountUsd, "error" in resolved ? 0 : (resolved.isPersonal ? 0 : sendCapUsd(input.wallet)));
+  const message = buildSendDraftMessage({
+    source: "error" in resolved ? undefined : resolved,
+    recipient: parsed.recipient,
+    amountUsd: parsed.amountUsd,
+    validation: validation || undefined,
+  });
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, validation ? "failed" : "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.send.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    amountUsd: parsed.amountUsd,
+    isPersonal: "error" in resolved ? null : resolved.isPersonal,
+    hasValidationError: Boolean(validation),
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+async function maybeExecuteConfirmedSend(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (latestText.toUpperCase() !== SEND_CONFIRMATION) return null;
+  const draft = findSendDraft(input.messages);
+  if (!draft) return null;
+
+  // Re-resolve the source from the draft's own From address — never trust a
+  // client-supplied agentId; resolveWalletSource looks the address up in the
+  // wallet vault. Personal wallets are gated to explicit confirmation here (this
+  // branch only runs on the SEND_USDC token) and never auto-send.
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, fallback, "evm");
+  if ("error" in resolved) return privateTransferSse(`**Send failed**\n\n${resolved.error}`);
+
+  const result = await executeGovernedUsdcSend({ agentId: resolved.agentId, toAddress: draft.recipient, amountUsd: draft.amountUsd });
+  const message = result.ok
+    ? [
+        "**Send complete**",
+        "",
+        `Sent **$${draft.amountUsd.toFixed(2)} USDC** on **${networkChainLabel(resolved.network)}**`,
+        `To \`${draft.recipient}\``,
+        `From \`${resolved.address}\`${resolved.isPersonal ? " (personal)" : ""}`,
+        `Tx \`${result.signature}\``,
+      ].join("\n")
+    : result.status === "pending_approval"
+      ? `**Approval required**\n\n${result.error}`
+      : `**Send failed**\n\n${result.error}`;
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, result.ok ? "completed" : "failed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.send.execute", {
+    ...telemetryPayloadForProfile(input.profile),
+    ok: result.ok,
+    isPersonal: resolved.isPersonal,
+    amountUsd: draft.amountUsd,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+// ---- Local DEX swap rail (0x on Base / Jupiter on Solana) -------------------
+
+function findSwapDraft(messages: IncomingMessage[]) {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (!isSwapDraftText(text)) continue;
+    return parseSwapDraft(text);
+  }
+  return null;
+}
+
+async function maybePrepareNaturalSwap(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const text = messageText(latestUserMessage(input.messages));
+  const parsed = parseSwapRequest(text);
+  if (!parsed) return null;
+  // A Bankr-managed acting wallet has no local signer — let Bankr own the swap.
+  if (input.actingWalletSource?.kind === "bankr"
+    && !parsed.source.address && !parsed.source.personal && !parsed.source.chain) return null;
+  // Only the local DEX rail is handled here; generic swaps fall through to Bankr.
+  if (!hasLocalSwapIntent(text, parsed.source)) return null;
+
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource(parsed.source, fallback, parsed.family);
+  let message: string;
+  let failed = true;
+  if ("error" in resolved) {
+    message = buildSwapDraftMessage({ sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman, maxUsd: MAX_SWAP_USD, validation: resolved.error });
+  } else {
+    const stored = await getWalletSecret(resolved.agentId);
+    if (!stored) {
+      message = buildSwapDraftMessage({ sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman, maxUsd: MAX_SWAP_USD, validation: "That wallet has no signing key available." });
+    } else {
+      let quoteLine = "";
+      let validation = "";
+      try {
+        const quote = await quoteDexSwap({ agentId: resolved.agentId, network: stored.info.network, fromAddress: stored.info.address, secret: stored.secret, sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman });
+        quoteLine = `You get ≈ **${quote.buyAmount.toPrecision(6)} ${quote.buy}** for ${quote.sellAmount} ${quote.sell} (≈ $${quote.valueUsd.toFixed(2)})`;
+      } catch (error) {
+        validation = error instanceof Error ? error.message : "Could not price this swap.";
+      }
+      failed = Boolean(validation);
+      message = buildSwapDraftMessage({ source: resolved, sellToken: parsed.sellToken, buyToken: parsed.buyToken, amountHuman: parsed.amountHuman, quoteLine, maxUsd: MAX_SWAP_USD, validation: validation || undefined });
+    }
+  }
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, failed ? "failed" : "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.swap.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    sellToken: parsed.sellToken,
+    buyToken: parsed.buyToken,
+    amountHuman: parsed.amountHuman,
+    isPersonal: "error" in resolved ? null : resolved.isPersonal,
+    failed,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+async function maybeExecuteConfirmedSwap(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (latestText.toUpperCase() !== SWAP_CONFIRMATION) return null;
+  const draft = findSwapDraft(input.messages);
+  if (!draft) return null;
+
+  const family = draft.sourceAddress.startsWith("0x") ? "evm" : "solana";
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, fallback, family);
+  if ("error" in resolved) return privateTransferSse(`**Swap failed**\n\n${resolved.error}`);
+  const stored = await getWalletSecret(resolved.agentId);
+  if (!stored) return privateTransferSse("**Swap failed**\n\nNo signing key for that wallet.");
+
+  let message: string;
+  let ok = false;
+  try {
+    const result = await executeDexSwap({
+      agentId: resolved.agentId,
+      network: stored.info.network,
+      fromAddress: stored.info.address,
+      secret: stored.secret,
+      sellToken: draft.sellToken,
+      buyToken: draft.buyToken,
+      amountHuman: draft.amountHuman,
+      confirmation: SWAP_CONFIRMATION,
+    });
+    ok = true;
+    message = [
+      "**Swap complete**",
+      "",
+      result.detail,
+      `On **${networkChainLabel(result.network)}** from \`${resolved.address}\`${resolved.isPersonal ? " (personal)" : ""}`,
+      `Tx \`${result.reference}\``,
+    ].filter(Boolean).join("\n");
+  } catch (error) {
+    message = `**Swap failed**\n\n${error instanceof Error ? error.message : "Swap failed."}`;
+  }
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, ok ? "completed" : "failed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.swap.execute", {
+    ...telemetryPayloadForProfile(input.profile),
+    ok,
+    isPersonal: resolved.isPersonal,
+    sellToken: draft.sellToken,
+    buyToken: draft.buyToken,
+    amountHuman: draft.amountHuman,
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
+// ---- Buy-stock rail (unified Alpaca / xStocks tool) -------------------------
+
+function buyStockCapUsd(wallet?: AgentWalletConfig): number {
+  if (!wallet) return 0;
+  const explicit = Number(wallet.maxTradeUsd) || 0;
+  return explicit > 0 ? explicit : Number(wallet.maxPaymentUsd) || 0;
+}
+
+function buyStockPolicy(wallet: AgentWalletConfig): BuyStockPolicy {
+  return {
+    enabled: wallet.enabled,
+    network: wallet.network,
+    tradingVenue: wallet.tradingVenue,
+    alpacaKeyEnvName: wallet.alpacaKeyEnvName,
+    alpacaSecretEnvName: wallet.alpacaSecretEnvName,
+    alpacaPaper: wallet.alpacaPaper,
+    maxTradeUsd: wallet.maxTradeUsd,
+    maxPaymentUsd: wallet.maxPaymentUsd,
+  };
+}
+
+function detectBuyStockVenue(text: string, wallet?: AgentWalletConfig): AgentTradingVenue | null {
+  if (/\b(xstock|x-stock|tokeni[sz]ed|on-?chain|solana|jupiter)\b/i.test(text)) return "xstocks";
+  if (/\b(alpaca|brokerage|paper trad|real (?:stock|share|shares))\b/i.test(text)) return "alpaca";
+  return wallet?.tradingVenue ?? null;
+}
+
+const BUY_STOCK_TICKER_STOPWORDS = new Set([
+  "USD", "USDC", "BUY", "THE", "AND", "FOR", "A", "AN", "OK", "GO", "AI", "CEO", "ETF",
+  "NYSE", "US", "PM", "AM", "OF", "IN", "IT", "MY", "I", "SOME", "WORTH", "LIVE",
+]);
+
+function scanBuyStockTicker(text: string): string | null {
+  for (const word of text.toUpperCase().match(/\b[A-Z][A-Z.]{0,9}\b/g) ?? []) {
+    if (resolveXStock(word)) return resolveXStock(word)!.underlying;
+  }
+  for (const word of text.match(/\b[A-Z]{1,5}\b/g) ?? []) {
+    if (!BUY_STOCK_TICKER_STOPWORDS.has(word)) return word;
+  }
+  const phrased = text.match(/\b(?:of|in)\s+([A-Za-z]{1,5})\b/i);
+  return phrased ? phrased[1].toUpperCase() : null;
+}
+
+function parseBuyStockRequest(text: string, wallet?: AgentWalletConfig): BuyStockDraft | null {
+  if (!text) return null;
+  if (/https?:\/\//i.test(text)) return null; // URL present -> x402 territory, not a stock trade.
+  const isSell = /\b(sell|liquidate|offload|dump)\b/i.test(text);
+  if (!isSell && !/\b(buy|purchase|invest|acquire|long)\b/i.test(text)) return null;
+  if (!/\b(stock|stocks|share|shares|equit|ticker|xstock|alpaca)\b/i.test(text) && !/\$\s*\d/.test(text)) return null;
+
+  const venue = detectBuyStockVenue(text, wallet);
+  if (!venue) return null;
+
+  const ticker = scanBuyStockTicker(text);
+  if (!ticker) return null;
+
+  const sharesMatch = text.match(/(\d+(?:\.\d+)?)\s*shares?\b/i);
+  const amountMatch = text.match(/\$\s*(\d+(?:\.\d{1,2})?)/)
+    ?? text.match(/(\d+(?:\.\d{1,2})?)\s*(?:usdc|usd|dollars?|bucks)\b/i)
+    ?? text.match(/\b(?:for|worth)\s+\$?(\d+(?:\.\d{1,2})?)\b/i);
+
+  const draft: BuyStockDraft = { venue, ticker, side: isSell ? "sell" : "buy" };
+  if (sharesMatch && venue === "alpaca") draft.qty = Number(sharesMatch[1]);
+  if (amountMatch) draft.notionalUsd = Number(amountMatch[1]);
+  if (draft.notionalUsd == null && draft.qty == null) return null;
+  return draft;
+}
+
+function isBuyStockDraftText(text: string) {
+  return /\*{0,2}(Buy|Sell) stock ready\*{0,2}/i.test(text);
+}
+
+function parseBuyStockDraft(text: string): BuyStockDraft | null {
+  const venueMatch = text.match(/Venue\s+`?(alpaca|xstocks)`?/i);
+  if (!venueMatch) return null;
+  const venue = venueMatch[1].toLowerCase() as AgentTradingVenue;
+  const sideOf = (verb: string): StockTradeSide => (verb.toLowerCase() === "sell" ? "sell" : "buy");
+  const qtyForm = text.match(/(Buy|Sell)\s+\*\*(\d+(?:\.\d+)?)\*\*\s+shares?(?:\(s\))?\s+of\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*/i);
+  if (qtyForm) return { venue, side: sideOf(qtyForm[1]), ticker: qtyForm[3].toUpperCase(), qty: Number(qtyForm[2]) };
+  const notionalForm = text.match(/(Buy|Sell)\s+\*\*([A-Za-z][A-Za-z.]{0,9})\*\*\s+for\s+~?\$(\d+(?:\.\d{1,2})?)/i);
+  if (notionalForm) return { venue, side: sideOf(notionalForm[1]), ticker: notionalForm[2].toUpperCase(), notionalUsd: Number(notionalForm[3]) };
+  return null;
+}
+
+function findLatestBuyStockRequest(messages: IncomingMessage[], wallet?: AgentWalletConfig): BuyStockDraft | null {
+  return parseBuyStockRequest(messageText(latestUserMessage(messages)), wallet);
+}
+
+function findBuyStockDraft(messages: IncomingMessage[]): BuyStockDraft | null {
+  for (let index = messages.length - 2; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== "assistant") continue;
+    const text = messageText(message);
+    if (!isBuyStockDraftText(text)) continue;
+    return parseBuyStockDraft(text);
+  }
+  return null;
+}
+
+function validateBuyStockDraft(wallet: AgentWalletConfig | undefined, draft: BuyStockDraft, executing: boolean): string {
+  const side = draft.side ?? "buy";
+  if (!wallet) return "No wallet is configured for this agent.";
+  if (!wallet.tradingVenue) return "Stock trading is off. Set a trading venue (alpaca or xstocks) for this agent first.";
+  if (executing && !wallet.enabled) return "Wallet spending is off for this agent. Turn Spend on before trading.";
+  const cap = buyStockCapUsd(wallet);
+  if (draft.notionalUsd != null) {
+    if (!(draft.notionalUsd > 0)) return "Trade amount must be a positive USD value.";
+    // The per-trade cap bounds spend (buys); a sell increases USDC, so it isn't capped here.
+    if (side === "buy" && cap > 0 && draft.notionalUsd > cap) return `Trade exceeds this agent's per-trade cap ($${cap.toFixed(2)}).`;
+  }
+  if (draft.venue === "xstocks") {
+    if (!resolveXStock(draft.ticker)) return `"${draft.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`;
+    if (wallet.network !== "solana:mainnet") return "xStocks swaps require a Solana mainnet wallet.";
+    if (draft.qty != null && draft.notionalUsd == null) return "On-chain xStock trades are sized in USDC, not share count — give a $ amount.";
+  }
+  if (draft.notionalUsd == null && draft.qty == null) return `Tell me how much to ${side} — a $ amount, or a share count for Alpaca.`;
+  return "";
+}
+
+function buyStockDraftMessage(draft: BuyStockDraft, wallet: AgentWalletConfig | undefined, quoteDetail: string, validation?: string) {
+  const side = draft.side ?? "buy";
+  const verb = side === "sell" ? "Sell" : "Buy";
+  if (validation) {
+    return [`**${verb} stock unavailable**`, "", validation, "", "Fix this blocker, then ask again."].join("\n");
+  }
+  const cap = buyStockCapUsd(wallet);
+  const venueLabel = draft.venue === "alpaca"
+    ? `\`alpaca\` ${wallet?.alpacaPaper === false ? "(LIVE)" : "(paper)"}`
+    : "`xstocks` (on-chain)";
+  const sizeLine = draft.qty != null
+    ? `${verb} **${draft.qty}** shares of **${draft.ticker}**`
+    : `${verb} **${draft.ticker}** for ~$${(draft.notionalUsd ?? 0).toFixed(2)}`;
+  return [
+    `**${verb} stock ready**`,
+    "",
+    `Venue ${venueLabel}`,
+    sizeLine,
+    quoteDetail,
+    side === "buy" && cap > 0 ? `Per-trade cap **$${cap.toFixed(2)}**` : "",
+    "",
+    wallet?.enabled
+      ? `Reply \`confirm\` to ${side}.`
+      : `Wallet spending is off, so I prepared the draft only. Turn Spend on before trading.`,
+  ].filter(Boolean).join("\n");
+}
+
+function buyStockResultMessage(result: BuyStockResult, executionMs: number) {
+  const verb = result.side === "sell" ? "Sell" : "Buy";
+  const head = result.venue === "alpaca"
+    ? `${result.paper ? "paper" : "LIVE"} brokerage order`
+    : "on-chain swap";
+  return [
+    `**${verb} stock complete** · ${head}`,
+    "",
+    result.detail,
+    result.priceImpactPct != null ? `Price impact \`${(result.priceImpactPct * 100).toFixed(2)}%\`` : "",
+    `Reference \`${result.reference}\``,
+    "",
+    `Timing **${formatDuration(executionMs)}**`,
+  ].filter(Boolean).join("\n");
+}
+
+function buyStockExecutionSse(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  draft: BuyStockDraft;
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}) {
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (payload: unknown) => controller.enqueue(encoder.encode(ssePayload(payload)));
+      const sendTool = async (type: string, label: string, detail?: string, status: "running" | "completed" | "failed" = "running") => {
+        const event = { type, toolName: "buyStock", name: "buyStock", message: label, detail, status };
+        send(event);
+        await appendRuntimeChatSessionEvent(input.runtimeSessionId, label, detail, event).catch(() => undefined);
+      };
+      try {
+        const { draft } = input;
+        const side = draft.side ?? "buy";
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_START, `Preparing stock ${side}`, `${draft.venue}:${draft.ticker}`);
+        const wallet = input.wallet;
+        const validation = validateBuyStockDraft(wallet, draft, true);
+        if (validation) throw new Error(validation);
+
+        let network: string | undefined;
+        let secret: string | undefined;
+        let fromAddress: string | undefined;
+        if (draft.venue === "xstocks") {
+          const stored = await getWalletSecret(input.profile.id);
+          if (!stored) throw new Error("No local Solana wallet exists for this agent.");
+          network = stored.info.network;
+          secret = stored.secret;
+          fromAddress = stored.info.address;
+        } else if (draft.venue === "alpaca" && wallet?.alpacaPaper === false) {
+          const stored = await getWalletSecret(input.profile.id).catch(() => null);
+          if (stored) {
+            network = stored.info.network;
+            secret = stored.secret;
+            fromAddress = stored.info.address;
+          }
+        }
+
+        await sendTool(
+          RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
+          "Validate trade policy",
+          `Venue ${draft.venue}; cap ${formatMoney(buyStockCapUsd(wallet))} USD.`,
+          "completed",
+        );
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, `Execute ${side}`, "Submitting the order.", "running");
+        const startedAt = Date.now();
+        const result = await executeStockTrade({
+          agentId: input.profile.id,
+          policy: buyStockPolicy(wallet!),
+          ticker: draft.ticker,
+          notionalUsd: draft.notionalUsd ?? 0,
+          qty: draft.qty,
+          side,
+          confirmation: stockTradeConfirmation(side),
+          network,
+          secret,
+          fromAddress,
+        });
+        const message = buyStockResultMessage(result, Date.now() - startedAt);
+        await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.completed", {
+          ...telemetryPayloadForProfile(input.profile),
+          venue: result.venue,
+          ticker: result.ticker,
+          notionalUsd: result.notionalUsd,
+          paper: result.paper,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, `${side === "sell" ? "Sell" : "Buy"} finished`, `Total ${formatDuration(Date.now() - input.routeStartedAt)}.`, "completed");
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message, result).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        const verb = (input.draft.side ?? "buy") === "sell" ? "Sell" : "Buy";
+        const message = `${verb} stock failed: ${detail}`;
+        await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.failed", {
+          ...telemetryPayloadForProfile(input.profile),
+          venue: input.draft.venue,
+          ticker: input.draft.ticker,
+          side: input.draft.side ?? "buy",
+          error: detail,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        }).catch(() => undefined);
+        await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE, `${verb} failed`, detail, "failed");
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+async function maybeExecuteConfirmedBuyStock(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (!/^(confirm|confirmed|yes|yes,? confirm|go ahead|buy it|sell it|do it|execute)$/i.test(latestText)) return null;
+  const draft = findBuyStockDraft(input.messages);
+  if (!draft) return null;
+  return buyStockExecutionSse({ ...input, draft });
+}
+
+async function maybePrepareNaturalBuyStock(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const draft = findLatestBuyStockRequest(input.messages, input.wallet);
+  if (!draft) return null;
+
+  const validation = validateBuyStockDraft(input.wallet, draft, false);
+  let quoteDetail = "";
+  if (!validation && input.wallet) {
+    try {
+      const quote = await discoverStockTradeQuote({
+        side: draft.side ?? "buy",
+        policy: buyStockPolicy(input.wallet),
+        ticker: draft.ticker,
+        notionalUsd: draft.notionalUsd ?? 0,
+      });
+      quoteDetail = quote.detail;
+    } catch {
+      quoteDetail = "";
+    }
+  }
+  const message = buyStockDraftMessage(draft, input.wallet, quoteDetail, validation);
+  await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+  await finishRuntimeChatSession(input.runtimeSessionId, validation ? "failed" : "completed").catch(() => undefined);
+  await recordRouteTelemetry(input.request, "agent_runtime.wallet.buy_stock.draft", {
+    ...telemetryPayloadForProfile(input.profile),
+    venue: draft.venue,
+    ticker: draft.ticker,
+    notionalUsd: draft.notionalUsd,
+    qty: draft.qty,
+    hasValidationError: Boolean(validation),
+    elapsedMs: Date.now() - input.routeStartedAt,
+  });
+  return privateTransferSse(message);
+}
+
 async function maybeExecuteNaturalMiroSharkX402(input: {
   request: NextRequest;
   routeStartedAt: number;
@@ -817,8 +1578,18 @@ function privateX402ExecutionSse(input: {
           "Selecting a private payer EOA, then settling x402.",
           "running",
         );
+        let feeWallet: Awaited<ReturnType<typeof getWalletSecret>> | null = null;
+        const maxPaymentUsd = Number(input.draft.maxPayment);
+        if (Number.isFinite(maxPaymentUsd) && maxPaymentUsd > 0) {
+          const feeQuote = await quoteTradingPlatformFee({ source: "veil-x402", network: VEIL_CASH_NETWORK, amountUsd: maxPaymentUsd });
+          if (feeQuote.enabled) {
+            feeWallet = await getWalletSecret(input.profile.id);
+            if (!feeWallet) throw new Error("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.");
+            await assertTradingPlatformFeeReady({ source: "veil-x402", network: feeWallet.info.network, amountUsd: maxPaymentUsd });
+          }
+        }
         const startedAt = Date.now();
-        let result = await callVeilMcpTool<VeilMcpX402Result>("veil_pay_x402", {
+        let result: VeilMcpX402ExecutionResult = await callVeilMcpTool<VeilMcpX402Result>("veil_pay_x402", {
           url: input.draft.url,
           method: input.draft.method,
           maxPayment: input.draft.maxPayment,
@@ -842,6 +1613,20 @@ function privateX402ExecutionSse(input: {
           });
         }
         if (result.success === false) throw new Error(result.message ?? "Veil private x402 payment was not submitted.");
+        const amountUsd = Number(result.amount ?? result.receipt?.amount ?? 0);
+        if (feeWallet && amountUsd > 0) {
+          result = {
+            ...result,
+            platformFee: await collectTradingPlatformFee({
+              agentId: input.profile.id,
+              network: feeWallet.info.network,
+              secret: feeWallet.secret,
+              fromAddress: feeWallet.info.address,
+              amountUsd,
+              source: "veil-x402",
+            }),
+          };
+        }
         await sendTool(
           RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
           "Execute Veil x402 payment",
@@ -1050,6 +1835,7 @@ function publicX402ExecutionSse(input: {
           agentId: input.profile.id,
           network: stored.info.network,
           secret: stored.secret,
+          fromAddress: stored.info.address,
           url: input.draft.url,
           method: input.draft.method,
           policy,
@@ -1122,6 +1908,7 @@ function publicX402ResultMessage(result: X402FetchResult, executionMs: number) {
     "",
     `Endpoint \`${result.url}\``,
     result.paid ? "Payment settled from the local wallet." : "No payment was required.",
+    platformFeeReceiptDetail(result.platformFee),
     `HTTP status \`${result.status}\``,
     "",
     body ? `Content received:\n${body}` : "Content received.",
@@ -1134,7 +1921,160 @@ function publicX402ErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function privateX402ResultMessage(result: VeilMcpX402Result, draft: PrivateX402Draft, executionMs: number) {
+// ---- Bankr native action rail ------------------------------------------------
+
+function findBankrActionDraft(messages: IncomingMessage[]): BankrActionDraft | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "assistant") continue;
+    const draft = parseBankrActionDraftMessage(messageText(message));
+    if (draft) return draft;
+  }
+  return null;
+}
+
+function bankrActionExecutionSse(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  draft: BankrActionDraft;
+  runtimeSessionId: string;
+}) {
+  const encoder = new TextEncoder();
+  const readable = new ReadableStream({
+    async start(controller) {
+      const startedAt = Date.now();
+      const detail = input.draft.jobId ? `Job ${input.draft.jobId}` : input.draft.prompt;
+      const send = (payload: RuntimeStreamEvent | Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(ssePayload(payload)));
+      };
+      try {
+        send({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_START,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: "Bankr action",
+          detail,
+          status: "running",
+        });
+        await appendRuntimeChatSessionEvent(input.runtimeSessionId, "Bankr action", detail).catch(() => undefined);
+        await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.started", {
+          ...telemetryPayloadForProfile(input.profile),
+          intent: input.draft.intent,
+          readOnly: input.draft.readOnly,
+          hasJobId: Boolean(input.draft.jobId),
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+        const result = await executeBankrAction(input.draft);
+        const message = bankrActionResultMessage(result);
+        send({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: "Bankr action complete",
+          detail: result.status || result.jobId || result.threadId || "Completed",
+          status: "completed",
+        });
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message, result.raw).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "completed").catch(() => undefined);
+        await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.completed", {
+          ...telemetryPayloadForProfile(input.profile),
+          intent: input.draft.intent,
+          readOnly: input.draft.readOnly,
+          status: result.status ?? null,
+          jobId: result.jobId ?? null,
+          threadId: result.threadId ?? null,
+          executionMs: Date.now() - startedAt,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+      } catch (error) {
+        const message = `Bankr action failed: ${error instanceof Error ? error.message : String(error)}`;
+        send({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: "Bankr action failed",
+          detail: message,
+          status: "failed",
+        });
+        send({ choices: [{ delta: { content: message } }] });
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+        await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+        await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.failed", {
+          ...telemetryPayloadForProfile(input.profile),
+          intent: input.draft.intent,
+          readOnly: input.draft.readOnly,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          executionMs: Date.now() - startedAt,
+          elapsedMs: Date.now() - input.routeStartedAt,
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+async function maybeExecuteConfirmedBankrAction(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const latestText = messageText(latestUserMessage(input.messages)).trim();
+  if (!isBankrActionConfirmationText(latestText)) return null;
+  const draft = findBankrActionDraft(input.messages);
+  if (!draft || !bankrActionRequiresConfirmation(draft)) return null;
+  const validation = await validateBankrActionReadiness();
+  if (validation) {
+    const message = bankrActionDraftMessage(draft, validation);
+    await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+    await finishRuntimeChatSession(input.runtimeSessionId, "failed").catch(() => undefined);
+    return privateTransferSse(message);
+  }
+  return bankrActionExecutionSse({ ...input, draft });
+}
+
+async function maybeHandleNaturalBankrAction(input: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const draft = classifyBankrActionPrompt(messageText(latestUserMessage(input.messages)));
+  if (!draft) return null;
+  const validation = await validateBankrActionReadiness();
+  if (validation || bankrActionRequiresConfirmation(draft)) {
+    const message = bankrActionDraftMessage(draft, validation);
+    await appendRuntimeChatSessionText(input.runtimeSessionId, "assistant", message).catch(() => undefined);
+    await finishRuntimeChatSession(input.runtimeSessionId, validation ? "failed" : "completed").catch(() => undefined);
+    await recordRouteTelemetry(input.request, "agent_runtime.bankr_action.draft", {
+      ...telemetryPayloadForProfile(input.profile),
+      intent: draft.intent,
+      readOnly: draft.readOnly,
+      hasValidationError: Boolean(validation),
+      elapsedMs: Date.now() - input.routeStartedAt,
+    });
+    return privateTransferSse(message);
+  }
+  return bankrActionExecutionSse({ ...input, draft });
+}
+
+function privateX402ResultMessage(result: VeilMcpX402ExecutionResult, draft: PrivateX402Draft, executionMs: number) {
   const amount = result.amount ?? result.receipt?.amount ?? result.requiredAmount ?? "";
   const relayTx = result.relayTransactionHash ?? result.receipt?.relayTransactionHash ?? "";
   const paymentTx = result.paymentTransactionHash ?? result.receipt?.paymentTransactionHash ?? "";
@@ -1149,6 +2089,7 @@ function privateX402ResultMessage(result: VeilMcpX402Result, draft: PrivateX402D
     payerAddress ? `${payerLabel} \`${payerAddress}\`${payerIndex ? ` · index \`${payerIndex}\`` : ""}` : "",
     relayTx ? `Private withdraw ${baseScanTxUrl(relayTx)}` : "",
     paymentTx ? `x402 payment ${baseScanTxUrl(paymentTx)}` : "",
+    platformFeeReceiptDetail(result.platformFee),
     result.status ? `HTTP status \`${result.status}\`` : "",
     "",
     body ? `Content received:\n${body}` : "Content received.",
@@ -1350,7 +2291,17 @@ function privateTransferExecutionSse(input: {
           `Using the configured Veil rail on Base for ${input.draft.amount} ${input.draft.asset}.`,
           "completed",
         );
-        const result = await executeVeilPrivateTransfer({
+        let feeWallet: Awaited<ReturnType<typeof getWalletSecret>> | null = null;
+        const feeNotionalUsd = Number(input.draft.amount);
+        if (Number.isFinite(feeNotionalUsd) && feeNotionalUsd > 0) {
+          const feeQuote = await quoteTradingPlatformFee({ source: "veil-transfer", network: VEIL_CASH_NETWORK, amountUsd: feeNotionalUsd });
+          if (feeQuote.enabled) {
+            feeWallet = await getWalletSecret(input.profile.id);
+            if (!feeWallet) throw new Error("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.");
+            await assertTradingPlatformFeeReady({ source: "veil-transfer", network: feeWallet.info.network, amountUsd: feeNotionalUsd });
+          }
+        }
+        let result: PrivateTransferExecutionResult = await executeVeilPrivateTransfer({
           agentId: input.profile.id,
           asset: input.draft.asset,
           amount: input.draft.amount,
@@ -1371,6 +2322,19 @@ function privateTransferExecutionSse(input: {
             void appendRuntimeChatSessionEvent(input.runtimeSessionId, event.label, detail, { ...event, status }).catch(() => undefined);
           },
         });
+        if (feeWallet && feeNotionalUsd > 0) {
+          result = {
+            ...result,
+            platformFee: await collectTradingPlatformFee({
+              agentId: input.profile.id,
+              network: feeWallet.info.network,
+              secret: feeWallet.secret,
+              fromAddress: feeWallet.info.address,
+              amountUsd: feeNotionalUsd,
+              source: "veil-transfer",
+            }),
+          };
+        }
         await recordRouteTelemetry(input.request, input.telemetryType, {
           ...telemetryPayloadForProfile(input.profile),
           asset: input.draft.asset,
@@ -1434,7 +2398,7 @@ function privateTransferExecutionSse(input: {
 }
 
 function privateTransferResultMessage(
-  result: Awaited<ReturnType<typeof executeVeilPrivateTransfer>>,
+  result: PrivateTransferExecutionResult,
   draft: PrivateTransferDraft,
   remainingBalance?: string,
 ) {
@@ -1446,6 +2410,7 @@ function privateTransferResultMessage(
       result.shield.transactionHash ? `Shield proof ${baseScanTxUrl(result.shield.transactionHash)}` : "",
       result.shield.transactionHash ? `Shield tx \`${result.shield.transactionHash}\`` : "",
       result.shield.blockNumber ? `Shield block \`${result.shield.blockNumber}\`` : "",
+      platformFeeReceiptDetail(result.platformFee),
       "",
       "HivemindOS will complete the private send after Veil accepts the deposit into the private pool.",
       [remainingBalance ? `Remaining **${remainingBalance}**` : "", `Timing **${privateTransferTimingCompact(result.timings)}**`].filter(Boolean).join(" · "),
@@ -1458,6 +2423,7 @@ function privateTransferResultMessage(
     result.transfer.transactionHash ? `Proof ${baseScanTxUrl(result.transfer.transactionHash)}` : "",
     result.transfer.transactionHash ? `Tx \`${result.transfer.transactionHash}\`` : "",
     result.transfer.blockNumber ? `Block \`${result.transfer.blockNumber}\`` : "",
+    platformFeeReceiptDetail(result.platformFee),
     "",
     [remainingBalance ? `Remaining **${remainingBalance}**` : "", `Timing **${privateTransferTimingCompact(result.timings)}**`].filter(Boolean).join(" · "),
   ].filter(Boolean).join("\n");
@@ -1921,12 +2887,14 @@ function retryableAdaptiveOpenRouterStatus(status: number) {
 function providerErrorMessage(body: string, status: number, model?: string) {
   const parsed = (() => {
     try {
-      return JSON.parse(body || "{}") as { error?: { message?: string; code?: string | number }; message?: string };
+      return JSON.parse(body || "{}") as { error?: string | { message?: string; code?: string | number }; message?: string };
     } catch {
       return null;
     }
   })();
-  const rawMessage = parsed?.error?.message || parsed?.message || body.trim();
+  // Some providers (e.g. Venice) return `error` as a plain string, not an object.
+  const errorString = typeof parsed?.error === "string" ? parsed.error : parsed?.error?.message;
+  const rawMessage = errorString || parsed?.message || body.trim();
   if (status === 429) {
     return model
       ? `OpenRouter rate-limited ${model}. Adaptive will try another free model when available.`
@@ -3044,6 +4012,7 @@ function imageGenerationToolDefinition() {
 }
 
 type AccumulatedToolCall = { id: string; name: string; arguments: string };
+type ToolCallOutcome = { toolResultContent: string; fallbackText: string; finalText?: string };
 
 function parseToolCallArguments(raw: string): Record<string, unknown> {
   try {
@@ -3126,6 +4095,26 @@ async function streamOpenAICompatibleRuntime(
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "UsePod setup is incomplete." }, { status: 502 });
   }
+  if (isVeniceProfile(profile)) {
+    try {
+      const veniceConfig = await resolveVeniceRuntimeConfig(profile);
+      if (veniceConfig) {
+        runtimeProfile = {
+          ...profile,
+          gatewayUrl: veniceConfig.baseUrl,
+          chatPath: veniceConfig.chatPath,
+          statusPath: veniceConfig.statusPath,
+          token: "",
+        };
+        // Wallet mode signs a short-lived Sign-In-With-X header per request;
+        // API-key mode is a plain bearer token. Either way the profile token
+        // must stay empty so no stale Authorization header is added.
+        providerHeaders = veniceConfig.headers;
+      }
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Venice setup is incomplete." }, { status: 502 });
+    }
+  }
   if (isBankrLlmProfile(profile)) {
     const resolved = await resolveBankrLlmRuntimeProfile(runtimeProfile);
     if (resolved.error) return Response.json({ error: resolved.error }, { status: 400 });
@@ -3191,10 +4180,12 @@ async function streamOpenAICompatibleRuntime(
   // actual local-execution loop (allowlisted commands) instead of letting it
   // role-play "I ran osascript…". Agents without the capability are unchanged.
   const offerCommandTool = profile.runtimeCapabilities?.skillActions === true;
+  const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(userText);
   // Tool definitions advertised on every request attempt. Empty → no tools
   // field is sent and the chat path is byte-for-byte unchanged.
   const toolDefinitions = [
     ...(offerImageTool ? [imageGenerationToolDefinition()] : []),
+    ...(offerBankrTool ? [bankrActionToolDefinition()] : []),
     ...(offerCommandTool ? [runCommandToolDefinition()] : []),
   ];
   let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean } | null = null;
@@ -3444,7 +4435,9 @@ async function streamOpenAICompatibleRuntime(
     }
     const upstreamErrorMessage = isLocalLmStudioProfile(candidateProfile) && isModelUnavailableErrorBody(errorText)
       ? lmStudioModelUnavailableMessage(model)
-      : providerErrorMessage(errorText, upstream.status, model);
+      : isVeniceProfile(profile)
+        ? interpretVeniceError(upstream.status, providerErrorMessage(errorText, upstream.status, model)).message
+        : providerErrorMessage(errorText, upstream.status, model);
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible upstream error", upstreamErrorMessage).catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
     releaseInteractiveRuntime(lockKey);
@@ -3487,6 +4480,24 @@ async function streamOpenAICompatibleRuntime(
     });
     await appendRuntimeChatSessionEvent(runtimeSessionId, "UsePod inference metadata", detail).catch(() => undefined);
   }
+  const veniceResponse = isVeniceProfile(profile) ? summarizeVeniceResponseHeaders(upstream.headers) : null;
+  // Forwarded on the SSE response so the dashboard can refresh the stored
+  // prepaid balance right after the chat instead of waiting for a settings
+  // refresh.
+  const providerBalanceHeader = veniceResponse?.balanceRemaining || usePodResponse?.balanceRemaining || "";
+  if (veniceResponse?.balanceRemaining) {
+    recordRuntimeTelemetry(telemetry, "agent_runtime.venice.response", {
+      ...telemetryPayloadForProfile(runtimeProfile),
+      url,
+      model,
+      balanceRemaining: veniceResponse.balanceRemaining,
+    });
+    await appendRuntimeChatSessionEvent(
+      runtimeSessionId,
+      "Venice inference metadata",
+      `Balance remaining: ${veniceResponse.balanceRemaining}`,
+    ).catch(() => undefined);
+  }
 
   if (!upstream.body) {
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response body is empty").catch(() => undefined);
@@ -3523,7 +4534,11 @@ async function streamOpenAICompatibleRuntime(
         : { choices: [{ delta: { content: chunk } }] })
       + (event ? ssePayload({ honey: event }) : "")
       + "data: [DONE]\n\n",
-      { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
+      { headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        ...(providerBalanceHeader ? { "X-Provider-Balance-Remaining": providerBalanceHeader } : {}),
+      } },
     );
   }
 
@@ -3771,10 +4786,78 @@ async function streamOpenAICompatibleRuntime(
         };
       };
 
+      const runBankrToolCall = async (call: AccumulatedToolCall): Promise<ToolCallOutcome> => {
+        const args = parseToolCallArguments(call.arguments);
+        const prompt = typeof args.prompt === "string" && args.prompt.trim() ? args.prompt.trim() : userText;
+        const label = "Bankr action";
+        controller.enqueue(encoder.encode(ssePayload({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_START,
+          toolName: BANKR_ACTION_TOOL_NAME,
+          name: BANKR_ACTION_TOOL_NAME,
+          message: label,
+          detail: prompt,
+          status: "running",
+        })));
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, label, prompt));
+        recordRuntimeTelemetry(telemetry, "agent_runtime.bankr_action_tool.dispatch", {
+          ...telemetryPayloadForProfile(profile),
+          intent: typeof args.intent === "string" ? args.intent : null,
+          hasJobId: typeof args.jobId === "string" && Boolean(args.jobId.trim()),
+        });
+        try {
+          const outcome = await runBankrActionTool({ ...args, prompt });
+          const message = typeof outcome.message === "string" && outcome.message.trim()
+            ? outcome.message.trim()
+            : outcome.ok
+              ? "Bankr action complete."
+              : `Bankr action failed: ${typeof outcome.error === "string" ? outcome.error : "unknown error"}`;
+          controller.enqueue(encoder.encode(ssePayload({
+            type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+            toolName: BANKR_ACTION_TOOL_NAME,
+            name: BANKR_ACTION_TOOL_NAME,
+            message: outcome.ok ? "Bankr action ready" : "Bankr action failed",
+            detail: message.slice(0, 500),
+            status: outcome.ok ? "completed" : "failed",
+          })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, outcome.ok ? "Bankr action finished" : "Bankr action failed", message.slice(0, 500)));
+          recordRuntimeTelemetry(telemetry, outcome.ok ? "agent_runtime.bankr_action_tool.completed" : "agent_runtime.bankr_action_tool.failed", {
+            ...telemetryPayloadForProfile(profile),
+            prepared: outcome.ok && "prepared" in outcome ? outcome.prepared === true : false,
+            errorMessage: outcome.ok ? null : outcome.error ?? null,
+          });
+          return {
+            toolResultContent: JSON.stringify(outcome),
+            fallbackText: message,
+            finalText: message,
+          };
+        } catch (error) {
+          const message = `Bankr action failed: ${error instanceof Error ? error.message : String(error)}`;
+          controller.enqueue(encoder.encode(ssePayload({
+            type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+            toolName: BANKR_ACTION_TOOL_NAME,
+            name: BANKR_ACTION_TOOL_NAME,
+            message: "Bankr action failed",
+            detail: message,
+            status: "failed",
+          })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Bankr action failed", message));
+          recordRuntimeTelemetry(telemetry, "agent_runtime.bankr_action_tool.failed", {
+            ...telemetryPayloadForProfile(profile),
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+          return {
+            toolResultContent: JSON.stringify({ ok: false, error: message }),
+            fallbackText: message,
+            finalText: message,
+          };
+        }
+      };
+
       // Dispatch one accumulated tool call by name. Unknown tools return an
       // error result so the model can recover instead of stalling.
-      const runToolCall = async (call: AccumulatedToolCall) => {
+      const runToolCall = async (call: AccumulatedToolCall): Promise<ToolCallOutcome> => {
         if (call.name === IMAGE_GENERATION_TOOL_NAME) return runImageToolCall(call);
+        if (call.name === BANKR_ACTION_TOOL_NAME) return runBankrToolCall(call);
         if (call.name === RUN_COMMAND_TOOL_NAME) return runCommandToolCall(call);
         return {
           toolResultContent: JSON.stringify({ ok: false, error: `Unknown tool: ${call.name}` }),
@@ -3801,12 +4884,21 @@ async function streamOpenAICompatibleRuntime(
           const assistantToolCalls: Array<Record<string, unknown>> = [];
           const toolResultMessages: Array<Record<string, unknown>> = [];
           const fallbacks: string[] = [];
+          const finalTexts: string[] = [];
           for (const call of toolCalls) {
             const callId = call.id || `call_${call.name}`;
             const outcome = await runToolCall(call);
             assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
             toolResultMessages.push({ role: "tool", tool_call_id: callId, content: outcome.toolResultContent });
             if (outcome.fallbackText) fallbacks.push(outcome.fallbackText);
+            if (outcome.finalText) finalTexts.push(outcome.finalText);
+          }
+          if (finalTexts.length) {
+            const finalText = finalTexts.join("\n\n");
+            controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: finalText } }] })));
+            fullText += finalText;
+            queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", finalText));
+            break;
           }
           conversation.push({ role: "assistant", content: "", tool_calls: assistantToolCalls });
           conversation.push(...toolResultMessages);
@@ -3881,6 +4973,7 @@ async function streamOpenAICompatibleRuntime(
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
+      ...(providerBalanceHeader ? { "X-Provider-Balance-Remaining": providerBalanceHeader } : {}),
     },
   });
 }
@@ -3898,6 +4991,7 @@ export async function POST(request: NextRequest) {
   let clientRunId = "";
   let agentMode: AgentMode = "act";
   let latencyMode = "";
+  let actingWalletSource: ActingWalletSourceHint | undefined;
   try {
     const body = (await request.json()) as {
       agent?: AgentProfile;
@@ -3912,6 +5006,7 @@ export async function POST(request: NextRequest) {
       chatStorageKey?: string;
       clientRunId?: string;
       latencyMode?: string;
+      actingWalletSource?: unknown;
     };
     if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
     profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
@@ -3929,6 +5024,7 @@ export async function POST(request: NextRequest) {
     chatStorageKey = typeof body.chatStorageKey === "string" ? body.chatStorageKey : "";
     clientRunId = typeof body.clientRunId === "string" ? body.clientRunId : "";
     latencyMode = typeof body.latencyMode === "string" ? body.latencyMode : "";
+    actingWalletSource = coerceActingWalletSourceHint(body.actingWalletSource);
   } catch {
     await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
     return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
@@ -3970,6 +5066,20 @@ export async function POST(request: NextRequest) {
   }
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
+  if (isFusionProfile(profile)) {
+    // Hive Fusion compound model: fan out to a panel of configured models,
+    // judge their responses, and stream a synthesized answer. Runs before the
+    // heavy single-model preflight since Fusion orchestrates its own panel.
+    await recordRouteTelemetry(request, "agent_runtime.dispatch.fusion", {
+      ...telemetryPayloadForProfile(profile),
+      promptLength: userPrompt.length,
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      agentMode,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamFusionResponse({ profile, messages, runtimeSessionId, request, routeStartedAt });
+  }
   if (isMobileAgentGatewayUrl(profile.gatewayUrl)) {
     // Phone-hosted agent: the hub cannot call the phone, so the turn is queued
     // as a job the phone app polls for (see lib/services/mobile-agents) and
@@ -4048,6 +5158,10 @@ export async function POST(request: NextRequest) {
           preferredSkillSlugs: profile.preferredSkillSlugs,
           taskPreferences: profile.taskPreferences,
         },
+        recordContextXray: true,
+        runId: runtimeSessionId,
+        threadId: chatStorageKey,
+        model: [profile.runtime, profile.model].filter(Boolean).join(":"),
       }),
       capabilitySearchTimeoutMs,
       emptyTaskRetrievalResult,
@@ -4066,7 +5180,13 @@ export async function POST(request: NextRequest) {
   // can use the shared Bankr key, and the briefing must survive a timed-out
   // capability search, so it rides along with whatever retrieval produced
   // (results or the fallback notice). Presence check is cached; never the value.
-  const bankrCapabilityContext = await buildBankrCapabilityContext().catch(() => "");
+  // ClawBank knowledge is credential-gated like Bankr (not profile-gated): any
+  // runtime can use the shared ClawBank token, and the briefing must survive a
+  // timed-out capability search. Presence check is cached; never the value.
+  const [bankrCapabilityContext, clawbankCapabilityContext] = await Promise.all([
+    buildBankrCapabilityContext().catch(() => ""),
+    buildClawbankCapabilityContext().catch(() => ""),
+  ]);
   const taskRetrievalContext = [
     taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
       query: userPrompt,
@@ -4076,6 +5196,7 @@ export async function POST(request: NextRequest) {
       failed: taskRetrievalPreflight.failed,
     }),
     bankrCapabilityContext,
+    clawbankCapabilityContext,
   ].filter(Boolean).join("\n\n");
   await recordRouteTelemetry(request, "agent_runtime.capability_search.completed", {
     ...telemetryPayloadForProfile(profile),
@@ -4127,6 +5248,98 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (naturalMiroSharkX402) return naturalMiroSharkX402;
+  const confirmedBankrAction = await maybeExecuteConfirmedBankrAction({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    runtimeSessionId,
+  });
+  if (confirmedBankrAction) return confirmedBankrAction;
+  const confirmedSend = await maybeExecuteConfirmedSend({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    actingWalletSource,
+    runtimeSessionId,
+  });
+  if (confirmedSend) return confirmedSend;
+  const naturalSend = await maybePrepareNaturalSend({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    actingWalletSource,
+    runtimeSessionId,
+  });
+  if (naturalSend) return naturalSend;
+  const confirmedSwap = await maybeExecuteConfirmedSwap({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    actingWalletSource,
+    runtimeSessionId,
+  });
+  if (confirmedSwap) return confirmedSwap;
+  const naturalSwap = await maybePrepareNaturalSwap({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    actingWalletSource,
+    runtimeSessionId,
+  });
+  if (naturalSwap) return naturalSwap;
+  const confirmedB20Issuer = await maybeExecuteConfirmedB20Issuer({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (confirmedB20Issuer) return confirmedB20Issuer;
+  const naturalB20Issuer = await maybePrepareNaturalB20Issuer({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalB20Issuer) return naturalB20Issuer;
+  const naturalBankrAction = await maybeHandleNaturalBankrAction({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    runtimeSessionId,
+  });
+  if (naturalBankrAction) return naturalBankrAction;
+  const confirmedBuyStock = await maybeExecuteConfirmedBuyStock({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (confirmedBuyStock) return confirmedBuyStock;
+  const naturalBuyStock = await maybePrepareNaturalBuyStock({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    runtimeSessionId,
+  });
+  if (naturalBuyStock) return naturalBuyStock;
   const confirmedPrivateX402 = await maybeExecuteConfirmedPrivateX402({
     request,
     routeStartedAt,

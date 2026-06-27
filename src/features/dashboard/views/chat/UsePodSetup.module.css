@@ -667,6 +667,18 @@
   line-height: 1;
 }
 
+/* Compact single-line variant for credential fields; matches .btn height. */
+.keyInputWrap {
+  min-height: 38px;
+  align-items: center;
+}
+
+.keyInputWrap input {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
 .transferSplit {
   filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.16));
 }
@@ -1386,4 +1398,135 @@
   .successMark::before {
     animation: none !important;
   }
+}
+
+:global(:root[data-theme="hive-light"]) .root {
+  --bg0: #fcf8ee;
+  --bg3: rgba(255, 252, 246, 0.92);
+  --fg: var(--foreground);
+  --fg2: var(--text-soft);
+  --fg3: var(--text-soft);
+  --fg4: var(--muted);
+  --line: rgba(137, 119, 91, 0.22);
+  --line2: rgba(185, 139, 47, 0.28);
+  --cyan: var(--accent);
+  --cyan2: var(--accent-strong);
+  --cyan3: var(--accent-strong);
+  --cyan-glow: rgba(185, 139, 47, 0.18);
+  --honey: var(--accent);
+  --honey2: var(--warning, #8a641f);
+  --honey-glow: rgba(212, 180, 111, 0.2);
+  --violet: #7760a8;
+  --violet2: #5f4a91;
+  --violet-soft: rgba(119, 96, 168, 0.12);
+
+  border-color: var(--line);
+  background:
+    radial-gradient(140% 80% at 50% -10%, rgba(212, 180, 111, 0.14), transparent 60%),
+    var(--surface);
+  box-shadow: 0 24px 64px rgba(82, 61, 22, 0.16);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .panel,
+:global(:root[data-theme="hive-light"]) .code,
+:global(:root[data-theme="hive-light"]) .copy,
+:global(:root[data-theme="hive-light"]) .fundingStatus,
+:global(:root[data-theme="hive-light"]) .amountInputWrap,
+:global(:root[data-theme="hive-light"]) .search,
+:global(:root[data-theme="hive-light"]) .model,
+:global(:root[data-theme="hive-light"]) .preset,
+:global(:root[data-theme="hive-light"]) .cap input,
+:global(:root[data-theme="hive-light"]) .stat,
+:global(:root[data-theme="hive-light"]) .wallet,
+:global(:root[data-theme="hive-light"]) .dropdown {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .ghost {
+  border-color: var(--line);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .primary,
+:global(:root[data-theme="hive-light"]) .honey,
+:global(:root[data-theme="hive-light"]) .transferPrimary {
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  box-shadow: 0 14px 28px rgba(185, 139, 47, 0.2);
+  color: var(--button-primary-foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .panel h3,
+:global(:root[data-theme="hive-light"]) .headText h2,
+:global(:root[data-theme="hive-light"]) .step.active .stepLabel b,
+:global(:root[data-theme="hive-light"]) .step.done .stepLabel b,
+:global(:root[data-theme="hive-light"]) .preset b,
+:global(:root[data-theme="hive-light"]) .stat b,
+:global(:root[data-theme="hive-light"]) .wname b,
+:global(:root[data-theme="hive-light"]) .success h3,
+:global(:root[data-theme="hive-light"]) .amountInputWrap input,
+:global(:root[data-theme="hive-light"]) .search input,
+:global(:root[data-theme="hive-light"]) .cap input,
+:global(:root[data-theme="hive-light"]) .keyInputWrap input {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .headText p,
+:global(:root[data-theme="hive-light"]) .stepLabel b,
+:global(:root[data-theme="hive-light"]) .stepLabel small,
+:global(:root[data-theme="hive-light"]) .panel p,
+:global(:root[data-theme="hive-light"]) .mutedMono,
+:global(:root[data-theme="hive-light"]) .fieldLabel,
+:global(:root[data-theme="hive-light"]) .amountField > span,
+:global(:root[data-theme="hive-light"]) .amountInputWrap strong,
+:global(:root[data-theme="hive-light"]) .walletUnavailableNote,
+:global(:root[data-theme="hive-light"]) .preset small,
+:global(:root[data-theme="hive-light"]) .cap span,
+:global(:root[data-theme="hive-light"]) .wname small,
+:global(:root[data-theme="hive-light"]) .wbal small,
+:global(:root[data-theme="hive-light"]) .success p,
+:global(:root[data-theme="hive-light"]) .msg,
+:global(:root[data-theme="hive-light"]) .dropdownLabel,
+:global(:root[data-theme="hive-light"]) .dropdownItem:disabled,
+:global(:root[data-theme="hive-light"]) .dropdownItem[data-empty="true"] {
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .accentCyan,
+:global(:root[data-theme="hive-light"]) .accentHoney,
+:global(:root[data-theme="hive-light"]) .model:hover,
+:global(:root[data-theme="hive-light"]) .model.sel,
+:global(:root[data-theme="hive-light"]) .preset:hover,
+:global(:root[data-theme="hive-light"]) .preset.sel,
+:global(:root[data-theme="hive-light"]) .wallet:hover,
+:global(:root[data-theme="hive-light"]) .dropdownItem:hover {
+  border-color: var(--accent-strong);
+  background: var(--button-accent);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .fundingStatus[data-tone="ok"],
+:global(:root[data-theme="hive-light"]) .successMark {
+  border-color: rgba(64, 111, 83, 0.32);
+  background: rgba(64, 111, 83, 0.12);
+  color: var(--success, #406f53);
+}
+
+:global(:root[data-theme="hive-light"]) .fundingStatus[data-tone="warn"],
+:global(:root[data-theme="hive-light"]) .badge,
+:global(:root[data-theme="hive-light"]) .msg.warn,
+:global(:root[data-theme="hive-light"]) .wbal b {
+  border-color: rgba(185, 139, 47, 0.34);
+  background: rgba(212, 180, 111, 0.16);
+  color: var(--warning, #8a641f);
+}
+
+:global(:root[data-theme="hive-light"]) .dropdown {
+  background: var(--button-popover);
+  color: var(--button-popover-foreground);
+  box-shadow: 0 18px 44px rgba(82, 61, 22, 0.16);
 }

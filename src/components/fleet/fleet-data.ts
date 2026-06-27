@@ -2,7 +2,7 @@
 // Shape + mock data for the Fleet view. Replace MACHINES/TASKS/ALERTS with
 // your real data fetcher when wiring up.
 
-import type { BeeWorkerClass } from "@/lib/types/agent-runtime";
+import type { BeeWorkerClass, CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
 import type { GitLawbNodeStatus } from "@/lib/types/gitlawb";
 
 export type AgentState = "working" | "ready" | "scheduled" | "setup" | "failed";
@@ -55,6 +55,9 @@ export interface FleetAgent {
   role: string;
   beeRole?: string;
   workerClass?: BeeWorkerClass;
+  customWorkerClass?: CustomWorkerClassProfile;
+  customWorkerClasses?: CustomWorkerClassProfile[];
+  selectedCustomWorkerClassId?: string;
   wallet: string;     // formatted e.g. "0.42 ETH" or "—"
   balance: "healthy" | "low_compute" | "dead" | "off";
   task: string;

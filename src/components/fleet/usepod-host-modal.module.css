@@ -820,3 +820,115 @@
     animation: none !important;
   }
 }
+
+:global(:root[data-theme="hive-light"]) .backdrop {
+  background: rgba(34, 29, 20, 0.34);
+  backdrop-filter: blur(10px) saturate(1.05);
+}
+
+:global(:root[data-theme="hive-light"]) .modal {
+  --bg0: #f1ede3;
+  --bg-0: #f1ede3;
+  --bg2: #fbf8f1;
+  --bg3: #f4efe4;
+  --bg-3: #f4efe4;
+  --fg: #221d14;
+  --fg2: #5e574b;
+  --fg-2: #5e574b;
+  --fg3: #867d6e;
+  --fg-3: #867d6e;
+  --fg4: #6f6657;
+  --fg-4: #6f6657;
+  --line: rgba(54, 46, 30, 0.16);
+  --line2: rgba(54, 46, 30, 0.24);
+  --line-2: rgba(54, 46, 30, 0.24);
+  --cyan: #5f8f5a;
+  --cyan2: #4f7d4b;
+  --cyan-2: #4f7d4b;
+  --cyan3: #376739;
+  --cyan-3: #376739;
+  --cyan-glow: rgba(95, 143, 90, 0.22);
+  --honey: #b07f1c;
+  --honey2: #936811;
+  --honey-2: #936811;
+  --honey-glow: rgba(176, 127, 28, 0.22);
+  --violet-2: #7f6bb2;
+  --red: #8e3328;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(176, 127, 28, 0.14), transparent 60%),
+    linear-gradient(180deg, rgba(251, 248, 241, 0.98), rgba(244, 239, 228, 0.96));
+  box-shadow:
+    0 0 0 1px rgba(176, 127, 28, 0.08),
+    0 40px 90px rgba(82, 61, 22, 0.22),
+    0 0 60px rgba(95, 143, 90, 0.08);
+}
+
+:global(:root[data-theme="hive-light"]) .close,
+:global(:root[data-theme="hive-light"]) .icon,
+:global(:root[data-theme="hive-light"]) .autoPanel,
+:global(:root[data-theme="hive-light"]) .autoVisual,
+:global(:root[data-theme="hive-light"]) .setupStep,
+:global(:root[data-theme="hive-light"]) .stats div,
+:global(:root[data-theme="hive-light"]) .pairingCard,
+:global(:root[data-theme="hive-light"]) .fundingPanel,
+:global(:root[data-theme="hive-light"]) .fundingStats div,
+:global(:root[data-theme="hive-light"]) .status,
+:global(:root[data-theme="hive-light"]) .manual,
+:global(:root[data-theme="hive-light"]) .commands code,
+:global(:root[data-theme="hive-light"]) .up-panel,
+:global(:root[data-theme="hive-light"]) .rp-backend,
+:global(:root[data-theme="hive-light"]) .rp-stepper,
+:global(:root[data-theme="hive-light"]) .rp-seg,
+:global(:root[data-theme="hive-light"]) .rp-mrow,
+:global(:root[data-theme="hive-light"]) .rp-cap-input,
+:global(:root[data-theme="hive-light"]) .rp-toggle,
+:global(:root[data-theme="hive-light"]) .rp-chip,
+:global(:root[data-theme="hive-light"]) .rp-live-hero,
+:global(:root[data-theme="hive-light"]) .rp-job {
+  border-color: var(--line);
+  background: rgba(251, 248, 241, 0.78);
+  color: var(--fg);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .compactStagePanel .up-foot {
+  background: linear-gradient(180deg, rgba(251, 248, 241, 0.94), rgba(244, 239, 228, 0.98));
+}
+
+:global(:root[data-theme="hive-light"]) .icon::after {
+  border-color: rgba(176, 127, 28, 0.46);
+}
+
+:global(:root[data-theme="hive-light"]) .setupStep[data-state="active"],
+:global(:root[data-theme="hive-light"]) .setupStep[data-state="done"],
+:global(:root[data-theme="hive-light"]) .rp-toggle.on,
+:global(:root[data-theme="hive-light"]) .rp-seg button.on {
+  border-color: rgba(95, 143, 90, 0.34);
+  background: rgba(95, 143, 90, 0.12);
+  color: var(--cyan3);
+}
+
+:global(:root[data-theme="hive-light"]) .setupStep[data-state="error"],
+:global(:root[data-theme="hive-light"]) .status[data-tone="error"] {
+  border-color: rgba(192, 82, 77, 0.38);
+  background: rgba(192, 82, 77, 0.1);
+  color: #8e3328;
+}
+
+:global(:root[data-theme="hive-light"]) .commands code,
+:global(:root[data-theme="hive-light"]) .rp-cap-input input,
+:global(:root[data-theme="hive-light"]) .sv {
+  color: var(--fg);
+  background: rgba(255, 252, 246, 0.9);
+}
+
+:global(:root[data-theme="hive-light"]) .ghost {
+  border-color: var(--line-2);
+  background: rgba(255, 252, 246, 0.72);
+  color: var(--fg);
+}
+
+:global(:root[data-theme="hive-light"]) .primary {
+  background: linear-gradient(180deg, var(--honey), var(--honey-2));
+  color: #fff7df;
+}

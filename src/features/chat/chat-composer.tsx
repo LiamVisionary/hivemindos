@@ -1,5 +1,6 @@
 import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, RefreshCcw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { useVoiceBands } from "@/lib/stores/voice-bands-store";
 
 import chatStyles from "@/app/chat.module.css";
 import kanbanStyles from "@/app/kanban-board.module.css";
@@ -638,6 +639,22 @@ export function AttachmentListMenuContent({
   );
 }
 
+/**
+ * The live mic level meter (18 bars). Isolated so the ~12fps voice-bands updates
+ * re-render only these spans, not ComposerField or the dashboard tree. Reads the
+ * global voice-bands store directly. See @/lib/stores/voice-bands-store.
+ */
+function VoiceWaveform() {
+  const voiceBands = useVoiceBands();
+  return (
+    <>
+      {voiceBands.map((level, index) => (
+        <span key={index} style={{ transform: `scaleY(${0.18 + level * 1.8})` }} />
+      ))}
+    </>
+  );
+}
+
 export function ComposerField({
   value,
   onChange,
@@ -670,7 +687,6 @@ export function ComposerField({
   workingDirectoryLabel,
   onChangeWorkingDirectory,
   recording,
-  voiceBands,
   voiceTranscript,
   onToggleRecording,
   canRecord = true,
@@ -715,7 +731,8 @@ export function ComposerField({
   workingDirectoryLabel?: string;
   onChangeWorkingDirectory?: () => void | Promise<void>;
   recording?: boolean;
-  voiceBands: number[];
+  /** @deprecated ignored — the meter now reads the global voice-bands store. Kept optional for call-site compat. */
+  voiceBands?: number[];
   voiceTranscript?: string;
   onToggleRecording?: () => void;
   canRecord?: boolean;
@@ -1041,6 +1058,7 @@ export function ComposerField({
             <textarea
               ref={textareaRef}
               value={composerValue}
+              data-bee-composer
               onChange={(event) => {
                 onChange(event.target.value);
                 setSelectedSlashCommandIndex(0);
@@ -1092,9 +1110,7 @@ export function ComposerField({
       {recording ? (
         <div className={chatClass("voiceRecorder")} aria-live="polite">
           <div className={chatClass("voiceWaveform")} aria-hidden="true">
-            {voiceBands.map((level, index) => (
-              <span key={index} style={{ transform: `scaleY(${0.18 + level * 1.8})` }} />
-            ))}
+            <VoiceWaveform />
           </div>
           <span>{voiceTranscript || "Listening..."}</span>
         </div>
@@ -1380,6 +1396,7 @@ export function ComposerField({
           <button
             type="submit"
             className={chatClass("composerIconButton", "sendButton")}
+            data-bee-send
             disabled={disabled || !canSend}
             aria-label={busy ? "Queue message" : "Send"}
           >

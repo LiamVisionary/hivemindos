@@ -1,7 +1,9 @@
 import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
 import { searchContextIndex, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
+import { createContextXrayManifestFromContextIndex } from "@/lib/services/context-xray";
 import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
 import { generationMetricsContext } from "@/lib/services/generation-metrics";
+import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
 import type { BeeWorkerClass, SharedVaultConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 const CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS = 250;
@@ -26,6 +28,7 @@ function contextItemLocator(item: ContextIndexItem) {
   if (item.kind === "connected-app" || item.kind === "app-endpoint") {
     return "Dashboard can resolve current app URLs through /api/context-index or /api/fleet/apps for tool-capable runtimes; do not hard-code Tailnet endpoints.";
   }
+  if (item.route && item.path) return `${item.route}; source: ${item.path}`;
   return item.path || item.route || item.load.note || "No direct locator.";
 }
 
@@ -201,6 +204,12 @@ function formatTaskRetrievalItem(hit: RetrievalHit, index: number) {
 function taskRetrievalQueries(query: string) {
   const normalized = query.toLowerCase();
   const queries = [{ label: "full task", query }];
+  if (loopEngineeringRequest(query)) {
+    queries.push({
+      label: "loop engineering",
+      query: "loop engineering readiness /api/loops Work Board pattern registry eval gates receipts budgets code-fix app-build-harness research daily-brief evo benchmark LOOP.md STATE.md",
+    });
+  }
   if (/\b(x|twitter|tweet|tweets|post|social)\b/.test(normalized)) {
     queries.push({ label: "x research and writing", query: "x twitter search latest news social post x-post optimizer grok writer" });
   }
@@ -242,9 +251,21 @@ export function localImageGenerationRequest(query: string) {
 }
 
 export function requiresCapabilityRouting(query: string) {
-  return localImageGenerationRequest(query)
+  return loopEngineeringRequest(query)
+    || localImageGenerationRequest(query)
     || /\b(?:capabilit(?:y|ies)|connected app|tool|api|x402|wallet|payment|send|deliver|deploy|workflow|kanban|scheduler|miroshark|bankr|crypto|trade|trading|token|swap|portfolio)\b/i.test(query)
     || /\bwhat\b[\s\S]{0,40}\bcan you do\b|\bcan you do with\b/i.test(query);
+}
+
+export function loopEngineeringRequest(query: string) {
+  const normalized = query.toLowerCase();
+  if (/\bloop(?:ed|ing|s)?\b/.test(normalized)) return true;
+  if (/\b(?:keep|continue|retry|rerun|repeat|iterate)\b[\s\S]{0,100}\b(?:until|unless|passes?|green|clean|verified|fixed|done)\b/.test(normalized)) return true;
+  if (/\buntil\b[\s\S]{0,100}\b(?:tests?|checks?|lint|typecheck|receipts?|evidence|verified|passes?|green|clean|done)\b/.test(normalized)) return true;
+  if (/\b(?:every|daily|weekly|weekday|hourly|recurring|scheduled)\b[\s\S]{0,120}\b(?:brief|scan|report|check|deliver|monitor|summary)\b/.test(normalized)) return true;
+  if (/\b(?:smoke|judge|receipt|receipts|evidence|gate|gates|handoff|budget|attempts?)\b[\s\S]{0,120}\b(?:build|fix|repair|research|investigate|scan|deliver|ship)\b/.test(normalized)) return true;
+  if (/\b(?:build|fix|repair|research|investigate|scan|deliver|ship)\b[\s\S]{0,120}\b(?:smoke|judge|receipt|receipts|evidence|gate|gates|handoff|budget|attempts?)\b/.test(normalized)) return true;
+  return false;
 }
 
 function shouldRunTaskRetrieval(query: string) {
@@ -356,6 +377,18 @@ function imageGenerationCapabilityContext(query: string, runtime?: RuntimeCapabi
   ].filter(Boolean).join("\n");
 }
 
+function loopEngineeringCapabilityContext(query: string) {
+  if (!loopEngineeringRequest(query)) return "";
+  return [
+    "Loop-shaped task routing:",
+    "- The user described repeat-until-clean, recurring, gated, judged, receipt-backed, budgeted, or handoff-driven work. Treat it as Work Board loop-engineering work even when they did not say the word loop.",
+    "- For loop-shaped requests, include a section labeled \"Work Board loop plan\" before any generic execution plan so the user sees how the task will be bounded, judged, retried, and audited.",
+    "- When asked how HivemindOS should track it, name the concrete Work Board loop task shape: template/pattern, acceptance gates, required receipts, attempt/runtime/token/cost budget, handoff rule, and readiness audit.",
+    "- Prefer /api/loops for loop task templates, create-task, readiness checks, and LOOP.md / STATE.md artifact exports; use /api/kanban for claim, heartbeat, complete, block, loop-discover, and loop-record lifecycle events.",
+    "- Do not claim execution if this chat bridge has no real tool call/app dispatch. Instead, describe the exact Work Board card and receipts HivemindOS should create or ask the user to run the HivemindOS loop/kanban path.",
+  ].join("\n");
+}
+
 async function fetchConnectedAppsForTaskRetrieval(origin: string) {
   const url = new URL("/api/fleet/apps", origin);
   const response = await fetch(url, {
@@ -407,6 +440,10 @@ export async function buildTaskRetrievalContextResult(input: {
   sharedVault: SharedVaultConfig | null;
   runtime?: RuntimeCapabilityContext;
   agent?: AgentRetrievalProfile;
+  recordContextXray?: boolean;
+  runId?: string;
+  threadId?: string;
+  model?: string;
 }): Promise<TaskRetrievalContextResult> {
   const trimmed = input.query.trim();
   const baseTelemetry = {
@@ -452,6 +489,15 @@ export async function buildTaskRetrievalContextResult(input: {
     return true;
   });
   const hits = rankHitsForAgent(dedupedHits, input.agent).slice(0, 22);
+  if (input.recordContextXray && (input.runId || input.threadId)) {
+    void createContextXrayManifestFromContextIndex({
+      runId: input.runId,
+      threadId: input.threadId,
+      model: input.model ?? input.runtime?.runtime,
+      query: trimmed,
+      items: hits.map((hit) => hit.item),
+    }).catch(() => undefined);
+  }
   const telemetry: TaskRetrievalTelemetry = {
     queryCount: queries.length,
     hitCount: hits.length,
@@ -477,9 +523,10 @@ export async function buildTaskRetrievalContextResult(input: {
       ? `- Worker class lens: ${input.agent.workerClass}. Hits marked class-preferred or agent task preference match this agent's specialization; prefer them on ties, but any listed capability remains usable.`
       : "",
     userAppPreferenceContext(connectedApps, trimmed),
+    loopEngineeringCapabilityContext(trimmed),
     imageGenerationCapabilityContext(trimmed, input.runtime, connectedApps),
     generationPerformanceContext,
-    ...hits.map(formatTaskRetrievalItem),
+    hits.length ? untrustedContextMessage("Hive capability search hits", hits.map(formatTaskRetrievalItem).join("\n")).content : "",
   ].filter(Boolean).join("\n");
   return { context, telemetry };
 }

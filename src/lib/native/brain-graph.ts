@@ -1,5 +1,6 @@
 import type { BrainGraph } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { invokeNative } from "@/lib/native/invoke";
 
 export async function getNativeBrainGraph(input: {
   vaultPath?: string;
@@ -7,8 +8,7 @@ export async function getNativeBrainGraph(input: {
 }): Promise<BrainGraph | null> {
   if (!isTauriDesktopRuntime()) return null;
   try {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return await invoke<BrainGraph>("brain_graph", {
+    return await invokeNative<BrainGraph>("brain_graph", {
       vaultPath: input.vaultPath,
       force: input.force,
     });

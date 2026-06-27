@@ -22,7 +22,11 @@ export type TipBotLedgerKind =
   | "withdrawal-refund"
   | "claim-escrow"
   | "claim-credit"
-  | "claim-refund";
+  | "claim-refund"
+  | "bounty-create"
+  | "bounty-boost"
+  | "bounty-refund"
+  | "bounty-payout";
 
 export type TipBotLedgerEntry = {
   id: string;
@@ -77,6 +81,48 @@ export type TipBotClaim = {
   resolvedAt?: string;
 };
 
+export type TipBotBountyStatus =
+  | "open"
+  | "funding"
+  | "active"
+  | "submitted"
+  | "accepted"
+  | "paid"
+  | "expired"
+  | "cancelled"
+  | "disputed";
+
+export type TipBotBountyBoost = {
+  id: string;
+  userId: string;
+  amountRaw: string;
+  createdAt: string;
+  refundedAt?: string;
+};
+
+export type TipBotBountySubmission = {
+  id: string;
+  userId: string;
+  text: string;
+  createdAt: string;
+};
+
+export type TipBotBounty = {
+  id: string;
+  title: string;
+  creatorUserId: string;
+  chatId?: string;
+  rewardRaw: string;
+  status: TipBotBountyStatus;
+  dueAt?: string;
+  boosts: TipBotBountyBoost[];
+  submissions: TipBotBountySubmission[];
+  winnerUserId?: string;
+  acceptedSubmissionId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type TipBotState = {
   version: 1;
   settings: {
@@ -96,6 +142,12 @@ export type TipBotState = {
   deposits: Record<string, TipBotDeposit>;
   withdrawals: TipBotWithdrawal[];
   claims: Record<string, TipBotClaim>;
+  bounties: Record<string, TipBotBounty>;
+  memberTags?: {
+    chatIds: string[];
+    lastSynced: Record<string, Record<string, string>>;
+    lastSyncAt?: string;
+  };
   updatedAt: string;
 };
 
@@ -110,8 +162,15 @@ export function emptyTipBotState(): TipBotState {
     deposits: {},
     withdrawals: [],
     claims: {},
+    bounties: {},
+    memberTags: { chatIds: [], lastSynced: {} },
     updatedAt: new Date(0).toISOString(),
   };
+}
+
+function bounties(state: TipBotState): Record<string, TipBotBounty> {
+  state.bounties ??= {};
+  return state.bounties;
 }
 
 export function balanceOf(state: TipBotState, userId: string): bigint {
@@ -145,6 +204,16 @@ function assertPositiveRaw(amountRaw: string): bigint {
   }
   if (value <= 0n) throw new Error("Amount must be greater than zero.");
   return value;
+}
+
+function assertMutableBounty(bounty: TipBotBounty) {
+  if (bounty.status === "paid" || bounty.status === "cancelled" || bounty.status === "expired") {
+    throw new Error(`Bounty ${bounty.id} is ${bounty.status}.`);
+  }
+}
+
+function bountyEscrowRaw(bounty: TipBotBounty): bigint {
+  return BigInt(bounty.rewardRaw) + bounty.boosts.reduce((total, boost) => total + (boost.refundedAt ? 0n : BigInt(boost.amountRaw)), 0n);
 }
 
 export function ensureUser(
@@ -280,6 +349,176 @@ export function applyClaimRefund(
   return claim;
 }
 
+export function applyBountyCreate(
+  state: TipBotState,
+  params: {
+    id: string;
+    entryId: string;
+    creatorUserId: string;
+    title: string;
+    rewardRaw: string;
+    chatId?: string;
+    dueAt?: string;
+    createdAt: string;
+  },
+): TipBotBounty {
+  const title = params.title.replace(/\s+/g, " ").trim().slice(0, 180);
+  if (!title) throw new Error("Bounty title is required.");
+  if (bounties(state)[params.id]) throw new Error(`Bounty ${params.id} already exists.`);
+  const reward = assertPositiveRaw(params.rewardRaw);
+  assertSufficient(state, params.creatorUserId, reward, "this bounty");
+  debit(state, params.creatorUserId, reward);
+  const bounty: TipBotBounty = {
+    id: params.id,
+    title,
+    creatorUserId: params.creatorUserId,
+    chatId: params.chatId,
+    rewardRaw: reward.toString(),
+    status: "open",
+    dueAt: params.dueAt,
+    boosts: [],
+    submissions: [],
+    createdAt: params.createdAt,
+    updatedAt: params.createdAt,
+  };
+  bounties(state)[params.id] = bounty;
+  state.ledger.push({
+    id: params.entryId,
+    kind: "bounty-create",
+    fromUserId: params.creatorUserId,
+    amountRaw: bounty.rewardRaw,
+    chatId: params.chatId,
+    ref: params.id,
+    createdAt: params.createdAt,
+  });
+  return bounty;
+}
+
+export function applyBountyBoost(
+  state: TipBotState,
+  params: { id: string; entryId: string; boostId: string; userId: string; amountRaw: string; createdAt: string },
+): TipBotBounty {
+  const bounty = findBounty(state, params.id);
+  if (!bounty) throw new Error(`Unknown bounty: ${params.id}`);
+  assertMutableBounty(bounty);
+  if (bounty.status === "accepted" || bounty.status === "disputed") {
+    throw new Error(`Bounty ${params.id} is ${bounty.status} and cannot be boosted.`);
+  }
+  const amount = assertPositiveRaw(params.amountRaw);
+  assertSufficient(state, params.userId, amount, "this bounty boost");
+  debit(state, params.userId, amount);
+  bounty.boosts.push({ id: params.boostId, userId: params.userId, amountRaw: amount.toString(), createdAt: params.createdAt });
+  if (bounty.status === "open" || bounty.status === "funding") bounty.status = "active";
+  bounty.updatedAt = params.createdAt;
+  state.ledger.push({
+    id: params.entryId,
+    kind: "bounty-boost",
+    fromUserId: params.userId,
+    amountRaw: amount.toString(),
+    chatId: bounty.chatId,
+    ref: params.id,
+    createdAt: params.createdAt,
+  });
+  return bounty;
+}
+
+export function applyBountySubmission(
+  state: TipBotState,
+  params: { id: string; submissionId: string; userId: string; text: string; createdAt: string },
+): TipBotBounty {
+  const bounty = findBounty(state, params.id);
+  if (!bounty) throw new Error(`Unknown bounty: ${params.id}`);
+  assertMutableBounty(bounty);
+  if (bounty.status === "accepted" || bounty.status === "disputed") {
+    throw new Error(`Bounty ${params.id} is ${bounty.status} and cannot accept submissions.`);
+  }
+  const text = params.text.trim().slice(0, 600);
+  if (!text) throw new Error("Submission text or URL is required.");
+  bounty.submissions.push({ id: params.submissionId, userId: params.userId, text, createdAt: params.createdAt });
+  bounty.status = "submitted";
+  bounty.updatedAt = params.createdAt;
+  return bounty;
+}
+
+export function applyBountyPayout(
+  state: TipBotState,
+  params: { id: string; entryId: string; winnerUserId: string; acceptedSubmissionId?: string; updatedAt: string },
+): TipBotBounty {
+  const bounty = findBounty(state, params.id);
+  if (!bounty) throw new Error(`Unknown bounty: ${params.id}`);
+  assertMutableBounty(bounty);
+  if (!state.users[params.winnerUserId]) throw new Error("Unknown bounty winner.");
+  const amount = bountyEscrowRaw(bounty);
+  if (amount <= 0n) throw new Error(`Bounty ${params.id} has no escrowed reward.`);
+  credit(state, params.winnerUserId, amount);
+  bounty.status = "paid";
+  bounty.winnerUserId = params.winnerUserId;
+  bounty.acceptedSubmissionId = params.acceptedSubmissionId;
+  bounty.updatedAt = params.updatedAt;
+  state.ledger.push({
+    id: params.entryId,
+    kind: "bounty-payout",
+    toUserId: params.winnerUserId,
+    amountRaw: amount.toString(),
+    chatId: bounty.chatId,
+    ref: params.id,
+    createdAt: params.updatedAt,
+  });
+  return bounty;
+}
+
+export function applyBountyRefund(
+  state: TipBotState,
+  params: { id: string; makeEntryId: () => string; status: Extract<TipBotBountyStatus, "cancelled" | "expired" | "disputed">; updatedAt: string },
+): TipBotBounty {
+  const bounty = findBounty(state, params.id);
+  if (!bounty) throw new Error(`Unknown bounty: ${params.id}`);
+  if (bounty.status === "paid" || bounty.status === "cancelled" || bounty.status === "expired") {
+    throw new Error(`Bounty ${params.id} is ${bounty.status}.`);
+  }
+  if (params.status === "disputed") {
+    bounty.status = "disputed";
+    bounty.updatedAt = params.updatedAt;
+    return bounty;
+  }
+  credit(state, bounty.creatorUserId, BigInt(bounty.rewardRaw));
+  state.ledger.push({
+    id: params.makeEntryId(),
+    kind: "bounty-refund",
+    toUserId: bounty.creatorUserId,
+    amountRaw: bounty.rewardRaw,
+    chatId: bounty.chatId,
+    ref: bounty.id,
+    createdAt: params.updatedAt,
+  });
+  for (const boost of bounty.boosts) {
+    if (boost.refundedAt) continue;
+    credit(state, boost.userId, BigInt(boost.amountRaw));
+    boost.refundedAt = params.updatedAt;
+    state.ledger.push({
+      id: params.makeEntryId(),
+      kind: "bounty-refund",
+      toUserId: boost.userId,
+      amountRaw: boost.amountRaw,
+      chatId: bounty.chatId,
+      ref: bounty.id,
+      createdAt: params.updatedAt,
+    });
+  }
+  bounty.status = params.status;
+  bounty.updatedAt = params.updatedAt;
+  return bounty;
+}
+
+export function expireBounties(
+  state: TipBotState,
+  params: { now: string; makeEntryId: () => string },
+): TipBotBounty[] {
+  return Object.values(bounties(state))
+    .filter((bounty) => bounty.dueAt && bounty.dueAt <= params.now && (bounty.status === "open" || bounty.status === "funding" || bounty.status === "active"))
+    .map((bounty) => applyBountyRefund(state, { id: bounty.id, makeEntryId: params.makeEntryId, status: "expired", updatedAt: params.now }));
+}
+
 export function expireClaims(
   state: TipBotState,
   params: { now: string; makeEntryId: () => string },
@@ -375,6 +614,10 @@ export function findWithdrawal(state: TipBotState, id: string): TipBotWithdrawal
   return state.withdrawals.find((withdrawal) => withdrawal.id === id) ?? null;
 }
 
+export function findBounty(state: TipBotState, id: string): TipBotBounty | null {
+  return bounties(state)[id.toLowerCase()] ?? bounties(state)[id] ?? null;
+}
+
 // Pops the oldest pending withdrawal into "processing" so the runner can send
 // it without racing a second iteration. Returns a copy.
 export function claimNextWithdrawal(state: TipBotState, now: string): TipBotWithdrawal | null {
@@ -430,6 +673,16 @@ export function approveWithdrawal(state: TipBotState, id: string, now: string): 
 }
 
 export type TipBotLeaderboardRow = { userId: string; totalRaw: string; count: number };
+export type TipBotBountyBoardRow = {
+  id: string;
+  title: string;
+  status: TipBotBountyStatus;
+  totalRaw: string;
+  boostRaw: string;
+  boosterCount: number;
+  dueAt?: string;
+  submissionCount: number;
+};
 
 export function tipLeaderboard(
   state: TipBotState,
@@ -459,6 +712,30 @@ export function tipLeaderboard(
   return { tippers: toRows(given), receivers: toRows(received) };
 }
 
+export function bountyBoard(
+  state: TipBotState,
+  params: { chatId?: string; includeClosed?: boolean } = {},
+): TipBotBountyBoardRow[] {
+  return Object.values(bounties(state))
+    .filter((bounty) => !params.chatId || bounty.chatId === params.chatId)
+    .filter((bounty) => params.includeClosed || !["paid", "cancelled", "expired"].includes(bounty.status))
+    .map((bounty) => {
+      const boostRaw = bounty.boosts.reduce((total, boost) => total + (boost.refundedAt ? 0n : BigInt(boost.amountRaw)), 0n);
+      const boosters = new Set(bounty.boosts.filter((boost) => !boost.refundedAt).map((boost) => boost.userId));
+      return {
+        id: bounty.id,
+        title: bounty.title,
+        status: bounty.status,
+        totalRaw: (BigInt(bounty.rewardRaw) + boostRaw).toString(),
+        boostRaw: boostRaw.toString(),
+        boosterCount: boosters.size,
+        dueAt: bounty.dueAt,
+        submissionCount: bounty.submissions.length,
+      };
+    })
+    .sort((left, right) => (BigInt(right.totalRaw) > BigInt(left.totalRaw) ? 1 : BigInt(right.totalRaw) < BigInt(left.totalRaw) ? -1 : left.id.localeCompare(right.id)));
+}
+
 export function totalLiabilitiesRaw(state: TipBotState): bigint {
   let total = 0n;
   for (const amount of Object.values(state.balances)) total += BigInt(amount);
@@ -468,6 +745,11 @@ export function totalLiabilitiesRaw(state: TipBotState): bigint {
   for (const withdrawal of state.withdrawals) {
     if (withdrawal.status === "pending" || withdrawal.status === "needs-review" || withdrawal.status === "processing") {
       total += BigInt(withdrawal.amountRaw);
+    }
+  }
+  for (const bounty of Object.values(bounties(state))) {
+    if (bounty.status !== "paid" && bounty.status !== "cancelled" && bounty.status !== "expired") {
+      total += bountyEscrowRaw(bounty);
     }
   }
   return total;

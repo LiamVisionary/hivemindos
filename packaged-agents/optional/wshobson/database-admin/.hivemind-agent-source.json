@@ -1,0 +1,19 @@
+{
+  "upstreamName": "database-admin",
+  "slug": "database-admin",
+  "label": "Database Admin",
+  "domain": "database-migrations",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/database-migrations/agents/database-admin.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent database-admin",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/database-admin",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Expert database administrator specializing in modern cloud databases, automation, and reliability engineering. Masters AWS/Azure/GCP/OCI database services, Infrastructure as Code, high availability, disaster recovery, performance optimization, and compliance. Handles multi-cloud strategies, container databases, and cost optimization. Use PROACTIVELY for database architecture, operations, or reliability engineering."
+}

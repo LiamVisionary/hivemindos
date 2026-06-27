@@ -218,16 +218,23 @@ export async function buildBrainGraph(vaultPath?: string, options: { force?: boo
   }
 
   const links: BrainGraphLink[] = [];
+  const linkKeys = new Set<string>();
+  const addLink = (link: BrainGraphLink) => {
+    const key = `${link.source}\u0000${link.target}`;
+    if (linkKeys.has(key)) return;
+    linkKeys.add(key);
+    links.push(link);
+  };
   const unresolved = new Set<string>();
   for (const note of notes) {
     for (const target of extractWikiLinks(note.content)) {
       const resolvedTarget = resolveLink(target, notePaths);
       if (resolvedTarget) {
-        links.push({ source: note.path, target: resolvedTarget });
+        addLink({ source: note.path, target: resolvedTarget });
       } else {
         const unresolvedId = `unresolved:${target}`;
         unresolved.add(unresolvedId);
-        links.push({ source: note.path, target: unresolvedId, unresolved: true });
+        addLink({ source: note.path, target: unresolvedId, unresolved: true });
       }
     }
   }

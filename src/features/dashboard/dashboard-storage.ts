@@ -1,6 +1,7 @@
 import { DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_KINDS, buildAgentCallPreferences, normalizeAgentRuntime, type AgentProfile, type AgentRuntime, type AgentRuntimeKind, type CustomWorkerClassProfile, type RuntimeCapabilities, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
+import { RESEARCH_STORM_SKILL_SLUG, normalizeResearchMethod } from "@/lib/config/research-methods";
 import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
 import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
@@ -73,13 +74,23 @@ export function seedAgents(): AgentProfile[] {
 
 export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
   const runtime = normalizeAgentRuntime(agent.runtime);
-  const inferredQueen = agent.beeRole === "queen" || /queen|orchestrat|lead|main/i.test(agent.name) || runtime === "openclaw";
+  const workerClass = agent.workerClass ?? "general";
+  const workerPreset = beeWorkerPreset(workerClass);
+  const beeRole = runtime === "openclaw" && agent.beeRole === "queen"
+    ? "worker"
+    : agent.beeRole;
+  const inferredQueen = beeRole === "queen" || (runtime !== "openclaw" && /queen|orchestrat|lead|main/i.test(agent.name));
   const customWorkerClasses = agent.customWorkerClasses?.length
     ? agent.customWorkerClasses
     : agent.customWorkerClass
       ? [agent.customWorkerClass]
       : undefined;
   const selectedCustomWorkerClassId = agent.selectedCustomWorkerClassId ?? agent.customWorkerClass?.id;
+  const preferredSkillSlugs = agent.preferredSkillSlugs ?? workerPreset.skillSlugs;
+  const migrateResearchSkills = workerClass === "research"
+    && !selectedCustomWorkerClassId
+    && agent.researchMethod === undefined
+    && !preferredSkillSlugs.includes(RESEARCH_STORM_SKILL_SLUG);
   return {
     ...agent,
     runtime,
@@ -92,13 +103,15 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     telemetryUrl: normalizeAgentTelemetryUrl(agent.telemetryUrl),
     aeonBranch: runtime === "aeon" ? agent.aeonBranch ?? "main" : agent.aeonBranch,
     aeonMode: runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
-    beeRole: agent.beeRole ?? (inferredQueen ? "queen" : "worker"),
-    workerClass: agent.workerClass ?? "general",
+    beeRole: beeRole ?? (inferredQueen ? "queen" : "worker"),
+    workerClass,
     customWorkerClasses,
     selectedCustomWorkerClassId,
     customWorkerClass: customWorkerClasses?.find((workerClass: CustomWorkerClassProfile) => workerClass.id === selectedCustomWorkerClassId) ?? agent.customWorkerClass,
-    skillProfilePrompt: agent.skillProfilePrompt ?? renderBeeSoulTemplate(beeWorkerPreset(agent.workerClass ?? "general").soulTemplate, agent.name),
-    preferredSkillSlugs: agent.preferredSkillSlugs ?? beeWorkerPreset(agent.workerClass ?? "general").skillSlugs,
+    soulPrompt: agent.soulPrompt ?? renderBeeSoulTemplate(workerPreset.soulTemplate, agent.name),
+    skillProfilePrompt: agent.skillProfilePrompt ?? workerPreset.taskProfile,
+    preferredSkillSlugs: migrateResearchSkills ? [RESEARCH_STORM_SKILL_SLUG, ...preferredSkillSlugs] : preferredSkillSlugs,
+    researchMethod: workerClass === "research" ? normalizeResearchMethod(agent.researchMethod) : agent.researchMethod,
     calls: buildAgentCallPreferences(agent.calls),
     agentEnv: agent.agentEnv && typeof agent.agentEnv === "object" && !Array.isArray(agent.agentEnv)
       ? Object.fromEntries(Object.entries(agent.agentEnv).filter(([key, value]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof value === "string"))
@@ -286,6 +299,8 @@ export function parseStoredVault(snapshot: DashboardStateSnapshot = {}): SharedV
       synthesisFolder: storedSynthesisFolder || DEFAULT_SHARED_VAULT.synthesisFolder,
       brainServicesFolder: migratedBrainServicesFolder || DEFAULT_SHARED_VAULT.brainServicesFolder,
       gbrain: { ...DEFAULT_SHARED_VAULT.gbrain, ...(storedVault.gbrain ?? {}) },
+      qmd: { ...DEFAULT_SHARED_VAULT.qmd, ...(storedVault.qmd ?? {}) },
+      neo4j: { ...DEFAULT_SHARED_VAULT.neo4j, ...(storedVault.neo4j ?? {}) },
       synto: { ...DEFAULT_SHARED_VAULT.synto, ...(storedVault.synto ?? {}) },
     };
   } catch {

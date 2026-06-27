@@ -1,39 +1,106 @@
 .glowRoot {
+  --queen-glow-block: 100vh;
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: 2147483000;
+  width: 100vw;
+  height: 100vh;
+  height: var(--queen-glow-block);
   pointer-events: none;
   opacity: 0;
   transition: opacity 480ms ease;
+  isolation: isolate;
+}
+
+@supports (height: 100dvh) {
+  .glowRoot {
+    --queen-glow-block: 100dvh;
+  }
 }
 
 .glowRootActive {
   opacity: 1;
 }
 
-/*
- * Port of jacobamobin/AppleIntelligenceGlowEffect: four stacked rounded-rect
- * ring layers sharing one animated angular gradient. The crisp 6px rim sits
- * on top of three increasingly blurred halos (9/4, 11/12, 15/15).
- */
-.glowLayer {
+.glowSvg {
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  background: var(
-    --queen-glow-gradient,
-    conic-gradient(#bc82f3, #8d9fff, #ffba71, #bc82f3)
-  );
-  padding: var(--ring-width, 6px);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  filter: blur(var(--ring-blur, 0px));
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: translateZ(0);
+}
+
+.glowBreath {
+  opacity: 0.92;
+}
+
+.glowTraceOuter,
+.glowTraceBloom,
+.glowTraceCore {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  mix-blend-mode: screen;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glowTraceOuter {
+  stroke-width: 26;
+  opacity: 0.32;
+  animation: queenVoiceGlowOuterBreath 4.8s ease-in-out infinite;
+}
+
+.glowTraceBloom {
+  stroke-width: 16;
+  opacity: 0.42;
+  animation: queenVoiceGlowBloomBreath 4.8s ease-in-out infinite;
+}
+
+.glowTraceCore {
+  stroke-width: 6;
+  opacity: 0.18;
+  animation: queenVoiceGlowCoreBreath 4.8s ease-in-out infinite;
+}
+
+@keyframes queenVoiceGlowOuterBreath {
+  0%,
+  100% {
+    filter: blur(14px) saturate(1.32);
+    opacity: 0.22;
+  }
+
+  50% {
+    filter: blur(24px) saturate(1.5);
+    opacity: 0.42;
+  }
+}
+
+@keyframes queenVoiceGlowBloomBreath {
+  0%,
+  100% {
+    filter: blur(9px) saturate(1.32);
+    opacity: 0.28;
+  }
+
+  50% {
+    filter: blur(17px) saturate(1.45);
+    opacity: 0.48;
+  }
+}
+
+@keyframes queenVoiceGlowCoreBreath {
+  0%,
+  100% {
+    filter: blur(5px) saturate(1.24);
+    opacity: 0.1;
+  }
+
+  50% {
+    filter: blur(9px) saturate(1.34);
+    opacity: 0.18;
+  }
 }
 
 .overlayShell {
@@ -52,17 +119,55 @@
 .transcriptPanel {
   pointer-events: auto;
   width: min(640px, calc(100vw - 96px));
-  max-height: 40vh;
-  overflow-y: auto;
+  /* hug content — never stretch to the flex parent's height (no empty space) */
+  height: fit-content;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px 18px;
+  gap: 8px;
+  padding: 12px 18px 16px;
   border-radius: 18px;
   background: rgba(8, 10, 15, 0.82);
   border: 1px solid rgba(141, 159, 255, 0.28);
   backdrop-filter: blur(18px);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.transcriptPanelMinimized {
+  width: auto;
+  gap: 0;
+  padding: 8px;
+}
+
+.transcriptScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.minimizeButton {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(141, 159, 255, 0.3);
+  background: rgba(141, 159, 255, 0.12);
+  color: rgba(235, 239, 250, 0.95);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.minimizeButton:hover {
+  background: rgba(141, 159, 255, 0.24);
+  border-color: rgba(141, 159, 255, 0.55);
 }
 
 .turn {
@@ -99,6 +204,143 @@
 .turnTextLive {
   color: rgba(235, 239, 250, 0.78);
   font-style: italic;
+}
+
+.turnTextThinking {
+  color: rgba(255, 186, 113, 0.9);
+  font-style: italic;
+  animation: queenVoiceThinkingBreath 1.4s ease-in-out infinite;
+}
+
+.thinkingDots::after {
+  content: "";
+  animation: queenVoiceThinkingDots 1.2s steps(4, end) infinite;
+}
+
+@keyframes queenVoiceThinkingBreath {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes queenVoiceThinkingDots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+}
+
+.detailButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 186, 113, 0.4);
+  background: rgba(255, 186, 113, 0.12);
+  color: #ffd1a1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.detailButton:hover {
+  background: rgba(255, 186, 113, 0.22);
+  border-color: rgba(255, 186, 113, 0.7);
+}
+
+.detailBackdrop {
+  pointer-events: auto;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(4, 6, 10, 0.62);
+  backdrop-filter: blur(6px);
+}
+
+.detailModal {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 64px));
+  max-height: min(72vh, 720px);
+  border-radius: 18px;
+  background: rgba(12, 14, 20, 0.97);
+  border: 1px solid rgba(255, 186, 113, 0.32);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.detailModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 186, 113, 0.18);
+}
+
+.detailModalTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffba71;
+}
+
+.detailModalClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(235, 239, 250, 0.2);
+  background: rgba(235, 239, 250, 0.08);
+  color: rgba(235, 239, 250, 0.92);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.detailModalClose:hover {
+  background: rgba(235, 239, 250, 0.18);
+  border-color: rgba(235, 239, 250, 0.45);
+}
+
+.detailModalBody {
+  padding: 16px 18px 20px;
+  overflow-y: auto;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: rgba(235, 239, 250, 0.92);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .controlBar {
@@ -186,6 +428,12 @@
   border-color: rgba(255, 103, 120, 0.5);
 }
 
+.controlButtonWakeActive {
+  background: rgba(126, 240, 178, 0.16);
+  border-color: rgba(126, 240, 178, 0.48);
+  color: #c6ffd8;
+}
+
 .controlButtonEnd {
   background: rgba(255, 103, 120, 0.2);
   border-color: rgba(255, 103, 120, 0.55);
@@ -258,6 +506,65 @@
 .voicePickerEmpty {
   font-size: 12px;
   color: rgba(200, 208, 232, 0.62);
+}
+
+:global(:root[data-theme="hive-light"]) .transcriptPanel,
+:global(:root[data-theme="hive-light"]) .detailModal,
+:global(:root[data-theme="hive-light"]) .controlBar,
+:global(:root[data-theme="hive-light"]) .voicePicker {
+  border-color: rgba(54, 46, 30, 0.18);
+  background: rgba(251, 248, 241, 0.9);
+  color: #221d14;
+  box-shadow: 0 18px 48px rgba(82, 61, 22, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .detailBackdrop {
+  background: rgba(34, 29, 20, 0.34);
+}
+
+:global(:root[data-theme="hive-light"]) .minimizeButton,
+:global(:root[data-theme="hive-light"]) .detailButton,
+:global(:root[data-theme="hive-light"]) .detailModalClose,
+:global(:root[data-theme="hive-light"]) .statusBadge,
+:global(:root[data-theme="hive-light"]) .controlButton,
+:global(:root[data-theme="hive-light"]) .voiceOption {
+  border-color: rgba(54, 46, 30, 0.18);
+  background: rgba(244, 239, 228, 0.84);
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .minimizeButton:hover,
+:global(:root[data-theme="hive-light"]) .detailButton:hover,
+:global(:root[data-theme="hive-light"]) .detailModalClose:hover,
+:global(:root[data-theme="hive-light"]) .controlButton:hover,
+:global(:root[data-theme="hive-light"]) .voiceOption:hover,
+:global(:root[data-theme="hive-light"]) .voiceOptionActive {
+  border-color: rgba(176, 127, 28, 0.36);
+  background: rgba(176, 127, 28, 0.14);
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .turnWho,
+:global(:root[data-theme="hive-light"]) .voicePickerTitle,
+:global(:root[data-theme="hive-light"]) .voicePickerEmpty {
+  color: #6f6657;
+}
+
+:global(:root[data-theme="hive-light"]) .turnText,
+:global(:root[data-theme="hive-light"]) .detailModalBody {
+  color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .errorText,
+:global(:root[data-theme="hive-light"]) .controlButtonEnd,
+:global(:root[data-theme="hive-light"]) .controlButtonActive {
+  color: #8e3328;
+}
+
+:global(:root[data-theme="hive-light"]) .controlButtonWakeActive {
+  border-color: rgba(54, 133, 78, 0.34);
+  background: rgba(54, 133, 78, 0.12);
+  color: #215c35;
 }
 
 @keyframes queenVoicePulse {

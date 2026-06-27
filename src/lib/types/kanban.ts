@@ -1,4 +1,22 @@
 import type { GitLawbProof } from "@/lib/types/gitlawb";
+import type {
+  LoopAntiPattern,
+  LoopBenchmark,
+  LoopEvalGate,
+  LoopEvalGateKind,
+  LoopEvalGatePhase,
+  LoopEvalGateStatus,
+  LoopExperiment,
+  LoopExperimentStatus,
+  LoopFrontierItem,
+  LoopFrontierStrategy,
+  LoopFrontierStrategyKind,
+  LoopMetricDirection,
+  LoopMode,
+  LoopObservation,
+  LoopReceipt,
+  LoopSpec,
+} from "@/lib/types/loops";
 
 export type KanbanStatus = "ideas" | "ready" | "working" | "needs-human" | "done" | "archived";
 
@@ -12,138 +30,38 @@ export type KanbanFailureReason =
   | "local-directory-error"
   | "manual";
 
-export type KanbanLoopMode = "closed" | "open" | "optimizer";
-
-export type KanbanEvalGatePhase = "pre" | "post";
-
-export type KanbanEvalGateKind = "command" | "test" | "artifact" | "agent" | "human" | "receipt";
-
-export type KanbanEvalGateStatus = "pending" | "passed" | "failed" | "skipped";
-
-export type KanbanEvalGate = {
-  id: string;
-  title: string;
-  kind: KanbanEvalGateKind;
-  phase: KanbanEvalGatePhase;
-  required: boolean;
-  status: KanbanEvalGateStatus;
-  command?: string;
-  verifier?: string;
-  evidence?: string[];
-  summary?: string;
-  createdAt: number;
-  updatedAt?: number;
-};
-
-export type KanbanLoopMetricDirection = "max" | "min";
-
-export type KanbanLoopFrontierStrategyKind = "argmax" | "top_k" | "epsilon_greedy" | "softmax" | "pareto_per_task";
-
-export type KanbanLoopFrontierStrategy = {
-  kind: KanbanLoopFrontierStrategyKind;
-  params?: Record<string, number>;
-  seed?: number;
-};
-
-export type KanbanLoopBenchmark = {
-  target?: string;
-  command?: string;
-  metricName?: string;
-  metricDirection: KanbanLoopMetricDirection;
-  scoreFloor?: number;
-  resourceProfile?: string;
-  instrumentation?: "sdk" | "inline" | "manual";
-  discoveredAt: number;
-  notes?: string[];
-};
-
-export type KanbanLoopExperimentStatus = "candidate" | "running" | "evaluated" | "committed" | "discarded" | "failed";
-
-export type KanbanLoopExperiment = {
-  id: string;
-  parentId?: string;
-  runId?: string;
-  title?: string;
-  hypothesis: string;
-  status: KanbanLoopExperimentStatus;
-  score?: number;
-  taskScores?: Record<string, number>;
-  taskDirections?: Record<string, KanbanLoopMetricDirection>;
-  gateReceipts?: KanbanLoopReceipt[];
-  agent?: string;
-  result?: string;
-  discardedReason?: string;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type KanbanLoopAntiPattern = {
-  id: string;
-  title: string;
-  reason: string;
-  sourceExperimentId?: string;
-  evidence: string[];
-  createdAt: number;
-};
-
-export type KanbanLoopFrontierItem = {
-  id: string;
-  rank: number;
-  score?: number;
-  hypothesis: string;
-  status: KanbanLoopExperimentStatus;
-  parentId?: string;
-  reason?: string;
-};
-
-export type KanbanLoopObservation = {
-  totalExperiments: number;
-  committedExperiments: number;
-  discardedExperiments: number;
-  failedExperiments: number;
-  bestExperimentId?: string;
-  bestScore?: number;
-  runningBestExperimentIds: string[];
-  frontier: KanbanLoopFrontierItem[];
-  antiPatternCount: number;
-  pendingRequiredGateCount: number;
-  updatedAt: number;
-};
-
-export type KanbanLoopSpec = {
-  mode: KanbanLoopMode;
-  goal: string;
-  successCriteria: string[];
-  evalGates: KanbanEvalGate[];
-  benchmark?: KanbanLoopBenchmark;
-  frontierStrategy?: KanbanLoopFrontierStrategy;
-  experiments?: KanbanLoopExperiment[];
-  antiPatterns?: KanbanLoopAntiPattern[];
-  observation?: KanbanLoopObservation;
-  budget?: {
-    maxAttempts?: number;
-    maxRuntimeMs?: number;
-    maxTokens?: number;
-    maxCostUsd?: number;
-  };
-  retryPolicy?: {
-    maxAttempts?: number;
-    onFailure?: "retry" | "needs-human";
-  };
-  handoffRules?: string[];
-  evidenceRequired?: string[];
-};
-
-export type KanbanLoopReceipt = {
-  id: string;
-  gateId?: string;
-  status: "passed" | "failed" | "skipped";
-  summary: string;
-  evidence: string[];
-  verifier?: string;
-  metadata?: Record<string, unknown>;
-  createdAt: number;
-};
+/** @deprecated Use LoopMode from "@/lib/types/loops". */
+export type KanbanLoopMode = LoopMode;
+/** @deprecated Use LoopEvalGatePhase from "@/lib/types/loops". */
+export type KanbanEvalGatePhase = LoopEvalGatePhase;
+/** @deprecated Use LoopEvalGateKind from "@/lib/types/loops". */
+export type KanbanEvalGateKind = LoopEvalGateKind;
+/** @deprecated Use LoopEvalGateStatus from "@/lib/types/loops". */
+export type KanbanEvalGateStatus = LoopEvalGateStatus;
+/** @deprecated Use LoopEvalGate from "@/lib/types/loops". */
+export type KanbanEvalGate = LoopEvalGate;
+/** @deprecated Use LoopMetricDirection from "@/lib/types/loops". */
+export type KanbanLoopMetricDirection = LoopMetricDirection;
+/** @deprecated Use LoopFrontierStrategyKind from "@/lib/types/loops". */
+export type KanbanLoopFrontierStrategyKind = LoopFrontierStrategyKind;
+/** @deprecated Use LoopFrontierStrategy from "@/lib/types/loops". */
+export type KanbanLoopFrontierStrategy = LoopFrontierStrategy;
+/** @deprecated Use LoopBenchmark from "@/lib/types/loops". */
+export type KanbanLoopBenchmark = LoopBenchmark;
+/** @deprecated Use LoopExperimentStatus from "@/lib/types/loops". */
+export type KanbanLoopExperimentStatus = LoopExperimentStatus;
+/** @deprecated Use LoopExperiment from "@/lib/types/loops". */
+export type KanbanLoopExperiment = LoopExperiment;
+/** @deprecated Use LoopAntiPattern from "@/lib/types/loops". */
+export type KanbanLoopAntiPattern = LoopAntiPattern;
+/** @deprecated Use LoopFrontierItem from "@/lib/types/loops". */
+export type KanbanLoopFrontierItem = LoopFrontierItem;
+/** @deprecated Use LoopObservation from "@/lib/types/loops". */
+export type KanbanLoopObservation = LoopObservation;
+/** @deprecated Use LoopSpec from "@/lib/types/loops". */
+export type KanbanLoopSpec = LoopSpec;
+/** @deprecated Use LoopReceipt from "@/lib/types/loops". */
+export type KanbanLoopReceipt = LoopReceipt;
 
 export type KanbanColumn = {
   id: KanbanStatus;
@@ -236,6 +154,8 @@ export type KanbanTask = {
   status: KanbanStatus;
   priority: KanbanPriority;
   workspace: "scratch" | "worktree" | `dir:${string}`;
+  /** Origin tag, e.g. "flow:<runId>:<nodeId>", so completion can advance an agent flow. */
+  source?: string;
   skills: string[];
   attachments?: KanbanTaskAttachment[];
   linkedDirectories?: KanbanLinkedDirectory[];

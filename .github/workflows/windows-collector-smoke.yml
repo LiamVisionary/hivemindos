@@ -1,0 +1,114 @@
+name: Windows Collector Smoke
+
+# Confirms the agent telemetry collector (the local agent bridge a machine needs
+# to host agents) actually boots and serves /health on Windows. Windows
+# agent-hosting was never wired up (setup.ps1 installs no collector), so this is
+# the free CI gate before building the Windows collector-install path.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to test
+        required: false
+        default: main
+  push:
+    branches: [main]
+    paths:
+      - scripts/agent-telemetry-collector.mjs
+      - scripts/install-telemetry-collector.ps1
+      - setup.ps1
+      - .github/workflows/windows-collector-smoke.yml
+
+jobs:
+  collector-windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the collector's only third-party dep
+        shell: pwsh
+        run: npm install --no-save bonjour-service
+
+      - name: Boot collector and probe /health on Windows
+        shell: pwsh
+        run: |
+          $port = 8799
+          $env:AGENT_TELEMETRY_PORT = "$port"
+          $env:AGENT_TELEMETRY_HOST = "127.0.0.1"
+          Write-Host "Booting agent-telemetry-collector.mjs on 127.0.0.1:$port ..."
+          $proc = Start-Process -FilePath "node" `
+            -ArgumentList "scripts/agent-telemetry-collector.mjs" `
+            -PassThru -NoNewWindow `
+            -RedirectStandardOutput "collector-out.log" `
+            -RedirectStandardError "collector-err.log"
+          $ok = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            if ($proc.HasExited) { Write-Host "collector process exited early (exit code $($proc.ExitCode))"; break }
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$port/health"
+              if ($r.StatusCode -eq 200) { $ok = $true; break }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          Write-Host "=== collector stdout (tail 60) ==="
+          if (Test-Path collector-out.log) { Get-Content collector-out.log -Tail 60 }
+          Write-Host "=== collector stderr (tail 60) ==="
+          if (Test-Path collector-err.log) { Get-Content collector-err.log -Tail 60 }
+          if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          if (-not $ok) {
+            Write-Error "FAIL: collector /health did not respond 200 on Windows"
+            exit 1
+          }
+          Write-Host "PASS: collector booted and /health responded 200 on Windows"
+
+      - name: Validate install-telemetry-collector.ps1 (registers + STARTS the collector)
+        shell: pwsh
+        run: |
+          # Source guard: the task principal must NOT use the unmappable
+          # `-UserId "$env:USERDOMAIN\$env:USERNAME"` form. On a workgroup PC
+          # USERDOMAIN is "WORKGROUP" (Microsoft-account logins are similar), so
+          # that string fails to map to a SID and Register-ScheduledTask dies with
+          # ERROR_NONE_MAPPED (0x80070534) -- which silently left real Windows
+          # machines with no collector. It must use a canonical identity + S4U so
+          # the task also starts without an interactive session.
+          $src = Get-Content scripts/install-telemetry-collector.ps1 -Raw
+          if ($src -match '-UserId\s+"\$env:USERDOMAIN') { Write-Error "FAIL: task principal uses the unmappable USERDOMAIN\USERNAME form"; exit 1 }
+          if ($src -notmatch 'LogonType S4U') { Write-Error "FAIL: task is not registered with LogonType S4U"; exit 1 }
+          Write-Host "OK: principal uses a canonical identity + S4U"
+
+          # Run the installer FOR REAL (not -NoStart): it must register the task
+          # AND start the collector via that task, then /health must respond. The
+          # earlier -NoStart version skipped exactly the Register/Start path that
+          # was broken on real Windows.
+          & scripts/install-telemetry-collector.ps1 -Port 8801 -RepoRoot $PWD
+
+          $task = Get-ScheduledTask -TaskName "HivemindOS Telemetry Collector" -ErrorAction SilentlyContinue
+          if (-not $task) { Write-Error "FAIL: scheduled task was not registered"; exit 1 }
+          Write-Host "OK: scheduled task registered (state $($task.State))"
+
+          $envFile = Join-Path $env:USERPROFILE ".hivemindos\collector.env"
+          $port = ((Get-Content $envFile -Raw) | Select-String 'AGENT_TELEMETRY_PORT=(\d+)').Matches.Groups[1].Value
+          if (-not $port) { Write-Error "FAIL: no AGENT_TELEMETRY_PORT in collector.env"; exit 1 }
+
+          # The collector must be up because the TASK started it (not a direct launch).
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            try { if ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$port/health").StatusCode -eq 200) { $ok = $true; break } } catch {}
+            Start-Sleep -Seconds 1
+          }
+          $info = Get-ScheduledTaskInfo -TaskName "HivemindOS Telemetry Collector" -ErrorAction SilentlyContinue
+          if ($info) { Write-Host ("task LastTaskResult: 0x{0:X}" -f $info.LastTaskResult) }
+          Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Unregister-ScheduledTask -TaskName "HivemindOS Telemetry Collector" -Confirm:$false -ErrorAction SilentlyContinue
+          if (-not $ok) { Write-Error "FAIL: collector not reachable on /health after the task started it (port $port)"; exit 1 }
+          Write-Host "PASS: installer registers the task, the task starts the collector, and /health responded 200"

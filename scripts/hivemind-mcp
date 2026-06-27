@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import http from "node:http";
+import { register } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
-const TOOLS = [
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const MANUAL_TOOLS = [
   {
     name: "list_hivemind_machines",
     description: "List connected HivemindOS machines and their available agents.",
@@ -43,10 +46,182 @@ const TOOLS = [
   },
   {
     name: "prepare_crypto_action",
-    description: "Prepare a spend-gated crypto/payment action draft and return the provider endpoint, request body, approval need, and missing readiness.",
+    description: "Prepare a spend-gated crypto/payment action draft and return the provider endpoint, request body, approval need, clear-signing review, and missing readiness.",
     inputSchema: cryptoSchema(["intent"]),
   },
+  {
+    name: "review_crypto_action",
+    description: "Build a clear-signing review for a crypto/payment/action draft without signing or executing it.",
+    inputSchema: clearSigningSchema([]),
+  },
+  {
+    name: "agent_crypto_identity",
+    description: "List, fetch, register, update, or retire local agent identity/listing records for ENS/ERC-8004-style discovery.",
+    inputSchema: agentIdentitySchema([]),
+  },
+  {
+    name: "crypto_risk_monitor",
+    description: "Run a DARC-style offline crypto control review over wallet policy, identity, env-key presence, repo, DNS, multisig, and endpoint exposure.",
+    inputSchema: cryptoRiskSchema([]),
+  },
+  {
+    name: "send_usdc",
+    description: "EXECUTE an on-chain USDC transfer from a HivemindOS wallet (governed /api/wallet/send). Moves REAL funds. Requires confirmation \"SEND_USDC\". Personal (user:) wallets always require explicit confirmation and never auto-send; agent wallets honor their Spend policy/caps. Get the human's go-ahead before calling. Consider prepare_crypto_action first to preview.",
+    inputSchema: sendUsdcSchema(),
+  },
+  {
+    name: "dex_swap",
+    description: "EXECUTE a token swap on the local DEX rail (0x on Base / Jupiter on Solana) from a HivemindOS wallet (governed /api/trading/swap). Moves REAL funds, hard-capped at $10 per swap. Requires confirmation \"CONFIRM_SWAP\". Get the human's go-ahead before calling.",
+    inputSchema: dexSwapSchema(),
+  },
+  {
+    name: "stock_trade",
+    description: "EXECUTE a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage or on-chain xStocks; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Get the human's go-ahead before calling.",
+    inputSchema: stockTradeSchema(),
+  },
+  {
+    name: "compile_brain_knowledge",
+    description: "Compile source text into HivemindOS compiled-knowledge wiki pages with entities, concepts, summaries, frontmatter, and wikilinks.",
+    inputSchema: knowledgeCompileSchema(),
+  },
+  {
+    name: "brain_graph_overview",
+    description: "Return a compact graph overview for a compiled-knowledge domain: counts, hubs, and orphan totals.",
+    inputSchema: knowledgeSchema([]),
+  },
+  {
+    name: "brain_search_knowledge",
+    description: "Search a compiled-knowledge domain with weighted title, slug, tags, frontmatter, and markdown body matches.",
+    inputSchema: knowledgeSearchSchema(),
+  },
+  {
+    name: "brain_get_node",
+    description: "Fetch one compiled-knowledge node with body, outgoing links, and backlinks.",
+    inputSchema: knowledgeSchema(["slug"]),
+  },
+  {
+    name: "brain_get_backlinks",
+    description: "List every compiled-knowledge page that links to a node.",
+    inputSchema: knowledgeSchema(["slug"]),
+  },
+  {
+    name: "scan_brain_wiki_health",
+    description: "Scan a compiled-knowledge domain for broken links, orphans, duplicate slugs, and missing backlinks.",
+    inputSchema: knowledgeSchema([]),
+  },
+  {
+    name: "fix_brain_wiki_issue",
+    description: "Apply one safe compiled-knowledge health fix, such as a suggested broken-link retarget or missing backlink.",
+    inputSchema: knowledgeFixSchema(),
+  },
+  {
+    name: "shared_brain_contract",
+    description: "Explain whether a write is allowed under HivemindOS personal, agent-to-agent, or human-collective shared-brain contribution rules.",
+    inputSchema: sharedContractSchema(),
+  },
 ];
+
+const TOOLS = mergeToolDescriptors(
+  MANUAL_TOOLS,
+  await loadHiveActionMcpTools(),
+);
+const HIVE_ACTION_MCP_TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
+const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade", "clawbank_send_usdc", "clawbank_trade", "clawbank_money_transfer", "clawbank_call"]);
+const HYPERLIQUID_READ_ACTIONS = new Set(["", "quote", "status", "positions", "open-orders", "fills", "fees", "order-status"]);
+const HYPERLIQUID_CONFIRMATION_BY_ACTION = new Map([
+  ["approve-builder", "CONFIRM_HYPERLIQUID_BUILDER"],
+  ["order", "CONFIRM_HYPERLIQUID_ORDER"],
+  ["modify", "CONFIRM_HYPERLIQUID_ORDER"],
+  ["cancel", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["cancel-by-cloid", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["schedule-cancel", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["leverage", "CONFIRM_HYPERLIQUID_ACCOUNT"],
+  ["margin", "CONFIRM_HYPERLIQUID_ACCOUNT"],
+  ["usd-class", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["usd-send", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["spot-send", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["withdraw", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["twap-order", "CONFIRM_HYPERLIQUID_TWAP"],
+  ["twap-cancel", "CONFIRM_HYPERLIQUID_TWAP"],
+]);
+
+async function loadHiveActionMcpTools() {
+  try {
+    const { listHiveActions, listMcpHiveActions } = await import(
+      new URL("../src/lib/services/hive-actions/index.ts", import.meta.url).href
+    );
+    return listMcpHiveActions(listHiveActions());
+  } catch {
+    return [];
+  }
+}
+
+function mergeToolDescriptors(manualTools, hiveActionTools) {
+  const hiveActionByName = new Map(
+    hiveActionTools.map((tool) => [tool.name, tool]),
+  );
+  const manualNames = new Set(manualTools.map((tool) => tool.name));
+  return [
+    ...manualTools.map((tool) => hiveActionByName.get(tool.name) || tool),
+    ...hiveActionTools.filter((tool) => !manualNames.has(tool.name)),
+  ];
+}
+
+function requireHiveActionExecutionPreflight(name, args = {}) {
+  if (!EXECUTION_TOOL_NAMES.has(name)) return;
+  if (name === "hyperliquid_trade" && HYPERLIQUID_READ_ACTIONS.has(String(args.action || "").toLowerCase())) return;
+  const tool = HIVE_ACTION_MCP_TOOL_BY_NAME.get(name);
+  const annotations = tool?.annotations || {};
+  const sideEffects = Array.isArray(annotations["hivemindos/sideEffects"])
+    ? annotations["hivemindos/sideEffects"]
+    : [];
+  const hasWalletPaymentMetadata = sideEffects.includes("wallet") && sideEffects.includes("payment");
+  const isCriticalDestructive =
+    annotations.destructiveHint === true && annotations["hivemindos/risk"] === "critical";
+  if (!tool || !hasWalletPaymentMetadata || !isCriticalDestructive) {
+    throw new Error(
+      `${name} is missing critical wallet/payment Hive action metadata; refusing MCP execution.`,
+    );
+  }
+
+  const expected = expectedConfirmationsForExecutionTool(name, args, annotations["hivemindos/confirmation"]);
+  const supplied = typeof args.confirmation === "string" ? args.confirmation.trim() : "";
+  if (!expected.includes(supplied)) {
+    throw new Error(
+      `${name} requires confirmation ${formatConfirmationTokens(expected)} before MCP execution.`,
+    );
+  }
+}
+
+function expectedConfirmationsForExecutionTool(name, args, confirmation) {
+  if (!confirmation || confirmation === true) {
+    throw new Error(`${name} is missing Hive action confirmation metadata; refusing MCP execution.`);
+  }
+  const tokens = [
+    typeof confirmation.token === "string" ? confirmation.token : null,
+    ...(Array.isArray(confirmation.tokens) ? confirmation.tokens : []),
+  ].filter((token) => typeof token === "string" && token.length > 0);
+  if (tokens.length === 0) {
+    throw new Error(`${name} has no valid Hive action confirmation token; refusing MCP execution.`);
+  }
+  if (name === "hyperliquid_trade") {
+    const action = typeof args.action === "string" ? args.action.toLowerCase() : "";
+    const expected = HYPERLIQUID_CONFIRMATION_BY_ACTION.get(action);
+    if (expected && tokens.includes(expected)) return [expected];
+    return tokens;
+  }
+  if (name !== "stock_trade") return tokens;
+
+  const side = typeof args.side === "string" ? args.side.toLowerCase() : "";
+  if (side === "buy" && tokens.includes("CONFIRM_BUY")) return ["CONFIRM_BUY"];
+  if (side === "sell" && tokens.includes("CONFIRM_SELL")) return ["CONFIRM_SELL"];
+  return tokens;
+}
+
+function formatConfirmationTokens(tokens) {
+  if (tokens.length === 1) return `"${tokens[0]}"`;
+  return tokens.map((token) => `"${token}"`).join(" or ");
+}
 
 function handoffSchema(required) {
   return {
@@ -69,11 +244,11 @@ function cryptoSchema(required) {
     properties: {
       intent: {
         type: "string",
-        enum: ["status", "portfolio", "receive", "send", "private-transfer", "paid-api", "private-paid-api", "trade", "card-payment", "fund-llm-credits"],
+        enum: ["status", "portfolio", "receive", "send", "private-transfer", "paid-api", "private-paid-api", "trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "card-payment", "fund-llm-credits"],
         description: "Natural payment intent to route.",
       },
       agentId: { type: "string", description: "Agent wallet/profile id, when the action belongs to a specific agent." },
-      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "veil"], description: "Optional explicit provider preference." },
+      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "venice", "veil", "hyperliquid"], description: "Optional explicit provider preference." },
       wallet: { type: "object", description: "Current agent wallet policy from the dashboard, including provider, Spend, caps, network, and auto-use settings." },
       amountUsd: { type: "number", description: "USD-denominated amount or cap for the intended action." },
       asset: { type: "string", enum: ["USDC", "ETH"], description: "Asset for private transfers." },
@@ -83,6 +258,209 @@ function cryptoSchema(required) {
       body: { description: "JSON body for paid API/x402 requests." },
       recipientAddress: { type: "string", description: "Recipient wallet address for send/private-transfer intents." },
       amount: { description: "Asset amount for private transfer intents." },
+      fromChain: { type: "string", description: "Source chain/network for bridge or crosschain swap intents." },
+      toChain: { type: "string", description: "Destination chain/network for bridge or crosschain swap intents." },
+      fromAsset: { type: "string", description: "Source asset for crosschain intents." },
+      toAsset: { type: "string", description: "Destination asset for crosschain intents." },
+    },
+  };
+}
+
+function clearSigningSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      kind: { type: "string", enum: ["x402", "send", "private-transfer", "bankr-action", "crosschain-intent", "agent-identity", "raw-transaction"] },
+      intent: { type: "string" },
+      provider: { type: "string" },
+      agentId: { type: "string" },
+      network: { type: "string" },
+      asset: { type: "string" },
+      amount: {},
+      amountUsd: { type: "number" },
+      recipientAddress: { type: "string" },
+      toAddress: { type: "string" },
+      url: { type: "string" },
+      method: { type: "string" },
+      prompt: { type: "string" },
+      confirmation: { type: "string" },
+      policy: { type: "object" },
+      paymentRequirement: { type: "object" },
+      metadata: { type: "object" },
+    },
+  };
+}
+
+function agentIdentitySchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      action: { type: "string", enum: ["list", "get", "upsert", "retire"], description: "Default is upsert." },
+      id: { type: "string" },
+      agentId: { type: "string" },
+      displayName: { type: "string" },
+      handle: { type: "string" },
+      walletAddress: { type: "string" },
+      network: { type: "string" },
+      chainId: { type: "string" },
+      ensName: { type: "string" },
+      erc8004EntityId: { type: "string" },
+      serviceEndpoint: { type: "string" },
+      x402Endpoint: { type: "string" },
+      capabilities: { type: "array", items: { type: "string" } },
+      proofs: { type: "array", items: { type: "object" } },
+      status: { type: "string", enum: ["draft", "verified", "retired"] },
+    },
+  };
+}
+
+function cryptoRiskSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      agentId: { type: "string" },
+      wallet: { type: "object" },
+      identity: { type: "object" },
+      env: { type: "object", description: "Optional { requiredKeys, optionalKeys } arrays. Values are never returned." },
+      repo: { type: "object" },
+      dns: { type: "array", items: { type: "object" } },
+      multisig: { type: "object" },
+      infrastructure: { type: "object" },
+    },
+  };
+}
+
+function knowledgeSchema(required) {
+  return {
+    type: "object",
+    required,
+    properties: {
+      domain: { type: "string", description: "Compiled-knowledge domain. Defaults to shared-brain." },
+      vaultPath: { type: "string", description: "Optional shared vault path override." },
+      slug: { type: "string", description: "Node slug, such as hivemindos or compiled-knowledge." },
+    },
+  };
+}
+
+function knowledgeCompileSchema() {
+  return {
+    type: "object",
+    required: ["title", "content"],
+    properties: {
+      domain: { type: "string", description: "Compiled-knowledge domain. Defaults to shared-brain." },
+      vaultPath: { type: "string", description: "Optional shared vault path override." },
+      title: { type: "string" },
+      content: { type: "string" },
+      summary: { type: "string" },
+      sourcePath: { type: "string" },
+      tags: { type: "array", items: { type: "string" } },
+      entities: { type: "array", items: knowledgeDraftSchema() },
+      concepts: { type: "array", items: knowledgeDraftSchema() },
+      collaborationMode: { type: "string", enum: ["personal", "agent-to-agent", "human-collective"] },
+      optedInDomain: { type: "string", description: "Personal opted-in domain for human collective contributions." },
+    },
+  };
+}
+
+function knowledgeSearchSchema() {
+  return {
+    type: "object",
+    required: ["query"],
+    properties: {
+      domain: { type: "string", description: "Compiled-knowledge domain. Defaults to shared-brain." },
+      vaultPath: { type: "string", description: "Optional shared vault path override." },
+      query: { type: "string", description: "Search query for compiled entity, concept, and summary pages." },
+      limit: { type: "number", description: "Maximum results to return, from 1 to 50." },
+      types: { type: "array", items: { type: "string", enum: ["entity", "concept", "summary"] } },
+    },
+  };
+}
+
+function knowledgeDraftSchema() {
+  return {
+    type: "object",
+    required: ["name"],
+    properties: {
+      name: { type: "string" },
+      slug: { type: "string" },
+      description: { type: "string" },
+      facts: { type: "array", items: { type: "string" } },
+      tags: { type: "array", items: { type: "string" } },
+      related: { type: "array", items: { type: "string" } },
+    },
+  };
+}
+
+function knowledgeFixSchema() {
+  return {
+    type: "object",
+    required: ["issueId"],
+    properties: {
+      domain: { type: "string" },
+      vaultPath: { type: "string" },
+      issueId: { type: "string" },
+    },
+  };
+}
+
+function sharedContractSchema() {
+  return {
+    type: "object",
+    properties: {
+      domain: { type: "string" },
+      actorKind: { type: "string", enum: ["human", "agent"] },
+      collaborationMode: { type: "string", enum: ["personal", "agent-to-agent", "human-collective"] },
+      operation: { type: "string", enum: ["compile", "fix-health", "dismiss-health", "direct-edit"] },
+      readonly: { type: "boolean" },
+      optedInDomain: { type: "string" },
+    },
+  };
+}
+
+function sendUsdcSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "toAddress", "amountUsd", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to send FROM. A personal wallet id (user:…) sends from the user's own wallet; an agent id sends from that agent's wallet." },
+      toAddress: { type: "string", description: "Recipient address (0x… on Base/EVM)." },
+      amountUsd: { type: "number", description: "USD amount to send (USDC is 1:1 with USD)." },
+      confirmation: { type: "string", description: "Must be \"SEND_USDC\". Only supply with explicit human authorization; personal wallets never auto-send." },
+      approvalToken: { type: "string", description: "Governance approval token, only if a prior call returned pending_approval." },
+    },
+  };
+}
+
+function dexSwapSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "sellToken", "buyToken", "amountHuman", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to swap from (user:… for a personal wallet)." },
+      sellToken: { type: "string", description: "Token to sell — symbol (USDC, USDT, WETH, ETH, HIVE on Base; SOL, USDC, USDT on Solana) or a token address/mint." },
+      buyToken: { type: "string", description: "Token to buy." },
+      amountHuman: { type: "number", description: "Amount in sell-token units (e.g. 5 = 5 USDC). Capped at ~$10 of value." },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_SWAP\"." },
+      approvalToken: { type: "string" },
+    },
+  };
+}
+
+function stockTradeSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "side", "ticker", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to trade from. The venue (Alpaca vs xStocks) is resolved from this wallet." },
+      side: { type: "string", enum: ["buy", "sell"], description: "Trade side." },
+      ticker: { type: "string", description: "Stock ticker (e.g. AAPL) or supported xStock symbol." },
+      notionalUsd: { type: "number", description: "USD notional to trade. Provide this or qty." },
+      qty: { type: "number", description: "Share count (Alpaca only). Provide this or notionalUsd." },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_BUY\" for a buy or \"CONFIRM_SELL\" for a sell." },
+      approvalToken: { type: "string" },
     },
   };
 }
@@ -94,9 +472,19 @@ function readEnvValue(filePath, key) {
   return match?.[1]?.trim().replace(/^['"]|['"]$/g, "") || "";
 }
 
+// The launcher (~/.local/bin/hivemind-mcp) execs this script with
+// HIVE_ENV_PROJECT_ROOT pointing at the checkout. When a harness (Claude Code,
+// Codex, Gemini, …) starts the MCP server its cwd is the user's project, not the
+// checkout, so token/URL discovery must use the repo root the launcher passes
+// rather than cwd. This keeps the device token OUT of each harness's MCP config.
+function projectRoot() {
+  return process.env.HIVE_ENV_PROJECT_ROOT || process.cwd();
+}
+
 function dashboardToken() {
   return process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
     || process.env.HIVE_E2E_DASHBOARD_TOKEN
+    || readEnvValue(path.join(projectRoot(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
     || readEnvValue(path.join(process.cwd(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
 }
 
@@ -106,6 +494,12 @@ function candidateApiBases() {
   if (process.env.NEXT_PUBLIC_APP_URL) values.push(process.env.NEXT_PUBLIC_APP_URL);
   if (process.env.DASHBOARD_URL) values.push(process.env.DASHBOARD_URL);
   if (process.env.PORT) values.push(`http://127.0.0.1:${process.env.PORT}`);
+  // Honor a custom URL/port persisted in the checkout's .env.local.
+  const rootEnv = path.join(projectRoot(), ".env.local");
+  const rootUrl = readEnvValue(rootEnv, "HIVEMINDOS_APP_URL") || readEnvValue(rootEnv, "NEXT_PUBLIC_APP_URL");
+  if (rootUrl) values.push(rootUrl);
+  const rootPort = readEnvValue(rootEnv, "PORT");
+  if (rootPort) values.push(`http://127.0.0.1:${rootPort}`);
   for (const port of [5020, 5021, 5022, 5023, 5024, 5025]) values.push(`http://127.0.0.1:${port}`);
   return [...new Set(values.map((value) => String(value).replace(/\/+$/, "")))];
 }
@@ -134,6 +528,7 @@ function requestJson(base, route, method = "GET", body) {
         if (res.statusCode < 200 || res.statusCode >= 300 || parsed?.ok === false) {
           const error = new Error(parsed?.error || `${base} returned HTTP ${res.statusCode}`);
           error.payload = parsed;
+          error.statusCode = res.statusCode;
           reject(error);
           return;
         }
@@ -154,10 +549,318 @@ async function callDashboard(route, method, body) {
       return await requestJson(base, route, method, body);
     } catch (error) {
       lastError = error;
-      if (error?.payload?.needsUserInput) throw error;
+      // An explicit JSON {ok:false} from a reachable base is authoritative — the
+      // request reached the real dashboard and was rejected for a business reason
+      // (validation, governance, a broker rejection). Surface it immediately rather
+      // than sweeping to the next port and masking it with a connection error.
+      // Only 5xx / non-JSON / connection failures mean "wrong or sick base, try next".
+      const status = error?.statusCode;
+      const reachedRealApi = error?.payload?.ok === false && (status === undefined || status < 500);
+      if (error?.payload?.needsUserInput || reachedRealApi) throw error;
     }
   }
   throw lastError || new Error("No HivemindOS dashboard API could be reached.");
+}
+
+const WORK_BOARD_CREATE_KEYS = [
+  "title",
+  "body",
+  "status",
+  "priority",
+  "assignee",
+  "tenant",
+  "workspace",
+  "skills",
+  "attachments",
+  "linkedDirectories",
+  "deliverables",
+  "targetMachine",
+  "projectId",
+  "proofs",
+  "loop",
+  "loopReceipts",
+  "parents",
+  "idempotencyKey",
+  "maxRuntimeMs",
+  "maxAttempts",
+  "vaultPath",
+  "kanbanFolder",
+];
+
+const WORK_BOARD_FINISH_KEYS = [
+  "taskId",
+  "summary",
+  "result",
+  "metadata",
+  "loopReceipts",
+  "error",
+  "reason",
+  "failureReason",
+  "runId",
+  "vaultPath",
+  "kanbanFolder",
+];
+
+async function callWorkBoard(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") {
+    return callDashboard(
+      routeWithQuery("/api/kanban", {
+        board: args.board,
+        include_archived: args.includeArchived,
+        include_boards: args.includeBoards,
+        boards_only: args.boardsOnly,
+        tenant: args.tenant,
+        assignee: args.assignee,
+        q: args.query,
+        vaultPath: args.vaultPath,
+        kanbanFolder: args.kanbanFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "create-task") {
+    return callDashboard(
+      routeWithQuery("/api/kanban", { board: args.board }),
+      "POST",
+      {
+        board: args.board,
+        source: args.source || "mcp:work-board",
+        ...definedArgs(args, WORK_BOARD_CREATE_KEYS),
+      },
+    );
+  }
+  if (action === "claim-next") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "claim-next",
+      board: args.board,
+      assignee: args.assignee,
+      runtime: args.runtime,
+      ttlMs: args.ttlMs,
+      claimer: args.claimer,
+      tenant: args.tenant,
+      targetMachineKey: args.targetMachineKey,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "heartbeat") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "heartbeat",
+      board: args.board,
+      taskId: args.taskId,
+      note: args.note,
+      claimLock: args.claimLock,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "comment") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "comment",
+      board: args.board,
+      taskId: args.taskId,
+      body: args.body || args.note,
+      author: args.author || args.claimer || "mcp-agent",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "complete" || action === "fail") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action,
+      board: args.board,
+      ...definedArgs(args, WORK_BOARD_FINISH_KEYS),
+    });
+  }
+  if (action === "block") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "block",
+      board: args.board,
+      taskId: args.taskId,
+      reason: args.reason || args.summary || args.body || "Blocked pending human input.",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "promote") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "promote",
+      board: args.board,
+      taskId: args.taskId,
+      force: args.force,
+      dryRun: args.dryRun,
+      reason: args.reason,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  throw new Error(`Unknown work_board action: ${action}`);
+}
+
+async function callQueenBee(args = {}) {
+  const action = String(args.action || "state");
+  if (action === "state") {
+    return callDashboard(
+      routeWithQuery("/api/queen-bee", {
+        vaultPath: args.vaultPath,
+        brainServicesFolder: args.brainServicesFolder,
+        kanbanFolder: args.kanbanFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "queue-task") {
+    return callDashboard("/api/queen-bee", "POST", {
+      message: args.message,
+      source: args.source || "mcp:queen-bee",
+      mode: args.mode,
+      priority: args.priority,
+      loop: args.loop,
+      taskTitle: args.taskTitle || args.title,
+      agentId: args.agentId,
+      machineId: args.machineId,
+      skills: args.skills,
+      vaultPath: args.vaultPath,
+      brainServicesFolder: args.brainServicesFolder,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "decompose-prd") {
+    return callDashboard("/api/queen-bee", "POST", {
+      action: "decompose-prd",
+      prd: args.prd || args.message,
+      title: args.title || args.taskTitle,
+      source: args.source || "mcp:queen-bee",
+      priority: args.priority,
+      projectId: args.projectId,
+      maxTasks: args.maxTasks,
+      preview: args.preview,
+      vaultPath: args.vaultPath,
+      brainServicesFolder: args.brainServicesFolder,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "flow") return callQueenBeeFlow(args);
+  throw new Error(`Unknown queen_bee action: ${action}`);
+}
+
+async function callQueenBeeFlow(args = {}) {
+  const flowAction = String(args.flowAction || "list-templates");
+  const readActions = new Set(["list-templates", "get-template", "list-runs", "get-run"]);
+  if (readActions.has(flowAction)) {
+    return callDashboard(
+      routeWithQuery("/api/queen-bee/flow", {
+        action: flowAction,
+        id: args.templateId,
+        runId: args.runId,
+        vaultPath: args.vaultPath,
+      }),
+      "GET",
+    );
+  }
+  return callDashboard("/api/queen-bee/flow", "POST", {
+    action: flowAction,
+    templateId: args.templateId,
+    runId: args.runId,
+    spec: args.spec,
+    state: args.state,
+    result: args.result,
+    approved: args.approved,
+    vaultPath: args.vaultPath,
+  });
+}
+
+async function callWorkEvent(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") return callDashboard("/api/work-events", "GET");
+  if (action === "create-event") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "create-event",
+      name: args.eventName || args.name,
+      payloadGuidelines: args.payloadGuidelines,
+    });
+  }
+  if (action === "create-trigger") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "create-trigger",
+      eventName: args.eventName || args.name,
+      board: args.board,
+      title: args.title,
+      body: args.body,
+      assignee: args.assignee,
+      tenant: args.tenant,
+      priority: args.priority,
+      status: args.status,
+      skills: args.skills,
+      targetMachine: args.targetMachine,
+      emitEventName: args.emitEventName,
+      enabled: args.enabled,
+      idempotencyKey: args.idempotencyKey,
+    });
+  }
+  if (action === "publish") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "publish",
+      eventName: args.eventName || args.name,
+      payload: args.payload,
+      faq: args.faq,
+      source: args.source || "mcp:work-event",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  throw new Error(`Unknown work_event action: ${action}`);
+}
+
+async function requestHumanApproval(args = {}) {
+  const title = String(args.title || "Human approval requested").trim();
+  const body = formatApprovalRequest(args);
+  return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+    board: args.board,
+    title,
+    body,
+    status: "needs-human",
+    priority: args.priority || "high",
+    assignee: "human",
+    source: "mcp:human-approval",
+    idempotencyKey: args.idempotencyKey,
+    vaultPath: args.vaultPath,
+    kanbanFolder: args.kanbanFolder,
+  });
+}
+
+function routeWithQuery(route, params = {}) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `${route}?${query}` : route;
+}
+
+function definedArgs(args, keys) {
+  const output = {};
+  for (const key of keys) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function formatApprovalRequest(args = {}) {
+  const lines = [
+    args.request || "An agent requested human approval.",
+    args.context ? `\nContext:\n${args.context}` : "",
+    args.approvalKind ? `\nApproval kind: ${args.approvalKind}` : "",
+    args.relatedTaskId ? `Related Work Board task: ${args.relatedTaskId}` : "",
+    Array.isArray(args.options) && args.options.length
+      ? `\nOptions:\n${args.options.map((option) => `- ${option}`).join("\n")}`
+      : "",
+    args.requestedBy ? `\nRequested by: ${args.requestedBy}` : "",
+    "\nThis card records a requested decision only. It does not grant approval, execute the action, or bypass HivemindOS policy gates.",
+  ];
+  return lines.filter(Boolean).join("\n");
 }
 
 async function callTool(name, args = {}) {
@@ -179,6 +882,18 @@ async function callTool(name, args = {}) {
       })),
     };
   }
+  if (name === "work_board") {
+    return callWorkBoard(args);
+  }
+  if (name === "queen_bee") {
+    return callQueenBee(args);
+  }
+  if (name === "work_event") {
+    return callWorkEvent(args);
+  }
+  if (name === "request_human_approval") {
+    return requestHumanApproval(args);
+  }
   if (name === "crypto_capabilities") {
     return callDashboard("/api/crypto/capabilities", "POST", {
       action: "status",
@@ -195,6 +910,183 @@ async function callTool(name, args = {}) {
     return callDashboard("/api/crypto/capabilities", "POST", {
       action: "prepare",
       ...cryptoArgs(args),
+    });
+  }
+  if (name === "review_crypto_action") {
+    return callDashboard("/api/crypto/clear-signing", "POST", clearSigningArgs(args));
+  }
+  if (name === "agent_crypto_identity") {
+    return callDashboard("/api/crypto/agent-identity", "POST", agentIdentityArgs(args));
+  }
+  if (name === "crypto_risk_monitor") {
+    return callDashboard("/api/crypto/risk-monitor", "POST", cryptoRiskArgs(args));
+  }
+  if (name === "send_usdc") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/wallet/send", "POST", {
+      agentId: args.agentId,
+      toAddress: args.toAddress,
+      amountUsd: args.amountUsd,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "dex_swap") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/trading/swap", "POST", {
+      action: "execute",
+      agentId: args.agentId,
+      sellToken: args.sellToken,
+      buyToken: args.buyToken,
+      amountHuman: args.amountHuman,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "stock_trade") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/trading", "POST", {
+      action: "execute",
+      agentId: args.agentId,
+      side: args.side,
+      ticker: args.ticker,
+      notionalUsd: args.notionalUsd,
+      qty: args.qty,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "hyperliquid_trade") {
+    const action = args.action || (args.confirmation === "CONFIRM_HYPERLIQUID_BUILDER" ? "approve-builder" : args.confirmation === "CONFIRM_HYPERLIQUID_ORDER" ? "order" : "quote");
+    requireHiveActionExecutionPreflight(name, { ...args, action });
+    return callDashboard("/api/trading/hyperliquid", "POST", {
+      action,
+      agentId: args.agentId,
+      coin: args.coin,
+      marketType: args.marketType,
+      assetId: args.assetId,
+      side: args.side,
+      orderType: args.orderType,
+      notionalUsd: args.notionalUsd,
+      size: args.size,
+      limitPrice: args.limitPrice,
+      timeInForce: args.timeInForce,
+      triggerPx: args.triggerPx,
+      triggerType: args.triggerType,
+      triggerIsMarket: args.triggerIsMarket,
+      grouping: args.grouping,
+      clientOrderId: args.clientOrderId,
+      reduceOnly: args.reduceOnly,
+      slippageBps: args.slippageBps,
+      orderId: args.orderId,
+      oid: args.oid,
+      cloid: args.cloid,
+      fastCancel: args.fastCancel,
+      alwaysPlace: args.alwaysPlace,
+      scheduleCancelTime: args.scheduleCancelTime,
+      leverage: args.leverage,
+      marginMode: args.marginMode,
+      marginDeltaUsd: args.marginDeltaUsd,
+      transferType: args.transferType,
+      amount: args.amount,
+      amountUsd: args.amountUsd,
+      destination: args.destination,
+      token: args.token,
+      toPerp: args.toPerp,
+      twapMinutes: args.twapMinutes,
+      twapRandomize: args.twapRandomize,
+      twapId: args.twapId,
+      aggregateByTime: args.aggregateByTime,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "compile_brain_knowledge") {
+    return callDashboard("/api/brain/knowledge", "POST", {
+      action: "compile",
+      actorKind: "agent",
+      collaborationMode: args.collaborationMode || "agent-to-agent",
+      ...knowledgeArgs(args),
+    });
+  }
+  if (name === "brain_graph_overview") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "graph-overview", ...knowledgeArgs(args) });
+  }
+  if (name === "brain_search_knowledge") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "search", ...knowledgeArgs(args) });
+  }
+  if (name === "brain_get_node") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "get-node", ...knowledgeArgs(args) });
+  }
+  if (name === "brain_get_backlinks") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "get-backlinks", ...knowledgeArgs(args) });
+  }
+  if (name === "scan_brain_wiki_health") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "scan-health", ...knowledgeArgs(args) });
+  }
+  if (name === "fix_brain_wiki_issue") {
+    return callDashboard("/api/brain/knowledge", "POST", { action: "fix-health", ...knowledgeArgs(args) });
+  }
+  if (name === "shared_brain_contract") {
+    return callDashboard("/api/brain/knowledge", "POST", {
+      action: "shared-contract",
+      domain: args.domain,
+      actorKind: args.actorKind,
+      collaborationMode: args.collaborationMode,
+      operation: args.operation,
+      readonly: args.readonly,
+      optedInDomain: args.optedInDomain,
+    });
+  }
+  if (name === "clawbank_status") {
+    return callDashboard("/api/clawbank", "GET");
+  }
+  if (name === "clawbank_list_tools") {
+    return callDashboard("/api/clawbank/run", "GET");
+  }
+  if (name === "clawbank_read") {
+    return callDashboard("/api/clawbank/run", "POST", {
+      tool: args.tool,
+      args: clawbankToolArgs(args.args),
+      mode: "read",
+    });
+  }
+  if (name === "clawbank_send_usdc") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/wallet", "POST", {
+      action: "send_usdc",
+      toAddress: args.toAddress,
+      amount: args.amount,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_trade") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/trading", "POST", {
+      action: "swap",
+      baseToken: args.baseToken,
+      side: args.side,
+      amountUsdc: args.amountUsdc,
+      maxSlippageBps: args.maxSlippageBps,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_money_transfer") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/money", "POST", {
+      action: "transfer",
+      chain: args.chain,
+      toAddress: args.toAddress,
+      amount: args.amount,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_call") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/run", "POST", {
+      tool: args.tool,
+      args: clawbankToolArgs(args.args),
+      confirmation: args.confirmation,
     });
   }
   const actionByTool = {
@@ -218,10 +1110,46 @@ async function callTool(name, args = {}) {
 
 function cryptoArgs(args) {
   const output = {};
-  for (const key of ["intent", "agentId", "preferredProvider", "wallet", "amountUsd", "asset", "url", "method", "headers", "body", "recipientAddress", "amount"]) {
+  for (const key of ["intent", "agentId", "preferredProvider", "wallet", "amountUsd", "asset", "url", "method", "headers", "body", "recipientAddress", "amount", "fromChain", "toChain", "fromAsset", "toAsset"]) {
     if (args[key] !== undefined) output[key] = args[key];
   }
   return output;
+}
+
+function clearSigningArgs(args) {
+  const output = {};
+  for (const key of ["kind", "intent", "provider", "agentId", "network", "asset", "amount", "amountUsd", "recipientAddress", "toAddress", "url", "method", "prompt", "confirmation", "policy", "paymentRequirement", "metadata"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function agentIdentityArgs(args) {
+  const output = {};
+  for (const key of ["action", "id", "agentId", "displayName", "handle", "walletAddress", "network", "chainId", "ensName", "erc8004EntityId", "serviceEndpoint", "x402Endpoint", "capabilities", "proofs", "status"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function cryptoRiskArgs(args) {
+  const output = {};
+  for (const key of ["agentId", "wallet", "identity", "env", "repo", "dns", "multisig", "infrastructure"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function knowledgeArgs(args) {
+  const output = {};
+  for (const key of ["domain", "vaultPath", "slug", "title", "content", "summary", "sourcePath", "tags", "entities", "concepts", "collaborationMode", "optedInDomain", "issueId", "query", "limit", "types"]) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function clawbankToolArgs(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function expandHome(value) {

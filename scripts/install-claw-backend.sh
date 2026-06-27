@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install + supervise the Claw backend — the gateway that the Claw Code Mobile
+# Install + supervise the HivemindOS Mobile backend gateway — the service that the mobile
 # iPhone app talks to so it can run a coding agent on THIS machine's repos
 # (file edit/glob/grep, git, terminal, preview). HivemindOS ships it as a
 # managed service so a user who installed only HivemindOS gets it automatically;
@@ -35,6 +35,9 @@ CLAW_HOME="${CLAW_HOME:-$HOME/.hivemindos/claw}"
 CLAW_VERSION="${CLAW_BACKEND_VERSION:-v0.3.0}"
 CLAW_PUBLIC_BASE="${CLAW_BACKEND_PUBLIC_BASE:-https://claw-dl.hivemindos.workers.dev}"
 CLAW_BASE_URL="${CLAW_BACKEND_BASE_URL:-$CLAW_PUBLIC_BASE/claw-backend/$CLAW_VERSION}"
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/macos-background-helpers.sh
+. "$APP_DIR/scripts/macos-background-helpers.sh"
 
 os="$(uname -s)"; arch="$(uname -m)"
 case "$os" in
@@ -51,6 +54,12 @@ ASSET="claw-backend-$osn-$an.tar.gz"
 
 NODE_BIN="$(command -v node || true)"
 [ -n "$NODE_BIN" ] || { echo "[claw] Node not found on PATH; cannot run the Claw backend" >&2; exit 1; }
+
+VOICE_WORKER_LABEL="com.hivemindos.voice-worker"
+VOICE_WORKER_LEGACY_LABEL="com.hivemindos.claw-voice-worker"
+VOICE_WORKER_HELPER_NAME="HivemindOS Voice Worker"
+VOICE_WORKER_HELPER_ID="com.hivemindos.voice-worker-helper"
+VOICE_WORKER_HELPER_HOME="$HOME/.hivemindos/bin/$VOICE_WORKER_HELPER_NAME"
 
 mkdir -p "$CLAW_HOME"
 
@@ -89,6 +98,37 @@ cp "$SRC/run.sh" "$CLAW_HOME/run.sh" 2>/dev/null || true
 chmod +x "$CLAW_HOME/bin/claw" "$CLAW_HOME/run.sh" 2>/dev/null || true
 
 DATA_DIR="$CLAW_HOME/data"; mkdir -p "$DATA_DIR"
+
+# 2b) Self-heal the better-sqlite3 native addon ABI. The published bundle ships a
+#     better_sqlite3.node prebuild frozen at the release's Node ABI
+#     (NODE_MODULE_VERSION). The launcher below execs $NODE_BIN (system node),
+#     whose ABI drifts every time Homebrew/nvm bumps node — when it no longer
+#     matches the prebuild, dlopen fails (ERR_DLOPEN_FAILED at db/sqlite.ts) and
+#     the gateway-host supervisor hot-loops (restarting every few seconds, with a
+#     log that grows without bound). Detect the mismatch against the node this
+#     launcher will actually use, and rebuild the addon for it before first start.
+#     Idempotent: when the addon already loads, this is a no-op.
+if [ -d "$CLAW_HOME/backend/node_modules/better-sqlite3" ]; then
+  if ( cd "$CLAW_HOME/backend" && "$NODE_BIN" -e 'require("better-sqlite3")' ) >/dev/null 2>&1; then
+    : # native addon loads under the launcher's node — nothing to do
+  else
+    NODE_VER="$("$NODE_BIN" -v 2>/dev/null || echo unknown)"
+    echo "[claw] better-sqlite3 native addon is ABI-incompatible with node $NODE_VER — rebuilding it for this node" >&2
+    NPM_BIN="$(PATH="$(dirname "$NODE_BIN"):$PATH" command -v npm || true)"
+    REBUILD_LOG="${TMPDIR:-/tmp}/hivemindos-claw-better-sqlite3-rebuild.log"
+    if [ -z "$NPM_BIN" ]; then
+      echo "[claw] npm not found next to $NODE_BIN; cannot rebuild better-sqlite3. The mobile/voice gateway may crash-loop until the published bundle matches this node." >&2
+    elif ( cd "$CLAW_HOME/backend" \
+            && PATH="$(dirname "$NODE_BIN"):$PATH" npm rebuild better-sqlite3 ) >"$REBUILD_LOG" 2>&1 \
+         && ( cd "$CLAW_HOME/backend" && "$NODE_BIN" -e 'require("better-sqlite3")' ) >/dev/null 2>&1; then
+      echo "[claw] better-sqlite3 rebuilt successfully for node $NODE_VER"
+    else
+      echo "[claw] better-sqlite3 rebuild did NOT resolve the ABI mismatch (see $REBUILD_LOG)." >&2
+      echo "[claw] Install Xcode Command Line Tools + python3 (for a source build), or align node to the bundle's ABI. Until then the mobile/voice gateway will keep crash-looping; clear its log with: : > \"\$HOME/Library/Logs/hivemindos-claw-gateway.err.log\"" >&2
+    fi
+  fi
+fi
+
 SERVER_ENTRY="$CLAW_HOME/backend/src/server.ts"
 WORKER_ENTRY="$CLAW_HOME/backend/src/voice/callAgentWorker.ts"
 
@@ -163,13 +203,11 @@ exec "$NODE_BIN" --import tsx "$WORKER_ENTRY" start
 LAUNCH
 chmod +x "$CLAW_HOME/launch-gateway.sh" "$CLAW_HOME/launch-worker.sh"
 
-# Record the binary that actually reads the filesystem (the gateway's Node
-# process) so the desktop app's "pair your phone" onboarding can point macOS
-# Full Disk Access straight at it. The gateway runs as a headless launchd agent,
-# which macOS never lets show a permission prompt — so a one-time grant against
-# this exact binary is what unblocks phone file browsing of protected folders
-# (Downloads/Desktop/Documents).
-printf '%s\n' "$NODE_BIN" > "$CLAW_HOME/gateway-fda-target.txt" 2>/dev/null || true
+# Note: no manual Full Disk Access step anymore. On macOS the desktop app runs
+# the gateway as an app-signed launchd login item (com.hivemindos.claw-gateway
+# -> Contents/MacOS/hivemind-gateway-host), so the gateway inherits the app's
+# TCC identity and macOS shows the standard one-click "Allow" folder prompts
+# attributed to HivemindOS — no binary needs to be dragged into the FDA list.
 
 # Run the voice worker only when LiveKit creds are actually present.
 VOICE_CONFIGURED=0
@@ -195,6 +233,16 @@ relaunch_agent() {
   launchctl kickstart -k "$domain/$label" >/dev/null 2>&1 || true
 }
 
+resolve_voice_worker_helper() {
+  hivemindos_resolve_background_helper \
+    "$VOICE_WORKER_HELPER_NAME" \
+    "$VOICE_WORKER_HELPER_ID" \
+    "$APP_DIR/scripts/hivemindos-background-helper.c" \
+    "$VOICE_WORKER_HELPER_HOME" \
+    "$APP_DIR/src-tauri/resources/hivemindos-voice-worker-helper/$VOICE_WORKER_HELPER_NAME" \
+    "$APP_DIR/resources/hivemindos-voice-worker-helper/$VOICE_WORKER_HELPER_NAME"
+}
+
 # 4) Register + (re)start the services through the launchers above (which set
 #    env, cwd, and source voice.env). The gateway always runs; the voice worker
 #    runs only when configured.
@@ -211,30 +259,41 @@ if [[ "$os" == "Darwin" ]]; then
   rm -f "$HOME/Library/LaunchAgents/com.hivemindos.claw-backend.plist"
   echo "[claw] gateway is now hosted by the signed HivemindOS app (one-click folder grant) — headless launchd backend retired"
 
-  WPLIST="$HOME/Library/LaunchAgents/com.hivemindos.claw-voice-worker.plist"
+  WPLIST="$HOME/Library/LaunchAgents/$VOICE_WORKER_LABEL.plist"
+  LEGACY_WPLIST="$HOME/Library/LaunchAgents/$VOICE_WORKER_LEGACY_LABEL.plist"
+  launchctl bootout "gui/$(id -u)/$VOICE_WORKER_LEGACY_LABEL" >/dev/null 2>&1 || launchctl unload "$LEGACY_WPLIST" >/dev/null 2>&1 || true
+  rm -f "$LEGACY_WPLIST"
   if [ "$VOICE_CONFIGURED" = "1" ]; then
+    VOICE_WORKER_HELPER="$(resolve_voice_worker_helper || true)"
+    if [[ -n "$VOICE_WORKER_HELPER" && -x "$VOICE_WORKER_HELPER" ]]; then
+      VOICE_WORKER_PROGRAM_ARGUMENTS="    <string>$VOICE_WORKER_HELPER</string>
+    <string>/bin/bash</string>
+    <string>$CLAW_HOME/launch-worker.sh</string>"
+    else
+      VOICE_WORKER_PROGRAM_ARGUMENTS="    <string>/bin/bash</string>
+    <string>$CLAW_HOME/launch-worker.sh</string>"
+    fi
     cat > "$WPLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.hivemindos.claw-voice-worker</string>
+  <key>Label</key><string>$VOICE_WORKER_LABEL</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/bin/bash</string>
-    <string>$CLAW_HOME/launch-worker.sh</string>
+$VOICE_WORKER_PROGRAM_ARGUMENTS
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$HOME/Library/Logs/hivemindos-claw-voice-worker.log</string>
-  <key>StandardErrorPath</key><string>$HOME/Library/Logs/hivemindos-claw-voice-worker.err.log</string>
+  <key>StandardOutPath</key><string>$HOME/Library/Logs/hivemindos-voice-worker.log</string>
+  <key>StandardErrorPath</key><string>$HOME/Library/Logs/hivemindos-voice-worker.err.log</string>
 </dict>
 </plist>
 PLIST
-    relaunch_agent "com.hivemindos.claw-voice-worker" "$WPLIST"
-    echo "[claw] installed launchd service com.hivemindos.claw-voice-worker (voice calling ON)"
+    relaunch_agent "$VOICE_WORKER_LABEL" "$WPLIST"
+    echo "[claw] installed launchd service $VOICE_WORKER_LABEL (voice calling ON)"
   else
-    launchctl bootout "gui/$(id -u)/com.hivemindos.claw-voice-worker" >/dev/null 2>&1 || launchctl unload "$WPLIST" >/dev/null 2>&1 || true
+    launchctl bootout "gui/$(id -u)/$VOICE_WORKER_LABEL" >/dev/null 2>&1 || launchctl unload "$WPLIST" >/dev/null 2>&1 || true
     rm -f "$WPLIST"
     echo "[claw] voice calling not configured (no LIVEKIT_* in $VOICE_ENV) — voice worker not started."
   fi
@@ -243,7 +302,7 @@ else
   mkdir -p "$(dirname "$SERVICE")"
   cat > "$SERVICE" <<SERVICE
 [Unit]
-Description=Claw Code backend (Claw Code Mobile gateway)
+Description=HivemindOS Mobile backend gateway
 After=agent-telemetry.service
 
 [Service]
@@ -258,11 +317,11 @@ SERVICE
   systemctl --user restart hivemindos-claw-backend.service
   echo "[claw] installed systemd service hivemindos-claw-backend.service"
 
-  WSERVICE="$HOME/.config/systemd/user/hivemindos-claw-voice-worker.service"
+  WSERVICE="$HOME/.config/systemd/user/hivemindos-voice-worker.service"
   if [ "$VOICE_CONFIGURED" = "1" ]; then
     cat > "$WSERVICE" <<SERVICE
 [Unit]
-Description=Claw voice-agent worker (LiveKit realtime)
+Description=HivemindOS voice worker (LiveKit realtime)
 After=hivemindos-claw-backend.service
 
 [Service]
@@ -273,16 +332,20 @@ Restart=always
 WantedBy=default.target
 SERVICE
     systemctl --user daemon-reload
-    systemctl --user enable hivemindos-claw-voice-worker.service >/dev/null 2>&1 || true
-    systemctl --user restart hivemindos-claw-voice-worker.service
-    echo "[claw] installed systemd service hivemindos-claw-voice-worker.service (voice calling ON)"
+    systemctl --user disable --now hivemindos-claw-voice-worker.service >/dev/null 2>&1 || true
+    rm -f "$HOME/.config/systemd/user/hivemindos-claw-voice-worker.service"
+    systemctl --user enable hivemindos-voice-worker.service >/dev/null 2>&1 || true
+    systemctl --user restart hivemindos-voice-worker.service
+    echo "[claw] installed systemd service hivemindos-voice-worker.service (voice calling ON)"
   else
+    systemctl --user disable --now hivemindos-voice-worker.service >/dev/null 2>&1 || true
     systemctl --user disable --now hivemindos-claw-voice-worker.service >/dev/null 2>&1 || true
     rm -f "$WSERVICE"
+    rm -f "$HOME/.config/systemd/user/hivemindos-claw-voice-worker.service"
     systemctl --user daemon-reload
     echo "[claw] voice calling not configured (no LIVEKIT_* in $VOICE_ENV) — voice worker not started."
   fi
 fi
 
-echo "[claw] Claw backend running (defaults :5000, auto-increments if taken; trusts the tailnet)."
-echo "[claw] The Claw Code Mobile app will auto-discover it on the fleet."
+echo "[claw] HivemindOS Mobile backend running (defaults :5000, auto-increments if taken; trusts the tailnet)."
+echo "[claw] The HivemindOS Mobile app will auto-discover it on the fleet."

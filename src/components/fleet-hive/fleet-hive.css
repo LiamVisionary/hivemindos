@@ -1,0 +1,656 @@
+/* fleet-hive.css — design tokens + animations + structural styles for the
+   Fleet "Hive" view. Import this once from the view entry points.
+   Everything is scoped under .fr-root so it never leaks into the rest of the
+   app. Dark by default; add data-fr-theme="light" on the same element for the
+   warm-paper light theme. */
+
+.fr-root {
+  /* type — fall back to system families if the brand fonts aren't loaded */
+  --f-display: "Space Grotesk", system-ui, sans-serif;
+  --f-body: "Geist", "Inter", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* warm-neutral dark */
+  --bg: #0c0d11;
+  --bg-soft: #101116;
+  --panel: #14161c;
+  --panel-2: #181b22;
+  --panel-hi: #1e222b;
+  --line: rgba(238, 232, 220, 0.07);
+  --line-2: rgba(238, 232, 220, 0.13);
+  --line-3: rgba(238, 232, 220, 0.20);
+
+  --fg: #f3f0e9;
+  --fg-2: #a7a39a;
+  --fg-3: #76726a;
+  --fg-4: #545049;
+
+  /* one warm accent — used sparingly */
+  --honey: #e7b45c;
+  --honey-2: #f0c879;
+  --honey-soft: rgba(231, 180, 92, 0.13);
+  --honey-line: rgba(231, 180, 92, 0.32);
+
+  /* live / working signal only */
+  --live: #6fcdba;
+  --live-soft: rgba(111, 205, 186, 0.14);
+
+  /* trouble */
+  --danger: #e58e85;
+  --danger-soft: rgba(229, 142, 133, 0.13);
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --radius-lg: 20px;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+
+  color: var(--fg);
+  font-family: var(--f-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.fr-root[data-fr-theme="light"] {
+  --bg: #f1ede3;
+  --bg-soft: #f6f2e9;
+  --panel: #fbf8f1;
+  --panel-2: #f4efe4;
+  --panel-hi: #ffffff;
+  --line: rgba(54, 46, 30, 0.10);
+  --line-2: rgba(54, 46, 30, 0.16);
+  --line-3: rgba(54, 46, 30, 0.26);
+
+  --fg: #221d14;
+  --fg-2: #5e574b;
+  --fg-3: #867d6e;
+  --fg-4: #a59b89;
+
+  --honey: #b07f1c;
+  --honey-2: #936811;
+  --honey-soft: rgba(176, 127, 28, 0.12);
+  --honey-line: rgba(176, 127, 28, 0.34);
+
+  /* muted warm olive (not the dark-theme cool teal) for the "live/working"
+     signal — the agent cell border is color-mix(--live 70%), so a saturated
+     green reads as a vivid outline that fights the cream/honey. A desaturated
+     olive sits with the warm palette while staying distinct from honey. */
+  --live: #88926e;
+  --live-soft: rgba(136, 146, 110, 0.12);
+
+  --danger: #c0524d;
+  --danger-soft: rgba(192, 82, 77, 0.12);
+
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
+}
+
+.fr-root * { box-sizing: border-box; }
+
+.fr-cell,
+.fr-cell *,
+.fr-addcell,
+.fr-addcell * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Cells rest on the comb, then lift on hover. The .fr-cell / .fr-queen-cell node
+   owns absolute-centering + stacking; the inner .fr-cell-lift / .fr-queen-lift
+   node owns scale + translate (selection via [data-selected], hover via :hover)
+   entirely in CSS — plain transforms so the tween always fires. Sweep the cursor
+   across the hive and each cell rises, then settles back gracefully. */
+.fr-cell { z-index: var(--fr-z, 4); }
+.fr-cell:hover { z-index: 30; }
+
+.fr-cell-lift,
+.fr-queen-lift {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  transform: translateY(0) scale(1);
+  transition:
+    transform 0.5s cubic-bezier(0.22, 0.61, 0.18, 1),
+    filter 0.5s cubic-bezier(0.22, 0.61, 0.18, 1);
+  will-change: transform;
+}
+
+/* selected cells rest slightly enlarged */
+.fr-cell[data-selected="true"] > .fr-cell-lift { transform: translateY(0) scale(1.08); }
+.fr-queen-cell[data-selected="true"] > .fr-queen-lift { transform: translateY(0) scale(1.05); }
+
+/* hover lifts the cell off the comb (scales relative to its resting size) */
+.fr-cell:hover > .fr-cell-lift {
+  transform: translateY(-6px) scale(1.05);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+}
+.fr-cell[data-selected="true"]:hover > .fr-cell-lift {
+  transform: translateY(-6px) scale(1.11);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+}
+.fr-queen-cell:hover > .fr-queen-lift {
+  transform: translateY(-8px) scale(1.04);
+  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.5));
+}
+.fr-queen-cell[data-selected="true"]:hover > .fr-queen-lift {
+  transform: translateY(-8px) scale(1.08);
+  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.5));
+}
+
+/* reduced motion: keep the hover lift as feedback, just drop the animated tween */
+@media (prefers-reduced-motion: reduce) {
+  .fr-cell-lift,
+  .fr-queen-lift {
+    transition: none;
+  }
+}
+
+/* quiet scrollbars */
+.fr-scroll { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.fr-scroll::-webkit-scrollbar { width: 7px; height: 7px; }
+.fr-scroll::-webkit-scrollbar-track { background: transparent; }
+.fr-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+.fr-scroll::-webkit-scrollbar-thumb:hover { background: var(--line-3); background-clip: padding-box; }
+
+/* tiny mono label */
+.fr-eyebrow {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+/* status dot */
+.fr-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 99px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.fr-dot.live {
+  box-shadow: 0 0 0 0 currentColor;
+  animation: fr-pulse 2.4s ease-in-out infinite;
+}
+@keyframes fr-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 50%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent); }
+}
+@keyframes fr-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fr-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+@keyframes fr-cell-breathe {
+  0%, 100% { transform: scale(0.92); opacity: 0.7; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+/* thin metric bar */
+.fr-meter { height: 3px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+.fr-meter > i { display: block; height: 100%; border-radius: 99px; background: var(--fg-3); transition: width .5s cubic-bezier(.2, .7, .3, 1); }
+
+/* selected-agent holdings panel */
+.fr-holdings {
+  margin-top: 22px;
+}
+.fr-holdings-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fr-holdings-header > span:last-child {
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+}
+.fr-holdings-list {
+  margin-top: 8px;
+}
+.fr-holding-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.fr-holding-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.fr-holding-icon img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+}
+.fr-holding-icon span {
+  color: #fff;
+  font-family: var(--f-display);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+.fr-holding-main,
+.fr-holding-value {
+  min-width: 0;
+}
+.fr-holding-main strong,
+.fr-holding-value strong {
+  display: block;
+  color: var(--fg);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.fr-holding-main span,
+.fr-holding-value span {
+  display: block;
+  margin-top: 3px;
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.25;
+}
+.fr-holding-value {
+  text-align: right;
+}
+.fr-holding-value span[data-tone="up"] { color: var(--live); }
+.fr-holding-value span[data-tone="down"] { color: var(--danger); }
+.fr-holding-value span[data-tone="muted"] { color: var(--fg-4); }
+.fr-holdings-empty {
+  margin-top: 10px;
+  color: var(--fg-3);
+  font-size: 12.5px;
+}
+.fr-holdings-wallet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px 0;
+  border: 1px solid var(--line-2);
+  border-radius: 99px;
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+  font-family: var(--f-body);
+  font-size: 12px;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
+}
+.fr-holdings-wallet:hover {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--fg);
+}
+.fr-holdings-wallet:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.fr-holdings-wallet:disabled:hover {
+  border-color: var(--line-2);
+  background: transparent;
+  color: var(--fg-2);
+}
+
+/* Detail panel "Working now" rows: long runtime/chat names should stay inside
+   the fixed right panel instead of creating horizontal scroll. */
+.fr-working-row {
+  display: flex;
+  gap: 11px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding: 11px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.fr-working-dot {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+.fr-working-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.fr-working-titleline {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+.fr-working-agent-name,
+.fr-working-machine {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fr-working-agent-name {
+  flex: 1 1 auto;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+.fr-working-machine {
+  flex: 0 1 auto;
+  max-width: 44%;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+}
+.fr-working-task {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+/* focus ring */
+.fr-root :focus-visible { outline: 2px solid var(--honey-line); outline-offset: 2px; }
+
+/* connected-hex backdrop texture, matching the Fleet loading shell and faded
+   toward the centre so it does not compete with the machine/agent cells. */
+.fr-comb-texture {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23e7b45c%27 stroke-opacity=%27.08%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+  background-size: 54px 93.531px;
+  -webkit-mask-image: radial-gradient(circle at 506px 474px, transparent 30%, #000 78%);
+  mask-image: radial-gradient(circle at 506px 474px, transparent 30%, #000 78%);
+}
+
+/* Full-bleed atmosphere for the hive area — fills the whole canvas regardless
+   of how the hive itself is zoomed/panned, so there are no dark gaps. The honey
+   glow + honeycomb texture are centred on the area and scale to its size. */
+.fr-hive-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(680px 680px at 50% 50%, color-mix(in srgb, var(--honey) 18%, transparent), transparent 70%),
+    radial-gradient(1200px 900px at 50% 46%, color-mix(in srgb, var(--honey) 6%, transparent), transparent 72%);
+}
+.fr-hive-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.62;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23e7b45c%27 stroke-opacity=%27.08%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+  background-size: 54px 93.531px;
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 20%, rgba(0, 0, 0, 0.42) 58%, #000 80%);
+  mask-image: radial-gradient(circle at 50% 50%, transparent 20%, rgba(0, 0, 0, 0.42) 58%, #000 80%);
+}
+.fr-root[data-fr-theme="light"] .fr-hive-backdrop::before,
+.fr-root[data-fr-theme="light"] .fr-comb-texture {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23b07f1c%27 stroke-opacity=%27.1%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+}
+
+.fr-graph-clock {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 28;
+  transform: translateX(-50%);
+  pointer-events: none;
+  text-align: center;
+}
+
+/* ---- dashed "add agent" cell hover ---- */
+.fr-addcell:hover .fr-addcell-hex { fill: var(--honey-soft); stroke: var(--honey-line); }
+.fr-addcell:hover .fr-addcell-plus { stroke: var(--honey); }
+
+/* ---- nav shelf (collapsed icon rail → expands on hover) ---- */
+.fr-shelf {
+  position: absolute; left: 0; top: 0; bottom: 0; z-index: 60;
+  width: 72px; padding: 14px 12px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-right: 1px solid var(--line);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  overflow: hidden; white-space: nowrap;
+  transition: width .34s cubic-bezier(.2, .8, .2, 1), box-shadow .34s, background .3s;
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf {
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 34%, transparent), transparent 52%),
+    color-mix(in srgb, var(--panel) 70%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--line-3) 72%, transparent);
+  box-shadow: inset -1px 0 rgba(255, 255, 255, 0.04), 18px 0 46px -38px rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(26px) saturate(1.34); -webkit-backdrop-filter: blur(26px) saturate(1.34);
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(160px 320px at 16px 10%, color-mix(in srgb, var(--honey) 18%, transparent), transparent 70%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.10), transparent 22%, rgba(255, 255, 255, 0.035) 64%, transparent);
+  opacity: 0.72;
+}
+.fr-shelf:hover,
+.fr-shelf[data-keyboard-focus="true"]:focus-within {
+  width: 238px;
+  box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf > * { position: relative; z-index: 1; }
+.fr-shelf:hover,
+.fr-shelf[data-keyboard-focus="true"]:focus-within {
+  width: 238px;
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf:hover,
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf[data-keyboard-focus="true"]:focus-within {
+  box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55), inset -1px 0 rgba(255, 255, 255, 0.05);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 38%, transparent), transparent 54%),
+    color-mix(in srgb, var(--panel) 84%, transparent);
+}
+.fr-brand { display: flex; align-items: center; gap: 13px; height: 48px; padding: 0 6px; margin-bottom: 10px; cursor: pointer; background: transparent; border: 0; width: 100%; }
+.fr-brand img { width: 36px; height: 36px; border-radius: 10px; flex: 0 0 auto; box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.5); }
+.fr-brand-name { font-family: var(--f-display); font-weight: 700; font-size: 16.5px; letter-spacing: -0.015em; color: var(--fg); opacity: 0; transform: translateX(-4px); transition: opacity .22s, transform .28s; }
+.fr-shelf:hover .fr-brand-name,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-brand-name { opacity: 1; transform: none; }
+.fr-nav { position: relative; display: flex; align-items: center; gap: 15px; height: 44px; padding: 0 12px; border-radius: 12px; cursor: pointer; border: 0; background: transparent; color: var(--fg-2); width: 100%; text-align: left; transition: background .18s, color .18s, border-color .18s, box-shadow .18s; }
+.fr-nav:hover { background: var(--panel-2); color: var(--fg); }
+.fr-nav[data-active] { background: var(--honey-soft); color: var(--honey); }
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-nav { border: 1px solid transparent; }
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-nav:hover { background: color-mix(in srgb, var(--panel-hi) 62%, transparent); border-color: var(--line-2); color: var(--fg); }
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-nav[data-active] { background: linear-gradient(180deg, color-mix(in srgb, var(--honey) 18%, transparent), color-mix(in srgb, var(--honey) 10%, transparent)); border-color: color-mix(in srgb, var(--honey-line) 84%, transparent); color: var(--honey); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+.fr-nav[data-active]::before { content: ""; position: absolute; left: -12px; top: 50%; transform: translateY(-50%); width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: var(--honey); }
+.fr-nav-ico { flex: 0 0 22px; width: 22px; height: 22px; display: grid; place-items: center; }
+.fr-nav-label { font-size: 13.5px; font-weight: 500; opacity: 0; transform: translateX(-4px); transition: opacity .2s, transform .26s; }
+.fr-shelf:hover .fr-nav-label,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-nav-label { opacity: 1; transform: none; }
+.fr-nav-div { flex: 0 0 auto; height: 1px; background: var(--line); margin: 9px 8px; }
+.fr-shelf-foot { margin-top: auto; }
+/* unread badge on a nav item — visible whether the rail is collapsed or open */
+.fr-nav-badge {
+  position: absolute; top: 6px; right: 8px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 99px; background: var(--danger); color: #1a1305;
+  font-family: var(--f-mono); font-size: 9.5px; font-weight: 700; line-height: 1;
+}
+/* build version readout in the foot — revealed with the labels on expand */
+.fr-shelf-version {
+  font-family: var(--f-mono); font-size: 10px; color: var(--fg-4);
+  padding: 8px 12px 2px; white-space: nowrap;
+  opacity: 0; transform: translateX(-4px); transition: opacity .2s, transform .26s;
+}
+.fr-shelf:hover .fr-shelf-version,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-shelf-version { opacity: 1; transform: none; }
+
+/* App-shell variant: the shelf is the global left nav, fixed to the viewport.
+   Used when the shelf replaces the old top header (see AppNavShelf). */
+.fr-shelf.fr-shelf-app { position: fixed; }
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 26%, transparent), transparent 58%),
+    color-mix(in srgb, var(--panel) 40%, transparent);
+  backdrop-filter: blur(32px) saturate(1.46); -webkit-backdrop-filter: blur(32px) saturate(1.46);
+  box-shadow: inset -1px 0 rgba(255, 255, 255, 0.08), 24px 0 80px -56px rgba(0, 0, 0, 0.82);
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app:hover,
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app[data-keyboard-focus="true"]:focus-within {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 34%, transparent), transparent 58%),
+    color-mix(in srgb, var(--panel) 58%, transparent);
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome,
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome body {
+  background: transparent;
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome body::before {
+  left: 72px;
+}
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .commandShell {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%235eead4' stroke-opacity='.09' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(circle at 14% 12%, rgba(45, 212, 191, 0.12), transparent 30rem),
+    radial-gradient(circle at 82% 18%, rgba(234, 179, 8, 0.08), transparent 26rem),
+    linear-gradient(140deg, #080a0f 0%, #0d121b 48%, #111418 100%);
+  background-clip: content-box;
+  background-size: 72px 41.569px, auto, auto, auto;
+}
+:root[data-theme="hive-light"][data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .commandShell {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.10' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.16), transparent 26rem),
+    radial-gradient(circle at 84% 18%, rgba(95, 143, 90, 0.10), transparent 28rem),
+    linear-gradient(140deg, #fbf8f1 0%, #f1ede3 52%, #f4efe4 100%);
+  background-clip: content-box;
+  background-size: 72px 41.569px, auto, auto, auto;
+}
+/* Narrow screens: slim the collapsed rail so it eats less width. Keyboard Tab
+   navigation sets data-keyboard-focus, while passive restored focus does not
+   leave the rail open on startup. */
+@media (max-width: 720px) {
+  .fr-shelf.fr-shelf-app { width: 56px; padding: 12px 8px; }
+}
+/* macOS overlay title bar: inset the brand below the traffic lights and make
+   the empty shelf chrome draggable; interactive children opt out. */
+.macDesktopChrome .fr-shelf.fr-shelf-app { -webkit-app-region: drag; padding-top: 36px; }
+.macDesktopChrome .fr-shelf.fr-shelf-app :where(button, a, nav, input, [role="button"]) { -webkit-app-region: no-drag; }
+
+/* ---- fleet header band (sits right of the full-height rail) ---- */
+.fr-topbar { position: relative; z-index: 50; }
+
+/* ---- "Message the hive" chat pill ---- */
+.fr-chat-wrap { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 40; }
+.fr-chat {
+  display: flex; align-items: center; justify-content: center; gap: 11px;
+  height: 52px; padding: 0 16px;
+  border-radius: 99px; cursor: text;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 22px 50px -22px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  width: 232px;
+  transition: width .46s cubic-bezier(.2, .8, .2, 1), border-color .3s, box-shadow .3s;
+}
+.fr-chat:hover, .fr-chat:focus-within { justify-content: flex-start; width: 540px; padding: 0 8px 0 16px; border-color: var(--honey-line); box-shadow: 0 26px 60px -22px rgba(0, 0, 0, 0.66), 0 0 0 4px var(--honey-soft); }
+.fr-chat:focus-within { outline: 2px solid color-mix(in srgb, var(--honey-line) 76%, transparent); outline-offset: 3px; }
+.fr-chat-orb { position: relative; width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; }
+.fr-chat-orb .ring { position: absolute; inset: 0; border-radius: 99px; background: radial-gradient(circle at 50% 50%, var(--honey-soft), transparent 70%); animation: fr-breathe 3.4s ease-in-out infinite; }
+.fr-chat-orb .core { width: 9px; height: 9px; border-radius: 99px; background: var(--honey); box-shadow: 0 0 10px var(--honey); }
+.fr-chat-label { font-size: 13.5px; color: var(--fg-2); white-space: nowrap; flex: 0 0 auto; transition: opacity .2s; }
+.fr-chat:hover .fr-chat-label, .fr-chat:focus-within .fr-chat-label { display: none; }
+.fr-chat-field { flex: 1 1 auto; min-width: 0; opacity: 0; width: 0; pointer-events: none; display: flex; align-items: center; }
+.fr-chat:hover .fr-chat-field, .fr-chat:focus-within .fr-chat-field { opacity: 1; width: auto; pointer-events: auto; transition: opacity .3s .12s; }
+.fr-chat-input { flex: 1 1 auto; min-width: 0; appearance: none; -webkit-appearance: none; background: transparent; border: 0; border-radius: 0; box-shadow: none; outline: none; color: var(--fg); font-family: var(--f-body); font-size: 14px; }
+.fr-root .fr-chat-input:focus,
+.fr-root .fr-chat-input:focus-visible {
+  border: 0;
+  box-shadow: none;
+  outline: none;
+  outline-offset: 0;
+}
+.fr-chat-input::placeholder { color: var(--fg-3); }
+.fr-chat-send { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 99px; border: 0; cursor: pointer; display: grid; place-items: center; background: var(--honey); color: #1a1305; transition: transform .16s, filter .16s; }
+.fr-chat-send:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.fr-root .fr-chat-send:focus-visible { outline: none; outline-offset: 0; }
+
+/* legacy/blue variant — matches the orbital graph + map/list views (which are
+   intentionally blue-monochrome) instead of the hive's honey palette */
+.fr-chat--legacy { background: color-mix(in srgb, #0a1634 88%, transparent); border-color: rgba(120, 180, 255, 0.28); }
+.fr-chat--legacy:hover, .fr-chat--legacy:focus-within { border-color: rgba(140, 195, 255, 0.6); box-shadow: 0 26px 60px -22px rgba(0, 0, 0, 0.66), 0 0 0 4px rgba(120, 180, 255, 0.16); }
+.fr-chat--legacy:focus-within { outline-color: rgba(140, 195, 255, 0.72); }
+.fr-chat--legacy .fr-chat-orb .ring { background: radial-gradient(circle at 50% 50%, rgba(120, 180, 255, 0.3), transparent 70%); }
+.fr-chat--legacy .fr-chat-orb .core { background: #9fd2ff; box-shadow: 0 0 10px rgba(159, 210, 255, 0.9); }
+.fr-chat--legacy .fr-chat-label { color: #9fc1ee; }
+.fr-chat--legacy .fr-chat-input { color: #dcebff; }
+.fr-chat--legacy .fr-chat-input::placeholder { color: rgba(159, 193, 238, 0.6); }
+.fr-chat--legacy .fr-chat-send { background: linear-gradient(180deg, #8fc2ff, #5b94ff); color: #04121a; }
+
+/* generic small pill button used by the detail panel actions */
+.fr-act {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border-radius: 99px; padding: 9px 0; flex: 1; min-width: 0;
+  font-size: 12.5px; font-family: var(--f-body); cursor: pointer;
+  border: 1px solid var(--line-2); background: transparent; color: var(--fg-2);
+  transition: background .16s, border-color .16s, color .16s, transform .12s;
+}
+.fr-act:hover { background: var(--panel-2); color: var(--fg); }
+.fr-act:active { transform: translateY(1px); }
+.fr-act-primary { background: var(--honey); color: #1a1305; border-color: transparent; font-weight: 500; }
+.fr-act-primary:hover { filter: brightness(1.05); background: var(--honey); color: #1a1305; }
+.fr-act-danger { color: var(--danger); border-color: var(--danger-soft); }
+.fr-act-danger:hover { background: var(--danger-soft); color: var(--danger); }
+.fr-act svg,
+.fr-chip svg,
+.fr-chip img {
+  flex: 0 0 auto;
+}
+
+/* Queen overview actions: compact, content-sized pills (the default .fr-act is
+   flex:1/full-width, which gets too big once there are three of them). */
+.fr-queen-actions .fr-act { flex: 0 0 auto; padding: 7px 13px; font-size: 12px; white-space: nowrap; }
+.fr-chip {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 11.5px; font-family: var(--f-mono); color: var(--fg-3);
+  border: 1px solid var(--line-2); border-radius: 99px; padding: 5px 11px;
+  background: transparent; transition: background .16s, color .16s, border-color .16s;
+}
+.fr-chip:hover { background: var(--panel-2); color: var(--fg); }
+.fr-chip:disabled { cursor: default; opacity: .68; }
+.fr-chip:disabled:hover { background: transparent; color: var(--fg-3); }
+.fr-chip-honey { color: var(--honey); border-color: var(--honey-line); }
+.fr-chip-honey:hover { background: var(--honey-soft); color: var(--honey); }
+.fr-chip-usepod {
+  color: var(--accent-strong);
+  border-color: rgba(94, 234, 212, .38);
+  background: rgba(45, 212, 191, .12);
+}
+.fr-chip-usepod:hover {
+  color: var(--accent-strong);
+  border-color: rgba(94, 234, 212, .68);
+  background: rgba(45, 212, 191, .18);
+}

@@ -4,7 +4,9 @@
 
 import { type ChangeEvent, type Dispatch, type SetStateAction, useMemo } from "react";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { DEFAULT_RESEARCH_METHOD } from "@/lib/config/research-methods";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
+import { PROVIDER_CATALOG } from "@/lib/config/provider-catalog";
 import { HIVEMIND_OS_RUNTIME, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass, type CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
 import type { BrainSkillSummary, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 import type { AgentCreateDraft, AgentWorkerClassView, RuntimeModelDraft } from "@/features/dashboard/agent-settings-types";
@@ -80,6 +82,9 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   const settingsAgentIsQueen = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
   const agentSettingsWorkerLabel = settingsAgentIsQueen ? "Queen Bee" : agentSettingsCustomWorker?.label || `${agentSettingsWorkerPreset.label} bee`;
   const agentSettingsWorkerImage = settingsAgentIsQueen ? beeRoleIconPath("queen") : agentSettingsCustomWorker?.imageSrc || beeRoleIconPath("worker", agentSettingsWorkerClass);
+  const agentSettingsSoulPrompt = agentCreateMachine
+    ? (agentCreateDraft.soulPrompt ?? "")
+    : (roleModalAgent?.soulPrompt ?? "");
   const agentSettingsSkillProfile = agentCreateMachine
     ? agentCreateDraft.skillProfilePrompt
     : roleModalAgent?.skillProfilePrompt ?? agentSettingsWorkerPreset.taskProfile;
@@ -102,6 +107,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
           adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
           adaptiveRouting: agentCreateDraft.adaptiveRouting,
           usePod: agentCreateDraft.usePod,
+          venice: agentCreateDraft.venice,
           telemetryUrl: agentCreateMachine.collectorUrl,
           machineName: agentCreateMachine.name,
         }
@@ -113,6 +119,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       agentCreateDraft.provider,
       agentCreateDraft.runtime,
       agentCreateDraft.usePod,
+      agentCreateDraft.venice,
       agentCreateMachine,
       agents,
       createAgentProfile,
@@ -149,6 +156,13 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
         });
       }
     }
+    // OpenRouter's hosted Fusion compound model is a plain OpenRouter slug, so
+    // surface it under the OpenRouter provider when that provider is available.
+    const openRouterProvider = providersBySlug.get("openrouter");
+    if (openRouterProvider && !openRouterProvider.models?.some((model) => model.id === "openrouter/fusion")) {
+      const models = [{ id: "openrouter/fusion" }, ...(openRouterProvider.models ?? [])];
+      providersBySlug.set("openrouter", { ...openRouterProvider, models, totalModels: models.length });
+    }
     for (const gateway of Object.values(MODEL_PROVIDER_GATEWAYS)) {
       if (providersBySlug.has(gateway.slug)) continue;
       const models = gateway.defaultModel ? [{ id: gateway.defaultModel }] : [];
@@ -159,6 +173,19 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
         totalModels: models.length,
         isUserDefined: true,
         source: "HivemindOS provider gateway",
+      });
+    }
+    // Always surface the full first-class provider catalog so unconfigured
+    // providers can be discovered and onboarded inline (rather than hidden).
+    for (const entry of PROVIDER_CATALOG) {
+      if (providersBySlug.has(entry.slug)) continue;
+      providersBySlug.set(entry.slug, {
+        slug: entry.slug,
+        name: entry.name,
+        models: [],
+        totalModels: 0,
+        isUserDefined: true,
+        source: "catalog",
       });
     }
     return [...providersBySlug.values()];
@@ -180,7 +207,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
     const target = agentSettingsIntegrationTarget;
-    const virtualRuntimeModel = provider === "adaptive" || (provider === "bankr" && model === "adaptive");
+    const virtualRuntimeModel = provider === "adaptive" || provider === "hive-fusion" || (provider === "bankr" && model === "adaptive");
     if (target && !virtualRuntimeModel && (target.runtime === "openclaw" || target.runtime === "hermes")) {
       window.setTimeout(() => {
         void runRuntimeIntegrationAction("set-model", patch, { ...target, ...patch });
@@ -206,12 +233,41 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       customWorkerClass: undefined,
       selectedCustomWorkerClassId: undefined,
       preferredSkillSlugs: preset.skillSlugs,
+      researchMethod: workerClass === "research" ? DEFAULT_RESEARCH_METHOD : undefined,
     };
     if (agentCreateMachine) {
-      setAgentCreateDraft((current) => ({ ...current, ...patch, skillProfilePrompt: renderBeeSoulTemplate(preset.soulTemplate, current.name) }));
+      setAgentCreateDraft((current) => {
+        const previousPreset = beeWorkerPreset(current.workerClass);
+        const currentSoul = current.soulPrompt?.trim() ?? "";
+        const previousSoul = renderBeeSoulTemplate(previousPreset.soulTemplate, current.name).trim();
+        const currentSuitedFor = current.skillProfilePrompt?.trim() ?? "";
+        const previousSuitedFor = previousPreset.taskProfile.trim();
+        return {
+          ...current,
+          ...patch,
+          soulPrompt: !currentSoul || currentSoul === previousSoul
+            ? renderBeeSoulTemplate(preset.soulTemplate, current.name)
+            : current.soulPrompt,
+          skillProfilePrompt: !currentSuitedFor || currentSuitedFor === previousSuitedFor
+            ? preset.taskProfile
+            : current.skillProfilePrompt,
+        };
+      });
     } else if (roleModalAgent) {
+      const previousPreset = beeWorkerPreset(roleModalAgent.workerClass ?? "general");
+      const currentSoul = roleModalAgent.soulPrompt?.trim() ?? "";
+      const previousSoul = renderBeeSoulTemplate(previousPreset.soulTemplate, roleModalAgent.name).trim();
       const currentPrompt = roleModalAgent.skillProfilePrompt?.trim() ?? "";
-      updateAgentProfile(roleModalAgent.id, currentPrompt ? patch : { ...patch, skillProfilePrompt: renderBeeSoulTemplate(preset.soulTemplate, roleModalAgent.name) });
+      const previousPrompt = previousPreset.taskProfile.trim();
+      updateAgentProfile(roleModalAgent.id, {
+        ...patch,
+        ...(!currentSoul || currentSoul === previousSoul
+          ? { soulPrompt: renderBeeSoulTemplate(preset.soulTemplate, roleModalAgent.name) }
+          : {}),
+        ...(!currentPrompt || currentPrompt === previousPrompt
+          ? { skillProfilePrompt: preset.taskProfile }
+          : {}),
+      });
     }
   };
   const selectCustomWorkerClass = (customWorkerClass: CustomWorkerClassProfile) => {
@@ -221,6 +277,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       selectedCustomWorkerClassId: customWorkerClass.id,
       skillProfilePrompt: customWorkerClass.skillProfilePrompt,
       preferredSkillSlugs: customWorkerClass.preferredSkillSlugs,
+      researchMethod: undefined,
     };
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
@@ -228,6 +285,10 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   const updateAgentSkillProfile = (skillProfilePrompt: string) => {
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, skillProfilePrompt }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { skillProfilePrompt });
+  };
+  const updateAgentSoulPrompt = (soulPrompt: string) => {
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, soulPrompt }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { soulPrompt });
   };
   const addAgentPreferredSkill = (slug: string) => {
     const trimmedSlug = slug.trim();
@@ -255,6 +316,32 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
   };
   const applyCustomWorkerClass = () => {
     const customWorkerClass = customWorkerProfileFromDraft(customWorkerDraft);
+    const nextCustomWorkerClasses = [
+      ...agentSettingsCustomWorkers.filter((workerClass) => workerClass.id !== customWorkerClass.id),
+      customWorkerClass,
+    ];
+    const patch = {
+      workerClass: "general" as BeeWorkerClass,
+      customWorkerClass,
+      customWorkerClasses: nextCustomWorkerClasses,
+      selectedCustomWorkerClassId: customWorkerClass.id,
+      skillProfilePrompt: customWorkerClass.skillProfilePrompt,
+      preferredSkillSlugs: customWorkerClass.preferredSkillSlugs,
+    };
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+    setAgentWorkerClassView("presets");
+  };
+  // Install an optional packaged agent (from the Browse Agents catalog) as a selectable custom
+  // worker class. Mirrors applyCustomWorkerClass but sources the profile from the catalog entry.
+  const installPackagedAgent = (agent: { slug: string; label: string; summary: string; soulPrompt?: string }) => {
+    const customWorkerClass: CustomWorkerClassProfile = {
+      id: agent.slug,
+      label: agent.label,
+      soulPrompt: agent.soulPrompt,
+      skillProfilePrompt: agent.summary,
+      preferredSkillSlugs: [],
+    };
     const nextCustomWorkerClasses = [
       ...agentSettingsCustomWorkers.filter((workerClass) => workerClass.id !== customWorkerClass.id),
       customWorkerClass,
@@ -320,5 +407,5 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     && hivemindLinkStatus?.ok === true
     && hivemindLinkConnectedUntil > Date.now();
 
-  return { agentSettingsSelectedCustomWorkerId, agentSettingsCustomWorker, agentSettingsWorkerLabel, agentSettingsWorkerImage, agentSettingsSkillProfile, agentSettingsPreferredSkills, agentSettingsRuntime, agentSettingsProvider, agentSettingsModel, runtimeModelSelection, runtimeModelSelectionFresh, runtimeModelProviders, selectedRuntimeProvider, selectedRuntimeModels, selectedRuntimeModelId, selectedRuntimeModel, updateAgentRuntimeModel, agentSettingsIntegrationTarget, addHermesModelFromDraft, selectAgentWorkerClass, selectCustomWorkerClass, updateAgentSkillProfile, addAgentPreferredSkill, removeAgentPreferredSkill, openCustomWorkerClassCreator, applyCustomWorkerClass, toggleCustomWorkerSkill, uploadCustomWorkerImage, filteredCustomWorkerSkills, selectedHetznerServerType, showHivemindLinkConnectedBanner };
+  return { agentSettingsSelectedCustomWorkerId, agentSettingsCustomWorker, agentSettingsWorkerLabel, agentSettingsWorkerImage, agentSettingsSoulPrompt, agentSettingsSkillProfile, agentSettingsPreferredSkills, agentSettingsRuntime, agentSettingsProvider, agentSettingsModel, runtimeModelSelection, runtimeModelSelectionFresh, runtimeModelProviders, selectedRuntimeProvider, selectedRuntimeModels, selectedRuntimeModelId, selectedRuntimeModel, updateAgentRuntimeModel, agentSettingsIntegrationTarget, addHermesModelFromDraft, selectAgentWorkerClass, selectCustomWorkerClass, updateAgentSoulPrompt, updateAgentSkillProfile, addAgentPreferredSkill, removeAgentPreferredSkill, openCustomWorkerClassCreator, applyCustomWorkerClass, installPackagedAgent, toggleCustomWorkerSkill, uploadCustomWorkerImage, filteredCustomWorkerSkills, selectedHetznerServerType, showHivemindLinkConnectedBanner };
 }

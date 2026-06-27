@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Video Shot Transcript",
+  "upstreamSlug": "video-shot-transcript",
+  "hiveSlug": "video-shot-transcript",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/video-shot-transcript",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-20T11:12:20.000Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/video-shot-transcript",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Captures the local video shot-list and transcript-alignment workflow from Liam's requested frame dissection.",
+    "Defaults to local ffmpeg scene detection, contact sheets, embedded subtitles, OCR, and local ASR when available.",
+    "Requires explicit user approval before uploading user-supplied local media to external transcription or vision services.",
+    "Includes a deterministic helper script that writes local manifests, representative frames, OCR TSV, an audio WAV, and a draft shot list."
+  ]
+}

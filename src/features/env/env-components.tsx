@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { Copy, Eye, Plus, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { Check, Copy, Eye, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
@@ -209,6 +209,23 @@ export function EnvValueRow({
   extraAction,
   editable = true,
 }: EnvValueRowProps) {
+  const [copied, setCopied] = useState(false);
+  const copyResetTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const copyValue = async () => {
+    if (!navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      if (copyResetTimer.current) window.clearTimeout(copyResetTimer.current);
+      copyResetTimer.current = window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  };
+  useEffect(() => () => {
+    if (copyResetTimer.current) window.clearTimeout(copyResetTimer.current);
+  }, []);
+
   return (
     <div className="grid gap-2 rounded-md border border-[rgba(148,163,184,0.10)] bg-[rgba(2,6,23,0.35)] p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -218,8 +235,8 @@ export function EnvValueRow({
           <Button type="button" size="icon" variant="ghost" aria-label={`${revealed ? "Hide" : "Reveal"} ${name}`} title={revealed ? "Hide value" : "Reveal value"} onClick={() => onToggleReveal(revealKey)}>
             <Eye aria-hidden="true" />
           </Button>
-          <Button type="button" size="icon" variant="ghost" aria-label={`Copy ${name}`} title="Copy value" onClick={() => navigator.clipboard?.writeText(value)}>
-            <Copy aria-hidden="true" />
+          <Button type="button" size="icon" variant="ghost" aria-label={copied ? `Copied ${name}` : `Copy ${name}`} title={copied ? "Copied" : "Copy value"} onClick={() => void copyValue()}>
+            {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
           </Button>
           {editable ? (
             <Button type="button" size="icon" variant="ghost" aria-label={`Remove ${name}`} title="Remove" onClick={onRemove}>

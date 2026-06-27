@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { searchContextIndex, writeConnectedAppsRagSnapshot, type ContextConnectedApp, type ContextIndexKind } from "@/lib/services/context-index";
+import { createContextXrayManifestFromContextIndex } from "@/lib/services/context-xray";
 import { importVaultToGbrain, queryGbrain } from "@/lib/services/brain/gbrain";
 import type { GBrainConfig } from "@/lib/types/agent-runtime";
 
@@ -67,6 +68,10 @@ export async function POST(request: NextRequest) {
       syncConnectedAppsToGbrain?: boolean;
       gbrain?: Partial<GBrainConfig>;
       gbrainMode?: "search" | "query" | "think";
+      contextXray?: boolean;
+      runId?: string;
+      threadId?: string;
+      model?: string;
     };
     const connectedApps = await connectedAppsFromExistingAppsView(request, body.includeConnectedApps !== false);
     const result = await searchContextIndex({
@@ -121,7 +126,26 @@ export async function POST(request: NextRequest) {
       )
       : undefined;
 
-    return NextResponse.json({ ok: true, ...result, connectedAppsRag, gbrainSync, semantic });
+    const contextXray = body.contextXray || body.runId || body.threadId
+      ? await createContextXrayManifestFromContextIndex({
+        runId: body.runId,
+        threadId: body.threadId,
+        model: body.model,
+        query: body.query,
+        items: result.items,
+      }).then(
+        (manifest) => ({
+          id: manifest.id,
+          sourceCount: manifest.sources.length,
+          totalEstimatedTokens: manifest.totalEstimatedTokens,
+        }),
+        (error: unknown) => ({
+          error: error instanceof Error ? error.message : "Context X-Ray capture failed.",
+        }),
+      )
+      : undefined;
+
+    return NextResponse.json({ ok: true, ...result, connectedAppsRag, gbrainSync, semantic, contextXray });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Could not search context index." }, { status: 400 });
   }

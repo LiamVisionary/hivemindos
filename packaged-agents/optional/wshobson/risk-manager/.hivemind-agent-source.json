@@ -1,0 +1,19 @@
+{
+  "upstreamName": "risk-manager",
+  "slug": "risk-manager",
+  "label": "Risk Manager",
+  "domain": "quantitative-trading",
+  "sourceLabel": "wshobson",
+  "sourceUrl": "https://github.com/wshobson/agents/blob/cc37bfdd292ce520ba1c44df7a3a70d5f8137236/plugins/quantitative-trading/agents/risk-manager.md",
+  "repository": "https://github.com/wshobson/agents",
+  "installCommand": "(packaged) optional agent risk-manager",
+  "importedAt": "2026-06-19T05:55:34.755Z",
+  "refreshedAt": "2026-06-19T05:55:34.755Z",
+  "provider": "packaged-optional-agent",
+  "providerLabel": "HivemindOS optional packaged agents",
+  "sourcePath": "packaged-agents/optional/wshobson/risk-manager",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "cc37bfdd292ce520ba1c44df7a3a70d5f8137236",
+  "description": "Monitor portfolio risk, R-multiples, and position limits. Creates hedging strategies, calculates expectancy, and implements stop-losses. Use PROACTIVELY for risk assessment, trade tracking, or portfolio protection."
+}
