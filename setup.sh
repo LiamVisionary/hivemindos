@@ -1333,6 +1333,10 @@ configure_shared_skills() {
   targets="$(normalize_agent_list "${targets:-none}")"
   info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
   ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
+  # Push the full bundled brain (skills, packaged skills, and the For Users /
+  # For Investors docs) into the vault through the same checksum-managed engine
+  # that the update path uses, so setup and update stay consistent.
+  node "$ROOT/scripts/hive-brain-sync.mjs" --content-base "$ROOT" || warn "Brain sync reported issues; the shared shelf is still seeded"
   # Tools, not just skills: register the HivemindOS MCP server into each targeted
   # harness so its agents get HivemindOS tools (fleet, brain, crypto read/prepare,
   # and the governed send/swap/stock execute tools) regardless of runtime. The
@@ -2030,7 +2034,7 @@ else
   # machine that only ran HivemindOS setup (its coding agent runs here, reached
   # by the app over the tailnet). Non-fatal: a failure just leaves the app's
   # remote-agent features unavailable until it's retried.
-  ./scripts/install-claw-backend.sh || warn "HivemindOS Mobile backend install failed — the app's remote-agent features will be unavailable until it succeeds"
+  ./scripts/install-mobile-backend.sh || warn "HivemindOS Mobile backend install failed — the app's remote-agent features will be unavailable until it succeeds"
   if [[ -f "$HOME/.hivemindos/collector.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.hivemindos/collector.env" >/dev/null 2>&1 || true
