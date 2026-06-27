@@ -942,6 +942,11 @@ Seed-BundledSharedSkills -VaultPath $vaultPath
 @("codex", "claude", "hermes", "gemini", "openclaw", "aeon") | ForEach-Object {
   Sync-SharedSkillsToRuntime -Agent $_ -VaultPath $vaultPath
 }
+# Push the full bundled brain (skills, packaged skills, and the For Users /
+# For Investors docs) into the vault through the same checksum-managed engine the
+# update path uses, so setup and update stay consistent across platforms.
+& node (Join-Path $Root "scripts\hive-brain-sync.mjs") --content-base $Root --vault $vaultPath
+if ($LASTEXITCODE -ne 0) { Warn "Brain sync reported issues; the shared shelf is still seeded" }
 # Tools, not just skills: register the HivemindOS MCP server into installed
 # agent harnesses so their agents get HivemindOS tools (fleet, brain, crypto
 # read/prepare, and the governed send/swap/stock execute tools) regardless of
