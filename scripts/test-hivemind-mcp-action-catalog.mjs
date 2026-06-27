@@ -65,7 +65,17 @@ try {
     );
   }
 
-  for (const existing of ["handoff_file_task", "send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade"]) {
+  for (const existing of [
+    "handoff_file_task",
+    "work_board",
+    "queen_bee",
+    "work_event",
+    "request_human_approval",
+    "send_usdc",
+    "dex_swap",
+    "stock_trade",
+    "hyperliquid_trade",
+  ]) {
     assert.ok(actualByName.has(existing), `${existing} should remain exposed`);
   }
 } catch (error) {

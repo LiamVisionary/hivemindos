@@ -6,7 +6,12 @@ const args = process.argv.slice(2);
 const nextArgs = [];
 let port = process.env.PORT || "5020";
 let hostname = process.env.HIVEMINDOS_DASHBOARD_HOST || "127.0.0.1";
-const rawBundler = (process.env.HIVEMINDOS_NEXT_DEV_BUNDLER || process.env.NEXT_DEV_BUNDLER || "webpack").trim().toLowerCase();
+// Default dev to Turbopack. On this app (243 routes, 4755-line DashboardApp)
+// webpack dev compiles route module-graphs on demand and holds them in the Node
+// heap (multi-GB RSS), which is slow AND tripped the memory cap below. Turbopack
+// compiles in a native engine: ~290ms ready, ~40MB Node RSS, far faster route
+// loads + HMR. Set HIVEMINDOS_NEXT_DEV_BUNDLER=webpack to fall back.
+const rawBundler = (process.env.HIVEMINDOS_NEXT_DEV_BUNDLER || process.env.NEXT_DEV_BUNDLER || "turbopack").trim().toLowerCase();
 
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];
@@ -52,7 +57,6 @@ const bundlerArgs = (() => {
 })();
 const sourceMapArgs = process.env.NEXT_DEV_SOURCE_MAPS === "1" || hasSourceMapFlag ? [] : ["--disable-source-maps"];
 
-const command = "scripts/run-with-memory-limit.sh";
 const nodeOptionSet = new Set((process.env.NODE_OPTIONS ?? "").split(/\s+/).filter(Boolean));
 if (process.env.NEXT_DEV_EXPOSE_GC !== "0") {
   nodeOptionSet.add("--expose-gc");
@@ -62,11 +66,8 @@ if (maxOldSpaceMb !== "0" && ![...nodeOptionSet].some((option) => option.startsW
   nodeOptionSet.add(`--max-old-space-size=${maxOldSpaceMb}`);
 }
 const nodeOptions = [...nodeOptionSet].join(" ");
-const commandArgs = [
-  "--limit-mb",
-  process.env.MEMORY_LIMIT_MB || "5000",
-  "--",
-  "pnpm",
+
+const nextDevArgs = [
   "exec",
   "next",
   "dev",
@@ -78,6 +79,19 @@ const commandArgs = [
   hostname,
   ...nextArgs,
 ];
+// The OOM guard belongs to the *production* build (package.json `build` wraps
+// `next build` in run-with-memory-limit.sh). DEV does not need it and it actively
+// caused the misery: under webpack the dev process grew past the 5 GB RSS cap, got
+// killed mid-session, and was respawned into a full cold recompile ("always
+// recompiling" / stuck on the loading screen). Under Turbopack the Node process is
+// ~40 MB, so a cap is pointless. The dev memory cap is therefore OFF by default;
+// set MEMORY_LIMIT_MB=<mb> to opt back into the kill+respawn behavior.
+const rawMemoryLimitMb = (process.env.MEMORY_LIMIT_MB ?? "").trim();
+const memoryCapEnabled = /^\d+$/.test(rawMemoryLimitMb) && Number(rawMemoryLimitMb) > 0;
+const command = memoryCapEnabled ? "scripts/run-with-memory-limit.sh" : "pnpm";
+const commandArgs = memoryCapEnabled
+  ? ["--limit-mb", rawMemoryLimitMb, "--", "pnpm", ...nextDevArgs]
+  : nextDevArgs;
 
 // run-with-memory-limit.sh exits 137 after killing a Next dev server that
 // crossed the memory cap. Respawning here (instead of letting the whole dev

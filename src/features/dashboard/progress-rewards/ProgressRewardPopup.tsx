@@ -85,16 +85,17 @@ export function ProgressRewardPopup({ enabled = true }: ProgressRewardPopupProps
   if (!current || !copy) return null;
 
   const isWeekly = current.kind === "weekly";
+  const hasPrimaryActivity = current.metrics.completedTasks > 0 || current.metrics.honeyEarned > 0;
   const primaryMetric = current.metrics.completedTasks > 0
     ? `${current.metrics.completedTasks}`
     : current.metrics.honeyEarned > 0
       ? formatHoney(current.metrics.honeyEarned)
-      : "Ready";
+      : "";
   const primaryLabel = current.metrics.completedTasks > 0
     ? `work ${current.metrics.completedTasks === 1 ? "item" : "items"} shipped`
     : current.metrics.honeyEarned > 0
       ? "HONEY earned"
-      : "for the next run";
+      : "";
 
   return (
     <div
@@ -127,10 +128,20 @@ export function ProgressRewardPopup({ enabled = true }: ProgressRewardPopupProps
         </div>
 
         <div className={styles.scoreRow}>
-          <div className={styles.scoreDial}>
-            <span className={styles.scoreMark} aria-hidden="true"><HiveHex size={30} strokeWidth={1.3} dot /></span>
-            <span className={styles.scoreValue}>{primaryMetric}</span>
-            <small>{primaryLabel}</small>
+          <div className={styles.scoreDial} data-empty={hasPrimaryActivity ? undefined : "true"}>
+            <span className={styles.scoreMark} aria-hidden="true"><HiveHex size={hasPrimaryActivity ? 30 : 34} strokeWidth={1.3} dot /></span>
+            {hasPrimaryActivity ? (
+              <>
+                <span className={styles.scoreValue}>{primaryMetric}</span>
+                <small>{primaryLabel}</small>
+              </>
+            ) : (
+              <div className={styles.readyState}>
+                <span className={styles.readyPill}>Ready</span>
+                <span className={styles.readyTitle}>Next run open</span>
+                <small>Progress starts with the next shipped task.</small>
+              </div>
+            )}
           </div>
           <div className={styles.metricGrid}>
             <Metric icon={<TasksIcon />} label="Tasks" value={String(current.metrics.completedTasks)} tone="live" />

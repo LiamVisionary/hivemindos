@@ -8,8 +8,12 @@ export {
   listHiveActions,
   listHivemindMachinesAction,
   planHandoffAction,
+  queenBeeAction,
   reviewCryptoAction,
+  requestHumanApprovalAction,
   sharedBrainContractAction,
+  workBoardAction,
+  workEventAction,
 } from "./catalog";
 export {
   hiveActionContextIndexItems,

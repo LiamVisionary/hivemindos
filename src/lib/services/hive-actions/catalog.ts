@@ -6,6 +6,19 @@ const handoffTargetSchema = {
   allowAmbiguous: z.boolean().optional(),
 };
 
+const jsonObjectSchema = z.record(z.string(), z.unknown());
+
+const kanbanStatusSchema = z.enum([
+  "ideas",
+  "ready",
+  "working",
+  "needs-human",
+  "done",
+  "archived",
+]);
+
+const kanbanPrioritySchema = z.enum(["low", "normal", "high", "urgent"]);
+
 const cryptoIntentSchema = z
   .enum([
     "status",
@@ -72,6 +85,234 @@ export const planHandoffAction = defineHiveAction({
     retrievalText:
       "Use plan_handoff when a machine name is ambiguous or before sending a task/file to another HivemindOS machine. It should not create transfer files or start a remote agent.",
     route: "/api/handoff",
+    methods: ["POST"],
+  },
+});
+
+export const workBoardAction = defineHiveAction({
+  id: "work-board.lifecycle",
+  title: "Work Board lifecycle",
+  description:
+    "List, create, claim, heartbeat, comment, complete, fail, block, or promote local-first Work Board tasks.",
+  schema: z.object({
+    action: z
+      .enum([
+        "list",
+        "create-task",
+        "claim-next",
+        "heartbeat",
+        "comment",
+        "complete",
+        "fail",
+        "block",
+        "promote",
+      ])
+      .describe("Work Board operation to perform."),
+    board: z.string().optional(),
+    taskId: z.string().optional(),
+    title: z.string().optional(),
+    body: z.string().optional(),
+    status: kanbanStatusSchema.optional(),
+    priority: kanbanPrioritySchema.optional(),
+    assignee: z.string().optional(),
+    tenant: z.string().optional(),
+    query: z.string().optional(),
+    includeArchived: z.boolean().optional(),
+    includeBoards: z.boolean().optional(),
+    boardsOnly: z.boolean().optional(),
+    workspace: z.string().optional(),
+    skills: z.array(z.string()).optional(),
+    attachments: z.array(jsonObjectSchema).optional(),
+    linkedDirectories: z.array(jsonObjectSchema).optional(),
+    deliverables: z.array(jsonObjectSchema).optional(),
+    targetMachine: jsonObjectSchema.optional(),
+    projectId: z.string().optional(),
+    proofs: z.array(jsonObjectSchema).optional(),
+    loop: jsonObjectSchema.optional(),
+    loopReceipts: z.array(jsonObjectSchema).optional(),
+    parents: z.array(z.string()).optional(),
+    idempotencyKey: z.string().optional(),
+    maxRuntimeMs: z.number().optional(),
+    maxAttempts: z.number().optional(),
+    runtime: z.string().optional(),
+    ttlMs: z.number().optional(),
+    claimer: z.string().optional(),
+    claimLock: z.string().optional(),
+    targetMachineKey: z.string().optional(),
+    source: z.string().optional(),
+    note: z.string().optional(),
+    author: z.string().optional(),
+    summary: z.string().optional(),
+    result: z.string().optional(),
+    metadata: jsonObjectSchema.optional(),
+    error: z.string().optional(),
+    reason: z.string().optional(),
+    failureReason: z.string().optional(),
+    force: z.boolean().optional(),
+    dryRun: z.boolean().optional(),
+    vaultPath: z.string().optional(),
+    kanbanFolder: z.string().optional(),
+  }),
+  sideEffects: ["write", "filesystem"],
+  risk: "medium",
+  tags: ["work-board", "kanban", "task", "mcp", "orchestration", "agent"],
+  aliases: [
+    "work_board",
+    "get next task",
+    "claim work board task",
+    "create work board task",
+    "complete task",
+    "block task",
+  ],
+  mcp: { expose: true, compact: true, toolName: "work_board" },
+  contextIndex: {
+    summary: "MCP-native Work Board task lifecycle for local-first agent work.",
+    retrievalText:
+      "Use work_board for AgentRQ-style task orchestration inside HivemindOS: action list, create-task, claim-next, heartbeat, comment, complete, fail, block, or promote. It routes through /api/kanban and preserves Work Board status, priority, assignee, tenant, skills, attachments, linked directories, machine targets, loops, receipts, idempotency, and shared-vault storage.",
+    route: "/api/kanban",
+    methods: ["GET", "POST"],
+  },
+});
+
+export const queenBeeAction = defineHiveAction({
+  id: "queen-bee.orchestration",
+  title: "Queen Bee orchestration",
+  description:
+    "Inspect Queen Bee state, queue coordinator work, decompose PRDs, or operate Queen Bee flow runs.",
+  schema: z.object({
+    action: z
+      .enum(["state", "queue-task", "decompose-prd", "flow"])
+      .describe("Queen Bee operation to perform."),
+    message: z.string().optional(),
+    prd: z.string().optional(),
+    title: z.string().optional(),
+    source: z.string().optional(),
+    mode: z.string().optional(),
+    priority: kanbanPrioritySchema.optional(),
+    loop: jsonObjectSchema.optional(),
+    taskTitle: z.string().optional(),
+    agentId: z.string().optional(),
+    machineId: z.string().optional(),
+    skills: z.array(z.string()).optional(),
+    projectId: z.string().optional(),
+    maxTasks: z.number().optional(),
+    preview: z.boolean().optional(),
+    flowAction: z
+      .enum([
+        "list-templates",
+        "get-template",
+        "list-runs",
+        "get-run",
+        "save-template",
+        "start",
+        "advance",
+        "resolve-approval",
+      ])
+      .optional(),
+    templateId: z.string().optional(),
+    runId: z.string().optional(),
+    spec: jsonObjectSchema.optional(),
+    state: jsonObjectSchema.optional(),
+    result: jsonObjectSchema.optional(),
+    approved: z.boolean().optional(),
+    vaultPath: z.string().optional(),
+    brainServicesFolder: z.string().optional(),
+    kanbanFolder: z.string().optional(),
+  }),
+  sideEffects: ["write", "filesystem"],
+  risk: "medium",
+  tags: ["queen-bee", "coordinator", "flow", "prd", "mcp", "orchestration"],
+  aliases: ["queen_bee", "queue queen bee task", "decompose PRD", "agent flow"],
+  mcp: { expose: true, compact: true, toolName: "queen_bee" },
+  contextIndex: {
+    summary: "MCP-native access to the Queen Bee coordinator and flow runner.",
+    retrievalText:
+      "Use queen_bee when an agent needs the Queen Bee coordinator: action state for current coordinator state, queue-task for a coordinator message/task, decompose-prd for PRD-to-Work-Board planning, and flow for template/run operations including approvals. It routes through /api/queen-bee and /api/queen-bee/flow.",
+    route: "/api/queen-bee",
+    methods: ["GET", "POST"],
+  },
+});
+
+export const workEventAction = defineHiveAction({
+  id: "work-event.fanout",
+  title: "Work event fanout",
+  description:
+    "Create durable local event triggers and publish events that fan out into Work Board tasks.",
+  schema: z.object({
+    action: z
+      .enum(["list", "create-event", "create-trigger", "publish"])
+      .describe("Work event operation to perform."),
+    eventName: z.string().optional(),
+    name: z.string().optional(),
+    payloadGuidelines: z.string().optional(),
+    payload: z.unknown().optional(),
+    faq: z
+      .array(
+        z.object({
+          question: z.string(),
+          answer: z.string(),
+        }),
+      )
+      .optional(),
+    source: z.string().optional(),
+    board: z.string().optional(),
+    title: z.string().optional(),
+    body: z.string().optional(),
+    assignee: z.string().optional(),
+    tenant: z.string().optional(),
+    priority: kanbanPrioritySchema.optional(),
+    status: kanbanStatusSchema.optional(),
+    skills: z.array(z.string()).optional(),
+    targetMachine: jsonObjectSchema.optional(),
+    emitEventName: z.string().optional(),
+    enabled: z.boolean().optional(),
+    idempotencyKey: z.string().optional(),
+    vaultPath: z.string().optional(),
+    kanbanFolder: z.string().optional(),
+  }),
+  sideEffects: ["write", "filesystem"],
+  risk: "medium",
+  tags: ["work-event", "event", "trigger", "fanout", "work-board", "mcp"],
+  aliases: ["work_event", "publish work event", "create event trigger", "event fanout"],
+  mcp: { expose: true, compact: true, toolName: "work_event" },
+  contextIndex: {
+    summary: "Durable local publish-event triggers for Work Board task fanout.",
+    retrievalText:
+      "Use work_event to adapt publishEvent-style orchestration in HivemindOS. Create event definitions and triggers, then publish an event payload/FAQ to fan out matching triggers into normal Work Board tasks. Trigger templates support {{EVENT_NAME}}, {{EVENT_PAYLOAD}}, {{EVENT_FAQ}}, and {{EVENT_SOURCE}} placeholders.",
+    route: "/api/work-events",
+    methods: ["GET", "POST"],
+  },
+});
+
+export const requestHumanApprovalAction = defineHiveAction({
+  id: "human-approval.request",
+  title: "Request human approval",
+  description:
+    "Create a Needs You Work Board card asking a human to approve, deny, or clarify an agent request.",
+  schema: z.object({
+    title: z.string().describe("Approval card title."),
+    request: z.string().describe("What the agent is asking the human to decide."),
+    context: z.string().optional(),
+    requestedBy: z.string().optional(),
+    board: z.string().optional(),
+    priority: kanbanPrioritySchema.optional(),
+    relatedTaskId: z.string().optional(),
+    approvalKind: z.string().optional(),
+    options: z.array(z.string()).optional(),
+    idempotencyKey: z.string().optional(),
+    vaultPath: z.string().optional(),
+    kanbanFolder: z.string().optional(),
+  }),
+  sideEffects: ["write", "filesystem"],
+  risk: "medium",
+  tags: ["approval", "human", "needs-human", "work-board", "mcp"],
+  aliases: ["request_human_approval", "permission request", "human approval card"],
+  mcp: { expose: true, compact: true, toolName: "request_human_approval" },
+  contextIndex: {
+    summary: "Create a human approval card without granting approval authority to the agent.",
+    retrievalText:
+      "Use request_human_approval when an agent needs a human decision before a risky or ambiguous action. The tool creates a needs-human Work Board task with context and options; it does not approve the action or bypass any HivemindOS server-side policy.",
+    route: "/api/kanban",
     methods: ["POST"],
   },
 });
@@ -930,6 +1171,10 @@ export const clawbankCallAction = defineHiveAction({
 export const HIVE_ACTIONS = [
   listHivemindMachinesAction,
   planHandoffAction,
+  workBoardAction,
+  queenBeeAction,
+  workEventAction,
+  requestHumanApprovalAction,
   cryptoCapabilitiesAction,
   reviewCryptoAction,
   prepareCryptoAction,

@@ -32,6 +32,17 @@ The registry feeds:
 
 For wallet and trading MCP tools, the external MCP server performs a local metadata preflight before calling the dashboard route. `send_usdc`, `dex_swap`, and `stock_trade` must be registered as critical destructive wallet/payment actions and must receive their exact confirmation token. The dashboard route still performs the authoritative spend-policy, entitlement, wallet, and settlement checks.
 
+## MCP Work Orchestration
+
+The HivemindOS MCP server exposes the core coordinator surfaces as local-first tools:
+
+- `work_board`: list, create, claim, heartbeat, comment, complete, fail, block, or promote Work Board tasks through `/api/kanban`.
+- `queen_bee`: inspect Queen Bee state, queue coordinator work, decompose PRDs, or operate Queen Bee flow templates and runs.
+- `work_event`: create local event triggers and publish event payloads that fan out into ordinary Work Board tasks.
+- `request_human_approval`: create a Needs You card for a human decision without granting approval to the requesting agent.
+
+These tools adapt external multi-agent queue patterns into HivemindOS rather than replacing the local task model. Work still lands in the Work Board, task state still lives in the shared vault or local fallback store, and Queen Bee remains the coordinator for routing and receipts.
+
 ## Dashboard Pins
 
 Dashboard pins are a built-in feedback layer for the control room.
@@ -109,6 +120,8 @@ Artifacts are stored through `/api/visual-artifacts` in the shared vault under `
 Agent-native workflow records improve visibility, but they do not grant authority.
 
 - Dashboard pins create feedback and Work Board tasks; they do not execute changes by themselves.
+- MCP Work Board and event tools create or update local task records; they do not run arbitrary event handlers outside the HivemindOS API.
+- Human approval request tools create review cards; they do not authorize the requesting agent to proceed.
 - Review proposals stage durable brain changes; only approved memory proposals auto-apply through the typed memory writer.
 - Context X-Ray manifests describe visible context; they do not become trusted source data.
 - Visual plans and recaps describe work; they do not approve deployment, spending, credential access, or destructive changes.
@@ -119,6 +132,7 @@ Agent-native workflow records improve visibility, but they do not grant authorit
 - `src/lib/services/hive-actions/**`
 - `scripts/hivemind-mcp`
 - `src/app/api/context-index/route.ts`
+- `src/app/api/work-events/route.ts`
 - `src/app/api/dashboard/pins/route.ts`
 - `src/app/api/brain/review/route.ts`
 - `src/app/api/context-xray/route.ts`
@@ -127,6 +141,7 @@ Agent-native workflow records improve visibility, but they do not grant authorit
 - `src/lib/services/context-xray.ts`
 - `src/lib/services/brain-review-queue.ts`
 - `src/lib/services/dashboard-pins.ts`
+- `src/lib/services/work-events.ts`
 - `src/lib/services/visual-artifacts.ts`
 - `src/lib/services/visual-plan.ts`
 - `src/lib/services/visual-recap.ts`

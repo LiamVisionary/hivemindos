@@ -278,6 +278,17 @@
 .fw-mywallet { min-height: 215px; background: linear-gradient(180deg, color-mix(in srgb, var(--honey) 5%, var(--panel)), var(--panel)); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 13px; }
 .fw-mywallet .top { display: flex; align-items: center; gap: 11px; }
 .fw-mywallet .nm { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+.fw-rename { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.fw-rename .nm { flex: 1 1 auto; min-width: 0; }
+.fw-rename-btn { flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--fg-4, var(--fg-3)); cursor: pointer; display: grid; place-items: center; line-height: 0; opacity: .65; transition: .15s; }
+.fw-mywallet:hover .fw-rename-btn { opacity: 1; }
+.fw-rename-btn:hover { color: var(--honey); border-color: var(--honey-line); }
+.fw-rename-btn:disabled { opacity: .4; cursor: default; }
+.fw-rename-btn.confirm, .fw-rename-btn.cancel { opacity: 1; border-color: var(--line-2); }
+.fw-rename-btn.confirm:hover { color: var(--ok, #4ade80); border-color: var(--ok, #4ade80); }
+.fw-rename-btn.cancel:hover { color: var(--danger); border-color: var(--danger); }
+.fw-rename-input { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; font-family: inherit; color: var(--fg); background: var(--panel-hi, var(--panel)); border: 1px solid var(--honey-line); border-radius: 7px; padding: 3px 8px; outline: none; }
+.fw-rename-input:focus { border-color: var(--honey); }
 .fw-mywallet .sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fw-mywallet .bal { font-family: var(--f-display); font-weight: 600; font-size: 24px; letter-spacing: -0.02em; line-height: 1; }
 .fw-mywallet .balsub { font-size: 11px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 5px; }

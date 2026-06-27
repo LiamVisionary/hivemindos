@@ -19,7 +19,7 @@ const files = {
   stocks: "src/lib/services/trading/buy-stock.ts",
   cryptoRouter: "src/lib/services/crypto-capability-router.ts",
   tradeApi: "src/features/dashboard/views/trade/trade-api.ts",
-  tradeView: "src/features/dashboard/views/trade/CryptoTradeView.tsx",
+  tradeView: "src/components/trade/CapabilityRail.tsx",
   walletPanel: "src/features/dashboard/views/WalletPanel.tsx",
   docs: "docs/features/wallets-honey-and-x402.md",
   env: ".env.example",

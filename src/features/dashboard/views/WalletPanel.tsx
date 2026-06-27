@@ -1090,6 +1090,40 @@ function WalletPanelComponent(props: any) {
       await Promise.all([refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
       return data;
     },
+    onRenamePersonalWallet: async (input: any) => {
+      const name = String(input?.name || "").trim();
+      if (!name) throw new Error("Enter a name for this wallet.");
+      const source = input?.source || {};
+      // A "my wallet" card groups one record per chain; match every underlying
+      // record by address so a multi-chain wallet is renamed consistently.
+      const addresses = new Set([
+        String(source.addr || "").toLowerCase(),
+        ...(Array.isArray(source.addresses) ? source.addresses.map((row: any) => String(row?.[1] || "").toLowerCase()) : []),
+      ].filter(Boolean));
+      const targets = mergedPersonalWallets.filter((wallet: any) => addresses.has(String(wallet?.address || "").toLowerCase()));
+      if (!targets.length) throw new Error("Could not find this wallet to rename.");
+      const now = Date.now();
+      const renamed = targets.map((wallet: any) => ({ ...wallet, name, updatedAt: now }));
+      // (1) Ledger source — drives the optimistic My-wallets list + /api/wallet/personal GET.
+      setPersonalWallets((current) => mergePersonalWalletList([...(Array.isArray(current) ? current : []), ...renamed]));
+      // (2) Dashboard-state source. The card name resolves through mergePersonalWalletSources,
+      // where a non-generic dashboard-state name (e.g. the generated "My Base mainnet wallet"
+      // fallback for a nameless stored wallet) wins over the ledger name — so without writing
+      // the new name here too, the rename is reverted on the next re-merge. updateWallet also
+      // persists walletsByAgent to dashboard state, so the rename survives a reload.
+      for (const wallet of targets) {
+        const agentId = String(wallet?.id || wallet?.agentId || "");
+        if (agentId && effectiveWalletsByAgent?.[agentId]) props.updateWallet?.(agentId, { name });
+      }
+      // (3) Persist to the wallet ledger so every other consumer sees the new name on reload.
+      const writable = renamed.filter((wallet: any) => String(wallet?.id || "").startsWith("user:") && wallet.address && wallet.network);
+      if (writable.length) {
+        const response = await fetch("/api/wallet/personal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: writable }) }).catch(() => null);
+        const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+        if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not save the wallet name.");
+      }
+      return { ok: true, name };
+    },
     onCreateWallet: async (input: any) => {
       const response = await fetch("/api/wallet/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, createKind: "multi-chain", name: input.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
       const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
@@ -1118,7 +1152,7 @@ function WalletPanelComponent(props: any) {
       nextUrl.searchParams.set("view", "chat");
       window.location.assign(nextUrl.toString());
     },
-  }), [bankrRecipientAddress, effectiveWalletsByAgent, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, props, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, vaultPath]);
+  }), [bankrRecipientAddress, effectiveWalletsByAgent, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, mergedPersonalWallets, props, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, vaultPath]);
   const navigateFromDropInShelf = useCallback((id: string) => {
     if (typeof window === "undefined") return;
     const nextView = walletViewForShelf(id);

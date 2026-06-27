@@ -180,15 +180,44 @@
   background: linear-gradient(180deg, var(--honey-soft), transparent 80%), var(--panel-2);
 }
 
+.scoreDial::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--honey) 20%, transparent), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 34%);
+  opacity: 0.35;
+}
+
+.scoreDial[data-empty="true"] {
+  display: grid;
+  align-items: end;
+  justify-items: start;
+  min-height: 146px;
+  border-color: color-mix(in srgb, var(--honey-line) 70%, var(--line-2));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--honey-soft) 70%, transparent), transparent 74%),
+    var(--panel-2);
+}
+
 .scoreMark {
   position: absolute;
   top: 14px;
   right: 14px;
   color: var(--honey);
   opacity: 0.55;
+  z-index: 1;
+}
+
+.scoreDial[data-empty="true"] .scoreMark {
+  opacity: 0.72;
 }
 
 .scoreValue {
+  position: relative;
+  z-index: 1;
   font-family: var(--f-display);
   font-weight: 600;
   letter-spacing: 0;
@@ -198,9 +227,46 @@
 }
 
 .scoreDial small {
+  position: relative;
+  z-index: 1;
   color: var(--fg-2);
   font-size: 12.5px;
   line-height: 1.3;
+}
+
+.readyState {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: end;
+  gap: 8px;
+  min-height: 100%;
+}
+
+.readyPill {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid var(--honey-line);
+  border-radius: 999px;
+  background: var(--honey-soft);
+  color: var(--honey);
+  font: 500 10.5px/1 var(--f-mono);
+  letter-spacing: 0;
+  text-transform: uppercase;
+  padding: 6px 10px;
+}
+
+.readyTitle {
+  color: var(--fg);
+  font: 600 clamp(20px, 3.2vw, 25px)/1.1 var(--f-display);
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.readyState small {
+  max-width: 21ch;
 }
 
 .metricGrid {

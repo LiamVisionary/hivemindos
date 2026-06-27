@@ -36,6 +36,8 @@ function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }) {
     case "download": return (<svg {...c}><path d="M12 3v12M8 11l4 4 4-4M5 21h14" /></svg>);
     case "plug": return (<svg {...c}><path d="M9 3v6M15 3v6M7 9h10v3a5 5 0 0 1-10 0zM12 17v4" /></svg>);
     case "check": return (<svg {...c}><path d="M20 6 9 17l-5-5" /></svg>);
+    case "x": return (<svg {...c}><path d="M18 6 6 18M6 6l12 12" /></svg>);
+    case "pencil": return (<svg {...c}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>);
     case "plus": return (<svg {...c}><path d="M12 5v14M5 12h14" /></svg>);
     case "shield": return (<svg {...c}><path d="M12 3l7 4v5c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V7z" /><path d="M9 12l2 2 4-4" /></svg>);
     case "warn": return (<svg {...c}><path d="M12 3 2 20h20z" /><path d="M12 10v4M12 17h.01" /></svg>);
@@ -949,6 +951,25 @@ function MyWalletCard({ w, actions }) {
   const { top, total } = frMyRanked(w);
   const canSpend = w.canSpend !== false;
   const [expanded, setExpanded] = React.useState(false);
+  const [editingName, setEditingName] = React.useState(false);
+  const [nameDraft, setNameDraft] = React.useState(w.name || "");
+  const [renaming, setRenaming] = React.useState(false);
+  const beginRename = () => { setNameDraft(w.name || ""); setEditingName(true); };
+  const cancelRename = () => { setEditingName(false); setRenaming(false); setNameDraft(w.name || ""); };
+  const commitRename = async () => {
+    const next = nameDraft.trim();
+    if (!next || next === w.name) { cancelRename(); return; }
+    if (!actions?.onRenamePersonalWallet) { cancelRename(); return; }
+    setRenaming(true);
+    try {
+      await actions.onRenamePersonalWallet({ source: w, name: next });
+      setEditingName(false);
+    } catch (e) {
+      // Leave the field open so the user can retry or cancel.
+    } finally {
+      setRenaming(false);
+    }
+  };
   const [sheet, setSheet] = React.useState(null); // send | receive
   const [fund, setFund] = React.useState(false);
   const [imp, setImport] = React.useState(false);
@@ -967,7 +988,27 @@ function MyWalletCard({ w, actions }) {
       <div className="top">
         <span className="fb-tile" style={{ color: w.primary ? "var(--honey)" : "var(--fg-3)" }}><BIcon name={w.icon} size={18} /></span>
         <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-          <div className="nm">{w.name}</div>
+          {editingName ? (
+            <div className="fw-rename">
+              <input
+                className="fw-rename-input"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } else if (e.key === "Escape") { e.preventDefault(); cancelRename(); } }}
+                autoFocus
+                disabled={renaming}
+                maxLength={60}
+                aria-label="Wallet name"
+              />
+              <button type="button" className="fw-rename-btn confirm" onClick={commitRename} disabled={renaming} aria-label="Save name" title="Save"><BIcon name="check" size={14} /></button>
+              <button type="button" className="fw-rename-btn cancel" onClick={cancelRename} disabled={renaming} aria-label="Cancel rename" title="Cancel"><BIcon name="x" size={14} /></button>
+            </div>
+          ) : (
+            <div className="fw-rename">
+              <span className="nm" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{w.name}</span>
+              <button type="button" className="fw-rename-btn" onClick={beginRename} aria-label="Rename wallet" title="Rename wallet"><BIcon name="pencil" size={13} /></button>
+            </div>
+          )}
           <div className="sub">{w.kind} · {w.network}</div>
         </div>
         {w.primary ? <Badge tone="honey">Primary</Badge> : null}

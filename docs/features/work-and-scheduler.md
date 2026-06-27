@@ -63,6 +63,14 @@ What the Work board can do:
 - Capture quick-add text, files, images, directories, target machine, and voice transcripts directly in each lane.
 - Steer active tasks with comments, attachments, target-lane selection, and interruption/reclaim actions.
 
+### Agent And MCP Orchestration
+
+Agents can use the same Work Board path through the HivemindOS MCP server. The `work_board` tool covers the normal task lifecycle: list, create task, claim next, heartbeat, comment, complete, fail, block, and promote. This gives raw coding agents a shared queue without bypassing the board, receipts, comments, loops, attachments, target machines, or human review lanes.
+
+The `request_human_approval` MCP tool creates a Needs You card for a decision. It records the request, context, options, and related task, but it does not approve the action or override any HivemindOS safety policy. Humans still decide in the dashboard or through the normal Work Board review flow.
+
+Event-driven work uses `/api/work-events` and the `work_event` MCP tool. Operators or agents can define a local event name, attach triggers, and later publish an event payload. Matching triggers create ordinary Work Board tasks, with optional FAQ text and a note telling the worker which follow-up event to publish when the work completes. This supports publish-event style coordination while keeping execution inspectable in the Work Board.
+
 ### Queen Bee Swarm Goals
 
 `/swarm-goal <build request>` is the chat shortcut for turning a rough software idea into Queen Bee-orchestrated work.
@@ -78,6 +86,8 @@ The command expands a short request into a more complete build brief, including:
 After rewriting the prompt, HivemindOS submits it to `/api/queen-bee`. Queen Bee records the request as a Work Board task, ranks online chat-capable fleet agents by worker class and routing context, writes the normal receipt trail, and can schedule autonomous pickup for act-mode tasks. Use ordinary Queen Bee or Work Board planning flows when you want to inspect routing without starting the build.
 
 Queen Bee also writes visual plan artifacts for accepted tasks and PRD decompositions. These artifacts link back to the Work Board task or PRD epic, include a route/dependency diagram, and show risk notes so a human reviewer can understand the plan without opening the full task body first. They are visible from the Memory review workbench and through `/api/visual-artifacts`.
+
+The `queen_bee` MCP tool exposes the same coordinator path for non-dashboard agents: read coordinator state, queue a task, decompose a PRD, or operate Queen Bee flow templates and runs. It still routes through HivemindOS API routes, so fleet routing, idempotency, receipts, and visual plans remain on the normal local-first record.
 
 ### Loop Contracts And Eval Gates
 
@@ -176,8 +186,10 @@ AEON work now has a stronger handoff loop:
 
 - `src/app/api/kanban/route.ts`
 - `src/app/api/kanban/deliverable/route.ts`
+- `src/app/api/work-events/route.ts`
 - `src/app/api/note-intake/route.ts`
 - `src/app/api/work-history/route.ts`
+- `src/lib/services/work-events.ts`
 - `src/lib/services/kanban/local-kanban-store.ts`
 - `src/lib/services/projects/project-registry.ts`
 - `src/lib/services/gitlawb/gitlawb-service.ts`

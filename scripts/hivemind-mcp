@@ -562,6 +562,307 @@ async function callDashboard(route, method, body) {
   throw lastError || new Error("No HivemindOS dashboard API could be reached.");
 }
 
+const WORK_BOARD_CREATE_KEYS = [
+  "title",
+  "body",
+  "status",
+  "priority",
+  "assignee",
+  "tenant",
+  "workspace",
+  "skills",
+  "attachments",
+  "linkedDirectories",
+  "deliverables",
+  "targetMachine",
+  "projectId",
+  "proofs",
+  "loop",
+  "loopReceipts",
+  "parents",
+  "idempotencyKey",
+  "maxRuntimeMs",
+  "maxAttempts",
+  "vaultPath",
+  "kanbanFolder",
+];
+
+const WORK_BOARD_FINISH_KEYS = [
+  "taskId",
+  "summary",
+  "result",
+  "metadata",
+  "loopReceipts",
+  "error",
+  "reason",
+  "failureReason",
+  "runId",
+  "vaultPath",
+  "kanbanFolder",
+];
+
+async function callWorkBoard(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") {
+    return callDashboard(
+      routeWithQuery("/api/kanban", {
+        board: args.board,
+        include_archived: args.includeArchived,
+        include_boards: args.includeBoards,
+        boards_only: args.boardsOnly,
+        tenant: args.tenant,
+        assignee: args.assignee,
+        q: args.query,
+        vaultPath: args.vaultPath,
+        kanbanFolder: args.kanbanFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "create-task") {
+    return callDashboard(
+      routeWithQuery("/api/kanban", { board: args.board }),
+      "POST",
+      {
+        board: args.board,
+        source: args.source || "mcp:work-board",
+        ...definedArgs(args, WORK_BOARD_CREATE_KEYS),
+      },
+    );
+  }
+  if (action === "claim-next") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "claim-next",
+      board: args.board,
+      assignee: args.assignee,
+      runtime: args.runtime,
+      ttlMs: args.ttlMs,
+      claimer: args.claimer,
+      tenant: args.tenant,
+      targetMachineKey: args.targetMachineKey,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "heartbeat") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "heartbeat",
+      board: args.board,
+      taskId: args.taskId,
+      note: args.note,
+      claimLock: args.claimLock,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "comment") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "comment",
+      board: args.board,
+      taskId: args.taskId,
+      body: args.body || args.note,
+      author: args.author || args.claimer || "mcp-agent",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "complete" || action === "fail") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action,
+      board: args.board,
+      ...definedArgs(args, WORK_BOARD_FINISH_KEYS),
+    });
+  }
+  if (action === "block") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "block",
+      board: args.board,
+      taskId: args.taskId,
+      reason: args.reason || args.summary || args.body || "Blocked pending human input.",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "promote") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "promote",
+      board: args.board,
+      taskId: args.taskId,
+      force: args.force,
+      dryRun: args.dryRun,
+      reason: args.reason,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  throw new Error(`Unknown work_board action: ${action}`);
+}
+
+async function callQueenBee(args = {}) {
+  const action = String(args.action || "state");
+  if (action === "state") {
+    return callDashboard(
+      routeWithQuery("/api/queen-bee", {
+        vaultPath: args.vaultPath,
+        brainServicesFolder: args.brainServicesFolder,
+        kanbanFolder: args.kanbanFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "queue-task") {
+    return callDashboard("/api/queen-bee", "POST", {
+      message: args.message,
+      source: args.source || "mcp:queen-bee",
+      mode: args.mode,
+      priority: args.priority,
+      loop: args.loop,
+      taskTitle: args.taskTitle || args.title,
+      agentId: args.agentId,
+      machineId: args.machineId,
+      skills: args.skills,
+      vaultPath: args.vaultPath,
+      brainServicesFolder: args.brainServicesFolder,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "decompose-prd") {
+    return callDashboard("/api/queen-bee", "POST", {
+      action: "decompose-prd",
+      prd: args.prd || args.message,
+      title: args.title || args.taskTitle,
+      source: args.source || "mcp:queen-bee",
+      priority: args.priority,
+      projectId: args.projectId,
+      maxTasks: args.maxTasks,
+      preview: args.preview,
+      vaultPath: args.vaultPath,
+      brainServicesFolder: args.brainServicesFolder,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "flow") return callQueenBeeFlow(args);
+  throw new Error(`Unknown queen_bee action: ${action}`);
+}
+
+async function callQueenBeeFlow(args = {}) {
+  const flowAction = String(args.flowAction || "list-templates");
+  const readActions = new Set(["list-templates", "get-template", "list-runs", "get-run"]);
+  if (readActions.has(flowAction)) {
+    return callDashboard(
+      routeWithQuery("/api/queen-bee/flow", {
+        action: flowAction,
+        id: args.templateId,
+        runId: args.runId,
+        vaultPath: args.vaultPath,
+      }),
+      "GET",
+    );
+  }
+  return callDashboard("/api/queen-bee/flow", "POST", {
+    action: flowAction,
+    templateId: args.templateId,
+    runId: args.runId,
+    spec: args.spec,
+    state: args.state,
+    result: args.result,
+    approved: args.approved,
+    vaultPath: args.vaultPath,
+  });
+}
+
+async function callWorkEvent(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") return callDashboard("/api/work-events", "GET");
+  if (action === "create-event") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "create-event",
+      name: args.eventName || args.name,
+      payloadGuidelines: args.payloadGuidelines,
+    });
+  }
+  if (action === "create-trigger") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "create-trigger",
+      eventName: args.eventName || args.name,
+      board: args.board,
+      title: args.title,
+      body: args.body,
+      assignee: args.assignee,
+      tenant: args.tenant,
+      priority: args.priority,
+      status: args.status,
+      skills: args.skills,
+      targetMachine: args.targetMachine,
+      emitEventName: args.emitEventName,
+      enabled: args.enabled,
+      idempotencyKey: args.idempotencyKey,
+    });
+  }
+  if (action === "publish") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "publish",
+      eventName: args.eventName || args.name,
+      payload: args.payload,
+      faq: args.faq,
+      source: args.source || "mcp:work-event",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  throw new Error(`Unknown work_event action: ${action}`);
+}
+
+async function requestHumanApproval(args = {}) {
+  const title = String(args.title || "Human approval requested").trim();
+  const body = formatApprovalRequest(args);
+  return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+    board: args.board,
+    title,
+    body,
+    status: "needs-human",
+    priority: args.priority || "high",
+    assignee: "human",
+    source: "mcp:human-approval",
+    idempotencyKey: args.idempotencyKey,
+    vaultPath: args.vaultPath,
+    kanbanFolder: args.kanbanFolder,
+  });
+}
+
+function routeWithQuery(route, params = {}) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `${route}?${query}` : route;
+}
+
+function definedArgs(args, keys) {
+  const output = {};
+  for (const key of keys) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+function formatApprovalRequest(args = {}) {
+  const lines = [
+    args.request || "An agent requested human approval.",
+    args.context ? `\nContext:\n${args.context}` : "",
+    args.approvalKind ? `\nApproval kind: ${args.approvalKind}` : "",
+    args.relatedTaskId ? `Related Work Board task: ${args.relatedTaskId}` : "",
+    Array.isArray(args.options) && args.options.length
+      ? `\nOptions:\n${args.options.map((option) => `- ${option}`).join("\n")}`
+      : "",
+    args.requestedBy ? `\nRequested by: ${args.requestedBy}` : "",
+    "\nThis card records a requested decision only. It does not grant approval, execute the action, or bypass HivemindOS policy gates.",
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
 async function callTool(name, args = {}) {
   if (name === "list_hivemind_machines") {
     const data = await callDashboard("/api/fleet/discover?includeSnapshots=0&fresh=1", "GET");
@@ -580,6 +881,18 @@ async function callTool(name, args = {}) {
         })),
       })),
     };
+  }
+  if (name === "work_board") {
+    return callWorkBoard(args);
+  }
+  if (name === "queen_bee") {
+    return callQueenBee(args);
+  }
+  if (name === "work_event") {
+    return callWorkEvent(args);
+  }
+  if (name === "request_human_approval") {
+    return requestHumanApproval(args);
   }
   if (name === "crypto_capabilities") {
     return callDashboard("/api/crypto/capabilities", "POST", {

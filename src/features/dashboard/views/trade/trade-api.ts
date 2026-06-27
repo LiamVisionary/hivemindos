@@ -571,10 +571,57 @@ export async function quoteStockTrade(params: { agentId: string; side: "buy" | "
   return postJson("/api/trading", { action: "quote", ...params });
 }
 
-export async function executeStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; confirmation: string; paper: boolean }): Promise<{ ok: boolean; error?: string; result?: StockTradeResult }> {
+export async function executeStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; confirmation: string; paper: boolean; qty?: number }): Promise<{ ok: boolean; error?: string; result?: StockTradeResult }> {
   return postJson("/api/trading", { action: "execute", ...params });
 }
 
 export async function fetchStockPortfolio(agentId: string, paper: boolean): Promise<{ ok: boolean; error?: string; portfolio?: AlpacaPortfolio | null; note?: string }> {
   return postJson("/api/trading", { action: "portfolio", agentId, paper });
+}
+
+// ---- Real market data (movers + sparklines + FX) ---------------------------
+export type MarketRange = "24h" | "7d" | "30d";
+
+export type CryptoMarketRow = { symbol: string; name: string; price: number; change24h: number; history: number[]; source: string };
+export type StockMarketRow = { symbol: string; price: number; change24h: number; history: number[] };
+
+export async function fetchCryptoMarket(symbols: string[], range: MarketRange = "24h"): Promise<{ ok: boolean; error?: string; rows?: CryptoMarketRow[] }> {
+  return postJson("/api/trading/market", { kind: "crypto", symbols, range });
+}
+
+export async function fetchStockMarket(symbols: string[], paper: boolean, range: MarketRange = "24h", withHistory = true): Promise<{ ok: boolean; error?: string; rows?: StockMarketRow[] }> {
+  return postJson("/api/trading/market", { kind: "stock", symbols, paper, range, withHistory });
+}
+
+export async function fetchStockEquityHistory(paper: boolean, range: MarketRange = "30d"): Promise<{ ok: boolean; error?: string; history?: number[] }> {
+  return postJson("/api/trading/market", { kind: "stock-equity", paper, range });
+}
+
+export type FxRatesResult = { rates: Record<string, number>; source: string; updatedAt: number };
+
+export async function fetchFxRates(): Promise<{ ok: boolean; error?: string; rates?: Record<string, number>; source?: string; updatedAt?: number }> {
+  return postJson("/api/trading/market", { kind: "fx" });
+}
+
+// ---- Real wallet activity (unified spend ledger) ---------------------------
+export type WalletActivityKind = "x402" | "x402-private" | "send" | "veil-transfer" | "trade" | "platform-fee" | string;
+export type WalletActivityRecord = {
+  id: string;
+  agentId: string;
+  companyId?: string;
+  kind: WalletActivityKind;
+  asset: string;
+  amountUsd: number;
+  assetAmount?: number;
+  target?: string;
+  status: "executed" | "failed" | string;
+  approvalId?: string;
+  transactionHash?: string;
+  createdAt: string;
+  createdAtMs: number;
+};
+
+export async function fetchWalletActivity(limit = 100): Promise<{ ok: boolean; error?: string; records?: WalletActivityRecord[] }> {
+  const response = await fetch(`/api/wallet/activity?limit=${encodeURIComponent(String(limit))}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
+  return asJson<{ records: WalletActivityRecord[] }>(response);
 }
