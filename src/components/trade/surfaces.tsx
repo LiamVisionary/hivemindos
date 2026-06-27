@@ -144,6 +144,7 @@ export function ActivityPanel({ items, onViewAll }: { items: DeskActivity[]; onV
             <span className="ic"><BIcon name={activityIcon(it.kind)} size={15} /></span>
             <span className="tx"><b>{it.text}</b><small style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>{it.kind} · {it.via}<WalletChip wid={it.wid} /></small></span>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+              {it.usd > 0 ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)", letterSpacing: "-0.01em" }}>{trUsd2(it.usd)}</span> : null}
               <Badge tone={it.state === "open" ? "honey" : it.state === "failed" ? "danger" : "live"}>{it.state}</Badge>
               <span className="when">{it.when}</span>
             </span>

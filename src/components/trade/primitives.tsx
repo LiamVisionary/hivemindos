@@ -8,6 +8,7 @@
 import React from "react";
 import { BIcon } from "./icons";
 import { FX_META, availableCurrencies, trUsd2, trAmt } from "./format";
+import { chainBadgeSrc } from "@/lib/utils/personal-wallet-grouping";
 
 // ── badges & buttons ─────────────────────────────────────────────────────────
 export function Badge({ tone, children }: { tone?: string; children: React.ReactNode }) {
@@ -124,10 +125,12 @@ export function ReviewLine({ k, v, live, icon }: { k: React.ReactNode; v: React.
 }
 
 // ── asset dropdown ───────────────────────────────────────────────────────────
-export function AssetMenu({ value, options, balances, onPick, stock, getName }: {
+export function AssetMenu({ value, options, balances, values, onPick, stock, getName }: {
   value: string;
   options: string[];
   balances?: Record<string, number>;
+  /** USD value held per symbol — rendered in the user's display currency. */
+  values?: Record<string, number>;
   onPick: (sym: string) => void;
   stock?: boolean;
   getName?: (sym: string) => string;
@@ -153,14 +156,69 @@ export function AssetMenu({ value, options, balances, onPick, stock, getName }: 
         <div className="tk-menu fr-scroll">
           {options.map((sym) => {
             const bal = balances ? balances[sym] : undefined;
+            const usd = values ? values[sym] : undefined;
+            const showUsd = usd != null && usd > 0;
             return (
               <button key={sym} type="button" data-active={sym === value ? "" : undefined} onClick={() => { onPick(sym); setOpen(false); }}>
                 <Coin sym={sym} size={28} stock={stock} />
                 <span className="mn"><b>{sym}</b><span>{getName ? getName(sym) : sym}</span></span>
-                {bal !== undefined ? <span className="mamt">{trAmt(sym, bal)}</span> : null}
+                {bal !== undefined || showUsd ? (
+                  <span className="mamt">
+                    {bal !== undefined ? trAmt(sym, bal) : null}
+                    {showUsd ? <span className="musd">{trUsd2(usd)}</span> : null}
+                  </span>
+                ) : null}
               </button>
             );
           })}
+        </div>
+      ) : null}
+    </span>
+  );
+}
+
+// ── chain dropdown ───────────────────────────────────────────────────────────
+function ChainGlyph({ chainKey, size = 24 }: { chainKey?: string; size?: number }) {
+  const src = chainBadgeSrc(chainKey || "");
+  if (src) return <img src={src} alt="" width={size} height={size} style={{ borderRadius: "50%", display: "block", flex: "0 0 auto" }} />;
+  return <span style={{ width: size, height: size, borderRadius: "50%", background: "var(--panel-hi)", border: "1px solid var(--line-2)", flex: "0 0 auto" }} />;
+}
+
+/** Chain selector for a trade action — same look as AssetMenu but for chains.
+ *  Disabled (static) when the acting wallet has only one chain. */
+export function ChainMenu({ value, options, onPick }: {
+  value: string;
+  options: Array<{ key: string; label: string; network: string }>;
+  onPick: (network: string) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLSpanElement>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("mousedown", handler); document.removeEventListener("keydown", key); };
+  }, [open]);
+  if (!options.length) return null;
+  const current = options.find((o) => o.network === value) ?? options[0];
+  const single = options.length <= 1;
+  return (
+    <span className="tk-asset" ref={ref}>
+      <button type="button" className="tk-assetbtn" onClick={() => { if (!single) setOpen((o) => !o); }} disabled={single} aria-label="Select chain">
+        <ChainGlyph chainKey={current.key} />
+        <span className="sym">{current.label}</span>
+        {!single ? <span className="car"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 9l6 6 6-6" /></svg></span> : null}
+      </button>
+      {open && !single ? (
+        <div className="tk-menu fr-scroll">
+          {options.map((o) => (
+            <button key={o.network} type="button" data-active={o.network === value ? "" : undefined} onClick={() => { onPick(o.network); setOpen(false); }}>
+              <ChainGlyph chainKey={o.key} size={28} />
+              <span className="mn"><b>{o.label}</b><span>Trade on {o.label}</span></span>
+            </button>
+          ))}
         </div>
       ) : null}
     </span>

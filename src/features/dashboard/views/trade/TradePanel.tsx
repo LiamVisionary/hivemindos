@@ -17,8 +17,9 @@
    The order tickets + capability rail call the real trade-api rails directly;
    this panel builds the dataset + owns the wallet picker. */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import type { DashboardActingWallet } from "@/features/dashboard/screen-context";
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet, hasConfiguredAgentWallet } from "@/lib/utils/agent-wallet";
@@ -38,7 +39,8 @@ import {
   type BankrWalletInfo, type CryptoCapabilityMap,
 } from "./trade-api";
 import { WalletSelectModal, type PickableWallet } from "./WalletSelectModal";
-import { agentPickable, personalPickable, type PickableAgent } from "./wallet-pickables";
+import { agentPickable, groupedUserPickables, isSelectablePickableId, resolvePickableAccount, type PickableAgent } from "./wallet-pickables";
+import { chainKeyForNetwork, chainLabelForNetwork } from "@/lib/utils/personal-wallet-grouping";
 
 type TradeAgent = PickableAgent;
 
@@ -91,6 +93,9 @@ type TradePanelProps = {
   getSurvivalSnapshot?: (wallet: AgentWalletConfig) => AgentSurvivalSnapshot;
   sharedVault?: SharedVaultConfig;
   theme?: "light" | "dark";
+  /** Report the currently-selected acting wallet up to the dashboard so the
+      app-wide hive chat can default wallet/trade actions to it. */
+  onActingWalletChange?: (wallet: DashboardActingWallet | null) => void;
 };
 
 export function TradePanel(props: TradePanelProps) {
@@ -147,9 +152,7 @@ export function TradePanel(props: TradePanelProps) {
   }, []);
 
   const pickables = useMemo<PickableWallet[]>(() => {
-    const user = personalWallets
-      .map(personalPickable)
-      .filter((p): p is PickableWallet => Boolean(p))
+    const user = groupedUserPickables(personalWallets)
       .map((p) => ({ ...p, pending: personalBalancesLoading }));
     const bankrPickable: PickableWallet | null = bankr?.configured ? {
       id: "bankr",
@@ -173,14 +176,63 @@ export function TradePanel(props: TradePanelProps) {
   const defaultId = (props.selectedAgent?.id && pickables.some((p) => p.id === props.selectedAgent!.id))
     ? props.selectedAgent.id
     : (pickables[0]?.id || "");
-  const resolvedId = actingId && pickables.some((p) => p.id === actingId) ? actingId : defaultId;
-  const acting = pickables.find((p) => p.id === resolvedId) ?? null;
+  const resolvedId = actingId && isSelectablePickableId(pickables, actingId) ? actingId : defaultId;
+  // Memoized: resolvePickableAccount builds a FRESH object for a grouped per-chain
+  // user wallet, so without this `acting` changes identity every render — which
+  // re-fires the report-acting effect → parent setState → infinite render loop.
+  const acting = useMemo(() => resolvePickableAccount(pickables, resolvedId), [pickables, resolvedId]);
 
   const pickWallet = (id: string) => {
     setActingId(id);
     writeLastTradeWalletId(id);
-    if (pickables.find((p) => p.id === id)?.kind === "agent") props.setSelectedAgentId?.(id);
+    if (resolvePickableAccount(pickables, id)?.kind === "agent") props.setSelectedAgentId?.(id);
   };
+
+  // Chains the ACTING wallet holds — drives the in-action chain dropdown. For a
+  // grouped user wallet these are its per-chain accounts; for a single-chain
+  // agent/bankr wallet it's just the one chain. Switching chain re-points the
+  // acting account so network/tokens/execution follow.
+  // Memoized so the dataset (and thus the whole desk tree) doesn't re-render on
+  // every render from a fresh array / function identity.
+  const actingGroup = useMemo(
+    () => pickables.find((p) => p.kind === "user" && (p.accounts ?? []).some((a) => a.id === resolvedId)) ?? null,
+    [pickables, resolvedId],
+  );
+  const walletChains = useMemo(
+    () => actingGroup?.accounts?.length
+      ? actingGroup.accounts.map((a) => ({ key: a.chainKey, label: chainLabelForNetwork(a.network), network: a.network, accountId: a.id }))
+      : acting
+        ? [{ key: chainKeyForNetwork(String((acting.wallet as unknown as Record<string, unknown>).network || "")), label: chainLabelForNetwork(String((acting.wallet as unknown as Record<string, unknown>).network || "")), network: String((acting.wallet as unknown as Record<string, unknown>).network || ""), accountId: acting.id }]
+        : [],
+    [actingGroup, acting],
+  );
+  // A chain switch always targets a user wallet's per-chain account (never an
+  // agent), so it just re-points actingId + persists — no global agent sync.
+  const onSelectChain = useCallback((net: string) => {
+    const target = actingGroup?.accounts?.find((a) => a.network === net);
+    if (target) { setActingId(target.id); writeLastTradeWalletId(target.id); }
+  }, [actingGroup]);
+
+  // Every chain the user actually has access to — derived from the resolved
+  // pickable wallets themselves (personal per-chain accounts + each configured
+  // agent wallet's network + Bankr), so the bridge / cross-chain dropdowns offer
+  // exactly the user's chains and nothing hardcoded.
+  const availableChains = useMemo<string[]>(() => {
+    const labels: string[] = [];
+    const add = (network: unknown) => {
+      const label = chainLabelForNetwork(String(network || "").trim());
+      if (label && !labels.includes(label)) labels.push(label);
+    };
+    for (const p of pickables) {
+      if (p.accounts?.length) p.accounts.forEach((a) => add(a.network));
+      else add((p.wallet as unknown as Record<string, unknown>)?.network);
+    }
+    const order = ["Base", "Base Sepolia", "Ethereum", "Arbitrum", "Optimism", "Polygon", "Solana"];
+    return labels.sort((a, b) => {
+      const ia = order.indexOf(a); const ib = order.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+    });
+  }, [pickables]);
 
   // ── real data orchestration for the acting wallet ──────────────────────────
   useEffect(() => {
@@ -298,6 +350,26 @@ export function TradePanel(props: TradePanelProps) {
     return { id: acting.id, name: acting.name, short, kind, custody, addr: truncateAddress(fullAddress), fullAddress, network, cap };
   }, [acting]);
 
+  // Report the acting wallet up to the dashboard (kept in a ref so the effect
+  // doesn't churn when the parent re-creates the callback) so the app-wide hive
+  // chat defaults wallet/trade actions to it. Cleared on unmount.
+  const reportActingRef = useRef(props.onActingWalletChange);
+  useEffect(() => { reportActingRef.current = props.onActingWalletChange; }, [props.onActingWalletChange]);
+  useEffect(() => {
+    reportActingRef.current?.(acting ? {
+      id: wallet.id || undefined,
+      label: wallet.name || wallet.short || "Acting wallet",
+      kind: wallet.kind,
+      provider: wallet.kind === "bankr" ? "bankr" : (String((acting.wallet as unknown as Record<string, unknown>)?.provider || "") || undefined),
+      network: wallet.network || undefined,
+      networkLabel: chainLabelForNetwork(wallet.network),
+      address: wallet.fullAddress || undefined,
+      custody: wallet.custody || undefined,
+      capUsd: wallet.cap,
+    } : null);
+  }, [wallet, acting]);
+  useEffect(() => () => reportActingRef.current?.(null), []);
+
   const dataset = useMemo<TradeDeskData>(() => {
     const network = data?.network ?? wallet.network;
     const isSolanaWallet = data?.isSolanaWallet ?? network.includes("solana");
@@ -310,6 +382,9 @@ export function TradePanel(props: TradePanelProps) {
       isEvmWallet: data?.isEvmWallet ?? network.startsWith("eip155:"),
       isSolanaWallet,
       hasActingWallet: Boolean(acting),
+      walletChains,
+      onSelectChain,
+      availableChains,
       loading,
       cryptoPortfolio: data?.cryptoPortfolio ?? EMPTY_PORTFOLIO,
       cryptoBalances: data?.cryptoBalances ?? {},
@@ -332,7 +407,7 @@ export function TradePanel(props: TradePanelProps) {
       onOpenView,
       refresh,
     };
-  }, [acting, wallet, data, loading, paper, currency, fxRates, actors, props.theme, onChangeWallet, onOpenView, refresh]);
+  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, paper, currency, fxRates, actors, props.theme, onChangeWallet, onOpenView, refresh]);
 
   return (
     <div style={{ height: "100%", overflow: "hidden" }}>

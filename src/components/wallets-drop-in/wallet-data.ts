@@ -97,6 +97,10 @@ export function frUsage() {
 export const FR_HONEY_LEDGER = [];
 export const FR_HONEY_BY_AGENT = [];
 export let FR_HONEY_SUMMARY = null;
+export let FR_BANKR_WALLET = null;
+export function frBankrWallet() {
+  return FR_RUNTIME_APPLIED && FR_BANKR_WALLET && FR_BANKR_WALLET.configured ? FR_BANKR_WALLET : null;
+}
 export const FR_HONEY_KIND = {
   earn:    { icon: "sparkles", label: "Earned",    tone: "var(--honey)" },
   redeem:  { icon: "spark",    label: "Redeemed",  tone: "var(--fg-2)" },
@@ -181,6 +185,7 @@ export function frApplyRuntimeWalletData(data) {
   FR_HONEY_LEDGER.splice(0, FR_HONEY_LEDGER.length, ...(Array.isArray(data.honeyLedger) ? data.honeyLedger : []));
   FR_HONEY_BY_AGENT.splice(0, FR_HONEY_BY_AGENT.length, ...(Array.isArray(data.honeyByAgent) ? data.honeyByAgent : []));
   FR_HONEY_SUMMARY = data.honeySummary || null;
+  FR_BANKR_WALLET = data.bankrWallet || null;
   if (data.railOverrides && typeof data.railOverrides === "object") {
     FR_RAIL_CONFIG.forEach((rail) => {
       const override = data.railOverrides[rail.id];

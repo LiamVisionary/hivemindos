@@ -27,7 +27,7 @@ import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent
 import { fetchPersonalWalletBalance, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { WalletSelectModal, type PickableWallet } from "@/features/dashboard/views/trade/WalletSelectModal";
 import {
-  agentPickable, personalPickable, isX402CapableWallet, x402WalletBlockReason, type PickableAgent,
+  agentPickable, userAccountPickables, isSelectablePickableId, resolvePickableAccount, isX402CapableWallet, x402WalletBlockReason, type PickableAgent,
 } from "@/features/dashboard/views/trade/wallet-pickables";
 import tradeStyles from "@/features/dashboard/views/trade/trade.module.css";
 import { MiroSharkProcessCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
@@ -310,10 +310,7 @@ export function SwarmPanel({
   // Wallets that can actually FUND an x402 run (local signing key + supported
   // network). Watch-only / runtime-custody wallets are excluded — they'd 404.
   const x402Pickables = React.useMemo<PickableWallet[]>(() => {
-    const user = personalWallets
-      .map(personalPickable)
-      .filter((p): p is PickableWallet => Boolean(p))
-      .filter((p) => isX402CapableWallet(p.wallet));
+    const user = userAccountPickables(personalWallets, { accountFilter: isX402CapableWallet });
     const agentP = (displayAgents ?? [])
       .map((a) => agentPickable(a, walletsByAgent))
       .filter((p) => isX402CapableWallet(p.wallet));
@@ -354,12 +351,12 @@ export function SwarmPanel({
   // live progress → report card.
   const [x402Job, setX402Job] = React.useState<X402Job | null>(null);
 
-  const chosen = confirmWalletId ? x402Pickables.find((p) => p.id === confirmWalletId) ?? null : null;
+  const chosen = confirmWalletId ? resolvePickableAccount(x402Pickables, confirmWalletId) : null;
 
   const defaultWalletId = React.useMemo(() => {
     const last = readLastWalletId();
-    if (last && x402Pickables.some((p) => p.id === last)) return last;
-    if (selectedAgent?.id && x402Pickables.some((p) => p.id === selectedAgent.id)) return selectedAgent.id;
+    if (last && isSelectablePickableId(x402Pickables, last)) return last;
+    if (selectedAgent?.id && isSelectablePickableId(x402Pickables, selectedAgent.id)) return selectedAgent.id;
     return x402Pickables[0]?.id ?? "";
   }, [x402Pickables, selectedAgent?.id]);
 

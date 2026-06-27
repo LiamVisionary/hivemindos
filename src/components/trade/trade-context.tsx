@@ -98,6 +98,13 @@ export type TradeDeskData = {
   isEvmWallet: boolean;
   isSolanaWallet: boolean;
   hasActingWallet: boolean;
+  /** Chains the ACTING wallet holds — the action chain dropdown (swap/buy/sell). */
+  walletChains: Array<{ key: string; label: string; network: string; accountId: string }>;
+  /** Switch the acting wallet to its account on `network` (re-points execution). */
+  onSelectChain: (network: string) => void;
+  /** Short labels of every chain the user holds across personal + agent wallets;
+   *  used to filter the bridge / cross-chain action dropdowns. */
+  availableChains: string[];
 
   // status
   loading: boolean;

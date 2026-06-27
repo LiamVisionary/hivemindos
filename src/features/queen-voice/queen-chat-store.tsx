@@ -126,6 +126,10 @@ export function QueenChatProvider({
         const data = await post({
           action: "agent-turn",
           message: withScreenContext(String(args.message ?? ""), screenContext),
+          // Structured acting-wallet source so the executing agent defaults
+          // sends/swaps/trades to the user's selected wallet (the prose context
+          // only truncates the address; this carries the full identity).
+          actingWallet: actingWalletSourceFromContext(screenContext),
         });
         return String(data?.text || data?.detail || "Done.");
       }
@@ -249,4 +253,17 @@ function withScreenContext(message: string, screenContext?: DashboardScreenConte
   const trimmed = message.trim();
   if (!context) return trimmed;
   return `${context}\n\nUser request: ${trimmed}`;
+}
+
+/** The acting wallet as a structured source hint for the executing agent's
+ *  send/swap resolver — full address included (it is not regex-parsed here). */
+function actingWalletSourceFromContext(screenContext?: DashboardScreenContext) {
+  const wallet = screenContext?.actingWallet;
+  if (!wallet?.id) return undefined;
+  return {
+    agentId: wallet.id,
+    address: wallet.address || "",
+    network: wallet.network || "",
+    kind: wallet.kind || "",
+  };
 }

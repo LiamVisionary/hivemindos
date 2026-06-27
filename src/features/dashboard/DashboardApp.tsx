@@ -370,7 +370,9 @@ import {
   baseDashboardScreenContext,
   mergeDashboardScreenContext,
   type DashboardContextItem,
+  type DashboardActingWallet,
 } from "@/features/dashboard/screen-context";
+import { TRADE_ROUTE_CAPABILITY_LINES, WALLET_ROUTE_CAPABILITY_LINES } from "@/lib/services/chat/trade-route-context";
 // DashboardHeader is retained as a legacy component; the app now navigates via
 // the left AppNavShelf (the redesigned hive shelf) instead of a top header.
 import { DashboardAppCompletionToast, type DashboardAppCompletionNotification } from "@/features/dashboard/views/DashboardHeader";
@@ -1278,6 +1280,9 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const [honeyLedgerEnabled, setHoneyLedgerEnabled] = useState(false);
   const [walletActionsByAgent, setWalletActionsByAgent] = useState<Record<string, WalletActionState>>({});
   const [walletPanelMode, setWalletPanelMode] = useState<"wallets" | "usage">("wallets");
+  // The Trade desk's currently-picked acting wallet, lifted up so the app-wide
+  // hive chat can default wallet/trade actions to it (see baseHiveScreenContext).
+  const [tradeActingWallet, setTradeActingWallet] = useState<DashboardActingWallet | null>(null);
   const [vaultPanelMode, setVaultPanelMode] = useState<DashboardVaultPanelMode>(initialVaultPanelMode ?? "hive-vault");
   const [moneyClawStatusByEnvName, setMoneyClawStatusByEnvName] = useState<Record<string, WalletMoneyClawStatus>>({});
   const [moneyClawLoadingEnvName, setMoneyClawLoadingEnvName] = useState("");
@@ -4466,6 +4471,8 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           return { kind: "section", id: mirosharkWorkbenchTab, label: "MiroShark swarm", detail: swarmStatusLabel || mirosharkDisplayStatus || undefined };
         case "wallet":
           return { kind: "section", id: walletPanelMode, label: walletPanelMode === "usage" ? "Wallet usage" : "Agent wallets", detail: `${walletStats.enabled ?? 0} enabled wallets` };
+        case "trade":
+          return { kind: "section", id: "trade-desk", label: "Trade desk", detail: "Crypto & stocks — swap, send, Hyperliquid perps, token launch, Alpaca (paper/live), xStocks" };
         case "vault": {
           const labels = {
             "hive-vault": "Shared brain graph",
@@ -4525,12 +4532,39 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     addPanel(Object.values(kanbanCardAttachmentListOpen).some(Boolean) ? { kind: "popover", id: "kanban-card-attachment-list", label: "Task card attachment list" } : null);
     addPanel(Object.values(kanbanCardDeliverableMenuOpen).some(Boolean) ? { kind: "popover", id: "kanban-card-deliverables", label: "Task card deliverable menu" } : null);
 
+    // The acting wallet the hive should default money actions to: the Trade
+    // desk's picked wallet on the Trade route, or the selected agent's wallet on
+    // the Wallets route. Other views carry none (the chat falls back to normal
+    // wallet resolution).
+    let actingWallet: DashboardActingWallet | null = null;
+    let capabilities: string[] | undefined;
+    if (activeView === "trade") {
+      actingWallet = tradeActingWallet;
+      capabilities = [...TRADE_ROUTE_CAPABILITY_LINES];
+    } else if (activeView === "wallet") {
+      if (selectedWallet) {
+        const network = String(selectedWallet.network || "");
+        actingWallet = {
+          id: selectedWallet.agentId,
+          label: selectedAgent?.name ?? "Selected wallet",
+          kind: selectedAgent?.id?.startsWith("user:") ? "user" : "agent",
+          provider: selectedWallet.provider,
+          network: network || undefined,
+          address: String(selectedWallet.walletAddress || "") || undefined,
+          capUsd: Number(selectedWallet.maxPaymentUsd) || null,
+        };
+      }
+      capabilities = [...WALLET_ROUTE_CAPABILITY_LINES];
+    }
+
     return mergeDashboardScreenContext(context, {
       route: currentRoute,
       section: sectionForView(),
       selections,
       openModals,
       openPanels,
+      actingWallet,
+      capabilities,
     });
   }, [
     activeView,
@@ -4582,6 +4616,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     selectedWallet,
     sessionSearchQuery,
     setupMachine,
+    tradeActingWallet,
     sharedEnvAddMenuOpen,
     sharedEnvImportOpen,
     skillBrowserGithubOpen,
@@ -4694,7 +4729,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       {(activeView === "scheduler" || (activeView === "aeon" && schedulerDraftOpen)) ? <SchedulerPanel {...{ AlignLeft, Button, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Link, List, LoaderCircle, Paperclip, Pencil, Plus, Puzzle, RUNTIME_LABELS, Repeat2, SCHEDULER_MODEL_OPTIONS, SCHEDULE_PRESETS, SchedulerView, Search, Send, Sparkles, TaskModal, Trash2, activeView, addSchedulePath, addSchedulerStep, addSchedulerStepPath, browseSchedulerFolder, createSchedule, displayAgents, editSchedule, editingScheduleId, filteredSchedulerSkills, findScheduleForJob, fleetClass, importExistingSchedules, isSchedulerFilePath, machineGroups, openSkillBrowser, pickSchedulerFiles, pickSchedulerFolder, refreshSharedSchedulesFromVault, removeSchedule, removeSchedulePath, removeScheduleSkill, removeSchedulerStep, removeSchedulerStepPath, renderAgentKey, resetScheduleDraft, runScheduleNow, saveScheduleFromModal, scheduleDraft, scheduleImportStatus, scheduleImporting, schedulerAttachMenu, schedulerDraftOpen, schedulerJobs, schedulerModalInitial, schedulerPathDraft, schedulerPathKind, schedulerRunStates, schedulerSelectedStep, schedulerSkillSearch, schedules, selectedAgent, setActiveView, setScheduleDraft, setScheduleImportStatus, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerSelectedStep, setSchedulerSkillSearch, sharedSkillOptions, aeonSkillOptions, toggleSchedule, toggleScheduleSkill, toggleSchedulerStepMode, toggleSchedulerStepSkill, updateSchedulerStep, updateSchedulerStepModel, vaultClass }} /> : null}
       {activeView === "swarm" ? <SwarmPanel {...{ setActiveView, swarmRuns, currentSwarmRun, swarmMarket, swarmAgents, swarmDecisions, swarmStatusLabel, selectedSwarmRunId, mirosharkRunPending, mirosharkProgressLabel, mirosharkArchiveStatus, mirosharkStatus, mirosharkScenario, walletsByAgent, displayAgents, selectedAgent, setSelectedAgentId, getSurvivalSnapshot, sharedVault, loadMirosharkArchivedRun, startNewMirosharkSimulation, launchMirosharkSwarm, setMirosharkScenario, setMirosharkRounds, setMirosharkPlatform, runMirosharkExperiment }} /> : null}
       {activeView === "wallet" ? <WalletPanel {...{ AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, copyPaymentPrompt, createDefaultAgentWallet, createLocalWallet, displayAgents, claimAllHoneyToBankrHive, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, hiveEnv, hydrated, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, setHoneyLedgerEnabled, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent }} /> : null}
-      {activeView === "trade" ? <TradePanel {...{ activeView, displayAgents, walletsByAgent, selectedAgent, setSelectedAgentId, getSurvivalSnapshot, hiveEnv, hydrated, RUNTIME_LABELS, sharedVault, setActiveView, theme: dashboardTheme === "hive-light" ? "light" : "dark" }} /> : null}
+      {activeView === "trade" ? <TradePanel {...{ activeView, displayAgents, walletsByAgent, selectedAgent, setSelectedAgentId, getSurvivalSnapshot, hiveEnv, hydrated, RUNTIME_LABELS, sharedVault, setActiveView, onActingWalletChange: setTradeActingWallet, theme: dashboardTheme === "hive-light" ? "light" : "dark" }} /> : null}
       {activeView === "vault" ? <VaultPanel {...{ Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshRuntimeFileRoots, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startAgentChat, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus, walletClass }} /> : null}
       {activeView === "integrations" ? <IntegrationsView embedded /> : null}
       {(isUtilityPanelView(activeView) || (activeView === "vault" && vaultPanelMode === "env")) ? <UtilityPanels {...{ AgentEnvCard, Activity, Button, Check, ChevronDown, ChevronLeft, Download, EnvValueRow, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, URL, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, memoryTelemetryLoading, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, onOpenNotification: openDashboardNotification, openRuntimeFile, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, searchAllRuntimeSessions, selectedRuntimeEnvSource, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSessionSearchQuery, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, startAgentChat, syncSharedEnvMachines, toggleEnvValue, updateNotificationSettings, vaultClass, vaultPanelMode, walletClass }} /> : null}

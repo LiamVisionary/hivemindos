@@ -259,6 +259,30 @@ export type QueenAgentTurnResult = {
   detail: string;
 };
 
+/** The user's selected acting wallet, relayed so the executing agent defaults
+ *  wallet/trade actions to it. `agentId` is its resolution id (agentId, a
+ *  `user:` personal id, or "bankr"); `kind` lets the local rails bow out for
+ *  Bankr-managed wallets so Bankr handles the action. */
+export type ActingWalletSource = {
+  agentId: string;
+  address: string;
+  network: string;
+  kind: string;
+};
+
+export function coerceActingWalletSource(value: unknown): ActingWalletSource | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const agentId = typeof record.agentId === "string" ? record.agentId.trim() : "";
+  if (!agentId) return undefined;
+  return {
+    agentId,
+    address: typeof record.address === "string" ? record.address.trim() : "",
+    network: typeof record.network === "string" ? record.network.trim() : "",
+    kind: typeof record.kind === "string" ? record.kind.trim() : "",
+  };
+}
+
 /**
  * Routes a spoken request through the full agent runtime harness (system
  * prompt, capabilities, vault/brain context). Used by the realtime session's
@@ -270,6 +294,7 @@ export type QueenAgentTurnResult = {
 export async function runQueenBeeAgentTurn(
   origin: string,
   message: string,
+  actingWallet?: ActingWalletSource,
 ): Promise<QueenAgentTurnResult> {
   const request = message.trim();
   if (!request) return { speech: "The request was empty, so nothing was done.", detail: "" };
@@ -303,6 +328,7 @@ export async function runQueenBeeAgentTurn(
         runtimeSessionId: "queen-bee-voice",
         agentMode: "act",
         latencyMode: "voice",
+        actingWalletSource: actingWallet,
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(45_000),

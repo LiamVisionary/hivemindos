@@ -1,37 +1,130 @@
 /* wallet-pickables.ts — shared wallet→pickable mapping for the wallet picker
    modal. Used by the Trade view (crypto/stocks) and by the Work→Simulation
    paid-run (x402) flow so both build the SAME pickable list (the user's own
-   wallets + configured agent wallets) from one source of truth. */
+   wallets + configured agent wallets) from one source of truth.
+
+   Personal wallets are GROUPED by recovery-phrase seed (Base + Solana from one
+   seed → one card) via the shared grouping module, matching the Wallets screen.
+   A grouped card carries its per-chain `accounts`; since a trade runs on one
+   chain, selection resolves to a specific account id via resolvePickableAccount. */
 
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
-import type { PickableWallet } from "./WalletSelectModal";
+import {
+  buildGroupedPersonalWallets,
+  chainShortLabel,
+  type PersonalWalletAccount,
+} from "@/lib/utils/personal-wallet-grouping";
+import type { PickableAccount, PickableWallet } from "./WalletSelectModal";
 
 /** Loose agent shape — panel prop bags are permissive across the dashboard. */
 export type PickableAgent = { id: string; name?: string; wallet?: unknown; provider?: unknown; usePod?: unknown; venice?: unknown };
 
-/** Map a personal/user wallet record (from the Wallets route) to a pickable card. */
-export function personalPickable(record: Record<string, unknown>): PickableWallet | null {
-  const id = String(record.id || record.agentId || "").trim();
-  const address = String(record.address || "").trim();
-  if (!id || !address) return null;
-  const custody = record.custodyMode === "local" ? "local" : "watch";
-  const wallet = {
-    ...createDefaultAgentWallet(id),
-    walletAddress: address,
-    network: String(record.network || "eip155:8453"),
-    custodyMode: custody,
-    enabled: custody === "local",
-    currentBalanceUsd: Number(record.currentBalanceUsd) || 0,
-  } as AgentWalletConfig;
+/** Build the executable AgentWalletConfig for one per-chain account. */
+function walletConfigForAccount(account: PersonalWalletAccount): AgentWalletConfig {
   return {
-    id,
-    name: String(record.name || "My wallet"),
-    kind: "user",
-    wallet,
-    statusOverride: custody === "local" ? { tone: "ok", text: "Local wallet" } : { tone: "muted", text: "Watch only" },
-  };
+    ...createDefaultAgentWallet(account.id),
+    walletAddress: account.address,
+    network: account.network,
+    custodyMode: account.custodyMode,
+    enabled: account.custodyMode === "local",
+    currentBalanceUsd: account.currentBalanceUsd || 0,
+  } as AgentWalletConfig;
+}
+
+/**
+ * Group raw personal wallet records into one pickable per seed. The card shows
+ * the seed's total balance and its chains as selectable badges. `accountFilter`
+ * lets a caller keep only accounts that qualify (e.g. x402-capable); a group
+ * with no surviving accounts is dropped.
+ */
+export function groupedUserPickables(
+  records: Array<Record<string, unknown>>,
+  opts?: { accountFilter?: (wallet: AgentWalletConfig) => boolean },
+): PickableWallet[] {
+  const groups = buildGroupedPersonalWallets(records as unknown[] as any[]);
+  const out: PickableWallet[] = [];
+  for (const group of groups) {
+    let accounts: PickableAccount[] = group.accounts.map((account) => ({ ...account, wallet: walletConfigForAccount(account) }));
+    if (opts?.accountFilter) accounts = accounts.filter((account) => opts.accountFilter!(account.wallet));
+    if (!accounts.length) continue;
+    const defaultAccount = accounts.find((account) => account.id === group.spendId)
+      ?? accounts.find((account) => account.chainKey === "base")
+      ?? accounts[0];
+    const totalUsd = accounts.reduce((sum, account) => sum + (Number(account.wallet.currentBalanceUsd) || 0), 0);
+    out.push({
+      id: defaultAccount.id,
+      name: group.name,
+      kind: "user",
+      // The card balance is the seed total; execution uses the per-account wallet
+      // resolved from the chosen chain (resolvePickableAccount).
+      wallet: { ...defaultAccount.wallet, currentBalanceUsd: totalUsd } as AgentWalletConfig,
+      statusOverride: group.canSpend ? { tone: "ok", text: "Local wallet" } : { tone: "muted", text: "Watch only" },
+      accounts,
+    });
+  }
+  return out;
+}
+
+/**
+ * Resolve a selected id (a pickable id, or — for a grouped user wallet — one of
+ * its per-chain account ids) to a single-chain pickable the trade/x402 flow can
+ * execute against. Returns null when the id isn't selectable.
+ */
+/**
+ * Flat, one-pickable-per-chain-account list (no grouping). Used by surfaces that
+ * have no in-action chain selector — e.g. the x402 paid-run confirm — so the user
+ * can still pick the exact chain account. Multi-chain wallets get a chain suffix
+ * so the rows are distinguishable. `accountFilter` keeps only qualifying accounts.
+ */
+export function userAccountPickables(
+  records: Array<Record<string, unknown>>,
+  opts?: { accountFilter?: (wallet: AgentWalletConfig) => boolean },
+): PickableWallet[] {
+  const out: PickableWallet[] = [];
+  for (const group of buildGroupedPersonalWallets(records as unknown[] as any[])) {
+    let accounts: PickableAccount[] = group.accounts.map((account) => ({ ...account, wallet: walletConfigForAccount(account) }));
+    if (opts?.accountFilter) accounts = accounts.filter((account) => opts.accountFilter!(account.wallet));
+    const multi = accounts.length > 1;
+    for (const account of accounts) {
+      out.push({
+        id: account.id,
+        name: multi ? `${group.name} · ${chainShortLabel(account.chainKey, account.networkLabel)}` : group.name,
+        kind: "user",
+        wallet: account.wallet,
+        statusOverride: group.canSpend ? { tone: "ok", text: "Local wallet" } : { tone: "muted", text: "Watch only" },
+      });
+    }
+  }
+  return out;
+}
+
+export function resolvePickableAccount(pickables: PickableWallet[], id: string): PickableWallet | null {
+  if (!id) return null;
+  for (const pickable of pickables) {
+    if (pickable.accounts && pickable.accounts.length) {
+      const account = pickable.accounts.find((entry) => entry.id === id);
+      if (account) {
+        return {
+          id: account.id,
+          name: pickable.name,
+          kind: pickable.kind,
+          wallet: account.wallet,
+          statusOverride: pickable.statusOverride,
+          pending: pickable.pending,
+          usePod: pickable.usePod,
+        };
+      }
+    } else if (pickable.id === id) {
+      return pickable;
+    }
+  }
+  return null;
+}
+
+export function isSelectablePickableId(pickables: PickableWallet[], id: string): boolean {
+  return Boolean(resolvePickableAccount(pickables, id));
 }
 
 /** Resolve an agent's effective wallet (runtime evidence merged with stored config). */

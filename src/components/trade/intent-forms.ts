@@ -82,12 +82,19 @@ export const INTENT_FORMS: Record<string, IntentFormDef> = {
     { k: "token", t: "select", label: "Pay with", opts: ["USDC", "USDT", "ETH", "HIVE"], def: "USDC" } ] },
 };
 
-/** Default field values for a form (used to seed the Build form). */
-export function initFormValues(form?: IntentFormDef): Record<string, string> {
+/** Default field values for a form (used to seed the Build form). Chain fields
+ *  are clamped to a chain the user actually holds (`chainOpts`) so the form never
+ *  seeds a chain that isn't in the filtered dropdown. */
+export function initFormValues(form?: IntentFormDef, chainOpts?: string[]): Record<string, string> {
   const values: Record<string, string> = {};
   if (!form) return values;
+  const chains = chainOpts && chainOpts.length ? chainOpts : TR_CHAINS;
   for (const f of form.fields) {
-    values[f.k] = f.def != null ? f.def : (f.t === "chain" ? "Base" : f.t === "select" ? (f.opts?.[0] ?? "") : "");
+    if (f.t === "chain") {
+      values[f.k] = (f.def && chains.includes(f.def)) ? f.def : (chains[0] ?? f.def ?? "Base");
+    } else {
+      values[f.k] = f.def != null ? f.def : (f.t === "select" ? (f.opts?.[0] ?? "") : "");
+    }
   }
   return values;
 }

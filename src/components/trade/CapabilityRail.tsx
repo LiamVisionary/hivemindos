@@ -96,7 +96,7 @@ export function CapabilityRail() {
 // ── detail ───────────────────────────────────────────────────────────────────
 function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack: () => void }) {
   const desk = useTradeDesk();
-  const { agentId, wallet, walletConfig, walletKind, isEvmWallet, isSolanaWallet, cryptoCaps, onOpenView } = desk;
+  const { agentId, wallet, walletConfig, walletKind, isEvmWallet, isSolanaWallet, cryptoCaps, onOpenView, availableChains } = desk;
 
   const form = INTENT_FORMS[intent.id];
   const hasForm = Boolean(form);
@@ -106,7 +106,8 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
   const hasHive = hasForm && !isCredits;
 
   const [mode, setMode] = React.useState<"build" | "hive">(hasForm ? "build" : "hive");
-  const [values, setValues] = React.useState<Record<string, string>>(() => initFormValues(form));
+  // Chain fields are seeded/clamped to chains the user actually holds.
+  const [values, setValues] = React.useState<Record<string, string>>(() => initFormValues(form, availableChains));
   const [prompt, setPrompt] = React.useState("");
   const [prepared, setPrepared] = React.useState<CryptoPreparedAction | null>(null);
   const [preparedKey, setPreparedKey] = React.useState("");
@@ -219,7 +220,7 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
   return (
     <DetailShell intent={intent} walletShort={wallet.short} onBack={onBack} modeToggle={modeToggle}>
       {showBuild && form ? (
-        <IntentForm form={form} values={values} onChange={setField} />
+        <IntentForm form={form} values={values} onChange={setField} chainOpts={availableChains} />
       ) : (
         <>
           <span className="lbl">Describe it in plain language — the hive routes it through the right provider</span>
@@ -275,19 +276,21 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
 }
 
 // Structured Build form — controlled fields drive the real rail.
-function IntentForm({ form, values, onChange }: { form: IntentFormDef; values: Record<string, string>; onChange: (k: string, v: string) => void }) {
+function IntentForm({ form, values, onChange, chainOpts }: { form: IntentFormDef; values: Record<string, string>; onChange: (k: string, v: string) => void; chainOpts?: string[] }) {
   return (
     <div className="tk-form">
-      {form.fields.map((f) => <IntentField key={f.k} f={f} value={values[f.k] ?? ""} onChange={(v) => onChange(f.k, v)} />)}
+      {form.fields.map((f) => <IntentField key={f.k} f={f} value={values[f.k] ?? ""} onChange={(v) => onChange(f.k, v)} chainOpts={chainOpts} />)}
     </div>
   );
 }
 
-function IntentField({ f, value, onChange }: { f: IntentFieldDef; value: string; onChange: (v: string) => void }) {
+function IntentField({ f, value, onChange, chainOpts }: { f: IntentFieldDef; value: string; onChange: (v: string) => void; chainOpts?: string[] }) {
   const full = f.t === "text" || f.t === "address";
   let control: React.ReactNode;
   if (f.t === "select" || f.t === "chain") {
-    const opts = f.t === "chain" ? (f.opts || TR_CHAINS) : (f.opts || []);
+    // Chain fields offer ONLY chains the user holds (across personal + agent
+    // wallets); fall back to the static list only if none were resolved.
+    const opts = f.t === "chain" ? (f.opts || (chainOpts && chainOpts.length ? chainOpts : TR_CHAINS)) : (f.opts || []);
     control = <select className="fb-select" value={value} onChange={(e) => onChange(e.target.value)}>{opts.map((o) => <option key={o} value={o}>{o}</option>)}</select>;
   } else if (f.t === "amount") {
     control = (

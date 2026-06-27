@@ -104,7 +104,7 @@ export function TradeView() {
 
                   <div className="dk-grid">
                     <div className="tk">
-                      {isStock ? <StockTicket /> : <CryptoTicket />}
+                      {isStock ? <StockTicket /> : <CryptoTicket key={desk.network} />}
                       <CapabilityRail />
                     </div>
                     <div className="dk-col">

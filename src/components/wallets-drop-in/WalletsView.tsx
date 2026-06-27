@@ -4,6 +4,7 @@
 import React from "react";
 import "./wallets.css";
 import * as D from "./wallet-data";
+import { chainBadgeSrc } from "@/lib/utils/personal-wallet-grouping";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions } from "./WalletRewardsActions";
 import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
@@ -15,7 +16,7 @@ const {
   FR_MY_WALLETS, FR_WALLET_META,
   frWallets, frRunway, frWalletSummary, frTokenRollup, frRailCfg, frRailReady, frAgentRail,
   frRailAgents, frNetworkLabel, frShortAddr, frBarColor, frModelFor, frUsage,
-  frHoneySummary, frHoneyByAgent, frMyWalletsTotal, frMyRanked,
+  frHoneySummary, frHoneyByAgent, frMyWalletsTotal, frMyRanked, frBankrWallet,
 } = D;
 function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }) {
   const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" };
@@ -947,6 +948,33 @@ function AddrRow({ w, expanded }) {
     </div>
   );
 }
+function walletChainBadgeSrcs(w) {
+  const accounts = Array.isArray(w?.accounts) ? w.accounts : [];
+  const keys = [];
+  for (const account of accounts) {
+    const key = account?.chainKey;
+    if (key && key !== "other" && !keys.includes(key)) keys.push(key);
+  }
+  return keys.slice(0, 3).map((key) => chainBadgeSrc(key)).filter(Boolean);
+}
+function WalletChainBadges({ w }) {
+  const logos = walletChainBadgeSrcs(w);
+  if (!logos.length) return <span className="fb-tile" style={{ color: w.primary ? "var(--honey)" : "var(--fg-3)" }}><BIcon name={w.icon} size={18} /></span>;
+  return (
+    <span aria-hidden style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto" }}>
+      {logos.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          width={32}
+          height={32}
+          style={{ width: 32, height: 32, borderRadius: "50%", display: "block", marginLeft: i === 0 ? 0 : -11, position: "relative", zIndex: logos.length - i, boxShadow: "0 0 0 2px var(--panel)", background: "var(--panel)" }}
+        />
+      ))}
+    </span>
+  );
+}
 function MyWalletCard({ w, actions }) {
   const { top, total } = frMyRanked(w);
   const canSpend = w.canSpend !== false;
@@ -986,7 +1014,7 @@ function MyWalletCard({ w, actions }) {
   return (
     <div className="fw-mywallet">
       <div className="top">
-        <span className="fb-tile" style={{ color: w.primary ? "var(--honey)" : "var(--fg-3)" }}><BIcon name={w.icon} size={18} /></span>
+        <WalletChainBadges w={w} />
         <div style={{ flex: "1 1 auto", minWidth: 0 }}>
           {editingName ? (
             <div className="fw-rename">
@@ -1073,8 +1101,41 @@ function MyWalletCard({ w, actions }) {
     </div>
   );
 }
-function MyWallets({ actions }) {
+function BankrWalletCard({ bankr, onNavigate }) {
+  const [copied, setCopied] = React.useState(false);
+  const balance = Number(bankr?.balanceUsd) || 0;
+  const addr = String(bankr?.address || "");
+  const copy = () => { try { navigator.clipboard.writeText(addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
+  return (
+    <div className="fw-mywallet">
+      <div className="top">
+        <img src="/icons/runtimes/bankr.svg" alt="Bankr" height={38} style={{ height: 38, width: "auto", display: "block", flex: "0 0 auto", borderRadius: 9 }} />
+        <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+          <div className="nm">Bankr trading wallet</div>
+          <div className="sub">Managed · Base mainnet</div>
+        </div>
+        <Badge tone="honey">Bankr-managed</Badge>
+      </div>
+      <div>
+        <div className="bal">{frFmtUsdFull(balance)}</div>
+        <div className="balsub">Bankr-managed balance</div>
+      </div>
+      {addr ? (
+        <div className="addr">
+          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{frShortAddr(addr)}</span>
+          <button type="button" onClick={copy} aria-label="Copy address"><BIcon name={copied ? "check" : "copy"} size={13} /></button>
+        </div>
+      ) : null}
+      <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+        <BBtn variant="primary" sm style={{ flex: 1 }} onClick={() => onNavigate && onNavigate("trade")}><BIcon name="trade" size={14} /> Trade with Bankr</BBtn>
+      </div>
+    </div>
+  );
+}
+function MyWallets({ actions, onNavigate }) {
   const total = frMyWalletsTotal();
+  const bankr = frBankrWallet();
+  const walletCount = FR_MY_WALLETS.length + (bankr ? 1 : 0);
   const [add, setAdd] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(() => {
     try { return localStorage.getItem("fr-mywallets-collapsed") === "1"; } catch (e) { return false; }
@@ -1088,11 +1149,12 @@ function MyWallets({ actions }) {
           <span style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em", color: "var(--fg)" }}>My wallets</span>
           <span style={{ fontSize: 12, color: "var(--fg-3)" }}>your funding sources — top agents up from here</span>
         </div>
-        <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)" }}>{collapsed ? FR_MY_WALLETS.length + " wallets · " : ""}{frFmtUsdFull(total)} reserve</span>
+        <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)" }}>{collapsed ? walletCount + " wallets · " : ""}{frFmtUsdFull(total)} reserve</span>
       </button>
       {!collapsed ? (
         <div className="fw-myrow">
           {FR_MY_WALLETS.map((w) => <MyWalletCard key={w.id} w={w} actions={actions} />)}
+          {bankr ? <BankrWalletCard bankr={bankr} onNavigate={onNavigate} /> : null}
           <button type="button" className="fw-addcard" onClick={() => setAdd(true)}>
             <span className="ring"><BIcon name="plus" size={18} /></span>
             <span>Create or Import Wallet</span>
@@ -1103,7 +1165,7 @@ function MyWallets({ actions }) {
     </div>
   );
 }
-function AgentsPanel({ onConfigure, actions }) {
+function AgentsPanel({ onConfigure, actions, onNavigate }) {
   const [filter, setFilter] = React.useState("all");
   const [density, setDensity] = React.useState(() => {
     try { return localStorage.getItem(FW_DENSITY_KEY) || "compact"; } catch (e) { return "compact"; }
@@ -1115,7 +1177,7 @@ function AgentsPanel({ onConfigure, actions }) {
   const toggle = (id) => setExpanded((cur) => (cur === id ? null : id));
   return (
     <div className="fb-fade" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-      <MyWallets actions={actions} />
+      <MyWallets actions={actions} onNavigate={onNavigate} />
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
@@ -1507,7 +1569,7 @@ function FleetWallets({ theme, onToggleTheme, onNavigate, actions }) {
   else if (panel === "usage") body = <UsagePanel />;
   else if (panel === "honey") body = <HoneyPanel actions={actions} />;
   else if (panel === "rails") body = <RailsPanel actions={actions} selectedRailId={selectedRailId} onSelectedRailHandled={() => setSelectedRailId("")} />;
-  else body = <AgentsPanel onConfigure={openRailConfig} actions={actions} />;
+  else body = <AgentsPanel onConfigure={openRailConfig} actions={actions} onNavigate={onNavigate} />;
   return (
     <div className="fr-root" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)", position: "relative", overflow: "hidden", paddingLeft: FR_SHELF_W }}>
       <NavShelf active="wallet" theme={theme} onToggleTheme={onToggleTheme} onNavigate={onNavigate} />

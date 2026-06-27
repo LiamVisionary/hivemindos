@@ -98,6 +98,37 @@ cp "$SRC/run.sh" "$CLAW_HOME/run.sh" 2>/dev/null || true
 chmod +x "$CLAW_HOME/bin/claw" "$CLAW_HOME/run.sh" 2>/dev/null || true
 
 DATA_DIR="$CLAW_HOME/data"; mkdir -p "$DATA_DIR"
+
+# 2b) Self-heal the better-sqlite3 native addon ABI. The published bundle ships a
+#     better_sqlite3.node prebuild frozen at the release's Node ABI
+#     (NODE_MODULE_VERSION). The launcher below execs $NODE_BIN (system node),
+#     whose ABI drifts every time Homebrew/nvm bumps node — when it no longer
+#     matches the prebuild, dlopen fails (ERR_DLOPEN_FAILED at db/sqlite.ts) and
+#     the gateway-host supervisor hot-loops (restarting every few seconds, with a
+#     log that grows without bound). Detect the mismatch against the node this
+#     launcher will actually use, and rebuild the addon for it before first start.
+#     Idempotent: when the addon already loads, this is a no-op.
+if [ -d "$CLAW_HOME/backend/node_modules/better-sqlite3" ]; then
+  if ( cd "$CLAW_HOME/backend" && "$NODE_BIN" -e 'require("better-sqlite3")' ) >/dev/null 2>&1; then
+    : # native addon loads under the launcher's node — nothing to do
+  else
+    NODE_VER="$("$NODE_BIN" -v 2>/dev/null || echo unknown)"
+    echo "[claw] better-sqlite3 native addon is ABI-incompatible with node $NODE_VER — rebuilding it for this node" >&2
+    NPM_BIN="$(PATH="$(dirname "$NODE_BIN"):$PATH" command -v npm || true)"
+    REBUILD_LOG="${TMPDIR:-/tmp}/hivemindos-claw-better-sqlite3-rebuild.log"
+    if [ -z "$NPM_BIN" ]; then
+      echo "[claw] npm not found next to $NODE_BIN; cannot rebuild better-sqlite3. The mobile/voice gateway may crash-loop until the published bundle matches this node." >&2
+    elif ( cd "$CLAW_HOME/backend" \
+            && PATH="$(dirname "$NODE_BIN"):$PATH" npm rebuild better-sqlite3 ) >"$REBUILD_LOG" 2>&1 \
+         && ( cd "$CLAW_HOME/backend" && "$NODE_BIN" -e 'require("better-sqlite3")' ) >/dev/null 2>&1; then
+      echo "[claw] better-sqlite3 rebuilt successfully for node $NODE_VER"
+    else
+      echo "[claw] better-sqlite3 rebuild did NOT resolve the ABI mismatch (see $REBUILD_LOG)." >&2
+      echo "[claw] Install Xcode Command Line Tools + python3 (for a source build), or align node to the bundle's ABI. Until then the mobile/voice gateway will keep crash-looping; clear its log with: : > \"\$HOME/Library/Logs/hivemindos-claw-gateway.err.log\"" >&2
+    fi
+  fi
+fi
+
 SERVER_ENTRY="$CLAW_HOME/backend/src/server.ts"
 WORKER_ENTRY="$CLAW_HOME/backend/src/voice/callAgentWorker.ts"
 

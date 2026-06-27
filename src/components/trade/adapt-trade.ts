@@ -54,7 +54,9 @@ function activityDisplay(record: WalletActivityRecord): { kind: string; text: st
 }
 
 export function mapActivity(records: WalletActivityRecord[], now: number): DeskActivity[] {
-  return records.map((record) => {
+  // Platform fees are internal accounting, not a user trade action — keep them
+  // out of the activity feed (panel + full "View all").
+  return records.filter((record) => record.kind !== "platform-fee").map((record) => {
     const display = activityDisplay(record);
     // Guard the timestamp like the activity route does — a legacy record missing
     // createdAtMs must not render "NaNd" or corrupt the day sort/grouping.

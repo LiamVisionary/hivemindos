@@ -5,6 +5,7 @@ import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
 import {
+  coerceActingWalletSource,
   runQueenBeeAgentTurn,
   runQueenBeeVoiceTurn,
   submitQueenBeeVoiceTask,
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
       const result = await runQueenBeeAgentTurn(
         request.nextUrl.origin,
         String(body.message ?? ""),
+        coerceActingWalletSource(body.actingWallet),
       );
       return NextResponse.json({
         ok: true,
@@ -247,6 +249,7 @@ async function runQueenChatTurn(body: Record<string, unknown>) {
     ? [
         "The user typed this from the global bottom-of-screen hive input.",
         "Use the current dashboard context below to resolve references like this screen, this view, this section, current modal, selected task, selected agent, or selected wallet. Do not mention this context unless it helps answer or act.",
+        "If an acting wallet is listed below, treat it as the default wallet for any wallet, payment, trading, or fee request (send, swap, trade, buy/sell stock, collect fees, check balance) unless the user names a different one. For those actions, call ask_hivemind_agent so the capable HivemindOS agent runs them against that acting wallet.",
         screenContext,
       ].join("\n")
     : "";

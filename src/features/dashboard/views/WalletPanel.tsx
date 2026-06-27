@@ -8,6 +8,14 @@ import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
 import { hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import { exportAgentWalletSecret } from "./wallet-secret-export-actions";
+import { fetchBankrWallet, type BankrWalletInfo } from "./trade/trade-api";
+import {
+  buildGroupedPersonalWallets,
+  mergePersonalWalletList,
+  mergePersonalWalletSources,
+  nativeSymbolForWallet,
+  personalWalletAccountKey,
+} from "@/lib/utils/personal-wallet-grouping";
 
 const RAIL_ENABLED_KEY_PREFIX = "hivemindos.walletRail.enabled.";
 const USEPOD_ROUTING_MODE_KEY = "hivemindos.walletRail.usepod.routingMode";
@@ -304,17 +312,6 @@ function chainToNetwork(chain: string): string {
   return "eip155:8453";
 }
 
-function personalWalletNetworkLabel(network: string): string {
-  if (network.includes("solana")) return "Solana mainnet";
-  if (network.includes("84532")) return "Base Sepolia";
-  if (network.includes("eip155")) return "Base mainnet";
-  return network || "Base mainnet";
-}
-
-function nativeSymbolForWallet(network: string): string {
-  return network.includes("solana") ? "SOL" : "ETH";
-}
-
 function tokenSymbol(token: any): string {
   return String(token?.symbol || "").trim().toUpperCase();
 }
@@ -376,101 +373,6 @@ function parseUsePodTokenFromInput(value: string): string {
   }
 }
 
-function personalWalletHoldings(wallet: any): Array<[string, number]> {
-  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
-  const rows = tokens
-    .map((token: any): [string, number] => [String(token?.symbol || "").toUpperCase(), Number(token?.balance ?? 0) || 0])
-    .filter((row: [string, number]) => Boolean(row[0]) && row[1] > 0);
-  if (rows.length) return rows;
-  if (Number(wallet?.nativeBalance) > 0) return [[nativeSymbolForWallet(String(wallet?.network || "")), Number(wallet.nativeBalance)]];
-  if (Number(wallet?.currentBalanceUsd) > 0) return [["USDC", Number(wallet.currentBalanceUsd)]];
-  return [];
-}
-
-function personalWalletFromDashboardState(agentId: string, wallet: any): any | null {
-  if (!agentId.startsWith("user:")) return null;
-  const address = String(wallet?.walletAddress || wallet?.vaultAddress || wallet?.address || "").trim();
-  const network = String(wallet?.network || "").trim();
-  if (!address || !network) return null;
-  const custodyMode = wallet?.custodyMode === "watch" ? "watch" : "local";
-  return {
-    agentId,
-    id: agentId,
-    name: recoveryPhraseWalletName({ id: agentId, agentId, name: wallet?.name, network }, 1),
-    address,
-    network,
-    custodyMode,
-    importedFrom: isRecoveryPhrasePersonalWallet({ id: agentId, agentId }) ? "recovery-phrase" : custodyMode === "local" ? "private-key" : "watch",
-    currentBalanceUsd: Number(wallet?.currentBalanceUsd ?? wallet?.onchainBalanceUsd ?? 0) || 0,
-    nativeBalance: Number(wallet?.nativeBalance ?? 0) || 0,
-    tokens: Array.isArray(wallet?.tokens) ? wallet.tokens : [],
-    portfolioVersion: 0,
-    lastOnchainSyncAt: Number(wallet?.lastOnchainSyncAt ?? 0) || 0,
-    createdAt: Number(wallet?.updatedAt ?? 0) || 0,
-    updatedAt: Number(wallet?.updatedAt ?? 0) || 0,
-  };
-}
-
-function personalWalletAccountKey(wallet: any): string {
-  const network = String(wallet?.network || "").trim();
-  const address = String(wallet?.address || "").trim().toLowerCase();
-  return network && address ? `${network}:${address}` : "";
-}
-
-function preferredPersonalWalletRecordName(base: any, next: any): string {
-  const baseName = String(base?.name || "").trim();
-  const nextName = String(next?.name || "").trim();
-  if (nextName && !isGenericPersonalWalletName(nextName)) return nextName;
-  if (baseName && !isGenericPersonalWalletName(baseName)) return baseName;
-  return nextName || baseName;
-}
-
-function mergePersonalWalletRecord(base: any, next: any): any {
-  if (!base) return next;
-  const baseUpdated = Number(base.updatedAt ?? base.lastOnchainSyncAt ?? 0) || 0;
-  const nextUpdated = Number(next.updatedAt ?? next.lastOnchainSyncAt ?? 0) || 0;
-  const preferNextBalance = nextUpdated >= baseUpdated || Number(base.currentBalanceUsd ?? 0) <= 0;
-  const nextHasTokenRows = Array.isArray(next.tokens);
-  return {
-    ...base,
-    ...next,
-    id: base.id || next.id,
-    agentId: base.agentId || next.agentId,
-    name: preferredPersonalWalletRecordName(base, next),
-    custodyMode: base.custodyMode === "local" || next.custodyMode === "local" ? "local" : "watch",
-    importedFrom: base.importedFrom !== "watch" ? base.importedFrom : next.importedFrom,
-    currentBalanceUsd: preferNextBalance ? Math.max(0, Number(next.currentBalanceUsd ?? 0) || 0) : Number(base.currentBalanceUsd ?? 0) || Number(next.currentBalanceUsd ?? 0) || 0,
-    nativeBalance: preferNextBalance ? Math.max(0, Number(next.nativeBalance ?? 0) || 0) : Number(base.nativeBalance ?? 0) || Number(next.nativeBalance ?? 0) || 0,
-    tokens: preferNextBalance && nextHasTokenRows ? next.tokens : Array.isArray(base.tokens) ? base.tokens : [],
-    lastOnchainSyncAt: Math.max(Number(base.lastOnchainSyncAt ?? 0) || 0, Number(next.lastOnchainSyncAt ?? 0) || 0),
-    updatedAt: Math.max(baseUpdated, nextUpdated),
-  };
-}
-
-function mergePersonalWalletSources(wallets: any[] | null, walletsByAgent: Record<string, any> | undefined) {
-  const merged = new Map<string, any>();
-  const add = (wallet: any) => {
-    const key = personalWalletAccountKey(wallet);
-    if (!key) return;
-    merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
-  };
-  (Array.isArray(wallets) ? wallets : []).forEach(add);
-  Object.entries(walletsByAgent ?? {})
-    .map(([agentId, wallet]) => personalWalletFromDashboardState(agentId, wallet))
-    .filter(Boolean)
-    .forEach(add);
-  return [...merged.values()];
-}
-
-function mergePersonalWalletList(wallets: any[]) {
-  const merged = new Map<string, any>();
-  wallets.forEach((wallet) => {
-    const key = personalWalletAccountKey(wallet);
-    if (key) merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
-  });
-  return [...merged.values()];
-}
-
 function mergeWalletsByAgentWithFresh(base: Record<string, any> | undefined, fresh: Record<string, any>) {
   const next = { ...(base ?? {}) };
   for (const [agentId, wallet] of Object.entries(fresh)) {
@@ -486,85 +388,6 @@ function personalWalletNeedsTokenRefresh(wallet: any) {
   const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
   const lastSync = Number(wallet?.lastOnchainSyncAt ?? 0) || 0;
   return !tokens.length || Date.now() - lastSync > PERSONAL_WALLET_TOKEN_REFRESH_MS;
-}
-
-const RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
-
-function isRecoveryPhrasePersonalWallet(wallet: any): boolean {
-  const id = String(wallet?.id || wallet?.agentId || "");
-  return wallet?.importedFrom === "recovery-phrase" || RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX.test(id);
-}
-
-function personalWalletGroupKey(wallet: any, index: number): string {
-  const id = String(wallet?.id || wallet?.agentId || "");
-  if (isRecoveryPhrasePersonalWallet(wallet)) return id.replace(RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX, "") || id;
-  return id || `${String(wallet?.network || "wallet")}:${String(wallet?.address || index)}`;
-}
-
-function personalWalletChainRank(wallet: any): number {
-  const network = String(wallet?.network || "").toLowerCase();
-  if (network.includes("eip155")) return 0;
-  if (network.includes("solana")) return 1;
-  return 2;
-}
-
-function combinePersonalWalletHoldings(wallets: any[]): Array<[string, number]> {
-  const totals = new Map<string, number>();
-  wallets.flatMap(personalWalletHoldings).forEach(([symbol, amount]) => {
-    totals.set(symbol, (totals.get(symbol) ?? 0) + amount);
-  });
-  return [...totals.entries()].filter(([, amount]) => amount > 0);
-}
-
-function recoveryPhraseWalletName(wallet: any, count: number): string {
-  const fallback = `My ${personalWalletNetworkLabel(String(wallet?.network || ""))} wallet`;
-  const name = String(wallet?.name || fallback).trim();
-  return count > 1 && isRecoveryPhrasePersonalWallet(wallet)
-    ? name.replace(/\s+(?:Base|Solana)$/i, "") || "My wallet"
-    : name;
-}
-
-function isGenericPersonalWalletName(name: unknown): boolean {
-  const normalized = String(name || "").trim().toLowerCase();
-  return normalized === "my wallet"
-    || normalized === "my wallet base"
-    || normalized === "my wallet solana"
-    || normalized === "my base wallet"
-    || normalized === "my solana wallet";
-}
-
-function buildDropInPersonalWallets(wallets: any[] | null) {
-  if (!Array.isArray(wallets)) return [];
-  const groups = new Map<string, any[]>();
-  wallets.forEach((wallet, index) => {
-    const key = personalWalletGroupKey(wallet, index);
-    groups.set(key, [...(groups.get(key) ?? []), wallet]);
-  });
-  return [...groups.entries()].map(([groupId, group], index) => {
-    const sorted = [...group].sort((a, b) => personalWalletChainRank(a) - personalWalletChainRank(b));
-    const primary = sorted[0] ?? {};
-    const nameWallet = sorted.find((wallet) => !isGenericPersonalWalletName(recoveryPhraseWalletName(wallet, sorted.length))) ?? primary;
-    const addressRows = sorted
-      .map((wallet) => [personalWalletNetworkLabel(String(wallet.network || "")), wallet.address || ""] as [string, string])
-      .filter(([, address], rowIndex, rows) => address && rows.findIndex(([chain, existing]) => chain === rows[rowIndex][0] && existing === address) === rowIndex);
-    const spendWallet = sorted.find((wallet) => wallet.custodyMode === "local" && String(wallet.network || "").includes("eip155")) ?? sorted.find((wallet) => wallet.custodyMode === "local") ?? primary;
-    return {
-      id: groupId || primary.id || primary.agentId || `user-wallet-${index}`,
-      spendId: spendWallet.id || spendWallet.agentId || groupId,
-      name: recoveryPhraseWalletName(nameWallet, sorted.length),
-      icon: sorted.some((wallet) => wallet.custodyMode === "local") ? "shield" : "eye",
-      kind: sorted.some((wallet) => wallet.custodyMode === "local") ? "Local wallet" : "Watch wallet",
-      canSpend: sorted.some((wallet) => wallet.custodyMode === "local"),
-      network: addressRows.length > 1 ? `${addressRows.length} chains` : personalWalletNetworkLabel(String(primary.network || "")),
-      token: nativeSymbolForWallet(String(primary.network || "")),
-      addr: primary.address || addressRows[0]?.[1] || "",
-      primary: index === 0,
-      gas: Number(primary.nativeBalance ?? 0) || 0,
-      source: primary.importedFrom || primary.custodyMode || "wallet ledger",
-      holdings: combinePersonalWalletHoldings(sorted),
-      addresses: addressRows.length ? addressRows : [[personalWalletNetworkLabel(String(primary.network || "")), primary.address || ""]],
-    };
-  });
 }
 
 // Configured-wallet detection is shared with the Trade tab's wallet picker via
@@ -679,7 +502,7 @@ function buildRailRuntimeOverrides(props: any, agents: any[], railEnabledOverrid
   };
 }
 
-function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railEnabledOverrides: Record<string, boolean>, usePodRoutingMode: string, walletActivity: WalletActivityRecord[] | null, honeyLedger: HoneyLedgerRuntime | null) {
+function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railEnabledOverrides: Record<string, boolean>, usePodRoutingMode: string, walletActivity: WalletActivityRecord[] | null, honeyLedger: HoneyLedgerRuntime | null, bankrWallet: BankrWalletInfo | null) {
   const agents = Array.isArray(props?.displayAgents) ? props.displayAgents : [];
   const walletsByAgent = props?.walletsByAgent ?? {};
   const walletActionsByAgent = props?.walletActionsByAgent ?? {};
@@ -778,7 +601,10 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
       versionState: "current",
       agents: machineAgents,
     })),
-    myWallets: buildDropInPersonalWallets(personalWallets),
+    myWallets: buildGroupedPersonalWallets(personalWallets),
+    bankrWallet: bankrWallet?.configured
+      ? { configured: true, address: bankrWallet.address || "", balanceUsd: Number(bankrWallet.balanceUsd) || 0 }
+      : null,
     walletMeta,
     balances,
     rewards,
@@ -803,6 +629,7 @@ function WalletPanelComponent(props: any) {
   const [railEnabledOverrides, setRailEnabledOverrides] = useState<Record<string, boolean>>({});
   const [usePodRoutingMode, setUsePodRoutingMode] = useState("");
   const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
+  const [bankrWallet, setBankrWallet] = useState<BankrWalletInfo | null>(null);
   const [freshWalletsByAgent, setFreshWalletsByAgent] = useState<Record<string, any>>({});
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const refreshedPersonalWalletKeys = useRef<Set<string>>(new Set());
@@ -904,6 +731,7 @@ function WalletPanelComponent(props: any) {
     let ignore = false;
     void fetchWalletActivityRecords().then((records) => { if (!ignore) setWalletActivity(records); });
     void fetchHoneyLedger().then((ledger) => { if (!ignore) setHoneyLedger(ledger); });
+    void fetchBankrWallet().then((info) => { if (!ignore) setBankrWallet(info); });
     void refreshRuntimeUsageRef.current?.();
     return () => { ignore = true; };
   }, [activeView]);
@@ -951,7 +779,7 @@ function WalletPanelComponent(props: any) {
     walletsByAgent: effectiveWalletsByAgent,
   }), [displayAgents, effectiveWalletsByAgent, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletActionsByAgent]);
   const mergedPersonalWallets = useMemo(() => mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent), [effectiveWalletsByAgent, personalWallets]);
-  const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
+  const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger, bankrWallet), [runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger, bankrWallet]);
   const walletActions = useMemo(() => ({
     bankrRewards: { honeyStats: props.honeyStats, honeyLedgerEnabled: props.honeyLedgerEnabled },
     bankrRecipientAddress,

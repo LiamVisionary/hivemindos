@@ -3,8 +3,19 @@
 import { useEffect, useState } from "react";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
-import { WalletPickerCard } from "@/components/wallets-drop-in/WalletPickerCard";
+import { WalletPickerCard, GroupedWalletPickerCard } from "@/components/wallets-drop-in/WalletPickerCard";
 import styles from "./trade.module.css";
+
+/** One executable per-chain account inside a grouped user wallet (Base, Solana …). */
+export type PickableAccount = {
+  id: string;
+  chainKey: "base" | "solana" | "other";
+  network: string;
+  networkLabel: string;
+  address: string;
+  custodyMode: "local" | "watch";
+  wallet: AgentWalletConfig;
+};
 
 export type PickableWallet = {
   id: string;
@@ -16,6 +27,9 @@ export type PickableWallet = {
   statusOverride?: { tone: "ok" | "warn" | "danger" | "off" | "muted"; text: string };
   /** Balance is still being fetched — show a loading state instead of a stale $0. */
   pending?: boolean;
+  /** Per-chain accounts for a grouped user wallet. When present with >1 entry the
+   *  picker renders selectable chain badges; selection resolves to an account id. */
+  accounts?: PickableAccount[];
 };
 
 type WalletSelectModalProps = {
@@ -37,8 +51,15 @@ type WalletSelectModalProps = {
  * configured agent wallets. Mounted only while open (parent conditionally
  * renders it), so the selection seeds from the current acting wallet on mount.
  */
+/** A selectable id is either a pickable's own id, or — for a grouped user wallet
+ *  — one of its per-chain account ids. */
+function canSelectId(pickables: PickableWallet[], id: string): boolean {
+  if (!id) return false;
+  return pickables.some((p) => (p.accounts && p.accounts.length) ? p.accounts.some((a) => a.id === id) : p.id === id);
+}
+
 export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, onConfirm, onClose, title = "Select a wallet", subtitle = "Pick which wallet trades. Your own wallets come first, then configured agent wallets.", confirmLabel = "Use this wallet" }: WalletSelectModalProps) {
-  const [selectedId, setSelectedId] = useState(() => (pickables.some((p) => p.id === currentId) ? currentId : ""));
+  const [selectedId, setSelectedId] = useState(() => (canSelectId(pickables, currentId) ? currentId : ""));
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -56,17 +77,29 @@ export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, o
         <div className={styles.groupTitle}>{title}</div>
         <div className={styles.modalCards}>
           {list.map((p) => (
-            <WalletPickerCard
-              key={p.id}
-              name={p.name}
-              agentUsePod={p.usePod}
-              wallet={p.wallet}
-              survival={getSurvivalSnapshot(p.wallet)}
-              statusOverride={p.statusOverride}
-              pending={p.pending}
-              selected={selectedId === p.id}
-              onSelect={() => setSelectedId(p.id)}
-            />
+            p.accounts && p.accounts.length > 1 ? (
+              <GroupedWalletPickerCard
+                key={p.id}
+                name={p.name}
+                accounts={p.accounts}
+                statusOverride={p.statusOverride}
+                pending={p.pending}
+                selectedAccountId={selectedId}
+                onSelect={() => setSelectedId(p.id)}
+              />
+            ) : (
+              <WalletPickerCard
+                key={p.id}
+                name={p.name}
+                agentUsePod={p.usePod}
+                wallet={p.wallet}
+                survival={getSurvivalSnapshot(p.wallet)}
+                statusOverride={p.statusOverride}
+                pending={p.pending}
+                selected={selectedId === p.id}
+                onSelect={() => setSelectedId(p.id)}
+              />
+            )
           ))}
         </div>
       </div>

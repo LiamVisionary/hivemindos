@@ -724,6 +724,33 @@ function agentWalletFallback(profile: AgentProfile, wallet?: AgentWalletConfig) 
     : undefined;
 }
 
+/** The user's selected acting wallet (Trade desk / Wallets screen), relayed from
+ *  the app-wide hive chat so a "send/swap" with no explicit "from …" defaults to
+ *  it instead of the executing agent's own wallet. */
+type ActingWalletSourceHint = { agentId: string; address: string; network: string; kind: string };
+
+function coerceActingWalletSourceHint(value: unknown): ActingWalletSourceHint | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const agentId = typeof record.agentId === "string" ? record.agentId.trim() : "";
+  if (!agentId) return undefined;
+  return {
+    agentId,
+    address: typeof record.address === "string" ? record.address.trim() : "",
+    network: typeof record.network === "string" ? record.network.trim() : "",
+    kind: typeof record.kind === "string" ? record.kind.trim() : "",
+  };
+}
+
+/** Build a resolver fallback from the acting wallet. Bankr is managed (no local
+ *  signer), so it returns undefined for Bankr — those defer to the Bankr/LLM path. */
+function actingWalletFallback(source: ActingWalletSourceHint | undefined) {
+  if (source && source.kind !== "bankr" && source.address && source.agentId && source.network) {
+    return { agentId: source.agentId, address: source.address, network: source.network };
+  }
+  return undefined;
+}
+
 function findSendDraft(messages: IncomingMessage[]) {
   for (let index = messages.length - 2; index >= 0; index -= 1) {
     const message = messages[index];
@@ -741,13 +768,21 @@ async function maybePrepareNaturalSend(input: {
   profile: AgentProfile;
   messages: IncomingMessage[];
   wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
   runtimeSessionId: string;
 }): Promise<Response | null> {
   const parsed = parseSendRequest(messageText(latestUserMessage(input.messages)));
   if (!parsed) return null;
 
-  // USDC to a 0x recipient must come from an EVM wallet.
-  const resolved = await resolveWalletSource(parsed.source, agentWalletFallback(input.profile, input.wallet), "evm");
+  // A Bankr-managed acting wallet has no local signer; with no explicit "from …"
+  // bow out so the Bankr/LLM path owns the send instead of drafting a local one.
+  const explicitSource = Boolean(parsed.source.address || parsed.source.personal || parsed.source.chain);
+  if (input.actingWalletSource?.kind === "bankr" && !explicitSource) return null;
+
+  // USDC to a 0x recipient must come from an EVM wallet. With no explicit "from",
+  // default to the user's acting wallet, else this agent's own wallet.
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource(parsed.source, fallback, "evm");
   const error = "error" in resolved ? resolved.error : "";
   const validation = error || validateSend(parsed.amountUsd, "error" in resolved ? 0 : (resolved.isPersonal ? 0 : sendCapUsd(input.wallet)));
   const message = buildSendDraftMessage({
@@ -774,6 +809,7 @@ async function maybeExecuteConfirmedSend(input: {
   profile: AgentProfile;
   messages: IncomingMessage[];
   wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
   runtimeSessionId: string;
 }): Promise<Response | null> {
   const latestText = messageText(latestUserMessage(input.messages)).trim();
@@ -782,9 +818,11 @@ async function maybeExecuteConfirmedSend(input: {
   if (!draft) return null;
 
   // Re-resolve the source from the draft's own From address — never trust a
-  // client-supplied agentId. Personal wallets are gated to explicit confirmation
-  // here (this branch only runs on the SEND_USDC token) and never auto-send.
-  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, agentWalletFallback(input.profile, input.wallet), "evm");
+  // client-supplied agentId; resolveWalletSource looks the address up in the
+  // wallet vault. Personal wallets are gated to explicit confirmation here (this
+  // branch only runs on the SEND_USDC token) and never auto-send.
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, fallback, "evm");
   if ("error" in resolved) return privateTransferSse(`**Send failed**\n\n${resolved.error}`);
 
   const result = await executeGovernedUsdcSend({ agentId: resolved.agentId, toAddress: draft.recipient, amountUsd: draft.amountUsd });
@@ -831,15 +869,20 @@ async function maybePrepareNaturalSwap(input: {
   profile: AgentProfile;
   messages: IncomingMessage[];
   wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
   runtimeSessionId: string;
 }): Promise<Response | null> {
   const text = messageText(latestUserMessage(input.messages));
   const parsed = parseSwapRequest(text);
   if (!parsed) return null;
+  // A Bankr-managed acting wallet has no local signer — let Bankr own the swap.
+  if (input.actingWalletSource?.kind === "bankr"
+    && !parsed.source.address && !parsed.source.personal && !parsed.source.chain) return null;
   // Only the local DEX rail is handled here; generic swaps fall through to Bankr.
   if (!hasLocalSwapIntent(text, parsed.source)) return null;
 
-  const resolved = await resolveWalletSource(parsed.source, agentWalletFallback(input.profile, input.wallet), parsed.family);
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource(parsed.source, fallback, parsed.family);
   let message: string;
   let failed = true;
   if ("error" in resolved) {
@@ -881,6 +924,7 @@ async function maybeExecuteConfirmedSwap(input: {
   profile: AgentProfile;
   messages: IncomingMessage[];
   wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
   runtimeSessionId: string;
 }): Promise<Response | null> {
   const latestText = messageText(latestUserMessage(input.messages)).trim();
@@ -889,7 +933,8 @@ async function maybeExecuteConfirmedSwap(input: {
   if (!draft) return null;
 
   const family = draft.sourceAddress.startsWith("0x") ? "evm" : "solana";
-  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, agentWalletFallback(input.profile, input.wallet), family);
+  const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
+  const resolved = await resolveWalletSource({ address: draft.sourceAddress }, fallback, family);
   if ("error" in resolved) return privateTransferSse(`**Swap failed**\n\n${resolved.error}`);
   const stored = await getWalletSecret(resolved.agentId);
   if (!stored) return privateTransferSse("**Swap failed**\n\nNo signing key for that wallet.");
@@ -4946,6 +4991,7 @@ export async function POST(request: NextRequest) {
   let clientRunId = "";
   let agentMode: AgentMode = "act";
   let latencyMode = "";
+  let actingWalletSource: ActingWalletSourceHint | undefined;
   try {
     const body = (await request.json()) as {
       agent?: AgentProfile;
@@ -4960,6 +5006,7 @@ export async function POST(request: NextRequest) {
       chatStorageKey?: string;
       clientRunId?: string;
       latencyMode?: string;
+      actingWalletSource?: unknown;
     };
     if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
     profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
@@ -4977,6 +5024,7 @@ export async function POST(request: NextRequest) {
     chatStorageKey = typeof body.chatStorageKey === "string" ? body.chatStorageKey : "";
     clientRunId = typeof body.clientRunId === "string" ? body.clientRunId : "";
     latencyMode = typeof body.latencyMode === "string" ? body.latencyMode : "";
+    actingWalletSource = coerceActingWalletSourceHint(body.actingWalletSource);
   } catch {
     await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
     return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
@@ -5214,6 +5262,7 @@ export async function POST(request: NextRequest) {
     profile,
     messages,
     wallet,
+    actingWalletSource,
     runtimeSessionId,
   });
   if (confirmedSend) return confirmedSend;
@@ -5223,6 +5272,7 @@ export async function POST(request: NextRequest) {
     profile,
     messages,
     wallet,
+    actingWalletSource,
     runtimeSessionId,
   });
   if (naturalSend) return naturalSend;
@@ -5232,6 +5282,7 @@ export async function POST(request: NextRequest) {
     profile,
     messages,
     wallet,
+    actingWalletSource,
     runtimeSessionId,
   });
   if (confirmedSwap) return confirmedSwap;
@@ -5241,6 +5292,7 @@ export async function POST(request: NextRequest) {
     profile,
     messages,
     wallet,
+    actingWalletSource,
     runtimeSessionId,
   });
   if (naturalSwap) return naturalSwap;

@@ -32,6 +32,17 @@ export async function resolveWalletSource(
     if (fallback && fallback.address.toLowerCase() === hint.address.toLowerCase()) {
       return { agentId: fallback.agentId, address: fallback.address, network: fallback.network, isPersonal: false, label: "this agent's wallet" };
     }
+    // The acting wallet (or any other configured agent wallet) — resolve its
+    // agentId AUTHORITATIVELY from the wallet vault by address, never from a
+    // client-supplied id. This lets a confirmed send execute from the user's
+    // selected acting wallet even when it isn't this agent's own wallet.
+    const owned = (await listWalletInfos().catch(() => []))
+      .filter((info) => networkFamily(info.network) === requiredFamily)
+      .find((info) => info.address.toLowerCase() === hint.address!.toLowerCase());
+    if (owned) {
+      const isPersonal = owned.agentId.startsWith("user:");
+      return { agentId: owned.agentId, address: owned.address, network: owned.network, isPersonal, label: isPersonal ? "your personal wallet" : "the selected wallet" };
+    }
     return { error: `I don't recognize the wallet ${shortAddress(hint.address)}. Use one of your configured wallets, or omit "from …" to use this agent's wallet.` };
   }
 

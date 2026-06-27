@@ -9,7 +9,7 @@
    No demo numbers: the receive estimate + rate come from a live swap quote. */
 
 import React from "react";
-import { Badge, AssetMenu, ReviewLine } from "./primitives";
+import { Badge, AssetMenu, ChainMenu, ReviewLine } from "./primitives";
 import { BIcon } from "./icons";
 import { trUsd, trUsd2, trAmt } from "./format";
 import { useTradeDesk } from "./trade-context";
@@ -20,7 +20,14 @@ type Side = "buy" | "sell" | "swap";
 
 export function CryptoTicket() {
   const desk = useTradeDesk();
-  const { agentId, walletKind, wallet, swapTokens, cryptoBalances, swapMaxUsd, onOpenView, network } = desk;
+  const { agentId, walletKind, wallet, swapTokens, cryptoBalances, cryptoPortfolio, swapMaxUsd, onOpenView, network, walletChains, onSelectChain } = desk;
+  // Per-token held value (USD) keyed by symbol, shown in the token dropdown in
+  // the user's display currency. Sourced from the same portfolio the positions
+  // panel uses, so amounts and values agree.
+  const usdBySymbol = React.useMemo(
+    () => Object.fromEntries((cryptoPortfolio?.rows ?? []).map((row) => [row.sym, row.usd])),
+    [cryptoPortfolio],
+  );
   const useBankr = walletKind === "bankr";
   const tokens = swapTokens.length >= 2 ? swapTokens : ["USDC", "ETH"];
   const nonUsdc = tokens.filter((t) => t !== "USDC");
@@ -106,7 +113,6 @@ export function CryptoTicket() {
   }, [state]);
 
   const sell = side === "sell";
-  const networkLabel = network.includes("solana") ? "Solana" : "Base";
   const label = state === "signing" ? (useBankr ? "Routing…" : "Signing…")
     : state === "done" ? "Order filled"
     : !amtNum ? "Enter an amount"
@@ -121,7 +127,10 @@ export function CryptoTicket() {
               onClick={() => changeSide(s)}>{s[0].toUpperCase() + s.slice(1)}</button>
           ))}
         </div>
-        <Badge tone="live"><span className="fr-dot live" style={{ color: "var(--live)" }} /> {useBankr ? "Bankr" : "Live"} · {networkLabel}</Badge>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ChainMenu value={network} options={walletChains} onPick={onSelectChain} />
+          <Badge tone="live"><span className="fr-dot live" style={{ color: "var(--live)" }} /> {useBankr ? "Bankr" : "Live"}</Badge>
+        </div>
       </div>
 
       <div className="tk-leg">
@@ -129,7 +138,7 @@ export function CryptoTicket() {
         <div className="tk-legrow">
           <input className="tk-input" inputMode="decimal" placeholder="0" value={amt}
             onChange={(e) => { setAmt(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); setResult(null); setQuote(null); }} aria-label="Amount to pay" />
-          <AssetMenu value={pay} options={side === "buy" ? ["USDC"] : tokens} balances={cryptoBalances}
+          <AssetMenu value={pay} options={side === "buy" ? ["USDC"] : tokens} balances={cryptoBalances} values={usdBySymbol}
             onPick={(s) => { if (s !== recv) { setPay(s); setState("idle"); setQuote(null); } }} />
         </div>
         <div className="tk-usd">{quote ? `≈ ${trUsd2(payUsd)}` : quoting ? "pricing…" : "≈ —"}</div>
@@ -151,7 +160,7 @@ export function CryptoTicket() {
         <div className="lhead"><span>You receive</span><span className="bal">≈ market</span></div>
         <div className="tk-legrow">
           <input className="tk-input" readOnly value={recvAmt ? trAmt(recv, recvAmt) : ""} placeholder="0" aria-label="Estimated received" />
-          <AssetMenu value={recv} options={side === "sell" ? ["USDC"] : tokens} onPick={(s) => { if (s !== pay) { setRecv(s); setState("idle"); setQuote(null); } }} />
+          <AssetMenu value={recv} options={side === "sell" ? ["USDC"] : tokens} balances={cryptoBalances} values={usdBySymbol} onPick={(s) => { if (s !== pay) { setRecv(s); setState("idle"); setQuote(null); } }} />
         </div>
         <div className="tk-usd">{quote ? `≈ ${trUsd2(payUsd)}` : "≈ —"}</div>
       </div>

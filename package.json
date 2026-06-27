@@ -82,6 +82,7 @@
     "test:untrusted-context": "node scripts/test-untrusted-context.mjs",
     "test:system-health": "node scripts/test-system-health.mjs",
     "test:system-cockpit": "node scripts/test-system-cockpit-surfaces.mjs",
+    "test:acting-wallet-context": "node scripts/test-acting-wallet-context.mjs",
     "test:fusion-blind-compare": "node scripts/test-fusion-blind-compare.mjs",
     "test:honey-economics": "node scripts/simulate-honey-economics.mjs",
     "test:hive-staking": "node scripts/test-hive-staking.mjs",

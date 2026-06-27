@@ -22,7 +22,13 @@ const OTHER = "__other__";
 
 export function StockTicket() {
   const desk = useTradeDesk();
-  const { agentId, paper, setPaper, stockReadiness: r, onOpenView } = desk;
+  const { agentId, paper, setPaper, stockReadiness: r, stockPortfolio, onOpenView } = desk;
+  // Held value (USD) per ticker, shown in the ticker dropdown in the user's
+  // display currency (populated only for tickers the user actually holds).
+  const usdByTicker = React.useMemo(
+    () => Object.fromEntries((stockPortfolio?.rows ?? []).map((row) => [row.sym, row.usd])),
+    [stockPortfolio],
+  );
   const venue = r.venue;
   const isXstocks = venue === "xstocks";
   const tickerOptions = isXstocks ? (r.xstockTickers.length ? r.xstockTickers : ["AAPLx"]) : COMMON_ALPACA_TICKERS;
@@ -129,7 +135,7 @@ export function StockTicket() {
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 19, letterSpacing: "-0.01em" }}>{ticker || "—"}</div>
             {price ? <div className="tk-usd" style={{ marginTop: 3, color: price.chg < 0 ? "var(--danger)" : "var(--live)" }}>{trPct(price.chg)} today</div> : null}
           </div>
-          <AssetMenu value={choice === OTHER ? "Other" : choice} options={[...tickerOptions, ...(venue === "alpaca" ? [OTHER] : [])]}
+          <AssetMenu value={choice === OTHER ? "Other" : choice} options={[...tickerOptions, ...(venue === "alpaca" ? [OTHER] : [])]} values={usdByTicker}
             getName={(s) => (s === OTHER ? "Custom ticker" : s)} onPick={(s) => { setChoice(s); setState("idle"); }} stock />
         </div>
         {choice === OTHER ? (

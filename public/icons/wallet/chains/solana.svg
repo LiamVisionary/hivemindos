@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-  <rect width="24" height="24" rx="12" fill="url(#bg)"/>
-  <path fill="#fff" d="M17.7 8.36a.54.54 0 0 1-.36.14H4.52c-.46 0-.69-.52-.37-.82l2.1-2.03a.54.54 0 0 1 .37-.15h12.86c.46 0 .69.52.37.83L17.7 8.36Zm0 10a.54.54 0 0 1-.36.14H4.52c-.46 0-.69-.52-.37-.82l2.1-2.03a.54.54 0 0 1 .37-.15h12.86c.46 0 .69.52.37.83l-2.15 2.03Zm0-7.72a.54.54 0 0 0-.36-.14H4.52c-.46 0-.69.52-.37.82l2.1 2.03c.1.1.23.15.37.15h12.86c.46 0 .69-.52.37-.82l-2.15-2.04Z"/>
+  <rect width="24" height="24" rx="12" fill="#fff"/>
+  <path fill="url(#solg)" d="M17.7 8.36a.54.54 0 0 1-.36.14H4.52c-.46 0-.69-.52-.37-.82l2.1-2.03a.54.54 0 0 1 .37-.15h12.86c.46 0 .69.52.37.83L17.7 8.36Zm0 10a.54.54 0 0 1-.36.14H4.52c-.46 0-.69-.52-.37-.82l2.1-2.03a.54.54 0 0 1 .37-.15h12.86c.46 0 .69.52.37.83l-2.15 2.03Zm0-7.72a.54.54 0 0 0-.36-.14H4.52c-.46 0-.69.52-.37.82l2.1 2.03c.1.1.23.15.37.15h12.86c.46 0 .69-.52.37-.82l-2.15-2.04Z"/>
   <defs>
-    <linearGradient id="bg" x1="4" x2="20.4" y1="50.26" y2="50.11" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#599DB0"/>
-      <stop offset="1" stop-color="#47F8C3"/>
+    <linearGradient id="solg" x1="5" x2="19" y1="19" y2="5" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9945FF"/>
+      <stop offset="1" stop-color="#14F195"/>
     </linearGradient>
   </defs>
 </svg>

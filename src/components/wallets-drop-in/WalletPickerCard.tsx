@@ -5,6 +5,7 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import { getDisplayWalletBalanceUsd, getUsePodBalanceUsd } from "@/lib/utils/agent-wallet";
+import { chainBadgeSrc, chainShortLabel, type PersonalChainKey } from "@/lib/utils/personal-wallet-grouping";
 
 import { frFmtUsdFull } from "./wallet-data";
 import "./wallets.css";
@@ -138,6 +139,82 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
 
       <span className="fw-alloc" aria-hidden="true">
         {showBar ? <i style={{ width: "100%", background: USDC_BAR_COLOR }} /> : null}
+      </span>
+    </button>
+  );
+}
+
+type GroupedPickerAccount = {
+  id: string;
+  chainKey: PersonalChainKey;
+  network: string;
+  networkLabel: string;
+  address: string;
+  custodyMode: "local" | "watch";
+  wallet: AgentWalletConfig;
+};
+
+export type GroupedWalletPickerCardProps = {
+  /** Wallet display name (one card per seed). */
+  name: string;
+  /** Per-chain accounts; shown as display-only chain tags. */
+  accounts: GroupedPickerAccount[];
+  statusOverride?: { tone: WalletPickerChipTone; text: string };
+  pending?: boolean;
+  /** Currently-selected account id (any of this wallet's accounts → selected). */
+  selectedAccountId?: string;
+  /** Select this wallet (the chain is chosen later, in the trade action view). */
+  onSelect: () => void;
+};
+
+/**
+ * Grouped user wallet tile: ONE card per seed (matching the Wallets screen),
+ * showing the wallet's chains as display-only tags. Selecting the card selects
+ * the wallet; the chain for a trade is chosen in the action view (swap/buy/…).
+ */
+export function GroupedWalletPickerCard({ name, accounts, statusOverride, pending, selectedAccountId, onSelect }: GroupedWalletPickerCardProps) {
+  const total = accounts.reduce((sum, account) => sum + (Number(account.wallet.currentBalanceUsd) || 0), 0);
+  const status = statusOverride ?? { tone: "ok" as WalletPickerChipTone, text: "Local wallet" };
+  const selected = accounts.some((account) => account.id === selectedAccountId);
+  const showLoading = Boolean(pending) && total <= 0;
+
+  return (
+    <button
+      type="button"
+      className={`fw-cc ${styles.card}`}
+      data-selected={selected ? "true" : undefined}
+      aria-pressed={selected}
+      aria-label={`Select ${name} wallet`}
+      onClick={onSelect}
+    >
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+          <span className="fw-pdot" style={{ background: TONE_DOT_COLOR[status.tone] }} aria-hidden="true" />
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+            <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{accounts.length} chains</span>
+          </span>
+        </span>
+        {selected ? <span className={styles.check} aria-hidden="true"><Check width={12} height={12} strokeWidth={3} /></span> : null}
+      </span>
+
+      <span style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10 }}>
+        {showLoading
+          ? <span className={`fw-cc-bal ${styles.balanceSkeleton}`} aria-label="Loading balance" />
+          : <span className="fw-cc-bal">{frFmtUsdFull(Math.max(0, total))}</span>}
+        <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
+      </span>
+
+      <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {accounts.map((account) => {
+          const logo = chainBadgeSrc(account.chainKey);
+          return (
+            <span key={account.id} className={styles.chainTag}>
+              {logo ? <img src={logo} alt="" width={15} height={15} style={{ borderRadius: "50%", display: "block" }} /> : null}
+              <span>{chainShortLabel(account.chainKey, account.networkLabel)}</span>
+            </span>
+          );
+        })}
       </span>
     </button>
   );
