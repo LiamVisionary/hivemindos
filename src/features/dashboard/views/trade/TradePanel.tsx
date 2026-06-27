@@ -69,6 +69,19 @@ const EMPTY_READINESS: DeskStockReadiness = {
   account: null, xstockTickers: [],
 };
 
+// The acting-wallet choice persists across view switches / reloads — the panel
+// unmounts when you leave the Trade view, so without this it reset every time.
+// Mirrors SwarmPanel's per-feature wallet memory.
+const LAST_TRADE_WALLET_KEY = "hivemindos.trade.actingWalletId.v1";
+function readLastTradeWalletId(): string {
+  if (typeof window === "undefined") return "";
+  try { return window.localStorage.getItem(LAST_TRADE_WALLET_KEY) || ""; } catch { return ""; }
+}
+function writeLastTradeWalletId(id: string) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(LAST_TRADE_WALLET_KEY, id); } catch { /* quota — best effort */ }
+}
+
 type TradePanelProps = {
   displayAgents?: TradeAgent[];
   walletsByAgent?: Record<string, unknown>;
@@ -83,7 +96,7 @@ type TradePanelProps = {
 export function TradePanel(props: TradePanelProps) {
   const agents = useMemo(() => (Array.isArray(props.displayAgents) ? props.displayAgents : []), [props.displayAgents]);
   const vaultPath = props.sharedVault?.enabled ? String(props.sharedVault.vaultPath || "").trim() : "";
-  const [actingId, setActingId] = useState("");
+  const [actingId, setActingId] = useState<string>(() => readLastTradeWalletId());
   const [pickerOpen, setPickerOpen] = useState(false);
   const [personalWallets, setPersonalWallets] = useState<Array<Record<string, unknown>>>([]);
   const [personalBalancesLoading, setPersonalBalancesLoading] = useState(true);
@@ -165,6 +178,7 @@ export function TradePanel(props: TradePanelProps) {
 
   const pickWallet = (id: string) => {
     setActingId(id);
+    writeLastTradeWalletId(id);
     if (pickables.find((p) => p.id === id)?.kind === "agent") props.setSelectedAgentId?.(id);
   };
 
