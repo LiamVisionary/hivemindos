@@ -131,6 +131,38 @@ export function buildPrepareParams(intentId: string, v: Record<string, string>):
   }
 }
 
+// ── recipient address format validation ─────────────────────────────────────
+const EVM_ADDR = /^0x[a-fA-F0-9]{40}$/;
+const NAME_SERVICE = /\.(eth|sol|base|box|cb\.id)$/i; // ENS / SNS / Basenames etc.
+const SOL_ADDR = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+const evmOk = (to: string) => EVM_ADDR.test(to) || NAME_SERVICE.test(to);
+const solOk = (to: string) => SOL_ADDR.test(to) || NAME_SERVICE.test(to);
+
+/**
+ * "" when the recipient is valid for where it's going, else a fix message.
+ * send → must match the acting wallet's network; private-transfer → EVM (Veil);
+ * crosschain-payment → must match the chosen recipient chain (rchain).
+ */
+export function recipientError(intentId: string, v: Record<string, string>, ctx: { isEvmWallet: boolean; isSolanaWallet: boolean }): string {
+  const to = (v.to || "").trim();
+  if (!to) return ""; // emptiness is handled by isFormValid
+  if (intentId === "send") {
+    if (ctx.isSolanaWallet) return solOk(to) ? "" : "Enter a valid Solana address — this is a Solana wallet.";
+    if (ctx.isEvmWallet) return evmOk(to) ? "" : "Enter a valid 0x… address (or ENS) — this is an EVM wallet.";
+    return "";
+  }
+  if (intentId === "private-transfer") {
+    return evmOk(to) ? "" : "Private transfers settle to an EVM 0x… recipient.";
+  }
+  if (intentId === "crosschain-payment") {
+    return (v.rchain || "").trim() === "Solana"
+      ? (solOk(to) ? "" : "Enter a valid Solana address for the recipient chain.")
+      : (evmOk(to) ? "" : "Enter a valid 0x… address for the recipient chain.");
+  }
+  return "";
+}
+
 /** Whether a Build form has enough to Review. */
 export function isFormValid(intentId: string, v: Record<string, string>): boolean {
   const has = (k: string) => Boolean(v[k]?.trim());

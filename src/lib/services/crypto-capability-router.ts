@@ -258,6 +258,13 @@ export async function prepareCryptoAction(input: CryptoCapabilityRouterInput & {
     requestBody,
     confirmation,
   });
+  // Non-breaking safety: flag a recipient that doesn't match the wallet network
+  // on a direct send / private transfer (the execute path also rejects it) so a
+  // wrong-network paste surfaces in the clear-signing review, not at confirm.
+  if ((intent === "send" || intent === "private-transfer") && input.recipientAddress && review) {
+    const mismatch = recipientNetworkMismatch(input.recipientAddress, input.wallet?.network);
+    if (mismatch) review.risks = [...(review.risks ?? []), { level: "warning", code: "recipient-network-mismatch", message: mismatch }];
+  }
   const platformFee = await preparedPlatformFee(intent, input);
   return {
     intent,
@@ -659,6 +666,21 @@ function promptForCrosschainIntent(
     input.toChain ? `to ${input.toChain}` : undefined,
     input.recipientAddress ? `recipient ${input.recipientAddress}` : undefined,
   ].filter(Boolean).join(" ");
+}
+
+// "" when the recipient looks valid for the wallet network, else a warning. Name
+// services (ENS/SNS/Basenames) are allowed through — they resolve server-side.
+function recipientNetworkMismatch(addr: string, network?: string): string {
+  const to = (addr || "").trim();
+  if (!to || !network) return "";
+  if (/\.(eth|sol|base|box|cb\.id)$/i.test(to)) return "";
+  const isEvm = network.startsWith("eip155:");
+  const isSol = network.includes("solana");
+  const evmOk = /^0x[a-fA-F0-9]{40}$/.test(to);
+  const solOk = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(to);
+  if (isEvm && !evmOk) return `Recipient ${to} is not a valid address for ${network} — confirm before signing.`;
+  if (isSol && !solOk) return `Recipient ${to} is not a valid address for ${network} — confirm before signing.`;
+  return "";
 }
 
 function buildPreparedActionReview(input: {

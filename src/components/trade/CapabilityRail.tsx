@@ -19,7 +19,7 @@ import { useTradeDesk } from "./trade-context";
 import { prepareCapability, executeCapability, type RailResult } from "./rails";
 import {
   INTENT_FORMS, TR_CHAINS, type IntentFieldDef, type IntentFormDef,
-  initFormValues, buildPrepareParams, isFormValid,
+  initFormValues, buildPrepareParams, isFormValid, recipientError,
 } from "./intent-forms";
 import { CRYPTO_INTENTS, CRYPTO_INTENT_GROUPS, type CryptoIntentDef } from "@/features/dashboard/views/trade/trade-intents";
 import type { CryptoCapabilityMap, CryptoPreparedAction } from "@/features/dashboard/views/trade/trade-api";
@@ -96,7 +96,7 @@ export function CapabilityRail() {
 // ── detail ───────────────────────────────────────────────────────────────────
 function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack: () => void }) {
   const desk = useTradeDesk();
-  const { agentId, wallet, walletConfig, walletKind, isEvmWallet, cryptoCaps, onOpenView } = desk;
+  const { agentId, wallet, walletConfig, walletKind, isEvmWallet, isSolanaWallet, cryptoCaps, onOpenView } = desk;
 
   const form = INTENT_FORMS[intent.id];
   const hasForm = Boolean(form);
@@ -128,7 +128,9 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
   const showBuild = hasForm && mode === "build";
   const inputKey = [intent.id, mode, JSON.stringify(values), prompt].join("|");
   const isPrepared = Boolean(prepared) && preparedKey === inputKey;
-  const inputValid = showBuild ? isFormValid(intent.id, values) : prompt.trim().length > 0;
+  // Block a recipient that doesn't match where it's going (wrong-network paste).
+  const recipErr = showBuild ? recipientError(intent.id, values, { isEvmWallet, isSolanaWallet }) : "";
+  const inputValid = (showBuild ? isFormValid(intent.id, values) : prompt.trim().length > 0) && !recipErr;
 
   const paramsForReview = () => (showBuild ? buildPrepareParams(intent.id, values) : { prompt: prompt.trim() });
 
@@ -226,6 +228,8 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
       )}
 
       {fundingNote ? <p style={{ marginTop: 10, fontSize: 11.5, color: "var(--fg-3)", lineHeight: 1.5 }}>{fundingNote}</p> : null}
+
+      {recipErr ? <p style={{ marginTop: 8, fontSize: 11.5, color: "var(--danger)", lineHeight: 1.5 }}>{recipErr}</p> : null}
 
       {!r.configured && r.missing.length ? (
         <p style={{ marginTop: 10, fontSize: 11.5, color: "var(--honey)" }}>
