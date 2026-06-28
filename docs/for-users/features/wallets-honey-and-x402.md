@@ -29,8 +29,8 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Local Honey ledger/cache is in `src/lib/services/wallet/honey-ledger.ts`.
 - Wallet-vault backup and restore logic is in `src/lib/services/wallet/wallet-vault-backup.ts`.
 - MoneyClaw account checks live in `src/lib/services/wallet/moneyclaw-client.ts`.
-- Official Honey ledger worker lives in `workers/honey-ledger`.
-- Reward compute gateway lives in `workers/compute-gateway`.
+- Official Honey ledger source lives in HivemindOS-controlled hosted-service infrastructure.
+- Reward compute gateway source lives in HivemindOS-controlled hosted-service infrastructure.
 - Managed-agent billing lives in `src/lib/services/managed-agent-billing.ts` and `/api/managed-agent/billing`.
 
 ## What Wallets Can Do
@@ -69,7 +69,7 @@ The no-API-key flow is:
 4. Managed compute uses HivemindOS-held provider keys server-side.
 5. The trusted runtime submits a signed debit to the Honey ledger based on verified usage.
 
-The official ledger rejects browser-spoofed credits. `/managed-billing/events` in `workers/honey-ledger` requires either a HONEY billing HMAC signature or the operator admin token, dedupes idempotency keys, and refuses debits when the managed HONEY balance is insufficient.
+The official ledger rejects browser-spoofed credits. Its `/managed-billing/events` endpoint requires either a HONEY billing HMAC signature or the operator admin token, dedupes idempotency keys, and refuses debits when the managed HONEY balance is insufficient.
 
 ## Paid Agent x402 Gateway
 
@@ -89,7 +89,7 @@ The packaged default is the official Cloudflare Worker at `https://hivemindos-pa
 
 The official client route requires a public HTTPS base URL by default and forwards only safe request metadata plus x402 payment/idempotency headers. It does not contain the official `payTo`, facilitator credentials, model provider keys, or HONEY/HIVE entitlement logic.
 
-The fastest official hosting path is the Cloudflare Worker in `workers/paid-agent-gateway`. It exposes the same hosted seller route (`/api/paid-agents/<slug>/chat/completions`), verifies and settles x402 at the edge, writes D1 receipt metadata, and forwards paid OpenAI-compatible chat bodies to a trusted upstream runtime URL. The downloaded app should point `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL` at that Worker URL.
+The official hosted paid-agent gateway exposes the same hosted seller route (`/api/paid-agents/<slug>/chat/completions`), verifies and settles x402 at the edge, writes receipt metadata, and forwards paid OpenAI-compatible chat bodies to a trusted upstream runtime URL. The downloaded app should point `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL` at that hosted URL.
 
 Base Builder Code attribution is optional for x402 calls on Base mainnet. Set a Builder Code only on the authoritative caller or seller infrastructure that should receive attribution:
 
@@ -338,10 +338,10 @@ Local observation:
 
 Trusted reward compute:
 
-- `workers/compute-gateway` exposes an OpenAI-compatible endpoint.
+- The official compute gateway exposes an OpenAI-compatible endpoint.
 - Requests are forwarded through Bankr/OpenRouter-compatible routing.
 - Provider usage is read server-side.
-- Receipts are signed and submitted to `workers/honey-ledger`.
+- Receipts are signed and submitted to the official Honey ledger.
 
 Claiming:
 
@@ -373,5 +373,5 @@ Claiming:
 - `src/app/api/runtime-usage/route.ts`
 - `src/features/dashboard/hooks/use-wallet-files-controller.tsx`
 - `src/components/wallet/**`
-- `workers/honey-ledger`
-- `workers/compute-gateway`
+- Official hosted Honey ledger endpoint
+- Official hosted compute gateway endpoint

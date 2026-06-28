@@ -169,7 +169,7 @@ One machine can work across many projects. Each project can link to its own GitL
 
 ## Repository Overview
 
-The app is a Next.js 16 / React 19 project using the App Router. The primary dashboard lives in `src/features/dashboard`, route handlers live under `src/app/api`, runtime-specific logic lives under `src/lib/services`, native desktop adapters live under `src/lib/native` and `src-tauri`, and optional Cloudflare Workers live under `workers/`.
+The app is a Next.js 16 / React 19 project using the App Router. The primary dashboard lives in `src/features/dashboard`, route handlers live under `src/app/api`, runtime-specific logic lives under `src/lib/services`, native desktop adapters live under `src/lib/native` and `src-tauri`, and the hosted-service source boundary is documented under `workers/`.
 
 Core commands:
 
@@ -215,4 +215,4 @@ This documentation reflects a code audit of the repository on 2026-06-01 WITA. T
 - Fleet/app discovery: `src/app/api/fleet/**`, `src/features/dashboard/views/MyAppsPanel.tsx`, `src/components/fleet/**`
 - Scheduler, Swarm, AEON, Phone, and Integrations views: `src/features/dashboard/views/**`, `src/components/scheduler/**`, `src/components/swarm/**`
 - Collector and setup scripts: `scripts/agent-telemetry-collector.mjs`, `setup.sh`, `uninstall.sh`
-- Workers: `workers/honey-ledger`, `workers/compute-gateway`, `workers/paid-agent-gateway`
+- Hosted service boundary: `workers/README.md`
