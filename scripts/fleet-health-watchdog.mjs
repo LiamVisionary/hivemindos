@@ -2,11 +2,13 @@
 // Fleet health watchdog.
 //
 // From this machine, probe every connected HivemindOS machine's agent collector
-// and force-restart it via the hive-native linkd shell when it's FUNCTIONALLY
-// down — covering the failure launchd KeepAlive / systemd Restart cannot: the
-// daemon is alive but broken (e.g. `spawn EBADF`, a wedged event loop), or a
-// prolonged outage. No SSH, and no pinned tailnet IPs (machines are rediscovered
-// each cycle, so addresses can change freely).
+// AND its Universal TTS server, and force-restart whichever is FUNCTIONALLY down
+// via the hive-native linkd shell — covering the failure launchd KeepAlive /
+// systemd Restart cannot: the daemon is alive but broken (e.g. `spawn EBADF`, a
+// wedged event loop), or a prolonged outage. Collector and TTS are tracked
+// separately, so a TTS flap restarts only the TTS daemon (and vice versa). No
+// SSH, and no pinned tailnet IPs (machines are rediscovered each cycle, so
+// addresses can change freely).
 //
 // Liveness uses the collector's /health; a DEEP probe (an actual /chat dispatch)
 // runs every Nth cycle to catch the alive-but-can't-spawn case. After
@@ -36,6 +38,7 @@ const RUN_ONCE = process.env.FLEET_WATCHDOG_ONCE === "1";
 
 const STATE_DIR = join(homedir(), ".hivemindos");
 const MACHINES_CACHE = join(STATE_DIR, "fleet-health-watchdog-machines.json");
+const TTS_CACHE = join(STATE_DIR, "fleet-health-watchdog-tts.json");
 const LOG_PATH = join(STATE_DIR, "fleet-health-watchdog.log");
 const SHELL_SESSION = "fleet-health-watchdog";
 
@@ -96,6 +99,53 @@ async function discoverMachines() {
   }
 }
 
+// TTS apps live behind each machine's linkd at /app-proxy/8799. Discover the
+// remote ones (their `machineBase` is the linkd base — strip the /app-proxy
+// suffix — used to kickstart the TTS service on the owning machine).
+async function discoverTtsApps() {
+  for (const port of APP_PORTS) {
+    try {
+      const { ok, data } = await fetchJson(`http://127.0.0.1:${port}/api/fleet/apps?fast=1`, {}, 8_000);
+      if (!ok) continue;
+      const apps = (data.apps || [])
+        .filter((a) => Number(a.port) === 8799 || /universal.?tts/i.test(String(a.name || "")))
+        .map((a) => {
+          const apiBaseUrl = String(a.apiBaseUrl || "").trim().replace(/\/+$/, "");
+          return { apiBaseUrl, machineBase: apiBaseUrl.replace(/\/app-proxy\/.*$/, ""), machineName: a.machineName || a.name || "TTS" };
+        })
+        .filter((a) => a.apiBaseUrl && a.machineBase && !/^https?:\/\/(127\.0\.0\.1|localhost)/i.test(a.machineBase));
+      if (apps.length) {
+        await writeFile(TTS_CACHE, JSON.stringify(apps)).catch(() => {});
+        return apps;
+      }
+    } catch {
+      // try the next port
+    }
+  }
+  try {
+    return JSON.parse(await readFile(TTS_CACHE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+// TTS liveness via /v1/models: it's reachable + populated when the app and its
+// linkd proxy are up, and fails (proxy EOF / connection refused) when the stack
+// is down — the flapping/down case that broke voice. (/v1/voices 307-redirects
+// through the app-proxy and so is unreliable as a probe; a deep synth probe is a
+// follow-up, kept out of v1 to avoid cold-model-load false positives.)
+async function probeTts(apiBaseUrl) {
+  try {
+    const res = await fetchJson(`${apiBaseUrl}/v1/models`, {}, 10_000);
+    if (!res.ok) return { healthy: false, reason: `models HTTP ${res.status} ${String(res.text).slice(0, 50)}` };
+    const models = res.data?.data || res.data?.models || [];
+    if (!Array.isArray(models) || models.length === 0) return { healthy: false, reason: "models empty" };
+  } catch (error) {
+    return { healthy: false, reason: `models unreachable: ${error.message}` };
+  }
+  return { healthy: true };
+}
+
 async function probeCollector(collectorUrl, deep) {
   try {
     const health = await fetchJson(`${collectorUrl}/health`, {}, 8_000);
@@ -121,30 +171,34 @@ async function probeCollector(collectorUrl, deep) {
   return { healthy: true };
 }
 
-function remediationCommand(os) {
+function remediationCommand(os, kind) {
+  // Specific label patterns so we kickstart the right daemon and nothing else
+  // (e.g. "universal-tts", NOT the unrelated mlx image sidecar).
+  const pattern = kind === "tts" ? "universal.?tts|mlx.?audio" : "telemetry|collector";
+  const label = kind === "tts" ? "TTS" : "collector";
   if (os.includes("linux")) {
     return [
       "kicked=0",
-      "for U in $(systemctl --user list-units --type=service --no-legend 2>/dev/null | grep -iE 'telemetry|collector' | awk '{print $1}'); do systemctl --user restart \"$U\" 2>/dev/null && kicked=$((kicked+1)); done",
-      "for S in $(systemctl list-units --type=service --no-legend 2>/dev/null | grep -iE 'telemetry|collector' | awk '{print $1}'); do sudo -n systemctl restart \"$S\" 2>/dev/null && kicked=$((kicked+1)); done",
-      'echo "watchdog restarted $kicked collector service(s)"',
+      `for U in $(systemctl --user list-units --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do systemctl --user restart "$U" 2>/dev/null && kicked=$((kicked+1)); done`,
+      `for S in $(systemctl list-units --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do sudo -n systemctl restart "$S" 2>/dev/null && kicked=$((kicked+1)); done`,
+      `echo "watchdog restarted $kicked ${label} service(s)"`,
     ].join("; ");
   }
-  // macOS: kickstart any loaded telemetry/collector LaunchAgent (machine-agnostic label match).
+  // macOS: kickstart any loaded matching LaunchAgent (machine-agnostic label match).
   return [
     "U=$(id -u); kicked=0",
-    "for L in $(launchctl list 2>/dev/null | awk 'NR>1 && tolower($3) ~ /telemetry|collector/ {print $3}'); do launchctl kickstart -k \"gui/$U/$L\" 2>/dev/null && kicked=$((kicked+1)); done",
-    'echo "watchdog kicked $kicked collector service(s)"',
+    `for L in $(launchctl list 2>/dev/null | awk 'NR>1 && tolower($3) ~ /${pattern}/ {print $3}'); do launchctl kickstart -k "gui/$U/$L" 2>/dev/null && kicked=$((kicked+1)); done`,
+    `echo "watchdog kicked $kicked ${label} service(s)"`,
   ].join("; ");
 }
 
-// Remediate via the linkd shell directly on the target (same path /api/fleet/shell
-// uses): POST a kickstart command to the machine's own linkd `/_hivemind/shell`.
-async function remediate(collectorUrl, os) {
+// Remediate via the linkd shell directly on the owning machine (same path
+// /api/fleet/shell uses): POST a kickstart command to its linkd `/_hivemind/shell`.
+async function remediate(machineBase, os, kind) {
   try {
     const { ok, status } = await fetchJson(
-      `${collectorUrl}/_hivemind/shell/sessions/${SHELL_SESSION}/command`,
-      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command: remediationCommand(os) }) },
+      `${machineBase}/_hivemind/shell/sessions/${SHELL_SESSION}/command`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command: remediationCommand(os, kind) }) },
       15_000,
     );
     if (!ok) await log(`  remediation shell returned HTTP ${status}`);
@@ -159,42 +213,56 @@ const consecutiveFailures = new Map();
 const cooldownUntil = new Map();
 
 async function runCycle(cycle) {
+  const deep = cycle % CHAT_EVERY === 0;
   const machines = await discoverMachines();
-  if (!machines.length) {
-    await log("no remote machines discovered (dashboard unreachable and no cache)");
+  const ttsApps = await discoverTtsApps();
+  // One unified target list. Collector and TTS on the same machine are keyed
+  // separately, so a TTS flap restarts ONLY the TTS daemon (and vice versa).
+  const targets = [
+    ...machines.filter((m) => m.online !== false).map((m) => ({
+      key: m.collectorUrl,
+      name: m.name,
+      machineBase: m.collectorUrl,
+      os: m.os,
+      kind: "collector",
+      probe: () => probeCollector(m.collectorUrl, deep),
+    })),
+    ...ttsApps.map((a) => ({
+      key: `tts:${a.apiBaseUrl}`,
+      name: `${a.machineName} TTS`,
+      machineBase: a.machineBase,
+      os: "",
+      kind: "tts",
+      probe: () => probeTts(a.apiBaseUrl),
+    })),
+  ];
+  if (!targets.length) {
+    await log("no targets discovered (dashboard unreachable and no cache)");
     return;
   }
-  const deep = cycle % CHAT_EVERY === 0;
   let healthy = 0;
   let unhealthy = 0;
-  let offline = 0;
-  for (const machine of machines) {
-    const url = machine.collectorUrl;
-    if (machine.online === false) {
-      offline += 1;
-      consecutiveFailures.set(url, 0);
-      continue;
-    }
-    const result = await probeCollector(url, deep);
+  for (const target of targets) {
+    const result = await target.probe();
     if (result.healthy) {
       healthy += 1;
-      if (consecutiveFailures.get(url)) await log(`${machine.name}: recovered`);
-      consecutiveFailures.set(url, 0);
+      if (consecutiveFailures.get(target.key)) await log(`${target.name}: recovered`);
+      consecutiveFailures.set(target.key, 0);
       continue;
     }
     unhealthy += 1;
-    const fails = (consecutiveFailures.get(url) || 0) + 1;
-    consecutiveFailures.set(url, fails);
-    await log(`${machine.name}: unhealthy ${fails}/${FAIL_THRESHOLD} — ${result.reason}`);
-    if (fails >= FAIL_THRESHOLD && (cooldownUntil.get(url) || 0) < Date.now()) {
-      await log(`${machine.name}: REMEDIATING — kickstart collector via linkd shell`);
-      const ok = await remediate(url, machine.os);
-      await log(`${machine.name}: remediation ${ok ? "sent" : "FAILED"}; cooling down ${Math.round(COOLDOWN_MS / 1000)}s`);
-      cooldownUntil.set(url, Date.now() + COOLDOWN_MS);
-      consecutiveFailures.set(url, 0);
+    const fails = (consecutiveFailures.get(target.key) || 0) + 1;
+    consecutiveFailures.set(target.key, fails);
+    await log(`${target.name}: unhealthy ${fails}/${FAIL_THRESHOLD} — ${result.reason}`);
+    if (fails >= FAIL_THRESHOLD && (cooldownUntil.get(target.key) || 0) < Date.now()) {
+      await log(`${target.name}: REMEDIATING — restart ${target.kind} via linkd shell`);
+      const ok = await remediate(target.machineBase, target.os, target.kind);
+      await log(`${target.name}: remediation ${ok ? "sent" : "FAILED"}; cooling down ${Math.round(COOLDOWN_MS / 1000)}s`);
+      cooldownUntil.set(target.key, Date.now() + COOLDOWN_MS);
+      consecutiveFailures.set(target.key, 0);
     }
   }
-  await log(`cycle ${cycle}: ${healthy} healthy, ${unhealthy} unhealthy${offline ? `, ${offline} offline` : ""} of ${machines.length}${deep ? " (deep probe)" : ""}`);
+  await log(`cycle ${cycle}: ${healthy} healthy, ${unhealthy} unhealthy of ${targets.length}${deep ? " (deep collector probe)" : ""}`);
 }
 
 await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles${RUN_ONCE ? " (ONCE)" : ""}`);

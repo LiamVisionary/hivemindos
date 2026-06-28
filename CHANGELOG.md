@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-29 02:50:19 +0800 - Extend the fleet health watchdog to the Universal TTS server
+  - Status: Pushed
+  - Areas changed: `scripts/fleet-health-watchdog.mjs`
+  - Summary: The watchdog now also watches each machine's Universal TTS server, not just the collector — so a TTS flap self-heals the same way (the voice-side instability from this session). It discovers TTS apps via `/api/fleet/apps` (port 8799 / `universal-tts`), probes `/v1/models` reachable+non-empty (which fails with a proxy EOF when the stack is down — the flapping case; `/v1/voices` was rejected as a probe because it 307-redirects through the linkd app-proxy), and on 3 consecutive failures restarts the `universal-tts` service on the owning machine via the linkd shell. Collector and TTS are keyed separately, so a TTS flap restarts ONLY the TTS daemon and a collector flap restarts ONLY the collector. The kickstart pattern is specific (`universal.?tts|mlx.?audio`) so it won't hit the unrelated mlx image sidecar.
+  - Verification: `node --check` clean. Ran live against the real fleet: now 3 targets (NYC collector, Ubuntu VPS collector, NYC TTS) → `cycle 0: 3 healthy, 0 unhealthy of 3`; the installed LaunchAgent was reloaded and confirmed the same in its log. Mid-test it also correctly caught a real NYC collector flap (`chat HTTP 502 … EOF`, counted 1/3) and recovered — exactly the detection it's there for. A deep synth probe (to catch frontend-up/backend-down) is a deliberate follow-up, left out of v1 to avoid cold-model-load false positives.
+  - Intended commit message: `Extend fleet health watchdog to the Universal TTS server`
+
 - 2026-06-29 02:35:14 +0800 - Add a fleet health watchdog (auto-restart wedged collectors)
   - Status: Pushed
   - Areas changed: new `scripts/fleet-health-watchdog.mjs` daemon + `scripts/install-fleet-health-watchdog.sh` (LaunchAgent/systemd installer), `package.json` (`fleet-watchdog` / `fleet-watchdog:install` scripts)
