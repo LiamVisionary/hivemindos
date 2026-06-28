@@ -9,7 +9,7 @@ import { bm25TermCounts, bm25Tokens, scoreBm25Terms } from "@/lib/services/searc
 export const FULL_VAULT_SEARCH_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
 
 const MAX_INDEXED_MARKDOWN_FILES = 50_000;
-const MAX_INDEXED_MARKDOWN_BYTES = 256 * 1024;
+const MAX_INDEXED_MARKDOWN_BYTES = 1024 * 1024;
 const MAX_INDEX_TERMS_PER_NOTE = 900;
 const MAX_SEARCH_RESULTS = 500;
 const VAULT_EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
@@ -51,6 +51,7 @@ export type FullVaultSearchIndexRecord = {
   mtimeMs: number;
   size: number;
   hash: string;
+  indexedByteLimit: number;
   documentLength: number;
   terms: Record<string, number>;
   excerpt: string;
@@ -251,6 +252,7 @@ function recordFromMarkdown(root: string, file: string, markdown: string, mtimeM
     mtimeMs,
     size,
     hash: createHash("sha256").update(markdown).digest("hex"),
+    indexedByteLimit: MAX_INDEXED_MARKDOWN_BYTES,
     documentLength: tokens.length,
     terms: termCounts(tokens),
     excerpt: compact(body.replace(/^#\s+.+$/gm, " ")),
@@ -273,7 +275,12 @@ async function readIndex(root: string) {
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line) as FullVaultSearchIndexRecord;
-      if (parsed.schema === "hivemindos.full-vault-search.v1" && parsed.path && parsed.terms) records.push(parsed);
+      if (
+        parsed.schema === "hivemindos.full-vault-search.v1" &&
+        parsed.path &&
+        parsed.terms &&
+        parsed.indexedByteLimit === MAX_INDEXED_MARKDOWN_BYTES
+      ) records.push(parsed);
     } catch {
       // Ignore corrupt rows; rebuild can repair the generated index.
     }

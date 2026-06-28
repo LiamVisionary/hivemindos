@@ -9,7 +9,7 @@ import { performance } from "node:perf_hooks";
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const FULL_VAULT_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
 const MAX_VAULT_FILES = 50_000;
-const MAX_VAULT_BYTES = 256 * 1024;
+const MAX_VAULT_BYTES = 1024 * 1024;
 const MAX_INDEX_TERMS_PER_NOTE = 900;
 const EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
 const EXCLUDE_PREFIXES = [
@@ -249,6 +249,7 @@ async function buildIndex(root) {
       frontmatterType,
       mtimeMs: st.mtimeMs,
       size: st.size,
+      indexedByteLimit: MAX_VAULT_BYTES,
       documentLength: tokens.length,
       terms: termCounts(tokens),
       excerpt: compact(body.replace(/^#\s+.+$/gm, " "), 280),
@@ -274,7 +275,12 @@ async function readIndex(root) {
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line);
-      if (parsed.schema === "hivemindos.full-vault-search.v1" && parsed.path && parsed.terms) records.push(parsed);
+      if (
+        parsed.schema === "hivemindos.full-vault-search.v1" &&
+        parsed.path &&
+        parsed.terms &&
+        parsed.indexedByteLimit === MAX_VAULT_BYTES
+      ) records.push(parsed);
     } catch {
       // Ignore corrupt generated rows.
     }
