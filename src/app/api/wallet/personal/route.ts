@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { listWalletInfos } from "@/lib/services/wallet/local-wallet-vault";
 import { readWalletLedger, writeWalletRecord } from "@/lib/services/obsidian/wallet-ledger";
-import type { AgentWalletConfig, AgentWalletTokenBalance, AgentWalletVaultInfo } from "@/lib/types/agent-wallet";
+import type { AgentTradingVenue, AgentWalletConfig, AgentWalletTokenBalance, AgentWalletVaultInfo } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet } from "@/lib/utils/agent-wallet";
 import { requireAuth } from "@/lib/utils/server-auth";
 
@@ -22,6 +22,15 @@ type PersonalWalletRecord = {
   lastOnchainSyncAt?: number;
   createdAt?: number;
   updatedAt?: number;
+  // Stock-trading config. Personal wallets can opt into a trading venue (the
+  // Trade desk's inline "Enable stock trading"); these must round-trip through
+  // the ledger or the balance-refresh write-through would silently drop them.
+  tradingVenue?: AgentTradingVenue;
+  alpacaPaper?: boolean;
+  maxTradeUsd?: number;
+  // Master spend switch. Personal wallets default off; a wallet that's opted
+  // into trading is enabled (the buy-stock rail rejects enabled !== true).
+  enabled?: boolean;
 };
 
 type PersonalWalletResponse = PersonalWalletRecord & {
@@ -81,6 +90,10 @@ function personalWalletFromAgentWallet(agentId: string, agentName: string, walle
     lastOnchainSyncAt: wallet.lastOnchainSyncAt || 0,
     createdAt: wallet.updatedAt || 0,
     updatedAt: wallet.updatedAt || 0,
+    tradingVenue: wallet.tradingVenue,
+    alpacaPaper: wallet.alpacaPaper,
+    maxTradeUsd: wallet.maxTradeUsd,
+    enabled: wallet.enabled,
   } satisfies PersonalWalletResponse;
 }
 
@@ -129,9 +142,14 @@ function ledgerWalletWithSignerTruth(wallet: PersonalWalletResponse, vaultByAcco
 
 function agentWalletFromPersonalRecord(record: PersonalWalletRecord): AgentWalletConfig {
   const now = Date.now();
+  const tradingVenue = record.tradingVenue === "alpaca" || record.tradingVenue === "xstocks" ? record.tradingVenue : undefined;
   return {
     ...createDefaultAgentWallet(record.id),
-    enabled: false,
+    // Personal wallets default to spend-off, but a wallet opted into a trading
+    // venue must be enabled or the buy-stock rail rejects it ("wallet is not
+    // enabled"). Setting a venue implies spend-enablement; honor an explicit
+    // enabled flag too. This also survives balance-refresh re-writes.
+    enabled: record.enabled === true || Boolean(tradingVenue),
     provider: "manual",
     walletAddress: record.address,
     network: record.network,
@@ -143,6 +161,12 @@ function agentWalletFromPersonalRecord(record: PersonalWalletRecord): AgentWalle
     tokens: Array.isArray(record.tokens) ? record.tokens : [],
     lastOnchainSyncAt: Number(record.lastOnchainSyncAt) || 0,
     updatedAt: Number(record.updatedAt) || now,
+    // Preserve any opted-in stock-trading config. Without this, every balance
+    // re-sync (which POSTs the refreshed record back) would wipe the venue and
+    // the buy-stock rail would report "Stock trading is off" again.
+    tradingVenue,
+    alpacaPaper: typeof record.alpacaPaper === "boolean" ? record.alpacaPaper : undefined,
+    maxTradeUsd: typeof record.maxTradeUsd === "number" && record.maxTradeUsd > 0 ? record.maxTradeUsd : undefined,
   };
 }
 

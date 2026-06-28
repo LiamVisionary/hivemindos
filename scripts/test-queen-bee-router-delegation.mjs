@@ -7,6 +7,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const {
   chooseQueenBeeDelegate,
   inferQueenBeeWorkerClass,
+  rankQueenBeeDelegates,
 } = await import("../src/lib/services/queen-bee/router.ts");
 
 const urlBackedMachine = {
@@ -73,6 +74,19 @@ const urlBackedMachine = {
   assert.equal(delegate.workerClass, "code");
   assert.equal(delegate.agent?.name, "Ada Lovelace");
   assert.equal(delegate.machine?.device?.collectorUrl, "http://127.0.0.1:8789");
+}
+
+{
+  const ranked = rankQueenBeeDelegates({
+    title: "Implement",
+    body: "Implement the next concrete increment for a zero-human company.",
+    skills: ["code"],
+  }, [urlBackedMachine]);
+
+  assert(ranked.length >= 2, "routing should expose a fallback chain, not only the top delegate");
+  assert.equal(ranked[0].agent?.name, "Ada Lovelace");
+  assert.equal(ranked[1].agent?.name, "AdaptiveAgent");
+  assert.match(ranked[1].reason, /fallback #2/);
 }
 
 {

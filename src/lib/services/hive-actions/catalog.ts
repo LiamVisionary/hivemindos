@@ -284,6 +284,71 @@ export const workEventAction = defineHiveAction({
   },
 });
 
+export const agentChallengeAction = defineHiveAction({
+  id: "agent-challenge.arena",
+  title: "Agent Challenge arena",
+  description:
+    "Run a local-first public agent challenge with credited lineage, quota caps, rulings, playbook notes, and significance-aware frontiers.",
+  schema: z.object({
+    action: z
+      .enum(["list", "get", "create", "post-entry", "record-result", "rule", "distill-playbook"])
+      .optional()
+      .describe("Agent challenge operation to perform."),
+    id: z.string().optional(),
+    challengeId: z.string().optional(),
+    title: z.string().optional(),
+    objective: z.string().optional(),
+    metricName: z.string().optional(),
+    metricDirection: z.enum(["increase", "decrease"]).optional(),
+    baselineScore: z.number().optional(),
+    significanceThreshold: z.number().optional(),
+    dailyRunCap: z.number().optional(),
+    workBoard: z.string().optional(),
+    type: z.enum(["candidate", "run-request", "finding", "result", "integrity-alert", "ruling", "playbook"]).optional(),
+    visibility: z.string().optional(),
+    body: z.string().optional(),
+    score: z.number().optional(),
+    parentIds: z.array(z.string()).optional(),
+    originatorId: z.string().optional(),
+    originatorName: z.string().optional(),
+    runnerId: z.string().optional(),
+    runnerName: z.string().optional(),
+    verifierId: z.string().optional(),
+    verifierName: z.string().optional(),
+    authorId: z.string().optional(),
+    authorName: z.string().optional(),
+    decidedById: z.string().optional(),
+    decidedByName: z.string().optional(),
+    kind: z.enum(["valid", "invalid", "tie", "needs-human", "policy"]).optional(),
+    targetLineageId: z.string().optional(),
+    summary: z.string().optional(),
+    evidence: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+    workBoardTaskId: z.string().optional(),
+    levers: z.array(z.string()).optional(),
+    antiPatterns: z.array(z.string()).optional(),
+    triageTools: z.array(z.string()).optional(),
+    verifierNotes: z.array(z.string()).optional(),
+    openQuestions: z.array(z.string()).optional(),
+    createdAt: z.string().optional(),
+    vaultPath: z.string().optional(),
+    challengesFolder: z.string().optional(),
+  }),
+  sideEffects: ["write", "filesystem"],
+  risk: "medium",
+  tags: ["agent", "challenge", "lineage", "quota", "leaderboard", "work-board", "mcp"],
+  aliases: ["agent_challenge", "challenge arena", "agent tournament", "coordination board"],
+  mcp: { expose: true, compact: true, toolName: "agent_challenge" },
+  contextIndex: {
+    summary:
+      "Local-first agent challenge arena for public coordination, credited results, quota pooling, rulings, and shared playbooks.",
+    retrievalText:
+      "Use agent_challenge when agents need a bounded shared objective with public board entries, per-agent run caps, credited lineage, significance-aware frontier ties, verifier or human rulings, and playbook distillation. It routes through /api/agent-challenges and stores local-first challenge state in the shared vault when available.",
+    route: "/api/agent-challenges",
+    methods: ["GET", "POST"],
+  },
+});
+
 export const requestHumanApprovalAction = defineHiveAction({
   id: "human-approval.request",
   title: "Request human approval",
@@ -1168,12 +1233,171 @@ export const clawbankCallAction = defineHiveAction({
   },
 });
 
+export const codeSearchGraphAction = defineHiveAction({
+  id: "code.search-graph",
+  title: "Search the code graph",
+  description:
+    "Find symbols, routes, classes, or functions in the repository code graph by name pattern or free-text query, without raw file walking.",
+  schema: z.object({
+    query: z.string().optional().describe("Free-text search across symbol/route names."),
+    namePattern: z.string().optional().describe("Regex over symbol names."),
+    label: z.string().optional().describe("Filter to a node kind, e.g. Function, Class, Route."),
+    filePattern: z.string().optional(),
+    limit: z.number().optional(),
+    repoPath: z.string().optional().describe("Defaults to the HivemindOS checkout."),
+  }),
+  sideEffects: ["read", "filesystem"],
+  risk: "low",
+  readOnly: true,
+  tags: ["code", "code-intelligence", "search", "symbols", "routes", "graph"],
+  aliases: ["code_search_graph", "search code graph", "find symbol"],
+  mcp: { expose: true, compact: true, toolName: "code_search_graph" },
+  contextIndex: {
+    summary: "Find code symbols and routes via the code graph (or live-scan fallback).",
+    retrievalText:
+      "Use code_search_graph before broad file search when the project is indexed, to locate functions, classes, and routes by name. Degrades to a live scan when the codebase-memory engine is not installed.",
+    route: "/api/code-intelligence",
+    methods: ["POST"],
+  },
+});
+
+export const codeTracePathAction = defineHiveAction({
+  id: "code.trace-path",
+  title: "Trace code call path",
+  description:
+    "Trace inbound callers and/or outbound callees of a function through the code graph to understand impact and call flow.",
+  schema: z.object({
+    functionName: z.string().describe("Function name or qualified name to trace."),
+    direction: z.enum(["inbound", "outbound", "both"]).optional(),
+    depth: z.number().optional(),
+    repoPath: z.string().optional(),
+  }),
+  sideEffects: ["read", "filesystem"],
+  risk: "low",
+  readOnly: true,
+  tags: ["code", "code-intelligence", "trace", "callers", "callees", "impact"],
+  aliases: ["code_trace_path", "what calls this", "call graph"],
+  mcp: { expose: true, compact: true, toolName: "code_trace_path" },
+  contextIndex: {
+    summary: "Trace callers/callees of a function (requires the codebase-memory engine).",
+    retrievalText:
+      "Use code_trace_path to answer 'what calls this?' / 'what does this call?' before editing. Requires the codebase-memory engine; the fallback returns a clear hint when it is missing.",
+    route: "/api/code-intelligence",
+    methods: ["POST"],
+  },
+});
+
+export const codeGetArchitectureAction = defineHiveAction({
+  id: "code.get-architecture",
+  title: "Get code & system architecture",
+  description:
+    "Return a structural overview of the repository plus the cross-service route map (Next API routes, Hive actions, MCP tools, and connected fleet apps).",
+  schema: z.object({
+    path: z.string().optional().describe("Scope the summary to a sub-path."),
+    aspects: z.array(z.string()).optional(),
+    repoPath: z.string().optional(),
+  }),
+  sideEffects: ["read", "filesystem"],
+  risk: "low",
+  readOnly: true,
+  tags: ["code", "code-intelligence", "architecture", "routes", "system", "wiring"],
+  aliases: ["code_get_architecture", "system map", "which routes expose"],
+  mcp: { expose: true, compact: true, toolName: "code_get_architecture" },
+  contextIndex: {
+    summary: "Structural overview + cross-service route map of how the hive is wired.",
+    retrievalText:
+      "Use code_get_architecture to understand how HivemindOS is wired — which routes, Hive actions, MCP tools, and connected apps exist and which expose a given capability (e.g. wallet execution).",
+    route: "/api/code-intelligence",
+    methods: ["POST"],
+  },
+});
+
+export const codeGetSnippetAction = defineHiveAction({
+  id: "code.get-snippet",
+  title: "Get code snippet",
+  description:
+    "Fetch the source for a symbol (by qualified name) or a file/line range, with caller/callee counts when the graph is available.",
+  schema: z.object({
+    qualifiedName: z.string().optional(),
+    filePath: z.string().optional(),
+    startLine: z.number().optional(),
+    endLine: z.number().optional(),
+    includeNeighbors: z.boolean().optional(),
+    repoPath: z.string().optional(),
+  }),
+  sideEffects: ["read", "filesystem"],
+  risk: "low",
+  readOnly: true,
+  tags: ["code", "code-intelligence", "snippet", "source"],
+  aliases: ["code_get_snippet", "show source"],
+  mcp: { expose: true, compact: true, toolName: "code_get_snippet" },
+  contextIndex: {
+    summary: "Read a symbol's source with caller/callee context.",
+    retrievalText:
+      "Use code_get_snippet to read a symbol's source by qualified name (or a file/line range) instead of opening the whole file.",
+    route: "/api/code-intelligence",
+    methods: ["POST"],
+  },
+});
+
+export const codeDetectChangesAction = defineHiveAction({
+  id: "code.detect-changes",
+  title: "Detect code change impact",
+  description:
+    "Compare the working tree (or a git ref) and report touched files, affected symbols/routes, inbound callers, outbound dependencies, likely-relevant tests, and a risk rating.",
+  schema: z.object({
+    baseRef: z.string().optional().describe("Base branch to diff against (default main)."),
+    since: z.string().optional().describe("Diff since a ref, e.g. HEAD~10."),
+    scope: z.enum(["files", "symbols", "impact"]).optional(),
+    depth: z.number().optional(),
+    repoPath: z.string().optional(),
+  }),
+  sideEffects: ["read", "filesystem"],
+  risk: "low",
+  readOnly: true,
+  tags: ["code", "code-intelligence", "diff", "impact", "risk", "review"],
+  aliases: ["code_detect_changes", "what did i break", "diff impact"],
+  mcp: { expose: true, compact: true, toolName: "code_detect_changes" },
+  contextIndex: {
+    summary: "Diff impact analysis: touched files, affected symbols/routes, callers, risk.",
+    retrievalText:
+      "Use code_detect_changes before a commit, in code review, or for 'what did I break?' to see touched files, affected routes/symbols, inbound callers, likely tests, and a low/medium/high/critical risk rating.",
+    route: "/api/code-intelligence",
+    methods: ["POST"],
+  },
+});
+
+export const codeIndexRepositoryAction = defineHiveAction({
+  id: "code.index-repository",
+  title: "Index repository code graph",
+  description:
+    "Build (or refresh) the persistent code-intelligence graph for the repository via the codebase-memory engine. Required before deep graph queries.",
+  schema: z.object({
+    repoPath: z.string().optional().describe("Defaults to the HivemindOS checkout."),
+    mode: z.enum(["full", "moderate", "fast"]).optional(),
+    persistence: z.boolean().optional().describe("Write the shareable .codebase-memory artifact (off by default)."),
+  }),
+  sideEffects: ["write", "filesystem"],
+  risk: "medium",
+  tags: ["code", "code-intelligence", "index", "graph"],
+  aliases: ["code_index_repository", "index code", "build code graph"],
+  mcp: { expose: true, compact: true, toolName: "code_index_repository" },
+  contextIndex: {
+    summary: "Build/refresh the persistent code graph (requires the codebase-memory engine).",
+    retrievalText:
+      "Use code_index_repository to build or refresh the code graph before deep queries. No-ops with a clear message when the codebase-memory engine is not installed.",
+    route: "/api/code-intelligence",
+    methods: ["POST"],
+  },
+});
+
 export const HIVE_ACTIONS = [
   listHivemindMachinesAction,
   planHandoffAction,
   workBoardAction,
   queenBeeAction,
   workEventAction,
+  agentChallengeAction,
   requestHumanApprovalAction,
   cryptoCapabilitiesAction,
   reviewCryptoAction,
@@ -1199,6 +1423,12 @@ export const HIVE_ACTIONS = [
   clawbankTradeAction,
   clawbankMoneyTransferAction,
   clawbankCallAction,
+  codeSearchGraphAction,
+  codeTracePathAction,
+  codeGetArchitectureAction,
+  codeGetSnippetAction,
+  codeDetectChangesAction,
+  codeIndexRepositoryAction,
 ] as const;
 
 export function listHiveActions() {

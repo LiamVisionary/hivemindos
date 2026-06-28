@@ -7,6 +7,7 @@ node_modules/
 out/
 dist/
 bin/
+.codebase-memory/
 /remotion/
 /.remotion-capture/
 /public/remotion/

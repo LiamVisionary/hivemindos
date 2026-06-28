@@ -172,28 +172,38 @@ function loadPenalty(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reaso
 }
 
 export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = [], options: QueenBeeRouterOptions = {}): QueenBeeDelegate {
+  const [best] = rankQueenBeeDelegates(task, machines, options);
+  if (best) return best;
+  const workerClass = inferQueenBeeWorkerClass(task);
+  return {
+    status: "pending",
+    workerClass,
+    score: 0,
+    reason: "No chat-capable online fleet agent is available yet; Queen Bee queued the task on the Work Board for later pickup.",
+  };
+}
+
+export function rankQueenBeeDelegates(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = [], options: QueenBeeRouterOptions = {}): QueenBeeDelegate[] {
   const workerClass = inferQueenBeeWorkerClass(task);
   const candidates = machines.flatMap((machine) => candidateAgents(machine, workerClass, task, options));
-  if (!candidates.length) {
+  const ranked = candidates.sort((left, right) => right.score - left.score || stableName(left).localeCompare(stableName(right)));
+  return ranked.map((candidate, index) => {
+    const machineName = candidate.machine.device?.name || candidate.machine.key || "unknown machine";
+    const agentName = candidate.agent.name || candidate.agent.id || candidate.agent.agentId || "selected agent";
+    const availability = ranked.length === 1
+      ? "the only available"
+      : index === 0
+        ? "the best available"
+        : `fallback #${index + 1}`;
     return {
-      status: "pending",
+      status: "delegated",
       workerClass,
-      score: 0,
-      reason: "No chat-capable online fleet agent is available yet; Queen Bee queued the task on the Work Board for later pickup.",
+      agent: candidate.agent,
+      machine: candidate.machine,
+      score: candidate.score,
+      reason: `Queen Bee selected ${agentName} on ${machineName} as ${availability} ${workerClass} worker across the fleet (${candidate.reasons.join("; ")}).`,
     };
-  }
-  const [best] = candidates.sort((left, right) => right.score - left.score || stableName(left).localeCompare(stableName(right)));
-  const machineName = best.machine.device?.name || best.machine.key || "unknown machine";
-  const agentName = best.agent.name || best.agent.id || best.agent.agentId || "selected agent";
-  const availability = candidates.length === 1 ? "the only available" : "the best available";
-  return {
-    status: "delegated",
-    workerClass,
-    agent: best.agent,
-    machine: best.machine,
-    score: best.score,
-    reason: `Queen Bee selected ${agentName} on ${machineName} as ${availability} ${workerClass} worker across the fleet (${best.reasons.join("; ")}).`,
-  };
+  });
 }
 
 function candidateAgents(machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent, options: QueenBeeRouterOptions): ScoredCandidate[] {

@@ -50,6 +50,9 @@ export interface FleetAgent {
   id: string;
   name: string;
   runtime: string;
+  /** LLM backing, surfaced in the agent detail panel, e.g. "openai-codex" / "gpt-5.5". */
+  provider?: string;
+  model?: string;
   canChat?: boolean;
   state: AgentState;
   role: string;

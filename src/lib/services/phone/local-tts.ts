@@ -35,6 +35,10 @@ export type LocalTtsCandidate = {
   model: string;
   voice: string;
   models: string[];
+  /** Every model the server advertises (full /v1/models), for the Calls model picker. */
+  availableModels: string[];
+  /** Every voice the server advertises (/v1/voices), for the Calls voice picker. */
+  availableVoices: string[];
   voiceCount?: number;
   supportsStreamingApi: boolean;
   supportsTrueStreaming: boolean;
@@ -297,6 +301,8 @@ async function candidateFromUniversalTtsFallback(entry: UniversalFallbackApp): P
     model: preferredModel(models),
     voice: preferredVoice(voices),
     models,
+    availableModels: models,
+    availableVoices: voices,
     voiceCount: voices.length,
     supportsStreamingApi,
     supportsTrueStreaming: selectedCaps.supports_true_streaming === true,
@@ -447,6 +453,10 @@ async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
     ]);
     const selectedCaps = selectedCapabilities(capabilities);
     const models = selectedCaps.models.length ? selectedCaps.models : modelIds(modelsPayload);
+    // The full server roster (not just the selected provider's), so the Calls
+    // panel can offer every model (qwen, kokoro, …), not only chatterbox.
+    // Deduped: the server's /v1/models can list the same id twice (e.g. tts-1).
+    const allModels = [...new Set(modelIds(modelsPayload))];
     const voicesEndpoint = clean(selectedCaps.voices_endpoint);
     const voicesPayload = voicesEndpoint
       ? await appJson(app, voicesEndpoint).catch(() => appJson(app, "/v1/voices").catch(() => appJson(app, "/voices").catch(() => null)))
@@ -470,6 +480,8 @@ async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
       model,
       voice,
       models,
+      availableModels: allModels.length ? allModels : models,
+      availableVoices: voices,
       voiceCount: voices.length,
       supportsStreamingApi,
       supportsTrueStreaming: selectedCaps.supports_true_streaming === true,
@@ -493,6 +505,8 @@ async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
       model: DEFAULT_LOCAL_TTS_MODEL,
       voice: DEFAULT_LOCAL_TTS_VOICE,
       models: [],
+      availableModels: [],
+      availableVoices: [],
       supportsStreamingApi: false,
       supportsTrueStreaming: false,
       sampleRate: DEFAULT_SAMPLE_RATE,
@@ -583,6 +597,160 @@ export async function resolveLocalTtsCallConfig(input: {
     streamingKind: candidate.streamingKind,
     streamingImplementation: candidate.streamingImplementation,
     openingLine: input.openingLine,
+  };
+}
+
+// Wrap raw PCM16 (little-endian, signed) in a 44-byte RIFF/WAVE header so a
+// Web Audio `decodeAudioData` consumer can play it. The in-app Queen voice
+// overlay buffers the whole reply and decodes it (it does not stream frames),
+// so it needs a real container — raw PCM would fail to decode and silently
+// fall back to browser speech synthesis.
+function pcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: number): ArrayBuffer {
+  const bitsPerSample = 16;
+  const blockAlign = channels * (bitsPerSample / 8);
+  const byteRate = sampleRate * blockAlign;
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  const writeAscii = (offset: number, text: string) => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  writeAscii(0, "RIFF");
+  view.setUint32(4, 36 + pcm.byteLength, true);
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true); // PCM fmt chunk size
+  view.setUint16(20, 1, true); // audio format = PCM
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeAscii(36, "data");
+  view.setUint32(40, pcm.byteLength, true);
+  const out = new Uint8Array(44 + pcm.byteLength);
+  out.set(new Uint8Array(header), 0);
+  out.set(pcm, 44);
+  return out.buffer;
+}
+
+export type LocalTtsWavResult =
+  | { ok: true; wav: ArrayBuffer; sampleRate: number; channels: number; bytes: number; appName: string }
+  | { ok: false; error: string };
+
+const WAV_SYNTH_TIMEOUT_MS = 60_000;
+
+/**
+ * Buffered (non-streaming) local TTS for callers that need a complete,
+ * decodable audio clip rather than a paced PCM frame stream — chiefly the
+ * in-app Queen Bee voice overlay, whose `decodeAudioData` playback cannot
+ * consume raw frames. Generates with `realtime_pacing` OFF so the caller does
+ * not wait the full utterance duration, buffers the PCM, and returns WAV.
+ */
+export async function synthesizeLocalTtsWav(input: {
+  origin: string;
+  appId: string;
+  model: string;
+  voice: string;
+  text: string;
+  signal?: AbortSignal;
+}): Promise<LocalTtsWavResult> {
+  const app = cachedApp(input.origin, input.appId)
+    ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
+  if (!app?.apiBaseUrl) {
+    return { ok: false, error: "No matching connected TTS app with an API base URL was found." };
+  }
+  const body = {
+    model: input.model || DEFAULT_LOCAL_TTS_MODEL,
+    voice: input.voice || DEFAULT_LOCAL_TTS_VOICE,
+    input: input.text,
+    response_format: "pcm",
+    sample_rate: DEFAULT_SAMPLE_RATE,
+    // Buffered consumer: generate as fast as the app allows. Apps that ignore
+    // this still work, just with their paced latency added before playback.
+    realtime_pacing: false,
+    language: "English",
+    instruct: "Speak warmly and clearly.",
+  };
+  let response: Response;
+  try {
+    response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}/v1/audio/speech-stream`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: input.signal ?? AbortSignal.timeout(WAV_SYNTH_TIMEOUT_MS),
+    });
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Local TTS request failed." };
+  }
+  if (!response.ok || !response.body) {
+    return { ok: false, error: `Local TTS speech returned HTTP ${response.status}.` };
+  }
+  const pcm = new Uint8Array(await response.arrayBuffer());
+  if (!pcm.byteLength) return { ok: false, error: "Local TTS returned no audio." };
+  const sampleRate = Math.trunc(numberValue(response.headers.get("x-audio-sample-rate"), DEFAULT_SAMPLE_RATE));
+  const channels = Math.max(1, Math.trunc(numberValue(response.headers.get("x-audio-channels"), 1)));
+  return {
+    ok: true,
+    wav: pcm16ToWav(pcm, sampleRate, channels),
+    sampleRate,
+    channels,
+    bytes: pcm.byteLength,
+    appName: clean(app.name) || "Local TTS",
+  };
+}
+
+export type LocalTtsPcmStream =
+  | { ok: true; body: ReadableStream<Uint8Array>; sampleRate: number; channels: number }
+  | { ok: false; error: string };
+
+/**
+ * Live PCM stream for the in-app overlay's streaming player: same fast, full-
+ * fidelity params as `synthesizeLocalTtsWav` (no `lowpass_hz`, no realtime
+ * pacing) but returns the response body unbuffered so the client can play
+ * frames as they arrive (~sub-second to first audio) instead of waiting for the
+ * whole clip. Distinct from `streamLocalTtsSpeech`, which is tuned for the
+ * mobile player (realtime pacing + a 7kHz lowpass).
+ */
+export async function streamLocalTtsPcm(input: {
+  origin: string;
+  appId: string;
+  model: string;
+  voice: string;
+  text: string;
+  signal?: AbortSignal;
+}): Promise<LocalTtsPcmStream> {
+  const app = cachedApp(input.origin, input.appId)
+    ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
+  if (!app?.apiBaseUrl) return { ok: false, error: "No matching connected TTS app with an API base URL was found." };
+  const body = {
+    model: input.model || DEFAULT_LOCAL_TTS_MODEL,
+    voice: input.voice || DEFAULT_LOCAL_TTS_VOICE,
+    input: input.text,
+    response_format: "pcm",
+    sample_rate: DEFAULT_SAMPLE_RATE,
+    realtime_pacing: false,
+    language: "English",
+    instruct: "Speak warmly and clearly.",
+  };
+  let response: Response;
+  try {
+    response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}/v1/audio/speech-stream`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: input.signal ?? AbortSignal.timeout(STREAM_TIMEOUT_MS),
+    });
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Local TTS stream request failed." };
+  }
+  if (!response.ok || !response.body) return { ok: false, error: `Local TTS stream returned HTTP ${response.status}.` };
+  return {
+    ok: true,
+    body: response.body,
+    sampleRate: Math.trunc(numberValue(response.headers.get("x-audio-sample-rate"), DEFAULT_SAMPLE_RATE)),
+    channels: Math.max(1, Math.trunc(numberValue(response.headers.get("x-audio-channels"), 1))),
   };
 }
 

@@ -41,6 +41,23 @@ function localOpenAiProviderName(slug: string) {
   return "OpenAI-compatible";
 }
 
+// Human label for a provider slug the runtime hasn't enumerated (so we can
+// synthesize a tile for the agent's own configured provider). Prefers the known
+// gateway/catalog name, else title-cases the slug ("openai-codex" -> "OpenAI Codex").
+function configuredProviderDisplayName(slug: string) {
+  const gateway = MODEL_PROVIDER_GATEWAYS[slug];
+  if (gateway) return gateway.name;
+  const catalog = PROVIDER_CATALOG.find((entry) => entry.slug === slug);
+  if (catalog) return catalog.name;
+  return slug
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) =>
+      part === "openai" ? "OpenAI" : part === "ai" ? "AI" : part === "llm" ? "LLM" : part.charAt(0).toUpperCase() + part.slice(1),
+    )
+    .join(" ") || slug;
+}
+
 type UseAgentSettingsControllerProps = {
   HETZNER_SERVER_TYPE_OPTIONS: readonly HetznerServerTypeOption[];
   agentCreateDraft: AgentCreateDraft;
@@ -187,6 +204,36 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
         isUserDefined: true,
         source: "catalog",
       });
+    }
+    // Always surface the agent's OWN configured provider + model as a selectable,
+    // highlightable option — even when the runtime can't enumerate its inventory
+    // (slow/failed status fetch, an agent on a remote or unreachable machine, or
+    // an older runtime that doesn't report a model list). The tiles above are
+    // built only from the runtime-reported list plus the static catalog/gateways,
+    // which omit runtime-managed providers like `openai-codex`; without this the
+    // modal opens with the agent's set provider/model unhighlighted. Mirrors the
+    // HivemindOS local-provider synthesis above, for every runtime-model runtime.
+    if (agentSettingsProvider) {
+      const existing = providersBySlug.get(agentSettingsProvider);
+      if (!existing) {
+        const models = agentSettingsModel ? [{ id: agentSettingsModel }] : [];
+        providersBySlug.set(agentSettingsProvider, {
+          slug: agentSettingsProvider,
+          name: configuredProviderDisplayName(agentSettingsProvider),
+          models,
+          totalModels: models.length,
+          isCurrent: true,
+          isUserDefined: true,
+          source: "Configured on this agent",
+        });
+      } else if (agentSettingsModel && !existing.models?.some((model) => model.id === agentSettingsModel)) {
+        const models = [{ id: agentSettingsModel }, ...(existing.models ?? [])];
+        providersBySlug.set(agentSettingsProvider, {
+          ...existing,
+          models,
+          totalModels: Math.max(existing.totalModels || 0, models.length),
+        });
+      }
     }
     return [...providersBySlug.values()];
   }, [agentSettingsModel, agentSettingsProvider, agentSettingsRuntime, runtimeModelSelection]);

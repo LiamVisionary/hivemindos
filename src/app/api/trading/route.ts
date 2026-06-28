@@ -5,6 +5,7 @@ import {
   BUY_STOCK_CONFIRMATION,
   SELL_STOCK_CONFIRMATION,
   type StockTradeSide,
+  cancelAlpacaOrder,
   discoverStockTradeQuote,
   executeStockTrade,
   fetchAlpacaPortfolio,
@@ -33,9 +34,10 @@ export const dynamic = "force-dynamic";
  */
 
 type TradingBody = {
-  action?: "quote" | "execute" | "portfolio";
+  action?: "quote" | "execute" | "portfolio" | "cancel-order";
   side?: string;
   agentId?: string;
+  orderId?: string;
   ticker?: string;
   notionalUsd?: number;
   qty?: number;
@@ -118,7 +120,10 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => ({}))) as TradingBody;
     const agentId = body.agentId?.trim();
     const side = normalizeSide(body.side);
-    const action = body.action === "execute" ? "execute" : body.action === "portfolio" ? "portfolio" : "quote";
+    const action = body.action === "execute" ? "execute"
+      : body.action === "portfolio" ? "portfolio"
+      : body.action === "cancel-order" ? "cancel-order"
+      : "quote";
     if (!agentId) return badRequest("An agentId is required to trade.");
 
     // Authoritative wallet: persisted config only, never a client-supplied policy.
@@ -134,6 +139,15 @@ export async function POST(request: NextRequest) {
       }
       const portfolio = await fetchAlpacaPortfolio({ policy, paper });
       return NextResponse.json({ ok: true, portfolio, paper });
+    }
+
+    // Cancel an open order — no ticker, reversal of a queued spend.
+    if (action === "cancel-order") {
+      if (policy.tradingVenue !== "alpaca") return badRequest("Order cancel is only available for the Alpaca venue.");
+      const orderId = body.orderId?.trim();
+      if (!orderId) return badRequest("An order id is required to cancel.");
+      await cancelAlpacaOrder({ policy, paper, orderId });
+      return NextResponse.json({ ok: true, canceled: orderId, paper });
     }
 
     const ticker = body.ticker?.trim();

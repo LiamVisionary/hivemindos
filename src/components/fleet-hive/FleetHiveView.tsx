@@ -17,6 +17,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { AeonDeleteModal, isAeonAgent } from "@/components/fleet/aeon-delete-modal";
 import { MachineTerminalModal } from "@/components/fleet/machine-terminal-modal";
+import { MachineSendFileModal } from "@/components/fleet/machine-send-file-modal";
 import { UsePodHostModal } from "@/components/fleet/usepod-host-modal";
 import { FleetConstellationLoading, FleetScanOverlay } from "@/components/fleet/fleet-loading";
 import {
@@ -186,6 +187,7 @@ export function FleetHiveView({
   const scale = baseScale * view.zoom;
   const [aeonDeleteTarget, setAeonDeleteTarget] = React.useState<{ machine: FleetMachine; agent: FleetAgent } | null>(null);
   const [terminalMachine, setTerminalMachine] = React.useState<FleetMachine | null>(null);
+  const [sendFileMachine, setSendFileMachine] = React.useState<FleetMachine | null>(null);
   const [usePodHostMachine, setUsePodHostMachine] = React.useState<FleetMachine | null>(null);
   const newAgentTimerRef = React.useRef<number>(0);
   const wrapRef = React.useRef<HTMLDivElement>(null);
@@ -391,6 +393,7 @@ export function FleetHiveView({
     onFixNetworkIssue: fixNetworkIssue,
     getNetworkFixStatus: (m) => networkFix[m.id] ?? null,
     onOpenShell: (m) => setTerminalMachine(m.source),
+    onSendFile: (m) => setSendFileMachine(m.source),
     onOpenUsePodHost: (m) => setUsePodHostMachine(m.source),
     onCallAgent: onCallAgent ? (m, a) => { void onCallAgent(m.source, a.source); } : undefined,
     onOpenChat: onOpenChat ? (m, a) => onOpenChat(m.source, a.source) : undefined,
@@ -586,6 +589,10 @@ export function FleetHiveView({
 
       {terminalMachine && typeof document !== "undefined"
         ? createPortal(<MachineTerminalModal machine={terminalMachine} onClose={() => setTerminalMachine(null)} />, document.body)
+        : null}
+
+      {sendFileMachine && typeof document !== "undefined"
+        ? createPortal(<MachineSendFileModal machine={sendFileMachine} onClose={() => setSendFileMachine(null)} />, document.body)
         : null}
 
       {usePodHostMachine && typeof document !== "undefined"

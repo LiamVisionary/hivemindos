@@ -3,6 +3,7 @@
    the Trade desk's view shapes. No React, no fetching — TradePanel does the I/O
    and calls these. */
 
+import { trAmt } from "./format";
 import type { DeskActivity, DeskHolding, DeskPortfolio } from "./trade-context";
 import type { WalletActivityRecord, CryptoMarketRow, StockMarketRow } from "@/features/dashboard/views/trade/trade-api";
 import type { AlpacaPosition, AlpacaPortfolio } from "@/features/dashboard/views/trade/trade-api";
@@ -29,6 +30,16 @@ export function hoursAgo(ms: number, now: number): number {
 
 // ── activity ─────────────────────────────────────────────────────────────────
 const STOCK_TARGET = /^(alpaca|xstocks):/i;
+// Stable "cash" tokens — a swap INTO one reads as a sell, OUT of one as a buy.
+const STABLE_SYMBOLS = new Set(["USDC", "USDT", "DAI", "USDS", "USDE", "PYUSD"]);
+
+export function swapDirection(sellToken: string, buyToken: string): "buy" | "sell" | "swap" {
+  const sellStable = STABLE_SYMBOLS.has((sellToken || "").toUpperCase());
+  const buyStable = STABLE_SYMBOLS.has((buyToken || "").toUpperCase());
+  if (buyStable && !sellStable) return "sell"; // gave up a token for cash
+  if (sellStable && !buyStable) return "buy"; // spent cash to acquire a token
+  return "swap";
+}
 
 function activityDisplay(record: WalletActivityRecord): { kind: string; text: string; via: string; src: "crypto" | "stocks" } {
   // Guard literal "null"/"undefined" strings (and blanks) from a sparse ledger
@@ -43,7 +54,19 @@ function activityDisplay(record: WalletActivityRecord): { kind: string; text: st
     return { kind: side, text: rest.trim() || "Stock trade", via: venue.toLowerCase() === "xstocks" ? "xStocks" : "Alpaca", src: "stocks" };
   }
   switch (record.kind) {
-    case "trade": return { kind: "Swap", text: target || `${record.asset} swap`, via: "DEX", src: "crypto" };
+    case "trade": {
+      // A swap carries its real legs now — label it by direction with the moved
+      // token + amount ("Sold 12.5 HIVE"), not the old bare "USDC swap" fallback.
+      const swap = record.swap;
+      if (swap?.sellToken && swap?.buyToken) {
+        const dir = swapDirection(swap.sellToken, swap.buyToken);
+        const text = dir === "sell" ? `Sold ${trAmt(swap.sellToken, swap.sellAmount)} ${swap.sellToken}`
+          : dir === "buy" ? `Bought ${trAmt(swap.buyToken, swap.buyAmount)} ${swap.buyToken}`
+          : `Swapped ${trAmt(swap.sellToken, swap.sellAmount)} ${swap.sellToken} → ${trAmt(swap.buyToken, swap.buyAmount)} ${swap.buyToken}`;
+        return { kind: dir === "sell" ? "Sell" : dir === "buy" ? "Buy" : "Swap", text, via: "DEX", src: "crypto" };
+      }
+      return { kind: "Swap", text: target || `${record.asset} swap`, via: "DEX", src: "crypto" };
+    }
     case "send": return { kind: "Send", text: target ? `Sent to ${target}` : `Sent ${record.asset}`, via: "Base", src: "crypto" };
     case "x402": return { kind: "Pay", text: target ? `Paid ${target}` : "Paid an API", via: "x402", src: "crypto" };
     case "x402-private": return { kind: "Private", text: target ? `Privately paid ${target}` : "Private API pay", via: "Veil", src: "crypto" };
@@ -61,6 +84,9 @@ export function mapActivity(records: WalletActivityRecord[], now: number): DeskA
     // Guard the timestamp like the activity route does — a legacy record missing
     // createdAtMs must not render "NaNd" or corrupt the day sort/grouping.
     const ms = Number(record.createdAtMs) || Date.parse(record.createdAt) || now;
+    const swap = record.swap?.sellToken && record.swap?.buyToken
+      ? { ...record.swap, direction: swapDirection(record.swap.sellToken, record.swap.buyToken) }
+      : undefined;
     return {
       id: record.id,
       kind: display.kind,
@@ -72,12 +98,13 @@ export function mapActivity(records: WalletActivityRecord[], now: number): DeskA
       usd: Number(record.amountUsd) || 0,
       state: record.status === "executed" ? "filled" : record.status === "failed" ? "failed" : String(record.status || "filled"),
       src: display.src,
+      swap,
     };
   });
 }
 
 // ── crypto portfolio ─────────────────────────────────────────────────────────
-type BalanceToken = { symbol?: string; name?: string; balance?: number; valueUsd?: number | null; priceChange24hPct?: number | null; tokenAddress?: string };
+type BalanceToken = { symbol?: string; name?: string; balance?: number; valueUsd?: number | null; priceChange24hPct?: number | null; tokenAddress?: string; iconUrl?: string | null };
 
 export function cryptoBalancesFrom(tokens: BalanceToken[]): Record<string, number> {
   const map: Record<string, number> = {};
@@ -101,13 +128,28 @@ export function buildCryptoPortfolio(tokens: BalanceToken[], history: number[]):
         amount: Number(token.balance) || 0,
         usd: Number(token.valueUsd) || 0,
         chg: Number(token.priceChange24hPct) || 0,
+        logoUrl: token.iconUrl ?? null,
       };
     })
     .filter((row) => row.sym && row.usd > 0)
     .sort((a, b) => b.usd - a.usd);
   const total = rows.reduce((sum, row) => sum + row.usd, 0);
-  const dayChange = rows.reduce((sum, row) => sum + (row.usd * row.chg) / 100, 0);
-  const dayPct = total - dayChange !== 0 ? (dayChange / (total - dayChange)) * 100 : 0;
+  // Each holding's 24h $ change, from its CURRENT value + 24h % move. Two fixes
+  // over the naive Σ(usd·chg/100):
+  //   1. Compounding form usd·c/(100+c) — the change from yesterday's price
+  //      (usd/(1+c/100)) to today's. The linear usd·c/100 overstates a big mover
+  //      by ~(1+c/100)×, so a thin-pool token DexScreener reports as e.g. +4000%
+  //      24h alone inflated the headline by tens of thousands of dollars and drove
+  //      total−dayChange negative — the "+$82k · −102.80% today" on a $2,236 wallet.
+  //   2. Clamp c to a sane band: a HELD token whose reported 24h% is past ~[-90,+900]
+  //      is almost always a low-liquidity / stale-price artifact, not a real move —
+  //      don't let one dominate "today". The clamp also keeps 100+c well clear of 0.
+  const dayChange = rows.reduce((sum, row) => {
+    const c = Math.max(-90, Math.min(900, row.chg));
+    return sum + (row.usd * c) / (100 + c);
+  }, 0);
+  const prior = total - dayChange; // portfolio value ~24h ago; clamp keeps it > 0 when total > 0
+  const dayPct = prior > 0 ? (dayChange / prior) * 100 : 0;
   return { rows, total, dayChange, dayPct, history };
 }
 
@@ -162,7 +204,23 @@ export function buildStockPortfolio(portfolio: AlpacaPortfolio | null, snapshotC
   // so a position-level dollar delta isn't diluted by an unrelated cash balance.
   const positionsTotal = rows.reduce((sum, row) => sum + row.usd, 0);
   const dayPct = positionsTotal > 0 ? (dayChange / positionsTotal) * 100 : 0;
-  return { rows, total, dayChange, dayPct, history: equityHistory };
+  // Pending (not-yet-filled) orders shown as pending position rows, on top, so a
+  // just-submitted buy is visible before it fills and flips to a real holding.
+  // A notional order shows its $ notional; a share order its qty.
+  const pendingRows: DeskHolding[] = (portfolio?.openOrders ?? []).map((order) => ({
+    id: `order:${order.id}`,
+    sym: order.symbol,
+    name: order.symbol,
+    amount: order.qty ?? 0,
+    shares: order.qty ?? undefined,
+    usd: order.notionalUsd ?? 0,
+    chg: 0,
+    pending: true,
+    status: order.status,
+    side: order.side === "sell" ? "sell" : "buy",
+    orderId: order.id,
+  }));
+  return { rows: [...pendingRows, ...rows], total, dayChange, dayPct, history: equityHistory };
 }
 
 export function moverFromCrypto(row: CryptoMarketRow) {

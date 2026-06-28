@@ -40,6 +40,7 @@ export type QueenBeeAutonomousDelegation = {
   agent?: QueenBeeAutonomousAgent | null;
   machine?: {
     key?: string;
+    collector?: string;
     device?: {
       name?: string;
       collectorUrl?: string;
@@ -50,6 +51,7 @@ export type QueenBeeAutonomousDelegation = {
 export type QueenBeeAutonomousPickupInput = KanbanStorageOptions & {
   task: KanbanTask;
   delegation: QueenBeeAutonomousDelegation;
+  delegationChain?: QueenBeeAutonomousDelegation[];
   marker?: string;
 };
 
@@ -69,6 +71,15 @@ type KanbanMutations = {
   claim: (slug: string | null, taskId: string, input?: Record<string, unknown>, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown; run?: unknown }>;
   complete: (slug: string | null, taskId: string, input?: Record<string, unknown>, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown; blocked?: boolean; missingGateIds?: string[] }>;
   block: (slug: string | null, taskId: string, reason: string, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown }>;
+  reroute: (slug: string | null, taskId: string, input: QueenBeeAutonomousRerouteInput, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown }>;
+};
+
+type QueenBeeAutonomousRerouteInput = {
+  reason: string;
+  failedAgentName?: string;
+  nextAssignee: string;
+  nextRuntime?: string;
+  targetMachine?: KanbanTask["targetMachine"];
 };
 
 export type QueenBeeAutonomousPickupDeps = {
@@ -76,19 +87,16 @@ export type QueenBeeAutonomousPickupDeps = {
   claim?: KanbanMutations["claim"];
   complete?: KanbanMutations["complete"];
   block?: KanbanMutations["block"];
+  reroute?: KanbanMutations["reroute"];
 };
 
 const DEFAULT_PICKUP_TTL_MS = 30 * 60 * 1000;
 
 export function shouldAutonomouslyPickupQueenBeeTask(input: QueenBeeAutonomousPickupInput) {
-  const collectorUrl = cleanCollectorUrl(input.task.targetMachine?.collectorUrl || input.delegation.machine?.device?.collectorUrl);
-  const agent = input.delegation.agent;
   return Boolean(
     input.task.status === "ready"
     && input.delegation.status === "delegated"
-    && collectorUrl
-    && agent
-    && (agent.runtime === "hermes" || agent.runtimeCapabilities?.chat || agent.collectorCapabilities?.chat),
+    && canAutonomouslyRunDelegation(input.task, input.delegation),
   );
 }
 
@@ -107,122 +115,258 @@ export async function runQueenBeeAutonomousPickup(
   input: QueenBeeAutonomousPickupInput,
   deps: QueenBeeAutonomousPickupDeps = {},
 ): Promise<QueenBeeAutonomousPickupResult> {
-  const collectorUrl = cleanCollectorUrl(input.task.targetMachine?.collectorUrl || input.delegation.machine?.device?.collectorUrl);
-  const agent = input.delegation.agent ?? null;
-  const agentName = agent?.name || agent?.id || agent?.agentId || input.task.assignee || "Queen Bee delegate";
-  if (!collectorUrl || !agent || input.delegation.status !== "delegated") {
-    return { ok: false, status: "skipped", taskId: input.task.id, collectorUrl, agentName, error: "Task has no live delegated collector/agent." };
-  }
-
   const mutations = await defaultKanbanMutations(deps);
   const claim = mutations.claim;
   const complete = mutations.complete;
   const block = mutations.block;
+  const reroute = mutations.reroute;
   const fetchJson = deps.fetchJson ?? defaultFetchJson;
-  const claimLock = `queen-bee-autonomous:${input.task.id}:${Date.now().toString(36)}`;
   const storageOptions = { vaultPath: input.vaultPath, kanbanFolder: input.kanbanFolder };
-
-  try {
-    const claimed = await claim(null, input.task.id, {
-      assignee: agentName,
-      claimer: claimLock,
-      runtime: agent.runtime || "hermes",
-      ttlMs: input.task.maxRuntimeMs || DEFAULT_PICKUP_TTL_MS,
-    }, storageOptions);
-
-    const runWorkerChat = (message: string) => fetchJson(`${collectorUrl}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message,
-        rawUserMessage: message,
-        stream: false,
-        agent,
-        context: {
-          queenBeeTaskId: input.task.id,
-          queenBeeAutonomousPickup: true,
-          claimLock,
-          marker: input.marker,
-        },
-      }),
-      signal: AbortSignal.timeout(Number(process.env.QUEEN_BEE_AUTONOMOUS_CHAT_TIMEOUT_MS || 240_000)),
-    });
-
-    let text = chatText(await runWorkerChat(autonomousWorkerPrompt(claimed.task, input.marker)));
-    if (!text.trim()) {
-      // Some runtimes return NO final assistant message on long or tool-heavy prompts
-      // (the worker enters a tool loop that ends without emitting text). Retry once asking
-      // for a concise, plain-text final answer with no tool calls before giving up.
-      text = chatText(await runWorkerChat(autonomousWorkerFallbackPrompt(claimed.task, input.marker)));
-    }
-    if (!text.trim()) {
-      // Still nothing after the retry — fail loud with a re-route hint rather than pretend
-      // the work happened. Never mark a task done without real output.
-      throw new Error(
-        `Agent "${agentName}" returned no final response after a retry (the runtime likely ended a tool loop without emitting text). Re-route this task to a healthy fleet agent or simplify the task.`,
-      );
-    }
-
-    // Turn the worker output into concrete loop receipts so required eval gates can
-    // actually be satisfied (or honestly blocked) instead of staying pending metadata.
-    const loopJudge = makeLoopJudge({ collectorUrl, agent, fetchJson, claimLock, marker: input.marker });
-    const { receipts } = await runLoopGates({
-      loop: claimed.task.loop ?? input.task.loop,
-      output: text,
-      judge: loopJudge,
-    });
-
-    const completion = await complete(null, input.task.id, {
-      summary: `Queen Bee autonomous pickup completed by ${agentName}.`,
-      result: text,
-      loopReceipts: receipts.length ? receipts : undefined,
-      metadata: {
-        queenBeeAutonomousPickup: true,
-        collectorUrl,
-        agentName,
-        workerClass: input.delegation.workerClass,
-        markerSeen: input.marker ? text.includes(input.marker) : undefined,
-        loopGatesEvaluated: receipts.length || undefined,
-      },
-    }, storageOptions);
-
-    const blockedByGates = completion?.blocked === true || completion?.task?.status === "needs-human";
-    await advanceFlowIfTagged(input.task, blockedByGates ? "failed" : "passed", text, input.vaultPath);
-    if (blockedByGates) {
-      const missing = completion?.missingGateIds ?? [];
-      return {
-        ok: false,
-        status: "blocked",
-        taskId: input.task.id,
-        claimLock,
-        collectorUrl,
-        agentName,
-        error: `Worker finished but required loop gates are unsatisfied: ${missing.join(", ") || "missing required eval receipts"}.`,
-      };
-    }
-    return { ok: true, status: "completed", taskId: input.task.id, claimLock, collectorUrl, agentName };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Queen Bee autonomous pickup failed.";
-    try {
-      await block(null, input.task.id, `Queen Bee autonomous pickup failed for ${agentName}: ${message}`, storageOptions);
-    } catch {
-      // Preserve the original failure if the board was already moved by another worker.
-    }
-    await advanceFlowIfTagged(input.task, "failed", message, input.vaultPath);
-    return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: message };
+  const chain = pickupDelegationChain(input);
+  if (!chain.length) {
+    return { ok: false, status: "skipped", taskId: input.task.id, error: "Task has no live delegated collector/agent." };
   }
+
+  let currentTask = input.task;
+  let lastClaimLock = "";
+  let lastCollectorUrl = "";
+  let lastAgentName = "";
+  const failures: string[] = [];
+
+  for (let index = 0; index < chain.length; index += 1) {
+    const delegation = chain[index];
+    const collectorUrl = collectorUrlForDelegation(currentTask, delegation);
+    const agent = delegation.agent ?? null;
+    const agentName = delegationAgentName(delegation, currentTask.assignee);
+    lastCollectorUrl = collectorUrl;
+    lastAgentName = agentName;
+
+    if (!canAutonomouslyRunDelegation(currentTask, delegation)) {
+      failures.push(`${agentName}: no live delegated collector/agent`);
+      continue;
+    }
+
+    const claimLock = `queen-bee-autonomous:${input.task.id}:${Date.now().toString(36)}:${index + 1}`;
+    lastClaimLock = claimLock;
+
+    try {
+      const claimed = await claim(null, input.task.id, {
+        assignee: agentName,
+        claimer: claimLock,
+        runtime: agent?.runtime || "hermes",
+        ttlMs: currentTask.maxRuntimeMs || DEFAULT_PICKUP_TTL_MS,
+      }, storageOptions);
+      currentTask = claimed.task;
+
+      const runWorkerChat = (message: string) => fetchJson(`${collectorUrl}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          rawUserMessage: message,
+          stream: false,
+          agent,
+          context: {
+            queenBeeTaskId: input.task.id,
+            queenBeeAutonomousPickup: true,
+            claimLock,
+            marker: input.marker,
+          },
+        }),
+        signal: AbortSignal.timeout(Number(process.env.QUEEN_BEE_AUTONOMOUS_CHAT_TIMEOUT_MS || 240_000)),
+      });
+
+      let text = chatText(await runWorkerChat(autonomousWorkerPrompt(claimed.task, input.marker)));
+      if (!text.trim()) {
+        // Some runtimes return NO final assistant message on long or tool-heavy prompts
+        // (the worker enters a tool loop that ends without emitting text). Retry once asking
+        // for a concise, plain-text final answer with no tool calls before giving up.
+        text = chatText(await runWorkerChat(autonomousWorkerFallbackPrompt(claimed.task, input.marker)));
+      }
+      if (!text.trim()) {
+        // Still nothing after the retry — fail loud with a re-route hint rather than pretend
+        // the work happened. Never mark a task done without real output.
+        throw new Error(
+          `Agent "${agentName}" returned no final response after a retry (the runtime likely ended a tool loop without emitting text). Re-route this task to a healthy fleet agent or simplify the task.`,
+        );
+      }
+
+      // Turn the worker output into concrete loop receipts so required eval gates can
+      // actually be satisfied (or honestly blocked) instead of staying pending metadata.
+      const loopJudge = makeLoopJudge({ collectorUrl, agent: agent!, fetchJson, claimLock, marker: input.marker });
+      const { receipts } = await runLoopGates({
+        loop: claimed.task.loop ?? input.task.loop,
+        output: text,
+        judge: loopJudge,
+      });
+
+      const completion = await complete(null, input.task.id, {
+        summary: `Queen Bee autonomous pickup completed by ${agentName}.`,
+        result: text,
+        loopReceipts: receipts.length ? receipts : undefined,
+        metadata: {
+          queenBeeAutonomousPickup: true,
+          collectorUrl,
+          agentName,
+          workerClass: delegation.workerClass ?? input.delegation.workerClass,
+          markerSeen: input.marker ? text.includes(input.marker) : undefined,
+          loopGatesEvaluated: receipts.length || undefined,
+        },
+      }, storageOptions);
+
+      const blockedByGates = completion?.blocked === true || completion?.task?.status === "needs-human";
+      currentTask = completion.task ?? currentTask;
+      if (!blockedByGates) {
+        await advanceFlowIfTagged(input.task, "passed", text, input.vaultPath);
+        return { ok: true, status: "completed", taskId: input.task.id, claimLock, collectorUrl, agentName };
+      }
+
+      const missing = completion?.missingGateIds ?? [];
+      const message = `Worker finished but required loop gates are unsatisfied: ${missing.join(", ") || "missing required eval receipts"}.`;
+      failures.push(`${agentName}: ${message}`);
+      const next = nextPickupDelegation(chain, index + 1, currentTask);
+      if (!next) {
+        await advanceFlowIfTagged(input.task, "failed", message, input.vaultPath);
+        return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: exhaustedMessage(failures) };
+      }
+      currentTask = (await reroute(null, input.task.id, rerouteInput(message, agentName, next), storageOptions)).task;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Queen Bee autonomous pickup failed.";
+      failures.push(`${agentName}: ${message}`);
+      const next = nextPickupDelegation(chain, index + 1, currentTask);
+      if (!next) {
+        const finalMessage = exhaustedMessage(failures);
+        try {
+          await block(null, input.task.id, finalMessage, storageOptions);
+        } catch {
+          // Preserve the original failure if the board was already moved by another worker.
+        }
+        await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
+        return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: finalMessage };
+      }
+      currentTask = (await reroute(null, input.task.id, rerouteInput(message, agentName, next), storageOptions)).task;
+    }
+  }
+
+  const finalMessage = exhaustedMessage(failures.length ? failures : ["No eligible autonomous delegates were available."]);
+  try {
+    await block(null, input.task.id, finalMessage, storageOptions);
+  } catch {
+    // Preserve the original failure if the board was already moved by another worker.
+  }
+  await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
+  return { ok: false, status: "blocked", taskId: input.task.id, claimLock: lastClaimLock, collectorUrl: lastCollectorUrl, agentName: lastAgentName, error: finalMessage };
 }
 
 async function defaultKanbanMutations(deps: QueenBeeAutonomousPickupDeps): Promise<KanbanMutations> {
-  if (deps.claim && deps.complete && deps.block) {
-    return { claim: deps.claim, complete: deps.complete, block: deps.block };
+  if (deps.claim && deps.complete && deps.block && deps.reroute) {
+    return { claim: deps.claim, complete: deps.complete, block: deps.block, reroute: deps.reroute };
   }
   const kanban = await import("../kanban/local-kanban-store");
   return {
     claim: deps.claim ?? kanban.claimTask,
     complete: deps.complete ?? kanban.completeTask,
     block: deps.block ?? kanban.blockTask,
+    reroute: deps.reroute ?? kanban.rerouteTaskForAutonomousPickup,
   };
+}
+
+function canAutonomouslyRunDelegation(
+  task: KanbanTask,
+  delegation: QueenBeeAutonomousDelegation,
+  options: { allowTaskTargetFallback?: boolean } = { allowTaskTargetFallback: true },
+) {
+  const collectorUrl = collectorUrlForDelegation(task, delegation, options);
+  const agent = delegation.agent;
+  return Boolean(
+    delegation.status === "delegated"
+    && collectorUrl
+    && agent
+    && (agent.runtime === "hermes" || agent.runtimeCapabilities?.chat || agent.collectorCapabilities?.chat),
+  );
+}
+
+function collectorUrlForDelegation(
+  task: KanbanTask,
+  delegation: QueenBeeAutonomousDelegation,
+  options: { allowTaskTargetFallback?: boolean } = { allowTaskTargetFallback: true },
+) {
+  return delegationCollectorUrl(delegation)
+    || (options.allowTaskTargetFallback === false ? "" : cleanCollectorUrl(task.targetMachine?.collectorUrl));
+}
+
+function delegationCollectorUrl(delegation: QueenBeeAutonomousDelegation) {
+  const deviceUrl = cleanCollectorUrl(delegation.machine?.device?.collectorUrl);
+  if (deviceUrl) return deviceUrl;
+  const machineCollector = cleanCollectorUrl(delegation.machine?.collector);
+  return /^https?:\/\//i.test(machineCollector) ? machineCollector : "";
+}
+
+function pickupDelegationChain(input: QueenBeeAutonomousPickupInput) {
+  const chain = [input.delegation, ...(input.delegationChain ?? [])];
+  const seen = new Set<string>();
+  return chain.filter((delegation) => {
+    const key = delegationKey(delegation);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function delegationKey(delegation: QueenBeeAutonomousDelegation) {
+  const agent = delegation.agent;
+  const machine = delegation.machine;
+  return [
+    cleanCollectorUrl(machine?.device?.collectorUrl),
+    cleanCollectorUrl(machine?.collector),
+    machine?.key,
+    machine?.device?.name,
+    agent?.id,
+    agent?.agentId,
+    agent?.name,
+  ].filter(Boolean).join("|") || "unknown-delegation";
+}
+
+function delegationAgentName(delegation: QueenBeeAutonomousDelegation, fallback?: string) {
+  const agent = delegation.agent;
+  return agent?.name || agent?.id || agent?.agentId || fallback || "Queen Bee delegate";
+}
+
+function nextPickupDelegation(chain: QueenBeeAutonomousDelegation[], startIndex: number, task: KanbanTask) {
+  for (let index = startIndex; index < chain.length; index += 1) {
+    if (canAutonomouslyRunDelegation(task, chain[index], { allowTaskTargetFallback: false })) return chain[index];
+  }
+  return null;
+}
+
+function rerouteInput(reason: string, failedAgentName: string, next: QueenBeeAutonomousDelegation): QueenBeeAutonomousRerouteInput {
+  return {
+    reason: `Autonomous pickup failed for ${failedAgentName}: ${reason}`,
+    failedAgentName,
+    nextAssignee: delegationAgentName(next),
+    nextRuntime: next.agent?.runtime,
+    targetMachine: targetMachineForDelegation(next),
+  };
+}
+
+function targetMachineForDelegation(delegation: QueenBeeAutonomousDelegation): KanbanTask["targetMachine"] {
+  const machine = delegation.machine;
+  const collectorUrl = delegationCollectorUrl(delegation);
+  const name = machine?.device?.name || machine?.key || (collectorUrl ? "Delegated machine" : "");
+  if (!name && !collectorUrl) return null;
+  return {
+    key: machine?.key || name || "delegated-machine",
+    name: name || "Delegated machine",
+    collectorUrl: collectorUrl || undefined,
+  };
+}
+
+function exhaustedMessage(failures: string[]) {
+  const detail = failures.map((failure) => `- ${failure}`).join("\n");
+  return [
+    "Queen Bee autonomous pickup exhausted all eligible delegates and now needs human input.",
+    detail ? `Failures:\n${detail}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function autonomousWorkerPrompt(task: KanbanTask, marker?: string) {

@@ -73,6 +73,7 @@ export function stockTradeConfirmation(side: StockTradeSide): string {
 
 export type BuyStockPolicy = Pick<
   AgentWalletConfig,
+  | "agentId"
   | "enabled"
   | "network"
   | "tradingVenue"
@@ -148,6 +149,11 @@ export type BuyStockQuote = {
 function maxTradeUsd(policy: BuyStockPolicy): number {
   const explicit = Number(policy.maxTradeUsd) || 0;
   if (explicit > 0) return explicit;
+  // Personal ("user:") wallets are the user's own custody — they carry no agent
+  // per-trade guardrail (the Trade desk shows them uncapped). Don't inherit the
+  // agent default maxPaymentUsd ($0.50) that createDefaultAgentWallet seeds onto
+  // every wallet config; a human-operated own wallet sizes its own orders.
+  if (policy.agentId?.startsWith("user:")) return 0;
   return Number(policy.maxPaymentUsd) || 0;
 }
 
@@ -300,6 +306,20 @@ export type AlpacaPosition = {
   unrealizedPlPct: number;
 };
 
+/** An open (not-yet-filled) Alpaca order — surfaced so the desk can show a
+ *  pending position before it fills. A notional market buy has notionalUsd set
+ *  and qty null; a share order has qty set. */
+export type AlpacaOpenOrder = {
+  id: string;
+  symbol: string;
+  side: string;
+  qty: number | null;
+  notionalUsd: number | null;
+  filledQty: number;
+  status: string;
+  submittedAt: string;
+};
+
 export type AlpacaPortfolio = {
   paper: boolean;
   account: {
@@ -311,6 +331,8 @@ export type AlpacaPortfolio = {
     portfolioValue: number;
   };
   positions: AlpacaPosition[];
+  /** Open/pending orders (status=open) so the UI can show them before they fill. */
+  openOrders: AlpacaOpenOrder[];
 };
 
 /**
@@ -322,15 +344,32 @@ export async function fetchAlpacaPortfolio(input: { policy: BuyStockPolicy; pape
   const { apiKey, apiSecret } = await resolveAlpacaCreds(input.policy, input.paper);
   const base = input.paper ? ALPACA_PAPER_BASE : ALPACA_LIVE_BASE;
   const headers = { "APCA-API-KEY-ID": apiKey, "APCA-API-SECRET-KEY": apiSecret };
-  const [accountRes, positionsRes] = await Promise.all([
+  const [accountRes, positionsRes, ordersRes] = await Promise.all([
     fetch(`${base}/v2/account`, { headers, signal: AbortSignal.timeout(20_000) }),
     fetch(`${base}/v2/positions`, { headers, signal: AbortSignal.timeout(20_000) }),
+    fetch(`${base}/v2/orders?status=open&limit=100&nested=false`, { headers, signal: AbortSignal.timeout(20_000) }),
   ]);
   if (!accountRes.ok) {
     throw new Error(`Alpaca account fetch failed (HTTP ${accountRes.status}). Check the ${input.paper ? "paper" : "live"} keys.`);
   }
   const account = (await accountRes.json().catch(() => ({}))) as Record<string, unknown>;
   const rawPositions = positionsRes.ok ? ((await positionsRes.json().catch(() => [])) as unknown) : [];
+  const rawOrders = ordersRes.ok ? ((await ordersRes.json().catch(() => [])) as unknown) : [];
+  const openOrders: AlpacaOpenOrder[] = (Array.isArray(rawOrders) ? rawOrders : []).map((raw) => {
+    const o = raw as Record<string, unknown>;
+    const qty = o.qty == null ? null : Number(o.qty) || 0;
+    const notionalUsd = o.notional == null ? null : Number(o.notional) || 0;
+    return {
+      id: String(o.id || ""),
+      symbol: String(o.symbol || ""),
+      side: String(o.side || "buy"),
+      qty,
+      notionalUsd,
+      filledQty: Number(o.filled_qty) || 0,
+      status: String(o.status || "pending"),
+      submittedAt: String(o.submitted_at || o.created_at || ""),
+    };
+  });
   const positions: AlpacaPosition[] = (Array.isArray(rawPositions) ? rawPositions : []).map((raw) => {
     const p = raw as Record<string, unknown>;
     return {
@@ -356,7 +395,34 @@ export async function fetchAlpacaPortfolio(input: { policy: BuyStockPolicy; pape
       portfolioValue: Number(account.portfolio_value) || 0,
     },
     positions,
+    openOrders,
   };
+}
+
+/**
+ * Cancel one open Alpaca order by id, on the mode-correct account. Cancelling is
+ * a reversal (it prevents a spend), so it's not governance- or confirmation-gated
+ * — but it still uses the venue's own credentials. Alpaca returns 204 on cancel
+ * and 422 when the order is no longer cancelable (e.g. it already filled).
+ */
+export async function cancelAlpacaOrder(input: { policy: BuyStockPolicy; paper: boolean; orderId: string }): Promise<{ ok: boolean; status: number }> {
+  if (input.policy.tradingVenue !== "alpaca") throw new Error("Order cancel is only available for the Alpaca venue.");
+  const orderId = input.orderId?.trim();
+  if (!orderId) throw new Error("An order id is required to cancel.");
+  const { apiKey, apiSecret } = await resolveAlpacaCreds(input.policy, input.paper);
+  const base = input.paper ? ALPACA_PAPER_BASE : ALPACA_LIVE_BASE;
+  const res = await fetch(`${base}/v2/orders/${encodeURIComponent(orderId)}`, {
+    method: "DELETE",
+    headers: { "APCA-API-KEY-ID": apiKey, "APCA-API-SECRET-KEY": apiSecret },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok && res.status !== 204) {
+    if (res.status === 422) throw new Error("This order can't be canceled — it may have already filled.");
+    if (res.status === 404) throw new Error("That order no longer exists (it may have filled or already canceled).");
+    const body = await res.text().catch(() => "");
+    throw new Error(`Order cancel failed (HTTP ${res.status}).${body ? ` ${body.slice(0, 120)}` : ""}`);
+  }
+  return { ok: true, status: res.status };
 }
 
 // ---- xStocks (on-chain tokenized equities via Jupiter) ----------------------
@@ -595,6 +661,7 @@ export async function discoverBuyStockQuote(input: Pick<BuyStockInput, "policy" 
 /** Narrow a persisted wallet config to the trade policy fields. */
 export function toBuyStockPolicy(wallet: AgentWalletConfig): BuyStockPolicy {
   return {
+    agentId: wallet.agentId,
     enabled: wallet.enabled,
     network: wallet.network,
     tradingVenue: wallet.tradingVenue,

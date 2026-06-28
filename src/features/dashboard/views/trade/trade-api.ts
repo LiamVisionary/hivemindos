@@ -109,10 +109,23 @@ export type AlpacaPosition = {
   unrealizedPlPct: number;
 };
 
+export type AlpacaOpenOrder = {
+  id: string;
+  symbol: string;
+  side: string;
+  qty: number | null;
+  notionalUsd: number | null;
+  filledQty: number;
+  status: string;
+  submittedAt: string;
+};
+
 export type AlpacaPortfolio = {
   paper: boolean;
   account: { status: string; currency: string; equity: number; cash: number; buyingPower: number; portfolioValue: number };
   positions: AlpacaPosition[];
+  /** Open/pending orders (not yet filled) so the desk can show pending positions. */
+  openOrders?: AlpacaOpenOrder[];
 };
 
 export type StockQuote = {
@@ -199,12 +212,13 @@ export async function fundBankrLlmCredits(amountUsd: number, token: string): Pro
   return postJson("/api/bankr/llm-credits", { amountUsd, token, confirmation: FUND_LLM_CREDITS_CONFIRMATION });
 }
 
-export type BankrWalletInfo = { configured: boolean; address?: string; balanceUsd?: number | null };
+export type BankrTokenHolding = { symbol: string; name: string; amount: number; usd: number };
+export type BankrWalletInfo = { configured: boolean; address?: string; balanceUsd?: number | null; tokens?: BankrTokenHolding[] };
 
 export async function fetchBankrWallet(): Promise<BankrWalletInfo> {
   const response = await fetch("/api/bankr/wallet", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
   const data = await asJson<BankrWalletInfo>(response);
-  return data.ok ? { configured: Boolean((data as BankrWalletInfo).configured), address: (data as BankrWalletInfo).address, balanceUsd: (data as BankrWalletInfo).balanceUsd } : { configured: false };
+  return data.ok ? { configured: Boolean((data as BankrWalletInfo).configured), address: (data as BankrWalletInfo).address, balanceUsd: (data as BankrWalletInfo).balanceUsd, tokens: Array.isArray((data as BankrWalletInfo).tokens) ? (data as BankrWalletInfo).tokens : [] } : { configured: false };
 }
 
 // ---- Local DEX swap rail (0x on Base) --------------------------------------
@@ -226,7 +240,7 @@ export type TradePlatformFee = {
 export type DexSwapQuote = { sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; platformFee?: TradePlatformFee; detail: string };
 export type DexSwapResult = { network: string; sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; reference: string; approvalReference?: string; platformFee?: TradePlatformFee; detail: string };
 
-export async function quoteSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; slippageBps?: number }): Promise<{ ok: boolean; error?: string; quote?: DexSwapQuote; confirmation?: string }> {
+export async function quoteSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; slippageBps?: number; network?: string }): Promise<{ ok: boolean; error?: string; quote?: DexSwapQuote; confirmation?: string }> {
   return postJson("/api/trading/swap", { action: "quote", ...params });
 }
 
@@ -579,6 +593,10 @@ export async function fetchStockPortfolio(agentId: string, paper: boolean): Prom
   return postJson("/api/trading", { action: "portfolio", agentId, paper });
 }
 
+export async function cancelStockOrder(agentId: string, orderId: string, paper: boolean): Promise<{ ok: boolean; error?: string; canceled?: string }> {
+  return postJson("/api/trading", { action: "cancel-order", agentId, orderId, paper });
+}
+
 // ---- Real market data (movers + sparklines + FX) ---------------------------
 export type MarketRange = "24h" | "7d" | "30d";
 
@@ -617,6 +635,8 @@ export type WalletActivityRecord = {
   status: "executed" | "failed" | string;
   approvalId?: string;
   transactionHash?: string;
+  /** DEX swap legs (tokens + human amounts), when this record is a swap. */
+  swap?: { sellToken: string; sellAmount: number; buyToken: string; buyAmount: number };
   createdAt: string;
   createdAtMs: number;
 };

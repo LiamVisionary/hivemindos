@@ -13,6 +13,46 @@ export function emitQueenVoiceToggle() {
   window.dispatchEvent(new CustomEvent(QUEEN_VOICE_TOGGLE_EVENT));
 }
 
+export const QUEEN_VOICE_STATE_EVENT = "hivemindos:queen-bee-voice-state";
+
+// The overlay owns the open/closed state; mirror the latest value here so a
+// late-subscribing control (e.g. the chat pill's voice toggle) can read the
+// current state synchronously on mount instead of waiting for the next change.
+let currentQueenVoiceOpen = false;
+
+/** Whether the Queen Bee voice overlay is currently open. */
+export function getQueenVoiceOpen() {
+  return currentQueenVoiceOpen;
+}
+
+/**
+ * Broadcasts the Queen Bee voice overlay's open/closed state so controls
+ * outside the overlay (e.g. the "Message the hive" pill's voice toggle) can
+ * reflect whether voice mode is active.
+ */
+export function emitQueenVoiceState(open: boolean) {
+  currentQueenVoiceOpen = open;
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(QUEEN_VOICE_STATE_EVENT, { detail: { open } }),
+  );
+}
+
+/**
+ * Subscribes to Queen Bee voice open/close state changes. Returns an unlisten
+ * function. The callback is not invoked on subscribe — read getQueenVoiceOpen()
+ * for the initial value.
+ */
+export function listenForQueenVoiceState(onState: (open: boolean) => void) {
+  if (typeof window === "undefined") return () => {};
+  const handleDomEvent = (event: Event) => {
+    const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+    onState(Boolean(detail?.open));
+  };
+  window.addEventListener(QUEEN_VOICE_STATE_EVENT, handleDomEvent);
+  return () => window.removeEventListener(QUEEN_VOICE_STATE_EVENT, handleDomEvent);
+}
+
 /**
  * Subscribes to Queen Bee voice toggles from the desktop shell (tray icon,
  * app menu) and from in-page CustomEvents so the flow stays testable in a

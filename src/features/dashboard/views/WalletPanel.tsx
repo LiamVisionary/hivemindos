@@ -603,7 +603,7 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
     })),
     myWallets: buildGroupedPersonalWallets(personalWallets),
     bankrWallet: bankrWallet?.configured
-      ? { configured: true, address: bankrWallet.address || "", balanceUsd: Number(bankrWallet.balanceUsd) || 0 }
+      ? { configured: true, address: bankrWallet.address || "", balanceUsd: Number(bankrWallet.balanceUsd) || 0, tokens: Array.isArray(bankrWallet.tokens) ? bankrWallet.tokens : [] }
       : null,
     walletMeta,
     balances,

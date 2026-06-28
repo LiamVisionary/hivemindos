@@ -18,11 +18,26 @@ import {
   type QueenBeeFleetMachine,
 } from "@/lib/services/queen-bee/control-plane";
 import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
+import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
+
+// The persisted session every Queen agent-turn shares; multi-step rail flows (a
+// swap/send/Bankr DRAFT prepared on one turn, then a confirmation on the next)
+// thread their draft through it because the agent-turn is otherwise stateless.
+const QUEEN_VOICE_SESSION_ID = "queen-bee-voice";
+
+// A bare confirmation token ("CONFIRM_SWAP", "confirm", ...) carries no request of
+// its own — it points at a draft prepared on the previous turn. Used to decide when
+// to strip the FAB's screen-context wrapper + thread the prior draft.
+const CONFIRMATION_REQUEST = /^(?:confirm|confirmed|yes|yes,?\s*confirm|go ahead|run it|execute|send it|(?:CONFIRM|SEND|APPROVE)_[A-Z]+)$/i;
 
 // Spoken turns need tight budgets: a slow runtime attempt costs silence.
 const AGENT_TURN_TIMEOUT_MS = 10_000;
 const OPENAI_TURN_TIMEOUT_MS = 20_000;
 const MAX_HISTORY_TURNS = 8;
+// How many capable agents the delegation path tries (in fitness order) before
+// falling back to OpenAI. A single down agent (bad provider key, etc.) must not
+// dead-end the request.
+const MAX_AGENT_FALLBACK_ATTEMPTS = 3;
 const OPENAI_VOICE_CHAT_FALLBACK_MODEL = "gpt-4o-mini";
 
 export type QueenVoiceHistoryTurn = { who: "you" | "queen"; text: string };
@@ -283,6 +298,64 @@ export function coerceActingWalletSource(value: unknown): ActingWalletSource | u
   };
 }
 
+// The recent rail DRAFTS from the shared Queen voice session. Every rail draft ends
+// with a "Reply `confirm`/`CONFIRM_…`" instruction, so we thread the most recent few
+// of THOSE (not arbitrary assistant text) — robust to interleaved errors/chatter —
+// letting a confirmation turn's route handler locate the exact draft to execute.
+async function recentQueenVoiceSessionMessages(): Promise<Array<{ role: "assistant"; content: string }>> {
+  const session = await readRuntimeChatSession({ sessionId: QUEEN_VOICE_SESSION_ID }).catch(() => null);
+  if (!session) return [];
+  return session.messages
+    .filter((m) => m.role === "assistant" && typeof m.content === "string"
+      && /reply\s+`?(?:confirm|CONFIRM_|SEND_|APPROVE_)/i.test(m.content))
+    .slice(-2)
+    .map((m) => ({ role: "assistant" as const, content: m.content }));
+}
+
+// Pull the EXACT confirmation token a prepared draft asked for - the route writes
+// drafts as "...Reply `CONFIRM_SWAP`...", "...Reply `confirm`...", "...Reply `SEND_USDC`...".
+// The confirm must hit the same rail that prepared it (DEX wants CONFIRM_SWAP, Bankr
+// wants confirm, sends want SEND_USDC); echoing the draft's own token back makes the
+// route's exact-match executors fire regardless of which token the user/brain typed.
+function extractDraftConfirmToken(draft: string): string {
+  const match = draft.match(/\breply\s+`?([A-Za-z0-9_]+)`?/i);
+  return match ? match[1] : "";
+}
+
+// Last-resort fallback for a relayed request when every capable agent is down:
+// answer directly via OpenAI. It has no computer tools, so it can only help with
+// requests answerable from its own knowledge; anything strictly needing the user's
+// machine/files/wallet it should say it couldn't reach an agent for.
+async function runOpenAiAgentTurn(request: string, systemPreamble?: string): Promise<string> {
+  const apiKey = await transcriptionApiKey();
+  if (!apiKey) throw new Error("No OpenAI key for the agent-turn fallback.");
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are Queen Bee's fallback brain. The user's HivemindOS agents are unavailable, so answer the request directly and briefly from your own knowledge. If it strictly needs their computer, files, or wallet, say plainly that you couldn't reach an agent to do it." +
+            (systemPreamble ? ` ${systemPreamble}` : ""),
+        },
+        { role: "user", content: request },
+      ],
+      max_tokens: 300,
+      temperature: 0.5,
+    }),
+    signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`OpenAI agent-turn fallback HTTP ${response.status}.`);
+  const data = (await response.json().catch(() => null)) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  } | null;
+  const content = data?.choices?.[0]?.message?.content;
+  return typeof content === "string" ? content.trim() : "";
+}
+
 /**
  * Routes a spoken request through the full agent runtime harness (system
  * prompt, capabilities, vault/brain context). Used by the realtime session's
@@ -298,8 +371,27 @@ export async function runQueenBeeAgentTurn(
 ): Promise<QueenAgentTurnResult> {
   const request = message.trim();
   if (!request) return { speech: "The request was empty, so nothing was done.", detail: "" };
-  const agent = await pickConversationAgent();
-  if (!agent) {
+  // The FAB wraps relayed requests as "<screen context>\n\nUser request: <text>".
+  // When this turn is a bare confirmation, (1) strip the wrapper so the route's
+  // exact-match confirm handlers (which compare against "CONFIRM_SWAP" etc.) fire,
+  // and (2) thread the recent persisted session — the prior draft is stored there
+  // as an assistant message, and the stateless agent-turn would otherwise lose it,
+  // so the confirm handlers that scan message history for the draft can find it.
+  const bareRequest = request.replace(/^[\s\S]*?\n\nUser request:\s*/i, "").trim() || request;
+  const isConfirmation = CONFIRMATION_REQUEST.test(bareRequest);
+  const priorDraftMessages = isConfirmation ? await recentQueenVoiceSessionMessages() : [];
+  let userContent = isConfirmation ? bareRequest : request;
+  // A confirmation only executes if it reaches the exact-match executor for the rail
+  // that prepared the draft. The brain (or user) may type the other rail's token or a
+  // synonym - e.g. "CONFIRM_SWAP" against a Bankr draft that wants "confirm", which
+  // matches NEITHER executor and re-prompts forever. Replace it with the pending
+  // draft's own required token so the correct executor fires deterministically.
+  if (isConfirmation && priorDraftMessages.length) {
+    const draftToken = extractDraftConfirmToken(priorDraftMessages[priorDraftMessages.length - 1].content);
+    if (draftToken) userContent = draftToken;
+  }
+  const agents = await rankConversationAgents();
+  if (agents.length === 0) {
     return {
       speech:
         "No chat-capable HivemindOS agent is configured yet, so the request could not be run.",
@@ -307,47 +399,90 @@ export async function runQueenBeeAgentTurn(
     };
   }
   const preferencePreamble = await queenVoicePreferencePreamble();
-  try {
-    const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        agent: voiceOptimizedAgent(agent),
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are handling a request relayed from Queen Bee's live voice chat. Do the work with your available capabilities, then respond with STRICT JSON only, no markdown fences, matching: " +
-              '{"speech": string, "detail": string}. ' +
-              "speech: one to three short spoken sentences describing the outcome, no markdown, no preambles - this is read aloud. " +
-              "detail: the full content the user would want to SEE on screen (the actual notes, list, values, file names, or findings), as readable markdown; use an empty string when there is nothing substantial to show beyond the spoken reply." +
-              (preferencePreamble ? ` ${preferencePreamble}` : ""),
-          },
-          { role: "user", content: request },
-        ],
-        runtimeSessionId: "queen-bee-voice",
-        agentMode: "act",
-        latencyMode: "voice",
-        actingWalletSource: actingWallet,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(45_000),
-    });
-    const text = await readRuntimeResponseText(response);
-    if (text.trim()) return parseAgentTurnResult(text);
-    return {
-      speech:
-        "The agent finished without a spoken result. The local runtime may be down - check the Hermes daemon.",
-      detail: "",
-    };
-  } catch (turnError) {
-    const detail =
-      turnError instanceof Error ? turnError.message : "request failed";
-    return {
-      speech: `The HivemindOS agent could not be reached (${detail}). The local runtime may need a restart.`,
-      detail: "",
-    };
+  const relayMessages = [
+    {
+      role: "system",
+      content:
+        "You are handling a request relayed from Queen Bee's live voice chat. Do the work with your available capabilities, then respond with STRICT JSON only, no markdown fences, matching: " +
+        '{"speech": string, "detail": string}. ' +
+        "speech: one to three short spoken sentences describing the outcome, no markdown, no preambles - this is read aloud. " +
+        "detail: the full content the user would want to SEE on screen (the actual notes, list, values, file names, or findings), as readable markdown; use an empty string when there is nothing substantial to show beyond the spoken reply." +
+        (preferencePreamble ? ` ${preferencePreamble}` : ""),
+    },
+    ...priorDraftMessages,
+    { role: "user", content: userContent },
+  ];
+  // Try capable agents in fitness order. A single failing agent (bad provider key,
+  // empty result, unreachable) must NOT dead-end the request - fall through to the
+  // next best, then to OpenAI. Money actions are intercepted by the route's rails
+  // BEFORE the agent runs, so the first agent's call returns the rail draft for
+  // those regardless of agent health.
+  let lastError = "";
+  for (const agent of agents.slice(0, MAX_AGENT_FALLBACK_ATTEMPTS)) {
+    try {
+      const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          agent: voiceOptimizedAgent(agent),
+          messages: relayMessages,
+          runtimeSessionId: QUEEN_VOICE_SESSION_ID,
+          agentMode: "act",
+          latencyMode: "voice",
+          actingWalletSource: actingWallet,
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(45_000),
+      });
+      const text = await readRuntimeResponseText(response);
+      if (text.trim()) return parseAgentTurnResult(text);
+      // 200 but no usable text (e.g. the agent's provider rejected its key) - next agent.
+    } catch (turnError) {
+      lastError = turnError instanceof Error ? turnError.message : "request failed";
+      console.warn(
+        `[queen-bee-voice] relayed agent turn via ${agent.name || agent.id} failed; trying next:`,
+        lastError,
+      );
+    }
   }
+  // Every capable agent came up empty/unreachable - last resort is OpenAI. No computer
+  // tools, but answering from its own knowledge beats dead-ending (any money action was
+  // already handled by the rails before reaching here).
+  try {
+    const text = await runOpenAiAgentTurn(userContent, preferencePreamble);
+    if (text.trim()) return parseAgentTurnResult(text);
+  } catch (fallbackError) {
+    lastError = fallbackError instanceof Error ? fallbackError.message : lastError;
+  }
+  return {
+    speech:
+      "I tried your agents and the OpenAI fallback, but none could complete that just now - your agent runtime may need attention.",
+    detail: "",
+  };
+}
+
+// The route's money-action rails (swap/send/Bankr/x402) return a rich markdown
+// CARD - bold headers, the full wallet address, a base64 Bankr payload, a tx hash,
+// a "Reply `confirm`" line. That belongs on SCREEN, not read aloud word-for-word.
+// Turn such a card into a short spoken line + the full card as on-screen detail.
+function spokenLineForCard(card: string): string {
+  if (/\breply\s+`?(?:confirm|CONFIRM_|SEND_|APPROVE_)/i.test(card)) {
+    return "Here's the transaction. Say confirm to continue.";
+  }
+  const header = card.match(/\*\*([^*]+)\*\*/);
+  if (header) return `${header[1].trim().replace(/[.:]+$/, "")}. The details are on screen.`;
+  return "The details are on screen.";
+}
+
+function looksLikeRichCard(text: string): boolean {
+  // A prepared/confirmed money action: a confirm line, a base64 Bankr payload,
+  // an on-chain tx hash, or a long bold-headed markdown block - none of it spoken.
+  return (
+    /\breply\s+`?(?:confirm|CONFIRM_|SEND_|APPROVE_)/i.test(text)
+    || /\b0x[a-fA-F0-9]{16,}\b/.test(text)
+    || /payload\s+`?[A-Za-z0-9_+/-]{24,}/i.test(text)
+    || (/\*\*[^*]+\*\*/.test(text) && text.length > 180)
+  );
 }
 
 // The agent is asked for {speech, detail} JSON, but runtimes vary; parse
@@ -371,6 +506,10 @@ function parseAgentTurnResult(text: string): QueenAgentTurnResult {
       // Not JSON - fall through to plain-text handling.
     }
   }
+  // A bare markdown card from the money rails: speak a short line, show the rest.
+  if (looksLikeRichCard(trimmed)) {
+    return { speech: spokenLineForCard(trimmed), detail: trimmed.slice(0, 8_000) };
+  }
   return { speech: trimmed.slice(0, 600), detail: "" };
 }
 
@@ -392,23 +531,29 @@ function isLocalMachineProfile(profile: AgentProfile) {
   return !machine || machine === "this mac" || machine === "local";
 }
 
-export async function pickConversationAgent(vaultPath?: string) {
+// All chat-capable agents in fitness order (general+local, then general, then
+// local, then the rest), deduped by id. The delegation path tries them in turn so
+// one failing agent falls through to the next best instead of dead-ending.
+export async function rankConversationAgents(vaultPath?: string): Promise<AgentProfile[]> {
   const profiles = await readVaultAgentProfiles(vaultPath).catch(
     () => [] as AgentProfile[],
   );
   const candidates = profiles.filter(
     (profile) => profile.id && profile.runtime && supportsLiveChatTurn(profile),
   );
-  const general = candidates.filter(
-    (profile) => profile.workerClass === "general" || !profile.workerClass,
-  );
-  return (
-    general.find(isLocalMachineProfile) ??
-    general[0] ??
-    candidates.find(isLocalMachineProfile) ??
-    candidates[0] ??
-    null
-  );
+  const isGeneral = (p: AgentProfile) => p.workerClass === "general" || !p.workerClass;
+  const ordered = [
+    ...candidates.filter((p) => isGeneral(p) && isLocalMachineProfile(p)),
+    ...candidates.filter((p) => isGeneral(p) && !isLocalMachineProfile(p)),
+    ...candidates.filter((p) => !isGeneral(p) && isLocalMachineProfile(p)),
+    ...candidates.filter((p) => !isGeneral(p) && !isLocalMachineProfile(p)),
+  ];
+  const seen = new Set<string>();
+  return ordered.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
+}
+
+export async function pickConversationAgent(vaultPath?: string) {
+  return (await rankConversationAgents(vaultPath))[0] ?? null;
 }
 
 async function runRuntimeConversationTurn(

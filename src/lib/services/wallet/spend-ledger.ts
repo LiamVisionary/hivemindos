@@ -33,6 +33,9 @@ export type SpendLedgerRecord = {
   approvalId?: string;
   /** Public chain transaction hash when the spend executed on-chain. */
   transactionHash?: string;
+  /** For a "trade" (DEX swap): the tokens + human amounts on each leg, so the
+   *  activity feed can show "Sold X HIVE → Y USDC" instead of a bare "USDC swap". */
+  swap?: { sellToken: string; sellAmount: number; buyToken: string; buyAmount: number };
   createdAt: string;
   createdAtMs: number;
 };

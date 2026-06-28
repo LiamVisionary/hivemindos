@@ -75,6 +75,12 @@ function readLocalTtsCandidates(value: unknown) {
       ok: item?.ok === true,
       error: typeof item?.error === "string" ? item.error : undefined,
       model: typeof item?.model === "string" ? item.model : "chatterbox-turbo",
+      availableModels: Array.isArray(item?.availableModels)
+        ? [...new Set(item.availableModels.filter((entry) => typeof entry === "string"))]
+        : [],
+      availableVoices: Array.isArray(item?.availableVoices)
+        ? [...new Set(item.availableVoices.filter((entry) => typeof entry === "string"))]
+        : [],
       voice: typeof item?.voice === "string" ? item.voice : "voice01",
       voiceCount: typeof item?.voiceCount === "number" ? item.voiceCount : undefined,
       streamingKind: typeof item?.streamingKind === "string" ? item.streamingKind : undefined,
@@ -167,6 +173,14 @@ export function AgentSettingsCallsPanel(props: any) {
       voiceId: candidate.voice,
     });
   };
+
+  const selectedLocalTtsCandidate = localTtsCandidates.find(
+    (candidate) => candidate.id === agentCallSettings.voiceProviderId,
+  );
+  // Persist a model choice through the dashboard's own save path so it sticks
+  // (an external edit to the stored profile gets clobbered by the running app).
+  const updateLocalTtsModel = (model: string) => updateAgentCalls({ voiceModelId: model });
+  const updateLocalTtsVoice = (voice: string) => updateAgentCalls({ voiceId: voice });
 
   const refreshCallConnectionState = async () => {
     const [statusResponse, voiceResponse] = await Promise.all([
@@ -417,6 +431,7 @@ export function AgentSettingsCallsPanel(props: any) {
           ) : null}
 
           {agentCallSettings.voiceRuntime === "local-tts" ? (
+            <>
             <div className={styles.localTtsGrid}>
               {localTtsCandidates.length ? localTtsCandidates.map((candidate) => (
                 <button
@@ -431,7 +446,7 @@ export function AgentSettingsCallsPanel(props: any) {
                   <strong>{candidate.name}</strong>
                   <small>{[candidate.machineName, candidate.port ? `port ${candidate.port}` : ""].filter(Boolean).join(" · ") || "Connected app"}</small>
                   <dl>
-                    <div><dt>Model</dt><dd>{candidate.model}</dd></div>
+                    <div><dt>Model</dt><dd>{candidate.id === agentCallSettings.voiceProviderId ? (agentCallSettings.voiceModelId || candidate.model) : candidate.model}</dd></div>
                     <div><dt>Voice</dt><dd>{candidate.voice}</dd></div>
                     <div><dt>Stream</dt><dd>{candidate.sampleFormat} · {candidate.sampleRate} Hz</dd></div>
                     <div><dt>Engine</dt><dd>{candidate.streamingImplementation || candidate.streamingKind || "streaming"}</dd></div>
@@ -446,6 +461,37 @@ export function AgentSettingsCallsPanel(props: any) {
                 </div>
               )}
             </div>
+            {selectedLocalTtsCandidate?.ok && (selectedLocalTtsCandidate.availableModels?.length || selectedLocalTtsCandidate.availableVoices?.length) ? (
+              <div className={styles.voiceGrid}>
+                {selectedLocalTtsCandidate.availableModels?.length ? (
+                  <Field label="Model (this agent)">
+                    <select
+                      className="fb-select"
+                      value={agentCallSettings.voiceModelId || selectedLocalTtsCandidate.model}
+                      onChange={(event) => updateLocalTtsModel(event.target.value)}
+                    >
+                      {selectedLocalTtsCandidate.availableModels.map((model) => (
+                        <option value={model} key={model}>{model}</option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
+                {selectedLocalTtsCandidate.availableVoices?.length ? (
+                  <Field label="Voice (this agent)">
+                    <select
+                      className="fb-select"
+                      value={agentCallSettings.voiceId || selectedLocalTtsCandidate.voice}
+                      onChange={(event) => updateLocalTtsVoice(event.target.value)}
+                    >
+                      {selectedLocalTtsCandidate.availableVoices.map((voice) => (
+                        <option value={voice} key={voice}>{voice}</option>
+                      ))}
+                    </select>
+                  </Field>
+                ) : null}
+              </div>
+            ) : null}
+            </>
           ) : null}
 
           <div className={styles.quietGrid}>

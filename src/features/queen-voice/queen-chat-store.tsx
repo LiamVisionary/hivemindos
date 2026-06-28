@@ -32,6 +32,11 @@ type RunQueenCommand = (
 
 type QueenChatContextValue = {
   turns: QueenChatTurn[];
+  /** True when the chat history above the input is collapsed. Lifted here so
+   *  the input's toggle tab and the transcript overlay share one source of
+   *  truth — a typed send re-opens it; the tab and the bee's modals flip it. */
+  historyMinimized: boolean;
+  setHistoryMinimized: React.Dispatch<React.SetStateAction<boolean>>;
   /** Append a turn; returns its id. Pass an explicit id for the voice bridge. */
   appendTurn: (turn: Omit<QueenChatTurn, "id"> & { id?: string }) => string;
   updateTurn: (id: string, patch: Partial<QueenChatTurn>) => void;
@@ -53,6 +58,10 @@ export function QueenChatProvider({
   children: React.ReactNode;
 }) {
   const [turns, setTurns] = React.useState<QueenChatTurn[]>([]);
+  // Whether the transcript history above the input is collapsed. Toggled by the
+  // tab on the input pill; forced open on a typed send; forced closed when the
+  // bee opens a modal (the overlay would otherwise cover it).
+  const [historyMinimized, setHistoryMinimized] = React.useState(false);
   const counterRef = React.useRef(0);
   // Held in a ref so sendText's identity stays stable even though
   // beePilot.runVoiceCommand is recreated each render.
@@ -131,7 +140,10 @@ export function QueenChatProvider({
           // only truncates the address; this carries the full identity).
           actingWallet: actingWalletSourceFromContext(screenContext),
         });
-        return String(data?.text || data?.detail || "Done.");
+        // Prefer detail: for money-action cards the route now puts a short line in
+        // `text` (read aloud in voice) and the full transaction card in `detail`,
+        // which is what the typed brain needs to show the user what they're confirming.
+        return String(data?.detail || data?.text || "Done.");
       }
       if (name === "create_hive_task") {
         const data = await post({
@@ -222,6 +234,8 @@ export function QueenChatProvider({
     async (text: string, opts?: { screenContext?: DashboardScreenContext }) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      // A fresh typed send always re-opens the history above the input.
+      setHistoryMinimized(false);
       appendTurn({ who: "you", text: trimmed, source: "text" });
       const queenId = appendTurn({ who: "queen", text: "", live: true, pending: true, source: "text" });
       // Chain so overlapping sends don't interleave the OpenAI message log.
@@ -235,8 +249,8 @@ export function QueenChatProvider({
   );
 
   const value = React.useMemo<QueenChatContextValue>(
-    () => ({ turns, appendTurn, updateTurn, upsertTurn, removeTurn, clear, sendText }),
-    [turns, appendTurn, updateTurn, upsertTurn, removeTurn, clear, sendText],
+    () => ({ turns, historyMinimized, setHistoryMinimized, appendTurn, updateTurn, upsertTurn, removeTurn, clear, sendText }),
+    [turns, historyMinimized, appendTurn, updateTurn, upsertTurn, removeTurn, clear, sendText],
   );
 
   return <QueenChatContext.Provider value={value}>{children}</QueenChatContext.Provider>;

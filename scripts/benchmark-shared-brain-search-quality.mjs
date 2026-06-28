@@ -9,7 +9,7 @@ import { performance } from "node:perf_hooks";
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const FULL_VAULT_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
 const MAX_VAULT_FILES = 50_000;
-const MAX_VAULT_BYTES = 256 * 1024;
+const MAX_VAULT_BYTES = 1024 * 1024;
 const MAX_INDEX_TERMS_PER_NOTE = 900;
 const EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
 const EXCLUDE_PREFIXES = [
@@ -37,6 +37,11 @@ const LIVE_CASES = [
     label: "operations policy",
     query: "collection:operations Queen Bee control plane routing policy best available",
     expectedPath: "Operations/Brain Services/Queen Bee/Routing Policy.md",
+  },
+  {
+    label: "coverage beats spam",
+    query: "broad noisy search irrelevant recall quality keyword spam",
+    expectedPath: "Projects/Search Quality Evaluation.md",
   },
   {
     label: "shared skill",
@@ -249,6 +254,7 @@ async function buildIndex(root) {
       frontmatterType,
       mtimeMs: st.mtimeMs,
       size: st.size,
+      indexedByteLimit: MAX_VAULT_BYTES,
       documentLength: tokens.length,
       terms: termCounts(tokens),
       excerpt: compact(body.replace(/^#\s+.+$/gm, " "), 280),
@@ -274,7 +280,12 @@ async function readIndex(root) {
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line);
-      if (parsed.schema === "hivemindos.full-vault-search.v1" && parsed.path && parsed.terms) records.push(parsed);
+      if (
+        parsed.schema === "hivemindos.full-vault-search.v1" &&
+        parsed.path &&
+        parsed.terms &&
+        parsed.indexedByteLimit === MAX_VAULT_BYTES
+      ) records.push(parsed);
     } catch {
       // Ignore corrupt generated rows.
     }
@@ -318,6 +329,16 @@ async function newSearch(root, query, limit) {
   });
   const averageLength = records.reduce((sum, record) => sum + record.documentLength, 0) / Math.max(1, records.length);
   const docFreq = new Map(parsed.terms.map((term) => [term, records.reduce((count, record) => count + (record.terms[term] ? 1 : 0), 0)]));
+  function coverageScore(matched) {
+    if (parsed.terms.length <= 1) return 0;
+    const matchedTermCount = parsed.terms.filter((term) => matched.has(term)).length;
+    if (!matchedTermCount) return 0;
+    const coverage = matchedTermCount / parsed.terms.length;
+    let score = coverage * 6;
+    if (matchedTermCount === parsed.terms.length) score += 3;
+    if (parsed.terms.length >= 4 && coverage < 0.5) score -= (parsed.terms.length - matchedTermCount) * 0.75;
+    return score;
+  }
   const indexedHits = records.map((record) => {
     const matched = new Set();
     let searchScore = 0;
@@ -342,6 +363,7 @@ async function newSearch(root, query, limit) {
         matched.add(`"${phrase}"`);
       }
     }
+    searchScore += coverageScore(matched);
     if (parsed.collections.includes(record.collection)) searchScore += 2;
     return { ...record, searchScore: Math.round(searchScore * 100) / 10, matched: [...matched] };
   }).filter((hit) => hit.matched.length)
@@ -391,12 +413,15 @@ async function writeFixture(root) {
     await writeFile(join(root, file), body, "utf8");
   }
   await write("Projects/Agent Calls - BYOK vs HivemindOS Cloud.md", "# Agent Calls - BYOK vs HivemindOS Cloud\n\nBYOK agent calls compare local user provider keys with a HivemindOS Cloud relay for native AI coding app calls.");
+  await write("Projects/Search Quality Evaluation.md", "# Search Quality Evaluation\n\nBroad noisy search should prefer documents that cover the full recall intent over irrelevant keyword spam.");
   await write("Operations/Brain Services/Queen Bee/Routing Policy.md", "# Queen Bee Routing Policy\n\nQueen Bee chooses the best available agent and machine from Fleet discovery, Work Board state, and safety policy.");
   await write("Skills/hive-brain-compiled-wiki/SKILL.md", "# Hive Brain Compiled Wiki\n\nUse brain_search_knowledge, brain_get_node, brain_get_backlinks, and brain_graph_overview before broad full-vault recall for compiled wiki topics.");
   await write("Operations/Brain Services/Obsidian Native Brain Pack.md", "# Obsidian Native Brain Pack\n\nSeeds obsidian-markdown, obsidian-bases, json-canvas, and Bases/Canvas views for human-readable vault work.");
   await write("Operations/Secure/Secure Hermes Env Sync.md", "# Secure Hermes Env Sync\n\nTracks encrypted backup references for Hermes env sync and credential status names without plaintext secrets.");
   await write("Memory/Imported Sources/Bankr Platform Documentation.md", "# Bankr Platform Documentation\n\nBankr provides wallet APIs, token trading, transfers, portfolio balances, and natural language crypto operations.");
+  await write("Memory/Imported Agent Memory/hermes/Platform API Token Spam.md", `# Platform API Token Runtime Notes\n\n${"platform api token runtime configuration guide. ".repeat(1200)}`);
   await write("Intake/Crypto token watchlist ideas.md", "# Crypto token watchlist ideas\n\nToken watchlist candidates, alerts, market narratives, and trading ideas for later review.");
+  await write("Ideas/Search Noise Scratchpad.md", `# Broad Search Noise Scratchpad\n\n${"broad noisy search irrelevant keyword spam. ".repeat(900)}`);
   await write("Ideas/General Brainstorm.md", "# General Brainstorm\n\nUnrelated notes about interface polish, meeting cadence, and kitchen inventory.");
 }
 

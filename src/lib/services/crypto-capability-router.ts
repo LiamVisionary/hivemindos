@@ -34,6 +34,7 @@ export type CryptoCapabilityIntent =
   | "automation"
   | "nft"
   | "agent-job"
+  | "claim-fees"
   | "card-payment"
   | "fund-llm-credits";
 
@@ -127,12 +128,13 @@ const ROUTE_PRIORITY: Record<CryptoCapabilityIntent, CryptoCapabilityProvider[]>
   automation: ["bankr"],
   nft: ["bankr"],
   "agent-job": ["bankr"],
+  "claim-fees": ["bankr"],
   "card-payment": ["moneyclaw"],
   "fund-llm-credits": ["bankr"],
 };
 
 const PROVIDER_INTENTS: Record<CryptoCapabilityProvider, CryptoCapabilityIntent[]> = {
-  bankr: ["status", "portfolio", "trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "fund-llm-credits"],
+  bankr: ["status", "portfolio", "trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "claim-fees", "fund-llm-credits"],
   moneyclaw: ["status", "portfolio", "receive", "send", "paid-api", "card-payment"],
   x402: ["status", "portfolio", "receive", "send", "paid-api"],
   usepod: ["status", "receive", "paid-api"],
@@ -156,6 +158,7 @@ export function normalizeCryptoIntent(value: unknown): CryptoCapabilityIntent {
   if (normalized === "automations" || normalized === "recurring" || normalized === "dca" || normalized === "twap") return "automation";
   if (normalized === "nfts") return "nft";
   if (normalized === "bankr-agent" || normalized === "agent-api" || normalized === "job") return "agent-job";
+  if (normalized === "claim" || normalized === "claim-fee" || normalized === "fees" || normalized === "creator-fees" || normalized === "claim-creator-fees") return "claim-fees";
   if (isCryptoCapabilityIntent(normalized)) return normalized;
   return "status";
 }
@@ -326,6 +329,7 @@ async function bankrCapability(): Promise<CryptoProviderCapability> {
       { intent: "automation", method: "POST", route: "/api/bankr/actions", note: "Prepare recurring Bankr automations such as DCA, TWAP, limit, stop, or scheduled agent commands." },
       { intent: "nft", method: "POST", route: "/api/bankr/actions", note: "Read NFT data or prepare NFT buy/sell/mint/transfer actions through Bankr." },
       { intent: "agent-job", method: "POST", route: "/api/bankr/actions", note: "Run a Bankr Agent API prompt or inspect an existing Agent API job." },
+      { intent: "claim-fees", method: "POST", route: "/api/bankr/actions", note: "Check or claim creator/LP trading fees for a Bankr-launched token; prepared for explicit user confirmation." },
       { intent: "fund-llm-credits", method: "POST", route: "/api/bankr/llm-credits", note: "Requires FUND_BANKR_LLM_CREDITS confirmation." },
     ],
   });
@@ -614,7 +618,7 @@ function guidanceForIntent(intent: CryptoCapabilityIntent, selected: CryptoProvi
   if (intent === "paid-api" || intent === "private-paid-api") return `Use ${selected.label} for this paid API call and keep the request under the supplied wallet policy cap.`;
   if (selected.provider === "hyperliquid" && intent === "hyperliquid") return "Use /api/trading/hyperliquid to quote/read first. Builder approval, orders, cancels, account changes, transfers, and TWAPs each require their matching Hyperliquid confirmation.";
   if (selected.provider === "bankr" && intent === "portfolio") return "Use /api/bankr/actions for a read-only Bankr wallet portfolio check.";
-  if (selected.provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return "Use /api/bankr/actions to prepare the Bankr action; execute only after the user confirms the reviewed draft.";
+  if (selected.provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "claim-fees"].includes(intent)) return "Use /api/bankr/actions to prepare the Bankr action; execute only after the user confirms the reviewed draft.";
   return `Use ${selected.label} for ${intent}.`;
 }
 
@@ -623,7 +627,7 @@ function confirmationForIntent(intent: CryptoCapabilityIntent, provider: CryptoC
   if (intent === "private-paid-api" || (intent === "paid-api" && provider === "veil")) return "VEIL_X402";
   if (intent === "send") return "SEND_USDC";
   if (provider === "hyperliquid" && intent === "hyperliquid") return HYPERLIQUID_ORDER_CONFIRMATION;
-  if (provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent)) return BANKR_ACTION_CONFIRMATION;
+  if (provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "claim-fees"].includes(intent)) return BANKR_ACTION_CONFIRMATION;
   if (intent === "fund-llm-credits") return "FUND_BANKR_LLM_CREDITS";
   return undefined;
 }
@@ -638,7 +642,7 @@ function canAutoSendVeilTransfer(wallet?: Partial<AgentWalletConfig>) {
 }
 
 function bankrIntentRequiresApproval(intent: CryptoCapabilityIntent, provider: CryptoCapabilityProvider) {
-  return provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job"].includes(intent);
+  return provider === "bankr" && ["trade", "crosschain-swap", "bridge", "crosschain-payment", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "claim-fees"].includes(intent);
 }
 
 function isCrosschainPreparedIntent(intent: CryptoCapabilityIntent) {
@@ -728,7 +732,7 @@ function reviewKindForIntent(intent: CryptoCapabilityIntent, provider?: CryptoCa
   if (intent === "send") return "send";
   if (isCrosschainPreparedIntent(intent)) return "crosschain-intent";
   if (intent === "hyperliquid" && provider === "hyperliquid") return "raw-transaction";
-  if (["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "fund-llm-credits"].includes(intent)) return "bankr-action";
+  if (["trade", "token-launch", "polymarket", "hyperliquid", "automation", "nft", "agent-job", "claim-fees", "fund-llm-credits"].includes(intent)) return "bankr-action";
   return "raw-transaction";
 }
 
@@ -761,6 +765,7 @@ function isCryptoCapabilityIntent(value: string): value is CryptoCapabilityInten
     "automation",
     "nft",
     "agent-job",
+    "claim-fees",
     "card-payment",
     "fund-llm-credits",
   ].includes(value);

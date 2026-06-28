@@ -182,13 +182,6 @@ export const SW_RUNS: Run[] = [
     },
   },
   {
-    id: "run-mm-cpi", template: "market-maker", state: "live",
-    title: "Market-making \u00b7 post-CPI overshoot", started: "1h 12m ago",
-    rounds: 12000, currentRound: 8410, sharpe: 1.83, pnl: "+0.42%",
-    agents: 24, news: 142, posts: 318, trades: 5102, tags: ["fx", "fed-watch", "long-vol"],
-    summary: "Synthetic market-makers reacting to a hotter-than-expected CPI print. Tests how quickly bid\u2013ask widens, who fades the move, and which crowd captures the long-vol carry.",
-  },
-  {
     id: "run-x-launch", template: "x-thread", state: "ready",
     title: "Launch thread \u00b7 v0.18.2 ship", started: "5m ago",
     rounds: 1, currentRound: 1, agents: 1, news: 0, posts: 4, trades: 0, tags: ["x", "announce"],
@@ -405,22 +398,6 @@ export const SW_INTEL: Record<string, Intel> = {
     ],
     swing: [{ name: "Econ-3", note: "held a YES lean right up to the CPI print" }],
     flipIf: ["A soft jobs number before the meeting would have re-opened YES."],
-  },
-  "run-mm-cpi": {
-    kind: "risk",
-    read: "Carry is holding; the main risk is inventory skew if Forager keeps sweeping.",
-    drivers: [
-      "Long-vol carry positive since the CPI sell-off.",
-      "Bid\u2013ask widened to 1.5bp, capturing the flow.",
-    ],
-    swing: [
-      { name: "Forager-2", note: "repeated sweeps are the main drawdown source" },
-      { name: "Sentry-\u03B1", note: "flagged book delta at 2\u03C3 \u2014 warn only" },
-    ],
-    flipIf: [
-      "Sharpe clears 2.0 \u2192 auto-stop fires and the run halts.",
-      "A position-cap breach forces a de-risk.",
-    ],
   },
 };
 export const frRunIntel = (run: Run): Intel | null => SW_INTEL[run.id] || null;

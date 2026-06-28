@@ -45,7 +45,7 @@ export function PortfolioCard({ pf, isStock, win = "24h" }: { pf: DeskPortfolio;
           <span style={{ color: "var(--fg-3)" }}>· {trPct(pf.dayPct)} today</span>
         </span>
       )}
-      <div className="spark"><Spark data={pf.history} w={440} h={56} up={up} win={win} /></div>
+      <div className="spark"><Spark data={pf.history} fluid w={440} h={56} up={up} win={win} /></div>
       {segs.length ? (
         <div className="dk-alloc" style={{ position: "relative" }}>
           <div className="bar" onMouseLeave={() => setBarHi(null)}>
@@ -93,20 +93,61 @@ export function MoversCard({ movers, isStock }: { movers: DeskMover[]; isStock: 
 }
 
 // ── positions ────────────────────────────────────────────────────────────────
+function pendingLabel(status?: string): string {
+  return status && /partial/i.test(status) ? "Filling" : "Pending";
+}
+
 export function PositionsPanel({ pf, isStock }: { pf: DeskPortfolio; isStock: boolean }) {
+  const desk = useTradeDesk();
+  // Pending (not-yet-filled) order rows are counted/labelled separately from
+  // settled holdings, so "held" stays truthful while the order is in flight.
+  const heldCount = pf.rows.filter((row) => !row.pending).length;
+  const pendingCount = pf.rows.filter((row) => row.pending).length;
+  // Per-order cancel state for the hover cancel button.
+  const [busyId, setBusyId] = React.useState("");
+  const [cancelErr, setCancelErr] = React.useState<{ id: string; msg: string } | null>(null);
+  const cancelOrder = async (orderId?: string) => {
+    if (!orderId || busyId) return;
+    setBusyId(orderId);
+    setCancelErr(null);
+    const result = await desk.onCancelStockOrder(orderId);
+    setBusyId("");
+    // On success the desk refresh drops the row; on failure surface why + offer retry.
+    if (!result.ok) setCancelErr({ id: orderId, msg: result.error || "Couldn't cancel this order." });
+  };
   return (
     <div className="dk-panel">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <h3>Positions</h3>
-        <Badge>{pf.rows.length} held</Badge>
+        <Badge>{heldCount} held{pendingCount ? ` · ${pendingCount} pending` : ""}</Badge>
       </div>
       <div className="dk-pos">
         <div className="dk-poshead"><span>Asset</span><span className="r">{isStock ? "Shares" : "Amount"}</span><span className="r">Value</span><span className="r">24h</span></div>
         {pf.rows.length ? pf.rows.map((row) => {
+          if (row.pending) {
+            const busy = busyId === row.orderId;
+            const failed = cancelErr?.id === row.orderId;
+            return (
+              <div className="dk-posrow" data-pending="" key={row.id} style={{ opacity: 0.72 }}>
+                <span className="a"><Coin sym={row.sym} size={28} stock={isStock} logoUrl={row.logoUrl} /><span style={{ minWidth: 0 }}><b>{row.sym}</b><small>{row.side === "sell" ? "Sell order" : "Buy order"}</small></span></span>
+                <span className="v r">{row.shares != null ? row.shares : "—"}</span>
+                <span className="v r">{row.usd > 0 ? trUsd(row.usd, true) : "—"}</span>
+                {/* Hover (or busy/error) swaps the Pending badge for a Cancel button. */}
+                <span className="chg r dk-pendcell" data-busy={busy ? "" : undefined} data-err={failed ? "" : undefined}>
+                  <span className="pend-badge"><Badge tone="honey">{pendingLabel(row.status)}</Badge></span>
+                  {row.orderId ? (
+                    <button type="button" className="pend-cancel" disabled={busy} title={failed ? cancelErr!.msg : "Cancel this order"} onClick={() => cancelOrder(row.orderId)}>
+                      {busy ? "Cancelling…" : failed ? "Retry" : "Cancel"}
+                    </button>
+                  ) : null}
+                </span>
+              </div>
+            );
+          }
           const up = row.chg >= 0;
           return (
             <div className="dk-posrow" key={row.id}>
-              <span className="a"><Coin sym={row.sym} size={28} stock={isStock} /><span style={{ minWidth: 0 }}><b>{row.sym}</b><small>{row.name}</small></span></span>
+              <span className="a"><Coin sym={row.sym} size={28} stock={isStock} logoUrl={row.logoUrl} /><span style={{ minWidth: 0 }}><b>{row.sym}</b><small>{row.name}</small></span></span>
               <span className="v r">{isStock ? (row.shares ?? 0) : trAmt(row.sym, row.amount)}</span>
               <span className="v r">{trUsd(row.usd, true)}</span>
               <span className={"chg " + (up ? "dk-up" : "dk-down")}>{trPct(row.chg)}</span>
@@ -145,6 +186,7 @@ export function ActivityPanel({ items, onViewAll }: { items: DeskActivity[]; onV
             <span className="tx"><b>{it.text}</b><small style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>{it.kind} · {it.via}<WalletChip wid={it.wid} /></small></span>
             <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
               {it.usd > 0 ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg)", letterSpacing: "-0.01em" }}>{trUsd2(it.usd)}</span> : null}
+              {it.swap ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", letterSpacing: "-0.01em" }}>+{trAmt(it.swap.buyToken, it.swap.buyAmount)} {it.swap.buyToken}</span> : null}
               <Badge tone={it.state === "open" ? "honey" : it.state === "failed" ? "danger" : "live"}>{it.state}</Badge>
               <span className="when">{it.when}</span>
             </span>
@@ -206,7 +248,7 @@ export function ActivityView({ items, filter, onFilter, onBack }: {
                     {showSrc ? <span className="dk-srcchip"><i style={{ background: HIST_SRC[it.src].color }} />{HIST_SRC[it.src].label}</span> : null}
                   </small>
                 </span>
-                <span className="val">{trUsd(it.usd, true)}</span>
+                <span className="val">{trUsd(it.usd, true)}{it.swap ? <small style={{ display: "block", fontWeight: 500, color: "var(--fg-3)" }}>+{trAmt(it.swap.buyToken, it.swap.buyAmount)} {it.swap.buyToken}</small> : null}</span>
                 <span className="meta">
                   <Badge tone={it.state === "open" ? "honey" : it.state === "failed" ? "danger" : "live"}>{it.state}</Badge>
                   <span className="when">{it.when}</span>

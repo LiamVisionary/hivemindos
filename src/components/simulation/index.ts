@@ -5,6 +5,13 @@ export type { SimulationViewProps } from "./SimulationView";
 
 // Composed surfaces
 export { SimDetail, SimLiveDetail, SimRunDetail, SimArtifact, SimRunHeader, SimStatsRow, SimPanel } from "./detail";
+export { SimRunningDetail, SimRunViewSeg, FR_PIPELINE } from "./running";
+export { SimPostExtras } from "./post";
+export {
+  BeliefRiver, CostMeter, TriPlatformFeed, DirectorBar, ConsensusCard, FR_STANCE, frTier,
+  frBeliefSeries, frBeliefSignal, frCostModel, frPlatformPools,
+} from "./signal";
+export type { Stance, Signal, BeliefPoint, CostModel, FeedItem, PlatformFeed } from "./signal";
 export { PredictionMarketView } from "./PredictionMarket";
 export { XThreadView, RedditView, ResearchView, OpsView } from "./outputs";
 export { SimRunRow, SimRunCard, SimTemplatesRail } from "./rail";

@@ -813,6 +813,34 @@ async function callWorkEvent(args = {}) {
   throw new Error(`Unknown work_event action: ${action}`);
 }
 
+async function callAgentChallenge(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") {
+    return callDashboard(
+      routeWithQuery("/api/agent-challenges", {
+        vaultPath: args.vaultPath,
+        challengesFolder: args.challengesFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "get") {
+    return callDashboard(
+      routeWithQuery("/api/agent-challenges", {
+        id: args.challengeId || args.id,
+        vaultPath: args.vaultPath,
+        challengesFolder: args.challengesFolder,
+      }),
+      "GET",
+    );
+  }
+  return callDashboard("/api/agent-challenges", "POST", {
+    source: args.source || "mcp:agent-challenge",
+    ...args,
+    action,
+  });
+}
+
 async function requestHumanApproval(args = {}) {
   const title = String(args.title || "Human approval requested").trim();
   const body = formatApprovalRequest(args);
@@ -890,6 +918,9 @@ async function callTool(name, args = {}) {
   }
   if (name === "work_event") {
     return callWorkEvent(args);
+  }
+  if (name === "agent_challenge") {
+    return callAgentChallenge(args);
   }
   if (name === "request_human_approval") {
     return requestHumanApproval(args);
@@ -1087,6 +1118,63 @@ async function callTool(name, args = {}) {
       tool: args.tool,
       args: clawbankToolArgs(args.args),
       confirmation: args.confirmation,
+    });
+  }
+  if (name === "code_search_graph") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "search-graph",
+      query: args.query,
+      namePattern: args.namePattern,
+      label: args.label,
+      filePattern: args.filePattern,
+      limit: args.limit,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_trace_path") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "trace-path",
+      functionName: args.functionName,
+      direction: args.direction,
+      depth: args.depth,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_get_architecture") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "get-architecture",
+      path: args.path,
+      aspects: args.aspects,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_get_snippet") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "get-code-snippet",
+      qualifiedName: args.qualifiedName,
+      filePath: args.filePath,
+      startLine: args.startLine,
+      endLine: args.endLine,
+      includeNeighbors: args.includeNeighbors,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_detect_changes") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "detect-changes",
+      baseRef: args.baseRef,
+      since: args.since,
+      scope: args.scope,
+      depth: args.depth,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_index_repository") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "index-repository",
+      repoPath: args.repoPath,
+      mode: args.mode,
+      persistence: args.persistence,
     });
   }
   const actionByTool = {

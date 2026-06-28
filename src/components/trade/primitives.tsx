@@ -19,6 +19,32 @@ export function BBtn({ variant = "ghost", sm, children, ...rest }: { variant?: s
   return <button type="button" className={"fb-btn " + variant + (sm ? " sm" : "")} {...rest}>{children}</button>;
 }
 
+// ── provider badge (which rail powers a capability) ──────────────────────────
+// Maps a crypto-capability provider to its real brand icon. Providers without a
+// shipped icon render their short name as text. Shown icon-only in the tile's
+// top corner with a hover tooltip for the name.
+const CRYPTO_PROVIDER_META: Record<string, { label: string; icon?: string; text?: string }> = {
+  bankr: { label: "Bankr", icon: "/icons/runtimes/bankr.svg" },
+  hyperliquid: { label: "Hyperliquid", icon: "/icons/runtimes/hyperliquid.svg?v=2" },
+  moneyclaw: { label: "MoneyClaw", icon: "/icons/runtimes/clawbank.svg" },
+  venice: { label: "Venice", icon: "/icons/runtimes/venice-keys.svg" },
+  usepod: { label: "UsePod", icon: "/icons/runtimes/usepod.webp" },
+  veil: { label: "Veil", icon: "/icons/runtimes/veil.svg" },
+  x402: { label: "x402", text: "x402" },
+};
+
+export function ProviderBadge({ provider, label }: { provider?: string; label?: string }) {
+  if (!provider) return null;
+  const meta = CRYPTO_PROVIDER_META[provider] ?? { label: label || provider, text: (label || provider).slice(0, 5) };
+  return (
+    <span className="tk-provbadge" title={meta.label} aria-label={`Powered by ${meta.label}`}>
+      {meta.icon
+        ? <img src={meta.icon} alt={meta.label} height={20} style={{ height: 20, width: "auto", borderRadius: 4, display: "block" }} />
+        : <span className="txt">{meta.text ?? meta.label}</span>}
+    </span>
+  );
+}
+
 // ── token color ──────────────────────────────────────────────────────────────
 const BRAND_COLORS: Record<string, string> = {
   ETH: "#627eea", WETH: "#627eea", USDC: "#2775ca", USDT: "#26a17b",
@@ -33,7 +59,25 @@ export function tokenColor(sym: string): string {
   return `hsl(${h} 52% 55%)`;
 }
 
-export function Coin({ sym, size = 30, stock }: { sym: string; size?: number; stock?: boolean }) {
+export function Coin({ sym, size = 30, stock, logoUrl }: { sym: string; size?: number; stock?: boolean; logoUrl?: string | null }) {
+  // Try the real token logo first (from the balance provider); on a missing or
+  // broken image, fall back to the generated letter coin. Tracking the failed
+  // URL (rather than a boolean reset via effect) means a new logoUrl re-attempts
+  // automatically without a setState-in-effect.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  if (logoUrl && logoUrl !== failedUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={sym}
+        width={size}
+        height={size}
+        loading="lazy"
+        onError={() => setFailedUrl(logoUrl)}
+        style={{ width: size, height: size, flex: "0 0 auto", borderRadius: stock ? Math.round(size * 0.28) : "50%", objectFit: "cover", display: "block", background: "var(--panel-hi)" }}
+      />
+    );
+  }
   const color = stock ? "var(--panel-hi)" : tokenColor(sym);
   const label = sym === "cbBTC" ? "₿" : sym === "USDC" ? "$" : sym.slice(0, stock ? 4 : 3);
   const fs = stock ? size * 0.3 : (label.length > 2 ? size * 0.3 : size * 0.42);
@@ -51,11 +95,28 @@ export function Coin({ sym, size = 30, stock }: { sym: string; size?: number; st
 }
 
 // ── interactive sparkline (real history) ─────────────────────────────────────
-export function Spark({ data, w = 96, h = 30, color = "var(--fg-3)", up, fmt, win = "24h" }: {
-  data: number[]; w?: number; h?: number; color?: string; up?: boolean; fmt?: (v: number) => string; win?: "24h" | "7d" | "30d";
+// `fluid` makes the chart fill its container's width (measured, so the geometry
+// renders at real pixels with no aspect-ratio distortion) instead of the fixed
+// `w` — used by the portfolio hero so the line lines up with the allocation bar
+// below it. `w` is the initial/SSR width until the container is measured.
+export function Spark({ data, w = 96, h = 30, color = "var(--fg-3)", up, fmt, win = "24h", fluid = false }: {
+  data: number[]; w?: number; h?: number; color?: string; up?: boolean; fmt?: (v: number) => string; win?: "24h" | "7d" | "30d"; fluid?: boolean;
 }) {
   const id = "sp" + React.useId().replace(/[^a-zA-Z0-9]/g, "");
   const [hi, setHi] = React.useState<number | null>(null);
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = React.useState<number | null>(null);
+  React.useLayoutEffect(() => {
+    if (!fluid) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const fit = () => setMeasured(el.getBoundingClientRect().width || null);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fluid]);
+  const W = fluid ? (measured ?? w) : w;
   const values = Array.isArray(data) ? data.filter((v) => Number.isFinite(v)) : [];
   const pad = 3;
   const stroke = up === undefined ? color : up ? "var(--live)" : "var(--danger)";
@@ -64,17 +125,19 @@ export function Spark({ data, w = 96, h = 30, color = "var(--fg-3)", up, fmt, wi
   // No real series → a faint flat baseline (never a faked wiggle).
   if (values.length < 2) {
     return (
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden style={{ display: "block" }}>
-        <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="var(--line-2)" strokeWidth="1.4" strokeDasharray="2 3" />
-      </svg>
+      <div ref={wrapRef} style={{ width: fluid ? "100%" : W }}>
+        <svg width={W} height={h} viewBox={`0 0 ${W} ${h}`} aria-hidden style={{ display: "block" }}>
+          <line x1={pad} y1={h / 2} x2={W - pad} y2={h / 2} stroke="var(--line-2)" strokeWidth="1.4" strokeDasharray="2 3" />
+        </svg>
+      </div>
     );
   }
 
   const min = Math.min(...values), max = Math.max(...values), span = (max - min) || 1;
-  const step = (w - pad * 2) / (values.length - 1);
+  const step = (W - pad * 2) / (values.length - 1);
   const pts = values.map((v, i) => [pad + i * step, pad + (1 - (v - min) / span) * (h - pad * 2)] as const);
   const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
-  const area = line + ` L${(w - pad).toFixed(1)} ${h} L${pad} ${h} Z`;
+  const area = line + ` L${(W - pad).toFixed(1)} ${h} L${pad} ${h} Z`;
   const spanH = win === "30d" ? 30 * 24 : win === "7d" ? 7 * 24 : 24;
   const tlabel = (i: number) => {
     const back = (values.length - 1 - i) * spanH / (values.length - 1);
@@ -88,8 +151,8 @@ export function Spark({ data, w = 96, h = 30, color = "var(--fg-3)", up, fmt, wi
     setHi(Math.max(0, Math.min(values.length - 1, i)));
   };
   return (
-    <div className="spark-wrap" style={{ width: w, height: h, cursor: "crosshair" }} onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden style={{ display: "block", overflow: "visible" }}>
+    <div ref={wrapRef} className="spark-wrap" style={{ width: fluid ? "100%" : W, height: h, cursor: "crosshair" }} onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
+      <svg width={W} height={h} viewBox={`0 0 ${W} ${h}`} aria-hidden style={{ display: "block", overflow: "visible" }}>
         <defs>
           <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={stroke} stopOpacity="0.22" />
@@ -106,7 +169,7 @@ export function Spark({ data, w = 96, h = 30, color = "var(--fg-3)", up, fmt, wi
         ) : null}
       </svg>
       {hi != null ? (
-        <div className="spark-tip" style={{ left: Math.max(0, Math.min(w, pts[hi][0])) }}>
+        <div className="spark-tip" style={{ left: Math.max(0, Math.min(W, pts[hi][0])) }}>
           <b>{fmtv(values[hi])}</b><span>{tlabel(hi)}</span>
         </div>
       ) : null}
@@ -125,12 +188,14 @@ export function ReviewLine({ k, v, live, icon }: { k: React.ReactNode; v: React.
 }
 
 // ── asset dropdown ───────────────────────────────────────────────────────────
-export function AssetMenu({ value, options, balances, values, onPick, stock, getName }: {
+export function AssetMenu({ value, options, balances, values, logos, onPick, stock, getName }: {
   value: string;
   options: string[];
   balances?: Record<string, number>;
   /** USD value held per symbol — rendered in the user's display currency. */
   values?: Record<string, number>;
+  /** Real token logo URL per symbol (from the balance provider). */
+  logos?: Record<string, string | null | undefined>;
   onPick: (sym: string) => void;
   stock?: boolean;
   getName?: (sym: string) => string;
@@ -148,7 +213,7 @@ export function AssetMenu({ value, options, balances, values, onPick, stock, get
   return (
     <span className="tk-asset" ref={ref}>
       <button type="button" className="tk-assetbtn" onClick={() => setOpen((o) => !o)}>
-        <Coin sym={value} size={24} stock={stock} />
+        <Coin sym={value} size={24} stock={stock} logoUrl={logos?.[value]} />
         <span className="sym">{value}</span>
         <span className="car"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M6 9l6 6 6-6" /></svg></span>
       </button>
@@ -160,7 +225,7 @@ export function AssetMenu({ value, options, balances, values, onPick, stock, get
             const showUsd = usd != null && usd > 0;
             return (
               <button key={sym} type="button" data-active={sym === value ? "" : undefined} onClick={() => { onPick(sym); setOpen(false); }}>
-                <Coin sym={sym} size={28} stock={stock} />
+                <Coin sym={sym} size={28} stock={stock} logoUrl={logos?.[sym]} />
                 <span className="mn"><b>{sym}</b><span>{getName ? getName(sym) : sym}</span></span>
                 {bal !== undefined || showUsd ? (
                   <span className="mamt">

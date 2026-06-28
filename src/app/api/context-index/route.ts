@@ -7,7 +7,7 @@ import type { GBrainConfig } from "@/lib/types/agent-runtime";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VALID_KINDS = new Set<ContextIndexKind>(["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime", "doc", "workspace-file"]);
+const VALID_KINDS = new Set<ContextIndexKind>(["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime", "doc", "workspace-file", "code-symbol", "code-route", "repo-architecture"]);
 
 function parseKinds(value?: string | null) {
   if (!value) return undefined;

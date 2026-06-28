@@ -272,14 +272,16 @@ if ask "Stop and remove the Claw backend service?" "yes"; then
     rm -f "$HOME/.hivemindos/bin/HivemindOS Voice Worker"
     ok "Removed HivemindOS Voice Worker helper if present"
   elif run_if_exists systemctl; then
+    systemctl --user disable --now hivemindos-mobile-backend.service >/dev/null 2>&1 || true
     systemctl --user disable --now hivemindos-claw-backend.service >/dev/null 2>&1 || true
     systemctl --user disable --now hivemindos-voice-worker.service >/dev/null 2>&1 || true
     systemctl --user disable --now hivemindos-claw-voice-worker.service >/dev/null 2>&1 || true
+    rm -f "$HOME/.config/systemd/user/hivemindos-mobile-backend.service"
     rm -f "$HOME/.config/systemd/user/hivemindos-claw-backend.service"
     rm -f "$HOME/.config/systemd/user/hivemindos-voice-worker.service"
     rm -f "$HOME/.config/systemd/user/hivemindos-claw-voice-worker.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    ok "Removed Claw backend and voice worker systemd services"
+    ok "Removed HivemindOS Mobile backend and voice worker systemd services"
   fi
 fi
 

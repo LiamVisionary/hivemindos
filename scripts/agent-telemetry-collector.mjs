@@ -23,7 +23,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { constants, watch } from "node:fs";
+import { constants, readFileSync, watch } from "node:fs";
 import { connect } from "node:net";
 import {
   arch,
@@ -108,9 +108,36 @@ const hermesApiPort = Number(
     8642,
 );
 const hermesApiBaseUrl = `http://${hermesApiHost}:${hermesApiPort}`;
+// The Hermes gateway's api_server (port 8642) requires a Bearer matching its
+// API_SERVER_KEY on every request, even on loopback. The gateway authoritatively
+// loads that key from ${HERMES_HOME:-~/.hermes}/.env at startup; this collector
+// runs under launchd whose plist never sets it, so reading the same file is the
+// only way to stay in sync across key rotations and plist regens. Without it the
+// gateway 401s every forwarded /chat with "rejected invalid API key".
+function readApiServerKeyFromHermesEnv() {
+  try {
+    const text = readFileSync(join(defaultHermesDir, ".env"), "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const match = line.match(/^\s*API_SERVER_KEY\s*=\s*(.*)$/);
+      if (!match) continue;
+      let value = match[1].trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (value) return value;
+    }
+  } catch {
+    // No ~/.hermes/.env (e.g. a machine without Hermes) — fall through to "".
+  }
+  return "";
+}
 const hermesApiKey =
   process.env.AGENT_TELEMETRY_HERMES_API_KEY ||
   process.env.API_SERVER_KEY ||
+  readApiServerKeyFromHermesEnv() ||
   "";
 const hermesApiStartTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_HERMES_API_START_TIMEOUT_MS || 15_000,

@@ -32,8 +32,10 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "hyperliquid", label: "Hyperliquid", desc: "Spot, perps, orders", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "quote a $25 ETH long or buy HYPE spot" },
   { id: "polymarket", label: "Prediction markets", desc: "Search or bet on Polymarket", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "bet $20 yes on the next Fed cut market" },
   { id: "token-launch", label: "Launch a token", desc: "Deploy a new token", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "launch a token called HIVE BEE, ticker BEE" },
+  { id: "claim-fees", label: "Claim fees", desc: "Collect creator & LP trading fees", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "claim my creator fees for BEE" },
   { id: "nft", label: "NFTs", desc: "Buy, sell, or mint NFTs", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "buy the floor of <collection>" },
   { id: "automation", label: "Automations", desc: "DCA, TWAP, limit, stop", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "DCA $25 into ETH every day" },
+  { id: "copy-trading", label: "Copy trading", desc: "Auto-mirror a wallet's trades", group: "Trade & markets", input: "info", mutating: true },
 
   { id: "send", label: "Send USDC", desc: "On-chain USDC transfer", group: "Move money", input: "recipient-amount", mutating: true },
   { id: "private-transfer", label: "Private transfer", desc: "Shielded USDC / ETH via Veil", group: "Move money", input: "recipient-amount", mutating: true, withAsset: true },

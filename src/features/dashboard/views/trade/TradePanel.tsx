@@ -26,7 +26,7 @@ import { createDefaultAgentWallet, hasConfiguredAgentWallet } from "@/lib/utils/
 import { fetchPersonalWalletBalance, fetchPersonalWalletBalanceResult, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import {
   TradeView, TradeDeskProvider,
-  type TradeDeskData, type DeskWallet, type DeskMover, type DeskPortfolio, type DeskStockReadiness, type DeskWalletKind,
+  type TradeDeskData, type DeskWallet, type DeskMover, type DeskPortfolio, type DeskHolding, type DeskStockReadiness, type DeskWalletKind,
 } from "@/components/trade";
 import {
   buildCryptoPortfolio, buildStockPortfolio, cryptoBalancesFrom, cryptoPortfolioHistory,
@@ -34,6 +34,7 @@ import {
 } from "@/components/trade/adapt-trade";
 import {
   SWAP_MAX_USD, SWAP_TOKENS_BASE, SWAP_TOKENS_SOLANA,
+  cancelStockOrder,
   fetchBankrWallet, fetchCryptoCapabilities, fetchCryptoMarket, fetchFxRates, fetchStockEquityHistory,
   fetchStockMarket, fetchStockPortfolio, fetchTradingReadiness, fetchWalletActivity,
   type BankrWalletInfo, type CryptoCapabilityMap,
@@ -96,6 +97,10 @@ type TradePanelProps = {
   /** Report the currently-selected acting wallet up to the dashboard so the
       app-wide hive chat can default wallet/trade actions to it. */
   onActingWalletChange?: (wallet: DashboardActingWallet | null) => void;
+  /** Persist a config change to an AGENT wallet (the shared dashboard handler).
+      Used by the inline "Enable stock trading" flow for agent acting wallets;
+      personal wallets persist through /api/wallet/personal instead. */
+  updateWallet?: (agentId: string, patch: Partial<AgentWalletConfig>) => void;
 };
 
 export function TradePanel(props: TradePanelProps) {
@@ -112,6 +117,16 @@ export function TradePanel(props: TradePanelProps) {
   const [fxRates, setFxRates] = useState<Record<string, number>>({ USD: 1 });
   const [data, setData] = useState<DeskData | null>(null);
   const [loading, setLoading] = useState(true);
+  // Orders the user just cancelled — hidden from the desk optimistically so the
+  // pending row drops immediately, instead of lingering until Alpaca's open-order
+  // list stops returning the just-cancelled order (eventual consistency). Pruned
+  // once a fetch confirms the order is gone.
+  const [cancelledOrders, setCancelledOrders] = useState<string[]>([]);
+  // Orders the user just submitted — shown as a pending position IMMEDIATELY (at
+  // the same moment as the order-placed confirmation) so the row doesn't lag the
+  // 3-5s it takes Alpaca's open-order list to surface it. Reconciled away in the
+  // data effect once the real open order (same id) appears, or after a timeout.
+  const [optimisticOrders, setOptimisticOrders] = useState<Array<{ id: string; ticker: string; notionalUsd: number; side: "buy" | "sell"; ts: number }>>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // ── pickable wallets (unchanged behaviour) ─────────────────────────────────
@@ -235,12 +250,20 @@ export function TradePanel(props: TradePanelProps) {
   }, [pickables]);
 
   // ── real data orchestration for the acting wallet ──────────────────────────
+  // Tracks the wallet we've already loaded data for, so a manual refresh (after
+  // a trade) or a paper/live toggle refetches IN THE BACKGROUND — keeping the
+  // current desk (and the order ticket + its "Order placed" message) mounted —
+  // instead of flashing the full DeskSkeleton, which unmounts the ticket and
+  // reads as "the whole route reloaded". The skeleton is for first load / a
+  // genuine wallet switch only.
+  const loadedWalletRef = useRef<string>("");
   useEffect(() => {
     let ignore = false;
     const activeWallet = acting;
     void (async () => {
-      if (!activeWallet) { if (!ignore) { setData(null); setLoading(false); } return; }
-      if (!ignore) setLoading(true);
+      if (!activeWallet) { if (!ignore) { setData(null); setLoading(false); loadedWalletRef.current = ""; } return; }
+      const walletChanged = loadedWalletRef.current !== activeWallet.id;
+      if (!ignore) setLoading(walletChanged);
       const agentId = activeWallet.id;
       const walletConfig = activeWallet.wallet as unknown as Record<string, unknown>;
       const address = String(walletConfig.walletAddress || walletConfig.vaultAddress || walletConfig.address || "").trim();
@@ -302,6 +325,18 @@ export function TradePanel(props: TradePanelProps) {
         xstockTickers: readiness?.venues.xstocks.supportedTickers ?? [],
       };
 
+      // First load of an Alpaca wallet: the portfolio above was fetched with the
+      // default paper mode, so a LIVE-configured wallet just pulled the $100k
+      // PAPER account, not its real one. Flip to the wallet's persisted mode and
+      // refetch BEFORE showing anything — the skeleton stays up, so the hero never
+      // flashes the paper balance. Only on first load; an in-session manual
+      // paper/live toggle (not first load) is respected.
+      const wantPaper = !(venue === "alpaca" && liveEnabled);
+      if (loadedWalletRef.current !== activeWallet.id && venue === "alpaca" && paper !== wantPaper) {
+        if (!ignore) setPaper(wantPaper);
+        return;
+      }
+
       // activity (unified spend ledger)
       const activityRes = await fetchWalletActivity(100);
       const activity = mapActivity(activityRes.ok && activityRes.records ? activityRes.records : [], Date.now());
@@ -312,15 +347,137 @@ export function TradePanel(props: TradePanelProps) {
         stockPortfolio, stockMovers, stockReadiness, activity,
         network, isEvmWallet, isSolanaWallet,
       });
+      loadedWalletRef.current = activeWallet.id;
       setLoading(false);
+      // Reconcile optimistic order rows against the freshly-fetched open orders:
+      // drop an optimistic row once the real open order (same id) represents it —
+      // a seamless handoff — or after a short grace window for an order that
+      // filled instantly and never appeared in the open-order list.
+      const fetchedOpenIds = new Set(stockPortfolio.rows.filter((row) => row.pending && row.orderId).map((row) => row.orderId));
+      const settledAt = Date.now();
+      setOptimisticOrders((prev) => {
+        if (!prev.length) return prev;
+        const next = prev.filter((order) => !fetchedOpenIds.has(order.id) && settledAt - order.ts < 15000);
+        return next.length === prev.length ? prev : next;
+      });
     })();
     return () => { ignore = true; };
   }, [acting?.id, paper, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // (The paper/live toggle is initialized from the wallet's persisted mode inside
+  // the data effect above — on first load it flips to the persisted mode and
+  // refetches before showing data, so a live wallet reopens in live with no
+  // paper-balance flash.)
 
   // ── handlers ───────────────────────────────────────────────────────────────
   const onOpenView = useCallback((view: string) => { props.setActiveView?.(view as DashboardView); }, [props]);
   const onChangeWallet = useCallback(() => setPickerOpen(true), []);
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  // Auto-poll while a stock order is pending: re-fetch the portfolio every few
+  // seconds so a just-submitted order flips from a pending row to a filled
+  // position (and buying power updates) on its own — no manual refresh. Capped
+  // (~2 min) so an order queued over a market close doesn't poll indefinitely;
+  // the counter resets once nothing is pending, so the next order polls afresh.
+  const pollCountRef = useRef(0);
+  useEffect(() => {
+    // Poll while a real order is pending OR an optimistic order is still awaiting
+    // reconciliation, so the optimistic row reliably hands off to the real one.
+    const pending = (data?.stockPortfolio?.rows?.some((row) => row.pending) ?? false) || optimisticOrders.length > 0;
+    if (!pending) { pollCountRef.current = 0; return; }
+    if (pollCountRef.current >= 24) return;
+    const timer = window.setTimeout(() => { pollCountRef.current += 1; refresh(); }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [data?.stockPortfolio, optimisticOrders, refresh]);
+
+  // Turn on stock trading for the acting wallet by setting its venue. The trade
+  // backend resolves the venue server-side from the wallet ledger keyed by this
+  // wallet's id, so we persist there (not just in memory): agent wallets through
+  // the shared updateWallet write-through, personal wallets through the personal
+  // route (which now round-trips the venue). Bankr has no ledger record.
+  const updateWallet = props.updateWallet;
+  const onEnableStockVenue = useCallback(async (
+    { venue, paper: enablePaper }: { venue: "alpaca" | "xstocks"; paper: boolean },
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (!acting) return { ok: false, error: "Pick a wallet first." };
+    const alpacaPaper = venue === "alpaca" ? enablePaper : undefined;
+    // Trading requires a spend-enabled wallet: the buy-stock + platform-fee
+    // rails reject a wallet with enabled !== true ("This agent's wallet is not
+    // enabled."), so turning on trading must also flip the master spend switch.
+    if (acting.kind === "agent") {
+      if (!updateWallet) return { ok: false, error: "Wallet settings aren't available here." };
+      updateWallet(acting.id, { tradingVenue: venue, alpacaPaper, enabled: true });
+      if (venue === "alpaca") setPaper(enablePaper);
+      refresh();
+      return { ok: true };
+    }
+    if (acting.kind === "user") {
+      const target = personalWallets.find((wallet) => String(wallet.id || wallet.agentId || "") === acting.id);
+      if (!target) return { ok: false, error: "Couldn't find this wallet to update." };
+      const updated = { ...target, tradingVenue: venue, alpacaPaper, enabled: true, updatedAt: Date.now() };
+      setPersonalWallets((current) => current.map((wallet) => (String(wallet.id || wallet.agentId || "") === acting.id ? updated : wallet)));
+      const response = await fetch("/api/wallet/personal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: [updated] }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) return { ok: false, error: data?.error || "Couldn't save the trading venue." };
+      if (venue === "alpaca") setPaper(enablePaper);
+      refresh();
+      return { ok: true };
+    }
+    return { ok: false, error: "Stock trading needs a personal or agent wallet — pick one in the wallet picker." };
+  }, [acting, updateWallet, personalWallets, vaultPath, refresh]);
+
+  // Cancel a pending Alpaca order (the pending-position cancel button), then
+  // refresh so the row drops + buying power restores.
+  const onCancelStockOrder = useCallback(async (orderId: string): Promise<{ ok: boolean; error?: string }> => {
+    if (!acting) return { ok: false, error: "Pick a wallet first." };
+    const response = await cancelStockOrder(acting.id, orderId, paper);
+    if (response.ok) {
+      // Drop the row now; re-arm the poll budget so the background refresh
+      // reconciles even if polling had already hit its cap while pending.
+      setCancelledOrders((prev) => (prev.includes(orderId) ? prev : [...prev, orderId]));
+      pollCountRef.current = 0;
+      refresh();
+    }
+    return { ok: response.ok, error: response.error };
+  }, [acting, paper, refresh]);
+
+  // Show a just-submitted order as a pending position immediately (called by the
+  // order ticket on a successful place), so the row appears with the confirmation
+  // rather than 3-5s later when Alpaca's open-order list catches up.
+  const onOptimisticStockOrder = useCallback((order: { orderId: string; ticker: string; notionalUsd: number; side: "buy" | "sell" }) => {
+    if (!order.orderId || !order.ticker) return;
+    setOptimisticOrders((prev) => (prev.some((entry) => entry.id === order.orderId)
+      ? prev
+      : [...prev, { id: order.orderId, ticker: order.ticker, notionalUsd: order.notionalUsd, side: order.side, ts: Date.now() }]));
+    pollCountRef.current = 0;
+    refresh();
+  }, [refresh]);
+
+  // Display portfolio with just-cancelled pending orders filtered out (optimistic).
+  // The auto-poll still reads the RAW data so it keeps reconciling until Alpaca
+  // drops the order from its open-order list; once gone, the hidden id matches no
+  // row and is simply inert (order ids are unique and never reused), so the set
+  // needs no pruning.
+  const displayStockPortfolio = useMemo(() => {
+    const pf = data?.stockPortfolio ?? EMPTY_PORTFOLIO;
+    const hidden = new Set(cancelledOrders);
+    let rows = hidden.size ? pf.rows.filter((row) => !(row.pending && row.orderId && hidden.has(row.orderId))) : pf.rows;
+    if (optimisticOrders.length) {
+      // Only add an optimistic row while the REAL open order for it hasn't yet
+      // appeared (dedup by id) and it wasn't just cancelled — so the optimistic
+      // row hands off to the real pending row with no flicker or duplicate.
+      const realPendingIds = new Set(rows.filter((row) => row.pending && row.orderId).map((row) => row.orderId));
+      const optimisticRows: DeskHolding[] = optimisticOrders
+        .filter((order) => !realPendingIds.has(order.id) && !hidden.has(order.id))
+        .map((order) => ({ id: `opt:${order.id}`, sym: order.ticker, name: order.ticker, amount: 0, usd: order.notionalUsd, chg: 0, pending: true, status: "accepted", side: order.side, orderId: order.id }));
+      if (optimisticRows.length) rows = [...optimisticRows, ...rows];
+    }
+    return rows === pf.rows ? pf : { ...pf, rows };
+  }, [data?.stockPortfolio, cancelledOrders, optimisticOrders]);
 
   // executor id → display name + kind, for the activity attribution chips.
   const actors = useMemo<Record<string, { name: string; kind: DeskWalletKind }>>(() => {
@@ -392,11 +549,14 @@ export function TradePanel(props: TradePanelProps) {
       swapTokens: isSolanaWallet ? SWAP_TOKENS_SOLANA : SWAP_TOKENS_BASE,
       swapMaxUsd: SWAP_MAX_USD,
       cryptoCaps: data?.cryptoCaps ?? null,
-      stockPortfolio: data?.stockPortfolio ?? EMPTY_PORTFOLIO,
+      stockPortfolio: displayStockPortfolio,
       stockMovers: data?.stockMovers ?? [],
       stockReadiness: data?.stockReadiness ?? EMPTY_READINESS,
       paper,
       setPaper,
+      onEnableStockVenue,
+      onCancelStockOrder,
+      onOptimisticStockOrder,
       activity: data?.activity ?? [],
       actors,
       currency,
@@ -407,7 +567,7 @@ export function TradePanel(props: TradePanelProps) {
       onOpenView,
       refresh,
     };
-  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, paper, currency, fxRates, actors, props.theme, onChangeWallet, onOpenView, refresh]);
+  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, paper, currency, fxRates, actors, props.theme, onChangeWallet, onOpenView, refresh, onEnableStockVenue, onCancelStockOrder, onOptimisticStockOrder, displayStockPortfolio]);
 
   return (
     <div style={{ height: "100%", overflow: "hidden" }}>

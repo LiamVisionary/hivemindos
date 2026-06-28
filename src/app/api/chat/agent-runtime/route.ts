@@ -878,8 +878,18 @@ async function maybePrepareNaturalSwap(input: {
   // A Bankr-managed acting wallet has no local signer — let Bankr own the swap.
   if (input.actingWalletSource?.kind === "bankr"
     && !parsed.source.address && !parsed.source.personal && !parsed.source.chain) return null;
-  // Only the local DEX rail is handled here; generic swaps fall through to Bankr.
-  if (!hasLocalSwapIntent(text, parsed.source)) return null;
+  // A selected non-Bankr acting wallet (a personal "user" or "agent" wallet, which
+  // carries a local signing key) is itself the local-swap intent: the user picked
+  // where to swap, so a bare "swap X to Y" should run on THAT wallet via the DEX
+  // rail. Without this, the swap falls through to the ungated Bankr handler below
+  // (maybeHandleNaturalBankrAction) and runs on Bankr instead of the wallet the
+  // user selected. Swaps with no wallet context at all still fall through to Bankr.
+  const actingIsLocalWallet = Boolean(
+    input.actingWalletSource
+    && input.actingWalletSource.kind !== "bankr"
+    && input.actingWalletSource.address.trim(),
+  );
+  if (!hasLocalSwapIntent(text, parsed.source) && !actingIsLocalWallet) return null;
 
   const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
   const resolved = await resolveWalletSource(parsed.source, fallback, parsed.family);
@@ -953,12 +963,18 @@ async function maybeExecuteConfirmedSwap(input: {
       confirmation: SWAP_CONFIRMATION,
     });
     ok = true;
+    const fee = result.platformFee;
+    const feeLine = fee && fee.amountUsd > 0
+      ? `**Fee** ${fee.amountUsd.toFixed(2)} USDC${fee.signature ? ` · [receipt](${txExplorerUrl(result.network, fee.signature)})` : ""}`
+      : "";
     message = [
       "**Swap complete**",
       "",
-      result.detail,
-      `On **${networkChainLabel(result.network)}** from \`${resolved.address}\`${resolved.isPersonal ? " (personal)" : ""}`,
-      `Tx \`${result.reference}\``,
+      `**Swapped** ${result.sellAmount} ${result.sell} → ≈${trimAmount(result.buyAmount)} ${result.buy}`,
+      `**Network** ${networkChainLabel(result.network)}`,
+      `**Wallet** \`${shortHex(resolved.address)}\`${resolved.isPersonal ? " (personal)" : ""}`,
+      feeLine,
+      `**Tx** [${shortHex(result.reference)}](${txExplorerUrl(result.network, result.reference)})`,
     ].filter(Boolean).join("\n");
   } catch (error) {
     message = `**Swap failed**\n\n${error instanceof Error ? error.message : "Swap failed."}`;
@@ -987,6 +1003,7 @@ function buyStockCapUsd(wallet?: AgentWalletConfig): number {
 
 function buyStockPolicy(wallet: AgentWalletConfig): BuyStockPolicy {
   return {
+    agentId: wallet.agentId,
     enabled: wallet.enabled,
     network: wallet.network,
     tradingVenue: wallet.tradingVenue,
@@ -2451,6 +2468,22 @@ function formatMoney(value: number) {
 
 function baseScanTxUrl(hash: string) {
   return `https://basescan.org/tx/${hash}`;
+}
+
+// Middle-truncate a long hash/address for a tidy card: 0xC42e…147bE9.
+function shortHex(value: string, head = 6, tail = 6) {
+  const v = value.trim();
+  return v.length > head + tail + 1 ? `${v.slice(0, head)}…${v.slice(-tail)}` : v;
+}
+
+// Block explorer for a tx, by network family (Solana vs EVM/Base default).
+function txExplorerUrl(network: string, hash: string) {
+  return /sol/i.test(network) ? `https://solscan.io/tx/${hash}` : baseScanTxUrl(hash);
+}
+
+// Trim trailing-zero noise from a fixed-precision amount: 0.000635500 -> 0.0006355.
+function trimAmount(value: number) {
+  return value.toPrecision(6).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
 }
 
 function privateTransferTimingSummary(timings: Awaited<ReturnType<typeof executeVeilPrivateTransfer>>["timings"]) {
@@ -4978,267 +5011,47 @@ async function streamOpenAICompatibleRuntime(
   });
 }
 
-export async function POST(request: NextRequest) {
-  const routeStartedAt = Date.now();
-  let profile: AgentProfile;
-  let messages: IncomingMessage[];
-  let sharedVault: SharedVaultConfig | undefined;
-  let workingDirectory: string | undefined;
-  let wallet: AgentWalletConfig | undefined;
-  let honeyLedgerEnabled = false;
-  let runtimeSessionId = "";
-  let chatStorageKey = "";
-  let clientRunId = "";
-  let agentMode: AgentMode = "act";
-  let latencyMode = "";
-  let actingWalletSource: ActingWalletSourceHint | undefined;
-  try {
-    const body = (await request.json()) as {
-      agent?: AgentProfile;
-      messages?: IncomingMessage[];
-      sharedVault?: SharedVaultConfig;
-      workingDirectory?: string;
-      wallet?: AgentWalletConfig;
-      honeyLedgerEnabled?: boolean;
-      agentMode?: string;
-      runtimeSessionId?: string;
-      hermesSessionId?: string;
-      chatStorageKey?: string;
-      clientRunId?: string;
-      latencyMode?: string;
-      actingWalletSource?: unknown;
-    };
-    if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
-    profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
-    messages = body.messages;
-    sharedVault = body.sharedVault;
-    workingDirectory = body.workingDirectory;
-    wallet = body.wallet;
-    honeyLedgerEnabled = body.honeyLedgerEnabled === true;
-    agentMode = normalizeAgentMode(body.agentMode);
-    runtimeSessionId = typeof body.runtimeSessionId === "string"
-      ? body.runtimeSessionId
-      : typeof body.hermesSessionId === "string"
-        ? body.hermesSessionId
-        : "";
-    chatStorageKey = typeof body.chatStorageKey === "string" ? body.chatStorageKey : "";
-    clientRunId = typeof body.clientRunId === "string" ? body.clientRunId : "";
-    latencyMode = typeof body.latencyMode === "string" ? body.latencyMode : "";
-    actingWalletSource = coerceActingWalletSourceHint(body.actingWalletSource);
-  } catch {
-    await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
-    return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
+// The FAB prepends a screen-context briefing ("<capabilities…>\n\nUser request: X")
+// to the relayed message. The intent matchers below must key on the user's ACTUAL
+// request, NOT that metadata — otherwise briefing words like "run" or "Polymarket"
+// false-trigger a handler (e.g. the MiroShark x402 matcher hijacking a plain
+// "swap 1 usdc to eth"). This returns a copy of the message list whose latest user
+// message is unwrapped to just the request; the agent fallthrough keeps the original
+// (briefing intact) for context.
+function unwrapLatestUserRequest(messages: IncomingMessage[]): IncomingMessage[] {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role !== "user") continue;
+    const text = messageText(messages[i]);
+    const marker = text.lastIndexOf("\n\nUser request:");
+    if (marker < 0) return messages;
+    const bare = text.slice(marker + "\n\nUser request:".length).trim();
+    if (!bare) return messages;
+    const copy = messages.slice();
+    copy[i] = { ...messages[i], content: bare };
+    return copy;
   }
-  await recordRouteTelemetry(request, "agent_runtime.request.received", {
-    ...telemetryPayloadForProfile(profile),
-    messageCount: messages.length,
-    workingDirectorySet: Boolean(workingDirectory?.trim()),
-    runtimeSessionIdSet: Boolean(runtimeSessionId.trim()),
-    runtimeSessionId: runtimeSessionId || null,
-    chatStorageKey: chatStorageKey || null,
-    clientRunId: clientRunId || null,
-    agentMode,
-    latencyMode: latencyMode || null,
-    sharedVaultEnabled: Boolean(sharedVault?.enabled),
-    honeyLedgerEnabled,
-    elapsedMs: Date.now() - routeStartedAt,
-  });
+  return messages;
+}
 
-  const userMessage = latestUserMessage(messages);
-  const userText = extractUserText(messages).trim();
-  const userPrompt = userText || attachmentPromptSummary(userMessage);
-  if (!userMessage || !userPrompt) {
-    await recordRouteTelemetry(request, "agent_runtime.request.invalid", {
-      reason: "empty-user-message",
-      ...telemetryPayloadForProfile(profile),
-      elapsedMs: Date.now() - routeStartedAt,
-    });
-    return Response.json({ error: "User message is empty" }, { status: 400 });
-  }
-  const promptCheck = proxyInput(userPrompt);
-  if (promptCheck.verdict === "block") {
-    await recordRouteTelemetry(request, "agent_runtime.security.blocked", {
-      reason: promptCheck.reason ?? null,
-      ...telemetryPayloadForProfile(profile),
-      elapsedMs: Date.now() - routeStartedAt,
-    });
-    return Response.json({ error: promptCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
-  }
-  const vault = activeSharedVault(profile, sharedVault);
-  runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
-  if (isFusionProfile(profile)) {
-    // Hive Fusion compound model: fan out to a panel of configured models,
-    // judge their responses, and stream a synthesized answer. Runs before the
-    // heavy single-model preflight since Fusion orchestrates its own panel.
-    await recordRouteTelemetry(request, "agent_runtime.dispatch.fusion", {
-      ...telemetryPayloadForProfile(profile),
-      promptLength: userPrompt.length,
-      runtimeSessionId,
-      chatStorageKey: chatStorageKey || null,
-      agentMode,
-      elapsedMs: Date.now() - routeStartedAt,
-    });
-    return streamFusionResponse({ profile, messages, runtimeSessionId, request, routeStartedAt });
-  }
-  if (isMobileAgentGatewayUrl(profile.gatewayUrl)) {
-    // Phone-hosted agent: the hub cannot call the phone, so the turn is queued
-    // as a job the phone app polls for (see lib/services/mobile-agents) and
-    // this stream replays the on-device run back to the dashboard.
-    await recordRouteTelemetry(request, "agent_runtime.dispatch.mobile", {
-      ...telemetryPayloadForProfile(profile),
-      promptLength: userPrompt.length,
-      runtimeSessionId,
-      chatStorageKey: chatStorageKey || null,
-      agentMode,
-      elapsedMs: Date.now() - routeStartedAt,
-    });
-    return streamMobileAgentTurn({
-      profile,
-      messages,
-      userPrompt,
-      runtimeSessionId,
-      chatStorageKey,
-      sharedVaultPath: vault?.vaultPath,
-      routeStartedAt,
-    });
-  }
-  const lowLatencyVoiceTurn = latencyMode === "voice";
-  if (lowLatencyVoiceTurn) {
-    const effectiveProfile = isBankrLlmProfile(profile) ? profile : await collectorChatProfile(profile) ?? profile;
-    const profileError = isBankrLlmProfile(effectiveProfile) ? null : validateHttpRuntimeProfile(effectiveProfile);
-    if (profileError) {
-      await recordRouteTelemetry(request, "agent_runtime.voice.validation_failed", {
-        reason: "profile-error",
-        message: profileError,
-        ...telemetryPayloadForProfile(effectiveProfile),
-        elapsedMs: Date.now() - routeStartedAt,
-      });
-      return Response.json({ error: profileError }, { status: 400 });
-    }
-    await recordRouteTelemetry(request, "agent_runtime.voice.fast_path.dispatch", {
-      ...telemetryPayloadForProfile(effectiveProfile),
-      runtimeSessionId,
-      chatStorageKey: chatStorageKey || null,
-      agentMode,
-      elapsedMs: Date.now() - routeStartedAt,
-    });
-    return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, null, agentMode, workingDirectory, undefined, false, runtimeSessionId, {
-      request,
-      routeStartedAt,
-      runtimeSessionId,
-      chatStorageKey,
-    }, "", "", "");
-  }
-  const fallbackRuntimeCapabilityContext: Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> = {
-    runtime: profile.runtime,
-    hasRuntimeImageGeneration: false,
-    runtimeImageGenerationSource: undefined,
-  };
-  const emptyTaskRetrievalResult = { context: "", telemetry: null as TaskRetrievalTelemetry | null };
-  const capabilitySearchTimeoutMs = !lowLatencyVoiceTurn && requiresCapabilityRouting(userPrompt)
-    ? CHAT_PREFLIGHT_CAPABILITY_ROUTING_TIMEOUT_MS
-    : CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS;
-  const runtimeCapabilityPreflight = lowLatencyVoiceTurn
-    ? { value: undefined as Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> | undefined, timedOut: false, failed: false }
-    : await bestEffortPreflight(
-      runtimeImageGenerationCapabilityContext(profile),
-      CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS,
-      fallbackRuntimeCapabilityContext,
-    );
-  const runtimeCapabilityContext = runtimeCapabilityPreflight.value;
-  const [taskRetrievalPreflight, sharedBrainMemoryPreflight] = await Promise.all([
-    bestEffortPreflight(
-      buildTaskRetrievalContextResult({
-        origin: request.url,
-        query: userPrompt,
-        sharedVault: vault,
-        runtime: runtimeCapabilityContext,
-        agent: {
-          workerClass: profile.workerClass,
-          preferredSkillSlugs: profile.preferredSkillSlugs,
-          taskPreferences: profile.taskPreferences,
-        },
-        recordContextXray: true,
-        runId: runtimeSessionId,
-        threadId: chatStorageKey,
-        model: [profile.runtime, profile.model].filter(Boolean).join(":"),
-      }),
-      capabilitySearchTimeoutMs,
-      emptyTaskRetrievalResult,
-    ),
-    lowLatencyVoiceTurn
-      ? Promise.resolve({ value: "", timedOut: false, failed: false })
-      : bestEffortPreflight(
-        buildSharedBrainMemoryContext(vault, userPrompt),
-        CHAT_PREFLIGHT_MEMORY_TIMEOUT_MS,
-        "",
-      ),
-  ]);
-  const taskRetrievalResult = taskRetrievalPreflight.value;
-  const sharedBrainMemoryContext = sharedBrainMemoryPreflight.value;
-  // Bankr knowledge is key-gated, not profile-gated: any runtime/provider/model
-  // can use the shared Bankr key, and the briefing must survive a timed-out
-  // capability search, so it rides along with whatever retrieval produced
-  // (results or the fallback notice). Presence check is cached; never the value.
-  // ClawBank knowledge is credential-gated like Bankr (not profile-gated): any
-  // runtime can use the shared ClawBank token, and the briefing must survive a
-  // timed-out capability search. Presence check is cached; never the value.
-  const [bankrCapabilityContext, clawbankCapabilityContext] = await Promise.all([
-    buildBankrCapabilityContext().catch(() => ""),
-    buildClawbankCapabilityContext().catch(() => ""),
-  ]);
-  const taskRetrievalContext = [
-    taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
-      query: userPrompt,
-      origin: request.url,
-      timeoutMs: capabilitySearchTimeoutMs,
-      timedOut: taskRetrievalPreflight.timedOut,
-      failed: taskRetrievalPreflight.failed,
-    }),
-    bankrCapabilityContext,
-    clawbankCapabilityContext,
-  ].filter(Boolean).join("\n\n");
-  await recordRouteTelemetry(request, "agent_runtime.capability_search.completed", {
-    ...telemetryPayloadForProfile(profile),
-    runtimeSessionId,
-    chatStorageKey: chatStorageKey || null,
-    skipped: false,
-    lowLatencyVoiceTurn,
-    runtimeCapabilityTimedOut: runtimeCapabilityPreflight.timedOut,
-    runtimeCapabilityFailed: runtimeCapabilityPreflight.failed,
-    capabilitySearchTimedOut: taskRetrievalPreflight.timedOut,
-    capabilitySearchFailed: taskRetrievalPreflight.failed,
-    sharedBrainMemoryTimedOut: sharedBrainMemoryPreflight.timedOut,
-    sharedBrainMemoryFailed: sharedBrainMemoryPreflight.failed,
-    contextInjected: Boolean(taskRetrievalContext),
-    telemetry: taskRetrievalResult.telemetry,
-    elapsedMs: Date.now() - routeStartedAt,
-  });
-  const runtimeSession = await startRuntimeChatSession({
-    sessionId: runtimeSessionId,
-    agent: profile,
-    chatStorageKey,
-    sharedVaultPath: vault?.vaultPath,
-    userContent: userPrompt,
-    startedAt: routeStartedAt,
-  }).catch(() => null);
-  await recordRouteTelemetry(request, "agent_runtime.session.started", {
-    ...telemetryPayloadForProfile(profile),
-    runtimeSessionId,
-    chatStorageKey: chatStorageKey || null,
-    session: chatTelemetrySession(runtimeSession),
-    elapsedMs: Date.now() - routeStartedAt,
-  });
-  const capabilitySearchProcessDetail = taskRetrievalResult.telemetry?.queryCount
-    ? formatTaskRetrievalProcessDetail(taskRetrievalResult.telemetry)
-    : formatTaskRetrievalFallbackProcessDetail({
-      timeoutMs: capabilitySearchTimeoutMs,
-      timedOut: taskRetrievalPreflight.timedOut,
-      failed: taskRetrievalPreflight.failed,
-    });
-  if (capabilitySearchProcessDetail) {
-    await appendRuntimeChatSessionEvent(runtimeSessionId, "Hive capability search", capabilitySearchProcessDetail).catch(() => undefined);
-  }
+// Deterministic wallet / trade intent dispatch. A "swap / send / buy / bankr / x402
+// ..." request must be intercepted and run on the rails here - NOT streamed to the
+// raw agent, which has no deterministic money path and returns nothing usable. This
+// runs for EVERY runtime path, including the low-latency voice fast path, so the
+// hive chat can transact on the user's acting wallet. Conversational turns fall
+// through (every handler parses the text and returns null synchronously) at
+// negligible cost. Returns the matched rail Response, or null to continue.
+async function dispatchWalletAndTradeIntents(ctx: {
+  request: NextRequest;
+  routeStartedAt: number;
+  profile: AgentProfile;
+  messages: IncomingMessage[];
+  wallet?: AgentWalletConfig;
+  actingWalletSource?: ActingWalletSourceHint;
+  runtimeSessionId: string;
+}): Promise<Response | null> {
+  const { request, routeStartedAt, profile, wallet, actingWalletSource, runtimeSessionId } = ctx;
+  // Match on the user's bare request, not the prepended screen-context briefing.
+  const messages = unwrapLatestUserRequest(ctx.messages);
   const naturalMiroSharkX402 = await maybeExecuteNaturalMiroSharkX402({
     request,
     routeStartedAt,
@@ -5394,6 +5207,287 @@ export async function POST(request: NextRequest) {
     runtimeSessionId,
   });
   if (confirmedPrivateTransfer) return confirmedPrivateTransfer;
+  return null;
+}
+
+export async function POST(request: NextRequest) {
+  const routeStartedAt = Date.now();
+  let profile: AgentProfile;
+  let messages: IncomingMessage[];
+  let sharedVault: SharedVaultConfig | undefined;
+  let workingDirectory: string | undefined;
+  let wallet: AgentWalletConfig | undefined;
+  let honeyLedgerEnabled = false;
+  let runtimeSessionId = "";
+  let chatStorageKey = "";
+  let clientRunId = "";
+  let agentMode: AgentMode = "act";
+  let latencyMode = "";
+  let actingWalletSource: ActingWalletSourceHint | undefined;
+  try {
+    const body = (await request.json()) as {
+      agent?: AgentProfile;
+      messages?: IncomingMessage[];
+      sharedVault?: SharedVaultConfig;
+      workingDirectory?: string;
+      wallet?: AgentWalletConfig;
+      honeyLedgerEnabled?: boolean;
+      agentMode?: string;
+      runtimeSessionId?: string;
+      hermesSessionId?: string;
+      chatStorageKey?: string;
+      clientRunId?: string;
+      latencyMode?: string;
+      actingWalletSource?: unknown;
+    };
+    if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
+    profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
+    messages = body.messages;
+    sharedVault = body.sharedVault;
+    workingDirectory = body.workingDirectory;
+    wallet = body.wallet;
+    honeyLedgerEnabled = body.honeyLedgerEnabled === true;
+    agentMode = normalizeAgentMode(body.agentMode);
+    runtimeSessionId = typeof body.runtimeSessionId === "string"
+      ? body.runtimeSessionId
+      : typeof body.hermesSessionId === "string"
+        ? body.hermesSessionId
+        : "";
+    chatStorageKey = typeof body.chatStorageKey === "string" ? body.chatStorageKey : "";
+    clientRunId = typeof body.clientRunId === "string" ? body.clientRunId : "";
+    latencyMode = typeof body.latencyMode === "string" ? body.latencyMode : "";
+    actingWalletSource = coerceActingWalletSourceHint(body.actingWalletSource);
+  } catch {
+    await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
+    return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
+  }
+  await recordRouteTelemetry(request, "agent_runtime.request.received", {
+    ...telemetryPayloadForProfile(profile),
+    messageCount: messages.length,
+    workingDirectorySet: Boolean(workingDirectory?.trim()),
+    runtimeSessionIdSet: Boolean(runtimeSessionId.trim()),
+    runtimeSessionId: runtimeSessionId || null,
+    chatStorageKey: chatStorageKey || null,
+    clientRunId: clientRunId || null,
+    agentMode,
+    latencyMode: latencyMode || null,
+    sharedVaultEnabled: Boolean(sharedVault?.enabled),
+    honeyLedgerEnabled,
+    elapsedMs: Date.now() - routeStartedAt,
+  });
+
+  const userMessage = latestUserMessage(messages);
+  const userText = extractUserText(messages).trim();
+  const userPrompt = userText || attachmentPromptSummary(userMessage);
+  if (!userMessage || !userPrompt) {
+    await recordRouteTelemetry(request, "agent_runtime.request.invalid", {
+      reason: "empty-user-message",
+      ...telemetryPayloadForProfile(profile),
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return Response.json({ error: "User message is empty" }, { status: 400 });
+  }
+  const promptCheck = proxyInput(userPrompt);
+  if (promptCheck.verdict === "block") {
+    await recordRouteTelemetry(request, "agent_runtime.security.blocked", {
+      reason: promptCheck.reason ?? null,
+      ...telemetryPayloadForProfile(profile),
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return Response.json({ error: promptCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
+  }
+  const vault = activeSharedVault(profile, sharedVault);
+  runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
+  if (isFusionProfile(profile)) {
+    // Hive Fusion compound model: fan out to a panel of configured models,
+    // judge their responses, and stream a synthesized answer. Runs before the
+    // heavy single-model preflight since Fusion orchestrates its own panel.
+    await recordRouteTelemetry(request, "agent_runtime.dispatch.fusion", {
+      ...telemetryPayloadForProfile(profile),
+      promptLength: userPrompt.length,
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      agentMode,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamFusionResponse({ profile, messages, runtimeSessionId, request, routeStartedAt });
+  }
+  if (isMobileAgentGatewayUrl(profile.gatewayUrl)) {
+    // Phone-hosted agent: the hub cannot call the phone, so the turn is queued
+    // as a job the phone app polls for (see lib/services/mobile-agents) and
+    // this stream replays the on-device run back to the dashboard.
+    await recordRouteTelemetry(request, "agent_runtime.dispatch.mobile", {
+      ...telemetryPayloadForProfile(profile),
+      promptLength: userPrompt.length,
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      agentMode,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamMobileAgentTurn({
+      profile,
+      messages,
+      userPrompt,
+      runtimeSessionId,
+      chatStorageKey,
+      sharedVaultPath: vault?.vaultPath,
+      routeStartedAt,
+    });
+  }
+  // Run the deterministic wallet / trade rails BEFORE the low-latency voice fast
+  // path below - that path streams the raw agent, which has no deterministic money
+  // path, so without this a spoken/typed "swap / send / buy ..." returns nothing.
+  // Conversational turns fall through (handlers parse + return null synchronously).
+  const walletIntentResponse = await dispatchWalletAndTradeIntents({
+    request,
+    routeStartedAt,
+    profile,
+    messages,
+    wallet,
+    actingWalletSource,
+    runtimeSessionId,
+  });
+  if (walletIntentResponse) return walletIntentResponse;
+  const lowLatencyVoiceTurn = latencyMode === "voice";
+  if (lowLatencyVoiceTurn) {
+    const effectiveProfile = isBankrLlmProfile(profile) ? profile : await collectorChatProfile(profile) ?? profile;
+    const profileError = isBankrLlmProfile(effectiveProfile) ? null : validateHttpRuntimeProfile(effectiveProfile);
+    if (profileError) {
+      await recordRouteTelemetry(request, "agent_runtime.voice.validation_failed", {
+        reason: "profile-error",
+        message: profileError,
+        ...telemetryPayloadForProfile(effectiveProfile),
+        elapsedMs: Date.now() - routeStartedAt,
+      });
+      return Response.json({ error: profileError }, { status: 400 });
+    }
+    await recordRouteTelemetry(request, "agent_runtime.voice.fast_path.dispatch", {
+      ...telemetryPayloadForProfile(effectiveProfile),
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      agentMode,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, null, agentMode, workingDirectory, undefined, false, runtimeSessionId, {
+      request,
+      routeStartedAt,
+      runtimeSessionId,
+      chatStorageKey,
+    }, "", "", "");
+  }
+  const fallbackRuntimeCapabilityContext: Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> = {
+    runtime: profile.runtime,
+    hasRuntimeImageGeneration: false,
+    runtimeImageGenerationSource: undefined,
+  };
+  const emptyTaskRetrievalResult = { context: "", telemetry: null as TaskRetrievalTelemetry | null };
+  const capabilitySearchTimeoutMs = !lowLatencyVoiceTurn && requiresCapabilityRouting(userPrompt)
+    ? CHAT_PREFLIGHT_CAPABILITY_ROUTING_TIMEOUT_MS
+    : CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS;
+  const runtimeCapabilityPreflight = lowLatencyVoiceTurn
+    ? { value: undefined as Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> | undefined, timedOut: false, failed: false }
+    : await bestEffortPreflight(
+      runtimeImageGenerationCapabilityContext(profile),
+      CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS,
+      fallbackRuntimeCapabilityContext,
+    );
+  const runtimeCapabilityContext = runtimeCapabilityPreflight.value;
+  const [taskRetrievalPreflight, sharedBrainMemoryPreflight] = await Promise.all([
+    bestEffortPreflight(
+      buildTaskRetrievalContextResult({
+        origin: request.url,
+        query: userPrompt,
+        sharedVault: vault,
+        runtime: runtimeCapabilityContext,
+        agent: {
+          workerClass: profile.workerClass,
+          preferredSkillSlugs: profile.preferredSkillSlugs,
+          taskPreferences: profile.taskPreferences,
+        },
+        recordContextXray: true,
+        runId: runtimeSessionId,
+        threadId: chatStorageKey,
+        model: [profile.runtime, profile.model].filter(Boolean).join(":"),
+      }),
+      capabilitySearchTimeoutMs,
+      emptyTaskRetrievalResult,
+    ),
+    lowLatencyVoiceTurn
+      ? Promise.resolve({ value: "", timedOut: false, failed: false })
+      : bestEffortPreflight(
+        buildSharedBrainMemoryContext(vault, userPrompt),
+        CHAT_PREFLIGHT_MEMORY_TIMEOUT_MS,
+        "",
+      ),
+  ]);
+  const taskRetrievalResult = taskRetrievalPreflight.value;
+  const sharedBrainMemoryContext = sharedBrainMemoryPreflight.value;
+  // Bankr knowledge is key-gated, not profile-gated: any runtime/provider/model
+  // can use the shared Bankr key, and the briefing must survive a timed-out
+  // capability search, so it rides along with whatever retrieval produced
+  // (results or the fallback notice). Presence check is cached; never the value.
+  // ClawBank knowledge is credential-gated like Bankr (not profile-gated): any
+  // runtime can use the shared ClawBank token, and the briefing must survive a
+  // timed-out capability search. Presence check is cached; never the value.
+  const [bankrCapabilityContext, clawbankCapabilityContext] = await Promise.all([
+    buildBankrCapabilityContext().catch(() => ""),
+    buildClawbankCapabilityContext().catch(() => ""),
+  ]);
+  const taskRetrievalContext = [
+    taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
+      query: userPrompt,
+      origin: request.url,
+      timeoutMs: capabilitySearchTimeoutMs,
+      timedOut: taskRetrievalPreflight.timedOut,
+      failed: taskRetrievalPreflight.failed,
+    }),
+    bankrCapabilityContext,
+    clawbankCapabilityContext,
+  ].filter(Boolean).join("\n\n");
+  await recordRouteTelemetry(request, "agent_runtime.capability_search.completed", {
+    ...telemetryPayloadForProfile(profile),
+    runtimeSessionId,
+    chatStorageKey: chatStorageKey || null,
+    skipped: false,
+    lowLatencyVoiceTurn,
+    runtimeCapabilityTimedOut: runtimeCapabilityPreflight.timedOut,
+    runtimeCapabilityFailed: runtimeCapabilityPreflight.failed,
+    capabilitySearchTimedOut: taskRetrievalPreflight.timedOut,
+    capabilitySearchFailed: taskRetrievalPreflight.failed,
+    sharedBrainMemoryTimedOut: sharedBrainMemoryPreflight.timedOut,
+    sharedBrainMemoryFailed: sharedBrainMemoryPreflight.failed,
+    contextInjected: Boolean(taskRetrievalContext),
+    telemetry: taskRetrievalResult.telemetry,
+    elapsedMs: Date.now() - routeStartedAt,
+  });
+  const runtimeSession = await startRuntimeChatSession({
+    sessionId: runtimeSessionId,
+    agent: profile,
+    chatStorageKey,
+    sharedVaultPath: vault?.vaultPath,
+    userContent: userPrompt,
+    startedAt: routeStartedAt,
+  }).catch(() => null);
+  await recordRouteTelemetry(request, "agent_runtime.session.started", {
+    ...telemetryPayloadForProfile(profile),
+    runtimeSessionId,
+    chatStorageKey: chatStorageKey || null,
+    session: chatTelemetrySession(runtimeSession),
+    elapsedMs: Date.now() - routeStartedAt,
+  });
+  const capabilitySearchProcessDetail = taskRetrievalResult.telemetry?.queryCount
+    ? formatTaskRetrievalProcessDetail(taskRetrievalResult.telemetry)
+    : formatTaskRetrievalFallbackProcessDetail({
+      timeoutMs: capabilitySearchTimeoutMs,
+      timedOut: taskRetrievalPreflight.timedOut,
+      failed: taskRetrievalPreflight.failed,
+    });
+  if (capabilitySearchProcessDetail) {
+    await appendRuntimeChatSessionEvent(runtimeSessionId, "Hive capability search", capabilitySearchProcessDetail).catch(() => undefined);
+  }
+  // Wallet / trade intents already ran via dispatchWalletAndTradeIntents() before the
+  // voice fast path above (so voice + typed chat share one money path); nothing to
+  // re-dispatch here. Continue to the conversational agent stream.
   const vaultPromptContext = buildChatVaultContext(vault, userPrompt);
   const promptEnvelope = buildHivemindPromptEnvelope({
     profile,

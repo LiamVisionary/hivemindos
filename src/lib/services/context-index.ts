@@ -17,7 +17,7 @@ import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/servic
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
 import { dashboardSwarmGoalContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem } from "@/lib/services/context-index/static-tool-items";
-import { hiveActionContextIndexItems, listHiveActions } from "@/lib/services/hive-actions";
+import { hiveActionContextIndexItems, hiveActionMcpName, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
 import {
   USEPOD_COMPATIBILITY_MATRIX,
@@ -44,7 +44,10 @@ export type ContextIndexKind =
   | "app-endpoint"
   | "runtime"
   | "doc"
-  | "workspace-file";
+  | "workspace-file"
+  | "code-symbol"
+  | "code-route"
+  | "repo-architecture";
 
 export type ContextIndexLoadHint = {
   type: "file" | "api" | "none";
@@ -431,6 +434,107 @@ async function apiRouteItem(file: FileStatEntry): Promise<ContextIndexItem> {
     updatedAt: file.mtimeMs,
     sizeBytes: file.size,
   };
+}
+
+// ── Code-intelligence context entries (compact only) ───────────────────────
+// Emits one repo-architecture summary plus a capped set of exported symbols so
+// agents can find code without raw file walking and know when to call the
+// code_* tools. Private symbols and every route are intentionally NOT flooded
+// in here — the graph engine answers depth via /api/code-intelligence.
+const CODE_SYMBOL_ROOTS = ["src/lib/services", "src/features/dashboard"];
+const CODE_SYMBOL_FILE_CAP = 400;
+const CODE_SYMBOL_ITEM_CAP = 80;
+
+async function codeSymbolFileStats(): Promise<FileStatEntry[]> {
+  const files: string[] = [];
+  for (const root of CODE_SYMBOL_ROOTS) {
+    if (files.length >= CODE_SYMBOL_FILE_CAP) break;
+    await walkFiles(absolutePath(root), files, CODE_SYMBOL_FILE_CAP);
+  }
+  return statPaths(files.filter((file) => /\.tsx?$/.test(file) && !file.endsWith(".d.ts")));
+}
+
+function exportedSymbols(source: string): Array<{ name: string; kind: "function" | "class" }> {
+  const out: Array<{ name: string; kind: "function" | "class" }> = [];
+  for (const match of source.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g)) out.push({ name: match[1], kind: "function" });
+  for (const match of source.matchAll(/export\s+(?:abstract\s+)?class\s+([A-Za-z0-9_]+)/g)) out.push({ name: match[1], kind: "class" });
+  return out;
+}
+
+function repoArchitectureItem(routeCount: number, symbolSampleCount: number): ContextIndexItem {
+  return {
+    id: "code-arch:repo",
+    kind: "repo-architecture" as const,
+    title: "HivemindOS code & system map",
+    summary: `Code-intelligence overview: ${routeCount} API routes plus exported symbols and the cross-service wiring (routes, Hive actions, MCP tools, connected apps).`,
+    tags: ["code", "architecture", "graph", "routes", "symbols", "impact", "system", "setup", "wiring"],
+    aliases: ["code graph", "code intelligence", "architecture", "trace call path", "what calls this", "which routes expose", "impact of my changes", "what did i break", "how is my hive wired", "understand my setup", "system map"],
+    retrievalText: `Use code_get_architecture for a structural overview and the cross-service route map, code_search_graph to find symbols/routes without raw file walking, code_trace_path for callers/callees, and code_detect_changes for diff impact ("what did I break?"). Answers how the HivemindOS hive is wired across ${routeCount} API routes, Hive actions, MCP tools, and connected apps (≈${symbolSampleCount} exported symbols sampled).`,
+    load: { type: "api" as const, target: "/api/code-intelligence", note: "POST { action: 'status' | 'get-architecture' | 'search-graph' | 'trace-path' | 'detect-changes' | 'get-code-snippet' }." },
+  };
+}
+
+async function codeIntelligenceItems(files: FileStatEntry[]): Promise<ContextIndexItem[]> {
+  const items: ContextIndexItem[] = [];
+  const seen = new Set<string>();
+  let symbolCount = 0;
+  for (const file of files) {
+    if (items.length >= CODE_SYMBOL_ITEM_CAP) break;
+    const source = await readFile(file.path, "utf8").catch(() => "");
+    if (!source) continue;
+    const relativePath = toPosix(relative(workspaceRoot(), file.path));
+    for (const symbol of exportedSymbols(source)) {
+      symbolCount += 1;
+      if (items.length >= CODE_SYMBOL_ITEM_CAP) break;
+      const id = `code-symbol:${relativePath}#${symbol.name}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      items.push({
+        id,
+        kind: "code-symbol" as const,
+        title: symbol.name,
+        summary: `Exported ${symbol.kind} in ${relativePath}.`,
+        tags: tagParts(symbol.name, relativePath),
+        aliases: [symbol.name],
+        path: file.path,
+        retrievalText: `Exported ${symbol.kind} ${symbol.name} (${relativePath}). Prefer code_search_graph over broad file search to find symbols; use code_trace_path for callers/callees and code_get_snippet for its source.`,
+        load: { type: "file" as const, target: file.path, note: "Read the file, or call code_get_snippet / code_trace_path for graph context." },
+        updatedAt: file.mtimeMs,
+        sizeBytes: file.size,
+      });
+    }
+  }
+  const routeCount = (await apiRouteFileStats()).length;
+  items.unshift(repoArchitectureItem(routeCount, symbolCount));
+  return items;
+}
+
+function codeCapabilityRouteItems(): ContextIndexItem[] {
+  const byRoute = new Map<string, ContextIndexItem>();
+  for (const action of listHiveActions()) {
+    const route = action.contextIndex?.route;
+    if (!route) continue;
+    const id = `code-route:${route}`;
+    const existing = byRoute.get(id);
+    if (existing) {
+      existing.tags = [...new Set([...existing.tags, ...tagParts(...action.tags)])].slice(0, 12);
+      existing.aliases = [...new Set([...(existing.aliases ?? []), action.id, hiveActionMcpName(action)])];
+      continue;
+    }
+    byRoute.set(id, {
+      id,
+      kind: "code-route" as const,
+      title: route,
+      summary: `Capability route ${route} — exposes ${action.title}.`,
+      tags: tagParts(route, ...action.tags),
+      aliases: [action.id, hiveActionMcpName(action)],
+      route,
+      methods: action.contextIndex?.methods ?? ["POST"],
+      retrievalText: `Route ${route} backs HivemindOS Hive action(s) / MCP tool(s). Use code_get_architecture to see every UI / tool / API surface that exposes a capability, e.g. "which routes expose wallet execution?".`,
+      load: { type: "api" as const, target: route, note: "Route exposed as a Hive action / MCP capability." },
+    });
+  }
+  return [...byRoute.values()];
 }
 
 function toolSchemaFileStats(): Promise<FileStatEntry[]> {
@@ -1210,6 +1314,9 @@ function totals(items: ContextIndexItem[]) {
     runtime: 0,
     doc: 0,
     "workspace-file": 0,
+    "code-symbol": 0,
+    "code-route": 0,
+    "repo-architecture": 0,
   } satisfies Record<ContextIndexKind, number>;
   for (const item of items) result[item.kind] += 1;
   return result;
@@ -1289,6 +1396,15 @@ const FS_SOURCES: FsSourceDefinition[] = [
     },
     build: async (probe) => (probe.files ?? []).map(workspaceFileItem),
   },
+  {
+    name: "code-intelligence",
+    kinds: ["code-symbol", "repo-architecture"],
+    probe: async () => {
+      const files = await codeSymbolFileStats();
+      return { signature: fileSignature(files), files };
+    },
+    build: (probe) => codeIntelligenceItems(probe.files ?? []),
+  },
 ];
 
 type FsSourceSnapshot = { signature: string; items: ContextIndexItem[] };
@@ -1366,6 +1482,7 @@ function perRequestItems(options: ContextIndexOptions, wants: (kind: ContextInde
     ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions()), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
     ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
     ...(wants("runtime") ? runtimeItems() : []),
+    ...(wants("code-route") ? codeCapabilityRouteItems() : []),
   ].filter((item) => wants(item.kind));
 }
 

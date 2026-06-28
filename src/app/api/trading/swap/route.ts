@@ -27,6 +27,9 @@ type SwapBody = {
   slippageBps?: number;
   confirmation?: string;
   approvalToken?: string;
+  /** Acting-wallet network for a price-only quote when the wallet has no local
+   *  signing key (e.g. a Bankr-managed wallet). Ignored for execute. */
+  network?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -45,13 +48,24 @@ export async function POST(request: NextRequest) {
 
     // Authoritative wallet: local vault only (key + address + network), never client-supplied.
     const stored = await getWalletSecret(agentId);
-    if (!stored) return NextResponse.json({ ok: false, error: "No local signing wallet exists for this selection." }, { status: 404 });
+    const isExecute = body.action === "execute";
+
+    // A price quote is wallet-agnostic — it needs only the network + tokens, no
+    // signing key or address. Bankr-managed wallets sign on Bankr and have no
+    // local key, so only EXECUTE requires the vault; a quote falls back to the
+    // network the client resolved from the acting wallet. (Bankr never executes
+    // through this route — it routes through the Bankr capability rail.)
+    if (isExecute && !stored) {
+      return NextResponse.json({ ok: false, error: "No local signing wallet exists for this selection." }, { status: 404 });
+    }
+    const network = stored?.info.network ?? body.network?.trim();
+    if (!network) return bad("A network is required to quote this swap.");
 
     const input: DexSwapInput = {
       agentId,
-      network: stored.info.network,
-      fromAddress: stored.info.address,
-      secret: stored.secret,
+      network,
+      fromAddress: stored?.info.address ?? "",
+      secret: stored?.secret,
       sellToken,
       buyToken,
       amountHuman,
@@ -60,7 +74,7 @@ export async function POST(request: NextRequest) {
       approvalToken: body.approvalToken?.trim() || undefined,
     };
 
-    if (body.action === "execute") {
+    if (isExecute) {
       const result = await executeDexSwap(input);
       return NextResponse.json({ ok: true, result });
     }

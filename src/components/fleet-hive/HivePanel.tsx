@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   ChevronLeft,
   Copy,
+  FileUp,
   GitBranch,
   MessageSquare,
   Pencil,
@@ -62,6 +63,7 @@ export interface HivePanelHandlers {
   /** Transient status text for an in-flight/just-finished network repair. */
   getNetworkFixStatus?: (m: HiveMachine) => string | null;
   onOpenShell?: (m: HiveMachine) => void;
+  onSendFile?: (m: HiveMachine) => void;
   onOpenUsePodHost?: (m: HiveMachine) => void;
   onCallAgent?: (m: HiveMachine, a: HiveAgent) => void;
   onOpenChat?: (m: HiveMachine, a: HiveAgent) => void;
@@ -255,6 +257,12 @@ export function HivePanel({
                 Shell
               </button>
             ) : null}
+            {handlers.onSendFile ? (
+              <button type="button" className="fr-chip" onClick={() => handlers.onSendFile?.(m)}>
+                <ActionIcon icon={FileUp} />
+                Send file
+              </button>
+            ) : null}
             {handlers.onOpenUsePodHost ? (
               <button
                 type="button"
@@ -352,6 +360,11 @@ export function HivePanel({
           </div>
           <h2 style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 26, letterSpacing: "-0.02em", margin: "10px 0 0", overflowWrap: "anywhere" }}>{a.name}</h2>
           <div style={{ fontSize: 12, color: "var(--fg-3)", fontFamily: "var(--f-mono)", marginTop: 6 }}>{a.runtime} · {a.role}</div>
+          {(a.source.provider || a.source.model) ? (
+            <div style={{ fontSize: 11.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", marginTop: 4 }}>
+              {[a.source.provider, a.source.model].filter(Boolean).join(" · ")}
+            </div>
+          ) : null}
           <div style={{ marginTop: 18, padding: "14px 16px", borderRadius: "var(--radius-sm)", background: "var(--panel)", border: "1px solid var(--line)", fontSize: 13.5, color: "var(--fg-2)", lineHeight: 1.6 }}>{a.task}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
             {a.since ? <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)", border: "1px solid var(--line-2)", borderRadius: 99, padding: "5px 11px" }}>started {a.since} ago</span> : null}

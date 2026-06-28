@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
       configured: true,
       address: extractWalletAddress(raw),
       balanceUsd: extractTotalUsd(raw),
+      tokens: extractTokens(raw),
     });
   } catch (error) {
     // Key is present but the read failed — still report configured so the wallet
@@ -59,6 +60,60 @@ function extractWalletAddress(raw: unknown): string {
   const direct = firstString(record, ["address", "walletAddress", "account", "accountAddress", "evmAddress", "ethAddress"]);
   if (direct) return direct;
   return firstString(asRecord(record.wallet), ["address", "walletAddress", "account"]);
+}
+
+export type BankrTokenHolding = { symbol: string; name: string; amount: number; usd: number };
+
+function nativeSymbolForNetwork(network: string): string {
+  const n = network.toLowerCase();
+  if (n.includes("solana") || n === "sol") return "SOL";
+  if (n.includes("polygon") || n.includes("matic")) return "POL";
+  if (n.includes("bnb") || n.includes("binance")) return "BNB";
+  return "ETH"; // base / mainnet / arbitrum / optimism / unichain / worldchain
+}
+
+/** Per-token holdings from the Bankr portfolio (native + ERC-20s), summed across
+ *  networks by symbol. Defensive — the Bankr shape isn't a fixed contract — and
+ *  returns [] when nothing parses, so the card just shows the total. */
+function extractTokens(raw: unknown): BankrTokenHolding[] {
+  const record = asRecord(raw);
+  const balances = record.balances;
+  const collected: BankrTokenHolding[] = [];
+  if (balances && typeof balances === "object" && !Array.isArray(balances)) {
+    for (const [network, net] of Object.entries(balances as Record<string, unknown>)) {
+      const netRecord = asRecord(net);
+      const nativeUsd = Number(netRecord.nativeUsd);
+      if (Number.isFinite(nativeUsd) && nativeUsd > 0.01) {
+        const sym = nativeSymbolForNetwork(network);
+        collected.push({ symbol: sym, name: sym, amount: firstNumber(netRecord, ["nativeBalance", "native", "nativeAmount", "balance"]) ?? 0, usd: nativeUsd });
+      }
+      const tokenBalances = netRecord.tokenBalances;
+      if (Array.isArray(tokenBalances)) {
+        for (const entry of tokenBalances) {
+          const e = asRecord(entry);
+          const token = asRecord(e.token);
+          // Bankr's per-token metadata lives under token.baseToken: { symbol, name,
+          // decimals }, with the USD value + raw balance on the token itself.
+          const baseToken = asRecord(token.baseToken);
+          const usd = firstNumber(token, ["balanceUSD", "balanceUsd"]) ?? firstNumber(e, ["balanceUSD", "balanceUsd"]);
+          if (usd === null || usd <= 0.01) continue;
+          const symbol = firstString(baseToken, ["symbol", "ticker"]) || firstString(token, ["symbol", "ticker"]) || firstString(e, ["symbol"]);
+          if (!symbol) continue;
+          collected.push({ symbol, name: firstString(baseToken, ["name"]) || firstString(token, ["name"]) || symbol, amount: firstNumber(token, ["balance", "amount", "uiAmount", "tokenBalance"]) ?? firstNumber(baseToken, ["balance"]) ?? 0, usd });
+        }
+      }
+    }
+  }
+  const bySymbol = new Map<string, BankrTokenHolding>();
+  for (const t of collected) {
+    const existing = bySymbol.get(t.symbol);
+    if (existing) { existing.amount += t.amount; existing.usd += t.usd; }
+    else bySymbol.set(t.symbol, { ...t });
+  }
+  return [...bySymbol.values()]
+    .map((t) => ({ ...t, usd: Math.round(t.usd * 100) / 100 }))
+    .sort((a, b) => b.usd - a.usd)
+    .slice(0, 20);
 }
 
 function extractTotalUsd(raw: unknown): number | null {

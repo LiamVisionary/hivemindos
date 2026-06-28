@@ -20,6 +20,8 @@ import {
 } from "./theater";
 import { frRunMetrics, type Run } from "./sim-data";
 import { useSimData } from "./sim-context";
+import { SimRunningDetail, SimRunViewSeg } from "./running";
+import { SimPostExtras } from "./post";
 
 export function SimPanel({ label, children, style }: { label?: string; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
@@ -102,6 +104,7 @@ export function SimRunDetail({ run, onPublish }: { run: Run; onPublish?: (run: R
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <PredictionMarketView run={run} />
         <Intelligence run={run} />
+        <SimPostExtras run={run} />
       </div>
     );
   }
@@ -133,12 +136,29 @@ export function SimRunDetail({ run, onPublish }: { run: Run; onPublish?: (run: R
         <SimStatsRow run={run} />
         <SimTags tags={run.tags} />
       </div>
+      <SimPostExtras run={run} />
     </div>
   );
 }
 
-// The market-making run is the only one that uses the live trading theater;
-// every other template (incl. live prediction markets) uses its native view.
+// A genuinely-live run opens in its determinate "running" state; a finished run opens in
+// its Result. "Live" is reliable now: swarmRunState treats a terminal MiroShark
+// runner_status (completed/stopped) or an archived run as done, so a completed sim no
+// longer animates as if it were still running. The Running ⇄ Result toggle is on every
+// run; SimulationView keys the detail pane on run id, so the default re-applies per run.
+// The market-making theater (SimLiveDetail) is retained but no stock run uses it.
 export function SimDetail({ run, onPublish }: { run: Run; onPublish?: (run: Run) => void }) {
-  return run.template === "market-maker" ? <SimLiveDetail run={run} /> : <SimRunDetail run={run} onPublish={onPublish} />;
+  const isLive = run.state === "live";
+  const [view, setView] = React.useState<"running" | "result">(isLive ? "running" : "result");
+
+  const result = run.template === "market-maker" ? <SimLiveDetail run={run} /> : <SimRunDetail run={run} onPublish={onPublish} />;
+  // A live run resumes from its real progress; a finished run opens in its terminal
+  // "done" snapshot (no re-animation), with an explicit Replay button if you want it.
+  if (view === "running") return <SimRunningDetail run={run} finished={!isLive} onResult={() => setView("result")} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}><SimRunViewSeg view="result" onChange={setView} /></div>
+      {result}
+    </div>
+  );
 }

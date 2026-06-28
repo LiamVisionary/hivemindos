@@ -13,9 +13,10 @@
    is shown in the detail. */
 
 import React from "react";
-import { Badge, BBtn } from "./primitives";
+import { Badge, BBtn, ProviderBadge } from "./primitives";
 import { BIcon, type IconName } from "./icons";
 import { useTradeDesk } from "./trade-context";
+import { playTradeSuccessSound } from "./trade-sound";
 import { prepareCapability, executeCapability, type RailResult } from "./rails";
 import {
   INTENT_FORMS, TR_CHAINS, type IntentFieldDef, type IntentFormDef,
@@ -23,13 +24,16 @@ import {
 } from "./intent-forms";
 import { CRYPTO_INTENTS, CRYPTO_INTENT_GROUPS, type CryptoIntentDef } from "@/features/dashboard/views/trade/trade-intents";
 import type { CryptoCapabilityMap, CryptoPreparedAction } from "@/features/dashboard/views/trade/trade-api";
+import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { HyperliquidTradeForm } from "@/features/dashboard/views/trade/HyperliquidTradeForm";
+import { CopyTradingPanel } from "./CopyTradingPanel";
 
 const INTENT_ICON: Record<string, IconName> = {
   "crosschain-swap": "repeat", bridge: "branch", hyperliquid: "activity", polymarket: "spark",
-  "token-launch": "sparkles", nft: "hex", automation: "refresh", send: "promote",
+  "token-launch": "sparkles", "claim-fees": "wallet", nft: "hex", automation: "refresh", send: "promote",
   "private-transfer": "shield", "crosschain-payment": "network", receive: "download",
   "paid-api": "plug", "private-paid-api": "key", "fund-llm-credits": "bot", "card-payment": "doc",
+  "copy-trading": "copy",
 };
 
 type Readiness = { ready: boolean; configured: boolean; missing: string[]; providerLabel?: string; provider?: string };
@@ -45,13 +49,36 @@ function readinessForIntent(caps: CryptoCapabilityMap | null, intentId: string):
   };
 }
 
+// Providers that are a SEPARATE managed account/runtime — only relevant to a
+// capability when the ACTING wallet actually is that provider. They report
+// "ready" globally (a shared env token), so without this filter UsePod/MoneyClaw
+// badge generic capabilities (receive / pay-api) on an unrelated personal wallet.
+// x402, Veil, Bankr, Hyperliquid stay (wallet-native, or inherent to a capability).
+const WALLET_BOUND_PROVIDERS = new Set(["usepod", "moneyclaw", "clawcard", "venice"]);
+
+/** Which provider's badge to show on a rail card — resolved for the ACTING
+ *  wallet, not from global env readiness. */
+function badgeProviderForIntent(caps: CryptoCapabilityMap | null, intentId: string, actingProvider: string): string | undefined {
+  const supporting = (caps?.providers ?? []).filter((p) => p.intents.includes(intentId));
+  if (!supporting.length) return undefined;
+  const applicable = supporting.filter((p) => !WALLET_BOUND_PROVIDERS.has(p.provider) || p.provider === actingProvider);
+  // If excluding wallet-bound runtimes empties the list, the capability is only
+  // served by one of them (e.g. Card payment → MoneyClaw) — keep it (inherent).
+  const pool = applicable.length ? applicable : supporting;
+  const pick = pool.find((p) => p.ready) ?? pool.find((p) => p.configured) ?? pool[0];
+  return pick?.provider;
+}
+
 // Catalog shown in the rail: the real crypto intents, minus the spot swap (now
 // the order ticket) and the read-only portfolio (the desk already shows it).
 const RAIL_INTENTS = CRYPTO_INTENTS.filter((intent) => intent.id !== "trade" && intent.id !== "portfolio");
 
 export function CapabilityRail() {
   const desk = useTradeDesk();
-  const { cryptoCaps } = desk;
+  const { cryptoCaps, walletKind, walletConfig } = desk;
+  // The acting wallet's own provider — drives which managed rails are allowed to
+  // badge its capabilities (so a personal wallet never shows UsePod/MoneyClaw).
+  const actingProvider = walletKind === "bankr" ? "bankr" : String((walletConfig as Record<string, unknown> | null)?.provider || "").toLowerCase();
   const [active, setActive] = React.useState<string | null>(null);
 
   const groups = CRYPTO_INTENT_GROUPS
@@ -74,23 +101,32 @@ export function CapabilityRail() {
         <div className="tk-group" key={g.group}>
           <div className="tk-grouplbl">{g.group}</div>
           <div className="tk-tiles">
-            {g.items.map((it) => {
-              const r = readinessForIntent(cryptoCaps, it.id);
-              const tone = it.id === "receive" ? undefined : r.ready ? "ready" : r.configured ? "setup" : "off";
-              return (
-                <button key={it.id} type="button" className="tk-tile" onClick={() => setActive(it.id)}>
-                  {tone ? <span className="rdot" data-tone={tone} title={r.ready ? "Ready" : r.configured ? "Needs setup" : "Off"} /> : null}
-                  <span className="ti"><BIcon name={INTENT_ICON[it.id] ?? "spark"} size={16} /></span>
-                  <b>{it.label}</b>
-                  <span>{it.desc}</span>
-                </button>
-              );
-            })}
+            {g.items.map((it) => (
+              <button key={it.id} type="button" className="tk-tile" onClick={() => setActive(it.id)}>
+                <ProviderBadge provider={badgeProviderForIntent(cryptoCaps, it.id, actingProvider)} />
+                <span className="ti"><BIcon name={INTENT_ICON[it.id] ?? "spark"} size={16} /></span>
+                <b>{it.label}</b>
+                <span>{it.desc}</span>
+              </button>
+            ))}
           </div>
         </div>
       ))}
     </div>
   );
+}
+
+// The last token a fee claim was submitted for persists across reloads, so an
+// owner who claims regularly doesn't retype it every time. Mirrors TradePanel's
+// per-feature localStorage memory.
+const CLAIM_FEES_TOKEN_KEY = "hivemindos.trade.claimFeesToken.v1";
+function readClaimFeesToken(): string {
+  if (typeof window === "undefined") return "";
+  try { return window.localStorage.getItem(CLAIM_FEES_TOKEN_KEY) || ""; } catch { return ""; }
+}
+function writeClaimFeesToken(token: string) {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(CLAIM_FEES_TOKEN_KEY, token); } catch { /* quota — best effort */ }
 }
 
 // ── detail ───────────────────────────────────────────────────────────────────
@@ -106,8 +142,16 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
   const hasHive = hasForm && !isCredits;
 
   const [mode, setMode] = React.useState<"build" | "hive">(hasForm ? "build" : "hive");
-  // Chain fields are seeded/clamped to chains the user actually holds.
-  const [values, setValues] = React.useState<Record<string, string>>(() => initFormValues(form, availableChains));
+  // Chain fields are seeded/clamped to chains the user actually holds; the
+  // claim-fees token is rehydrated from the last submitted claim.
+  const [values, setValues] = React.useState<Record<string, string>>(() => {
+    const init = initFormValues(form, availableChains);
+    if (intent.id === "claim-fees") {
+      const saved = readClaimFeesToken();
+      if (saved) init.token = saved;
+    }
+    return init;
+  });
   const [prompt, setPrompt] = React.useState("");
   const [prepared, setPrepared] = React.useState<CryptoPreparedAction | null>(null);
   const [preparedKey, setPreparedKey] = React.useState("");
@@ -152,7 +196,12 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
     const outcome = await executeCapability(prepared, { intentId: intent.id, amountUsd, token: values.token });
     setBusy(null);
     setResult(outcome);
-    if (outcome.ok) desk.refresh();
+    if (outcome.ok) {
+      playTradeSuccessSound();
+      // Remember the token a claim was submitted for so the next visit pre-fills it.
+      if (intent.id === "claim-fees" && values.token?.trim()) writeClaimFeesToken(values.token.trim());
+      desk.refresh();
+    }
   };
 
   // Credits funds directly (no prepare step) — execute on the single Run button.
@@ -162,7 +211,7 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
     const outcome = await executeCapability(null, { intentId: "fund-llm-credits", amountUsd: Number(values.amt) || 0, token: values.token || "USDC" });
     setBusy(null);
     setResult(outcome);
-    if (outcome.ok) desk.refresh();
+    if (outcome.ok) { playTradeSuccessSound(); desk.refresh(); }
   };
 
   const modeToggle = hasHive ? (
@@ -173,6 +222,27 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
   ) : null;
 
   // ── special-case details ────────────────────────────────────────────────────
+  // Copy trading is a persistent per-wallet/per-chain config, not a one-shot
+  // prepare→execute action, so it owns its whole detail surface (must come
+  // before the generic input === "info" branch below).
+  if (intent.id === "copy-trading") {
+    return (
+      <DetailShell intent={intent} walletShort={wallet.short} onBack={onBack}>
+        <CopyTradingPanel
+          agentId={agentId}
+          walletShort={wallet.short}
+          walletAddress={wallet.fullAddress}
+          walletKind={walletKind}
+          custody={wallet.custody}
+          network={wallet.network}
+          walletChains={desk.walletChains}
+          onSelectChain={desk.onSelectChain}
+          onOpenView={onOpenView}
+        />
+      </DetailShell>
+    );
+  }
+
   if (intent.input === "address") {
     return (
       <DetailShell intent={intent} walletShort={wallet.short} onBack={onBack}>
@@ -249,17 +319,17 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
         </span>
         {isCredits ? (
           <BBtn variant="primary" sm disabled={busy != null || !inputValid} onClick={fundCredits}>
-            <BIcon name={busy === "execute" ? "refresh" : "bot"} size={14} /> {busy === "execute" ? "Funding…" : "Fund credits"}
+            <BIcon name={busy === "execute" ? "spinner" : "bot"} size={14} spin={busy === "execute"} /> {busy === "execute" ? "Funding…" : "Fund credits"}
           </BBtn>
         ) : !isPrepared ? (
           <BBtn variant="primary" sm disabled={busy != null || !inputValid || !r.configured} onClick={review}>
-            <BIcon name="shield" size={14} /> {busy === "prepare" ? "Reviewing…" : reviewLabel}
+            <BIcon name={busy === "prepare" ? "spinner" : "shield"} size={14} spin={busy === "prepare"} /> {busy === "prepare" ? "Reviewing…" : reviewLabel}
           </BBtn>
         ) : (
           <span style={{ display: "inline-flex", gap: 8 }}>
             <BBtn variant="ghost" sm disabled={busy != null} onClick={reset}>Edit</BBtn>
             <BBtn variant="primary" sm disabled={busy != null} onClick={execute}>
-              <BIcon name={busy === "execute" ? "refresh" : "check"} size={14} /> {busy === "execute" ? "Submitting…" : intent.mutating ? "Confirm & run" : "Run"}
+              <BIcon name={busy === "execute" ? "spinner" : "check"} size={14} spin={busy === "execute"} /> {busy === "execute" ? "Submitting…" : intent.mutating ? "Confirm & run" : "Run"}
             </BBtn>
           </span>
         )}
@@ -267,7 +337,8 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
 
       {result && !result.ok && result.error ? <p className="tk-error">{result.error}</p> : null}
       {result?.ok ? (
-        <div className="tk-success">{result.message || "Submitted."}
+        <div className="tk-success">
+          <ChatMarkdown text={result.message || "Submitted."} className="tk-md" />
           <div style={{ marginTop: 6 }}><button type="button" className="fw-manage" onClick={() => onOpenView("wallet")}>View in Wallets · Activity →</button></div>
         </div>
       ) : null}

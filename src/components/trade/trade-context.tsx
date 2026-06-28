@@ -41,6 +41,18 @@ export type DeskHolding = {
   shares?: number;
   usd: number;
   chg: number;
+  /** Real token logo URL from the balance provider (Blockscout / DexScreener /
+   *  CoinGecko); null when none is known — the UI falls back to a letter coin. */
+  logoUrl?: string | null;
+  /** Set for a not-yet-filled order shown as a pending position (stocks). When
+   *  true, `usd` is the order's estimated notional and `chg` is meaningless. */
+  pending?: boolean;
+  /** Alpaca order status for a pending row (e.g. "new", "accepted", "partially_filled"). */
+  status?: string;
+  /** Order side for a pending row. */
+  side?: "buy" | "sell";
+  /** Alpaca order id for a pending row — used to cancel it. */
+  orderId?: string;
 };
 
 export type DeskPortfolio = {
@@ -71,6 +83,9 @@ export type DeskActivity = {
   usd: number;
   state: string;
   src: "crypto" | "stocks";
+  /** DEX swap legs + derived direction, so the row can show the received token +
+   *  amount beside the USD and label itself as a buy / sell / swap. */
+  swap?: { sellToken: string; sellAmount: number; buyToken: string; buyAmount: number; direction: "buy" | "sell" | "swap" };
 };
 
 export type DeskStockReadiness = {
@@ -123,6 +138,21 @@ export type TradeDeskData = {
   stockReadiness: DeskStockReadiness;
   paper: boolean;
   setPaper: (paper: boolean) => void;
+  /**
+   * Turn on stock trading for the ACTING wallet by setting its venue (and, for
+   * Alpaca, the paper/live default). Persists to the wallet ledger the trade
+   * backend resolves the venue from — so a later order isn't rejected as "off"
+   * — and refreshes the desk. Resolves { ok }; on failure `error` says why
+   * (e.g. the Bankr wallet has no ledger record to enable it on).
+   */
+  onEnableStockVenue: (input: { venue: "alpaca" | "xstocks"; paper: boolean }) => Promise<{ ok: boolean; error?: string }>;
+  /** Cancel a pending Alpaca order by id (the pending-position cancel button),
+   *  then refresh the desk. Resolves { ok }; `error` says why on failure. */
+  onCancelStockOrder: (orderId: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Optimistically show a just-submitted order as a pending position right away
+   *  (called by the order ticket on a successful place), before Alpaca's
+   *  open-order list surfaces it. Reconciled to the real row automatically. */
+  onOptimisticStockOrder: (order: { orderId: string; ticker: string; notionalUsd: number; side: "buy" | "sell" }) => void;
 
   // activity
   activity: DeskActivity[];

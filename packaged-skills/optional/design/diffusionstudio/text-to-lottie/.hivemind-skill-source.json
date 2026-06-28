@@ -1,0 +1,26 @@
+{
+  "upstreamName": "text-to-lottie",
+  "upstreamSlug": "text-to-lottie",
+  "hiveSlug": "text-to-lottie",
+  "sourceLabel": "Diffusion Studio Lottie",
+  "sourceUrl": "https://github.com/diffusionstudio/lottie/blob/39bb536f27225a198ed4c1ec92de0a4ab8665a9c/skills/text-to-lottie/SKILL.md",
+  "repository": "https://github.com/diffusionstudio/lottie",
+  "installCommand": "npx skills add diffusionstudio/lottie",
+  "importedAt": "2026-06-28T00:00:00.000Z",
+  "refreshedAt": "2026-06-28T00:00:00.000Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/diffusionstudio/text-to-lottie",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "39bb536f27225a198ed4c1ec92de0a4ab8665a9c",
+  "normalized": "verbatim",
+  "description": "Create, edit, or fix Lottie/Bodymovin JSON animations for the local Skia Skottie player. Use for text-to-Lottie, SVG/logo/type animation, loaders/icons, state feedback, UI microinteractions, lower thirds, diagrams, data/stat/chart animations, product promos, scene/camera motion, visual effects, scene edits, slots/controls, and Skottie debugging.",
+  "hivemindAdaptations": [
+    "Vendors the complete text-to-lottie skill package verbatim: SKILL.md (thin control plane), the full references/ library (player-contract, lottie-spec-map, design-taste, motion-taste, chapterization, svg-compatibility, and the recipe-*.md set), and the evals/ maintenance fixtures.",
+    "Upstream MIT LICENSE is bundled at the package root for attribution; no upstream content was modified.",
+    "Render/verify gate: this skill authors Lottie JSON into public/projects/<project>/<scene-N>/lottie.json and verifies in the official local Skia Skottie player. That player project (the diffusionstudio/lottie checkout) is NOT vendored here; without it an agent can author Lottie JSON from the references but cannot run the in-player verification loop the SKILL.md prescribes. Install the player with `npx skills add diffusionstudio/lottie` / clone the repo when a live render check is needed.",
+    "evals/ are upstream skill-maintenance fixtures (the SKILL.md says not to read them during normal animation work); kept for fidelity, not required for use."
+  ]
+}

@@ -189,3 +189,47 @@
 .sim-root .intel-col { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 13px; }
 .sim-root .intel-li { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: start; font-size: 12px; color: var(--fg-2); line-height: 1.45; }
 .sim-root .intel-li + .intel-li { margin-top: 9px; }
+
+/* ── running state (signal/belief/cost/pipeline) ──────────────────────────── */
+.sim-root .fr-run-big { font-family: var(--f-display); font-weight: 600; font-size: 32px; letter-spacing: -0.03em; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; }
+.sim-root .fr-run-big .of { color: var(--fg-4); font-size: 18px; font-weight: 600; }
+.sim-root .fr-run-hstat { text-align: right; }
+.sim-root .fr-run-hstat .v { font-family: var(--f-mono); font-size: 15px; font-weight: 600; line-height: 1; }
+.sim-root .fr-run-hstat .k { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); margin-top: 5px; }
+
+.sim-root .fr-phases { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sim-root .fr-phase { display: flex; gap: 9px; align-items: flex-start; padding: 9px 11px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 40%, var(--panel)); }
+.sim-root .fr-phase.active { border-color: color-mix(in srgb, var(--live) 50%, transparent); background: color-mix(in srgb, var(--live) 8%, var(--panel)); }
+.sim-root .fr-phase.done { opacity: .6; }
+.sim-root .fr-phase .pd { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 99px; display: grid; place-items: center; font-family: var(--f-mono); font-size: 9px; font-weight: 700; color: var(--fg-4); border: 1px solid var(--line-2); background: var(--panel-2); }
+.sim-root .fr-phase.active .pd { color: #06231d; background: var(--live); border-color: var(--live); animation: fr-pp 1.5s ease-in-out infinite; }
+.sim-root .fr-phase.done .pd { color: #06231d; background: color-mix(in srgb, var(--live) 75%, #fff); border-color: transparent; }
+.sim-root .fr-phase .pt b { display: block; font-family: var(--f-display); font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg-2); }
+.sim-root .fr-phase.active .pt b { color: var(--fg); }
+.sim-root .fr-phase .pt em { font-family: var(--f-mono); font-size: 9px; font-style: normal; color: var(--fg-4); }
+@keyframes fr-pp { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+.sim-root .fr-hex { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; }
+.sim-root .fr-hex i { aspect-ratio: 1; border-radius: 3px; background: var(--line-2); display: block; transition: background .3s, box-shadow .3s; }
+.sim-root .fr-hex i.on { background: var(--fc); box-shadow: 0 0 5px color-mix(in srgb, var(--fc) 45%, transparent); }
+.sim-root .fr-hex i.spawn { animation: fr-sp 1.1s ease-in-out infinite; }
+@keyframes fr-sp { 0%,100% { opacity: .26; } 50% { opacity: .6; } }
+
+.sim-root .fr-rmetric { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 11px 12px; }
+.sim-root .fr-rmetric .v { font-family: var(--f-display); font-weight: 600; font-size: 18px; letter-spacing: -0.02em; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .fr-rmetric .b { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-4); margin-top: 4px; }
+.sim-root .fr-rmetric .k { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); margin-top: 6px; }
+
+.sim-root .fr-streamline { display: grid; align-items: baseline; font-family: var(--f-mono); padding: 4px 9px; border-radius: 6px; animation: fr-in .34s ease; }
+@keyframes fr-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+.sim-root .fr-locked { border: 1px solid var(--honey-line); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--honey) 6%, var(--panel)); display: grid; gap: 11px; }
+.sim-root .fr-skel { height: 9px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in srgb, var(--fg-4) 16%, transparent) 25%, color-mix(in srgb, var(--fg-4) 34%, transparent) 50%, color-mix(in srgb, var(--fg-4) 16%, transparent) 75%); background-size: 200% 100%; animation: fr-shim 1.5s linear infinite; }
+@keyframes fr-shim { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sim-root .fr-done { border: 1px solid color-mix(in srgb, var(--live) 45%, transparent); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--live) 8%, var(--panel)); display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }
+
+.sim-root .fr-seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 99px; overflow: hidden; }
+.sim-root .fr-seg button { font-family: var(--f-mono); font-size: 10.5px; padding: 5px 12px; background: transparent; color: var(--fg-4); border: 0; cursor: pointer; letter-spacing: .04em; }
+.sim-root .fr-seg button[data-on] { background: color-mix(in srgb, var(--live) 16%, transparent); color: var(--live); }
+
+@media (prefers-reduced-motion: reduce) { .sim-root .fr-phase.active .pd, .sim-root .fr-hex i.spawn, .sim-root .fr-skel, .sim-root .fr-streamline { animation: none; } }

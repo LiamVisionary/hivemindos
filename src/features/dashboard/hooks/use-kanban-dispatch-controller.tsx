@@ -2,9 +2,7 @@
 // @ts-nocheck
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   parseRuntimeSsePayload,
   responseErrorMessage,
@@ -166,7 +164,6 @@ export function useKanbanDispatchController(props: any) {
           agent.name === task.agentSession?.agentName,
       );
     if (staleAgent) {
-      // eslint-disable-next-line react-hooks/purity
       kanbanDispatchCooldownRef.current.set(
         staleAgent.id,
         Date.now() + KANBAN_STALE_AGENT_COOLDOWN_MS,
@@ -223,7 +220,70 @@ export function useKanbanDispatchController(props: any) {
       .catch(() => undefined);
   }
 
-  /* eslint-disable react-hooks/immutability, react-hooks/purity */
+  async function readCurrentKanbanDispatchTask(taskId: string) {
+    try {
+      const url = new URL(
+        `/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`,
+        window.location.origin,
+      );
+      url.searchParams.set("include_archived", "true");
+      url.searchParams.set("q", taskId);
+      const storage = kanbanStorageBody();
+      for (const [key, value] of Object.entries(storage)) {
+        if (value !== undefined && value !== null && String(value).trim()) {
+          url.searchParams.set(key, String(value));
+        }
+      }
+      const response = await fetch(url.toString(), { cache: "no-store" });
+      const data = (await response.json().catch(() => null)) as KanbanResponse | null;
+      if (!response.ok || !data?.ok) return null;
+      return data.board?.tasks?.find((item: KanbanTask) => item.id === taskId) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function kanbanDispatchFailureStillOwnsTask(task: KanbanTask, agent: AgentProfile) {
+    if (task.status !== "working") return false;
+    if (String(task.claimLock || "").startsWith("queen-bee-autonomous:")) return false;
+    const agentKeys = new Set(
+      [agent.id, agent.agentId, agent.name].filter(Boolean).map((value) => String(value)),
+    );
+    return (
+      agentKeys.has(String(task.assignee || ""))
+      || agentKeys.has(String(task.agentSession?.agentId || ""))
+      || agentKeys.has(String(task.agentSession?.agentName || ""))
+    );
+  }
+
+  async function markKanbanTaskNeedsHumanFromDashboardDispatch(
+    task: KanbanTask,
+    agent: AgentProfile,
+    patch: KanbanTaskPatch,
+    reason: string,
+  ) {
+    const current = await readCurrentKanbanDispatchTask(task.id);
+    if (!current || !kanbanDispatchFailureStillOwnsTask(current, agent)) {
+      logClientTelemetry("kanban.dispatch.needs_human_skipped_stale_owner", {
+        taskId: task.id,
+        agentId: agent.id,
+        agentName: agent.name,
+        reason,
+        currentStatus: current?.status ?? null,
+        currentAssignee: current?.assignee ?? null,
+        currentClaimLock: current?.claimLock ?? null,
+      });
+      await refreshKanbanOnce().catch(() => undefined);
+      return false;
+    }
+    await patchKanbanTask(task.id, {
+      ...patch,
+      status: "needs-human",
+      agentSession: null,
+    });
+    return true;
+  }
+
   async function dispatchKanbanTaskToAgent(
     task: KanbanTask,
     agent: AgentProfile,
@@ -660,24 +720,20 @@ export function useKanbanDispatchController(props: any) {
         }
         return { ok: true, message };
       }
-      if (!options.leaveKanbanOpen) {
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: `Delegation failed for ${agent.name}: ${message}`,
-        });
+      if (options.leaveKanbanOpen) {
+        return { ok: false, message };
       }
-      await addKanbanSystemComment(
-        task.id,
-        `Delegation failed for ${agent.name}: ${message}`,
+      const result = task.targetMachine?.key
+        ? `Delegation failed for ${agent.name} on ${task.targetMachine.name}: ${message}`
+        : `Delegation failed for ${agent.name}: ${message}`;
+      const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+        task,
+        agent,
+        { result },
+        "dispatch-error",
       );
-      if (task.targetMachine?.key) {
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: `Delegation failed for ${agent.name} on ${task.targetMachine.name}: ${message}`,
-        });
-        return { ok: true, message };
+      if (marked) {
+        await addKanbanSystemComment(task.id, result);
       }
       return { ok: false, message };
     } finally {
@@ -687,7 +743,6 @@ export function useKanbanDispatchController(props: any) {
       }
     }
   }
-  /* eslint-enable react-hooks/immutability, react-hooks/purity */
 
   useEffect(() => {
     if (!hydrated || !kanbanBoard) return;
@@ -831,12 +886,13 @@ export function useKanbanDispatchController(props: any) {
             failureCount,
             error: errorMessage,
           });
-          await patchKanbanTask(task.id, {
-            status: "needs-human",
-            agentSession: null,
-            result: message,
-          });
-          await addKanbanSystemComment(task.id, message);
+          const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+            task,
+            agent,
+            { result: message },
+            "session-poll-failed",
+          );
+          if (marked) await addKanbanSystemComment(task.id, message);
         }
         return;
       }
@@ -909,7 +965,6 @@ export function useKanbanDispatchController(props: any) {
       const latestRaw = [...rawMessages]
         .reverse()
         .find((message) => message.content.trim());
-      // eslint-disable-next-line react-hooks/purity
       const now = Date.now();
       const sessionUpdatedAt =
         data.session.updatedAt ?? latestRaw?.createdAt ?? now;
@@ -954,12 +1009,13 @@ export function useKanbanDispatchController(props: any) {
             },
           ],
         }));
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: message,
-        });
-        await addKanbanSystemComment(task.id, message);
+        const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+          task,
+          agent,
+          { result: message },
+          "tool-output-stalled",
+        );
+        if (marked) await addKanbanSystemComment(task.id, message);
         return;
       }
       if (noAssistantStalled) {
@@ -1000,12 +1056,13 @@ export function useKanbanDispatchController(props: any) {
             },
           ],
         }));
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: message,
-        });
-        await addKanbanSystemComment(task.id, message);
+        const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+          task,
+          agent,
+          { result: message },
+          "no-assistant-stalled",
+        );
+        if (marked) await addKanbanSystemComment(task.id, message);
         return;
       }
       if (latestCount !== task.agentSession?.lastMessageCount) {
@@ -1050,7 +1107,6 @@ export function useKanbanDispatchController(props: any) {
       return;
     const lastPoll =
       kanbanSessionPollRef.current.get(selectedKanbanTask.id) ?? 0;
-    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     if (now - lastPoll < 4_000) return;
     kanbanSessionPollRef.current.set(selectedKanbanTask.id, now);
@@ -1094,7 +1150,6 @@ export function useKanbanDispatchController(props: any) {
 
   useEffect(() => {
     if (!hydrated || !kanbanBoard) return;
-    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     const staleTasks = kanbanBoard.tasks.filter((task) =>
       isKanbanStaleWorkingTask(task, now),

@@ -7,6 +7,15 @@
       "skillPath": "skills/frontend-design/SKILL.md",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
     },
+    "hyperframes": {
+      "source": "heygen-com/hyperframes",
+      "sourceType": "github",
+      "ref": "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
+      "license": "Apache-2.0",
+      "skillPath": "skills/hyperframes/SKILL.md",
+      "packagedPath": "packaged-skills/optional/media/heygen-com/hyperframes/SKILL.md",
+      "computedHash": "ad670946b01c694b39e32e599561fb4320f56622799957ba9260d29d9d9b5eb0"
+    },
     "local-business-scraper": {
       "source": "athm793/local-business-scraper",
       "sourceType": "github",
@@ -87,6 +96,15 @@
       "skillPath": ".agents/skills/n8n-workflow-reliability-guardrails.md",
       "packagedPath": "packaged-skills/optional/n8n/forma-norden/n8n-workflow-reliability-guardrails/SKILL.md",
       "computedHash": "163efb0b83c7d5150b7181ce137abd78a025260f84303f0f2c6c67b34b286044"
+    },
+    "text-to-lottie": {
+      "source": "diffusionstudio/lottie",
+      "sourceType": "github",
+      "ref": "39bb536f27225a198ed4c1ec92de0a4ab8665a9c",
+      "license": "MIT",
+      "skillPath": "skills/text-to-lottie/SKILL.md",
+      "packagedPath": "packaged-skills/optional/design/diffusionstudio/text-to-lottie/SKILL.md",
+      "computedHash": "1daf04ce33708c342d923ecd14e55d33dfa599f01c0528b38c8f8d03af651df9"
     }
   }
 }

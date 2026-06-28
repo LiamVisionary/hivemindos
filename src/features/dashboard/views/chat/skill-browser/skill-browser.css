@@ -146,7 +146,7 @@
 .sb-search input:focus { border-color: var(--honey-line); box-shadow: 0 0 0 3px var(--honey-soft); }
 .sb-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: 0; color: var(--fg-3); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; }
 
-.sb-body { padding: 18px 22px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.sb-body { padding: 18px 22px 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; flex: 1 1 auto; min-height: 0; }
 .sb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 12px; align-items: start; }
 
 .sb-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px; display: flex; flex-direction: column; gap: 11px; transition: border-color .16s, box-shadow .16s; }
@@ -186,6 +186,15 @@
 
 .sb-pack { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .sb-pack .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Loading skeleton for the Packs tab while Phase 2 enrichment is in flight. */
+.sb-pack-skel { min-height: 168px; }
+.sb-skel { display: block; position: relative; overflow: hidden; background: var(--line); border-radius: var(--radius-sm); }
+.sb-skel::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fg) 9%, transparent), transparent);
+  animation: sb-shimmer 1.4s ease-in-out infinite; }
+@keyframes sb-shimmer { 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .sb-skel::after { animation: none; } }
 .sb-chip { font-size: 11px; color: var(--fg-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 3px 9px; background: var(--panel); overflow-wrap: anywhere; }
 .sb-chip[data-on] { color: var(--live); border-color: color-mix(in srgb, var(--live) 30%, transparent); background: var(--live-soft); }
 

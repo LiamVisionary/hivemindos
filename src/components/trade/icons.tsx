@@ -5,10 +5,10 @@ import React from "react";
 export type IconName =
   | "brain" | "search" | "doc" | "trade" | "spark" | "activity" | "key" | "network"
   | "branch" | "sync" | "refresh" | "download" | "plug" | "check" | "plus" | "shield"
-  | "alert" | "repeat" | "sparkles" | "eye" | "copy" | "promote" | "bot" | "hex" | "wallet";
+  | "alert" | "repeat" | "sparkles" | "eye" | "copy" | "promote" | "bot" | "hex" | "wallet" | "spinner";
 
-export function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }: { name: IconName; color?: string; size?: number; sw?: number }) {
-  const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+export function BIcon({ name, color = "currentColor", size = 16, sw = 1.7, spin = false }: { name: IconName; color?: string; size?: number; sw?: number; spin?: boolean }) {
+  const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, className: spin ? "tk-spin" : undefined };
   switch (name) {
     case "brain": return (<svg {...c}><path d="M9 4a2.5 2.5 0 0 0-2.5 2.5A2.5 2.5 0 0 0 5 11c0 1 .5 1.8 1.2 2.3A2.6 2.6 0 0 0 7 18c.8.6 2 .6 2.5-.2V4z" /><path d="M15 4a2.5 2.5 0 0 1 2.5 2.5A2.5 2.5 0 0 1 19 11c0 1-.5 1.8-1.2 2.3A2.6 2.6 0 0 1 17 18c-.8.6-2 .6-2.5-.2V4z" /></svg>);
     case "search": return (<svg {...c}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>);
@@ -35,6 +35,8 @@ export function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }: { n
     case "bot": return (<svg {...c}><rect x="5" y="8" width="14" height="11" rx="2.4" /><path d="M12 8V4M9 13h.01M15 13h.01M9 16h6" /></svg>);
     case "hex": return (<svg {...c}><path d="M12 3l7.5 4.5v9L12 21l-7.5-4.5v-9z" /></svg>);
     case "wallet": return (<svg {...c}><rect x="3" y="6" width="18" height="13" rx="2.2" /><path d="M3 9.5h18" /><circle cx="16.5" cy="13.5" r="1.1" fill={color} stroke="none" /></svg>);
+    // 3/4 arc — reads as a classic spinner when rotated via the `tk-spin` class.
+    case "spinner": return (<svg {...c}><path d="M21 12a9 9 0 1 1-6.2-8.5" /></svg>);
     default: return null;
   }
 }

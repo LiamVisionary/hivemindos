@@ -1,0 +1,83 @@
+/* Copy-trading panel — lives inside the Trade desk CapabilityRail detail.
+   Leans on the desk's global tokens (--panel, --line, --honey, --live, …) so it
+   themes with both the dark and hive-light skins automatically. */
+
+.wrap { display: flex; flex-direction: column; gap: 14px; }
+
+.status {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px; line-height: 1.5;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 8px 11px; color: var(--fg-3);
+}
+.statusDot { width: 7px; height: 7px; border-radius: 99px; background: var(--fg-4); flex: 0 0 auto; }
+.statusOk { border-color: var(--live-soft); color: var(--fg-2); }
+.statusOk .statusDot { background: var(--live); }
+.statusOff { border-color: var(--honey-line); }
+.statusOff .statusDot { background: var(--honey); }
+.statusCmd { font-family: var(--f-mono); font-size: 10.5px; color: var(--honey); background: var(--honey-soft); padding: 1px 5px; border-radius: 4px; }
+
+.gate {
+  border: 1px solid var(--honey-line); background: var(--honey-soft);
+  border-radius: var(--radius-sm); padding: 12px 13px;
+  font-size: 12px; color: var(--fg-2); line-height: 1.55;
+}
+.gate b { color: var(--fg); }
+.chainBtns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+.sectionLbl {
+  font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--fg-3); margin: 2px 0;
+}
+
+.cards { display: flex; flex-direction: column; gap: 9px; }
+.empty { font-size: 12px; color: var(--fg-3); padding: 4px 0; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 13px 14px; }
+.card.foreign { opacity: .82; }
+.cardHead { display: flex; align-items: center; gap: 8px; }
+.cardTitle { min-width: 0; flex: 1 1 auto; }
+.cardTitle b { display: block; font-size: 13px; color: var(--fg); }
+.cardTitle span { display: block; font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pill {
+  font-family: var(--f-mono); font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--fg-3); flex: 0 0 auto;
+}
+.pillRun { color: var(--live); border-color: var(--live-soft); background: var(--live-soft); }
+.pillDry { color: var(--honey); border-color: var(--honey-line); background: var(--honey-soft); }
+.pillStop { color: var(--fg-4); }
+.pillErr { color: var(--danger); border-color: var(--danger-soft); background: var(--danger-soft); }
+
+.meta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 9px; font-size: 11px; color: var(--fg-3); }
+.meta b { color: var(--fg-2); font-family: var(--f-mono); }
+
+.events { margin-top: 9px; display: flex; flex-direction: column; gap: 3px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.ev { font-size: 10.5px; color: var(--fg-3); line-height: 1.45; display: flex; gap: 6px; }
+.evBuy { color: var(--live); }
+.evSell { color: var(--honey); }
+.evErr { color: var(--danger); }
+.evTime { font-family: var(--f-mono); color: var(--fg-4); flex: 0 0 auto; }
+
+.actions { display: flex; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
+.spacer { flex: 1 1 auto; }
+
+.form { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 12px; }
+.full { grid-column: 1 / -1; }
+
+.toggleRow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 11px; }
+.toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--fg-2); cursor: pointer; }
+.toggle input { accent-color: var(--honey); width: 15px; height: 15px; }
+.toggleHint { font-size: 10.5px; color: var(--fg-4); }
+
+.advToggle {
+  background: none; border: none; cursor: pointer; padding: 4px 0; margin-top: 12px;
+  color: var(--fg-3); font-size: 11px; font-family: var(--f-mono); letter-spacing: .04em;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.advToggle:hover { color: var(--honey); }
+.adv { margin-top: 11px; padding-top: 12px; border-top: 1px dashed var(--line); }
+
+.err { color: var(--danger); font-size: 11.5px; margin-top: 9px; }
+.cap { font-size: 10.5px; color: var(--fg-4); margin-top: 8px; line-height: 1.5; }

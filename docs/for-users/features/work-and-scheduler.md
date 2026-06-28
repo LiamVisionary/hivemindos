@@ -71,6 +71,8 @@ The `request_human_approval` MCP tool creates a Needs You card for a decision. I
 
 Event-driven work uses `/api/work-events` and the `work_event` MCP tool. Operators or agents can define a local event name, attach triggers, and later publish an event payload. Matching triggers create ordinary Work Board tasks, with optional FAQ text and a note telling the worker which follow-up event to publish when the work completes. This supports publish-event style coordination while keeping execution inspectable in the Work Board.
 
+Agent Challenges use `/api/agent-challenges` and the `agent_challenge` MCP tool for bounded multi-agent objectives. A challenge keeps one public-within-the-hive board for candidates, findings, run requests, results, rulings, integrity alerts, and playbook notes. It records credited lineage across originators, runners, and verifiers; enforces optional per-agent daily run caps; and treats result deltas inside the configured significance threshold as frontier ties. Use a challenge when agents should collaborate on a measurable sprint before individual tasks or final deliverables are promoted through the normal Work Board.
+
 ### Queen Bee Swarm Goals
 
 `/swarm-goal <build request>` is the chat shortcut for turning a rough software idea into Queen Bee-orchestrated work.
@@ -187,9 +189,11 @@ AEON work now has a stronger handoff loop:
 - `src/app/api/kanban/route.ts`
 - `src/app/api/kanban/deliverable/route.ts`
 - `src/app/api/work-events/route.ts`
+- `src/app/api/agent-challenges/route.ts`
 - `src/app/api/note-intake/route.ts`
 - `src/app/api/work-history/route.ts`
 - `src/lib/services/work-events.ts`
+- `src/lib/services/agent-challenges.ts`
 - `src/lib/services/kanban/local-kanban-store.ts`
 - `src/lib/services/projects/project-registry.ts`
 - `src/lib/services/gitlawb/gitlawb-service.ts`

@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import styles from "./trade.module.css";
+import { playTradeSuccessSound } from "@/components/trade/trade-sound";
 import { CryptoPracticeBookPanel } from "./CryptoPracticeBookPanel";
 import {
   type HyperliquidAccountStatus,
@@ -186,6 +187,7 @@ export function HyperliquidTradeForm({ agentId, agentName, isEvmWallet, setActiv
     }
     setQuote(null);
     setSuccess(response.result.detail);
+    playTradeSuccessSound();
     await refreshStatus();
   };
 

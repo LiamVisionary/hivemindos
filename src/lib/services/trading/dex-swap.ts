@@ -7,7 +7,7 @@ import { getMint } from "@solana/spl-token";
 import { base58 } from "@scure/base";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { executeEvmZeroExSwap, readErc20Decimals, type ZeroExSwapQuote } from "@/lib/services/wallet/chain-wallet";
-import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import { appendSpend } from "@/lib/services/wallet/spend-ledger";
 import { evaluateSpend, resolveSpendGovernance, shouldEvaluateSpend } from "@/lib/services/wallet/spend-governance";
 import {
   assertTradingPlatformFeeReady,
@@ -129,14 +129,25 @@ async function swapGovernance(agentId: string, valueUsd: number, target: string,
   return {};
 }
 
-async function recordSwap(input: DexSwapInput, companyId: string | undefined, valueUsd: number, label: string) {
+async function recordSwap(
+  input: DexSwapInput,
+  companyId: string | undefined,
+  valueUsd: number,
+  legs: { sell: string; buy: string; sellAmount: number; buyAmount: number },
+) {
   await appendSpend({
     agentId: input.agentId,
     companyId,
+    // asset/amountUsd stay USD-denominated for spend-cap accounting; the legs
+    // below carry the real swap so the activity feed can show direction + amounts.
     kind: "trade",
     asset: "USDC",
     amountUsd: valueUsd,
-    target: shortTarget(label),
+    assetAmount: legs.sellAmount,
+    // Plain pair label — NOT a "dex:…" string: `new URL("dex:…").origin` is the
+    // string "null", which shortTarget would persist and the feed would then drop.
+    target: `${legs.sell} → ${legs.buy}`,
+    swap: { sellToken: legs.sell, sellAmount: legs.sellAmount, buyToken: legs.buy, buyAmount: legs.buyAmount },
     status: "executed",
   }).catch(() => {});
 }
@@ -234,7 +245,7 @@ async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
     source: "dex-swap",
     companyId,
   });
-  await recordSwap(input, companyId, valueUsd, label);
+  await recordSwap(input, companyId, valueUsd, { sell: sell.symbol, buy: buy.symbol, sellAmount: input.amountHuman, buyAmount });
   return {
     ok: true,
     network: input.network,
@@ -357,7 +368,7 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
     source: "dex-swap",
     companyId,
   });
-  await recordSwap(input, companyId, valueUsd, label);
+  await recordSwap(input, companyId, valueUsd, { sell: sell.symbol, buy: buy.symbol, sellAmount: input.amountHuman, buyAmount });
   return {
     ok: true,
     network: input.network,

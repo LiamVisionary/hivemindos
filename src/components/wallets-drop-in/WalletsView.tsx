@@ -1103,9 +1103,90 @@ function MyWalletCard({ w, actions }) {
 }
 function BankrWalletCard({ bankr, onNavigate }) {
   const [copied, setCopied] = React.useState(false);
+  const [sheet, setSheet] = React.useState(null); // "send" | "receive" | "fund" | null
+  const [expanded, setExpanded] = React.useState(false);
   const balance = Number(bankr?.balanceUsd) || 0;
   const addr = String(bankr?.address || "");
+  // Real per-token holdings from /api/bankr/wallet (Bankr portfolio), mapped to
+  // the same shape the personal cards' AllocBar/TokenRow use. (Bankr's portfolio
+  // doesn't carry a 24h change, so change is shown flat.)
+  const holdings = (Array.isArray(bankr?.tokens) ? bankr.tokens : []).map((t) => ({ sym: t.symbol, name: t.name, amount: Number(t.amount) || 0, usd: Number(t.usd) || 0, change: 0 }));
+  const holdTotal = holdings.reduce((s, h) => s + h.usd, 0) || balance;
+  const topHolding = holdings[0];
   const copy = () => { try { navigator.clipboard.writeText(addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
+
+  // Agents fundable via Bankr — they need an EVM (0x) address, since Bankr sends
+  // on Base mainnet. (Agent addresses live on w.meta.addr in the drop-in data.)
+  const fundableAgents = frWallets().filter((w) => !w.meta?.setup && /^0x[a-fA-F0-9]{40}$/.test(String(w.meta?.addr || "").trim()));
+
+  // Bankr is a MANAGED wallet (no local key), so it can't use the structured
+  // /api/wallet/send rail. It moves funds the way it trades — as a natural-language
+  // action on its own wallet: prepare → confirm (BANKR_ACTION) → execute via
+  // /api/bankr/actions. Send + Fund-agent share this one flow.
+  const [asset, setAsset] = React.useState("USDC");
+  const [amount, setAmount] = React.useState("");
+  const [recipient, setRecipient] = React.useState("");
+  const [fundAgentId, setFundAgentId] = React.useState("");
+  const [step, setStep] = React.useState("idle"); // idle | preparing | review | executing | done | error
+  const [draft, setDraft] = React.useState(null);
+  const [msg, setMsg] = React.useState("");
+  const amtNum = Number(amount) || 0;
+  const selectedAgent = fundableAgents.find((a) => a.id === fundAgentId) || fundableAgents[0];
+  const recipOk = /^0x[a-fA-F0-9]{40}$/.test(recipient.trim()) || /\.(eth|base|box|cb\.id)$/i.test(recipient.trim());
+  const sendAddr = sheet === "fund" ? String(selectedAgent?.meta?.addr || "") : recipient.trim();
+  const addrOk = sheet === "fund" ? Boolean(selectedAgent?.meta?.addr) : recipOk;
+  const canReview = amtNum > 0 && addrOk && step !== "preparing" && step !== "executing";
+  const resetFlow = () => { setStep("idle"); setDraft(null); setMsg(""); };
+  const openSheet = (s) => { setSheet((cur) => (cur === s ? null : s)); resetFlow(); };
+
+  const bankrPost = async (body) => {
+    const r = await fetch("/api/bankr/actions", { method: "POST", headers: { "Content-Type": "application/json", accept: "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    return (await r?.json().catch(() => null)) || null;
+  };
+  const review = async () => {
+    if (!canReview) return;
+    setStep("preparing"); setMsg("");
+    const noun = sheet === "fund" ? "funding" : "send";
+    // Bankr has no structured transfer rail — an arbitrary send (incl. funding an
+    // agent's address) goes through its free-form agent, reviewed + confirmed first.
+    const res = await bankrPost({ action: "prepare", intent: "agent-job", prompt: `send ${amtNum} ${asset} to ${sendAddr}` });
+    if (!res?.ok) { setStep("error"); setMsg(res?.error || `Could not prepare this Bankr ${noun}.`); return; }
+    setDraft({ message: res.message, confirmation: res.confirmation || "BANKR_ACTION" });
+    setStep("review"); setMsg(res.message || "");
+  };
+  const send = async () => {
+    if (!draft) return;
+    setStep("executing"); setMsg("");
+    const res = await bankrPost({ action: "execute", draftMessage: draft.message, confirmation: draft.confirmation });
+    if (!res?.ok) { setStep("error"); setMsg(res?.error || "Bankr action failed."); return; }
+    setStep("done"); setMsg(res.message || "Done."); setAmount(""); setRecipient("");
+  };
+
+  const flowControls = (
+    <>
+      {step === "review" && draft ? <p className="fw-sheet-help" style={{ color: "var(--fg-2)" }}>{draft.message}</p> : null}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        {step === "review" ? (
+          <>
+            <BBtn variant="ghost" sm onClick={resetFlow}>Edit</BBtn>
+            <BBtn variant="primary" sm disabled={step === "executing"} onClick={send}><BIcon name="promote" size={14} /> {step === "executing" ? "Sending…" : "Confirm & send"}</BBtn>
+          </>
+        ) : (
+          <BBtn variant="primary" sm disabled={!canReview} onClick={review}><BIcon name="shield" size={14} /> {step === "preparing" ? "Reviewing…" : sheet === "fund" ? "Review funding" : "Review send"}</BBtn>
+        )}
+      </div>
+      {msg && step !== "review" ? <p className="fw-sheet-help" style={{ color: step === "error" ? "var(--danger)" : step === "done" ? "var(--live)" : undefined }}>{msg}</p> : null}
+    </>
+  );
+  const assetField = (
+    <label className="fb-label">Asset
+      <select className="fb-field" value={asset} onChange={(e) => { setAsset(e.target.value); resetFlow(); }}>
+        {["USDC", "ETH", "USDT", "HIVE"].map((a) => <option key={a} value={a}>{a}</option>)}
+      </select>
+    </label>
+  );
+  const amountField = <label className="fb-label">Amount<input className="fb-field fb-mono" value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); resetFlow(); }} placeholder="0" /></label>;
+
   return (
     <div className="fw-mywallet">
       <div className="top">
@@ -1115,19 +1196,68 @@ function BankrWalletCard({ bankr, onNavigate }) {
           <div className="sub">Managed · Base mainnet</div>
         </div>
         <Badge tone="honey">Bankr-managed</Badge>
+        {holdings.length ? (
+          <button type="button" className="fw-x" onClick={() => setExpanded((e) => !e)} aria-label={expanded ? "Collapse" : "Expand"}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+        ) : null}
       </div>
       <div>
         <div className="bal">{frFmtUsdFull(balance)}</div>
-        <div className="balsub">Bankr-managed balance</div>
+        <div className="balsub">{topHolding ? `${frFmtAmount(topHolding.sym, topHolding.amount)} ${topHolding.sym}${holdings.length > 1 ? ` · +${holdings.length - 1} more` : ""}` : "Bankr-managed balance"}</div>
       </div>
-      {addr ? (
-        <div className="addr">
-          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{frShortAddr(addr)}</span>
-          <button type="button" onClick={copy} aria-label="Copy address"><BIcon name={copied ? "check" : "copy"} size={13} /></button>
+      {expanded && holdings.length ? (
+        <>
+          <AllocBar holdings={holdings} total={holdTotal} />
+          <div style={{ maxHeight: holdings.length > 5 ? 245 : undefined, overflowY: holdings.length > 5 ? "auto" : undefined, paddingRight: holdings.length > 5 ? 4 : 0 }}>{holdings.map((b) => <TokenRow key={b.sym} b={b} />)}</div>
+        </>
+      ) : null}
+      <AddrRow w={{ addr, network: "Base mainnet" }} expanded={false} />
+
+      {sheet === "send" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => { setSheet(null); resetFlow(); }}>Send via Bankr</SheetTitle>
+          <p className="fw-sheet-help">Bankr is managed, so a send runs as an action on Bankr&apos;s own wallet — reviewed, then confirmed, before it moves.</p>
+          <div className="fb-grid2">{assetField}{amountField}</div>
+          <label className="fb-label">Recipient address<input className="fb-field fb-mono" value={recipient} onChange={(e) => { setRecipient(e.target.value); resetFlow(); }} placeholder="0x… or name.eth" /></label>
+          {recipient.trim() && !recipOk ? <p className="fw-sheet-help" style={{ color: "var(--danger)" }}>Enter a valid 0x… address (Bankr is on Base).</p> : null}
+          {flowControls}
         </div>
       ) : null}
-      <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-        <BBtn variant="primary" sm style={{ flex: 1 }} onClick={() => onNavigate && onNavigate("trade")}><BIcon name="trade" size={14} /> Trade with Bankr</BBtn>
+
+      {sheet === "fund" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => { setSheet(null); resetFlow(); }}>Fund an agent via Bankr</SheetTitle>
+          {fundableAgents.length ? (
+            <>
+              <div className="fb-grid2">
+                <label className="fb-label">Agent
+                  <select className="fb-field" value={selectedAgent?.id || ""} onChange={(e) => { setFundAgentId(e.target.value); resetFlow(); }}>
+                    {fundableAgents.map((a) => <option key={a.id} value={a.id}>{a.name || a.id}</option>)}
+                  </select>
+                </label>
+                {amountField}
+              </div>
+              {assetField}
+              <p className="fw-sheet-help">Sends {asset} from Bankr to {selectedAgent?.name || "the agent"}&apos;s address ({frShortAddr(String(selectedAgent?.meta?.addr || ""))}) — reviewed + confirmed first.</p>
+              {flowControls}
+            </>
+          ) : <p className="fw-sheet-help">No agent wallets with an on-chain address to fund yet. Create or import an agent wallet first.</p>}
+        </div>
+      ) : null}
+
+      {sheet === "receive" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => setSheet(null)}>Receive on Base mainnet</SheetTitle>
+          <div className="fw-addr">{addr || "No address yet"}</div>
+          {addr ? <BBtn variant="ghost" sm onClick={copy}><BIcon name={copied ? "check" : "copy"} size={14} /> {copied ? "Copied" : "Copy address"}</BBtn> : null}
+        </div>
+      ) : null}
+
+      <div style={{ display: "flex", gap: 8, marginTop: "auto", flexWrap: "wrap" }}>
+        <BBtn variant="primary" sm style={{ flex: 1 }} data-active={sheet === "fund" ? "" : undefined} onClick={() => openSheet("fund")}><BIcon name="promote" size={14} /> Fund agent</BBtn>
+        <BBtn variant="ghost" sm data-active={sheet === "send" ? "" : undefined} onClick={() => openSheet("send")}><BIcon name="branch" size={14} /> Send</BBtn>
+        <BBtn variant="ghost" sm data-active={sheet === "receive" ? "" : undefined} onClick={() => openSheet("receive")}><BIcon name="download" size={14} /> Receive</BBtn>
       </div>
     </div>
   );

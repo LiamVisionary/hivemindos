@@ -13,10 +13,19 @@ import {
 } from "@/lib/services/queen-bee/voice-turn";
 import {
   QUEEN_BEE_REALTIME_VOICES,
+  readQueenBeeCallPreferences,
   readQueenBeeVoice,
   ttsVoiceFor,
   writeQueenBeeVoice,
 } from "@/lib/services/queen-bee/voice-settings";
+import {
+  LOCAL_TTS_RUNTIME,
+  isLocalTtsProviderId,
+  resolveLocalTtsCallConfig,
+  streamLocalTtsPcm,
+  synthesizeLocalTtsWav,
+} from "@/lib/services/phone/local-tts";
+import type { AgentCallPreferences } from "@/lib/types/agent-runtime";
 import {
   addQueenBeeVoicePreference,
   queenVoicePreferencePreamble,
@@ -51,6 +60,9 @@ try {
 
 const VOICE_TURN_TIMEOUT_MS = 60_000;
 const TTS_TIMEOUT_MS = 30_000;
+// Streamed replies play as they arrive, so the request can outlive the buffered
+// timeout — bound it generously to the longest spoken reply.
+const STREAM_SPEAK_TIMEOUT_MS = 90_000;
 const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_REALTIME_MODEL = "gpt-realtime";
 
@@ -78,8 +90,11 @@ export async function POST(request: NextRequest) {
       string,
       unknown
     >;
+    if (body.action === "speak-stream") {
+      return await streamSpokenReplyPcm(request, body);
+    }
     if (body.action === "speak") {
-      return await streamSpokenReply(body);
+      return await streamSpokenReply(request, body);
     }
     if (body.action === "converse") {
       return await runConversationTurn(request, body);
@@ -128,13 +143,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Voice settings for the overlay's picker.
+// Voice settings for the overlay's picker. `localTtsSelected` lets the overlay
+// route to the non-realtime pipeline (which honors the chosen local TTS server)
+// instead of OpenAI Realtime speech-to-speech, where local TTS cannot apply.
 export async function GET() {
   try {
+    const calls = await readQueenBeeCallPreferences().catch(() => null);
     return NextResponse.json({
       ok: true,
       voice: await readQueenBeeVoice(),
       voices: QUEEN_BEE_REALTIME_VOICES,
+      callVoiceRuntime: calls?.voiceRuntime ?? null,
+      localTtsSelected: Boolean(
+        calls &&
+          (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
+            isLocalTtsProviderId(calls.voiceProviderId)),
+      ),
     });
   } catch (error) {
     const message =
@@ -471,11 +495,171 @@ function historyFromForm(
   }
 }
 
-async function streamSpokenReply(body: Record<string, unknown>) {
+// Synthesize the spoken reply on the Queen's selected connected TTS server,
+// buffered to a decodable WAV clip. Returns null on any miss so the caller
+// falls back to OpenAI cloud TTS.
+async function speakViaLocalTts(
+  request: NextRequest,
+  text: string,
+  calls: AgentCallPreferences,
+): Promise<
+  | { ok: true; wav: ArrayBuffer; appName: string; appId: string; voice: string; model: string; bytes: number }
+  | { ok: false; error: string }
+> {
+  const config = await resolveLocalTtsCallConfig({
+    origin: request.nextUrl.origin,
+    voiceProviderId: calls.voiceProviderId,
+    voiceModelId: calls.voiceModelId,
+    voiceId: calls.voiceId,
+    openingLine: "",
+  }).catch(() => null);
+  if (!config) return { ok: false, error: "no validated local TTS server" };
+  const result = await synthesizeLocalTtsWav({
+    origin: request.nextUrl.origin,
+    appId: config.appId,
+    model: config.model,
+    voice: config.voice,
+    text: text.slice(0, 4_000),
+    signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  return {
+    ok: true,
+    wav: result.wav,
+    appName: result.appName,
+    appId: config.appId,
+    voice: config.voice,
+    model: config.model,
+    bytes: result.bytes,
+  };
+}
+
+// Streaming sibling of `speak`: when the Queen uses local TTS, forward the live
+// PCM frame stream so the overlay can play audio within ~a second instead of
+// waiting for the whole clip. Returns 409 {fallback:true} for any non-local-TTS
+// or unavailable case, signalling the client to use the buffered `speak` path
+// (which still handles OpenAI + browser-synth fallback).
+async function streamSpokenReplyPcm(
+  request: NextRequest,
+  body: Record<string, unknown>,
+) {
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) throw new Error("Speech text is required.");
+  const startedAt = Date.now();
+  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  if (
+    calls &&
+    (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
+      isLocalTtsProviderId(calls.voiceProviderId))
+  ) {
+    const config = await resolveLocalTtsCallConfig({
+      origin: request.nextUrl.origin,
+      voiceProviderId: calls.voiceProviderId,
+      voiceModelId: calls.voiceModelId,
+      voiceId: calls.voiceId,
+      openingLine: "",
+    }).catch(() => null);
+    if (config) {
+      const stream = await streamLocalTtsPcm({
+        origin: request.nextUrl.origin,
+        appId: config.appId,
+        model: config.model,
+        voice: config.voice,
+        text: text.slice(0, 4_000),
+        signal: AbortSignal.timeout(STREAM_SPEAK_TIMEOUT_MS),
+      }).catch((error) => ({
+        ok: false as const,
+        error: error instanceof Error ? error.message : "stream failed",
+      }));
+      if (stream.ok) {
+        await appendVoiceTurnTelemetry({
+          ok: true,
+          stage: "speak-stream",
+          engine: "local-tts",
+          appId: config.appId,
+          voice: config.voice,
+          model: config.model,
+          sampleRate: stream.sampleRate,
+          ttsMs: Date.now() - startedAt, // time to first byte (stream open)
+        });
+        return new Response(stream.body, {
+          headers: {
+            "Content-Type": "audio/pcm",
+            "x-audio-sample-rate": String(stream.sampleRate),
+            "x-audio-channels": String(stream.channels),
+            "Cache-Control": "no-store, no-transform",
+          },
+        });
+      }
+      await appendVoiceTurnTelemetry({
+        ok: false,
+        stage: "speak-stream",
+        engine: "local-tts",
+        model: config.model,
+        error: stream.error,
+        ttsMs: Date.now() - startedAt,
+      });
+    }
+  }
+  return NextResponse.json({ ok: false, fallback: true }, { status: 409 });
+}
+
+async function streamSpokenReply(
+  request: NextRequest,
+  body: Record<string, unknown>,
+) {
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (!text) throw new Error("Speech text is required.");
+  const startedAt = Date.now();
+
+  // Honor a Queen Calls "Local TTS" selection: voice the reply on the chosen
+  // connected TTS server instead of OpenAI cloud TTS. Any miss (no validated
+  // server, app unreachable, no audio) falls through to OpenAI below.
+  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  let localFallbackReason = "";
+  if (
+    calls &&
+    (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
+      isLocalTtsProviderId(calls.voiceProviderId))
+  ) {
+    const local = await speakViaLocalTts(request, text, calls).catch(
+      (error) => ({
+        ok: false as const,
+        error: error instanceof Error ? error.message : "local TTS failed",
+      }),
+    );
+    if (local.ok) {
+      await appendVoiceTurnTelemetry({
+        ok: true,
+        stage: "speak",
+        engine: "local-tts",
+        appName: local.appName,
+        appId: local.appId,
+        voice: local.voice,
+        model: local.model,
+        audioBytes: local.bytes,
+        ttsMs: Date.now() - startedAt,
+      });
+      return new Response(local.wav, {
+        headers: {
+          "Content-Type": "audio/wav",
+          "Cache-Control": "no-store, no-transform",
+        },
+      });
+    }
+    localFallbackReason = local.error;
+  }
+
   const apiKey = await transcriptionApiKey();
   if (!apiKey) {
+    await appendVoiceTurnTelemetry({
+      ok: false,
+      stage: "speak",
+      engine: "none",
+      error: "no-openai-key",
+      ...(localFallbackReason ? { localFallbackReason } : {}),
+      ttsMs: Date.now() - startedAt,
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -485,6 +669,8 @@ async function streamSpokenReply(body: Record<string, unknown>) {
       { status: 503 },
     );
   }
+  const voice = ttsVoiceFor(await readQueenBeeVoice());
+  const model = process.env.OPENAI_TTS_MODEL || DEFAULT_TTS_MODEL;
   const response = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -492,8 +678,8 @@ async function streamSpokenReply(body: Record<string, unknown>) {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_TTS_MODEL || DEFAULT_TTS_MODEL,
-      voice: ttsVoiceFor(await readQueenBeeVoice()),
+      model,
+      voice,
       input: text.slice(0, 4_000),
       response_format: "mp3",
     }),
@@ -506,6 +692,16 @@ async function streamSpokenReply(body: Record<string, unknown>) {
     } | null;
     const detail =
       typeof data?.error === "string" ? data.error : data?.error?.message;
+    await appendVoiceTurnTelemetry({
+      ok: false,
+      stage: "speak",
+      engine: "openai",
+      voice,
+      model,
+      error: detail || `HTTP ${response.status}`,
+      ...(localFallbackReason ? { localFallbackReason } : {}),
+      ttsMs: Date.now() - startedAt,
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -514,6 +710,15 @@ async function streamSpokenReply(body: Record<string, unknown>) {
       { status: 502 },
     );
   }
+  await appendVoiceTurnTelemetry({
+    ok: true,
+    stage: "speak",
+    engine: "openai",
+    voice,
+    model,
+    ...(localFallbackReason ? { localFallbackReason } : {}),
+    ttsMs: Date.now() - startedAt,
+  });
   return new Response(response.body, {
     headers: {
       "Content-Type": "audio/mpeg",

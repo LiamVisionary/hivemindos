@@ -127,6 +127,14 @@ type FinishRunInput = {
   failureReason?: KanbanFailureReason;
 };
 
+type AutonomousRerouteInput = {
+  reason: string;
+  failedAgentName?: string;
+  nextAssignee: string;
+  nextRuntime?: string;
+  targetMachine?: KanbanTask["targetMachine"];
+};
+
 type ClaimNextTaskInput = ClaimTaskInput & {
   tenant?: string;
   assignee?: string;
@@ -1330,6 +1338,68 @@ export async function failTask(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed, run, retried, failureReason };
+  });
+}
+
+export async function rerouteTaskForAutonomousPickup(
+  slug: string | null,
+  taskId: string,
+  input: AutonomousRerouteInput,
+  options: KanbanStorageOptions = {},
+) {
+  return withBoardMutation(slug, options, async () => {
+  const board = await readBoard(slug, options);
+  const task = board.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  if (task.status === "done" || task.status === "archived") {
+    throw new Error("Completed or archived tasks cannot be autonomously rerouted.");
+  }
+  const nextAssignee = input.nextAssignee.trim();
+  if (!nextAssignee) throw new Error("Autonomous reroute requires a next assignee.");
+  const now = Date.now();
+  const reason = input.reason.trim() || "Autonomous pickup failed.";
+  const failureReason = classifyKanbanFailure(reason);
+  const failedRun = finishActiveRun(board, taskId, "failed", {
+    summary: reason,
+    error: reason,
+    failureReason,
+  });
+  const changed: KanbanTask = {
+    ...task,
+    status: "ready",
+    assignee: nextAssignee,
+    targetMachine: input.targetMachine === undefined ? task.targetMachine : input.targetMachine,
+    result: `${reason}\nNext autonomous delegate: ${nextAssignee}.`,
+    agentSession: null,
+    claimLock: undefined,
+    claimExpiresAt: undefined,
+    lastHeartbeatAt: undefined,
+    currentRunId: undefined,
+    lastFailureReason: failureReason,
+    updatedAt: now,
+    completedAt: undefined,
+  };
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event(
+      "task.autonomous-rerouted",
+      `Rerouted ${task.title} to ${nextAssignee}`,
+      task.id,
+      {
+        reason,
+        failedAgentName: input.failedAgentName,
+        nextAssignee,
+        nextRuntime: input.nextRuntime,
+        targetMachine: changed.targetMachine,
+        failureReason,
+      },
+      failedRun?.id ?? task.currentRunId,
+    ),
+  );
+  await writeBoard(touch(board), options);
+  return { board, task: changed, run: failedRun, failureReason };
   });
 }
 

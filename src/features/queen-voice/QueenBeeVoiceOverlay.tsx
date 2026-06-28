@@ -5,8 +5,6 @@ import { createPortal } from "react-dom";
 import {
   AudioLines,
   Check,
-  ChevronDown,
-  ChevronUp,
   Crown,
   FileText,
   Mic,
@@ -14,7 +12,8 @@ import {
   Settings2,
   X,
 } from "lucide-react";
-import { listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
+import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { emitQueenVoiceState, listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
 import { HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET } from "./hive-chat-layout";
 import { useQueenClapActivation } from "./use-queen-clap-activation";
@@ -86,97 +85,143 @@ function clapWakeTitle(status: string, error: string) {
   return "Enable clap wake";
 }
 
+// A card with a "Reply `confirm`" / "Reply `CONFIRM_SWAP`" line needs a yes/no
+// decision: we auto-open its modal and give it Confirm/Deny buttons.
+function needsConfirmation(detail?: string | null): boolean {
+  return !!detail && /\breply\s+`?(?:confirm|CONFIRM_|SEND_|APPROVE_)/i.test(detail);
+}
+// Transaction-related (a pending confirmation, a Bankr/swap/trade card, or an
+// on-chain tx) gets a transaction label instead of the generic "what she found".
+function isTransactionDetail(detail?: string | null): boolean {
+  return (
+    !!detail
+    && (needsConfirmation(detail)
+      || /\*\*(?:bankr action|swap\b|trade\b|transaction)/i.test(detail)
+      || /\b0x[a-fA-F0-9]{16,}\b/.test(detail))
+  );
+}
+function detailBadgeLabel(detail?: string | null): string {
+  return isTransactionDetail(detail) ? "Show transaction info" : "Show what she found";
+}
+function detailModalTitle(detail: string): string {
+  return isTransactionDetail(detail) ? "Transaction" : "What Queen Bee found";
+}
+
 function TranscriptTurns({
   turns,
   minimized,
-  onToggleMinimize,
   thinking,
   thinkingLabel,
   onShowDetail,
+  onCollapse,
 }: {
   turns: QueenChatTurn[];
   minimized: boolean;
-  onToggleMinimize: () => void;
   thinking: boolean;
   thinkingLabel: string;
   onShowDetail: (detail: string) => void;
+  onCollapse: () => void;
 }) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
 
+  // Spring open/close: keep the bubble mounted through its exit animation.
+  // `wantOpen` is the desired state; `closing` holds the bubble one beat longer
+  // so transcriptCollapse can finish; `rendered` (derived) is DOM presence.
+  const wantOpen = !minimized && (turns.length > 0 || thinking);
+  const [closing, setClosing] = React.useState(false);
+  const [prevWantOpen, setPrevWantOpen] = React.useState(wantOpen);
+
+  // Adjust derived state during render when the desired open-state flips — the
+  // React-sanctioned alternative to a cascading setState-in-effect. Turning off
+  // begins the exit; turning back on cancels any in-flight close.
+  if (prevWantOpen !== wantOpen) {
+    setPrevWantOpen(wantOpen);
+    setClosing(!wantOpen);
+  }
+  const rendered = wantOpen || closing;
+
   React.useEffect(() => {
-    if (minimized) return;
+    if (!closing) return;
+    // Slightly longer than the transcriptCollapse duration (200ms). The setState
+    // lives in the timer callback (not the effect body), so no cascading render,
+    // and it still fires under reduced-motion (no reliance on animationend).
+    const timer = setTimeout(() => setClosing(false), 230);
+    return () => clearTimeout(timer);
+  }, [closing]);
+
+  React.useEffect(() => {
+    if (closing) return;
     const panel = panelRef.current;
     if (panel) panel.scrollTop = panel.scrollHeight;
-  }, [turns, minimized, thinking]);
+  }, [turns, thinking, closing, rendered]);
 
-  if (!turns.length && !thinking) return null;
+  // Collapsed (and exit finished): the history is gone; the triangle tab on the
+  // input pill is the only control (see the .fr-chat-tab in PersistentHiveChat).
+  if (!rendered) return null;
   return (
     <div
-      className={`${styles.transcriptPanel} ${minimized ? styles.transcriptPanelMinimized : ""}`}
+      className={`${styles.transcriptPanel} ${closing ? styles.transcriptPanelClosing : styles.transcriptPanelOpen}`}
     >
+      <div ref={panelRef} className={styles.transcriptScroll} aria-live="polite">
+        {turns.slice(-3).map((turn) => (
+          <div key={turn.id} className={styles.turn}>
+            <span
+              className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
+            >
+              {turn.who === "queen" ? "Queen Bee" : "You"}
+            </span>
+            <div
+              className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""} ${turn.pending && !turn.text ? styles.turnTextThinking : ""}`}
+            >
+              {turn.pending && !turn.text ? (
+                // steady label keeps the bubble height stable while the dots
+                // animation cycles through its empty frame
+                <>Thinking<span className={styles.thinkingDots} aria-hidden="true" /></>
+              ) : turn.who === "queen" ? (
+                // Queen replies are markdown (code spans like `CONFIRM_SWAP`, bold,
+                // lists, links); the user's own echo stays plain text.
+                <ChatMarkdown text={turn.text} />
+              ) : (
+                turn.text
+              )}
+            </div>
+            {turn.detail ? (
+              <button
+                type="button"
+                className={styles.detailButton}
+                onClick={() => onShowDetail(turn.detail ?? "")}
+              >
+                <FileText size={12} aria-hidden="true" />
+                {detailBadgeLabel(turn.detail)}
+              </button>
+            ) : null}
+          </div>
+        ))}
+        {thinking ? (
+          <div className={styles.turn}>
+            <span className={`${styles.turnWho} ${styles.turnWhoQueen}`}>
+              Queen Bee
+            </span>
+            <p className={`${styles.turnText} ${styles.turnTextThinking}`}>
+              {thinkingLabel || "Checking"}
+              <span className={styles.thinkingDots} aria-hidden="true" />
+            </p>
+          </div>
+        ) : null}
+      </div>
+      {/* Down-tail on the bubble's bottom edge — points toward the input and
+          collapses the history. Outlined so it reads against the page. */}
       <button
         type="button"
-        className={styles.minimizeButton}
-        onClick={onToggleMinimize}
-        aria-label={minimized ? "Expand chat history" : "Minimize chat history"}
-        aria-pressed={minimized}
-        title={minimized ? "Expand chat history" : "Minimize chat history"}
+        className={styles.bubbleTail}
+        onClick={onCollapse}
+        aria-label="Hide chat history"
+        title="Hide chat history"
       >
-        {minimized ? (
-          <ChevronUp size={16} aria-hidden="true" />
-        ) : (
-          <ChevronDown size={16} aria-hidden="true" />
-        )}
+        <svg width="30" height="13" viewBox="0 0 30 13" fill="none" aria-hidden="true">
+          <path d="M2.5 1.5 L15 10.5 L27.5 1.5" />
+        </svg>
       </button>
-      {minimized ? null : (
-        <div
-          ref={panelRef}
-          className={styles.transcriptScroll}
-          aria-live="polite"
-        >
-          {turns.slice(-3).map((turn) => (
-            <div key={turn.id} className={styles.turn}>
-              <span
-                className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
-              >
-                {turn.who === "queen" ? "Queen Bee" : "You"}
-              </span>
-              <p
-                className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""} ${turn.pending && !turn.text ? styles.turnTextThinking : ""}`}
-              >
-                {turn.pending && !turn.text ? (
-                  // steady label keeps the bubble height stable while the dots
-                  // animation cycles through its empty frame
-                  <>Thinking<span className={styles.thinkingDots} aria-hidden="true" /></>
-                ) : (
-                  turn.text
-                )}
-              </p>
-              {turn.detail ? (
-                <button
-                  type="button"
-                  className={styles.detailButton}
-                  onClick={() => onShowDetail(turn.detail ?? "")}
-                >
-                  <FileText size={12} aria-hidden="true" />
-                  Show what she found
-                </button>
-              ) : null}
-            </div>
-          ))}
-          {thinking ? (
-            <div className={styles.turn}>
-              <span className={`${styles.turnWho} ${styles.turnWhoQueen}`}>
-                Queen Bee
-              </span>
-              <p className={`${styles.turnText} ${styles.turnTextThinking}`}>
-                {thinkingLabel || "Checking"}
-                <span className={styles.thinkingDots} aria-hidden="true" />
-              </p>
-            </div>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 }
@@ -273,22 +318,61 @@ export function QueenBeeVoiceOverlay({
   const [open, setOpen] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
   const [voicePickerOpen, setVoicePickerOpen] = React.useState(false);
-  const [minimized, setMinimized] = React.useState(false);
+  // The shared Queen conversation (typed + voice live here together). The
+  // history-collapsed flag lives in the store so the input's toggle tab and
+  // this transcript overlay share one source of truth.
+  const chat = useQueenChat();
+  const { historyMinimized, setHistoryMinimized } = chat;
   // Bumping the nonce restarts the realtime session (e.g. new voice).
   const [sessionNonce, setSessionNonce] = React.useState(0);
   const [realtimeFailedNonce, setRealtimeFailedNonce] = React.useState(-1);
+  // The resolved voice engine for a given session nonce. A local-TTS Calls
+  // selection runs the non-realtime pipeline so the chosen TTS server actually
+  // voices replies; anything else uses OpenAI Realtime speech-to-speech (where
+  // local TTS cannot apply). Tagged with the nonce it was resolved for so a new
+  // open reads `null` until ITS fetch lands — which gates both voice hooks and
+  // keeps a local-TTS selection from briefly starting a Realtime session.
+  const [resolvedVoiceMode, setResolvedVoiceMode] = React.useState<
+    { nonce: number; mode: "realtime" | "pipeline" } | null
+  >(null);
   const sessionNonceRef = React.useRef(sessionNonce);
   React.useEffect(() => {
     sessionNonceRef.current = sessionNonce;
   }, [sessionNonce]);
-  const realtimeMode = realtimeFailedNonce !== sessionNonce;
+  // Re-resolved on each open and session restart so a freshly-changed Calls
+  // setting takes effect without restarting the app.
+  React.useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const nonce = sessionNonce;
+    void fetch("/api/queen-bee/voice", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { localTtsSelected?: boolean } | null) => {
+        if (!cancelled) {
+          setResolvedVoiceMode({
+            nonce,
+            mode: data?.localTtsSelected ? "pipeline" : "realtime",
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedVoiceMode({ nonce, mode: "realtime" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionNonce]);
+  const voiceModeForOpen =
+    resolvedVoiceMode?.nonce === sessionNonce ? resolvedVoiceMode.mode : null;
+  const realtimeMode =
+    voiceModeForOpen === "realtime" && realtimeFailedNonce !== sessionNonce;
 
   const resetVoiceSessionUi = React.useCallback(() => {
     setMuted(false);
     setVoicePickerOpen(false);
-    setMinimized(false);
+    setHistoryMinimized(false);
     setSessionNonce((current) => current + 1);
-  }, []);
+  }, [setHistoryMinimized]);
 
   const openQueenVoiceChat = React.useCallback(() => {
     setOpen((current) => {
@@ -327,9 +411,9 @@ export function QueenBeeVoiceOverlay({
   const driveDashboard = React.useCallback(
     async (command: string) => {
       if (!onDriveDashboard) return "The dashboard isn't available to drive right now.";
-      return onDriveDashboard(command, { onModalOpen: () => setMinimized(true) });
+      return onDriveDashboard(command, { onModalOpen: () => setHistoryMinimized(true) });
     },
-    [onDriveDashboard],
+    [onDriveDashboard, setHistoryMinimized],
   );
   const realtime = useQueenBeeRealtime(
     open && realtimeMode,
@@ -339,14 +423,13 @@ export function QueenBeeVoiceOverlay({
     QUEEN_VOICE_OPENING_LINE,
   );
   const pipeline = useQueenBeeVoice(
-    open && !realtimeMode,
+    open && voiceModeForOpen !== null && !realtimeMode,
     muted,
     QUEEN_VOICE_OPENING_LINE,
+    voiceModeForOpen === "pipeline",
   );
   const voiceState = realtimeMode ? realtime : pipeline;
 
-  // The shared Queen conversation (typed + voice live here together).
-  const chat = useQueenChat();
   const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;
 
   // Bridge voice turns into the shared store (append-only diff). Namespace ids
@@ -388,6 +471,52 @@ export function QueenBeeVoiceOverlay({
   // "working", not "stuck".
   const [thinkingFiller, setThinkingFiller] = React.useState("");
   const [detailContent, setDetailContent] = React.useState<string | null>(null);
+  // Auto-open the transaction modal when a card needing a decision arrives, then
+  // auto-close it once the user responds (by voice, typed, or a modal button).
+  // `autoShownRef` tracks the last card we auto-opened so dismissing it doesn't
+  // immediately re-open it; `detailForTurnRef` is the turn the modal is showing.
+  const autoShownRef = React.useRef<string | null>(null);
+  const detailForTurnRef = React.useRef<string | null>(null);
+  const closeDetail = React.useCallback(() => {
+    detailForTurnRef.current = null;
+    setDetailContent(null);
+  }, []);
+  const handleDetailAction = React.useCallback(
+    (say: string) => {
+      detailForTurnRef.current = null;
+      setDetailContent(null);
+      // Same path as speaking/typing it: the route's confirm rails finalize the
+      // pending draft. Speaking still works; this just gives an on-screen option.
+      void chat.sendText(say);
+    },
+    [chat],
+  );
+  React.useEffect(() => {
+    const turns = chat.turns;
+    // Auto-close once the user has FINISHED responding to the shown transaction.
+    // The interim caption row is a live "you" turn added the instant speech
+    // starts; only a finalized (committed) user turn should dismiss the modal,
+    // otherwise it closes mid-utterance. Symmetric with the auto-open guard below.
+    if (detailForTurnRef.current) {
+      const shownIdx = turns.findIndex((t) => t.id === detailForTurnRef.current);
+      if (shownIdx >= 0 && turns.slice(shownIdx + 1).some((t) => t.who === "you" && !t.live && !t.pending)) {
+        detailForTurnRef.current = null;
+        setDetailContent(null);
+        return;
+      }
+    }
+    // Auto-open the newest finalized transaction card that still needs a decision.
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      const turn = turns[i];
+      if (turn.who !== "queen" || turn.live || turn.pending) continue;
+      if (!needsConfirmation(turn.detail)) continue;
+      if (autoShownRef.current === turn.id) break; // already shown or dismissed
+      autoShownRef.current = turn.id;
+      detailForTurnRef.current = turn.id;
+      setDetailContent(turn.detail ?? null);
+      break;
+    }
+  }, [chat.turns]);
   const prevPhaseRef = React.useRef<QueenVoicePhase>("starting");
   React.useEffect(() => {
     const previous = prevPhaseRef.current;
@@ -422,17 +551,24 @@ export function QueenBeeVoiceOverlay({
     };
   }, [toggleQueenVoiceChat]);
 
+  // Mirror the open/closed state out to peripheral controls (the "Message the
+  // hive" pill's voice toggle) so they reflect whether voice mode is active —
+  // including closes via Escape, the overlay's own controls, or clap-wake.
+  React.useEffect(() => {
+    emitQueenVoiceState(open);
+  }, [open]);
+
   React.useEffect(() => {
     if (!open && detailContent === null) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // The details modal closes first; a second Escape ends a live voice chat.
-      if (detailContent !== null) setDetailContent(null);
+      if (detailContent !== null) closeDetail();
       else if (open) setOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, detailContent]);
+  }, [open, detailContent, closeDetail]);
 
   if (typeof document === "undefined") return null;
   // Always-mounted: the transcript shows for typed turns too, not just voice.
@@ -454,11 +590,11 @@ export function QueenBeeVoiceOverlay({
       >
         <TranscriptTurns
           turns={chat.turns}
-          minimized={minimized}
-          onToggleMinimize={() => setMinimized((current) => !current)}
+          minimized={historyMinimized}
           thinking={open && voiceState.phase === "thinking"}
           thinkingLabel={thinkingFiller}
           onShowDetail={setDetailContent}
+          onCollapse={() => setHistoryMinimized(true)}
         />
         {detailContent !== null ? (
           <div
@@ -466,7 +602,7 @@ export function QueenBeeVoiceOverlay({
             role="dialog"
             aria-modal="true"
             aria-label="Queen Bee details"
-            onClick={() => setDetailContent(null)}
+            onClick={closeDetail}
           >
             <div
               className={styles.detailModal}
@@ -475,18 +611,40 @@ export function QueenBeeVoiceOverlay({
               <div className={styles.detailModalHeader}>
                 <span className={styles.detailModalTitle}>
                   <Crown size={14} aria-hidden="true" />
-                  What Queen Bee found
+                  {detailModalTitle(detailContent)}
                 </span>
                 <button
                   type="button"
                   className={styles.detailModalClose}
-                  onClick={() => setDetailContent(null)}
+                  onClick={closeDetail}
                   aria-label="Close details"
                 >
                   <X size={14} aria-hidden="true" />
                 </button>
               </div>
-              <div className={styles.detailModalBody}>{detailContent}</div>
+              <div className={styles.detailModalBody}>
+                <ChatMarkdown text={detailContent} />
+              </div>
+              {needsConfirmation(detailContent) ? (
+                <div className={styles.detailModalActions}>
+                  <button
+                    type="button"
+                    className={`${styles.detailAction} ${styles.detailActionConfirm}`}
+                    onClick={() => handleDetailAction("confirm")}
+                  >
+                    <Check size={15} aria-hidden="true" />
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.detailAction} ${styles.detailActionDeny}`}
+                    onClick={() => handleDetailAction("cancel")}
+                  >
+                    <X size={15} aria-hidden="true" />
+                    Deny
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}

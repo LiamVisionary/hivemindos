@@ -69,6 +69,11 @@ const fieldLabelStyle = {
 const fieldPattern = /(^|\s)(Suggested comment|Suggested DM|Post context|Related post|Best action|Comment under Wake or related thread|Name|Followers|Bio|Why|Post|Comment|DM|Account|Action|Profile|Handle|Engagement|URL|Link):/g;
 const jsonStartPattern = /^\s*[{[]/;
 const jsonPropertyPattern = /"[^"\n]+"\s*:/g;
+// A line/segment that begins with a markdown link — `[text](url)` — also starts
+// with `[`, but it is NOT JSON. Without this guard the JSON heuristics below
+// pretty-print it and shatter the link across lines (e.g. a basescan tx receipt
+// rendered as `[\n receipt\n](https:\n//…)`).
+const markdownLinkLeadPattern = /^\s*\[[^\]]+\]\s*\(/;
 
 function safeMarkdownHref(href: string) {
   const trimmed = href.trim();
@@ -223,6 +228,9 @@ function extractBalancedJsonCandidate(value: string) {
 function formatJsonCandidate(value: string) {
   const trimmed = trimJsonCandidate(value);
   if (!trimmed) return "";
+  // Never treat a markdown link as a JSON candidate (the `[` start is a false
+  // positive); this is what keeps inline links — like tx receipts — intact.
+  if (markdownLinkLeadPattern.test(trimmed)) return "";
   const formatted = formatJsonBlock(trimmed);
   if (formatted) return formatted;
   const balanced = extractBalancedJsonCandidate(trimmed);
@@ -502,7 +510,7 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
       previousBlockKind = formattedDataFence ? "json" : "code";
       continue;
     }
-    if (jsonStartPattern.test(line)) {
+    if (jsonStartPattern.test(line) && !markdownLinkLeadPattern.test(line)) {
       const jsonBlock = collectJsonBlock(lines, index);
       if (jsonBlock) {
         blocks.push(renderDataBlock(jsonBlock.formatted, `json-${index}`));

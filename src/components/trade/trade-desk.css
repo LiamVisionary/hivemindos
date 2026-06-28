@@ -44,6 +44,9 @@
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
+/* Pending-transaction spinner — applied to any BIcon rendered with `spin`. */
+@keyframes tk-spin { to { transform: rotate(360deg); } }
+.tk-spin { transform-origin: 50% 50%; animation: tk-spin 0.7s linear infinite; }
 
 /* focus ring */
 .fr-root :focus-visible { outline: 2px solid var(--honey-line); outline-offset: 2px; }
@@ -153,6 +156,12 @@
 .tk-foot { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 11px; font-size: 11px; color: var(--fg-4); font-family: var(--f-mono); text-align: center; }
 .tk-error { margin-top: 10px; color: var(--danger); font-size: 12px; line-height: 1.5; }
 .tk-success { margin-top: 10px; color: var(--live); font-size: 12.5px; line-height: 1.5; }
+/* Markdown rendered inside a compact result box (e.g. the Bankr action summary). */
+.tk-md { display: grid; gap: 5px; font-size: 12.5px; line-height: 1.5; }
+.tk-md p { margin: 0; }
+.tk-md strong { font-weight: 700; }
+.tk-md code { font-size: 0.92em; padding: 1px 5px; border-radius: 5px; background: color-mix(in srgb, currentColor 12%, transparent); }
+.tk-md pre { margin: 2px 0; padding: 8px 10px; border-radius: 8px; background: var(--panel-hi); overflow-x: auto; font-size: 11.5px; }
 
 /* capability rail */
 .tk-rail { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 18px; }
@@ -169,10 +178,13 @@
 .tk-tile[data-active] .ti, .tk-tile:hover .ti { color: var(--honey); border-color: var(--honey-line); }
 .tk-tile b { font-size: 12.5px; font-weight: 600; letter-spacing: -0.01em; }
 .tk-tile span { font-size: 10.5px; color: var(--fg-3); line-height: 1.35; }
-.tk-tile .rdot { position: absolute; top: 10px; right: 10px; width: 7px; height: 7px; border-radius: 99px; }
-.tk-tile .rdot[data-tone="ready"] { background: var(--live); }
-.tk-tile .rdot[data-tone="setup"] { background: var(--honey); }
-.tk-tile .rdot[data-tone="off"] { background: var(--fg-4); }
+.tk-tile .tk-provbadge { position: absolute; top: 11px; right: 11px; display: inline-flex; align-items: center; justify-content: center; height: 22px; }
+/* Blend the brand marks into the muted UI: softened + slightly desaturated at
+   rest, popping to full colour on hover (which also surfaces the name tooltip). */
+.tk-tile .tk-provbadge img { opacity: 0.66; filter: saturate(0.7) contrast(0.95); transition: opacity .16s, filter .16s; }
+.tk-tile:hover .tk-provbadge img, .tk-tile[data-active] .tk-provbadge img { opacity: 1; filter: none; }
+.tk-tile .tk-provbadge .txt { font-family: var(--f-mono); font-size: 10.5px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg-3); padding: 3px 7px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--panel); line-height: 1; white-space: nowrap; transition: color .16s, border-color .16s; }
+.tk-tile:hover .tk-provbadge .txt, .tk-tile[data-active] .tk-provbadge .txt { color: var(--fg); border-color: var(--line-3); }
 
 /* capability detail (master/detail) */
 .tk-back { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--fg-3); font-family: var(--f-body); font-size: 12.5px; cursor: pointer; padding: 5px 9px 5px 5px; border-radius: 8px; transition: color .15s, background .15s; }
@@ -286,6 +298,16 @@
 .dk-posrow .chg { font-family: var(--f-mono); font-size: 11.5px; text-align: right; }
 .dk-up { color: var(--live); } .dk-down { color: var(--danger); }
 .dk-emptyrow { color: var(--fg-3); font-size: 12.5px; padding: 16px 0; text-align: center; }
+
+/* Pending-order cell: hover (or busy/error) swaps the Pending badge for a Cancel button. */
+.dk-pendcell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.dk-pendcell .pend-cancel { display: none; border: 1px solid color-mix(in srgb, var(--danger) 42%, transparent); background: var(--danger-soft); color: var(--danger); border-radius: 99px; padding: 3px 11px; font-family: var(--f-body); font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: filter .14s; }
+.dk-pendcell .pend-cancel:hover { filter: brightness(1.12); }
+.dk-pendcell .pend-cancel:disabled { opacity: .6; cursor: default; }
+.dk-posrow[data-pending]:hover .pend-badge { display: none; }
+.dk-posrow[data-pending]:hover .pend-cancel { display: inline-flex; }
+.dk-pendcell[data-busy] .pend-badge, .dk-pendcell[data-err] .pend-badge { display: none; }
+.dk-pendcell[data-busy] .pend-cancel, .dk-pendcell[data-err] .pend-cancel { display: inline-flex; }
 
 /* sparkline hover tooltip */
 .spark-wrap { position: relative; }

@@ -1,9 +1,16 @@
 export { defineHiveAction } from "./define";
 export {
   HIVE_ACTIONS,
+  agentChallengeAction,
   brainGetNodeAction,
   brainGraphOverviewAction,
   brainSearchKnowledgeAction,
+  codeDetectChangesAction,
+  codeGetArchitectureAction,
+  codeGetSnippetAction,
+  codeIndexRepositoryAction,
+  codeSearchGraphAction,
+  codeTracePathAction,
   cryptoCapabilitiesAction,
   listHiveActions,
   listHivemindMachinesAction,

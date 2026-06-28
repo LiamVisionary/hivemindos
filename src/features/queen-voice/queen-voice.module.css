@@ -117,6 +117,7 @@
 }
 
 .transcriptPanel {
+  position: relative;
   pointer-events: auto;
   width: min(640px, calc(100vw - 96px));
   /* hug content — never stretch to the flex parent's height (no empty space) */
@@ -127,16 +128,89 @@
   gap: 8px;
   padding: 12px 18px 16px;
   border-radius: 18px;
-  background: rgba(8, 10, 15, 0.82);
-  border: 1px solid rgba(141, 159, 255, 0.28);
-  backdrop-filter: blur(18px);
+  /* match the "Message the hive" pill exactly (fleet-hive.css .fr-chat):
+     frosted glass — bg = color-mix(--panel 60%), border = --line-2. This portal
+     lives outside .fr-root, so the token values are mirrored as literals (dark
+     theme here). The -webkit- prefix is required for the blur to apply in the
+     macOS WKWebView Tauri shell. */
+  background: color-mix(in srgb, #14161c 60%, transparent);
+  border: 1px solid rgba(238, 232, 220, 0.13);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
 }
 
-.transcriptPanelMinimized {
-  width: auto;
-  gap: 0;
-  padding: 8px;
+/* Springy open/close. The bubble grows from its bottom edge (the input) with a
+   little overshoot, and collapses back down faster. Mount/unmount is driven in
+   TranscriptTurns; these classes just supply the motion. */
+.transcriptPanelOpen {
+  transform-origin: bottom center;
+  animation: transcriptPop 300ms cubic-bezier(0.2, 0.85, 0.3, 1) both;
+}
+
+.transcriptPanelClosing {
+  transform-origin: bottom center;
+  animation: transcriptCollapse 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+/* Snappy pop: overshoot peaks early (~48%) and resolves to rest fast — the
+   last segment barely moves, so the settle reads quick, not stiff. */
+@keyframes transcriptPop {
+  0% { opacity: 0; transform: translateY(10px) scale(0.93); }
+  48% { opacity: 1; transform: translateY(-2.5px) scale(1.025); }
+  72% { transform: translateY(0.5px) scale(0.997); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes transcriptCollapse {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(8px) scale(0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* keep a token duration so the unmount still fires, but drop the motion */
+  .transcriptPanelOpen,
+  .transcriptPanelClosing {
+    animation-duration: 1ms;
+  }
+}
+
+/* Collapse control: an outlined down-triangle tail hanging off the bubble's
+   bottom-centre, pointing at the input. Its flat top edge merges into the
+   bubble (open path → no stroke there) so it reads as one piece. */
+.bubbleTail {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: -1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  pointer-events: auto;
+}
+
+.bubbleTail svg {
+  display: block;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+}
+
+.bubbleTail svg path {
+  /* seamless extension of the bubble = same fill + outline as the input pill */
+  fill: color-mix(in srgb, #14161c 60%, transparent);
+  stroke: rgba(238, 232, 220, 0.13);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 160ms ease;
+}
+
+.bubbleTail:hover svg path {
+  /* mirror the pill's own hover, which warms its border to --honey-line */
+  stroke: rgba(231, 180, 92, 0.32);
 }
 
 .transcriptScroll {
@@ -145,29 +219,6 @@
   gap: 10px;
   max-height: 40vh;
   overflow-y: auto;
-}
-
-.minimizeButton {
-  align-self: flex-end;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid rgba(141, 159, 255, 0.3);
-  background: rgba(141, 159, 255, 0.12);
-  color: rgba(235, 239, 250, 0.95);
-  cursor: pointer;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease;
-}
-
-.minimizeButton:hover {
-  background: rgba(141, 159, 255, 0.24);
-  border-color: rgba(141, 159, 255, 0.55);
 }
 
 .turn {
@@ -339,8 +390,55 @@
   font-size: 13.5px;
   line-height: 1.6;
   color: rgba(235, 239, 250, 0.92);
-  white-space: pre-wrap;
+  /* Markdown renders its own block layout, so don't force pre-wrap (it would
+     double the spacing). overflow-wrap keeps long hashes/payloads from spilling. */
   overflow-wrap: anywhere;
+}
+
+.detailModalActions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(255, 186, 113, 0.18);
+}
+
+.detailAction {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.detailActionConfirm {
+  border: 1px solid rgba(120, 220, 160, 0.5);
+  background: rgba(120, 220, 160, 0.16);
+  color: #b6f0cf;
+}
+
+.detailActionConfirm:hover {
+  background: rgba(120, 220, 160, 0.28);
+  border-color: rgba(120, 220, 160, 0.8);
+}
+
+.detailActionDeny {
+  border: 1px solid rgba(235, 239, 250, 0.2);
+  background: rgba(235, 239, 250, 0.06);
+  color: rgba(235, 239, 250, 0.85);
+}
+
+.detailActionDeny:hover {
+  background: rgba(235, 239, 250, 0.14);
+  border-color: rgba(235, 239, 250, 0.45);
 }
 
 .controlBar {
@@ -518,11 +616,26 @@
   box-shadow: 0 18px 48px rgba(82, 61, 22, 0.16);
 }
 
+/* Bubble matches the light pill exactly (color-mix(--panel 60%) + --line-2);
+   wins over the grouped rule above by source order, leaving text + shadow. */
+:global(:root[data-theme="hive-light"]) .transcriptPanel {
+  background: color-mix(in srgb, #fbf8f1 60%, transparent);
+  border-color: rgba(54, 46, 30, 0.16);
+}
+
 :global(:root[data-theme="hive-light"]) .detailBackdrop {
   background: rgba(34, 29, 20, 0.34);
 }
 
-:global(:root[data-theme="hive-light"]) .minimizeButton,
+:global(:root[data-theme="hive-light"]) .bubbleTail svg path {
+  fill: color-mix(in srgb, #fbf8f1 60%, transparent);
+  stroke: rgba(54, 46, 30, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .bubbleTail:hover svg path {
+  stroke: rgba(176, 127, 28, 0.34);
+}
+
 :global(:root[data-theme="hive-light"]) .detailButton,
 :global(:root[data-theme="hive-light"]) .detailModalClose,
 :global(:root[data-theme="hive-light"]) .statusBadge,
@@ -533,7 +646,6 @@
   color: #221d14;
 }
 
-:global(:root[data-theme="hive-light"]) .minimizeButton:hover,
 :global(:root[data-theme="hive-light"]) .detailButton:hover,
 :global(:root[data-theme="hive-light"]) .detailModalClose:hover,
 :global(:root[data-theme="hive-light"]) .controlButton:hover,

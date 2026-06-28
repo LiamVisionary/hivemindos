@@ -48,6 +48,9 @@ export const INTENT_FORMS: Record<string, IntentFormDef> = {
     { k: "name", t: "text", label: "Token name", ph: "HIVE BEE" },
     { k: "tick", t: "text", label: "Ticker", ph: "BEE" },
     { k: "supply", t: "text", label: "Supply", ph: "1,000,000,000" } ] },
+  "claim-fees": { run: "Review claim", fields: [
+    { k: "token", t: "text", label: "Token", ph: "ticker or contract address" },
+    { k: "act", t: "select", label: "Action", opts: ["Claim fees", "Check claimable", "Claim fee NFT"], def: "Claim fees" } ] },
   nft: { run: "Submit", fields: [
     { k: "col", t: "text", label: "Collection", ph: "contract address or name" },
     { k: "act", t: "select", label: "Action", opts: ["Buy floor", "Make offer", "Mint"] },
@@ -107,6 +110,11 @@ export function composeIntentPrompt(intentId: string, v: Record<string, string>)
     case "hyperliquid": return `${v.side} ${v.size} USD of ${v.mkt}${v.lev && v.lev !== "1x" ? ` at ${v.lev} leverage` : ""}`;
     case "polymarket": return `bet ${v.amt} ${v.side} on ${v.mkt}`;
     case "token-launch": return `launch a token called ${v.name}, ticker ${v.tick}${v.supply ? `, supply ${v.supply}` : ""}`;
+    case "claim-fees": return v.act === "Check claimable"
+      ? `check how much in trading fees I can claim for ${v.token}`
+      : v.act === "Claim fee NFT"
+        ? `claim my fee NFT for ${v.token}`
+        : `claim my creator and LP trading fees for ${v.token}`;
     case "nft": return `${v.act} ${v.col}${v.max ? ` up to $${v.max}` : ""}`;
     case "automation": return `${v.strat} $${v.amt} into ${v.asset} ${v.freq}`;
     case "crosschain-payment": return `pay ${v.amt} USDC on ${v.pchain} to ${v.to} on ${v.rchain}`;
@@ -187,6 +195,7 @@ export function isFormValid(intentId: string, v: Record<string, string>): boolea
     case "hyperliquid": return has("mkt") && pos("size");
     case "polymarket": return has("mkt") && pos("amt");
     case "token-launch": return has("name") && has("tick");
+    case "claim-fees": return has("token");
     case "nft": return has("col");
     default: return true;
   }

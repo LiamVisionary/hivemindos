@@ -104,8 +104,15 @@ export function TradeView() {
 
                   <div className="dk-grid">
                     <div className="tk">
-                      {isStock ? <StockTicket /> : <CryptoTicket key={desk.network} />}
-                      <CapabilityRail />
+                      {isStock ? <StockTicket /> : (
+                        <>
+                          <CryptoTicket key={desk.network} />
+                          {/* The capability rail is the long-tail CRYPTO actions
+                              (swap, bridge, perps, send…); it doesn't apply to the
+                              stocks segment, so it's crypto-only. */}
+                          <CapabilityRail />
+                        </>
+                      )}
                     </div>
                     <div className="dk-col">
                       <PositionsPanel pf={pf} isStock={isStock} />

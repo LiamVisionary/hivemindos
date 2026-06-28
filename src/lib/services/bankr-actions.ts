@@ -14,6 +14,7 @@ export const BANKR_ACTION_INTENTS = [
   "automation",
   "nft",
   "agent-job",
+  "claim-fees",
 ] as const;
 
 export type BankrActionIntent = typeof BANKR_ACTION_INTENTS[number];
@@ -60,6 +61,7 @@ const INTENT_LABELS: Record<BankrActionIntent, string> = {
   automation: "Bankr automation",
   nft: "NFT action",
   "agent-job": "Bankr Agent API job",
+  "claim-fees": "Claim trading fees",
 };
 
 const READ_ONLY_WORDS = /\b(show|check|view|list|what|which|search|find|look\s*up|lookup|status|balance|balances|portfolio|pnl|positions?|orders?|automations?|history|quote|price|prices|info|details)\b/i;
@@ -74,6 +76,7 @@ export function normalizeBankrActionIntent(value: unknown): BankrActionIntent | 
   if (normalized === "automations" || normalized === "dca" || normalized === "twap" || normalized === "limit-order" || normalized === "stop-order") return "automation";
   if (normalized === "nfts") return "nft";
   if (normalized === "agent" || normalized === "job" || normalized === "agent-api") return "agent-job";
+  if (normalized === "claim" || normalized === "claim-fee" || normalized === "fees" || normalized === "creator-fees" || normalized === "claim-creator-fees") return "claim-fees";
   return (BANKR_ACTION_INTENTS as readonly string[]).includes(normalized) ? normalized as BankrActionIntent : null;
 }
 
@@ -104,6 +107,9 @@ export function classifyBankrActionPrompt(text: string): BankrActionDraft | null
   }
   if (/\blaunch\s+(?:a\s+)?token|deploy\s+(?:a\s+)?token|token\s+launch\b/i.test(prompt)) {
     return { intent: "token-launch", prompt, readOnly: false };
+  }
+  if (/\bclaim\b.*\bfees?\b|\bfees?\b.*\bclaim\b|\bcreator\s+fees?\b|\bfee\s+nft\b/i.test(prompt)) {
+    return { intent: "claim-fees", prompt, readOnly: isReadOnlyPrompt(prompt) };
   }
   if (/\bswap\b|\bbridge\b|\btrade\b|\bbuy\s+\$?\d|\bsell\s+\$?\d/i.test(prompt)) {
     if (mentionsBankr || /\b(crypto|token|eth|btc|sol|usdc|hype|bnkr|base|solana|polygon|unichain|arbitrum)\b/i.test(prompt)) {
@@ -376,4 +382,74 @@ function stringValue(value: unknown) {
 
 function truncate(value: string, max: number) {
   return value.length > max ? `${value.slice(0, max)}\n...[truncated]` : value;
+}
+
+// ── Raw transaction submission (Wallet API) ─────────────────────────────────
+// Unlike the natural-language /agent/prompt flow, /wallet/submit takes explicit
+// calldata and signs+broadcasts from Bankr's own provisioned wallet. This is the
+// reliable path for contracts Bankr's agent doesn't natively know (e.g. the
+// custom HIVE staking vault) — we build the calldata, Bankr just signs it.
+
+export type BankrSubmitTransaction = {
+  to: string;
+  data?: string;
+  value?: string;
+  chainId: number;
+};
+
+export type BankrSubmitResult = {
+  transactionHash: string;
+  status: string;
+  signer: string;
+};
+
+/**
+ * Submit a pre-built EVM transaction through Bankr's Wallet API (/wallet/submit).
+ * Requires a read-write key with arbitrary contract calls enabled; a read-only
+ * key returns 403 and this throws with Bankr's message. Waits for on-chain
+ * confirmation by default and throws if Bankr reports the transaction reverted.
+ */
+export async function submitBankrTransaction(
+  transaction: BankrSubmitTransaction,
+  options: { description?: string; waitForConfirmation?: boolean } = {},
+  deps: BankrActionDeps = {},
+): Promise<BankrSubmitResult> {
+  const apiKey = deps.apiKey ?? await bankrApiKey();
+  if (!apiKey) throw new Error("Set BANKR_API_KEY, BANKR_LLM_KEY, or BANKR_MANAGEMENT_KEY before using Bankr actions.");
+  const waitForConfirmation = options.waitForConfirmation ?? true;
+  const data = await bankrFetch("/wallet/submit", apiKey, deps, {
+    method: "POST",
+    body: JSON.stringify({ transaction, description: options.description, waitForConfirmation }),
+  });
+  const record = asRecord(data);
+  const status = stringValue(record.status).toLowerCase();
+  const transactionHash = stringValue(record.transactionHash) || stringValue(record.hash) || stringValue(record.txHash);
+  if (status === "reverted") {
+    throw new Error(`Bankr transaction reverted${transactionHash ? ` (${transactionHash})` : ""}.`);
+  }
+  if (waitForConfirmation && !transactionHash) {
+    throw new Error(bankrErrorMessage(data, "Bankr did not return a transaction hash for the submitted transaction."));
+  }
+  return {
+    transactionHash,
+    status: status || (waitForConfirmation ? "success" : "pending"),
+    signer: stringValue(record.signer),
+  };
+}
+
+/** Probe the Bankr portfolio response for the provisioned EVM wallet address. */
+export function extractBankrWalletAddress(raw: unknown): string {
+  const record = asRecord(raw);
+  const direct = ["address", "walletAddress", "account", "accountAddress", "evmAddress", "ethAddress"]
+    .map((key) => stringValue(record[key]))
+    .find(Boolean);
+  if (direct) return direct;
+  const wallet = asRecord(record.wallet);
+  return ["address", "walletAddress", "account"].map((key) => stringValue(wallet[key])).find(Boolean) ?? "";
+}
+
+/** Read the Bankr-provisioned wallet's EVM address (empty string if unavailable). */
+export async function readBankrWalletAddress(deps: BankrActionDeps = {}): Promise<string> {
+  const result = await executeBankrAction({ intent: "portfolio", prompt: "portfolio", readOnly: true }, deps);
+  return extractBankrWalletAddress((result as { raw?: unknown }).raw);
 }

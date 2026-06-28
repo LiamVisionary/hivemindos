@@ -47,6 +47,25 @@ const delegation = {
   },
 };
 
+const fallbackDelegation = {
+  status: "delegated",
+  workerClass: "qa",
+  agent: {
+    id: "ada-lovelace",
+    name: "Ada Lovelace",
+    runtime: "hermes",
+    workerClass: "qa",
+    runtimeCapabilities: { chat: true },
+  },
+  machine: {
+    key: "linux",
+    collector: "http://collector-two.local:5055",
+    device: {
+      name: "Linux Box",
+    },
+  },
+};
+
 assert.equal(shouldAutonomouslyPickupQueenBeeTask({ task, delegation }), true);
 
 // --- Scenario 1: plain task, no loop → claim → chat → complete, output preserved as result.
@@ -204,6 +223,73 @@ function loopDeps({ judgeAccepts, onComplete }) {
   });
   assert.equal(result.status, "completed", "a recovered retry should complete the task");
   assert.equal(chatCount, 2, "exactly one retry should occur on an empty first response");
+}
+
+// --- Scenario 5: first eligible worker fails; autonomous pickup reroutes to the next
+//     eligible worker instead of immediately moving the card to needs-human.
+{
+  const calls = [];
+  const result = await runQueenBeeAutonomousPickup({
+    task,
+    delegation,
+    delegationChain: [delegation, fallbackDelegation],
+  }, {
+    claim: async (slug, taskId, input) => {
+      calls.push({ kind: "claim", assignee: input.assignee });
+      assert.equal(taskId, task.id);
+      return {
+        task: {
+          ...task,
+          status: "working",
+          assignee: input.assignee,
+          targetMachine: input.assignee === "Ada Lovelace"
+            ? { key: "linux", name: "Linux Box", collectorUrl: "http://collector-two.local:5055" }
+            : task.targetMachine,
+          claimLock: input.claimer,
+          currentRunId: `r_${calls.length}`,
+        },
+        board: {},
+      };
+    },
+    fetchJson: async (url, init) => {
+      const body = JSON.parse(String(init.body));
+      calls.push({ kind: "chat", url, agent: body.agent.name });
+      if (body.agent.name === "Grace Hopper") throw new Error("Bad Gateway");
+      assert.equal(url, "http://collector-two.local:5055/chat");
+      return { ok: true, text: "Ada completed after reroute." };
+    },
+    complete: async (slug, taskId, input) => {
+      calls.push({ kind: "complete", result: input.result });
+      assert.equal(input.result, "Ada completed after reroute.");
+      return { task: { ...task, status: "done", assignee: "Ada Lovelace", result: input.result }, board: {} };
+    },
+    reroute: async (slug, taskId, input) => {
+      calls.push({ kind: "reroute", input });
+      assert.equal(taskId, task.id);
+      assert.match(input.reason, /Bad Gateway/);
+      assert.equal(input.failedAgentName, "Grace Hopper");
+      assert.equal(input.nextAssignee, "Ada Lovelace");
+      assert.equal(input.targetMachine.collectorUrl, "http://collector-two.local:5055");
+      return {
+        task: {
+          ...task,
+          status: "ready",
+          assignee: "Ada Lovelace",
+          targetMachine: input.targetMachine,
+          result: input.reason,
+        },
+        board: {},
+      };
+    },
+    block: async () => {
+      throw new Error("block should not be called while an eligible fallback agent exists");
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, "completed");
+  assert.equal(result.agentName, "Ada Lovelace");
+  assert.deepEqual(calls.map((call) => call.kind), ["claim", "chat", "reroute", "claim", "chat", "complete"]);
 }
 
 console.log("Queen Bee autonomous pickup + loop receipts contract test passed.");

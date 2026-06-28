@@ -26,6 +26,10 @@ export type WalletPickerCardProps = {
   pending?: boolean;
   selected?: boolean;
   onSelect?: () => void;
+  /** Brand / chain badges (e.g. Bankr logo + Base) shown in place of the plain
+   *  network text — the agent / Bankr / single-chain analogue of the grouped
+   *  card's chain tags. */
+  tags?: Array<{ label: string; src?: string | null; round?: boolean }>;
 };
 
 const TONE_DOT_COLOR: Record<WalletPickerChipTone, string> = {
@@ -91,13 +95,31 @@ function statusFor(
   return { tone: "ok", text: "Can spend" };
 }
 
+/** The status chip the picker shows for a wallet — an explicit override wins,
+ *  otherwise the canonical computed status. Exported so callers (e.g. the wallet
+ *  picker modal's sort) reuse the exact status the card renders. */
+export function resolveWalletPickerStatus(
+  wallet: AgentWalletConfig,
+  survival: AgentSurvivalSnapshot,
+  agentUsePod?: AgentProfile["usePod"],
+  statusOverride?: { tone: WalletPickerChipTone; text: string },
+): { tone: WalletPickerChipTone; text: string } {
+  return statusOverride ?? statusFor(wallet, survival, agentUsePod);
+}
+
+/** A wallet the picker renders muted/off — not actively spendable (watch-only,
+ *  wallet off, rails not set up). Used to sink these below active wallets. */
+export function isWalletPickerStatusDisabled(tone: WalletPickerChipTone): boolean {
+  return tone === "off" || tone === "muted";
+}
+
 /**
  * Selectable wallet tile rendered in the Wallets-route visual language
  * (`.fw-cc` from wallets.css), driven entirely by props — no shared global
  * runtime state. Used by the Trade tab's wallet picker so it matches the cards
  * on the Wallets screen.
  */
-export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOverride, pending, selected, onSelect }: WalletPickerCardProps) {
+export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOverride, pending, selected, onSelect, tags }: WalletPickerCardProps) {
   const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
   const usePodBalanceUnknown = providerFeatures.balanceSource === "usepod-runtime" && getUsePodBalanceUsd(agentUsePod) === null;
   const usePodReadyBalanceUnknown = usePodBalanceUnknown && agentUsePod?.lastTestStatus === "ready";
@@ -106,7 +128,7 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
   // nothing real to show yet — a stored non-zero balance is shown immediately.
   const showLoading = Boolean(pending) && !usePodBalanceUnknown && safeBalance <= 0;
   const balanceLabel = usePodReadyBalanceUnknown ? "Ready" : usePodBalanceUnknown ? "Pending" : frFmtUsdFull(Math.max(0, safeBalance));
-  const status = statusOverride ?? statusFor(wallet, survival, agentUsePod);
+  const status = resolveWalletPickerStatus(wallet, survival, agentUsePod, statusOverride);
   const showBar = !usePodBalanceUnknown && safeBalance > 0;
 
   return (
@@ -124,7 +146,7 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
           <span className="fw-pdot" style={{ background: TONE_DOT_COLOR[status.tone] }} aria-hidden="true" />
           <span style={{ minWidth: 0 }}>
             <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
-            <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{networkLabel(wallet.network)}</span>
+            {tags && tags.length ? null : <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{networkLabel(wallet.network)}</span>}
           </span>
         </span>
         {selected ? <span className={styles.check} aria-hidden="true"><Check width={12} height={12} strokeWidth={3} /></span> : null}
@@ -137,9 +159,20 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
         <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
       </span>
 
-      <span className="fw-alloc" aria-hidden="true">
-        {showBar ? <i style={{ width: "100%", background: USDC_BAR_COLOR }} /> : null}
-      </span>
+      {tags && tags.length ? (
+        <span style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+          {tags.map((tag, i) => (
+            <span key={`${tag.label}-${i}`} className={styles.chainTag}>
+              {tag.src ? <img src={tag.src} alt="" height={15} style={{ height: 15, width: "auto", borderRadius: tag.round === false ? 3 : "50%", display: "block", flex: "0 0 auto" }} /> : null}
+              <span>{tag.label}</span>
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className="fw-alloc" aria-hidden="true">
+          {showBar ? <i style={{ width: "100%", background: USDC_BAR_COLOR }} /> : null}
+        </span>
+      )}
     </button>
   );
 }
@@ -205,7 +238,7 @@ export function GroupedWalletPickerCard({ name, accounts, statusOverride, pendin
         <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
       </span>
 
-      <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <span style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
         {accounts.map((account) => {
           const logo = chainBadgeSrc(account.chainKey);
           return (

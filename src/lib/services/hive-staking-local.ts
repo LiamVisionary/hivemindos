@@ -29,7 +29,7 @@ export async function hiveWriteTokenAddress(): Promise<`0x${string}`> {
   return candidate;
 }
 
-async function hiveBaseRpcUrl() {
+export async function hiveBaseRpcUrl() {
   return await hiveEnvValue("BASE_RPC_URL") || "https://mainnet.base.org";
 }
 
@@ -108,7 +108,7 @@ function validateAddress(value: string, label: string): `0x${string}` {
   return value;
 }
 
-function parseHiveStakeAmount(amountHive: string, decimals: number) {
+export function parseHiveStakeAmount(amountHive: string, decimals: number) {
   if (!Number.isInteger(decimals) || decimals < 0) throw new Error(`Invalid HIVE token decimals: ${decimals}`);
   let amountRaw: bigint;
   try {
@@ -132,7 +132,7 @@ async function waitForHiveTransactionReceipt(
   if (receipt.status !== "success") throw new Error(`HIVE ${label} transaction failed.`);
 }
 
-async function waitForHiveAllowance(params: {
+export async function waitForHiveAllowance(params: {
   publicClient: ReturnType<typeof createHiveStakingPublicClient>;
   owner: `0x${string}`;
   tokenAddress: `0x${string}`;

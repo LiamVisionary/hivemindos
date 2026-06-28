@@ -13,6 +13,7 @@ import { Badge, AssetMenu, ChainMenu, ReviewLine } from "./primitives";
 import { BIcon } from "./icons";
 import { trUsd, trUsd2, trAmt } from "./format";
 import { useTradeDesk } from "./trade-context";
+import { playTradeSuccessSound } from "./trade-sound";
 import { quoteDex, runDexSwap, prepareCapability, executeCapability, type RailResult } from "./rails";
 import type { DexSwapQuote } from "@/features/dashboard/views/trade/trade-api";
 
@@ -28,11 +29,22 @@ export function CryptoTicket() {
     () => Object.fromEntries((cryptoPortfolio?.rows ?? []).map((row) => [row.sym, row.usd])),
     [cryptoPortfolio],
   );
+  const logoBySymbol = React.useMemo(
+    () => Object.fromEntries((cryptoPortfolio?.rows ?? []).map((row) => [row.sym, row.logoUrl])),
+    [cryptoPortfolio],
+  );
   const useBankr = walletKind === "bankr";
   const tokens = swapTokens.length >= 2 ? swapTokens : ["USDC", "ETH"];
   const nonUsdc = tokens.filter((t) => t !== "USDC");
+  // Every asset the ACTING wallet actually holds (positive balance), so you can
+  // pay with what you own — not just the curated swap list. Pay menu = held
+  // first, then the curated tradable set as a fallback; receive menu = the
+  // curated set, plus any held token so a holding is selectable on both legs.
+  const heldTokens = Object.keys(cryptoBalances).filter((s) => (cryptoBalances[s] || 0) > 0);
+  const payOptions = Array.from(new Set([...heldTokens, ...tokens]));
+  const recvOptions = Array.from(new Set([...tokens, ...heldTokens]));
 
-  const [side, setSide] = React.useState<Side>("swap");
+  const [side, setSide] = React.useState<Side>("buy");
   const [pay, setPay] = React.useState("USDC");
   const [recv, setRecv] = React.useState(nonUsdc[0] ?? "ETH");
   const [amt, setAmt] = React.useState("");
@@ -41,8 +53,9 @@ export function CryptoTicket() {
   const [state, setState] = React.useState<"idle" | "signing" | "done" | "error">("idle");
   const [result, setResult] = React.useState<RailResult | null>(null);
 
-  // Lock pay/recv to USDC for the buy/sell legs (buy = USDC→token, sell =
-  // token→USDC). Done on the side click — no effect needed (derive-on-event).
+  // Preset pay/recv for the buy/sell legs (buy = USDC→token, sell = token→USDC).
+  // These are overridable defaults, not locks — the asset menus still offer every
+  // held token. Done on the side click — no effect needed (derive-on-event).
   const changeSide = (s: Side) => {
     setSide(s); setState("idle"); setResult(null); setQuote(null);
     if (s === "buy") { setPay("USDC"); if (recv === "USDC") setRecv(nonUsdc[0] ?? "ETH"); }
@@ -64,19 +77,31 @@ export function CryptoTicket() {
     let active = true;
     const timer = window.setTimeout(async () => {
       setQuoting(true);
-      const response = await quoteDex({ agentId, sellToken: pay, buyToken: recv, amountHuman: amtNum });
+      const response = await quoteDex({ agentId, sellToken: pay, buyToken: recv, amountHuman: amtNum, network });
       if (!active || seq !== quoteSeq.current) return;
       setQuoting(false);
       setQuote(response.ok && response.quote ? response.quote : null);
     }, 450);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [agentId, pay, recv, amtNum]);
+  }, [agentId, pay, recv, amtNum, network]);
 
   const payUsd = quote ? quote.valueUsd : 0;
   const recvAmt = quote ? quote.buyAmount : 0;
   const rate = quote && quote.sellAmount ? quote.buyAmount / quote.sellAmount : 0;
-  const overCap = !useBankr && payUsd > swapMaxUsd;
-  const overWalletCap = useBankr && wallet.cap != null && payUsd > wallet.cap;
+  // Per-token USD unit price from the wallet's OWN priced portfolio (value ÷
+  // balance). This lets us value the sell leg even when there's no swap quote —
+  // e.g. the amount is over the rail's $10 cap, or 0x has thin liquidity for the
+  // pair — both of which throw and null the quote, leaving payUsd at 0.
+  const unitUsd = (sym: string) => {
+    const held = cryptoBalances[sym] || 0;
+    const valued = usdBySymbol[sym] || 0;
+    return held > 0 && valued > 0 ? valued / held : 0;
+  };
+  // Sell-leg value: the live quote's USD when we have it (authoritative), else the
+  // portfolio-priced estimate so the user always sees what their amount is worth.
+  const payUsdEstimate = payUsd || unitUsd(pay) * amtNum;
+  const overCap = !useBankr && payUsdEstimate > swapMaxUsd;
+  const overWalletCap = useBankr && wallet.cap != null && payUsdEstimate > wallet.cap;
 
   const setPct = (p: number) => { setAmt(String(+(bal * p).toFixed(pay === "ETH" || pay === "cbBTC" || pay === "BTC" ? 6 : 2))); setState("idle"); setQuote(null); };
   const flip = () => { setSide("swap"); setPay(recv); setRecv(pay); setAmt(""); setQuote(null); setState("idle"); };
@@ -103,7 +128,7 @@ export function CryptoTicket() {
     }
     setResult(outcome);
     setState(outcome.ok ? "done" : "error");
-    if (outcome.ok) { setAmt(""); setQuote(null); desk.refresh(); }
+    if (outcome.ok) { playTradeSuccessSound(); setAmt(""); setQuote(null); desk.refresh(); }
   };
 
   React.useEffect(() => {
@@ -138,10 +163,10 @@ export function CryptoTicket() {
         <div className="tk-legrow">
           <input className="tk-input" inputMode="decimal" placeholder="0" value={amt}
             onChange={(e) => { setAmt(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); setResult(null); setQuote(null); }} aria-label="Amount to pay" />
-          <AssetMenu value={pay} options={side === "buy" ? ["USDC"] : tokens} balances={cryptoBalances} values={usdBySymbol}
+          <AssetMenu value={pay} options={payOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol}
             onPick={(s) => { if (s !== recv) { setPay(s); setState("idle"); setQuote(null); } }} />
         </div>
-        <div className="tk-usd">{quote ? `≈ ${trUsd2(payUsd)}` : quoting ? "pricing…" : "≈ —"}</div>
+        <div className="tk-usd">{payUsdEstimate > 0 ? `≈ ${trUsd2(payUsdEstimate)}` : quoting ? "pricing…" : "≈ —"}</div>
         <div className="tk-chips">
           {([[0.25, "25%"], [0.5, "50%"], [1, "Max"]] as const).map(([p, l]) => (
             <button key={l} type="button" onClick={() => setPct(p)}>{l}</button>
@@ -160,7 +185,7 @@ export function CryptoTicket() {
         <div className="lhead"><span>You receive</span><span className="bal">≈ market</span></div>
         <div className="tk-legrow">
           <input className="tk-input" readOnly value={recvAmt ? trAmt(recv, recvAmt) : ""} placeholder="0" aria-label="Estimated received" />
-          <AssetMenu value={recv} options={side === "sell" ? ["USDC"] : tokens} balances={cryptoBalances} values={usdBySymbol} onPick={(s) => { if (s !== pay) { setRecv(s); setState("idle"); setQuote(null); } }} />
+          <AssetMenu value={recv} options={recvOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol} onPick={(s) => { if (s !== pay) { setRecv(s); setState("idle"); setQuote(null); } }} />
         </div>
         <div className="tk-usd">{quote ? `≈ ${trUsd2(payUsd)}` : "≈ —"}</div>
       </div>
@@ -175,7 +200,7 @@ export function CryptoTicket() {
       {overCap ? (
         <div className="tk-guard" data-danger>
           <BIcon name="alert" size={14} />
-          <span>{quote ? trUsd(payUsd) : "This swap"} exceeds the {trUsd(swapMaxUsd)} per-swap cap on the local rail. Reduce the amount.</span>
+          <span>{payUsdEstimate > 0 ? trUsd(payUsdEstimate) : "This swap"} exceeds the {trUsd(swapMaxUsd)} per-swap cap on the local rail. Reduce the amount.</span>
         </div>
       ) : overWalletCap ? (
         <div className="tk-guard">
@@ -186,7 +211,7 @@ export function CryptoTicket() {
 
       <button type="button" className="tk-place" data-sell={sell && state === "idle" ? "" : undefined} data-done={state === "done" ? "" : undefined}
         disabled={(!amtNum && state === "idle") || state === "signing" || overCap} onClick={place}>
-        {state === "signing" ? <BIcon name="refresh" size={15} /> : state === "done" ? <BIcon name="check" size={15} /> : null}
+        {state === "signing" ? <BIcon name="spinner" size={15} spin /> : state === "done" ? <BIcon name="check" size={15} /> : null}
         {label}
       </button>
       <div className="tk-foot"><BIcon name="shield" size={12} /> {useBankr ? "Routed through the Bankr trading wallet" : "Signs locally from your governed wallet"}</div>

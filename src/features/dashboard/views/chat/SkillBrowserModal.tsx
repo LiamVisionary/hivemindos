@@ -30,6 +30,7 @@ type SkillBrowserModalProps = {
   skillBrowserGithubUrl: string;
   skillBrowserImporting: string;
   skillBrowserLoading: boolean;
+  skillBrowserEnriching: boolean;
   skillBrowserMode: "brain" | "agent-class";
   skillBrowserOpen: boolean;
   skillBrowserSearch: string;
@@ -420,6 +421,33 @@ function Audit({ skills }: { skills: SkillBrowserSkill[] }) {
   );
 }
 
+function PackSkeletonGrid() {
+  return (
+    <div className="sb-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", alignItems: "stretch" }} aria-busy="true" aria-label="Loading skill packs">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="sb-pack sb-pack-skel" aria-hidden="true">
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <span className="sb-skel" style={{ width: 38, height: 38, borderRadius: 10, flex: "0 0 auto" }} />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+              <span className="sb-skel" style={{ height: 14, width: "55%" }} />
+              <span className="sb-skel" style={{ height: 11, width: "92%" }} />
+              <span className="sb-skel" style={{ height: 11, width: "68%" }} />
+            </div>
+          </div>
+          <div className="chips">
+            <span className="sb-skel" style={{ height: 22, width: 70, borderRadius: 999 }} />
+            <span className="sb-skel" style={{ height: 22, width: 88, borderRadius: 999 }} />
+            <span className="sb-skel" style={{ height: 22, width: 56, borderRadius: 999 }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: "auto" }}>
+            <span className="sb-skel" style={{ height: 28, width: 104, borderRadius: 8 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SkillBrowserModal(props: SkillBrowserModalProps) {
   const {
     addAgentPreferredSkill,
@@ -443,6 +471,7 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
     skillBrowserGithubUrl,
     skillBrowserImporting,
     skillBrowserLoading,
+    skillBrowserEnriching,
     skillBrowserMode,
     skillBrowserOpen,
     skillBrowserSearch,
@@ -642,6 +671,9 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
               search={skillBrowserSearch}
             />
           ) : skillBrowserView === "packs" ? (
+            (skillBrowserLoading || skillBrowserEnriching) && !packSkills.length ? (
+              <PackSkeletonGrid />
+            ) : (
             <div className="sb-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", alignItems: "stretch" }}>
               {packSkills.length ? packSkills.map((pack) => {
                 const included = pack.includedSkills ?? [];
@@ -674,6 +706,7 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
                 );
               }) : <div className="sb-empty">No skill packs are available on this machine.</div>}
             </div>
+            )
           ) : skillBrowserView === "audit" ? (
             <Audit skills={installedSkills} />
           ) : skillBrowserView === "fusion" ? (

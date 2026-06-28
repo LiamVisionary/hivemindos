@@ -565,14 +565,23 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 
 /* ---- "Message the hive" chat pill ---- */
 .fr-chat-wrap { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 40; }
+/* Chat-history toggle: a compact outlined triangle peak attached to the
+   top-centre of the pill — click to reveal the history above it. Outlined (not
+   a flat fill) so it reads against both the pill and the page behind it. */
+.fr-chat-tab { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: -1px; padding: 0; border: 0; background: transparent; cursor: pointer; line-height: 0; pointer-events: auto; z-index: 1; }
+.fr-chat-tab-svg { display: block; filter: drop-shadow(0 -1px 1px rgba(0, 0, 0, 0.3)); }
+.fr-chat-tab-svg path { fill: color-mix(in srgb, var(--panel) 60%, transparent); stroke: var(--line-2); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; transition: stroke .18s ease; }
+.fr-chat-tab:hover .fr-chat-tab-svg path, .fr-chat-tab:focus-visible .fr-chat-tab-svg path { stroke: var(--honey-line); }
+.fr-chat-tab:focus-visible { outline: none; }
 .fr-chat {
   display: flex; align-items: center; justify-content: center; gap: 11px;
   height: 52px; padding: 0 16px;
   border-radius: 99px; cursor: text;
-  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  /* frosted glass: low fill opacity, heavier blur so it reads frosted-not-clear */
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
   border: 1px solid var(--line-2);
   box-shadow: 0 22px 50px -22px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   width: 232px;
   transition: width .46s cubic-bezier(.2, .8, .2, 1), border-color .3s, box-shadow .3s;
 }
@@ -597,6 +606,11 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 .fr-chat-send { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 99px; border: 0; cursor: pointer; display: grid; place-items: center; background: var(--honey); color: #1a1305; transition: transform .16s, filter .16s; }
 .fr-chat-send:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .fr-root .fr-chat-send:focus-visible { outline: none; outline-offset: 0; }
+/* voice toggle — secondary control left of send; honey-tinted while voice mode is live */
+.fr-chat-voice { flex: 0 0 auto; width: 34px; height: 34px; margin-right: 4px; border-radius: 99px; border: 1px solid var(--line-2); cursor: pointer; display: grid; place-items: center; background: transparent; color: var(--fg-2); transition: color .16s, background .16s, border-color .16s, transform .16s; }
+.fr-chat-voice:hover { color: var(--fg); border-color: var(--honey-line); transform: translateY(-1px); }
+.fr-chat-voice.is-active { background: var(--honey-soft); border-color: var(--honey-line); color: var(--honey); }
+.fr-root .fr-chat-voice:focus-visible { outline: 2px solid var(--honey-line); outline-offset: 2px; }
 
 /* legacy/blue variant — matches the orbital graph + map/list views (which are
    intentionally blue-monochrome) instead of the hive's honey palette */

@@ -15,6 +15,7 @@ export type SwarmEventItem = {
 type MiroSharkRunStateInput = {
   error?: string;
   status?: "queued" | "running" | "started" | "failed";
+  archived?: boolean;
 } | null;
 
 export function mirosharkUserName(userId?: number) {
@@ -54,7 +55,11 @@ export function swarmTemplateIdFromMirosharkTemplate(template: MiroSharkTemplate
 
 export function swarmRunState(run: MiroSharkRunStateInput, runnerStatus?: string): SwarmRun["state"] {
   if (run?.error || run?.status === "failed" || runnerStatus === "failed") return "failed";
-  if (run?.status === "started" && !isMiroSharkRunTerminal(runnerStatus)) return "live";
+  // A terminal MiroShark runner_status (completed/stopped) or an archived/saved run is
+  // finished — even though MiroShark leaves the run's top-level status at "started" after
+  // it completes. Without this a just-finished or loaded archived run reads as "live".
+  if (isMiroSharkRunTerminal(runnerStatus) || run?.archived) return "done";
+  if (run?.status === "started") return "live";
   if (run?.status === "queued" || run?.status === "running") return "ready";
   return "done";
 }

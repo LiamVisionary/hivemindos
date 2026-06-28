@@ -5,7 +5,7 @@ import { dirname, join, sep } from "node:path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
-import { chooseQueenBeeDelegate, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
+import { chooseQueenBeeDelegate, rankQueenBeeDelegates, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -309,9 +309,11 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   // history (so routing learns from remote agents, not just this machine's chat sessions).
   const { assignments, boardOutcomes } = await readQueenBeeBoardSignals(input);
   const outcomes = mergeQueenBeeOutcomes(sessionOutcomes, boardOutcomes);
-  const delegation = chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes, assignments });
+  const delegationChain = rankQueenBeeDelegates({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes, assignments });
+  const delegation = delegationChain[0] ?? chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes, assignments });
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
+  const selectedCollectorUrl = queenBeeDelegationCollectorUrl(delegation);
 
   const result = await createTask(null, {
     title,
@@ -325,7 +327,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     targetMachine: delegation.machine ? {
       key: delegation.machine.key || delegation.machine.device?.machineId || selectedMachineName || "unknown",
       name: selectedMachineName || "Unknown machine",
-      collectorUrl: delegation.machine.device?.collectorUrl,
+      collectorUrl: selectedCollectorUrl,
     } : null,
     loop: input.loop ?? undefined,
     idempotencyKey,
@@ -367,6 +369,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const autonomousPickupScheduled = result.created && mode === "act" && scheduleQueenBeeAutonomousPickup({
     task: result.task,
     delegation,
+    delegationChain,
     vaultPath: input.vaultPath,
     kanbanFolder: input.kanbanFolder,
   });
@@ -507,10 +510,17 @@ function publicDelegation(delegation: ReturnType<typeof chooseQueenBeeDelegate>)
       key: delegation.machine.key,
       name: delegation.machine.device?.name,
       os: delegation.machine.device?.os,
-      collectorUrl: delegation.machine.device?.collectorUrl,
+      collectorUrl: queenBeeDelegationCollectorUrl(delegation),
       machineId: delegation.machine.device?.machineId,
     } : null,
   };
+}
+
+function queenBeeDelegationCollectorUrl(delegation: ReturnType<typeof chooseQueenBeeDelegate>) {
+  const deviceUrl = String(delegation.machine?.device?.collectorUrl || "").trim();
+  if (deviceUrl) return deviceUrl;
+  const collector = String(delegation.machine?.collector || "").trim();
+  return /^https?:\/\//i.test(collector) ? collector : undefined;
 }
 
 function queenBeeIdentityMarkdown() {

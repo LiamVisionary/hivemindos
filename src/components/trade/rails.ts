@@ -23,7 +23,7 @@ import {
 export type RailResult = { ok: boolean; message?: string; reference?: string; error?: string };
 
 // ── local DEX swap rail (0x on Base / Jupiter on Solana) ─────────────────────
-export async function quoteDex(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number }): Promise<{ ok: boolean; quote?: DexSwapQuote; error?: string }> {
+export async function quoteDex(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; network?: string }): Promise<{ ok: boolean; quote?: DexSwapQuote; error?: string }> {
   return quoteSwap(params);
 }
 

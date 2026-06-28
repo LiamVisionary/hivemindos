@@ -989,17 +989,24 @@ func main() {
 	}()
 
 	collectorProxy := newProxy(target, lc)
-	var tailnetHandler http.Handler = collectorProxy
+	// File receive rides the same self-user gate as the shell, but does not
+	// depend on the shell manager, so it works on shell-disabled hosts too.
+	fileHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, serveFileReceive())
+	var shellHandler http.Handler
 	if shell != nil {
-		shellHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, shell.handler())
-		tailnetHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, shellPathPrefix) {
-				shellHandler.ServeHTTP(w, r)
-				return
-			}
-			collectorProxy.ServeHTTP(w, r)
-		})
+		shellHandler = requireTailnetSelfUser(lc, cfg.statusTimeout, shell.handler())
 	}
+	tailnetHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == fileReceivePath {
+			fileHandler.ServeHTTP(w, r)
+			return
+		}
+		if shellHandler != nil && strings.HasPrefix(r.URL.Path, shellPathPrefix) {
+			shellHandler.ServeHTTP(w, r)
+			return
+		}
+		collectorProxy.ServeHTTP(w, r)
+	})
 
 	log.Printf("hivemind-linkd proxying Tailnet %s to %s as %s (shell=%t)", cfg.listenAddr, cfg.target, cfg.hostname, shell != nil)
 	if err := http.Serve(ln, tailnetHandler); err != nil && !strings.Contains(err.Error(), "use of closed network connection") && !errors.Is(err, net.ErrClosed) {

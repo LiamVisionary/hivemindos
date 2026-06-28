@@ -25,6 +25,12 @@ type Step = "intro" | "email" | "code" | "verified" | "initializing" | "success"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Progress-rail position for each step, and the per-dot "on" thresholds
+// (intro · email · code · verified · success — initializing folds into the
+// verified→success span and lights the last dot's live state).
+const STEP_INDEX: Record<Step, number> = { intro: 0, email: 1, code: 2, verified: 3, initializing: 4, success: 5 };
+const RAIL_THRESHOLDS = [0, 1, 2, 3, 5];
+
 // The biggest things ClawBank gives an agent — shown on the intro and (present
 // tense) on the success screen.
 const CAPABILITIES: Array<{ icon: ReactNode; title: string; blurb: string }> = [
@@ -180,6 +186,8 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
   if (!open || typeof document === "undefined") return null;
 
   const lockBackdrop = step === "initializing";
+  const stepIndex = STEP_INDEX[step];
+  const tone = step === "verified" || step === "initializing" || step === "success" ? "live" : undefined;
 
   return createPortal(
     <div
@@ -202,12 +210,19 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
           </button>
         ) : null}
 
-        <header className={styles.hero} data-step={step}>
-          <span className={styles.heroGlow} aria-hidden="true" />
-          <span className={styles.logo} aria-hidden="true">
-            <Image src={CLAWBANK_LOGO_PATH} alt="" aria-hidden="true" width={40} height={40} unoptimized />
+        <header className={styles.hero} data-tone={tone}>
+          <span className={styles.mark} aria-hidden="true">
+            <Image src={CLAWBANK_LOGO_PATH} alt="" aria-hidden="true" width={30} height={30} unoptimized />
           </span>
-          <p className={styles.heroEyebrow}>ClawBank</p>
+          <span className={styles.heroText}>
+            <span className={styles.heroEyebrow}>ClawBank</span>
+            <span className={styles.heroTitle}>Banking for your agents</span>
+          </span>
+          <span className={styles.rail} aria-hidden="true">
+            {RAIL_THRESHOLDS.map((threshold, index) => (
+              <i key={index} data-on={stepIndex >= threshold ? "true" : undefined} data-live={step === "initializing" && index === 4 ? "true" : undefined} />
+            ))}
+          </span>
         </header>
 
         <div className={styles.body}>
@@ -243,19 +258,25 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
                 </button>
               </>
             ) : step === "email" ? (
-              <button className={styles.primary} type="button" onClick={sendCode} disabled={busy || !EMAIL_RE.test(email.trim())}>
-                {busy ? <><Spinner /> Sending…</> : "Send code"}
-              </button>
+              <>
+                <button className={`${styles.text} ${styles.grow}`} type="button" onClick={() => setStep("intro")} disabled={busy}><ChevLeftIcon /> Back</button>
+                <button className={styles.primary} type="button" onClick={sendCode} disabled={busy || !EMAIL_RE.test(email.trim())}>
+                  {busy ? <><Spinner /> Sending…</> : "Send code"}
+                </button>
+              </>
             ) : step === "code" ? (
-              <button className={styles.primary} type="button" onClick={verifyCode} disabled={busy || code.trim().length < 4}>
-                {busy ? <><Spinner /> Verifying…</> : "Verify"}
-              </button>
+              <>
+                <button className={`${styles.text} ${styles.grow}`} type="button" onClick={() => setStep("email")} disabled={busy}><ChevLeftIcon /> Back</button>
+                <button className={styles.primary} type="button" onClick={verifyCode} disabled={busy || code.trim().length < 4}>
+                  {busy ? <><Spinner /> Verifying…</> : "Verify"}
+                </button>
+              </>
             ) : step === "verified" ? (
-              <button className={styles.primary} type="button" onClick={initialize}>
+              <button className={styles.primary} type="button" data-tone="live" onClick={initialize}>
                 Initialize ClawBank
               </button>
             ) : (
-              <button className={styles.primary} type="button" data-ready={step === "success" ? "true" : undefined} disabled={step !== "success"} onClick={() => dismiss("enabled")}>
+              <button className={styles.primary} type="button" data-tone="live" data-ready={step === "success" ? "true" : undefined} disabled={step !== "success"} onClick={() => dismiss("enabled")}>
                 {step === "success" ? <><BeeIcon /> Buzz on</> : <><Spinner /> Initializing…</>}
               </button>
             )}
@@ -497,6 +518,14 @@ function CloseIcon() {
   return (
     <svg width={15} height={15} viewBox="0 0 24 24" {...stroke} strokeWidth={1.9}>
       <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+function ChevLeftIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 24 24" {...stroke}>
+      <path d="M15 6l-6 6 6 6" />
     </svg>
   );
 }

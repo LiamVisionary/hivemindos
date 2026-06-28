@@ -65,6 +65,11 @@ Looped work is where operator intent turns into agent execution. A loop contract
     <a href="loop-engineering.html">Open loop docs</a>
   </section>
   <section class="docCard">
+    <h3>Agent Challenges</h3>
+    <p>Bounded multi-agent objectives with public challenge boards, credited lineage, per-agent run caps, verifier rulings, significance thresholds, and shared playbooks.</p>
+    <a href="agent-challenges.html">Open challenge docs</a>
+  </section>
+  <section class="docCard">
     <h3>MiroShark And Runtime Gateways</h3>
     <p>Simulation templates, `/swarm-sim` chat launches, swarm rehearsal, run intelligence, route catalogs, and the minimal runtime-gateway integration points HivemindOS owns.</p>
     <a href="miroshark-and-openclaw.html">Open gateway docs</a>

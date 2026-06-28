@@ -50,6 +50,8 @@ sections:
             url: /for-users/features/work-and-scheduler.html
           - title: Loop Engineering
             url: /for-users/features/loop-engineering.html
+          - title: Agent Challenges
+            url: /for-users/features/agent-challenges.html
           - title: Zero Human Companies
             url: /for-users/features/zero-human-companies.html
           - title: Brain, Vault, And Skills

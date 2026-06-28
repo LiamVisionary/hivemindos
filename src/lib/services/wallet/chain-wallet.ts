@@ -676,6 +676,7 @@ async function fetchKnownEvmTokenBalances(
       network,
       price: prices[tokenAddress.toLowerCase()],
       tokenAddress,
+      iconUrl: prices[tokenAddress.toLowerCase()]?.imageUrl,
     });
   }));
   return rows.filter((row): row is AgentWalletTokenBalance => Boolean(row));

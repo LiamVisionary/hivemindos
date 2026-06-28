@@ -9,7 +9,7 @@ const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const INDEX_PATH = "Operations/Brain Services/Agent Memory Index.jsonl";
 const FULL_VAULT_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
 const MAX_VAULT_FILES = 50000;
-const MAX_VAULT_BYTES = 256 * 1024;
+const MAX_VAULT_BYTES = 1024 * 1024;
 const MAX_INDEX_TERMS_PER_NOTE = 900;
 const LOW_SIGNAL_WORDS = new Set(["agent", "agents", "brain", "hivemindos", "memory", "memories", "note", "notes", "shared", "vault"]);
 const EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
@@ -456,6 +456,7 @@ function fullVaultIndexRecord(root, file) {
     frontmatterType,
     mtimeMs: st.mtimeMs,
     size: st.size,
+    indexedByteLimit: MAX_VAULT_BYTES,
     documentLength: tokens.length,
     terms: termCounts(tokens),
     excerpt: compact(body.replace(/^#\s+.+$/gm, " ")),
@@ -483,7 +484,12 @@ function readFullVaultIndex(root) {
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line);
-      if (parsed.schema === "hivemindos.full-vault-search.v1" && parsed.path && parsed.terms) records.push(parsed);
+      if (
+        parsed.schema === "hivemindos.full-vault-search.v1" &&
+        parsed.path &&
+        parsed.terms &&
+        parsed.indexedByteLimit === MAX_VAULT_BYTES
+      ) records.push(parsed);
     } catch {
       // Ignore corrupt generated rows; explicit rebuild repairs the index.
     }
@@ -530,6 +536,16 @@ function searchFullVaultIndex(root, query, limit = 400) {
   const averageLength = records.reduce((sum, record) => sum + record.documentLength, 0) / Math.max(1, records.length);
   const docFreq = new Map(parsed.terms.map((term) => [term, records.reduce((count, record) => count + (record.terms[term] ? 1 : 0), 0)]));
   const hasSearchTerms = parsed.terms.length || parsed.phrases.length;
+  function coverageScore(matched) {
+    if (parsed.terms.length <= 1) return 0;
+    const matchedTermCount = parsed.terms.filter((term) => matched.has(term)).length;
+    if (!matchedTermCount) return 0;
+    const coverage = matchedTermCount / parsed.terms.length;
+    let score = coverage * 6;
+    if (matchedTermCount === parsed.terms.length) score += 3;
+    if (parsed.terms.length >= 4 && coverage < 0.5) score -= (parsed.terms.length - matchedTermCount) * 0.75;
+    return score;
+  }
   return records.map((record) => {
     const matched = new Set();
     let searchScore = 0;
@@ -545,6 +561,7 @@ function searchFullVaultIndex(root, query, limit = 400) {
       searchScore += idf * ((frequency * 2.2) / denominator);
       if (title.includes(term)) searchScore += 3;
       if (headings.includes(term)) searchScore += 1.5;
+      if (record.path.toLowerCase().includes(term)) searchScore += 1;
       matched.add(term);
     }
     for (const phrase of parsed.phrases) {
@@ -553,6 +570,7 @@ function searchFullVaultIndex(root, query, limit = 400) {
         matched.add(`"${phrase}"`);
       }
     }
+    searchScore += coverageScore(matched);
     return { ...record, searchScore: Math.round(searchScore * 100) / 10, matched: [...matched] };
   }).filter((hit) => !hasSearchTerms || hit.matched.length)
     .sort((left, right) => right.searchScore - left.searchScore || right.mtimeMs - left.mtimeMs)

@@ -93,6 +93,111 @@ async function speakWithBrowserSynthesis(text: string, signal: AbortSignal) {
   });
 }
 
+// Local-TTS streaming playback: request the PCM frame stream and schedule each
+// chunk back-to-back on the VAD AudioContext as it arrives, so audio starts in
+// ~a second instead of waiting for the whole clip to synthesize. Returns false
+// (e.g. 409 when local TTS isn't selected/available) so the caller falls back
+// to the buffered path. PCM16 little-endian; chunks can split mid-sample, so an
+// odd trailing byte is carried into the next chunk.
+async function playStreamedLocalTts(
+  text: string,
+  signal: AbortSignal,
+  context: AudioContext,
+): Promise<boolean> {
+  let response: Response;
+  try {
+    response = await fetch("/api/queen-bee/voice", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "speak-stream", text }),
+      cache: "no-store",
+      signal,
+    });
+  } catch {
+    return false;
+  }
+  if (signal.aborted) return false;
+  const contentType = response.headers.get("content-type") || "";
+  if (!response.ok || !response.body || contentType.includes("json")) return false;
+  const sampleRate = Number(response.headers.get("x-audio-sample-rate")) || 24_000;
+  await context.resume().catch(() => undefined);
+  const reader = response.body.getReader();
+  // A small lead-in absorbs network jitter so scheduled chunks stay gapless.
+  let playhead = context.currentTime + 0.15;
+  let leftover = new Uint8Array(0);
+  const sources: AudioBufferSourceNode[] = [];
+  const stopAll = () => {
+    for (const source of sources) {
+      try {
+        source.stop();
+      } catch {
+        // already stopped/ended
+      }
+    }
+  };
+  const onAbort = () => {
+    void reader.cancel().catch(() => undefined);
+    stopAll();
+  };
+  signal.addEventListener("abort", onAbort, { once: true });
+  let played = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done || signal.aborted) break;
+      if (!value?.length) continue;
+      let chunk: Uint8Array;
+      if (leftover.length) {
+        chunk = new Uint8Array(leftover.length + value.length);
+        chunk.set(leftover, 0);
+        chunk.set(value, leftover.length);
+      } else {
+        chunk = value;
+      }
+      const usable = chunk.length - (chunk.length % 2);
+      leftover = usable < chunk.length ? chunk.slice(usable) : new Uint8Array(0);
+      if (usable === 0) continue;
+      const sampleCount = usable / 2;
+      const samples = new Float32Array(sampleCount);
+      const view = new DataView(chunk.buffer, chunk.byteOffset, usable);
+      for (let i = 0; i < sampleCount; i += 1) {
+        samples[i] = view.getInt16(i * 2, true) / 32_768;
+      }
+      const buffer = context.createBuffer(1, sampleCount, sampleRate);
+      buffer.copyToChannel(samples, 0);
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
+      const startAt = Math.max(playhead, context.currentTime);
+      source.start(startAt);
+      playhead = startAt + buffer.duration;
+      sources.push(source);
+      played = true;
+    }
+  } catch {
+    // stream/decoding error mid-flight; if nothing played, let the caller fall back
+  }
+  if (!played) {
+    signal.removeEventListener("abort", onAbort);
+    return false;
+  }
+  // Hold until the scheduled audio finishes (or the turn aborts).
+  const remainingMs = Math.max(0, (playhead - context.currentTime) * 1_000);
+  await new Promise<void>((resolve) => {
+    const timer = window.setTimeout(resolve, remainingMs + 60);
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+  signal.removeEventListener("abort", onAbort);
+  return true;
+}
+
 // WKWebView's autoplay policy blocks `new Audio().play()` without a user
 // gesture, so replies are decoded and played through the already-running VAD
 // AudioContext instead (the same approach the agent call modal relies on).
@@ -100,7 +205,14 @@ async function playSpokenReply(
   text: string,
   signal: AbortSignal,
   context: AudioContext | null,
+  streamLocalTts = false,
 ) {
+  // Local TTS: stream frames for sub-second first audio; on any miss (not
+  // local-tts, app down) fall through to the buffered path below.
+  if (streamLocalTts && context) {
+    const streamed = await playStreamedLocalTts(text, signal, context).catch(() => false);
+    if (streamed || signal.aborted) return;
+  }
   let response: Response | null = null;
   try {
     response = await fetch("/api/queen-bee/voice", {
@@ -160,17 +272,24 @@ export function useQueenBeeVoice(
   active: boolean,
   muted: boolean,
   openingLine = "",
+  streamLocalTts = false,
 ) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
   const [turns, setTurns] = React.useState<QueenVoiceTurn[]>([]);
   const [speechDetected, setSpeechDetected] = React.useState(false);
   const mutedRef = React.useRef(muted);
+  // Read at playback time so the long-lived session effect never goes stale.
+  const streamLocalTtsRef = React.useRef(streamLocalTts);
   const streamRef = React.useRef<MediaStream | null>(null);
 
   React.useEffect(() => {
     mutedRef.current = muted;
   }, [muted]);
+
+  React.useEffect(() => {
+    streamLocalTtsRef.current = streamLocalTts;
+  }, [streamLocalTts]);
 
   React.useEffect(() => {
     if (!active) return undefined;
@@ -352,7 +471,7 @@ export function useQueenBeeVoice(
         addTurn("queen", data.reply);
         history.push({ who: "queen", text: data.reply });
         setPhase("speaking");
-        await playSpokenReply(data.reply, abort.signal, audioContext);
+        await playSpokenReply(data.reply, abort.signal, audioContext, streamLocalTtsRef.current);
         if (!cancelled) startListening();
       } catch (turnError) {
         if (cancelled) return;
@@ -372,7 +491,7 @@ export function useQueenBeeVoice(
       addTurn("queen", openingText);
       history.push({ who: "queen", text: openingText });
       setPhase("speaking");
-      await playSpokenReply(openingText, abort.signal, audioContext);
+      await playSpokenReply(openingText, abort.signal, audioContext, streamLocalTtsRef.current);
       if (!cancelled) startListening();
     };
 

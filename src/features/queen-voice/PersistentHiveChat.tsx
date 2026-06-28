@@ -37,6 +37,33 @@ export function PersistentHiveChat({
 
   if (hidden || typeof document === "undefined") return null;
 
+  // A compact triangle peak on the pill's top-centre reveals the chat history.
+  // Only while there IS history AND it's hidden — once expanded, the bubble's
+  // own down-tail is the collapse control (see TranscriptTurns), so the input
+  // edge stays clean.
+  const showExpandTab = queenChat.turns.length > 0 && queenChat.historyMinimized;
+  const historyTab = showExpandTab ? (
+    <button
+      type="button"
+      className="fr-chat-tab"
+      aria-expanded={false}
+      aria-label="Show chat history"
+      title="Show chat history"
+      onClick={() => queenChat.setHistoryMinimized(false)}
+    >
+      <svg
+        className="fr-chat-tab-svg"
+        width="30"
+        height="13"
+        viewBox="0 0 30 13"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path d="M2.5 11.5 L15 2.5 L27.5 11.5" />
+      </svg>
+    </button>
+  ) : null;
+
   return createPortal(
     <div
       className="fr-root"
@@ -65,6 +92,7 @@ export function PersistentHiveChat({
           zIndex: 50,
           pointerEvents: "auto",
         }}
+        topSlot={historyTab}
         onSend={(text) => {
           const liveScreenContext = mergeDashboardScreenContext(screenContext, {
             openModals: readOpenDialogContextFromDom(),

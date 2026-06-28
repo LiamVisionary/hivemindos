@@ -1306,6 +1306,8 @@ export function useDashboardDerivedState(props: any) {
               id: agent.id,
               name: agent.name,
               runtime: RUNTIME_LABELS[agent.runtime],
+              provider: agent.provider,
+              model: agent.model,
               canChat: runtimeCan(agent, "chat"),
               state: fleetAgentState(
                 agent,

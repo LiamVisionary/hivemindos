@@ -9,6 +9,7 @@ import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS, HIVE_STAKING_TIERS } from "@/lib/confi
 import { isBaseHiveTokenLike, isEvmAddress, shortenEvmAddress, stakeHiveWithBrowserWallet, type BrowserEthereumProvider } from "@/lib/services/hive-staking-client";
 import { HIVE_STAKING_REWARD_MIN_ACTIVE_SECONDS, HIVE_STAKING_REWARD_RATE_LABEL, HIVE_STAKING_REWARD_USD_PER_MILLION } from "@/lib/services/hive-staking-rewards";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import BankrStakeCard from "./BankrStakeCard";
 import styles from "./stake.module.css";
 
 type WalletWindow = Window & {
@@ -760,6 +761,8 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
             )}
           </div>
         </section>
+
+        {!demoActive ? <BankrStakeCard /> : null}
       </div>
     </main>
   );

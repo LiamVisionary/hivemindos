@@ -16,6 +16,7 @@ type CryptoCapabilityBody = {
   agentId?: string;
   intent?: string;
   preferredProvider?: string;
+  prompt?: string;
   wallet?: Partial<AgentWalletConfig>;
   amountUsd?: number;
   asset?: "USDC" | "ETH";
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
       agentId: body.agentId?.trim() || undefined,
       intent,
       preferredProvider,
+      prompt: body.prompt?.trim() || undefined,
       wallet: normalizeWalletPolicy(body.wallet),
       amountUsd: positiveNumber(body.amountUsd),
       asset: body.asset,
