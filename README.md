@@ -407,6 +407,8 @@ If you ship a modified build, rename it, replace the prominent HivemindOS brand
 assets, and make the fork or service relationship clear. See
 [TRADEMARK.md](TRADEMARK.md) for the brand policy.
 
-## Provenance
+## Attributions
 
 HivemindOS packages agent-control patterns, runtime adapter code, HivemindOS workflow templates, MiroShark companion integration, and local-first fleet telemetry into a standalone open-source dashboard. The AI SDK route and chat UI patterns were adapted from public Next.js agent examples. Some workflow templates were inspired by `shannhk/hermes-agent-control-room`.
+
+Thanks to [AgentRQ](https://github.com/agentrq/agentrq) for the Apache-2.0 task-orchestration ideas behind HivemindOS' MCP-native Work Board additions: claimable tasks, status updates, task comments, human approval requests, and event-driven agent coordination.

@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-28 12:21:25 +0800 - Credit AgentRQ Work Board Inspiration
+  - Status: Pushed
+  - Areas changed: GitHub README attribution footer
+  - Summary: The README now includes a concise Attributions section crediting AgentRQ for the Apache-2.0 task-orchestration ideas behind HivemindOS' MCP-native Work Board additions.
+  - Verification: Passed `git diff --check -- README.md CHANGELOG.md`, confirmed the README Attributions section plus AgentRQ credit with `rg`, and verified AgentRQ's upstream license header is Apache License 2.0.
+  - Intended commit message: `Credit AgentRQ Work Board inspiration`
+
 - 2026-06-12 11:50:37 -0400 - Add Whole-Brain Workspaces
   - Status: Pushed
   - Areas changed: workspace registry service (`src/lib/services/hive-workspaces.ts`), vault/env resolution (`src/lib/services/obsidian/vault-path.ts`, `src/lib/services/shared-hive-env.ts`), workspace API (`src/app/api/hive/workspaces/route.ts`), raw CLI helpers (`scripts/hive-brain`, `scripts/hive-env-add`, `scripts/hive-workspace`, `scripts/hive-workspace-switch`, `scripts/hive-workspace-add`), setup/uninstall installers, docs and vault contract test (`docs/for-users/whole-brain/workspaces.md`, `docs/for-users/whole-brain/index.md`, `scripts/test-vault-structure-contract.mjs`), docs route references (`AGENTS.md`, `README.md`, `docs/_layouts/default.html`, `docs/for-users/packaged-skills/index.md`), note-intake canonical placeholder (`src/features/dashboard/views/KanbanPanel.tsx`)
