@@ -292,6 +292,31 @@ function mergeQueenBeeOutcomes(
   return merged;
 }
 
+// An explicit machineId pins the task to that machine. Otherwise, if the message
+// names a specific fleet machine by a hyphenated tailnet identifier (its key,
+// machineId, or dnsName / dnsName first label — NOT friendly names like "This
+// Mac", which are too ambiguous to infer from prose), pin to that machine. The
+// router then hard-restricts candidates to that machine's agents.
+function resolveQueenBeeTargetMachine(
+  machineId: string | null | undefined,
+  message: string,
+  machines: QueenBeeFleetMachine[],
+): string | undefined {
+  const explicit = machineId?.trim();
+  if (explicit) return explicit;
+  const text = message.toLowerCase();
+  for (const machine of machines) {
+    const dns = String(machine.device?.dnsName || "").toLowerCase().replace(/\.$/, "");
+    const identifiers = [machine.key, machine.device?.machineId, dns, dns.split(".")[0]]
+      .map((value) => String(value || "").toLowerCase().trim())
+      .filter((value) => value.length >= 12 && value.includes("-"));
+    if (identifiers.some((id) => text.includes(id))) {
+      return machine.key || machine.device?.name || undefined;
+    }
+  }
+  return undefined;
+}
+
 export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   const message = input.message?.trim();
   if (!message) throw new Error("Queen Bee message is required.");
@@ -309,8 +334,10 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   // history (so routing learns from remote agents, not just this machine's chat sessions).
   const { assignments, boardOutcomes } = await readQueenBeeBoardSignals(input);
   const outcomes = mergeQueenBeeOutcomes(sessionOutcomes, boardOutcomes);
-  const delegationChain = rankQueenBeeDelegates({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes, assignments });
-  const delegation = delegationChain[0] ?? chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], { outcomes, assignments });
+  const targetMachineKey = resolveQueenBeeTargetMachine(input.machineId, message, input.fleetSnapshot ?? []);
+  const routerOptions = { outcomes, assignments, targetMachineKey };
+  const delegationChain = rankQueenBeeDelegates({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], routerOptions);
+  const delegation = delegationChain[0] ?? chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], routerOptions);
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
   const selectedCollectorUrl = queenBeeDelegationCollectorUrl(delegation);

@@ -151,6 +151,10 @@ export type QueenBeeRouterOptions = {
   outcomes?: Record<string, { completed: number; failed: number }>;
   /** In-flight (assigned, not-yet-done) task count per agent name/id; spreads bursts across equal agents. */
   assignments?: Record<string, number>;
+  /** Hard machine pin: when set, ONLY agents on the machine this names (by key,
+   * friendly name, machineId, dnsName, or dnsName first label) are eligible, so
+   * an explicit "run on machine X" cannot be routed elsewhere. */
+  targetMachineKey?: string;
 };
 
 const LOAD_PENALTY_PER_TASK = 9;
@@ -171,6 +175,26 @@ function loadPenalty(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reaso
   return -Math.min(LOAD_PENALTY_MAX, inFlight * LOAD_PENALTY_PER_TASK);
 }
 
+function normalizeMachineToken(value?: string | null) {
+  return String(value || "").trim().toLowerCase().replace(/\.$/, "");
+}
+
+/** Whether `target` names this machine — matched against its key, friendly
+ * name, machineId, full dnsName, or dnsName's first label. Used to hard-pin a
+ * Queen Bee task to a specific machine. */
+export function machineMatchesTarget(machine: QueenBeeMachine, target?: string | null): boolean {
+  const wanted = normalizeMachineToken(target);
+  if (!wanted) return false;
+  const dns = normalizeMachineToken(machine.device?.dnsName);
+  return [
+    normalizeMachineToken(machine.key),
+    normalizeMachineToken(machine.device?.name),
+    normalizeMachineToken(machine.device?.machineId),
+    dns,
+    dns.split(".")[0],
+  ].filter(Boolean).includes(wanted);
+}
+
 export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = [], options: QueenBeeRouterOptions = {}): QueenBeeDelegate {
   const [best] = rankQueenBeeDelegates(task, machines, options);
   if (best) return best;
@@ -179,13 +203,21 @@ export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: Queen
     status: "pending",
     workerClass,
     score: 0,
-    reason: "No chat-capable online fleet agent is available yet; Queen Bee queued the task on the Work Board for later pickup.",
+    reason: options.targetMachineKey
+      ? `No chat-capable online agent is available on the pinned machine "${options.targetMachineKey}" right now; Queen Bee queued the task for that machine's next available worker.`
+      : "No chat-capable online fleet agent is available yet; Queen Bee queued the task on the Work Board for later pickup.",
   };
 }
 
 export function rankQueenBeeDelegates(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = [], options: QueenBeeRouterOptions = {}): QueenBeeDelegate[] {
   const workerClass = inferQueenBeeWorkerClass(task);
-  const candidates = machines.flatMap((machine) => candidateAgents(machine, workerClass, task, options));
+  // Hard machine pin: an explicit target restricts candidates to that machine
+  // only, so the fallback chain rotates among ITS agents instead of letting the
+  // task route to a different machine.
+  const scopedMachines = options.targetMachineKey
+    ? machines.filter((machine) => machineMatchesTarget(machine, options.targetMachineKey))
+    : machines;
+  const candidates = scopedMachines.flatMap((machine) => candidateAgents(machine, workerClass, task, options));
   const ranked = candidates.sort((left, right) => right.score - left.score || stableName(left).localeCompare(stableName(right)));
   return ranked.map((candidate, index) => {
     const machineName = candidate.machine.device?.name || candidate.machine.key || "unknown machine";

@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-29 02:13:16 +0800 - Honor explicit machine targeting in Queen Bee routing
+  - Status: Pushed
+  - Areas changed: Queen Bee router (`src/lib/services/queen-bee/router.ts`), control plane (`src/lib/services/queen-bee/control-plane.ts`)
+  - Summary: The Queen Bee router now honors an explicit machine target as a HARD pin — previously the `machineId` queue-task param (and any in-message "run on machine X") was silently dropped, so the router always picked the highest-scoring agent fleet-wide and a task meant for the NYC MacBook kept running on This Mac. `QueenBeeRouterOptions` gained `targetMachineKey`; when set, `rankQueenBeeDelegates` restricts candidates to that one machine's agents (matched by key, friendly name, machineId, dnsName, or dnsName first label via the new exported `machineMatchesTarget`), so the autonomous-pickup fallback chain rotates only among THAT machine's agents instead of routing elsewhere. The control plane resolves the target from the `machineId` param first, else from a specific hyphenated tailnet identifier named in the message (`resolveQueenBeeTargetMachine` — friendly names like "This Mac" are intentionally NOT inferred from prose to avoid false pins). When the pinned machine has no available agent, the task queues with a pinned-machine note rather than running on the wrong host.
+  - Verification: `npx tsc --noEmit` clean on both files (repo-wide count holds at the pre-existing baseline; only generated `.next-tauri-build` validators fluctuate). `npx eslint` clean. **Verified live**: `mcp__hivemind__queen_bee queue-task` with `machineId: "hivemindos-liams-macbook-pro-1"` now routes `targetMachine` = the NYC MacBook (was This Mac without the pin), and the task completed ON NYC — result `PINNED_OK Liams-MacBook-Pro-361520.local` (NYC host, not This Mac's `-19744`). Earlier same-message tests without the fix routed to This Mac.
+  - Intended commit message: `Honor explicit machine targeting in Queen Bee routing`
+
 - 2026-06-29 01:02:25 +0800 - Reroute Queen Bee Autonomous Pickup Before Human Escalation
   - Status: Uncommitted
   - Areas changed: Queen Bee autonomous pickup worker (`src/lib/services/queen-bee/autonomous-worker.ts`), Queen Bee control plane routing chain (`src/lib/services/queen-bee/control-plane.ts`), router ranked delegation (`src/lib/services/queen-bee/router.ts`), Work Board autonomous reroute mutation (`src/lib/services/kanban/local-kanban-store.ts`), dashboard dispatch stale-failure guard (`src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx`), focused Queen Bee/router/dispatch tests
