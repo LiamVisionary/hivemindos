@@ -239,7 +239,7 @@ Plaintext secrets do not belong in the shared vault. If GPG is configured, `hive
 
 ## Shared Env
 
-For the focused docs page, see [Shared Env](docs/whole-brain/shared-env.md).
+For the focused docs page, see [Shared Env](docs/for-users/whole-brain/shared-env.md).
 
 Setup installs `hive-env-add`, `hive-env-remove`, `hive-env-delete`, `hive-env-check`, and `hive-env-run` into `~/.local/bin`. GnuPG is optional; when it is installed and a recipient or public key is configured, `hive-env-add` refreshes the encrypted `hive.env.gpg` backup in the shared notes folder.
 
@@ -294,7 +294,7 @@ The shared brain can also export Agent Memory and conversation mirrors as an Ope
 
 Compiled Knowledge gives agents a second retrieval lane for reviewed source material and durable synthesis. `/api/brain/knowledge` and the `hivemind-mcp` tools can compile findings into `Synthesis/Compiled Knowledge/<domain>/`, then search entity/concept/summary pages, fetch exact nodes, follow backlinks, inspect graph shape, and scan wiki health. In the deterministic 720-page compiled-wiki benchmark, HivemindOS measured `67.18ms` median compiled search, `39.45ms` graph overview, `31.71ms` node lookup, and `32.44ms` backlink lookup while keeping the source files as normal Obsidian markdown.
 
-Packaged skills ship from `packaged-skills/`. Setup auto-installs foundational Hive skills such as `hive-assimilate`, `hive-pulse`, `hive-capability-search`, and the Hive Fusion skills into the shared brain, along with curated third-party Obsidian Native Brain Pack skills. `hive-pulse` bundles a pinned MIT licensed last-30-days research engine and installs a `hive-pulse` command shim so agents can run social, market, GitHub, and web signal briefs without a separate upstream install. Optional packaged skills stay in `packaged-skills/optional/` until the user installs them. See [Packaged Skills](docs/packaged-skills/index.md), [Token And Cost Savings](docs/features/token-and-cost-savings.md), and the [slash command reference](docs/slash-commands.md) for the agent-facing catalog surfaces.
+Packaged skills ship from `packaged-skills/`. Setup auto-installs foundational Hive skills such as `hive-assimilate`, `hive-pulse`, `hive-capability-search`, and the Hive Fusion skills into the shared brain, along with curated third-party Obsidian Native Brain Pack skills. `hive-pulse` bundles a pinned MIT licensed last-30-days research engine and installs a `hive-pulse` command shim so agents can run social, market, GitHub, and web signal briefs without a separate upstream install. Optional packaged skills stay in `packaged-skills/optional/` until the user installs them. See [Packaged Skills](docs/for-users/packaged-skills/index.md), [Token And Cost Savings](docs/for-users/features/token-and-cost-savings.md), and the [slash command reference](docs/for-users/slash-commands.md) for the agent-facing catalog surfaces.
 
 HivemindOS can auto-detect common local Obsidian vault locations, validate an explicit vault path, and fall back to local Kanban storage at `~/.hivemindos/kanban` if the vault is unavailable.
 
@@ -302,7 +302,7 @@ Setup also seeds the first brain foundation: an AI ready vault contract under `O
 
 For multi-machine sharing, Hivemind Sync can pair Syncthing over Tailscale so trusted machines each keep a local copy of the same vault. No Obsidian Sync subscription is required. If you already use Obsidian Sync, iCloud Drive, Dropbox, Git, or another provider, select that external sync owner in Brain so HivemindOS does not auto-pair Syncthing on top of it. When setup finds another Syncthing-capable collector and the Brain setting allows HivemindOS Syncthing, it can pair the shared vault and write/read a small test note to verify that sync is actually flowing.
 
-For the full brain model, see [Whole Brain](docs/whole-brain/index.md). For the sync and networking model, see [Hivemind Sync](docs/features/hivemind-sync.md) and [Syncing And Tailscale Architecture](docs/syncing-and-tailscale.md). For artifact handoffs, see [Hivemind Sync Handoff Transfers](docs/targeted-file-transfers.md).
+For the full brain model, see [Whole Brain](docs/for-users/whole-brain/index.md). For the sync and networking model, see [Hivemind Sync](docs/for-users/features/hivemind-sync.md) and [Syncing And Tailscale Architecture](docs/for-users/syncing-and-tailscale.md). For artifact handoffs, see [Hivemind Sync Handoff Transfers](docs/for-users/targeted-file-transfers.md).
 
 ## Multi-Machine Setup
 
@@ -369,7 +369,7 @@ HIVE_SHARED_SKILLS=false ./setup.sh
 HIVE_GITLAWB_SETUP=true HIVE_GITLAWB_IDENTITY=true ./setup.sh
 ```
 
-More detail: [docs/integrations/gitlawb.md](docs/integrations/gitlawb.md)
+More detail: [docs/for-users/integrations/gitlawb.md](docs/for-users/integrations/gitlawb.md)
 
 ## Development
 

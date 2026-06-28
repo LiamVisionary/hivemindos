@@ -1,10 +1,16 @@
 import "server-only";
 
 import { readFile } from "node:fs/promises";
-import { homedir } from "@/lib/home-dir";
-import { join } from "node:path";
+import { resolveHiveWorkspace, expandHomePath } from "@/lib/services/hive-workspaces";
+import { resolve } from "node:path";
 
-const HIVE_ENV_FILE = join(homedir(), ".hivemindos", ".env");
+const DEFAULT_HIVE_ENV_FILE = "~/.hivemindos/.env";
+
+function hiveEnvFilePath() {
+  const explicit = process.env.HIVE_ENV_FILE?.trim();
+  const workspaceEnv = resolveHiveWorkspace().envPath;
+  return resolve(expandHomePath(explicit || workspaceEnv || DEFAULT_HIVE_ENV_FILE));
+}
 
 export type HiveEnvPresence = {
   key: string;
@@ -16,12 +22,12 @@ export async function hiveEnvValue(key: string): Promise<string> {
   const safeKey = cleanEnvKey(key);
   const processValue = process.env[safeKey]?.trim();
   if (processValue) return processValue;
-  const raw = await readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
+  const raw = await readFile(hiveEnvFilePath(), "utf8").catch(() => "");
   return parseEnvFileValue(raw, safeKey);
 }
 
 export async function hiveEnvPresence(keys: readonly string[]): Promise<HiveEnvPresence[]> {
-  const raw = await readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
+  const raw = await readFile(hiveEnvFilePath(), "utf8").catch(() => "");
   return keys.map((key) => {
     const safeKey = cleanEnvKey(key);
     if (process.env[safeKey]?.trim()) return { key: safeKey, present: true, source: "process" };

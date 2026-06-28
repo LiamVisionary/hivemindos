@@ -26,6 +26,7 @@ SCRIPT_PATH = pathlib.Path(__file__).resolve()
 ROOT = pathlib.Path(os.path.expanduser(os.environ.get("HIVE_ENV_PROJECT_ROOT", ""))).resolve() if os.environ.get("HIVE_ENV_PROJECT_ROOT") else SCRIPT_PATH.parents[1]
 DEFAULT_ENV_FILE = ROOT / ".env.local"
 DEFAULT_AGENT_ENV_FILE = pathlib.Path.home() / ".hivemindos" / ".env"
+WORKSPACES_FILE = pathlib.Path(os.path.expanduser(os.environ.get("HIVE_WORKSPACES_FILE", "~/.hivemindos/workspaces.json"))).resolve()
 DEFAULT_NOTE_ROOT_CANDIDATES = [
     pathlib.Path.home() / "Documents" / "Obsidian" / "hivemindos-vault",
     pathlib.Path.home() / "Documents" / "Obsidian" / "HivemindOS Vault",
@@ -100,6 +101,29 @@ def local_setting(key: str) -> str:
         if value:
             return value
     return ""
+
+
+def active_workspace() -> dict[str, str]:
+    try:
+        data = json.loads(WORKSPACES_FILE.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+    workspaces = data.get("workspaces") if isinstance(data, dict) else None
+    if not isinstance(workspaces, list):
+        return {}
+    requested = os.environ.get("HIVE_WORKSPACE_ID") or os.environ.get("NEXT_PUBLIC_HIVE_WORKSPACE_ID") or data.get("activeWorkspaceId") or "main"
+    for workspace in workspaces:
+        if isinstance(workspace, dict) and workspace.get("id") == requested:
+            return workspace
+    for workspace in workspaces:
+        if isinstance(workspace, dict) and workspace.get("id") == "main":
+            return workspace
+    return {}
+
+
+def workspace_path(key: str) -> str:
+    value = active_workspace().get(key)
+    return str(value or "")
 
 
 def hive_collector_setting(key: str) -> str:
@@ -641,6 +665,7 @@ def agent_env_file(args: argparse.Namespace) -> pathlib.Path:
     raw = (
         args.agent_env_file
         or os.environ.get("HIVE_AGENT_ENV_FILE")
+        or workspace_path("envPath")
         or local_setting("HIVE_AGENT_ENV_FILE")
         or str(DEFAULT_AGENT_ENV_FILE)
     )
@@ -652,6 +677,7 @@ def note_root() -> pathlib.Path | None:
         os.environ.get("HIVE_NOTE_ROOT")
         or os.environ.get("HIVE_SHARED_BRAIN_PATH")
         or os.environ.get("NEXT_PUBLIC_OBSIDIAN_VAULT_PATH")
+        or workspace_path("vaultPath")
         or local_setting("HIVE_NOTE_ROOT")
         or local_setting("HIVE_SHARED_BRAIN_PATH")
         or local_setting("NEXT_PUBLIC_OBSIDIAN_VAULT_PATH")

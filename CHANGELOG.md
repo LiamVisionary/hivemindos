@@ -60,11 +60,18 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `Add code intelligence graph (provider-backed + system map)`
 
 - 2026-06-28 12:21:25 +0800 - Credit AgentRQ Work Board Inspiration
-  - Status: Uncommitted
+  - Status: Pushed
   - Areas changed: GitHub README attribution footer
   - Summary: The README now includes a concise Attributions section crediting AgentRQ for the Apache-2.0 task-orchestration ideas behind HivemindOS' MCP-native Work Board additions.
-  - Verification: Passed `git diff --check -- README.md CHANGELOG.md` and confirmed the README Attributions section plus AgentRQ credit with `rg`.
+  - Verification: Passed `git diff --check -- README.md CHANGELOG.md`, confirmed the README Attributions section plus AgentRQ credit with `rg`, and verified AgentRQ's upstream license header is Apache License 2.0.
   - Intended commit message: `Credit AgentRQ Work Board inspiration`
+
+- 2026-06-12 11:50:37 -0400 - Add Whole-Brain Workspaces
+  - Status: Pushed
+  - Areas changed: workspace registry service (`src/lib/services/hive-workspaces.ts`), vault/env resolution (`src/lib/services/obsidian/vault-path.ts`, `src/lib/services/shared-hive-env.ts`), workspace API (`src/app/api/hive/workspaces/route.ts`), raw CLI helpers (`scripts/hive-brain`, `scripts/hive-env-add`, `scripts/hive-workspace`, `scripts/hive-workspace-switch`, `scripts/hive-workspace-add`), setup/uninstall installers, docs and vault contract test (`docs/for-users/whole-brain/workspaces.md`, `docs/for-users/whole-brain/index.md`, `scripts/test-vault-structure-contract.mjs`), docs route references (`AGENTS.md`, `README.md`, `docs/_layouts/default.html`, `docs/for-users/packaged-skills/index.md`), note-intake canonical placeholder (`src/features/dashboard/views/KanbanPanel.tsx`)
+  - Summary: HivemindOS can now register named whole-brain workspaces so bots, teams, or projects can use separate Obsidian vaults, shared env files, shared skill shelves, and brain-service folders while keeping the existing main shared brain as the default. The app exposes a workspace list/upsert API with optional scaffolding, `HIVE_WORKSPACE_ID` selects a workspace for vault and shared-env resolution, and `hive-brain`/`hive-env-add` use the selected workspace without forcing callers to pass raw vault paths. Operators also get `hive-workspace` for a quick current/default summary, `hive-workspace-switch` for an arrow-key picker or direct id switch, and `hive-workspace-add` for guided workspace creation.
+  - Verification: `python3 -m py_compile scripts/hive-env-add`; `node --check scripts/hive-brain`; `node --check scripts/hive-workspace`; `node --check scripts/hive-workspace-switch`; `node --check scripts/hive-workspace-add`; `bash -n setup.sh uninstall.sh`; `node scripts/test-vault-structure-contract.mjs`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; focused `pnpm exec eslint` on touched TypeScript files; temp-workspace smoke tests proved `hive-brain --workspace` reads the selected vault's Agent Memory, `HIVE_WORKSPACE_ID=... hive-env-add` writes the selected workspace env file, `hive-workspace` prints the current/default workspace plus switch hint, `hive-workspace-switch <id>` updates the active workspace, and `hive-workspace-add` creates/scaffolds a workspace; `git diff --check`. Merge verification on 2026-06-27 also passed `git diff --cached --check` and the whole-brain contract after updating moved docs paths. `node scripts/check-file-sizes.mjs` still reports oversized files already present in `origin/main`; none are changed by this workspace merge.
+  - Intended commit message: `Add whole-brain workspace registry`
 
 - 2026-06-27 11:35:36 +0800 - Refine Progress Reward Ready State
   - Status: Uncommitted

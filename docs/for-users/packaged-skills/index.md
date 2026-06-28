@@ -64,6 +64,6 @@ Any packaged skill addition, removal, rename, install-policy change, or source r
 
 - `packaged-skills/README.md`
 - this docs section
-- `docs/whole-brain/shared-skills.md` when shared brain behavior changes
+- `docs/for-users/whole-brain/shared-skills.md` when shared brain behavior changes
 - `AGENTS.md` so future agents know the docs contract
 - `scripts/test-vault-structure-contract.mjs` when the skill affects required brain setup or docs navigation

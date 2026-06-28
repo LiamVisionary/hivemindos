@@ -11,4 +11,3 @@ export type {
   FoundryTheme,
   InstallableServiceAction,
 } from "./apps-types";
-

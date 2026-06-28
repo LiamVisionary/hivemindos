@@ -431,7 +431,7 @@ function KanbanPanelBase(props: any) {
                       value={sharedVault.noteTaskImportFolders || DEFAULT_SHARED_VAULT.noteTaskImportFolders}
                       onChange={(event) => updateSharedVault({ noteTaskImportFolders: event.target.value })}
                       rows={3}
-                      placeholder="Projects&#10;Inbox"
+                      placeholder="Projects&#10;Intake&#10;Memory"
                     />
                   </label>
                   <div className={kanbanClass("kanbanNoteActions")}>
