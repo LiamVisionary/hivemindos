@@ -337,6 +337,17 @@ function recordMatchesFilters(record: FullVaultSearchIndexRecord, parsed: Parsed
   return true;
 }
 
+function queryTermCoverageScore(parsed: ParsedSearchQuery, matched: Set<string>) {
+  if (parsed.terms.length <= 1) return 0;
+  const matchedTermCount = parsed.terms.filter((term) => matched.has(term)).length;
+  if (!matchedTermCount) return 0;
+  const coverage = matchedTermCount / parsed.terms.length;
+  let score = coverage * 6;
+  if (matchedTermCount === parsed.terms.length) score += 3;
+  if (parsed.terms.length >= 4 && coverage < 0.5) score -= (parsed.terms.length - matchedTermCount) * 0.75;
+  return score;
+}
+
 function bm25Score(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery, documentCount: number, docFreq: Map<string, number>, averageLength: number) {
   const matched = new Set<string>();
   let score = 0;
@@ -369,6 +380,7 @@ function bm25Score(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery
       matched.add(`"${phrase}"`);
     }
   }
+  score += queryTermCoverageScore(parsed, matched);
   if (parsed.collections.includes(record.collection)) score += 2;
   return { score: Math.round(score * 100) / 10, matched: [...matched] };
 }

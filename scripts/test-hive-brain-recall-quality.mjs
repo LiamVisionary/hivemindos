@@ -87,9 +87,21 @@ await writeNote("Memory/Imported Sources/Bankr Platform Documentation.md", `# Ba
 
 ${largeBody}`);
 
+await writeNote("Memory/Imported Agent Memory/hermes/Platform API Token Spam.md", `# Platform API Token Runtime Notes
+
+${"platform api token runtime configuration guide. ".repeat(1200)}`);
+
 await writeNote("Projects/Agent Calls - BYOK vs HivemindOS Cloud.md", `# Agent Calls - BYOK vs HivemindOS Cloud
 
 BYOK agent calls compare local user provider keys with a HivemindOS Cloud relay for native AI coding app calls.`);
+
+await writeNote("Projects/Search Quality Evaluation.md", `# Search Quality Evaluation
+
+Broad noisy search should prefer documents that cover the full recall intent over irrelevant keyword spam.`);
+
+await writeNote("Ideas/Search Noise Scratchpad.md", `# Broad Search Noise Scratchpad
+
+${"broad noisy search irrelevant keyword spam. ".repeat(900)}`);
 
 await writeNote("Memory/Imported Agent Memory/hermes/hermes-agent-AGENTS.md", `# Hermes Agent - Development Guide
 
@@ -137,6 +149,12 @@ const cases = [
     query: "collection:operations Queen Bee control plane routing policy best available",
     expectedPath: "Operations/Brain Services/Queen Bee/Routing Policy.md",
     limit: 3,
+  },
+  {
+    id: "coverage-beats-spam",
+    query: "broad noisy search irrelevant recall quality keyword spam",
+    expectedPath: "Projects/Search Quality Evaluation.md",
+    limit: 5,
   },
   {
     id: "shared-skill",
