@@ -72,3 +72,8 @@ __pycache__/
 # Evo optimization workspace (worktrees + experiment state)
 .evo/
 .e2e-loop-templates-*.json
+
+# Official hosted-service source lives outside this MIT-licensed public repo.
+# Keep the public boundary note, but do not commit private Worker source here.
+workers/*
+!workers/README.md

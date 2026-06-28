@@ -126,11 +126,11 @@ function scanTargets(projectRoot) {
       extensions: new Set([".ts", ".tsx", ".md"]),
     },
     {
-      path: path.join(projectRoot, "docs/features/wallets-honey-and-x402.md"),
+      path: path.join(projectRoot, "docs/for-users/features/wallets-honey-and-x402.md"),
       file: true,
     },
     {
-      path: path.join(projectRoot, "docs/architecture/api-and-storage.md"),
+      path: path.join(projectRoot, "docs/for-users/architecture/api-and-storage.md"),
       file: true,
     },
   ];

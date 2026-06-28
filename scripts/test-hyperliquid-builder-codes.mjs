@@ -88,7 +88,7 @@ assert.deepEqual(hyperliquidAction.confirmation?.tokens, [
 const serviceSource = fs.readFileSync(new URL("../src/lib/services/trading/hyperliquid.ts", import.meta.url), "utf8");
 const routeSource = fs.readFileSync(new URL("../src/app/api/trading/hyperliquid/route.ts", import.meta.url), "utf8");
 const envExample = fs.readFileSync(new URL("../.env.example", import.meta.url), "utf8");
-const workerSource = fs.readFileSync(new URL("../workers/paid-agent-gateway/src/index.ts", import.meta.url), "utf8");
+const workerBoundary = fs.readFileSync(new URL("../workers/README.md", import.meta.url), "utf8");
 assert.match(serviceSource, /client\.maxBuilderFee/);
 assert.match(serviceSource, /client\.approvedBuilders/);
 assert.match(serviceSource, /approveBuilderFee/);
@@ -99,7 +99,8 @@ assert.doesNotMatch(routeSource, /body\.(builder|builderAddress|builderFee|build
 assert.match(routeSource, /getWalletSecret\(agentId\)/);
 assert.match(routeSource, /loadGovernanceWallet\(agentId\)/);
 assert.doesNotMatch(envExample, /HIVEMINDOS_HYPERLIQUID_BUILDER_ADDRESS/);
-assert.match(workerSource, /\/api\/hyperliquid\/builder-policy/);
+assert.equal(fs.existsSync(new URL("../workers/paid-agent-gateway/src/index.ts", import.meta.url)), false);
+assert.match(workerBoundary, /Hyperliquid builder-code policy/);
 
 globalThis.fetch = originalFetch;
 

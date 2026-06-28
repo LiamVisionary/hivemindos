@@ -6,8 +6,7 @@ const ROOT = new URL("../", import.meta.url);
 
 const files = {
   fees: "src/lib/services/wallet/platform-fees.ts",
-  worker: "workers/paid-agent-gateway/src/index.ts",
-  workerReadme: "workers/paid-agent-gateway/README.md",
+  workerBoundary: "workers/README.md",
   ledger: "src/lib/services/wallet/spend-ledger.ts",
   send: "src/lib/services/wallet/governed-send.ts",
   sendRoute: "src/app/api/wallet/send/route.ts",
@@ -21,7 +20,7 @@ const files = {
   tradeApi: "src/features/dashboard/views/trade/trade-api.ts",
   tradeView: "src/components/trade/CapabilityRail.tsx",
   walletPanel: "src/features/dashboard/views/WalletPanel.tsx",
-  docs: "docs/features/wallets-honey-and-x402.md",
+  docs: "docs/for-users/features/wallets-honey-and-x402.md",
   env: ".env.example",
   contextIndex: "src/lib/services/context-index.ts",
 };
@@ -86,15 +85,9 @@ assert.match(contents.cryptoRouter, /source: "wallet-send"/);
 assert.match(contents.tradeApi, /platformFee/);
 assert.match(contents.tradeView, /Platform fee/);
 
-assert.match(contents.worker, /\/api\/platform-fees\/config/);
-assert.match(contents.worker, /publicPlatformFeePolicy/);
-assert.match(contents.worker, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM/);
-assert.match(contents.worker, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA/);
-assert.match(contents.worker, /"alpaca-live"/);
-assert.match(contents.worker, /"x402-paid-api"/);
-assert.match(contents.worker, /"veil-transfer"/);
-assert.match(contents.worker, /"veil-x402"/);
-assert.match(contents.workerReadme, /GET \/api\/platform-fees\/config/);
+assert.match(contents.workerBoundary, /Official platform-fee/);
+assert.match(contents.workerBoundary, /fee-recipient/);
+assert.match(contents.workerBoundary, /HivemindOS-controlled infrastructure/);
 
 assert.match(contents.env, /HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https:\/\/hivemindos-paid-agent-gateway\.hivemindos\.workers\.dev\/api\/platform-fees\/config/);
 assert.match(contents.env, /HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=100/);

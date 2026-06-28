@@ -242,11 +242,12 @@ Default folders and files are configured in `DEFAULT_SHARED_VAULT` in `src/lib/t
 | Aeon | `~/.aeon` or `AEON_LOCAL_PATH` | Background runtime, skills, run history, outputs |
 | Local OpenAI | configured base URL | LM Studio, Ollama, vLLM, llama.cpp server, LocalAI, or compatible service |
 
-## Cloudflare Workers
+## Hosted Services
 
 ### Honey Ledger
 
-Location: `workers/honey-ledger`
+Source boundary: official hosted-service source is maintained outside the public
+MIT-licensed app repo. The public app talks to the configured ledger endpoint.
 
 Routes:
 
@@ -265,7 +266,8 @@ Pool math: Bankr Doppler swap fee `1.2%` * creator share `57%` * Honey allocatio
 
 ### Compute Gateway
 
-Location: `workers/compute-gateway`
+Source boundary: official hosted-service source is maintained outside the public
+MIT-licensed app repo. The public app talks to the configured compute endpoint.
 
 Routes:
 
@@ -278,7 +280,8 @@ Routes:
 
 ### Paid Agent Gateway
 
-Location: `workers/paid-agent-gateway`
+Source boundary: official hosted-service source is maintained outside the public
+MIT-licensed app repo. The public app talks to the configured paid-agent endpoint.
 
 Routes:
 

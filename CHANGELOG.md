@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-29 00:43:15 +0800 - Move Official Hosted Services Out Of The Public Repo
+  - Status: Pushed
+  - Areas changed: hosted-service source boundary (`workers/README.md`, `.gitignore`), extracted private `hivemind-cloud-services` repo, removed bundled official Worker source from `workers/`, public docs for architecture/wallets/Honey/x402, commercial trust-boundary guard paths, and paid-agent/platform-fee/Hyperliquid contract tests
+  - Summary: HivemindOS now keeps the local-first MIT app public while moving official hosted-service authority into a separate private services repo. The public repo retains client adapters, self-hosted seller paths, official endpoint defaults, and a clear boundary note; official Honey/HIVE ledger authority, trusted compute, x402 paid-agent settlement, platform-fee policy, Hyperliquid builder policy, issue-report collection, and tip-ledger persistence source now live outside the downloadable app source.
+  - Verification: Passed `node --check scripts/test-paid-agent-worker.mjs`, `node --check scripts/test-trading-platform-fees.mjs`, `node --check scripts/test-hyperliquid-builder-codes.mjs`, `node --check scripts/guard-commercial-trust-boundary.mjs`, `node scripts/test-paid-agent-worker.mjs`, `node scripts/test-trading-platform-fees.mjs`, `node scripts/test-hyperliquid-builder-codes.mjs`, and `node scripts/guard-commercial-trust-boundary.mjs`. Confirmed no public docs/source references to the extracted hosted Worker service paths remain outside intentional negative assertions in boundary tests.
+  - Intended commit message: `Move official hosted services out of public repo`
+
 - 2026-06-28 12:21:25 +0800 - Credit AgentRQ Work Board Inspiration
   - Status: Pushed
   - Areas changed: GitHub README attribution footer
