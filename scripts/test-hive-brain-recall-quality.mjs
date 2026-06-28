@@ -87,6 +87,10 @@ await writeNote("Memory/Imported Sources/Bankr Platform Documentation.md", `# Ba
 
 ${largeBody}`);
 
+await writeNote("Projects/Agent Calls - BYOK vs HivemindOS Cloud.md", `# Agent Calls - BYOK vs HivemindOS Cloud
+
+BYOK agent calls compare local user provider keys with a HivemindOS Cloud relay for native AI coding app calls.`);
+
 await writeNote("Memory/Imported Agent Memory/hermes/hermes-agent-AGENTS.md", `# Hermes Agent - Development Guide
 
 ${"platform api token development guide tools agents runtime configuration. ".repeat(800)}`);
@@ -95,11 +99,33 @@ await writeNote("Skills/bankr/SKILL.md", `# Bankr
 
 Bankr wallet API token trading skill instructions for agents.`);
 
+await writeNote("Skills/hive-brain-compiled-wiki/SKILL.md", `# Hive Brain Compiled Wiki
+
+Use brain_search_knowledge, brain_get_node, brain_get_backlinks, and brain_graph_overview before broad full-vault recall for compiled wiki topics.`);
+
 await writeNote("Operations/Brain Services/Queen Bee/Routing Policy.md", `# Queen Bee Routing Policy
 
 Queen Bee chooses the best available routing policy from Fleet, Work Board, and safety state.`);
 
+await writeNote("Operations/Brain Services/Obsidian Native Brain Pack.md", `# Obsidian Native Brain Pack
+
+Seeds obsidian-markdown, obsidian-bases, json-canvas, and Bases/Canvas views for human-readable vault work.`);
+
+await writeNote("Operations/Secure/Secure Hermes Env Sync.md", `# Secure Hermes Env Sync
+
+Tracks encrypted backup references for Hermes env sync and credential status names without plaintext secrets.`);
+
+await writeNote("Intake/Crypto token watchlist ideas.md", `# Crypto token watchlist ideas
+
+Token watchlist candidates, alerts, market narratives, and trading ideas for later review.`);
+
 const cases = [
+  {
+    id: "project-decision",
+    query: "collection:projects BYOK Agent Calls HivemindOS Cloud",
+    expectedPath: "Projects/Agent Calls - BYOK vs HivemindOS Cloud.md",
+    limit: 5,
+  },
   {
     id: "large-imported-source",
     query: "path:Memory/Imported Bankr platform documentation wallet API token trading",
@@ -111,6 +137,30 @@ const cases = [
     query: "collection:operations Queen Bee control plane routing policy best available",
     expectedPath: "Operations/Brain Services/Queen Bee/Routing Policy.md",
     limit: 3,
+  },
+  {
+    id: "shared-skill",
+    query: "path:Skills/ hive-brain compiled wiki backlinks graph overview",
+    expectedPath: "Skills/hive-brain-compiled-wiki/SKILL.md",
+    limit: 5,
+  },
+  {
+    id: "brain-service-note",
+    query: "collection:operations Obsidian Native Brain Pack bases canvas",
+    expectedPath: "Operations/Brain Services/Obsidian Native Brain Pack.md",
+    limit: 5,
+  },
+  {
+    id: "secure-reference",
+    query: "collection:operations secure hermes env sync encrypted backup references",
+    expectedPath: "Operations/Secure/Secure Hermes Env Sync.md",
+    limit: 5,
+  },
+  {
+    id: "crypto-intake",
+    query: "collection:intake crypto token watchlist ideas",
+    expectedPath: "Intake/Crypto token watchlist ideas.md",
+    limit: 5,
   },
 ];
 
