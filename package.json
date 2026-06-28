@@ -23,6 +23,8 @@
     "copy-trading:bundle": "npx -y esbuild@0.25.5 scripts/copy-trading-daemon.mjs --bundle --platform=node --format=esm --packages=external --alias:@=./src --alias:server-only=./scripts/shims/empty.mjs --outfile=dist/copy-trading.mjs",
     "copy-trading:daemon": "pnpm copy-trading:bundle && node dist/copy-trading.mjs",
     "test:copy-trading": "node --test scripts/test-copy-trading.mjs",
+    "fleet-watchdog": "node scripts/fleet-health-watchdog.mjs",
+    "fleet-watchdog:install": "scripts/install-fleet-health-watchdog.sh",
     "tauri:build": "HIVEMINDOS_TAURI_SOURCE_BUILD=1 HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'",
     "tauri:build:release": "tauri build",
     "tauri:build:static": "HIVEMINDOS_TAURI_SOURCE_BUILD=1 tauri build --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'",
