@@ -57,7 +57,11 @@ jobs:
   standalone:
     name: Build embedded Next standalone (shared)
     needs: resolve
-    runs-on: ubuntu-22.04
+    # Self-hosted 32 GB runner (hive-ci-bigmem): the embedded next build outgrew
+    # the 16 GB hosted runner after v0.2.20 (heap OOM at 12 GB heap / 15.5 GB cap,
+    # no single-file culprit — organic growth to ~155 API routes). Ephemeral,
+    # workflow_dispatch-only. Revert to ubuntu-22.04 once the build fits 16 GB.
+    runs-on: [self-hosted, hive-bigmem]
     timeout-minutes: 90
     steps:
       - name: Checkout release source
@@ -101,13 +105,11 @@ jobs:
         env:
           HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
           HIVEMINDOS_TAURI_STANDALONE_ONLY: "1"
-          TAURI_NEXT_BUILD_HEAP_MB: "12288"
-          # Bumped 14000 -> 15500 (2026-06-29): the accumulated main since
-          # v0.2.20 grew the embedded `next build` RSS past the old 14 GB cap,
-          # SIGKILLing the standalone job (exit 137). 15500 leaves ~0.9 GB OS
-          # headroom under the 16 GB hosted runner; heap stays 12288 (3.2 GB
-          # non-heap reserve, above the 1024 floor guard in tauri-build.mjs).
-          TAURI_NEXT_BUILD_MEMORY_MB: "15500"
+          # 32 GB self-hosted runner (see runs-on above): heap 24 GB, RSS cap
+          # 30 GB (leaves ~2 GB for the OS under 32 GB physical; 6 GB non-heap
+          # reserve above the 1024 floor guard in tauri-build.mjs).
+          TAURI_NEXT_BUILD_HEAP_MB: "24000"
+          TAURI_NEXT_BUILD_MEMORY_MB: "30000"
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
         run: node scripts/tauri-build.mjs
 
