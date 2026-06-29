@@ -163,13 +163,13 @@ async function probeTts(apiBaseUrl, deep) {
     });
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      return { healthy: false, reason: `synth HTTP ${response.status} ${text.slice(0, 50)}` };
+      return { healthy: false, severe: true, reason: `synth HTTP ${response.status} ${text.slice(0, 50)}` };
     }
     const bytes = (await response.arrayBuffer().catch(() => new ArrayBuffer(0))).byteLength;
     // A working synth returns real PCM; a wedged backend returns a tiny proxy-error blob.
-    if (bytes < TTS_MIN_PCM_BYTES) return { healthy: false, reason: `synth returned ${bytes}B (backend wedged)` };
+    if (bytes < TTS_MIN_PCM_BYTES) return { healthy: false, severe: true, reason: `synth returned ${bytes}B (backend wedged)` };
   } catch (error) {
-    return { healthy: false, reason: `synth failed: ${error.message}` };
+    return { healthy: false, severe: true, reason: `synth failed: ${error.message}` };
   }
   return { healthy: true };
 }
@@ -191,10 +191,10 @@ async function probeCollector(collectorUrl, deep) {
       body: JSON.stringify({ message: "reply with the single word OK", stream: false, agent: { name: "Hermes", runtime: "hermes" } }),
     }, 30_000);
     if (!chat.ok || chat.data?.ok === false) {
-      return { healthy: false, reason: `chat HTTP ${chat.status} ${String(chat.data?.error || chat.text).slice(0, 80)}` };
+      return { healthy: false, severe: true, reason: `chat HTTP ${chat.status} ${String(chat.data?.error || chat.text).slice(0, 80)}` };
     }
   } catch (error) {
-    return { healthy: false, reason: `chat dispatch failed: ${error.message}` };
+    return { healthy: false, severe: true, reason: `chat dispatch failed: ${error.message}` };
   }
   return { healthy: true };
 }
@@ -281,8 +281,12 @@ async function runCycle(cycle) {
     unhealthy += 1;
     const fails = (consecutiveFailures.get(target.key) || 0) + 1;
     consecutiveFailures.set(target.key, fails);
-    await log(`${target.name}: unhealthy ${fails}/${FAIL_THRESHOLD} — ${result.reason}`);
-    if (fails >= FAIL_THRESHOLD && (cooldownUntil.get(target.key) || 0) < Date.now()) {
+    // A deep functional probe (chat/synth) failing is a definitive wedge — act on
+    // one. A cheap-probe failure tolerates FAIL_THRESHOLD strikes (brief reload
+    // flaps are normal). Cooldown gates both.
+    const threshold = result.severe ? 1 : FAIL_THRESHOLD;
+    await log(`${target.name}: unhealthy ${fails}/${threshold}${result.severe ? " (severe)" : ""} — ${result.reason}`);
+    if (fails >= threshold && (cooldownUntil.get(target.key) || 0) < Date.now()) {
       await log(`${target.name}: REMEDIATING — restart ${target.kind} via linkd shell`);
       const ok = await remediate(target.machineBase, target.os, target.kind);
       await log(`${target.name}: remediation ${ok ? "sent" : "FAILED"}; cooling down ${Math.round(COOLDOWN_MS / 1000)}s`);

@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-29 13:17:15 +0800 - Watchdog: act immediately on a deep functional-probe wedge
+  - Status: Pushed
+  - Areas changed: `scripts/fleet-health-watchdog.mjs`
+  - Summary: Fixes a real gap found while testing the deep probes against a live NYC TTS wedge: the cheap per-cycle probe (collector `/health`, TTS `/v1/models`) PASSES even when the deep functional probe (collector `/chat`, TTS synth) fails, so the shared consecutive-failure counter kept resetting between the 15-min deep cycles and a wedged-but-reachable backend would never reach the 3-strike remediation threshold. Deep functional failures are now flagged `severe` and remediate on a SINGLE occurrence (still gated by the 5-min cooldown), while cheap-probe failures keep the 3-strike tolerance for brief reload flaps. So a backend that's up-but-can't-actually-work is restarted on the next deep cycle, not never.
+  - Verification: `node --check` clean. Verified live against an actually-wedged NYC TTS (synth returned 32B / 0B — the proxy-error blob): the deep probe correctly flagged it unhealthy. The wedge then self-cleared (NYC flapping), and the deep probe correctly read healthy again (synth → 38,776B real PCM). Every link is proven separately — wedge detection, healthy read, and the `kickstart universal-tts` remediation (proven by hand earlier this session when it restored 51 models) — even though the transient cleared before an automated remediation fired. Installed daemon reloaded with the change.
+  - Intended commit message: `Watchdog: remediate immediately on a deep functional-probe wedge`
+
 - 2026-06-29 13:12:04 +0800 - Add the deep TTS synth probe to the fleet health watchdog
   - Status: Pushed
   - Areas changed: `scripts/fleet-health-watchdog.mjs`
