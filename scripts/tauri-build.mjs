@@ -1111,10 +1111,16 @@ function runEmbeddedNextBuild(fingerprint) {
       NODE_OPTIONS:
         `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
     };
-    // Use webpack like the static build does. Turbopack rejects this codebase's
-    // `:global {}` CSS module block and the API routes' dynamic execFile/fs
-    // patterns; webpack tolerates them.
-    const nextBuildArgs = ["exec", "next", "build", "--webpack"];
+    // Build with Turbopack (the Next 16 default). Webpack needs 14-20 GB to
+    // compile all ~250 API routes (it OOMs CI); Turbopack peaks ~5 GB. The old
+    // ":global {} / dynamic execFile" rationale for forcing --webpack was stale
+    // and inaccurate (0 such occurrences). The one real Turbopack gotcha: it
+    // statically resolves an execFile/spawn binary STRING-LITERAL as a module,
+    // so keep binary names behind an opaque indirection (see
+    // scheduler/skill-action/route.ts). Turbopack's standalone trace also omits
+    // a couple of Next runtime deps — ensureStandaloneFrameworkDeps() backfills
+    // them below.
+    const nextBuildArgs = ["exec", "next", "build"];
     if (process.platform === "win32") {
       // Windows can't exec the bash run-with-memory-limit.sh wrapper (the static
       // path handles this the same way). Run next directly via cmd; the
@@ -1141,7 +1147,80 @@ function runEmbeddedNextBuild(fingerprint) {
     );
   }
 
+  completeTurbopackStandalone();
+
   writeEmbeddedFingerprint(embeddedFingerprintFile, fingerprint);
+}
+
+// Turbopack's `output: "standalone"` (Next 16.2.x) produces an INCOMPLETE
+// standalone and must be backfilled, or the packaged server.js boots but fails
+// at runtime. Two gaps, both confirmed by booting the standalone:
+//   (a) Compiled server chunks under <distDir>/server are not copied — only ~2
+//       of ~1400 land, so page rendering dies with
+//       `Cannot find module '../chunks/ssr/[turbopack]_runtime.js'`.
+//   (b) Several Next framework runtime deps are missing from standalone
+//       node_modules: @swc/helpers + @next/env (server won't even boot),
+//       styled-jsx + scheduler + client-only (pages 500 at render).
+// Webpack's standalone is complete; since we build with Turbopack we complete it
+// here. Validated on a real build: homepage HTTP 200 + API routes respond.
+const STANDALONE_FRAMEWORK_DEPS = [
+  "@swc/helpers",
+  "@next/env",
+  "styled-jsx",
+  "scheduler",
+  "client-only",
+  "server-only",
+];
+const STANDALONE_BOOT_CRITICAL_DEPS = new Set(["@swc/helpers", "@next/env"]);
+
+function resolvePnpmPackageDir(pkg) {
+  const hoisted = join(projectRoot, "node_modules", ...pkg.split("/"));
+  if (existsSync(join(hoisted, "package.json"))) return hoisted;
+  const pnpmRoot = join(projectRoot, "node_modules", ".pnpm");
+  if (!existsSync(pnpmRoot)) return null;
+  const prefix = `${pkg.replace("/", "+")}@`;
+  const match = readdirSync(pnpmRoot).find((d) => d.startsWith(prefix));
+  if (!match) return null;
+  const dir = join(pnpmRoot, match, "node_modules", ...pkg.split("/"));
+  return existsSync(join(dir, "package.json")) ? dir : null;
+}
+
+function completeTurbopackStandalone() {
+  // (a) Copy the full compiled server tree (chunks the standalone trace missed)
+  // into the standalone, skipping .map files the runtime doesn't need.
+  const distName = basename(nextBuildDir);
+  const fullServer = join(nextBuildDir, "server");
+  const standaloneServerDir = join(standaloneDir, distName, "server");
+  if (existsSync(fullServer)) {
+    cpSync(fullServer, standaloneServerDir, {
+      recursive: true,
+      dereference: true,
+      filter: (src) => !src.endsWith(".map"),
+    });
+    console.log(
+      `[embedded] completed standalone server chunks from ${distName}/server`,
+    );
+  }
+  // (b) Stage the framework runtime deps the trace omits.
+  const destRoot = join(standaloneDir, "node_modules");
+  for (const pkg of STANDALONE_FRAMEWORK_DEPS) {
+    const dest = join(destRoot, ...pkg.split("/"));
+    if (existsSync(join(dest, "package.json"))) continue;
+    const src = resolvePnpmPackageDir(pkg);
+    if (!src) {
+      if (STANDALONE_BOOT_CRITICAL_DEPS.has(pkg)) {
+        throw new Error(
+          `Could not locate ${pkg} to stage into the Next standalone; ` +
+            `the packaged server.js will not boot without it.`,
+        );
+      }
+      console.warn(`[embedded] ${pkg} not found to stage into standalone (skipping)`);
+      continue;
+    }
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src, dest, { recursive: true, dereference: true });
+    console.log(`[embedded] staged ${pkg} into standalone node_modules`);
+  }
 }
 
 function copyEmbeddedNextResources(fingerprint) {

@@ -182,9 +182,14 @@ async function executeWorkflowAction(input: {
     return Response.json({ ok: false, skill: slug, actionId: action.id, error: execSpec.error, elapsedMs: Date.now() - startedAt }, { status: 400 });
   }
 
+  // Turbopack statically resolves a string-literal first arg to execFile()/spawn()
+  // as a *module specifier* (webpack does not) and fails `next build` with
+  // "Module not found: Can't resolve". Route the binary name through an opaque
+  // String() call so the bundler can't constant-fold it into a module path.
+  const execCommand = (0, String)(execSpec.command);
   return new Promise<Response>((resolve) => {
     execFile(
-      execSpec.command,
+      execCommand,
       execSpec.args,
       { timeout: safeTimeout(action.timeoutMs) },
       async (error, stdout, stderr) => {
