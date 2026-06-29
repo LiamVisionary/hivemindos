@@ -102,7 +102,12 @@ jobs:
           HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
           HIVEMINDOS_TAURI_STANDALONE_ONLY: "1"
           TAURI_NEXT_BUILD_HEAP_MB: "12288"
-          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
+          # Bumped 14000 -> 15500 (2026-06-29): the accumulated main since
+          # v0.2.20 grew the embedded `next build` RSS past the old 14 GB cap,
+          # SIGKILLing the standalone job (exit 137). 15500 leaves ~0.9 GB OS
+          # headroom under the 16 GB hosted runner; heap stays 12288 (3.2 GB
+          # non-heap reserve, above the 1024 floor guard in tauri-build.mjs).
+          TAURI_NEXT_BUILD_MEMORY_MB: "15500"
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
         run: node scripts/tauri-build.mjs
 
