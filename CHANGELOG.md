@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-06-29 13:12:04 +0800 - Add the deep TTS synth probe to the fleet health watchdog
+  - Status: Pushed
+  - Areas changed: `scripts/fleet-health-watchdog.mjs`
+  - Summary: The watchdog's TTS check now also runs a deep probe every 15th cycle — it actually POSTs a tiny `/v1/audio/speech-stream` synth and requires real PCM back (≥2KB). This catches the last uncovered failure: the TTS frontend up (so `/v1/models` still returns the static catalog) but the model backend WEDGED, where no audio comes out. The cold-load false positive is handled by judging on the RESULT (bytes) under a generous 60s timeout, so a slow-but-real cold model load passes while a wedged backend (instant proxy-error blob, or a >60s hang) fails. Tunable via `FLEET_WATCHDOG_TTS_{DEEP_TIMEOUT_MS,MODEL,VOICE}` (defaults chatterbox-turbo/voice01, the fast proven path). Same 3-strike + 5-min-cooldown remediation as the rest.
+  - Verification: `node --check` clean. Ran live with the deep probe forced: it synthesized on the NYC TTS and returned real PCM → `cycle 0: 3 healthy, 0 unhealthy of 3 (deep probe: collector chat + TTS synth)`. Installed LaunchAgent reloaded. This closes the frontend-up/backend-wedged gap noted in the prior two watchdog entries; the only remaining named caveat is external memory pressure (Splashtop ~16GB on NYC), which no restart can fix.
+  - Intended commit message: `Add deep TTS synth probe to the fleet health watchdog`
+
 - 2026-06-29 02:50:19 +0800 - Extend the fleet health watchdog to the Universal TTS server
   - Status: Pushed
   - Areas changed: `scripts/fleet-health-watchdog.mjs`

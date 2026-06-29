@@ -32,6 +32,13 @@ const POLL_MS = Number(process.env.FLEET_WATCHDOG_POLL_MS || 60_000);
 const FAIL_THRESHOLD = Number(process.env.FLEET_WATCHDOG_FAIL_THRESHOLD || 3);
 const COOLDOWN_MS = Number(process.env.FLEET_WATCHDOG_COOLDOWN_MS || 300_000);
 const CHAT_EVERY = Math.max(1, Number(process.env.FLEET_WATCHDOG_CHAT_EVERY || 15));
+// Deep TTS synth probe: generous timeout so a cold model LOAD (slow but real) is
+// not mistaken for a wedged backend — we judge by the result (real PCM bytes),
+// not by latency. A small/fast model keeps the probe cheap.
+const TTS_DEEP_TIMEOUT_MS = Number(process.env.FLEET_WATCHDOG_TTS_DEEP_TIMEOUT_MS || 60_000);
+const TTS_PROBE_MODEL = process.env.FLEET_WATCHDOG_TTS_MODEL || "chatterbox-turbo";
+const TTS_PROBE_VOICE = process.env.FLEET_WATCHDOG_TTS_VOICE || "voice01";
+const TTS_MIN_PCM_BYTES = 2_000;
 const APP_PORTS = String(process.env.FLEET_WATCHDOG_APP_PORTS || "5020,5021,5111,5121,3000")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const RUN_ONCE = process.env.FLEET_WATCHDOG_ONCE === "1";
@@ -129,12 +136,14 @@ async function discoverTtsApps() {
   }
 }
 
-// TTS liveness via /v1/models: it's reachable + populated when the app and its
-// linkd proxy are up, and fails (proxy EOF / connection refused) when the stack
-// is down — the flapping/down case that broke voice. (/v1/voices 307-redirects
-// through the app-proxy and so is unreliable as a probe; a deep synth probe is a
-// follow-up, kept out of v1 to avoid cold-model-load false positives.)
-async function probeTts(apiBaseUrl) {
+// TTS health. Cheap (every cycle): /v1/models reachable + populated — it fails
+// (proxy EOF / connection refused) when the app + its linkd proxy are down (the
+// flapping/down case that broke voice). (/v1/voices 307-redirects through the
+// app-proxy, so it's unusable as a probe.) Deep (every Nth cycle): actually
+// synthesize a tiny clip — this catches frontend-up but model-backend-WEDGED,
+// where /v1/models still returns the static catalog. Judged by result bytes
+// under a generous timeout so a cold model load (slow but real) passes.
+async function probeTts(apiBaseUrl, deep) {
   try {
     const res = await fetchJson(`${apiBaseUrl}/v1/models`, {}, 10_000);
     if (!res.ok) return { healthy: false, reason: `models HTTP ${res.status} ${String(res.text).slice(0, 50)}` };
@@ -142,6 +151,25 @@ async function probeTts(apiBaseUrl) {
     if (!Array.isArray(models) || models.length === 0) return { healthy: false, reason: "models empty" };
   } catch (error) {
     return { healthy: false, reason: `models unreachable: ${error.message}` };
+  }
+  if (!deep) return { healthy: true };
+  try {
+    const response = await fetch(`${apiBaseUrl}/v1/audio/speech-stream`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: TTS_PROBE_MODEL, voice: TTS_PROBE_VOICE, input: "ok", response_format: "pcm", sample_rate: 24_000, realtime_pacing: false }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(TTS_DEEP_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return { healthy: false, reason: `synth HTTP ${response.status} ${text.slice(0, 50)}` };
+    }
+    const bytes = (await response.arrayBuffer().catch(() => new ArrayBuffer(0))).byteLength;
+    // A working synth returns real PCM; a wedged backend returns a tiny proxy-error blob.
+    if (bytes < TTS_MIN_PCM_BYTES) return { healthy: false, reason: `synth returned ${bytes}B (backend wedged)` };
+  } catch (error) {
+    return { healthy: false, reason: `synth failed: ${error.message}` };
   }
   return { healthy: true };
 }
@@ -233,7 +261,7 @@ async function runCycle(cycle) {
       machineBase: a.machineBase,
       os: "",
       kind: "tts",
-      probe: () => probeTts(a.apiBaseUrl),
+      probe: () => probeTts(a.apiBaseUrl, deep),
     })),
   ];
   if (!targets.length) {
@@ -262,7 +290,7 @@ async function runCycle(cycle) {
       consecutiveFailures.set(target.key, 0);
     }
   }
-  await log(`cycle ${cycle}: ${healthy} healthy, ${unhealthy} unhealthy of ${targets.length}${deep ? " (deep collector probe)" : ""}`);
+  await log(`cycle ${cycle}: ${healthy} healthy, ${unhealthy} unhealthy of ${targets.length}${deep ? " (deep probe: collector chat + TTS synth)" : ""}`);
 }
 
 await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles${RUN_ONCE ? " (ONCE)" : ""}`);
