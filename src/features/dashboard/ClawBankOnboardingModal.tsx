@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
-import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import styles from "./ClawBankOnboardingModal.module.css";
 
 /**
@@ -19,6 +19,10 @@ import styles from "./ClawBankOnboardingModal.module.css";
  */
 
 const CLAWBANK_SETUP_STATE_KEY = "hivemindos.clawbankSetup.shown.v1";
+// ClawBank is BUTTON-ONLY: it never auto-pops (it used to surface mid-setup).
+// Open it on demand by dispatching this window event from a button, e.g.
+//   window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT))
+export const CLAWBANK_OPEN_EVENT = "hivemindos.clawbank.open";
 const CLAWBANK_LOGO_PATH = "/icons/runtimes/clawbank.svg";
 
 type Step = "intro" | "email" | "code" | "verified" | "initializing" | "success";
@@ -56,30 +60,14 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
   const codeInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
 
-  // Decide whether to surface the modal at all.
+  // Button-only: open ONLY when a button dispatches CLAWBANK_OPEN_EVENT — never
+  // automatically. (It used to auto-pop on dashboard hydration, which surfaced it
+  // before/during the machine-setup wizard.)
   useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      const [state, status] = await Promise.all([
-        loadDashboardStateSnapshot().catch(() => null),
-        fetch("/api/clawbank", { headers: { accept: "application/json" }, cache: "no-store" })
-          .then((res) => (res.ok ? res.json() : null))
-          .catch(() => null),
-      ]);
-      if (cancelled) return;
-      if (state?.[CLAWBANK_SETUP_STATE_KEY]) return; // already shown/dismissed
-      if (status?.configured) {
-        // Already wired — record as shown so it never nags, and stay closed.
-        void saveDashboardStateValue(CLAWBANK_SETUP_STATE_KEY, "configured");
-        return;
-      }
-      setOpen(true);
-    }, 900);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
+    const onOpen = () => setOpen(true);
+    window.addEventListener(CLAWBANK_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(CLAWBANK_OPEN_EVENT, onOpen);
   }, [enabled]);
 
   const dismiss = useCallback((reason: "skipped" | "enabled") => {
