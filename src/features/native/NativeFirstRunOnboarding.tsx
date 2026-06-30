@@ -172,11 +172,33 @@ export function NativeFirstRunOnboarding() {
       void refreshStatus();
       const locallyDismissed = readLocalDismissal();
       setOpen(!locallyDismissed);
-      void loadDashboardStateSnapshot().then((snapshot) => {
+      void loadDashboardStateSnapshot().then(async (snapshot) => {
         const dismissedInDashboardState = dashboardStateValue(snapshot, DISMISS_KEY) === "1";
         const legacyDismissed = dashboardStateValue(snapshot, LEGACY_DISMISS_KEY) === "1";
         const dismissed = dismissedInDashboardState || locallyDismissed;
         if (legacyDismissed && !dismissed) void removeDashboardStateValue(LEGACY_DISMISS_KEY);
+        // Auto-recover: a stale dismiss flag must not permanently suppress setup
+        // on a machine that genuinely has no collector. The flag lives in
+        // ~/.hivemindos/dashboard-state.json, which survives reinstall + "delete
+        // all app data" (those only clear the OS app-data dir) — so a
+        // once-dismissed, never-set-up machine could otherwise never re-prompt.
+        // Only override when we POSITIVELY read a status whose collector check is
+        // not installed; on any read error, honor the dismissal as before.
+        if (dismissed) {
+          let knownNotInstalled = false;
+          try {
+            const freshStatus = await readNativeSetupStatus({ demoMode });
+            if (freshStatus) {
+              knownNotInstalled = !freshStatus.checks?.find((c) => c.id === "collector")?.installed;
+            }
+          } catch { /* unknown — fall through and honor the dismissal */ }
+          if (knownNotInstalled) {
+            clearLocalDismissal();
+            void removeDashboardStateValue(DISMISS_KEY);
+            setOpen(true);
+            return;
+          }
+        }
         setOpen(!dismissed);
         if (dismissed && !dismissedInDashboardState) void saveDashboardStateValue(DISMISS_KEY, "1");
       });

@@ -129,8 +129,8 @@ export function HivePanel({
     const attention = (() => {
       for (const m of machines) {
         const a = m.agents.find((x) => x.state === "failed") ?? m.agents.find((x) => x.state === "setup");
-        if (a) return { agent: a.name, machine: m.name, text: a.task };
-        if (m.versionState === "needs-setup") return { agent: "", machine: m.name, text: "Machine needs setup before agents can run." };
+        if (a) return { agent: a.name, machine: m.name, text: a.task, setupMachine: undefined as HiveMachine | undefined };
+        if (m.versionState === "needs-setup") return { agent: "", machine: m.name, text: "Machine needs setup before agents can run.", setupMachine: m };
       }
       return null;
     })();
@@ -197,12 +197,29 @@ export function HivePanel({
           )}
         </div>
 
-        {attention ? (
-          <div style={{ display: "flex", gap: 10, marginTop: 22, padding: "12px 14px", borderRadius: "var(--radius-sm)", background: "var(--honey-soft)", border: "1px solid var(--honey-line)" }}>
-            <HiveMark size={16} stroke="var(--honey)" />
-            <span style={{ fontSize: 12.5, color: "var(--fg-2)", lineHeight: 1.45 }}>{attention.agent ? `${attention.agent} on ${attention.machine} — ` : `${attention.machine} — `}{attention.text}</span>
-          </div>
-        ) : null}
+        {attention ? (() => {
+          const attnStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, marginTop: 22, padding: "12px 14px", borderRadius: "var(--radius-sm)", background: "var(--honey-soft)", border: "1px solid var(--honey-line)" };
+          const inner = (
+            <>
+              <HiveMark size={16} stroke="var(--honey)" />
+              <span style={{ fontSize: 12.5, color: "var(--fg-2)", lineHeight: 1.45 }}>{attention.agent ? `${attention.agent} on ${attention.machine} — ` : `${attention.machine} — `}{attention.text}</span>
+            </>
+          );
+          // A needs-setup machine: make the banner a real button that opens the
+          // setup wizard (onAddAgent -> openAgentCreationModal routes a self
+          // desktop machine through the rerun event that clears the stale
+          // nativeFirstRun dismiss flag and opens onboarding). Without this the
+          // pill is dead text and users have no obvious way to reach setup.
+          if (attention.setupMachine && handlers.onAddAgent) {
+            const setupMachine = attention.setupMachine;
+            return (
+              <button type="button" onClick={() => handlers.onAddAgent?.(setupMachine)} style={{ ...attnStyle, width: "100%", textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}>
+                {inner}
+              </button>
+            );
+          }
+          return <div style={attnStyle}>{inner}</div>;
+        })() : null}
       </div>
     );
   } else if (sel.type === "machine") {

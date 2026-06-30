@@ -1018,6 +1018,12 @@ function copyRequiredRuntimePackages() {
     "caniuse-lite",
     "postcss",
     "styled-jsx",
+    // The Lottie loading animation route (/loading/dotlottie-player.wasm) reads
+    // node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm at
+    // runtime. Next's trace keeps it only under .pnpm, which materialize+prune
+    // deletes — so the packaged server 500s on that route. Stage the package so
+    // its dist/*.wasm lands at the top-level node_modules path the route expects.
+    "@lottiefiles/dotlottie-web",
     // Wallet/trading routes are imported by shared chat/status modules at
     // route-load time. Stage the root packages and their dependency closure so
     // production chat cannot crash before the route handler starts.
