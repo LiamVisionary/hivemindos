@@ -143,11 +143,11 @@ jobs:
             os: macos-14-xlarge
             app_arch: -arm64
             bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
-          - label: macOS Intel
-            artifact_key: macos-x64
-            os: macos-15-intel
-            app_arch: -x64
-            bundle_glob: src-tauri/target/release/bundle/dmg/*.dmg src-tauri/target/release/bundle/macos/*.app.tar.gz src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+          # macOS Intel discontinued 2026-06-30: it was the slowest/flakiest job
+          # (bundle_dmg.sh) and Apple Silicon covers the overwhelming majority of
+          # Mac users. Dropping it also requires removing darwin-x86_64 from
+          # scripts/build-updater-manifest.mjs. NOTE: existing Intel installs stop
+          # receiving auto-updates (the updater manifest no longer lists them).
           - label: Windows x64
             artifact_key: windows-x64
             os: windows-latest
