@@ -70,18 +70,15 @@ const nextConfig: NextConfig = {
   },
   distDir: isTauriDev ? tauriDevDistDir : isTauriStaticBuild ? ".next-tauri-static-build" : isTauriBuild ? ".next-tauri-build" : ".next",
   output: isTauriStaticBuild ? "export" : isTauriBuild ? "standalone" : undefined,
-  serverExternalPackages: isTauriBuild
-    ? [
-        "@noble/curves",
-        "@noble/hashes",
-        "@scure/bip39",
-        "@solana/kit",
-        "@solana/spl-token",
-        "@solana/web3.js",
-        "bs58",
-        "viem",
-      ]
-    : undefined,
+  // NOTE: do NOT add serverExternalPackages for the embedded (isTauriBuild)
+  // build. It was a webpack memory optimization, but the embedded build now uses
+  // Turbopack, which mis-handles externals in `output: standalone`: it imports an
+  // externalized package by a content-hashed specifier (e.g.
+  // `@solana/spl-token-58c1342ef0f4abd7`) that doesn't exist in node_modules, so
+  // the packaged server crashes at runtime with "Failed to load external module"
+  // the moment a crypto/wallet route loads. These libs are pure JS and Turbopack
+  // bundles them for ~0 extra peak memory (build still ~5 GB), so just bundle
+  // them. (The static-export build is unaffected — it has no API routes.)
   // Tauri packaging builds (static export + embedded server) don't gate on
   // type errors — those are enforced in dev and the standalone `build`/
   // `lint` scripts + CI. The embedded build additionally compiles paths the
