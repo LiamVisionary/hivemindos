@@ -253,7 +253,7 @@ Options:
   --no-shared-skills            Seed the shared shelf only; do not import from or advertise to agents.
   --non-interactive             Do not prompt. Uses explicit flags/env or safe defaults.
   --interactive                 Force prompts when running in a TTY.
-  --skip-deps                   Skip pnpm install.
+  --skip-deps                   Skip the workspace pnpm install.
   --build                       Run a production Next.js build during setup.
   --skip-build                  Deprecated no-op; production builds are skipped by default.
   --skip-collector              Skip collector service installation/restart.
@@ -1559,11 +1559,21 @@ process.stdin.on("end", () => {
 install_node_if_missing || true
 
 load_homebrew_shellenv || true
-install_pnpm_if_missing || true
+needs_pnpm="false"
+if [[ "$CLI_COLLECTOR_ONLY" != "true" ]]; then
+  if [[ "$CLI_SKIP_DEPS" != "true" || "$CLI_BUILD_DASHBOARD" == "true" || "$CLI_SKIP_DASHBOARD" != "true" ]]; then
+    needs_pnpm="true"
+  fi
+fi
+if [[ "$needs_pnpm" == "true" ]]; then
+  install_pnpm_if_missing || true
 
-if command -v corepack >/dev/null 2>&1; then
-  corepack prepare pnpm@8.6.12 --activate >/dev/null 2>&1 || true
-  refresh_tool_paths
+  if command -v corepack >/dev/null 2>&1; then
+    corepack prepare pnpm@8.6.12 --activate >/dev/null 2>&1 || true
+    refresh_tool_paths
+  fi
+else
+  ok "Skipping pnpm setup; no workspace install, build, or dev dashboard requested"
 fi
 
 tailscale_ip=""

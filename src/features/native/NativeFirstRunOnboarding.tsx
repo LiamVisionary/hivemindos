@@ -50,8 +50,8 @@ type PlanRow = { icon: ReactElement; label: string; detail: string; opt?: boolea
 // appears for multi-machine modes, mirroring how setup.sh wires networking.
 function planRows(mode: InstallMode): PlanRow[] {
   const rows: PlanRow[] = [
-    { icon: <IconNode />, label: "Check Node.js 20+ and pnpm", detail: "required toolchain" },
-    { icon: <IconBox />, label: "Install workspace dependencies", detail: "pnpm install" },
+    { icon: <IconNode />, label: "Check Node.js 20+", detail: "setup scripts + collector" },
+    { icon: <IconBox />, label: "Skip source dependencies", detail: "no workspace pnpm install" },
     { icon: <IconWrench />, label: "Install hive env helpers", detail: "hive-env-add · hive-transfer · hive-update" },
     { icon: <IconPulse />, label: "Start the machine monitor", detail: "collector · 127.0.0.1:8787" },
   ];
@@ -64,7 +64,7 @@ function planRows(mode: InstallMode): PlanRow[] {
   }
   rows.push(
     { icon: <IconBrain />, label: "Seed the shared brain & skills", detail: "shared vault + skill shelf" },
-    { icon: <IconWindow />, label: "Start the dashboard", detail: DASHBOARD_URL },
+    { icon: <IconWindow />, label: "Use the packaged dashboard", detail: "bundled app server" },
   );
   return rows;
 }
@@ -265,8 +265,8 @@ export function NativeFirstRunOnboarding() {
   // setup.ps1 has no mode/import flags (it detects Tailscale and seeds vault/skills itself),
   // so the Windows backup command mirrors build_setup_invocation in src-tauri/src/setup.rs.
   const commandPreview = isWindows
-    ? "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild"
-    : `${modeCommand(mode)} ${skillAgents.length ? `--import-skills=${skillAgents.join(",")} --share-skills=all` : "--no-shared-skills"} --skip-dashboard${memoryAgents.length ? `\n./scripts/import-agent-memory.sh --sources ${memoryAgents.join(",")}` : ""}`;
+    ? "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDeps -SkipDashboard -SkipBuild"
+    : `${modeCommand(mode)} --skip-deps ${skillAgents.length ? `--import-skills=${skillAgents.join(",")} --share-skills=all` : "--no-shared-skills"} --skip-dashboard${memoryAgents.length ? `\n./scripts/import-agent-memory.sh --sources ${memoryAgents.join(",")}` : ""}`;
 
   function toggleAgent(id: string) {
     const active = skillAgents.includes(id) || memoryAgents.includes(id);
@@ -317,7 +317,7 @@ export function NativeFirstRunOnboarding() {
       startDashboard: false,
       installCollector: true,
       buildDashboard: false,
-      installDeps: true,
+      installDeps: false,
       force: false,
     }, { demoMode });
     setRunning(false);

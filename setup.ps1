@@ -541,7 +541,12 @@ function Get-HashForFiles($Files) {
 Info "HivemindOS Windows setup"
 
 Ensure-Node
-Ensure-Pnpm
+$needsPnpm = (-not $SkipDeps) -or (-not $SkipBuild) -or (-not $SkipDashboard)
+if ($needsPnpm) {
+  Ensure-Pnpm
+} else {
+  Ok "Skipping pnpm setup; no workspace install, build, or dev dashboard requested"
+}
 $tailnetSyncEnabled = Ensure-Tailscale
 Ensure-Syncthing $tailnetSyncEnabled
 Ensure-Unison

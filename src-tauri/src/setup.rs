@@ -471,8 +471,8 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
                 },
                 install_command: setup_script.as_ref().map(|_| {
                     platform.pick(
-                        "./setup.sh --local-only --skip-build",
-                        "powershell -ExecutionPolicy Bypass -File .\\setup.ps1",
+                        "./setup.sh --local-only --skip-deps --skip-build --skip-dashboard",
+                        "powershell -ExecutionPolicy Bypass -File .\\setup.ps1 -SkipDeps -SkipBuild -SkipDashboard",
                     )
                 }),
                 optional: true,
@@ -624,7 +624,7 @@ mod tests {
             "startDashboard": false,
             "installCollector": true,
             "buildDashboard": false,
-            "installDeps": true,
+            "installDeps": false,
             "force": false,
         })
     }
@@ -650,6 +650,7 @@ mod tests {
         assert_eq!(mode, "local");
         assert!(command.contains("./setup.sh"));
         assert!(command.contains("'--local-only'"));
+        assert!(command.contains("'--skip-deps'"));
         assert!(command.contains("'--skip-dashboard'"));
         assert!(command.contains("'--import-skills=claude,codex'"));
         assert!(command.contains("HIVE_MEMORY_IMPORTS='none'"));
@@ -670,6 +671,7 @@ mod tests {
         let (mode, command) = build_setup_invocation(request, SetupPlatform::Windows);
         assert_eq!(mode, "local");
         assert!(command.contains("setup.ps1"));
+        assert!(command.contains("-SkipDeps"));
         assert!(command.contains("-SkipDashboard"));
         assert!(command.contains("-SkipBuild"));
         assert!(command.contains("where pwsh"));
