@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-01 02:15:57 +0800 - Setup wizard: stop the renderer pegging a CPU core on GPU-less Windows (freeze / no progress / late modal)
+  - Status: Pushed
+  - Areas changed: `src/features/native/NativeFirstRunOnboarding.module.css`, `src/features/native/NativeFirstRunOnboarding.tsx`, `src-tauri/src/setup.rs`
+  - Summary: On a GPU-less Windows host (cloud VPS / RDP / VM, where WebView2 falls back to CPU software rendering) the first-run setup wizard froze the window into "Not Responding", never showed live progress, and opened after the daily/weekly popups. Root cause, traced through the actual render path: the setup modal's own CSS was the only continuous renderer work — a full-screen `backdrop-filter: blur()` scrim (re-rasters the whole screen every frame) plus two infinite `box-shadow` glow animations (`cellPulse`, `ping`, each a per-frame blurred-shadow repaint). The dashboard behind it has no idle animation (queen-voice RAF is gated on an active call, the bee-flight RAF self-terminates when settled), so those modal effects were the entire cost that pegged one core. Fixes: (1) drop the backdrop blur for a near-opaque dim gradient; (2) convert the two glow animations from animated `box-shadow` to animated `opacity` (composite-only — same breathing/lit look, ~free); (3) open the wizard inline in its effect instead of via `setTimeout(…, 0)`, which on a busy main thread yielded the open behind the other popups; (4) the hidden-setup stdout throttle now always flushes the final line (it could drop the last/most-important activity line if it landed inside the 150 ms window). Helps every low-end / remote-desktop user, not just the test VPS; negligible visual change on GPU machines.
+  - Verification: `tsc --noEmit` clean on the changed TSX (0 errors in the file; the repo's other baseline type errors are unrelated and `next.config` sets `ignoreBuildErrors: true`). Freeze traced through real call chains and CPU-sampled on the VPS earlier (renderer at 100% of one core, node server idle). NOT yet confirmed on-device after the fix — the decisive test is installing the v0.2.27 prerelease on the GPU-less Windows box; the Rust throttle change compiles in CI.
+  - Intended commit message: `Setup wizard: stop renderer CPU peg on GPU-less Windows (freeze/progress/late-open)`
+
 - 2026-06-29 13:17:15 +0800 - Watchdog: act immediately on a deep functional-probe wedge
   - Status: Pushed
   - Areas changed: `scripts/fleet-health-watchdog.mjs`

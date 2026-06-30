@@ -172,7 +172,10 @@ export function NativeFirstRunOnboarding() {
   }, [demoMode]);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => {
+    // Run synchronously on mount rather than via setTimeout(…, 0): deferring to a
+    // macrotask let the first-run wizard open AFTER the daily/weekly popups on a
+    // busy main thread. Opening the decision inline makes setup surface first.
+    const run = () => {
       if (demoMode) {
         setOpen(true);
         void refreshStatus();
@@ -212,8 +215,8 @@ export function NativeFirstRunOnboarding() {
         setOpen(!dismissed);
         if (dismissed && !dismissedInDashboardState) void saveDashboardStateValue(DISMISS_KEY, "1");
       });
-    }, 0);
-    return () => window.clearTimeout(handle);
+    };
+    run();
   }, [demoMode, refreshStatus]);
 
   // While the running step waits for setup to finish, keep refreshing status so
