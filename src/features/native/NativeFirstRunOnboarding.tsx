@@ -6,6 +6,7 @@ import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
 import { requestGuidedTour } from "@/lib/native/guided-tour";
+import { CLAWBANK_OPEN_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { grantNativePrivateFilesystemAccess } from "@/lib/native/dashboard-bootstrap";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
@@ -452,7 +453,7 @@ export function NativeFirstRunOnboarding() {
           {step === "running" ? (
             <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
           ) : null}
-          {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} copied={copied} onCopy={copy} /> : null}
+          {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} copied={copied} onCopy={copy} onOpenClawbank={() => { dismiss(); window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }} /> : null}
         </div>
 
         <footer className={styles.foot}>
@@ -673,12 +674,13 @@ function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPrev
   );
 }
 
-function DoneStep({ scope, isMac, isWindows, copied, onCopy }: {
+function DoneStep({ scope, isMac, isWindows, copied, onCopy, onOpenClawbank }: {
   scope: "local" | "multi";
   isMac: boolean;
   isWindows: boolean;
   copied: string;
   onCopy: (key: string, value: string) => void;
+  onOpenClawbank: () => void;
 }) {
   return (
     <div className={`${styles.step} ${styles.center}`}>
@@ -700,6 +702,9 @@ function DoneStep({ scope, isMac, isWindows, copied, onCopy }: {
           {copied === "url" ? <IconCheck width="13" height="13" /> : <IconCopy />}{copied === "url" ? "Copied" : "Copy"}
         </button>
       </div>
+      <button className={`${styles.btn} ${styles.text}`} type="button" style={{ marginTop: 10 }} onClick={onOpenClawbank}>
+        Set up ClawBank — give your agents banking <IconArrow />
+      </button>
       {scope === "multi" ? (
         <p className={styles.lede} style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
           Adding another machine? Run <code>{isWindows ? "setup.ps1" : "./setup.sh"}</code> there too and it joins this hive automatically.
