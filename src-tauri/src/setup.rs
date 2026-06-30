@@ -664,7 +664,21 @@ fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatfo
                 );
             }
         });
+        // Throttle stdout emits to ~7/sec. Setup output (especially pnpm install)
+        // is very verbose and PowerShell block-buffers its pipe, so lines arrive
+        // in large bursts; emitting every line floods the webview into a "Not
+        // Responding" freeze. A progress feed only needs the latest activity, so
+        // we drop intermediate lines and emit at most one per 150 ms. (stderr is
+        // NOT throttled below — errors are low-volume and must all surface.)
+        let mut last_emit = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(1))
+            .unwrap_or_else(std::time::Instant::now);
         for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            let now = std::time::Instant::now();
+            if now.duration_since(last_emit) < std::time::Duration::from_millis(150) {
+                continue;
+            }
+            last_emit = now;
             let _ = app.emit(
                 NATIVE_SETUP_PROGRESS_EVENT,
                 serde_json::json!({ "kind": "line", "line": line }),
