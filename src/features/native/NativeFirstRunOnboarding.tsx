@@ -14,6 +14,10 @@ import styles from "./NativeFirstRunOnboarding.module.css";
 const DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v3";
 const LEGACY_DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
 const DISMISS_FALLBACK_KEY = `${DISMISS_KEY}.localFallback`;
+// Matches NATIVE_SETUP_PROGRESS_EVENT in src-tauri/src/setup.rs. Setup now runs
+// hidden (no console window) and streams its output here so the wizard shows
+// live progress + surfaces a non-zero exit instead of spinning forever.
+const NATIVE_SETUP_PROGRESS_EVENT = "native-setup-progress";
 
 const APP_LOGO_PATH = "/hivemindos-logo.png";
 const DASHBOARD_URL = "http://localhost:5020";
@@ -23,7 +27,7 @@ type WizardStep = "welcome" | "scope" | "agents" | "plan" | "running" | "done";
 
 const ALL_AGENT_IDS = ["codex", "claude", "hermes", "gemini", "openclaw", "aeon"];
 const DEMO_RUN_MESSAGES = [
-  "Starting setup. If your system needs permission, a Terminal window will open for that part.",
+  "Starting setup — it runs in the background. Approve any permission prompts that appear.",
   "Checking selected agents.",
   "Setup has started. Follow any permission prompts that appear.",
 ];
@@ -129,6 +133,11 @@ export function NativeFirstRunOnboarding() {
   // collector signal lands — see setupSettled below. The cells are decorative
   // (aria-hidden); no per-step claim is made about what setup is doing.
   const [filledCells, setFilledCells] = useState(0);
+  // Live setup output streamed from the hidden launcher (native-setup-progress),
+  // plus a captured non-zero exit so the wizard can show an error instead of
+  // spinning. Kept short (tail) since it's a live activity feed, not a full log.
+  const [setupLines, setSetupLines] = useState<string[]>([]);
+  const [setupExitError, setSetupExitError] = useState("");
 
   const detectedAgents = useMemo(() => status?.detected_agents?.length
     ? status.detected_agents
@@ -234,6 +243,32 @@ export function NativeFirstRunOnboarding() {
     return () => window.clearTimeout(id);
   }, [step, setupSettled]);
 
+  // Stream the hidden setup launcher's output into the wizard: live activity
+  // lines + a captured non-zero exit (so a failed setup shows an error instead
+  // of spinning forever now that there is no visible console window).
+  useEffect(() => {
+    if (!isTauriDesktopRuntime()) return;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void import("@tauri-apps/api/event").then(({ listen }) => listen<{ kind?: string; line?: string; exitCode?: number | null }>(NATIVE_SETUP_PROGRESS_EVENT, (event) => {
+      const p = event.payload ?? {};
+      if (p.kind === "start") { setSetupLines([]); setSetupExitError(""); return; }
+      if (p.kind === "line" && typeof p.line === "string") {
+        const line = p.line;
+        setSetupLines((current) => [...current.slice(-149), line]);
+        return;
+      }
+      if (p.kind === "done" && p.exitCode != null && p.exitCode !== 0) {
+        setSetupExitError(`Setup exited with code ${p.exitCode}.`);
+      }
+    })).then((unlisten) => {
+      const safeUnlisten = createSafeTauriUnlisten(unlisten);
+      if (cancelled) { safeUnlisten(); return; }
+      cleanup = safeUnlisten;
+    }).catch(() => undefined);
+    return () => { cancelled = true; cleanup?.(); };
+  }, []);
+
   useEffect(() => {
     if (!isTauriDesktopRuntime()) return;
     let cancelled = false;
@@ -307,7 +342,7 @@ export function NativeFirstRunOnboarding() {
       return true;
     }
     setRunning(true);
-    setRunStatus("Starting setup. If your system needs permission, a Terminal window will open for that part.");
+    setRunStatus("Starting setup — it runs in the background. Approve any permission prompts that appear.");
     const result = await runNativeSetup({
       installMode: mode,
       skillAgents,
@@ -359,14 +394,21 @@ export function NativeFirstRunOnboarding() {
 
   const runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }> = [];
   if (step === "running") {
-    runLog.push({ k: "logDim", t: `$ ${(launchedCommand || modeCommand(mode)).split("\n")[0]}` });
-    runLog.push({ k: "logOk", t: "✓ setup launched in Terminal" });
+    // Live activity tail from the hidden setup launcher (real setup output),
+    // newest emphasized. Falls back to a starting message before the first line.
+    const activity = setupLines.map((line) => line.trim()).filter((line) => line.length > 0).slice(-7);
+    if (activity.length === 0) {
+      runLog.push({ k: "logRun", t: setupExitError ? "✗ setup stopped" : "→ starting setup…" });
+    } else {
+      activity.forEach((line, index) => runLog.push({ k: index === activity.length - 1 && !setupSettled && !setupExitError ? "logRun" : "logDim", t: line }));
+    }
     if (setupSettled) {
       runLog.push({ k: "logOk", t: "✓ collector online · 127.0.0.1:8787" });
-    } else {
-      runLog.push({ k: "logRun", t: "→ waiting for the local agent bridge…" });
     }
   }
+  const effectiveRunStatus = setupExitError
+    ? `${setupExitError} Open “Run it yourself” below to retry, or close and re-open Add agent.`
+    : runStatus;
 
   return (
     <div className={styles.stage}>
@@ -408,7 +450,7 @@ export function NativeFirstRunOnboarding() {
           ) : null}
           {step === "plan" ? <PlanStep rows={rows} mode={mode} runError={runError} /> : null}
           {step === "running" ? (
-            <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} runLog={runLog} runStatus={runStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
+            <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
           ) : null}
           {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} copied={copied} onCopy={copy} /> : null}
         </div>
@@ -615,7 +657,7 @@ function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPrev
         ))}
       </div>
       <p className={styles.lede} style={{ fontSize: 12.5, textAlign: "center" }}>
-        {runStatus || `Setup is running in the ${isWindows ? "PowerShell" : "Terminal"} window — follow any permission prompts. This screen updates on its own when it finishes.`}
+        {runStatus || "Setting up your machine in the background — progress shows above and this screen updates on its own when it finishes."}
       </p>
       <details className={styles.detail}>
         <summary className={styles.detailSummary}>Setup didn&rsquo;t start? Run it yourself</summary>

@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
+
+/// Tauri event the setup wizard listens on to render live progress + errors in
+/// the modal (so setup can run hidden with no console window).
+pub(crate) const NATIVE_SETUP_PROGRESS_EVENT: &str = "native-setup-progress";
 
 #[derive(Serialize)]
 struct SetupCheck {
@@ -334,12 +339,15 @@ fn setup_root_command(platform: SetupPlatform) -> String {
 }
 
 fn launcher_file_content(command: &str, platform: SetupPlatform) -> String {
+    // No `pause`/`read` to hold a window open: the launcher runs HIDDEN and its
+    // output is streamed to the setup wizard (see spawn_hidden_setup). A trailing
+    // echo just marks the end of the step in the captured log.
     match platform {
         SetupPlatform::Unix => format!(
-            "#!/usr/bin/env bash\nset -euo pipefail\n{command}\necho\necho 'HivemindOS setup step finished. You can close this terminal.'\nread -r -p 'Press Return to close...' _\n"
+            "#!/usr/bin/env bash\nset -euo pipefail\n{command}\necho\necho 'HivemindOS setup step finished.'\n"
         ),
         SetupPlatform::Windows => format!(
-            "@echo off\r\nsetlocal\r\n{command}\r\necho.\r\necho HivemindOS setup step finished. You can close this window.\r\npause\r\n"
+            "@echo off\r\nsetlocal\r\n{command}\r\necho.\r\necho HivemindOS setup step finished.\r\n"
         ),
     }
 }
@@ -591,11 +599,18 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
 }
 
 #[tauri::command]
-pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
+pub(crate) fn native_setup_run(app: AppHandle, request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
     let platform = SetupPlatform::current();
     let (mode, command) = build_setup_invocation(request, platform);
     let command_path = write_command_file(&command, platform)?;
-    open_command_file(&command_path)?;
+    // Run the launcher HIDDEN and stream its output to the setup wizard via the
+    // progress event, instead of opening a console window. Fall back to the
+    // visible launcher if the hidden spawn can't start, so setup is never
+    // un-runnable.
+    if let Err(error) = spawn_hidden_setup(app, &command_path, platform) {
+        eprintln!("[native-setup] hidden run failed ({error}); falling back to visible launcher");
+        open_command_file(&command_path)?;
+    }
 
     serde_json::to_value(NativeSetupRunResult {
         ok: true,
@@ -604,6 +619,65 @@ pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_j
         mode,
     })
     .map_err(|error| error.to_string())
+}
+
+/// Run the setup launcher hidden (no console window), streaming each output line
+/// to the wizard via NATIVE_SETUP_PROGRESS_EVENT. Emits a final
+/// `{ kind: "done", exitCode }` so the wizard can surface a non-zero exit instead
+/// of spinning forever. stdout and stderr are drained on separate threads so a
+/// full pipe can't deadlock. Returns Err if the process cannot be spawned (the
+/// caller then falls back to a visible launcher).
+fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatform) -> Result<(), String> {
+    let mut cmd = match platform {
+        SetupPlatform::Windows => {
+            let mut c = crate::hidden_command("cmd");
+            c.args(["/c", &command_path.display().to_string()]);
+            c
+        }
+        SetupPlatform::Unix => {
+            let mut c = crate::hidden_command("sh");
+            c.arg(command_path);
+            c
+        }
+    };
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|error| error.to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "setup process had no stdout pipe".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "setup process had no stderr pipe".to_string())?;
+    std::thread::spawn(move || {
+        let _ = app.emit(
+            NATIVE_SETUP_PROGRESS_EVENT,
+            serde_json::json!({ "kind": "start" }),
+        );
+        let app_err = app.clone();
+        let err_handle = std::thread::spawn(move || {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                let _ = app_err.emit(
+                    NATIVE_SETUP_PROGRESS_EVENT,
+                    serde_json::json!({ "kind": "line", "stream": "stderr", "line": line }),
+                );
+            }
+        });
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            let _ = app.emit(
+                NATIVE_SETUP_PROGRESS_EVENT,
+                serde_json::json!({ "kind": "line", "line": line }),
+            );
+        }
+        let _ = err_handle.join();
+        let exit_code = child.wait().ok().and_then(|status| status.code());
+        let _ = app.emit(
+            NATIVE_SETUP_PROGRESS_EVENT,
+            serde_json::json!({ "kind": "done", "exitCode": exit_code }),
+        );
+    });
+    Ok(())
 }
 
 #[cfg(test)]
