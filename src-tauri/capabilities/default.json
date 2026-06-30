@@ -61,6 +61,7 @@
     "allow-dashboard-state-write",
     "allow-download-aeon-deliverable",
     "allow-send-aeon-deliverable",
-    "allow-open-route-window"
+    "allow-open-route-window",
+    "allow-wallet-secret-export-save"
   ]
 }

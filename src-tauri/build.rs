@@ -98,6 +98,7 @@ fn main() {
                 "download_aeon_deliverable",
                 "send_aeon_deliverable",
                 "open_route_window",
+                "wallet_secret_export_save",
             ]),
         ),
     )
