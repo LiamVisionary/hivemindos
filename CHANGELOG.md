@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-01 15:06:56 +0800 - Windows setup: force UTF-8 output so the app's progress reader doesn't die on ✓/✗/↑ glyphs (the real "freeze + no updates")
+  - Status: Pushed
+  - Areas changed: `setup.ps1`
+  - Summary: THE root cause of the Windows first-run "freezes, no status updates, Not Responding at the last step" that survived the earlier fixes — found by reproducing the app's exact reader on a live VPS. The app streams setup progress by reading the hidden run's stdout one line at a time and decoding each line as UTF-8 (`spawn_hidden_setup` in src-tauri/src/setup.rs used `.lines()`, which yields an Err and STOPS at the first non-UTF-8 byte). Under the default console code page, setup.ps1's status glyphs (✓ ✗ ↑ from Ok/Fail/brain-sync) are written as non-UTF-8 bytes (e.g. 0xFB). So the reader died on the very first ✗/✓ line → no more progress emitted, and the still-running setup process then failed with "The process tried to write to a nonexistent pipe" (the read end was gone), stalling the wizard. Entirely GPU-independent; the earlier CSS/renderer theory was wrong. Fix: setup.ps1 now sets `[Console]::OutputEncoding = UTF8` (and `$OutputEncoding`) at the very top, so every line is valid UTF-8 and the reader drains cleanly to completion. Ships via the app-source `main` pull — fixes the installed v0.2.27 with no rebuild. (The durable belt — a lenient `from_utf8_lossy` byte reader on the app side — is queued for the next app release.)
+  - Verification: Reproduced + fixed on a live Windows Server 2022 VPS. A strict UTF-8 line reader (byte-identical to the Rust `.lines()` reader) STOPPED after 0 lines on the raw output (`Unable to translate bytes [FB]`); with the encoding fix it read ALL 91 lines of a full real setup with 0 choke, 0 "nonexistent pipe", exit 0, and the collector scheduled task registered.
+  - Intended commit message: `Windows setup: force UTF-8 stdout so the app progress reader doesn't choke on glyphs`
+
 - 2026-07-01 12:05:00 +0800 - Windows setup: stop the hidden run hanging on prompts + auto-install Node so the collector installs
   - Status: Pushed
   - Areas changed: `setup.ps1`

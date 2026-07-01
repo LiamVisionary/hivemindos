@@ -10,6 +10,18 @@
 
 $ErrorActionPreference = "Stop"
 
+# Force UTF-8 stdout. The app streams setup progress by reading this script's output
+# one line at a time and decoding each line as UTF-8; a strict UTF-8 line reader STOPS
+# at the first byte it can't decode. Under the default console code page the check /
+# cross / arrow glyphs printed below (✓ ✗ ↑) land as non-UTF-8 bytes (e.g. 0xFB), so
+# the reader dies on the first such line — which drops the pipe (the still-running
+# setup process then errors "The process tried to write to a nonexistent pipe"), kills
+# all live progress, and hangs the wizard at the last step. Emitting UTF-8 keeps every
+# line decodable so progress streams and setup finishes. (A lenient reader on the app
+# side is the durable fix; this makes the currently-installed app work too.)
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+try { $OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+
 # The HivemindOS app runs this script HIDDEN from ~/.hivemindos/app-source with no
 # console attached. Ask-YesNo below falls back to Read-Host when interactive, and
 # Read-Host on a hidden run's inherited stdin BLOCKS FOREVER — hanging setup at the
