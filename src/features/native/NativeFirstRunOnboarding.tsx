@@ -34,6 +34,34 @@ const DEMO_RUN_MESSAGES = [
 // Seven honeycomb cells in the running emblem (matches .cell.c0..c6 in the CSS).
 const EMBLEM_CELLS = 7;
 
+// Real setup milestones parsed from the streamed hidden-setup output, so the emblem
+// and meter reflect ACTUAL progress instead of a cosmetic timer (which raced through the
+// quick early steps then stalled on the genuinely-slow collector step). Each entry maps
+// to how many of the EMBLEM_CELLS are filled once a matching line has streamed, and to a
+// human phase label. Order matters: the highest matched cell wins.
+const SETUP_MILESTONES: Array<{ re: RegExp; cell: number; label: string }> = [
+  { re: /Downloading HivemindOS setup files|Unpacking setup files/i, cell: 1, label: "Downloading setup files…" },
+  { re: /HivemindOS (Windows )?setup\b|Node (found|is missing)|Downloading Node/i, cell: 2, label: "Checking dependencies…" },
+  { re: /Python (found|ready)|hive-env-add installed|hive-pulse installed/i, cell: 3, label: "Installing hive tools…" },
+  { re: /shared skill projection|hive-brain-sync|shared skills/i, cell: 4, label: "Syncing shared brain + skills…" },
+  { re: /MCP registration|Registered into \d+ harness|Runtime skill and memory hints/i, cell: 5, label: "Registering agents + MCP…" },
+  { re: /\bReady\b|Dashboard:|Local-only mode is ready/i, cell: 6, label: "Almost there…" },
+];
+
+function setupMilestoneCells(lines: string[]): number {
+  return SETUP_MILESTONES.reduce((max, m) => (lines.some((line) => m.re.test(line)) ? Math.max(max, m.cell) : max), 0);
+}
+
+function setupPhaseLabel(lines: string[], settled: boolean): string {
+  if (settled) return "Hive assembled.";
+  const cells = setupMilestoneCells(lines);
+  // Cell 6 = "Ready" printed, but the collector /health check (settled) can take a while.
+  // Name that slow tail so it doesn't read as a stall.
+  if (cells >= 6) return "Bringing the agent collector online…";
+  const current = [...SETUP_MILESTONES].reverse().find((m) => lines.some((line) => m.re.test(line)));
+  return current?.label ?? "Starting setup…";
+}
+
 // "this Mac" / "this PC" / "this computer", from the platform reported by native_setup_status.
 function deviceNoun(platform: string | undefined) {
   if (platform === "windows") return "PC";
@@ -127,11 +155,6 @@ export function NativeFirstRunOnboarding() {
   const [runError, setRunError] = useState("");
   const [launchedCommand, setLaunchedCommand] = useState("");
   const [copied, setCopied] = useState("");
-  // Cosmetic activity indicator for the running emblem. It fills toward (but
-  // never reaches) the last cell on a timer, then completes only when the real
-  // collector signal lands — see setupSettled below. The cells are decorative
-  // (aria-hidden); no per-step claim is made about what setup is doing.
-  const [filledCells, setFilledCells] = useState(0);
   // Live setup output streamed from the hidden launcher (native-setup-progress),
   // plus a captured non-zero exit so the wizard can show an error instead of
   // spinning. Kept short (tail) since it's a live activity feed, not a full log.
@@ -225,18 +248,6 @@ export function NativeFirstRunOnboarding() {
     const id = window.setInterval(() => { void refreshStatus(); }, 4000);
     return () => window.clearInterval(id);
   }, [step, setupSettled, demoMode, refreshStatus]);
-
-  // Cosmetic emblem fill while setup runs in the terminal (capped one short of
-  // full); the real collector signal completes it. The counter is reset to 0
-  // when setup is launched (see launchSetup) so re-runs start fresh; here we
-  // only ever increment, inside the interval callback.
-  useEffect(() => {
-    if (step !== "running" || setupSettled) return;
-    const id = window.setInterval(() => {
-      setFilledCells((current) => Math.min(EMBLEM_CELLS - 1, current + 1));
-    }, 1500);
-    return () => window.clearInterval(id);
-  }, [step, setupSettled]);
 
   // Once the collector is up, briefly hold the full emblem, then reveal "done".
   useEffect(() => {
@@ -337,7 +348,6 @@ export function NativeFirstRunOnboarding() {
 
   async function launchSetup(): Promise<boolean> {
     setRunError("");
-    setFilledCells(0);
     if (demoMode) {
       await launchDemoSetup();
       setLaunchedCommand("demo");
@@ -391,8 +401,9 @@ export function NativeFirstRunOnboarding() {
 
   const tone = step === "running" ? "live" : undefined;
   const rows = planRows(mode);
-  const filled = step === "running" ? (setupSettled ? EMBLEM_CELLS : filledCells) : 0;
+  const filled = step === "running" ? (setupSettled ? EMBLEM_CELLS : setupMilestoneCells(setupLines)) : 0;
   const meterPct = Math.round((filled / EMBLEM_CELLS) * 100);
+  const phaseLabel = setupPhaseLabel(setupLines, setupSettled);
 
   const runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }> = [];
   if (step === "running") {
@@ -452,7 +463,7 @@ export function NativeFirstRunOnboarding() {
           ) : null}
           {step === "plan" ? <PlanStep rows={rows} mode={mode} runError={runError} /> : null}
           {step === "running" ? (
-            <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
+            <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} phaseLabel={phaseLabel} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
           ) : null}
           {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} /> : null}
         </div>
@@ -625,10 +636,11 @@ function PlanStep({ rows, mode, runError }: { rows: PlanRow[]; mode: InstallMode
   );
 }
 
-function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPreview, isWindows, copied, onCopy }: {
+function RunningStep({ filled, meterPct, settled, phaseLabel, runLog, runStatus, commandPreview, isWindows, copied, onCopy }: {
   filled: number;
   meterPct: number;
   settled: boolean;
+  phaseLabel: string;
   runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }>;
   runStatus: string;
   commandPreview: string;
@@ -647,7 +659,7 @@ function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPrev
       </div>
       <div className={styles.runMeta}>
         <span className={styles.liveTag}><span className={styles.liveDot} /> Building your hive</span>
-        <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>{settled ? "Hive assembled." : "Setting things up…"}</h2>
+        <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>{phaseLabel}</h2>
       </div>
       <div className={styles.meter}><i style={{ width: `${settled ? 100 : Math.max(meterPct, 8)}%` }} /></div>
       <div className={styles.log}>
