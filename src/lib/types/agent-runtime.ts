@@ -294,11 +294,14 @@ export interface VeniceAgentConfig {
 }
 
 export interface HivemindosModelsAgentConfig {
+  fundingMode?: "credits" | "wallet";
+  creditAccountId?: string;
   walletVaultId?: string;
   walletAddress?: string;
   walletNetwork?: string;
   fundingWalletKind?: "personal" | "agent";
   fundingWalletLabel?: string;
+  lastCheckoutSessionId?: string;
   lastCreditBalanceUsd?: string;
   lastCreditBalanceLabel?: string;
   lastCreditCheckedAt?: string;

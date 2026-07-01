@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Unit tests for the ClawBank REST client + tool-policy classifier.
+// Unit tests for the ClawBank REST client, onboarding helpers, and tool-policy classifier.
 // Mocks global fetch; no network, no live ClawBank token required.
 import assert from "node:assert/strict";
 import { register } from "node:module";
@@ -22,6 +22,7 @@ const {
   CLAWBANK_CONFIRM,
   CLAWBANK_DEFAULT_API_URL,
 } = await import("../src/lib/services/clawbank/index.ts");
+const { normalizeClawBankLoginCode } = await import("../src/features/dashboard/clawbank-login-code.ts");
 
 let passed = 0;
 function ok(name) {
@@ -132,6 +133,14 @@ mockFetch(() => ({ status: 200, body: { ok: true, data: {} } }));
   assert.equal(clawbankErrorCode({ error: { code: "rate_limited" } }, 429), "rate_limited");
   assert.equal(clawbankErrorCode({}, 500), "http_500");
   ok("error message/code extraction probes envelope shapes + falls back by status");
+}
+
+// --- onboarding helper: preserve URL-safe email codes ----------------------
+{
+  const urlSafeCode = " LE-aBc_DEF-123_ghi \n";
+  assert.equal(normalizeClawBankLoginCode(urlSafeCode), "LE-aBc_DEF-123_ghi");
+  assert.equal(normalizeClawBankLoginCode("123 456"), "123456");
+  ok("normalizeClawBankLoginCode preserves URL-safe punctuation and removes paste whitespace");
 }
 
 // --- tool-policy: read vs write classification ----------------------------

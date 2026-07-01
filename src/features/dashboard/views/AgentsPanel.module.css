@@ -1,0 +1,212 @@
+.tailnetCleanupBanner {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 9px 12px;
+  align-items: center;
+  margin: 0 0 8px;
+  overflow: hidden;
+  border: 1px solid rgba(231, 180, 92, 0.26);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(231, 180, 92, 0.12), rgba(16, 20, 29, 0.78) 48%, rgba(45, 212, 191, 0.06)),
+    var(--surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: var(--foreground);
+  padding: 9px 10px 9px 12px;
+}
+
+.tailnetCleanupBanner::before {
+  position: absolute;
+  inset: 8px auto 8px 0;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--honey), var(--live));
+  content: "";
+}
+
+.tailnetCleanupIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(231, 180, 92, 0.32);
+  border-radius: 8px;
+  background: rgba(231, 180, 92, 0.11);
+  color: var(--honey);
+}
+
+.tailnetCleanupIconGlyph {
+  width: 15px;
+  height: 15px;
+}
+
+.tailnetCleanupCopy {
+  min-width: 0;
+}
+
+.tailnetCleanupHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+}
+
+.tailnetCleanupHeader strong {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.tailnetCleanupHeader span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  border: 1px solid rgba(231, 180, 92, 0.24);
+  border-radius: 999px;
+  background: rgba(231, 180, 92, 0.09);
+  color: var(--warning);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  padding: 0 7px;
+}
+
+.tailnetCleanupCopy p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.tailnetCleanupActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.tailnetCleanupBanner .tailnetCleanupAction[data-slot="button"] {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  height: auto;
+  border: 1px solid rgba(94, 234, 212, 0.34);
+  border-radius: 6px;
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+  box-shadow: none;
+  color: var(--button-primary-foreground);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.15;
+  padding: 6px 9px;
+  white-space: normal;
+}
+
+.tailnetCleanupBanner .tailnetCleanupAction[data-slot="button"]:hover:not(:disabled) {
+  border-color: rgba(94, 234, 212, 0.62);
+  filter: brightness(1.04);
+}
+
+.tailnetCleanupBanner .tailnetCleanupActionSecondary[data-slot="button"] {
+  border-color: rgba(238, 232, 220, 0.12);
+  background: rgba(238, 232, 220, 0.05);
+  color: var(--text-soft);
+}
+
+.tailnetCleanupBanner .tailnetCleanupActionSecondary[data-slot="button"]:hover:not(:disabled) {
+  border-color: rgba(231, 180, 92, 0.32);
+  background: rgba(231, 180, 92, 0.1);
+  color: var(--foreground);
+  filter: none;
+}
+
+.tailnetCleanupButtonIcon {
+  width: 13px;
+  height: 13px;
+}
+
+.tailnetCleanupClose {
+  align-self: start;
+  justify-self: end;
+}
+
+.tailnetCleanupBanner .tailnetCleanupClose[data-slot="close-icon-button"] {
+  width: 26px;
+  height: 26px;
+  border-color: rgba(238, 232, 220, 0.12);
+  background: rgba(238, 232, 220, 0.05);
+  color: var(--muted);
+}
+
+.tailnetCleanupBanner .tailnetCleanupClose[data-slot="close-icon-button"]:hover {
+  border-color: rgba(94, 234, 212, 0.36);
+  background: rgba(45, 212, 191, 0.09);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .tailnetCleanupBanner {
+  border-color: rgba(176, 127, 28, 0.28);
+  background:
+    linear-gradient(135deg, rgba(176, 127, 28, 0.12), rgba(251, 248, 241, 0.9) 52%, rgba(95, 143, 90, 0.08)),
+    var(--surface);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .tailnetCleanupIcon {
+  border-color: rgba(176, 127, 28, 0.28);
+  background: rgba(176, 127, 28, 0.1);
+  color: var(--accent-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .tailnetCleanupHeader span {
+  border-color: rgba(176, 127, 28, 0.26);
+  background: rgba(176, 127, 28, 0.1);
+  color: var(--warning);
+}
+
+:global(:root[data-theme="hive-light"]) .tailnetCleanupBanner .tailnetCleanupAction[data-slot="button"] {
+  border-color: rgba(124, 85, 11, 0.26);
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  color: var(--button-primary-foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .tailnetCleanupBanner .tailnetCleanupActionSecondary[data-slot="button"] {
+  border-color: rgba(54, 46, 30, 0.16);
+  background: rgba(176, 127, 28, 0.08);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .tailnetCleanupBanner .tailnetCleanupActionSecondary[data-slot="button"]:hover:not(:disabled) {
+  border-color: rgba(124, 85, 11, 0.28);
+  background: rgba(176, 127, 28, 0.13);
+}
+
+:global(:root[data-theme="hive-light"]) .tailnetCleanupBanner .tailnetCleanupClose[data-slot="close-icon-button"] {
+  border-color: rgba(54, 46, 30, 0.16);
+  background: rgba(176, 127, 28, 0.08);
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .tailnetCleanupBanner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+  }
+
+  .tailnetCleanupCopy {
+    grid-column: 2 / 3;
+  }
+
+  .tailnetCleanupClose {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .tailnetCleanupActions {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+}

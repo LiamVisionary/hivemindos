@@ -73,17 +73,32 @@ export function isVeniceSetupReady(config = {}) {
   return config.lastTestStatus === "ready";
 }
 
+function moneyValue(value) {
+  const raw = typeof value === "number"
+    ? value
+    : typeof value === "string"
+      ? Number(value.replace(/[$,\s]/g, ""))
+      : NaN;
+  return Number.isFinite(raw) ? raw : 0;
+}
+
 export function hasHivemindosModelsSetup(config = {}) {
   return Boolean(
-    config.walletVaultId
+    config.creditAccountId
+      || config.walletVaultId
       || config.walletAddress
+      || config.lastCreditBalanceUsd
       || config.lastTestStatus
       || config.lastCheckedAt,
   );
 }
 
 export function isHivemindosModelsSetupReady(config = {}) {
-  return Boolean(config.walletVaultId && config.walletAddress);
+  const fundedCredits = Boolean(
+    moneyValue(config.lastCreditBalanceUsd) > 0
+      || moneyValue(config.lastCreditBalanceLabel) > 0,
+  );
+  return Boolean((config.creditAccountId && fundedCredits) || (config.walletVaultId && config.walletAddress));
 }
 
 function useBufferedTextField<E extends HTMLInputElement | HTMLTextAreaElement>({

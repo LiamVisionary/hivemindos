@@ -248,10 +248,9 @@
 }
 .codeInput {
   font-family: var(--f-mono);
-  font-size: 23px;
-  letter-spacing: 0.42em;
-  text-align: center;
-  padding-left: 0.42em;
+  font-size: 15px;
+  letter-spacing: 0;
+  text-align: left;
 }
 
 /* --- Verified: animated checkmark (teal / live) -------------------------- */

@@ -3,7 +3,6 @@
 import * as React from "react";
 import type { GitLawbStatus } from "@/lib/types/gitlawb";
 import type {
-  NangoHostConfig,
   NangoHostSetupResult,
   NangoIntegrationPayload,
   NangoProviderKey,
@@ -22,40 +21,29 @@ import {
   TermIcon,
   Toggle,
 } from "./integrations-primitives";
-import { XAccountMcpPanel, type XMcpStatus } from "./XAccountMcpPanel";
+import { XAccountMcpPanel, type ManagedXPanelStatus, type XMcpStatus } from "./XAccountMcpPanel";
+import {
+  friendlySetupError,
+  machineChoices,
+  managedXReturnUrl,
+  managedXStatusUrl,
+  readJson,
+  setupMethodLabel,
+  setupStepForPayload,
+  setupTargetFromBaseUrl,
+  showManagedXReturnMessage,
+  splitArgs,
+  summarizeRegistrarOutput,
+  tabFromLocation,
+  timeAgo,
+  type FleetMachine,
+  type MachineChoice,
+} from "./integrations-view-helpers";
 import "./integrations-redesign.css";
 
 type SetupStep = "welcome" | "host" | "method" | "automatic" | "manual" | "apps";
 type SetupMode = "automatic" | "manual" | "";
 type TabId = "connections" | "mcp" | "codeproof";
-
-type FleetMachine = {
-  device?: {
-    self?: boolean;
-    name?: string;
-    dnsName?: string;
-    os?: string;
-    online?: boolean;
-    ip?: string;
-    collectorUrl?: string;
-  };
-  collector?: string;
-  envSync?: { ready?: boolean };
-};
-
-type MachineChoice = {
-  id: string;
-  name: string;
-  os: string;
-  online: boolean;
-  collectorReady: boolean;
-  envReady: boolean;
-  self: boolean;
-  baseUrl: string;
-  collectorUrl: string;
-  rank: number;
-  note: string;
-};
 
 type HiveMcpCatalogItem = {
   id: string;
@@ -151,7 +139,7 @@ export type IntegrationsViewProps = {
 };
 
 export function IntegrationsView({ embedded = false, defaultTab = "connections" }: IntegrationsViewProps) {
-  const [tab, setTab] = React.useState<TabId>(defaultTab);
+  const [tab, setTab] = React.useState<TabId>(() => tabFromLocation(defaultTab, TABS));
 
   return (
     <div className={`fr-root ${embedded ? "ni-embedded" : ""}`} style={{ position: "relative", minHeight: embedded ? undefined : "100vh", background: embedded ? "transparent" : "var(--bg)" }}>
@@ -785,6 +773,7 @@ function McpManager() {
   const [connected, setConnected] = React.useState<McpServerStatus[]>([]);
   const [catalog, setCatalog] = React.useState<McpCatalogCardItem[]>([]);
   const [xStatus, setXStatus] = React.useState<XMcpStatus | null>(null);
+  const [managedXStatus, setManagedXStatus] = React.useState<ManagedXPanelStatus | null>(null);
   const [connectItem, setConnectItem] = React.useState<McpCatalogCardItem | null>(null);
   const [category, setCategory] = React.useState("all");
   const [query, setQuery] = React.useState("");
@@ -798,21 +787,30 @@ function McpManager() {
     setLoading(true);
     setMessage("");
     try {
-      const [statusResponse, catalogResponse, xResponse] = await Promise.all([
+      const [statusResponse, catalogResponse, xResponse, managedResponse] = await Promise.all([
         fetch("/api/mcp/client", { cache: "no-store" }),
         fetch("/api/mcp/catalog?limit=100", { cache: "no-store" }),
         fetch("/api/integrations/x-mcp", { cache: "no-store" }),
+        fetch(managedXStatusUrl(), { cache: "no-store" }),
       ]);
       const status = await readJson<{ ok?: boolean; enabled?: boolean; servers?: McpServerStatus[] } & FetchErrorPayload>(statusResponse);
       const catalogData = await readJson<{ ok?: boolean; servers?: HiveMcpCatalogItem[] } & FetchErrorPayload>(catalogResponse);
       const xData = await readJson<{ ok?: boolean; status?: XMcpStatus } & FetchErrorPayload>(xResponse);
+      const managedData = await readJson<{ ok?: boolean } & ManagedXPanelStatus & FetchErrorPayload>(managedResponse);
       if (!statusResponse.ok || status.ok === false) throw new Error(status.error ?? "Could not read MCP client status.");
       if (!catalogResponse.ok || catalogData.ok === false) throw new Error(catalogData.error ?? "Could not read MCP catalog.");
       if (!xResponse.ok || xData.ok === false) throw new Error(xData.error ?? "Could not read X MCP status.");
+      if (!managedResponse.ok || managedData.ok === false) throw new Error(managedData.error ?? "Could not read managed X status.");
       setEnabled(status.enabled !== false);
       setConnected(status.servers ?? []);
       setCatalog((catalogData.servers ?? []).map(withMcpDefaults));
       setXStatus(xData.status ?? null);
+      setManagedXStatus({
+        creditAccounts: managedData.creditAccounts ?? [],
+        connections: managedData.connections ?? [],
+        credits: managedData.credits,
+      });
+      showManagedXReturnMessage(setXMessage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load MCP servers.");
     } finally {
@@ -918,6 +916,53 @@ function McpManager() {
     }
   }
 
+  async function refreshManagedX(creditAccountId?: string, slug?: string) {
+    setXBusy("managed-refresh");
+    setXMessage("");
+    try {
+      const response = await fetch(managedXStatusUrl(creditAccountId, slug), { cache: "no-store" });
+      const data = await readJson<{ ok?: boolean } & ManagedXPanelStatus & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not read managed X status.");
+      setManagedXStatus({
+        creditAccounts: data.creditAccounts ?? [],
+        connections: data.connections ?? [],
+        credits: data.credits,
+      });
+      const connectionCount = data.connections?.length ?? 0;
+      setXMessage(connectionCount > 0
+        ? `Managed X account connected: ${connectionCount} connection${connectionCount === 1 ? "" : "s"}.`
+        : "Managed X status refreshed.");
+    } catch (error) {
+      setXMessage(error instanceof Error ? error.message : "Could not read managed X status.");
+    } finally {
+      setXBusy("");
+    }
+  }
+
+  async function startManagedXOAuth(creditAccountId: string, slug: string) {
+    setXBusy("managed-oauth");
+    setXMessage("");
+    try {
+      const response = await fetch("/api/integrations/x-managed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "oauth-start",
+          creditAccountId,
+          slug,
+          returnUrl: managedXReturnUrl(creditAccountId, slug),
+        }),
+      });
+      const data = await readJson<{ ok?: boolean; authorizationUrl?: string } & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not start managed X sign-in.");
+      if (!data.authorizationUrl) throw new Error("Managed X sign-in did not return an authorization URL.");
+      window.location.assign(data.authorizationUrl);
+    } catch (error) {
+      setXMessage(error instanceof Error ? error.message : "Could not start managed X sign-in.");
+      setXBusy("");
+    }
+  }
+
   return (
     <div className="fm-wrap">
       <div className="fm-master">
@@ -937,13 +982,16 @@ function McpManager() {
         <>
           <XAccountMcpPanel
             status={xStatus}
+            managedStatus={managedXStatus}
             busy={xBusy}
             message={xMessage}
             onSaveCredentials={(clientId, clientSecret, redirectUri) => void runXAction("save-credentials", { clientId, clientSecret, redirectUri })}
             onStartOAuth={() => void runXAction("start-oauth")}
+            onStartManagedOAuth={(creditAccountId, slug) => void startManagedXOAuth(creditAccountId, slug)}
             onSyncRuntimes={() => void runXAction("sync-runtimes")}
             onRemoveRuntimes={() => void runXAction("remove-runtimes")}
             onRefresh={() => void load()}
+            onRefreshManaged={(creditAccountId, slug) => void refreshManagedX(creditAccountId, slug)}
           />
 
           <div>
@@ -1367,126 +1415,4 @@ function withMcpDefaults(item: HiveMcpCatalogItem): McpCatalogCardItem {
 
 function mcpRiskyEffects(item: Pick<McpCatalogCardItem, "sideEffects">) {
   return item.sideEffects.filter((effect) => effect === "write" || effect === "payments" || effect === "filesystem" || effect === "browser");
-}
-
-function setupStepForPayload(payload: NangoIntegrationPayload): SetupStep {
-  if (payload.health.ok) return "apps";
-  if (payload.config.hostMachineId && payload.config.baseUrl) return "apps";
-  return "welcome";
-}
-
-function setupMethodLabel(method?: NangoHostSetupResult["method"]) {
-  if (method === "collector-api") return "agent bridge";
-  if (method === "local-shell") return "local setup";
-  if (method === "tailscale-ssh") return "Tailscale";
-  if (method === "plain-ssh") return "SSH";
-  return method || "setup";
-}
-
-function summarizeRegistrarOutput(output?: string) {
-  if (!output) return "";
-  const changedMatch = output.match(/Done\.\s+([^\n]+)/);
-  if (changedMatch) return changedMatch[1].trim();
-  const lines = output.split(/\r?\n/).filter(Boolean);
-  return lines.at(-1) ?? "";
-}
-
-function machineChoices(machines: FleetMachine[], config: NangoHostConfig): MachineChoice[] {
-  const choices = machines.map((machine) => {
-    const device = machine.device ?? {};
-    const name = device.self ? "This Mac" : device.name || dnsLabel(device.dnsName) || device.ip || "Unknown machine";
-    const id = device.self ? "self" : normalizeId(device.dnsName || device.name || device.ip || name);
-    const online = device.self || device.online === true;
-    const collectorReady = machine.collector === "ready";
-    const envReady = machine.envSync?.ready === true;
-    const serverLike = /linux|ubuntu|debian|server|cloud|hetzner/i.test(`${device.os} ${name} ${device.dnsName}`);
-    const baseHost = device.self ? "127.0.0.1" : (device.dnsName || device.ip || name).replace(/\.$/, "");
-    const rank = (online ? 32 : 0) + (collectorReady ? 18 : 0) + (envReady ? 14 : 0) + (serverLike ? 28 : 0) + (device.self ? 4 : 0);
-    return {
-      id,
-      name,
-      os: device.os || "unknown OS",
-      online,
-      collectorReady,
-      envReady,
-      self: device.self === true,
-      baseUrl: `http://${baseHost}:3003`,
-      collectorUrl: device.collectorUrl || "",
-      rank,
-      note: device.self ? "current machine" : serverLike ? "always-on candidate" : "tailnet machine",
-    };
-  });
-
-  if (!choices.some((choice) => choice.id === "self")) {
-    choices.push({
-      id: "self",
-      name: "This Mac",
-      os: "local",
-      online: true,
-      collectorReady: false,
-      envReady: false,
-      self: true,
-      baseUrl: "http://127.0.0.1:3003",
-      collectorUrl: "",
-      rank: 18,
-      note: "current machine",
-    });
-  }
-
-  if (config.hostMachineId && !choices.some((choice) => choice.id === config.hostMachineId)) {
-    choices.push({
-      id: config.hostMachineId,
-      name: config.hostMachineName || config.hostMachineId,
-      os: "saved host",
-      online: false,
-      collectorReady: false,
-      envReady: false,
-      self: false,
-      baseUrl: config.baseUrl,
-      collectorUrl: "",
-      rank: 10,
-      note: "saved host",
-    });
-  }
-
-  return choices.sort((left, right) => right.rank - left.rank || left.name.localeCompare(right.name));
-}
-
-function dnsLabel(value?: string) {
-  return value?.replace(/\.$/, "").split(".")[0] ?? "";
-}
-
-function normalizeId(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-|-$/g, "") || "machine";
-}
-
-function setupTargetFromBaseUrl(baseUrl: string) {
-  try {
-    return new URL(baseUrl).hostname.replace(/^\[|\]$/g, "");
-  } catch {
-    return baseUrl.replace(/^https?:\/\//, "").split(":")[0] || "integration-host";
-  }
-}
-
-function friendlySetupError(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  if (/fetch failed|failed to fetch|network/i.test(message)) return "Could not reach that machine. Make sure it is online, then try again.";
-  return message || "Could not start Nango. Try again in a moment.";
-}
-
-function splitArgs(value: string) {
-  return value.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((part) => part.replace(/^"|"$/g, "")).filter(Boolean) ?? [];
-}
-
-async function readJson<T>(response: Response): Promise<T> {
-  return await response.json().catch(() => ({})) as T;
-}
-
-function timeAgo(ts: number) {
-  const seconds = Math.max(1, Math.round((Date.now() - ts) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  return `${hours}h ago`;
 }

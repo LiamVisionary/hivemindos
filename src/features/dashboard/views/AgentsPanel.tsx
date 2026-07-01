@@ -12,6 +12,7 @@ import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { DashboardView, HivemindLinkClientStatus, MachineGroup } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import styles from "./AgentsPanel.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 type IconComponent = ElementType<{
@@ -43,8 +44,10 @@ type TailnetCleanupBanner = {
 type AgentsPanelProps = {
   Button: ElementType;
   Check: IconComponent;
+  CircleAlert: IconComponent;
   ExternalLink: IconComponent;
   FleetView: ComponentType<FleetViewProps>;
+  Trash2: IconComponent;
   activeView: DashboardView;
   tailnetCleanup?: TailnetCleanupBanner;
   addAgentToMachine: (machine: MachineGroup) => void;
@@ -167,8 +170,10 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   const {
     Button,
     Check,
+    CircleAlert,
     ExternalLink,
     FleetView,
+    Trash2,
     activeView,
     tailnetCleanup,
     addAgentToMachine,
@@ -428,6 +433,15 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     }),
   };
   const layoutToggle = <FleetLayoutToggle layout={fleetLayout} onChoose={chooseFleetLayout} />;
+  const tailnetCleanupCount = tailnetCleanup?.candidates.length ?? 0;
+  const tailnetCleanupHosts = tailnetCleanup?.candidates.map((candidate) => candidate.hostname).join(", ") ?? "";
+  const tailnetCleanupTitle = tailnetCleanup?.notice && tailnetCleanupCount === 0
+    ? "Tailnet cleanup updated"
+    : tailnetCleanupCount === 1
+      ? "Stale tailnet node"
+      : `${tailnetCleanupCount} stale tailnet nodes`;
+  const tailnetCleanupDetail = tailnetCleanup?.notice
+    || `Offline over ${tailnetCleanup?.staleAgeDays ?? 7} days${tailnetCleanupHosts ? `: ${tailnetCleanupHosts}` : ""}. Cleanup keeps Fleet free of retired registrations.`;
 
   return (
     <>
@@ -480,40 +494,48 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
             </div>
           ) : null}
           {tailnetCleanup?.visible ? (
-            <div className="relative mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.10)] px-4 py-3 pr-12 text-sm text-[var(--foreground)]">
-              <div style={{ minWidth: 0 }}>
-                <strong>
-                  {tailnetCleanup.candidates.length === 1
-                    ? "1 stale tailnet node detected"
-                    : `${tailnetCleanup.candidates.length} stale tailnet nodes detected`}
-                </strong>
-                <p className="mt-1 text-[var(--muted)]" style={{ overflowWrap: "anywhere" }}>
-                  {tailnetCleanup.notice
-                    || `Old registrations offline for over ${tailnetCleanup.staleAgeDays} days: ${tailnetCleanup.candidates.map((candidate) => candidate.hostname).join(", ")}. Removing them keeps the fleet roster free of ghost machines.`}
-                </p>
+            <div className={styles.tailnetCleanupBanner} role="status" aria-live="polite">
+              <span className={styles.tailnetCleanupIcon} aria-hidden="true">
+                <CircleAlert className={styles.tailnetCleanupIconGlyph} />
+              </span>
+              <div className={styles.tailnetCleanupCopy}>
+                <div className={styles.tailnetCleanupHeader}>
+                  <strong>{tailnetCleanupTitle}</strong>
+                  {tailnetCleanupCount > 0 ? (
+                    <span>{tailnetCleanup.staleAgeDays}+ days offline</span>
+                  ) : null}
+                </div>
+                <p>{tailnetCleanupDetail}</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={tailnetCleanup.busy}
-                  onClick={() => tailnetCleanup.onCleanupNow()}
-                >
-                  {tailnetCleanup.busy ? "Cleaning..." : "Clean up now"}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={tailnetCleanup.busy}
-                  onClick={() => tailnetCleanup.onAlwaysCleanup()}
-                  title="Also removes future stale hivemindos-* nodes automatically once a day"
-                >
-                  Always clean up automatically
-                </Button>
-              </div>
+              {tailnetCleanupCount > 0 ? (
+                <div className={styles.tailnetCleanupActions}>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className={styles.tailnetCleanupAction}
+                    disabled={tailnetCleanup.busy}
+                    onClick={() => tailnetCleanup.onCleanupNow()}
+                  >
+                    <Trash2 aria-hidden="true" className={styles.tailnetCleanupButtonIcon} />
+                    {tailnetCleanup.busy ? "Cleaning..." : "Clean up"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className={`${styles.tailnetCleanupAction} ${styles.tailnetCleanupActionSecondary}`}
+                    disabled={tailnetCleanup.busy}
+                    onClick={() => tailnetCleanup.onAlwaysCleanup()}
+                    title="Also removes future stale hivemindos-* nodes automatically once a day"
+                  >
+                    <Check aria-hidden="true" className={styles.tailnetCleanupButtonIcon} />
+                    Auto-clean daily
+                  </Button>
+                </div>
+              ) : null}
               <CloseIconButton
-                className="absolute right-2 top-2"
+                className={styles.tailnetCleanupClose}
+                size="sm"
                 aria-label="Dismiss stale tailnet node message"
                 onClick={() => tailnetCleanup.onDismiss()}
               />

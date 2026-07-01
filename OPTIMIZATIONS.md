@@ -17,6 +17,16 @@ the engineering memory for optimization decisions and performance traps.
 - Note tradeoffs, cache freshness, fallback behavior, and when the optimization should be revisited.
 - If an optimization affects prompt injection or agent context, state what context is preserved and what is skipped, cached, compacted, or deferred.
 
+## 2026-07-01 23:10 +0800 - Bound Stripe Checkout Credit Polling
+
+- Problem: After a card-funded HivemindOS Models checkout, the desktop app had no automatic way to notice the Stripe webhook-minted credit balance. Users had to press Refresh, and even then the modal-local balance could update without persisting the balance that provider cards read.
+- Change: The guided HivemindOS Models setup starts a bounded credit-balance watcher after card checkout opens or after the `hivemindos://models/credits` desktop return event arrives. It waits 2.5 seconds before the first poll, then checks every 5 seconds, and stops after 10 minutes, when credits are funded, or when checkout is canceled. Each successful balance read persists the hosted credit balance back onto the agent profile.
+- Preserved behavior: Manual Refresh remains available and uses the same balance persistence path. Stripe webhooks remain the authority for credit minting; polling only reads the local hosted-credit balance endpoint and never grants credits by itself.
+- Tradeoff: The modal may make up to about 120 lightweight balance reads during a long pending checkout. That is intentional because checkout completion is user-visible and bounded to one active setup flow. Revisit if Stripe webhook latency routinely exceeds 10 minutes or if multiple concurrent setup modals become common.
+- Files: `src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx`, `src/app/api/hivemindos/models/credits/route.ts`, `src/lib/services/paid-agent-cloud-client.ts`, `src-tauri/src/desktop_navigation.rs`, `src-tauri/tauri.conf.json`, `OPTIMIZATIONS.md`.
+- Verification: Passed `node scripts/test-wallet-paid-models.mjs`, focused ESLint for the touched HivemindOS Models checkout files, focused `git diff --check`, `cargo check --manifest-path src-tauri/Cargo.toml`, private Worker `pnpm typecheck`, and a filtered TypeScript scan with no diagnostics for the touched public files.
+- Watch next: If the return page opens the browser instead of the app, verify the installed Tauri bundle has the `hivemindos` scheme registered before tuning the polling window.
+
 ## 2026-06-29 00:34 +0800 - Keep Large Source Notes In Shared Brain Recall
 
 - Problem: Full-vault recall could become noisy for broad queries because large imported source notes over 256 KiB were excluded from both the generated lexical index and local fallback reads. The live vault reproduced this with `Memory/Imported Sources/Bankr Platform Documentation.md`, about 546 KB: the old generated index did not contain it, so a targeted Bankr documentation query ranked unrelated imported agent memory above the intended source and the live benchmark scored 6/7 Top-1.

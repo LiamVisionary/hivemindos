@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
+    App, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
 use crate::{guard_native_callback, NativeServerState};
@@ -17,6 +17,7 @@ const NAVIGATE_EVENT: &str = "hivemindos:navigate";
 const OPEN_PALETTE_EVENT: &str = "hivemindos:open-command-palette";
 const OPEN_POPOUT_EVENT: &str = "hivemindos:open-popout";
 const RERUN_SETUP_EVENT: &str = "hivemindos:rerun-setup";
+const MODELS_CREDITS_RETURN_EVENT: &str = "hivemindos:models-credits-return";
 const QUEEN_VOICE_EVENT: &str = "hivemindos:queen-bee-voice";
 const QUEEN_SETTINGS_EVENT: &str = "hivemindos:queen-bee-settings";
 
@@ -57,6 +58,56 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+pub fn setup_deep_links(app: &App) -> Result<(), String> {
+    use tauri_plugin_deep_link::DeepLinkExt;
+
+    let start_urls = app.deep_link().get_current().map_err(|error| error.to_string())?;
+    if let Some(urls) = start_urls {
+        handle_deep_link_urls(app.handle(), urls.iter().map(|url| url.to_string()).collect());
+    }
+
+    let handle = app.handle().clone();
+    app.deep_link().on_open_url(move |event| {
+        let urls = event.urls().iter().map(|url| url.to_string()).collect::<Vec<_>>();
+        handle_deep_link_urls(&handle, urls);
+    });
+
+    #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+    app.deep_link().register_all().map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
+    for raw_url in urls {
+        let Ok(url) = url::Url::parse(&raw_url) else {
+            continue;
+        };
+        if url.scheme() != "hivemindos" {
+            continue;
+        }
+        let host = url.host_str().unwrap_or_default();
+        let path = url.path().trim_matches('/');
+        if host == "models" && path == "credits" {
+            show_main_window(app);
+            let status = query_value(&url, "status").unwrap_or_else(|| "returned".to_string());
+            let source = query_value(&url, "source").unwrap_or_else(|| "stripe".to_string());
+            let slug = query_value(&url, "slug").unwrap_or_default();
+            let _ = app.emit(MODELS_CREDITS_RETURN_EVENT, serde_json::json!({
+                "status": status,
+                "source": source,
+                "slug": slug,
+                "url": url.to_string(),
+            }));
+        }
+    }
+}
+
+fn query_value(url: &url::Url, key: &str) -> Option<String> {
+    url.query_pairs()
+        .find_map(|(name, value)| (name == key).then(|| value.into_owned()))
 }
 
 // Tray menu clicks are delivered to both the tray menu handler and the

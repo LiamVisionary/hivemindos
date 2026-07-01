@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Image from "next/image";
 
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import { normalizeClawBankLoginCode } from "./clawbank-login-code";
 import styles from "./ClawBankOnboardingModal.module.css";
 
 /**
@@ -121,7 +122,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
   }, [email]);
 
   const verifyCode = useCallback(async () => {
-    const value = code.trim();
+    const value = normalizeClawBankLoginCode(code);
     if (value.length < 4) {
       setError("Enter the code from your email.");
       return;
@@ -353,12 +354,15 @@ function CodeStep({ email, code, setCode, inputRef, busy, onVerify }: {
           ref={inputRef}
           className={`${styles.input} ${styles.codeInput}`}
           type="text"
-          inputMode="numeric"
+          inputMode="text"
           autoComplete="one-time-code"
-          placeholder="123456"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="Paste code"
           value={code}
           disabled={busy}
-          onChange={(event) => setCode(event.target.value.replace(/[^0-9a-zA-Z]/g, ""))}
+          onChange={(event) => setCode(normalizeClawBankLoginCode(event.target.value))}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();

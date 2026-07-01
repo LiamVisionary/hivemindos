@@ -414,7 +414,7 @@ async function augmentGatewayModelProviders(
     },
     hivemindosModels: {
       status: "ready",
-      message: "Uses the selected agent's local x402 wallet policy for each paid model call.",
+      message: "Uses hosted credits by default, with optional local x402 wallet funding for crypto users.",
       modelCount: walletPaidModels.length,
       checkedAt: new Date().toISOString(),
     },

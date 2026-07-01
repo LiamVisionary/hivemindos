@@ -24,6 +24,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 getrandom = "0.2"
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-liquid-glass = "0.1.6"
 tauri-plugin-opener = "2"
 tauri-plugin-process = "2"

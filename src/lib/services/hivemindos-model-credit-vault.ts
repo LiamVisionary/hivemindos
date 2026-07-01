@@ -20,6 +20,12 @@ type CreditTokenVault = {
   records: Record<string, CreditTokenRecord>;
 };
 
+export type HivemindosModelCreditTokenSummary = {
+  walletAgentId: string;
+  slug: string;
+  updatedAt: string;
+};
+
 const vaultDir = path.join(homedir(), ".hivemindos");
 const vaultPath = path.join(vaultDir, "hivemindos-model-credit-vault.json");
 const keyPath = path.join(vaultDir, "hivemindos-model-credit-vault.key");
@@ -136,4 +142,15 @@ export async function getHivemindosModelCreditToken(walletAgentId: string, slug:
     toUint8Array(decipher.update(base64UrlDecode(record.encryptedToken))),
     toUint8Array(decipher.final()),
   ])).toString("utf8");
+}
+
+export async function listHivemindosModelCreditTokenSummaries(): Promise<HivemindosModelCreditTokenSummary[]> {
+  const vault = await readVault();
+  return Object.values(vault.records)
+    .map((record) => ({
+      walletAgentId: record.walletAgentId,
+      slug: record.slug,
+      updatedAt: record.updatedAt,
+    }))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }

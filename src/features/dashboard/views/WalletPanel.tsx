@@ -470,8 +470,16 @@ function findPersonalWalletById(personalWallets: any[] | null, walletId: string)
 function buildLlmFundingSourceMeta(agent: any, wallet: any, agentsById: Map<string, any>, walletsByAgent: Record<string, any>, personalWallets: any[] | null) {
   const config = agent?.hivemindosModels ?? {};
   const configuredId = firstStringValue(config.walletVaultId);
-  const usesHivemindosModels = agent?.provider === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER || Boolean(configuredId);
+  const creditAccountId = firstStringValue(config.creditAccountId);
+  const usesHivemindosModels = agent?.provider === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER || Boolean(configuredId || creditAccountId);
   if (!usesHivemindosModels) return null;
+  if ((config.fundingMode === "credits" || creditAccountId) && !configuredId) {
+    return {
+      id: creditAccountId || agent.id,
+      title: "Hosted model credits",
+      detail: firstStringValue(config.lastCreditBalanceLabel) || "Tap to choose a crypto funding wallet.",
+    };
+  }
   const sourceId = configuredId || agent.id;
   const configuredAddress = firstStringValue(config.walletAddress);
   const configuredNetwork = firstStringValue(config.walletNetwork);
@@ -895,6 +903,7 @@ function WalletPanelComponent(props: any) {
         provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
         hivemindosModels: {
           ...(target.hivemindosModels ?? {}),
+          fundingMode: "wallet",
           walletVaultId: data.wallet.vaultId,
           walletAddress: data.wallet.address,
           walletNetwork: data.wallet.network,

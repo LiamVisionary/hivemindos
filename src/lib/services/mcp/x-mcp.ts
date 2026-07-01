@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { hiveEnvPresence, type HiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { writeSharedHiveEnvValue } from "@/lib/services/hive-env-write";
+import { getManagedXGatewayStatus, type ManagedXGatewayStatus } from "@/lib/services/managed-x-api-client";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +34,7 @@ export type XMcpStatus = {
   credentials: HiveEnvPresence[];
   optionalCredentials: HiveEnvPresence[];
   credentialsReady: boolean;
+  managedGateway: ManagedXGatewayStatus;
   xurlCachePresent: boolean;
   bridgeScriptPresent: boolean;
   runtimeTargets: XMcpRuntimeTargetStatus[];
@@ -43,15 +45,17 @@ export type XMcpStatus = {
 };
 
 export async function getXMcpStatus(): Promise<XMcpStatus> {
-  const [credentials, optionalCredentials] = await Promise.all([
+  const [credentials, optionalCredentials, managedGateway] = await Promise.all([
     hiveEnvPresence(X_MCP_ENV_KEYS),
     hiveEnvPresence(X_MCP_OPTIONAL_ENV_KEYS),
+    getManagedXGatewayStatus(),
   ]);
   const runtimeTargets = readRuntimeTargets();
   return {
     credentials,
     optionalCredentials,
     credentialsReady: credentials.every((item) => item.present),
+    managedGateway,
     xurlCachePresent: existsSync(XURL_DIR),
     bridgeScriptPresent: existsSync(BRIDGE_SCRIPT),
     runtimeTargets,

@@ -5,6 +5,76 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-02 00:04:58 PST +0800 - Sanitize collector env before remote Hermes chat
+  - Status: Uncommitted
+  - Areas changed: Remote agent collector chat spawn environment (`scripts/agent-telemetry-collector.mjs`) and focused regression guard (`scripts/test-agent-collector-env-sanitize.mjs`).
+  - Summary: Remote Hermes agents now sanitize inherited process env, shared hive-env values, and per-agent env overlays before spawning Hermes, so a corrupted shared env value with embedded NUL bytes cannot crash Emerson, Grace Hopper, or other remote collector-hosted agents before they answer.
+  - Verification: Reproduced the live Emerson and Grace Hopper failures through `/api/chat/agent-runtime`; confirmed the remote shared env export had `PUBLIC_PREVIEW_BASE_URL` with embedded NUL bytes in the generic scope while the Hermes-specific export was clean; after user approval, rewrote the affected remote `agent/generic` key to the NUL-stripped value and confirmed `agent/generic`, `agent/hermes`, `all/generic`, and `all/hermes` now report zero NUL bytes; Emerson and Grace Hopper both replied `HIVE_ENV_OK` through `/api/chat/agent-runtime`; passed `node --check scripts/agent-telemetry-collector.mjs`, `node --check scripts/test-agent-collector-env-sanitize.mjs`, `node scripts/test-agent-collector-env-sanitize.mjs`, and `git diff --check -- scripts/agent-telemetry-collector.mjs scripts/test-agent-collector-env-sanitize.mjs CHANGELOG.md`.
+  - Intended commit message: `Sanitize collector env before remote Hermes chat`
+
+- 2026-07-01 23:19:48 PST +0800 - Add managed X API credit gateway support
+  - Status: Uncommitted
+  - Areas changed: Managed X API local proxy routes, managed X gateway client, X MCP status/catalog UI, managed X account connection UI, integration callback routing, encrypted hosted-credit token summaries, HivemindOS MCP tool routing, X MCP regression coverage, and the private cloud-services X API gateway Worker/schema/README.
+  - Summary: HivemindOS now has the hosted side of "Sign in with X and spend Hivemind credits": a HivemindOS-controlled X API gateway owns OAuth token custody, encrypts X tokens server-side, prices calls from a server-owned X endpoint policy, and debits the same hosted credit balance already funded by Stripe or x402. The Integrations > MCP Servers panel now lets users pick a funded credit account, open managed X OAuth, return to the MCP panel, and see connected X accounts without exposing credit bearer tokens to the browser. All runtimes connected to the HivemindOS MCP can use the new `x_api` tool with write calls gated by `CONFIRM_X_API_CALL`.
+  - Verification: Passed private `pnpm test:static` and `pnpm typecheck` in `workers/x-api-gateway`; verified the deployed Worker health/pricing routes, required Worker secret names, remote D1 tables, fail-closed unauthenticated protected routes, and live deployment version; passed public `node --check scripts/hivemind-mcp`, `node --check scripts/test-x-mcp-integration.mjs`, `node scripts/test-x-mcp-integration.mjs`, focused public ESLint through `./node_modules/.bin/eslint` on the managed X client/routes/status/catalog/UI/test files, focused public and private `git diff --check`, and filtered public TypeScript scans with no diagnostics for touched files. `pnpm exec eslint ...` remains blocked before ESLint starts by the repo's existing pnpm lockfile/runtime mismatch, so the local ESLint binary was used. Full public TypeScript still exits on the existing unrelated promo/generated/Tauri-copy/shared-service baseline.
+  - Intended commit message: `Add managed X API credit gateway`
+
+- 2026-07-01 23:19:01 PST +0800 - Make HivemindOS Models Done close after funded refresh
+  - Status: Uncommitted
+  - Areas changed: HivemindOS Models guided funding setup and wallet-paid model regression coverage.
+  - Summary: Pressing Done after a card-funded HivemindOS Models balance refresh now saves the modal's current funded credit balance into the agent before closing, so the setup panel no longer reopens as if funding were still incomplete.
+  - Verification: Passed `node scripts/test-wallet-paid-models.mjs`, focused `./node_modules/.bin/eslint src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx scripts/test-wallet-paid-models.mjs --max-warnings=0`, focused `git diff --check` on the touched setup/test/changelog files, and a filtered `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no diagnostics for the touched files.
+  - Intended commit message: `Close HivemindOS Models setup after funded refresh`
+
+- 2026-07-01 23:10:59 PST +0800 - Return Stripe Checkout to the desktop app
+  - Status: Uncommitted
+  - Areas changed: HivemindOS Models card-credit checkout flow, guided funding setup, official paid-agent return URL client, Tauri deep-link registration, desktop navigation events, wallet-paid regression coverage, and the private paid-agent gateway checkout return page.
+  - Summary: Stripe Checkout for HivemindOS Models now returns through an official hosted HTTPS page that opens the real `hivemindos://models/credits` desktop deep link instead of the locked local web dashboard. After card checkout starts or returns, the desktop app automatically polls for up to 10 minutes, and refresh/auto-poll results persist the hosted model-credit balance back onto the agent so provider cards show the same funded balance as the setup panel.
+  - Verification: Passed `node scripts/test-wallet-paid-models.mjs`, focused `./node_modules/.bin/eslint src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx src/app/api/hivemindos/models/credits/route.ts src/lib/services/paid-agent-cloud-client.ts scripts/test-wallet-paid-models.mjs --max-warnings=0`, focused public and private `git diff --check`, `cargo check --manifest-path src-tauri/Cargo.toml`, private Worker `pnpm typecheck`, and a filtered `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no diagnostics for the touched public files.
+  - Intended commit message: `Return Stripe checkout to the desktop app`
+
+- 2026-07-01 22:56:04 PST +0800 - Tighten stale tailnet cleanup banner
+  - Status: Uncommitted
+  - Areas changed: Fleet dashboard stale-tailnet cleanup banner styling and copy.
+  - Summary: The stale tailnet cleanup prompt is now a compact Fleet-style notice with quieter warning treatment, smaller actions, matching iconography, and light-theme styling so it no longer dominates the Fleet header area.
+  - Verification: Passed `pnpm exec eslint src/features/dashboard/views/AgentsPanel.tsx --max-warnings=0`, focused `git diff --check -- src/features/dashboard/views/AgentsPanel.tsx src/features/dashboard/views/AgentsPanel.module.css CHANGELOG.md`, a filtered `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no `AgentsPanel` diagnostics, line-count checks for the touched view files, and authenticated Playwright desktop/mobile banner smoke tests on `http://127.0.0.1:5021` with a mocked stale-node cleanup GET.
+  - Intended commit message: `Tighten stale tailnet cleanup banner`
+
+- 2026-07-01 22:17:50 PST +0800 - Preserve ClawBank email codes during onboarding
+  - Status: Uncommitted
+  - Areas changed: ClawBank onboarding modal, login-code normalization helper, ClawBank regression coverage.
+  - Summary: ClawBank signup now preserves the exact URL-safe email code a user pastes, including hyphens and underscores, instead of treating every login code like a six-digit numeric OTP. This prevents valid ClawBank email codes from being altered before verification.
+  - Verification: Passed `pnpm test:clawbank`, focused `./node_modules/.bin/eslint src/features/dashboard/ClawBankOnboardingModal.tsx src/features/dashboard/clawbank-login-code.ts scripts/test-clawbank-client.mjs --max-warnings=0`, focused `git diff --check` on the touched ClawBank files and changelog, and a filtered `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no diagnostics for the touched ClawBank paths. Full TypeScript still exits 2 on the existing unrelated promo/generated/Tauri-copy baseline.
+  - Intended commit message: `Preserve ClawBank email codes during onboarding`
+
+- 2026-07-01 21:16 PST - Open Stripe Checkout from the Tauri app
+  - Status: Uncommitted
+  - Areas changed: HivemindOS Models guided funding setup UI and wallet-paid model regression coverage.
+  - Summary: Card-funded HivemindOS Models checkout now opens through the app's system-browser bridge, so pressing the card credit button in the Tauri desktop app launches Stripe Checkout in the user's browser instead of relying on WebView popup behavior. The setup still falls back to normal browser opening when running outside the desktop app.
+  - Verification: Passed `node scripts/test-wallet-paid-models.mjs`, focused `./node_modules/.bin/eslint src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx scripts/test-wallet-paid-models.mjs --max-warnings=0`, focused `git diff --check` on the touched checkout/changelog/test files, and a filtered `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no diagnostics for the touched files.
+  - Intended commit message: `Open Stripe checkout from Tauri`
+
+- 2026-07-01 21:07:51 PST - Keep card checkout pending until credits are funded
+  - Status: Uncommitted
+  - Areas changed: HivemindOS Models guided funding setup UI, HivemindOS Models readiness helpers, and wallet-paid model regression coverage.
+  - Summary: Opening Stripe Checkout for card credits no longer marks HivemindOS Models funding as ready or reveals the model route panel before credits are actually funded. The card-credit flow now offers $10, $25, $50, $100, and custom funding amounts, and the selected amount is sent to checkout.
+  - Verification: Passed `node scripts/test-wallet-paid-models.mjs`, focused `./node_modules/.bin/eslint src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx src/features/dashboard/views/chat/AgentSettingsModalPrimitives.tsx scripts/test-wallet-paid-models.mjs --max-warnings=0`, focused `git diff --check` on the touched setup/readiness/test/changelog files, and a filtered `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no diagnostics for the touched files.
+  - Intended commit message: `Keep card checkout pending until credits are funded`
+
+- 2026-07-01 20:54:20 PST - Hide model route until HivemindOS Models funding is configured
+  - Status: Uncommitted
+  - Areas changed: HivemindOS Models guided funding setup UI and wallet-paid model regression coverage.
+  - Summary: New HivemindOS Models setups now start with only the funding panel visible, so the model route preference does not occupy an empty right column before a card-credit funding source or wallet is configured. Once funding is ready, the route panel animates in and pushes the funding panel into the existing two-column layout.
+  - Verification: Passed `node scripts/test-wallet-paid-models.mjs`, focused `./node_modules/.bin/eslint src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx scripts/test-wallet-paid-models.mjs --max-warnings=0`, focused `git diff --check` on the touched setup files and changelog, and a filtered `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no diagnostics for the touched setup/test files.
+  - Intended commit message: `Hide model route until HivemindOS funding is ready`
+
+- 2026-07-01 15:19:12 PST - Add card-funded HivemindOS Models credits
+  - Status: Uncommitted
+  - Areas changed: HivemindOS Models credit routes and chat proxy, official paid-agent proxy routes, guided HivemindOS Models setup UI, agent profile funding metadata, Wallets LLM funding metadata, wallet-paid regression coverage, and the private paid-agent gateway Worker/schema/README.
+  - Summary: HivemindOS Models now supports a no-crypto funding path: agents can use hosted model credits funded by card checkout, while crypto users can still link a wallet and top up over x402. The local app starts checkout, stores the hosted credit token encrypted, and model calls with prepaid credits no longer require a local signing wallet. The hosted gateway creates Stripe Checkout sessions and only credits the D1 model-credit ledger after a verified paid Stripe webhook, preserving the official commercial trust boundary.
+  - Verification: Passed `node scripts/test-wallet-paid-models.mjs`, focused `./node_modules/.bin/eslint` on the touched HivemindOS Models credit/proxy/UI/type files, focused public and private `git diff --check`, `pnpm typecheck` in the private paid-agent gateway Worker, and a filtered public `./node_modules/.bin/tsc --noEmit --pretty false --incremental false --skipLibCheck` scan with no diagnostics for touched files. Production setup also exported a remote D1 backup before applying the additive credit-ledger schema, installed the Stripe Worker secrets from shared hive env without printing values, registered the live Stripe `checkout.session.completed` webhook, deployed paid-agent gateway Worker version `6d566eeb-ab5f-47ee-9b35-223ff72634ef`, confirmed health/readiness routes report configured with prepaid billing metadata, confirmed D1 credit tables exist, created and immediately expired a live Stripe Checkout smoke session without exposing the checkout URL or credit token, and removed the zero-balance smoke credit account.
+  - Intended commit message: `Add card-funded HivemindOS Models credits`
+
 - 2026-07-01 10:48:02 +0800 - Include generated Tauri permission and Next type config drift
   - Status: Uncommitted
   - Areas changed: Tauri autogenerated wallet-secret permission metadata, Next generated type references, and TypeScript include paths.

@@ -390,25 +390,37 @@ async function stableMachineId() {
   return machineIdPromise;
 }
 
-function safeAgentEnv(value) {
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function cleanProcessEnvValue(value) {
+  if (typeof value !== "string") return undefined;
+  return value.replace(/\0/g, "");
+}
+
+function sanitizeProcessEnvEntries(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      ([key, entry]) =>
-        /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof entry === "string",
-    ),
-  );
+  const env = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (!ENV_KEY_PATTERN.test(key)) continue;
+    const cleaned = cleanProcessEnvValue(entry);
+    if (cleaned !== undefined) env[key] = cleaned;
+  }
+  return env;
+}
+
+function safeAgentEnv(value) {
+  return sanitizeProcessEnvEntries(value);
 }
 
 function runtimeProcessEnv(extra = {}) {
   const pathParts = [dirname(process.execPath), process.env.PATH].filter(
     Boolean,
   );
-  return {
+  return sanitizeProcessEnvEntries({
     ...process.env,
     PATH: pathParts.join(delimiter),
     ...extra,
-  };
+  });
 }
 
 // The collector captures process.env at startup, so shared credentials added
@@ -430,6 +442,7 @@ async function readSharedHiveEnvForSpawn() {
     if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))) {
       value = value.slice(1, -1);
     }
+    value = cleanProcessEnvValue(value) ?? "";
     if (value) values[key] = value;
   }
   return values;

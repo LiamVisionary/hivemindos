@@ -27,6 +27,7 @@ const [
   walletsView,
   agentRuntimeTypes,
   agentSettingsTypes,
+  agentSettingsPrimitives,
   agentSettingsModal,
   safeProcessEnv,
   chatRuntimeRoute,
@@ -37,7 +38,12 @@ const [
   creditRoute,
   creditVault,
   paidAgentCloudClient,
+  tauriCargo,
+  tauriConfig,
+  tauriLib,
+  tauriDesktopNavigation,
   officialCreditTopUpRoute,
+  officialCreditCheckoutRoute,
   officialCreditBalanceRoute,
   chatBillingTypes,
   runtimeSessionStore,
@@ -62,6 +68,7 @@ const [
   source("src/components/wallets-drop-in/WalletsView.tsx"),
   source("src/lib/types/agent-runtime.ts"),
   source("src/features/dashboard/agent-settings-types.ts"),
+  source("src/features/dashboard/views/chat/AgentSettingsModalPrimitives.tsx"),
   source("src/features/dashboard/views/chat/AgentSettingsModal.tsx"),
   source("src/lib/utils/safe-process-env.ts"),
   source("src/app/api/chat/agent-runtime/route.ts"),
@@ -72,7 +79,12 @@ const [
   source("src/app/api/hivemindos/models/credits/route.ts"),
   source("src/lib/services/hivemindos-model-credit-vault.ts"),
   source("src/lib/services/paid-agent-cloud-client.ts"),
+  source("src-tauri/Cargo.toml"),
+  source("src-tauri/tauri.conf.json"),
+  source("src-tauri/src/lib.rs"),
+  source("src-tauri/src/desktop_navigation.rs"),
   source("src/app/api/official-paid-agents/[slug]/credits/top-up/route.ts"),
+  source("src/app/api/official-paid-agents/[slug]/credits/checkout/route.ts"),
   source("src/app/api/official-paid-agents/[slug]/credits/balance/route.ts"),
   source("src/lib/types/chat-billing.ts"),
   source("src/lib/services/chat/runtime-session-store.ts"),
@@ -102,7 +114,8 @@ includes(runtimeRoute, "runNonStreamToolCalls", "chat runtime executes non-strea
 includes(runtimeRoute, "const toolCalls = winningRequest?.sentTools ? extractOpenAIToolCalls(json) : []", "chat runtime checks non-stream JSON for tool calls before text fallback");
 includes(runtimeRoute, "nonStream: true", "chat runtime records non-stream command tool telemetry");
 includes(walletPaidService, "X-HivemindOS-Wallet-Agent-Id", "wallet-paid runtime resolver");
-includes(walletPaidService, "profile.hivemindosModels?.walletVaultId", "wallet-paid runtime resolver setup wallet id");
+includes(walletPaidService, "funding.walletVaultId", "wallet-paid runtime resolver setup wallet id");
+includes(walletPaidService, "funding.creditAccountId", "wallet-paid runtime resolver hosted credit account id");
 includes(walletPaidService, "/api/hivemindos/models", "wallet-paid runtime resolver");
 
 includes(modelsRoute, "hivemindosWalletPaidModelOptions", "models list route");
@@ -115,8 +128,11 @@ includes(walletPaidModelsConfig, "claude-opus-4.8", "wallet-paid research upstre
 
 includes(agentRuntimeTypes, "interface HivemindosModelsAgentConfig", "agent profile wallet-paid config");
 includes(agentRuntimeTypes, "hivemindosModels?: HivemindosModelsAgentConfig", "agent profile wallet-paid config field");
+includes(agentRuntimeTypes, "fundingMode?: \"credits\" | \"wallet\"", "agent profile HivemindOS Models funding mode");
+includes(agentRuntimeTypes, "creditAccountId?: string", "agent profile hosted credit account id");
 includes(agentRuntimeTypes, "fundingWalletKind?: \"personal\" | \"agent\"", "agent profile funding source kind");
 includes(agentRuntimeTypes, "fundingWalletLabel?: string", "agent profile funding source label");
+includes(agentRuntimeTypes, "lastCheckoutSessionId?: string", "agent profile card checkout session metadata");
 includes(agentRuntimeTypes, "lastCreditBalanceUsd?: string", "agent profile wallet-paid model credit balance");
 includes(agentRuntimeTypes, "lastCreditBalanceLabel?: string", "agent profile wallet-paid model credit balance label");
 includes(agentSettingsTypes, "hivemindosModels?: HivemindosModelsAgentConfig", "agent create draft wallet-paid config");
@@ -145,10 +161,33 @@ includes(setupComponent, "Funding address", "guided setup funding flow");
 includes(setupComponent, "Saved to Wallets", "guided setup wallet persistence copy");
 includes(setupComponent, "savedFundingBalanceCopy", "guided setup saved wallet balance copy");
 includes(setupComponent, "/api/hivemindos/models/credits", "guided setup model credits route");
-includes(setupComponent, "Top up credits", "guided setup model credits top-up action");
+includes(setupComponent, "Card credits", "guided setup card credit mode");
+includes(setupComponent, "Crypto wallet", "guided setup crypto wallet mode");
+includes(setupComponent, "CARD_CREDIT_AMOUNT_OPTIONS = [10, 25, 50, 100]", "guided setup card credit presets");
+includes(setupComponent, "CardCreditAmountOption", "guided setup card custom amount state");
+includes(setupComponent, "Custom amount", "guided setup custom card amount input");
+includes(setupComponent, "amountUsd: cardTopUpAmountUsd", "guided setup uses selected card amount for checkout");
+includes(setupComponent, "openCheckoutUrl", "guided setup opens Stripe checkout through the app browser bridge");
+includes(setupComponent, "/api/system/browsers/open", "guided setup opens Stripe checkout in the system browser for Tauri");
+includes(setupComponent, "window.open(trimmedUrl", "guided setup keeps web fallback for checkout links");
+includes(setupComponent, "CARD_CHECKOUT_POLL_WINDOW_MS = 10 * 60 * 1000", "guided setup auto-polls card checkout for ten minutes");
+includes(setupComponent, "setCardCheckoutPollUntil(Date.now() + CARD_CHECKOUT_POLL_WINDOW_MS", "guided setup starts card checkout polling");
+includes(setupComponent, "hivemindos:models-credits-return", "guided setup listens for desktop checkout return deep links");
+includes(setupComponent, "persistModelCreditBalance", "guided setup persists refreshed model credit balances");
+includes(setupComponent, "lastCreditBalanceLabel: balanceLabel", "guided setup writes refreshed balance labels back to the agent");
+includes(setupComponent, "hasFundedModelCredits", "guided setup waits for actual funded credits");
+assert.ok(!setupComponent.includes("creditState.checkoutSessionId\n      || creditState.configured"), "guided setup should not treat an opened checkout session as funded credits");
+assert.ok(!setupComponent.includes("lastTestStatus: \"ready\",\n        lastStatusMessage: data.message || \"Card checkout opened"), "guided setup should not mark opened card checkout as ready");
+assert.ok(!setupComponent.includes("successUrl: returnUrl"), "guided setup should not send the local dashboard as Stripe success URL");
+assert.ok(!setupComponent.includes("cancelUrl: returnUrl"), "guided setup should not send the local dashboard as Stripe cancel URL");
+includes(setupComponent, "Fund with crypto", "guided setup crypto top-up action");
 includes(setupComponent, "modelCreditLabel", "guided setup model credits balance label");
 includes(setupComponent, "async function finishSetup", "guided setup Done completion handler");
+includes(setupComponent, "completionConfig.lastCreditBalanceLabel", "guided setup Done persists local refreshed credit balance before closing");
+includes(setupComponent, "await onComplete(profilePatch(completionConfig))", "guided setup Done saves completion config before close");
 includes(setupComponent, "onCancel();", "guided setup Done closes after saving");
+includes(setupComponent, "const showRoutePreference = setupReady", "guided setup hides route preference until funding is configured");
+includes(setupComponent, "showRoutePreference ? (", "guided setup conditionally renders route preference panel");
 includes(setupComponent, "HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS", "guided setup model route selection");
 includes(setupComponent, "WalletSelectPanel", "guided setup embedded wallet picker");
 includes(setupComponent, "HivemindosModelsSetup.module.css", "guided setup dark honey stylesheet");
@@ -157,8 +196,15 @@ assert.ok(!setupComponent.includes("/api/wallet/browse"), "guided setup should u
 assert.ok(!setupComponent.includes("styles.browseActions"), "guided setup browse picker should not show a separate New wallet action");
 assert.ok(!setupComponent.includes("UsePodSetup.module.css"), "guided setup should not reuse UsePod setup styling");
 assert.ok(!setupComponent.includes("styles.wallets"), "guided setup should not render the old custom wallet list");
+assert.ok(!setupComponent.includes("Use my own API key"), "HivemindOS Models setup should not expose BYOK copy");
 
 includes(setupStyles, "--honey", "guided setup honey tokens");
+includes(setupStyles, "fundingModes", "guided setup funding mode switch styling");
+includes(setupStyles, "cardAmounts", "guided setup card amount presets styling");
+includes(setupStyles, "customAmount", "guided setup custom card amount styling");
+includes(setupStyles, "bodyFundingOnly", "guided setup single-column funding state");
+includes(setupStyles, "bodyWithModel", "guided setup animated two-column ready state");
+includes(setupStyles, "routePanelEnter", "guided setup route panel entrance animation");
 includes(setupStyles, "walletSelectorEmbed", "guided setup embedded wallet picker styling");
 includes(setupStyles, "[data-theme=\"hive-light\"]", "guided setup light theme token bridge");
 assert.ok(!setupStyles.includes("browseActions"), "guided setup styles should not keep the hidden browse New wallet action");
@@ -181,9 +227,14 @@ includes(agentSettingsModal, "onCancel={closeHivemindosModelsSetup}", "agent set
 includes(agentSettingsModal, "hivemindosModelsCreateBlocked", "agent settings modal create gate");
 includes(agentSettingsModal, "selectHivemindosModelsProvider", "agent settings modal provider select handler");
 includes(agentSettingsModal, "applyHivemindosModelsSetupProfile", "agent settings modal setup profile apply");
+includes(agentSettingsModal, "creditAccountId", "agent settings modal preserves hosted credit account id");
+includes(agentSettingsModal, "fundingMode", "agent settings modal preserves HivemindOS Models funding mode");
 includes(agentSettingsModal, "lastCreditBalanceLabel", "agent settings modal preserves HivemindOS Models credit balance");
 assert.ok(!agentSettingsModal.includes(") : hivemindosModelsSelected ? ("), "agent settings modal should not render completed HivemindOS Models setup solely because the provider is selected");
+includes(agentSettingsPrimitives, "moneyValue(config.lastCreditBalanceUsd) > 0", "agent settings readiness requires funded hosted credits");
+assert.ok(!agentSettingsPrimitives.includes("config.lastCheckoutSessionId\n      || config.lastCreditBalanceUsd"), "agent settings readiness should not treat an opened checkout session as ready");
 includes(walletPanel, "buildLlmFundingSourceMeta", "wallet panel LLM funding source metadata");
+includes(walletPanel, "Hosted model credits", "wallet panel card-funded LLM funding source metadata");
 includes(walletPanel, "onOpenLlmFundingSource", "wallet panel funding source action");
 includes(walletPanel, "WalletSelectModal", "wallet panel funding source selector");
 includes(walletPanel, "/api/hivemindos/models/wallet", "wallet panel persists linked funding wallets");
@@ -195,7 +246,7 @@ includes(proxyRoute, "executeX402Fetch", "wallet-paid proxy");
 includes(proxyRoute, "upstreamHivemindosWalletPaidModel", "wallet-paid proxy maps public model aliases to upstream ids");
 includes(proxyRoute, "getHivemindosModelCreditToken", "wallet-paid proxy reads prepaid model credit token");
 includes(proxyRoute, "X-HivemindOS-Credit-Token", "wallet-paid proxy forwards hosted credit token");
-includes(proxyRoute, "skipPaymentDiscovery: Boolean(creditToken)", "wallet-paid proxy avoids prepaid POST discovery double-runs");
+includes(proxyRoute, "fetchWithHostedCredits", "wallet-paid proxy uses stored credits without a local wallet secret");
 includes(proxyRoute, "X-HivemindOS-Models-Credit-Balance-Usd", "wallet-paid proxy exposes hosted model credit balance");
 includes(proxyRoute, "const upstreamModel = upstreamHivemindosWalletPaidModel(model)", "wallet-paid proxy derives upstream model id");
 includes(proxyRoute, "model: upstreamModel", "wallet-paid proxy sends upstream model id");
@@ -224,11 +275,16 @@ includes(creditVault, "getHivemindosModelCreditToken", "credit token vault reads
 
 includes(creditRoute, "storeHivemindosModelCreditToken", "model credits route persists hosted credit token");
 includes(creditRoute, "getHivemindosModelCreditToken", "model credits route reads hosted credit token");
+includes(creditRoute, "method === \"card\"", "model credits route supports card checkout funding");
+includes(creditRoute, "creditAccountId", "model credits route accepts hosted credit account ids");
 includes(creditRoute, "executeX402Fetch", "model credits route signs official top-up");
 includes(creditRoute, "MODEL_CREDIT_TOP_UP_CAP_USD", "model credits route uses explicit top-up cap");
 includes(creditRoute, "approvalRequiredOverUsd: 0", "model credits route treats top-up click as model-credit approval");
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/top-up", "model credits route calls official top-up endpoint");
+includes(creditRoute, "/api/official-paid-agents/${slug}/credits/checkout", "model credits route calls official card checkout endpoint");
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/balance", "model credits route calls official balance endpoint");
+includes(creditRoute, "officialPaidAgentCheckoutReturnUrl(\"success\", slug)", "model credits route uses hosted success return URL");
+includes(creditRoute, "officialPaidAgentCheckoutReturnUrl(\"cancel\", slug)", "model credits route uses hosted cancel return URL");
 assert.ok(!creditRoute.includes("creditToken,"), "model credits route should not return the hosted bearer token to the client as a bare field");
 
 includes(chatBillingTypes, "export type ChatResponseBilling", "chat billing metadata type");
@@ -243,11 +299,23 @@ includes(messageThread, "responseBillingText(message.billing)", "chat thread ren
 includes(chatExchangeStyles, "fr-chat-response-billing", "chat billing subtle footer style");
 
 includes(paidAgentCloudClient, "proxyOfficialPaidAgentCreditTopUpRequest", "official paid-agent proxy top-up helper");
+includes(paidAgentCloudClient, "proxyOfficialPaidAgentCreditCheckoutRequest", "official paid-agent proxy checkout helper");
 includes(paidAgentCloudClient, "proxyOfficialPaidAgentCreditBalanceRequest", "official paid-agent proxy balance helper");
+includes(paidAgentCloudClient, "officialPaidAgentCheckoutReturnUrl", "official paid-agent client builds checkout return URLs");
+includes(paidAgentCloudClient, "models\", \"credits\", \"return", "official paid-agent checkout return URL path");
 includes(paidAgentCloudClient, "x-hivemindos-credit-token", "official paid-agent proxy forwards credit token header");
 includes(paidAgentCloudClient, "x-hivemindos-credit-balance-usd", "official paid-agent proxy exposes credit balance header");
 includes(officialCreditTopUpRoute, "proxyOfficialPaidAgentCreditTopUpRequest", "official credit top-up route");
+includes(officialCreditCheckoutRoute, "proxyOfficialPaidAgentCreditCheckoutRequest", "official credit checkout route");
 includes(officialCreditBalanceRoute, "proxyOfficialPaidAgentCreditBalanceRequest", "official credit balance route");
+
+includes(tauriCargo, "tauri-plugin-deep-link", "Tauri desktop enables the deep-link plugin");
+includes(tauriConfig, "\"schemes\": [\"hivemindos\"]", "Tauri desktop registers the hivemindos URL scheme");
+includes(tauriLib, "tauri_plugin_deep_link::init()", "Tauri desktop initializes deep linking");
+includes(tauriLib, "setup_deep_links(_app)", "Tauri desktop wires deep link setup");
+includes(tauriDesktopNavigation, "hivemindos:models-credits-return", "Tauri desktop emits model credit return events");
+includes(tauriDesktopNavigation, "url.scheme() != \"hivemindos\"", "Tauri desktop handles the hivemindos scheme");
+includes(tauriDesktopNavigation, "get_current()", "Tauri desktop handles cold-start deep link URLs");
 
 includes(safeProcessEnv, "replace(/\\0/g, \"\")", "safe process env strips null bytes");
 includes(safeProcessEnv, "ENV_KEY_PATTERN", "safe process env validates keys");

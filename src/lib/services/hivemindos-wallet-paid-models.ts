@@ -45,9 +45,12 @@ export function resolveHivemindosWalletPaidModelRuntimeConfig(
   if (!requestOrigin) {
     throw new Error("HivemindOS Models need the dashboard request origin to route wallet-paid calls.");
   }
-  const walletAgentId = profile.hivemindosModels?.walletVaultId?.trim() || wallet?.agentId?.trim() || profile.id?.trim();
-  if (!walletAgentId) {
-    throw new Error("Select an agent with a local wallet before using HivemindOS Models.");
+  const funding = profile.hivemindosModels ?? {};
+  const fundingAccountId = funding.fundingMode === "credits"
+    ? funding.creditAccountId?.trim() || funding.walletVaultId?.trim() || wallet?.agentId?.trim() || profile.id?.trim()
+    : funding.walletVaultId?.trim() || funding.creditAccountId?.trim() || wallet?.agentId?.trim() || profile.id?.trim();
+  if (!fundingAccountId) {
+    throw new Error("Add HivemindOS Models credits or select a local funding wallet before chatting.");
   }
   return {
     baseUrl: `${requestOrigin.replace(/\/+$/, "")}/api/hivemindos/models`,
@@ -55,7 +58,7 @@ export function resolveHivemindosWalletPaidModelRuntimeConfig(
     statusPath: "/models",
     model: selectedHivemindosWalletPaidModel(profile),
     headers: {
-      "X-HivemindOS-Wallet-Agent-Id": walletAgentId,
+      "X-HivemindOS-Wallet-Agent-Id": fundingAccountId,
       "X-HivemindOS-Wallet-Model-Slug": hivemindosWalletPaidModelAgentSlug(),
     },
   };

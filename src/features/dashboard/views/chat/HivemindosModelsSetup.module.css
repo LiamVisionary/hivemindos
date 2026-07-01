@@ -155,12 +155,16 @@
 
 .body {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(260px, 0.92fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  column-gap: 0;
+  row-gap: 14px;
   padding: 16px 18px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-2) transparent;
+  transition:
+    grid-template-columns 0.38s cubic-bezier(0.2, 0.74, 0.12, 1),
+    column-gap 0.38s cubic-bezier(0.2, 0.74, 0.12, 1);
 }
 
 .body::-webkit-scrollbar {
@@ -176,6 +180,17 @@
 
 .bodyBrowse {
   grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
+}
+
+.bodyFundingOnly {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  column-gap: 0;
+}
+
+.bodyWithModel {
+  grid-template-columns: minmax(0, 1.08fr) minmax(260px, 0.92fr);
+  column-gap: 14px;
 }
 
 .panel,
@@ -193,6 +208,8 @@
 
 .modelPanel {
   background: linear-gradient(180deg, color-mix(in srgb, var(--live) 4%, var(--panel)), var(--panel));
+  transform-origin: left center;
+  animation: routePanelEnter 0.4s cubic-bezier(0.18, 0.78, 0.14, 1) both;
 }
 
 .panel h3,
@@ -304,6 +321,47 @@
   margin-top: 14px;
 }
 
+.fundingModes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+
+.fundingMode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 12px;
+  color: var(--fg-2);
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.fundingMode svg {
+  width: 16px;
+  height: 16px;
+}
+
+.fundingMode:hover {
+  color: var(--fg);
+  border-color: var(--line-3);
+}
+
+.fundingMode[data-active] {
+  color: var(--honey);
+  background: var(--honey-soft);
+  border-color: var(--honey-line);
+}
+
 .creditBox {
   display: grid;
   gap: 12px;
@@ -360,6 +418,81 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.cardAmounts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.amountChoice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 8px;
+  color: var(--fg-2);
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.amountChoice:hover {
+  color: var(--fg);
+  border-color: var(--line-3);
+}
+
+.amountChoice[data-active] {
+  color: var(--honey);
+  background: var(--honey-soft);
+  border-color: var(--honey-line);
+}
+
+.customAmount {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 0.35fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  color: var(--fg-3);
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.customAmount span {
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.customAmount input {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 9px;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.customAmount input:focus {
+  outline: none;
+  border-color: var(--honey-line);
+  box-shadow: 0 0 0 3px var(--honey-soft);
 }
 
 .iconOnly {
@@ -482,7 +615,27 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes routePanelEnter {
+  from {
+    opacity: 0;
+    transform: translateX(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .body {
+    transition: none;
+  }
+
+  .modelPanel {
+    animation: none;
+  }
+
   .spin {
     animation: none;
   }
@@ -503,6 +656,21 @@
   }
 
   .body {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+  }
+
+  .bodyFundingOnly,
+  .bodyWithModel {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+  }
+
+  .cardAmounts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .customAmount {
     grid-template-columns: minmax(0, 1fr);
   }
 

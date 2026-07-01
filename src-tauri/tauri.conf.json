@@ -35,6 +35,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["hivemindos"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://github.com/LiamVisionary/hivemindos/releases/latest/download/latest.json"

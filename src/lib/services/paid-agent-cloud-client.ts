@@ -50,6 +50,8 @@ type OfficialBaseResolution = {
   error?: string;
 };
 
+export type OfficialPaidAgentCheckoutReturnStatus = "success" | "cancel";
+
 type OfficialPaidAgentStatus = {
   configured: boolean;
   mode: "official-hosted-client";
@@ -103,8 +105,24 @@ export async function proxyOfficialPaidAgentCreditTopUpRequest(request: NextRequ
   return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "top-up"], "POST");
 }
 
+export async function proxyOfficialPaidAgentCreditCheckoutRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "checkout"], "POST");
+}
+
 export async function proxyOfficialPaidAgentCreditBalanceRequest(request: NextRequest, slug: string): Promise<Response> {
   return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "balance"], "GET");
+}
+
+export function officialPaidAgentCheckoutReturnUrl(status: OfficialPaidAgentCheckoutReturnStatus, slug?: string): string {
+  const resolution = resolveOfficialPaidAgentBaseUrl();
+  const target = new URL(resolution.url ?? DEFAULT_OFFICIAL_PAID_AGENT_BASE_URL);
+  target.pathname = joinUrlPath(target.pathname, "models", "credits", "return");
+  target.search = "";
+  target.hash = "";
+  target.searchParams.set("status", status);
+  target.searchParams.set("source", "stripe");
+  target.searchParams.set("slug", normalizeSlug(slug || DEFAULT_SLUG));
+  return target.toString();
 }
 
 async function proxyOfficialPaidAgentRequestPath(

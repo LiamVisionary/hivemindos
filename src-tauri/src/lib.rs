@@ -1442,6 +1442,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_liquid_glass::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -1455,6 +1456,9 @@ pub fn run() {
         .setup(|_app| {
             if let Err(error) = desktop_navigation::setup_tray(_app.handle()) {
                 eprintln!("HivemindOS tray setup failed: {error}");
+            }
+            if let Err(error) = desktop_navigation::setup_deep_links(_app) {
+                eprintln!("HivemindOS deep link setup failed: {error}");
             }
             desktop_navigation::restore_window_state(_app.handle());
 

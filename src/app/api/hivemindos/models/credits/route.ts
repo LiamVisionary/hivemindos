@@ -6,6 +6,7 @@ import {
   getHivemindosModelCreditToken,
   storeHivemindosModelCreditToken,
 } from "@/lib/services/hivemindos-model-credit-vault";
+import { officialPaidAgentCheckoutReturnUrl } from "@/lib/services/paid-agent-cloud-client";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
 import { executeX402Fetch, type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
@@ -15,8 +16,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type CreditTopUpBody = {
+  creditAccountId?: string;
   walletVaultId?: string;
   slug?: string;
+  method?: "card" | "crypto";
+  amountUsd?: number;
+  successUrl?: string;
+  cancelUrl?: string;
+  returnUrl?: string;
 };
 
 type CreditTopUpResponse = {
@@ -24,6 +31,8 @@ type CreditTopUpResponse = {
   error?: string;
   slug?: string;
   creditToken?: string;
+  checkoutUrl?: string;
+  checkoutSessionId?: string;
   creditedUsd?: number;
   balanceUsd?: number;
   totalCreditedUsd?: number;
@@ -32,19 +41,24 @@ type CreditTopUpResponse = {
 };
 
 const MODEL_CREDIT_TOP_UP_CAP_USD = 10;
+const MODEL_CREDIT_CARD_TOP_UP_USD = 10;
+const MODEL_CREDIT_CARD_TOP_UP_MIN_USD = 1;
+const MODEL_CREDIT_CARD_TOP_UP_MAX_USD = 500;
 
 export async function GET(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
 
   const url = new URL(request.url);
-  const walletVaultId = url.searchParams.get("walletVaultId")?.trim() || "";
+  const accountId = url.searchParams.get("creditAccountId")?.trim()
+    || url.searchParams.get("walletVaultId")?.trim()
+    || "";
   const slug = normalizeHivemindosWalletPaidSlug(url.searchParams.get("slug"));
-  if (!walletVaultId) {
-    return NextResponse.json({ ok: false, error: "walletVaultId is required to check HivemindOS Models credits." }, { status: 400 });
+  if (!accountId) {
+    return NextResponse.json({ ok: false, error: "creditAccountId or walletVaultId is required to check HivemindOS Models credits." }, { status: 400 });
   }
 
-  const token = await getHivemindosModelCreditToken(walletVaultId, slug).catch(() => "");
+  const token = await getHivemindosModelCreditToken(accountId, slug).catch(() => "");
   if (!token) {
     return NextResponse.json({
       ok: true,
@@ -83,7 +97,15 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => ({})) as CreditTopUpBody;
   const walletVaultId = body.walletVaultId?.trim() || "";
+  const accountId = body.creditAccountId?.trim() || walletVaultId;
   const slug = normalizeHivemindosWalletPaidSlug(body.slug);
+  if (body.method === "card") {
+    if (!accountId) {
+      return NextResponse.json({ ok: false, error: "creditAccountId is required to fund HivemindOS Models credits by card." }, { status: 400 });
+    }
+    return startCardCheckout(request, slug, body, accountId);
+  }
+
   if (!walletVaultId) {
     return NextResponse.json({ ok: false, error: "walletVaultId is required to top up HivemindOS Models credits." }, { status: 400 });
   }
@@ -182,6 +204,60 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function startCardCheckout(
+  request: NextRequest,
+  slug: string,
+  body: CreditTopUpBody,
+  accountId: string,
+) {
+  const target = new URL(`/api/official-paid-agents/${slug}/credits/checkout`, request.url);
+  const existingToken = await getHivemindosModelCreditToken(accountId, slug).catch(() => "");
+  const response = await fetch(target, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "Idempotency-Key": `hmos-model-credit-card-${randomUUID()}`,
+      ...(existingToken ? { "X-HivemindOS-Credit-Token": existingToken } : {}),
+    },
+    body: JSON.stringify({
+      creditAccountId: accountId,
+      amountUsd: normalizedCardTopUpUsd(body.amountUsd),
+      successUrl: officialPaidAgentCheckoutReturnUrl("success", slug),
+      cancelUrl: officialPaidAgentCheckoutReturnUrl("cancel", slug),
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(30_000),
+  });
+  const checkout = await response.json().catch(() => null) as CreditTopUpResponse | null;
+  if (!response.ok || !checkout?.ok) {
+    return NextResponse.json({
+      ok: false,
+      error: hostedError(checkout) || `HivemindOS Models card checkout returned HTTP ${response.status}.`,
+      status: response.status,
+    }, { status: response.status >= 400 && response.status < 600 ? response.status : 502 });
+  }
+
+  const checkoutCreditToken = typeof checkout.creditToken === "string" ? checkout.creditToken.trim() : "";
+  if (checkoutCreditToken) {
+    await storeHivemindosModelCreditToken({ walletAgentId: accountId, slug, token: checkoutCreditToken });
+  }
+  const balance = checkoutCreditToken ? await readHostedBalance(request, slug, checkoutCreditToken).catch(() => ({} as CreditTopUpResponse)) : {};
+  return NextResponse.json({
+    ok: true,
+    slug,
+    checkoutUrl: checkout.checkoutUrl,
+    checkoutSessionId: checkout.checkoutSessionId,
+    creditedUsd: numberOrUndefined(checkout.creditedUsd) ?? normalizedCardTopUpUsd(body.amountUsd),
+    balanceUsd: balance.balanceUsd ?? checkout.balanceUsd ?? null,
+    balanceLabel: typeof balance.balanceUsd === "number" ? formatUsd(balance.balanceUsd) : checkout.balanceUsd === undefined ? "Checkout pending" : formatUsd(checkout.balanceUsd),
+    totalCreditedUsd: balance.totalCreditedUsd,
+    totalDebitedUsd: balance.totalDebitedUsd,
+    updatedAt: balance.updatedAt,
+    message: "Card checkout opened. Refresh credits after payment completes.",
+  });
+}
+
 async function readHostedBalance(request: NextRequest, slug: string, token: string): Promise<CreditTopUpResponse> {
   const target = new URL(`/api/official-paid-agents/${slug}/credits/balance`, request.url);
   const response = await fetch(target, {
@@ -224,6 +300,11 @@ function formatUsd(value: number) {
     minimumFractionDigits: value >= 100 ? 0 : 2,
     maximumFractionDigits: value >= 100 ? 0 : 2,
   }).format(Math.max(0, value));
+}
+
+function normalizedCardTopUpUsd(value: unknown) {
+  const amount = numberOrUndefined(value) ?? MODEL_CREDIT_CARD_TOP_UP_USD;
+  return Math.min(MODEL_CREDIT_CARD_TOP_UP_MAX_USD, Math.max(MODEL_CREDIT_CARD_TOP_UP_MIN_USD, Math.round(amount * 100) / 100));
 }
 
 function errorStatusFor(message: string) {
