@@ -7,6 +7,7 @@ import type { QmdStatus } from "@/lib/services/brain/qmd";
 import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
 import type { ChatApplicationGenerationCard, ChatImageGeneration } from "@/features/dashboard/chat-application-generation";
+import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 
 export type GatewayStatus = {
   ok?: boolean;
@@ -278,6 +279,7 @@ export type ChatMessage = {
   sourceSessionId?: string;
   sourceIndex?: number;
   processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string }>;
+  billing?: ChatResponseBilling;
   attachments?: ChatAttachment[];
   applicationGeneration?: ChatApplicationGenerationCard;
   imageGeneration?: ChatImageGeneration;

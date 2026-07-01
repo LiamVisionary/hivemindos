@@ -10,7 +10,7 @@ import {
 } from "@/lib/services/wallet/honey-ledger";
 
 export type ManagedAgentBillingIntent = "chat" | "coding" | "research" | "paid-api" | "tool";
-export type ManagedAgentBillingProvider = "auto" | "bankr" | "openai" | "x402" | "moneyclaw" | "agent-wallet" | "hive";
+export type ManagedAgentBillingProvider = "auto" | "bankr" | "openai" | "x402" | "hivemindos-models" | "moneyclaw" | "agent-wallet" | "hive";
 export type ManagedAgentFundingRail = "stripe" | "stripe-crypto" | "x402" | "bankr" | "agent-wallet" | "hive";
 
 export type ManagedAgentQuoteInput = {
@@ -227,6 +227,7 @@ function providerModes() {
     { provider: "bankr", label: "Bankr / managed LLM gateway", default: false },
     { provider: "openai", label: "Direct model provider", default: false },
     { provider: "x402", label: "x402 paid API", default: false },
+    { provider: "hivemindos-models", label: "HivemindOS wallet-paid models", default: false },
     { provider: "moneyclaw", label: "MoneyClaw web payment", default: false },
     { provider: "agent-wallet", label: "Agent wallet", default: false },
     { provider: "hive", label: "$HIVE settlement", default: false },

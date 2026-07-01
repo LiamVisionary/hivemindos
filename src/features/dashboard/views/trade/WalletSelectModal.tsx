@@ -80,12 +80,20 @@ type WalletSelectModalProps = {
   confirmLabel?: string;
 };
 
+export type WalletSelectPanelProps = Omit<WalletSelectModalProps, "onClose"> & {
+  onCancel?: () => void;
+  cancelLabel?: string;
+  confirmDisabled?: boolean;
+  emptyCopy?: string;
+  panelClassName?: string;
+  showCloseButton?: boolean;
+};
+
 /**
  * Wallet picker that renders the Wallets-route card look via WalletPickerCard
  * (the `.fw-cc` visual language, driven by props — no shared runtime globals).
  * Shows the user's own wallets first, then the Bankr trading wallet, then
- * configured agent wallets. Mounted only while open (parent conditionally
- * renders it), so the selection seeds from the current acting wallet on mount.
+ * configured agent wallets.
  */
 /** A selectable id is either a pickable's own id, or — for a grouped user wallet
  *  — one of its per-chain account ids. */
@@ -124,13 +132,49 @@ function sortPickables(list: PickableWallet[], getSurvivalSnapshot: (wallet: Age
 }
 
 export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, onConfirm, onClose, title = "Select a wallet", subtitle = "Pick which wallet trades. Your own wallets come first, then configured agent wallets.", confirmLabel = "Use this wallet" }: WalletSelectModalProps) {
-  const [selectedId, setSelectedId] = useState(() => (canSelectId(pickables, currentId) ? currentId : ""));
-
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  return (
+    <div className={styles.modalOverlay} role="presentation" onMouseDown={onClose}>
+      <WalletSelectPanel
+        pickables={pickables}
+        getSurvivalSnapshot={getSurvivalSnapshot}
+        currentId={currentId}
+        title={title}
+        subtitle={subtitle}
+        confirmLabel={confirmLabel}
+        onCancel={onClose}
+        showCloseButton
+        panelClassName={styles.modal}
+        onConfirm={(selectedId) => {
+          onConfirm(selectedId);
+          onClose();
+        }}
+      />
+    </div>
+  );
+}
+
+export function WalletSelectPanel({
+  pickables,
+  getSurvivalSnapshot,
+  currentId,
+  onConfirm,
+  onCancel,
+  title = "Select a wallet",
+  subtitle = "Pick which wallet trades. Your own wallets come first, then configured agent wallets.",
+  confirmLabel = "Use this wallet",
+  cancelLabel = "Cancel",
+  confirmDisabled = false,
+  emptyCopy = "No configured wallets yet. Open the Wallets tab to create or import one, then come back to trade.",
+  panelClassName,
+  showCloseButton = false,
+}: WalletSelectPanelProps) {
+  const [selectedId, setSelectedId] = useState(() => (canSelectId(pickables, currentId) ? currentId : ""));
 
   // Within each section, surface the highest-balance spendable wallets first and
   // sink the muted/off ones (watch-only, wallet off, rails not set up) to the end.
@@ -175,41 +219,39 @@ export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, o
   );
 
   return (
-    <div className={styles.modalOverlay} role="presentation" onMouseDown={onClose}>
-      <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Select a wallet" onMouseDown={(event) => event.stopPropagation()}>
-        <div className={styles.modalHead}>
-          <div>
-            <h3 className={styles.title} style={{ fontSize: 15 }}>{title}</h3>
-            <p className={styles.subtitle}>{subtitle}</p>
-          </div>
-          <button type="button" className={styles.iconBtn} onClick={onClose} aria-label="Close">×</button>
+    <div className={`${styles.walletSelectPanel} ${panelClassName ?? ""}`} role={showCloseButton ? "dialog" : "group"} aria-modal={showCloseButton ? "true" : undefined} aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+      <div className={styles.modalHead}>
+        <div>
+          <h3 className={styles.title}>{title}</h3>
+          <p className={styles.subtitle}>{subtitle}</p>
         </div>
+        {showCloseButton && onCancel ? (
+          <button type="button" className={styles.iconBtn} onClick={onCancel} aria-label="Close">×</button>
+        ) : null}
+      </div>
 
-        <div className={styles.modalBody}>
-          {pickables.length ? (
-            <>
-              {renderGroup("Your wallets", userWallets)}
-              {renderGroup("Bankr", bankrWallets)}
-              {renderGroup("Agent wallets", agentWallets)}
-            </>
-          ) : (
-            <div className={styles.empty}>
-              No configured wallets yet. Open the Wallets tab to create or import one, then come back to trade.
-            </div>
-          )}
-        </div>
+      <div className={styles.modalBody}>
+        {pickables.length ? (
+          <>
+            {renderGroup("Your wallets", userWallets)}
+            {renderGroup("Bankr", bankrWallets)}
+            {renderGroup("Agent wallets", agentWallets)}
+          </>
+        ) : (
+          <div className={styles.empty}>{emptyCopy}</div>
+        )}
+      </div>
 
-        <div className={styles.modalFoot}>
-          <button type="button" className={styles.btn} onClick={onClose}>Cancel</button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.btnPrimary}`}
-            disabled={!selectedId}
-            onClick={() => { if (selectedId) { onConfirm(selectedId); onClose(); } }}
-          >
-            {confirmLabel}
-          </button>
-        </div>
+      <div className={styles.modalFoot}>
+        {onCancel ? <button type="button" className={styles.btn} onClick={onCancel}>{cancelLabel}</button> : null}
+        <button
+          type="button"
+          className={`${styles.btn} ${styles.btnPrimary}`}
+          disabled={!selectedId || confirmDisabled}
+          onClick={() => { if (selectedId && !confirmDisabled) onConfirm(selectedId); }}
+        >
+          {confirmLabel}
+        </button>
       </div>
     </div>
   );

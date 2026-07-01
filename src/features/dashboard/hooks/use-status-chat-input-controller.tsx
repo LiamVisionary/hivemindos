@@ -13,6 +13,7 @@ import { handleNativeImageGenerationCommand } from "./status-chat-image-generati
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
 import { appendChatProcessState, finishChatStreamState, markChatStreamChunkState, startChatStreamState } from "./status-chat-stream-state";
 import { pushVoiceBands, resetVoiceBands } from "@/lib/stores/voice-bands-store";
+import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 
 export function useStatusChatInputController(props: any) {
   const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
@@ -905,6 +906,16 @@ export function useStatusChatInputController(props: any) {
       next[assistantIndex] = { ...assistant, processEvents: nextEvents, applicationGeneration: nextApplicationGeneration };
       return next;
     };
+    const attachBillingToActiveAssistant = (items: ChatMessage[], billing: unknown) => {
+      const normalizedBilling = normalizeChatResponseBilling(billing);
+      if (!normalizedBilling) return items;
+      const assistantIndex = findActiveAssistantIndex(items);
+      if (assistantIndex < 0) return items;
+      const assistant = items[assistantIndex];
+      const next = [...items];
+      next[assistantIndex] = { ...assistant, billing: normalizedBilling };
+      return next;
+    };
     const replaceActiveAssistantMessage = (items: ChatMessage[], message: ChatMessage) => {
       const next = [...items];
       const assistantIndex = findActiveAssistantIndex(next);
@@ -1279,6 +1290,7 @@ export function useStatusChatInputController(props: any) {
             prompt?: unknown;
             event?: { type?: string };
             type?: string;
+            billing?: unknown;
             applicationGeneration?: Record<string, unknown>;
           };
           const runtimeError = runtimeErrorMessage(parsed);
@@ -1289,6 +1301,20 @@ export function useStatusChatInputController(props: any) {
           }
           if (parsed.applicationGeneration && typeof parsed.applicationGeneration === "object") {
             updateActiveImageGenerationCard(parsed.applicationGeneration);
+            continue;
+          }
+          const responseBilling = normalizeChatResponseBilling(parsed.billing);
+          if (responseBilling) {
+            setMessagesByAgent((current) => {
+              const existing = current[selectedStorageKey] ?? [];
+              const next = attachBillingToActiveAssistant(existing, responseBilling);
+              return next === existing ? current : { ...current, [selectedStorageKey]: next };
+            });
+            setSelectedChatPreview((current) => {
+              if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
+              const next = attachBillingToActiveAssistant(current.messages, responseBilling);
+              return next === current.messages ? current : { ...current, messages: next };
+            });
             continue;
           }
           const processEvent = processLabelFromRuntimeEvent(parsed);

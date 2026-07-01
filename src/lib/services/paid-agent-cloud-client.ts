@@ -27,6 +27,7 @@ const REQUEST_HEADER_ALLOWLIST = new Set([
   "x402-version",
   "idempotency-key",
   "x-idempotency-key",
+  "x-hivemindos-credit-token",
 ]);
 
 const RESPONSE_HEADER_ALLOWLIST = new Set([
@@ -38,6 +39,9 @@ const RESPONSE_HEADER_ALLOWLIST = new Set([
   "x-payment-response",
   "www-authenticate",
   "x402-version",
+  "x-hivemindos-credit-top-up-usd",
+  "x-hivemindos-credit-debited-usd",
+  "x-hivemindos-credit-balance-usd",
 ]);
 
 type OfficialBaseResolution = {
@@ -92,6 +96,23 @@ export async function getOfficialPaidAgentStatus(slug?: string): Promise<Officia
 }
 
 export async function proxyOfficialPaidAgentRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["chat", "completions"], "POST");
+}
+
+export async function proxyOfficialPaidAgentCreditTopUpRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "top-up"], "POST");
+}
+
+export async function proxyOfficialPaidAgentCreditBalanceRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "balance"], "GET");
+}
+
+async function proxyOfficialPaidAgentRequestPath(
+  request: NextRequest,
+  slug: string,
+  pathSegments: string[],
+  method: "GET" | "POST",
+): Promise<Response> {
   const resolution = resolveOfficialPaidAgentBaseUrl();
   if (!resolution.url) {
     return jsonResponse({
@@ -104,12 +125,12 @@ export async function proxyOfficialPaidAgentRequest(request: NextRequest, slug: 
     }, 424);
   }
 
-  const target = officialPaidAgentTargetUrl(resolution.url, slug);
+  const target = officialPaidAgentTargetUrl(resolution.url, slug, pathSegments);
   try {
     const response = await fetch(target, {
-      method: "POST",
+      method,
       headers: forwardedRequestHeaders(request.headers),
-      body: await request.arrayBuffer(),
+      body: method === "GET" ? undefined : await request.arrayBuffer(),
       cache: "no-store",
       signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
     });
@@ -168,9 +189,9 @@ function resolveOfficialPaidAgentBaseUrl(): OfficialBaseResolution {
   return { raw, url };
 }
 
-function officialPaidAgentTargetUrl(baseUrl: URL, slug: string | undefined) {
+function officialPaidAgentTargetUrl(baseUrl: URL, slug: string | undefined, pathSegments: string[] = ["chat", "completions"]) {
   const target = new URL(baseUrl);
-  target.pathname = joinUrlPath(target.pathname, "api", "paid-agents", normalizeSlug(slug || DEFAULT_SLUG), "chat", "completions");
+  target.pathname = joinUrlPath(target.pathname, "api", "paid-agents", normalizeSlug(slug || DEFAULT_SLUG), ...pathSegments);
   target.search = "";
   target.hash = "";
   return target;

@@ -157,10 +157,14 @@ export const X402_SUPPORTED_NETWORKS = new Set(["eip155:8453", "eip155:84532", "
  * network x402 supports. Watch-only/runtime-custody wallets can't sign. This is
  * a client-side predictor; the server vault is authoritative and may still 404.
  */
-export function isX402CapableWallet(wallet: AgentWalletConfig): boolean {
+export function isLocalPaymentSigningWallet(wallet: AgentWalletConfig): boolean {
   return Boolean(wallet.walletAddress?.trim?.())
     && wallet.custodyMode === "local"
     && X402_SUPPORTED_NETWORKS.has(wallet.network);
+}
+
+export function isX402CapableWallet(wallet: AgentWalletConfig): boolean {
+  return isLocalPaymentSigningWallet(wallet);
 }
 
 /**

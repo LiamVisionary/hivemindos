@@ -759,6 +759,13 @@
   white-space: normal;
 }
 
+.model[aria-pressed="true"] {
+  border-color: var(--cyan);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--cyan3);
+  box-shadow: 0 0 16px var(--cyan-glow);
+}
+
 .model:hover {
   border-color: var(--cyan);
   color: var(--fg);

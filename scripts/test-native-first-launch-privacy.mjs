@@ -6,6 +6,8 @@ function fail(message) {
 }
 
 const setup = readFileSync("src-tauri/src/setup.rs", "utf8");
+const setupSh = readFileSync("setup.sh", "utf8");
+const setupPs = readFileSync("setup.ps1", "utf8");
 const env = readFileSync("src-tauri/src/env.rs", "utf8");
 const nativeBootstrap = readFileSync("src-tauri/src/lib.rs", "utf8");
 const bootstrapClient = readFileSync("src/lib/native/dashboard-bootstrap.ts", "utf8");
@@ -40,6 +42,22 @@ if (!onboarding.includes("hivemindos.nativeFirstRun.dismissed.v3")) {
 
 if (!onboarding.includes("grantNativePrivateFilesystemAccess")) {
   fail("native first-run setup must grant private filesystem access only after user-approved setup starts.");
+}
+
+if (!onboarding.includes("installDeps: false") || !onboarding.includes("--skip-deps")) {
+  fail("native first-run setup must skip the source workspace dependency install for packaged-app users.");
+}
+
+if (!setup.includes("--skip-deps --skip-build --skip-dashboard")) {
+  fail("native setup repair commands must skip source dependency/build/dev-server work by default.");
+}
+
+if (!setupSh.includes("needs_pnpm=\"false\"") || !setupSh.includes("CLI_SKIP_DEPS") || !setupSh.includes("CLI_SKIP_DASHBOARD")) {
+  fail("setup.sh must not install or enable pnpm when no workspace install/build/dev dashboard is requested.");
+}
+
+if (!setupPs.includes("$needsPnpm = (-not $SkipDeps) -or (-not $SkipBuild) -or (-not $SkipDashboard)")) {
+  fail("setup.ps1 must not install or enable pnpm when no workspace install/build/dev dashboard is requested.");
 }
 
 if (!hiveEnv.includes("nativePrivateFilesystemAccessGranted()") || !hiveEnv.includes("allowPrivateFilesystem")) {

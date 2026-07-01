@@ -277,7 +277,7 @@ export function HivePanel({
             {handlers.onSendFile ? (
               <button type="button" className="fr-chip" onClick={() => handlers.onSendFile?.(m)}>
                 <ActionIcon icon={FileUp} />
-                Send file
+                HiveDrop
               </button>
             ) : null}
             {handlers.onOpenUsePodHost ? (

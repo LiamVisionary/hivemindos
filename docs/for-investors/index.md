@@ -7,7 +7,18 @@ description: HivemindOS business model — revenue streams, trading and on-chain
 
 This is the business side of HivemindOS: how it makes money, where the free-vs-paid line sits, and how the Honey/HIVE economy, treasury, and buybacks fit together. For the product itself, see the [For Users](../for-users/) docs.
 
-Revenue comes from optional premium services, trading and on-chain fees (a policy-driven platform fee on sends/swaps and stock/xStock trades, plus a Hyperliquid builder fee), the Agent Marketplace, and Enterprise — detailed in the [Ecosystem Plan](ecosystem-plan.html) and [Paid Features](paid-features/).
+Revenue comes from optional premium services, trading and on-chain fees, hosted agent/model messages, the Agent Marketplace, and Enterprise. The details live in the [Ecosystem Plan](ecosystem-plan.html) and [Paid Features](paid-features/), but the current numbers should be visible up front.
+
+## Current Revenue Snapshot
+
+| Revenue stream | Current number | What that means |
+| --- | ---: | --- |
+| Wallet sends, swaps, live stocks, xStocks, x402, and private payments | **1%**, with a **$0.01 minimum** | A `$100` action produces `$1.00` in revenue. A tiny `$0.25` test action produces the `$0.01` minimum. |
+| Hyperliquid builder fee | **0.005%** of eligible filled notional | A `$10,000` fill produces `$0.50` in revenue. |
+| Hosted HivemindOS agent/model messages | **$0.001 per successful hosted chat completion** on the current default hosted paid agent | `1,000` messages produces `$1`. `100,000` messages produces `$100`. `1,000,000` messages produces `$1,000`. |
+| Future paid infrastructure | TBD by product | Hive Cloud, managed compute, marketplace fees, and enterprise contracts. |
+
+The app still shows fees before users confirm money movement. The point here is not mystery monetization. It is clear take rate, clear message pricing, and paid infrastructure where HivemindOS actually runs something.
 
 HivemindOS should be useful before anyone pays for a cloud feature. Start here when you want to understand what stays free, what becomes paid, and how Honey and HIVE fit around the product without blocking it.
 
@@ -125,7 +136,7 @@ Managed agents use HONEY as the visible credit unit. The ledger separates reward
 - Reward Honey is earned through ecosystem participation and may be claimable to HIVE.
 - Managed HONEY credits are spend-only service credits for HivemindOS-managed agents and cannot be claimed to HIVE.
 
-Users can start without provider API keys. HivemindOS quotes the task, lets the user fund managed HONEY through a verified rail such as Stripe Checkout, Stripe crypto payments, x402, Bankr, an agent wallet, or HIVE, then runs the managed agent through HivemindOS-held provider keys at a configured markup.
+Users can start without provider API keys. For the current hosted paid agent, the visible default is **$0.001 per successful hosted chat completion**. HivemindOS can also quote larger managed jobs through managed HONEY credits, then run the agent through HivemindOS-held provider keys at a configured markup.
 
 Official credit changes are spoof-resistant: credits are written only from verified funding events, and debits are signed by trusted managed runtimes after provider usage is observed server-side.
 
@@ -160,7 +171,7 @@ Marketplace creators can choose pricing models such as free, pay-per-use, lifeti
 
 Enterprise covers SSO, teams, compliance, private deployments, and support contracts.
 
-Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven platform fee (currently about 1%) on supported local-wallet actions — USDC sends, DEX swaps, xStocks trades, live Alpaca orders, public x402 payments, and Veil private transfers — plus a 0.5 bps Hyperliquid builder fee on eligible local Hyperliquid fills. The fee is quoted before confirmation and taken as a separate USDC transfer to the platform treasury; paper trades and read-only checks are never charged. Rates and recipient addresses live in the official platform-fee policy, not the app. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
+Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven **1% platform fee with a $0.01 minimum** on supported local-wallet actions: USDC sends, DEX swaps, xStocks trades, live Alpaca orders, public x402 payments, and Veil private transfers. Official builds also collect a **0.005% Hyperliquid builder fee** on eligible local Hyperliquid fills. Paper trades and read-only checks are never charged. Rates and recipient addresses live in the official platform-fee policy, not the app. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
 
 ## HIVE Staker Discounts
 

@@ -72,6 +72,10 @@ import {
   resolveAdaptiveBankrLlmModels,
 } from "@/lib/services/bankr-llm";
 import {
+  isHivemindosWalletPaidModelProfile,
+  resolveHivemindosWalletPaidModelRuntimeConfig,
+} from "@/lib/services/hivemindos-wallet-paid-models";
+import {
   bankrActionDraftMessage,
   bankrActionResultMessage,
   bankrActionRequiresConfirmation,
@@ -104,6 +108,7 @@ import {
   prepareB20IssuerProofFromMessages,
 } from "@/lib/services/crypto/b20-issuer-proof";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
+import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import { activeSharedVault, buildVaultContext } from "@/lib/services/chat/shared-vault-context";
 import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capability-context";
 import { buildClawbankCapabilityContext } from "@/lib/services/chat/clawbank-capability-context";
@@ -136,12 +141,14 @@ import {
   createRuntimeChatSessionId,
   finishRuntimeChatSession,
   startRuntimeChatSession,
+  updateRuntimeChatSessionLastAssistantBilling,
 } from "@/lib/services/chat/runtime-session-store";
 import { canonicalLocalCollectorUrl, isLocalCollectorUrl, remoteCollectorLocalServiceUrl } from "@/lib/services/local-collector-url";
 import { resolveLmStudioFleetBaseUrl } from "@/lib/services/fleet/lmstudio-model-hosts";
 import { RUN_COMMAND_TOOL_NAME, runAgentCommand, runCommandToolDefinition } from "@/lib/services/agent-shell/command-tool";
 import { streamMobileAgentTurn } from "@/lib/services/mobile-agents/chat-turn";
 import { isMobileAgentGatewayUrl } from "@/lib/types/mobile-agents";
+import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
@@ -162,6 +169,36 @@ type RuntimeRouteTelemetry = {
   runtimeSessionId?: string;
   chatStorageKey?: string;
 };
+
+function numericHeader(headers: Headers, name: string) {
+  const value = headers.get(name)?.trim();
+  if (!value) return undefined;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function stringHeader(headers: Headers, name: string) {
+  const value = headers.get(name)?.trim();
+  return value || undefined;
+}
+
+function hivemindosModelsBillingFromHeaders(headers: Headers): ChatResponseBilling | null {
+  const creditDebitUsd = numericHeader(headers, "X-HivemindOS-Models-Credit-Debited-Usd");
+  const creditBalanceUsd = numericHeader(headers, "X-HivemindOS-Models-Credit-Balance-Usd");
+  const walletDebitUsd = numericHeader(headers, "X-HivemindOS-Wallet-Paid-Amount-Usd");
+  const paidHeader = stringHeader(headers, "X-HivemindOS-Wallet-Paid");
+  const costUsd = creditDebitUsd ?? walletDebitUsd;
+  if (costUsd === undefined && creditBalanceUsd === undefined && !paidHeader) return null;
+  return {
+    provider: "hivemindos-models",
+    label: "HivemindOS Models",
+    source: creditDebitUsd !== undefined ? "prepaid-credit" : paidHeader === "x402" ? "x402" : undefined,
+    costUsd,
+    balanceUsd: creditBalanceUsd,
+    paid: creditDebitUsd !== undefined || walletDebitUsd !== undefined || paidHeader === "x402",
+    network: stringHeader(headers, "X-HivemindOS-Wallet-Paid-Network"),
+  };
+}
 
 type AgentMode = "plan" | "act";
 
@@ -341,9 +378,10 @@ async function readWorkspaceSnapshot(workingDirectory?: string): Promise<Workspa
     const cwd = resolve(trimmed);
     const pathStats = await stat(cwd);
     if (!pathStats.isDirectory()) return null;
+    const env = sanitizeProcessEnv();
     const [head, status] = await Promise.all([
-      execFileAsync("git", ["-C", cwd, "rev-parse", "HEAD"], { timeout: 5_000 }).then(({ stdout }) => stdout.trim()),
-      execFileAsync("git", ["-C", cwd, "status", "--porcelain"], { timeout: 5_000, maxBuffer: 500_000 }).then(({ stdout }) => stdout.trim()),
+      execFileAsync("git", ["-C", cwd, "rev-parse", "HEAD"], { timeout: 5_000, env }).then(({ stdout }) => stdout.trim()),
+      execFileAsync("git", ["-C", cwd, "status", "--porcelain"], { timeout: 5_000, maxBuffer: 500_000, env }).then(({ stdout }) => stdout.trim()),
     ]);
     return {
       head,
@@ -2793,13 +2831,12 @@ function lmStudioModelUnavailableMessage(model: string) {
 }
 
 function lmStudioCliEnv() {
-  return {
-    ...process.env,
+  return sanitizeProcessEnv(process.env, {
     FORCE_COLOR: "0",
     NO_COLOR: "1",
     TERM: "dumb",
     PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH].filter(Boolean).join(delimiter),
-  };
+  });
 }
 
 async function resolveLmStudioCliBin() {
@@ -3481,6 +3518,9 @@ async function streamHttpRuntime(
   if (isBankrLlmProfile(profile)) {
     return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
   }
+  if (isHivemindosWalletPaidModelProfile(profile)) {
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
+  }
   if (isOpenAICompatibleRuntime(profile)) {
     return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
   }
@@ -4056,6 +4096,37 @@ function parseToolCallArguments(raw: string): Record<string, unknown> {
   }
 }
 
+function extractOpenAIToolCalls(payload: unknown): AccumulatedToolCall[] {
+  if (!payload || typeof payload !== "object") return [];
+  const record = payload as {
+    choices?: Array<{
+      message?: { tool_calls?: unknown };
+      delta?: { tool_calls?: unknown };
+    }>;
+    message?: { tool_calls?: unknown };
+    tool_calls?: unknown;
+  };
+  const rawCalls = record.choices?.flatMap((choice) => (
+    Array.isArray(choice?.message?.tool_calls) ? choice.message.tool_calls
+      : Array.isArray(choice?.delta?.tool_calls) ? choice.delta.tool_calls
+        : []
+  )) ?? (Array.isArray(record.message?.tool_calls) ? record.message.tool_calls : Array.isArray(record.tool_calls) ? record.tool_calls : []);
+  return rawCalls
+    .map((toolCall, index): AccumulatedToolCall | null => {
+      if (!toolCall || typeof toolCall !== "object") return null;
+      const entry = toolCall as { id?: unknown; function?: { name?: unknown; arguments?: unknown }; name?: unknown; arguments?: unknown };
+      const name = typeof entry.function?.name === "string" ? entry.function.name : typeof entry.name === "string" ? entry.name : "";
+      if (!name.trim()) return null;
+      const args = typeof entry.function?.arguments === "string" ? entry.function.arguments : typeof entry.arguments === "string" ? entry.arguments : "";
+      return {
+        id: typeof entry.id === "string" && entry.id.trim() ? entry.id : `call_${index}`,
+        name,
+        arguments: args,
+      };
+    })
+    .filter((call): call is AccumulatedToolCall => Boolean(call));
+}
+
 type ImageGenerationDispatchResult = {
   ok: boolean;
   error?: string;
@@ -4113,6 +4184,14 @@ async function streamOpenAICompatibleRuntime(
   let usePodHeaders: Record<string, string> = {};
   let providerHeaders: Record<string, string> = {};
   const usePodEnabled = isUsePodProfile(profile);
+  const walletPaidModelsEnabled = isHivemindosWalletPaidModelProfile(profile);
+  const requestOrigin = (() => {
+    try {
+      return new URL(telemetry?.request?.url ?? "").origin;
+    } catch {
+      return "";
+    }
+  })();
   try {
     const usePodConfig = await resolveUsePodRuntimeConfig(profile);
     if (usePodConfig) {
@@ -4153,6 +4232,26 @@ async function streamOpenAICompatibleRuntime(
     if (resolved.error) return Response.json({ error: resolved.error }, { status: 400 });
     runtimeProfile = resolved.profile;
     providerHeaders = resolved.headers;
+  }
+  if (walletPaidModelsEnabled) {
+    try {
+      const walletPaidConfig = resolveHivemindosWalletPaidModelRuntimeConfig(profile, wallet, requestOrigin);
+      runtimeProfile = {
+        ...profile,
+        gatewayUrl: walletPaidConfig.baseUrl,
+        chatPath: walletPaidConfig.chatPath,
+        statusPath: walletPaidConfig.statusPath,
+        model: walletPaidConfig.model,
+        token: "",
+        telemetryUrl: "",
+      };
+      providerHeaders = {
+        ...providerHeaders,
+        ...walletPaidConfig.headers,
+      };
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "HivemindOS Models setup is incomplete." }, { status: 400 });
+    }
   }
   const url = buildOpenAICompatibleUrl(runtimeProfile);
   const lockKey = interactiveRuntimeLockKey(runtimeProfile, url);
@@ -4198,13 +4297,6 @@ async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
-  const requestOrigin = (() => {
-    try {
-      return new URL(telemetry?.request?.url ?? "").origin;
-    } catch {
-      return "";
-    }
-  })();
   // Only advertise the image tool when the user is actually asking for an image and we
   // can reach our own dispatch route. Every other chat is byte-for-byte unchanged.
   const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(userText);
@@ -4221,6 +4313,104 @@ async function streamOpenAICompatibleRuntime(
     ...(offerBankrTool ? [bankrActionToolDefinition()] : []),
     ...(offerCommandTool ? [runCommandToolDefinition()] : []),
   ];
+  const commandSuccessText = (label: string, commandLine: string) => {
+    const cleanLabel = label.trim();
+    if (/^open\b/i.test(cleanLabel)) {
+      const sentence = cleanLabel.replace(/^open\b/i, "Opened");
+      return sentence.endsWith(".") ? sentence : `${sentence}.`;
+    }
+    if (cleanLabel && !/^run\b/i.test(cleanLabel)) return cleanLabel.endsWith(".") ? cleanLabel : `${cleanLabel}.`;
+    return `Ran \`${commandLine}\`.`;
+  };
+  const runNonStreamToolCalls = async (toolCalls: AccumulatedToolCall[]) => {
+    const events: string[] = [];
+    const finalTexts: string[] = [];
+    for (const call of toolCalls) {
+      if (call.name !== RUN_COMMAND_TOOL_NAME) {
+        const message = `Tool ${call.name} is not available for this non-streamed HivemindOS Models response.`;
+        events.push(ssePayload({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          toolName: call.name,
+          name: call.name,
+          message: "Tool unavailable",
+          detail: message,
+          status: "failed",
+        }));
+        await appendRuntimeChatSessionEvent(runtimeSessionId, "Tool unavailable", message).catch(() => undefined);
+        finalTexts.push(message);
+        continue;
+      }
+      const args = parseToolCallArguments(call.arguments);
+      const command = typeof args.command === "string" ? args.command : "";
+      const commandArgs = Array.isArray(args.args) ? args.args.filter((item): item is string => typeof item === "string") : [];
+      const commandLine = [command, ...commandArgs].filter(Boolean).join(" ");
+      const label = typeof args.reason === "string" && args.reason.trim()
+        ? args.reason.trim()
+        : `Run ${command || "command"}`;
+      events.push(ssePayload({
+        type: RUNTIME_STREAM_EVENT_TYPES.TOOL_START,
+        toolName: RUN_COMMAND_TOOL_NAME,
+        name: RUN_COMMAND_TOOL_NAME,
+        message: label,
+        detail: commandLine,
+        status: "running",
+      }));
+      await appendRuntimeChatSessionEvent(runtimeSessionId, label, commandLine).catch(() => undefined);
+      if (!command) {
+        const message = "Command tool call did not include a command.";
+        events.push(ssePayload({
+          type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+          toolName: RUN_COMMAND_TOOL_NAME,
+          name: RUN_COMMAND_TOOL_NAME,
+          message: "Command failed",
+          detail: message,
+          status: "failed",
+        }));
+        await appendRuntimeChatSessionEvent(runtimeSessionId, "Command failed", message).catch(() => undefined);
+        finalTexts.push(`Command failed: ${message}`);
+        continue;
+      }
+      recordRuntimeTelemetry(telemetry, "agent_runtime.command_tool.dispatch", {
+        ...telemetryPayloadForProfile(profile),
+        command,
+        argCount: commandArgs.length,
+        nonStream: true,
+      });
+      const result = await runAgentCommand({
+        command,
+        args: commandArgs,
+        cwd: workingDirectory,
+        signal: telemetry?.request?.signal,
+      });
+      const detail = result.ok
+        ? (result.stdout?.split("\n").find(Boolean)?.slice(0, 200) || "Done")
+        : (result.error || result.stderr || "Failed");
+      events.push(ssePayload({
+        type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+        toolName: RUN_COMMAND_TOOL_NAME,
+        name: RUN_COMMAND_TOOL_NAME,
+        message: result.ok ? "Command finished" : "Command failed",
+        detail,
+        status: result.ok ? "completed" : "failed",
+      }));
+      await appendRuntimeChatSessionEvent(
+        runtimeSessionId,
+        result.ok ? "Command finished" : "Command failed",
+        (result.stdout || result.stderr || result.error || "").slice(0, 500),
+      ).catch(() => undefined);
+      recordRuntimeTelemetry(telemetry, result.ok ? "agent_runtime.command_tool.completed" : "agent_runtime.command_tool.failed", {
+        ...telemetryPayloadForProfile(profile),
+        command: result.command || command,
+        exitCode: result.exitCode ?? null,
+        elapsedMs: result.elapsedMs,
+        nonStream: true,
+      });
+      finalTexts.push(result.ok
+        ? commandSuccessText(label, commandLine)
+        : `Command failed: ${result.error ?? result.stderr ?? "unknown error"}`);
+    }
+    return { events, text: finalTexts.filter(Boolean).join("\n\n") || "Done." };
+  };
   let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean } | null = null;
   const fetchStartedAt = Date.now();
   let upstream: Response | null = null;
@@ -4518,6 +4708,7 @@ async function streamOpenAICompatibleRuntime(
   // prepaid balance right after the chat instead of waiting for a settings
   // refresh.
   const providerBalanceHeader = veniceResponse?.balanceRemaining || usePodResponse?.balanceRemaining || "";
+  const responseBilling = walletPaidModelsEnabled ? hivemindosModelsBillingFromHeaders(upstream.headers) : null;
   if (veniceResponse?.balanceRemaining) {
     recordRuntimeTelemetry(telemetry, "agent_runtime.venice.response", {
       ...telemetryPayloadForProfile(runtimeProfile),
@@ -4545,6 +4736,39 @@ async function streamOpenAICompatibleRuntime(
   const contentType = upstream.headers.get("content-type") ?? "";
   if (!contentType.includes("text/event-stream")) {
     const json = await upstream.json().catch(async () => ({ text: await upstream.text().catch(() => "") }));
+    const toolCalls = winningRequest?.sentTools ? extractOpenAIToolCalls(json) : [];
+    if (toolCalls.length) {
+      const toolRun = await runNonStreamToolCalls(toolCalls);
+      const outputCheck = proxyOutput(toolRun.text);
+      const routed = outputCheck.verdict === "block"
+        ? { content: "", thinking: "" }
+        : routeChannelMarkupText(outputCheck.text);
+      const chunk = routed.content;
+      const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled);
+      if (outputCheck.verdict === "block") {
+        await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response blocked", outputCheck.reason ?? "Response blocked by security policy").catch(() => undefined);
+        await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
+      } else {
+        await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
+        await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
+      }
+      releaseInteractiveRuntime(lockKey);
+      return new Response(
+        toolRun.events.join("")
+        + (routed.thinking ? ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking }) : "")
+        + ssePayload(outputCheck.verdict === "block"
+          ? { error: outputCheck.reason ?? "Response blocked by security policy" }
+          : { choices: [{ delta: { content: chunk } }] })
+        + (event ? ssePayload({ honey: event }) : "")
+        + (responseBilling ? ssePayload({ billing: responseBilling }) : "")
+        + "data: [DONE]\n\n",
+        { headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          ...(providerBalanceHeader ? { "X-Provider-Balance-Remaining": providerBalanceHeader } : {}),
+        } },
+      );
+    }
     const outputCheck = proxyOutput(extractChunk(json));
     const routed = outputCheck.verdict === "block"
       ? { content: "", thinking: "" }
@@ -4555,7 +4779,7 @@ async function streamOpenAICompatibleRuntime(
       await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response blocked", outputCheck.reason ?? "Response blocked by security policy").catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
     } else {
-      await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, json).catch(() => undefined);
+      await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
     }
     releaseInteractiveRuntime(lockKey);
@@ -4566,6 +4790,7 @@ async function streamOpenAICompatibleRuntime(
         ? { error: outputCheck.reason ?? "Response blocked by security policy" }
         : { choices: [{ delta: { content: chunk } }] })
       + (event ? ssePayload({ honey: event }) : "")
+      + (responseBilling ? ssePayload({ billing: responseBilling }) : "")
       + "data: [DONE]\n\n",
       { headers: {
         "Content-Type": "text/event-stream",
@@ -4976,6 +5201,10 @@ async function streamOpenAICompatibleRuntime(
         }
         const event = await recordChatHoney(profile, userText, fullText, honeyLedgerEnabled);
         if (event) controller.enqueue(encoder.encode(ssePayload({ honey: event })));
+        if (responseBilling) {
+          queueSessionWrite(() => updateRuntimeChatSessionLastAssistantBilling(runtimeSessionId, responseBilling));
+          controller.enqueue(encoder.encode(ssePayload({ billing: responseBilling })));
+        }
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.stream.done", {
           ...telemetryPayloadForProfile(profile),

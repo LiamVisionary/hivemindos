@@ -130,6 +130,7 @@
     "test:crypto-practice-book": "node scripts/test-crypto-practice-book.mjs",
     "test:buy-stock": "node scripts/test-buy-stock-xstocks.mjs",
     "test:wallet-vault": "node scripts/test-wallet-vault.mjs",
+    "test:wallet-paid-models": "node scripts/test-wallet-paid-models.mjs",
     "test:personal-wallet-grouping": "node scripts/test-personal-wallet-grouping.mjs",
     "test:wallet-real-tabs": "node scripts/test-wallet-real-tabs.mjs",
     "test:veil-auto-send": "node scripts/test-veil-auto-send-policy.mjs",

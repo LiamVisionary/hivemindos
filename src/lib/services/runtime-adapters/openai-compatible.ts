@@ -5,9 +5,17 @@ import { homedir } from "@/lib/home-dir";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import { HIVEMIND_OS_RUNTIME, type AgentProfile } from "@/lib/types/agent-runtime";
+import {
+  HIVEMINDOS_WALLET_PAID_MODELS_NAME,
+} from "@/lib/config/hivemindos-wallet-paid-models";
 import { bankrLlmAuthHeaders, isBankrLlmProfile } from "@/lib/services/bankr-llm";
+import {
+  hivemindosWalletPaidModelOptions,
+  isHivemindosWalletPaidModelProfile,
+} from "@/lib/services/hivemindos-wallet-paid-models";
 import { checkUsePodModels, isUsePodProfile, resolveUsePodRuntimeConfig } from "@/lib/services/usepod";
 import { checkVeniceModels, isVeniceProfile, resolveVeniceRuntimeConfig } from "@/lib/services/venice";
+import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import type { RuntimeAdapter } from "./types";
 
 const execFileAsync = promisify(execFile);
@@ -79,6 +87,8 @@ function providerName(profile: AgentProfile) {
       ? "Venice AI"
     : isBankrLlmProfile(profile)
       ? "Bankr LLM"
+      : isHivemindosWalletPaidModelProfile(profile)
+        ? HIVEMINDOS_WALLET_PAID_MODELS_NAME
       : profile.provider === "ollama"
         ? "Ollama"
         : profile.provider === "vllm"
@@ -113,10 +123,9 @@ export function localOpenAIProviderProfile(profile: AgentProfile): AgentProfile 
 }
 
 function lmsProcessEnv() {
-  return {
-    ...process.env,
+  return sanitizeProcessEnv(process.env, {
     PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH].filter(Boolean).join(delimiter),
-  };
+  });
 }
 
 async function resolveLmsBin() {
@@ -150,6 +159,15 @@ async function runLmsJson(args: string[], timeout = 15_000) {
 }
 
 async function fetchModels(profile: AgentProfile): Promise<OpenAIModelList> {
+  if (isHivemindosWalletPaidModelProfile(profile)) {
+    return {
+      data: hivemindosWalletPaidModelOptions().map((model) => ({
+        id: model.id,
+        object: "model",
+        owned_by: "hivemindos",
+      })),
+    };
+  }
   const usePodConfig = await resolveUsePodRuntimeConfig(profile);
   const veniceConfig = !usePodConfig ? await resolveVeniceRuntimeConfig(profile) : null;
   const runtimeProfile = usePodConfig
@@ -424,6 +442,8 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
     } else if (veniceStatus) {
       models = veniceStatus.models.length ? veniceStatus.models.map((model) => model.id) : configuredModelFallback(profile);
       if (!veniceStatus.ok) modelDiscoveryError = veniceStatus.message;
+    } else if (isHivemindosWalletPaidModelProfile(profile)) {
+      models = hivemindosWalletPaidModelOptions().map((model) => model.id);
     } else if (profile.provider === "lm-studio") {
       const discovery = await discoverLmStudioProviderModels(runtimeProfile);
       lmStudioModels = discovery.lmStudioModels;
@@ -441,8 +461,8 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
     }
     const name = providerName(profile);
     return {
-      baseUrl: cleanBaseUrl(runtimeProfile),
-      chatPath: runtimeProfile.chatPath || "/v1/chat/completions",
+      baseUrl: isHivemindosWalletPaidModelProfile(profile) ? "/api/hivemindos/models" : cleanBaseUrl(runtimeProfile),
+      chatPath: isHivemindosWalletPaidModelProfile(profile) ? "/chat/completions" : runtimeProfile.chatPath || "/v1/chat/completions",
       models,
       diagnostics: modelDiscoveryError ? [`${name} model discovery unavailable: ${modelDiscoveryError}`] : undefined,
       providerStatus: usePodStatus ? {
@@ -510,6 +530,8 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
           isUserDefined: true,
           source: profile.provider === "lm-studio"
             ? lmStudioModelSource || buildRuntimeUrl(runtimeProfile, "/api/v1/models")
+            : isHivemindosWalletPaidModelProfile(profile)
+              ? "/api/hivemindos/models/models"
             : buildRuntimeUrl(runtimeProfile, runtimeProfile.statusPath || "/v1/models"),
         }],
       },

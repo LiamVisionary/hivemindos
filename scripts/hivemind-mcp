@@ -8,6 +8,35 @@ import readline from "node:readline";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
+const CRITICAL_EXECUTION_ANNOTATIONS = {
+  send_usdc: { token: "SEND_USDC" },
+  dex_swap: { token: "CONFIRM_SWAP" },
+  stock_trade: { tokens: ["CONFIRM_BUY", "CONFIRM_SELL"] },
+  hyperliquid_trade: {
+    tokens: [
+      "CONFIRM_HYPERLIQUID_ORDER",
+      "CONFIRM_HYPERLIQUID_BUILDER",
+      "CONFIRM_HYPERLIQUID_CANCEL",
+      "CONFIRM_HYPERLIQUID_ACCOUNT",
+      "CONFIRM_HYPERLIQUID_TRANSFER",
+      "CONFIRM_HYPERLIQUID_TWAP",
+    ],
+  },
+  clawbank_send_usdc: { token: "CLAWBANK_SEND_USDC" },
+  clawbank_trade: { token: "CONFIRM_CLAWBANK_SWAP" },
+  clawbank_money_transfer: { token: "CONFIRM_CLAWBANK_TRANSFER" },
+  clawbank_call: { token: "CONFIRM_CLAWBANK_CALL" },
+};
+
+function criticalExecutionAnnotations(toolName) {
+  return {
+    destructiveHint: true,
+    "hivemindos/risk": "critical",
+    "hivemindos/sideEffects": ["wallet", "payment", "network"],
+    "hivemindos/confirmation": CRITICAL_EXECUTION_ANNOTATIONS[toolName],
+  };
+}
+
 const MANUAL_TOOLS = [
   {
     name: "list_hivemind_machines",
@@ -68,16 +97,25 @@ const MANUAL_TOOLS = [
     name: "send_usdc",
     description: "EXECUTE an on-chain USDC transfer from a HivemindOS wallet (governed /api/wallet/send). Moves REAL funds. Requires confirmation \"SEND_USDC\". Personal (user:) wallets always require explicit confirmation and never auto-send; agent wallets honor their Spend policy/caps. Get the human's go-ahead before calling. Consider prepare_crypto_action first to preview.",
     inputSchema: sendUsdcSchema(),
+    annotations: criticalExecutionAnnotations("send_usdc"),
   },
   {
     name: "dex_swap",
     description: "EXECUTE a token swap on the local DEX rail (0x on Base / Jupiter on Solana) from a HivemindOS wallet (governed /api/trading/swap). Moves REAL funds, hard-capped at $10 per swap. Requires confirmation \"CONFIRM_SWAP\". Get the human's go-ahead before calling.",
     inputSchema: dexSwapSchema(),
+    annotations: criticalExecutionAnnotations("dex_swap"),
   },
   {
     name: "stock_trade",
     description: "EXECUTE a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage or on-chain xStocks; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Get the human's go-ahead before calling.",
     inputSchema: stockTradeSchema(),
+    annotations: criticalExecutionAnnotations("stock_trade"),
+  },
+  {
+    name: "hyperliquid_trade",
+    description: "Quote, approve builder fees, trade spot/perps, manage orders, adjust account settings, transfer funds, or run TWAPs on Hyperliquid from a governed local wallet. State-changing actions move real exchange state or funds and require action-specific confirmation.",
+    inputSchema: hyperliquidTradeSchema(),
+    annotations: criticalExecutionAnnotations("hyperliquid_trade"),
   },
   {
     name: "compile_brain_knowledge",
@@ -119,6 +157,45 @@ const MANUAL_TOOLS = [
     description: "Explain whether a write is allowed under HivemindOS personal, agent-to-agent, or human-collective shared-brain contribution rules.",
     inputSchema: sharedContractSchema(),
   },
+  {
+    name: "clawbank_status",
+    description: "Read ClawBank connection and wallet status through the local dashboard.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "clawbank_list_tools",
+    description: "List available ClawBank tools and schemas through the local dashboard.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "clawbank_read",
+    description: "Run a read-only ClawBank tool after inspecting its schema.",
+    inputSchema: clawbankReadSchema(),
+  },
+  {
+    name: "clawbank_send_usdc",
+    description: "EXECUTE a gas-sponsored USDC transfer from the ClawBank self-custody wallet on Base. Moves REAL funds and requires confirmation \"CLAWBANK_SEND_USDC\".",
+    inputSchema: clawbankSendUsdcSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_send_usdc"),
+  },
+  {
+    name: "clawbank_trade",
+    description: "EXECUTE a one-off ClawBank spot swap against USDC from the self-custody wallet. Moves REAL funds and requires confirmation \"CONFIRM_CLAWBANK_SWAP\".",
+    inputSchema: clawbankTradeSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_trade"),
+  },
+  {
+    name: "clawbank_money_transfer",
+    description: "EXECUTE an on-chain USDC transfer from the ClawBank custodial bank-rails account. Moves REAL funds and requires confirmation \"CONFIRM_CLAWBANK_TRANSFER\".",
+    inputSchema: clawbankMoneyTransferSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_money_transfer"),
+  },
+  {
+    name: "clawbank_call",
+    description: "EXECUTE a state-changing ClawBank discovered tool by name. May move real funds or file legal/entity actions and requires confirmation \"CONFIRM_CLAWBANK_CALL\".",
+    inputSchema: clawbankCallSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_call"),
+  },
 ];
 
 const TOOLS = mergeToolDescriptors(
@@ -146,6 +223,9 @@ const HYPERLIQUID_CONFIRMATION_BY_ACTION = new Map([
 ]);
 
 async function loadHiveActionMcpTools() {
+  if (process.env.HIVE_MCP_DISABLE_HIVE_ACTION_IMPORT === "1") {
+    return [];
+  }
   try {
     const { listHiveActions, listMcpHiveActions } = await import(
       new URL("../src/lib/services/hive-actions/index.ts", import.meta.url).href
@@ -461,6 +541,114 @@ function stockTradeSchema() {
       qty: { type: "number", description: "Share count (Alpaca only). Provide this or notionalUsd." },
       confirmation: { type: "string", description: "Must be \"CONFIRM_BUY\" for a buy or \"CONFIRM_SELL\" for a sell." },
       approvalToken: { type: "string" },
+    },
+  };
+}
+
+function hyperliquidTradeSchema() {
+  return {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["status", "positions", "open-orders", "fills", "fees", "order-status", "quote", "approve-builder", "order", "cancel", "cancel-by-cloid", "modify", "schedule-cancel", "leverage", "margin", "usd-class", "usd-send", "spot-send", "withdraw", "twap-order", "twap-cancel"] },
+      agentId: { type: "string" },
+      coin: { type: "string" },
+      marketType: { type: "string", enum: ["perp", "spot"] },
+      assetId: { type: "number" },
+      side: { type: "string", enum: ["long", "short", "buy", "sell"] },
+      orderType: { type: "string", enum: ["market", "limit", "trigger"] },
+      notionalUsd: { type: "number" },
+      size: { type: "number" },
+      limitPrice: { type: "number" },
+      timeInForce: { type: "string" },
+      triggerPx: { type: "number" },
+      triggerType: { type: "string", enum: ["tp", "sl"] },
+      triggerIsMarket: { type: "boolean" },
+      grouping: { type: "string" },
+      clientOrderId: { type: "string" },
+      reduceOnly: { type: "boolean" },
+      slippageBps: { type: "number" },
+      orderId: {},
+      oid: {},
+      cloid: { type: "string" },
+      fastCancel: { type: "boolean" },
+      alwaysPlace: { type: "boolean" },
+      scheduleCancelTime: {},
+      leverage: { type: "number" },
+      marginMode: { type: "string", enum: ["cross", "isolated"] },
+      marginDeltaUsd: { type: "number" },
+      transferType: { type: "string" },
+      amount: { type: "number" },
+      amountUsd: { type: "number" },
+      destination: { type: "string" },
+      token: { type: "string" },
+      toPerp: { type: "boolean" },
+      twapMinutes: { type: "number" },
+      twapRandomize: { type: "boolean" },
+      twapId: {},
+      confirmation: { type: "string" },
+      approvalToken: { type: "string" },
+    },
+  };
+}
+
+function clawbankReadSchema() {
+  return {
+    type: "object",
+    required: ["tool"],
+    properties: {
+      tool: { type: "string" },
+      args: { type: "object" },
+    },
+  };
+}
+
+function clawbankSendUsdcSchema() {
+  return {
+    type: "object",
+    required: ["toAddress", "amount", "confirmation"],
+    properties: {
+      toAddress: { type: "string" },
+      amount: {},
+      confirmation: { type: "string", description: "Must be \"CLAWBANK_SEND_USDC\"." },
+    },
+  };
+}
+
+function clawbankTradeSchema() {
+  return {
+    type: "object",
+    required: ["baseToken", "side", "amountUsdc", "confirmation"],
+    properties: {
+      baseToken: { type: "string" },
+      side: { type: "string", enum: ["buy", "sell"] },
+      amountUsdc: { type: "number" },
+      maxSlippageBps: { type: "number" },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_CLAWBANK_SWAP\"." },
+    },
+  };
+}
+
+function clawbankMoneyTransferSchema() {
+  return {
+    type: "object",
+    required: ["chain", "toAddress", "amount", "confirmation"],
+    properties: {
+      chain: { type: "string" },
+      toAddress: { type: "string" },
+      amount: {},
+      confirmation: { type: "string", description: "Must be \"CONFIRM_CLAWBANK_TRANSFER\"." },
+    },
+  };
+}
+
+function clawbankCallSchema() {
+  return {
+    type: "object",
+    required: ["tool", "confirmation"],
+    properties: {
+      tool: { type: "string" },
+      args: { type: "object" },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_CLAWBANK_CALL\"." },
     },
   };
 }

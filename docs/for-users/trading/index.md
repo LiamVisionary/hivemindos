@@ -84,9 +84,10 @@ confirmation before anything executes. Nothing moves silently.
 - **Shared crypto practice** is local target state, not shared custody. It can capture
   Alpaca paper crypto positions and prepare a Hyperliquid replay plan, but the actual
   Hyperliquid orders still spend from the selected wallet after confirmation.
-- Supported local-wallet actions may include a HivemindOS platform fee. It is shown
-  in the preview and collected as a separate USDC transaction after the action
-  succeeds.
+- Supported local-wallet actions use the current HivemindOS platform fee: **1% with
+  a $0.01 minimum**. A `$100` swap, send, live stock order, xStock trade, x402
+  payment, or private payment produces a `$1.00` platform fee. The fee is shown in
+  the preview and collected as a separate USDC transaction after the action succeeds.
 - **Stock trading** defaults to a free **paper** (practice) account so you can try it
   with no real money; live trading is something you opt into.
 - One thing that doesn't fully work today: a **standalone "bridge X to another chain"**

@@ -2137,6 +2137,9 @@ export function useDashboardDerivedState(props: any) {
           venice: agentCreateMachine
             ? agentCreateDraft.venice
             : draftAgent.venice,
+          hivemindosModels: agentCreateMachine
+            ? agentCreateDraft.hivemindosModels
+            : draftAgent.hivemindosModels,
           telemetryUrl:
             agentCreateMachine?.collectorUrl ?? draftAgent.telemetryUrl,
         }),
@@ -2156,6 +2159,7 @@ export function useDashboardDerivedState(props: any) {
     agentCreateDraft.runtime,
     agentCreateDraft.provider,
     agentCreateDraft.model,
+    agentCreateDraft.hivemindosModels,
   ]);
   return {
     discoveredAgents,

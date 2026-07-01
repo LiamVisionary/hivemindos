@@ -193,7 +193,7 @@ Hive Fusion saves tokens when a workflow will repeat.
 
 HivemindOS also lowers spend by separating agent runtimes from model providers.
 
-That means one runtime profile can route to the right provider without recreating a new runtime for every backend. Local OpenAI-compatible servers, Bankr LLM, UsePod, OpenRouter, and runtime-native providers can be represented as providers, not duplicated as whole agent shells.
+That means one runtime profile can route to the right provider without recreating a new runtime for every backend. Local OpenAI-compatible servers, Bankr LLM, UsePod, HivemindOS Models, OpenRouter, and runtime-native providers can be represented as providers, not duplicated as whole agent shells.
 
 The dashboard also reads real token usage where runtimes expose it. That supports:
 

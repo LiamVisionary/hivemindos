@@ -84,10 +84,30 @@ Business customers can pay for:
 
 HivemindOS earns a usage fee on supported on-chain and trading actions taken from a user's acting wallet:
 
-- A platform fee (policy-driven, currently about 1%) on local USDC sends, DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC transfer after the action succeeds.
+- A platform fee of **1% with a $0.01 minimum** on local USDC sends, DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC transfer after the action succeeds.
 - A Hyperliquid builder fee of 0.5 bps (0.005%) on eligible filled local Hyperliquid orders, approved separately by the user.
 
 Paper trades, read-only checks, and no-payment x402 calls are never charged. The fee rate and recipient addresses are controlled by the official platform-fee policy (a Cloudflare Worker), not hardcoded in the app, and proceeds feed the same treasury and allocation below. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) for the mechanism.
+
+Current examples:
+
+| Activity | User volume | HivemindOS revenue |
+| --- | ---: | ---: |
+| Wallet send, swap, live stock, xStock, paid API, or private payment | `$100` | `$1.00` |
+| Wallet send, swap, live stock, xStock, paid API, or private payment | `$0.25` | `$0.01` minimum |
+| Hyperliquid eligible fill | `$10,000` | `$0.50` |
+
+### Hosted Agent And Model Messages
+
+HivemindOS also earns from hosted agent/model messages when the user does not bring their own model key or wants a HivemindOS-managed model route.
+
+The current default hosted paid agent is **$0.001 per successful chat completion**.
+
+| Hosted message volume | HivemindOS revenue |
+| ---: | ---: |
+| `1,000` messages | `$1` |
+| `100,000` messages | `$100` |
+| `1,000,000` messages | `$1,000` |
 
 ## Contribution And Ownership
 

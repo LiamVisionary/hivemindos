@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hivemind-dev-5121",
+      "runtimeExecutable": "/usr/bin/true",
+      "runtimeArgs": [],
+      "port": 5121
+    }
+  ]
+}

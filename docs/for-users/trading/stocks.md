@@ -53,9 +53,10 @@ Only the key **names** are stored — never the values themselves. xStocks needs
 - A buy spends money, so it counts toward your spending limits. A sell brings money in,
   and a paper trade isn't real money — neither counts against your budgets. If you've
   frozen a company, even practice trades are blocked.
-- Official builds may add a HivemindOS platform fee on xStocks and live Alpaca
-  orders. The preview shows it before you confirm, and the fee is collected as its
-  own USDC transaction after the order is accepted or the swap completes. Paper
+- Official builds use the HivemindOS platform fee on xStocks and live Alpaca orders:
+  **1% with a $0.01 minimum**. A `$100` live stock or xStock order produces a `$1.00`
+  platform fee. The preview shows it before you confirm, and the fee is collected as
+  its own USDC transaction after the order is accepted or the swap completes. Paper
   trading does not charge this fee.
 
 ## A note on market hours

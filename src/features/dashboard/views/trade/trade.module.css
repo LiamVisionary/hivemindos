@@ -421,7 +421,7 @@
 .actingName { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .actingChange { font-size: 11px; color: var(--honey, #e7b45c); white-space: nowrap; }
 
-/* Wallet selection modal. */
+/* Wallet selection panel/modal. */
 .modalOverlay {
   position: fixed;
   inset: 0;
@@ -432,16 +432,21 @@
   padding: 24px;
   background: rgba(0, 0, 0, 0.55);
 }
-.modal {
+
+.walletSelectPanel {
   width: 100%;
-  max-width: 760px;
-  max-height: 86vh;
   display: flex;
   flex-direction: column;
+  color: var(--fg-1, var(--fg, #e9e4d8));
   background: var(--panel, #14171d);
   border: 1px solid var(--line-2, #2b3038);
   border-radius: 16px;
   overflow: hidden;
+}
+
+.modal {
+  max-width: 760px;
+  max-height: 86vh;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
 }
 .modalHead {

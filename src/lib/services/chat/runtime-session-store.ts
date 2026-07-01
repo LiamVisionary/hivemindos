@@ -3,6 +3,7 @@ import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { syncConversationNoteForSession } from "@/lib/services/obsidian/conversation-notes";
+import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 
 export type RuntimeChatSessionMessage = {
   index: number;
@@ -11,6 +12,7 @@ export type RuntimeChatSessionMessage = {
   createdAt: number;
   type?: string;
   raw?: unknown;
+  billing?: ChatResponseBilling;
 };
 
 export type RuntimeChatSessionRecord = {
@@ -139,7 +141,7 @@ export async function startRuntimeChatSession(options: StartRuntimeChatSessionOp
   return session;
 }
 
-export async function appendRuntimeChatSessionText(sessionId: string, role: "assistant" | "tool" | "system", content: string, raw?: unknown) {
+export async function appendRuntimeChatSessionText(sessionId: string, role: "assistant" | "tool" | "system", content: string, raw?: unknown, options?: { billing?: ChatResponseBilling }) {
   if (!content) return;
   const session = await readSessionFile(sessionPath(sessionId));
   if (!session) return;
@@ -163,6 +165,7 @@ export async function appendRuntimeChatSessionText(sessionId: string, role: "ass
     target.content += content;
     target.createdAt = target.createdAt || now;
     target.raw = raw ?? target.raw;
+    target.billing = options?.billing ?? target.billing;
   } else {
     session.messages.push({
       index: session.messages.length,
@@ -170,10 +173,25 @@ export async function appendRuntimeChatSessionText(sessionId: string, role: "ass
       content,
       createdAt: now,
       raw,
+      billing: options?.billing,
     });
   }
   session.updatedAt = now;
   await writeSession(session);
+}
+
+export async function updateRuntimeChatSessionLastAssistantBilling(sessionId: string, billing: ChatResponseBilling) {
+  const session = await readSessionFile(sessionPath(sessionId));
+  if (!session) return;
+  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+    const message = session.messages[index];
+    if (message.type === "process") continue;
+    if (message.role !== "assistant" || message.type) break;
+    message.billing = billing;
+    session.updatedAt = Date.now();
+    await writeSession(session);
+    return;
+  }
 }
 
 export async function appendRuntimeChatSessionEvent(sessionId: string, label: string, detail?: string, raw?: unknown) {
