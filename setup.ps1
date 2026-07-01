@@ -10,6 +10,22 @@
 
 $ErrorActionPreference = "Stop"
 
+# The HivemindOS app runs this script HIDDEN from ~/.hivemindos/app-source with no
+# console attached. Ask-YesNo below falls back to Read-Host when interactive, and
+# Read-Host on a hidden run's inherited stdin BLOCKS FOREVER — hanging setup at the
+# first prompt (observed: setup stuck ~24 min at the final "Open dashboard?" prompt,
+# surfacing as a "Not Responding" freeze at the last step). When we are app-driven
+# (running from the managed app-source dir) or otherwise have no interactive console,
+# force NonInteractive so every Ask-YesNo takes its safe default instead of blocking.
+# A human running setup.ps1 from a real terminal is unaffected. This re-applies on
+# the pwsh re-exec below because the child re-runs this script from the same path.
+if (-not $NonInteractive) {
+  $__scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+  $__noConsole = $false
+  try { $__noConsole = [Console]::IsInputRedirected -or (-not [Environment]::UserInteractive) } catch { $__noConsole = $true }
+  if (($__scriptDir -like "*.hivemindos*app-source*") -or $__noConsole) { $NonInteractive = $true }
+}
+
 # Fresh Windows ships Windows PowerShell 5.1 only, but this script needs
 # PowerShell 7 (ConvertFrom-Json -AsHashtable and friends). Re-exec under
 # pwsh, installing it first when winget is available.
@@ -119,6 +135,29 @@ function Invoke-Pnpm {
   exit 1
 }
 
+function Install-NodeWindows {
+  # Best-effort, non-interactive Node.js LTS install (mirrors Install-PythonWindows):
+  # winget first (present on most Win10/11 desktops); the official nodejs.org MSI is
+  # the fallback for winget-less boxes (e.g. Windows Server). The MSI adds Node to
+  # PATH. Never throws. The agent telemetry collector is a node script
+  # (scripts\agent-telemetry-collector.mjs), so even the -SkipDeps app-driven setup
+  # needs Node for the collector to install and run.
+  if (Install-WingetPackage "Node.js LTS" "OpenJS.NodeJS.LTS") { Refresh-Path; return }
+  $ver = "22.11.0"
+  $url = "https://nodejs.org/dist/v$ver/node-v$ver-x64.msi"
+  $dest = Join-Path $env:TEMP "node-v$ver-x64.msi"
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Info "Downloading Node.js $ver from nodejs.org"
+    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $dest
+    Info "Installing Node.js $ver (silent, adds to PATH)"
+    Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", "`"$dest`"", "/quiet", "/norestart") -Wait
+    Refresh-Path
+  } catch {
+    Warn "Automatic Node.js install failed: $($_.Exception.Message)"
+  }
+}
+
 function Ensure-Node {
   if (Test-Command node) {
     Ok "Node found: $(node --version)"
@@ -127,6 +166,13 @@ function Ensure-Node {
   if (Ask-YesNo "Node.js 20+ is missing. Install Node.js LTS with winget now?" $true) {
     Install-WingetPackage "Node.js LTS" "OpenJS.NodeJS.LTS" | Out-Null
     Refresh-Path
+  }
+  if (-not (Test-Command node)) {
+    # winget-less boxes (Windows Server) and the app-driven hidden setup (where the
+    # prompt above is auto-declined) still need Node for the collector. Fall back to
+    # the official nodejs.org MSI so a fresh box installs the collector instead of
+    # exiting at the required-dependencies check below.
+    Install-NodeWindows
   }
   if (Test-Command node) {
     Ok "Node found: $(node --version)"
