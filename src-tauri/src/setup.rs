@@ -306,7 +306,7 @@ fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String 
             // 'Stop' makes any failure exit powershell non-zero for the caller's
             // `if errorlevel 1`. Tls12 keeps the download working on older boxes.
             format!(
-                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; Remove-Item -Recurse -Force $tmp\"",
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; Remove-Item -Recurse -Force $tmp\"",
                 root = root.display(),
                 url = APP_SOURCE_ARCHIVE_ZIP,
             )
@@ -657,28 +657,59 @@ fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatfo
         );
         let app_err = app.clone();
         let err_handle = std::thread::spawn(move || {
-            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            // Read raw bytes + decode LOSSILY, never `.lines()`: `.lines()` yields an
+            // Err and STOPS at the first non-UTF-8 byte. setup.ps1 prints glyphs
+            // (✓ ✗ ↑) that land as console-codepage bytes (e.g. 0xFB), so a strict
+            // reader dies on the first such line, drops this pipe — the still-running
+            // setup process then fails with "The process tried to write to a
+            // nonexistent pipe" — and progress stalls. Lossy decode drains to EOF.
+            let mut reader = BufReader::new(stderr);
+            let mut bytes: Vec<u8> = Vec::new();
+            loop {
+                bytes.clear();
+                if matches!(reader.read_until(b'\n', &mut bytes), Ok(0) | Err(_)) { break; }
+                while matches!(bytes.last(), Some(b'\n') | Some(b'\r')) { bytes.pop(); }
+                let line = String::from_utf8_lossy(&bytes).into_owned();
                 let _ = app_err.emit(
                     NATIVE_SETUP_PROGRESS_EVENT,
                     serde_json::json!({ "kind": "line", "stream": "stderr", "line": line }),
                 );
             }
         });
-        // Throttle stdout emits to ~7/sec. Setup output (especially pnpm install)
-        // is very verbose and PowerShell block-buffers its pipe, so lines arrive
-        // in large bursts; emitting every line floods the webview into a "Not
-        // Responding" freeze. A progress feed only needs the latest activity, so
-        // we drop intermediate lines and emit at most one per 150 ms. (stderr is
-        // NOT throttled below — errors are low-volume and must all surface.)
+        // Rate-cap stdout emits to ~7/sec as IPC backpressure: setup output is
+        // verbose and PowerShell block-buffers its pipe, so lines arrive in large
+        // bursts, and a progress feed only needs the latest activity. We coalesce
+        // intermediate lines and emit at most one per 150 ms — but always FLUSH the
+        // most recent line at end-of-stream, so the final/most-important activity
+        // line never gets dropped by the cap. (stderr is NOT throttled — errors are
+        // low-volume and must all surface.)
         let mut last_emit = std::time::Instant::now()
             .checked_sub(std::time::Duration::from_secs(1))
             .unwrap_or_else(std::time::Instant::now);
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+        let mut pending: Option<String> = None;
+        // Byte reader + lossy decode (see the stderr note above): a strict `.lines()`
+        // reader stops at the first non-UTF-8 glyph, which is exactly what stalled the
+        // wizard with no progress. This drains every line to EOF.
+        let mut reader = BufReader::new(stdout);
+        let mut bytes: Vec<u8> = Vec::new();
+        loop {
+            bytes.clear();
+            if matches!(reader.read_until(b'\n', &mut bytes), Ok(0) | Err(_)) { break; }
+            while matches!(bytes.last(), Some(b'\n') | Some(b'\r')) { bytes.pop(); }
+            let line = String::from_utf8_lossy(&bytes).into_owned();
             let now = std::time::Instant::now();
             if now.duration_since(last_emit) < std::time::Duration::from_millis(150) {
+                pending = Some(line);
                 continue;
             }
             last_emit = now;
+            pending = None;
+            let _ = app.emit(
+                NATIVE_SETUP_PROGRESS_EVENT,
+                serde_json::json!({ "kind": "line", "line": line }),
+            );
+        }
+        if let Some(line) = pending {
             let _ = app.emit(
                 NATIVE_SETUP_PROGRESS_EVENT,
                 serde_json::json!({ "kind": "line", "line": line }),

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
-import { requestGuidedTour } from "@/lib/native/guided-tour";
+import { CLAWBANK_OPEN_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { grantNativePrivateFilesystemAccess } from "@/lib/native/dashboard-bootstrap";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
@@ -20,7 +20,6 @@ const DISMISS_FALLBACK_KEY = `${DISMISS_KEY}.localFallback`;
 const NATIVE_SETUP_PROGRESS_EVENT = "native-setup-progress";
 
 const APP_LOGO_PATH = "/hivemindos-logo.png";
-const DASHBOARD_URL = "http://localhost:5020";
 
 type InstallMode = "local" | "link" | "system-tailscale";
 type WizardStep = "welcome" | "scope" | "agents" | "plan" | "running" | "done";
@@ -34,6 +33,34 @@ const DEMO_RUN_MESSAGES = [
 
 // Seven honeycomb cells in the running emblem (matches .cell.c0..c6 in the CSS).
 const EMBLEM_CELLS = 7;
+
+// Real setup milestones parsed from the streamed hidden-setup output, so the emblem
+// and meter reflect ACTUAL progress instead of a cosmetic timer (which raced through the
+// quick early steps then stalled on the genuinely-slow collector step). Each entry maps
+// to how many of the EMBLEM_CELLS are filled once a matching line has streamed, and to a
+// human phase label. Order matters: the highest matched cell wins.
+const SETUP_MILESTONES: Array<{ re: RegExp; cell: number; label: string }> = [
+  { re: /Downloading HivemindOS setup files|Unpacking setup files/i, cell: 1, label: "Downloading setup files…" },
+  { re: /HivemindOS (Windows )?setup\b|Node (found|is missing)|Downloading Node/i, cell: 2, label: "Checking dependencies…" },
+  { re: /Python (found|ready)|hive-env-add installed|hive-pulse installed/i, cell: 3, label: "Installing hive tools…" },
+  { re: /shared skill projection|hive-brain-sync|shared skills/i, cell: 4, label: "Syncing shared brain + skills…" },
+  { re: /MCP registration|Registered into \d+ harness|Runtime skill and memory hints/i, cell: 5, label: "Registering agents + MCP…" },
+  { re: /\bReady\b|Dashboard:|Local-only mode is ready/i, cell: 6, label: "Almost there…" },
+];
+
+function setupMilestoneCells(lines: string[]): number {
+  return SETUP_MILESTONES.reduce((max, m) => (lines.some((line) => m.re.test(line)) ? Math.max(max, m.cell) : max), 0);
+}
+
+function setupPhaseLabel(lines: string[], settled: boolean): string {
+  if (settled) return "Hive assembled.";
+  const cells = setupMilestoneCells(lines);
+  // Cell 6 = "Ready" printed, but the collector /health check (settled) can take a while.
+  // Name that slow tail so it doesn't read as a stall.
+  if (cells >= 6) return "Bringing the agent collector online…";
+  const current = [...SETUP_MILESTONES].reverse().find((m) => lines.some((line) => m.re.test(line)));
+  return current?.label ?? "Starting setup…";
+}
 
 // "this Mac" / "this PC" / "this computer", from the platform reported by native_setup_status.
 function deviceNoun(platform: string | undefined) {
@@ -128,11 +155,6 @@ export function NativeFirstRunOnboarding() {
   const [runError, setRunError] = useState("");
   const [launchedCommand, setLaunchedCommand] = useState("");
   const [copied, setCopied] = useState("");
-  // Cosmetic activity indicator for the running emblem. It fills toward (but
-  // never reaches) the last cell on a timer, then completes only when the real
-  // collector signal lands — see setupSettled below. The cells are decorative
-  // (aria-hidden); no per-step claim is made about what setup is doing.
-  const [filledCells, setFilledCells] = useState(0);
   // Live setup output streamed from the hidden launcher (native-setup-progress),
   // plus a captured non-zero exit so the wizard can show an error instead of
   // spinning. Kept short (tail) since it's a live activity feed, not a full log.
@@ -171,7 +193,10 @@ export function NativeFirstRunOnboarding() {
   }, [demoMode]);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => {
+    // Run synchronously on mount rather than via setTimeout(…, 0): deferring to a
+    // macrotask let the first-run wizard open AFTER the daily/weekly popups on a
+    // busy main thread. Opening the decision inline makes setup surface first.
+    const run = () => {
       if (demoMode) {
         setOpen(true);
         void refreshStatus();
@@ -211,8 +236,8 @@ export function NativeFirstRunOnboarding() {
         setOpen(!dismissed);
         if (dismissed && !dismissedInDashboardState) void saveDashboardStateValue(DISMISS_KEY, "1");
       });
-    }, 0);
-    return () => window.clearTimeout(handle);
+    };
+    run();
   }, [demoMode, refreshStatus]);
 
   // While the running step waits for setup to finish, keep refreshing status so
@@ -223,18 +248,6 @@ export function NativeFirstRunOnboarding() {
     const id = window.setInterval(() => { void refreshStatus(); }, 4000);
     return () => window.clearInterval(id);
   }, [step, setupSettled, demoMode, refreshStatus]);
-
-  // Cosmetic emblem fill while setup runs in the terminal (capped one short of
-  // full); the real collector signal completes it. The counter is reset to 0
-  // when setup is launched (see launchSetup) so re-runs start fresh; here we
-  // only ever increment, inside the interval callback.
-  useEffect(() => {
-    if (step !== "running" || setupSettled) return;
-    const id = window.setInterval(() => {
-      setFilledCells((current) => Math.min(EMBLEM_CELLS - 1, current + 1));
-    }, 1500);
-    return () => window.clearInterval(id);
-  }, [step, setupSettled]);
 
   // Once the collector is up, briefly hold the full emblem, then reveal "done".
   useEffect(() => {
@@ -335,7 +348,6 @@ export function NativeFirstRunOnboarding() {
 
   async function launchSetup(): Promise<boolean> {
     setRunError("");
-    setFilledCells(0);
     if (demoMode) {
       await launchDemoSetup();
       setLaunchedCommand("demo");
@@ -389,8 +401,9 @@ export function NativeFirstRunOnboarding() {
 
   const tone = step === "running" ? "live" : undefined;
   const rows = planRows(mode);
-  const filled = step === "running" ? (setupSettled ? EMBLEM_CELLS : filledCells) : 0;
+  const filled = step === "running" ? (setupSettled ? EMBLEM_CELLS : setupMilestoneCells(setupLines)) : 0;
   const meterPct = Math.round((filled / EMBLEM_CELLS) * 100);
+  const phaseLabel = setupPhaseLabel(setupLines, setupSettled);
 
   const runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }> = [];
   if (step === "running") {
@@ -450,9 +463,9 @@ export function NativeFirstRunOnboarding() {
           ) : null}
           {step === "plan" ? <PlanStep rows={rows} mode={mode} runError={runError} /> : null}
           {step === "running" ? (
-            <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
+            <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} phaseLabel={phaseLabel} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
           ) : null}
-          {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} copied={copied} onCopy={copy} /> : null}
+          {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} /> : null}
         </div>
 
         <footer className={styles.foot}>
@@ -489,10 +502,7 @@ export function NativeFirstRunOnboarding() {
                 <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" disabled><IconSpinner /> Working…</button>
               </>
             ) : (
-              <>
-                <button className={`${styles.btn} ${styles.ghost} ${styles.grow}`} type="button" onClick={dismiss}>I&rsquo;ll explore on my own</button>
-                <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" onClick={() => { dismiss(); requestGuidedTour(); }}><IconSparkle /> Show me around</button>
-              </>
+              <button className={`${styles.btn} ${styles.primary} ${styles.grow}`} type="button" data-tone="live" onClick={() => { dismiss(); window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }}>Next <IconArrow /></button>
             )}
           </div>
         </footer>
@@ -626,10 +636,11 @@ function PlanStep({ rows, mode, runError }: { rows: PlanRow[]; mode: InstallMode
   );
 }
 
-function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPreview, isWindows, copied, onCopy }: {
+function RunningStep({ filled, meterPct, settled, phaseLabel, runLog, runStatus, commandPreview, isWindows, copied, onCopy }: {
   filled: number;
   meterPct: number;
   settled: boolean;
+  phaseLabel: string;
   runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }>;
   runStatus: string;
   commandPreview: string;
@@ -648,7 +659,7 @@ function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPrev
       </div>
       <div className={styles.runMeta}>
         <span className={styles.liveTag}><span className={styles.liveDot} /> Building your hive</span>
-        <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>{settled ? "Hive assembled." : "Setting things up…"}</h2>
+        <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>{phaseLabel}</h2>
       </div>
       <div className={styles.meter}><i style={{ width: `${settled ? 100 : Math.max(meterPct, 8)}%` }} /></div>
       <div className={styles.log}>
@@ -673,12 +684,10 @@ function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPrev
   );
 }
 
-function DoneStep({ scope, isMac, isWindows, copied, onCopy }: {
+function DoneStep({ scope, isMac, isWindows }: {
   scope: "local" | "multi";
   isMac: boolean;
   isWindows: boolean;
-  copied: string;
-  onCopy: (key: string, value: string) => void;
 }) {
   return (
     <div className={`${styles.step} ${styles.center}`}>
@@ -694,12 +703,6 @@ function DoneStep({ scope, isMac, isWindows, copied, onCopy }: {
         The dashboard is running locally. HivemindOS finishes up in the background.
         {isMac ? " Your phone can reach this Mac automatically, even when the app is closed — just tap “Allow” on the one-time prompt the first time it opens a file." : ""}
       </p>
-      <div className={styles.card}>
-        <span className={styles.lead}><span>Dashboard</span><strong>{DASHBOARD_URL}</strong></span>
-        <button className={styles.copy} type="button" data-done={copied === "url" ? "true" : undefined} onClick={() => onCopy("url", DASHBOARD_URL)}>
-          {copied === "url" ? <IconCheck width="13" height="13" /> : <IconCopy />}{copied === "url" ? "Copied" : "Copy"}
-        </button>
-      </div>
       {scope === "multi" ? (
         <p className={styles.lede} style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
           Adding another machine? Run <code>{isWindows ? "setup.ps1" : "./setup.sh"}</code> there too and it joins this hive automatically.
@@ -722,7 +725,6 @@ function IconChevL(p: SVGProps<SVGSVGElement>) { return <svg width="16" height="
 function IconCopy(p: SVGProps<SVGSVGElement>) { return <svg width="13" height="13" viewBox="0 0 24 24" {...stroke} {...p}><rect x="9" y="9" width="11" height="11" rx="2.2" /><path d="M5 15V6a2 2 0 0 1 2-2h8" /></svg>; }
 function IconSpinner(p: SVGProps<SVGSVGElement>) { return <svg className={styles.spin} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" {...p}><path d="M12 3a9 9 0 1 0 9 9" /></svg>; }
 function IconRefresh(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M20 11a8 8 0 1 0-1.6 5M20 5v6h-6" /></svg>; }
-function IconSparkle(p: SVGProps<SVGSVGElement>) { return <svg width="15" height="15" viewBox="0 0 24 24" {...stroke} {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6M6.5 6.5l3 3M14.5 14.5l3 3M17.5 6.5l-3 3M9.5 14.5l-3 3" /></svg>; }
 
 function IconLaptop(p: SVGProps<SVGSVGElement>) { return <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} {...p}><rect x="4" y="5" width="16" height="11" rx="2" /><path d="M2.5 20h19M9.5 16h5" /></svg>; }
 function IconMesh(p: SVGProps<SVGSVGElement>) { return <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} {...p}><circle cx="6" cy="6" r="2.4" /><circle cx="18" cy="6" r="2.4" /><circle cx="12" cy="18" r="2.4" /><path d="M8.2 7.3 15.8 16.7M15.8 7.3 8.2 16.7M8.4 6h7.2" /></svg>; }
