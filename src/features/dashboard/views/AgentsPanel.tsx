@@ -398,7 +398,13 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     onOpenCodeProof: () => setActiveView("integrations"),
     onFixSyncIssue,
     onOpenChat: (_, agent) => {
-      if (!agent.model) { setChatBlockedAgent({ id: agent.id, name: agent.name }); return; }
+      // An agent can't actually answer if it has no model, or if it's on the
+      // wallet-paid "HivemindOS models" gateway with no funded wallet (balance is
+      // "off" when the wallet isn't enabled, "dead" when it's out of funds). Gate
+      // chat behind setup instead of opening a chat that will fail.
+      const walletPaidProvider = !!agent.provider && /hivemindos.?models/i.test(agent.provider);
+      const notReady = !agent.model || (walletPaidProvider && (agent.balance === "off" || agent.balance === "dead"));
+      if (notReady) { setChatBlockedAgent({ id: agent.id, name: agent.name }); return; }
       startAgentChat(agent.id, { fresh: true });
     },
     onOpenTaskChat: (_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task),
