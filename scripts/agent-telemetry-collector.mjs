@@ -71,9 +71,10 @@ import {
   reconcilePortableState,
   unpackTarToDir,
 } from "./lib/runtime-portable-state.mjs";
-import bonjourService from "bonjour-service";
-
-const { Bonjour } = bonjourService;
+// NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
+// not at top level. A -SkipDeps app-driven collector install (Windows) has no
+// node_modules, and a failed top-level import would crash the whole collector at
+// startup — so /health never comes up and the setup wizard hangs waiting for it.
 
 const execFileAsync = promisify(execFile);
 const collectorOnly = /^(1|true|yes)$/i.test(
@@ -7943,6 +7944,11 @@ async function advertiseHubMdns() {
       /* tailscale not present / not up — advertise without the suffix */
     }
     const machineId = await stableMachineId().catch(() => "");
+    // Lazy-load bonjour-service here (see the top-of-file note): a missing package
+    // (no node_modules on a -SkipDeps install) throws into this function's try/catch
+    // and just disables mDNS advertising, instead of crashing the collector.
+    const bonjourModule = await import("bonjour-service");
+    const Bonjour = (bonjourModule.default ?? bonjourModule).Bonjour;
     const bonjour = new Bonjour();
     bonjour.publish({
       name: `HivemindOS ${hostname()}`,
