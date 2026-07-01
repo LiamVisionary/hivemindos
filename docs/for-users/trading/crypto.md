@@ -99,10 +99,11 @@ The app is always upfront about this:
 
 ## HivemindOS fees
 
-Official HivemindOS builds may add a small platform fee on supported local-wallet
-actions such as sends, swaps, public x402 payments, and Veil private payments. The
-preview shows the fee before you confirm, and the fee is sent as its own USDC
-transaction after the main action succeeds.
+Official HivemindOS builds use a **1% platform fee with a $0.01 minimum** on
+supported local-wallet actions such as sends, swaps, public x402 payments, and Veil
+private payments. A `$100` action produces a `$1.00` platform fee. A tiny test action
+below `$1` produces the `$0.01` minimum. The preview shows the fee before you confirm,
+and the fee is sent as its own USDC transaction after the main action succeeds.
 
 Local Hyperliquid trades use a separate builder fee, described in the Hyperliquid
 guide. Bankr and card-style provider flows may have their own provider fees instead

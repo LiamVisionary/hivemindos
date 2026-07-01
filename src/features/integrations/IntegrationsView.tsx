@@ -22,6 +22,7 @@ import {
   TermIcon,
   Toggle,
 } from "./integrations-primitives";
+import { XAccountMcpPanel, type XMcpStatus } from "./XAccountMcpPanel";
 import "./integrations-redesign.css";
 
 type SetupStep = "welcome" | "host" | "method" | "automatic" | "manual" | "apps";
@@ -116,6 +117,8 @@ const NANGO_AUTO_TASKS = [
 ];
 
 const MCP_DEFAULTS: Record<string, McpTransportDefaults & { accent: string; mono: string }> = {
+  xapi: { transport: "stdio", command: "node", args: ["scripts/x-mcp-bridge.mjs"], accent: "#f3f0e9", mono: "X" },
+  "x-docs": { transport: "http", url: "https://docs.x.com/mcp", accent: "#6f9bd6", mono: "Xd" },
   github: { transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-github"], accent: "#c7ccd4", mono: "Gh" },
   "browser-use": { transport: "stdio", command: "npx", args: ["-y", "browser-use-mcp"], accent: "#6f9bd6", mono: "Br" },
   "palmier-pro": { transport: "http", url: "http://127.0.0.1:19789/mcp", accent: "#e09a86", mono: "Pp" },
@@ -781,28 +784,35 @@ function McpManager() {
   const [enabled, setEnabled] = React.useState(true);
   const [connected, setConnected] = React.useState<McpServerStatus[]>([]);
   const [catalog, setCatalog] = React.useState<McpCatalogCardItem[]>([]);
+  const [xStatus, setXStatus] = React.useState<XMcpStatus | null>(null);
   const [connectItem, setConnectItem] = React.useState<McpCatalogCardItem | null>(null);
   const [category, setCategory] = React.useState("all");
   const [query, setQuery] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState("");
+  const [xBusy, setXBusy] = React.useState("");
+  const [xMessage, setXMessage] = React.useState("");
   const [message, setMessage] = React.useState("");
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      const [statusResponse, catalogResponse] = await Promise.all([
+      const [statusResponse, catalogResponse, xResponse] = await Promise.all([
         fetch("/api/mcp/client", { cache: "no-store" }),
         fetch("/api/mcp/catalog?limit=100", { cache: "no-store" }),
+        fetch("/api/integrations/x-mcp", { cache: "no-store" }),
       ]);
       const status = await readJson<{ ok?: boolean; enabled?: boolean; servers?: McpServerStatus[] } & FetchErrorPayload>(statusResponse);
       const catalogData = await readJson<{ ok?: boolean; servers?: HiveMcpCatalogItem[] } & FetchErrorPayload>(catalogResponse);
+      const xData = await readJson<{ ok?: boolean; status?: XMcpStatus } & FetchErrorPayload>(xResponse);
       if (!statusResponse.ok || status.ok === false) throw new Error(status.error ?? "Could not read MCP client status.");
       if (!catalogResponse.ok || catalogData.ok === false) throw new Error(catalogData.error ?? "Could not read MCP catalog.");
+      if (!xResponse.ok || xData.ok === false) throw new Error(xData.error ?? "Could not read X MCP status.");
       setEnabled(status.enabled !== false);
       setConnected(status.servers ?? []);
       setCatalog((catalogData.servers ?? []).map(withMcpDefaults));
+      setXStatus(xData.status ?? null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load MCP servers.");
     } finally {
@@ -887,6 +897,27 @@ function McpManager() {
     }
   }
 
+  async function runXAction(action: "save-credentials" | "start-oauth" | "sync-runtimes" | "remove-runtimes", payload: Record<string, unknown> = {}) {
+    setXBusy(action);
+    setXMessage("");
+    try {
+      const response = await fetch("/api/integrations/x-mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const data = await readJson<{ ok?: boolean; status?: XMcpStatus; message?: string; stdout?: string } & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? "X MCP action failed.");
+      if (data.status) setXStatus(data.status);
+      setXMessage(data.message || summarizeRegistrarOutput(data.stdout) || "X MCP status updated.");
+      await load();
+    } catch (error) {
+      setXMessage(error instanceof Error ? error.message : "X MCP action failed.");
+    } finally {
+      setXBusy("");
+    }
+  }
+
   return (
     <div className="fm-wrap">
       <div className="fm-master">
@@ -904,6 +935,17 @@ function McpManager() {
 
       {!loading ? (
         <>
+          <XAccountMcpPanel
+            status={xStatus}
+            busy={xBusy}
+            message={xMessage}
+            onSaveCredentials={(clientId, clientSecret, redirectUri) => void runXAction("save-credentials", { clientId, clientSecret, redirectUri })}
+            onStartOAuth={() => void runXAction("start-oauth")}
+            onSyncRuntimes={() => void runXAction("sync-runtimes")}
+            onRemoveRuntimes={() => void runXAction("remove-runtimes")}
+            onRefresh={() => void load()}
+          />
+
           <div>
             <div className="fm-sec">Connected <span className="ct">{connected.length} server{connected.length === 1 ? "" : "s"} · {totalTools} tools</span></div>
             {connected.length ? (
@@ -1339,6 +1381,14 @@ function setupMethodLabel(method?: NangoHostSetupResult["method"]) {
   if (method === "tailscale-ssh") return "Tailscale";
   if (method === "plain-ssh") return "SSH";
   return method || "setup";
+}
+
+function summarizeRegistrarOutput(output?: string) {
+  if (!output) return "";
+  const changedMatch = output.match(/Done\.\s+([^\n]+)/);
+  if (changedMatch) return changedMatch[1].trim();
+  const lines = output.split(/\r?\n/).filter(Boolean);
+  return lines.at(-1) ?? "";
 }
 
 function machineChoices(machines: FleetMachine[], config: NangoHostConfig): MachineChoice[] {

@@ -20,6 +20,7 @@ The provider catalog makes external options retrievable by agents through `/api/
 - OpenHands and Aider as optional coding runtime adapters.
 - Palmier Pro as an installable macOS video editor with a local MCP endpoint for timeline and media workflows.
 - RentAHuman as a REST and MCP provider for real-world human work through profile search, conversations, bounties, service bookings, escrow, and transfers.
+- X API MCP as an official user-account bridge for X search, timelines, bookmarks, trends, news, and Articles.
 - n8n as an installable workflow automation service.
 - Queen Bee PRD decomposition for turning product requirements into linked Work Board tasks.
 
@@ -47,6 +48,12 @@ The Browser Use provider card has a Full permissions toggle. Enabling it require
 `GET /api/mcp/catalog` returns a curated MCP server list with capability tags, credential key names, side-effect classes, install hints, and safety notes. Agents should verify credentials and side effects before installing or calling a server.
 
 AgentMail's hosted MCP endpoint is included for runtimes that prefer MCP. Use OAuth-capable clients against `https://mcp.agentmail.to/mcp` when available, or pass `AGENTMAIL_API_KEY` through the MCP client when OAuth is unavailable. Live send/reply tools remain write-capable email side effects and should confirm recipients, subject, body, and attachment intent before use.
+
+X's official API MCP is included as `xapi`. The X API server is hosted at `https://api.x.com/mcp`, but user-account access runs through the local `xurl` bridge because X requires the user to provide their own OAuth 2.0 developer app. In Integrations → MCP Servers, users can save `X_MCP_CLIENT_ID` and `X_MCP_CLIENT_SECRET` into shared env, start the browser sign-in, and sync the `xapi` MCP entry into installed agent runtimes. Runtime configs launch HivemindOS's local bridge wrapper and do not contain X secrets or OAuth tokens.
+
+The X sign-in cache is owned by `xurl` under the user's home directory. HivemindOS reports whether that cache exists, but it does not read or copy token bodies. Agents should treat X tools as acting with the signed-in account's scopes; write-capable tools such as bookmark changes and Article publishing need explicit user confirmation.
+
+The read-only X docs MCP is also included as `x-docs` for clients that can connect to Streamable HTTP servers at `https://docs.x.com/mcp`.
 
 ## RentAHuman REST API
 

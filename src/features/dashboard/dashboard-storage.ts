@@ -9,6 +9,7 @@ import type { AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-w
 import type { AgentSchedule, AgentSnapshot, AgentTask, ChatCustomFolder, ChatMessage, DiscoveredMachine, HermesUpdateSkillLike, RuntimeIntegrationKey, RuntimeIntegrationStatus, RuntimeSetupDefinition, StoredSharedVaultConfig, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 import { imageGenerationToApplicationGeneration, normalizeApplicationGenerationUrl, type ChatApplicationGenerationArtifact, type ChatApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
 import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
+import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
 const VAULT_STORAGE_KEY = "hivemindos.sharedVault.v1";
@@ -391,7 +392,13 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
   const output: ChatMessage[] = [];
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
-    if (sameVisibleChatMessage(output.at(-1), message)) continue;
+    if (sameVisibleChatMessage(output.at(-1), message)) {
+      const previous = output.at(-1);
+      if (previous && message.billing && !previous.billing) {
+        output[output.length - 1] = { ...previous, billing: message.billing } as ChatMessage;
+      }
+      continue;
+    }
     if (message.role === "user" && message.content.trim()) {
       const previousUserIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
       const between = previousUserIndex >= 0 ? output.slice(previousUserIndex + 1) : [];
@@ -410,7 +417,12 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
       const previousAssistantIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
       const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
       const currentUser = [...output].reverse().find((item) => item.role === "user");
-      if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) continue;
+      if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) {
+        if (message.billing && !output[previousAssistantIndex]?.billing) {
+          output[previousAssistantIndex] = { ...output[previousAssistantIndex], billing: message.billing };
+        }
+        continue;
+      }
     }
     output.push(message);
   }
@@ -552,6 +564,7 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
           surface: message.surface === "chat" || message.surface === "kanban" || message.surface === "scheduler" ? message.surface : undefined,
           sourceSessionId: typeof message.sourceSessionId === "string" ? message.sourceSessionId : undefined,
           sourceIndex: typeof message.sourceIndex === "number" ? message.sourceIndex : undefined,
+          billing: normalizeChatResponseBilling(message.billing),
           processEvents: Array.isArray(message.processEvents)
             ? message.processEvents
               .filter((event) => event && typeof event.label === "string" && event.label.trim())

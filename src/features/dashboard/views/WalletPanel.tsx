@@ -2,13 +2,16 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
+import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
-import { hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { getSurvivalSnapshot, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import { exportAgentWalletSecret } from "./wallet-secret-export-actions";
 import { fetchBankrWallet, type BankrWalletInfo } from "./trade/trade-api";
+import { WalletSelectModal, type PickableWallet } from "./trade/WalletSelectModal";
+import { agentPickable, groupedUserPickables, isLocalPaymentSigningWallet, resolvePickableAccount } from "./trade/wallet-pickables";
 import {
   buildGroupedPersonalWallets,
   mergePersonalWalletList,
@@ -436,6 +439,72 @@ function shortPublicRef(value: unknown): string {
   return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text;
 }
 
+function shortWalletAddress(value: unknown): string {
+  const text = stringValue(value);
+  if (!text) return "";
+  return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text;
+}
+
+function fundingNetworkLabel(network: string): string {
+  if (network === "eip155:8453") return "Base";
+  if (network === "eip155:84532") return "Base Sepolia";
+  if (network === "solana:mainnet") return "Solana";
+  if (network === "solana:devnet") return "Solana devnet";
+  if (network.startsWith("eip155:")) return "EVM";
+  if (network.startsWith("solana:")) return "Solana";
+  return network || "Unknown network";
+}
+
+function fundingDetail(network: string, address: string): string {
+  return [network ? fundingNetworkLabel(network) : "", shortWalletAddress(address)].filter(Boolean).join(" · ");
+}
+
+function walletAddress(value: any): string {
+  return firstStringValue(value?.walletAddress, value?.vaultAddress, value?.address);
+}
+
+function findPersonalWalletById(personalWallets: any[] | null, walletId: string) {
+  return (Array.isArray(personalWallets) ? personalWallets : []).find((wallet) => firstStringValue(wallet?.id, wallet?.agentId) === walletId);
+}
+
+function buildLlmFundingSourceMeta(agent: any, wallet: any, agentsById: Map<string, any>, walletsByAgent: Record<string, any>, personalWallets: any[] | null) {
+  const config = agent?.hivemindosModels ?? {};
+  const configuredId = firstStringValue(config.walletVaultId);
+  const usesHivemindosModels = agent?.provider === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER || Boolean(configuredId);
+  if (!usesHivemindosModels) return null;
+  const sourceId = configuredId || agent.id;
+  const configuredAddress = firstStringValue(config.walletAddress);
+  const configuredNetwork = firstStringValue(config.walletNetwork);
+  if (!configuredId || sourceId === agent.id) {
+    const address = configuredAddress || walletAddress(wallet);
+    const network = configuredNetwork || firstStringValue(wallet?.network);
+    return {
+      id: sourceId,
+      title: "This agent wallet",
+      detail: fundingDetail(network, address) || "Tap to choose a different funding wallet.",
+    };
+  }
+  if (sourceId.startsWith("user:")) {
+    const personal = findPersonalWalletById(personalWallets, sourceId);
+    const address = configuredAddress || firstStringValue(personal?.address);
+    const network = configuredNetwork || firstStringValue(personal?.network);
+    return {
+      id: sourceId,
+      title: firstStringValue(config.fundingWalletLabel, personal?.name, "Personal wallet"),
+      detail: fundingDetail(network, address) || "Personal wallet",
+    };
+  }
+  const sourceAgent = agentsById.get(sourceId);
+  const sourceWallet = sourceAgent ? resolveAgentWallet(sourceAgent, walletsByAgent[sourceId] ?? sourceAgent.wallet) : null;
+  const address = configuredAddress || walletAddress(sourceWallet);
+  const network = configuredNetwork || firstStringValue(sourceWallet?.network);
+  return {
+    id: sourceId,
+    title: firstStringValue(config.fundingWalletLabel, sourceAgent?.name, "Agent wallet"),
+    detail: fundingDetail(network, address) || "Agent wallet",
+  };
+}
+
 function normalizedRailStatus(value: string, credentialPresent: boolean): string {
   const status = value.toLowerCase();
   if (status === "ok" || status === "healthy" || status === "operational") return "ready";
@@ -504,6 +573,7 @@ function buildRailRuntimeOverrides(props: any, agents: any[], railEnabledOverrid
 
 function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railEnabledOverrides: Record<string, boolean>, usePodRoutingMode: string, walletActivity: WalletActivityRecord[] | null, honeyLedger: HoneyLedgerRuntime | null, bankrWallet: BankrWalletInfo | null) {
   const agents = Array.isArray(props?.displayAgents) ? props.displayAgents : [];
+  const agentsById = buildAgentLookup(agents);
   const walletsByAgent = props?.walletsByAgent ?? {};
   const walletActionsByAgent = props?.walletActionsByAgent ?? {};
   const machineGroups = new Map<string, any[]>();
@@ -547,6 +617,7 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
       const enabled = wallet?.enabled !== false && !wallet?.disabled;
       const configured = hasConfiguredAgentWallet(agent, wallet);
       const action = walletActionsByAgent[agent.id] ?? {};
+      const llmFundingSource = buildLlmFundingSourceMeta(agent, wallet, agentsById, walletsByAgent, personalWallets);
 
       const row = {
         id: agent.id,
@@ -582,6 +653,9 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
         actionBusy: Boolean(action.busy),
         actionMessage: action.message || "",
         actionError: action.error || "",
+        llmFundingSource: llmFundingSource?.title || "",
+        llmFundingSourceDetail: llmFundingSource?.detail || "",
+        llmFundingSourceId: llmFundingSource?.id || "",
       };
       balances[agent.id] = balanceRows;
       rewards[agent.id] = { gas: Number(wallet?.nativeBalance ?? wallet?.gasBalance ?? 0) || 0, used: usageTokensByAgent.get(agent.id) ?? (Number(wallet?.tokensUsed ?? 0) || 0) };
@@ -631,6 +705,7 @@ function WalletPanelComponent(props: any) {
   const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
   const [bankrWallet, setBankrWallet] = useState<BankrWalletInfo | null>(null);
   const [freshWalletsByAgent, setFreshWalletsByAgent] = useState<Record<string, any>>({});
+  const [llmFundingAgentId, setLlmFundingAgentId] = useState("");
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const refreshedPersonalWalletKeys = useRef<Set<string>>(new Set());
   const refreshedAgentWalletKeys = useRef<Set<string>>(new Set());
@@ -779,6 +854,64 @@ function WalletPanelComponent(props: any) {
     walletsByAgent: effectiveWalletsByAgent,
   }), [displayAgents, effectiveWalletsByAgent, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletActionsByAgent]);
   const mergedPersonalWallets = useMemo(() => mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent), [effectiveWalletsByAgent, personalWallets]);
+  const llmFundingPickables = useMemo<PickableWallet[]>(() => {
+    const userPickables = groupedUserPickables(mergedPersonalWallets, { accountFilter: isLocalPaymentSigningWallet });
+    const agentPickables = (Array.isArray(displayAgents) ? displayAgents : []).flatMap((agent: any) => {
+      const pickable = agentPickable(agent, effectiveWalletsByAgent);
+      if (!hasConfiguredAgentWallet(agent, pickable.wallet)) return [];
+      if ((pickable.wallet as unknown as { setupRequired?: boolean }).setupRequired) return [];
+      if (!isLocalPaymentSigningWallet(pickable.wallet)) return [];
+      return [{ ...pickable, statusOverride: { tone: "ok" as const, text: "Agent wallet" } }];
+    });
+    return [...userPickables, ...agentPickables];
+  }, [displayAgents, effectiveWalletsByAgent, mergedPersonalWallets]);
+  const llmFundingTarget = useMemo(
+    () => (Array.isArray(displayAgents) ? displayAgents : []).find((agent: any) => agent.id === llmFundingAgentId),
+    [displayAgents, llmFundingAgentId],
+  );
+  const llmFundingCurrentId = firstStringValue(llmFundingTarget?.hivemindosModels?.walletVaultId, llmFundingAgentId);
+  const setLlmFundingSource = useCallback(async (selectedId: string) => {
+    const target = (Array.isArray(displayAgents) ? displayAgents : []).find((agent: any) => agent.id === llmFundingAgentId);
+    const picked = resolvePickableAccount(llmFundingPickables, selectedId);
+    if (!target || !picked) return;
+    props.updateWalletAction?.(target.id, { busy: true, error: "", message: "Updating LLM funding source..." });
+    try {
+      const response = await fetch("/api/hivemindos/models/wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "link",
+          walletVaultId: picked.id,
+          agentId: target.id,
+          agentName: target.name,
+          vaultPath: vaultPath || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; wallet?: { vaultId: string; address: string; network: string; kind?: "personal" | "agent" } } | null;
+      if (!response.ok || !data?.ok || !data.wallet) {
+        throw new Error(data?.error || `Could not update LLM funding source (HTTP ${response.status}).`);
+      }
+      await props.updateAgentProfile?.(target.id, {
+        provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+        hivemindosModels: {
+          ...(target.hivemindosModels ?? {}),
+          walletVaultId: data.wallet.vaultId,
+          walletAddress: data.wallet.address,
+          walletNetwork: data.wallet.network,
+          fundingWalletKind: data.wallet.kind ?? (picked.kind === "user" ? "personal" : "agent"),
+          fundingWalletLabel: picked.name,
+          lastCheckedAt: new Date().toISOString(),
+          lastTestStatus: "ready",
+          lastStatusMessage: "LLM funding source updated.",
+        },
+      });
+      props.updateWalletAction?.(target.id, { busy: false, error: "", message: "LLM funding source updated." });
+    } catch (error) {
+      props.updateWalletAction?.(target.id, { busy: false, error: error instanceof Error ? error.message : "Could not update LLM funding source.", message: "" });
+    } finally {
+      setLlmFundingAgentId("");
+    }
+  }, [displayAgents, llmFundingAgentId, llmFundingPickables, props, vaultPath]);
   const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger, bankrWallet), [runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger, bankrWallet]);
   const walletActions = useMemo(() => ({
     bankrRewards: { honeyStats: props.honeyStats, honeyLedgerEnabled: props.honeyLedgerEnabled },
@@ -821,6 +954,7 @@ function WalletPanelComponent(props: any) {
     },
     onResetAgentRunway: (agentId: string) => props.resetWalletBurnClock?.(agentId),
     onCopyAgentPrompt: (agentId: string) => effectiveWalletsByAgent?.[agentId] ? props.copyPaymentPrompt?.(effectiveWalletsByAgent[agentId]) : undefined,
+    onOpenLlmFundingSource: (agentId: string) => setLlmFundingAgentId(agentId),
     onExportAgentWallet: (agentId: string, confirmation?: string) => {
       const agent = props.displayAgents?.find((item: any) => item.id === agentId);
       if (!agent) return { ok: false, error: "Could not find this agent wallet." };
@@ -992,6 +1126,18 @@ function WalletPanelComponent(props: any) {
   return (
     <section aria-label="Wallets" style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0c0d11" }}>
       <WalletsView runtimeData={runtimeData} actions={walletActions} onNavigate={navigateFromDropInShelf} />
+      {llmFundingAgentId ? (
+        <WalletSelectModal
+          pickables={llmFundingPickables}
+          getSurvivalSnapshot={getSurvivalSnapshot}
+          currentId={llmFundingCurrentId}
+          onConfirm={setLlmFundingSource}
+          onClose={() => setLlmFundingAgentId("")}
+          title="LLM Funding Source"
+          subtitle="Choose which local wallet pays HivemindOS Models for this agent. Personal wallets and configured agent wallets can both be used."
+          confirmLabel="Use for LLM calls"
+        />
+      ) : null}
     </section>
   );
 }

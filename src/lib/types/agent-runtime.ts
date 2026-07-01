@@ -293,6 +293,20 @@ export interface VeniceAgentConfig {
   lastKeyPresent?: boolean;
 }
 
+export interface HivemindosModelsAgentConfig {
+  walletVaultId?: string;
+  walletAddress?: string;
+  walletNetwork?: string;
+  fundingWalletKind?: "personal" | "agent";
+  fundingWalletLabel?: string;
+  lastCreditBalanceUsd?: string;
+  lastCreditBalanceLabel?: string;
+  lastCreditCheckedAt?: string;
+  lastCheckedAt?: string;
+  lastTestStatus?: string;
+  lastStatusMessage?: string;
+}
+
 export type AgentVoiceRuntime =
   | "openai-realtime"
   | "grok-voice"
@@ -400,6 +414,7 @@ export interface AgentProfile {
   fusion?: FusionAgentConfig;
   usePod?: UsePodAgentConfig;
   venice?: VeniceAgentConfig;
+  hivemindosModels?: HivemindosModelsAgentConfig;
   calls?: AgentCallPreferences;
   agentId?: string;
   sessionKey?: string;

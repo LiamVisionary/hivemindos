@@ -221,7 +221,36 @@ export function LottiePlayer({
     let syncAnimationFrame: number | null = null;
     let playbackWatchTimer: number | null = null;
     let lastPlaybackRestartAt = Number.NEGATIVE_INFINITY;
+    let lastObservedFrame: number | null = null;
     let player: DotLottiePlayer | null = null;
+
+    // TEMP-BEE-DIAG: beacon the thinking-bee loader's real state from inside the
+    // Tauri webview so we can see what actually stalls it. Remove after diagnosis.
+    let beeDiagTimer: number | null = null;
+    const BEE_DIAG = ariaLabel === "Worker bee thinking";
+    const beeBeacon = (tag: string) => {
+      if (!BEE_DIAG) return;
+      try {
+        const p = player as unknown as {
+          isLoaded?: boolean; isPlaying?: boolean; isFrozen?: boolean;
+          currentFrame?: number; totalFrames?: number; loopCount?: number;
+        } | null;
+        const msg = JSON.stringify({
+          t: Math.round(window.performance.now()),
+          tag,
+          loaded: p?.isLoaded, playing: p?.isPlaying, frozen: p?.isFrozen,
+          frame: p?.currentFrame, total: p?.totalFrames, loops: p?.loopCount,
+          hidden: typeof document !== "undefined" ? document.hidden : null,
+          vis: typeof document !== "undefined" ? document.visibilityState : null,
+          focus: typeof document !== "undefined" ? document.hasFocus() : null,
+        });
+        const url = "http://localhost:8920/beacon";
+        if (navigator.sendBeacon) navigator.sendBeacon(url, msg);
+        else void fetch(url, { method: "POST", body: msg, mode: "no-cors", keepalive: true });
+      } catch {
+        // diagnostics must never break rendering
+      }
+    };
     const devicePixelRatio = fixedCanvasDevicePixelRatio();
     const fixedWidth = pixelWidth;
     const fixedHeight = pixelHeight;
@@ -275,10 +304,43 @@ export function LottiePlayer({
       if (!player || !loop || !autoplay) return;
       // Skip the playback check while the tab is hidden; the interval stays
       // alive and resumes watching once the document becomes visible again.
-      if (typeof document !== "undefined" && document.hidden) return;
+      // Rendering is legitimately paused while hidden, so clear the stall
+      // tracker to avoid a false positive on the first visible tick.
+      if (typeof document !== "undefined" && document.hidden) {
+        lastObservedFrame = null;
+        return;
+      }
 
       try {
-        if (player.isLoaded && !player.isPlaying) restartLoopPlayback();
+        if (!player.isLoaded) return;
+        // A stopped/paused player never resumes on its own — restart it.
+        if (!player.isPlaying) {
+          lastObservedFrame = null;
+          restartLoopPlayback();
+          return;
+        }
+        // is_playing() can stay true while nothing actually renders: freeze()
+        // halts the rAF render loop without clearing the flag, and an occluded
+        // or backgrounded webview (common in the packaged desktop app) starves
+        // requestAnimationFrame the same way. A plain !isPlaying check never
+        // fires for these, so the bee freezes for good. Recover a frozen player
+        // and, failing that, detect the stall by watching whether the frame
+        // advances on a clip that is supposed to be looping continuously.
+        if (player.isFrozen) {
+          lastObservedFrame = null;
+          restartLoopPlayback();
+          return;
+        }
+        const frame = player.currentFrame;
+        const animates = player.totalFrames > 1;
+        if (animates && lastObservedFrame !== null && frame === lastObservedFrame) {
+          // No advance across a full watch interval on a multi-frame loop means
+          // the render loop has stalled even though is_playing() is still true.
+          lastObservedFrame = null;
+          restartLoopPlayback();
+          return;
+        }
+        lastObservedFrame = frame;
       } catch {
         // Best effort only while WASM-backed player state settles.
       }
@@ -325,6 +387,20 @@ export function LottiePlayer({
       player.addEventListener("load", ensurePlaybackConfig);
       player.addEventListener("complete", restartLoopOnComplete);
       playerRef.current = player;
+      // TEMP-BEE-DIAG: trace lifecycle + every-frame error events for the bee.
+      if (BEE_DIAG) {
+        beeBeacon("create");
+        player.addEventListener("ready", () => beeBeacon("ready"));
+        player.addEventListener("load", () => beeBeacon("load"));
+        player.addEventListener("complete", () => beeBeacon("complete"));
+        player.addEventListener("freeze", () => beeBeacon("freeze"));
+        player.addEventListener("pause", () => beeBeacon("pause"));
+        player.addEventListener("stop", () => beeBeacon("stop"));
+        const re = player as unknown as { addEventListener: (e: string, cb: (ev: unknown) => void) => void };
+        re.addEventListener("renderError", (ev: unknown) => beeBeacon("renderError:" + JSON.stringify((ev as { error?: unknown })?.error ?? "")));
+        re.addEventListener("loadError", (ev: unknown) => beeBeacon("loadError:" + JSON.stringify((ev as { error?: unknown })?.error ?? "")));
+        beeDiagTimer = window.setInterval(() => beeBeacon("tick"), 400);
+      }
       scheduleFixedCanvasSync();
       ensurePlaybackConfig();
       startPlaybackWatch();
@@ -334,6 +410,12 @@ export function LottiePlayer({
 
     return () => {
       const current = player;
+      // TEMP-BEE-DIAG
+      if (BEE_DIAG) beeBeacon("unmount");
+      if (beeDiagTimer !== null) {
+        window.clearInterval(beeDiagTimer);
+        beeDiagTimer = null;
+      }
       player = null;
       if (syncAnimationFrame !== null) {
         window.cancelAnimationFrame(syncAnimationFrame);

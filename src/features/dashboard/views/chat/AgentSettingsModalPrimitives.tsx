@@ -73,6 +73,19 @@ export function isVeniceSetupReady(config = {}) {
   return config.lastTestStatus === "ready";
 }
 
+export function hasHivemindosModelsSetup(config = {}) {
+  return Boolean(
+    config.walletVaultId
+      || config.walletAddress
+      || config.lastTestStatus
+      || config.lastCheckedAt,
+  );
+}
+
+export function isHivemindosModelsSetupReady(config = {}) {
+  return Boolean(config.walletVaultId && config.walletAddress);
+}
+
 function useBufferedTextField<E extends HTMLInputElement | HTMLTextAreaElement>({
   value,
   onChange,

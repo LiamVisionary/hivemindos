@@ -30,6 +30,7 @@ import { AgentSettingsToolsPanel } from "./AgentSettingsToolsPanel";
 import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
 import { BankrLowCreditSetup } from "./BankrLowCreditSetup";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
+import { GuidedHivemindosModelsSetup } from "./GuidedHivemindosModelsSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
 import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
 import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
@@ -42,6 +43,7 @@ import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { normalizeResearchMethod } from "@/lib/config/research-methods";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
+import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
@@ -60,6 +62,7 @@ import {
   hasUsePodSetup,
   hasVeniceSetup,
   iconMark,
+  isHivemindosModelsSetupReady,
   isUsePodSetupReady,
   isVeniceSetupReady,
   titleCaseId,
@@ -67,6 +70,7 @@ import {
 
 const USEPOD_PROVIDER = MODEL_PROVIDER_GATEWAYS.usepod;
 const VENICE_PROVIDER = MODEL_PROVIDER_GATEWAYS.venice;
+const HIVEMINDOS_MODELS_PROVIDER = MODEL_PROVIDER_GATEWAYS[HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER];
 const BANKR_LLM_BASE_URL = "https://llm.bankr.bot";
 const BANKR_LLM_CHAT_PATH = "/v1/chat/completions";
 const BANKR_LLM_MODELS_PATH = "/v1/models";
@@ -166,6 +170,7 @@ export function AgentSettingsModal(props: any) {
     updateAgentSoulPrompt,
     updateAgentSkillProfile,
     uploadCustomWorkerImage,
+    walletsByAgent,
     workerCapabilityBadges,
   } = props;
 
@@ -180,6 +185,7 @@ export function AgentSettingsModal(props: any) {
   const selectedProviderSlug = agentSettingsProvider || selectedRuntimeProvider?.slug || "";
   const openRouterSelected = selectedProviderSlug === "openrouter";
   const usePodSelected = selectedProviderSlug === "usepod";
+  const hivemindosModelsSelected = selectedProviderSlug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER;
   const bankrLlmSelected = selectedProviderSlug === "bankr";
   const lmStudioSelected = selectedProviderSlug === "lm-studio";
   const adaptiveProviderSelected = selectedProviderSlug === "adaptive";
@@ -192,6 +198,7 @@ export function AgentSettingsModal(props: any) {
   const [savedAgentSoulsStatus, setSavedAgentSoulsStatus] = useState("");
   const [soulSaveTitle, setSoulSaveTitle] = useState("");
   const [showAllProviders, setShowAllProviders] = useState(false);
+  const [hivemindosModelsSetupOpen, setHivemindosModelsSetupOpen] = useState(false);
   const [envPresentKeys, setEnvPresentKeys] = useState(() => new Set());
   const [envHermesKeys, setEnvHermesKeys] = useState(() => new Set());
   const [envLoaded, setEnvLoaded] = useState(false);
@@ -214,12 +221,16 @@ export function AgentSettingsModal(props: any) {
   const adaptiveRouting = agentCreateMachine ? agentCreateDraft.adaptiveRouting ?? {} : roleModalAgent?.adaptiveRouting ?? {};
   const usePodConfig = agentCreateMachine ? agentCreateDraft.usePod ?? {} : roleModalAgent?.usePod ?? {};
   const veniceConfig = agentCreateMachine ? agentCreateDraft.venice ?? {} : roleModalAgent?.venice ?? {};
+  const hivemindosModelsConfig = agentCreateMachine ? agentCreateDraft.hivemindosModels ?? {} : roleModalAgent?.hivemindosModels ?? {};
   const usePodSetupStarted = hasUsePodSetup(usePodConfig);
   const usePodSetupComplete = isUsePodSetupReady(usePodConfig);
   const usePodCreateBlocked = Boolean(agentCreateMachine && usePodSelected && !usePodSetupComplete);
   const veniceSelected = selectedProviderSlug === "venice";
   const veniceSetupComplete = isVeniceSetupReady(veniceConfig);
   const veniceCreateBlocked = Boolean(agentCreateMachine && veniceSelected && !veniceSetupComplete);
+  const hivemindosModelsSetupComplete = isHivemindosModelsSetupReady(hivemindosModelsConfig);
+  const shouldShowHivemindosModelsSetup = hivemindosModelsSelected && (!hivemindosModelsSetupComplete || hivemindosModelsSetupOpen);
+  const hivemindosModelsCreateBlocked = Boolean(agentCreateMachine && hivemindosModelsSelected && !hivemindosModelsSetupComplete);
   const agentTaskPreferences = (agentCreateMachine ? agentCreateDraft.taskPreferences : roleModalAgent?.taskPreferences) ?? [];
   const researchSubclassSelected = agentSettingsWorkerClass === "research" && !agentSettingsCustomWorker;
   const selectedResearchMethod = normalizeResearchMethod(agentCreateMachine ? agentCreateDraft.researchMethod : roleModalAgent?.researchMethod);
@@ -261,7 +272,7 @@ export function AgentSettingsModal(props: any) {
   const hideRuntimeSection = !agentCreateMachine && Boolean(runtimeSettings.hidesRuntimeSelectorWhenEditing);
   const runtimeSelectorEntries = Object.entries(RUNTIME_LABELS).filter(([runtime]) => runtime !== HIVEMIND_OS_RUNTIME || activeRuntime === HIVEMIND_OS_RUNTIME);
   const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
-  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !(veniceSelected && !veniceSetupComplete) && !isQueenSettings;
+  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !(veniceSelected && !veniceSetupComplete) && !(hivemindosModelsSelected && !hivemindosModelsSetupComplete) && !isQueenSettings;
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "").replace(/\s+bee$/i, "").trim();
   const aeonSettings = {
@@ -305,6 +316,14 @@ export function AgentSettingsModal(props: any) {
   const veniceDraftSetupTarget = agentCreateMachine ? { id: "new-venice-draft", name: displayName, provider: "venice", model: agentCreateDraft.model, venice: agentCreateDraft.venice } : null;
   const veniceSetupTarget = veniceDraftSetupTarget ?? agentSettingsIntegrationTarget;
   const veniceRequiresCurrentSetup = hasVeniceSetup(veniceConfig);
+  const hivemindosModelsDraftSetupTarget = agentCreateMachine ? {
+    id: "new-hivemindos-models-draft",
+    name: displayName,
+    provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+    model: agentCreateDraft.model || HIVEMINDOS_MODELS_PROVIDER?.defaultModel,
+    hivemindosModels: agentCreateDraft.hivemindosModels,
+  } : null;
+  const hivemindosModelsSetupTarget = hivemindosModelsDraftSetupTarget ?? agentSettingsIntegrationTarget;
   const creditProviderBalances = {
     bankr: bankrCreditStatus?.balanceLabel ?? "",
     usepod: (() => {
@@ -315,6 +334,7 @@ export function AgentSettingsModal(props: any) {
       const value = runtimeIntegrationStatus?.providerStatus?.venice?.balanceUsd || veniceConfig.lastBalanceUsd || completedVeniceWallets.find((agent) => agent.venice?.lastBalanceUsd)?.venice?.lastBalanceUsd || "";
       return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value;
     })(),
+    [HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER]: hivemindosModelsConfig.lastCreditBalanceLabel || "",
   };
 
   const refreshSavedAgentSouls = useCallback(async () => {
@@ -614,6 +634,17 @@ export function AgentSettingsModal(props: any) {
     void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
   }
 
+  async function applyHivemindosModelsSetupProfile(patch: Record<string, unknown>) {
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+    void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+  }
+
+  function closeHivemindosModelsSetup() {
+    setHivemindosModelsSetupOpen(false);
+    setRuntimeModelSetupMode(null);
+  }
+
   function openAeonGithubOauth() {
     if (aeonOauthConnecting) return;
     setAeonOauthConnecting(true);
@@ -767,6 +798,41 @@ export function AgentSettingsModal(props: any) {
     }
   }
 
+  function selectHivemindosModelsProvider() {
+    const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const availableModels = runtimeModelProviders.find((provider) => provider.slug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER)?.models?.map((modelOption) => modelOption.id) ?? [];
+    const model = currentModel && availableModels.includes(currentModel) ? currentModel : HIVEMINDOS_MODELS_PROVIDER?.defaultModel || "hivemindos/auto";
+    const patch = {
+      provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+      model,
+      token: "",
+      hivemindosModels: {
+        walletVaultId: hivemindosModelsConfig.walletVaultId || "",
+        walletAddress: hivemindosModelsConfig.walletAddress || "",
+        walletNetwork: hivemindosModelsConfig.walletNetwork || "",
+        fundingWalletKind: hivemindosModelsConfig.fundingWalletKind || "",
+        fundingWalletLabel: hivemindosModelsConfig.fundingWalletLabel || "",
+        lastCreditBalanceUsd: hivemindosModelsConfig.lastCreditBalanceUsd || "",
+        lastCreditBalanceLabel: hivemindosModelsConfig.lastCreditBalanceLabel || "",
+        lastCreditCheckedAt: hivemindosModelsConfig.lastCreditCheckedAt || "",
+        lastCheckedAt: hivemindosModelsConfig.lastCheckedAt || "",
+        lastTestStatus: hivemindosModelsConfig.lastTestStatus || "",
+        lastStatusMessage: hivemindosModelsConfig.lastStatusMessage || "",
+      },
+    };
+    setHivemindosModelsSetupOpen(true);
+    updateAgentRuntimeModel(HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER, model);
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({ ...current, ...patch, name: current.name.trim() ? current.name : defaultNameForRuntime(current.runtime, HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER) }));
+      setRuntimeModelSetupMode(null);
+      return;
+    }
+    if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, patch);
+      setRuntimeModelSetupMode(null);
+    }
+  }
+
   function selectBankrLlmProvider() {
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
     const bankrProvider = runtimeModelProviders.find((provider) => provider.slug === "bankr");
@@ -851,7 +917,7 @@ export function AgentSettingsModal(props: any) {
   }
 
   function renderProviderModelPanel() {
-    if (!runtimeModelPanelAvailable && !usePodSelected && !veniceSelected) return null;
+    if (!runtimeModelPanelAvailable && !usePodSelected && !veniceSelected && !hivemindosModelsSelected) return null;
     const PROVIDER_TILE_LIMIT = 8;
     const providerReady = (provider) => providerConfigured(provider.slug) || (provider.source !== "catalog" && provider.source !== "HivemindOS provider gateway" && (provider.totalModels || 0) > 0);
     const sortedProviders = [...runtimeModelProviders].sort((a, b) => {
@@ -899,9 +965,11 @@ export function AgentSettingsModal(props: any) {
                   ? selectUsePodProvider
                   : provider.slug === "venice"
                     ? selectVeniceProvider
-                    : provider.slug === "bankr"
-                      ? selectBankrLlmProvider
-                      : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
+                    : provider.slug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER
+                      ? selectHivemindosModelsProvider
+                      : provider.slug === "bankr"
+                        ? selectBankrLlmProvider
+                        : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
                 return (
                   <button key={provider.slug} type="button" className="as-choice" data-active={selected || undefined} data-bee={`agent-provider-${provider.slug}`} aria-pressed={selected} onClick={selectProvider}>
                     <span className="t">
@@ -961,6 +1029,20 @@ export function AgentSettingsModal(props: any) {
               requireCurrentSetup={usePodRequiresCurrentSetup}
               onCancel={() => setRuntimeModelSetupMode(null)}
               onComplete={applyUsePodSetupProfile}
+            />
+          </div>
+        ) : shouldShowHivemindosModelsSetup ? (
+          <div className="as-block">
+            <GroupLabel>HivemindOS Models setup</GroupLabel>
+            <GuidedHivemindosModelsSetup
+              key={hivemindosModelsSetupTarget?.id ?? "new-hivemindos-models"}
+              agent={hivemindosModelsSetupTarget}
+              busy={runtimeIntegrationBusy}
+              displayAgents={displayAgents}
+              walletsByAgent={walletsByAgent}
+              sharedVault={sharedVault}
+              onCancel={closeHivemindosModelsSetup}
+              onComplete={applyHivemindosModelsSetupProfile}
             />
           </div>
         ) : bankrSetupVisible && bankrNeedsKeySetup ? (
@@ -1461,7 +1543,7 @@ export function AgentSettingsModal(props: any) {
         onPrimaryAction={runPrimarySettingsAction}
         panelContent={panelContent}
         primaryActionBusy={primaryActionBusy}
-        primaryActionDisabled={usePodCreateBlocked || veniceCreateBlocked || Boolean(agentCreateMachine && activeRuntimeNeedsSetup)}
+        primaryActionDisabled={usePodCreateBlocked || veniceCreateBlocked || hivemindosModelsCreateBlocked || Boolean(agentCreateMachine && activeRuntimeNeedsSetup)}
         primaryActionLabel={primaryActionLabel}
         roleModalAgent={roleModalAgent}
         runtimeLabel={runtimeLabel}

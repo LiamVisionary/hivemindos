@@ -16,15 +16,9 @@ import {
 import type { FleetMachine } from "./fleet-data";
 import styles from "./machine-send-file-modal.module.css";
 
-// Sends a file to a fleet machine over the tailnet. The bytes are POSTed to
-// /api/fleet/send-file, which streams them to the machine via `tailscale ssh`
-// (the same transport the shell button and handoff use to reach machines).
-//
-// Drag-and-drop has to be wired two ways. In a browser the HTML5 drop event
-// fires with the File bytes. In the packaged Tauri app the native layer
-// (dragDropEnabled, on by default) swallows the HTML5 event and instead emits
-// `tauri://drag-drop` with the OS file path — so we listen for that too and
-// send the path for the server to read locally. Mirrors chat-composer.tsx.
+// HiveDrop sends a file to a fleet machine over Hivemind Link. Browser-picked
+// files use a raw XHR upload for real upload progress; Tauri-native drops send
+// the OS path so the server can stream the file from disk and publish progress.
 
 type MachineSendFileModalProps = {
   machine: FleetMachine;
@@ -32,6 +26,49 @@ type MachineSendFileModalProps = {
 };
 
 type SendState = "idle" | "sending" | "done" | "error";
+type HiveDropPhase = "preparing" | "sending" | "done" | "error";
+
+type HiveDropProgress = {
+  phase: HiveDropPhase | "idle";
+  bytesSent: number;
+  totalBytes: number | null;
+  uploadBytesSent: number;
+  uploadTotalBytes: number | null;
+};
+
+type HiveDropProgressResponse = {
+  ok?: boolean;
+  progress?: {
+    phase?: HiveDropPhase;
+    bytesSent?: number;
+    totalBytes?: number | null;
+    error?: string;
+    path?: string;
+  };
+  error?: string;
+};
+
+type HiveDropResponse = {
+  ok?: boolean;
+  transferId?: string;
+  path?: string;
+  error?: string;
+};
+
+type XhrResult = {
+  status: number;
+  data: HiveDropResponse | null;
+};
+
+function emptyProgress(): HiveDropProgress {
+  return {
+    phase: "idle",
+    bytesSent: 0,
+    totalBytes: null,
+    uploadBytesSent: 0,
+    uploadTotalBytes: null,
+  };
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -43,6 +80,60 @@ function baseName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
+function createTransferId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `hivedrop-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function sendWithProgress(
+  url: string,
+  body: XMLHttpRequestBodyInit,
+  onUploadProgress: (loaded: number, total: number | null) => void,
+): Promise<XhrResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.timeout = 0;
+    xhr.upload.onprogress = (event) => {
+      onUploadProgress(event.loaded, event.lengthComputable ? event.total : null);
+    };
+    xhr.onload = () => {
+      const text = String(xhr.responseText || "");
+      let data: HiveDropResponse | null = null;
+      try {
+        data = text ? JSON.parse(text) as HiveDropResponse : null;
+      } catch {
+        data = null;
+      }
+      resolve({ status: xhr.status, data });
+    };
+    xhr.onerror = () => reject(new Error("HiveDrop could not reach the local dashboard route."));
+    xhr.onabort = () => reject(new Error("HiveDrop was canceled."));
+    xhr.send(body);
+  });
+}
+
+function rawFileUrl(input: {
+  transferId: string;
+  file: File;
+  collectorUrl: string;
+  destDir: string;
+  machineName: string;
+}) {
+  const params = new URLSearchParams({
+    transport: "raw",
+    transferId: input.transferId,
+    fileName: input.file.name,
+    size: String(input.file.size),
+    collectorUrl: input.collectorUrl,
+    destDir: input.destDir,
+    machineName: input.machineName,
+  });
+  return `/api/fleet/send-file?${params.toString()}`;
+}
+
 export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalProps) {
   const [file, setFile] = React.useState<File | null>(null);
   const [sourcePath, setSourcePath] = React.useState<string | null>(null);
@@ -51,27 +142,65 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
   const [state, setState] = React.useState<SendState>("idle");
   const [message, setMessage] = React.useState("");
   const [dragging, setDragging] = React.useState(false);
+  const [progress, setProgress] = React.useState<HiveDropProgress>(() => emptyProgress());
   const inputRef = React.useRef<HTMLInputElement>(null);
   const dropZoneRef = React.useRef<HTMLButtonElement>(null);
   const hasCollector = Boolean(machine.collectorUrl);
   const hasSelection = Boolean(file || sourcePath);
   const selectedName = file?.name ?? sourceName;
+  const displayDestDir = destDir.trim() || "~/Downloads";
+
+  const resetTransferState = React.useCallback(() => {
+    setState("idle");
+    setMessage("");
+    setProgress(emptyProgress());
+  }, []);
 
   const pickFile = React.useCallback((next: File | null) => {
     if (!next) return;
     setFile(next);
     setSourcePath(null);
     setSourceName(next.name);
-    setState("idle");
-    setMessage("");
-  }, []);
+    resetTransferState();
+  }, [resetTransferState]);
 
   const pickPath = React.useCallback((path: string) => {
     setSourcePath(path);
     setFile(null);
     setSourceName(baseName(path));
-    setState("idle");
-    setMessage("");
+    resetTransferState();
+  }, [resetTransferState]);
+
+  const pollTransferProgress = React.useCallback((transferId: string, fallbackTotal: number | null) => {
+    let active = true;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/fleet/send-file?transferId=${encodeURIComponent(transferId)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok || !active) return;
+        const data = (await res.json().catch(() => null)) as HiveDropProgressResponse | null;
+        const next = data?.progress;
+        if (!next) return;
+        const nextBytes = Number.isFinite(next.bytesSent) ? Number(next.bytesSent) : 0;
+        const nextTotal = typeof next.totalBytes === "number" ? next.totalBytes : fallbackTotal;
+        setProgress((current) => ({
+          ...current,
+          phase: next.phase ?? current.phase,
+          bytesSent: Math.max(current.bytesSent, nextBytes),
+          totalBytes: nextTotal,
+        }));
+      } catch {
+        // Progress polling is advisory; the main upload response owns errors.
+      }
+    };
+
+    void tick();
+    const timer = window.setInterval(() => void tick(), 350);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
   // Tauri-native drag-drop (packaged app): HTML5 events never fire there.
@@ -131,35 +260,72 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
 
   const send = React.useCallback(async () => {
     if ((!file && !sourcePath) || state === "sending") return;
+    const transferId = createTransferId();
+    const targetDir = destDir.trim() || "~/Downloads";
+    const fallbackTotal = file?.size ?? null;
     setState("sending");
     setMessage("");
+    setProgress({
+      phase: "preparing",
+      bytesSent: 0,
+      totalBytes: fallbackTotal,
+      uploadBytesSent: 0,
+      uploadTotalBytes: fallbackTotal,
+    });
+
+    const stopPolling = pollTransferProgress(transferId, fallbackTotal);
     try {
-      const form = new FormData();
+      let url = "/api/fleet/send-file";
+      let body: XMLHttpRequestBodyInit;
       if (file) {
-        form.append("file", file);
-      } else if (sourcePath) {
-        form.append("sourcePath", sourcePath);
+        url = rawFileUrl({
+          transferId,
+          file,
+          collectorUrl: machine.collectorUrl ?? "",
+          destDir: targetDir,
+          machineName: machine.name,
+        });
+        body = file;
+      } else {
+        const form = new FormData();
+        form.append("sourcePath", sourcePath ?? "");
         form.append("fileName", sourceName);
+        form.append("transferId", transferId);
+        form.append("collectorUrl", machine.collectorUrl ?? "");
+        form.append("destDir", targetDir);
+        form.append("machineName", machine.name);
+        body = form;
       }
-      form.append("collectorUrl", machine.collectorUrl ?? "");
-      form.append("destDir", destDir.trim() || "~/Downloads");
-      form.append("machineName", machine.name);
-      const res = await fetch("/api/fleet/send-file", { method: "POST", body: form });
-      const data = (await res.json().catch(() => null)) as
-        | { ok?: boolean; path?: string; error?: string }
-        | null;
-      if (!res.ok || !data?.ok) {
+
+      const result = await sendWithProgress(url, body, (loaded, total) => {
+        setProgress((current) => ({
+          ...current,
+          phase: current.phase === "idle" ? "preparing" : current.phase,
+          uploadBytesSent: loaded,
+          uploadTotalBytes: total ?? current.uploadTotalBytes ?? fallbackTotal,
+        }));
+      });
+
+      if (!result.data?.ok || result.status < 200 || result.status >= 300) {
         setState("error");
-        setMessage(data?.error || `Transfer failed (HTTP ${res.status}).`);
+        setMessage(result.data?.error || `HiveDrop failed with HTTP ${result.status}.`);
         return;
       }
+
       setState("done");
-      setMessage(`Saved to ${data.path ?? destDir} on ${machine.name}.`);
+      setProgress((current) => ({
+        ...current,
+        phase: "done",
+        bytesSent: current.totalBytes ?? current.bytesSent,
+      }));
+      setMessage(`HiveDrop saved to ${result.data.path ?? targetDir} on ${machine.name}.`);
     } catch (error) {
       setState("error");
-      setMessage(error instanceof Error ? error.message : "Transfer failed.");
+      setMessage(error instanceof Error ? error.message : "HiveDrop failed.");
+    } finally {
+      window.setTimeout(stopPolling, 800);
     }
-  }, [file, sourcePath, sourceName, state, destDir, machine.collectorUrl, machine.name]);
+  }, [file, sourcePath, sourceName, state, destDir, machine.collectorUrl, machine.name, pollTransferProgress]);
 
   // HTML5 drop (browser / dev): Tauri swallows these in the packaged app.
   const onHtml5Drop = React.useCallback(
@@ -172,23 +338,34 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
     [pickFile],
   );
 
+  const progressTotal = progress.totalBytes ?? (file ? progress.uploadTotalBytes ?? file.size : null);
+  const progressBytes = Math.max(progress.bytesSent, file ? progress.uploadBytesSent : 0);
+  const progressPercent = progressTotal && progressTotal > 0
+    ? Math.max(0, Math.min(100, Math.round((progressBytes / progressTotal) * 100)))
+    : null;
+  const progressLabel = progressPercent !== null
+    ? `${formatBytes(Math.min(progressBytes, progressTotal ?? progressBytes))} of ${formatBytes(progressTotal ?? progressBytes)}`
+    : progress.phase === "preparing"
+      ? "Preparing HiveDrop"
+      : "Sending with HiveDrop";
+
   return createPortal(
     <div role="presentation" className={styles.backdrop} onClick={onClose}>
       <section
         role="dialog"
         aria-modal="true"
-        aria-label={`Send a file to ${machine.name}`}
+        aria-label={`HiveDrop a file to ${machine.name}`}
         className={styles.modal}
         onClick={(event) => event.stopPropagation()}
       >
         <div className={styles.header}>
           <span className={styles.headerTitle}>
             <FileUp size={14} aria-hidden="true" style={{ color: "var(--sf-accent)", flex: "none" }} />
-            <span>Send file to {machine.name}</span>
+            <span>HiveDrop to {machine.name}</span>
           </span>
           <CloseIconButton
             type="button"
-            aria-label="Close send file"
+            aria-label="Close HiveDrop"
             onClick={onClose}
             style={{ width: 26, height: 26 }}
           />
@@ -219,7 +396,7 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
               </span>
               <span className={styles.dropZoneText}>
                 <span className={styles.dropZoneName}>
-                  {dragging ? "Drop the file here" : hasSelection ? selectedName : "Choose a file…"}
+                  {dragging ? "Drop the file here" : hasSelection ? selectedName : "Choose a file"}
                 </span>
                 <span className={styles.dropZoneHint}>
                   {dragging
@@ -253,6 +430,32 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
               spellCheck={false}
             />
           </div>
+
+          {state === "sending" || state === "done" || state === "error" ? (
+            <div className={styles.progressPanel}>
+              <div className={styles.progressHeader}>
+                <span>{state === "done" ? "HiveDrop complete" : state === "error" ? "HiveDrop stopped" : `Sending ${selectedName}`}</span>
+                <span>{progressPercent !== null ? `${progressPercent}%` : progressLabel}</span>
+              </div>
+              <div
+                className={styles.progressTrack}
+                role="progressbar"
+                aria-label="HiveDrop progress"
+                aria-valuemin={0}
+                aria-valuemax={progressPercent !== null ? 100 : undefined}
+                aria-valuenow={progressPercent !== null ? progressPercent : undefined}
+              >
+                <span
+                  className={`${styles.progressFill} ${progressPercent === null ? styles.progressFillIndeterminate : ""}`}
+                  style={progressPercent !== null ? { width: `${progressPercent}%` } : undefined}
+                />
+              </div>
+              <div className={styles.progressMeta}>
+                <span>{progressLabel}</span>
+                <span>{displayDestDir}</span>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className={styles.footer}>
@@ -264,11 +467,11 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
           >
             {state === "sending" ? (
               <>
-                <LoaderCircle size={12} className="animate-spin" aria-hidden="true" /> Sending…
+                <LoaderCircle size={12} className="animate-spin" aria-hidden="true" /> Sending with HiveDrop
               </>
             ) : (
               <>
-                <FileUp size={12} aria-hidden="true" /> Send over tailscale
+                <FileUp size={12} aria-hidden="true" /> Send with HiveDrop
               </>
             )}
           </button>
@@ -285,8 +488,8 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
         ) : (
           <div className={styles.statusNote}>
             {hasCollector
-              ? `Streams over tailscale ssh into ${destDir.trim() || "~/Downloads"} on ${machine.name}.`
-              : `${machine.name} has no reachable collector URL — can't send a file to it right now.`}
+              ? `HiveDrop streams through Hivemind Link into ${displayDestDir} on ${machine.name}.`
+              : `${machine.name} has no reachable collector URL, so HiveDrop cannot send to it right now.`}
           </div>
         )}
       </section>

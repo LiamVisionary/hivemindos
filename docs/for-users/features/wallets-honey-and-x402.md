@@ -61,6 +61,14 @@ Managed agents use HONEY as the visible credit unit, but the ledger keeps two se
 
 This prevents a funding/cash-out loop while still giving users one simple credit language.
 
+The current hosted paid agent default is **$0.001 per successful hosted chat completion**. That means:
+
+| Usage | Cost |
+| ---: | ---: |
+| `1,000` messages | `$1` |
+| `100,000` messages | `$100` |
+| `1,000,000` messages | `$1,000` |
+
 The no-API-key flow is:
 
 1. The app quotes a managed run through `/api/managed-agent/billing` using a server-side pricing matrix and markup.
@@ -74,6 +82,8 @@ The official ledger rejects browser-spoofed credits. Its `/managed-billing/event
 ## Paid Agent x402 Gateway
 
 HivemindOS can expose a curated agent as an OpenAI-compatible paid endpoint. For official monetized agents, this endpoint should run on HivemindOS-controlled hosted infrastructure, not inside the downloaded desktop app.
+
+The current official default hosted paid agent charges **$0.001 per successful chat completion**. Self-hosted sellers can set their own `priceUsd`, but official HivemindOS pricing comes from the hosted endpoint, not from a local app setting.
 
 - Downloaded apps should call `GET /api/official-paid-agents/<slug>/chat/completions` for official hosted-agent readiness and `POST /api/official-paid-agents/<slug>/chat/completions` for paid calls. This local route is only a buyer/proxy path to HivemindOS-hosted infrastructure.
 - Self-hosted sellers can expose `GET /api/paid-agents/<slug>/chat/completions` for non-secret readiness, price, runtime, provider, model, and supported runtime/provider matrices.
@@ -126,13 +136,38 @@ Optional accounting:
 - `HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true` mirrors each settled x402 call into managed HONEY as an equal credit/debit pair for operator reporting.
 - HIVE can fund Bankr LLM credits or managed HONEY through the managed-agent billing rail; x402 remains the external per-call charge.
 
+## Wallet-Paid HivemindOS Models
+
+The model picker includes `HivemindOS Models` for users who want managed model calls without bringing provider API keys. It is a wallet-paid provider:
+
+- The selected agent's persisted local x402 wallet pays each official hosted model call.
+- The current official hosted default is **$0.001 per successful chat completion**.
+- The app uses the same wallet Spend, max-payment, auto-use, network, and governance policy as other x402 paid requests.
+- The local route is `POST /api/hivemindos/models/chat/completions`, with model ids `hivemindos/auto`, `hivemindos/fast`, `hivemindos/frontier`, and `hivemindos/research`.
+- The route pays the official hosted paid-agent resource through `/api/official-paid-agents/<slug>/chat/completions`, then returns an OpenAI-compatible `chat.completion` response to the normal chat streamer.
+- Users do not provide a model API key, provider key, or `payTo` address for official HivemindOS Models.
+
+Optional staging, enterprise, or self-hosted official-compatible deployments can set `HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG=<slug>` to choose which hosted paid-agent product slug backs the picker. The slug selects a hosted resource; it does not define the recipient or price inside the downloaded app.
+
+This is still a server-authoritative commercial flow. The downloaded app loads the user's encrypted local wallet only to sign the x402 payment under that wallet's policy. Official price, recipient, payment requirements, settlement, receipts, quotas, provider keys, and upstream model access stay in HivemindOS-controlled hosted infrastructure. A local app setting or request body cannot redirect official HivemindOS model revenue.
+
+For one-click calls, the agent needs a local custody Base/Base Sepolia/Solana wallet with Spend enabled, provider `x402`, enough USDC and native gas, and Allow auto-use enabled under the wallet's cap. Personal user wallets do not auto-spend; they still require explicit payment confirmation.
+
 ## Trading Platform Fees
 
 The downloadable app cannot be the authority for official HivemindOS revenue: users can edit local config, patch local routes, or rebuild the app. For the official build, local wallet rails read public fee policy from HivemindOS-hosted infrastructure by default:
 
 - `HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config`
 
-That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. Today that includes local USDC sends, local DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, Veil private transfers, and Veil private x402 payments. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. The fee transfer is recorded in wallet activity as a platform-fee item so it remains visible to the user.
+That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official policy is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. Today that includes local USDC sends, local DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, Veil private transfers, and Veil private x402 payments. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. The fee transfer is recorded in wallet activity as a platform-fee item so it remains visible to the user.
+
+Simple examples:
+
+| Action amount | Platform fee |
+| ---: | ---: |
+| `$0.25` | `$0.01` minimum |
+| `$100` | `$1.00` |
+| `$1,000` | `$10.00` |
 
 Self-hosted operators can override the hosted policy for their own install by setting `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED` or local recipient variables. Fee-rate defaults alone keep using the hosted official policy:
 

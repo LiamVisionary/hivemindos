@@ -15,6 +15,25 @@ import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/Appli
 import { extractMiroSharkSimulationCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
 import { Dot, Glyph, ICON } from "./primitives";
 
+function formatBillingUsd(value: number) {
+  const decimals = value > 0 && value < 0.001 ? 6 : value > 0 && value < 0.01 ? 4 : 2;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
+function responseBillingText(billing: any) {
+  const costUsd = Number(billing?.costUsd);
+  if (!Number.isFinite(costUsd)) return "";
+  const balanceUsd = Number(billing?.balanceUsd);
+  const parts = [`Model cost ${formatBillingUsd(costUsd)}`];
+  if (Number.isFinite(balanceUsd)) parts.push(`balance ${formatBillingUsd(balanceUsd)}`);
+  return parts.join(" · ");
+}
+
 function renderInline(text: string) {
   const out: React.ReactNode[] = [];
   const re = /(\*\*[^*]+\*\*|`[^`]+`)/g;
@@ -389,6 +408,7 @@ function MessageThreadBase({
         const timeLabel = Number.isFinite(message.createdAt) ? formatRelativeTime?.(message.createdAt) : "";
         const attachments = message.attachments ?? [];
         const messageEvents = normalizeProcessEvents(message.processEvents ?? message.events);
+        const responseBilling = !isUser ? responseBillingText(message.billing) : "";
         const isPendingAssistant = !isUser && !content && busy && index === messages.length - 1;
         const renderKey = messageKey(message, index);
         const userProcessRenderKey = `${chatProcessScopeKey}\u001fuser\u001f${renderKey}`;
@@ -486,6 +506,7 @@ function MessageThreadBase({
                     <InteractivePromptControls disabled={false} options={promptUi.options} sendPromptMessage={sendPromptMessage} Send={Send} />
                   ) : null}
                 </div>
+                {responseBilling ? <div className="fr-chat-response-billing">{responseBilling}</div> : null}
                 {!(busy && index === messages.length - 1) ? <MessageFooter align="agent" timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} /> : null}
               </article>
             ) : null}

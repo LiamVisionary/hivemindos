@@ -49,6 +49,9 @@ export type X402FetchInput = {
   confirmation?: string;
   /** Granted approval id, supplied when retrying an escalated x402 payment. */
   approvalToken?: string;
+  /** Use plain fetch without x402 discovery/wrapping when an upstream bearer/prepaid token should decide access. */
+  skipPaymentDiscovery?: boolean;
+  timeoutMs?: number;
 };
 
 export type X402PaymentDiscoveryInput = {
@@ -79,6 +82,7 @@ export type X402FetchResult = {
   builderCode?: string;
   platformFee?: PlatformFeeCollection;
   paymentResponse?: string;
+  responseHeaders: Record<string, string>;
   contentType: string;
   bodyPreview: string;
   bodyJson?: unknown;
@@ -240,6 +244,12 @@ async function responsePreview(response: Response) {
   return { contentType, bodyPreview: text.slice(0, 8000) };
 }
 
+function responseHeaderRecord(headers: Headers) {
+  const record: Record<string, string> = {};
+  for (const [key, value] of headers.entries()) record[key.toLowerCase()] = value;
+  return record;
+}
+
 /**
  * Tolerant pre-flight: returns the USD amount this call would pay, or null when
  * the endpoint does not require payment. The unpaid 402 carries no side effect,
@@ -270,6 +280,32 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   }
   if (input.policy.network !== input.network) throw new Error("Stored wallet network does not match the x402 policy network.");
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
+
+  const method = parseX402Method(input.method);
+  if (input.skipPaymentDiscovery) {
+    const response = await fetch(input.url, {
+      method,
+      headers: {
+        ...redactHeaders(input.headers),
+        ...(input.body == null ? {} : { "Content-Type": "application/json" }),
+      },
+      body: input.body == null || method === "GET" ? undefined : JSON.stringify(input.body),
+      signal: AbortSignal.timeout(input.timeoutMs ?? 60_000),
+    });
+    const preview = await responsePreview(response);
+    return {
+      ok: response.ok,
+      status: response.status,
+      url: input.url,
+      method,
+      network: x402Network(input.network),
+      amountUsd: 0,
+      paid: false,
+      paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
+      responseHeaders: responseHeaderRecord(response.headers),
+      ...preview,
+    };
+  }
 
   let discoveredAmountUsd: number | null | undefined;
   const discoverAmount = async () => {
@@ -313,7 +349,6 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     spendCompanyId = decision.companyId;
   }
 
-  const method = parseX402Method(input.method);
   let selectedAmountUsd = 0;
   let paid = false;
   const network = x402Network(input.network);
@@ -345,7 +380,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       ...(input.body == null ? {} : { "Content-Type": "application/json" }),
     },
     body: input.body == null || method === "GET" ? undefined : JSON.stringify(input.body),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(input.timeoutMs ?? 60_000),
   });
   const preview = await responsePreview(response);
   const platformFee = paid && selectedAmountUsd > 0
@@ -370,6 +405,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     builderCode,
     platformFee,
     paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
+    responseHeaders: responseHeaderRecord(response.headers),
     ...preview,
   };
   if (paid) {

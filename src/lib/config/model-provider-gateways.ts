@@ -1,3 +1,9 @@
+import {
+  HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL,
+  HIVEMINDOS_WALLET_PAID_MODELS_NAME,
+  HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+} from "@/lib/config/hivemindos-wallet-paid-models";
+
 export type ModelProviderGateway = {
   slug: string;
   name: string;
@@ -76,6 +82,15 @@ export const MODEL_PROVIDER_GATEWAYS: Record<string, ModelProviderGateway> = {
       keyEnv: "USEPOD_TOKEN",
       models: ["gpt-5.5"],
     },
+  },
+  [HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER]: {
+    slug: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+    name: HIVEMINDOS_WALLET_PAID_MODELS_NAME,
+    detail: "Wallet-paid models · no API key",
+    iconPath: "/icons/runtimes/hive-fusion.svg",
+    iconMode: "mask",
+    fallback: "HM",
+    defaultModel: HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL,
   },
   openrouter: {
     slug: "openrouter",

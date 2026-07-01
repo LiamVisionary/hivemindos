@@ -855,6 +855,15 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
         </span>
         <Toggle on={auto} onChange={(e) => { e.stopPropagation(); flipAuto(); }} />
       </div>
+      {w.meta.llmFundingSource ? (
+        <button type="button" className="fw-autouse" onClick={() => actions?.onOpenLlmFundingSource?.(w.id)}>
+          <span>
+            <strong>LLM Funding Source</strong>
+            <small>{w.meta.llmFundingSource} · {w.meta.llmFundingSourceDetail || "Tap to choose a funding wallet."}</small>
+          </span>
+          <BIcon name="branch" size={15} />
+        </button>
+      ) : null}
       {w.meta.rawProvider === "veil" ? <div className="fw-autouse" onClick={flipVeilAuto} role="button" aria-pressed={veilAuto}><span><strong>Allow Veil auto-send</strong><small>{veilAuto ? "Private sends under USDC/ETH caps can execute without CONFIRM." : "Private sends still require CONFIRM."}</small></span><Toggle on={veilAuto} onChange={(e) => { e.stopPropagation(); flipVeilAuto(); }} /></div> : null}
       <Disclosure summary="Identity & spend policy">
         <div style={{ display: "flex", flexDirection: "column", gap: 11, paddingTop: 4 }}>
@@ -913,6 +922,15 @@ function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
           <Badge tone="honey">Setup</Badge>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.5, margin: "4px 0 8px" }}>No wallet yet. Initialise a rail to let this agent pay for what it needs.</p>
+        {w.meta.llmFundingSource ? (
+          <button type="button" className="fw-autouse" onClick={() => actions?.onOpenLlmFundingSource?.(w.id)}>
+            <span>
+              <strong>LLM Funding Source</strong>
+              <small>{w.meta.llmFundingSource} · {w.meta.llmFundingSourceDetail || "Tap to choose a funding wallet."}</small>
+            </span>
+            <BIcon name="branch" size={15} />
+          </button>
+        ) : null}
         <button type="button" className="fb-btn primary" style={{ width: "100%" }} data-bee={`wallet-create-${w.id}`} onClick={() => actions?.onCreateAgentWallet?.(w.id, w.meta.network || "base")}><BIcon name="plus" size={15} /> Create wallet</button>
       </div>
     );

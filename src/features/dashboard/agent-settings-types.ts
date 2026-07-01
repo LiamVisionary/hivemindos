@@ -1,4 +1,4 @@
-import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, ResearchMethod, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, HivemindosModelsAgentConfig, ResearchMethod, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 export type AgentCreateDraft = {
   name: string;
@@ -9,6 +9,7 @@ export type AgentCreateDraft = {
   adaptiveRouting?: AdaptiveRoutingConfig;
   usePod?: UsePodAgentConfig;
   venice?: VeniceAgentConfig;
+  hivemindosModels?: HivemindosModelsAgentConfig;
   calls?: AgentCallPreferences;
   workerClass: BeeWorkerClass;
   customWorkerClass?: CustomWorkerClassProfile;

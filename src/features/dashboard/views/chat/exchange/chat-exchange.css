@@ -728,6 +728,16 @@
   margin-left: 14px;
 }
 
+.fr-chat-response-billing {
+  justify-self: start;
+  margin-left: 14px;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  opacity: 0.76;
+}
+
 .fr-chat-message-footer.is-user {
   justify-content: flex-end;
   justify-self: end;

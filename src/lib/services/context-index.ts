@@ -644,7 +644,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "Human collective shared-brain mode follows the Curator-style contract: write to the contributor's personal opted-in domain, then push/synthesize/pull the shared mirror. This does not restrict ordinary agent-to-agent HivemindOS collaboration; use collaborationMode agent-to-agent for internal agent work.",
       ].join(" "),
       route: "/api/brain/knowledge",
-      methods: ["GET", "POST"],
+      methods: ["POST"],
       load: {
         type: "api",
         target: "/api/brain/knowledge",
@@ -795,7 +795,7 @@ function localCliToolItems(): ContextIndexItem[] {
       retrievalText: [
         "Use /api/managed-agent/billing when the user wants one-step managed agent usage without bringing their own provider API keys.",
         "GET /api/managed-agent/billing?agentId=<id> returns the Honey ledger, managed Honey balance for the agent, configured funding rails, and provider mode choices.",
-        "POST { action: 'quote', intent: 'chat'|'coding'|'research'|'paid-api'|'tool', provider?: 'auto'|'bankr'|'openai'|'x402'|'moneyclaw'|'agent-wallet'|'hive', estimatedTokens?, estimatedCalls? } returns a server-side quote in spend-only managed HONEY credits with markup.",
+        "POST { action: 'quote', intent: 'chat'|'coding'|'research'|'paid-api'|'tool', provider?: 'auto'|'bankr'|'openai'|'x402'|'hivemindos-models'|'moneyclaw'|'agent-wallet'|'hive', estimatedTokens?, estimatedCalls? } returns a server-side quote in spend-only managed HONEY credits with markup.",
         "POST { action: 'create-stripe-checkout', agentId, amountUsd, rail?: 'stripe'|'stripe-crypto' } creates a Stripe Checkout top-up session when STRIPE_SECRET_KEY is configured. The Stripe webhook credits managed HONEY only after a verified checkout.session.completed event.",
         "Managed HONEY credits are separate from reward Honey: reward Honey can be claimed to HIVE, but managed HONEY is spend-only service credit for managed agents and cannot be cashed out.",
         "Official spoof resistance lives in the HivemindOS-hosted Honey ledger service: /managed-billing/events requires HONEY_BILLING_SECRET/HONEY_LEDGER_SECRET HMAC or the admin token, is idempotent, and refuses debit events when the managed balance is insufficient.",
@@ -843,6 +843,34 @@ function localCliToolItems(): ContextIndexItem[] {
         type: "api",
         target: "/api/paid-agents/<slug>/chat/completions",
         note: "Self-hosted seller route. GET reports non-secret readiness and supported runtime/provider matrices. POST accepts OpenAI-style chat completion bodies and requires x402 unless the non-production dev bypass is explicitly enabled. Downloaded apps should use /api/official-paid-agents/<slug>/chat/completions for official HivemindOS hosted agents.",
+      },
+    },
+    {
+      id: "tool-schema:hivemindos-wallet-paid-models",
+      kind: "tool-schema",
+      title: "HivemindOS wallet-paid models",
+      summary: "Keyless model provider that pays official HivemindOS-hosted model calls from the selected agent's local x402 wallet policy.",
+      tags: ["hivemindos models", "wallet paid models", "no api keys", "x402", "chat completions", "model provider", "crypto wallet", "paid inference", "agent wallet"],
+      aliases: [
+        "crypto wallet models",
+        "wallet paid ai calls",
+        "no api key models",
+        "pay per model call",
+        "HivemindOS Models",
+      ],
+      retrievalText: [
+        "Select provider slug 'hivemindos-models' when the user wants HivemindOS-managed models paid per call from a crypto wallet without user API keys.",
+        "The chat runtime resolves the provider to /api/hivemindos/models/chat/completions, which loads the persisted agent wallet and encrypted local wallet secret server-side, enforces the wallet's x402 provider, network, max-payment cap, auto-pay setting, and governance budgets, then pays /api/official-paid-agents/<slug>/chat/completions through x402.",
+        "The route never accepts client-supplied payTo, facilitator, balance, entitlement, or provider key values. Official recipient, amount, resource binding, settlement, and upstream provider authority stay in the hosted HivemindOS paid-agent resource server.",
+        "Supported picker model ids are hivemindos/auto, hivemindos/fast, hivemindos/frontier, and hivemindos/research. The local route forces non-stream upstream settlement and returns an OpenAI-compatible chat.completion payload so the existing chat streamer can render it.",
+        "The selected agent must have a local custody Base/Base Sepolia/Solana x402-capable wallet with Spend enabled, provider x402, enough USDC/native gas, and Allow auto-use for one-click calls under its cap. Personal user wallets do not auto-spend; they still require explicit payment confirmation.",
+      ].join(" "),
+      route: "/api/hivemindos/models/chat/completions",
+      methods: ["POST"],
+      load: {
+        type: "api",
+        target: "/api/hivemindos/models/models",
+        note: "GET lists the keyless HivemindOS model ids. POST is the local buyer/proxy path and spends only through persisted x402 wallet policy.",
       },
     },
     {

@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join, resolve } from "node:path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import type { RuntimeAdapter, RuntimeSchedule, RuntimeScheduleAction } from "./types";
 
 type ParsedSchedule = {
@@ -169,7 +170,7 @@ async function runHermesScheduleAction(_profile: AgentProfile | undefined, actio
     const id = `hermes-schedule-${Date.now().toString(36)}`;
     const logPath = join(homedir(), ".hivemindos", "runtime-runs", `${id}.log`);
     await mkdir(dirname(logPath), { recursive: true });
-    const child = spawn("hermes", ["-z", prompt], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env } });
+    const child = spawn("hermes", ["-z", prompt], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: sanitizeProcessEnv() });
     const append = (chunk: Buffer) => void writeFile(logPath, chunk.toString(), { flag: "a" }).catch(() => undefined);
     child.stdout.on("data", append);
     child.stderr.on("data", append);

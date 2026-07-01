@@ -14,6 +14,32 @@ export type HiveMcpServerCatalogItem = {
 
 export const HIVE_MCP_SERVER_CATALOG: HiveMcpServerCatalogItem[] = [
   {
+    id: "xapi",
+    name: "X API MCP",
+    source: "official",
+    repoUrl: "https://docs.x.com/tools/mcp",
+    summary: "Official X API MCP for searching posts, resolving users, reading timelines and mentions, managing bookmarks, fetching trends/news, and drafting or publishing Articles through the user's X account.",
+    categories: ["social", "search", "communication", "mcp"],
+    capabilities: ["post-search", "user-lookup", "timeline", "mentions", "bookmarks", "trends", "news", "articles"],
+    credentialKeys: ["X_MCP_CLIENT_ID", "X_MCP_CLIENT_SECRET"],
+    sideEffects: ["read", "write", "network", "browser"],
+    installHint: "Save an X developer app client ID/secret, use HivemindOS to start the browser OAuth login, then sync the xapi MCP entry into all installed runtimes.",
+    safetyNote: "X API tools act as the signed-in X account. Confirm write-capable actions such as bookmark changes and Article publishing before execution.",
+  },
+  {
+    id: "x-docs",
+    name: "X Docs MCP",
+    source: "official",
+    repoUrl: "https://docs.x.com/tools/mcp",
+    summary: "Hosted MCP server for searching and reading X API documentation from agent workflows.",
+    categories: ["social", "documentation", "mcp"],
+    capabilities: ["docs-search", "docs-read"],
+    credentialKeys: [],
+    sideEffects: ["read", "network"],
+    installHint: "Connect MCP clients that support Streamable HTTP to https://docs.x.com/mcp; no X account credentials are required.",
+    safetyNote: "Documentation lookup is read-only. Verify live API behavior against X's current docs before implementing write flows.",
+  },
+  {
     id: "github",
     name: "GitHub MCP Server",
     source: "official",

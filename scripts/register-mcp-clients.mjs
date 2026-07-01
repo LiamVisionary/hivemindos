@@ -26,7 +26,7 @@
 // upgrade changes that path, so setup AND hive-update re-run this to self-heal.
 //
 // Usage:
-//   node scripts/register-mcp-clients.mjs [--targets all|none|claude,codex,…] [--remove] [--force] [--dry-run] [--aeon-project <dir>]
+//   node scripts/register-mcp-clients.mjs [--server hivemind|xapi] [--targets all|none|claude,codex,…] [--remove] [--force] [--dry-run] [--aeon-project <dir>]
 
 import fs from "node:fs";
 import os from "node:os";
@@ -36,11 +36,23 @@ import { fileURLToPath } from "node:url";
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SELF_DIR, "..");
 const HOME = os.homedir();
-const NAME = "hivemind";
-const SCRIPT = path.join(ROOT, "scripts", "hivemind-mcp");
 const COMMAND = process.execPath; // absolute node — no PATH dependency for GUI harnesses
-const ARGS = [SCRIPT];
-const ENV = { HIVE_ENV_PROJECT_ROOT: ROOT };
+const SERVER_CATALOG = {
+  hivemind: {
+    name: "hivemind",
+    script: path.join(ROOT, "scripts", "hivemind-mcp"),
+    args: [path.join(ROOT, "scripts", "hivemind-mcp")],
+    env: { HIVE_ENV_PROJECT_ROOT: ROOT },
+    description: "HivemindOS MCP",
+  },
+  xapi: {
+    name: "xapi",
+    script: path.join(ROOT, "scripts", "x-mcp-bridge.mjs"),
+    args: [path.join(ROOT, "scripts", "x-mcp-bridge.mjs")],
+    env: { HIVE_ENV_PROJECT_ROOT: ROOT },
+    description: "X API MCP",
+  },
+};
 
 const KNOWN = ["claude", "codex", "gemini", "openclaw", "hermes", "aeon"];
 
@@ -54,6 +66,15 @@ function flagValue(name) {
   return argv[i].includes("=") ? argv[i].split("=").slice(1).join("=") : (argv[i + 1] || "");
 }
 const AEON_PROJECT = flagValue("--aeon-project");
+const SERVER_KEY = (flagValue("--server") || flagValue("--name") || "hivemind").trim().toLowerCase();
+const SERVER = SERVER_CATALOG[SERVER_KEY];
+if (!SERVER) {
+  console.error(`Unknown MCP server "${SERVER_KEY}". Expected one of: ${Object.keys(SERVER_CATALOG).join(", ")}`);
+  process.exit(2);
+}
+const NAME = SERVER.name;
+const ARGS = SERVER.args;
+const ENV = SERVER.env;
 
 function parseTargets() {
   let raw = flagValue("--targets") || "all";
@@ -197,7 +218,7 @@ const REGISTRARS = {
 };
 
 const targets = parseTargets();
-console.log(`HivemindOS MCP ${REMOVE ? "removal" : "registration"} → server "${NAME}" = ${COMMAND} ${ARGS.join(" ")}`);
+console.log(`${SERVER.description} ${REMOVE ? "removal" : "registration"} → server "${NAME}" = ${COMMAND} ${ARGS.join(" ")}`);
 console.log(`  repo root: ${ROOT}`);
 console.log(`  targets: ${targets.join(", ") || "(none)"}${DRY ? "  [dry-run]" : ""}${FORCE ? "  [force]" : ""}`);
 let changed = 0;

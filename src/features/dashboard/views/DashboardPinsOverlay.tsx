@@ -248,6 +248,7 @@ export function DashboardPinsOverlay({ activeView, formatRelativeTime, sharedVau
         </section>
       ) : null}
       <button
+        hidden
         type="button"
         onClick={() => setOpen((current) => !current)}
         className="inline-flex h-11 items-center gap-2 rounded-full border border-[rgba(94,234,212,0.28)] bg-[rgba(2,6,23,0.88)] px-4 text-sm font-bold text-[var(--foreground)] shadow-2xl backdrop-blur transition hover:border-[rgba(94,234,212,0.52)] hover:bg-[rgba(20,184,166,0.12)]"

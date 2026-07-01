@@ -6,11 +6,16 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentProfile, AgentRuntime, RuntimeCapabilities } from "@/lib/types/agent-runtime";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
+import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { RUNTIME_CAPABILITIES } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { discoverLmStudioProviderModels, localOpenAIProviderProfile, runLmStudioAction } from "@/lib/services/runtime-adapters/openai-compatible";
 import { bankrLlmAccessStatus, bankrLlmModelOptions, isBankrLlmLowCreditError, listBankrLlmModels } from "@/lib/services/bankr-llm";
+import {
+  hivemindosWalletPaidModelOptions,
+} from "@/lib/services/hivemindos-wallet-paid-models";
 import { mergeRuntimeSessions, previewSessionText } from "@/lib/services/runtime-session-utils";
+import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import type { RuntimeModelSelection } from "./runtime-adapters/types";
 
 const execFileAsync = promisify(execFile);
@@ -103,6 +108,12 @@ export type RuntimeIntegrationStatus = {
         format?: string | null;
       }>;
       error?: string;
+      checkedAt?: string;
+    };
+    hivemindosModels?: {
+      status?: string;
+      message?: string;
+      modelCount?: number;
       checkedAt?: string;
     };
   };
@@ -299,6 +310,7 @@ async function augmentGatewayModelProviders(
   if (!agent) return { modelSelection, providerStatus };
   const bankrGateway = MODEL_PROVIDER_GATEWAYS.bankr;
   const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
+  const walletPaidGateway = MODEL_PROVIDER_GATEWAYS[HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER];
   // Run the independent gateway probes concurrently: Bankr model discovery +
   // Bankr access status (network) and LM Studio discovery (`lms ls`/REST,
   // memoized per resolved endpoint) no longer serialize, so the settings status
@@ -370,6 +382,19 @@ async function augmentGatewayModelProviders(
   const existingIndex = providers.findIndex((provider) => provider.slug === "bankr");
   if (existingIndex >= 0) providers[existingIndex] = { ...providers[existingIndex], ...bankrProvider };
   else providers.push(bankrProvider);
+  const walletPaidModels = hivemindosWalletPaidModelOptions();
+  const walletPaidProvider = {
+    slug: walletPaidGateway.slug,
+    name: walletPaidGateway.name,
+    models: walletPaidModels,
+    totalModels: walletPaidModels.length,
+    isCurrent: agent.provider === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+    isUserDefined: false,
+    source: "/api/hivemindos/models/models",
+  };
+  const walletPaidIndex = providers.findIndex((provider) => provider.slug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER);
+  if (walletPaidIndex >= 0) providers[walletPaidIndex] = { ...providers[walletPaidIndex], ...walletPaidProvider };
+  else providers.push(walletPaidProvider);
   const nextProviderStatus = {
     ...providerStatus,
     bankr: {
@@ -385,6 +410,12 @@ async function augmentGatewayModelProviders(
       baseUrl: lmStudio.runtimeProfile.gatewayUrl?.trim().replace(/\/+$/, ""),
       models: lmStudio.lmStudioModels,
       error: lmStudio.modelDiscoveryError || undefined,
+      checkedAt: new Date().toISOString(),
+    },
+    hivemindosModels: {
+      status: "ready",
+      message: "Uses the selected agent's local x402 wallet policy for each paid model call.",
+      modelCount: walletPaidModels.length,
       checkedAt: new Date().toISOString(),
     },
   };
@@ -439,7 +470,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const child = spawn("hermes", ["login", "--provider", "xai-oauth"], {
       detached: true,
       stdio: "ignore",
-      env: { ...process.env },
+      env: sanitizeProcessEnv(),
     });
     child.unref();
     return { ok: true, message: "Started Hermes xAI OAuth login in a separate process." };
@@ -499,7 +530,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const child = spawn("hermes", ["-z", prompt], {
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: sanitizeProcessEnv(),
     });
     const write = (chunk: Buffer) => void writeFile(logPath, chunk.toString(), { flag: "a" }).catch(() => undefined);
     child.stdout.on("data", write);
@@ -609,7 +640,7 @@ print(json.dumps(payload))
 `;
   const { stdout } = await execFileAsync(HERMES_PYTHON, ["-c", script], {
     cwd: HERMES_AGENT_DIR,
-    env: { ...process.env, PYTHONPATH: HERMES_AGENT_DIR },
+    env: sanitizeProcessEnv(process.env, { PYTHONPATH: HERMES_AGENT_DIR }),
     timeout: 20_000,
     maxBuffer: 5_000_000,
   });
@@ -954,14 +985,13 @@ async function loadHiveEnv() {
     value = value.replaceAll("\0", "");
     if (value) values[key] = value;
   }
-  return { ...values, ...process.env };
+  return sanitizeProcessEnv({ ...values, ...process.env });
 }
 
 async function hermesProcessEnv() {
-  return {
-    ...await loadHiveEnv(),
+  return sanitizeProcessEnv(await loadHiveEnv(), {
     PYTHONPATH: HERMES_AGENT_DIR,
-  };
+  });
 }
 
 async function runHermesPython(script: string, values: Record<string, string | number>, env?: Record<string, string>) {
@@ -972,7 +1002,7 @@ async function runHermesPython(script: string, values: Record<string, string | n
   }
   const { stdout } = await execFileAsync(HERMES_PYTHON, ["-c", rendered], {
     cwd: HERMES_AGENT_DIR,
-    env: { ...(await hermesProcessEnv()), ...(env ?? {}) },
+    env: sanitizeProcessEnv({ ...(await hermesProcessEnv()), ...(env ?? {}) }),
     timeout: 20_000,
     maxBuffer: 2_000_000,
   });

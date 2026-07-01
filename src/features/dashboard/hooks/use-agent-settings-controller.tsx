@@ -125,6 +125,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
           adaptiveRouting: agentCreateDraft.adaptiveRouting,
           usePod: agentCreateDraft.usePod,
           venice: agentCreateDraft.venice,
+          hivemindosModels: agentCreateDraft.hivemindosModels,
           telemetryUrl: agentCreateMachine.collectorUrl,
           machineName: agentCreateMachine.name,
         }
@@ -137,6 +138,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       agentCreateDraft.runtime,
       agentCreateDraft.usePod,
       agentCreateDraft.venice,
+      agentCreateDraft.hivemindosModels,
       agentCreateMachine,
       agents,
       createAgentProfile,

@@ -133,6 +133,11 @@ export const PAID_AGENT_MODEL_PROVIDER_MATRIX = [
     notes: "Broad hosted model catalog; keep provider keys server-side.",
   },
   {
+    provider: "hivemindos-models",
+    rail: "local wallet x402",
+    notes: "Downloaded-app buyer path for HivemindOS-managed models: the local wallet pays the official hosted x402 resource server per call.",
+  },
+  {
     provider: "hive-fusion",
     rail: "x402 or managed HONEY",
     notes: "Compound-model routing over configured server-side providers.",
