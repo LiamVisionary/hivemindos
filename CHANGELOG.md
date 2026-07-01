@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-01 16:05:43 +0800 - Windows setup: collector crashed on a -SkipDeps box (missing bonjour-service) so /health never came up and the wizard hung on "Working…"
+  - Status: Pushed
+  - Areas changed: `scripts/agent-telemetry-collector.mjs`
+  - Summary: After the UTF-8 fix let setup stream + finish, the wizard still sat on "Setting things up… / Working…" forever. Root cause found on the live VPS: the agent telemetry collector (a node script the setup registers + starts) crashed immediately with `ERR_MODULE_NOT_FOUND: Cannot find package 'bonjour-service'`. The app-driven setup runs with `-SkipDeps`, so app-source has NO node_modules, and the collector's one third-party dep (`bonjour-service`, used only for LAN mDNS advertising) was imported at the TOP LEVEL — so the whole collector died at module load, `/health` never answered, and the wizard's "wait for collector ready" gate never resolved. Fix: import `bonjour-service` LAZILY inside `advertiseHubMdns()` (its only use, already wrapped in try/catch) instead of at the top of the file. A missing package now just disables mDNS advertising; the collector boots normally and `/health` responds. Every other collector import is a `node:` builtin or a local `.mjs`, so this was the only blocker. Ships via the app-source `main` pull — no app release.
+  - Verification: On a live Windows Server 2022 VPS with no node_modules — BEFORE: `node agent-telemetry-collector.mjs` exited 1 with `ERR_MODULE_NOT_FOUND 'bonjour-service'`; AFTER: collector runs (no crash) and `GET /health` returns 200. This is the last blocker in the Windows first-run chain (streams → no hang → Node installed → collector installs → collector reachable → wizard completes).
+  - Intended commit message: `Windows collector: lazy-load bonjour-service so a -SkipDeps install doesn't crash the collector`
+
 - 2026-07-01 15:06:56 +0800 - Windows setup: force UTF-8 output so the app's progress reader doesn't die on ✓/✗/↑ glyphs (the real "freeze + no updates")
   - Status: Pushed
   - Areas changed: `setup.ps1`
