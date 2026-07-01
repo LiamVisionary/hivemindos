@@ -5,7 +5,6 @@ import Image from "next/image";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
-import { requestGuidedTour } from "@/lib/native/guided-tour";
 import { CLAWBANK_OPEN_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { grantNativePrivateFilesystemAccess } from "@/lib/native/dashboard-bootstrap";
@@ -21,7 +20,6 @@ const DISMISS_FALLBACK_KEY = `${DISMISS_KEY}.localFallback`;
 const NATIVE_SETUP_PROGRESS_EVENT = "native-setup-progress";
 
 const APP_LOGO_PATH = "/hivemindos-logo.png";
-const DASHBOARD_URL = "http://localhost:5020";
 
 type InstallMode = "local" | "link" | "system-tailscale";
 type WizardStep = "welcome" | "scope" | "agents" | "plan" | "running" | "done";
@@ -456,7 +454,7 @@ export function NativeFirstRunOnboarding() {
           {step === "running" ? (
             <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
           ) : null}
-          {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} copied={copied} onCopy={copy} onOpenClawbank={() => { dismiss(); window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }} /> : null}
+          {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} /> : null}
         </div>
 
         <footer className={styles.foot}>
@@ -493,10 +491,7 @@ export function NativeFirstRunOnboarding() {
                 <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" disabled><IconSpinner /> Working…</button>
               </>
             ) : (
-              <>
-                <button className={`${styles.btn} ${styles.ghost} ${styles.grow}`} type="button" onClick={dismiss}>I&rsquo;ll explore on my own</button>
-                <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" onClick={() => { dismiss(); requestGuidedTour(); }}><IconSparkle /> Show me around</button>
-              </>
+              <button className={`${styles.btn} ${styles.primary} ${styles.grow}`} type="button" data-tone="live" onClick={() => { dismiss(); window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }}>Next <IconArrow /></button>
             )}
           </div>
         </footer>
@@ -677,13 +672,10 @@ function RunningStep({ filled, meterPct, settled, runLog, runStatus, commandPrev
   );
 }
 
-function DoneStep({ scope, isMac, isWindows, copied, onCopy, onOpenClawbank }: {
+function DoneStep({ scope, isMac, isWindows }: {
   scope: "local" | "multi";
   isMac: boolean;
   isWindows: boolean;
-  copied: string;
-  onCopy: (key: string, value: string) => void;
-  onOpenClawbank: () => void;
 }) {
   return (
     <div className={`${styles.step} ${styles.center}`}>
@@ -699,15 +691,6 @@ function DoneStep({ scope, isMac, isWindows, copied, onCopy, onOpenClawbank }: {
         The dashboard is running locally. HivemindOS finishes up in the background.
         {isMac ? " Your phone can reach this Mac automatically, even when the app is closed — just tap “Allow” on the one-time prompt the first time it opens a file." : ""}
       </p>
-      <div className={styles.card}>
-        <span className={styles.lead}><span>Dashboard</span><strong>{DASHBOARD_URL}</strong></span>
-        <button className={styles.copy} type="button" data-done={copied === "url" ? "true" : undefined} onClick={() => onCopy("url", DASHBOARD_URL)}>
-          {copied === "url" ? <IconCheck width="13" height="13" /> : <IconCopy />}{copied === "url" ? "Copied" : "Copy"}
-        </button>
-      </div>
-      <button className={`${styles.btn} ${styles.text}`} type="button" style={{ marginTop: 10 }} onClick={onOpenClawbank}>
-        Set up ClawBank — give your agents banking <IconArrow />
-      </button>
       {scope === "multi" ? (
         <p className={styles.lede} style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
           Adding another machine? Run <code>{isWindows ? "setup.ps1" : "./setup.sh"}</code> there too and it joins this hive automatically.
@@ -730,7 +713,6 @@ function IconChevL(p: SVGProps<SVGSVGElement>) { return <svg width="16" height="
 function IconCopy(p: SVGProps<SVGSVGElement>) { return <svg width="13" height="13" viewBox="0 0 24 24" {...stroke} {...p}><rect x="9" y="9" width="11" height="11" rx="2.2" /><path d="M5 15V6a2 2 0 0 1 2-2h8" /></svg>; }
 function IconSpinner(p: SVGProps<SVGSVGElement>) { return <svg className={styles.spin} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" {...p}><path d="M12 3a9 9 0 1 0 9 9" /></svg>; }
 function IconRefresh(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M20 11a8 8 0 1 0-1.6 5M20 5v6h-6" /></svg>; }
-function IconSparkle(p: SVGProps<SVGSVGElement>) { return <svg width="15" height="15" viewBox="0 0 24 24" {...stroke} {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6M6.5 6.5l3 3M14.5 14.5l3 3M17.5 6.5l-3 3M9.5 14.5l-3 3" /></svg>; }
 
 function IconLaptop(p: SVGProps<SVGSVGElement>) { return <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} {...p}><rect x="4" y="5" width="16" height="11" rx="2" /><path d="M2.5 20h19M9.5 16h5" /></svg>; }
 function IconMesh(p: SVGProps<SVGSVGElement>) { return <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} {...p}><circle cx="6" cy="6" r="2.4" /><circle cx="18" cy="6" r="2.4" /><circle cx="12" cy="18" r="2.4" /><path d="M8.2 7.3 15.8 16.7M15.8 7.3 8.2 16.7M8.4 6h7.2" /></svg>; }
