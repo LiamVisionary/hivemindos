@@ -235,6 +235,10 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   // Fleet layout: the redesigned "hive" is the default; "classic" falls back to
   // the legacy three-column FleetView. The choice is persisted across sessions.
   const [fleetLayout, setFleetLayout] = useState<"hive" | "classic">("hive");
+  // An agent with no configured model (e.g. the default OpenClaw agent on the
+  // "HivemindOS models" provider before a wallet/model is set up) can't actually
+  // answer, so gate "Open chat" behind model setup instead of opening a dead chat.
+  const [chatBlockedAgent, setChatBlockedAgent] = useState<{ id: string; name: string } | null>(null);
   const [fleetHiveViewMode, setFleetHiveViewMode] = useState<FleetHiveViewMode>("hive");
   useEffect(() => {
     let cancelled = false;
@@ -393,7 +397,10 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     onRenameMachine: renameMachine,
     onOpenCodeProof: () => setActiveView("integrations"),
     onFixSyncIssue,
-    onOpenChat: (_, agent) => startAgentChat(agent.id, { fresh: true }),
+    onOpenChat: (_, agent) => {
+      if (!agent.model) { setChatBlockedAgent({ id: agent.id, name: agent.name }); return; }
+      startAgentChat(agent.id, { fresh: true });
+    },
     onOpenTaskChat: (_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task),
     onCallAgent: openAgentPhoneCall,
     onOpenWallet: (_, agent) => {
@@ -526,6 +533,40 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
               <FleetView {...fleetProps} layoutToggle={layoutToggle} />
             )}
           </div>
+          {chatBlockedAgent ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setChatBlockedAgent(null)}
+              style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(4,5,8,0.62)", padding: 20 }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "min(420px, 100%)", background: "var(--panel-2, var(--panel, #12151c))", border: "1px solid var(--line-2, var(--line, #2a2f3a))", borderRadius: 14, padding: "22px 22px 18px", boxShadow: "0 30px 80px -30px rgba(0,0,0,0.8)" }}
+              >
+                <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--foreground, #f4f7fb)" }}>Configure a model first</h3>
+                <p style={{ margin: "0 0 18px", fontSize: 13.5, lineHeight: 1.5, color: "var(--fg-2, #a7b0c0)" }}>
+                  You must first configure an AI model to chat with <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong>.
+                </p>
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => setChatBlockedAgent(null)}
+                    style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid var(--line-2, #2a2f3a)", background: "transparent", color: "var(--fg-2, #a7b0c0)", font: "inherit", fontSize: 13, cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { const blockedId = chatBlockedAgent.id; setChatBlockedAgent(null); setAgentRoleModalId(blockedId); }}
+                    style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid var(--honey-line, #caa24a)", background: "var(--honey, #e7b45c)", color: "var(--honey-ink, #241a06)", font: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    Configure model
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {agentCallSession ? (
             <AgentCallModal
               machine={agentCallSession.machine}
