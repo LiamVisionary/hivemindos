@@ -106,7 +106,16 @@ function syncSkill(sourceDir, slug, provider, providerLabel, sourceUrl) {
   const managed = meta && (meta.managedBy === "hivemindos" || meta.provider === provider || meta.provider === "bundled" || meta.provider === "packaged-auto-install" || meta.provider === "shared-brain");
   if (!managed) { stats.foreign++; log(`  · skip     ${slug} (unmanaged local skill)`); return; }
   const destChecksum = hashDir(dest);
-  if (meta.sourceChecksum && destChecksum !== meta.sourceChecksum) {
+  if (!meta.sourceChecksum) {
+    // Older imports lack sourceChecksum, so user edits are indistinguishable
+    // from source drift. Adopt (stamp) only when dest matches the current
+    // source; otherwise preserve — replacing here silently clobbered edits.
+    if (destChecksum === sourceChecksum) {
+      writeMeta(); stats.upToDate++; log(`  = adopted  ${slug} (stamped missing sourceChecksum)`); return;
+    }
+    stats.preserved++; log(`  · preserve ${slug} (no sourceChecksum; possibly user-edited — delete the skill folder to re-seed)`); return;
+  }
+  if (destChecksum !== meta.sourceChecksum) {
     stats.preserved++; log(`  · preserve ${slug} (user-edited; not overwriting)`); return;
   }
   if (sourceChecksum === meta.sourceChecksum) { stats.upToDate++; return; }

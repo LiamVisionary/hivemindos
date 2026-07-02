@@ -24,13 +24,13 @@ Symptoms:
 
 Checks:
 
-- run `pnpm dashboard-auth status`
+- run `dashboard-auth status`
 - confirm `.env.local` contains dashboard auth keys
 
 Fixes:
 
-- run `pnpm dashboard-auth copy-token` to recover the device token
-- run `pnpm dashboard-auth reset-token` if the token is lost
+- run `dashboard-auth copy-token` to recover the device token
+- run `dashboard-auth reset-token` if the token is lost
 - restart the dashboard after rotating auth values
 
 ### Collector Unreachable

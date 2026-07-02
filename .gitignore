@@ -19,6 +19,10 @@ promo-videos/
 .env.*
 !.env.example
 
+# Local capture/QA artifacts (session screenshots, dogfood run summaries)
+.codex-nango-*.png
+.hivemindos-dogfood/
+
 *.tsbuildinfo
 *.log
 npm-debug.log*

@@ -6,6 +6,18 @@
       "runtimeExecutable": "/usr/bin/true",
       "runtimeArgs": [],
       "port": 5121
+    },
+    {
+      "name": "hivemind-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "port": 5020
+    },
+    {
+      "name": "hivemindos-verify",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "-H", "127.0.0.1", "-p", "5031"],
+      "port": 5031
     }
   ]
 }

@@ -3,6 +3,8 @@ import "server-only";
 import { appendFile, mkdir, writeFile } from "fs/promises";
 import { dirname, join } from "path";
 import { redactSecretText } from "@/lib/services/agent-security-proxy";
+import { listAgentMemoryRecords } from "@/lib/services/obsidian/agent-memory";
+import { appendAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -188,5 +190,34 @@ export async function syncConversationNoteForSession(session: RuntimeChatSession
   await mkdir(dirname(indexFile), { recursive: true });
   const entry = indexEntry(session, notePath, title, keywords, messages.length);
   await appendFile(indexFile, `${JSON.stringify(entry)}\n`, "utf8");
+  await recordCitedMemoryUsage(root, session, messages).catch(() => undefined);
   return { notePath, entry };
+}
+
+// Final-answer usage is the strong ranking signal: when a finished reply
+// actually cites a typed memory (by id, note path, or exact title), record it
+// so usageScore rewards genuinely useful memories instead of raw retrievals.
+async function recordCitedMemoryUsage(root: string, session: RuntimeChatSessionRecord, messages: RuntimeChatSessionMessage[]) {
+  const assistantText = messages
+    .filter((message) => message.role === "assistant")
+    .map((message) => message.content)
+    .join("\n")
+    .toLowerCase();
+  if (!assistantText.trim()) return;
+  const { records } = await listAgentMemoryRecords({ vaultPath: root });
+  const cited = records.filter((record) => {
+    if (record.notePath && assistantText.includes(record.notePath.toLowerCase())) return true;
+    if (record.id && assistantText.includes(record.id.toLowerCase())) return true;
+    const title = record.title?.toLowerCase() ?? "";
+    return title.length >= 12 && assistantText.includes(title);
+  }).slice(0, 20);
+  if (!cited.length) return;
+  await appendAgentMemoryUsage(root, {
+    memoryIds: cited.map((record) => record.id),
+    usageType: "final-answer",
+    usageContext: "conversation-citation",
+    sessionId: session.sessionId,
+    agentName: session.agentName,
+    runtime: session.runtime,
+  });
 }

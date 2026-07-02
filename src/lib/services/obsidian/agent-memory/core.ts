@@ -1,12 +1,16 @@
 import { constants } from "fs";
 import { access, appendFile, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { readGitLawbStatus, sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
-import { rebuildFullVaultSearchIndex, searchFullVaultSearchIndex } from "@/lib/services/obsidian/full-vault-search-index";
-import { appendAgentMemoryEntityIndex, extractAgentMemoryEntities } from "@/lib/services/obsidian/agent-memory/entities";
-import { bm25ScoresForRecords, recordVisibleForRecall, scoreAgentMemory } from "@/lib/services/obsidian/agent-memory/scoring";
-import { appendAgentMemoryUsage, withAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
+import { fullVaultSearchIndexStatus, rebuildFullVaultSearchIndex, searchFullVaultSearchIndex } from "@/lib/services/obsidian/full-vault-search-index";
+import { agentMemoryEmbeddingsCoverage, backfillAgentMemoryEmbeddings, semanticScoresForRecords, upsertAgentMemoryEmbedding } from "@/lib/services/obsidian/agent-memory/embeddings";
+import { AGENT_MEMORY_ENTITY_INDEX_PATH, appendAgentMemoryEntityIndex, extractAgentMemoryEntities, rewriteAgentMemoryEntityIndex } from "@/lib/services/obsidian/agent-memory/entities";
+import { extractRecallQuery, meaningfulMatchCount, queryWordsForRecall, RECALL_STOP_WORDS } from "@/lib/services/obsidian/agent-memory/query";
+import { detectSensitiveContent, redactSensitiveText } from "@/lib/services/obsidian/agent-memory/redact";
+import { AGENT_MEMORY_ANSWER_MIN_SCORE, bm25ScoresForRecords, recordVisibleForRecall, scoreAgentMemory } from "@/lib/services/obsidian/agent-memory/scoring";
+import { AGENT_MEMORY_RETRIEVALS_PATH, appendAgentMemoryUsage, withAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
+import { bm25Tokens } from "@/lib/services/search/bm25-lite";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -87,9 +91,14 @@ const VAULT_NOTE_EXCLUDE_PREFIXES = [
   "Operations/Brain Services/Agent Memory Entity Index.jsonl",
   "Operations/Brain Services/Agent Memory Retrievals.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
+  "Operations/Brain Services/Agent Memory Embeddings.jsonl",
   "Operations/Vault Migrations/",
   "Archive/",
 ];
+// A conflicting write this similar to an existing active memory is treated as
+// a duplicate and rejected with an evolve hint unless allowDuplicate is set.
+const DUPLICATE_BLOCK_SCORE = 60;
+const DUPLICATE_BLOCK_MIN_MATCHED = 3;
 const VAULT_NOTE_TYPE_MAP: Array<[RegExp, AgentMemoryType]> = [
   [/decision/i, "decision"],
   [/preference/i, "preference"],
@@ -332,6 +341,9 @@ function normalizeMemoryIds(values?: string[]) {
 }
 
 function shouldWriteProof(type: AgentMemoryType, confidence: number, mode?: AgentMemoryProofMode) {
+  // GitLawb has never been installed in this deployment; receipts are a local
+  // hash chain. HIVEMINDOS_MEMORY_PROOFS=off skips them entirely.
+  if (process.env.HIVEMINDOS_MEMORY_PROOFS?.trim().toLowerCase() === "off") return false;
   if (mode === true) return true;
   if (mode !== "auto") return false;
   return AUTO_PROOF_TYPES.has(type) || (type === "fact" && confidence >= 0.85);
@@ -415,6 +427,9 @@ function shouldSkipVaultPath(root: string, fullPath: string, isDirectory: boolea
   const name = basename(fullPath);
   if (VAULT_NOTE_EXCLUDE_PARTS.has(name)) return true;
   if (name.startsWith(".") && name !== ".") return true;
+  // Obsidian/Syncthing conflict copies duplicate the original note and pollute
+  // recall; they must be resolved by hand, not surfaced as memories.
+  if (name.includes(".sync-conflict-")) return true;
   if (rel === MEMORY_FOLDER || rel.startsWith(`${MEMORY_FOLDER}/`)) return true;
   if (isDirectory && VAULT_NOTE_EXCLUDE_PREFIXES.some((prefix) => prefix.endsWith("/") && (rel === prefix.slice(0, -1) || rel.startsWith(prefix)))) return true;
   if (!isDirectory && VAULT_NOTE_EXCLUDE_PREFIXES.some((prefix) => rel === prefix || rel.startsWith(prefix))) return true;
@@ -786,7 +801,7 @@ function normalizeRecallScope(value?: string) {
   return "tiered";
 }
 
-function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryInput, limit: number) {
+function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryInput, limit: number, semanticScores?: Map<string, number>) {
   const type = input.type ? normalizeMemoryType(input.type) : null;
   const tags = normalizeTags(input.tags);
   const project = input.project?.trim().toLowerCase();
@@ -798,13 +813,13 @@ function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryI
   const lexicalScores = bm25ScoresForRecords(candidateRecords, input);
   return candidateRecords
     .map((record) => {
-      const scored = scoreAgentMemory(record, input, lexicalScores.get(record.id));
+      const scored = scoreAgentMemory(record, input, lexicalScores.get(record.id), semanticScores?.get(record.id));
       return {
         ...record,
         score: scored.score,
         matched: scored.matched,
         scoreDetails: scored.scoreDetails,
-        excerpt: compactContent(record.content, 320),
+        excerpt: redactSensitiveText(compactContent(record.content, 320)),
       };
     })
     .filter((hit) => !input.query?.trim() || hit.matched.length > 0)
@@ -1105,12 +1120,16 @@ export async function rebuildAgentMemoryIndex(input: RebuildAgentMemoryIndexInpu
     indexedFrom: "markdown-rebuild",
     rebuiltAt: startedAt,
   }));
-  await appendFile(file, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
-  for (const record of records) await appendAgentMemoryEntityIndex(root, record);
+  // Rebuild compacts: the markdown notes are the source of truth, so the index
+  // is rewritten to one line per memory instead of appended (the old append
+  // behavior doubled the file on every rebuild).
+  await writeFile(file, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
+  await rewriteAgentMemoryEntityIndex(root, records);
   memoryIndexCache.delete(root);
-  const [st, fullVaultIndex] = await Promise.all([
+  const [st, fullVaultIndex, embeddings] = await Promise.all([
     stat(file).catch(() => null),
     input.includeFullVault === false ? Promise.resolve(undefined) : rebuildFullVaultSearchIndex({ root }),
+    backfillAgentMemoryEmbeddings(root, records).catch(() => undefined),
   ]);
   return {
     vaultPath: root,
@@ -1119,6 +1138,7 @@ export async function rebuildAgentMemoryIndex(input: RebuildAgentMemoryIndexInpu
     appended: lines.length,
     bytes: st?.size ?? 0,
     fullVaultIndex,
+    embeddings,
     rebuiltAt: startedAt,
   };
 }
@@ -1129,8 +1149,16 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
   const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
   await access(root, constants.R_OK | constants.W_OK);
   const type = normalizeMemoryType(input.type);
+  // Fail closed on high-confidence secret shapes; the vault syncs across
+  // machines and recall feeds model context.
+  const sensitive = detectSensitiveContent(`${input.title ?? ""}\n${content}`);
+  if (sensitive.blockers.length && input.allowSensitiveContent !== true) {
+    throw new Error(`Memory content looks like it contains ${sensitive.blockers.join(", ")}. Store credential status by name only (never values or raw Tailnet IPs), or pass allowSensitiveContent: true if this is a false positive.`);
+  }
   const now = new Date().toISOString();
-  const hash = createHash("sha256").update(`${type}\n${content}`).digest("hex").slice(0, 10);
+  // Salt with time+uuid: ids embed a second-resolution timestamp, so two
+  // same-content writes in the same second would otherwise collide on id.
+  const hash = createHash("sha256").update(`${type}\n${content}\n${now}\n${randomUUID()}`).digest("hex").slice(0, 10);
   const title = input.title?.trim() || compactContent(content, 80);
   const id = `mem-${now.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
   const folder = join(root, MEMORY_FOLDER, type);
@@ -1191,6 +1219,29 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
     scope: "agent-memory",
   })).hits.filter((hit) => hit.score >= 24);
 
+  // Duplicate gate: a very similar active memory means this should almost
+  // always be an evolve, not a sibling write. Explicit allowDuplicate opts out.
+  // Absolute score is not enough — different topics sharing operational
+  // vocabulary (tailnet/queue/env/...) can score high, so a block also
+  // requires the conflict to cover most of the new content's terms.
+  const topConflict = possibleConflicts[0];
+  const conflictTermCount = queryWordsForRecall(extractRecallQuery(content).query).length;
+  const requiredConflictMatches = Math.max(DUPLICATE_BLOCK_MIN_MATCHED, Math.ceil(Math.min(conflictTermCount, 32) * 0.55));
+  if (
+    input.allowDuplicate !== true
+    && topConflict
+    && topConflict.score >= DUPLICATE_BLOCK_SCORE
+    && meaningfulMatchCount(topConflict.matched) >= requiredConflictMatches
+  ) {
+    return {
+      vaultPath: root,
+      blocked: true as const,
+      blockReason: `A very similar active ${topConflict.type} memory already exists: "${topConflict.title}" (${topConflict.id}, score ${topConflict.score}). Evolve it instead (hive-brain evolve --memory-id ${topConflict.id} --content "..." --reason "...") or retry with allowDuplicate/--allow-duplicate if this is genuinely a new fact.`,
+      possibleConflicts,
+      sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
+    };
+  }
+
   const proofReceipt = shouldWriteProof(type, record.confidence, input.proof)
     ? await createMemoryProofReceipt(root, record)
     : undefined;
@@ -1208,7 +1259,15 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
   }
   await appendIndex(root, record);
   await appendAgentMemoryEntityIndex(root, record);
-  return { vaultPath: root, record, possibleConflicts, proof: proofReceipt };
+  const embedding = await upsertAgentMemoryEmbedding(root, record).catch(() => ({ embedded: false as const, reason: "embed-failed" as const }));
+  return {
+    vaultPath: root,
+    record,
+    possibleConflicts,
+    proof: proofReceipt,
+    embedding,
+    sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
+  };
 }
 
 export async function rememberActionAgentMemory(input: RememberAgentMemoryInput) {
@@ -1218,6 +1277,9 @@ export async function rememberActionAgentMemory(input: RememberAgentMemoryInput)
     actorRole: input.actorRole ?? "assistant",
     memoryOrigin: input.memoryOrigin ?? "assistant-action",
     proof: input.proof ?? "auto",
+    // Action receipts are legitimately repetitive (same shape per handoff /
+    // orchestrator event) so the duplicate gate defaults open here.
+    allowDuplicate: input.allowDuplicate ?? true,
     tags: normalizeTags(["action", ...(input.tags ?? [])]),
   });
 }
@@ -1246,6 +1308,10 @@ function mergeEvolutionTags(input: EvolveAgentMemoryInput, previous: AgentMemory
 export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
   const content = input.content?.trim();
   if (!content) throw new Error("Evolved memory content is required.");
+  const sensitive = detectSensitiveContent(`${input.title ?? ""}\n${content}`);
+  if (sensitive.blockers.length && input.allowSensitiveContent !== true) {
+    throw new Error(`Evolved memory content looks like it contains ${sensitive.blockers.join(", ")}. Store credential status by name only (never values or raw Tailnet IPs), or pass allowSensitiveContent: true if this is a false positive.`);
+  }
   const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
   await access(root, constants.R_OK | constants.W_OK);
   const memoryRecords = await readMemoryRecords(root);
@@ -1253,7 +1319,9 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
   const primary = previousRecords[0];
   const type = input.type ? normalizeMemoryType(input.type) : primary.type;
   const now = new Date().toISOString();
-  const hash = createHash("sha256").update(`${type}\n${content}`).digest("hex").slice(0, 10);
+  // Salt with time+uuid: ids embed a second-resolution timestamp, so two
+  // same-content writes in the same second would otherwise collide on id.
+  const hash = createHash("sha256").update(`${type}\n${content}\n${now}\n${randomUUID()}`).digest("hex").slice(0, 10);
   const title = input.title?.trim() || primary.title || compactContent(content, 80);
   const id = `mem-${now.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
   const folder = join(root, MEMORY_FOLDER, type);
@@ -1343,12 +1411,15 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
   }
   await appendIndex(root, record);
   await appendAgentMemoryEntityIndex(root, record);
+  const embedding = await upsertAgentMemoryEmbedding(root, record).catch(() => ({ embedded: false as const, reason: "embed-failed" as const }));
   return {
     vaultPath: root,
     record,
     superseded: supersededRecords,
     evolutionChain: traceEvolutionChain(record, new Map([...memoryRecords, record, ...supersededRecords].map((item) => [item.id, item]))).map(chainItemForRecord),
     proof: proofReceipt,
+    embedding,
+    sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
   };
 }
 
@@ -1385,24 +1456,33 @@ export async function recallAgentMemory(input: RecallAgentMemoryInput = {}) {
   await access(root, constants.R_OK);
   const limit = Math.min(Math.max(Math.trunc(Number(input.limit ?? 8)), 1), 50);
   const scope = normalizeRecallScope(input.scope);
+  // Long prompts (hook/chat preflight) are reduced to salient terms so
+  // boilerplate stops matching every memory; short queries pass through.
+  const { query: effectiveQuery, derived } = extractRecallQuery(input.query);
+  const effectiveInput: RecallAgentMemoryInput = derived ? { ...input, query: effectiveQuery } : input;
   const memoryRecords = await withAgentMemoryUsage(root, await readMemoryRecords(root));
-  const memoryHits = attachEvolutionChains(hitsFromRecords(memoryRecords, input, limit), memoryRecords);
-  if (scope === "agent-memory" || (scope === "tiered" && shouldUseDistilledMemoryOnly(input, memoryHits))) {
-    await recordRetrievedHits(root, input, memoryHits);
+  const semanticScores = await semanticScoresForRecords(root, effectiveQuery, memoryRecords).catch(() => new Map<string, number>());
+  const memoryHits = attachEvolutionChains(hitsFromRecords(memoryRecords, effectiveInput, limit, semanticScores), memoryRecords);
+  if (scope === "agent-memory" || (scope === "tiered" && shouldUseDistilledMemoryOnly(effectiveInput, memoryHits))) {
+    await recordRetrievedHits(root, effectiveInput, memoryHits);
     return {
       vaultPath: root,
-      query: input.query?.trim() || "",
+      query: effectiveQuery,
+      rawQuery: derived ? input.query?.trim().slice(0, 200) : undefined,
+      queryDerived: derived || undefined,
       recallScope: "agent-memory",
       augmentedFromVault: false,
       hits: memoryHits,
     };
   }
-  const records = await readFullVaultRecords(root, memoryRecords, input.query);
-  const hits = attachEvolutionChains(hitsFromRecords(records, input, limit), memoryRecords);
-  await recordRetrievedHits(root, input, hits);
+  const records = await readFullVaultRecords(root, memoryRecords, effectiveQuery);
+  const hits = attachEvolutionChains(hitsFromRecords(records, effectiveInput, limit, semanticScores), memoryRecords);
+  await recordRetrievedHits(root, effectiveInput, hits);
   return {
     vaultPath: root,
-    query: input.query?.trim() || "",
+    query: effectiveQuery,
+    rawQuery: derived ? input.query?.trim().slice(0, 200) : undefined,
+    queryDerived: derived || undefined,
     recallScope: "full-vault",
     augmentedFromVault: scope === "tiered",
     memoryHitCount: memoryHits.length,
@@ -1431,7 +1511,27 @@ function chainContext(hit: AgentMemoryHit) {
 }
 
 export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) {
-  const result = await recallAgentMemory(input);
+  const recalled = await recallAgentMemory(input);
+  // Answer mode feeds model context (hook, chat preflight): drop noise-floor
+  // hits so weak incidental matches never reach a prompt.
+  const minScore = input.query?.trim()
+    ? Math.max(0, Math.trunc(Number(input.minScore ?? AGENT_MEMORY_ANSWER_MIN_SCORE)))
+    : 0;
+  // On informational queries (4+ meaningful terms) a single incidental word
+  // match is noise: require 2+ meaningful matches or a strong signal
+  // (exact phrase / semantic similarity).
+  const requireMultiMatch = minScore > 0 && queryWordsForRecall(recalled.query ?? "").length >= 4;
+  const keptHits = recalled.hits.filter((hit) => {
+    if (minScore && hit.score < minScore) return false;
+    if (!requireMultiMatch) return true;
+    return meaningfulMatchCount(hit.matched) >= 2 || hit.matched.includes("exact-query") || hit.matched.includes("semantic");
+  });
+  const result = {
+    ...recalled,
+    hits: keptHits,
+    minScore: minScore || undefined,
+    droppedBelowMinScore: minScore ? recalled.hits.length - keptHits.length : 0,
+  };
   const answer = result.hits.length
     ? [
       `Found ${result.hits.length} relevant shared-brain memor${result.hits.length === 1 ? "y/note" : "ies/notes"}.`,
@@ -1461,4 +1561,222 @@ export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) 
     `Content: ${hit.excerpt}`,
   ].filter(Boolean).join("\n")).join("\n\n");
   return { ...result, answer, context };
+}
+
+// --- Consolidation & health -------------------------------------------------
+
+const ARCHIVABLE_MEMORY_TYPES = new Set<AgentMemoryType>(["context", "event", "observation", "action"]);
+const STALE_ARCHIVE_AGE_MS = 120 * 86_400_000;
+const NEAR_DUPLICATE_SIMILARITY = 0.5;
+const MAX_CONSOLIDATION_RECORDS = 600;
+
+function distinctiveTokenSet(record: AgentMemoryRecord) {
+  return new Set(bm25Tokens(`${record.title}\n${record.content}`).filter((token) => !RECALL_STOP_WORDS.has(token)));
+}
+
+function tokenSimilarity(left: Set<string>, right: Set<string>) {
+  if (!left.size || !right.size) return 0;
+  let shared = 0;
+  const [small, large] = left.size <= right.size ? [left, right] : [right, left];
+  for (const token of small) {
+    if (large.has(token)) shared += 1;
+  }
+  return shared / Math.min(left.size, right.size);
+}
+
+// Near-duplicate clusters among active memories of the same type; these are
+// the writes that should have been evolutions.
+export function findNearDuplicateGroups(records: AgentMemoryRecord[], minSimilarity = NEAR_DUPLICATE_SIMILARITY) {
+  const candidates = [...records]
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+    .slice(0, MAX_CONSOLIDATION_RECORDS);
+  const tokens = candidates.map(distinctiveTokenSet);
+  const parents = candidates.map((_, index) => index);
+  const find = (index: number): number => (parents[index] === index ? index : (parents[index] = find(parents[index])));
+  for (let left = 0; left < candidates.length; left += 1) {
+    for (let right = left + 1; right < candidates.length; right += 1) {
+      if (candidates[left].type !== candidates[right].type) continue;
+      if (tokenSimilarity(tokens[left], tokens[right]) >= minSimilarity) parents[find(left)] = find(right);
+    }
+  }
+  const groups = new Map<number, AgentMemoryRecord[]>();
+  candidates.forEach((record, index) => {
+    const rootIndex = find(index);
+    groups.set(rootIndex, [...(groups.get(rootIndex) ?? []), record]);
+  });
+  return [...groups.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => [...group].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)))
+    .sort((left, right) => right.length - left.length);
+}
+
+function staleArchiveCandidates(records: AgentMemoryRecord[]) {
+  const cutoff = Date.now() - STALE_ARCHIVE_AGE_MS;
+  return records.filter((record) => record.status === "active"
+    && ARCHIVABLE_MEMORY_TYPES.has(record.type)
+    && Date.parse(record.createdAt) < cutoff
+    && !(record.usage?.retrievalCount || record.usage?.finalAnswerCount));
+}
+
+async function archiveMemoryRecords(root: string, records: AgentMemoryRecord[]) {
+  const now = new Date().toISOString();
+  const archived: AgentMemoryRecord[] = [];
+  for (const record of records) {
+    const archivedRecord: AgentMemoryRecord = { ...record, status: "archived", updatedAt: now };
+    const file = join(root, archivedRecord.notePath);
+    assertInside(root, file);
+    await writeFile(file, memoryMarkdown(archivedRecord), { encoding: "utf8", mode: 0o600 });
+    await appendIndex(root, archivedRecord);
+    await appendAgentMemoryEntityIndex(root, archivedRecord);
+    archived.push(archivedRecord);
+  }
+  if (archived.length) memoryIndexCache.delete(root);
+  return archived;
+}
+
+// Report-first maintenance pass: near-duplicate merge proposals (agents apply
+// them via evolve), stale-archive candidates (applied only with applyArchives),
+// compiled-wiki promotion candidates, and embeddings backfill.
+export async function consolidateAgentMemory(input: { vaultPath?: string; applyArchives?: boolean } = {}) {
+  const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: Boolean(input.applyArchives) });
+  await access(root, constants.R_OK);
+  const records = await withAgentMemoryUsage(root, await readMemoryRecords(root));
+  const active = records.filter((record) => record.status === "active");
+  const duplicateGroups = findNearDuplicateGroups(active).map((group) => {
+    const [canonical, ...older] = group;
+    return {
+      size: group.length,
+      type: canonical.type,
+      canonicalId: canonical.id,
+      canonicalTitle: canonical.title,
+      memberIds: group.map((record) => record.id),
+      memberTitles: group.map((record) => record.title),
+      memberPaths: group.map((record) => record.notePath),
+      suggestedAction: "evolve" as const,
+      evolveHint: `hive-brain evolve --memory-id ${canonical.id} --supersedes ${older.map((record) => record.id).join(",")} --content "<merged durable memory>" --reason "consolidate near-duplicates"`,
+    };
+  });
+  const archiveCandidates = staleArchiveCandidates(active);
+  const archived = input.applyArchives ? await archiveMemoryRecords(root, archiveCandidates) : [];
+  const entityCounts = new Map<string, { entity: string; records: AgentMemoryRecord[] }>();
+  for (const record of active) {
+    for (const entity of record.entities ?? []) {
+      const key = entity.toLowerCase();
+      const current = entityCounts.get(key) ?? { entity, records: [] };
+      if (!current.records.some((existing) => existing.id === record.id)) current.records.push(record);
+      entityCounts.set(key, current);
+    }
+  }
+  const wikiCandidates = [...entityCounts.values()]
+    .filter(({ records: linked }) => linked.length >= 3)
+    .sort((left, right) => right.records.length - left.records.length)
+    .slice(0, 12)
+    .map(({ entity, records: linked }) => ({
+      entity,
+      memoryCount: linked.length,
+      memoryPaths: linked.map((record) => record.notePath),
+      compileHint: {
+        action: "compile",
+        title: entity,
+        summary: `Compiled from ${linked.length} typed Agent Memory notes.`,
+        content: linked.map((record) => `- ${record.title} ([[${record.notePath}]])`).join("\n"),
+        entities: [{ name: entity }],
+      },
+    }));
+  const embeddings = await backfillAgentMemoryEmbeddings(root, active).catch(() => undefined);
+  return {
+    vaultPath: root,
+    scanned: records.length,
+    active: active.length,
+    duplicateGroups,
+    archiveCandidates: archiveCandidates.map((record) => ({ id: record.id, title: record.title, type: record.type, createdAt: record.createdAt, notePath: record.notePath })),
+    archivedCount: archived.length,
+    archivedIds: archived.map((record) => record.id),
+    wikiCandidates,
+    embeddings,
+  };
+}
+
+async function jsonlFileStats(root: string, vaultRelativePath: string) {
+  const file = join(root, vaultRelativePath);
+  const st = await stat(file).catch(() => null);
+  if (!st?.isFile()) return { exists: false, bytes: 0, lines: 0 };
+  const raw = await readFile(file, "utf8").catch(() => "");
+  return { exists: true, bytes: st.size, lines: raw.split("\n").filter(Boolean).length, mtimeMs: st.mtimeMs };
+}
+
+// Observability for the memory layer: sizes, staleness, duplicate pressure,
+// proof/embedding status. Surfaced via API action "health" and `hive-brain health`.
+export async function healthAgentMemory(input: { vaultPath?: string } = {}) {
+  const root = resolveObsidianVaultPath(input.vaultPath);
+  await access(root, constants.R_OK);
+  const records = await withAgentMemoryUsage(root, await readMemoryRecords(root));
+  const active = records.filter((record) => record.status === "active");
+  const byType: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  for (const record of records) {
+    byType[record.type] = (byType[record.type] ?? 0) + 1;
+    byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
+  }
+  const [indexStats, entityStats, retrievalStats, proofStats] = await Promise.all([
+    jsonlFileStats(root, INDEX_PATH),
+    jsonlFileStats(root, AGENT_MEMORY_ENTITY_INDEX_PATH),
+    jsonlFileStats(root, AGENT_MEMORY_RETRIEVALS_PATH),
+    jsonlFileStats(root, PROOF_INDEX_PATH),
+  ]);
+  const proofStatusCounts: Record<string, number> = {};
+  for (const record of records) {
+    if (record.proofStatus) proofStatusCounts[record.proofStatus] = (proofStatusCounts[record.proofStatus] ?? 0) + 1;
+  }
+  let retrievedTotal = 0;
+  let finalAnswerTotal = 0;
+  let neverRetrieved = 0;
+  for (const record of active) {
+    retrievedTotal += record.usage?.retrievalCount ?? 0;
+    finalAnswerTotal += record.usage?.finalAnswerCount ?? 0;
+    if (!record.usage?.retrievalCount && !record.usage?.finalAnswerCount) neverRetrieved += 1;
+  }
+  const duplicateGroups = findNearDuplicateGroups(active);
+  const [fullVaultIndex, embeddings, gitlawb] = await Promise.all([
+    fullVaultSearchIndexStatus(root).catch(() => null),
+    agentMemoryEmbeddingsCoverage(root, active).catch(() => null),
+    safeGitLawbStatus(),
+  ]);
+  const evolutionChains = new Set(records.filter((record) => record.evolutionRootId).map((record) => record.evolutionRootId));
+  return {
+    vaultPath: root,
+    generatedAt: new Date().toISOString(),
+    memories: {
+      total: records.length,
+      active: active.length,
+      byType,
+      byStatus,
+      evolvedChains: evolutionChains.size,
+      supersededCount: byStatus.superseded ?? 0,
+      neverRetrievedActive: neverRetrieved,
+    },
+    usage: {
+      retrievedTotal,
+      finalAnswerTotal,
+      retrievalsFile: retrievalStats,
+    },
+    indexes: {
+      memoryIndex: { ...indexStats, uniqueRecords: records.length, bloatFactor: records.length ? Math.round((indexStats.lines / records.length) * 100) / 100 : 0 },
+      entityIndex: entityStats,
+      fullVaultIndex,
+      embeddings,
+    },
+    proofs: {
+      mode: process.env.HIVEMINDOS_MEMORY_PROOFS?.trim().toLowerCase() === "off" ? "off" : "auto",
+      file: proofStats,
+      byStatus: proofStatusCounts,
+      gitlawbCliInstalled: Boolean(gitlawb?.cli.installed),
+      gitlawbDid: Boolean(gitlawb?.identity.did),
+    },
+    duplicatePressure: {
+      groups: duplicateGroups.length,
+      largestGroup: duplicateGroups[0]?.length ?? 0,
+      affectedMemories: duplicateGroups.reduce((sum, group) => sum + group.length, 0),
+    },
+  };
 }

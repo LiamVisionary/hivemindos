@@ -1,9 +1,10 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, Search } from "lucide-react";
+import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { AgentNotification } from "@/lib/types/agent-notifications";
+import type { KanbanTask } from "@/lib/types/kanban";
 import type { DashboardRouteTarget, DashboardRouteCatalogItem } from "@/features/dashboard/dashboard-navigation";
 import { DASHBOARD_ROUTE_CATALOG, dashboardRouteForView } from "@/features/dashboard/dashboard-navigation";
 
@@ -14,15 +15,17 @@ type CommandAction = {
   detail: string;
   shortcut?: string;
   target: DashboardRouteTarget;
-  keywords: string[];
+  keywords: Array<string | undefined>;
 };
 
 type DashboardCommandPaletteProps = {
   activeView: string;
-  displayAgents: any[];
-  kanbanTasks: any[];
+  displayAgents: AgentProfile[];
+  // agentId is read defensively; canonical KanbanTask carries `assignee` instead.
+  kanbanTasks: Array<KanbanTask & { agentId?: string }>;
   navItems: Array<{ id: string; label: string; detail: string }>;
-  notifications: any[];
+  // kanbanTaskId is read defensively; canonical AgentNotification does not define it.
+  notifications: Array<AgentNotification & { kanbanTaskId?: string }>;
   open: boolean;
   recents: DashboardRouteTarget[];
   onNavigate: (target: DashboardRouteTarget) => void;
@@ -63,7 +66,7 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
       ...routeAction(item),
       detail: navDetails.get(item.id) ?? item.detail,
     }));
-    const recentActions = recents.map((target, index) => {
+    const recentActions = recents.map((target, index): CommandAction => {
       const route = dashboardRouteForView(target.view);
       return {
         id: `recent:${index}:${target.view}:${target.taskId ?? target.agentId ?? ""}`,
@@ -74,7 +77,7 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
         keywords: [route.label, route.detail, target.taskId ?? "", target.agentId ?? ""],
       };
     });
-    const agentActions = displayAgents.slice(0, 24).map((agent) => ({
+    const agentActions = displayAgents.slice(0, 24).map((agent): CommandAction => ({
       id: `agent:${agent.id}`,
       group: "Agents",
       label: agent.name ?? agent.id,
@@ -82,7 +85,7 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
       target: { view: "chat", agentId: agent.id },
       keywords: [agent.id, agent.name, agent.runtime, agent.machineName].filter(Boolean),
     }));
-    const taskActions = kanbanTasks.slice(0, 24).map((task) => ({
+    const taskActions = kanbanTasks.slice(0, 24).map((task): CommandAction => ({
       id: `task:${task.id}`,
       group: "Tasks",
       label: task.title ?? "Untitled task",
@@ -90,7 +93,7 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
       target: { view: "kanban", taskId: task.id, agentId: task.agentId },
       keywords: [task.id, task.title, task.status, task.agentId].filter(Boolean),
     }));
-    const alertActions = notifications.filter((item) => !item.read).slice(0, 12).map((notification) => ({
+    const alertActions = notifications.filter((item) => !item.read).slice(0, 12).map((notification): CommandAction => ({
       id: `notification:${notification.id}`,
       group: "Alerts",
       label: notification.title ?? "Agent alert",
@@ -137,7 +140,7 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
       }
       if (meta && !event.shiftKey && ["1", "2", "3", "4", "5", "6"].includes(event.key)) {
         event.preventDefault();
-        const targetView = ["agents", "kanban", "vault", "chat", "wallet", "more"][Number(event.key) - 1];
+        const targetView = (["agents", "kanban", "vault", "chat", "wallet", "more"] as const)[Number(event.key) - 1];
         onNavigate({ view: targetView });
         return;
       }

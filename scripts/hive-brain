@@ -4,20 +4,47 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { spawnSync } from "node:child_process";
+import {
+  AGENT_MEMORY_ANSWER_MIN_SCORE,
+  bm25ScoresForRecords,
+  containsPhraseWithBoundaries,
+  extractRecallQuery,
+  meaningfulMatchCount,
+  queryWordsForRecall,
+  recordVisibleForRecall,
+  redactSecrets,
+  scoreAgentMemory,
+  shouldUseDistilledMemoryOnly,
+} from "./lib/hive-brain-scoring.mjs";
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const INDEX_PATH = "Operations/Brain Services/Agent Memory Index.jsonl";
 const FULL_VAULT_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
+const RETRIEVALS_PATH = "Operations/Brain Services/Agent Memory Retrievals.jsonl";
+const EMBEDDINGS_PATH = "Operations/Brain Services/Agent Memory Embeddings.jsonl";
 const WORKSPACES_FILE = path.join(os.homedir(), ".hivemindos", "workspaces.json");
+const PENDING_WRITES_FILE = path.join(os.homedir(), ".hivemindos", "brain-write-pending.jsonl");
+const PENDING_WRITE_TTL_MS = 14 * 86_400_000;
+const MAX_PENDING_FLUSH_PER_RUN = 20;
 const MAX_VAULT_FILES = 50000;
 const MAX_VAULT_BYTES = 1024 * 1024;
 const MAX_INDEX_TERMS_PER_NOTE = 900;
+// Mirrors the app default (HIVEMINDOS_FULL_VAULT_INDEX_TTL_MS overrides; 0 disables).
+const FULL_VAULT_INDEX_TTL_MS = (() => {
+  const raw = process.env.HIVEMINDOS_FULL_VAULT_INDEX_TTL_MS?.trim();
+  if (raw === undefined || raw === "") return 6 * 60 * 60 * 1000;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 6 * 60 * 60 * 1000;
+})();
 const LOW_SIGNAL_WORDS = new Set(["agent", "agents", "brain", "hivemindos", "memory", "memories", "note", "notes", "shared", "vault"]);
 const EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
 const EXCLUDE_PREFIXES = [
   "Operations/Runtime Mirrors/",
   "Operations/Brain Services/Agent Memory Index.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
+  "Operations/Brain Services/Agent Memory Entity Index.jsonl",
+  "Operations/Brain Services/Agent Memory Retrievals.jsonl",
+  EMBEDDINGS_PATH,
   FULL_VAULT_INDEX_PATH,
   "Operations/Vault Migrations/",
   "Archive/",
@@ -25,16 +52,25 @@ const EXCLUDE_PREFIXES = [
 
 function usage() {
   console.error(`Usage:
-  hive-brain answer "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--workspace ID] [--json]
+  hive-brain answer "query" [--limit N] [--min-score N] [--scope tiered|agent-memory|full-vault] [--workspace ID] [--json]
   hive-brain recall "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--workspace ID] [--json]
-  hive-brain remember --type TYPE --title TITLE --content TEXT [--workspace ID] [--tag TAG] [--source TEXT]
-  hive-brain evolve --memory-id ID --content TEXT [--workspace ID] [--title TITLE] [--reason TEXT]
+  hive-brain remember --type TYPE --title TITLE --content TEXT [--tag TAG] [--source TEXT] [--allow-duplicate]
+  hive-brain evolve --memory-id ID --content TEXT [--title TITLE] [--reason TEXT]
+  hive-brain record-usage --memory-ids ID[,ID...] [--usage-type retrieved|final-answer] [--query TEXT] [--context TEXT]
+  hive-brain health [--json]
+  hive-brain consolidate [--apply-archives] [--json]
+  hive-brain rebuild-index [--json]
+  hive-brain flush-pending
 
 Examples:
   hive-brain answer "what fruit does liam like?"
   hive-brain recall "BYOK Agent Calls" --scope full-vault --limit 5
   hive-brain evolve --memory-id mem-... --content "Updated durable memory"
+  hive-brain record-usage --memory-ids mem-abc --usage-type final-answer --context "cited in reply"
   hive-brain answer "query" --no-api
+
+Writes that cannot reach the app API are queued to ~/.hivemindos/brain-write-pending.jsonl
+and delivered on the next successful contact (or via flush-pending).
 `);
 }
 
@@ -70,11 +106,29 @@ function defaultVaultPath(workspaceId) {
     || path.join(os.homedir(), "Documents", "Obsidian", "hivemindos-vault");
 }
 
+// Provenance autofill: the contract asks writers to attach agent/machine
+// context, but almost no CLI callers pass the flags — detect what we can.
+function detectRuntime() {
+  if (process.env.HIVE_BRAIN_RUNTIME) return process.env.HIVE_BRAIN_RUNTIME;
+  if (process.env.CLAUDECODE || process.env.CLAUDE_CODE_ENTRYPOINT) return "claude-code";
+  if (process.env.CODEX_SANDBOX || process.env.CODEX_HOME) return "codex";
+  return "cli";
+}
+
+function applyProvenanceDefaults(input) {
+  if (!input.machineName) input.machineName = os.hostname().replace(/\.local$/i, "");
+  if (!input.runtime) input.runtime = detectRuntime();
+  if (!input.agentName && process.env.HIVE_AGENT_NAME) input.agentName = process.env.HIVE_AGENT_NAME;
+  if (!input.sessionId) input.sessionId = process.env.CLAUDE_SESSION_ID || process.env.HIVE_SESSION_ID || undefined;
+  return input;
+}
+
 function parseArgs(argv) {
   const input = {
     action: argv[2] || "answer",
     queryParts: [],
     tags: [],
+    memoryIds: [],
     limit: 5,
     scope: undefined,
     json: false,
@@ -91,8 +145,21 @@ function parseArgs(argv) {
       input.json = true;
     } else if (arg === "--no-api") {
       input.noApi = true;
+    } else if (arg === "--no-queue") {
+      input.noQueue = true;
+    } else if (arg === "--allow-duplicate") {
+      input.allowDuplicate = true;
+    } else if (arg === "--retry-blocked") {
+      input.retryBlocked = true;
+    } else if (arg === "--allow-sensitive") {
+      input.allowSensitiveContent = true;
+    } else if (arg === "--apply-archives") {
+      input.applyArchives = true;
     } else if (arg === "--limit" || arg === "-n") {
       input.limit = Number(next || input.limit);
+      index += 1;
+    } else if (arg === "--min-score") {
+      input.minScore = Number(next);
       index += 1;
     } else if (arg === "--scope") {
       input.scope = next;
@@ -115,6 +182,18 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--memory-id") {
       input.memoryId = next;
+      index += 1;
+    } else if (arg === "--memory-ids") {
+      input.memoryIds.push(...String(next || "").split(",").map((id) => id.trim()).filter(Boolean));
+      index += 1;
+    } else if (arg === "--usage-type") {
+      input.usageType = next;
+      index += 1;
+    } else if (arg === "--context" || arg === "--usage-context") {
+      input.usageContext = next;
+      index += 1;
+    } else if (arg === "--query") {
+      input.usageQuery = next;
       index += 1;
     } else if (arg === "--supersedes") {
       input.supersedes = String(next || "").split(",").map((id) => id.trim()).filter(Boolean);
@@ -190,7 +269,8 @@ function candidateApiBases() {
   if (process.env.HIVEMINDOS_APP_URL) values.push(process.env.HIVEMINDOS_APP_URL);
   if (process.env.NEXT_PUBLIC_APP_URL) values.push(process.env.NEXT_PUBLIC_APP_URL);
   if (process.env.PORT) values.push(`http://127.0.0.1:${process.env.PORT}`);
-  for (const port of [5020, 5021, 5022, 5023, 5024, 5025]) values.push(`http://127.0.0.1:${port}`);
+  // Dev servers auto-increment past busy ports; probe the whole 5020-5030 range.
+  for (let port = 5020; port <= 5030; port += 1) values.push(`http://127.0.0.1:${port}`);
   return [...new Set(values.map((value) => value.replace(/\/+$/, "")))];
 }
 
@@ -213,15 +293,24 @@ function requestJson(base, method, body, searchParams) {
       res.setEncoding("utf8");
       res.on("data", (chunk) => { data += chunk; });
       res.on("end", () => {
+        let parsed = null;
+        try {
+          parsed = data ? JSON.parse(data) : null;
+        } catch {
+          parsed = null;
+        }
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`${base} returned HTTP ${res.statusCode}`));
+          const error = new Error(parsed?.blockReason || parsed?.error || `${base} returned HTTP ${res.statusCode}`);
+          error.status = res.statusCode;
+          error.body = parsed;
+          reject(error);
           return;
         }
-        try {
-          resolve(JSON.parse(data));
-        } catch {
+        if (parsed === null) {
           reject(new Error(`${base} returned non-JSON memory response`));
+          return;
         }
+        resolve(parsed);
       });
     });
     req.on("timeout", () => req.destroy(new Error(`${base} timed out`)));
@@ -231,80 +320,177 @@ function requestJson(base, method, body, searchParams) {
   });
 }
 
+function writePayload(input, action) {
+  applyProvenanceDefaults(input);
+  return {
+    action,
+    type: input.type,
+    title: input.title,
+    content: input.content,
+    tags: input.tags,
+    source: input.source || "hive-brain cli",
+    vaultPath: input.vaultPath,
+    memoryId: input.memoryId,
+    supersedes: input.supersedes,
+    cognitiveStage: input.cognitiveStage,
+    evidenceCount: input.evidenceCount,
+    sourceType: input.sourceType,
+    evolutionType: input.evolutionType,
+    evolutionReason: input.evolutionReason,
+    allowDuplicate: input.allowDuplicate,
+    allowSensitiveContent: input.allowSensitiveContent,
+    agentName: input.agentName,
+    agentId: input.agentId,
+    runtime: input.runtime,
+    machineName: input.machineName,
+    machineId: input.machineId,
+    tailnetId: input.tailnetId,
+    tailnetName: input.tailnetName,
+    tailnetDnsName: input.tailnetDnsName,
+    collectorUrl: input.collectorUrl,
+    sessionId: input.sessionId,
+    project: input.project,
+    proof: "auto",
+  };
+}
+
 async function callApi(input) {
   if (input.noApi || /^(1|true|yes|on)$/i.test(process.env.HIVE_BRAIN_NO_API || "")) {
-    throw new Error("API disabled by --no-api/HIVE_BRAIN_NO_API.");
+    const error = new Error("API disabled by --no-api/HIVE_BRAIN_NO_API.");
+    error.apiDisabled = true;
+    throw error;
   }
   const bases = candidateApiBases();
   let lastError = null;
+  let lastHttpError = null;
   for (const base of bases) {
     try {
-      if (input.action === "remember") {
-        return await requestJson(base, "POST", {
-          action: "remember",
-          type: input.type,
-          title: input.title,
-          content: input.content,
-          tags: input.tags,
-          source: input.source || "hive-brain cli",
+      let result;
+      if (input.action === "remember" || input.action === "evolve") {
+        result = await requestJson(base, "POST", writePayload(input, input.action));
+      } else if (input.action === "record-usage") {
+        result = await requestJson(base, "POST", {
+          action: "record-usage",
           vaultPath: input.vaultPath,
+          memoryIds: input.memoryIds,
+          usageType: input.usageType,
+          query: input.usageQuery,
+          usageContext: input.usageContext,
           agentName: input.agentName,
-          agentId: input.agentId,
           runtime: input.runtime,
-          machineName: input.machineName,
-          machineId: input.machineId,
-          tailnetId: input.tailnetId,
-          tailnetName: input.tailnetName,
-          tailnetDnsName: input.tailnetDnsName,
-          collectorUrl: input.collectorUrl,
           sessionId: input.sessionId,
-          project: input.project,
-          proof: "auto",
+        });
+      } else if (input.action === "health") {
+        result = await requestJson(base, "GET", null, { mode: "health", vaultPath: input.vaultPath });
+      } else if (input.action === "consolidate") {
+        result = await requestJson(base, "POST", {
+          action: "consolidate",
+          vaultPath: input.vaultPath,
+          applyArchives: Boolean(input.applyArchives),
+        });
+      } else if (input.action === "rebuild-index") {
+        result = await requestJson(base, "POST", { action: "rebuild-index", vaultPath: input.vaultPath });
+      } else {
+        result = await requestJson(base, "GET", null, {
+          mode: input.action === "recall" ? "recall" : "answer",
+          q: input.query,
+          limit: input.limit,
+          minScore: input.minScore,
+          scope: input.scope,
+          vaultPath: input.vaultPath,
         });
       }
-      if (input.action === "evolve") {
-        return await requestJson(base, "POST", {
-          action: "evolve",
-          memoryId: input.memoryId,
-          supersedes: input.supersedes,
-          type: input.type,
-          title: input.title,
-          content: input.content,
-          tags: input.tags,
-          source: input.source || "hive-brain cli",
-          cognitiveStage: input.cognitiveStage,
-          evidenceCount: input.evidenceCount,
-          sourceType: input.sourceType,
-          evolutionType: input.evolutionType,
-          evolutionReason: input.evolutionReason,
-          vaultPath: input.vaultPath,
-          agentName: input.agentName,
-          agentId: input.agentId,
-          runtime: input.runtime,
-          machineName: input.machineName,
-          machineId: input.machineId,
-          tailnetId: input.tailnetId,
-          tailnetName: input.tailnetName,
-          tailnetDnsName: input.tailnetDnsName,
-          collectorUrl: input.collectorUrl,
-          sessionId: input.sessionId,
-          project: input.project,
-          proof: "auto",
-        });
-      }
-      return await requestJson(base, "GET", null, {
-        mode: input.action === "recall" ? "recall" : "answer",
-        q: input.query,
-        limit: input.limit,
-        scope: input.scope,
-        vaultPath: input.vaultPath,
-      });
+      result.apiBase = base;
+      await flushPendingWrites(base).catch(() => undefined);
+      return result;
     } catch (error) {
+      // An authoritative application-level rejection (duplicate gate,
+      // validation) must surface, not fall back or try other ports.
+      if (error?.status && error.body && (error.body.blocked || error.status === 400 || error.status === 409)) throw error;
+      if (error?.status) lastHttpError = error;
       lastError = error;
     }
   }
-  throw lastError || new Error("No HivemindOS memory API base could be reached.");
+  throw lastHttpError || lastError || new Error("No HivemindOS memory API base could be reached.");
 }
+
+// --- offline write queue -----------------------------------------------------
+
+function readPendingWrites() {
+  try {
+    const raw = fs.readFileSync(PENDING_WRITES_FILE, "utf8");
+    const cutoff = Date.now() - PENDING_WRITE_TTL_MS;
+    return raw.split("\n").filter(Boolean).map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    }).filter((entry) => entry?.payload && Date.parse(entry.queuedAt || "") > cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function writePendingWrites(entries) {
+  fs.mkdirSync(path.dirname(PENDING_WRITES_FILE), { recursive: true });
+  fs.writeFileSync(PENDING_WRITES_FILE, entries.length ? `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n` : "", "utf8");
+}
+
+function enqueuePendingWrite(payload) {
+  const entries = readPendingWrites();
+  entries.push({ queuedAt: new Date().toISOString(), payload });
+  writePendingWrites(entries);
+  return entries.length;
+}
+
+async function flushPendingWrites(base, { retryBlocked = false } = {}) {
+  const entries = readPendingWrites();
+  if (!entries.length) return { flushed: 0, blocked: 0, remaining: 0, blockedEntries: [] };
+  const remaining = [];
+  let flushed = 0;
+  let blocked = 0;
+  for (const [index, entry] of entries.entries()) {
+    if (flushed >= MAX_PENDING_FLUSH_PER_RUN) {
+      remaining.push(...entries.slice(index));
+      break;
+    }
+    // Entries the app rejected (duplicate gate/validation) are NEVER silently
+    // dropped: they stay in the queue marked blocked until reviewed,
+    // retried with --retry-blocked, or expired by the queue TTL.
+    if (entry.blockedAt && !retryBlocked) {
+      blocked += 1;
+      remaining.push(entry);
+      continue;
+    }
+    try {
+      await requestJson(base, "POST", retryBlocked && entry.blockedAt ? { ...entry.payload, allowDuplicate: true } : entry.payload);
+      flushed += 1;
+    } catch (error) {
+      if (process.env.HIVE_BRAIN_DEBUG) console.error(`flush error via ${base}: ${error?.status ?? ""} ${error?.message}`);
+      if (error?.status && (error.status === 400 || error.status === 409)) {
+        blocked += 1;
+        remaining.push({
+          ...entry,
+          blockedAt: new Date().toISOString(),
+          blockedStatus: error.status,
+          blockedReason: error.body?.blockReason || error.body?.error || error.message,
+        });
+        continue;
+      }
+      remaining.push(entry);
+    }
+  }
+  writePendingWrites(remaining);
+  return {
+    flushed,
+    blocked,
+    remaining: remaining.length,
+    blockedEntries: remaining.filter((entry) => entry.blockedAt),
+  };
+}
+
+// --- local fallback: shared parsing helpers ----------------------------------
 
 function parseFrontmatter(markdown) {
   const match = markdown.match(/^---\n([\s\S]*?)\n---\n?/);
@@ -333,46 +519,8 @@ function compact(value, max = 260) {
   return `${redacted.slice(0, Math.max(0, max - 3)).trim()}...`;
 }
 
-function redactSecrets(text) {
-  return text
-    .replace(/\b(sk|pk|rk|ak)-[A-Za-z0-9]{20,}\b/g, "[REDACTED_API_KEY]")
-    .replace(/Bearer\s+[A-Za-z0-9\-._~+/]{20,}/gi, "Bearer [REDACTED]")
-    .replace(/eyJ[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,}\.[A-Za-z0-9\-_]{10,}/g, "[REDACTED_JWT]")
-    .replace(/-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----[\s\S]+?-----END\s+(RSA\s+)?PRIVATE\s+KEY-----/g, "[REDACTED_PRIVATE_KEY]")
-    .replace(/(password|passwd|secret|api_key|apikey|token)\s*[:=]\s*["']?[A-Za-z0-9!@#$%^&*\-_+]{8,}["']?/gi, "$1=[REDACTED]")
-    .replace(/https?:\/\/100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}(?::\d+)?(?:\/[^\s"'`<>)\]]*)?/g, "[REDACTED_TAILNET_URL]")
-    .replace(/\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2}\b/g, "[REDACTED_TAILNET_IP]");
-}
-
 function words(value) {
-  return String(value || "")
-    .toLowerCase()
-    .split(/[^a-z0-9_-]+/)
-    .filter((word) => word.length > 2 && !LOW_SIGNAL_WORDS.has(word));
-}
-
-function score(record, query) {
-  const queryText = query.trim().toLowerCase();
-  const queryWords = words(query);
-  const haystack = [record.title, record.content, record.type, record.tags?.join(" "), record.source, record.notePath].filter(Boolean).join(" ").toLowerCase();
-  const title = record.title.toLowerCase();
-  const content = record.content.toLowerCase();
-  const matched = new Set();
-  let value = 0;
-  if (queryText && haystack.includes(queryText)) {
-    value += 30;
-    matched.add("exact-query");
-  }
-  for (const word of queryWords) {
-    if (title.includes(word)) { value += 8; matched.add(word); }
-    if ((record.tags || []).some((tag) => tag.includes(word))) { value += 6; matched.add(word); }
-    if (content.includes(word)) { value += 4; matched.add(word); }
-    if ((record.source || "").toLowerCase().includes(word) || record.notePath.toLowerCase().includes(word)) { value += 2; matched.add(word); }
-  }
-  if (record.searchScore) value += Math.min(30, Math.max(0, Math.round(record.searchScore)));
-  value += Math.round((record.confidence || 0.62) * 10);
-  if (record.notePath.startsWith(`${MEMORY_FOLDER}/`)) value += 4;
-  return { score: value, matched: [...matched] };
+  return queryWordsForRecall(value, LOW_SIGNAL_WORDS);
 }
 
 function rel(root, file) {
@@ -384,6 +532,8 @@ function shouldSkip(root, file, isDir) {
   const name = path.basename(file);
   if (EXCLUDE_PARTS.has(name)) return true;
   if (name.startsWith(".")) return true;
+  // Sync-conflict copies are unresolved duplicates, not knowledge.
+  if (name.includes(".sync-conflict-")) return true;
   if (isDir && EXCLUDE_PREFIXES.some((prefix) => prefix.endsWith("/") && (notePath === prefix.slice(0, -1) || notePath.startsWith(prefix)))) return true;
   if (!isDir && EXCLUDE_PREFIXES.some((prefix) => notePath === prefix || notePath.startsWith(prefix))) return true;
   return false;
@@ -507,6 +657,16 @@ function rebuildFullVaultIndex(root) {
 function readFullVaultIndex(root) {
   const file = path.join(root, FULL_VAULT_INDEX_PATH);
   if (!fs.existsSync(file)) return rebuildFullVaultIndex(root);
+  // Staleness guard: notes written after the last rebuild would otherwise be
+  // invisible to indexed recall.
+  if (FULL_VAULT_INDEX_TTL_MS > 0) {
+    try {
+      const st = fs.statSync(file);
+      if (Date.now() - st.mtimeMs > FULL_VAULT_INDEX_TTL_MS) return rebuildFullVaultIndex(root);
+    } catch {
+      return rebuildFullVaultIndex(root);
+    }
+  }
   const records = [];
   for (const line of fs.readFileSync(file, "utf8").split("\n")) {
     if (!line.trim()) continue;
@@ -516,7 +676,8 @@ function readFullVaultIndex(root) {
         parsed.schema === "hivemindos.full-vault-search.v1" &&
         parsed.path &&
         parsed.terms &&
-        parsed.indexedByteLimit === MAX_VAULT_BYTES
+        parsed.indexedByteLimit === MAX_VAULT_BYTES &&
+        !parsed.path.includes(".sync-conflict-")
       ) records.push(parsed);
     } catch {
       // Ignore corrupt generated rows; explicit rebuild repairs the index.
@@ -605,6 +766,45 @@ function searchFullVaultIndex(root, query, limit = 400) {
     .slice(0, limit);
 }
 
+// --- local fallback: typed memory records ------------------------------------
+
+// Retrieval rows older than this stop counting toward the ranking nudge
+// (mirrors the app's usage window).
+const RETRIEVAL_SIGNAL_WINDOW_MS = 45 * 86_400_000;
+
+function readUsageSummaries(root) {
+  const file = path.join(root, RETRIEVALS_PATH);
+  const summary = new Map();
+  let raw = "";
+  try {
+    raw = fs.readFileSync(file, "utf8");
+  } catch {
+    return summary;
+  }
+  const retrievalCutoff = new Date(Date.now() - RETRIEVAL_SIGNAL_WINDOW_MS).toISOString();
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line);
+      if (!row.memoryId) continue;
+      const current = summary.get(row.memoryId) ?? {};
+      if (row.usageType === "final-answer") {
+        current.finalAnswerCount = (current.finalAnswerCount ?? 0) + 1;
+        if (row.timestamp && (!current.lastUsedAt || row.timestamp > current.lastUsedAt)) current.lastUsedAt = row.timestamp;
+      } else {
+        if (!row.timestamp || row.timestamp >= retrievalCutoff) {
+          current.retrievalCount = (current.retrievalCount ?? 0) + 1;
+        }
+        if (row.timestamp && (!current.lastRetrievedAt || row.timestamp > current.lastRetrievedAt)) current.lastRetrievedAt = row.timestamp;
+      }
+      summary.set(row.memoryId, current);
+    } catch {
+      // Ignore corrupt rows.
+    }
+  }
+  return summary;
+}
+
 function recordsFromIndex(root) {
   const file = path.join(root, INDEX_PATH);
   if (!fs.existsSync(file)) return [];
@@ -629,7 +829,15 @@ function recordsFromIndex(root) {
         confidence: Number(entry.confidence || 0.7),
         tags: Array.isArray(entry.tags) ? entry.tags : [],
         metaTags: Array.isArray(entry.metaTags) ? entry.metaTags : [],
+        entities: Array.isArray(entry.entities) ? entry.entities : [],
+        aliases: Array.isArray(entry.aliases) ? entry.aliases : [],
         source: entry.source,
+        project: entry.project,
+        agentName: entry.agentName,
+        agentId: entry.agentId,
+        runtime: entry.runtime,
+        machineName: entry.machineName,
+        machineId: entry.machineId,
         createdAt: entry.createdAt,
         updatedAt: entry.updatedAt,
         notePath: entry.notePath,
@@ -666,6 +874,8 @@ function recordFromMarkdown(root, file, typedOnly = false) {
     confidence: typedOnly ? Number(fields.get("confidence") || 0.7) : 0.62,
     tags: Array.isArray(fields.get("tags")) ? fields.get("tags") : notePath.split("/").slice(0, 3).map((part) => part.toLowerCase()),
     metaTags: Array.isArray(fields.get("metaTags")) ? fields.get("metaTags") : [],
+    entities: Array.isArray(fields.get("entities")) ? fields.get("entities") : [],
+    aliases: Array.isArray(fields.get("aliases")) ? fields.get("aliases") : [],
     source: `Vault note: ${notePath}`,
     createdAt: fields.get("createdAt"),
     updatedAt: fields.get("updatedAt"),
@@ -673,25 +883,132 @@ function recordFromMarkdown(root, file, typedOnly = false) {
   };
 }
 
-function fallbackRecall(input) {
+// --- local fallback: optional semantic augmentation ---------------------------
+
+function embeddingsConfig() {
+  const url = process.env.HIVEMINDOS_EMBEDDINGS_URL?.trim();
+  return {
+    enabled: Boolean(url),
+    url: url || undefined,
+    model: process.env.HIVEMINDOS_EMBEDDINGS_MODEL?.trim() || "text-embedding-3-small",
+    dimensions: Math.max(16, Math.trunc(Number(process.env.HIVEMINDOS_EMBEDDINGS_DIMENSIONS || 256)) || 256),
+    apiKey: process.env.HIVEMINDOS_EMBEDDINGS_API_KEY?.trim() || "",
+  };
+}
+
+function readEmbeddingRows(root) {
+  const rows = new Map();
+  try {
+    const raw = fs.readFileSync(path.join(root, EMBEDDINGS_PATH), "utf8");
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line);
+        if (parsed.schema === "hivemindos.agent-memory-embedding.v1" && parsed.memoryId && Array.isArray(parsed.vector)) {
+          rows.set(parsed.memoryId, parsed.vector);
+        }
+      } catch {
+        // Ignore corrupt rows.
+      }
+    }
+  } catch {
+    // Missing file -> no semantic layer locally.
+  }
+  return rows;
+}
+
+async function embedQuery(query) {
+  const config = embeddingsConfig();
+  if (!config.enabled || typeof fetch !== "function") return null;
+  const endpoint = /\/embeddings\/?$/.test(config.url) ? config.url : `${config.url.replace(/\/+$/, "")}/embeddings`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3500);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        ...(config.apiKey ? { authorization: `Bearer ${config.apiKey}` } : {}),
+      },
+      body: JSON.stringify({ model: config.model, input: [query.slice(0, 6000)], dimensions: config.dimensions }),
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const vector = payload?.data?.[0]?.embedding;
+    return Array.isArray(vector) ? vector : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function cosineSimilarity(left, right) {
+  const length = Math.min(left.length, right.length);
+  if (!length) return 0;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < length; index += 1) {
+    dot += left[index] * right[index];
+    leftNorm += left[index] * left[index];
+    rightNorm += right[index] * right[index];
+  }
+  if (!leftNorm || !rightNorm) return 0;
+  return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+}
+
+async function semanticScores(root, query) {
+  const scores = new Map();
+  if (!embeddingsConfig().enabled || !query.trim()) return scores;
+  const rows = readEmbeddingRows(root);
+  if (!rows.size) return scores;
+  const queryVector = await embedQuery(query);
+  if (!queryVector) return scores;
+  for (const [memoryId, vector] of rows) {
+    const similarity = cosineSimilarity(queryVector, vector);
+    if (similarity > 0) scores.set(memoryId, Math.max(0, Math.min(1, similarity)));
+  }
+  return scores;
+}
+
+// --- local fallback: recall --------------------------------------------------
+
+async function fallbackRecall(input) {
   const root = path.resolve(input.vaultPath);
   if (!fs.existsSync(root)) throw new Error(`Vault path not found: ${root}`);
   const limit = Math.min(Math.max(Math.trunc(Number(input.limit || 5)), 1), 50);
   const scope = String(input.scope || "tiered").toLowerCase();
+  const { query: effectiveQuery, derived } = extractRecallQuery(input.query);
+  const scoringInput = { query: effectiveQuery, type: input.type };
   let memoryRecords = recordsFromIndex(root);
   if (!memoryRecords.length) {
     const folder = path.join(root, MEMORY_FOLDER);
     if (fs.existsSync(folder)) memoryRecords = walk(folder).map((file) => recordFromMarkdown(root, file, true)).filter(Boolean);
   }
-  const activeMemoryRecords = memoryRecords.filter((record) => !record.status || record.status === "active");
-  const memoryHits = attachEvolutionChains(rank(activeMemoryRecords, input.query, limit), memoryRecords);
-  const strong = memoryHits[0] && (memoryHits[0].score >= 32 || (memoryHits[0].score >= 24 && memoryHits[0].confidence >= 0.85 && memoryHits[0].matched.length >= 2));
-  if (scope === "agent-memory" || (scope !== "full-vault" && strong)) {
-    return { ok: true, source: "local-fallback", recallScope: "agent-memory", augmentedFromVault: false, hits: memoryHits };
+  const usage = readUsageSummaries(root);
+  for (const record of memoryRecords) {
+    const summary = usage.get(record.id);
+    if (summary) record.usage = summary;
+  }
+  const semantic = await semanticScores(root, effectiveQuery).catch(() => new Map());
+  const activeMemoryRecords = memoryRecords.filter((record) => recordVisibleForRecall(record, scoringInput));
+  const memoryHits = attachEvolutionChains(rank(activeMemoryRecords, scoringInput, limit, semantic), memoryRecords);
+  if (scope === "agent-memory" || (scope !== "full-vault" && shouldUseDistilledMemoryOnly(scoringInput, memoryHits))) {
+    return {
+      ok: true,
+      source: "local-fallback",
+      recallScope: "agent-memory",
+      augmentedFromVault: false,
+      query: effectiveQuery,
+      queryDerived: derived || undefined,
+      hits: memoryHits,
+    };
   }
   const byPath = new Map();
-  const indexedHits = input.query?.trim() ? searchFullVaultIndex(root, input.query, 400) : [];
-  const fullVaultFiles = indexedHits.length ? indexedHits.map((hit) => path.join(root, hit.path)) : searchVaultFiles(root, input.query) ?? walk(root);
+  const indexedHits = effectiveQuery.trim() ? searchFullVaultIndex(root, effectiveQuery, 400) : [];
+  const fullVaultFiles = indexedHits.length ? indexedHits.map((hit) => path.join(root, hit.path)) : searchVaultFiles(root, effectiveQuery) ?? walk(root);
   const scoreByPath = new Map(indexedHits.map((hit) => [hit.path, hit.searchScore]));
   const collectionByPath = new Map(indexedHits.map((hit) => [hit.path, hit.collection]));
   for (const file of fullVaultFiles) {
@@ -716,7 +1033,9 @@ function fallbackRecall(input) {
     recallScope: "full-vault",
     augmentedFromVault: scope !== "full-vault",
     memoryHitCount: memoryHits.length,
-    hits: attachEvolutionChains(rank([...byPath.values()], input.query, limit), memoryRecords),
+    query: effectiveQuery,
+    queryDerived: derived || undefined,
+    hits: attachEvolutionChains(rank([...byPath.values()], scoringInput, limit, semantic), memoryRecords),
   };
 }
 
@@ -755,18 +1074,84 @@ function attachEvolutionChains(hits, allMemoryRecords) {
   });
 }
 
-function rank(records, query, limit) {
+function rank(records, scoringInput, limit, semantic) {
+  const lexicalScores = bm25ScoresForRecords(records, scoringInput);
   return records
     .map((record) => {
-      const scored = score(record, query);
-      return { ...record, score: scored.score, matched: scored.matched, excerpt: compact(record.content) };
+      const scored = scoreAgentMemory(record, scoringInput, lexicalScores.get(record.id), semantic?.get(record.id));
+      return { ...record, score: scored.score, matched: scored.matched, scoreDetails: scored.scoreDetails, excerpt: compact(record.content) };
     })
-    .filter((hit) => !query.trim() || hit.matched.length)
+    .filter((hit) => !(scoringInput.query ?? "").trim() || hit.matched.length)
     .sort((left, right) => right.score - left.score)
     .slice(0, limit);
 }
 
-function formatResult(result, action) {
+// --- local fallback: usage + health ------------------------------------------
+
+function fallbackRecordUsage(input) {
+  const root = path.resolve(input.vaultPath);
+  const memoryIds = [...new Set(input.memoryIds.map((id) => id.trim()).filter(Boolean))].slice(0, 50);
+  if (!memoryIds.length) throw new Error("record-usage requires --memory-ids.");
+  const timestamp = new Date().toISOString();
+  const query = input.usageQuery ? redactSecrets(String(input.usageQuery).replace(/\s+/g, " ").trim()).slice(0, 200) : undefined;
+  const rows = memoryIds.map((memoryId) => ({
+    timestamp,
+    schema: "hivemindos.agent-memory-retrieval.v1",
+    memoryId,
+    usageType: input.usageType === "final-answer" ? "final-answer" : "retrieved",
+    query,
+    usageContext: input.usageContext || undefined,
+    agentName: input.agentName || undefined,
+    runtime: input.runtime || undefined,
+    sessionId: input.sessionId || undefined,
+  }));
+  const file = path.join(root, RETRIEVALS_PATH);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.appendFileSync(file, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+  return { ok: true, source: "local-fallback", recorded: rows.length };
+}
+
+function fileStats(root, relPath) {
+  const file = path.join(root, relPath);
+  try {
+    const st = fs.statSync(file);
+    const lines = fs.readFileSync(file, "utf8").split("\n").filter(Boolean).length;
+    return { exists: true, bytes: st.size, lines, ageMs: Math.max(0, Date.now() - st.mtimeMs) };
+  } catch {
+    return { exists: false, bytes: 0, lines: 0 };
+  }
+}
+
+function fallbackHealth(input) {
+  const root = path.resolve(input.vaultPath);
+  const records = recordsFromIndex(root);
+  const byType = {};
+  const byStatus = {};
+  for (const record of records) {
+    byType[record.type] = (byType[record.type] ?? 0) + 1;
+    byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
+  }
+  const indexStats = fileStats(root, INDEX_PATH);
+  return {
+    ok: true,
+    source: "local-fallback",
+    generatedAt: new Date().toISOString(),
+    note: "Local health is a subset; run against the app API for duplicate pressure, embeddings coverage, and proof status.",
+    memories: { total: records.length, byType, byStatus },
+    indexes: {
+      memoryIndex: { ...indexStats, uniqueRecords: records.length, bloatFactor: records.length ? Math.round((indexStats.lines / records.length) * 100) / 100 : 0 },
+      entityIndex: fileStats(root, "Operations/Brain Services/Agent Memory Entity Index.jsonl"),
+      retrievals: fileStats(root, RETRIEVALS_PATH),
+      fullVaultIndex: fileStats(root, FULL_VAULT_INDEX_PATH),
+      embeddings: fileStats(root, EMBEDDINGS_PATH),
+    },
+    pendingWrites: readPendingWrites().length,
+  };
+}
+
+// --- output formatting ---------------------------------------------------------
+
+function formatResult(result, action, input) {
   if (action === "recall") {
     return result.hits.map((hit, index) => {
       const chain = formatEvolutionChain(hit);
@@ -774,13 +1159,15 @@ function formatResult(result, action) {
     }).join("\n\n")
       || "No matching shared-brain memories or vault notes were found.";
   }
+  const minScore = Number.isFinite(Number(input?.minScore)) ? Number(input.minScore) : AGENT_MEMORY_ANSWER_MIN_SCORE;
+  const hits = (result.hits || []).filter((hit) => result.source !== "local-fallback" || !minScore || hit.score >= minScore);
   return [
-    `Recall scope: ${result.recallScope || "unknown"}${result.augmentedFromVault ? " (augmented from full vault)" : ""}`,
-    ...(result.hits || []).slice(0, 6).map((hit, index) => {
+    `Recall scope: ${result.recallScope || "unknown"}${result.augmentedFromVault ? " (augmented from full vault)" : ""}${result.queryDerived ? "; query condensed from long prompt" : ""}`,
+    ...(hits.slice(0, 6).map((hit, index) => {
       const evolved = hit.evolutionChain?.length > 1 ? `, evolved ${hit.evolutionChain.length} versions` : "";
       const chain = formatEvolutionChain(hit);
       return `${index + 1}. ${hit.title} (${hit.type || "context"}, score ${hit.score}${evolved})\n   Path: ${hit.notePath}\n   ${hit.excerpt}${chain ? `\n${chain}` : ""}`;
-    }),
+    })),
   ].join("\n") || "No matching shared-brain memories or vault notes were found.";
 }
 
@@ -797,37 +1184,155 @@ function formatEvolutionChain(hit) {
   ].join("\n");
 }
 
+function formatConflicts(conflicts) {
+  return (conflicts || []).slice(0, 3).map((hit, index) =>
+    `   ${index + 1}. ${hit.title} (${hit.id}, score ${hit.score})\n      ${compact(hit.content || hit.excerpt || "", 180)}`).join("\n");
+}
+
+function applyAnswerFloor(result, input) {
+  // API responses already floor answer hits; local fallback floors here.
+  if (result.source !== "local-fallback") return result;
+  if (!(input.query ?? "").trim()) return result;
+  const minScore = Number.isFinite(Number(input.minScore)) ? Math.max(0, Number(input.minScore)) : AGENT_MEMORY_ANSWER_MIN_SCORE;
+  if (!minScore) return result;
+  // Mirrors answerFromAgentMemory: informational queries (4+ meaningful terms)
+  // need 2+ meaningful matches or a strong signal, not one incidental word.
+  const requireMultiMatch = queryWordsForRecall(result.query ?? "").length >= 4;
+  const hits = result.hits.filter((hit) => {
+    if (hit.score < minScore) return false;
+    if (!requireMultiMatch) return true;
+    return meaningfulMatchCount(hit.matched) >= 2 || hit.matched.includes("exact-query") || hit.matched.includes("semantic");
+  });
+  return { ...result, hits, minScore, droppedBelowMinScore: result.hits.length - hits.length };
+}
+
 async function main() {
   const input = parseArgs(process.argv);
-  if (input.help || !["answer", "recall", "remember", "evolve"].includes(input.action)) {
+  const actions = ["answer", "recall", "remember", "evolve", "record-usage", "health", "consolidate", "rebuild-index", "flush-pending"];
+  if (input.help || !actions.includes(input.action)) {
     usage();
     process.exit(input.help ? 0 : 2);
   }
-  if (!["remember", "evolve"].includes(input.action) && !input.query) throw new Error("A query is required.");
+  if (["answer", "recall"].includes(input.action) && !input.query) throw new Error("A query is required.");
   if (input.action === "remember" && !input.content) throw new Error("remember requires --content.");
   if (input.action === "evolve" && !input.content) throw new Error("evolve requires --content.");
   if (input.action === "evolve" && !input.memoryId && !input.supersedes?.length) throw new Error("evolve requires --memory-id or --supersedes.");
+  if (input.action === "record-usage" && !input.memoryIds.length) throw new Error("record-usage requires --memory-ids.");
+
+  if (input.action === "flush-pending") {
+    let flushedTotal = 0;
+    let remaining = readPendingWrites().length;
+    let blockedEntries = readPendingWrites().filter((entry) => entry.blockedAt);
+    if (remaining) {
+      for (const base of candidateApiBases()) {
+        try {
+          const result = await flushPendingWrites(base, { retryBlocked: Boolean(input.retryBlocked) });
+          flushedTotal += result.flushed;
+          remaining = result.remaining;
+          blockedEntries = result.blockedEntries;
+          if (!remaining) break;
+          if (remaining === blockedEntries.length && !input.retryBlocked) break;
+        } catch {
+          // Try the next base.
+        }
+      }
+    }
+    console.log(`Pending shared-brain writes flushed: ${flushedTotal}; remaining: ${remaining}${blockedEntries.length ? ` (${blockedEntries.length} blocked)` : ""}.`);
+    for (const entry of blockedEntries.slice(0, 5)) {
+      console.log(`- BLOCKED ${entry.payload?.action ?? "write"} "${entry.payload?.title ?? ""}": ${compact(entry.blockedReason ?? "rejected", 220)}`);
+    }
+    if (blockedEntries.length) console.log("Review each blocked entry: evolve the conflicting memory, or re-deliver with: hive-brain flush-pending --retry-blocked (sends allowDuplicate).");
+    return;
+  }
+
   let result;
   try {
     result = await callApi(input);
     result.source = result.source || "api";
   } catch (error) {
-    if (input.action === "remember" || input.action === "evolve") throw error;
-    result = fallbackRecall(input);
-    result.apiError = error instanceof Error ? error.message : String(error);
+    // Authoritative app rejection (duplicate gate / validation): surface it.
+    if (error?.status && error.body) {
+      if (error.body.blocked) {
+        console.error(`hive-brain: memory write blocked as a suspected duplicate.`);
+        console.error(`Reason: ${error.body.blockReason || "similar active memory exists."}`);
+        if (error.body.possibleConflicts?.length) {
+          console.error("Conflicting memories:");
+          console.error(formatConflicts(error.body.possibleConflicts));
+        }
+        console.error("Evolve the existing memory (hive-brain evolve --memory-id <id> --content ... --reason ...) or retry with --allow-duplicate.");
+        process.exit(3);
+      }
+      throw error;
+    }
+    if (input.action === "remember" || input.action === "evolve") {
+      if (input.noQueue) throw error;
+      // The app API is unreachable: queue the write for durable delivery
+      // instead of losing the memory.
+      const pending = enqueuePendingWrite(writePayload(input, input.action));
+      console.log(`HivemindOS memory API unreachable; queued ${input.action} for later delivery (${pending} pending in ${PENDING_WRITES_FILE}).`);
+      console.log("It will flush automatically on the next successful API contact, or run: hive-brain flush-pending");
+      return;
+    }
+    if (input.action === "record-usage") {
+      result = fallbackRecordUsage(applyProvenanceDefaults(input));
+    } else if (input.action === "health") {
+      result = fallbackHealth(input);
+    } else if (input.action === "consolidate" || input.action === "rebuild-index") {
+      throw new Error(`${input.action} needs the HivemindOS app API (start the app or set HIVEMINDOS_BRAIN_URL). ${error instanceof Error ? error.message : ""}`.trim());
+    } else {
+      result = await fallbackRecall(input);
+      result.apiError = error instanceof Error ? error.message : String(error);
+    }
   }
+
+  if (input.action === "answer") result = applyAnswerFloor(result, input);
+
   if (input.json) {
     console.log(JSON.stringify(result, null, 2));
-  } else if (input.action === "remember") {
+    return;
+  }
+  if (input.action === "remember") {
     console.log(`Remembered: ${result.record?.title || input.title || compact(input.content, 80)}`);
     if (result.record?.notePath) console.log(`Path: ${result.record.notePath}`);
-  } else if (input.action === "evolve") {
+    if (result.sensitiveWarnings?.length) console.log(`Warnings: ${result.sensitiveWarnings.join("; ")}`);
+    if (result.possibleConflicts?.length) {
+      console.log("Similar existing memories (consider evolve next time):");
+      console.log(formatConflicts(result.possibleConflicts));
+    }
+    return;
+  }
+  if (input.action === "evolve") {
     console.log(`Evolved: ${result.record?.title || input.title || compact(input.content, 80)}`);
     if (result.record?.notePath) console.log(`Path: ${result.record.notePath}`);
     if (result.superseded?.length) console.log(`Superseded: ${result.superseded.map((record) => record.id).join(", ")}`);
-  } else {
-    console.log(formatResult(result, input.action));
+    return;
   }
+  if (input.action === "record-usage") {
+    console.log(`Recorded ${result.recorded ?? 0} usage row(s) (${input.usageType || "retrieved"}).`);
+    return;
+  }
+  if (input.action === "health") {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (input.action === "consolidate") {
+    console.log(`Consolidation report for ${result.vaultPath}:`);
+    console.log(`- Active memories: ${result.active}/${result.scanned}`);
+    console.log(`- Near-duplicate groups: ${result.duplicateGroups?.length ?? 0}`);
+    for (const group of (result.duplicateGroups || []).slice(0, 8)) {
+      console.log(`  * [${group.type}] ${group.size}x "${group.canonicalTitle}"`);
+      console.log(`    ${group.evolveHint}`);
+    }
+    console.log(`- Stale archive candidates: ${result.archiveCandidates?.length ?? 0}${result.archivedCount ? ` (archived ${result.archivedCount})` : " (report only; use --apply-archives)"}`);
+    console.log(`- Compiled-wiki candidates: ${(result.wikiCandidates || []).map((candidate) => `${candidate.entity} (${candidate.memoryCount})`).join(", ") || "none"}`);
+    if (result.embeddings) console.log(`- Embeddings: ${JSON.stringify(result.embeddings)}`);
+    return;
+  }
+  if (input.action === "rebuild-index") {
+    console.log(`Rebuilt memory index: ${result.scanned} memories, full-vault ${result.fullVaultIndex ? `${result.fullVaultIndex.indexed} notes` : "skipped"}.`);
+    return;
+  }
+  console.log(formatResult(result, input.action, input));
 }
 
 main().catch((error) => {

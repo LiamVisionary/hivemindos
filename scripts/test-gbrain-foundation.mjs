@@ -4,8 +4,10 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), "utf8");
+// Whitespace-normalized so formatter line-wrapping can't fail a semantic token.
+const squish = (value) => value.replace(/\s+/g, " ");
 const has = (path, needle, label = needle) => {
-  assert.ok(read(path).includes(needle), `${path} should contain ${label}`);
+  assert.ok(squish(read(path)).includes(squish(needle)), `${path} should contain ${label}`);
 };
 
 const agentRuntime = read("src/lib/types/agent-runtime.ts");
@@ -25,7 +27,7 @@ for (const token of [
   'searchMode: "balanced"',
   'enabled: false',
 ]) {
-  assert.ok(agentRuntime.includes(token), `agent runtime default missing ${token}`);
+  assert.ok(squish(agentRuntime).includes(squish(token)), `agent runtime default missing ${token}`);
 }
 
 const storage = read("src/features/dashboard/dashboard-storage.ts");

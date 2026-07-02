@@ -6,6 +6,7 @@
   "type": "module",
   "packageManager": "pnpm@8.6.12",
   "scripts": {
+    "test": "node scripts/test-gate.mjs",
     "dev": "node scripts/dev-server.mjs",
     "hive:update": "bash scripts/update-hivemindos.sh",
     "build": "scripts/run-with-memory-limit.sh --limit-mb 5000 --timeout-seconds 300 -- next build --webpack",
@@ -98,6 +99,8 @@
     "test:agent-memory-evolution": "node scripts/benchmark-agent-memory-evolution.mjs",
     "test:agent-memory-upgrade": "node scripts/test-agent-memory-upgrade.mjs",
     "test:agent-memory-api": "node scripts/test-agent-memory-api-integration.mjs",
+    "test:hive-brain-hardening": "node scripts/test-hive-brain-memory-hardening.mjs",
+    "test:hive-brain-parity": "node scripts/test-hive-brain-scoring-parity.mjs",
     "test:neo4j-brain-service": "node scripts/test-neo4j-brain-service.mjs",
     "test:neo4j-api": "node scripts/test-neo4j-api-integration.mjs",
     "test:okf-export": "node scripts/test-okf-export.mjs",

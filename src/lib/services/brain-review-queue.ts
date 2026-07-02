@@ -253,6 +253,19 @@ export async function applyBrainReviewProposal(
     const memory = proposal.kind === "memory"
       ? await rememberAgentMemory(rememberInputForProposal(proposal, memoryInput))
       : await evolveAgentMemory(evolveInputForProposal(proposal, memoryInput));
+    if (!memory.record) {
+      // Duplicate gate: surface the evolve hint to the reviewer instead of
+      // silently writing a sibling of an existing memory.
+      return {
+        applied: false,
+        action: preview.action,
+        reason: "blocked" in memory && memory.blockReason ? memory.blockReason : "Memory write was blocked as a suspected duplicate.",
+        preview,
+        proposal,
+        file: queue,
+        memory,
+      };
+    }
     const now = new Date().toISOString();
     const updated: BrainReviewProposal = {
       ...proposal,

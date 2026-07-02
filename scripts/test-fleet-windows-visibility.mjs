@@ -124,25 +124,19 @@ assert.equal(isDesktopMachineOs(undefined), false);
 
 // --- Drift guard: this exact Windows/Linux fix was silently dropped once by a
 // branch merge (the released v0.2.14 route fix in 2c8b5838 was reverted when
-// merge 99fe4c1e integrated the in-flight branch). Fail loudly if any of the
-// route-level Windows/Linux+self clauses disappears again. ---
+// merge 99fe4c1e integrated the in-flight branch). Visibility is now
+// single-sourced: the routes must filter through the real isVisibleFleetMachine
+// (whose Windows/Linux/self behavior is asserted on the shipped module above).
+// Fail loudly if a route stops routing through it again. ---
 function assertRouteKeepsDesktops(relPath, label) {
   const text = readFileSync(new URL(relPath, import.meta.url), "utf8");
   assert.ok(
-    /function isDesktopDevice/.test(text),
-    `${label}: isDesktopDevice helper must exist`,
+    /import \{[^}]*isVisibleFleetMachine[^}]*\} from "@\/features\/fleet\/fleet-identity"/.test(text),
+    `${label}: must import isVisibleFleetMachine from fleet-identity (single-source visibility)`,
   );
   assert.ok(
-    /isDesktopDevice\(device\)/.test(text),
-    `${label}: dedupeDevices must keep Windows/Linux desktops`,
-  );
-  assert.ok(
-    /device\.self\s*\|\|/.test(text),
-    `${label}: dedupeDevices must keep the self device`,
-  );
-  assert.ok(
-    /win32/.test(text),
-    `${label}: isDesktopDevice must match the win32 process.platform spelling`,
+    /\.filter\(isVisibleFleetMachine\)/.test(text),
+    `${label}: dedupeDevices must filter through isVisibleFleetMachine (keeps self + Windows/Linux)`,
   );
 }
 assertRouteKeepsDesktops(

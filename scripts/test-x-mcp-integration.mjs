@@ -89,13 +89,23 @@ assert.match(ui, /"x-docs": \{ transport: "http"/);
 
 const xPanel = readFileSync("src/features/integrations/XAccountMcpPanel.tsx", "utf8");
 assert.match(xPanel, /X Account MCP/);
+assert.match(xPanel, /x-method-grid/);
+assert.match(xPanel, /MethodCard/);
 assert.match(xPanel, /Enable for all agents/);
 assert.match(xPanel, /Managed credits/);
+assert.match(xPanel, /Bring your own X app/);
+assert.match(xPanel, /Runtime reach/);
 assert.match(xPanel, /Connect managed X account/);
 assert.match(xPanel, /Credits to charge/);
 assert.match(xPanel, /managedGateway/);
 assert.match(xPanel, /X_MCP_CLIENT_ID/);
 assert.match(xPanel, /X_MCP_CLIENT_SECRET/);
+
+const integrationsCss = readFileSync("src/features/integrations/integrations-redesign.css", "utf8");
+assert.match(integrationsCss, /\.fr-root\.ni-embedded/);
+assert.match(integrationsCss, /overflow-y:\s*auto/);
+assert.match(integrationsCss, /\.x-method-grid/);
+assert.match(integrationsCss, /\.x-method-panel/);
 
 const integrationsPage = readFileSync("src/app/integrations/page.tsx", "utf8");
 assert.match(integrationsPage, /params\.set\("view", "integrations"\)/);

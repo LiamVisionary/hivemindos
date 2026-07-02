@@ -1,13 +1,54 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, ElementType, SetStateAction } from "react";
+import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
+import type { BrainSkillInventory, BrainSkillProviderId, BrainSkillProviderInventory, BrainSkillSummary, HermesUpdateSkillLike } from "@/features/dashboard/dashboard-types";
 import styles from "./BrainSkillsPanel.module.css";
 
-const skillsClass = (...classes) => classes.map((className) => styles[className]).filter(Boolean).join(" ");
+// Non-string entries are falsy toggles; styles[falsy] is undefined and filtered out.
+const skillsClass = (...classes: Array<string | false | null | undefined>) => classes.map((className) => styles[className as string]).filter(Boolean).join(" ");
 
-export function BrainSkillsPanel(props: any) {
+type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
+type IconComponent = ElementType<{ "aria-hidden"?: boolean | "true" | "false"; className?: string }>;
+
+type BrainSkillsPanelProps = {
+  Button: ElementType;
+  Check: IconComponent;
+  Download: IconComponent;
+  LoaderCircle: IconComponent;
+  RefreshCcw: IconComponent;
+  Repeat2: IconComponent;
+  Search: IconComponent;
+  Sparkles: IconComponent;
+  brainSkillAeonSyncing: boolean;
+  brainSkillImportAllDescription: string;
+  brainSkillImportAllLabel: string;
+  brainSkillImportProvider: string;
+  brainSkillImportSuccess: string;
+  brainSkillImportableCount: number;
+  brainSkills: BrainSkillInventory | null;
+  brainSkillsLoading: boolean;
+  brainSkillsStatus: string;
+  hermesUpdateRequired: boolean;
+  hermesUpdateRequiredDetail: string;
+  importBrainSkills: (provider: BrainSkillProviderId | "all") => unknown;
+  openSkillBrowser: () => void;
+  providerSkillInventories: BrainSkillProviderInventory[];
+  providerSkillSummary: string;
+  refreshBrainSkills: () => unknown;
+  setSkillBrowserSearch: Dispatch<SetStateAction<string>>;
+  sharedBrainSkills: BrainSkillSummary[];
+  sharedVault: SharedVaultConfig;
+  skillBrowserSearch: string;
+  skillRequiresHermesUpdate: (skill: HermesUpdateSkillLike, hermesUpdateRequired: boolean) => boolean;
+  syncBrainSkillsToAeon: () => unknown;
+  updateAllSkillAutoSync: (enabled: boolean) => unknown;
+  updateSkillAutoSync: (providerId: BrainSkillProviderId, patch: Partial<SharedVaultConfig["skillAutoSync"][string]>) => unknown;
+  vaultClass: ClassNameBuilder;
+};
+
+export function BrainSkillsPanel(props: BrainSkillsPanelProps) {
   const {
     Button,
     Check,
@@ -46,7 +87,7 @@ export function BrainSkillsPanel(props: any) {
   const autoRefreshRef = useRef(false);
   const localSharedLoadingRef = useRef(false);
   const [catalogView, setCatalogView] = useState("available");
-  const [localSharedInventory, setLocalSharedInventory] = useState<any | null>(null);
+  const [localSharedInventory, setLocalSharedInventory] = useState<BrainSkillInventory | null>(null);
   const [localSharedLoading, setLocalSharedLoading] = useState(false);
   const skillSearchQuery = (skillBrowserSearch ?? "").trim().toLowerCase();
   const hasSkillInventory = useMemo(() => {
@@ -91,7 +132,8 @@ export function BrainSkillsPanel(props: any) {
   const localSharedCount = localSharedInventory?.totals?.shared ?? localSharedInventory?.shared?.length ?? 0;
   const effectiveBrainSkills = {
     ...(brainSkills ?? localSharedInventory ?? {}),
-    shared: (brainSkills?.shared?.length ?? 0) ? brainSkills.shared : (localSharedInventory?.shared ?? brainSkills?.shared ?? []),
+    // brainSkills! is guarded by the length check just before it.
+    shared: (brainSkills?.shared?.length ?? 0) ? brainSkills!.shared : (localSharedInventory?.shared ?? brainSkills?.shared ?? []),
     totals: {
       ...(brainSkills?.totals ?? localSharedInventory?.totals ?? {}),
       shared: Math.max(brainSkills?.totals?.shared ?? 0, brainSkills?.shared?.length ?? 0, localSharedCount),

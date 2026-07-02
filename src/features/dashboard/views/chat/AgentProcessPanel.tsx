@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import {
@@ -7,6 +5,14 @@ import {
   MiroSharkProcessCard,
 } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
 import { Glyph, ICON } from "@/features/dashboard/views/chat/exchange/primitives";
+
+export type ProcessEvent = {
+  at?: number;
+  label?: string;
+  detail?: string;
+  status?: string;
+  runId?: string;
+};
 
 const PROCESS_TOOL_META: Record<string, { icon: string }> = {
   bash: { icon: "terminal" },
@@ -38,15 +44,17 @@ const TOOL_GLYPH: Record<string, string | readonly string[]> = {
   terminal: ["M4 5h16v14H4z", "M7.5 9.5l3 2.5-3 2.5", "M13 15h4"],
 };
 
-export function normalizeProcessEvents(value: any) {
-  if (Array.isArray(value)) return value;
-  if (Array.isArray(value?.events)) return value.events;
-  if (Array.isArray(value?.steps)) return value.steps;
+export function normalizeProcessEvents(value: unknown): ProcessEvent[] {
+  // External boundary: process events arrive as untyped JSON from runtime/session payloads.
+  const source = value as ProcessEvent[] | { events?: ProcessEvent[]; steps?: ProcessEvent[] } | null | undefined;
+  if (Array.isArray(source)) return source;
+  if (Array.isArray(source?.events)) return source.events;
+  if (Array.isArray(source?.steps)) return source.steps;
   return [];
 }
 
-export function mergeProcessEvents(first: any[] = [], second: any[] = []) {
-  const output: any[] = [];
+export function mergeProcessEvents(first: ProcessEvent[] = [], second: ProcessEvent[] = []) {
+  const output: ProcessEvent[] = [];
   const indexByKey = new Map<string, number>();
   for (const event of [...first, ...second]) {
     if (!event) continue;
@@ -62,7 +70,7 @@ export function mergeProcessEvents(first: any[] = [], second: any[] = []) {
   return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
 }
 
-function processDisplayEvents(events: any[] = []) {
+function processDisplayEvents(events: ProcessEvent[] = []) {
   return events.filter((event) => {
     const label = String(event?.label ?? "").trim();
     const detail = String(event?.detail ?? "").trim();
@@ -72,7 +80,7 @@ function processDisplayEvents(events: any[] = []) {
   });
 }
 
-export function processEventsAreActive(events: any[] = []) {
+export function processEventsAreActive(events: ProcessEvent[] = []) {
   const visibleEvents = processDisplayEvents(events);
   if (!visibleEvents.length) return false;
   const lastEvent = visibleEvents[visibleEvents.length - 1];
@@ -82,7 +90,7 @@ export function processEventsAreActive(events: any[] = []) {
   return lastStatus !== "completed" && lastStatus !== "failed";
 }
 
-function processToolKey(event: any) {
+function processToolKey(event: ProcessEvent) {
   const text = `${event?.label ?? ""} ${event?.detail ?? ""}`.toLowerCase();
   if (/error|failed|interrupted|timed out/.test(text)) return "error";
   if (/git|commit|branch|origin\//.test(text)) return "git";
@@ -100,7 +108,7 @@ function processGlyph(key: string) {
   return TOOL_GLYPH[key] ?? TOOL_GLYPH.activity;
 }
 
-function processFileTarget(event: any) {
+function processFileTarget(event: ProcessEvent) {
   const detail = String(event?.detail ?? "");
   const label = String(event?.label ?? "");
   const haystack = `${label}\n${detail}`;
@@ -112,19 +120,19 @@ function processFileTarget(event: any) {
   return target ? target.split(/[)\],]/)[0].replace(/^["'`]+|["'`]+$/g, "") : "";
 }
 
-function processDisplayLabel(event: any) {
+function processDisplayLabel(event: ProcessEvent) {
   const label = String(event?.label ?? "Runtime event").trim();
   if (/tool output/i.test(label)) return "Tool output";
   return label;
 }
 
-function processStatusLabel(event: any) {
+function processStatusLabel(event: ProcessEvent) {
   const status = String(event?.status ?? "").trim();
   if (!status) return "";
   return status.replace(/[-_]+/g, " ");
 }
 
-function processTone(event: any, active: boolean) {
+function processTone(event: ProcessEvent, active: boolean) {
   const text = `${event?.label ?? ""} ${event?.detail ?? ""} ${event?.status ?? ""}`.toLowerCase();
   if (/\b(error|failed|failure|interrupted|timed out|cancelled|canceled)\b/.test(text)) return "danger";
   if (active) return "live";
@@ -132,7 +140,7 @@ function processTone(event: any, active: boolean) {
   return "default";
 }
 
-function splitProcessDetail(event: any) {
+function splitProcessDetail(event: ProcessEvent) {
   const detail = String(event?.detail ?? "").trim();
   if (!detail) return { primary: "", result: "" };
   const parts = detail.split(" · ");
@@ -159,7 +167,7 @@ function processTimeLabel(value: unknown) {
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export function AgentProcessPanel(props: any) {
+export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEvent[] }) {
   const { active = false, events = [] } = props;
   const visibleEvents = processDisplayEvents(events);
   const latestActive = active && processEventsAreActive(visibleEvents);
@@ -189,7 +197,7 @@ export function AgentProcessPanel(props: any) {
         </div>
       ) : null}
       <div className="fr-process-list fr-scroll" data-many={many ? "true" : undefined}>
-        {visibleEvents.map((event: any, index: number) => {
+        {visibleEvents.map((event, index) => {
           const toolKey = processToolKey(event);
           const meta = PROCESS_TOOL_META[toolKey] ?? PROCESS_TOOL_META.unknown;
           const isActive = index === visibleEvents.length - 1 && latestActive;

@@ -44,7 +44,11 @@
   "exclude": [
     "node_modules",
     "src-tauri/resources",
+    "src-tauri/target",
     "vendor",
-    "workers"
+    "workers",
+    "promo-videos",
+    "remotion",
+    ".evo"
   ]
 }

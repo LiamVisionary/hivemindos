@@ -19,10 +19,22 @@ const VAULT_EXCLUDE_PREFIXES = [
   "Operations/Brain Services/Agent Memory Entity Index.jsonl",
   "Operations/Brain Services/Agent Memory Retrievals.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
+  "Operations/Brain Services/Agent Memory Embeddings.jsonl",
   FULL_VAULT_SEARCH_INDEX_PATH,
   "Operations/Vault Migrations/",
   "Archive/",
 ];
+// An existing index older than this is rebuilt before answering, so notes
+// written after the last rebuild stop being invisible to indexed recall.
+// Override with HIVEMINDOS_FULL_VAULT_INDEX_TTL_MS (0 disables the check).
+const DEFAULT_INDEX_TTL_MS = 6 * 60 * 60 * 1000;
+
+function indexTtlMs() {
+  const raw = process.env.HIVEMINDOS_FULL_VAULT_INDEX_TTL_MS?.trim();
+  if (raw === undefined || raw === "") return DEFAULT_INDEX_TTL_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_INDEX_TTL_MS;
+}
 const STOP_WORDS = new Set([
   "about", "after", "again", "agent", "agents", "also", "and", "are", "brain", "but", "can", "codex", "for", "from",
   "has", "have", "hive", "hivemindos", "into", "its", "memory", "note", "notes", "not", "our", "shared", "that",
@@ -101,6 +113,8 @@ function shouldSkipVaultPath(root: string, fullPath: string, isDirectory: boolea
   const name = basename(fullPath);
   if (VAULT_EXCLUDE_PARTS.has(name)) return true;
   if (name.startsWith(".") && name !== ".") return true;
+  // Sync-conflict copies are unresolved duplicates, not knowledge.
+  if (name.includes(".sync-conflict-")) return true;
   if (isDirectory && VAULT_EXCLUDE_PREFIXES.some((prefix) => prefix.endsWith("/") && (rel === prefix.slice(0, -1) || rel.startsWith(prefix)))) return true;
   if (!isDirectory && VAULT_EXCLUDE_PREFIXES.some((prefix) => rel === prefix || rel.startsWith(prefix))) return true;
   return false;
@@ -325,7 +339,29 @@ function collectionSummary(records: FullVaultSearchIndexRecord[]) {
 }
 
 async function readOrBuildIndex(root: string) {
+  const ttl = indexTtlMs();
+  if (ttl > 0) {
+    const st = await stat(indexPath(root)).catch(() => null);
+    if (st?.isFile() && Date.now() - st.mtimeMs > ttl) {
+      await rebuildFullVaultSearchIndex({ root }).catch(() => undefined);
+    }
+  }
   return await readIndex(root) ?? (await rebuildFullVaultSearchIndex({ root }), await readIndex(root)) ?? [];
+}
+
+export async function fullVaultSearchIndexStatus(root: string) {
+  const st = await stat(indexPath(resolve(root))).catch(() => null);
+  const records = st?.isFile() ? await readIndex(resolve(root)) : null;
+  return {
+    exists: Boolean(st?.isFile()),
+    indexPath: FULL_VAULT_SEARCH_INDEX_PATH,
+    bytes: st?.size ?? 0,
+    ageMs: st ? Math.max(0, Date.now() - st.mtimeMs) : null,
+    ttlMs: indexTtlMs(),
+    stale: Boolean(st?.isFile() && indexTtlMs() > 0 && Date.now() - st.mtimeMs > indexTtlMs()),
+    indexed: records?.length ?? 0,
+    syncConflictEntries: records?.filter((record) => record.path.includes(".sync-conflict-")).length ?? 0,
+  };
 }
 
 function recordMatchesFilters(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery) {

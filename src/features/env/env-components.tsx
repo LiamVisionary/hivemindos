@@ -210,7 +210,7 @@ export function EnvValueRow({
   editable = true,
 }: EnvValueRowProps) {
   const [copied, setCopied] = useState(false);
-  const copyResetTimer = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const copyResetTimer = useRef<number | null>(null);
   const copyValue = async () => {
     if (!navigator.clipboard) return;
     try {

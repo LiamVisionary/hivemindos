@@ -94,7 +94,7 @@ try {
   const service = await readFile(new URL("../src/lib/services/trading/crypto-practice-book.ts", import.meta.url), "utf8");
   const route = await readFile(new URL("../src/app/api/trading/practice-book/route.ts", import.meta.url), "utf8");
   const ui = await readFile(new URL("../src/features/dashboard/views/trade/CryptoPracticeBookPanel.tsx", import.meta.url), "utf8");
-  const cryptoDocs = await readFile(new URL("../docs/trading/crypto.md", import.meta.url), "utf8");
+  const cryptoDocs = await readFile(new URL("../docs/for-users/trading/crypto.md", import.meta.url), "utf8");
   assert.match(service, /HIVEMINDOS_CRYPTO_PRACTICE_BOOK_PATH/);
   assert.match(route, /execute-hyperliquid-replay/);
   assert.match(route, /CRYPTO_PRACTICE_REPLAY_CONFIRMATION/);

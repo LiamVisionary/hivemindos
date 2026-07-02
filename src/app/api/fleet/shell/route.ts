@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 
+import { errorJson } from "@/lib/utils/api-response";
 import { SHELL_SESSION_PATTERN, shellBaseFromCollectorUrl, shellSessionUrl } from "./shell-target";
 
 export const runtime = "nodejs";
@@ -7,9 +8,7 @@ export const dynamic = "force-dynamic";
 
 const SHELL_ACTIONS = new Set(["command", "stdin", "interrupt", "kill"]);
 
-function badRequest(error: string) {
-  return Response.json({ ok: false, error }, { status: 400 });
-}
+const badRequest = (error: string) => errorJson(error);
 
 function resolveTarget(collectorUrl: string | undefined, session: string | undefined) {
   if (!session || !SHELL_SESSION_PATTERN.test(session)) {

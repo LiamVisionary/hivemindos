@@ -23,6 +23,7 @@ import type { DashboardActingWallet } from "@/features/dashboard/screen-context"
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet, hasConfiguredAgentWallet } from "@/lib/utils/agent-wallet";
+import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
 import { fetchPersonalWalletBalance, fetchPersonalWalletBalanceResult, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import {
   TradeView, TradeDeskProvider,
@@ -72,18 +73,10 @@ const EMPTY_READINESS: DeskStockReadiness = {
   account: null, xstockTickers: [],
 };
 
-// The acting-wallet choice persists across view switches / reloads — the panel
-// unmounts when you leave the Trade view, so without this it reset every time.
-// Mirrors SwarmPanel's per-feature wallet memory.
-const LAST_TRADE_WALLET_KEY = "hivemindos.trade.actingWalletId.v1";
-function readLastTradeWalletId(): string {
-  if (typeof window === "undefined") return "";
-  try { return window.localStorage.getItem(LAST_TRADE_WALLET_KEY) || ""; } catch { return ""; }
-}
-function writeLastTradeWalletId(id: string) {
-  if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(LAST_TRADE_WALLET_KEY, id); } catch { /* quota — best effort */ }
-}
+// The acting-wallet choice persists across view switches / reloads / app
+// surfaces through the shared dashboard state service (the panel unmounts when
+// you leave the Trade view, so without this it reset every time).
+const LAST_TRADE_WALLET_STATE_KEY = "trade.actingWalletId";
 
 type TradePanelProps = {
   displayAgents?: TradeAgent[];
@@ -106,7 +99,7 @@ type TradePanelProps = {
 export function TradePanel(props: TradePanelProps) {
   const agents = useMemo(() => (Array.isArray(props.displayAgents) ? props.displayAgents : []), [props.displayAgents]);
   const vaultPath = props.sharedVault?.enabled ? String(props.sharedVault.vaultPath || "").trim() : "";
-  const [actingId, setActingId] = useState<string>(() => readLastTradeWalletId());
+  const [actingId, rememberActingWalletId] = useRememberedDashboardValue(LAST_TRADE_WALLET_STATE_KEY);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [personalWallets, setPersonalWallets] = useState<Array<Record<string, unknown>>>([]);
   const [personalBalancesLoading, setPersonalBalancesLoading] = useState(true);
@@ -198,8 +191,7 @@ export function TradePanel(props: TradePanelProps) {
   const acting = useMemo(() => resolvePickableAccount(pickables, resolvedId), [pickables, resolvedId]);
 
   const pickWallet = (id: string) => {
-    setActingId(id);
-    writeLastTradeWalletId(id);
+    rememberActingWalletId(id);
     if (resolvePickableAccount(pickables, id)?.kind === "agent") props.setSelectedAgentId?.(id);
   };
 
@@ -225,8 +217,8 @@ export function TradePanel(props: TradePanelProps) {
   // agent), so it just re-points actingId + persists — no global agent sync.
   const onSelectChain = useCallback((net: string) => {
     const target = actingGroup?.accounts?.find((a) => a.network === net);
-    if (target) { setActingId(target.id); writeLastTradeWalletId(target.id); }
-  }, [actingGroup]);
+    if (target) rememberActingWalletId(target.id);
+  }, [actingGroup, rememberActingWalletId]);
 
   // Every chain the user actually has access to — derived from the resolved
   // pickable wallets themselves (personal per-chain accounts + each configured

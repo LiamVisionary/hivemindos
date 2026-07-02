@@ -734,8 +734,8 @@ export const cryptoPracticeBookAction = defineHiveAction({
   confirmation: {
     token: "CONFIRM_CRYPTO_PRACTICE_REPLAY",
     reason:
-      "Reading and planning are safe, but replay execution can place Hyperliquid orders and must pass an explicit replay confirmation plus wallet governance.",
-    when: "execute-hyperliquid-replay",
+      "Reading and planning are safe, but the execute-hyperliquid-replay action can place Hyperliquid orders and must always pass an explicit replay confirmation plus wallet governance.",
+    when: "always",
   },
   contextIndex: {
     summary:
@@ -744,6 +744,95 @@ export const cryptoPracticeBookAction = defineHiveAction({
       "Use crypto_practice_book to read or update the local normalized crypto practice holdings book, snapshot Alpaca paper crypto positions, snapshot Hyperliquid status, add a manual target, plan the Hyperliquid order diff, or execute the replay only after CONFIRM_CRYPTO_PRACTICE_REPLAY. Provider accounts remain authoritative for custody; the practice book is local target state.",
     route: "/api/trading/practice-book",
     methods: ["GET", "POST"],
+  },
+});
+
+export const tradingMarketDataAction = defineHiveAction({
+  id: "trading.market-data",
+  title: "Trading market data",
+  description:
+    "Fetch read-only crypto and stock market rows, Alpaca account-equity history, and USD FX rates for the Trade desk.",
+  schema: z.object({
+    kind: z
+      .enum(["crypto", "stock", "stock-equity", "fx"])
+      .optional()
+      .describe("Market-data kind to fetch."),
+    symbols: z.array(z.string()).optional().describe("Up to 40 symbols."),
+    range: z.enum(["24h", "7d", "30d"]).optional(),
+    paper: z.boolean().optional().describe("Use the Alpaca paper account (default true)."),
+    withHistory: z.boolean().optional(),
+  }),
+  sideEffects: ["read", "network"],
+  risk: "low",
+  readOnly: true,
+  tags: ["trading", "market-data", "prices", "crypto", "stocks", "fx", "sparkline"],
+  aliases: ["market data", "crypto prices", "stock prices", "fx rates", "price history", "movers"],
+  contextIndex: {
+    summary:
+      "Read-only market data: crypto/stock prices, 24h change, sparklines, Alpaca equity history, FX rates.",
+    retrievalText:
+      "Use POST /api/trading/market for live read-only market data feeding the Trade desk: kind crypto or stock for price/change/history rows, kind stock-equity for Alpaca account-value history (paper or live), and kind fx for USD-to-currency rates. No money moves through this route; trades execute through the governed trading routes instead.",
+    route: "/api/trading/market",
+    methods: ["POST"],
+  },
+});
+
+export const copyTradeConfigAction = defineHiveAction({
+  id: "trading.copy-trade-config",
+  title: "Copy-trading configs",
+  description:
+    "List, create, enable, disable, or delete copy-trading configs and read the mirror daemon's status. The standalone daemon is the sole swap-execution host; this surface only manages its config store.",
+  schema: z.object({
+    action: z
+      .enum(["upsert", "start", "stop", "delete"])
+      .optional()
+      .describe("Copy-trading config operation to perform."),
+    id: z.string().optional().describe("Config id, required for start, stop, and delete."),
+    config: jsonObjectSchema
+      .optional()
+      .describe("Partial CopyTradingConfig for upsert: agentId, network (Base or Solana), targetAddress, maxCopyUsd, and limits."),
+  }),
+  sideEffects: ["write", "filesystem"],
+  risk: "high",
+  tags: ["trading", "copy-trade", "mirror", "wallet", "config", "daemon"],
+  aliases: ["copy trading", "mirror wallet trades", "copy trade config", "start copy trading", "stop copy trading"],
+  contextIndex: {
+    summary:
+      "Config and status surface for the copy-trading mirror daemon; enabling a config starts live real-fund trade mirroring.",
+    retrievalText:
+      "Use /api/trading/copy-trade to read copy-trading configs, runtime states, and daemon heartbeat (GET) or to upsert, start, stop, and delete configs (POST). Upsert requires an acting wallet with a local signing key on Base or Solana, rejects self-copy, and caps per-trade size at $10. The route never executes swaps itself — the standalone daemon is the sole execution host — but action start enables live mirroring of the target wallet's trades with real funds, so treat enablement as a user-approved decision.",
+    route: "/api/trading/copy-trade",
+    methods: ["GET", "POST"],
+  },
+});
+
+export const hivemindosModelsWalletAction = defineHiveAction({
+  id: "hivemindos-models.funding-wallet",
+  title: "HivemindOS Models funding wallet",
+  description:
+    "Create a new encrypted local wallet or link an existing vault wallet as the funding source for wallet-paid HivemindOS Models LLM usage.",
+  schema: z.object({
+    action: z
+      .enum(["create", "link"])
+      .optional()
+      .describe("create generates a new local wallet (default); link reuses an existing vault wallet."),
+    agentId: z.string().optional(),
+    agentName: z.string().optional(),
+    walletVaultId: z.string().optional().describe("Existing encrypted-vault wallet id, required for link."),
+    network: z.string().optional().describe("eip155:8453 (default), eip155:84532, solana:mainnet, or solana:devnet."),
+    vaultPath: z.string().optional(),
+  }),
+  sideEffects: ["write", "credential", "filesystem"],
+  risk: "medium",
+  tags: ["wallet", "hivemindos-models", "llm", "funding", "credits", "setup"],
+  aliases: ["models funding wallet", "wallet-paid models setup", "create models wallet", "link models wallet"],
+  contextIndex: {
+    summary:
+      "Create or link the encrypted local wallet that funds wallet-paid HivemindOS Models usage.",
+    retrievalText:
+      "Use POST /api/hivemindos/models/wallet during HivemindOS Models (wallet-paid LLM) setup. action create generates a wallet (default Base eip155:8453; also eip155:84532, solana:mainnet, solana:devnet), stores its secret in the encrypted local wallet vault, and records it in the wallet ledger as a Models funding source with conservative default caps (max $0.50 per payment, approval required over $2). action link designates an existing vault wallet by walletVaultId instead. It never sends funds or spends credits — spending stays behind the governed wallet execution routes.",
+    route: "/api/hivemindos/models/wallet",
+    methods: ["POST"],
   },
 });
 
@@ -1233,6 +1322,80 @@ export const clawbankCallAction = defineHiveAction({
   },
 });
 
+export const managedXApiAction = defineHiveAction({
+  id: "integrations.x-managed-api",
+  title: "Managed X API gateway",
+  description:
+    "Check the hosted X API gateway, start Sign in with X, read hosted credit balances and X connections, and proxy X API calls paid from hosted HivemindOS credits.",
+  schema: z.object({
+    action: z
+      .enum(["oauth-start", "balance", "connections", "proxy"])
+      .optional()
+      .describe("Managed X gateway operation to perform (GET returns status, credit accounts, balance, and connections)."),
+    creditAccountId: z.string().optional().describe("Wallet/credit account id whose stored hosted credit token pays for the call."),
+    walletVaultId: z.string().optional().describe("Accepted alias for creditAccountId."),
+    slug: z.string().optional(),
+    returnUrl: z.string().optional(),
+    scopes: z.string().optional(),
+    connectionId: z.string().optional(),
+    method: z.string().optional().describe("X API HTTP method for proxy; non-GET requires confirmation."),
+    path: z.string().optional().describe("X API path to proxy, e.g. /2/tweets."),
+    query: jsonObjectSchema.optional(),
+    json: z.unknown().optional(),
+    confirmation: z.string().optional().describe('Must be "CONFIRM_X_API_CALL" for non-GET proxy calls.'),
+  }),
+  sideEffects: ["network", "payment", "public-message"],
+  risk: "high",
+  tags: ["x", "twitter", "integration", "social", "credits", "oauth", "gateway", "mcp"],
+  aliases: ["x_api", "managed x api", "x api proxy", "sign in with x", "hosted x credits", "post to x"],
+  confirmation: {
+    token: "CONFIRM_X_API_CALL",
+    reason:
+      "Gateway status, OAuth start, balance, connections, and GET proxy reads do not mutate X, but write (non-GET) proxy calls post or mutate as the connected X account and the route rejects them without CONFIRM_X_API_CALL. All managed calls are paid from hosted HivemindOS credits.",
+    when: "always",
+  },
+  contextIndex: {
+    summary:
+      "Hosted X API gateway: Sign in with X, hosted-credit billing, and a confirmation-gated X API proxy.",
+    retrievalText:
+      "Use /api/integrations/x-managed for the managed HivemindOS X API path: GET reports gateway status, stored hosted-credit accounts, credit balance, and X connections; POST action oauth-start begins Sign in with X through the hosted gateway (server-side OAuth token custody), action balance and connections read account state, and action proxy forwards an X API call (method, path, query, json) billed to the stored hosted credit token. Non-GET proxy calls require confirmation CONFIRM_X_API_CALL; the hivemind-mcp x_api tool wraps this proxy with the same gate. Managed X MCP traffic flows through POST /api/integrations/x-managed/mcp with the same credit token.",
+    route: "/api/integrations/x-managed",
+    methods: ["GET", "POST"],
+  },
+});
+
+export const xMcpIntegrationAction = defineHiveAction({
+  id: "integrations.x-mcp-setup",
+  title: "X MCP integration setup",
+  description:
+    "Read X MCP readiness and manage the BYO X developer app path: save client credentials, start browser OAuth, and sync or remove the xapi MCP server across local runtimes.",
+  schema: z.object({
+    action: z
+      .enum(["save-credentials", "start-oauth", "sync-runtimes", "remove-runtimes"])
+      .optional()
+      .describe("X MCP setup operation to perform (GET returns status)."),
+    clientId: z.string().optional().describe("X developer app OAuth client id (stored as X_MCP_CLIENT_ID)."),
+    clientSecret: z.string().optional().describe("X developer app OAuth client secret (stored as X_MCP_CLIENT_SECRET)."),
+    redirectUri: z.string().optional().describe("Optional OAuth redirect override (stored as X_MCP_REDIRECT_URI)."),
+    targets: z
+      .string()
+      .optional()
+      .describe("Comma-separated runtimes (claude, codex, gemini, openclaw, hermes, aeon) or all."),
+  }),
+  sideEffects: ["credential", "write", "filesystem", "network"],
+  risk: "medium",
+  tags: ["x", "twitter", "mcp", "integration", "oauth", "credentials", "runtime", "setup"],
+  aliases: ["x mcp", "xapi mcp", "connect x", "x oauth", "sync x mcp to runtimes", "x mcp status"],
+  contextIndex: {
+    summary:
+      "X MCP setup surface: credential save, browser OAuth, and per-runtime xapi MCP config sync.",
+    retrievalText:
+      "Use /api/integrations/x-mcp to set up the official X API MCP. GET reports readiness: X_MCP_CLIENT_ID / X_MCP_CLIENT_SECRET presence by key name (optional X_MCP_REDIRECT_URI), managed gateway status, xurl cache, bridge script, and which runtimes (claude, codex, gemini, openclaw, hermes, aeon) have the xapi MCP server configured. POST action save-credentials writes the X_MCP_* keys into the shared hive env, start-oauth launches the x-mcp-bridge browser OAuth flow, and sync-runtimes / remove-runtimes run the MCP client registrar to add or remove the xapi server in runtime configs. It stores credentials and edits local runtime config files; it does not post to X.",
+    route: "/api/integrations/x-mcp",
+    methods: ["GET", "POST"],
+  },
+});
+
 export const codeSearchGraphAction = defineHiveAction({
   id: "code.search-graph",
   title: "Search the code graph",
@@ -1408,6 +1571,9 @@ export const HIVE_ACTIONS = [
   stockTradeAction,
   hyperliquidTradeAction,
   cryptoPracticeBookAction,
+  tradingMarketDataAction,
+  copyTradeConfigAction,
+  hivemindosModelsWalletAction,
   brainGraphOverviewAction,
   brainSearchKnowledgeAction,
   brainGetNodeAction,
@@ -1423,6 +1589,8 @@ export const HIVE_ACTIONS = [
   clawbankTradeAction,
   clawbankMoneyTransferAction,
   clawbankCallAction,
+  managedXApiAction,
+  xMcpIntegrationAction,
   codeSearchGraphAction,
   codeTracePathAction,
   codeGetArchitectureAction,

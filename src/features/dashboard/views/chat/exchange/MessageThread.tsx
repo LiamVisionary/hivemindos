@@ -1,8 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { Fragment, memo, useState } from "react";
+import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -10,10 +9,36 @@ import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-r
 import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
 import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
 import { markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
-import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive } from "@/features/dashboard/views/chat/AgentProcessPanel";
+import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type ProcessEvent } from "@/features/dashboard/views/chat/AgentProcessPanel";
 import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
 import { extractMiroSharkSimulationCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
+import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { ChatAttachment, ChatMessage } from "@/features/dashboard/dashboard-types";
+import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 import { Dot, Glyph, ICON } from "./primitives";
+
+type IconComponent = ElementType<{ "aria-hidden"?: boolean | "true" | "false"; className?: string }>;
+type ChatMarkdownComponent = ComponentType<{ text: string; className?: string; headingClassName?: string }>;
+
+// events/label are read defensively; the canonical ChatMessage/attachment types do not define them.
+export type ThreadMessage = ChatMessage & { events?: ProcessEvent[] };
+type ThreadAttachment = ChatAttachment & { label?: string };
+
+export type ChatKanbanGeneration = {
+  key: string;
+  phase: string;
+  message?: string;
+  taskTitle?: string;
+  status?: string;
+};
+
+export type ThreadIconProps = {
+  Check?: IconComponent;
+  Copy?: IconComponent;
+  KanbanSquare?: IconComponent;
+  LoaderCircle?: IconComponent;
+  Sparkles?: IconComponent;
+};
 
 function formatBillingUsd(value: number) {
   const decimals = value > 0 && value < 0.001 ? 6 : value > 0 && value < 0.01 ? 4 : 2;
@@ -25,7 +50,7 @@ function formatBillingUsd(value: number) {
   }).format(value);
 }
 
-function responseBillingText(billing: any) {
+function responseBillingText(billing: ChatResponseBilling | undefined) {
   const costUsd = Number(billing?.costUsd);
   if (!Number.isFinite(costUsd)) return "";
   const balanceUsd = Number(billing?.balanceUsd);
@@ -58,7 +83,7 @@ function InteractivePromptControls({ disabled, options, sendPromptMessage, Send 
   disabled?: boolean;
   options: Array<{ label: string; value: string }>;
   sendPromptMessage?: (prompt: string) => void | Promise<void>;
-  Send?: any;
+  Send?: IconComponent;
 }) {
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState("");
@@ -110,7 +135,7 @@ function InteractivePromptControls({ disabled, options, sendPromptMessage, Send 
   );
 }
 
-function ThinkingLoader({ AgentResponseLoader }: { AgentResponseLoader?: any }) {
+function ThinkingLoader({ AgentResponseLoader }: { AgentResponseLoader?: ElementType }) {
   return AgentResponseLoader ? (
     <AgentResponseLoader />
   ) : (
@@ -136,14 +161,14 @@ function MessageActions({
   open,
   renderKey,
 }: {
-  Check?: any;
-  Copy?: any;
-  KanbanSquare?: any;
-  LoaderCircle?: any;
-  Sparkles?: any;
+  Check?: IconComponent;
+  Copy?: IconComponent;
+  KanbanSquare?: IconComponent;
+  LoaderCircle?: IconComponent;
+  Sparkles?: IconComponent;
   content: string;
   copied?: boolean;
-  generation?: any;
+  generation?: ChatKanbanGeneration | null;
   generateKanbanTaskFromChat?: (lane: string, payload: { key: string; content: string }) => void | Promise<void>;
   onCopy: () => void;
   onDismissKanban: () => void;
@@ -226,7 +251,7 @@ function MessageFooter({ actions, align = "agent", timeLabel }: { actions?: Reac
   );
 }
 
-function AttachmentPills({ FileText, attachments }: { FileText?: any; attachments: any[] }) {
+function AttachmentPills({ FileText, attachments }: { FileText?: IconComponent; attachments: ThreadAttachment[] }) {
   if (!attachments.length) return null;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 5 }}>
@@ -240,7 +265,7 @@ function AttachmentPills({ FileText, attachments }: { FileText?: any; attachment
   );
 }
 
-function ProcessPanel({ iconProps, active, events }: { iconProps: Record<string, any>; active: boolean; events: any[] }) {
+function ProcessPanel({ iconProps, active, events }: { iconProps: ThreadIconProps; active: boolean; events: ProcessEvent[] }) {
   return <AgentProcessPanel {...iconProps} active={active} events={events} />;
 }
 
@@ -279,7 +304,7 @@ function parseResearchBriefTabs(text: string) {
   return introText ? [{ id: "overview", label: "Overview", content: introText }, ...sections] : sections;
 }
 
-function ResearchBriefTabs({ text, ChatMarkdown }: { text: string; ChatMarkdown?: any }) {
+function ResearchBriefTabs({ text, ChatMarkdown }: { text: string; ChatMarkdown?: ChatMarkdownComponent }) {
   const sections = parseResearchBriefTabs(text);
   const [activeTab, setActiveTab] = useState(sections?.[0]?.id ?? "");
   if (!sections?.length) return ChatMarkdown ? <ChatMarkdown text={text} className="fr-chat-markdown" /> : <>{renderInline(text)}</>;
@@ -336,28 +361,28 @@ function MessageThreadBase({
   chatKanbanGeneration,
   dismissChatKanbanGeneration,
 }: {
-  AgentResponseLoader?: any;
-  ChatMarkdown?: any;
-  FileText?: any;
-  Send?: any;
+  AgentResponseLoader?: ElementType;
+  ChatMarkdown?: ChatMarkdownComponent;
+  FileText?: IconComponent;
+  Send?: IconComponent;
   activeChatTaskRunning?: boolean;
   busy?: boolean;
-  chatDisplayContent?: (message: any) => string;
+  chatDisplayContent?: (message: unknown) => string;
   chatProcessScopeKey: string;
   copiedMessageKey: string;
-  formatRelativeTime?: (time: number) => string;
+  formatRelativeTime?: (time: number | undefined) => string;
   generateKanbanTaskFromChat?: (lane: string, payload: { key: string; content: string }) => void | Promise<void>;
   hasStreamingChunk?: boolean;
-  iconProps: Record<string, any>;
-  messages: any[];
+  iconProps: ThreadIconProps;
+  messages: ThreadMessage[];
   openKanbanTaskMenuKey: string;
-  processEventsForDisplay: any[];
+  processEventsForDisplay: ProcessEvent[];
   processEventsTargetKey: string;
-  selectedAgent?: any;
+  selectedAgent?: AgentProfile | null;
   sendPromptMessage?: (prompt: string) => void | Promise<void>;
-  setCopiedMessageKey: (key: string) => void;
-  setOpenKanbanTaskMenuKey: (key: string | ((current: string) => string)) => void;
-  chatKanbanGeneration?: any;
+  setCopiedMessageKey: Dispatch<SetStateAction<string>>;
+  setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
+  chatKanbanGeneration?: ChatKanbanGeneration | null;
   dismissChatKanbanGeneration?: (key: string) => void;
 }) {
   const pendingAssistantBubbleVisible = busy && !hasStreamingChunk && messages.some((message, index) => (

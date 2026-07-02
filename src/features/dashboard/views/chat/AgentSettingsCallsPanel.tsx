@@ -1,14 +1,125 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import QRCode from "qrcode";
-import { Bell, Briefcase, Clock, MessageSquareText, Phone, PlugZap, RefreshCcw, Send, Shield, Volume2, Wand2 } from "lucide-react";
+import {
+  Bell,
+  Briefcase,
+  ChevronDown,
+  Clock,
+  Cpu,
+  HardDrive,
+  MemoryStick,
+  MessageSquareText,
+  Phone,
+  PlugZap,
+  RefreshCcw,
+  Send,
+  Server,
+  Shield,
+  Volume2,
+  Wand2,
+  type LucideIcon,
+} from "lucide-react";
 import { buildAgentCallPreferences } from "@/lib/types/agent-runtime";
+import type { AgentCallMissedFallback, AgentCallPreferences, AgentProfile } from "@/lib/types/agent-runtime";
+import type { AgentCreateDraft } from "@/features/dashboard/agent-settings-types";
 import { clawMobilePairingUrl, hubUrlForPairingHost } from "@/lib/phone/pairing-url";
 import { Badge, Btn, Field, GroupLabel, PanelHead, Toggle } from "./AgentSettingsModalPrimitives";
 import styles from "./AgentSettingsCallsPanel.module.css";
+
+type AgentCallSourceKey = keyof AgentCallPreferences["sources"];
+
+type VoiceOption = {
+  id: string;
+  provider: string;
+  voice: string;
+  model?: string;
+  appName?: string;
+  machineName?: string;
+  source: string;
+};
+
+type LocalTtsCandidate = {
+  id: string;
+  appId: string;
+  name: string;
+  machineName?: string;
+  port?: number;
+  ok: boolean;
+  error?: string;
+  model: string;
+  availableModels: string[];
+  availableModelDetails: LocalTtsModelStatus[];
+  availableVoices: string[];
+  voice: string;
+  voiceCount?: number;
+  streamingKind?: string;
+  streamingImplementation?: string;
+  sampleRate: number;
+  sampleFormat: string;
+};
+
+type LocalTtsModelStatus = {
+  id: string;
+  providerId: string;
+  loaded: boolean;
+  healthy: boolean;
+  callReady: boolean;
+  supportsTrueStreaming: boolean;
+  streamingKind?: string;
+  streamingImplementation?: string;
+};
+
+type LocalTtsCapacity = "ready" | "tight" | "limited" | "unknown";
+type LocalTtsLaunchModelHintsSource = "service" | "running-candidate" | "fallback";
+
+type LocalTtsLaunchCandidate = {
+  id: string;
+  machineName: string;
+  collectorUrl: string;
+  collectorStatus: string;
+  online: boolean;
+  serviceLabels: string[];
+  system?: {
+    cpuPct?: number;
+    cpuCores?: number;
+    ramUsedGb?: number;
+    ramTotalGb?: number;
+    diskPct?: number | null;
+    diskUsedGb?: number | null;
+    diskTotalGb?: number | null;
+    platform?: string;
+    arch?: string;
+  };
+  availableRamGb?: number;
+  capacity: LocalTtsCapacity;
+  capacityLabel: string;
+  capacityDetail: string;
+  canStart: boolean;
+  modelHints: string[];
+  modelHintsSource: LocalTtsLaunchModelHintsSource;
+  preferredModel: string;
+};
+
+type PhoneStatus = {
+  checked: boolean;
+  connected: boolean;
+  lastSeenAt?: string;
+  apnsConfigured?: boolean;
+  apnsMissing: string[];
+};
+
+export type AgentSettingsCallsPanelProps = {
+  agentCreateDraft: AgentCreateDraft;
+  agentCreateMachine: { name?: string } | null;
+  onQueenClapWakeEnabledChange?: (enabled: boolean) => unknown;
+  queenClapWakeEnabled?: boolean;
+  roleModalAgent: AgentProfile | null;
+  setAgentCreateDraft: Dispatch<SetStateAction<AgentCreateDraft>>;
+  updateAgentProfile: (agentId: string, patch: Partial<AgentProfile>) => unknown;
+};
 
 const VOICE_RUNTIME_LABELS: Record<string, string> = {
   "openai-realtime": "OpenAI Realtime",
@@ -24,7 +135,7 @@ const FALLBACK_OPTIONS = [
   { value: "telegram", label: "Telegram" },
 ];
 
-const CALL_SOURCES = [
+const CALL_SOURCES: Array<{ key: AgentCallSourceKey; label: string; sub: string; Icon: LucideIcon }> = [
   { key: "obsidianBriefing", label: "Obsidian briefing", sub: "Vault deltas and open loops.", Icon: MessageSquareText },
   { key: "codingJobCompletion", label: "Coding completion", sub: "Call when long work finishes.", Icon: Briefcase },
   { key: "blockedAgentDecision", label: "Blocked decision", sub: "Ring when a choice needs you.", Icon: Wand2 },
@@ -36,11 +147,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function runtimeDefaultVoiceOptions(provider: string) {
+function runtimeDefaultVoiceOptions(provider: string): VoiceOption[] {
   return [{ id: `runtime-default:${provider}`, provider, voice: "Gateway default", source: "runtime-default" }];
 }
 
-function readVoiceOptions(value: unknown) {
+function readVoiceOptions(value: unknown): VoiceOption[] {
   const config = asRecord(asRecord(value)?.config);
   const options = Array.isArray(config?.voiceOptions) ? config.voiceOptions : config?.voiceProviders;
   if (!Array.isArray(options)) return runtimeDefaultVoiceOptions("openai-realtime");
@@ -58,7 +169,7 @@ function readVoiceOptions(value: unknown) {
   return configuredOptions.length ? configuredOptions : runtimeDefaultVoiceOptions("openai-realtime");
 }
 
-function readLocalTtsCandidates(value: unknown) {
+function readLocalTtsCandidates(value: unknown): LocalTtsCandidate[] {
   const config = asRecord(asRecord(value)?.config);
   const candidates = Array.isArray(config?.localTtsCandidates) ? config.localTtsCandidates : [];
   return candidates.flatMap((candidate) => {
@@ -78,6 +189,24 @@ function readLocalTtsCandidates(value: unknown) {
       availableModels: Array.isArray(item?.availableModels)
         ? [...new Set(item.availableModels.filter((entry) => typeof entry === "string"))]
         : [],
+      availableModelDetails: Array.isArray(item?.availableModelDetails)
+        ? item.availableModelDetails.flatMap((entry) => {
+          const model = asRecord(entry);
+          if (!model) return [];
+          const modelId = typeof model?.id === "string" ? model.id : "";
+          const providerId = typeof model?.providerId === "string" ? model.providerId : "";
+          return modelId && providerId ? [{
+            id: modelId,
+            providerId,
+            loaded: model.loaded === true,
+            healthy: model.healthy === true,
+            callReady: model.callReady === true,
+            supportsTrueStreaming: model.supportsTrueStreaming === true,
+            streamingKind: typeof model.streamingKind === "string" ? model.streamingKind : undefined,
+            streamingImplementation: typeof model.streamingImplementation === "string" ? model.streamingImplementation : undefined,
+          }] : [];
+        })
+        : [],
       availableVoices: Array.isArray(item?.availableVoices)
         ? [...new Set(item.availableVoices.filter((entry) => typeof entry === "string"))]
         : [],
@@ -91,6 +220,81 @@ function readLocalTtsCandidates(value: unknown) {
   });
 }
 
+function readLocalTtsLaunchCandidates(value: unknown): LocalTtsLaunchCandidate[] {
+  const root = asRecord(value);
+  const result = asRecord(root?.result) ?? root;
+  const candidates = Array.isArray(result?.launchCandidates) ? result.launchCandidates : [];
+  return candidates.flatMap((candidate) => {
+    const item = asRecord(candidate);
+    const id = typeof item?.id === "string" ? item.id : "";
+    const collectorUrl = typeof item?.collectorUrl === "string" ? item.collectorUrl : "";
+    if (!id || !collectorUrl) return [];
+    const system = asRecord(item?.system);
+    return [{
+      id,
+      machineName: typeof item?.machineName === "string" ? item.machineName : "Hivemind machine",
+      collectorUrl,
+      collectorStatus: typeof item?.collectorStatus === "string" ? item.collectorStatus : "unknown",
+      online: item?.online !== false,
+      serviceLabels: Array.isArray(item?.serviceLabels)
+        ? [...new Set(item.serviceLabels.filter((entry) => typeof entry === "string"))]
+        : [],
+      system: system ? {
+        cpuPct: typeof system.cpuPct === "number" ? system.cpuPct : undefined,
+        cpuCores: typeof system.cpuCores === "number" ? system.cpuCores : undefined,
+        ramUsedGb: typeof system.ramUsedGb === "number" ? system.ramUsedGb : undefined,
+        ramTotalGb: typeof system.ramTotalGb === "number" ? system.ramTotalGb : undefined,
+        diskPct: typeof system.diskPct === "number" || system.diskPct === null ? system.diskPct : undefined,
+        diskUsedGb: typeof system.diskUsedGb === "number" || system.diskUsedGb === null ? system.diskUsedGb : undefined,
+        diskTotalGb: typeof system.diskTotalGb === "number" || system.diskTotalGb === null ? system.diskTotalGb : undefined,
+        platform: typeof system.platform === "string" ? system.platform : undefined,
+        arch: typeof system.arch === "string" ? system.arch : undefined,
+      } : undefined,
+      availableRamGb: typeof item?.availableRamGb === "number" ? item.availableRamGb : undefined,
+      capacity: item?.capacity === "ready" || item?.capacity === "tight" || item?.capacity === "limited" || item?.capacity === "unknown" ? item.capacity : "unknown",
+      capacityLabel: typeof item?.capacityLabel === "string" ? item.capacityLabel : "Resource check pending",
+      capacityDetail: typeof item?.capacityDetail === "string" ? item.capacityDetail : "Capacity has not been checked yet.",
+      canStart: item?.canStart === true,
+      modelHints: Array.isArray(item?.modelHints)
+        ? [...new Set(item.modelHints.filter((entry) => typeof entry === "string"))]
+        : [],
+      modelHintsSource: item?.modelHintsSource === "service" || item?.modelHintsSource === "running-candidate" || item?.modelHintsSource === "fallback"
+        ? item.modelHintsSource
+        : "fallback",
+      preferredModel: typeof item?.preferredModel === "string" ? item.preferredModel : "",
+    }];
+  });
+}
+
+function formatGb(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "Unknown";
+  return `${value >= 10 ? Math.round(value) : value.toFixed(1)} GB`;
+}
+
+function formatPct(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "Unknown";
+  return `${Math.round(value)}%`;
+}
+
+function machineResourceSummary(candidate: LocalTtsLaunchCandidate) {
+  const system = candidate.system;
+  const cpu = system?.cpuCores
+    ? `${Math.round(system.cpuCores)} cores${typeof system.cpuPct === "number" ? ` · ${formatPct(system.cpuPct)}` : ""}`
+    : "Unknown";
+  const ram = typeof system?.ramTotalGb === "number"
+    ? `${formatGb(candidate.availableRamGb)} free / ${formatGb(system.ramTotalGb)}`
+    : "Unknown";
+  const disk = typeof system?.diskTotalGb === "number"
+    ? `${formatPct(system.diskPct)} used / ${formatGb(system.diskTotalGb)}`
+    : "Unknown";
+  const platform = [system?.platform, system?.arch].filter(Boolean).join(" · ") || "Unknown";
+  return { cpu, ram, disk, platform };
+}
+
+function normalizeDisplayName(value?: string) {
+  return String(value || "").trim().toLowerCase().replace(/\.$/, "");
+}
+
 function fmt12(time: string) {
   const [rawHour, rawMinute] = String(time || "09:00").split(":").map(Number);
   const hour = Number.isFinite(rawHour) ? rawHour : 9;
@@ -99,7 +303,7 @@ function fmt12(time: string) {
   return { h: ((hour + 11) % 12) + 1, m: String(minute).padStart(2, "0"), ap };
 }
 
-export function AgentSettingsCallsPanel(props: any) {
+export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   const {
     agentCreateDraft,
     agentCreateMachine,
@@ -112,9 +316,20 @@ export function AgentSettingsCallsPanel(props: any) {
   const [phoneQr, setPhoneQr] = useState("");
   const [phoneHubUrl, setPhoneHubUrl] = useState("");
   const [phoneConnectError, setPhoneConnectError] = useState("");
-  const [phoneStatus, setPhoneStatus] = useState({ checked: false, connected: false, apnsMissing: [] });
+  const [phoneStatus, setPhoneStatus] = useState<PhoneStatus>({ checked: false, connected: false, apnsMissing: [] });
+  const [localTtsDiscoveryStatus, setLocalTtsDiscoveryStatus] = useState<"idle" | "loading" | "ready" | "error">("loading");
+  const [localTtsDiscoveryError, setLocalTtsDiscoveryError] = useState("");
   const [voiceOptions, setVoiceOptions] = useState(() => runtimeDefaultVoiceOptions("openai-realtime"));
-  const [localTtsCandidates, setLocalTtsCandidates] = useState([]);
+  const [localTtsCandidates, setLocalTtsCandidates] = useState<LocalTtsCandidate[]>([]);
+  const [localTtsLaunchCandidates, setLocalTtsLaunchCandidates] = useState<LocalTtsLaunchCandidate[]>([]);
+  const [ttsLaunchPickerId, setTtsLaunchPickerId] = useState("");
+  const [ttsLaunchModelById, setTtsLaunchModelById] = useState<Record<string, string>>({});
+  const [ttsLaunchBusyId, setTtsLaunchBusyId] = useState("");
+  const [ttsLaunchMessage, setTtsLaunchMessage] = useState("");
+  const [ttsLaunchTone, setTtsLaunchTone] = useState<"ok" | "error" | "muted">("muted");
+  const [ttsModelBusyKey, setTtsModelBusyKey] = useState("");
+  const [ttsModelMessage, setTtsModelMessage] = useState("");
+  const [ttsModelTone, setTtsModelTone] = useState<"ok" | "error" | "muted">("muted");
   const [callTestBusy, setCallTestBusy] = useState(false);
   const [callTestMessage, setCallTestMessage] = useState("");
   const [callTestTone, setCallTestTone] = useState<"ok" | "error" | "muted">("muted");
@@ -131,14 +346,15 @@ export function AgentSettingsCallsPanel(props: any) {
     ?? selectedVoiceOptions[0]
     ?? runtimeDefaultVoiceOptions(agentCallSettings.voiceRuntime)[0];
   const hasConfiguredVoices = voiceOptions.some((provider) => provider.source === "configured");
+  const localTtsDiscoveryLoading = localTtsDiscoveryStatus === "loading";
 
-  const updateAgentCalls = (patch: Record<string, unknown>) => {
+  const updateAgentCalls = (patch: Partial<AgentCallPreferences>) => {
     const next = buildAgentCallPreferences({ ...agentCallSettings, ...patch });
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, calls: next }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { calls: next });
   };
 
-  const updateCallSource = (source: string, enabled: boolean) => {
+  const updateCallSource = (source: AgentCallSourceKey, enabled: boolean) => {
     updateAgentCalls({ sources: { ...agentCallSettings.sources, [source]: enabled } });
   };
 
@@ -164,45 +380,155 @@ export function AgentSettingsCallsPanel(props: any) {
     });
   };
 
-  const selectLocalTtsCandidate = (candidate: any) => {
+  const selectLocalTtsCandidate = (candidate: LocalTtsCandidate, overrides?: { model?: string; voice?: string }) => {
     if (!candidate.ok) return;
     updateAgentCalls({
       voiceRuntime: "local-tts",
       voiceProviderId: candidate.id,
-      voiceModelId: candidate.model,
-      voiceId: candidate.voice,
+      voiceModelId: overrides?.model || candidate.model,
+      voiceId: overrides?.voice || candidate.voice,
     });
   };
 
   const selectedLocalTtsCandidate = localTtsCandidates.find(
     (candidate) => candidate.id === agentCallSettings.voiceProviderId,
   );
+  const selectedLocalTtsModel = agentCallSettings.voiceModelId || selectedLocalTtsCandidate?.model || "";
   // Persist a model choice through the dashboard's own save path so it sticks
   // (an external edit to the stored profile gets clobbered by the running app).
   const updateLocalTtsModel = (model: string) => updateAgentCalls({ voiceModelId: model });
   const updateLocalTtsVoice = (voice: string) => updateAgentCalls({ voiceId: voice });
 
   const refreshCallConnectionState = async () => {
-    const [statusResponse, voiceResponse] = await Promise.all([
-      fetch("/api/phone?action=device-status", { cache: "no-store" }).catch(() => null),
-      fetch("/api/phone?action=voice-config", { cache: "no-store" }).catch(() => null),
-    ]);
-    const statusData = asRecord(await statusResponse?.json().catch(() => null));
-    const voiceData = asRecord(await voiceResponse?.json().catch(() => null));
-    const statusResult = asRecord(statusData?.result) ?? statusData;
-    const device = asRecord(statusResult?.device);
-    const apns = asRecord(statusResult?.apns);
-    const missingApns = apns?.missing;
-    setPhoneStatus({
-      checked: true,
-      connected: Boolean(statusResponse?.ok && statusData?.ok !== false && device),
-      lastSeenAt: typeof device?.lastSeenAt === "string" ? device.lastSeenAt : undefined,
-      apnsConfigured: typeof apns?.configured === "boolean" ? apns.configured : undefined,
-      apnsMissing: Array.isArray(missingApns) ? missingApns.filter((item) => typeof item === "string") : [],
-    });
-    const voicePayload = voiceData?.result ?? voiceData;
-    setVoiceOptions(readVoiceOptions(voicePayload));
-    setLocalTtsCandidates(readLocalTtsCandidates(voicePayload));
+    setLocalTtsDiscoveryStatus("loading");
+    setLocalTtsDiscoveryError("");
+    try {
+      const [statusResponse, voiceResponse, localTtsResponse] = await Promise.all([
+        fetch("/api/phone?action=device-status", { cache: "no-store" }).catch(() => null),
+        fetch("/api/phone?action=voice-config", { cache: "no-store" }).catch(() => null),
+        fetch("/api/phone/local-tts", { cache: "no-store" }).catch(() => null),
+      ]);
+      const statusData = asRecord(await statusResponse?.json().catch(() => null));
+      const voiceData = asRecord(await voiceResponse?.json().catch(() => null));
+      const localTtsData = asRecord(await localTtsResponse?.json().catch(() => null));
+      const statusResult = asRecord(statusData?.result) ?? statusData;
+      const device = asRecord(statusResult?.device);
+      const apns = asRecord(statusResult?.apns);
+      const missingApns = apns?.missing;
+      setPhoneStatus({
+        checked: true,
+        connected: Boolean(statusResponse?.ok && statusData?.ok !== false && device),
+        lastSeenAt: typeof device?.lastSeenAt === "string" ? device.lastSeenAt : undefined,
+        apnsConfigured: typeof apns?.configured === "boolean" ? apns.configured : undefined,
+        apnsMissing: Array.isArray(missingApns) ? missingApns.filter((item) => typeof item === "string") : [],
+      });
+      const voicePayload = voiceData?.result ?? voiceData;
+      const nextVoiceOptions = readVoiceOptions(voicePayload);
+      const nextLocalTtsCandidates = readLocalTtsCandidates(voicePayload);
+      const nextLocalTtsLaunchCandidates = readLocalTtsLaunchCandidates(localTtsData);
+      setVoiceOptions(nextVoiceOptions);
+      setLocalTtsCandidates(nextLocalTtsCandidates);
+      setLocalTtsLaunchCandidates(nextLocalTtsLaunchCandidates);
+      setLocalTtsDiscoveryStatus("ready");
+      return { localTtsCandidates: nextLocalTtsCandidates, localTtsLaunchCandidates: nextLocalTtsLaunchCandidates };
+    } catch (error) {
+      setLocalTtsDiscoveryStatus("error");
+      setLocalTtsDiscoveryError(error instanceof Error ? error.message : "Local TTS discovery failed.");
+      return { localTtsCandidates, localTtsLaunchCandidates };
+    }
+  };
+
+  const updateLaunchModel = (candidateId: string, model: string) => {
+    setTtsLaunchModelById((current) => ({ ...current, [candidateId]: model }));
+  };
+
+  const enableLocalTtsCandidate = async (candidate: LocalTtsLaunchCandidate) => {
+    const model = ttsLaunchModelById[candidate.id] || candidate.preferredModel || candidate.modelHints[0] || "";
+    setTtsLaunchBusyId(candidate.id);
+    setTtsLaunchMessage("");
+    setTtsLaunchTone("muted");
+    try {
+      const response = await fetch("/api/phone/local-tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start-service", collectorUrl: candidate.collectorUrl }),
+      });
+      const data = asRecord(await response.json().catch(() => null));
+      if (!response.ok || data?.ok === false) throw new Error(typeof data?.error === "string" ? data.error : "Local TTS could not be started.");
+      setTtsLaunchTone("ok");
+      setTtsLaunchMessage(typeof data?.message === "string" ? data.message : "TTS start requested.");
+      const refreshed = await refreshCallConnectionState();
+      const machineName = normalizeDisplayName(candidate.machineName);
+      const started = refreshed.localTtsCandidates.find((item) => item.ok && normalizeDisplayName(item.machineName) === machineName)
+        ?? refreshed.localTtsCandidates.find((item) => item.ok);
+      if (started) {
+        const selectedModel = model && started.availableModels.includes(model) ? model : started.model;
+        selectLocalTtsCandidate(started, { model: selectedModel, voice: started.voice });
+        setTtsLaunchPickerId("");
+        setTtsLaunchTone("ok");
+        setTtsLaunchMessage(started.availableModels.length
+          ? "Local TTS is running. Confirmed device models are available below."
+          : "Local TTS is running. Refresh again if the model list is still warming up.");
+      }
+    } catch (error) {
+      setTtsLaunchTone("error");
+      setTtsLaunchMessage(error instanceof Error ? error.message : "Local TTS could not be started.");
+    } finally {
+      setTtsLaunchBusyId("");
+    }
+  };
+
+  const localTtsModelStatus = (candidate: LocalTtsCandidate, model: string) =>
+    candidate.availableModelDetails.find((item) => item.id === model);
+
+  const runLocalTtsModelAction = async (
+    candidate: LocalTtsCandidate,
+    action: "load-model" | "unload-model",
+    status: LocalTtsModelStatus,
+  ) => {
+    const busyKey = `${candidate.appId}:${status.providerId}:${action}`;
+    setTtsModelBusyKey(busyKey);
+    setTtsModelMessage(action === "load-model" ? `Loading ${status.id}...` : `Unloading ${status.providerId}...`);
+    setTtsModelTone("muted");
+    try {
+      const response = await fetch("/api/phone/local-tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          appId: candidate.appId,
+          model: status.id,
+          providerId: status.providerId,
+        }),
+      });
+      const data = asRecord(await response.json().catch(() => null));
+      if (!response.ok || data?.ok === false) throw new Error(typeof data?.error === "string" ? data.error : "Local TTS model action failed.");
+      if (action === "unload-model" && status.id === selectedLocalTtsModel) {
+        const fallback = candidate.availableModelDetails.find((item) => item.providerId !== status.providerId && item.callReady)?.id
+          || candidate.availableModels.find((model) => model !== status.id)
+          || candidate.model;
+        updateLocalTtsModel(fallback);
+      }
+      setTtsModelTone("ok");
+      setTtsModelMessage(action === "load-model" ? `${status.id} is loading on ${candidate.machineName || candidate.name}.` : `${status.providerId} unload requested.`);
+      await refreshCallConnectionState();
+    } catch (error) {
+      setTtsModelTone("error");
+      setTtsModelMessage(error instanceof Error ? error.message : "Local TTS model action failed.");
+    } finally {
+      setTtsModelBusyKey("");
+    }
+  };
+
+  const changeLocalTtsModel = async (candidate: LocalTtsCandidate, model: string) => {
+    updateLocalTtsModel(model);
+    const status = localTtsModelStatus(candidate, model);
+    if (!status || status.loaded) {
+      setTtsModelTone("ok");
+      setTtsModelMessage(status ? `${model} selected.` : `${model} selected. Load state is not reported by Universal TTS.`);
+      return;
+    }
+    await runLocalTtsModelAction(candidate, "load-model", status);
   };
 
   const buildPairingQr = async () => {
@@ -289,6 +615,8 @@ export function AgentSettingsCallsPanel(props: any) {
       void buildPairingQr();
     }, 0);
     return () => window.clearTimeout(timer);
+    // Mount-only discovery; manual Refresh handles later availability checks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -297,7 +625,10 @@ export function AgentSettingsCallsPanel(props: any) {
         eyebrow="Calls"
         title="Scheduled phone calls"
         sub="Let this agent ring your phone with status briefings through the HivemindOS Mobile gateway."
-        action={<Btn sm onClick={() => void refreshCallConnectionState()}><RefreshCcw size={13} aria-hidden="true" />Refresh</Btn>}
+        action={<Btn sm disabled={localTtsDiscoveryLoading} onClick={() => void refreshCallConnectionState()}>
+          <RefreshCcw size={13} className={localTtsDiscoveryLoading ? "animate-spin" : undefined} aria-hidden="true" />
+          {localTtsDiscoveryLoading ? "Refreshing" : "Refresh"}
+        </Btn>}
       />
 
       {isQueenSettings && onQueenClapWakeEnabledChange ? (
@@ -417,7 +748,8 @@ export function AgentSettingsCallsPanel(props: any) {
               </select>
             </Field>
             <Field label="Missed-call fallback">
-              <select className="fb-select" value={agentCallSettings.missedCallFallback} onChange={(event) => updateAgentCalls({ missedCallFallback: event.target.value })}>
+              {/* DOM boundary: the option values below are exactly the AgentCallMissedFallback union. */}
+              <select className="fb-select" value={agentCallSettings.missedCallFallback} onChange={(event) => updateAgentCalls({ missedCallFallback: event.target.value as AgentCallMissedFallback })}>
                 {FALLBACK_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
               </select>
             </Field>
@@ -432,65 +764,194 @@ export function AgentSettingsCallsPanel(props: any) {
 
           {agentCallSettings.voiceRuntime === "local-tts" ? (
             <>
-            <div className={styles.localTtsGrid}>
-              {localTtsCandidates.length ? localTtsCandidates.map((candidate) => (
-                <button
-                  type="button"
-                  key={candidate.id}
-                  className={styles.localTtsCard}
-                  data-selected={candidate.id === agentCallSettings.voiceProviderId ? "" : undefined}
-                  disabled={!candidate.ok}
-                  onClick={() => selectLocalTtsCandidate(candidate)}
-                >
-                  <Badge tone={candidate.ok ? "live" : "danger"}>{candidate.ok ? "Validated" : "Unavailable"}</Badge>
-                  <strong>{candidate.name}</strong>
-                  <small>{[candidate.machineName, candidate.port ? `port ${candidate.port}` : ""].filter(Boolean).join(" · ") || "Connected app"}</small>
-                  <dl>
-                    <div><dt>Model</dt><dd>{candidate.id === agentCallSettings.voiceProviderId ? (agentCallSettings.voiceModelId || candidate.model) : candidate.model}</dd></div>
-                    <div><dt>Voice</dt><dd>{candidate.voice}</dd></div>
-                    <div><dt>Stream</dt><dd>{candidate.sampleFormat} · {candidate.sampleRate} Hz</dd></div>
-                    <div><dt>Engine</dt><dd>{candidate.streamingImplementation || candidate.streamingKind || "streaming"}</dd></div>
-                  </dl>
-                  {candidate.voiceCount ? <small>{candidate.voiceCount} voices</small> : null}
-                  {!candidate.ok && candidate.error ? <p className={styles.messageError}>{candidate.error}</p> : null}
-                </button>
-              )) : (
+            {localTtsDiscoveryLoading ? (
+              <div className={styles.localTtsLoading} role="status" aria-live="polite">
+                <RefreshCcw size={16} className="animate-spin" aria-hidden="true" />
+                <div>
+                  <strong>Checking Local TTS availability</strong>
+                  <span>Scanning Hivemind Link machines, Universal TTS services, voices, and model rosters.</span>
+                </div>
+              </div>
+            ) : localTtsDiscoveryError ? (
+              <div className={styles.localTtsLoading} data-tone="error" role="status">
+                <Volume2 size={16} aria-hidden="true" />
+                <div>
+                  <strong>Local TTS discovery failed</strong>
+                  <span>{localTtsDiscoveryError}</span>
+                </div>
+              </div>
+            ) : null}
+            {localTtsCandidates.length ? (
+              <div className={styles.localTtsGrid}>
+                {localTtsCandidates.map((candidate) => {
+                  const selected = candidate.id === agentCallSettings.voiceProviderId;
+                  const selectedModel = selected ? selectedLocalTtsModel || candidate.model : candidate.model;
+                  const selectedStatus = localTtsModelStatus(candidate, selectedModel);
+                  const loadedProviders = [...new Map(candidate.availableModelDetails
+                    .filter((status) => status.loaded && status.callReady)
+                    .map((status) => [status.providerId, status])).values()];
+                  return (
+                    <article
+                      key={candidate.id}
+                      className={styles.localTtsCard}
+                      data-selected={selected ? "" : undefined}
+                      data-unavailable={!candidate.ok ? "" : undefined}
+                    >
+                      <Badge tone={candidate.ok ? "live" : "danger"}>{candidate.ok ? "Validated" : "Unavailable"}</Badge>
+                      <strong>{candidate.name}</strong>
+                      <small>{[candidate.machineName, candidate.port ? `port ${candidate.port}` : ""].filter(Boolean).join(" · ") || "Connected app"}</small>
+                      <dl>
+                        <div><dt>Model</dt><dd>{selectedModel}</dd></div>
+                        <div><dt>Voice</dt><dd>{selected ? (agentCallSettings.voiceId || candidate.voice) : candidate.voice}</dd></div>
+                        <div><dt>Stream</dt><dd>{candidate.sampleFormat} · {candidate.sampleRate} Hz</dd></div>
+                        <div><dt>Engine</dt><dd>{candidate.streamingImplementation || candidate.streamingKind || "streaming"}</dd></div>
+                      </dl>
+                      {candidate.voiceCount ? <small>{candidate.voiceCount} voices</small> : null}
+                      {!candidate.ok && candidate.error ? <p className={styles.messageError}>{candidate.error}</p> : null}
+                      {!selected ? (
+                        <Btn sm disabled={!candidate.ok} onClick={() => selectLocalTtsCandidate(candidate)}>Use this voice</Btn>
+                      ) : candidate.ok ? (
+                        <div className={styles.localTtsInlineControls}>
+                          {candidate.availableModels.length ? (
+                            <Field label="Model">
+                              <select
+                                className="fb-select"
+                                value={selectedModel}
+                                disabled={Boolean(ttsModelBusyKey)}
+                                onChange={(event) => void changeLocalTtsModel(candidate, event.target.value)}
+                              >
+                                {candidate.availableModels.map((model) => (
+                                  <option value={model} key={model}>{model}</option>
+                                ))}
+                              </select>
+                            </Field>
+                          ) : null}
+                          {candidate.availableVoices.length ? (
+                            <Field label="Voice">
+                              <select
+                                className="fb-select"
+                                value={agentCallSettings.voiceId || candidate.voice}
+                                onChange={(event) => updateLocalTtsVoice(event.target.value)}
+                              >
+                                {candidate.availableVoices.map((voice) => (
+                                  <option value={voice} key={voice}>{voice}</option>
+                                ))}
+                              </select>
+                            </Field>
+                          ) : null}
+                          <div className={styles.localTtsModelActions}>
+                            <span>{selectedStatus?.loaded ? `${selectedStatus.providerId} loaded` : "Load state unavailable"}</span>
+                            {selectedStatus ? (
+                              <Btn
+                                sm
+                                variant={selectedStatus.loaded ? "ghost" : "primary"}
+                                disabled={Boolean(ttsModelBusyKey)}
+                                onClick={() => void runLocalTtsModelAction(candidate, selectedStatus.loaded ? "unload-model" : "load-model", selectedStatus)}
+                              >
+                                {ttsModelBusyKey.includes(selectedStatus.providerId) ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : <Volume2 size={13} aria-hidden="true" />}
+                                {selectedStatus.loaded ? "Unload selected" : "Load selected"}
+                              </Btn>
+                            ) : null}
+                          </div>
+                          {loadedProviders.filter((status) => status.providerId !== selectedStatus?.providerId).length ? (
+                            <div className={styles.localTtsLoadedList}>
+                              {loadedProviders.filter((status) => status.providerId !== selectedStatus?.providerId).map((status) => (
+                                <Btn
+                                  key={status.providerId}
+                                  sm
+                                  variant="ghost"
+                                  disabled={Boolean(ttsModelBusyKey)}
+                                  onClick={() => void runLocalTtsModelAction(candidate, "unload-model", status)}
+                                >
+                                  {ttsModelBusyKey.includes(status.providerId) ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : null}
+                                  Unload {status.providerId}
+                                </Btn>
+                              ))}
+                            </div>
+                          ) : null}
+                          {ttsModelMessage ? <p className={[styles.launchStatus, ttsModelTone === "ok" ? styles.messageOk : ttsModelTone === "error" ? styles.messageError : ""].filter(Boolean).join(" ")}>{ttsModelMessage}</p> : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : localTtsDiscoveryLoading ? null : (
+              <div className={styles.localTtsEmpty}>
                 <div className="as-info">
                   <Volume2 size={16} className="ic" aria-hidden="true" />
                   <p>No TTS candidates were discovered yet. Start Universal TTS, then refresh this panel.</p>
                 </div>
-              )}
-            </div>
-            {selectedLocalTtsCandidate?.ok && (selectedLocalTtsCandidate.availableModels?.length || selectedLocalTtsCandidate.availableVoices?.length) ? (
-              <div className={styles.voiceGrid}>
-                {selectedLocalTtsCandidate.availableModels?.length ? (
-                  <Field label="Model (this agent)">
-                    <select
-                      className="fb-select"
-                      value={agentCallSettings.voiceModelId || selectedLocalTtsCandidate.model}
-                      onChange={(event) => updateLocalTtsModel(event.target.value)}
-                    >
-                      {selectedLocalTtsCandidate.availableModels.map((model) => (
-                        <option value={model} key={model}>{model}</option>
-                      ))}
-                    </select>
-                  </Field>
-                ) : null}
-                {selectedLocalTtsCandidate.availableVoices?.length ? (
-                  <Field label="Voice (this agent)">
-                    <select
-                      className="fb-select"
-                      value={agentCallSettings.voiceId || selectedLocalTtsCandidate.voice}
-                      onChange={(event) => updateLocalTtsVoice(event.target.value)}
-                    >
-                      {selectedLocalTtsCandidate.availableVoices.map((voice) => (
-                        <option value={voice} key={voice}>{voice}</option>
-                      ))}
-                    </select>
-                  </Field>
+                {localTtsLaunchCandidates.length ? (
+                  <section className={styles.localTtsLaunchPanel}>
+                    <div className={styles.launchHead}>
+                      <div>
+                        <strong>Machines that can start TTS</strong>
+                        <span>Hivemind Link can request Universal TTS on these reachable hosts.</span>
+                      </div>
+                    </div>
+                    <div className={styles.ttsMachineGrid}>
+                      {localTtsLaunchCandidates.map((candidate) => {
+                        const resources = machineResourceSummary(candidate);
+                        const selectedModel = ttsLaunchModelById[candidate.id] || candidate.preferredModel || candidate.modelHints[0] || "";
+                        const badgeTone = candidate.capacity === "ready" ? "live" : candidate.capacity === "limited" ? "danger" : "honey";
+                        const modelHintText = candidate.modelHintsSource === "fallback"
+                          ? "Default starter models are shown until Universal TTS answers /v1/models."
+                          : `${candidate.modelHints.length} models loaded from this machine's /v1/models roster.`;
+                        return (
+                          <article key={candidate.id} className={styles.ttsMachineCard} data-capacity={candidate.capacity}>
+                            <div className={styles.ttsMachineTop}>
+                              <span className={styles.ttsMachineIcon}><Server size={16} aria-hidden="true" /></span>
+                              <div>
+                                <strong>{candidate.machineName}</strong>
+                                <small>{candidate.collectorStatus === "ready" ? "Hivemind Link ready" : `Collector ${candidate.collectorStatus}`}</small>
+                              </div>
+                              <Badge tone={candidate.canStart ? badgeTone : "plain"}>{candidate.capacityLabel}</Badge>
+                            </div>
+                            <dl className={styles.resourceStrip}>
+                              <div><dt><Cpu size={12} aria-hidden="true" />CPU</dt><dd>{resources.cpu}</dd></div>
+                              <div><dt><MemoryStick size={12} aria-hidden="true" />RAM</dt><dd>{resources.ram}</dd></div>
+                              <div><dt><HardDrive size={12} aria-hidden="true" />Disk</dt><dd>{resources.disk}</dd></div>
+                              <div><dt><Server size={12} aria-hidden="true" />OS</dt><dd>{resources.platform}</dd></div>
+                            </dl>
+                            <p className={styles.capacityLine}>{candidate.capacityDetail}</p>
+                            <div className={styles.ttsLaunchActions}>
+                              <Btn
+                                sm
+                                disabled={!candidate.canStart || ttsLaunchBusyId === candidate.id}
+                                onClick={() => setTtsLaunchPickerId(ttsLaunchPickerId === candidate.id ? "" : candidate.id)}
+                              >
+                                {ttsLaunchBusyId === candidate.id ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+                                Enable
+                              </Btn>
+                              {ttsLaunchPickerId === candidate.id ? (
+                                <div className={styles.ttsModelPopover} role="tooltip">
+                                  {candidate.modelHints.length ? (
+                                    <Field label="Model to load">
+                                      <select className="fb-select" value={selectedModel} onChange={(event) => updateLaunchModel(candidate.id, event.target.value)}>
+                                        {candidate.modelHints.map((model) => <option value={model} key={model}>{model}</option>)}
+                                      </select>
+                                    </Field>
+                                  ) : (
+                                    <p className={styles.ttsPopoverHint}>Model choices load after the service reports its device roster.</p>
+                                  )}
+                                  <p className={styles.ttsPopoverHint}>{modelHintText}</p>
+                                  <Btn variant="primary" sm disabled={!candidate.canStart || ttsLaunchBusyId === candidate.id} onClick={() => void enableLocalTtsCandidate(candidate)}>
+                                    {ttsLaunchBusyId === candidate.id ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : <Volume2 size={13} aria-hidden="true" />}
+                                    Start TTS
+                                  </Btn>
+                                </div>
+                              ) : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    {ttsLaunchMessage ? <p className={[styles.launchStatus, ttsLaunchTone === "ok" ? styles.messageOk : ttsLaunchTone === "error" ? styles.messageError : ""].filter(Boolean).join(" ")}>{ttsLaunchMessage}</p> : null}
+                  </section>
                 ) : null}
               </div>
-            ) : null}
+            )}
             </>
           ) : null}
 

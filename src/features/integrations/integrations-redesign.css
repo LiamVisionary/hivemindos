@@ -78,6 +78,20 @@
 
 .fr-root * { box-sizing: border-box; }
 
+.fr-root.ni-embedded {
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+.fr-root.ni-embedded::-webkit-scrollbar { width: 7px; height: 7px; }
+.fr-root.ni-embedded::-webkit-scrollbar-track { background: transparent; }
+.fr-root.ni-embedded::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+.fr-root.ni-embedded::-webkit-scrollbar-thumb:hover { background: var(--line-3); background-clip: padding-box; }
+
 .fr-scroll { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
 .fr-scroll::-webkit-scrollbar { width: 7px; height: 7px; }
 .fr-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -231,6 +245,50 @@
 .ni-methcard > svg { color: var(--honey); }
 .ni-methcard strong { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 .ni-methcard span { font-size: 13px; color: var(--fg-3); line-height: 1.45; }
+
+.x-method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.x-method-card {
+  min-height: 166px;
+  padding: 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon copy"
+    "badge badge";
+  gap: 12px;
+  align-items: start;
+  transition: transform .16s, border-color .16s, background .16s, box-shadow .16s;
+}
+.x-method-card:hover { transform: translateY(-1px); border-color: var(--line-3); }
+.x-method-card[data-sel] { border-color: var(--honey-line); background: var(--panel-hi); box-shadow: 0 0 0 3px var(--honey-soft); transform: translateY(-1px); }
+.x-method-icon {
+  grid-area: icon;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--honey-soft);
+  border: 1px solid var(--honey-line);
+  color: var(--honey);
+}
+.x-method-copy { grid-area: copy; min-width: 0; display: grid; gap: 6px; }
+.x-method-copy strong { font-size: 15.5px; font-weight: 600; letter-spacing: 0; }
+.x-method-copy span { color: var(--fg-3); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.x-method-card > .ni-badge { grid-area: badge; justify-self: start; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.x-method-panel { border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--panel-2); padding: 16px; display: grid; gap: 14px; }
+.x-method-detail { display: grid; gap: 12px; }
+.x-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.x-actions .fb-btn { min-width: 0; }
+.x-muted { margin: 0; color: var(--fg-3); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.x-info-row { border-top: 1px solid var(--line); padding-top: 11px; }
+.x-connection-list { display: grid; gap: 8px; }
 
 .ni-setup { border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--panel-2); padding: 18px; display: grid; gap: 15px; }
 .ni-setup-head { display: flex; align-items: center; gap: 13px; }

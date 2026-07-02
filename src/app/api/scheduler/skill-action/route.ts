@@ -185,8 +185,10 @@ async function executeWorkflowAction(input: {
   // Turbopack statically resolves a string-literal first arg to execFile()/spawn()
   // as a *module specifier* (webpack does not) and fails `next build` with
   // "Module not found: Can't resolve". Route the binary name through an opaque
-  // String() call so the bundler can't constant-fold it into a module path.
-  const execCommand = (0, String)(execSpec.command);
+  // indirect String() call so the bundler can't constant-fold it into a module
+  // path. (globalThis.String rather than bare String: tsc only allows the
+  // (0, fn)() idiom when the callee is a property access — TS2695.)
+  const execCommand = (0, globalThis.String)(execSpec.command);
   return new Promise<Response>((resolve) => {
     execFile(
       execCommand,

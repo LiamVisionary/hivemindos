@@ -1,15 +1,41 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Activity, AppWindow, Bell, Bot, Coins, FolderOpen, Landmark, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, Coins, FolderOpen, KeyRound, Landmark, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
 
 import fleetStyles from "@/app/fleet.module.css";
+import type { DashboardUtilityView } from "@/features/dashboard/dashboard-navigation";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 
 const fleetClass = createStyleClass(fleetStyles);
 const moreCardClass = "grid gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] p-4 text-left text-[var(--foreground)] transition hover:border-[var(--accent-strong)] hover:bg-[var(--surface-strong)]";
 const moreIconClass = "flex h-9 w-9 items-center justify-center rounded-md border border-[var(--comb-line)] bg-[var(--button-accent)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4";
 
-type MorePanelTarget = "integrations" | "env" | "maintenance" | "sessions" | "tools" | "files" | "notifications" | "messaging" | "memory" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
+// The More menu's reachable set is the catalog's Utilities group, so a new
+// utility view added to the dashboard registry is a compile error here until
+// it gets a card (this is how the previously-unreachable Env view surfaced).
+type MorePanelTarget = DashboardUtilityView;
+type MorePanelGridTarget = Exclude<MorePanelTarget, "fusion">;
+
+const MORE_PANEL_UTILITY_ORDER = [
+  "aeon",
+  "governance",
+  "integrations",
+  "maintenance",
+  "sessions",
+  "tools",
+  "my-apps",
+  "phone",
+  "memory",
+  "env",
+  "files",
+  "notifications",
+  "messaging",
+] as const satisfies readonly MorePanelGridTarget[];
+
+type UtilityMissingFromMorePanel = Exclude<MorePanelGridTarget, (typeof MORE_PANEL_UTILITY_ORDER)[number]>;
+// Compile-time proof the More grid shows every utility view (fusion has its own section).
+const _morePanelUtilitiesComplete: UtilityMissingFromMorePanel extends never ? true : UtilityMissingFromMorePanel = true;
+void _morePanelUtilitiesComplete;
 
 type MorePanelCard = {
   icon: ReactNode;
@@ -40,6 +66,7 @@ export type MorePanelProps = {
 };
 
 export function MorePanel({
+  sharedEnvCount,
   maintenanceOk,
   runtimeFileRootCount,
   notificationUnread,
@@ -57,100 +84,96 @@ export function MorePanel({
       body: "Create reusable skills from selected skills, tools, apps, agents, and workflows.",
     },
   ];
-  const systemItems: Array<MorePanelNavigationItem | MorePanelRouteItem> = [
-    {
-      id: "aeon" as const,
+  const utilityCards: Record<MorePanelGridTarget, MorePanelCard> = {
+    aeon: {
       icon: <Bot aria-hidden="true" />,
       eyebrow: "Autopilot",
       title: "Aeon",
       body: "Manage unattended skills, schedules, workflow runs, and outputs.",
     },
-    {
-      id: "governance" as const,
+    governance: {
       icon: <Landmark aria-hidden="true" />,
       eyebrow: "Companies & budgets",
       title: "Zero Human Company",
       body: "Group agents into companies, set shared budgets and kill switches, and clear spend approvals.",
     },
-    {
-      id: "stake",
-      icon: <Coins aria-hidden="true" />,
-      eyebrow: "Community tiers",
-      title: "Stake HIVE",
-      body: "Lock HIVE for Holder through Visionary status, alpha rooms, governance, and curator rights.",
-      href: "/stake",
-    },
-    {
-      id: "integrations" as const,
+    integrations: {
       icon: <PlugZap aria-hidden="true" />,
       eyebrow: "Nango host",
       title: "Integrations",
       body: "Choose the always-on machine for shared external API access.",
     },
-    {
-      id: "maintenance" as const,
+    maintenance: {
       icon: <ShieldCheck aria-hidden="true" />,
       eyebrow: maintenanceOk === false ? "Needs attention" : "Fleet checks",
       title: "Diagnostics",
       body: "Run dashboard and runtime health checks.",
     },
-    {
-      id: "sessions" as const,
+    sessions: {
       icon: <Search aria-hidden="true" />,
       eyebrow: "Runtime memory",
       title: "Sessions",
       body: "Search readable Hermes and OpenClaw conversations from one place.",
     },
-    {
-      id: "tools" as const,
+    tools: {
       icon: <Wrench aria-hidden="true" />,
       eyebrow: "Callable handles",
       title: "Tools",
       body: "Review built-in, runtime, and app-provided handles agents can invoke.",
     },
-    {
-      id: "my-apps" as const,
+    "my-apps": {
       icon: <AppWindow aria-hidden="true" />,
       eyebrow: "Providers",
       title: "Apps & Services",
       body: "Open running apps and browse installable providers agents can also call.",
     },
-    {
-      id: "phone" as const,
+    phone: {
       icon: <PhoneCall aria-hidden="true" />,
       eyebrow: "Call prompts",
       title: "Phone",
       body: "Manage the spoken prompts your iPhone calls you with.",
     },
-    {
-      id: "memory" as const,
+    memory: {
       icon: <Activity aria-hidden="true" />,
       eyebrow: memoryRssMb ? `${Math.round(memoryRssMb)} MB RSS` : "Review queue",
       title: "Memory & Review",
       body: memoryGrowthMb && memoryGrowthMb > 0 ? `Growing ${memoryGrowthMb.toFixed(1)} MB in the sample window, with review and Context X-Ray tools below.` : "Review proposed brain writes, inspect Context X-Ray manifests, and track process RSS growth.",
     },
-    {
-      id: "files" as const,
+    env: {
+      icon: <KeyRound aria-hidden="true" />,
+      eyebrow: sharedEnvCount ? `${sharedEnvCount} shared keys` : "Shared credentials",
+      title: "Env",
+      body: "Manage shared and per-agent runtime variables synced across the hive.",
+    },
+    files: {
       icon: <FolderOpen aria-hidden="true" />,
       eyebrow: runtimeFileRootCount ? `${runtimeFileRootCount} roots` : "Scoped browser",
       title: "Files",
       body: "Inspect allowlisted runtime and brain files.",
     },
-    {
-      id: "notifications" as const,
+    notifications: {
       icon: <Bell aria-hidden="true" />,
       eyebrow: notificationUnread ? `${notificationUnread} unread` : `${notificationTotal} total`,
       title: "Alerts",
       body: "Review messages agents write into the shared inbox.",
     },
-    {
-      id: "messaging" as const,
+    messaging: {
       icon: <MessageSquare aria-hidden="true" />,
       eyebrow: "Telegram, Discord, iMessage",
       title: "Messaging",
       body: "Set up outbound channels for Queen Bee and individual agents.",
     },
-  ];
+  };
+  const stakeItem: MorePanelRouteItem = {
+    id: "stake",
+    icon: <Coins aria-hidden="true" />,
+    eyebrow: "Community tiers",
+    title: "Stake HIVE",
+    body: "Lock HIVE for Holder through Visionary status, alpha rooms, governance, and curator rights.",
+    href: "/stake",
+  };
+  const systemItems: Array<MorePanelNavigationItem | MorePanelRouteItem> = MORE_PANEL_UTILITY_ORDER.map((id) => ({ id, ...utilityCards[id] }));
+  systemItems.splice(2, 0, stakeItem);
 
   return (
     <section className={fleetClass("taskPanel", "tabPanel")}>

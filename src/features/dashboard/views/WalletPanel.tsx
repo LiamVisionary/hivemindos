@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
+import { AGENT_PAYMENT_PROVIDER_FEATURES, type WalletDropInGroup } from "@/lib/config/agent-payments";
 import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
@@ -285,15 +286,12 @@ function walletViewForShelf(id: string): string {
   return id;
 }
 
-function walletProviderForDropIn(wallet: any): "bankr" | "cards" | "crypto" | "manual" | "usepod" | "veil" | "venice" | "x402" {
+function walletProviderForDropIn(wallet: any): WalletDropInGroup {
   const provider = String(wallet?.provider || "").toLowerCase();
-  if (provider === "bankr") return "bankr";
-  if (provider === "usepod") return "usepod";
-  if (provider === "veil") return "veil";
-  if (provider === "venice") return "venice";
-  if (provider === "x402") return "x402";
-  if (provider === "moneyclaw" || provider === "cards" || provider === "clawcard") return "cards";
-  if (provider === "manual") return "manual";
+  if (provider === "cards") return "cards"; // legacy stored value predating provider ids
+  if (provider in AGENT_PAYMENT_PROVIDER_FEATURES) {
+    return AGENT_PAYMENT_PROVIDER_FEATURES[provider as keyof typeof AGENT_PAYMENT_PROVIDER_FEATURES].walletDropInGroup;
+  }
   return "crypto";
 }
 

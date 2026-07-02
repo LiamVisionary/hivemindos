@@ -54,9 +54,16 @@ def main() -> int:
         help="Whether the final implementation is mostly assimilated repo code, balanced, or mostly custom.",
     )
     parser.add_argument("--output", default="ASSIMILATION.json")
-    parser.add_argument("--request", default="", help="Original user request to include in ASSIMILATION_LOG")
+    parser.add_argument(
+        "--request",
+        required=True,
+        help="Original user request; joins the manifest to the run's other ASSIMILATION_LOG events (21/48 June 2026 manifests were unattributable without it)",
+    )
     parser.add_argument("--no-log", action="store_true", help="Do not append ASSIMILATION_LOG entries")
     args = parser.parse_args()
+
+    if not args.request.strip():
+        raise SystemExit("--request must be non-empty so the manifest is attributable to a run.")
 
     if args.custom_code_assessment == "mostly_custom":
         raise SystemExit(
@@ -90,8 +97,20 @@ def main() -> int:
         raise SystemExit("At least one concrete source-to-target mapping is required.")
 
     output = args.target_root / args.output
+    if output.exists():
+        try:
+            previous_request = str(json.loads(output.read_text(encoding="utf-8")).get("request", "")).strip()
+        except (OSError, json.JSONDecodeError):
+            previous_request = ""
+        if previous_request and previous_request != args.request.strip():
+            print(
+                f"warning: overwriting {args.output} written for a different request "
+                f"({previous_request[:80]!r}); use --output ASSIMILATION.<task-slug>.json to keep both",
+                file=sys.stderr,
+            )
     payload = {
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "request": args.request.strip(),
         "custom_code_assessment": args.custom_code_assessment,
         "entries": entries,
     }

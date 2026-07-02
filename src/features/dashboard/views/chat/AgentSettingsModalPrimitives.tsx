@@ -1,10 +1,9 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { Bot, BrainCircuit, Phone, PlugZap, Settings2, ShieldCheck } from "lucide-react";
+import type { HivemindosModelsAgentConfig, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
 
 const TEXT_COMMIT_DELAY_MS = 200;
 
@@ -42,7 +41,7 @@ export function panelDetail(panel: string) {
   return PANEL_DETAILS[panel] ?? "";
 }
 
-export function hasUsePodSetup(config = {}) {
+export function hasUsePodSetup(config: UsePodAgentConfig = {}) {
   return Boolean(
     config.depositAddress
       || config.depositCode
@@ -54,11 +53,11 @@ export function hasUsePodSetup(config = {}) {
   );
 }
 
-export function isUsePodSetupReady(config = {}) {
+export function isUsePodSetupReady(config: UsePodAgentConfig = {}) {
   return config.lastTestStatus === "ready";
 }
 
-export function hasVeniceSetup(config = {}) {
+export function hasVeniceSetup(config: VeniceAgentConfig = {}) {
   return Boolean(
     config.walletVaultId
       || config.walletAddress
@@ -69,11 +68,11 @@ export function hasVeniceSetup(config = {}) {
   );
 }
 
-export function isVeniceSetupReady(config = {}) {
+export function isVeniceSetupReady(config: VeniceAgentConfig = {}) {
   return config.lastTestStatus === "ready";
 }
 
-function moneyValue(value) {
+function moneyValue(value: unknown) {
   const raw = typeof value === "number"
     ? value
     : typeof value === "string"
@@ -82,7 +81,7 @@ function moneyValue(value) {
   return Number.isFinite(raw) ? raw : 0;
 }
 
-export function hasHivemindosModelsSetup(config = {}) {
+export function hasHivemindosModelsSetup(config: HivemindosModelsAgentConfig = {}) {
   return Boolean(
     config.creditAccountId
       || config.walletVaultId
@@ -93,7 +92,7 @@ export function hasHivemindosModelsSetup(config = {}) {
   );
 }
 
-export function isHivemindosModelsSetupReady(config = {}) {
+export function isHivemindosModelsSetupReady(config: HivemindosModelsAgentConfig = {}) {
   const fundedCredits = Boolean(
     moneyValue(config.lastCreditBalanceUsd) > 0
       || moneyValue(config.lastCreditBalanceLabel) > 0,

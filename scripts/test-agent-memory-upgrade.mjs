@@ -49,7 +49,7 @@ for (const token of [
 
 for (const token of [
   "appendAgentMemoryEntityIndex(root, record)",
-  "for (const record of records) await appendAgentMemoryEntityIndex(root, record)",
+  "await rewriteAgentMemoryEntityIndex(root, records)",
   "entities: record.entities",
   "aliases: record.aliases",
   "actorRole: record.actorRole",

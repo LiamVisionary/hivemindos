@@ -13,6 +13,7 @@
    is shown in the detail. */
 
 import React from "react";
+import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
 import { Badge, BBtn, ProviderBadge } from "./primitives";
 import { BIcon, type IconName } from "./icons";
 import { useTradeDesk } from "./trade-context";
@@ -116,18 +117,9 @@ export function CapabilityRail() {
   );
 }
 
-// The last token a fee claim was submitted for persists across reloads, so an
-// owner who claims regularly doesn't retype it every time. Mirrors TradePanel's
-// per-feature localStorage memory.
-const CLAIM_FEES_TOKEN_KEY = "hivemindos.trade.claimFeesToken.v1";
-function readClaimFeesToken(): string {
-  if (typeof window === "undefined") return "";
-  try { return window.localStorage.getItem(CLAIM_FEES_TOKEN_KEY) || ""; } catch { return ""; }
-}
-function writeClaimFeesToken(token: string) {
-  if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(CLAIM_FEES_TOKEN_KEY, token); } catch { /* quota — best effort */ }
-}
+// The last token a fee claim was submitted for persists across reloads (via
+// shared dashboard state), so an owner who claims regularly doesn't retype it.
+const CLAIM_FEES_TOKEN_STATE_KEY = "trade.claimFeesToken";
 
 // ── detail ───────────────────────────────────────────────────────────────────
 function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack: () => void }) {
@@ -143,15 +135,18 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
 
   const [mode, setMode] = React.useState<"build" | "hive">(hasForm ? "build" : "hive");
   // Chain fields are seeded/clamped to chains the user actually holds; the
-  // claim-fees token is rehydrated from the last submitted claim.
-  const [values, setValues] = React.useState<Record<string, string>>(() => {
-    const init = initFormValues(form, availableChains);
-    if (intent.id === "claim-fees") {
-      const saved = readClaimFeesToken();
-      if (saved) init.token = saved;
+  // claim-fees token is rehydrated (async) from the last submitted claim.
+  const [values, setValues] = React.useState<Record<string, string>>(() => initFormValues(form, availableChains));
+  const [savedClaimFeesToken, rememberClaimFeesToken] = useRememberedDashboardValue(CLAIM_FEES_TOKEN_STATE_KEY);
+  // Seed the token when the remembered value hydrates, unless the user already
+  // typed one — render-phase adjust, not an effect (react.dev guidance).
+  const [seededClaimFeesToken, setSeededClaimFeesToken] = React.useState("");
+  if (savedClaimFeesToken !== seededClaimFeesToken) {
+    setSeededClaimFeesToken(savedClaimFeesToken);
+    if (intent.id === "claim-fees" && savedClaimFeesToken && !values.token?.trim()) {
+      setValues((current) => ({ ...current, token: savedClaimFeesToken }));
     }
-    return init;
-  });
+  }
   const [prompt, setPrompt] = React.useState("");
   const [prepared, setPrepared] = React.useState<CryptoPreparedAction | null>(null);
   const [preparedKey, setPreparedKey] = React.useState("");
@@ -199,7 +194,7 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
     if (outcome.ok) {
       playTradeSuccessSound();
       // Remember the token a claim was submitted for so the next visit pre-fills it.
-      if (intent.id === "claim-fees" && values.token?.trim()) writeClaimFeesToken(values.token.trim());
+      if (intent.id === "claim-fees" && values.token?.trim()) rememberClaimFeesToken(values.token.trim());
       desk.refresh();
     }
   };

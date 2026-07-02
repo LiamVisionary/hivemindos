@@ -1190,7 +1190,7 @@ install_hive_env_add() {
   local bin_dir="${HOME}/.local/bin"
   local command_name command_path script_path
   mkdir -p "$bin_dir"
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse; do
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse dashboard-auth; do
     command_path="$bin_dir/$command_name"
     script_path="$ROOT/scripts/$command_name"
     chmod +x "$script_path"
@@ -1230,7 +1230,7 @@ EOF
   done
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
-    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, and hive-pulse from any folder" ;;
+    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, hive-pulse, and dashboard-auth from any folder" ;;
   esac
 }
 install_pnpm_if_missing() {
@@ -2176,8 +2176,8 @@ if [[ -n "$network_url" ]]; then
   echo "  $network_url"
 fi
 echo "  Unlock token: stored in .env.local and shared hive env as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
-echo "  Copy token later: pnpm dashboard-auth copy-token"
-echo "  Reset lost token: pnpm dashboard-auth reset-token"
+echo "  Copy token later: dashboard-auth copy-token"
+echo "  Reset lost token: dashboard-auth reset-token"
 copy_dashboard_token_if_requested
 echo
 echo "Collector:"

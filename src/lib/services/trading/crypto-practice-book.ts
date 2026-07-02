@@ -219,7 +219,7 @@ function normalizeHolding(input: Partial<CryptoPracticeHolding> & { symbol?: unk
 
 export function coalesceCryptoPracticeHoldings(holdings: Array<Partial<CryptoPracticeHolding> & { symbol?: unknown }>): CryptoPracticeHolding[] {
   const grouped = new Map<string, CryptoPracticeHolding[]>();
-  holdings.map(normalizeHolding).filter(Boolean).forEach((holding) => {
+  holdings.map(normalizeHolding).filter((holding): holding is CryptoPracticeHolding => holding !== null).forEach((holding) => {
     const key = holdingKey(holding);
     grouped.set(key, [...(grouped.get(key) ?? []), holding]);
   });

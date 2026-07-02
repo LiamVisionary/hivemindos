@@ -9,9 +9,9 @@ type DashboardUnlockRecoveryProps = {
   nativeMode?: boolean;
 };
 
-const copyTokenCommand = "pnpm dashboard-auth copy-token";
-const resetTokenCommand = "pnpm dashboard-auth reset-token";
-const rotateSecretCommand = "pnpm dashboard-auth rotate-secret";
+const copyTokenCommand = "dashboard-auth copy-token";
+const resetTokenCommand = "dashboard-auth reset-token";
+const rotateSecretCommand = "dashboard-auth rotate-secret";
 const nativeBootstrapHashKey = "hivemindos_native_bootstrap";
 
 export default function DashboardUnlockRecovery({ authSecretPresent, deviceTokenPresent, nativeMode = false }: DashboardUnlockRecoveryProps) {
@@ -135,7 +135,7 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           <p style={{ margin: 0, color: "var(--text-soft, #5e574b)", fontSize: 13, lineHeight: 1.55 }}>
             {nativeMode
               ? "The desktop app creates local auth automatically. If this screen stays locked, quit and reopen HivemindOS."
-              : "Run these from the HivemindOS project folder. The token value is never exposed through this locked page."}
+              : "Run these from any terminal after setup. If the command is not on PATH yet, run it from the HivemindOS project folder with pnpm. The token value is never exposed through this locked page."}
           </p>
           {!nativeMode ? (
             <div style={{ display: "grid", gap: 10 }}>

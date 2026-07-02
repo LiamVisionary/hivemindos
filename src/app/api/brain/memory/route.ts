@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   answerFromAgentMemory,
+  consolidateAgentMemory,
   evolveAgentMemory,
+  healthAgentMemory,
   recallAgentMemory,
   recordAgentMemoryUsage,
   rememberAgentMemory,
@@ -32,12 +34,17 @@ function recallInputFromSearchParams(request: NextRequest): RecallAgentMemoryInp
     asOf: params.get("asOf") ?? undefined,
     trackUsage: params.get("trackUsage") === "1",
     usageContext: params.get("usageContext") ?? undefined,
+    minScore: params.get("minScore") ? Number(params.get("minScore")) : undefined,
   };
 }
 
 export async function GET(request: NextRequest) {
   try {
     const mode = request.nextUrl.searchParams.get("mode") ?? "recall";
+    if (mode === "health") {
+      const result = await healthAgentMemory({ vaultPath: request.nextUrl.searchParams.get("vaultPath") ?? undefined });
+      return NextResponse.json({ ok: true, mode, ...result });
+    }
     const input = recallInputFromSearchParams(request);
     const result = mode === "answer"
       ? await answerFromAgentMemory(input)
@@ -54,15 +61,27 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as (RememberAgentMemoryInput & EvolveAgentMemoryInput & RecallAgentMemoryInput & RebuildAgentMemoryIndexInput & RecordAgentMemoryUsageInput & {
-      action?: "remember" | "remember-action" | "evolve" | "recall" | "answer" | "rebuild-index" | "record-usage";
+      action?: "remember" | "remember-action" | "evolve" | "recall" | "answer" | "rebuild-index" | "record-usage" | "health" | "consolidate";
+      applyArchives?: boolean;
     });
     const action = body.action ?? "recall";
     if (action === "remember") {
       const result = await rememberAgentMemory(body);
+      // Suspected duplicate: surface conflicts + evolve hint instead of writing.
+      if (result.blocked) return NextResponse.json({ ok: false, action, ...result }, { status: 409 });
       return NextResponse.json({ ok: true, action, ...result });
     }
     if (action === "remember-action") {
       const result = await rememberActionAgentMemory(body);
+      if (result.blocked) return NextResponse.json({ ok: false, action, ...result }, { status: 409 });
+      return NextResponse.json({ ok: true, action, ...result });
+    }
+    if (action === "health") {
+      const result = await healthAgentMemory(body);
+      return NextResponse.json({ ok: true, action, ...result });
+    }
+    if (action === "consolidate") {
+      const result = await consolidateAgentMemory(body);
       return NextResponse.json({ ok: true, action, ...result });
     }
     if (action === "evolve") {

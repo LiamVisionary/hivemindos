@@ -11,6 +11,7 @@
 
 import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { Brain } from "lucide-react";
+import { APP_NAV_SHELF_GROUPS, shelfSlotForView } from "@/features/dashboard/dashboard-navigation";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { applyAppNavLiquidGlass } from "@/lib/native/liquid-glass";
@@ -19,11 +20,6 @@ import { MoonIcon, SunIcon } from "./primitives";
 import "./fleet-hive.css";
 
 export type ShelfTheme = "dark" | "light";
-
-interface NavItem {
-  id: DashboardView;
-  label: string;
-}
 
 function FrNavIcon({ id }: { id: string }) {
   const p = {
@@ -63,47 +59,6 @@ function FrNavIcon({ id }: { id: string }) {
       return (<svg {...p}><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" /></svg>);
     default:
       return null;
-  }
-}
-
-const GROUPS: NavItem[][] = [
-  [
-    { id: "kanban", label: "Work" },
-    { id: "vault", label: "Brain" },
-    { id: "chat", label: "Chat" },
-    { id: "wallet", label: "Wallets" },
-    { id: "trade", label: "Trade" },
-  ],
-  [
-    { id: "scheduler", label: "Schedules" },
-    { id: "swarm", label: "Swarm" },
-    { id: "history", label: "History" },
-  ],
-  [
-    { id: "aeon", label: "Aeon" },
-    { id: "integrations", label: "Integrations" },
-    { id: "maintenance", label: "Diagnostics" },
-  ],
-];
-
-// Which shelf slot lights up for the current dashboard view.
-function resolveActive(view: DashboardView): string {
-  switch (view) {
-    case "agents": return "agents";
-    case "kanban":
-    case "history": return view === "history" ? "history" : "kanban";
-    case "vault": return "vault";
-    case "chat": return "chat";
-    case "wallet": return "wallet";
-    case "trade": return "trade";
-    case "scheduler": return "scheduler";
-    case "swarm": return "swarm";
-    case "aeon": return "aeon";
-    case "integrations":
-    case "my-apps": return "integrations";
-    case "maintenance":
-    case "memory": return "maintenance";
-    default: return "more"; // notifications, sessions, tools, files, env, phone, fusion, governance, messaging, more…
   }
 }
 
@@ -153,7 +108,7 @@ function AppNavShelfBase({
   appVersion?: string | null;
   notificationUnread?: number;
 }) {
-  const active = resolveActive(activeView);
+  const active = shelfSlotForView(activeView);
   const keyboardNavigationRef = useRef(false);
   const [shelfKeyboardFocus, setShelfKeyboardFocus] = useState(false);
 
@@ -247,12 +202,12 @@ function AppNavShelfBase({
           <img src={brandSrc} alt="HivemindOS" />
           <span className="fr-brand-name">HivemindOS</span>
         </button>
-        {GROUPS.map((g, i) => (
+        {APP_NAV_SHELF_GROUPS.map((g, i) => (
           <Fragment key={i}>
             {g.map((it) => (
               <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} />
             ))}
-            {i < GROUPS.length - 1 ? <div className="fr-nav-div" /> : null}
+            {i < APP_NAV_SHELF_GROUPS.length - 1 ? <div className="fr-nav-div" /> : null}
           </Fragment>
         ))}
         <div className="fr-shelf-foot">

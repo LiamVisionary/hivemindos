@@ -1,6 +1,6 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
+// @ts-nocheck
+// Partially typed 2026-07-02; the typing pass ran out of session mid-file and the remaining errors are deferred (see CHANGELOG).
 
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
@@ -10,6 +10,7 @@ import { BrainGraphExplorer } from "./BrainGraphExplorer";
 import { BrainConfigPanel } from "./BrainConfigPanel";
 import { BrainSkillsPanel } from "./BrainSkillsPanel";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
+import { AgentMemoryHealthCard } from "./AgentMemoryHealthCard";
 import { SkillSecurityCard } from "./SkillSecurityCard";
 import brainServiceStyles from "./brain-services.module.css";
 import { SectionModeHeader } from "./WorkSectionHeader";
@@ -1262,6 +1263,7 @@ function VaultPanelComponent(props: any) {
               <>
                 <BrainServiceOverview Button={Button} brainClass={brainClass} cards={brainServiceOverviewCards} setActiveSection={setBrainServiceSection} />
                 <div className={brainClass("brainServiceOverviewGrid")} style={{ marginTop: 16 }}>
+                  <AgentMemoryHealthCard />
                   <SkillSecurityCard />
                 </div>
               </>

@@ -18,8 +18,8 @@ export const TROUBLESHOOTING_COOKBOOK: TroubleshootingEntry[] = [
     area: "general",
     severity: "critical",
     symptoms: ["Unlock screen repeats", "API calls return Dashboard authentication is required"],
-    checks: ["Run pnpm dashboard-auth status", "Confirm .env.local has dashboard auth keys"],
-    fixes: ["Run pnpm dashboard-auth copy-token to recover the device token", "Run pnpm dashboard-auth reset-token if the token is lost", "Restart the dashboard after rotating auth values"],
+    checks: ["Run dashboard-auth status", "Confirm .env.local has dashboard auth keys"],
+    fixes: ["Run dashboard-auth copy-token to recover the device token", "Run dashboard-auth reset-token if the token is lost", "Restart the dashboard after rotating auth values"],
     relatedRoutes: ["/api/auth/session", "/api/system/health"],
   },
   {

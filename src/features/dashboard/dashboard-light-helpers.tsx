@@ -280,12 +280,17 @@ export function kanbanTaskAssigneeAgent(task: KanbanTask, agents: AgentProfile[]
   if (!assignee) return undefined;
   const normalizedAssignee = assignee.toLowerCase();
   return agents.find((agent) => {
-    const thisMachineAliases = agent.machineName && /mac|local|this/i.test(agent.machineName)
-      ? [
-        `${agent.name} on This Mac`,
-        agent.agentId ? `${agent.agentId} on This Mac` : "",
-        `${agent.runtime} on This Mac`,
-      ]
+    // Local-machine display labels differ by OS ("This Mac" / "This PC" /
+    // "This computer" — see displayMachineName in fleet-identity). An assignee
+    // written with any of them must match an agent whose stored machineName is
+    // a local-machine indicator, including default Windows "DESKTOP-…" hostnames.
+    const localMachineLabels = ["This Mac", "This PC", "This computer"];
+    const thisMachineAliases = agent.machineName && /mac|local|this|desktop|win|computer|\bpc\b/i.test(agent.machineName)
+      ? localMachineLabels.flatMap((label) => [
+        `${agent.name} on ${label}`,
+        agent.agentId ? `${agent.agentId} on ${label}` : "",
+        `${agent.runtime} on ${label}`,
+      ])
       : [];
     const candidates = [
       agent.id,

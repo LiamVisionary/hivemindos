@@ -2,7 +2,7 @@
 // @ts-nocheck
 
 "use client";
-import { Component, FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition, type ChangeEvent, type PointerEvent } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition, type ChangeEvent, type PointerEvent } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import {
@@ -105,7 +105,6 @@ import kanbanStyles from "@/app/kanban-board.module.css";
 import notificationStyles from "@/app/notifications.module.css";
 import vaultStyles from "@/app/vault.module.css";
 import walletStyles from "@/app/wallets.module.css";
-import { WalletPanelLoading } from "@/features/dashboard/views/WalletPanelLoading";
 import { QUEEN_CLAP_WAKE_STORAGE_KEY } from "@/features/queen-voice/clap-activation";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -138,14 +137,33 @@ import type { NewTaskPayload } from "@/components/task-modal";
 import type { SwarmAgent, SwarmDecision, SwarmMarket, SwarmRun, SwarmSocialPost, SwarmTemplate, TemplateId } from "@/components/swarm";
 import {
   AgentCell,
+  AgentSettingsModal,
   AgentTaskList,
   AgentWalletCard,
   AgentWalletCardCompact,
+  AgentsPanel,
+  AeonAutopilotPanel,
+  ChatPanel,
+  DashboardModals,
   FleetView,
+  FusionPanel,
+  GovernancePanel,
+  IntegrationsView,
+  KanbanPanel,
   MachineCell,
+  MorePanel,
+  PhonePanel,
+  SchedulerPanel,
   SchedulerView,
   SetupCell,
+  SkillBrowserModal,
+  SwarmPanel,
   TaskModal,
+  TradePanel,
+  UtilityPanels,
+  VaultPanel,
+  WalletPanel,
+  preloadDashboardView,
 } from "@/features/dashboard/lazy-components";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import {
@@ -364,7 +382,8 @@ import { useKanbanTaskController } from "@/features/dashboard/hooks/use-kanban-t
 import { useKanbanDispatchController } from "@/features/dashboard/hooks/use-kanban-dispatch-controller";
 import { useStatusChatInputController } from "@/features/dashboard/hooks/use-status-chat-input-controller";
 import { useAgentSettingsController } from "@/features/dashboard/hooks/use-agent-settings-controller";
-import { dashboardTargetFromSearch } from "@/features/dashboard/dashboard-navigation";
+import { DASHBOARD_ROUTE_LABELS, dashboardTargetFromSearch } from "@/features/dashboard/dashboard-navigation";
+import { DashboardRouteErrorBoundary, DashboardRouteLoading, HYDRATION_STALL_THRESHOLD, HydrationStalledNotice, preloadDashboardChunk } from "@/features/dashboard/dashboard-route-chrome";
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { useDashboardNavigationController } from "@/features/dashboard/hooks/use-dashboard-navigation-controller";
 import {
@@ -393,138 +412,6 @@ const chatClass = createStyleClass(chatStyles);
 const notificationClass = createStyleClass(notificationStyles);
 const vaultClass = createStyleClass(vaultStyles);
 const walletClass = createStyleClass(walletStyles);
-const DASHBOARD_ROUTE_LABELS: Record<DashboardView, string> = {
-  agents: "Fleet", kanban: "Work", scheduler: "Scheduler", swarm: "Swarm", history: "Work History", wallet: "Wallets", trade: "Trade", vault: "Brain",
-  integrations: "Integrations", maintenance: "Diagnostics", sessions: "Sessions", tools: "Tools", memory: "Memory", files: "Files",
-  notifications: "Alerts", messaging: "Messaging", chat: "Agent Chat", more: "More", env: "Env", "my-apps": "Apps & Services", phone: "Phone", aeon: "Aeon", fusion: "Hive Fusion", governance: "Zero Human Company",
-};
-
-type DashboardRouteLoadingProps = { children?: React.ReactNode; detail?: string; label?: string; view?: DashboardView };
-function DashboardRouteLoading({ children, detail, label, view }: DashboardRouteLoadingProps) {
-  const routeLabel = label ?? (view ? DASHBOARD_ROUTE_LABELS[view] : "dashboard view");
-  const routeTitle = routeLabel === "dashboard view" ? "Loading dashboard view" : `Loading ${routeLabel}`;
-  const routeDetail = detail ?? (view ? `Opening ${routeLabel}` : "Opening the selected control surface");
-  return (
-    <section className={vaultClass("brainGraphPanel", "tabPanel")} aria-label={routeTitle} data-hivemindos-route-loading="true">
-      <div className={vaultClass("brainGraphCanvas")}>
-        <BrainGraphLoader title={routeTitle} detail={routeDetail} />
-        {children}
-      </div>
-    </section>
-  );
-}
-
-type DashboardRouteErrorBoundaryProps = {
-  children: React.ReactNode;
-  onRetry: () => void;
-  resetKey: string;
-  view: DashboardView;
-};
-
-class DashboardRouteErrorBoundary extends Component<DashboardRouteErrorBoundaryProps, { error: unknown }> {
-  state = { error: null };
-
-  static getDerivedStateFromError(error: unknown) {
-    return { error };
-  }
-
-  componentDidUpdate(previousProps: DashboardRouteErrorBoundaryProps) {
-    if (previousProps.resetKey !== this.props.resetKey && this.state.error) {
-      this.setState({ error: null });
-    }
-  }
-
-  render() {
-    if (!this.state.error) return this.props.children;
-
-    return (
-      <DashboardRouteLoading
-        view={this.props.view}
-        label="Reloading view"
-        detail="A route chunk missed the current app bundle. Try again or switch views."
-      >
-        <button
-          type="button"
-          onClick={() => {
-            this.setState({ error: null });
-            this.props.onRetry();
-          }}
-          style={{ padding: "8px 18px", borderRadius: 10, border: "1px solid var(--accent-strong, #2f6b52)", background: "transparent", color: "var(--accent-strong, #6fe0b0)", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em", textTransform: "uppercase" }}
-        >
-          Try again
-        </button>
-      </DashboardRouteLoading>
-    );
-  }
-}
-
-function preloadDashboardChunk(loader: () => Promise<unknown>) {
-  void loader().catch(() => undefined);
-}
-// Shown when hydration can't reach the local dashboard service after several
-// tries. The snapshot loader keeps retrying in the background and this notice
-// auto-clears the moment it succeeds, so a transient slow start just flashes
-// briefly; a persistent failure gets a readable, recoverable screen instead of
-// an endless honeycomb spinner that needs devtools to diagnose.
-const HYDRATION_STALL_THRESHOLD = 5;
-function HydrationStalledNotice({ info }: { info: SnapshotRetryInfo }) {
-  const reason = info.kind === "network"
-    ? "The local HivemindOS service isn't responding yet."
-    : info.kind === "server"
-      ? `The local HivemindOS service returned an error${info.status ? ` (${info.status})` : ""}.`
-      : "The local HivemindOS service returned an unexpected response.";
-  return (
-    <section
-      className={vaultClass("brainGraphPanel", "tabPanel")}
-      aria-label="Connecting to HivemindOS"
-      data-hivemindos-hydration-stalled={info.kind}
-      style={{ position: "fixed", inset: 0, zIndex: 9999, background: "var(--bg, #060a08)", display: "flex", alignItems: "center", justifyContent: "center" }}
-    >
-      <div className={vaultClass("brainGraphCanvas")} style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", maxWidth: 420, padding: 24, gap: 16 }}>
-        <BrainGraphLoader title="Still connecting to HivemindOS…" detail={`${reason} It will connect automatically the moment it's ready.`} />
-        <button
-          type="button"
-          onClick={() => { if (typeof window !== "undefined") window.location.reload(); }}
-          style={{ padding: "8px 18px", borderRadius: 10, border: "1px solid var(--accent-strong, #2f6b52)", background: "transparent", color: "var(--accent-strong, #6fe0b0)", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em", textTransform: "uppercase" }}
-        >
-          Reload now
-        </button>
-        <p style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.6, margin: 0 }}>
-          Still stuck after reloading? Fully quit and reopen the app. If it persists, send a photo of this screen to support.
-        </p>
-      </div>
-    </section>
-  );
-}
-const routeLoadingFor = (view: DashboardView) => function RouteLoading() { return <DashboardRouteLoading view={view} />; };
-const routeLoadingFromProps = (props: { activeView?: DashboardView }) => <DashboardRouteLoading view={props?.activeView} />;
-const AgentsPanel = dynamic(() => import("@/features/dashboard/views/AgentsPanel").then((mod) => mod.AgentsPanel), { ssr: false, loading: routeLoadingFor("agents") });
-const KanbanPanel = dynamic(() => import("@/features/dashboard/views/KanbanPanel").then((mod) => mod.KanbanPanel), { ssr: false, loading: routeLoadingFromProps });
-const SchedulerPanel = dynamic(() => import("@/features/dashboard/views/SchedulerPanel").then((mod) => mod.SchedulerPanel), { ssr: false, loading: routeLoadingFor("scheduler") });
-const SwarmPanel = dynamic(() => import("@/features/dashboard/views/SwarmPanel").then((mod) => mod.SwarmPanel), { ssr: false, loading: routeLoadingFor("swarm") });
-const WalletPanel = dynamic(() => import("@/features/dashboard/views/WalletPanel").then((mod) => mod.WalletPanel), { ssr: false, loading: WalletPanelLoading });
-const TradePanel = dynamic(() => import("@/features/dashboard/views/trade/TradePanel").then((mod) => mod.TradePanel), { ssr: false, loading: routeLoadingFor("trade") });
-const VaultPanel = dynamic(() => import("@/features/dashboard/views/VaultPanel").then((mod) => mod.VaultPanel), { ssr: false, loading: routeLoadingFor("vault") });
-const UtilityPanels = dynamic(() => import("@/features/dashboard/views/UtilityPanels").then((mod) => mod.UtilityPanels), { ssr: false, loading: routeLoadingFromProps });
-const ChatPanel = dynamic(() => import("@/features/dashboard/views/ChatPanel").then((mod) => mod.ChatPanel), { ssr: false, loading: routeLoadingFor("chat") });
-const MorePanel = dynamic(() => import("@/features/dashboard/MorePanel").then((mod) => mod.MorePanel), { ssr: false, loading: routeLoadingFromProps });
-const FusionPanel = dynamic(() => import("@/features/dashboard/views/FusionPanel").then((mod) => mod.FusionPanel), { ssr: false, loading: routeLoadingFor("fusion") });
-const GovernancePanel = dynamic(() => import("@/features/dashboard/views/GovernancePanel").then((mod) => mod.GovernancePanel), { ssr: false, loading: routeLoadingFor("governance") });
-const AeonAutopilotPanel = dynamic(() => import("@/components/aeon").then((mod) => mod.AeonAutopilotPanel), { ssr: false, loading: routeLoadingFor("aeon") });
-const PhonePanel = dynamic(() => import("@/features/dashboard/views/PhonePanel").then((mod) => mod.PhonePanel), { ssr: false, loading: routeLoadingFor("phone") });
-const DashboardModals = dynamic(() => import("@/features/dashboard/views/DashboardModals").then((mod) => mod.DashboardModals), { ssr: false });
-const AgentSettingsModal = dynamic(() => import("@/features/dashboard/views/chat/AgentSettingsModal").then((mod) => mod.AgentSettingsModal), {
-  ssr: false,
-  // The chunk is normally preloaded after launch (see the idle preload effect
-  // in DashboardApp); this overlay keeps the first click responsive when the
-  // user beats the preload (worst in dev, where the chunk compiles on demand).
-  loading: () => (
-    <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "grid", placeItems: "center", padding: 20, background: "rgba(34,29,20,0.34)", backdropFilter: "blur(18px)" }}>
-      <LoaderCircle size={28} className="animate-spin" style={{ color: "var(--fg)" }} />
-    </div>
-  ),
-});
-const SkillBrowserModal = dynamic(() => import("@/features/dashboard/views/chat/SkillBrowserModal").then((mod) => mod.SkillBrowserModal), { ssr: false });
 
 // Opening the agent settings modal recomputes runtime availability; the result
 // is usually identical to what's already in state. Returning the current
@@ -546,7 +433,6 @@ const ConnectPhoneFab = dynamic(() => import("@/components/phone/ConnectPhoneFab
 const QueenBeeVoiceOverlay = dynamic(() => import("@/features/queen-voice/QueenBeeVoiceOverlay").then((mod) => mod.QueenBeeVoiceOverlay), { ssr: false });
 const PersistentHiveChat = dynamic(() => import("@/features/queen-voice/PersistentHiveChat").then((mod) => mod.PersistentHiveChat), { ssr: false });
 const GuidedDashboardTour = dynamic(() => import("@/features/dashboard/GuidedDashboardTour").then((mod) => mod.GuidedDashboardTour), { ssr: false });
-const IntegrationsView = dynamic(() => import("@/features/integrations/IntegrationsView"), { ssr: false, loading: routeLoadingFor("integrations") });
 const BRAIN_SKILL_PROVIDER_FALLBACK: BrainSkillProviderInventory[] = [
   { id: "claude", label: "Claude", home: "~/.claude", skills: [], installed: false },
   { id: "codex", label: "Codex", home: "~/.codex", skills: [], installed: false },
@@ -1542,7 +1428,13 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   // which also keeps the rail highlight correct for programmatic navigation.
   const [requestedView, setRequestedView] = useState<DashboardView>(initialView ?? "agents");
   const [isViewPending, startViewTransition] = useTransition();
-  useEffect(() => { setRequestedView(activeView); }, [activeView]);
+  // Render-phase re-sync (not an effect): the rail highlight follows programmatic
+  // navigation in the same commit instead of one paint later.
+  const [lastSyncedActiveView, setLastSyncedActiveView] = useState<DashboardView>(activeView);
+  if (lastSyncedActiveView !== activeView) {
+    setLastSyncedActiveView(activeView);
+    setRequestedView(activeView);
+  }
   const [dashboardTheme, setDashboardTheme] = useState<DashboardTheme>("dark");
   const [chatStreamingByKey, setChatStreamingByKey] = useState<Record<string, ChatStreamState>>({});
   const chatStreamingByKeyRef = useRef<Record<string, ChatStreamState>>({});
@@ -1742,26 +1634,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const prefetchView = useCallback((view: DashboardView) => {
     if (prefetchedViewsRef.current.has(view)) return;
     prefetchedViewsRef.current.add(view);
-    const load: () => Promise<unknown> = (() => {
-      switch (view) {
-        case "kanban":
-        case "history": return () => import("@/features/dashboard/views/KanbanPanel");
-        case "vault": return () => import("@/features/dashboard/views/VaultPanel");
-        case "chat": return () => import("@/features/dashboard/views/ChatPanel");
-        case "wallet": return () => import("@/features/dashboard/views/WalletPanel");
-        case "more": return () => import("@/features/dashboard/MorePanel");
-        case "scheduler": return () => import("@/features/dashboard/views/SchedulerPanel");
-        case "swarm": return () => import("@/features/dashboard/views/SwarmPanel");
-        case "phone": return () => import("@/features/dashboard/views/PhonePanel");
-        case "fusion": return () => import("@/features/dashboard/views/FusionPanel");
-        case "governance": return () => import("@/features/dashboard/views/GovernancePanel");
-        case "aeon": return () => import("@/components/aeon");
-        case "integrations": return () => import("@/features/integrations/IntegrationsView");
-        case "agents": return () => Promise.resolve();
-        default: return () => import("@/features/dashboard/views/UtilityPanels");
-      }
-    })();
-    void load().catch(() => undefined);
+    void preloadDashboardView(view);
   }, []);
 
   const applyHivemindLinkStatus = useCallback((status: HivemindLinkClientStatus | null) => {
@@ -4457,6 +4330,10 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     tasks,
     vaultPanelMode,
   });
+  // Bound before the memo so React Compiler sees the same property-level
+  // dependency the deps array declares (whole-object inference skipped the
+  // compiler for this component).
+  const notificationUnreadCount = notificationSummary?.unread;
   const baseHiveScreenContext = useMemo(() => {
     const context = baseDashboardScreenContext(activeView);
     const selections: DashboardContextItem[] = [];
@@ -4507,7 +4384,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         case "sessions":
           return { kind: "section", id: "runtime-sessions", label: "Runtime session search", detail: sessionSearchQuery || undefined };
         case "notifications":
-          return { kind: "section", id: "notifications", label: "Notifications", detail: notificationSummary?.unread ? `${notificationSummary.unread} unread` : undefined };
+          return { kind: "section", id: "notifications", label: "Notifications", detail: notificationUnreadCount ? `${notificationUnreadCount} unread` : undefined };
         default:
           return { kind: "section", id: activeView, label: DASHBOARD_ROUTE_LABELS[activeView] ?? String(activeView) };
       }
@@ -4609,7 +4486,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     machineInitOpen,
     mirosharkDisplayStatus,
     mirosharkWorkbenchTab,
-    notificationSummary?.unread,
+    notificationUnreadCount,
     quickAddAttachmentMenuOpen,
     quickAddMachineMenuOpen,
     roleModalAgent,

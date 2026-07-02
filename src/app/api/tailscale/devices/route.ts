@@ -8,6 +8,7 @@ import {
   hivemindLinkControlUrl,
   localTelemetryCollectorUrl,
 } from "@/lib/services/hivemind-link-control";
+import { isHivemindMachineName, isVisibleFleetMachine } from "@/features/fleet/fleet-identity";
 
 export const runtime = "nodejs";
 
@@ -165,29 +166,10 @@ function deviceIdentityKey(device: ReturnType<typeof simplifyDevice>) {
   return device.ip || device.collectorUrl;
 }
 
+// Machine visibility/OS predicates are single-sourced in fleet-identity.ts
+// (they encode the v0.2.13-15 lessons: never drop self, keep Windows/Linux).
 function isHivemindLinkDevice(device: ReturnType<typeof simplifyDevice>) {
-  return (
-    normalizeName(device.name).startsWith("hivemindos") ||
-    normalizeName(dnsLabel(device.dnsName)).startsWith("hivemindos")
-  );
-}
-
-function isMobileDevice(device: ReturnType<typeof simplifyDevice>) {
-  return /^(ios|android)$/i.test(device.os);
-}
-
-function isMacDevice(device: ReturnType<typeof simplifyDevice>) {
-  return /^(macos|darwin)$/i.test(device.os);
-}
-
-// Windows / Linux desktops are real HivemindOS machines too. They were being
-// dropped by dedupeDevices (which only kept mac/mobile/link devices), so a
-// Windows or Linux install never saw its own machine in the fleet — no self
-// cell, no add-agent cell, and any agents on it were invisible.
-function isDesktopDevice(device: ReturnType<typeof simplifyDevice>) {
-  // process.platform reports "win32"; the native bridge reports "windows".
-  // Match both so a Windows device is never dropped (mirrors isDesktopMachineOs).
-  return /^(windows|win32|linux)$/i.test(device.os);
+  return isHivemindMachineName(device.name, device.dnsName);
 }
 
 function hasNeverHandshake(value?: string) {
@@ -300,14 +282,7 @@ function dedupeDevices(devices: ReturnType<typeof simplifyDevice>[]) {
       byIdentity.set(key, device);
     }
   }
-  return [...byIdentity.values()].filter(
-    (device) =>
-      device.self || // never drop this machine's own self device (any OS)
-      isHivemindLinkDevice(device) ||
-      isMacDevice(device) ||
-      isDesktopDevice(device) ||
-      isMobileDevice(device),
-  );
+  return [...byIdentity.values()].filter(isVisibleFleetMachine);
 }
 
 const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from(

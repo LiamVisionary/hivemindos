@@ -1,13 +1,60 @@
-/* eslint-disable */
-// @ts-nocheck
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/refs, react-hooks/exhaustive-deps, @next/next/no-img-element, @typescript-eslint/no-unused-vars, @typescript-eslint/no-unused-expressions --
+   Pre-existing drop-in patterns (prop->state sync effects, render-time runtime-data application,
+   unused destructured aliases) preserved verbatim during the @ts-nocheck removal typing pass. */
 "use client";
 import React from "react";
 import "./wallets.css";
 import * as D from "./wallet-data";
-import { chainBadgeSrc } from "@/lib/utils/personal-wallet-grouping";
+import type { DropInWallet, WalletBankrInfo, WalletHolding, WalletRail, WalletRailId, WalletRuntimeData, WalletTokenMeta } from "./wallet-data";
+import { chainBadgeSrc, type GroupedPersonalWallet } from "@/lib/utils/personal-wallet-grouping";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
-import { WalletRewardsActions } from "./WalletRewardsActions";
+import { WalletRewardsActions, type WalletRewardsActionsSlice } from "./WalletRewardsActions";
 import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
+
+type WalletSendResult = {
+  ok?: boolean;
+  error?: string;
+  signature?: string;
+  transfer?: { transactionHash?: string };
+  shield?: { transactionHash?: string };
+  status?: string;
+};
+
+type WalletFundResult = WalletSendResult & { recipientBalanceUsd?: number };
+
+type WalletSecretExportResultLike = {
+  ok?: boolean;
+  error?: string;
+  exportedCount?: number;
+  label?: string;
+  savedPath?: string;
+};
+
+type WalletModalActionInput = { wallet?: unknown; name?: string; chain?: string; secret?: string };
+
+export type WalletDropInActions = WalletRewardsActionsSlice & {
+  onToggleAgentSpend?: (agentId: string, enabled: boolean) => unknown;
+  onUpdateAgentWallet?: (agentId: string, patch: Record<string, unknown>) => unknown;
+  onCreateAgentWallet?: (agentId: string, network: string) => unknown;
+  onRefreshAgentWallet?: (agentId: string) => unknown;
+  onResetAgentRunway?: (agentId: string) => unknown;
+  onCopyAgentPrompt?: (agentId: string) => unknown;
+  onOpenLlmFundingSource?: (agentId: string) => unknown;
+  onExportAgentWallet?: (walletId: string, confirmation: string) => Promise<WalletSecretExportResultLike> | WalletSecretExportResultLike;
+  onSendAgentPayment?: (input: { agentId: string; asset: string; amount: string; amountUsd?: number; toAddress: string; recipientAgentId?: string; confirmation: string }) => Promise<WalletSendResult | null | undefined>;
+  onSaveRailConfig?: (input: { rail: WalletRail; enabled: boolean; key: string; share: boolean }) => Promise<{ ok?: boolean; error?: string; rail?: Partial<WalletRail> } | null | undefined>;
+  onRefreshUsePod?: (agentId?: string) => unknown;
+  onSetUsePodRoutingMode?: (mode: string) => unknown;
+  onSaveUsePodRepair?: (value: string) => Promise<unknown>;
+  onFundAgent?: (input: { source?: GroupedPersonalWallet | null; agentId?: string; asset: string; amount: string; confirmation: string }) => Promise<WalletFundResult | null | undefined>;
+  onSendPersonalWallet?: (input: { source: GroupedPersonalWallet; asset: string; amount: string; toAddress: string; confirmation: string }) => Promise<WalletSendResult | null | undefined>;
+  onRenamePersonalWallet?: (input: { source: GroupedPersonalWallet; name: string }) => Promise<unknown>;
+  onCreateWallet?: (input: WalletModalActionInput) => Promise<unknown>;
+  onImportWallet?: (input: WalletModalActionInput) => Promise<unknown>;
+  onOpenRailDocs?: (rail: { baseUrl?: string }) => unknown;
+  onToggleHoneyLedger?: (enabled: boolean) => unknown;
+  onMessageHive?: (text: string) => unknown;
+};
 const {
   FR_CCY, FR_MACHINES, frFmtAmount, frFmtUsd, frFmtUsdFull, frFmtChange, frTopBalances,
   frStateMeta, frFleetSummary, frMachineState,
@@ -18,8 +65,8 @@ const {
   frRailAgents, frNetworkLabel, frShortAddr, frBarColor, frModelFor, frUsage,
   frHoneySummary, frHoneyByAgent, frMyWalletsTotal, frMyRanked, frBankrWallet,
 } = D;
-function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }) {
-  const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" };
+function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }: { name: string; color?: string; size?: number; sw?: number }) {
+  const c: React.SVGProps<SVGSVGElement> = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" };
   switch (name) {
     case "brain": return (<svg {...c}><path d="M9 4a2.5 2.5 0 0 0-2.5 2.5A2.5 2.5 0 0 0 5 11c0 1 .5 1.8 1.2 2.3A2.6 2.6 0 0 0 7 18c.8.6 2 .6 2.5-.2V4z" /><path d="M15 4a2.5 2.5 0 0 1 2.5 2.5A2.5 2.5 0 0 1 19 11c0 1-.5 1.8-1.2 2.3A2.6 2.6 0 0 1 17 18c-.8.6-2 .6-2.5-.2V4z" /></svg>);
     case "search": return (<svg {...c}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>);
@@ -55,9 +102,9 @@ function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }) {
     default: return null;
   }
 }
-function TokenIcon({ sym, size = 30 }) {
-  const m = FR_CCY[sym] || {};
-  const base = { width: size, height: size, borderRadius: "50%", display: "grid", placeItems: "center", flex: "0 0 auto", overflow: "hidden" };
+function TokenIcon({ sym, size = 30 }: { sym: string; size?: number }) {
+  const m: WalletTokenMeta = FR_CCY[sym] || {};
+  const base: React.CSSProperties = { width: size, height: size, borderRadius: "50%", display: "grid", placeItems: "center", flex: "0 0 auto", overflow: "hidden" };
   if (m.img) {
     return <span style={{ ...base, background: m.color || "#0e1118" }}><img src={m.img} width={size} height={size} alt="" style={{ objectFit: "cover" }} /></span>;
   }
@@ -74,7 +121,7 @@ function TokenIcon({ sym, size = 30 }) {
   }
   return <span style={{ ...base, background: m.color || "#444" }}>{glyph}</span>;
 }
-function Dot({ state, size = 7 }) {
+function Dot({ state, size = 7 }: { state: string; size?: number }) {
   const meta = frStateMeta(state);
   return (
     <span
@@ -83,7 +130,7 @@ function Dot({ state, size = 7 }) {
     />
   );
 }
-function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", dot = true, strokeWidth = 1.4 }) {
+function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", dot = true, strokeWidth = 1.4 }: { size?: number; stroke?: string; fill?: string; dot?: boolean; strokeWidth?: number }) {
   const pts = "12,1.8 21.2,7 21.2,17 12,22.2 2.8,17 2.8,7";
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden style={{ display: "block" }}>
@@ -92,7 +139,7 @@ function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", dot = tru
     </svg>
   );
 }
-function Meter({ value, tone }) {
+function Meter({ value, tone }: { value: number; tone?: string }) {
   const color = value >= 85 ? "var(--danger)" : tone || "var(--fg-3)";
   return (
     <span className="fr-meter" style={{ display: "block", width: "100%" }}>
@@ -114,9 +161,9 @@ function MoonIcon() {
     </svg>
   );
 }
-function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }) {
-  const ref = React.useRef(null);
-  const onSubmit = (e) => { e.preventDefault(); const text = ref.current ? ref.current.value.trim() : ""; if (text) onSubmitMessage && onSubmitMessage(text); if (ref.current) ref.current.value = ""; };
+function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }: { placeholder?: string; offsetX?: number; onSubmitMessage?: (text: string) => unknown }) {
+  const ref = React.useRef<HTMLInputElement | null>(null);
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const text = ref.current ? ref.current.value.trim() : ""; if (text) onSubmitMessage && onSubmitMessage(text); if (ref.current) ref.current.value = ""; };
   return (
     <div className="fr-chat-wrap" style={offsetX ? { left: `calc(50% - ${offsetX}px)` } : undefined}>
       <form className="fr-chat" onSubmit={onSubmit}>
@@ -139,8 +186,8 @@ function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }) {
   );
 }
 const FR_SHELF_W = 72;
-function FrNavIcon({ id }) {
-  const p = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
+function FrNavIcon({ id }: { id: string }) {
+  const p: React.SVGProps<SVGSVGElement> = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
   switch (id) {
     case "kanban": return (<svg {...p}><rect x="3" y="4" width="5" height="16" rx="1.2" /><rect x="9.5" y="4" width="5" height="10" rx="1.2" /><rect x="16" y="4" width="5" height="13" rx="1.2" /></svg>);
     case "vault": return <BIcon name="brain" size={20} sw={1.7} />;
@@ -156,7 +203,7 @@ function FrNavIcon({ id }) {
     default: return null;
   }
 }
-function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }) {
+function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }: { active?: string; onNavigate?: (id: string) => void; theme?: string; onToggleTheme?: () => void }) {
   const groups = [
     [
       { id: "kanban", label: "Work" },
@@ -175,8 +222,8 @@ function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }) {
       { id: "maintenance", label: "Diagnostics" },
     ],
   ];
-  const go = (id) => { if (onNavigate) onNavigate(id); };
-  const Item = (it) => (
+  const go = (id: string) => { if (onNavigate) onNavigate(id); };
+  const Item = (it: { id: string; label: string }) => (
     <button key={it.id} type="button" className="fr-nav" data-active={active === it.id ? "" : undefined}
       data-bee-nav={it.id}
       onClick={() => go(it.id)} title={it.label}>
@@ -206,21 +253,21 @@ function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }) {
     </nav>
   );
 }
-function Badge({ tone, children }) { return <span className={"fb-badge" + (tone ? " " + tone : "")}>{children}</span>; }
-function BBtn({ variant = "ghost", sm, children, ...rest }) {
+function Badge({ tone, children }: { tone?: string; children?: React.ReactNode }) { return <span className={"fb-badge" + (tone ? " " + tone : "")}>{children}</span>; }
+function BBtn({ variant = "ghost", sm, children, ...rest }: { variant?: string; sm?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button type="button" className={"fb-btn " + variant + (sm ? " sm" : "")} {...rest}>{children}</button>;
 }
-function Pill({ active, children, ...rest }) {
+function Pill({ active, children, ...rest }: { active?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button type="button" data-active={active ? "" : undefined} {...rest}>{children}</button>;
 }
-function Toggle({ on, onChange }) {
+function Toggle({ on, onChange }: { on: boolean; onChange?: React.MouseEventHandler<HTMLSpanElement> }) {
   return (
     <span onClick={onChange} className="fb-switch" style={{ cursor: onChange ? "pointer" : "default", background: on ? "var(--honey)" : "var(--panel-hi)", border: "1px solid " + (on ? "var(--honey)" : "var(--line-2)") }}>
       <i style={{ left: on ? 17 : 2, background: on ? "#1a1305" : "var(--fg-3)" }} />
     </span>
   );
 }
-function Disclosure({ summary, defaultOpen, children }) {
+function Disclosure({ summary, defaultOpen, children }: { summary: React.ReactNode; defaultOpen?: boolean; children?: React.ReactNode }) {
   return (
     <details className="fb-disc" open={defaultOpen}>
       <summary>{summary}</summary>
@@ -228,7 +275,7 @@ function Disclosure({ summary, defaultOpen, children }) {
     </details>
   );
 }
-function Select({ label, value, options, onCommit, disabled }) {
+function Select({ label, value, options, onCommit, disabled }: { label: React.ReactNode; value?: string; options: string[]; onCommit?: (value: string) => void; disabled?: boolean }) {
   const [v, setV] = React.useState(value);
   return (
     <label className="fb-label">{label}
@@ -238,7 +285,7 @@ function Select({ label, value, options, onCommit, disabled }) {
     </label>
   );
 }
-function Field({ label, value, sub, mono, readOnly }) {
+function Field({ label, value, sub, mono, readOnly }: { label: React.ReactNode; value?: string; sub?: string; mono?: boolean; readOnly?: boolean }) {
   const [v, setV] = React.useState(value);
   return (
     <label className="fb-label">{label}
@@ -247,8 +294,8 @@ function Field({ label, value, sub, mono, readOnly }) {
     </label>
   );
 }
-function RunwayChip({ tone, children }) { return <span className="fw-chip" data-tone={tone}>{children}</span>; }
-function AllocBar({ holdings, total }) {
+function RunwayChip({ tone, children }: { tone?: string; children?: React.ReactNode }) { return <span className="fw-chip" data-tone={tone}>{children}</span>; }
+function AllocBar({ holdings, total }: { holdings: Array<{ sym: string; usd: number }>; total: number }) {
   if (!total) return <span className="fw-alloc" />;
   return (
     <span className="fw-alloc" aria-hidden>
@@ -258,8 +305,8 @@ function AllocBar({ holdings, total }) {
     </span>
   );
 }
-function TokenRow({ b }) {
-  const meta = FR_CCY[b.sym] || {};
+function TokenRow({ b }: { b: WalletHolding }) {
+  const meta: WalletTokenMeta = FR_CCY[b.sym] || {};
   const chg = frFmtChange(b.change);
   return (
     <div className="fw-trow">
@@ -275,7 +322,7 @@ function TokenRow({ b }) {
     </div>
   );
 }
-function PowerToggle({ on, onClick }) {
+function PowerToggle({ on, onClick }: { on: boolean; onClick?: () => void }) {
   return (
     <button type="button" className="fw-power" data-on={on ? "" : undefined} onClick={onClick}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v8M7.5 7a7 7 0 1 0 9 0" /></svg>
@@ -283,7 +330,7 @@ function PowerToggle({ on, onClick }) {
     </button>
   );
 }
-function WStat({ value, label, tone, live, sub }) {
+function WStat({ value, label, tone, live, sub }: { value: React.ReactNode; label: string; tone?: string; live?: boolean; sub?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -295,14 +342,14 @@ function WStat({ value, label, tone, live, sub }) {
     </div>
   );
 }
-function RailConfigModal({ rail, onClose, actions }) {
+function RailConfigModal({ rail, onClose, actions }: { rail: WalletRail; onClose?: () => void; actions?: WalletDropInActions }) {
   const [enabled, setEnabled] = React.useState(rail.enabled);
   const [key, setKey] = React.useState("");
   const [share, setShare] = React.useState(false);
   const [state, setState] = React.useState("idle"); // idle | checking | saved
   const save = async () => { setState("checking"); try { if (!actions?.onSaveRailConfig) throw new Error("Rail setup is not available in this build."); const res = await actions.onSaveRailConfig({ rail, enabled, key, share }); if (res && res.ok === false) throw new Error(res.error || "Rail setup failed."); Object.assign(rail, res?.rail || { enabled, cred: key.trim() ? true : rail.cred }); setState("saved"); setTimeout(() => onClose && onClose(), 850); } catch (e) { setState(e instanceof Error ? e.message : "Rail setup failed."); } };
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose && onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -383,7 +430,7 @@ function RailConfigModal({ rail, onClose, actions }) {
     </div>
   );
 }
-function UsePodAdvanced({ w, actions } = {}) {
+function UsePodAdvanced({ w, actions }: { w?: DropInWallet; actions?: WalletDropInActions } = {}) {
   const [tab, setTab] = React.useState("status");
   const u = FR_USEPOD;
   const [repair, setRepair] = React.useState("");
@@ -391,7 +438,7 @@ function UsePodAdvanced({ w, actions } = {}) {
   const [routing, setRouting] = React.useState(u.routingMode || u.routing[0].label);
   const statusLabel = String(u.status || "unknown").replace(/-/g, " ");
   React.useEffect(() => setRouting(u.routingMode || u.routing[0].label), [u.routingMode]);
-  const tabs = [["status", "Status"], ["connect", "Connect"], ["routing", "Routing"], ["repair", "Repair"]];
+  const tabs: Array<[string, string]> = [["status", "Status"], ["connect", "Connect"], ["routing", "Routing"], ["repair", "Repair"]];
   const saveRepair = async () => { if (repair.trim().length < 12) { setRepairMsg("That doesn't look like a UsePod token."); return; } setRepairMsg("Saving…"); try { if (!actions?.onSaveUsePodRepair) throw new Error("UsePod repair is not available in this build."); await actions.onSaveUsePodRepair(repair); setRepairMsg("Token saved · rechecking UsePod status."); actions?.onRefreshUsePod?.(w?.id); } catch (e) { setRepairMsg(e instanceof Error ? e.message : "UsePod repair failed."); } };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 4 }}>
@@ -459,21 +506,21 @@ function UsePodAdvanced({ w, actions } = {}) {
     </div>
   );
 }
-function FundAgentModal({ source, onClose, actions }) {
+function FundAgentModal({ source, onClose, actions }: { source?: GroupedPersonalWallet | null; onClose?: () => void; actions?: WalletDropInActions }) {
   const agents = frWallets().filter((w) => !w.meta.setup);
-  const [sel, setSel] = React.useState(null);
-  const ranked = source ? frMyRanked(source) : { total: 0, top: [] };
+  const [sel, setSel] = React.useState<string | null>(null);
+  const ranked = source ? frMyRanked(source) : { total: 0, top: [] as WalletHolding[] };
   const [fundSymState, setFundSym] = React.useState("");
   const [amount, setAmount] = React.useState("");
   const [fundState, setFundState] = React.useState("idle");
   const [msg, setMsg] = React.useState("");
-  const [fundResult, setFundResult] = React.useState(null);
+  const [fundResult, setFundResult] = React.useState<WalletFundResult | null>(null);
   const transferable = ranked.top.filter((b) => b.sym === "USDC");
   const fundSym = fundSymState || (transferable[0] ? transferable[0].sym : "USDC");
   const fundBal = transferable.find((b) => b.sym === fundSym);
   const AssetSel = AssetSelect;
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose && onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -487,7 +534,8 @@ function FundAgentModal({ source, onClose, actions }) {
   const successDetail = recipientBalanceText
     ? `${selected?.name || "Agent"} now has ${recipientBalanceText}.`
     : "Refresh the wallet balance to verify the new total.";
-  const canSubmitFund = !locked && source?.canSpend !== false && Boolean(selected) && Boolean(fundBal) && Number.isFinite(fundAmount) && fundAmount > 0 && fundAmount <= fundBal.amount;
+  // `!!` (identical to the previous Boolean() call) so TS narrows fundBal for the cap check.
+  const canSubmitFund = !locked && source?.canSpend !== false && Boolean(selected) && !!fundBal && Number.isFinite(fundAmount) && fundAmount > 0 && fundAmount <= fundBal.amount;
   const resetFundState = () => { setFundState("idle"); setMsg(""); setFundResult(null); };
   const submitFund = async (event?: React.MouseEvent<HTMLButtonElement>) => {
     event?.preventDefault();
@@ -562,14 +610,14 @@ const FW_FILTERS = [
   { id: "off",   label: "Off" },
 ];
 const FW_DENSITY_KEY = "fr-wallet-density";
-function frMatchesFilter(w, f) {
+function frMatchesFilter(w: DropInWallet, f: string) {
   if (f === "on")   return w.meta.enabled && !w.meta.setup;
   if (f === "off")  return !w.meta.enabled && !w.meta.setup;
   if (f === "tend") return w.meta.setup || w.state === "failed" || w.meta.alert || (w.runway != null && w.runway < 3);
   return true;
 }
 function frRailSub() { return ""; }
-function CompactCard({ w, enabled, onOpen }) {
+function CompactCard({ w, enabled, onOpen }: { w: DropInWallet; enabled: boolean; onOpen?: () => void }) {
   const rw = frRunway({ ...w, meta: { ...w.meta, enabled } });
   const cfg = frRailCfg(w.railId);
   const railReady = frRailReady(w.railId);
@@ -604,14 +652,14 @@ function CompactCard({ w, enabled, onOpen }) {
     </button>
   );
 }
-function SheetTitle({ children, onClose }) {
+function SheetTitle({ children, onClose }: { children?: React.ReactNode; onClose?: () => void }) {
   return (
     <div className="fw-sheet-title">{children}
       <button type="button" className="fw-x" onClick={onClose} aria-label="Close" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={14} sw={2} /></button>
     </div>
   );
 }
-function NumField({ label, value, onCommit, readOnly }) {
+function NumField({ label, value, onCommit, readOnly }: { label: string; value: string; onCommit?: (value: string) => void; readOnly?: boolean }) {
   const [v, setV] = React.useState(value);
   React.useEffect(() => setV(value), [value]);
   const commit = () => { if (!readOnly && onCommit) onCommit(v); };
@@ -621,13 +669,14 @@ function NumField({ label, value, onCommit, readOnly }) {
     </label>
   );
 }
-function AssetSelect({ holdings, value, disabled = false, onChange }) {
+function AssetSelect({ holdings, value, disabled = false, onChange }: { holdings: Array<{ sym: string; amount: number }>; value: string; disabled?: boolean; onChange: (sym: string) => void }) {
   const [open, setOpen] = React.useState(false);
-  const ref = React.useRef(null);
+  const ref = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   React.useEffect(() => {
     if (!open) return;
-    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    // e.target as Node: DOM boundary; contains() takes Node while listeners get EventTarget.
+    const away = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, [open]);
@@ -646,8 +695,8 @@ function AssetSelect({ holdings, value, disabled = false, onChange }) {
     </div>
   );
 }
-function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure, actions }) {
-  const [sheet, setSheet] = React.useState(null);
+function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure, actions }: { w: DropInWallet; enabled: boolean; setEnabled: React.Dispatch<React.SetStateAction<boolean>>; compact?: boolean; onCollapse?: () => void; onConfigure?: (railId: WalletRailId) => void; actions?: WalletDropInActions }) {
+  const [sheet, setSheet] = React.useState<string | null>(null);
   const [auto, setAuto] = React.useState(!!w.meta.autoUse);
   const [copied, setCopied] = React.useState(false);
   const [dup, setDup] = React.useState(!!w.policy.dupGuard);
@@ -678,7 +727,8 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const sendAmount = Number(sendAmt);
   const spendCap = Number(w.meta.assetSpendCaps?.[sendSym] ?? (sendSym === "ETH" ? 0.01 : w.meta.maxPay));
   const sendAmountUsd = Number.isFinite(sendAmount) && sendAmount > 0 ? sendAmount * ((FR_CCY[sendSym] || {}).price || 0) : 0;
-  const canSubmitSend = Boolean(sendBal)
+  // `!!` (identical to the previous Boolean() call) so TS narrows sendBal for the cap check.
+  const canSubmitSend = !!sendBal
     && sendAmt.trim()
     && Number.isFinite(sendAmount)
     && sendAmount > 0
@@ -687,14 +737,14 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
     && (!requiresSendConfirmation || sendConfirm === confirmLabel);
   const actionStatus = w.meta.actionError || w.meta.actionMessage || "";
   const actionTone = w.meta.actionError ? "danger" : w.meta.actionBusy ? "working" : "ok";
-  const toggleSheet = (s) => setSheet((c) => (c === s ? null : s));
-  const copyAddr = () => { try { navigator.clipboard.writeText(w.meta.addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
+  const toggleSheet = (s: string) => setSheet((c) => (c === s ? null : s));
+  const copyAddr = () => { try { navigator.clipboard.writeText(w.meta.addr); } catch { /* clipboard unavailable */ } setCopied(true); setTimeout(() => setCopied(false), 1400); };
   const flipEnabled = () => setEnabled((v) => { const next = !v; actions?.onToggleAgentSpend?.(w.id, next); return next; });
   const flipAuto = () => setAuto((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { autoPayEnabled: next, allowAutoUse: next }); return next; });
   const flipVeilAuto = () => setVeilAuto((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { veilAutoSendEnabled: next }); return next; });
   const flipDup = () => setDup((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { duplicatePaymentGuardEnabled: next }); return next; });
-  const commitNum = (key) => (value) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { [key]: n }); };
-  const commitAsset = (asset) => (value) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { assetSpendCaps: { ...(w.meta.assetSpendCaps || {}), [asset]: n } }); };
+  const commitNum = (key: string) => (value: string) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { [key]: n }); };
+  const commitAsset = (asset: string) => (value: string) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { assetSpendCaps: { ...(w.meta.assetSpendCaps || {}), [asset]: n } }); };
   const send = async () => { setSendMsg("Sending…"); try { if (!actions?.onSendAgentPayment) throw new Error("Agent send is not available in this build."); const res = await actions.onSendAgentPayment({ agentId: w.id, asset: sendSym, amount: sendAmt, amountUsd: sendAmountUsd || undefined, toAddress: recipMode === "address" ? sendTo : "", recipientAgentId: recipMode === "agent" ? (recipAgent || (others[0] && others[0].id)) : "", confirmation: sendConfirm }); setSendMsg(res?.signature ? "Sent · " + res.signature : res?.transfer?.transactionHash ? "Sent · " + res.transfer.transactionHash : "Sent."); } catch (e) { setSendMsg(e instanceof Error ? e.message : "Send failed."); } };
   return (
     <div className="fw-card" data-tone={cardTone} data-bee={`wallet-agent-${w.id}`} data-bee-wallet-action="details">
@@ -901,7 +951,7 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
     </div>
   );
 }
-function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
+function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }: { w: DropInWallet; density: string; expanded: boolean; onToggle: () => void; onConfigure?: (railId: WalletRailId) => void; actions?: WalletDropInActions }) {
   const [enabled, setEnabled] = React.useState(w.meta.enabled);
   React.useEffect(() => setEnabled(w.meta.enabled), [w.id, w.meta.enabled]);
   const detailed = density === "detailed" || expanded;
@@ -938,23 +988,25 @@ function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
   if (!detailed) return <CompactCard w={w} enabled={enabled} onOpen={onToggle} />;
   return <DetailedCard w={w} enabled={enabled} setEnabled={setEnabled} compact={density === "compact"} onCollapse={onToggle} onConfigure={onConfigure} actions={actions} />;
 }
-function AddrRow({ w, expanded }) {
+function AddrRow({ w, expanded }: { w: { addr: string; network?: string; addresses?: Array<[string, string]> }; expanded?: boolean }) {
   const [open, setOpen] = React.useState(false);
-  const [copied, setCopied] = React.useState(null);
-  const t = React.useRef(null);
-  const show = () => { clearTimeout(t.current); t.current = setTimeout(() => setOpen(true), 200); };
-  const hide = () => { clearTimeout(t.current); t.current = setTimeout(() => setOpen(false), 140); };
-  const doCopy = (val, key) => { try { navigator.clipboard.writeText(val); } catch (e) {} setCopied(key); setTimeout(() => setCopied(null), 1400); };
+  const [copied, setCopied] = React.useState<string | null>(null);
+  const t = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // clearTimeout(null) is a harmless no-op at runtime; the lib types only accept a timer id.
+  const show = () => { clearTimeout(t.current as ReturnType<typeof setTimeout>); t.current = setTimeout(() => setOpen(true), 200); };
+  const hide = () => { clearTimeout(t.current as ReturnType<typeof setTimeout>); t.current = setTimeout(() => setOpen(false), 140); };
+  const doCopy = (val: string, key: string) => { try { navigator.clipboard.writeText(val); } catch { /* clipboard unavailable */ } setCopied(key); setTimeout(() => setCopied(null), 1400); };
   const multi = w.addresses && w.addresses.length > 1;
   return (
     <div className="fw-addrwrap">
       <div className="addr">
-        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: multi ? "help" : "default" }} onMouseEnter={multi ? show : undefined} onMouseLeave={multi ? hide : undefined} title={multi ? "Hover for all chain addresses" : undefined}>{expanded && !multi ? w.network + " · " : ""}{frShortAddr(w.addr)}{multi ? "  · " + w.addresses.length + " chains" : ""}</span>
+        {/* w.addresses! below: guarded by `multi`, which implies addresses is set. */}
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: multi ? "help" : "default" }} onMouseEnter={multi ? show : undefined} onMouseLeave={multi ? hide : undefined} title={multi ? "Hover for all chain addresses" : undefined}>{expanded && !multi ? w.network + " · " : ""}{frShortAddr(w.addr)}{multi ? "  · " + w.addresses!.length + " chains" : ""}</span>
         <button type="button" onClick={() => doCopy(w.addr, "main")} aria-label="Copy address"><BIcon name={copied === "main" ? "check" : "copy"} size={13} /></button>
       </div>
       {open && multi ? (
         <div className="fw-addrpop" onMouseEnter={show} onMouseLeave={hide}>
-          {w.addresses.map(([chain, addr]) => (
+          {w.addresses!.map(([chain, addr]) => (
             <div className="arow" key={chain}>
               <span className="chain">{chain}</span>
               <span className="a">{frShortAddr(addr)}</span>
@@ -966,16 +1018,16 @@ function AddrRow({ w, expanded }) {
     </div>
   );
 }
-function walletChainBadgeSrcs(w) {
+function walletChainBadgeSrcs(w: Pick<GroupedPersonalWallet, "accounts"> | null | undefined) {
   const accounts = Array.isArray(w?.accounts) ? w.accounts : [];
-  const keys = [];
+  const keys: string[] = [];
   for (const account of accounts) {
     const key = account?.chainKey;
     if (key && key !== "other" && !keys.includes(key)) keys.push(key);
   }
-  return keys.slice(0, 3).map((key) => chainBadgeSrc(key)).filter(Boolean);
+  return keys.slice(0, 3).map((key) => chainBadgeSrc(key)).filter((src): src is string => Boolean(src));
 }
-function WalletChainBadges({ w }) {
+function WalletChainBadges({ w }: { w: GroupedPersonalWallet }) {
   const logos = walletChainBadgeSrcs(w);
   if (!logos.length) return <span className="fb-tile" style={{ color: w.primary ? "var(--honey)" : "var(--fg-3)" }}><BIcon name={w.icon} size={18} /></span>;
   return (
@@ -993,7 +1045,7 @@ function WalletChainBadges({ w }) {
     </span>
   );
 }
-function MyWalletCard({ w, actions }) {
+function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: WalletDropInActions }) {
   const { top, total } = frMyRanked(w);
   const canSpend = w.canSpend !== false;
   const [expanded, setExpanded] = React.useState(false);
@@ -1010,13 +1062,13 @@ function MyWalletCard({ w, actions }) {
     try {
       await actions.onRenamePersonalWallet({ source: w, name: next });
       setEditingName(false);
-    } catch (e) {
+    } catch {
       // Leave the field open so the user can retry or cancel.
     } finally {
       setRenaming(false);
     }
   };
-  const [sheet, setSheet] = React.useState(null); // send | receive
+  const [sheet, setSheet] = React.useState<string | null>(null); // send | receive
   const [fund, setFund] = React.useState(false);
   const [imp, setImport] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -1026,9 +1078,10 @@ function MyWalletCard({ w, actions }) {
   const prim = sendHoldings[0] || { sym: "USDC", amount: 0 };
   const sendSym = sendSymState || prim.sym;
   const sendBal = sendHoldings.find((b) => b.sym === sendSym);
-  const sendAmount = Number(sendAmt), canSendPersonal = canSpend && Boolean(sendBal) && Number.isFinite(sendAmount) && sendAmount > 0 && sendAmount <= sendBal.amount && Boolean(sendTo.trim()) && sendConfirm === "SEND_USDC";
-  const copy = () => { try { navigator.clipboard.writeText(w.addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
-  const toggleSheet = (s) => setSheet((c) => (c === s ? null : s));
+  // `!!` (identical to the previous Boolean() call) so TS narrows sendBal for the cap check.
+  const sendAmount = Number(sendAmt), canSendPersonal = canSpend && !!sendBal && Number.isFinite(sendAmount) && sendAmount > 0 && sendAmount <= sendBal.amount && Boolean(sendTo.trim()) && sendConfirm === "SEND_USDC";
+  const copy = () => { try { navigator.clipboard.writeText(w.addr); } catch { /* clipboard unavailable */ } setCopied(true); setTimeout(() => setCopied(false), 1400); };
+  const toggleSheet = (s: string) => setSheet((c) => (c === s ? null : s));
   return (
     <div className="fw-mywallet">
       <div className="top">
@@ -1119,9 +1172,9 @@ function MyWalletCard({ w, actions }) {
     </div>
   );
 }
-function BankrWalletCard({ bankr, onNavigate }) {
+function BankrWalletCard({ bankr }: { bankr: WalletBankrInfo; onNavigate?: (id: string) => void }) {
   const [copied, setCopied] = React.useState(false);
-  const [sheet, setSheet] = React.useState(null); // "send" | "receive" | "fund" | null
+  const [sheet, setSheet] = React.useState<string | null>(null); // "send" | "receive" | "fund" | null
   const [expanded, setExpanded] = React.useState(false);
   const balance = Number(bankr?.balanceUsd) || 0;
   const addr = String(bankr?.address || "");
@@ -1131,7 +1184,7 @@ function BankrWalletCard({ bankr, onNavigate }) {
   const holdings = (Array.isArray(bankr?.tokens) ? bankr.tokens : []).map((t) => ({ sym: t.symbol, name: t.name, amount: Number(t.amount) || 0, usd: Number(t.usd) || 0, change: 0 }));
   const holdTotal = holdings.reduce((s, h) => s + h.usd, 0) || balance;
   const topHolding = holdings[0];
-  const copy = () => { try { navigator.clipboard.writeText(addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
+  const copy = () => { try { navigator.clipboard.writeText(addr); } catch { /* clipboard unavailable */ } setCopied(true); setTimeout(() => setCopied(false), 1400); };
 
   // Agents fundable via Bankr — they need an EVM (0x) address, since Bankr sends
   // on Base mainnet. (Agent addresses live on w.meta.addr in the drop-in data.)
@@ -1146,7 +1199,7 @@ function BankrWalletCard({ bankr, onNavigate }) {
   const [recipient, setRecipient] = React.useState("");
   const [fundAgentId, setFundAgentId] = React.useState("");
   const [step, setStep] = React.useState("idle"); // idle | preparing | review | executing | done | error
-  const [draft, setDraft] = React.useState(null);
+  const [draft, setDraft] = React.useState<{ message?: string; confirmation: string } | null>(null);
   const [msg, setMsg] = React.useState("");
   const amtNum = Number(amount) || 0;
   const selectedAgent = fundableAgents.find((a) => a.id === fundAgentId) || fundableAgents[0];
@@ -1155,9 +1208,9 @@ function BankrWalletCard({ bankr, onNavigate }) {
   const addrOk = sheet === "fund" ? Boolean(selectedAgent?.meta?.addr) : recipOk;
   const canReview = amtNum > 0 && addrOk && step !== "preparing" && step !== "executing";
   const resetFlow = () => { setStep("idle"); setDraft(null); setMsg(""); };
-  const openSheet = (s) => { setSheet((cur) => (cur === s ? null : s)); resetFlow(); };
+  const openSheet = (s: string) => { setSheet((cur) => (cur === s ? null : s)); resetFlow(); };
 
-  const bankrPost = async (body) => {
+  const bankrPost = async (body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; message?: string; confirmation?: string } | null> => {
     const r = await fetch("/api/bankr/actions", { method: "POST", headers: { "Content-Type": "application/json", accept: "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     return (await r?.json().catch(() => null)) || null;
   };
@@ -1187,7 +1240,10 @@ function BankrWalletCard({ bankr, onNavigate }) {
         {step === "review" ? (
           <>
             <BBtn variant="ghost" sm onClick={resetFlow}>Edit</BBtn>
-            <BBtn variant="primary" sm disabled={step === "executing"} onClick={send}><BIcon name="promote" size={14} /> {step === "executing" ? "Sending…" : "Confirm & send"}</BBtn>
+            {/* (step as string): inside this branch TS narrows step to "review", so these
+                "executing" checks are dead at render time (the outer ternary swaps to the
+                Review button once send() sets step to "executing"). Kept as-is on purpose. */}
+            <BBtn variant="primary" sm disabled={(step as string) === "executing"} onClick={send}><BIcon name="promote" size={14} /> {(step as string) === "executing" ? "Sending…" : "Confirm & send"}</BBtn>
           </>
         ) : (
           <BBtn variant="primary" sm disabled={!canReview} onClick={review}><BIcon name="shield" size={14} /> {step === "preparing" ? "Reviewing…" : sheet === "fund" ? "Review funding" : "Review send"}</BBtn>
@@ -1280,15 +1336,15 @@ function BankrWalletCard({ bankr, onNavigate }) {
     </div>
   );
 }
-function MyWallets({ actions, onNavigate }) {
+function MyWallets({ actions, onNavigate }: { actions?: WalletDropInActions; onNavigate?: (id: string) => void }) {
   const total = frMyWalletsTotal();
   const bankr = frBankrWallet();
   const walletCount = FR_MY_WALLETS.length + (bankr ? 1 : 0);
   const [add, setAdd] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(() => {
-    try { return localStorage.getItem("fr-mywallets-collapsed") === "1"; } catch (e) { return false; }
+    try { return localStorage.getItem("fr-mywallets-collapsed") === "1"; } catch { return false; }
   });
-  const toggle = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("fr-mywallets-collapsed", n ? "1" : "0"); } catch (e) {} return n; });
+  const toggle = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("fr-mywallets-collapsed", n ? "1" : "0"); } catch { /* storage unavailable */ } return n; });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <button type="button" onClick={toggle} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", width: "100%", background: "transparent", border: 0, padding: 0, cursor: "pointer", textAlign: "left" }}>
@@ -1313,16 +1369,16 @@ function MyWallets({ actions, onNavigate }) {
     </div>
   );
 }
-function AgentsPanel({ onConfigure, actions, onNavigate }) {
+function AgentsPanel({ onConfigure, actions, onNavigate }: { onConfigure: (railId: WalletRailId) => void; actions?: WalletDropInActions; onNavigate?: (id: string) => void }) {
   const [filter, setFilter] = React.useState("all");
   const [density, setDensity] = React.useState(() => {
-    try { return localStorage.getItem(FW_DENSITY_KEY) || "compact"; } catch (e) { return "compact"; }
+    try { return localStorage.getItem(FW_DENSITY_KEY) || "compact"; } catch { return "compact"; }
   });
-  const [expanded, setExpanded] = React.useState(null);
+  const [expanded, setExpanded] = React.useState<string | null>(null);
   const wallets = frWallets();
   const shown = wallets.filter((w) => frMatchesFilter(w, filter));
-  const setD = (d) => { setDensity(d); setExpanded(null); try { localStorage.setItem(FW_DENSITY_KEY, d); } catch (e) {} };
-  const toggle = (id) => setExpanded((cur) => (cur === id ? null : id));
+  const setD = (d: string) => { setDensity(d); setExpanded(null); try { localStorage.setItem(FW_DENSITY_KEY, d); } catch { /* storage unavailable */ } };
+  const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
   return (
     <div className="fb-fade" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
       <MyWallets actions={actions} onNavigate={onNavigate} />
@@ -1379,7 +1435,7 @@ function HoldingsPanel() {
           {tokens.map((t) => (
             <span key={t.sym} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 11.5, color: "var(--fg-2)" }}>
               <i style={{ width: 9, height: 9, borderRadius: 3, background: frBarColor(t.sym) }} />
-              {(FR_CCY[t.sym] || {}).name} <span style={{ color: "var(--fg-4)", fontFamily: "var(--f-mono)" }}>{Math.round((t.usd / total) * 100)}%</span>
+              {((FR_CCY[t.sym] || {}) as WalletTokenMeta).name} <span style={{ color: "var(--fg-4)", fontFamily: "var(--f-mono)" }}>{Math.round((t.usd / total) * 100)}%</span>
             </span>
           ))}
         </div>
@@ -1398,7 +1454,7 @@ function HoldingsPanel() {
           </thead>
           <tbody>
             {tokens.map((t) => {
-              const meta = FR_CCY[t.sym] || {};
+              const meta: WalletTokenMeta = FR_CCY[t.sym] || {};
               const c = frFmtChange(t.change);
               const share = (t.usd / total) * 100;
               return (
@@ -1469,8 +1525,8 @@ function ActivityPanel() {
     </div>
   );
 }
-function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }) {
-  const [cfg, setCfg] = React.useState(null);
+function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }: { actions?: WalletDropInActions; selectedRailId?: string; onSelectedRailHandled?: () => void }) {
+  const [cfg, setCfg] = React.useState<WalletRail | null>(null);
   React.useEffect(() => {
     if (!selectedRailId) return;
     const rail = frRailCfg(selectedRailId);
@@ -1530,7 +1586,7 @@ function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }) {
     </div>
   );
 }
-function fmtTokens(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n); }
+function fmtTokens(n: number) { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n); }
 function UsagePanel() {
   const rows = frUsage();
   const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
@@ -1603,7 +1659,7 @@ function UsagePanel() {
     </div>
   );
 }
-function HoneyPanel({ actions }) {
+function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
   const [on, setOn] = React.useState(D.FR_HONEY_ENABLED);
   React.useEffect(() => setOn(D.FR_HONEY_ENABLED), [D.FR_HONEY_ENABLED]);
   const s = frHoneySummary();
@@ -1676,9 +1732,10 @@ function HoneyPanel({ actions }) {
     </div>
   );
 }
-function WalletModeHeader({ panel, onPanel }) {
+function WalletModeHeader({ panel, onPanel }: { panel: string; onPanel: (id: string) => void }) {
   const s = frWalletSummary();
-  const copy = FR_WALLET_PANELS.find((p) => p.id === panel);
+  // panel is always one of FR_WALLET_PANELS' ids (guarded in FleetWallets).
+  const copy = FR_WALLET_PANELS.find((p) => p.id === panel)!;
   const chg = frFmtChange(s.change);
   return (
     <header style={{ padding: "20px 30px", borderBottom: "1px solid var(--line)" }}>
@@ -1702,12 +1759,12 @@ function WalletModeHeader({ panel, onPanel }) {
     </header>
   );
 }
-function FleetWallets({ theme, onToggleTheme, onNavigate, actions }) {
+function FleetWallets({ theme, onToggleTheme, onNavigate, actions }: { theme?: string; onToggleTheme?: () => void; onNavigate?: (id: string) => void; actions?: WalletDropInActions }) {
   const valid = FR_WALLET_PANELS.map((p) => p.id);
   const initial = (typeof location !== "undefined" && new URLSearchParams(location.search).get("walletPanel")) || "agents";
   const [panel, setPanel] = React.useState(valid.includes(initial) ? initial : "agents");
   const [selectedRailId, setSelectedRailId] = React.useState("");
-  const openRailConfig = React.useCallback((railId) => {
+  const openRailConfig = React.useCallback((railId: string) => {
     setSelectedRailId(railId);
     setPanel("rails");
   }, []);
@@ -1729,8 +1786,16 @@ function FleetWallets({ theme, onToggleTheme, onNavigate, actions }) {
     </div>
   );
 }
-export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, actions }: any = {}) {
-  const appliedRuntimeDataRef = React.useRef(null);
+export type WalletsViewProps = {
+  runtimeData?: WalletRuntimeData | null;
+  theme?: string;
+  onToggleTheme?: () => void;
+  onNavigate?: (id: string) => void;
+  actions?: WalletDropInActions;
+};
+
+export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, actions }: WalletsViewProps = {}) {
+  const appliedRuntimeDataRef = React.useRef<WalletRuntimeData | null>(null);
   if (runtimeData && appliedRuntimeDataRef.current !== runtimeData) {
     D.frApplyRuntimeWalletData(runtimeData);
     appliedRuntimeDataRef.current = runtimeData;

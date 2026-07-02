@@ -22,12 +22,16 @@ export type AgentPaymentProviderAdvancedSetup = {
   sections: readonly AgentPaymentProviderAdvancedSection[];
 };
 
+export type WalletDropInGroup = "bankr" | "cards" | "crypto" | "manual" | "usepod" | "veil" | "venice" | "x402";
+
 export type AgentPaymentProviderFeatures = {
   label: string;
   summary: string;
   setup: string;
   balanceSource: AgentPaymentProviderBalanceSource;
   addressSource: "manual" | "local-wallet" | "moneyclaw" | "usepod-deposit" | "none";
+  /** Card stack the wallets drop-in view renders this provider's wallets under. */
+  walletDropInGroup: WalletDropInGroup;
   localWalletRequired: boolean;
   canReceive: boolean;
   canSend: boolean;
@@ -50,6 +54,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Store the Bankr API key in the shared/agent environment, set spending caps here, and route trades through Bankr instead of treating it as the primary wallet.",
     balanceSource: "manual-ledger",
     addressSource: "manual",
+    walletDropInGroup: "bankr",
     localWalletRequired: false,
     canReceive: false,
     canSend: false,
@@ -67,6 +72,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Keep existing CLAWCARD_API_KEY values if you have them, but new agent wallet setup uses MoneyClaw for cards, local wallets for crypto, x402 for paid APIs, and Bankr for trading.",
     balanceSource: "manual-ledger",
     addressSource: "none",
+    walletDropInGroup: "cards",
     localWalletRequired: false,
     canReceive: false,
     canSend: false,
@@ -84,6 +90,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Store MONEYCLAW_API_KEY once through shared env. The wallet card can then inspect readiness, deposit address, balance, and recent payment tasks automatically.",
     balanceSource: "moneyclaw",
     addressSource: "moneyclaw",
+    walletDropInGroup: "cards",
     localWalletRequired: true,
     canReceive: true,
     canSend: true,
@@ -101,6 +108,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Configure a Base/Solana wallet and enforce network, scheme, and max-amount payment policies.",
     balanceSource: "x402-wallet",
     addressSource: "local-wallet",
+    walletDropInGroup: "x402",
     localWalletRequired: true,
     canReceive: true,
     canSend: true,
@@ -118,6 +126,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Register UsePod from agent settings, keep the token in HivemindOS env, fund the saved receiver, and let UsePod handle model calls and machine-native paywalls from that balance.",
     balanceSource: "usepod-runtime",
     addressSource: "usepod-deposit",
+    walletDropInGroup: "usepod",
     localWalletRequired: false,
     canReceive: true,
     canSend: false,
@@ -135,6 +144,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Connect or create a wallet from Venice setup in agent settings, top up the Venice balance with Base USDC over x402, and pick a model. Or save VENICE_API_KEY and buy credits with a card at venice.ai/settings/api.",
     balanceSource: "venice-runtime",
     addressSource: "local-wallet",
+    walletDropInGroup: "venice",
     localWalletRequired: false,
     canReceive: true,
     canSend: false,
@@ -152,6 +162,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Run Setup Veil once, keep a funded Base wallet for the agent, and let HivemindOS use ready private funds or shield from the local wallet before completing reviewed private sends.",
     balanceSource: "local-wallet",
     addressSource: "manual",
+    walletDropInGroup: "veil",
     localWalletRequired: false,
     canReceive: true,
     canSend: true,
@@ -171,6 +182,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
     setup: "Track seed balance, burn rate, and caps before connecting real credentials.",
     balanceSource: "manual-ledger",
     addressSource: "manual",
+    walletDropInGroup: "manual",
     localWalletRequired: false,
     canReceive: false,
     canSend: false,

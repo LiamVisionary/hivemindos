@@ -13,6 +13,10 @@ import {
   CLAWBANK_REPO_REFERENCE_PATH,
   CLAWBANK_VAULT_REFERENCE_PATH,
 } from "@/lib/services/chat/clawbank-capability-context";
+import {
+  X_MCP_HIVEMIND_INTEGRATION_FACTS,
+  X_MCP_PLATFORM_FACTS,
+} from "@/lib/services/chat/x-mcp-capability-context";
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
@@ -731,6 +735,38 @@ function localCliToolItems(): ContextIndexItem[] {
         type: "file",
         target: CLAWBANK_VAULT_REFERENCE_PATH,
         note: "Vault-relative imported ClawBank docs. For live readiness use GET /api/clawbank; discover the per-account tool surface with GET /api/clawbank/run; money/entity actions need confirmation tokens.",
+      },
+    },
+    {
+      id: "tool-schema:x-mcp-integration",
+      kind: "tool-schema",
+      title: "X / Twitter integration (managed X API + X MCP)",
+      summary: "X/Twitter over MCP on two paths: the official X API MCP with a BYO X developer app, and the managed HivemindOS X API gateway with Sign in with X, server-side OAuth token custody, hosted-credit billing, the x_api MCP tool, and the CONFIRM_X_API_CALL write gate.",
+      tags: ["x", "twitter", "social", "mcp", "integration", "post", "search", "timeline", "oauth", "credits", "gateway", "capability", "tool"],
+      aliases: [
+        "x integration",
+        "twitter integration",
+        "what can you do with x",
+        "connect x",
+        "sign in with x",
+        "post to x",
+        "tweet",
+        "x api",
+        "x mcp",
+        "xapi mcp",
+        "managed x api",
+        "x api credits",
+      ],
+      retrievalText: [
+        ...X_MCP_PLATFORM_FACTS,
+        ...X_MCP_HIVEMIND_INTEGRATION_FACTS,
+      ].join(" "),
+      route: "/api/integrations/x-mcp",
+      methods: ["GET", "POST"],
+      load: {
+        type: "api",
+        target: "/api/integrations/x-mcp",
+        note: "Live X MCP readiness by credential key name plus per-runtime xapi config state. Managed X API calls run through /api/integrations/x-managed; non-GET proxy calls require CONFIRM_X_API_CALL.",
       },
     },
     {

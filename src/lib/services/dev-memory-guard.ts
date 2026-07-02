@@ -1,3 +1,5 @@
+import { booleanEnv } from "@/lib/config/env";
+
 const MEMORY_GUARD_KEY = Symbol.for("hivemindos.devMemoryGuard");
 const MB = 1024 * 1024;
 const MEMORY_PRESSURE_FILE = ".hivemindos/telemetry/memory-pressure.jsonl";
@@ -31,7 +33,7 @@ function mb(bytes: number) {
 function runGc() {
   const runtime = globalThis as MemoryGuardGlobal;
   if (typeof runtime.gc !== "function") return false;
-  if (process.env.HIVEMINDOS_DEV_FORCE_GC !== "1") return false;
+  if (!booleanEnv("HIVEMINDOS_DEV_FORCE_GC")) return false;
   const heap = readHeapStatistics();
   if (heap.used_heap_size / heap.heap_size_limit > 0.75) return false;
   runtime.gc();
@@ -80,7 +82,7 @@ function recordMemoryPressure(reason: string) {
     totalAvailableSizeMb: mb(heap.total_available_size),
     nativeContexts: heap.number_of_native_contexts,
     detachedContexts: heap.number_of_detached_contexts,
-    forceGcEnabled: process.env.HIVEMINDOS_DEV_FORCE_GC === "1",
+    forceGcEnabled: booleanEnv("HIVEMINDOS_DEV_FORCE_GC"),
   };
   try {
     const require = runtimeRequire();

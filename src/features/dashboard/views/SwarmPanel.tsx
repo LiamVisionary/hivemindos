@@ -23,6 +23,7 @@ import {
 } from "@/components/simulation";
 import type { DashboardView, MiroSharkRunResult, MiroSharkStatus } from "@/features/dashboard/dashboard-types";
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
+import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { fetchPersonalWalletBalance, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { WalletSelectModal, type PickableWallet } from "@/features/dashboard/views/trade/WalletSelectModal";
@@ -36,16 +37,9 @@ import type { MiroSharkProcessSummary, MiroSharkSimulationCardData } from "@/fea
 type MiroSharkPlatform = MiroSharkRunResult["platform"];
 
 // MiroShark-scoped "last used wallet" — persisted separately from other
-// features so a user can keep one wallet for paid sims and others elsewhere.
-const LAST_WALLET_KEY = "hivemindos.miroshark.lastWalletId.v1";
-function readLastWalletId(): string {
-  if (typeof window === "undefined") return "";
-  try { return window.localStorage.getItem(LAST_WALLET_KEY) || ""; } catch { return ""; }
-}
-function writeLastWalletId(id: string) {
-  if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(LAST_WALLET_KEY, id); } catch { /* quota — best effort */ }
-}
+// features (via shared dashboard state) so a user can keep one wallet for paid
+// sims and others elsewhere.
+const LAST_WALLET_STATE_KEY = "miroshark.lastWalletId";
 
 type SwarmPanelProps = {
   setActiveView: Dispatch<SetStateAction<DashboardView>>;
@@ -353,12 +347,12 @@ export function SwarmPanel({
 
   const chosen = confirmWalletId ? resolvePickableAccount(x402Pickables, confirmWalletId) : null;
 
+  const [lastWalletId, rememberLastWalletId] = useRememberedDashboardValue(LAST_WALLET_STATE_KEY);
   const defaultWalletId = React.useMemo(() => {
-    const last = readLastWalletId();
-    if (last && isSelectablePickableId(x402Pickables, last)) return last;
+    if (lastWalletId && isSelectablePickableId(x402Pickables, lastWalletId)) return lastWalletId;
     if (selectedAgent?.id && isSelectablePickableId(x402Pickables, selectedAgent.id)) return selectedAgent.id;
     return x402Pickables[0]?.id ?? "";
-  }, [x402Pickables, selectedAgent?.id]);
+  }, [lastWalletId, x402Pickables, selectedAgent?.id]);
 
   const closeX402 = () => {
     setPendingX402(null);
@@ -370,7 +364,7 @@ export function SwarmPanel({
 
   const onWalletConfirm = (id: string) => {
     justPickedRef.current = true;
-    writeLastWalletId(id);
+    rememberLastWalletId(id);
     // Only sync the global selected agent for real agents, not personal wallets.
     if (!id.startsWith("user:")) setSelectedAgentId?.(id);
     setConfirmWalletId(id);

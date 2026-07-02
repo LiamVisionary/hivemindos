@@ -1,5 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import "@/components/json-render/fr/fr-style.css";
@@ -30,6 +28,7 @@ import { mergeProcessEvents, normalizeProcessEvents, processEventsAreActive } fr
 import { ConversationNav } from "./ConversationNav";
 import { ContextPanel } from "./ContextPanel";
 import { MessageThread } from "./MessageThread";
+import type { ExchangeConversation } from "./types";
 import { Dot, HiveMark, frChatState } from "./primitives";
 
 const hiveClass = createStyleClass(hiveChatStyles);
@@ -45,7 +44,7 @@ function friendlyThreadLabel(rawLabel: string, directoryLabel?: string) {
   return "agent chat";
 }
 
-function makeMetricRows(selectedAgent: any, runtimeLabel: string, providerLabel: string, modelLabel: string, machineLabel: string) {
+function makeMetricRows(selectedAgent: { name?: string } | null | undefined, runtimeLabel: string, providerLabel: string, modelLabel: string, machineLabel: string): Array<[string, string]> {
   return [
     ["Runtime", runtimeLabel],
     ["Provider", providerLabel],
@@ -533,7 +532,7 @@ export function ChatExchangePanel(props: any) {
     setExpandedChatFolders?.((current: Set<string>) => new Set(current).add(folderKey));
   }
 
-  const conv = {
+  const conv: ExchangeConversation = {
     id: selectedAgent?.id ?? selectedChatStorageKey ?? "chat",
     name: selectedAgent?.name ?? "Hive overview",
     sub: selectedChatDirectory || displayThreadLabel,

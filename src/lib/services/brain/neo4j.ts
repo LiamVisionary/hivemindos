@@ -5,7 +5,7 @@ import { constants } from "fs";
 import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { basename, dirname, join, relative, sep } from "path";
 import neo4j, { type Driver, type Session } from "neo4j-driver";
-import { hiveEnvPresence, hiveEnvValue } from "@/lib/services/shared-hive-env";
+import { hiveEnvPresence, hiveEnvValue, type HiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { listAgentMemoryRecords } from "@/lib/services/obsidian/agent-memory";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT, type Neo4jBrainConfig } from "@/lib/types/agent-runtime";
@@ -23,7 +23,7 @@ export type Neo4jBrainStatus = {
   serviceNotePath: string;
   database: string;
   config: Pick<Neo4jBrainConfig, "installMode" | "uriEnvKey" | "usernameEnvKey" | "passwordEnvKey" | "databaseEnvKey" | "queryLimit">;
-  keyStatus: Record<string, { present: boolean; source: "process" | "shared-hive-env" | "missing" }>;
+  keyStatus: Record<string, { present: boolean; source: HiveEnvPresence["source"] }>;
   counts?: Record<string, number>;
   error?: string;
 };

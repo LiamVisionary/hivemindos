@@ -110,7 +110,7 @@ function secret() {
 function copyExistingToken() {
   const token = readKey(DEVICE_TOKEN);
   if (!token) {
-    console.error(`${DEVICE_TOKEN} is missing from ${envFile}. Run: pnpm dashboard-auth reset-token`);
+    console.error(`${DEVICE_TOKEN} is missing from ${envFile}. Run: dashboard-auth reset-token`);
     process.exit(1);
   }
   copyTokenOrExit(token);
@@ -172,10 +172,13 @@ function printHelp() {
   console.log(`Dashboard auth helper
 
 Usage:
+  dashboard-auth status
+  dashboard-auth copy-token
+  dashboard-auth reset-token
+  dashboard-auth rotate-secret
+
+From the project folder you can also run:
   pnpm dashboard-auth status
-  pnpm dashboard-auth copy-token
-  pnpm dashboard-auth reset-token
-  pnpm dashboard-auth rotate-secret
 
 Commands:
   status         Check whether dashboard auth keys exist.

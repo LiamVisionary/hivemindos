@@ -412,12 +412,12 @@ function Ensure-HiveEnvAdd {
     Warn "Python is missing; hive env shims installed but will need Python to run."
     $pythonCommand = "python"
   }
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "dashboard-auth")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     $scriptPath = Join-Path $Root "scripts\$commandName"
     if ($commandName -eq "hive-transfer") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath.mjs`" %*`r`n" -Encoding ASCII
-    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook" -or $commandName -eq "hive-workspace" -or $commandName -eq "hive-workspace-switch" -or $commandName -eq "hive-workspace-add" -or $commandName -eq "hive-pulse") {
+    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook" -or $commandName -eq "hive-workspace" -or $commandName -eq "hive-workspace-switch" -or $commandName -eq "hive-workspace-add" -or $commandName -eq "hive-pulse" -or $commandName -eq "dashboard-auth") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath`" %*`r`n" -Encoding ASCII
     } elseif ($commandName -eq "hive-update") {
       Set-Content -Path $shimPath -Value "@echo off`r`nbash `"$scriptPath`" %*`r`n" -Encoding ASCII
@@ -428,13 +428,13 @@ function Ensure-HiveEnvAdd {
   }
   $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
   if (($userPath -split ";") -notcontains $binDir) {
-    if (Ask-YesNo "Add $binDir to your user PATH for hive env, transfer, handoff, and MCP commands?" $true) {
+    if (Ask-YesNo "Add $binDir to your user PATH for hive env, transfer, handoff, MCP, and dashboard auth commands?" $true) {
       $nextPath = if ($userPath) { "$userPath;$binDir" } else { $binDir }
       [Environment]::SetEnvironmentVariable("Path", $nextPath, "User")
       Refresh-Path
       Ok "Added $binDir to user PATH"
     } else {
-      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, and hive-pulse from any folder"
+      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, hive-pulse, and dashboard-auth from any folder"
     }
   } else {
     Refresh-Path
@@ -939,6 +939,12 @@ function Write-HivemindManagedBlock {
   $lines.Add("")
   $lines.Add("Check for the established project way before adding helpers, tools, storage paths, workflows, or abstractions. Keep scope tight and leave concurrent work alone. Before irreversible or outward actions such as delete, overwrite, migrate, commit, push, deploy, send, or multi-agent fan-out, name the rollback path and wait for explicit approval unless the user already asked for that exact action.")
   $lines.Add("")
+  $lines.Add("When you have enough information to act, act. Do not re-derive settled facts, re-litigate prior decisions, narrate options you will not pursue, or ask permission for reversible work already covered by the request. Keep scope tight: no unrequested features, broad refactors, abstractions, speculative fallbacks, feature flags, or compatibility shims unless compatibility is part of the task or established product contract.")
+  $lines.Add("")
+  $lines.Add("Before reporting progress or final results, audit each claim against tool results or artifacts from this run. Say what is verified, what is unverified, what failed, and what was skipped. Lead final summaries with the outcome in clear complete sentences, not compressed shorthand or hidden chain-of-thought.")
+  $lines.Add("")
+  $lines.Add("Delegate independent subtasks through HivemindOS routes when that reduces wall-clock time, keep working while they run when the runtime allows it, and verify subagent reports before relying on them. Do not stop or suggest a new session solely because the context is long.")
+  $lines.Add("")
   $lines.Add("## Shared Brain Memory")
   $lines.Add("")
   $lines.Add("Use ``hive-brain answer `"<query>`"`` before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, credential status, or project context. The CLI tries the running HivemindOS ``/api/brain/memory`` route first, then falls back to local vault/index search, so raw/non-managed agents can recall shared memory without being app-routed. Setup also installs ``hive-brain-hook`` as a Claude Code ``UserPromptSubmit`` hook when Claude is targeted, so raw Claude prompts receive relevant shared-brain context automatically. Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault through the generated full-vault lexical index. Pass ``--scope agent-memory`` for typed/proven memory only, or ``--scope full-vault`` to force broad vault recall. Load the ``hive-brain-memory`` skill when recalling, writing, correcting, or evolving typed Shared Brain Memory. For durable writes, use ``hive-brain remember --type <type> --title <title> --content <content>`` or POST ``/api/brain/memory``; use ``hive-brain evolve --memory-id <id> --content <content>`` or POST action ``evolve`` when reviewed context replaces an older memory; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.")
@@ -1120,8 +1126,8 @@ Write-Host ""
 Write-Host "Dashboard:"
 Write-Host "  http://localhost:$Port"
 Write-Host "  Unlock token: stored in .env.local and shared hive env as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
-Write-Host "  Copy token later: pnpm dashboard-auth copy-token"
-Write-Host "  Reset lost token: pnpm dashboard-auth reset-token"
+Write-Host "  Copy token later: dashboard-auth copy-token"
+Write-Host "  Reset lost token: dashboard-auth reset-token"
 Copy-DashboardTokenIfRequested
 Write-Host ""
 Write-Host "Collector:"

@@ -468,7 +468,7 @@ async function quoteXStocksLeg(mint: string, side: StockTradeSide, usdcAtomic: n
   return fetchJupiterQuote(mint, SOLANA_USDC_MINT, mintAtomic, slippageBps);
 }
 
-function assertXStocksNetwork(network: string | undefined) {
+function assertXStocksNetwork(network: string | undefined): asserts network is "solana:mainnet" {
   if (network !== "solana:mainnet") throw new Error("xStocks swaps require a Solana mainnet wallet.");
 }
 

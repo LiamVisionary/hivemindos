@@ -1,3 +1,4 @@
+import { shellBaseFromCollectorUrl, shellSessionUrl } from "@/app/api/fleet/shell/shell-target";
 import { discoverRawConnectedApps, type ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
 
@@ -10,6 +11,11 @@ const DISCOVERY_TIMEOUT_MS = 12_000;
 const RAW_TTS_DISCOVERY_TIMEOUT_MS = 2_500;
 const PROBE_TIMEOUT_MS = 8_000;
 const STREAM_TIMEOUT_MS = 120_000;
+const LAUNCH_DISCOVERY_TIMEOUT_MS = 10_000;
+const LAUNCH_PROBE_TIMEOUT_MS = 8_000;
+const LAUNCH_MODEL_PROBE_TIMEOUT_MS = 4_000;
+const LAUNCH_SHELL_TIMEOUT_MS = 15_000;
+const LAUNCH_SHELL_SESSION = "local-tts-launcher";
 const APP_CACHE_MS = 5 * 60_000;
 const CANDIDATE_CACHE_MS = 60_000;
 const PREFERRED_LOCAL_TTS_MODELS = [
@@ -35,8 +41,8 @@ export type LocalTtsCandidate = {
   model: string;
   voice: string;
   models: string[];
-  /** Every model the server advertises (full /v1/models), for the Calls model picker. */
   availableModels: string[];
+  availableModelDetails: LocalTtsModelStatus[];
   /** Every voice the server advertises (/v1/voices), for the Calls voice picker. */
   availableVoices: string[];
   voiceCount?: number;
@@ -48,6 +54,17 @@ export type LocalTtsCandidate = {
   channels: number;
   sampleFormat: string;
   routeHints: string[];
+};
+
+export type LocalTtsModelStatus = {
+  id: string;
+  providerId: string;
+  loaded: boolean;
+  healthy: boolean;
+  callReady: boolean;
+  supportsTrueStreaming: boolean;
+  streamingKind?: string;
+  streamingImplementation?: string;
 };
 
 export type LocalTtsCallConfig = {
@@ -63,6 +80,45 @@ export type LocalTtsCallConfig = {
   streamingKind?: string;
   streamingImplementation?: string;
   openingLine: string;
+};
+
+export type LocalTtsMachineSystem = {
+  checkedAt?: number;
+  cpuPct?: number;
+  cpuCores?: number;
+  cpuModel?: string;
+  loadAvg1m?: number;
+  ramPct?: number;
+  ramUsedGb?: number;
+  ramTotalGb?: number;
+  diskPct?: number | null;
+  diskUsedGb?: number | null;
+  diskTotalGb?: number | null;
+  platform?: string;
+  arch?: string;
+  osRelease?: string;
+  uptimeSec?: number;
+};
+
+export type LocalTtsCapacity = "ready" | "tight" | "limited" | "unknown";
+export type LocalTtsLaunchModelHintsSource = "service" | "running-candidate" | "fallback";
+
+export type LocalTtsLaunchCandidate = {
+  id: string;
+  machineName: string;
+  collectorUrl: string;
+  collectorStatus: string;
+  online: boolean;
+  serviceLabels: string[];
+  system?: LocalTtsMachineSystem;
+  availableRamGb?: number;
+  capacity: LocalTtsCapacity;
+  capacityLabel: string;
+  capacityDetail: string;
+  canStart: boolean;
+  modelHints: string[];
+  modelHintsSource: LocalTtsLaunchModelHintsSource;
+  preferredModel: string;
 };
 
 type HostedApp = ConnectedHostedApp;
@@ -110,6 +166,13 @@ type LinkPeer = {
 
 type LinkStatus = {
   peer?: Record<string, LinkPeer>;
+};
+
+type FleetLaunchMachine = {
+  device?: Record<string, unknown>;
+  collector?: unknown;
+  collectorHost?: unknown;
+  system?: unknown;
 };
 
 const appsByOrigin = new Map<string, AppCacheEntry>();
@@ -184,6 +247,18 @@ function cleanList(value: unknown): string[] {
   return [];
 }
 
+function uniqueClean(values: unknown[]) {
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const value of values) {
+    const text = clean(value);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    output.push(text);
+  }
+  return output;
+}
+
 function modelIds(payload: unknown): string[] {
   if (!payload || typeof payload !== "object") return [];
   const record = payload as { data?: unknown; models?: unknown };
@@ -198,6 +273,64 @@ function modelIds(payload: unknown): string[] {
     }
     return [];
   });
+}
+
+function boolValue(value: unknown) {
+  return value === true;
+}
+
+function providerEntries(payload: unknown): Array<[string, Record<string, unknown>]> {
+  const root = recordValue(payload);
+  const providers = recordValue(root?.providers);
+  if (!providers) return [];
+  return Object.entries(providers).flatMap(([providerId, value]) => {
+    const provider = recordValue(value);
+    return provider ? [[providerId, provider]] : [];
+  });
+}
+
+function localTtsModelStatuses(payload: unknown): LocalTtsModelStatus[] {
+  return providerEntries(payload).flatMap(([providerId, provider]) => {
+    const details = recordValue(provider.details);
+    const body = recordValue(details?.body);
+    const models = cleanList(provider.models);
+    const loaded = (boolValue(provider.loaded) || boolValue(body?.loaded)) && body?.loaded !== false;
+    const healthy = boolValue(provider.healthy) || boolValue(body?.healthy) || boolValue(body?.ok);
+    const supportsTrueStreaming = boolValue(provider.supports_true_streaming) || boolValue(body?.supports_true_streaming);
+    const supportsStreamingApi = provider.supports_streaming_api !== false && body?.supports_streaming_api !== false;
+    const streamingKind = clean(body?.streaming_kind) || clean(provider.streaming_kind);
+    const sampleFormat = clean(body?.sample_format) || clean(provider.sample_format);
+    const streamingImplementation = clean(body?.streaming_implementation) || clean(provider.streaming_implementation);
+    const placeholderHaystack = [
+      provider.kind,
+      body?.kind,
+      body?.status,
+      body?.streaming_mode,
+      body?.implementation,
+      body?.notes,
+    ].map(clean).join(" ").toLowerCase();
+    const placeholder = /catalog_stub|not-enabled|not-realtime|not-tts|voice_conversion|\basr\b|postprocess/.test(placeholderHaystack);
+    const callReady = loaded
+      && healthy
+      && supportsStreamingApi
+      && supportsTrueStreaming
+      && (streamingKind === "pcm16" || sampleFormat === "pcm16")
+      && !placeholder;
+    return models.map((id) => ({
+      id,
+      providerId: clean(provider.id) || providerId,
+      loaded,
+      healthy,
+      callReady,
+      supportsTrueStreaming,
+      streamingKind: streamingKind || undefined,
+      streamingImplementation: streamingImplementation || undefined,
+    }));
+  });
+}
+
+function callReadyModels(statuses: LocalTtsModelStatus[]) {
+  return uniqueClean(statuses.filter((status) => status.callReady).map((status) => status.id));
 }
 
 function voiceIds(payload: unknown): string[] {
@@ -219,6 +352,251 @@ function voiceIds(payload: unknown): string[] {
 function numberValue(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function optionalNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function optionalNullableNumber(value: unknown) {
+  if (value === null) return null;
+  return optionalNumber(value);
+}
+
+function optionalString(value: unknown) {
+  const text = clean(value);
+  return text || undefined;
+}
+
+function systemStats(value: unknown): LocalTtsMachineSystem | undefined {
+  const source = recordValue(value);
+  if (!source) return undefined;
+  const stats: LocalTtsMachineSystem = {
+    checkedAt: optionalNumber(source.checkedAt),
+    cpuPct: optionalNumber(source.cpuPct),
+    cpuCores: optionalNumber(source.cpuCores),
+    cpuModel: optionalString(source.cpuModel),
+    loadAvg1m: optionalNumber(source.loadAvg1m),
+    ramPct: optionalNumber(source.ramPct),
+    ramUsedGb: optionalNumber(source.ramUsedGb),
+    ramTotalGb: optionalNumber(source.ramTotalGb),
+    diskPct: optionalNullableNumber(source.diskPct),
+    diskUsedGb: optionalNullableNumber(source.diskUsedGb),
+    diskTotalGb: optionalNullableNumber(source.diskTotalGb),
+    platform: optionalString(source.platform),
+    arch: optionalString(source.arch),
+    osRelease: optionalString(source.osRelease),
+    uptimeSec: optionalNumber(source.uptimeSec),
+  };
+  return Object.values(stats).some((entry) => entry !== undefined) ? stats : undefined;
+}
+
+function availableRamGb(system?: LocalTtsMachineSystem) {
+  if (!system || typeof system.ramTotalGb !== "number" || typeof system.ramUsedGb !== "number") return undefined;
+  return Math.max(0, system.ramTotalGb - system.ramUsedGb);
+}
+
+function capacityForSystem(system?: LocalTtsMachineSystem): {
+  capacity: LocalTtsCapacity;
+  capacityLabel: string;
+  capacityDetail: string;
+  availableRamGb?: number;
+} {
+  const freeRamGb = availableRamGb(system);
+  const totalRamGb = system?.ramTotalGb;
+  const diskPct = typeof system?.diskPct === "number" ? system.diskPct : undefined;
+  if (typeof freeRamGb !== "number" || typeof totalRamGb !== "number") {
+    return {
+      capacity: "unknown",
+      capacityLabel: "Resource telemetry unavailable",
+      capacityDetail: "Hivemind Link can try to start the service, but RAM and disk fit are not confirmed yet.",
+    };
+  }
+  if ((typeof diskPct === "number" && diskPct >= 96) || totalRamGb < 4 || freeRamGb < 1.25) {
+    return {
+      capacity: "limited",
+      capacityLabel: "Likely too constrained",
+      capacityDetail: "Local TTS may not load reliably with the current free memory or disk headroom.",
+      availableRamGb: freeRamGb,
+    };
+  }
+  if (totalRamGb >= 8 && freeRamGb >= 2 && (typeof diskPct !== "number" || diskPct < 92)) {
+    return {
+      capacity: "ready",
+      capacityLabel: "Can load Local TTS",
+      capacityDetail: "Current RAM and disk telemetry look healthy for starting Universal TTS.",
+      availableRamGb: freeRamGb,
+    };
+  }
+  return {
+    capacity: "tight",
+    capacityLabel: "Can try Local TTS",
+    capacityDetail: "The machine has enough headroom to try, but loading may be slower or more fragile.",
+    availableRamGb: freeRamGb,
+  };
+}
+
+function launchMachineName(machine: FleetLaunchMachine) {
+  const device = recordValue(machine.device);
+  return clean(device?.name)
+    || clean(device?.dnsName).replace(/\.$/, "").split(".")[0]
+    || clean(machine.collectorHost)
+    || clean(device?.ip)
+    || "Hivemind machine";
+}
+
+function normalizedMachineName(value?: string) {
+  return clean(value).toLowerCase().replace(/\.$/, "");
+}
+
+function collectorHostName(collectorUrl?: string) {
+  try {
+    return normalizedMachineName(new URL(clean(collectorUrl)).hostname.split(".")[0]);
+  } catch {
+    return "";
+  }
+}
+
+function runningCandidateMatchesMachine(candidate: LocalTtsCandidate, machineName: string, collectorUrl: string) {
+  const machineKey = normalizedMachineName(machineName);
+  const candidateMachine = normalizedMachineName(candidate.machineName);
+  const collectorHost = collectorHostName(collectorUrl);
+  const appKey = normalizedMachineName(candidate.appId);
+  return Boolean(
+    (machineKey && candidateMachine && (candidateMachine === machineKey || candidateMachine.includes(machineKey) || machineKey.includes(candidateMachine)))
+    || (machineKey && appKey.includes(machineKey))
+    || (collectorHost && appKey.includes(collectorHost)),
+  );
+}
+
+function runningCandidateModels(candidate: LocalTtsCandidate) {
+  return uniqueClean([...(candidate.availableModels ?? []), ...(candidate.models ?? [])]);
+}
+
+function runningModelsForMachine(machineName: string, collectorUrl: string, runningCandidates: LocalTtsCandidate[]) {
+  return uniqueClean(runningCandidates
+    .filter((candidate) => runningCandidateMatchesMachine(candidate, machineName, collectorUrl))
+    .flatMap((candidate) => runningCandidateModels(candidate)));
+}
+
+async function fleetLaunchMachines(origin: string): Promise<FleetLaunchMachine[]> {
+  const response = await fetch(new URL("/api/fleet/discover?includeSnapshots=0&fresh=1", origin), {
+    cache: "no-store",
+    signal: AbortSignal.timeout(LAUNCH_DISCOVERY_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Fleet discovery returned HTTP ${response.status}.`);
+  const payload = recordValue(await response.json().catch(() => null));
+  const machines = payload?.machines;
+  return Array.isArray(machines)
+    ? machines.flatMap((machine) => {
+      const item = recordValue(machine);
+      return item ? [item as FleetLaunchMachine] : [];
+    })
+    : [];
+}
+
+function ttsLaunchCommand() {
+  const pattern = "universal.?tts";
+  return [
+    "U=$(id -u 2>/dev/null || echo); kicked=0",
+    `if command -v launchctl >/dev/null 2>&1; then for L in $(launchctl list 2>/dev/null | awk 'NR>1 && tolower($3) ~ /${pattern}/ {print $3}'); do launchctl kickstart -k "gui/$U/$L" 2>/dev/null && kicked=$((kicked+1)); done; fi`,
+    `if command -v systemctl >/dev/null 2>&1; then for S in $(systemctl --user list-units --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do systemctl --user restart "$S" 2>/dev/null && kicked=$((kicked+1)); done; for S in $(systemctl list-units --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do sudo -n systemctl restart "$S" 2>/dev/null && kicked=$((kicked+1)); done; fi`,
+    "echo \"hivemindos started $kicked TTS service(s)\"",
+  ].join("; ");
+}
+
+function ttsServiceProbeCommand() {
+  const pattern = "universal.?tts";
+  return [
+    `if command -v launchctl >/dev/null 2>&1; then launchctl list 2>/dev/null | awk 'NR>1 && tolower($3) ~ /${pattern}/ {print "HMOS_TTS_SERVICE:" $3}' | head -20; fi`,
+    `if command -v systemctl >/dev/null 2>&1; then { systemctl --user list-unit-files --type=service --no-legend 2>/dev/null; systemctl --user list-units --type=service --all --no-legend 2>/dev/null; systemctl list-unit-files --type=service --no-legend 2>/dev/null; systemctl list-units --type=service --all --no-legend 2>/dev/null; } | awk 'tolower($1) ~ /${pattern}/ {print "HMOS_TTS_SERVICE:" $1}' | sort -u | head -20; fi`,
+    "echo HMOS_TTS_PROBE_DONE",
+  ].join("; ");
+}
+
+function launchProbeSessionId(machineName: string) {
+  const slug = normalizedMachineName(machineName).replace(/[^a-z0-9._-]/g, "-").slice(0, 42) || "machine";
+  return `local-tts-probe-${slug}-${Date.now().toString(36)}`.slice(0, 120);
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function shellJson(url: string, init?: RequestInit): Promise<Record<string, unknown>> {
+  const response = await fetch(url, {
+    ...init,
+    cache: "no-store",
+    signal: init?.signal ?? AbortSignal.timeout(LAUNCH_PROBE_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Hivemind Link shell returned HTTP ${response.status}.`);
+  return recordValue(await response.json().catch(() => null)) ?? {};
+}
+
+function shellOutputLines(payload: Record<string, unknown>) {
+  const lines = payload.lines;
+  if (!Array.isArray(lines)) return [];
+  return lines.filter((line): line is string => typeof line === "string" && !line.startsWith("$ "));
+}
+
+function universalTtsServiceLabels(payload: Record<string, unknown>) {
+  return shellOutputLines(payload).flatMap((line) => {
+    const match = /^HMOS_TTS_SERVICE:(.+)$/.exec(line.trim());
+    return match?.[1]?.trim() ? [match[1].trim()] : [];
+  });
+}
+
+async function probeUniversalTtsService(collectorUrl: string, machineName: string): Promise<string[]> {
+  const base = shellBaseFromCollectorUrl(collectorUrl);
+  if (!base) return [];
+  const session = launchProbeSessionId(machineName);
+  await shellJson(shellSessionUrl(base, session, "command"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ command: ttsServiceProbeCommand() }),
+  }).catch(() => ({}));
+  const deadline = Date.now() + LAUNCH_PROBE_TIMEOUT_MS;
+  let labels: string[] = [];
+  while (Date.now() < deadline) {
+    await delay(350);
+    const payload = await shellJson(shellSessionUrl(base, session)).catch(() => ({}));
+    labels = universalTtsServiceLabels(payload);
+    if (labels.length || shellOutputLines(payload).some((line) => line.trim() === "HMOS_TTS_PROBE_DONE")) break;
+  }
+  return [...new Set(labels)];
+}
+
+function universalTtsApiBaseFromCollectorUrl(collectorUrl: string) {
+  const base = shellBaseFromCollectorUrl(collectorUrl);
+  if (!base) return "";
+  const linkBase = base.replace(/\/app-proxy\/\d+(?:\/.*)?$/, "").replace(/\/+$/, "");
+  return `${linkBase}/app-proxy/8799`;
+}
+
+async function probeUniversalTtsModels(collectorUrl: string) {
+  const base = universalTtsApiBaseFromCollectorUrl(collectorUrl);
+  if (!base) return [];
+  const providers = await jsonAt<unknown>(`${base}/providers`, LAUNCH_MODEL_PROBE_TIMEOUT_MS)
+    .catch(() => jsonAt<unknown>(`${base}/runtimes`, LAUNCH_MODEL_PROBE_TIMEOUT_MS).catch(() => null));
+  return callReadyModels(localTtsModelStatuses(providers));
+}
+
+async function launchModelHintsForCandidate(
+  candidate: Pick<LocalTtsLaunchCandidate, "collectorUrl" | "machineName">,
+  runningCandidates: LocalTtsCandidate[],
+): Promise<{ modelHints: string[]; modelHintsSource: LocalTtsLaunchModelHintsSource }> {
+  const serviceModels = await probeUniversalTtsModels(candidate.collectorUrl);
+  if (serviceModels.length) return { modelHints: serviceModels, modelHintsSource: "service" };
+
+  const runningModels = runningModelsForMachine(candidate.machineName, candidate.collectorUrl, runningCandidates);
+  if (runningModels.length) return { modelHints: runningModels, modelHintsSource: "running-candidate" };
+
+  return { modelHints: [...PREFERRED_LOCAL_TTS_MODELS], modelHintsSource: "fallback" };
 }
 
 function ipv4(value?: string) {
@@ -280,7 +658,11 @@ async function candidateFromUniversalTtsFallback(entry: UniversalFallbackApp): P
   const { app, capabilities } = entry;
   if (!app.id || !app.apiBaseUrl) return null;
   const selectedCaps = selectedCapabilities(capabilities);
-  const models = selectedCaps.models;
+  const providersPayload = await jsonAt<unknown>(`${app.apiBaseUrl}/providers`, 1_500)
+    .catch(() => jsonAt<unknown>(`${app.apiBaseUrl}/runtimes`, 1_500).catch(() => null));
+  const modelDetails = localTtsModelStatuses(providersPayload);
+  const readyModels = callReadyModels(modelDetails);
+  const models = readyModels.length ? readyModels : selectedCaps.models;
   const voicesEndpoint = clean(selectedCaps.voices_endpoint) || "/v1/voices";
   const voicesPayload = await jsonAt<unknown>(`${app.apiBaseUrl}${voicesEndpoint}`, 1_500)
     .catch(() => jsonAt<unknown>(`${app.apiBaseUrl}/v1/voices`, 1_500).catch(() => null));
@@ -301,7 +683,8 @@ async function candidateFromUniversalTtsFallback(entry: UniversalFallbackApp): P
     model: preferredModel(models),
     voice: preferredVoice(voices),
     models,
-    availableModels: models,
+    availableModels: readyModels,
+    availableModelDetails: modelDetails.filter((status) => status.callReady),
     availableVoices: voices,
     voiceCount: voices.length,
     supportsStreamingApi,
@@ -447,16 +830,15 @@ async function appJson(app: HostedApp, path: string) {
 async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
   const routeHints = routePaths(app);
   try {
-    const [capabilities, modelsPayload] = await Promise.all([
+    const [capabilities, modelsPayload, providersPayload] = await Promise.all([
       appJson(app, "/v1/audio/capabilities"),
       appJson(app, "/v1/models").catch(() => null),
+      appJson(app, "/providers").catch(() => appJson(app, "/runtimes").catch(() => null)),
     ]);
     const selectedCaps = selectedCapabilities(capabilities);
-    const models = selectedCaps.models.length ? selectedCaps.models : modelIds(modelsPayload);
-    // The full server roster (not just the selected provider's), so the Calls
-    // panel can offer every model (qwen, kokoro, …), not only chatterbox.
-    // Deduped: the server's /v1/models can list the same id twice (e.g. tts-1).
-    const allModels = [...new Set(modelIds(modelsPayload))];
+    const modelDetails = localTtsModelStatuses(providersPayload);
+    const readyModels = callReadyModels(modelDetails);
+    const models = readyModels.length ? readyModels : selectedCaps.models.length ? selectedCaps.models : modelIds(modelsPayload);
     const voicesEndpoint = clean(selectedCaps.voices_endpoint);
     const voicesPayload = voicesEndpoint
       ? await appJson(app, voicesEndpoint).catch(() => appJson(app, "/v1/voices").catch(() => appJson(app, "/voices").catch(() => null)))
@@ -480,7 +862,8 @@ async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
       model,
       voice,
       models,
-      availableModels: allModels.length ? allModels : models,
+      availableModels: readyModels,
+      availableModelDetails: modelDetails.filter((status) => status.callReady),
       availableVoices: voices,
       voiceCount: voices.length,
       supportsStreamingApi,
@@ -506,6 +889,7 @@ async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
       voice: DEFAULT_LOCAL_TTS_VOICE,
       models: [],
       availableModels: [],
+      availableModelDetails: [],
       availableVoices: [],
       supportsStreamingApi: false,
       supportsTrueStreaming: false,
@@ -549,6 +933,171 @@ export async function discoverLocalTtsCandidates(origin: string): Promise<LocalT
   }
   rememberCandidates(origin, candidates);
   return candidates;
+}
+
+export async function readLocalTtsLaunchCandidates(
+  origin: string,
+  runningCandidates: LocalTtsCandidate[] = [],
+): Promise<LocalTtsLaunchCandidate[]> {
+  const runningMachineNames = new Set(
+    runningCandidates.map((candidate) => normalizedMachineName(candidate.machineName)).filter(Boolean),
+  );
+  const machines = await fleetLaunchMachines(origin);
+  const unverifiedCandidates = machines.flatMap((machine): Omit<LocalTtsLaunchCandidate, "serviceLabels">[] => {
+    const device = recordValue(machine.device);
+    const collectorUrl = clean(device?.collectorUrl);
+    if (!collectorUrl) return [];
+    const machineName = launchMachineName(machine);
+    if (runningMachineNames.has(normalizedMachineName(machineName))) return [];
+    const collectorStatus = clean(machine.collector) || "unknown";
+    const online = device?.online !== false;
+    const system = systemStats(machine.system);
+    const capacity = capacityForSystem(system);
+    const collectorReady = collectorStatus === "ready";
+    const canStart = online && collectorReady && capacity.capacity !== "limited";
+    return [{
+      id: `${normalizedMachineName(machineName) || "machine"}:${collectorUrl}`,
+      machineName,
+      collectorUrl,
+      collectorStatus,
+      online,
+      system,
+      availableRamGb: capacity.availableRamGb,
+      capacity: capacity.capacity,
+      capacityLabel: !online
+        ? "Machine offline"
+        : collectorReady
+          ? capacity.capacityLabel
+          : "Collector not ready",
+      capacityDetail: !online
+        ? "The machine is not reachable through Tailscale right now."
+        : collectorReady
+          ? capacity.capacityDetail
+          : "Hivemind Link needs the remote collector before it can start Universal TTS there.",
+      canStart,
+      modelHints: [...PREFERRED_LOCAL_TTS_MODELS],
+      modelHintsSource: "fallback",
+      preferredModel: DEFAULT_LOCAL_TTS_MODEL,
+    }];
+  });
+  const launchCandidates = (await Promise.all(unverifiedCandidates.map(async (candidate) => {
+    if (!candidate.online || candidate.collectorStatus !== "ready") return null;
+    const [serviceLabels, modelHints] = await Promise.all([
+      probeUniversalTtsService(candidate.collectorUrl, candidate.machineName),
+      launchModelHintsForCandidate(candidate, runningCandidates),
+    ]);
+    return serviceLabels.length
+      ? {
+        ...candidate,
+        serviceLabels,
+        modelHints: modelHints.modelHints,
+        modelHintsSource: modelHints.modelHintsSource,
+        preferredModel: preferredModel(modelHints.modelHints),
+      }
+      : null;
+  }))).filter((candidate): candidate is LocalTtsLaunchCandidate => Boolean(candidate));
+  const rank: Record<LocalTtsCapacity, number> = { ready: 4, tight: 3, unknown: 2, limited: 1 };
+  return launchCandidates.sort((left, right) =>
+    Number(right.canStart) - Number(left.canStart)
+    || rank[right.capacity] - rank[left.capacity]
+    || left.machineName.localeCompare(right.machineName),
+  );
+}
+
+export async function startLocalTtsService(input: { collectorUrl: string }): Promise<{
+  ok: boolean;
+  message: string;
+  output?: string;
+}> {
+  const base = shellBaseFromCollectorUrl(input.collectorUrl);
+  if (!base) return { ok: false, message: "No Hivemind Link shell target was found for that machine." };
+  let response: Response;
+  try {
+    response = await fetch(shellSessionUrl(base, LAUNCH_SHELL_SESSION, "command"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ command: ttsLaunchCommand() }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(LAUNCH_SHELL_TIMEOUT_MS),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Hivemind Link shell request failed.",
+    };
+  }
+  const rawText = await response.text().catch(() => "");
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = recordValue(rawText ? JSON.parse(rawText) : null);
+  } catch {
+    parsed = null;
+  }
+  const output = clean(parsed?.output) || clean(parsed?.stdout) || clean(parsed?.message) || clean(rawText);
+  if (!response.ok || parsed?.ok === false) {
+    return {
+      ok: false,
+      message: output || `Hivemind Link shell returned HTTP ${response.status}.`,
+      output: output || undefined,
+    };
+  }
+  return {
+    ok: true,
+    message: "TTS start requested. Refreshing Local TTS discovery.",
+    output: output || undefined,
+  };
+}
+
+export async function manageLocalTtsModel(input: {
+  origin: string;
+  appId: string;
+  action: "load-model" | "unload-model";
+  model?: string;
+  providerId?: string;
+}): Promise<{
+  ok: boolean;
+  message: string;
+  providerId?: string;
+  model?: string;
+  detail?: unknown;
+}> {
+  const app = cachedApp(input.origin, input.appId)
+    ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
+  if (!app?.apiBaseUrl) return { ok: false, message: "No matching connected TTS app with an API base URL was found." };
+
+  const providersPayload = await appJson(app, "/providers").catch(() => appJson(app, "/runtimes").catch(() => null));
+  const statuses = localTtsModelStatuses(providersPayload);
+  const status = input.providerId
+    ? statuses.find((item) => item.providerId === input.providerId)
+    : statuses.find((item) => item.id === input.model);
+  const provider = input.providerId || status?.providerId || "";
+  if (!provider) return { ok: false, message: "No Universal TTS provider was found for that model." };
+
+  const path = input.action === "load-model"
+    ? `/providers/${encodeURIComponent(provider)}/load`
+    : `/providers/${encodeURIComponent(provider)}/unload`;
+  const response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}${path}`, {
+    method: "POST",
+    headers: input.action === "load-model" ? { "content-type": "application/json" } : undefined,
+    body: input.action === "load-model" ? JSON.stringify({ model: input.model || status?.id || provider }) : undefined,
+    cache: "no-store",
+    signal: AbortSignal.timeout(LAUNCH_SHELL_TIMEOUT_MS),
+  }).catch((error) => {
+    throw new Error(error instanceof Error ? error.message : "Universal TTS model action failed.");
+  });
+  const detail = await response.json().catch(() => null);
+  if (!response.ok) {
+    const errorText = clean(recordValue(detail)?.error) || clean(recordValue(detail)?.detail) || `Universal TTS returned HTTP ${response.status}.`;
+    return { ok: false, message: errorText, providerId: provider, model: input.model, detail };
+  }
+  candidatesByOrigin.delete(input.origin);
+  return {
+    ok: true,
+    message: input.action === "load-model" ? "Local TTS model load requested." : "Local TTS model unloaded.",
+    providerId: provider,
+    model: input.model || status?.id,
+    detail,
+  };
 }
 
 export async function resolveLocalTtsCallConfig(input: {

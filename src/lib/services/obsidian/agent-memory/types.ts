@@ -52,6 +52,7 @@ export type AgentMemoryScoreDetails = {
   exact?: number;
   lexical?: number;
   entity?: number;
+  semantic?: number;
   temporal?: number;
   confidence?: number;
   recency?: number;
@@ -157,6 +158,11 @@ export type RememberAgentMemoryInput = {
   sessionId?: string;
   project?: string;
   proof?: AgentMemoryProofMode;
+  // Suspected-duplicate writes are blocked unless this is set; remember-action
+  // (repetitive receipts) defaults it to true.
+  allowDuplicate?: boolean;
+  // High-confidence secret shapes block a write unless explicitly overridden.
+  allowSensitiveContent?: boolean;
 };
 
 export type EvolveAgentMemoryInput = RememberAgentMemoryInput & {
@@ -179,6 +185,8 @@ export type RecallAgentMemoryInput = {
   asOf?: string;
   trackUsage?: boolean;
   usageContext?: string;
+  // Floor applied by answer mode before hits reach model context.
+  minScore?: number;
 };
 
 export type RebuildAgentMemoryIndexInput = {

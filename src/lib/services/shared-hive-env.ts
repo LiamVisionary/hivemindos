@@ -45,7 +45,7 @@ export async function anyHiveEnvPresent(keys: readonly string[]) {
 }
 
 export async function readSharedHiveEnvValues(): Promise<Record<string, string>> {
-  const raw = await readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
+  const raw = await readFile(hiveEnvFilePath(), "utf8").catch(() => "");
   const values: Record<string, string> = {};
   for (const line of raw.split(/\r?\n/)) {
     const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
