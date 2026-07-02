@@ -2,35 +2,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import vm from "node:vm";
 
-import ts from "typescript";
+// The grouping helpers were extracted from WalletPanel into a real module —
+// import the shipped code directly (Node strips the types) instead of
+// vm-compiling a source slice of the panel.
+const { buildGroupedPersonalWallets: buildDropInPersonalWallets, mergePersonalWalletSources } = await import(
+  new URL("../src/lib/utils/personal-wallet-grouping.ts", import.meta.url)
+);
 
 const root = process.cwd();
-const sourcePath = join(root, "src/features/dashboard/views/WalletPanel.tsx");
-const source = readFileSync(sourcePath, "utf8");
-const helperEnd = source.indexOf("function hasUsePodSetupEvidence");
-if (helperEnd < 0) throw new Error("Could not locate WalletPanel helper boundary.");
-
-const helperSource = source
-  .slice(0, helperEnd)
-  .replace(/^import[\s\S]*?;\n/gm, "")
-  + "\nglobalThis.__walletHelpers = { buildDropInPersonalWallets, mergePersonalWalletSources };";
-
-const compiled = ts.transpileModule(helperSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ES2022,
-    jsx: ts.JsxEmit.ReactJSX,
-  },
-  fileName: sourcePath,
-}).outputText;
-
-const context = { console, URL, globalThis: {} };
-context.globalThis = context;
-vm.runInNewContext(compiled, context, { filename: sourcePath });
-
-const { buildDropInPersonalWallets, mergePersonalWalletSources } = context.__walletHelpers;
 
 const wallets = [
   {
@@ -101,7 +81,7 @@ assert.equal(JSON.stringify(mergedRich.holdings), JSON.stringify([["ETH", 0.1979
 const walletViewSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletsView.tsx"), "utf8");
 assert.match(walletViewSource, /setTimeout\(\(\) => setOpen\(true\), 200\)/);
 assert.match(walletViewSource, /title=\{multi \? "Hover for all chain addresses" : undefined\}/);
-assert.match(walletViewSource, /w\.addresses\.map\(\(\[chain, addr\]\)/);
+assert.match(walletViewSource, /w\.addresses!?\.map\(\(\[chain, addr\]\)/);
 assert.match(walletViewSource, /primaryHolding = sendHoldings\[0\] \|\| top\[0\]/);
 assert.match(walletViewSource, /frFmtAmount\(primaryHolding\.sym, primaryHolding\.amount\)/);
 assert.match(walletViewSource, /maxHeight: top\.length > 5 \? 245/);

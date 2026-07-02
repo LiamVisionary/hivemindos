@@ -124,11 +124,18 @@ export function OrbitalGraph({
     const ro = new ResizeObserver(resize);
     ro.observe(root);
 
+    // Decorative motion only — cap at ~30fps. Every skipped frame skips the
+    // whole scene (grid, gradient, particle trig, ticks), which halves the
+    // canvas cost at 60Hz and quarters it on 120Hz displays; the rotation is
+    // driven by absolute time, so pacing is unchanged.
+    let lastFrame = 0;
     const draw = (now: number) => {
       raf = requestAnimationFrame(draw);
       // Skip the redraw entirely while the tab/window is hidden — keep the loop
       // alive so it resumes instantly when the page becomes visible again.
       if (document.hidden) return;
+      if (now - lastFrame < 33) return;
+      lastFrame = now;
       if (!w || !h) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);

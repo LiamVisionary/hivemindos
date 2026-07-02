@@ -60,12 +60,16 @@ export interface KanbanTaskLite {
   body?: string;
   result?: string;
   status: string;
+  /** Origin marker; company dispatches stamp `company:{id}:{runId}` — the authoritative company link. */
+  source?: string;
   assignee?: string | null;
   priority?: string;
   skills?: string[];
   deliverables?: KanbanDeliverable[];
   loop?: KanbanLoopSpec;
   loopReceipts?: KanbanLoopReceipt[];
+  /** Machine that ran the task; its name is shown as deliverable provenance. */
+  targetMachine?: { name?: string } | null;
   createdAt?: number;
   updatedAt?: number;
   completedAt?: number;
@@ -241,6 +245,19 @@ export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<str
       agent: resolveAssigneeName(t.assignee, byId, names),
       pri: (t.priority && PRIORITY_TO_PRI[t.priority]) || "med",
       pts: Math.max(1, Math.min(8, t.skills?.length || 1)),
+      // Carry the real Work Board record so the cockpit can open the task's
+      // actual output (result, deliverables, receipts) instead of a dead card.
+      work: {
+        taskId: t.id,
+        status: t.status,
+        body: t.body,
+        result: t.result,
+        deliverables: (t.deliverables ?? []).map((d) => ({ id: d.id, label: d.label, kind: d.kind, path: d.path, url: d.url })),
+        receipts: (t.loopReceipts ?? []).map((r) => ({ title: r.summary || r.gateId || "receipt", status: r.status })),
+        machineName: t.targetMachine?.name || undefined,
+        updatedAt: t.updatedAt,
+        completedAt: t.completedAt,
+      },
     }));
 }
 

@@ -9,5 +9,13 @@
 import { ZeroHumanCompaniesView } from "./zero-human-companies/ZeroHumanCompaniesView";
 
 export function GovernancePanel({ theme = "dark" }: { theme?: "dark" | "light" }) {
-  return <ZeroHumanCompaniesView theme={theme} />;
+  // The shell (.commandMain) is viewport-capped with overflow hidden, so every
+  // route panel owns its own scrolling via the global .tabPanel contract (see
+  // sibling panels). Without this wrapper the company cockpit/board clipped at
+  // the fold with no scrollbar once real companies had more content than fits.
+  return (
+    <section className="tabPanel" aria-label="Zero Human Companies">
+      <ZeroHumanCompaniesView theme={theme} />
+    </section>
+  );
 }

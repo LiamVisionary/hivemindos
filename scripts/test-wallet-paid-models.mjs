@@ -8,6 +8,16 @@ async function source(path) {
   return readFile(join(root, path), "utf8");
 }
 
+// The chat agent-runtime route was decomposed into sibling modules (route.ts +
+// stream-*/wallet-*/messages/… on 2026-07-02); the wallet-paid contract spans
+// them, so read the whole route directory as one haystack.
+async function sourceDir(dir) {
+  const { readdir } = await import("node:fs/promises");
+  const names = (await readdir(join(root, dir))).filter((name) => name.endsWith(".ts"));
+  const contents = await Promise.all(names.map((name) => readFile(join(root, dir, name), "utf8")));
+  return contents.join("\n");
+}
+
 function includes(haystack, needle, label) {
   assert.ok(haystack.includes(needle), `${label} should include ${needle}`);
 }
@@ -55,7 +65,7 @@ const [
   chatExchangeStyles,
 ] = await Promise.all([
   source("src/lib/config/model-provider-gateways.ts"),
-  source("src/app/api/chat/agent-runtime/route.ts"),
+  sourceDir("src/app/api/chat/agent-runtime"),
   source("src/lib/services/hivemindos-wallet-paid-models.ts"),
   source("src/app/api/hivemindos/models/chat/completions/route.ts"),
   source("src/app/api/hivemindos/models/models/route.ts"),
@@ -71,7 +81,7 @@ const [
   source("src/features/dashboard/views/chat/AgentSettingsModalPrimitives.tsx"),
   source("src/features/dashboard/views/chat/AgentSettingsModal.tsx"),
   source("src/lib/utils/safe-process-env.ts"),
-  source("src/app/api/chat/agent-runtime/route.ts"),
+  sourceDir("src/app/api/chat/agent-runtime"),
   source("src/lib/services/runtime-integrations.ts"),
   source("src/lib/services/context-index.ts"),
   source("src/lib/services/wallet/x402-agent-fetch.ts"),

@@ -293,6 +293,16 @@ const appVersionCacheMs = Number(
 const installedRuntimesCacheMs = Number(
   process.env.AGENT_TELEMETRY_RUNTIME_PROBE_CACHE_MS || 300_000,
 );
+// /snapshot is polled independently by the dashboard, the fleet watchdog, and
+// peer collectors; each uncached hit re-scans every agent (files + sqlite + a
+// ps sweep per agent). A few seconds of staleness is invisible to 30s+ pollers
+// but collapses overlapping bursts into one computation.
+const snapshotCacheMs = Number(
+  process.env.AGENT_TELEMETRY_SNAPSHOT_CACHE_MS || 4_000,
+);
+const psScanCacheMs = Number(
+  process.env.AGENT_TELEMETRY_PS_SCAN_CACHE_MS || 3_500,
+);
 const hostedAppProbeTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_APP_PROBE_TIMEOUT_MS || 900,
 );
@@ -326,6 +336,10 @@ const skillAutoSyncSignatures = new Map();
 let machineIdPromise = null;
 let healthPayloadCache = null;
 let healthPayloadPromise = null;
+let snapshotAllCache = null;
+let snapshotAllPromise = null;
+let psScanCache = null;
+let psScanPromise = null;
 let appVersionCache = null;
 let appVersionPromise = null;
 let installedRuntimesCache = null;
@@ -5314,11 +5328,31 @@ function dateMsFrom(value) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-async function processSeen(agent) {
-  const { stdout } = await execFileAsync("ps", ["-axo", "command="], {
+// One ps sweep serves every agent in a snapshot burst — snapshotFor runs per
+// agent, and an uncached ps spawn per agent multiplied across pollers was a
+// measurable share of collector CPU.
+async function scanProcessCommands() {
+  if (psScanCache && Date.now() - psScanCache.at < psScanCacheMs) {
+    return psScanCache.stdout;
+  }
+  if (psScanPromise) return psScanPromise;
+  psScanPromise = execFileAsync("ps", ["-axo", "command="], {
     timeout: 4000,
     maxBuffer: 800_000,
-  }).catch(() => ({ stdout: "" }));
+  })
+    .then(({ stdout }) => {
+      psScanCache = { stdout, at: Date.now() };
+      return stdout;
+    })
+    .catch(() => "")
+    .finally(() => {
+      psScanPromise = null;
+    });
+  return psScanPromise;
+}
+
+async function processSeen(agent) {
+  const stdout = await scanProcessCommands();
   const needles = [agent.id, agent.agentId, agent.name]
     .filter(Boolean)
     .map((value) => String(value).toLowerCase())
@@ -7912,13 +7946,49 @@ const telemetryServer = createServer(async (request, response) => {
   }
   const rawBody = request.method === "POST" ? await readBody(request) : "{}";
   const body = rawBody ? JSON.parse(rawBody) : {};
-  const agents = body.agent
-    ? [body.agent]
-    : body.agents || (await localAgents());
-  const snapshots = await Promise.all(
-    agents.map((agent) => snapshotFor(agent)),
-  );
-  jsonResponse(response, 200, { ok: true, snapshot: snapshots[0], snapshots });
+  if (body.agent || body.agents) {
+    const agents = body.agent ? [body.agent] : body.agents;
+    const snapshots = await Promise.all(
+      agents.map((agent) => snapshotFor(agent)),
+    );
+    jsonResponse(response, 200, {
+      ok: true,
+      snapshot: snapshots[0],
+      snapshots,
+    });
+    return;
+  }
+  // Default all-local-agents snapshot: TTL + in-flight coalescing, because the
+  // dashboard, fleet watchdog, and peer collectors each poll this endpoint on
+  // their own clocks and every uncached hit re-scans all agents.
+  if (
+    snapshotAllCache &&
+    Date.now() - snapshotAllCache.at < snapshotCacheMs
+  ) {
+    jsonResponse(response, 200, snapshotAllCache.payload);
+    return;
+  }
+  if (!snapshotAllPromise) {
+    snapshotAllPromise = (async () => {
+      const agents = await localAgents();
+      const snapshots = await Promise.all(
+        agents.map((agent) => snapshotFor(agent)),
+      );
+      const payload = { ok: true, snapshot: snapshots[0], snapshots };
+      snapshotAllCache = { payload, at: Date.now() };
+      return payload;
+    })().finally(() => {
+      snapshotAllPromise = null;
+    });
+  }
+  try {
+    jsonResponse(response, 200, await snapshotAllPromise);
+  } catch (error) {
+    jsonResponse(response, 500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "snapshot failed",
+    });
+  }
 });
 
 telemetryServer.on("upgrade", (request, socket, head) => {

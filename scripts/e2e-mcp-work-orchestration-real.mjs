@@ -230,6 +230,74 @@ async function runBrowserVerification(taskTitles) {
   }
 }
 
+// Remove everything this run (and any crashed prior run) parked on the REAL app:
+// marker-titled tasks on the shared default board, throwaway mcp_e2e_* boards, and
+// mcp_* work-event definitions/triggers. Sweeping by marker prefix instead of
+// per-run ids makes the cleanup self-healing when an earlier run died mid-way.
+// Set E2E_KEEP_TASKS=1 to keep the artifacts around for debugging.
+async function cleanupRealBoardArtifacts() {
+  if (process.env.E2E_KEEP_TASKS === "1") return { skipped: "E2E_KEEP_TASKS=1" };
+  const outcome = { deletedTasks: 0, archivedBoards: 0, deletedEvents: 0, errors: [] };
+  try {
+    const board = await requestJson("/api/kanban?include_archived=true");
+    const junkTasks = (board.board?.tasks || []).filter((task) =>
+      String(task.title || "").startsWith("MCP_WORK_REAL_E2E_"),
+    );
+    for (const task of junkTasks) {
+      try {
+        await requestJson("/api/kanban", {
+          method: "DELETE",
+          body: JSON.stringify({ taskId: task.id }),
+        });
+        outcome.deletedTasks += 1;
+      } catch (error) {
+        outcome.errors.push(`delete task ${task.id}: ${error.message}`);
+      }
+    }
+  } catch (error) {
+    outcome.errors.push(`list default board: ${error.message}`);
+  }
+  try {
+    const boards = await requestJson("/api/kanban?boards_only=true");
+    const junkBoards = (boards.boards || [])
+      .map((entry) => entry.slug || entry)
+      .filter((slug) => /^mcp_e2e_/.test(String(slug)));
+    for (const slug of junkBoards) {
+      try {
+        await requestJson("/api/kanban", {
+          method: "POST",
+          body: JSON.stringify({ action: "archive-board", slug }),
+        });
+        outcome.archivedBoards += 1;
+      } catch (error) {
+        outcome.errors.push(`archive board ${slug}: ${error.message}`);
+      }
+    }
+  } catch (error) {
+    outcome.errors.push(`list boards: ${error.message}`);
+  }
+  try {
+    const events = await requestJson("/api/work-events");
+    const junkEvents = (events.events || [])
+      .map((event) => event.name)
+      .filter((name) => /^mcp_mcp_work_real_e2e_/.test(String(name)));
+    for (const name of junkEvents) {
+      try {
+        await requestJson("/api/work-events", {
+          method: "POST",
+          body: JSON.stringify({ action: "delete-event", eventName: name }),
+        });
+        outcome.deletedEvents += 1;
+      } catch (error) {
+        outcome.errors.push(`delete event ${name}: ${error.message}`);
+      }
+    }
+  } catch (error) {
+    outcome.errors.push(`list work events: ${error.message}`);
+  }
+  return outcome;
+}
+
 async function main() {
   await mkdir(artifactDir, { recursive: true });
   const preflight = await requestJson("/api/kanban?boards_only=true", {
@@ -512,6 +580,9 @@ await main().catch((error) => {
   summary.error = error instanceof Error ? error.stack || error.message : String(error);
   process.exitCode = 1;
 }).finally(async () => {
+  summary.cleanup = await cleanupRealBoardArtifacts().catch((error) => ({
+    errors: [String(error?.message || error)],
+  }));
   summary.finishedAt = new Date().toISOString();
   await mkdir(artifactDir, { recursive: true });
   await writeFile(join(artifactDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);

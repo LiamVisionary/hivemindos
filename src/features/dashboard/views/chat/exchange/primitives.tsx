@@ -42,6 +42,30 @@ export function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", do
   );
 }
 
+export function HistorySkeleton() {
+  return (
+    <div className="fr-chat-skeleton" role="status" aria-label="Loading chat history">
+      <div className="fr-chat-skeleton-group is-user">
+        <span className="fr-chat-skeleton-bubble" style={{ width: "46%", height: 42 }} />
+      </div>
+      <div className="fr-chat-skeleton-group">
+        <span className="fr-chat-skeleton-name" />
+        <span className="fr-chat-skeleton-line" style={{ width: "88%" }} />
+        <span className="fr-chat-skeleton-line" style={{ width: "72%" }} />
+        <span className="fr-chat-skeleton-line" style={{ width: "55%" }} />
+      </div>
+      <div className="fr-chat-skeleton-group is-user">
+        <span className="fr-chat-skeleton-bubble" style={{ width: "34%", height: 40 }} />
+      </div>
+      <div className="fr-chat-skeleton-group">
+        <span className="fr-chat-skeleton-name" />
+        <span className="fr-chat-skeleton-line" style={{ width: "80%" }} />
+        <span className="fr-chat-skeleton-line" style={{ width: "62%" }} />
+      </div>
+    </div>
+  );
+}
+
 export function Glyph({ d, s = 16, sw = 1.6, style }: { d: string | readonly string[]; s?: number; sw?: number; style?: CSSProperties }) {
   return (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden style={style}>

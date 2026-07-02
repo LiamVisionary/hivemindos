@@ -175,18 +175,51 @@ function bearerToken(request: Request) {
   return match?.[1]?.trim() ?? "";
 }
 
+// Positive-verdict cache. The middleware runs verifyAuth on every /api
+// request, and each miss costs 1–3 HMAC computations for a deterministic
+// answer (same secret + same credential always verifies the same). Cache ONLY
+// successful verdicts — failures are never cached, so junk tokens can't pin
+// memory or delay a newly-valid credential — with a short TTL so a rotated
+// secret or device token stops being honored within minutes, and a hard size
+// cap as a backstop.
+const VERIFIED_CREDENTIAL_TTL_MS = 5 * 60_000;
+const VERIFIED_CREDENTIAL_MAX = 128;
+const verifiedCredentials = new Map<string, number>();
+
+function verifiedRecently(credential: string, now: number) {
+  const at = verifiedCredentials.get(credential);
+  return at !== undefined && now - at < VERIFIED_CREDENTIAL_TTL_MS;
+}
+
+function rememberVerified(credential: string, now: number) {
+  if (verifiedCredentials.size >= VERIFIED_CREDENTIAL_MAX) {
+    const oldest = verifiedCredentials.keys().next().value;
+    if (oldest !== undefined) verifiedCredentials.delete(oldest);
+  }
+  verifiedCredentials.set(credential, now);
+}
+
 export async function verifyAuth(request: Request): Promise<AuthResult> {
   const status = dashboardAuthStatus();
   if (!status.ok) return { userId: null, reason: status.reason };
+  const now = Date.now();
 
   const sessionValue = requestCookie(request, DASHBOARD_SESSION_COOKIE);
-  if (sessionValue && await verifyDashboardSessionCookie(sessionValue)) {
-    return { userId: userId() };
+  if (sessionValue) {
+    if (verifiedRecently(`session:${sessionValue}`, now)) return { userId: userId() };
+    if (await verifyDashboardSessionCookie(sessionValue)) {
+      rememberVerified(`session:${sessionValue}`, now);
+      return { userId: userId() };
+    }
   }
 
   const headerToken = request.headers.get(DASHBOARD_AUTH_HEADER)?.trim() || bearerToken(request);
-  if (await verifyDeviceToken(headerToken)) {
-    return { userId: userId() };
+  if (headerToken) {
+    if (verifiedRecently(`device:${headerToken}`, now)) return { userId: userId() };
+    if (await verifyDeviceToken(headerToken)) {
+      rememberVerified(`device:${headerToken}`, now);
+      return { userId: userId() };
+    }
   }
 
   return { userId: null, reason: "Dashboard authentication is required." };

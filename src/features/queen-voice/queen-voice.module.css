@@ -268,6 +268,60 @@
   animation: queenVoiceThinkingDots 1.2s steps(4, end) infinite;
 }
 
+/* Compact live-activity chips inside the thinking bubble: what Queen Bee is
+   doing right now (agent brain, tool calls, fleet scan, routing). */
+.workingChips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.workingChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: rgba(235, 239, 250, 0.62);
+  overflow-wrap: anywhere;
+}
+
+.workingChipDone {
+  color: rgba(235, 239, 250, 0.38);
+}
+
+.workingChipDot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(235, 239, 250, 0.35);
+}
+
+.workingChipDotActive {
+  background: rgba(255, 186, 113, 0.95);
+  animation: queenVoiceWorkingPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes queenVoiceWorkingPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.72);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workingChipDotActive {
+    animation: none;
+  }
+}
+
 @keyframes queenVoiceThinkingBreath {
   0%,
   100% {

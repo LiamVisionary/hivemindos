@@ -191,6 +191,28 @@ export CLAW_BINARY
 if [ -f "$VOICE_ENV" ]; then set -a; . "$VOICE_ENV" 2>/dev/null || true; set +a; fi
 mkdir -p "$DATA_DIR"
 cd "$MOBILE_HOME/backend"
+# Self-heal the better-sqlite3 native addon at LAUNCH time (the install-time
+# check can't catch ABI drift that happens later, e.g. a Homebrew node bump).
+# A mismatched prebuild kills the server ~1s into boot, and the supervisor
+# would otherwise relaunch it forever — each attempt re-paying a full tsx
+# transpile at ~100% CPU and appending a stack trace to the launchd log.
+# Rebuild at most once per node version (stamp file); if it still fails,
+# sleep long before exiting so the retry loop stays cold and quiet.
+if ! "$NODE_BIN" -e 'require("better-sqlite3")' >/dev/null 2>&1; then
+  NODE_VER="\$("$NODE_BIN" -v 2>/dev/null || echo unknown)"
+  STAMP="$MOBILE_HOME/.better-sqlite3-rebuild-\$NODE_VER"
+  if [ ! -f "\$STAMP" ]; then
+    rm -f "$MOBILE_HOME"/.better-sqlite3-rebuild-* 2>/dev/null || true
+    : > "\$STAMP"
+    echo "[gateway] better-sqlite3 ABI mismatch under node \$NODE_VER — rebuilding once" >&2
+    ( PATH="\$(dirname "$NODE_BIN"):\$PATH" npm rebuild better-sqlite3 ) >/dev/null 2>&1 || true
+  fi
+  if ! "$NODE_BIN" -e 'require("better-sqlite3")' >/dev/null 2>&1; then
+    echo "[gateway] better-sqlite3 still ABI-incompatible with node \$NODE_VER; install Xcode CLT or align node to the bundle ABI. Idling to avoid a hot restart loop." >&2
+    sleep 300
+    exit 1
+  fi
+fi
 exec "$NODE_BIN" --import tsx "$SERVER_ENTRY"
 LAUNCH
 
@@ -203,6 +225,14 @@ cat > "$MOBILE_HOME/launch-worker.sh" <<LAUNCH
 set -uo pipefail
 if [ -f "$VOICE_ENV" ]; then set -a; . "$VOICE_ENV" 2>/dev/null || true; set +a; fi
 cd "$MOBILE_HOME/backend"
+# Same launch-time ABI guard as launch-gateway.sh (launchd KeepAlive would
+# otherwise hot-loop this worker too); the gateway launcher owns the rebuild,
+# so the worker only waits out a mismatch instead of racing a second rebuild.
+if ! "$NODE_BIN" -e 'require("better-sqlite3")' >/dev/null 2>&1; then
+  echo "[voice-worker] better-sqlite3 ABI-incompatible with \$("$NODE_BIN" -v 2>/dev/null || echo unknown); idling to avoid a hot restart loop" >&2
+  sleep 300
+  exit 1
+fi
 exec "$NODE_BIN" --import tsx "$WORKER_ENTRY" start
 LAUNCH
 chmod +x "$MOBILE_HOME/launch-gateway.sh" "$MOBILE_HOME/launch-worker.sh"

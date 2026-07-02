@@ -337,6 +337,7 @@ export function NetworkGraph({
 
   React.useEffect(() => {
     let raf = 0;
+    let lastFrame = 0;
     const SZ = graphScale(44);
     const tick = (now: number) => {
       // Skip the bee animation while the tab/window is hidden; keep the loop
@@ -345,6 +346,14 @@ export function NetworkGraph({
         raf = requestAnimationFrame(tick);
         return;
       }
+      // Decorative roaming bees — ~30fps is plenty and halves the style-write
+      // and compositor churn (quarters it on 120Hz displays). Bee phase is
+      // derived from absolute time, so motion speed is unchanged.
+      if (now - lastFrame < 33) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
+      lastFrame = now;
       const { edges: currentEdges, pos: currentPos } = latestBeeGraphRef.current;
       for (let i = 0; i < BEE_COUNT; i++) {
         const el = beeRefs.current[i];

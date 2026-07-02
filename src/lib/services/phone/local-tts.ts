@@ -1,6 +1,11 @@
 import { shellBaseFromCollectorUrl, shellSessionUrl } from "@/app/api/fleet/shell/shell-target";
 import { discoverRawConnectedApps, type ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
+import {
+  isCallerAbortError,
+  recordLocalTtsFailure,
+  recordLocalTtsSuccess,
+} from "@/lib/services/phone/local-tts-health";
 
 export const LOCAL_TTS_RUNTIME = "local-tts";
 export const LOCAL_TTS_PROVIDER_PREFIX = "local-tts:";
@@ -59,6 +64,7 @@ export type LocalTtsCandidate = {
 export type LocalTtsModelStatus = {
   id: string;
   providerId: string;
+  loadable: boolean;
   loaded: boolean;
   healthy: boolean;
   callReady: boolean;
@@ -310,6 +316,7 @@ function localTtsModelStatuses(payload: unknown): LocalTtsModelStatus[] {
       body?.notes,
     ].map(clean).join(" ").toLowerCase();
     const placeholder = /catalog_stub|not-enabled|not-realtime|not-tts|voice_conversion|\basr\b|postprocess/.test(placeholderHaystack);
+    const loadable = models.length > 0 && !placeholder;
     const callReady = loaded
       && healthy
       && supportsStreamingApi
@@ -319,6 +326,7 @@ function localTtsModelStatuses(payload: unknown): LocalTtsModelStatus[] {
     return models.map((id) => ({
       id,
       providerId: clean(provider.id) || providerId,
+      loadable,
       loaded,
       healthy,
       callReady,
@@ -329,8 +337,8 @@ function localTtsModelStatuses(payload: unknown): LocalTtsModelStatus[] {
   });
 }
 
-function callReadyModels(statuses: LocalTtsModelStatus[]) {
-  return uniqueClean(statuses.filter((status) => status.callReady).map((status) => status.id));
+function loadableModels(statuses: LocalTtsModelStatus[]) {
+  return uniqueClean(statuses.filter((status) => status.loadable).map((status) => status.id));
 }
 
 function voiceIds(payload: unknown): string[] {
@@ -583,7 +591,7 @@ async function probeUniversalTtsModels(collectorUrl: string) {
   if (!base) return [];
   const providers = await jsonAt<unknown>(`${base}/providers`, LAUNCH_MODEL_PROBE_TIMEOUT_MS)
     .catch(() => jsonAt<unknown>(`${base}/runtimes`, LAUNCH_MODEL_PROBE_TIMEOUT_MS).catch(() => null));
-  return callReadyModels(localTtsModelStatuses(providers));
+  return loadableModels(localTtsModelStatuses(providers));
 }
 
 async function launchModelHintsForCandidate(
@@ -661,8 +669,8 @@ async function candidateFromUniversalTtsFallback(entry: UniversalFallbackApp): P
   const providersPayload = await jsonAt<unknown>(`${app.apiBaseUrl}/providers`, 1_500)
     .catch(() => jsonAt<unknown>(`${app.apiBaseUrl}/runtimes`, 1_500).catch(() => null));
   const modelDetails = localTtsModelStatuses(providersPayload);
-  const readyModels = callReadyModels(modelDetails);
-  const models = readyModels.length ? readyModels : selectedCaps.models;
+  const loadable = loadableModels(modelDetails);
+  const models = loadable.length ? loadable : selectedCaps.models;
   const voicesEndpoint = clean(selectedCaps.voices_endpoint) || "/v1/voices";
   const voicesPayload = await jsonAt<unknown>(`${app.apiBaseUrl}${voicesEndpoint}`, 1_500)
     .catch(() => jsonAt<unknown>(`${app.apiBaseUrl}/v1/voices`, 1_500).catch(() => null));
@@ -683,8 +691,8 @@ async function candidateFromUniversalTtsFallback(entry: UniversalFallbackApp): P
     model: preferredModel(models),
     voice: preferredVoice(voices),
     models,
-    availableModels: readyModels,
-    availableModelDetails: modelDetails.filter((status) => status.callReady),
+    availableModels: loadable,
+    availableModelDetails: modelDetails.filter((status) => status.loadable),
     availableVoices: voices,
     voiceCount: voices.length,
     supportsStreamingApi,
@@ -837,8 +845,8 @@ async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
     ]);
     const selectedCaps = selectedCapabilities(capabilities);
     const modelDetails = localTtsModelStatuses(providersPayload);
-    const readyModels = callReadyModels(modelDetails);
-    const models = readyModels.length ? readyModels : selectedCaps.models.length ? selectedCaps.models : modelIds(modelsPayload);
+    const loadable = loadableModels(modelDetails);
+    const models = loadable.length ? loadable : selectedCaps.models.length ? selectedCaps.models : modelIds(modelsPayload);
     const voicesEndpoint = clean(selectedCaps.voices_endpoint);
     const voicesPayload = voicesEndpoint
       ? await appJson(app, voicesEndpoint).catch(() => appJson(app, "/v1/voices").catch(() => appJson(app, "/voices").catch(() => null)))
@@ -862,8 +870,8 @@ async function validateCandidate(app: HostedApp): Promise<LocalTtsCandidate> {
       model,
       voice,
       models,
-      availableModels: readyModels,
-      availableModelDetails: modelDetails.filter((status) => status.callReady),
+      availableModels: loadable,
+      availableModelDetails: modelDetails.filter((status) => status.loadable),
       availableVoices: voices,
       voiceCount: voices.length,
       supportsStreamingApi,
@@ -1206,6 +1214,9 @@ export async function synthesizeLocalTtsWav(input: {
   const app = cachedApp(input.origin, input.appId)
     ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
   if (!app?.apiBaseUrl) {
+    // Undiscoverable app (e.g. Hivemind Link down) fails every consumer the
+    // same way; remember it so fallbacks stop re-paying discovery.
+    recordLocalTtsFailure(input.appId, "No matching connected TTS app with an API base URL was found.");
     return { ok: false, error: "No matching connected TTS app with an API base URL was found." };
   }
   const body = {
@@ -1230,13 +1241,20 @@ export async function synthesizeLocalTtsWav(input: {
       signal: input.signal ?? AbortSignal.timeout(WAV_SYNTH_TIMEOUT_MS),
     });
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Local TTS request failed." };
+    const message = error instanceof Error ? error.message : "Local TTS request failed.";
+    if (!isCallerAbortError(error)) recordLocalTtsFailure(input.appId, message);
+    return { ok: false, error: message };
   }
   if (!response.ok || !response.body) {
+    recordLocalTtsFailure(input.appId, `Local TTS speech returned HTTP ${response.status}.`);
     return { ok: false, error: `Local TTS speech returned HTTP ${response.status}.` };
   }
   const pcm = new Uint8Array(await response.arrayBuffer());
-  if (!pcm.byteLength) return { ok: false, error: "Local TTS returned no audio." };
+  if (!pcm.byteLength) {
+    recordLocalTtsFailure(input.appId, "Local TTS returned no audio.");
+    return { ok: false, error: "Local TTS returned no audio." };
+  }
+  recordLocalTtsSuccess(input.appId);
   const sampleRate = Math.trunc(numberValue(response.headers.get("x-audio-sample-rate"), DEFAULT_SAMPLE_RATE));
   const channels = Math.max(1, Math.trunc(numberValue(response.headers.get("x-audio-channels"), 1)));
   return {
@@ -1271,7 +1289,10 @@ export async function streamLocalTtsPcm(input: {
 }): Promise<LocalTtsPcmStream> {
   const app = cachedApp(input.origin, input.appId)
     ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
-  if (!app?.apiBaseUrl) return { ok: false, error: "No matching connected TTS app with an API base URL was found." };
+  if (!app?.apiBaseUrl) {
+    recordLocalTtsFailure(input.appId, "No matching connected TTS app with an API base URL was found.");
+    return { ok: false, error: "No matching connected TTS app with an API base URL was found." };
+  }
   const body = {
     model: input.model || DEFAULT_LOCAL_TTS_MODEL,
     voice: input.voice || DEFAULT_LOCAL_TTS_VOICE,
@@ -1292,9 +1313,15 @@ export async function streamLocalTtsPcm(input: {
       signal: input.signal ?? AbortSignal.timeout(STREAM_TIMEOUT_MS),
     });
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Local TTS stream request failed." };
+    const message = error instanceof Error ? error.message : "Local TTS stream request failed.";
+    if (!isCallerAbortError(error)) recordLocalTtsFailure(input.appId, message);
+    return { ok: false, error: message };
   }
-  if (!response.ok || !response.body) return { ok: false, error: `Local TTS stream returned HTTP ${response.status}.` };
+  if (!response.ok || !response.body) {
+    recordLocalTtsFailure(input.appId, `Local TTS stream returned HTTP ${response.status}.`);
+    return { ok: false, error: `Local TTS stream returned HTTP ${response.status}.` };
+  }
+  recordLocalTtsSuccess(input.appId);
   return {
     ok: true,
     body: response.body,
@@ -1315,6 +1342,7 @@ export async function streamLocalTtsSpeech(input: {
   const app = cachedApp(input.origin, input.appId)
     ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
   if (!app?.apiBaseUrl) {
+    recordLocalTtsFailure(input.appId, "No matching connected TTS app with an API base URL was found.");
     return Response.json({ ok: false, error: "No matching connected TTS app with an API base URL was found." }, { status: 404 });
   }
   const body = {
@@ -1331,13 +1359,23 @@ export async function streamLocalTtsSpeech(input: {
     instruct: "Speak warmly and clearly.",
     utterance_id: input.utteranceId,
   };
-  const response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}/v1/audio/speech-stream`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    cache: "no-store",
-    signal: input.signal ?? AbortSignal.timeout(STREAM_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}/v1/audio/speech-stream`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: input.signal ?? AbortSignal.timeout(STREAM_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (!isCallerAbortError(error)) {
+      recordLocalTtsFailure(input.appId, error instanceof Error ? error.message : "Local TTS stream request failed.");
+    }
+    throw error;
+  }
+  if (!response.ok) recordLocalTtsFailure(input.appId, `Local TTS stream returned HTTP ${response.status}.`);
+  else recordLocalTtsSuccess(input.appId);
   const headers = new Headers();
   headers.set("Content-Type", response.headers.get("content-type") || "application/octet-stream");
   headers.set("Cache-Control", "no-store");

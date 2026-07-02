@@ -18,15 +18,18 @@ function splitOrigins(value?: string) {
 function detectedTailnetDevOrigins() {
   const origins = new Set<string>();
 
+  // These block config evaluation (every dev boot and build). A live tailscale
+  // answers in tens of ms; the timeout only bounds the stall when it's absent
+  // or wedged, so keep it tight.
   try {
-    const ips = execFileSync("tailscale", ["ip", "-4"], { encoding: "utf8", timeout: 1_000 });
+    const ips = execFileSync("tailscale", ["ip", "-4"], { encoding: "utf8", timeout: 400 });
     splitOrigins(ips.replace(/\n/g, ",")).forEach((ip) => origins.add(ip));
   } catch {
     // Tailscale is optional; clones without it can use NEXT_ALLOWED_DEV_ORIGINS.
   }
 
   try {
-    const rawStatus = execFileSync("tailscale", ["status", "--json"], { encoding: "utf8", timeout: 1_000 });
+    const rawStatus = execFileSync("tailscale", ["status", "--json"], { encoding: "utf8", timeout: 400 });
     const status = JSON.parse(rawStatus) as { Self?: { DNSName?: string } };
     const dnsName = status.Self?.DNSName?.replace(/\.$/, "");
     if (dnsName) origins.add(dnsName);

@@ -1554,6 +1554,33 @@ export const codeIndexRepositoryAction = defineHiveAction({
   },
 });
 
+export const phoneLocalTtsAction = defineHiveAction({
+  id: "phone.local-tts",
+  title: "Local TTS service management",
+  description:
+    "Discover launchable local TTS candidates, start the Local TTS service through a machine's collector, and load or unload a local TTS app's model.",
+  schema: z.object({
+    action: z
+      .enum(["start-service", "load-model", "unload-model"])
+      .describe("start-service spawns the Local TTS service via the collector; load/unload manage a local TTS app's model."),
+    collectorUrl: z.string().optional().describe("Required for start-service: the target machine's collector URL."),
+    appId: z.string().optional().describe("Required for load-model/unload-model: the local TTS app id."),
+    model: z.string().optional(),
+    providerId: z.string().optional(),
+  }),
+  sideEffects: ["write", "network"],
+  risk: "medium",
+  tags: ["phone", "voice", "tts", "local-services"],
+  aliases: ["local tts", "start tts service", "load tts model", "unload tts model"],
+  contextIndex: {
+    summary: "Manage the Local TTS service: discover candidates (GET), start via collector, load/unload models.",
+    retrievalText:
+      "Use /api/phone/local-tts to manage local text-to-speech: GET lists launchable/running local TTS candidates; POST action start-service (with collectorUrl) starts the service on a machine, and POST action load-model/unload-model (with appId) manages a local TTS app's model. Local service/process state changes only — no spend, no external publication.",
+    route: "/api/phone/local-tts",
+    methods: ["GET", "POST"],
+  },
+});
+
 export const HIVE_ACTIONS = [
   listHivemindMachinesAction,
   planHandoffAction,
@@ -1572,6 +1599,7 @@ export const HIVE_ACTIONS = [
   hyperliquidTradeAction,
   cryptoPracticeBookAction,
   tradingMarketDataAction,
+  phoneLocalTtsAction,
   copyTradeConfigAction,
   hivemindosModelsWalletAction,
   brainGraphOverviewAction,

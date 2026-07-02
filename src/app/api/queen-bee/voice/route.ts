@@ -25,6 +25,17 @@ import {
   streamLocalTtsPcm,
   synthesizeLocalTtsWav,
 } from "@/lib/services/phone/local-tts";
+import {
+  localTtsBreakerState,
+  prewarmLocalTts,
+} from "@/lib/services/phone/local-tts-health";
+import {
+  beginVoiceTurnProgress,
+  finishVoiceTurnProgress,
+  markVoiceTurnStage,
+  normalizeVoiceTurnId,
+  readVoiceTurnProgress,
+} from "@/lib/services/queen-bee/voice-turn-progress";
 import type { AgentCallPreferences } from "@/lib/types/agent-runtime";
 import {
   addQueenBeeVoicePreference,
@@ -96,8 +107,17 @@ export async function POST(request: NextRequest) {
     if (body.action === "speak") {
       return await streamSpokenReply(request, body);
     }
+    if (body.action === "speak-prewarm") {
+      return await prewarmSpokenReplyEngine(request);
+    }
     if (body.action === "converse") {
       return await runConversationTurn(request, body);
+    }
+    if (body.action === "turn-progress") {
+      return NextResponse.json({
+        ok: true,
+        ...readVoiceTurnProgress(normalizeVoiceTurnId(body.turnId)),
+      });
     }
     if (body.action === "realtime-session") {
       return await mintRealtimeSession();
@@ -380,6 +400,10 @@ async function runConversationTurn(
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
   };
   const marks: Record<string, number> = {};
+  // Optional live progress (overlay working chips): the client polls
+  // `turn-progress` with the same id while this request runs.
+  const turnId = normalizeVoiceTurnId(body.turnId);
+  if (turnId) beginVoiceTurnProgress(turnId);
   try {
     const result = await runQueenBeeVoiceTurn({
       origin: request.nextUrl.origin,
@@ -399,6 +423,7 @@ async function runConversationTurn(
           request.headers.get("x-hivemindos-device-token"),
         ),
       marks,
+      progress: turnId ? (label) => markVoiceTurnStage(turnId, label) : undefined,
     });
     await appendVoiceTurnTelemetry({
       ok: true,
@@ -417,6 +442,8 @@ async function runConversationTurn(
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
+  } finally {
+    if (turnId) finishVoiceTurnProgress(turnId);
   }
 }
 
@@ -514,6 +541,16 @@ async function speakViaLocalTts(
     openingLine: "",
   }).catch(() => null);
   if (!config) return { ok: false, error: "no validated local TTS server" };
+  // A server that failed seconds ago (often right before this buffered
+  // fallback) will fail again; skip straight to the cloud voice instead of
+  // sitting in silence for another timeout.
+  const breaker = localTtsBreakerState(config.appId);
+  if (breaker.open) {
+    return {
+      ok: false,
+      error: `local TTS breaker open (${breaker.lastError || "recent failure"}; retry in ${Math.ceil(breaker.retryInMs / 1000)}s)`,
+    };
+  }
   const result = await synthesizeLocalTtsWav({
     origin: request.nextUrl.origin,
     appId: config.appId,
@@ -532,6 +569,49 @@ async function speakViaLocalTts(
     model: config.model,
     bytes: result.bytes,
   };
+}
+
+// Fire-and-forget warmer the overlay calls when it opens and while the LLM is
+// composing each reply. Cold Universal TTS model loads measured 5-30s at speak
+// time; warming during the think phase keeps that off the audible path. A
+// prewarm success also re-closes the failure breaker (recovery probe).
+async function prewarmSpokenReplyEngine(request: NextRequest) {
+  const startedAt = Date.now();
+  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  if (
+    !calls ||
+    (calls.voiceRuntime !== LOCAL_TTS_RUNTIME &&
+      !isLocalTtsProviderId(calls.voiceProviderId))
+  ) {
+    return NextResponse.json({ ok: true, warmed: false, skipped: "local-tts-not-selected" });
+  }
+  const result = await prewarmLocalTts({
+    origin: request.nextUrl.origin,
+    voiceProviderId: calls.voiceProviderId,
+    voiceModelId: calls.voiceModelId,
+    voiceId: calls.voiceId,
+  }).catch((error) => ({
+    ok: false as const,
+    warmed: false as const,
+    ms: Date.now() - startedAt,
+    error: error instanceof Error ? error.message : "prewarm failed",
+  }));
+  // Skipped-as-warm is routine; only real warm runs and failures are worth a
+  // telemetry line.
+  if (result.warmed || !result.ok) {
+    await appendVoiceTurnTelemetry({
+      ok: result.ok,
+      stage: "speak-prewarm",
+      engine: "local-tts",
+      ...("appId" in result && result.appId ? { appId: result.appId } : {}),
+      ...("model" in result && result.model ? { model: result.model } : {}),
+      ...("voice" in result && result.voice ? { voice: result.voice } : {}),
+      warmed: result.warmed,
+      ...(result.error ? { error: result.error } : {}),
+      ttsMs: result.ms,
+    });
+  }
+  return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }
 
 // Streaming sibling of `speak`: when the Queen uses local TTS, forward the live
@@ -559,6 +639,23 @@ async function streamSpokenReplyPcm(
       voiceId: calls.voiceId,
       openingLine: "",
     }).catch(() => null);
+    const breaker = config ? localTtsBreakerState(config.appId) : null;
+    if (config && breaker?.open) {
+      await appendVoiceTurnTelemetry({
+        ok: false,
+        stage: "speak-stream",
+        engine: "local-tts",
+        appId: config.appId,
+        model: config.model,
+        skipped: "breaker-open",
+        breakerError: breaker.lastError,
+        breakerRetryInMs: breaker.retryInMs,
+      });
+      return NextResponse.json(
+        { ok: false, fallback: true, reason: "local-tts-breaker-open" },
+        { status: 409 },
+      );
+    }
     if (config) {
       const stream = await streamLocalTtsPcm({
         origin: request.nextUrl.origin,

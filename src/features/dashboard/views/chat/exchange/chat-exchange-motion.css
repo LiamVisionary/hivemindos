@@ -1,0 +1,323 @@
+/*
+ * Motion layer for the chat exchange view.
+ * Compositor-friendly only (opacity / transform); colors come from the
+ * .fr-root token set so dark and hive-light both work. Everything here is
+ * disabled under prefers-reduced-motion at the bottom of the file.
+ */
+
+@keyframes fr-chat-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fr-chat-msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fr-chat-pop-down {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fr-chat-pop-up {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fr-chat-step-in {
+  from {
+    opacity: 0;
+    transform: translateX(-7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fr-chat-check-pop {
+  0% { transform: scale(0.4); }
+  55% { transform: scale(1.16); }
+  100% { transform: scale(1); }
+}
+
+@keyframes fr-chat-bar-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.35);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes fr-chat-live-glow {
+  0%,
+  100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--live) 8%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--live) 20%, transparent), 0 0 18px -6px color-mix(in srgb, var(--live) 30%, transparent); }
+}
+
+@keyframes fr-chat-skel-breathe {
+  0%,
+  100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+/* View entrance — plays once when the chat route mounts. */
+.fr-chat-root {
+  animation: fr-chat-view-in 300ms cubic-bezier(0.25, 0.8, 0.3, 1) backwards;
+}
+
+/* Messages and process cards rise in as they land in the thread. */
+.fr-chat-thread-rail > article,
+.fr-chat-thread-rail > .fr-process-card {
+  animation: fr-chat-msg-in 260ms cubic-bezier(0.22, 0.9, 0.32, 1) backwards;
+}
+
+/* Generic entrance for auxiliary blocks (empty state, typing row, queue). */
+.fr-chat-enter {
+  animation: fr-chat-msg-in 240ms cubic-bezier(0.22, 0.9, 0.32, 1) backwards;
+}
+
+/* Header identity crossfades when the selected agent changes (keyed remount). */
+.fr-chat-agent-copy {
+  animation: fr-chat-view-in 220ms cubic-bezier(0.25, 0.8, 0.3, 1) backwards;
+}
+
+.fr-chat-agent-avatar {
+  animation: fr-chat-msg-in 220ms cubic-bezier(0.25, 0.8, 0.3, 1) backwards;
+}
+
+/* Menus and popovers spring open instead of popping. */
+.fr-chat-agent-menu {
+  animation: fr-chat-pop-down 170ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+  transform-origin: top left;
+}
+
+.fr-chat-kanban-popover {
+  animation: fr-chat-pop-down 160ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+  transform-origin: top right;
+}
+
+.fr-chat-composer-menu,
+.fr-chat-option-menu {
+  animation: fr-chat-pop-up 160ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+  transform-origin: bottom left;
+}
+
+/* Live process feed: steps slide in, the running card breathes. */
+.fr-process-step {
+  animation: fr-chat-step-in 200ms cubic-bezier(0.25, 0.8, 0.3, 1) backwards;
+}
+
+.fr-process-card[data-active="true"] {
+  animation: fr-chat-live-glow 2.4s ease-in-out infinite;
+}
+
+/* Copy-confirmation check pops with a little overshoot. */
+.fr-chat-segmented-button[data-active="true"] svg {
+  animation: fr-chat-check-pop 260ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* Hover/active transitions the base layer was missing. */
+.fr-chat-agent-menu-list button,
+.fr-chat-action-row > button,
+.fr-chat-mini-button,
+.fr-chat-segmented-button,
+.fr-chat-composer-menu button,
+.fr-chat-option-menu button {
+  transition: background 130ms ease, border-color 130ms ease, color 130ms ease;
+}
+
+/* Message actions stay out of the way until the message is hovered or focused.
+   Pointerless devices keep them always visible. */
+@media (hover: hover) and (pointer: fine) {
+  .fr-chat-thread-rail article .fr-chat-action-row {
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 150ms ease, transform 150ms ease;
+  }
+
+  .fr-chat-thread-rail article:hover .fr-chat-action-row,
+  .fr-chat-thread-rail article:focus-within .fr-chat-action-row,
+  .fr-chat-thread-rail article .fr-chat-action-row:has([data-active="true"]),
+  .fr-chat-thread-rail article .fr-chat-action-row:has([aria-expanded="true"]) {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Send button press feedback (transform only; base styles live in chat.module.css). */
+.fr-chat-composer-rail :where([data-bee-send]) {
+  transition: transform 130ms cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+.fr-chat-composer-rail :where([data-bee-send]:active:not(:disabled)) {
+  transform: scale(0.9);
+}
+
+/* Scroll container: we own bottom-anchoring in JS, so opt out of native
+   scroll anchoring (the two fight during streaming) and keep the gutter
+   stable so the centered rail never shifts when the scrollbar appears. */
+.fr-chat-scroller {
+  overflow-anchor: none;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Sidebar rows: CSS-driven hover (replaces per-row JS style mutation). */
+.frnav-hover-row {
+  background: transparent;
+  transition: background 140ms ease;
+}
+
+.frnav-hover-row:hover,
+.frnav-hover-row:focus-visible {
+  background: var(--panel-2);
+}
+
+.frnav-chat-row {
+  background: transparent;
+  transition: background 140ms ease;
+}
+
+.frnav-chat-row:hover,
+.frnav-chat-row:focus-visible {
+  background: var(--panel-2);
+}
+
+.frnav-chat-row[data-active="true"] {
+  background: var(--honey-soft);
+}
+
+.frnav-active-bar {
+  animation: fr-chat-bar-in 200ms cubic-bezier(0.25, 0.8, 0.3, 1) backwards;
+  transform-origin: center;
+}
+
+/* Sidebar groups/folders collapse smoothly via grid-template-rows. */
+.frnav-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 240ms cubic-bezier(0.25, 0.8, 0.3, 1), opacity 180ms ease;
+}
+
+.frnav-collapse[data-open="false"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.frnav-collapse-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* History skeleton — mirrors the thread layout so the swap causes no shift. */
+.fr-chat-skeleton {
+  display: grid;
+  gap: 22px;
+  padding-top: 4px;
+}
+
+.fr-chat-skeleton-group {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  animation: fr-chat-skel-breathe 1.8s ease-in-out infinite backwards;
+}
+
+.fr-chat-skeleton-group.is-user {
+  justify-items: end;
+}
+
+.fr-chat-skeleton-group:nth-child(2) { animation-delay: 120ms; }
+.fr-chat-skeleton-group:nth-child(3) { animation-delay: 240ms; }
+.fr-chat-skeleton-group:nth-child(4) { animation-delay: 360ms; }
+
+.fr-chat-skeleton-bubble,
+.fr-chat-skeleton-line,
+.fr-chat-skeleton-name {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+}
+
+.fr-chat-skeleton-bubble {
+  border-color: color-mix(in srgb, var(--honey) 14%, var(--line));
+  border-radius: 16px 16px 6px 16px;
+  background: color-mix(in srgb, var(--honey-soft) 45%, var(--panel-2));
+}
+
+.fr-chat-skeleton-name {
+  width: 92px;
+  height: 11px;
+  border-radius: 5px;
+}
+
+.fr-chat-skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+}
+
+.fr-chat-skeleton-bubble::after,
+.fr-chat-skeleton-line::after,
+.fr-chat-skeleton-name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fg) 7%, transparent), transparent);
+  animation: fr-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Reduced motion: freeze every animation and transition in the chat view. */
+@media (prefers-reduced-motion: reduce) {
+  .fr-chat-root,
+  .fr-chat-root *,
+  .fr-chat-root *::before,
+  .fr-chat-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .fr-chat-thread-rail article .fr-chat-action-row {
+    opacity: 1;
+    transform: none;
+  }
+}

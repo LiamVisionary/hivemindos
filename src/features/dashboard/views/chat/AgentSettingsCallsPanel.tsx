@@ -64,6 +64,7 @@ type LocalTtsCandidate = {
 type LocalTtsModelStatus = {
   id: string;
   providerId: string;
+  loadable: boolean;
   loaded: boolean;
   healthy: boolean;
   callReady: boolean;
@@ -198,6 +199,7 @@ function readLocalTtsCandidates(value: unknown): LocalTtsCandidate[] {
           return modelId && providerId ? [{
             id: modelId,
             providerId,
+            loadable: model.loadable === true,
             loaded: model.loaded === true,
             healthy: model.healthy === true,
             callReady: model.callReady === true,
@@ -354,11 +356,37 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { calls: next });
   };
 
+  const okLocalTtsCandidates = localTtsCandidates.filter((candidate) => candidate.ok);
+  const selectedLocalTtsCandidate = localTtsCandidates.find(
+    (candidate) => candidate.id === agentCallSettings.voiceProviderId,
+  );
+  const effectiveSelectedLocalTtsCandidate = selectedLocalTtsCandidate
+    ?? (agentCallSettings.voiceRuntime === "local-tts" && okLocalTtsCandidates.length === 1 ? okLocalTtsCandidates[0] : undefined);
+  const selectedLocalTtsModel = agentCallSettings.voiceModelId || effectiveSelectedLocalTtsCandidate?.model || "";
+  const selectedLocalTtsVoice = agentCallSettings.voiceId || effectiveSelectedLocalTtsCandidate?.voice || "";
+  const selectedLocalTtsVoiceOptions = [
+    selectedLocalTtsVoice,
+    ...(effectiveSelectedLocalTtsCandidate?.availableVoices ?? []),
+  ].filter((voice, index, list): voice is string => Boolean(voice) && list.indexOf(voice) === index);
+
   const updateCallSource = (source: AgentCallSourceKey, enabled: boolean) => {
     updateAgentCalls({ sources: { ...agentCallSettings.sources, [source]: enabled } });
   };
 
   const updateVoiceRuntime = (voiceRuntime: string) => {
+    if (voiceRuntime === "local-tts") {
+      const candidate = effectiveSelectedLocalTtsCandidate ?? okLocalTtsCandidates[0];
+      if (candidate) {
+        const keepLocalSelection = agentCallSettings.voiceRuntime === "local-tts";
+        updateAgentCalls({
+          voiceRuntime,
+          voiceProviderId: candidate.id,
+          voiceModelId: keepLocalSelection ? agentCallSettings.voiceModelId || candidate.model : candidate.model,
+          voiceId: keepLocalSelection ? agentCallSettings.voiceId || candidate.voice : candidate.voice,
+        });
+        return;
+      }
+    }
     const firstVoice = voiceOptions.find((provider) => provider.provider === voiceRuntime)
       ?? runtimeDefaultVoiceOptions(voiceRuntime)[0];
     updateAgentCalls({
@@ -390,14 +418,20 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
     });
   };
 
-  const selectedLocalTtsCandidate = localTtsCandidates.find(
-    (candidate) => candidate.id === agentCallSettings.voiceProviderId,
-  );
-  const selectedLocalTtsModel = agentCallSettings.voiceModelId || selectedLocalTtsCandidate?.model || "";
   // Persist a model choice through the dashboard's own save path so it sticks
   // (an external edit to the stored profile gets clobbered by the running app).
-  const updateLocalTtsModel = (model: string) => updateAgentCalls({ voiceModelId: model });
-  const updateLocalTtsVoice = (voice: string) => updateAgentCalls({ voiceId: voice });
+  const updateLocalTtsModel = (model: string, candidate = effectiveSelectedLocalTtsCandidate) => updateAgentCalls({
+    voiceRuntime: "local-tts",
+    voiceProviderId: candidate?.id ?? agentCallSettings.voiceProviderId,
+    voiceModelId: model,
+    voiceId: agentCallSettings.voiceId || candidate?.voice,
+  });
+  const updateLocalTtsVoice = (voice: string, candidate = effectiveSelectedLocalTtsCandidate) => updateAgentCalls({
+    voiceRuntime: "local-tts",
+    voiceProviderId: candidate?.id ?? agentCallSettings.voiceProviderId,
+    voiceModelId: agentCallSettings.voiceModelId || candidate?.model,
+    voiceId: voice,
+  });
 
   const refreshCallConnectionState = async () => {
     setLocalTtsDiscoveryStatus("loading");
@@ -503,11 +537,14 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
       });
       const data = asRecord(await response.json().catch(() => null));
       if (!response.ok || data?.ok === false) throw new Error(typeof data?.error === "string" ? data.error : "Local TTS model action failed.");
+      if (action === "load-model") {
+        updateLocalTtsModel(status.id, candidate);
+      }
       if (action === "unload-model" && status.id === selectedLocalTtsModel) {
         const fallback = candidate.availableModelDetails.find((item) => item.providerId !== status.providerId && item.callReady)?.id
           || candidate.availableModels.find((model) => model !== status.id)
           || candidate.model;
-        updateLocalTtsModel(fallback);
+        updateLocalTtsModel(fallback, candidate);
       }
       setTtsModelTone("ok");
       setTtsModelMessage(action === "load-model" ? `${status.id} is loading on ${candidate.machineName || candidate.name}.` : `${status.providerId} unload requested.`);
@@ -521,7 +558,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   };
 
   const changeLocalTtsModel = async (candidate: LocalTtsCandidate, model: string) => {
-    updateLocalTtsModel(model);
+    updateLocalTtsModel(model, candidate);
     const status = localTtsModelStatus(candidate, model);
     if (!status || status.loaded) {
       setTtsModelTone("ok");
@@ -570,6 +607,16 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
     setCallTestMessage("");
     setCallTestTone("muted");
     try {
+      const localTtsSelected = agentCallSettings.voiceRuntime === "local-tts";
+      const voiceProviderId = localTtsSelected
+        ? effectiveSelectedLocalTtsCandidate?.id ?? agentCallSettings.voiceProviderId
+        : selectedVoiceOption.source === "configured" ? selectedVoiceOption.id : undefined;
+      const voiceModelId = localTtsSelected
+        ? selectedLocalTtsModel || effectiveSelectedLocalTtsCandidate?.model
+        : selectedVoiceOption.source === "configured" ? selectedVoiceOption.model : undefined;
+      const voiceId = localTtsSelected
+        ? selectedLocalTtsVoice || effectiveSelectedLocalTtsCandidate?.voice
+        : selectedVoiceOption.source === "configured" ? selectedVoiceOption.voice : undefined;
       const response = await fetch("/api/phone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -580,10 +627,10 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
             name: agent.name,
             runtime: agent.runtime,
             role: agent.workerClass,
-            voiceProviderId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.id : undefined,
+            voiceProviderId,
             voiceRuntime: agentCallSettings.voiceRuntime,
-            voiceModelId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.model : undefined,
-            voiceId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.voice : undefined,
+            voiceModelId,
+            voiceId,
             skillProfilePrompt: agent.skillProfilePrompt,
             preferredSkillSlugs: agent.preferredSkillSlugs,
             aeonRepo: agent.aeonRepo,
@@ -740,13 +787,28 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                 {voiceRuntimeOptions.map((runtime) => <option value={runtime} key={runtime}>{VOICE_RUNTIME_LABELS[runtime] ?? runtime}</option>)}
               </select>
             </Field>
-            <Field label="Voice">
-              <select className="fb-select" value={selectedVoiceOption.id} onChange={(event) => updateVoiceProvider(event.target.value)}>
-                {selectedVoiceOptions.map((provider) => (
-                  <option value={provider.id} key={provider.id}>{VOICE_RUNTIME_LABELS[provider.provider] ?? provider.provider} · {provider.voice}</option>
-                ))}
-              </select>
-            </Field>
+            {agentCallSettings.voiceRuntime === "local-tts" ? (
+              <Field label="Voice">
+                <select
+                  className="fb-select"
+                  value={selectedLocalTtsVoice}
+                  disabled={!selectedLocalTtsVoiceOptions.length}
+                  onChange={(event) => updateLocalTtsVoice(event.target.value)}
+                >
+                  {selectedLocalTtsVoiceOptions.length
+                    ? selectedLocalTtsVoiceOptions.map((voice) => <option value={voice} key={voice}>{voice}</option>)
+                    : <option value="">No Local TTS voices discovered</option>}
+                </select>
+              </Field>
+            ) : (
+              <Field label="Voice">
+                <select className="fb-select" value={selectedVoiceOption.id} onChange={(event) => updateVoiceProvider(event.target.value)}>
+                  {selectedVoiceOptions.map((provider) => (
+                    <option value={provider.id} key={provider.id}>{VOICE_RUNTIME_LABELS[provider.provider] ?? provider.provider} · {provider.voice}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <Field label="Missed-call fallback">
               {/* DOM boundary: the option values below are exactly the AgentCallMissedFallback union. */}
               <select className="fb-select" value={agentCallSettings.missedCallFallback} onChange={(event) => updateAgentCalls({ missedCallFallback: event.target.value as AgentCallMissedFallback })}>
@@ -755,7 +817,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
             </Field>
           </div>
 
-          {!hasConfiguredVoices ? (
+          {!hasConfiguredVoices && agentCallSettings.voiceRuntime !== "local-tts" ? (
             <div className="as-info">
               <PlugZap size={16} className="ic" aria-hidden="true" />
               <p>Using the gateway-resolved default voice. Sync custom voices from Hivemind Mobile Settings when you want an explicit provider voice.</p>
@@ -784,8 +846,11 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
             {localTtsCandidates.length ? (
               <div className={styles.localTtsGrid}>
                 {localTtsCandidates.map((candidate) => {
-                  const selected = candidate.id === agentCallSettings.voiceProviderId;
+                  const selected = candidate.id === effectiveSelectedLocalTtsCandidate?.id;
                   const selectedModel = selected ? selectedLocalTtsModel || candidate.model : candidate.model;
+                  const selectedVoice = selected ? selectedLocalTtsVoice || candidate.voice : candidate.voice;
+                  const modelOptions = [selectedModel, ...candidate.availableModels]
+                    .filter((model, index, list): model is string => Boolean(model) && list.indexOf(model) === index);
                   const selectedStatus = localTtsModelStatus(candidate, selectedModel);
                   const loadedProviders = [...new Map(candidate.availableModelDetails
                     .filter((status) => status.loaded && status.callReady)
@@ -802,17 +867,17 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                       <small>{[candidate.machineName, candidate.port ? `port ${candidate.port}` : ""].filter(Boolean).join(" · ") || "Connected app"}</small>
                       <dl>
                         <div><dt>Model</dt><dd>{selectedModel}</dd></div>
-                        <div><dt>Voice</dt><dd>{selected ? (agentCallSettings.voiceId || candidate.voice) : candidate.voice}</dd></div>
+                        <div><dt>Voice</dt><dd>{selectedVoice}</dd></div>
                         <div><dt>Stream</dt><dd>{candidate.sampleFormat} · {candidate.sampleRate} Hz</dd></div>
                         <div><dt>Engine</dt><dd>{candidate.streamingImplementation || candidate.streamingKind || "streaming"}</dd></div>
                       </dl>
                       {candidate.voiceCount ? <small>{candidate.voiceCount} voices</small> : null}
                       {!candidate.ok && candidate.error ? <p className={styles.messageError}>{candidate.error}</p> : null}
                       {!selected ? (
-                        <Btn sm disabled={!candidate.ok} onClick={() => selectLocalTtsCandidate(candidate)}>Use this voice</Btn>
+                        <Btn sm disabled={!candidate.ok} onClick={() => selectLocalTtsCandidate(candidate)}>Select host</Btn>
                       ) : candidate.ok ? (
                         <div className={styles.localTtsInlineControls}>
-                          {candidate.availableModels.length ? (
+                          {modelOptions.length ? (
                             <Field label="Model">
                               <select
                                 className="fb-select"
@@ -820,27 +885,14 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                                 disabled={Boolean(ttsModelBusyKey)}
                                 onChange={(event) => void changeLocalTtsModel(candidate, event.target.value)}
                               >
-                                {candidate.availableModels.map((model) => (
+                                {modelOptions.map((model) => (
                                   <option value={model} key={model}>{model}</option>
                                 ))}
                               </select>
                             </Field>
                           ) : null}
-                          {candidate.availableVoices.length ? (
-                            <Field label="Voice">
-                              <select
-                                className="fb-select"
-                                value={agentCallSettings.voiceId || candidate.voice}
-                                onChange={(event) => updateLocalTtsVoice(event.target.value)}
-                              >
-                                {candidate.availableVoices.map((voice) => (
-                                  <option value={voice} key={voice}>{voice}</option>
-                                ))}
-                              </select>
-                            </Field>
-                          ) : null}
                           <div className={styles.localTtsModelActions}>
-                            <span>{selectedStatus?.loaded ? `${selectedStatus.providerId} loaded` : "Load state unavailable"}</span>
+                            <span>{selectedStatus ? `${selectedStatus.providerId} ${selectedStatus.loaded ? "loaded" : "not loaded"}` : "Load state unavailable"}</span>
                             {selectedStatus ? (
                               <Btn
                                 sm

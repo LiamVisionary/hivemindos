@@ -405,7 +405,7 @@ function MessageThreadBase({
 
   if (!messages.length) {
     return (
-      <div style={{ display: "grid", justifyItems: "center", gap: 6, padding: "44px 16px", textAlign: "center" }}>
+      <div className="fr-chat-enter" style={{ display: "grid", justifyItems: "center", gap: 6, padding: "44px 16px", textAlign: "center" }}>
         <strong style={{ color: "var(--fg)", fontFamily: "var(--f-display)", fontSize: 16 }}>{selectedAgent ? `Start with ${selectedAgent.name}` : "No agent selected"}</strong>
         <p style={{ maxWidth: 360, margin: 0, color: "var(--fg-3)", fontSize: 13.5, lineHeight: 1.6 }}>{selectedAgent ? "Send a message from the composer below." : "Use the rail to select a chat or start a new one."}</p>
       </div>
@@ -539,7 +539,7 @@ function MessageThreadBase({
         );
       })}
       {busy && !hasStreamingChunk && !pendingAssistantBubbleVisible ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 1 }}>
+        <div className="fr-chat-enter" style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 1 }}>
           <span className="fr-dot live" style={{ color: "var(--live)" }} />
           <ThinkingLoader AgentResponseLoader={AgentResponseLoader} />
         </div>

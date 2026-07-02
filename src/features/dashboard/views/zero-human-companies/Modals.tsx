@@ -123,11 +123,11 @@ function clampedNumber(value: string, max?: number): number | undefined {
 // Rendered through a portal to <body> (wrapped in a themed .zhc-root so the
 // scoped CSS tokens still resolve), so the fixed overlay is never clipped or
 // re-anchored by the dashboard panel's overflow/transform context.
-function Modal({
-  title, subtitle, onClose, width = 880, children, footer, theme = "dark",
+export function Modal({
+  title, subtitle, onClose, width = 880, children, footer, theme = "dark", zIndex = 2147483000,
 }: {
   title: string; subtitle?: string; onClose: () => void; width?: number;
-  children: React.ReactNode; footer?: React.ReactNode; theme?: Theme;
+  children: React.ReactNode; footer?: React.ReactNode; theme?: Theme; zIndex?: number;
 }) {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -136,7 +136,7 @@ function Modal({
   }, [onClose]);
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="zhc-root" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 2147483000, display: "grid", placeItems: "center", padding: 24, background: "rgba(2,4,8,0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "zhcFade 160ms ease" }}>
+    <div className="zhc-root" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex, display: "grid", placeItems: "center", padding: 24, background: "rgba(2,4,8,0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "zhcFade 160ms ease" }}>
       <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={{ width: "min(" + width + "px, 96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", borderRadius: 16, border: "1px solid var(--line-2)", background: "var(--bg-1)", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", overflow: "hidden", animation: "zhcRise 200ms cubic-bezier(.2,.7,.3,1)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "18px 20px", borderBottom: "1px solid var(--line)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -961,3 +961,8 @@ export function AgentMemberSettingsModal({
     </Modal>
   );
 }
+
+
+// TaskDetailModal + its deliverable rendering live in FileViewer.tsx
+// (colocated with DeliverableChip / FileViewerModal) to avoid a
+// Modals <-> FileViewer import cycle. The classification helpers above are shared.

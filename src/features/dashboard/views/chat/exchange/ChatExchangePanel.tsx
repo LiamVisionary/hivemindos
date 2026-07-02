@@ -2,6 +2,7 @@
 
 import "@/components/json-render/fr/fr-style.css";
 import "./chat-exchange.css";
+import "./chat-exchange-motion.css";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import hiveChatStyles from "@/features/dashboard/views/chat/HiveChatView.module.css";
@@ -29,7 +30,7 @@ import { ConversationNav } from "./ConversationNav";
 import { ContextPanel } from "./ContextPanel";
 import { MessageThread } from "./MessageThread";
 import type { ExchangeConversation } from "./types";
-import { Dot, HiveMark, frChatState } from "./primitives";
+import { Dot, HiveMark, HistorySkeleton, frChatState } from "./primitives";
 
 const hiveClass = createStyleClass(hiveChatStyles);
 
@@ -343,7 +344,8 @@ export function ChatExchangePanel(props: any) {
       chatScrollFrameRef.current = null;
       const node = scrollNodeRef.current;
       if (!node) return;
-      node.scrollTo({ top: node.scrollHeight, behavior });
+      const reduceMotion = behavior === "smooth" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      node.scrollTo({ top: node.scrollHeight, behavior: reduceMotion ? "auto" : behavior });
     });
   }, []);
 
@@ -357,8 +359,9 @@ export function ChatExchangePanel(props: any) {
     }
     if (!chatChanged && !chatAutoScrollRef?.current && !isChatScrollNearBottom(node)) return;
     if (chatAutoScrollRef) chatAutoScrollRef.current = true;
-    scheduleChatScrollToBottom(chatChanged ? "auto" : "smooth");
-  }, [chatAutoScrollRef, chatScrollKey, chatScrollSignature, scheduleChatScrollToBottom, selectedChatHistoryLoading]);
+    // Instant while tokens stream: restarting a smooth scroll every chunk rubber-bands.
+    scheduleChatScrollToBottom(chatChanged || hasStreamingChunk ? "auto" : "smooth");
+  }, [chatAutoScrollRef, chatScrollKey, chatScrollSignature, hasStreamingChunk, scheduleChatScrollToBottom, selectedChatHistoryLoading]);
 
   useEffect(() => {
     const scrollNode = scrollNodeRef.current;
@@ -640,7 +643,7 @@ export function ChatExchangePanel(props: any) {
                     setAgentMenuOpen((current) => !current);
                   }}
                 >
-                  <span className="fr-chat-agent-avatar">
+                  <span className="fr-chat-agent-avatar" key={`avatar-${conv.id}`}>
                     {iconSrc ? (
                       <span className="fr-chat-agent-avatar-image" style={{ backgroundImage: `url(${iconSrc})` }} aria-hidden="true" />
                     ) : selectedAgent ? (
@@ -649,7 +652,7 @@ export function ChatExchangePanel(props: any) {
                       <HiveMark size={20} stroke="var(--honey)" />
                     )}
                   </span>
-                  <span className="fr-chat-agent-copy">
+                  <span className="fr-chat-agent-copy" key={`copy-${conv.id}`}>
                     <span className="fr-chat-agent-title-row">
                       <span className="fr-chat-agent-title">{conv.name}</span>
                       <span className="fr-chat-agent-state" style={{ color: state.text }}>
@@ -727,7 +730,7 @@ export function ChatExchangePanel(props: any) {
               </div>
             </header>
 
-            <div ref={attachScrollNode} className="fr-scroll" onScroll={handleScroll} aria-busy={selectedChatHistoryLoading} style={{ minHeight: 0, overflow: "auto", padding: "26px 24px 12px" }}>
+            <div ref={attachScrollNode} className="fr-scroll fr-chat-scroller" onScroll={handleScroll} aria-busy={selectedChatHistoryLoading} style={{ minHeight: 0, overflow: "auto", padding: "26px 24px 12px" }}>
               <div ref={threadNodeRef} className="fr-chat-content-rail fr-chat-thread-rail">
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
@@ -736,10 +739,7 @@ export function ChatExchangePanel(props: any) {
                 </div>
 
                 {selectedChatHistoryLoading ? (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9, color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 12, padding: 24 }}>
-                    {LoaderCircle ? <LoaderCircle aria-hidden="true" style={{ animation: "fr-spin 0.8s linear infinite" }} /> : null}
-                    Loading history
-                  </div>
+                  <HistorySkeleton />
                 ) : (
                   <MessageThread
                     AgentResponseLoader={AgentResponseLoader}
@@ -774,7 +774,7 @@ export function ChatExchangePanel(props: any) {
             <section className={`${hiveClass("hiveComposerDock")} fr-chat-composer-dock`} aria-label="Message composer">
               <div className="fr-chat-content-rail fr-chat-composer-rail">
                 {hasQueued ? (
-                  <div style={{ display: "grid", gap: 8, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--panel-2)", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "9px 11px" }} aria-label="Queued messages">
+                  <div className="fr-chat-enter" style={{ display: "grid", gap: 8, border: "1px solid var(--line)", borderRadius: "var(--radius)", background: "var(--panel-2)", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "9px 11px" }} aria-label="Queued messages">
                     <strong style={{ color: "var(--fg)" }}>{queuedChatMessages.length} queued</strong>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                       {queuedChatMessages.slice(0, 3).map((item: any, index: number) => {

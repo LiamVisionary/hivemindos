@@ -311,6 +311,85 @@ export async function setCompanyAutonomy(id: string, enabled: boolean): Promise<
   return company;
 }
 
+/** Loose business-number parse: "$1,234.50", "12k", "30%", "1.2m" → number. */
+export function parseMetricNumber(value?: string | number | null): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const cleaned = (value ?? "").replace(/[$,\s%]/g, "").toLowerCase();
+  if (!cleaned) return null;
+  const match = /^(-?\d+(?:\.\d+)?)(k|m|b)?$/.exec(cleaned);
+  if (!match) return null;
+  const multiplier = match[2] === "k" ? 1e3 : match[2] === "m" ? 1e6 : match[2] === "b" ? 1e9 : 1;
+  return Number(match[1]) * multiplier;
+}
+
+export type UpdateCompanyMetricInput = {
+  /** New reading for apexGoal.current (any business unit: "$1,240", "312", "4.8%"). */
+  current?: string | number;
+  /** Explicit 0–100 progress; derived from current/target when both parse numerically. */
+  progress?: number;
+  /** Optional headline revenue/DAU display value + delta. */
+  revenueValue?: string;
+  revenueDelta?: string;
+  /** Attribution recorded in company memory, e.g. "maps-agency daily metrics". */
+  source?: string;
+  note?: string;
+};
+
+/**
+ * Generic trackable rail: any business (script, bridge, or agent) posts its
+ * metric readings here — apexGoal.current/progress and the headline revenue
+ * stay live without manual edits, and every update lands in company memory.
+ */
+export async function updateCompanyMetric(id: string, input: UpdateCompanyMetricInput): Promise<Company | null> {
+  const records = await readRaw();
+  const company = records.find((record) => record.id === id);
+  if (!company) return null;
+
+  if (input.current !== undefined) {
+    const currentText = typeof input.current === "number" ? String(input.current) : input.current.trim();
+    company.apexGoal = { ...(company.apexGoal ?? { title: company.name }), current: currentText || undefined };
+  }
+  const explicitProgress = normalizeAlignment(input.progress);
+  if (explicitProgress !== undefined) {
+    company.apexGoal = { ...(company.apexGoal ?? { title: company.name }), progress: explicitProgress };
+  } else if (input.current !== undefined) {
+    const currentNum = parseMetricNumber(company.apexGoal?.current);
+    const targetNum = parseMetricNumber(company.apexGoal?.target);
+    if (currentNum !== null && targetNum !== null && targetNum > 0) {
+      company.apexGoal = {
+        ...(company.apexGoal ?? { title: company.name }),
+        progress: Math.max(0, Math.min(100, Math.round((currentNum / targetNum) * 100))),
+      };
+    }
+  }
+  if (input.revenueValue !== undefined) {
+    const value = input.revenueValue.trim();
+    if (value) {
+      company.revenue = {
+        ...(company.revenue ?? { label: company.apexGoal?.metric?.trim() || "Revenue", value }),
+        value,
+        delta: input.revenueDelta?.trim() || company.revenue?.delta || null,
+      };
+    }
+  }
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+
+  const { appendCompanyMemory } = await import("@/lib/services/company-memory");
+  const readings = [
+    input.current !== undefined ? `${company.apexGoal?.metric?.trim() || "metric"} = ${company.apexGoal?.current}` : null,
+    input.revenueValue !== undefined ? `revenue = ${input.revenueValue}` : null,
+    company.apexGoal?.progress !== undefined ? `${company.apexGoal.progress}% to target` : null,
+  ].filter(Boolean).join(", ");
+  await appendCompanyMemory(company.id, {
+    kind: "metric",
+    title: `Metric update: ${readings || "reading recorded"}`,
+    detail: [input.note?.trim(), input.source ? `Source: ${input.source.trim()}` : null].filter(Boolean).join(" — ") || undefined,
+  }).catch(() => undefined);
+
+  return company;
+}
+
 export async function setCompanyFrozen(id: string, frozen: boolean): Promise<Company | null> {
   const records = await readRaw();
   const company = records.find((record) => record.id === id);

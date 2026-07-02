@@ -6,6 +6,7 @@
    NOT @ts-nocheck) while DashboardApp keeps only orchestration. */
 
 import { Component, type ReactNode } from "react";
+import type { DynamicOptionsLoadingProps } from "next/dynamic";
 
 import vaultStyles from "@/app/vault.module.css";
 import { DASHBOARD_ROUTE_LABELS } from "@/features/dashboard/dashboard-navigation";
@@ -118,7 +119,7 @@ export const routeLoadingFor = (view: DashboardView) => function RouteLoading() 
 // activeView is never passed at runtime, so panels using this always showed the
 // generic "Loading dashboard view" label (pre-existing; surfaced when this file
 // became typed). Kept accepting it so a future harness could thread the view in.
-export const routeLoadingFromProps = (props?: { activeView?: DashboardView } | null) => <DashboardRouteLoading view={props?.activeView} />;
+export const routeLoadingFromProps = (props?: (DynamicOptionsLoadingProps & { activeView?: DashboardView }) | null) => <DashboardRouteLoading view={props?.activeView} />;
 
 export function preloadDashboardChunk(loader: () => Promise<unknown>) {
   void loader().catch(() => undefined);

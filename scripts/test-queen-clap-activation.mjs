@@ -280,7 +280,10 @@ check("Queen Bee starts each voice session with one opening line", () => {
   assert.match(realtimeHook, /JSON\.stringify\(openingText\)/);
   assert.match(pipelineHook, /addTurn\("queen", openingText\)/);
   assert.match(pipelineHook, /history\.push\(\{ who: "queen", text: openingText \}\)/);
-  assert.match(pipelineHook, /playSpokenReply\(openingText/);
+  // The opening line speaks through the barge-in wrapper, which delegates to
+  // the shared spoken-reply pipeline.
+  assert.match(pipelineHook, /speakReplyWithBargeIn\(openingText\)/);
+  assert.match(pipelineHook, /return await playSpokenReply\(/);
 });
 
 check("clap hook stays local and tears down the microphone stream", () => {

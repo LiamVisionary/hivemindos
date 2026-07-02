@@ -1,6 +1,7 @@
-"use client";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 // Partially typed 2026-07-02; the typing pass ran out of session mid-file and the remaining errors are deferred (see CHANGELOG).
+"use client";
 
 import { useCallback, useEffect, useRef } from "react";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";

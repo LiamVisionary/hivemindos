@@ -6,6 +6,7 @@ import React from "react";
 import { Portfolio } from "./ColonyCards";
 import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
+import { TaskDetailModal } from "./TaskDetailModal";
 import type { Agent, CardStyle, Colony, CompanyEditForm, CreateForm, Density, PoolAgent, Theme } from "./types";
 
 function HiveLogo({ size = 40 }: { size?: number }) {
@@ -134,6 +135,7 @@ export default function ZeroHumanCompanies({
     | { type: "treasury"; id: string }
     | { type: "browse"; id: string }
     | { type: "edit-agent"; id: string; agentId: string }
+    | { type: "task"; id: string; issueKey: string }
     | null
   >(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -182,6 +184,7 @@ export default function ZeroHumanCompanies({
     onEdit: () => setModal({ type: "edit", id: colony.id }),
     onEditTreasury: () => setModal({ type: "treasury", id: colony.id }),
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
+    onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueKey: issue.key }),
     busyId,
   };
 
@@ -232,6 +235,7 @@ export default function ZeroHumanCompanies({
             colony={colony}
             colonies={colonies}
             showBudget={showBudget}
+            theme={theme}
             onBack={() => setOpenId(null)}
             onSwitch={setOpenId}
             onAddAgents={() => setModal({ type: "browse", id: colony.id })}
@@ -265,6 +269,14 @@ export default function ZeroHumanCompanies({
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
           <AgentMemberSettingsModal key={`${modal.id}:${modal.agentId}`} colony={target} agentId={modal.agentId} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+        ) : null;
+      })()}
+      {modal && modal.type === "task" && (() => {
+        // Resolve from the live colonies each render so polling keeps the detail fresh.
+        const target = colonies.find((c) => c.id === modal.id);
+        const issue = target?.issues.find((i) => i.key === modal.issueKey);
+        return issue?.work ? (
+          <TaskDetailModal issue={issue} colonyName={target!.name} theme={theme} onClose={closeModal} />
         ) : null;
       })()}
     </div>

@@ -54,10 +54,47 @@ const QUEEN_VOICE_SYSTEM_PROMPT = [
   "You are Queen Bee, the single coordinator voice of HivemindOS, in a live spoken conversation with the user.",
   'Reply with STRICT JSON only, no markdown fences, matching: {"speech": string, "task": null | {"title": string, "message": string}}.',
   "speech: one or two short, natural spoken sentences. No markdown, no lists, no reasoning preambles.",
+  "You are MID-conversation: never greet again, never reintroduce yourself, never restart the conversation - answer the latest message directly in context.",
   "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive).",
   "Greetings, questions, status chat, and thinking-out-loud get task: null and a conversational speech reply.",
   "When you do create a task, make title a short imperative summary, message the full work request in the user's words, and have speech briefly confirm what you are kicking off.",
 ].join(" ");
+
+/**
+ * One self-contained prompt for runtime (CLI/gateway) agents. The agent-runtime
+ * route reduces a messages[] array to the LATEST user message for most
+ * runtimes, which silently dropped the system prompt and conversation history -
+ * the runtime brain saw a bare "What do you think?" with no context and
+ * re-greeted like a fresh session. Everything the turn needs rides in the one
+ * user message instead.
+ */
+export function buildRuntimeVoiceUserText(
+  transcript: string,
+  history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
+) {
+  const recent = history.slice(-MAX_HISTORY_TURNS);
+  const transcriptBlock = recent.length
+    ? [
+        "Conversation so far (most recent last):",
+        ...recent.map(
+          (turn) => `${turn.who === "queen" ? "Queen Bee" : "User"}: ${turn.text.slice(0, 600)}`,
+        ),
+        "",
+      ].join("\n")
+    : "";
+  return [
+    QUEEN_VOICE_SYSTEM_PROMPT,
+    systemPreamble?.trim() || "",
+    "",
+    transcriptBlock,
+    `User's latest spoken message: ${transcript}`,
+    "",
+    "Respond now as Queen Bee with the STRICT JSON object only.",
+  ]
+    .filter((part) => part !== "")
+    .join("\n");
+}
 
 /**
  * One conversational Queen Bee voice turn: a chat-capable fleet agent (as the
@@ -77,11 +114,16 @@ export async function runQueenBeeVoiceTurn(options: {
   kanbanFolder?: string;
   /** Optional per-stage timing sink for caller telemetry. */
   marks?: Record<string, number>;
+  /** Optional live stage sink (overlay progress chips). */
+  progress?: (label: string) => void;
 }): Promise<QueenVoiceTurnResult> {
   const text = await conversationTurnText(options);
   if (text) {
     const parsed = parseVoiceTurnJson(text);
     if (parsed?.task) {
+      options.progress?.(
+        parsed.task.title ? `Delegating: ${parsed.task.title}` : "Delegating the task",
+      );
       const submitted = await submitQueenBeeVoiceTask(options, parsed.task);
       return {
         reply: joinSpeech(parsed.speech, submitted.summary),
@@ -157,6 +199,7 @@ async function conversationTurnText(options: {
   history: QueenVoiceHistoryTurn[];
   vaultPath?: string;
   marks?: Record<string, number>;
+  progress?: (label: string) => void;
 }) {
   // Standing preferences ("call me boss") splice onto the system prompt so
   // both the runtime brain and the OpenAI fallback honor them every turn. Note
@@ -168,6 +211,7 @@ async function conversationTurnText(options: {
     : await pickConversationAgent(options.vaultPath);
   if (agent) {
     const agentStartedAt = Date.now();
+    options.progress?.(`Thinking with ${agent.name || agent.id}`);
     try {
       const text = await runRuntimeConversationTurn(
         options.origin,
@@ -175,6 +219,7 @@ async function conversationTurnText(options: {
         options.transcript,
         options.history,
         systemPreamble,
+        options.progress,
       );
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
@@ -191,6 +236,7 @@ async function conversationTurnText(options: {
     }
   }
   const openAiStartedAt = Date.now();
+  options.progress?.("Thinking with OpenAI");
   try {
     return await runOpenAiConversationTurn(
       options.transcript,
@@ -562,13 +608,18 @@ async function runRuntimeConversationTurn(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
+  onActivity?: (label: string) => void,
 ) {
+  // One flattened user message (persona + history + latest): most runtime
+  // adapters only see the latest user message, so a messages[] history array
+  // never reached them - see buildRuntimeVoiceUserText.
+  const userText = buildRuntimeVoiceUserText(transcript, history, systemPreamble);
   const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       agent: voiceOptimizedAgent(agent),
-      messages: conversationMessages(transcript, history, systemPreamble),
+      messages: [{ role: "user", content: userText }],
       runtimeSessionId: "queen-bee-voice",
       agentMode: "act",
       latencyMode: "voice",
@@ -576,7 +627,7 @@ async function runRuntimeConversationTurn(
     cache: "no-store",
     signal: AbortSignal.timeout(AGENT_TURN_TIMEOUT_MS),
   });
-  return readRuntimeResponseText(response);
+  return readRuntimeResponseText(response, onActivity);
 }
 
 function parseVoiceTurnJson(
@@ -621,12 +672,15 @@ export async function submitQueenBeeVoiceTask(
     kanbanFolder?: string;
     fleetSnapshot: () => Promise<QueenBeeFleetMachine[]>;
     marks?: Record<string, number>;
+    progress?: (label: string) => void;
   },
   task: { title: string; message: string },
 ) {
   const fleetStartedAt = Date.now();
+  options.progress?.("Scanning the fleet for the right agent");
   const fleetSnapshot = await options.fleetSnapshot();
   if (options.marks) options.marks.fleetMs = Date.now() - fleetStartedAt;
+  options.progress?.("Routing the task");
   const result = await submitQueenBeeMessage({
     message: task.message,
     taskTitle: task.title || undefined,

@@ -37,6 +37,8 @@ const TESTS = [
   "test:bankr-actions",
   "test:clawbank",
   "test:code-intelligence",
+  "test:company-autonomy",
+  "test:company-deliverables",
   "test:compiled-knowledge",
   "test:context-index:loop-readiness",
   "test:context-index:swarm-goal",
@@ -60,6 +62,7 @@ const TESTS = [
   "test:hyperliquid",
   "test:json-render",
   "test:kanban:concurrency",
+  "test:local-tts-robustness",
   "test:loop-blocking",
   "test:loop-kanban-real-tasks",
   "test:loop-readiness",
@@ -70,6 +73,7 @@ const TESTS = [
   "test:neo4j-brain-service",
   "test:okf-export",
   "test:packaged-agents",
+  "test:personal-wallet-grouping",
   "test:qmd-brain-service",
   "test:queen-bee:autonomous",
   "test:queen-bee:redispatch",
@@ -77,6 +81,8 @@ const TESTS = [
   "test:queen-clap",
   "test:queen-echo",
   "test:queen-voice-events",
+  "test:queen-voice-prefs",
+  "test:queen-voice-working",
   "test:runtime-portable-state",
   "test:shared-brain-index",
   "test:skill-loop-guard",
@@ -89,6 +95,7 @@ const TESTS = [
   "test:vault-structure",
   "test:veil-auto-send",
   "test:wallet-paid-models",
+  "test:wallet-real-tabs",
   "test:wallet-vault",
   "test:work-events",
 ];
@@ -96,10 +103,7 @@ const TESTS = [
 // Hermetic but currently failing (stale source anchors / moved docs) or owned
 // by in-flight work. Fix, verify locally, then move into TESTS.
 const PENDING = [
-  ["test:queen-voice-prefs", "anchors agent-runtime route internals (extraction in flight)"],
-  ["test:personal-wallet-grouping", "WalletPanel helper boundary anchor drifted (helpers moved)"],
   ["test:agent-memory-upgrade", "agent-memory refactor in flight (concurrent session)"],
-  ["test:wallet-real-tabs", "personal-wallets import anchor drifted (wallet typing in flight)"],
 ];
 
 const scripts = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).scripts;

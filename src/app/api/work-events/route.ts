@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createWorkEvent,
   createWorkEventTrigger,
+  deleteWorkEvent,
   publishWorkEvent,
   readWorkEventsState,
 } from "@/lib/services/work-events";
@@ -43,6 +44,10 @@ export async function POST(request: NextRequest) {
         enabled: body.enabled,
         idempotencyKey: body.idempotencyKey,
       });
+      return NextResponse.json({ ok: true, ...result });
+    }
+    if (body.action === "delete-event") {
+      const result = await deleteWorkEvent(body.eventName ?? body.name);
       return NextResponse.json({ ok: true, ...result });
     }
     if (body.action === "publish") {

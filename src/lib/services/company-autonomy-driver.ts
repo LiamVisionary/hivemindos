@@ -1,10 +1,17 @@
 import "server-only";
 
+import {
+  acquireOrRenewCompanyDriverLease,
+  companyDriverLeaseDisabled,
+  releaseCompanyDriverLease,
+} from "@/lib/services/company-driver-lease";
 import { markCompanyDispatched, readCompanies } from "@/lib/services/companies-store";
 import { countDispatchableMembers, dispatchCompanyGoal, scopeFleetToMembers } from "@/lib/services/companies-orchestration";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
-import { redispatchReadyQueenBeeTasks } from "@/lib/services/queen-bee/control-plane";
+import { redispatchReadyQueenBeeTasks, routePendingQueenBeeTasks } from "@/lib/services/queen-bee/control-plane";
 import { readBoard, reclaimStaleTasks } from "@/lib/services/kanban/local-kanban-store";
+import { notifyEscalation, runEscalationSweep } from "@/lib/services/messaging/escalation-notify";
+import { syncCompanyTaskOutcomes } from "@/lib/services/company-memory";
 
 /**
  * Perpetual company autonomy driver. A single boot-time background loop (one per
@@ -28,6 +35,13 @@ export type CompanyAutonomyDriverStatus = {
   tickCount?: number;
   lastTickAt?: string;
   lastError?: string;
+  /**
+   * Machine-wide lease election (see company-driver-lease.ts). Every server
+   * process runs a driver loop, but only the lease holder ticks — standby
+   * instances poll the lease and take over when the holder stops/dies.
+   * Absent while the first loop iteration hasn't run or the lease is disabled.
+   */
+  lease?: { held: boolean; holderPid?: number; holderPort?: string };
 };
 
 type Runner = CompanyAutonomyDriverStatus & { stopRequested: boolean; stopped: Promise<void> };
@@ -41,6 +55,9 @@ function envNum(name: string, fallback: number): number {
 
 const tickIntervalMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_TICK_MS", 300_000); // 5 min
 const minRedispatchMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_MIN_REDISPATCH_MS", 1_800_000); // 30 min
+// Standby instances (lease held elsewhere) re-check the lease this often — a
+// tiny file read — so a killed holder is replaced within about a minute.
+const standbyPollMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_STANDBY_POLL_MS", 60_000);
 
 export function companyAutonomyDriverDisabled(): boolean {
   return (process.env.HIVEMINDOS_COMPANY_AUTONOMY_DRIVER || "").trim() === "0";
@@ -96,15 +113,70 @@ async function tickOnce(): Promise<void> {
   const redispatched = await redispatchReadyQueenBeeTasks({});
   if (redispatched > 0) console.log(`[company-autonomy-driver] re-dispatched ${redispatched} stranded ready task(s)`);
 
+  // One fleet snapshot per tick, shared by pending-task routing and company
+  // re-dispatch. Routing pending ("queen-bee"-assigned) tasks runs regardless of
+  // company eligibility: a task queued while its agent was offline must get
+  // delegated once the agent returns, or it waits forever.
+  const fleet = await fetchFleetSnapshot();
+  const routedPending = await routePendingQueenBeeTasks(fleet, {});
+  if (routedPending > 0) console.log(`[company-autonomy-driver] routed ${routedPending} pending task(s) to online agents`);
+
   const companies = await readCompanies();
   const eligible = companies.filter(
     (c) => c.autonomy && !c.frozen && Boolean(c.apexGoal?.title?.trim()) && (c.agentIds?.length ?? 0) > 0,
   );
-  if (eligible.length === 0) return;
+  // Fold finished company-sourced tasks into each company's durable memory ledger
+  // BEFORE re-dispatch, so a re-plan triggered this tick already sees the outcomes.
+  // Covers every company (even autonomy off) — memory accrues whenever work finishes.
+  try {
+    const board = await readBoard(null, {});
+    const recorded = await syncCompanyTaskOutcomes(companies, board.tasks ?? []);
+    if (recorded > 0) console.log(`[company-autonomy-driver] recorded ${recorded} task outcome(s) into company memory`);
+  } catch (error) {
+    console.warn("[company-autonomy-driver] memory sync failed:", error instanceof Error ? error.message : error);
+  }
 
-  const fleet = await fetchFleetSnapshot();
+  let companyPassError: unknown = null;
+  if (eligible.length > 0) {
+    try {
+      await redispatchEligibleCompanies(eligible, fleet);
+    } catch (error) {
+      companyPassError = error; // rethrown below so the runner records lastError
+    }
+  }
+
+  // Escalation sweep runs EVERY tick (blocked tasks and approvals exist even with
+  // no launched company) and LAST so it sees this tick's board/approval state.
+  // It's what reaches the user headless — no dashboard open.
+  await runEscalationSweep({}).catch((error) =>
+    console.warn("[company-autonomy-driver] escalation sweep failed:", error instanceof Error ? error.message : error),
+  );
+  if (companyPassError) throw companyPassError;
+}
+
+/**
+ * Pure predicate: does this company still have live work? Counts tasks delegated
+ * to its members (any source) plus ITS OWN pending ("queen-bee"-assigned) tasks
+ * awaiting routing. Another source's pending task must never freeze this company
+ * — that wildcard once deadlocked every company on one stuck task.
+ */
+export function companyHasActiveWork(
+  tasks: Array<Pick<import("@/lib/types/kanban").KanbanTask, "status" | "assignee" | "source">>,
+  memberIdents: Set<string>,
+  companyId: string,
+): boolean {
+  const companyPrefix = `company:${companyId}:`;
+  return tasks.some((t) => {
+    if (t.status !== "ready" && t.status !== "working") return false;
+    const assignee = t.assignee ?? "";
+    if (assignee && memberIdents.has(assignee)) return true;
+    return assignee === "queen-bee" && (t.source ?? "").startsWith(companyPrefix);
+  });
+}
+
+async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof readCompanies>>, fleet: QueenBeeFleetMachine[]): Promise<void> {
   // If the board can't be read we can't tell whether the crew is idle — a throw
-  // bubbles to the loop and we skip this tick rather than re-dispatch blind.
+  // bubbles to the loop and we skip this pass rather than re-dispatch blind.
   const board = await readBoard(null, {});
   const tasks = board.tasks ?? [];
   const now = Date.now();
@@ -114,17 +186,9 @@ async function tickOnce(): Promise<void> {
       const scoped = scopeFleetToMembers(fleet, company.agentIds);
       // No member online + chat-capable → nobody to do the work; don't pile up queued tasks.
       if (countDispatchableMembers(scoped) === 0) continue;
-      // Crew already has live work (incl. queued "queen-bee" tasks awaiting an
-      // agent) → let it finish before re-dispatching. Counting "queen-bee" here is
-      // defense-in-depth against ever re-dispatching on top of pending work.
+      // Crew already has live work → let it finish before re-dispatching.
       const idents = memberIdentities(scoped);
-      const hasActiveWork = tasks.some(
-        (t) =>
-          (t.status === "ready" || t.status === "working") &&
-          t.assignee != null &&
-          (idents.has(t.assignee) || t.assignee === "queen-bee"),
-      );
-      if (hasActiveWork) continue;
+      if (companyHasActiveWork(tasks, idents, company.id)) continue;
       // Throttle: don't re-dispatch the same company more often than the min interval.
       if (now - (company.lastDispatchedAt ?? 0) < minRedispatchMs()) continue;
 
@@ -134,27 +198,61 @@ async function tickOnce(): Promise<void> {
       const port = process.env.PORT?.trim();
       await dispatchCompanyGoal(company, fleet, { origin: port ? `http://127.0.0.1:${port}` : undefined });
     } catch (error) {
-      // One company's failure must never stop the loop.
-      console.error(
-        `[company-autonomy-driver] re-dispatch failed for ${company.id}:`,
-        error instanceof Error ? error.message : error,
-      );
+      // One company's failure must never stop the loop — but the operator should
+      // hear about a company that keeps failing to dispatch (6h re-notify TTL).
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[company-autonomy-driver] re-dispatch failed for ${company.id}:`, message);
+      await notifyEscalation({
+        key: `company-dispatch-failed:${company.id}`,
+        title: `${company.name}: autonomous dispatch failing`,
+        body: `The autonomy driver could not dispatch new work toward "${company.apexGoal?.title ?? company.name}".\nError: ${message}\nIt retries every ${Math.round(minRedispatchMs() / 60_000)} minutes.`,
+        severity: "high",
+        ttlMs: 6 * 60 * 60 * 1_000,
+        tags: ["company", "dispatch"],
+      }).catch(() => undefined);
     }
   }
 }
 
 async function loop(runner: Runner): Promise<void> {
   while (!runner.stopRequested) {
-    try {
-      await tickOnce();
-      runner.tickCount = (runner.tickCount ?? 0) + 1;
-      runner.lastTickAt = new Date().toISOString();
-      runner.lastError = undefined;
-    } catch (error) {
-      runner.lastError = error instanceof Error ? error.message : String(error);
+    // Lease election: several server processes run this loop concurrently on a
+    // dev machine (every Next server auto-starts the driver), but only the
+    // lease holder may tick — otherwise each instance re-scans the fleet and
+    // can re-dispatch real agent work against the same shared board.
+    let ticking = true;
+    if (!companyDriverLeaseDisabled()) {
+      const wasStandby = runner.lease?.held === false;
+      const lease = await acquireOrRenewCompanyDriverLease();
+      ticking = lease.held;
+      runner.lease = {
+        held: lease.held,
+        holderPid: lease.holder?.pid,
+        holderPort: lease.holder?.port || undefined,
+      };
+      if (!lease.held && !wasStandby) {
+        console.log(
+          `[company-autonomy-driver] standby — active driver is pid ${lease.holder?.pid ?? "?"}${lease.holder?.port ? ` (port ${lease.holder.port})` : ""}`,
+        );
+      } else if (lease.held && wasStandby) {
+        console.log("[company-autonomy-driver] lease acquired — this instance is now the active driver");
+      }
+    } else {
+      runner.lease = undefined;
     }
     if (runner.stopRequested) break;
-    await sleepUnlessStopped(runner, tickIntervalMs());
+    if (ticking) {
+      try {
+        await tickOnce();
+        runner.tickCount = (runner.tickCount ?? 0) + 1;
+        runner.lastTickAt = new Date().toISOString();
+        runner.lastError = undefined;
+      } catch (error) {
+        runner.lastError = error instanceof Error ? error.message : String(error);
+      }
+    }
+    if (runner.stopRequested) break;
+    await sleepUnlessStopped(runner, ticking ? tickIntervalMs() : standbyPollMs());
   }
 }
 
@@ -189,6 +287,10 @@ export async function stopCompanyAutonomyDriver(): Promise<CompanyAutonomyDriver
   if (runner && runner.status === "running") {
     runner.stopRequested = true;
     await runner.stopped;
+    // Hand the lease to a standby instance immediately instead of making it
+    // wait out staleness/pid-death detection. No-op if we never held it.
+    await releaseCompanyDriverLease().catch(() => undefined);
+    runner.lease = undefined;
   }
   return getCompanyAutonomyDriverStatus();
 }
@@ -202,6 +304,7 @@ export function getCompanyAutonomyDriverStatus(): CompanyAutonomyDriverStatus {
     tickCount: runner.tickCount,
     lastTickAt: runner.lastTickAt,
     lastError: runner.lastError,
+    lease: runner.lease,
   };
 }
 

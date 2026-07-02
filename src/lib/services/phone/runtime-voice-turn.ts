@@ -73,7 +73,28 @@ export function sseErrorFromPayload(raw: string) {
   }
 }
 
-export async function readRuntimeResponseText(response: Response) {
+// Best-effort human label for a runtime tool event ("chat.tool.start" etc.);
+// payload field names vary per runtime adapter. Tool completions return "" —
+// the next stage (or the finish) marks the previous one done.
+export function toolActivityLabel(raw: string): string {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown> & { type?: string };
+    const type = typeof parsed.type === "string" ? parsed.type : "";
+    if (!type.startsWith("chat.tool") || type === "chat.tool.done") return "";
+    const name = [parsed.name, parsed.tool, parsed.tool_name, parsed.label, parsed.title]
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .find(Boolean);
+    return name ? `Using ${name.slice(0, 60)}` : "Using a tool";
+  } catch {
+    return "";
+  }
+}
+
+export async function readRuntimeResponseText(
+  response: Response,
+  /** Optional live sink for non-text SSE activity (tool starts etc.). */
+  onActivity?: (label: string) => void,
+) {
   if (!response.body) {
     const data = (await response.json().catch(() => null)) as {
       error?: string;
@@ -91,6 +112,13 @@ export async function readRuntimeResponseText(response: Response) {
   const decoder = new TextDecoder();
   let buffer = "";
   let text = "";
+  const consume = (data: string) => {
+    if (onActivity) {
+      const label = toolActivityLabel(data);
+      if (label) onActivity(label);
+    }
+    text += sseTextFromPayload(data);
+  };
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -103,7 +131,7 @@ export async function readRuntimeResponseText(response: Response) {
         .filter((line) => line.startsWith("data: "))
         .map((line) => line.slice(6))
         .join("\n");
-      text += sseTextFromPayload(data);
+      consume(data);
     }
   }
   if (buffer) {
@@ -112,7 +140,7 @@ export async function readRuntimeResponseText(response: Response) {
       .filter((line) => line.startsWith("data: "))
       .map((line) => line.slice(6))
       .join("\n");
-    text += sseTextFromPayload(data);
+    consume(data);
   }
   if (!response.ok && !text.trim())
     throw new Error(`Runtime returned HTTP ${response.status}.`);

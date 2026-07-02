@@ -5,7 +5,9 @@ import { Settings2 } from "lucide-react";
 import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel } from "./primitives";
 import { IssueBoard } from "./IssueBoard";
 import { STATUS_TONE } from "./data";
-import type { Agent, Approval, Colony } from "./types";
+import type { Agent, Approval, Colony, Issue } from "./types";
+import { DeliverableCard } from "./DeliverableCard";
+import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable, type DeliverableCategory } from "./deliverables-model";
 
 export type CockpitHandlers = {
   onApprove: (approvalId: string) => void;
@@ -22,6 +24,8 @@ export type CockpitHandlers = {
   onEditTreasury: () => void;
   /** Open one member agent's company settings. */
   onEditAgent: (agentId: string) => void;
+  /** Open a board card's underlying Work Board task (result + deliverables). */
+  onOpenIssue: (issue: Issue) => void;
   /** Approval/company id currently mutating, to disable its controls. */
   busyId: string | null;
 };
@@ -238,6 +242,166 @@ function ActivityTicker({ colony }: { colony: Colony }) {
   );
 }
 
+/**
+ * Everything the company has produced, newest first — deliverable links plus
+ * the task that made them. This is the "where do I see the actual work" surface;
+ * each row opens the full task detail (result text, receipts, brief).
+ */
+/**
+ * The always-visible "don't miss this" strip above the tabs. Collects the things
+ * that actually want a human: work the crew blocked on you, spend awaiting
+ * approval, and customer-facing previews ready to review before they go out. If
+ * there's nothing to act on, it renders nothing.
+ */
+function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprovals }: {
+  colony: Colony; onOpenIssue: (issue: Issue) => void; onGoToDeliverables: () => void; onGoToApprovals: () => void;
+}) {
+  const blocked = c.issues.filter((i) => i.work?.status === "needs-human" || i.status === "board_review");
+  const previewCount = React.useMemo(
+    () => collectCompanyDeliverables(c).filter((x) => x.classified.reviewable).length,
+    [c],
+  );
+  const total = blocked.length + c.approvals.length + (previewCount > 0 ? 1 : 0);
+  if (total === 0) return null;
+
+  const rowStyle: React.CSSProperties = {
+    display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", cursor: "pointer",
+    borderRadius: 11, padding: "10px 12px", border: "1px solid color-mix(in srgb, var(--honey) 30%, var(--line))",
+    background: "color-mix(in srgb, var(--honey) 7%, var(--bg-2))", font: "inherit", color: "inherit",
+  };
+
+  return (
+    <div style={{ borderRadius: 14, border: "1px solid color-mix(in srgb, var(--honey) 40%, transparent)", background: "color-mix(in srgb, var(--honey) 6%, var(--bg-1))", padding: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span aria-hidden style={{ fontSize: 14 }}>⚑</span>
+        <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey-2)", letterSpacing: 0.02 }}>Needs your review</span>
+        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>the crew handles the rest on its own</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {c.approvals.length > 0 && (
+          <button type="button" onClick={onGoToApprovals} style={rowStyle}>
+            <span aria-hidden style={{ fontSize: 15 }}>💳</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{c.approvals.length} spend approval{c.approvals.length === 1 ? "" : "s"} waiting</span>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>An agent wants to spend money — approve or deny.</span>
+            </span>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>Review →</span>
+          </button>
+        )}
+        {blocked.map((issue) => (
+          <button key={issue.work?.taskId ?? issue.key} type="button" onClick={() => onOpenIssue(issue)} style={rowStyle}>
+            <span aria-hidden style={{ fontSize: 15 }}>⛔</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)", overflowWrap: "anywhere" }}>{issue.title}</span>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>Blocked — the crew needs a decision or an unblock from you.</span>
+            </span>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>Open →</span>
+          </button>
+        ))}
+        {previewCount > 0 && (
+          <button type="button" onClick={onGoToDeliverables} style={rowStyle}>
+            <span aria-hidden style={{ fontSize: 15 }}>🌐</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{previewCount} customer preview{previewCount === 1 ? "" : "s"} ready</span>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>Preview sites built for specific leads — look before they go out.</span>
+            </span>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>View →</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type CardCtx = { classified: ClassifiedDeliverable; machineName?: string; key: string };
+
+/** Human section headers for each visible category, in display order. */
+const DELIVERABLE_SECTIONS: { category: DeliverableCategory; label: string; blurb: string }[] = [
+  { category: "link", label: "Live links & sites", blurb: "Pages you can open right now" },
+  { category: "report", label: "Reports", blurb: "What the crew wrote up" },
+  { category: "data", label: "Data & spreadsheets", blurb: "Lists, trackers, and structured output" },
+  { category: "media", label: "Media", blurb: "Images and video" },
+];
+
+/** Flatten every company deliverable, classify, and dedupe by target (preferring the useful copy). */
+function collectCompanyDeliverables(c: Colony): CardCtx[] {
+  const bySort = [...c.issues].sort((a, b) => (b.work?.completedAt ?? b.work?.updatedAt ?? 0) - (a.work?.completedAt ?? a.work?.updatedAt ?? 0));
+  const seen = new Map<string, CardCtx>();
+  for (const issue of bySort) {
+    const work = issue.work;
+    if (!work) continue;
+    for (const d of work.deliverables) {
+      // The dedupe key (resolved target) is also a stable, unique React key — the
+      // extractor reuses one deliverable.id when two tasks reference the same file.
+      const key = (deliverableHref(d) || d.path || d.label || d.id || "").replace(/\/+$/, "").toLowerCase();
+      const ctx: CardCtx = { classified: classifyDeliverable(d), machineName: work.machineName, key };
+      const existing = seen.get(key);
+      if (!existing) seen.set(key, ctx);
+      else if (existing.classified.category === "internal" && ctx.classified.category !== "internal") seen.set(key, ctx);
+    }
+  }
+  return [...seen.values()];
+}
+
+function DeliverablesPanel({ colony: c, theme = "dark" }: { colony: Colony; theme?: "dark" | "light" }) {
+  const [showInternal, setShowInternal] = React.useState(false);
+  const all = React.useMemo(() => collectCompanyDeliverables(c), [c]);
+  const internal = all.filter((x) => x.classified.category === "internal");
+  const visibleCount = all.length - internal.length;
+
+  return (
+    <Panel>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{visibleCount} item{visibleCount === 1 ? "" : "s"}</span>}>
+        deliverables · what the company produced
+      </SectionLabel>
+      {all.length === 0 ? (
+        <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "16px 0" }}>
+          Nothing yet — links, reports, and data appear here as the crew completes work.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {DELIVERABLE_SECTIONS.map((section) => {
+            const items = all.filter((x) => x.classified.category === section.category);
+            if (items.length === 0) return null;
+            return (
+              <div key={section.category}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg-2)" }}>{section.label}</span>
+                  <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{section.blurb}</span>
+                </div>
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))" }}>
+                  {items.map((x) => (
+                    <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {visibleCount === 0 && (
+            <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }}>
+              No opener-friendly deliverables yet — only internal working files so far.
+            </div>
+          )}
+          {internal.length > 0 && (
+            <div>
+              <button type="button" onClick={() => setShowInternal((v) => !v)} style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", padding: 0 }}>
+                {showInternal ? "▾" : "▸"} {internal.length} working file{internal.length === 1 ? "" : "s"} (internal scratch, commands, and unopenable paths)
+              </button>
+              {showInternal && (
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))", marginTop: 10 }}>
+                  {internal.map((x) => (
+                    <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function CapabilityCapitalPanel({ colony: c }: { colony: Colony }) {
   const cc = c.capabilityCapital;
   const gatePct = cc.evalGates > 0 ? Math.round((cc.passedEvalGates / cc.evalGates) * 100) : 0;
@@ -404,18 +568,25 @@ function KStat({ n, label, tone, last }: { n: number; label: string; tone?: "hon
 
 // ── The cockpit ────────────────────────────────────────────────────────────
 export function Cockpit({
-  colony: c, colonies, showBudget, onBack, onSwitch, onAddAgents, handlers,
+  colony: c, colonies, showBudget, onBack, onSwitch, onAddAgents, handlers, theme = "dark",
 }: {
   colony: Colony; colonies: Colony[]; showBudget: boolean;
   onBack: () => void; onSwitch: (id: string) => void; onAddAgents: () => void;
-  handlers: CockpitHandlers;
+  handlers: CockpitHandlers; theme?: "dark" | "light";
 }) {
   const wb = c.workBlock;
   const wbPct = wb.total > 0 ? Math.round((wb.done / wb.total) * 100) : 0;
   const [tab, setTab] = React.useState("board");
 
+  // Badge the USEFUL (deduped, non-internal) count so it matches the panel — the
+  // raw per-task total double-counts shared files and includes hidden junk.
+  const deliverableCount = React.useMemo(
+    () => collectCompanyDeliverables(c).filter((x) => x.classified.category !== "internal").length,
+    [c],
+  );
   const tabs: { key: string; label: string; badge?: number | null }[] = [
     { key: "board", label: "Board" },
+    { key: "deliverables", label: "Deliverables", badge: deliverableCount || null },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
     { key: "team", label: "Team" },
     { key: "approvals", label: "Approvals", badge: c.approvals.length || null },
@@ -470,6 +641,8 @@ export function Cockpit({
       </div>
 
       <ApexStrip colony={c} />
+
+      <ReviewStrip colony={c} onOpenIssue={handlers.onOpenIssue} onGoToDeliverables={() => setTab("deliverables")} onGoToApprovals={() => setTab("approvals")} />
 
       {/* segmented section control */}
       <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-1)", alignSelf: "flex-start", flexWrap: "wrap" }}>
@@ -566,10 +739,12 @@ export function Cockpit({
             <div style={{ width: wbPct + "%", height: "100%", background: "var(--cyan)", transition: "width 600ms ease" }} />
           </div>
           <div style={{ overflowX: "auto", paddingBottom: 4 }} className="scrollbar-thin">
-            <IssueBoard colony={c} />
+            <IssueBoard colony={c} onOpenIssue={handlers.onOpenIssue} />
           </div>
         </Panel>
       )}
+
+      {active === "deliverables" && <DeliverablesPanel colony={c} theme={theme} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} />}
 

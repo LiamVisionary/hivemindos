@@ -185,7 +185,16 @@ if (!warmRoutes.length && warmRoutesRaw !== "0") {
     "/api/queen-bee/voice",
   );
 }
-const WARM_INTERVAL_MS = 20_000;
+// Re-ping cadence. Entry disposal is a WEBPACK dev behavior (onDemandEntries
+// evicts idle routes, so warmth decays); Turbopack keeps compiled modules for
+// the life of the process, so one warm pass after each (re)spawn suffices and
+// the perpetual 20s re-ping — a full /stake SSR plus three middleware runs,
+// forever — is pure background load on the single dev-server process. 0 = warm
+// once per spawn, no re-ping.
+const usingWebpack = bundlerArgs.includes("--webpack") || nextArgs.includes("--webpack");
+const WARM_INTERVAL_MS = Number(
+  process.env.HIVEMINDOS_DEV_WARM_INTERVAL_MS ?? (usingWebpack ? 20_000 : 0),
+);
 const WARM_STARTUP_RETRY_MS = 3_000;
 const WARM_STARTUP_RETRY_LIMIT = 100;
 let warmedSinceSpawn = false;
@@ -222,7 +231,11 @@ function kickWarmKeeper() {
     warmStartupAttempts += 1;
     if (await warmRoutesOnce()) {
       warmedSinceSpawn = true;
-      console.log(`Dev warm-keeper compiled ${warmRoutes.length} route(s); re-pinging every ${WARM_INTERVAL_MS / 1000}s.`);
+      console.log(
+        WARM_INTERVAL_MS > 0
+          ? `Dev warm-keeper compiled ${warmRoutes.length} route(s); re-pinging every ${WARM_INTERVAL_MS / 1000}s.`
+          : `Dev warm-keeper compiled ${warmRoutes.length} route(s); no re-ping needed under turbopack.`,
+      );
       return;
     }
     if (warmStartupAttempts < WARM_STARTUP_RETRY_LIMIT) {
@@ -232,7 +245,7 @@ function kickWarmKeeper() {
   if (warmRoutes.length) setTimeout(startupTick, WARM_STARTUP_RETRY_MS).unref();
 }
 
-if (warmRoutes.length) {
+if (warmRoutes.length && WARM_INTERVAL_MS > 0) {
   setInterval(() => {
     if (warmedSinceSpawn) void warmRoutesOnce();
   }, WARM_INTERVAL_MS).unref();

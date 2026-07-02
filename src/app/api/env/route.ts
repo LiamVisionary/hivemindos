@@ -7,9 +7,10 @@ export const runtime = "nodejs";
 // readEnvPayload spawns ~5 `hive-env-add` subprocesses per call. Coalesce
 // concurrent GETs and serve rapid repeat reads from memory for a short window.
 // Successful reads only — cachedCall evicts rejections. Mutations below call
-// invalidateCachedCall so a write is reflected on the next read.
+// invalidateCachedCall so a write is reflected on the next read; the TTL only
+// bounds how long an out-of-band edit to ~/.hivemindos/.env goes unseen.
 const ENV_PAYLOAD_CACHE_KEY = "env-payload";
-const ENV_PAYLOAD_CACHE_MS = 8_000;
+const ENV_PAYLOAD_CACHE_MS = 30_000;
 
 type HiveEnvExport = {
   version?: number;

@@ -22,7 +22,7 @@ import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CreateForm, Gov
 type CompanyEntry = { company: Company; rollup: CompanySpendRollup };
 
 const POLL_MS = 15_000;
-const USE_ZHC_DEMO_DATA = true;
+const USE_ZHC_DEMO_DATA = false;
 
 async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boolean; company?: Company; error?: string }> {
   const res = await fetch("/api/companies", {
@@ -231,12 +231,14 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
             body: typeof t.body === "string" ? t.body : undefined,
             result: typeof t.result === "string" ? t.result : undefined,
             status: typeof t.status === "string" ? t.status : "ideas",
+            source: typeof t.source === "string" ? t.source : undefined,
             assignee: typeof t.assignee === "string" ? t.assignee : null,
             priority: typeof t.priority === "string" ? t.priority : undefined,
             skills: Array.isArray(t.skills) ? (t.skills as string[]) : undefined,
             deliverables: Array.isArray(t.deliverables) ? (t.deliverables as KanbanTaskLite["deliverables"]) : undefined,
             loop: t.loop && typeof t.loop === "object" ? (t.loop as KanbanTaskLite["loop"]) : undefined,
             loopReceipts: Array.isArray(t.loopReceipts) ? (t.loopReceipts as KanbanTaskLite["loopReceipts"]) : undefined,
+            targetMachine: t.targetMachine && typeof t.targetMachine === "object" ? (t.targetMachine as KanbanTaskLite["targetMachine"]) : undefined,
             createdAt: typeof t.createdAt === "number" ? t.createdAt : undefined,
             updatedAt: typeof t.updatedAt === "number" ? t.updatedAt : undefined,
             completedAt: typeof t.completedAt === "number" ? t.completedAt : undefined,
@@ -291,14 +293,15 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       const company = entry?.company;
       if (!company || typeof company.id !== "string") continue;
       try {
-        // Scope the board's tasks to this company by member id OR display name.
-        const idents = new Set<string>();
-        for (const id of company.agentIds ?? []) {
-          idents.add(id);
-          const profile = agentsById.get(id);
-          if (profile?.name) idents.add(profile.name);
-        }
-        const companyTasks = tasks.filter((t) => t.assignee && idents.has(t.assignee));
+        // Scope the board strictly to work THIS company dispatched: every company
+        // dispatch stamps `company:{id}:{runId}` as the task source, so that prefix
+        // is the authoritative and sufficient link. We deliberately do NOT fall
+        // back to assignee identity — a member agent (e.g. the Queen) also runs
+        // unrelated work from other sources (loop evals, ad-hoc chats), and matching
+        // by assignee dragged all of that history onto the company board/deliverables
+        // (seen live 2026-07-02: 11 stray tasks). Source-only keeps it clean.
+        const sourcePrefix = `company:${company.id}:`;
+        const companyTasks = tasks.filter((t) => t.source?.startsWith(sourcePrefix));
         out.push(buildColony({
           company,
           rollup: entry.rollup ?? { companyId: company.id, memberCount: company.agentIds?.length ?? 0, dailySpentUsd: 0, monthlySpentUsd: 0, totalSpentUsd: 0, dailyRemainingUsd: null, monthlyRemainingUsd: null, totalRemainingUsd: null },

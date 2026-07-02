@@ -194,4 +194,35 @@ function snapshotTask(task, marker) {
   };
 }
 
-main().catch((e) => { console.error("E2E FAILED:", e.message || e); process.exit(1); });
+// Template tasks land on the REAL shared Work Board; sweep every marker-titled
+// task (this run and any stray from a crashed prior run) so E2E runs don't leave
+// LOOPTPL_* cards on the user-visible board. The per-task snapshots survive in the
+// report JSON written above. E2E_KEEP_TASKS=1 skips this for live debugging.
+async function cleanupLoopTemplateTasks() {
+  if (process.env.E2E_KEEP_TASKS === "1") return { skipped: "E2E_KEEP_TASKS=1" };
+  const outcome = { deletedTasks: 0, errors: [] };
+  try {
+    const board = await api("/api/kanban?include_archived=true", { timeoutMs: 30_000 });
+    const junk = (board.board?.tasks || []).filter((task) =>
+      /LOOPTPL_/.test(String(task.title || "")) || /^loop-tpl-e2e:/.test(String(task.source || "")),
+    );
+    for (const task of junk) {
+      try {
+        await api("/api/kanban", { method: "DELETE", body: JSON.stringify({ taskId: task.id }) });
+        outcome.deletedTasks += 1;
+      } catch (e) {
+        outcome.errors.push(`delete task ${task.id}: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    outcome.errors.push(`list default board: ${e.message}`);
+  }
+  return outcome;
+}
+
+main()
+  .catch((e) => { console.error("E2E FAILED:", e.message || e); process.exitCode = 1; })
+  .finally(async () => {
+    const cleanup = await cleanupLoopTemplateTasks().catch((e) => ({ errors: [String(e?.message || e)] }));
+    console.error(`[cleanup] ${JSON.stringify(cleanup)}`);
+  });

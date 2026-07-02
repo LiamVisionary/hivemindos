@@ -104,6 +104,39 @@ export interface GovEvent {
   since: string;
 }
 
+/** A durable output attached to a piece of company work (file, doc, or link). */
+export interface IssueDeliverable {
+  id: string;
+  label: string;
+  kind: string;
+  path?: string;
+  url?: string;
+}
+
+/** A verification receipt recorded against the work's eval gates. */
+export interface IssueReceipt {
+  title: string;
+  status: "passed" | "failed" | "skipped";
+}
+
+/**
+ * The real Work Board record behind a board card — what the agent actually
+ * produced. Present only for live data (demo issues have no backing task);
+ * cards with `work` open the task-detail modal.
+ */
+export interface IssueWork {
+  taskId: string;
+  status: string;
+  body?: string;
+  result?: string;
+  deliverables: IssueDeliverable[];
+  receipts: IssueReceipt[];
+  /** Name of the machine that produced the work (for deliverable provenance). */
+  machineName?: string;
+  updatedAt?: number;
+  completedAt?: number;
+}
+
 export interface Issue {
   key: string;
   title: string;
@@ -111,6 +144,8 @@ export interface Issue {
   agent: string | null;
   pri: Priority;
   pts: number;
+  /** Live-data link to the underlying Work Board task and its outputs. */
+  work?: IssueWork;
 }
 
 export interface Colony {

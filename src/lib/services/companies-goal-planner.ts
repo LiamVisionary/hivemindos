@@ -44,13 +44,14 @@ function systemPrompt(maxTasks: number): string {
     "You are the Queen Bee planning the next batch of work for an autonomous, zero-human company.",
     "Turn the company's apex goal into concrete, independently-actionable tasks for its crew.",
     'Reply with STRICT JSON ONLY (no prose, no markdown fences), matching: {"tasks": [{"title": string, "detail": string, "role": string}]}.',
-    `Rules: return ${Math.min(3, maxTasks)}-${maxTasks} tasks; each title STARTS with an action verb (Implement, Research, Design, Test, Deploy, Write, Launch, Audit, Negotiate, Ship...);`,
+    `Rules: return ${Math.min(3, maxTasks)}-${maxTasks} tasks; each title is a short verb-first action phrase of 4-9 words naming its concrete object (e.g. "Audit reply rates for the first outreach batch"), never a single word;`,
     "detail is 1-3 sentences of concrete scope tied directly to THIS goal and its metric (no generic filler);",
     "role is one of the crew roles provided; prefer tasks that can run in parallel; make tasks specific to this goal, not boilerplate.",
+    "When company activity history is provided: plan the NEXT increment — build on completed work, do NOT repeat it, unblock or route around blocked items, and follow up on open threads, leads, or customers mentioned there.",
   ].join("\n");
 }
 
-function userPrompt(company: Company): string {
+export function userPrompt(company: Company, history?: string): string {
   const apex = company.apexGoal;
   const goal = apex?.title?.trim() || company.name;
   const lines = [
@@ -61,6 +62,10 @@ function userPrompt(company: Company): string {
   const mission = (company.blurb || company.charter || "").trim();
   if (mission) lines.push(`Mission: ${mission}`);
   lines.push(`Crew roles available: ${crewRoster(company)}`);
+  const trimmedHistory = history?.trim();
+  if (trimmedHistory) {
+    lines.push("", "Recent company activity (newest first):", trimmedHistory, "");
+  }
   lines.push("Produce the next batch of tasks that moves this goal toward its target.");
   return lines.join("\n");
 }
@@ -139,12 +144,12 @@ async function runOpenAiDecompose(system: string, user: string): Promise<string>
 
 export async function llmDecomposeApexGoal(
   company: Company,
-  opts: { origin?: string; vaultPath?: string; maxTasks?: number } = {},
+  opts: { origin?: string; vaultPath?: string; maxTasks?: number; history?: string } = {},
 ): Promise<QueenBeePrdTaskDraft[] | null> {
   if (!company.apexGoal?.title?.trim()) return null;
   const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
   const system = systemPrompt(maxTasks);
-  const user = userPrompt(company);
+  const user = userPrompt(company, opts.history);
 
   // 1. Brain: the company's own chat-capable fleet agent (agent-scoped model),
   //    via the same /api/chat/agent-runtime path queen-bee's pilot/voice turns use.

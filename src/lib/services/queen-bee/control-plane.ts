@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
-import { createTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
+import { createTask, patchTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
 import { chooseQueenBeeDelegate, rankQueenBeeDelegates, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
@@ -208,7 +208,7 @@ export function isRedispatchableReadyTask(
   const assignee = task.assignee?.trim();
   if (!collectorUrl || !assignee || assignee === "queen-bee") return false;
   const source = task.source ?? "";
-  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop");
+  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:");
   if (!autonomous) return false;
   // Idle a beat so we never race the original setTimeout pickup of a just-submitted task.
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
@@ -243,6 +243,81 @@ export async function redispatchReadyQueenBeeTasks(options: QueenBeeOptions = {}
   return scheduled;
 }
 
+/**
+ * Pure predicate: a task Queen Bee queued "pending" (assignee "queen-bee", never
+ * delegated — no routable agent was online at submit time) that routing should
+ * retry against a fresh fleet snapshot. The pickup re-dispatcher intentionally
+ * skips these (no delegate to re-schedule), so without a routing retry they wait
+ * forever even after matching agents come online.
+ */
+export function isRoutablePendingQueenBeeTask(
+  task: Pick<KanbanTask, "status" | "assignee" | "source" | "loop" | "updatedAt">,
+  now: number,
+): boolean {
+  if (task.status !== "ready") return false;
+  if ((task.assignee?.trim() || "queen-bee") !== "queen-bee") return false;
+  const source = task.source ?? "";
+  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:");
+  if (!autonomous) return false;
+  // Idle a beat so we never race the submit path that just created the task.
+  return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
+}
+
+/**
+ * Re-run routing for pending queen-bee tasks against the CURRENT fleet, delegate
+ * the ones that now have a routable agent, and schedule their autonomous pickup.
+ * Returns the number of tasks delegated. One task's failure never stops the sweep.
+ */
+export async function routePendingQueenBeeTasks(
+  fleetSnapshot: QueenBeeFleetMachine[],
+  options: QueenBeeOptions & { now?: number } = {},
+): Promise<number> {
+  if (!fleetSnapshot.length) return 0;
+  const board = await readBoard(null, { vaultPath: options.vaultPath, kanbanFolder: options.kanbanFolder }).catch(() => null);
+  if (!board) return 0;
+  const now = options.now ?? Date.now();
+  const pending = (board.tasks ?? []).filter((task) => isRoutablePendingQueenBeeTask(task, now));
+  if (pending.length === 0) return 0;
+
+  const projectRegistry = await readQueenBeeProjectRegistry(options.vaultPath);
+  const sessionOutcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
+  const { assignments, boardOutcomes } = await readQueenBeeBoardSignals(options);
+  const routerOptions = { outcomes: mergeQueenBeeOutcomes(sessionOutcomes, boardOutcomes), assignments };
+
+  let routed = 0;
+  for (const task of pending) {
+    try {
+      const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectRegistry };
+      const chain = rankQueenBeeDelegates(intent, fleetSnapshot, routerOptions);
+      const delegation = chain[0];
+      if (!delegation || delegation.status !== "delegated") continue;
+      const agentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
+      const collectorUrl = queenBeeDelegationCollectorUrl(delegation);
+      if (!agentName || !collectorUrl) continue;
+      const machineName = delegation.machine?.device?.name || delegation.machine?.key;
+      const { task: updated } = await patchTask(null, task.id, {
+        assignee: agentName,
+        targetMachine: {
+          key: delegation.machine?.key || delegation.machine?.device?.machineId || machineName || "unknown",
+          name: machineName || "Unknown machine",
+          collectorUrl,
+        },
+      }, { vaultPath: options.vaultPath, kanbanFolder: options.kanbanFolder });
+      const scheduled = scheduleQueenBeeAutonomousPickup({
+        task: updated,
+        delegation,
+        delegationChain: chain,
+        vaultPath: options.vaultPath,
+        kanbanFolder: options.kanbanFolder,
+      });
+      if (scheduled) routed += 1;
+    } catch {
+      // Leave this task pending; the next sweep retries it.
+    }
+  }
+  return routed;
+}
+
 type QueenBeeBoardSignals = {
   assignments: Record<string, number>;
   boardOutcomes: Record<string, { completed: number; failed: number }>;
@@ -253,7 +328,7 @@ const BOARD_OUTCOME_WINDOW_MS = 14 * 24 * 60 * 60 * 1_000;
 // Reads the shared Work Board ONCE to derive two routing signals: in-flight load per agent
 // (to spread bursts) and per-agent completion/failure history (so routing learns from REMOTE
 // agents too — local chat-session stats only cover this machine's agents).
-async function readQueenBeeBoardSignals(input: QueenBeeMessageInput): Promise<QueenBeeBoardSignals> {
+async function readQueenBeeBoardSignals(input: QueenBeeOptions): Promise<QueenBeeBoardSignals> {
   try {
     const board = await readBoard(null, { vaultPath: input.vaultPath, kanbanFolder: input.kanbanFolder });
     const assignments: Record<string, number> = {};

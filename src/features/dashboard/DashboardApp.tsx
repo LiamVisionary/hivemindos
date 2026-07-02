@@ -73,7 +73,7 @@ import { AGENT_PAYMENT_PROVIDER_COPY } from "@/lib/config/agent-payments";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { providerIconPath, providerIconRenderMode, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { BEE_WORKER_PRESET_LIST, beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
-import { logClientTelemetry } from "@/lib/utils/client-telemetry";
+import { clientTelemetryEnabled, logClientTelemetry } from "@/lib/utils/client-telemetry";
 import { clearReportedIssue, reportIssue } from "@/lib/utils/issue-reporter";
 import { loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue, type DashboardStateSnapshot, type SnapshotRetryInfo } from "@/lib/services/dashboard-state-client";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
@@ -3430,23 +3430,27 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
             const merged = replaceRuntimeLeafHistory
               ? dedupeChatTranscript(incomingSessionMessages).slice(-120)
               : mergeRuntimeSessionMessages(existing, incomingSessionMessages);
-            logClientTelemetry("chat.runtime.poll.merge_decision", {
-              agentId: selectedAgent.id,
-              leafKey: selectedChatLeafKey,
-              storageKey,
-              sessionKey: sessionKey || null,
-              replaceRuntimeLeafHistory,
-              existingMessageCount: existing.length,
-              incomingMessageCount: incomingSessionMessages.length,
-              mergedMessageCount: merged.length,
-              changed: !(merged === existing || JSON.stringify(merged) === JSON.stringify(existing)),
-              existingMessages: chatTelemetryMessages(existing),
-              incomingMessages: chatTelemetryMessages(incomingSessionMessages),
-              mergedMessages: chatTelemetryMessages(merged),
-            }, { threadId: storageKey, runId: sessionKey || sessionId || undefined });
-            return merged === existing || JSON.stringify(merged) === JSON.stringify(existing)
-              ? current
-              : { ...current, [storageKey]: merged };
+            // Full-thread stringify is the dominant cost of this 5s poll on
+            // long chats — compute the verdict once and only build the (heavy)
+            // telemetry payload when telemetry is actually on.
+            const unchanged = merged === existing || JSON.stringify(merged) === JSON.stringify(existing);
+            if (clientTelemetryEnabled()) {
+              logClientTelemetry("chat.runtime.poll.merge_decision", {
+                agentId: selectedAgent.id,
+                leafKey: selectedChatLeafKey,
+                storageKey,
+                sessionKey: sessionKey || null,
+                replaceRuntimeLeafHistory,
+                existingMessageCount: existing.length,
+                incomingMessageCount: incomingSessionMessages.length,
+                mergedMessageCount: merged.length,
+                changed: !unchanged,
+                existingMessages: chatTelemetryMessages(existing),
+                incomingMessages: chatTelemetryMessages(incomingSessionMessages),
+                mergedMessages: chatTelemetryMessages(merged),
+              }, { threadId: storageKey, runId: sessionKey || sessionId || undefined });
+            }
+            return unchanged ? current : { ...current, [storageKey]: merged };
           });
           if (replaceRuntimeLeafHistory) {
             setSelectedChatPreview((current) => (
@@ -3496,8 +3500,17 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       }
     };
     void pollSession();
-    const timer = window.setInterval(() => void pollSession(), chatStreamingByKeyRef.current[storageKey] ? 5_000 : 12_000);
-    return () => window.clearInterval(timer);
+    // Skip ticks while the window is hidden (each one is a fetch plus a
+    // full-thread merge/compare) and catch up immediately on refocus.
+    const pollWhenVisible = () => {
+      if (document.visibilityState === "visible") void pollSession();
+    };
+    const timer = window.setInterval(pollWhenVisible, chatStreamingByKeyRef.current[storageKey] ? 5_000 : 12_000);
+    document.addEventListener("visibilitychange", pollWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", pollWhenVisible);
+    };
   }, [activeView, hydrated, persistActiveChatRuns, selectedAgent, selectedChatLeafKey, selectedChatRuntimeSessionId]);
 
   // Global stale-run sweep. The per-thread poller above only re-evaluates the
@@ -3547,9 +3560,18 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         return changed ? next : current;
       });
     };
-    sweep();
-    const id = window.setInterval(sweep, 30_000);
-    return () => window.clearInterval(id);
+    // The sweep only clears on-screen indicators, so it has nothing to do
+    // while the window is hidden; refocus runs it immediately.
+    const sweepWhenVisible = () => {
+      if (document.visibilityState === "visible") sweep();
+    };
+    sweepWhenVisible();
+    const id = window.setInterval(sweepWhenVisible, 30_000);
+    document.addEventListener("visibilitychange", sweepWhenVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", sweepWhenVisible);
+    };
   }, [hydrated, activeView, selectedAgent, selectedChatLeafKey, clearActiveChatRun]);
 
   // eslint-disable-next-line react-hooks/refs

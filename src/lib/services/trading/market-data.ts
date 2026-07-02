@@ -59,6 +59,17 @@ function cached<T>(key: string): T | null {
   return null;
 }
 function setCache<T>(key: string, value: T, ttlMs: number) {
+  // Expired entries are otherwise only dropped on a same-key re-read, so
+  // one-off symbol/range keys would accumulate for the process lifetime.
+  if (cache.size >= 256) {
+    const now = Date.now();
+    for (const [k, entry] of cache) if (entry.expires <= now) cache.delete(k);
+    while (cache.size >= 256) {
+      const oldest = cache.keys().next().value;
+      if (oldest === undefined) break;
+      cache.delete(oldest);
+    }
+  }
   cache.set(key, { value, expires: Date.now() + ttlMs });
 }
 

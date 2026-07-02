@@ -347,9 +347,42 @@ async function main() {
   console.log(JSON.stringify(summary, null, 2));
 }
 
+// Queen Bee tasks land on the REAL shared Work Board; sweep every marker-titled
+// task (this run and any stray from a crashed prior run) so E2E runs don't leave
+// machine-named cards on the user-visible board. E2E_KEEP_TASKS=1 skips this.
+async function cleanupQueenBeeE2eTasks() {
+  if (process.env.E2E_KEEP_TASKS === "1") return { skipped: "E2E_KEEP_TASKS=1" };
+  const outcome = { deletedTasks: 0, errors: [] };
+  try {
+    const board = await dashboard("/api/kanban?include_archived=true");
+    const junk = (board.board?.tasks || []).filter((task) =>
+      String(task.title || "").includes("QUEEN_BEE_REAL_E2E_"),
+    );
+    for (const task of junk) {
+      try {
+        await dashboard("/api/kanban", {
+          method: "DELETE",
+          body: JSON.stringify({ taskId: task.id }),
+        });
+        outcome.deletedTasks += 1;
+      } catch (error) {
+        outcome.errors.push(`delete task ${task.id}: ${error.message}`);
+      }
+    }
+  } catch (error) {
+    outcome.errors.push(`list default board: ${error.message}`);
+  }
+  return outcome;
+}
+
 main().catch((error) => {
   summary.error = error instanceof Error ? error.message : String(error);
   summary.finishedAt = new Date().toISOString();
   console.error(JSON.stringify(summary, null, 2));
-  process.exit(1);
+  process.exitCode = 1;
+}).finally(async () => {
+  const cleanup = await cleanupQueenBeeE2eTasks().catch((error) => ({
+    errors: [String(error?.message || error)],
+  }));
+  console.error(`[cleanup] ${JSON.stringify(cleanup)}`);
 });

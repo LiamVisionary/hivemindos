@@ -4,6 +4,7 @@ import type { Company, CompanyProcess } from "@/lib/types/company";
 import { decomposePrdToTaskDrafts, type QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
+import { appendCompanyMemory, companyMemoryDigest } from "@/lib/services/company-memory";
 import type { KanbanLoopSpec } from "@/lib/types/kanban";
 import { buildOperatingUnitLearningLoop } from "@/lib/services/loops";
 import type { FlowSpec } from "@/lib/types/agent-flow";
@@ -109,6 +110,35 @@ export function buildApexBrief(company: Company): { prd: string; title: string }
   return { prd: lines.join("\n"), title: goal };
 }
 
+/**
+ * Standing context appended to every dispatched task body so workers never run
+ * cold: who the company is, what the apex goal/metric currently reads, and a
+ * compact digest of what the company has already done. Business-agnostic — the
+ * digest is whatever the company's own memory ledger accumulated.
+ */
+export function companyWorkerContext(company: Company, memoryDigest: string): string {
+  const apex = company.apexGoal;
+  const metricLine = apex?.metric || apex?.target
+    ? `Metric: ${apex?.metric || "—"}${apex?.target ? ` → target ${apex.target}` : ""}${apex?.current ? ` (current ${apex.current})` : ""}`
+    : "";
+  const mission = (company.blurb || company.charter || "").trim();
+  const lines = [
+    "",
+    "---",
+    `Company: ${company.name}${company.sector ? ` (${company.sector})` : ""}`,
+    apex?.title?.trim() ? `Apex goal: ${apex.title.trim()}` : "",
+    metricLine,
+    mission ? `Charter: ${mission}` : "",
+  ];
+  const digest = memoryDigest.trim();
+  if (digest) lines.push("", "What the company has done recently (newest first):", digest);
+  lines.push(
+    "",
+    "Do not repeat work listed as DONE above. Record a concrete, durable result on the Work Board — it becomes company memory for the next cycle.",
+  );
+  return lines.filter((line) => line !== "").join("\n");
+}
+
 export type CompanyDispatchTask = {
   taskId: string;
   title: string;
@@ -182,6 +212,12 @@ export async function dispatchCompanyFlow(
     state: { topic: goal, goal },
   });
 
+  await appendCompanyMemory(company.id, {
+    kind: "dispatch",
+    title: `Started ${company.process ?? "sequential"} flow toward "${goal}"`,
+    detail: `Flow run ${run.runId} with ${spec.nodes.filter((n) => n.kind === "task").length} step(s).`,
+  }).catch(() => undefined);
+
   return {
     goal,
     taskCount: spec.nodes.filter((n) => n.kind === "task").length,
@@ -233,12 +269,17 @@ export async function dispatchCompanyGoal(
   const dispatchableMembers = countDispatchableMembers(scoped);
   const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
 
+  // Company memory makes each cycle incremental: the planner sees a longer digest
+  // (plan the NEXT batch), each worker body a shorter one (don't run cold).
+  const plannerMemory = await companyMemoryDigest(company.id, { maxChars: 1_600 }).catch(() => "");
+  const workerMemory = plannerMemory.length > 900 ? `${plannerMemory.slice(0, 899)}…` : plannerMemory;
+
   // Prefer an LLM-authored, goal-specific plan via queen-bee's brain order
   // (the company's own agent first, then OpenAI). Fall back to the deterministic
   // per-role heuristic brief when no brain is reachable, so dispatch never blocks.
   let drafts: QueenBeePrdTaskDraft[];
   let planner: "llm" | "heuristic";
-  const llmDrafts = await llmDecomposeApexGoal(company, { origin: opts.origin, vaultPath: opts.vaultPath, maxTasks }).catch(() => null);
+  const llmDrafts = await llmDecomposeApexGoal(company, { origin: opts.origin, vaultPath: opts.vaultPath, maxTasks, history: plannerMemory }).catch(() => null);
   if (llmDrafts && llmDrafts.length > 0) {
     drafts = llmDrafts;
     planner = "llm";
@@ -253,6 +294,7 @@ export async function dispatchCompanyGoal(
   // instead of de-duping against a prior identical dispatch.
   const runId = `${Date.now().toString(36)}`;
 
+  const workerContext = companyWorkerContext(company, workerMemory);
   const tasks: CompanyDispatchTask[] = [];
   let firstError: Error | null = null;
   // Sequential: each submit reads+writes the shared board file; avoid clobbering.
@@ -260,7 +302,7 @@ export async function dispatchCompanyGoal(
   for (const draft of drafts) {
     try {
       const result = await submitQueenBeeMessage({
-        message: draft.body,
+        message: `${draft.body}\n${workerContext}`,
         taskTitle: draft.title,
         mode: "act",
         priority: "high",
@@ -282,6 +324,12 @@ export async function dispatchCompanyGoal(
     }
   }
   if (tasks.length === 0) throw firstError ?? new Error("No tasks could be dispatched.");
+
+  await appendCompanyMemory(company.id, {
+    kind: "dispatch",
+    title: `Dispatched ${tasks.length} task(s) toward "${goal}" (${planner} plan)`,
+    detail: tasks.map((t) => t.title).join(" · "),
+  }).catch(() => undefined);
 
   return {
     goal,

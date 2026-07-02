@@ -10,6 +10,7 @@ import {
   setCompanyAgents,
   setCompanyAutonomy,
   setCompanyFrozen,
+  updateCompanyMetric,
   upsertCompany,
 } from "@/lib/services/companies-store";
 import { dispatchCompanyGoal } from "@/lib/services/companies-orchestration";
@@ -61,6 +62,13 @@ type CompanyBody = {
   // dispatch-goal
   fleetSnapshot?: QueenBeeFleetMachine[];
   maxTasks?: number;
+  // update-metric (generic trackables rail for any business)
+  current?: string | number;
+  progress?: number;
+  revenueValue?: string;
+  revenueDelta?: string;
+  source?: string;
+  note?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -102,6 +110,19 @@ export async function POST(request: NextRequest) {
       const dispatch = await dispatchCompanyGoal(company, Array.isArray(body.fleetSnapshot) ? body.fleetSnapshot : [], { maxTasks: body.maxTasks, origin: request.nextUrl.origin });
       await markCompanyDispatched(company.id, Date.now());
       return NextResponse.json({ ok: true, dispatch });
+    }
+    if (action === "update-metric") {
+      if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      const company = await updateCompanyMetric(body.id.trim(), {
+        current: body.current,
+        progress: body.progress,
+        revenueValue: body.revenueValue,
+        revenueDelta: body.revenueDelta,
+        source: body.source,
+        note: body.note,
+      });
+      if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, company });
     }
     if (action === "stop-autonomy") {
       if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });

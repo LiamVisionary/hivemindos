@@ -14,7 +14,6 @@ function groupHeaderStyle(): React.CSSProperties {
     width: "100%",
     border: 0,
     borderRadius: 8,
-    background: "transparent",
     color: "var(--fg-3)",
     cursor: "pointer",
     padding: "7px 8px",
@@ -22,14 +21,21 @@ function groupHeaderStyle(): React.CSSProperties {
   };
 }
 
+function Collapse({ open, children }: { open: boolean; children: React.ReactNode }) {
+  return (
+    <div className="frnav-collapse" data-open={open ? "true" : "false"} inert={open ? undefined : true}>
+      <div className="frnav-collapse-inner">{children}</div>
+    </div>
+  );
+}
+
 function GroupHeader({ icon, label, count, open, onToggle }: { icon: string | readonly string[]; label: string; count?: number; open: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
       onClick={onToggle}
+      className="frnav-hover-row"
       style={groupHeaderStyle()}
-      onMouseEnter={(event) => (event.currentTarget.style.background = "var(--panel-2)")}
-      onMouseLeave={(event) => (event.currentTarget.style.background = "transparent")}
       aria-expanded={open}
     >
       <Glyph d={ICON.chevronR} s={12} sw={2} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 160ms ease", color: "var(--fg-4)" }} />
@@ -89,15 +95,11 @@ function ChatRow({ chat, kind, running, onOpen, formatRelativeTime }: { chat: Ex
         onClick={() => onOpen(chat)}
         title={[chat.title, chat.subtitle].filter(Boolean).join("\n")}
         aria-current={active ? "true" : undefined}
-        style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, minWidth: 0, maxWidth: "100%", width: "100%", overflow: "hidden", border: 0, borderRadius: 9, background: active ? "var(--honey-soft)" : "transparent", cursor: "pointer", padding: "7px 32px 7px 13px", textAlign: "left", transition: "background 140ms ease" }}
-        onMouseEnter={(event) => {
-          if (!active) event.currentTarget.style.background = "var(--panel-2)";
-        }}
-        onMouseLeave={(event) => {
-          if (!active) event.currentTarget.style.background = "transparent";
-        }}
+        className="frnav-chat-row"
+        data-active={active ? "true" : undefined}
+        style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, minWidth: 0, maxWidth: "100%", width: "100%", overflow: "hidden", border: 0, borderRadius: 9, cursor: "pointer", padding: "7px 32px 7px 13px", textAlign: "left" }}
       >
-        {active ? <span style={{ position: "absolute", left: -1, top: 8, bottom: 8, width: 3, borderRadius: "0 3px 3px 0", background: "var(--honey)" }} /> : null}
+        {active ? <span className="frnav-active-bar" style={{ position: "absolute", left: -1, top: 8, bottom: 8, width: 3, borderRadius: "0 3px 3px 0", background: "var(--honey)" }} /> : null}
         {kind === "general" ? (
           <span style={{ color: active ? "var(--honey)" : "var(--fg-4)", flexShrink: 0 }}><Glyph d={ICON.chat} s={14} /></span>
         ) : (
@@ -117,9 +119,8 @@ function MachineRow({ machine, open, onToggle, onStartChat }: { machine: Exchang
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, maxWidth: "100%", width: "100%", overflow: "hidden", border: 0, borderRadius: 8, background: "transparent", cursor: "pointer", padding: "7px 34px 7px 10px", textAlign: "left" }}
-        onMouseEnter={(event) => (event.currentTarget.style.background = "var(--panel-2)")}
-        onMouseLeave={(event) => (event.currentTarget.style.background = "transparent")}
+        className="frnav-hover-row"
+        style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, maxWidth: "100%", width: "100%", overflow: "hidden", border: 0, borderRadius: 8, cursor: "pointer", padding: "7px 34px 7px 10px", textAlign: "left" }}
       >
         <Glyph d={ICON.chevronR} s={12} sw={2} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 160ms ease", color: "var(--fg-4)" }} />
         <span style={{ color: "var(--fg-3)", flexShrink: 0 }}><Glyph d={ICON.server} s={14} /></span>
@@ -166,9 +167,8 @@ function FolderRows({
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "100%", width: "100%", overflow: "hidden", border: 0, borderRadius: 7, background: "transparent", cursor: "pointer", padding: "6px 32px 6px 10px", textAlign: "left" }}
-          onMouseEnter={(event) => (event.currentTarget.style.background = "var(--panel-2)")}
-          onMouseLeave={(event) => (event.currentTarget.style.background = "transparent")}
+          className="frnav-hover-row"
+          style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: "100%", width: "100%", overflow: "hidden", border: 0, borderRadius: 7, cursor: "pointer", padding: "6px 32px 6px 10px", textAlign: "left" }}
         >
           <Glyph d={ICON.chevronR} s={11} sw={2} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 160ms ease", color: "var(--fg-4)" }} />
           <span style={{ color: "var(--honey)", flexShrink: 0, opacity: 0.9 }}><Glyph d={open ? ICON.folderOpen : ICON.folder} s={13} /></span>
@@ -176,7 +176,7 @@ function FolderRows({
         </button>
         {onStartChat ? <ChatButton title={`New chat in ${folder.label || "folder"}`} onClick={onStartChat} /> : null}
       </div>
-      {open ? (
+      <Collapse open={open}>
         <div style={{ display: "flex", minWidth: 0, maxWidth: "100%", flexDirection: "column", gap: 1, marginBottom: 2, marginLeft: 18, overflow: "hidden", paddingLeft: 9, borderLeft: "1px solid var(--line)" }}>
           {visibleChats.length ? visibleChats.map((chat) => (
             <ChatRow key={chat.key || chat.title} chat={chat} kind="agent" running={running(chat)} onOpen={onOpenChat} formatRelativeTime={formatRelativeTime} />
@@ -187,7 +187,7 @@ function FolderRows({
             </button>
           ) : null}
         </div>
-      ) : null}
+      </Collapse>
     </div>
   );
 }
@@ -217,52 +217,56 @@ export function ConversationNav({
   return (
     <div className="fr-chat-sidebar-nav">
       <GroupHeader icon={ICON.chat} label="General" count={generalChats.length} open={generalOpen} onToggle={() => setGeneralOpen((open) => !open)} />
-      {generalOpen ? (
+      <Collapse open={generalOpen}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {generalChats.length ? generalChats.map((chat) => (
             <ChatRow key={chat.key || chat.title} chat={chat} kind="general" onOpen={onOpenChat} formatRelativeTime={formatRelativeTime} />
           )) : <p style={{ margin: "8px 0 8px 12px", color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 10.5 }}>No general chats yet</p>}
         </div>
-      ) : null}
+      </Collapse>
 
       <div style={{ height: 8 }} />
       <GroupHeader icon={ICON.server} label="Machines" count={machines.length} open={machinesOpen} onToggle={() => setMachinesOpen((open) => !open)} />
-      {machinesOpen ? machines.map((machine) => {
-        const machineKey = machine.key || machine.name || "machine";
-        const machineOpen = openMachines[machineKey] ?? true;
-        return (
-          <div key={machineKey} style={{ display: "flex", minWidth: 0, maxWidth: "100%", flexDirection: "column", gap: 2, overflow: "hidden" }}>
-            <MachineRow
-              machine={machine}
-              open={machineOpen}
-              onToggle={() => setOpenMachines((current) => ({ ...current, [machineKey]: !machineOpen }))}
-              onStartChat={machine.onStartChat}
-            />
-            {machineOpen ? (
-              <div style={{ display: "flex", minWidth: 0, maxWidth: "100%", flexDirection: "column", gap: 1, marginBottom: 3, marginLeft: 20, marginTop: 1, overflow: "hidden", borderLeft: "1px solid var(--line)" }}>
-                {(machine.folders ?? []).map((folder) => {
-                  const folderKey = folder.key || folder.label || "folder";
-                  const folderOpen = openFolders[folderKey] ?? true;
-                  return (
-                    <FolderRows
-                      key={folderKey}
-                      folder={folder}
-                      open={folderOpen}
-                      expanded={expandedChatFolders?.has(folderKey)}
-                      running={running}
-                      onOpenChat={onOpenChat}
-                      onReveal={onRevealFolder}
-                      onStartChat={folder.onStartChat}
-                      onToggle={() => setOpenFolders((current) => ({ ...current, [folderKey]: !folderOpen }))}
-                      formatRelativeTime={formatRelativeTime}
-                    />
-                  );
-                })}
+      <Collapse open={machinesOpen}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {machines.map((machine) => {
+            const machineKey = machine.key || machine.name || "machine";
+            const machineOpen = openMachines[machineKey] ?? true;
+            return (
+              <div key={machineKey} style={{ display: "flex", minWidth: 0, maxWidth: "100%", flexDirection: "column", gap: 2, overflow: "hidden" }}>
+                <MachineRow
+                  machine={machine}
+                  open={machineOpen}
+                  onToggle={() => setOpenMachines((current) => ({ ...current, [machineKey]: !machineOpen }))}
+                  onStartChat={machine.onStartChat}
+                />
+                <Collapse open={machineOpen}>
+                  <div style={{ display: "flex", minWidth: 0, maxWidth: "100%", flexDirection: "column", gap: 1, marginBottom: 3, marginLeft: 20, marginTop: 1, overflow: "hidden", borderLeft: "1px solid var(--line)" }}>
+                    {(machine.folders ?? []).map((folder) => {
+                      const folderKey = folder.key || folder.label || "folder";
+                      const folderOpen = openFolders[folderKey] ?? true;
+                      return (
+                        <FolderRows
+                          key={folderKey}
+                          folder={folder}
+                          open={folderOpen}
+                          expanded={expandedChatFolders?.has(folderKey)}
+                          running={running}
+                          onOpenChat={onOpenChat}
+                          onReveal={onRevealFolder}
+                          onStartChat={folder.onStartChat}
+                          onToggle={() => setOpenFolders((current) => ({ ...current, [folderKey]: !folderOpen }))}
+                          formatRelativeTime={formatRelativeTime}
+                        />
+                      );
+                    })}
+                  </div>
+                </Collapse>
               </div>
-            ) : null}
-          </div>
-        );
-      }) : null}
+            );
+          })}
+        </div>
+      </Collapse>
     </div>
   );
 }

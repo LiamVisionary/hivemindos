@@ -4,14 +4,26 @@ import { ISSUE_LANES } from "./data";
 import { PriTag, RoleGlyph } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
 
-function IssueCard({ issue, agents }: { issue: Issue; agents: Agent[] }) {
+function IssueCard({ issue, agents, onOpen }: { issue: Issue; agents: Agent[]; onOpen?: (issue: Issue) => void }) {
   const a = issue.agent;
   const stateAgent = a ? agents.find((x) => x.name === a) : null;
+  // Live cards carry the real Work Board record and open the task detail;
+  // demo cards have no backing task and stay inert.
+  const openable = Boolean(issue.work && onOpen);
+  const deliverables = issue.work?.deliverables.length ?? 0;
   return (
-    <div style={{
-      borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)",
-      padding: "10px 11px", display: "flex", flexDirection: "column", gap: 8,
-    }}>
+    <div
+      role={openable ? "button" : undefined}
+      tabIndex={openable ? 0 : undefined}
+      onClick={openable ? () => onOpen!(issue) : undefined}
+      onKeyDown={openable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen!(issue); } } : undefined}
+      title={openable ? "Open the task result and deliverables" : undefined}
+      style={{
+        borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)",
+        padding: "10px 11px", display: "flex", flexDirection: "column", gap: 8,
+        cursor: openable ? "pointer" : undefined,
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
         <PriTag pri={issue.pri} />
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{issue.key}</span>
@@ -28,12 +40,19 @@ function IssueCard({ issue, agents }: { issue: Issue; agents: Agent[] }) {
         ) : (
           <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>unassigned</span>
         )}
+        <span style={{ flex: 1 }} />
+        {deliverables > 0 && (
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--cyan-2)" }} title={`${deliverables} deliverable${deliverables === 1 ? "" : "s"}`}>
+            ⎘ {deliverables}
+          </span>
+        )}
+        {openable && <span aria-hidden style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>↗</span>}
       </div>
     </div>
   );
 }
 
-export function IssueBoard({ colony }: { colony: Colony }) {
+export function IssueBoard({ colony, onOpenIssue }: { colony: Colony; onOpenIssue?: (issue: Issue) => void }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${ISSUE_LANES.length}, minmax(168px, 1fr))`, gap: 12, minWidth: "min-content" }}>
       {ISSUE_LANES.map((lane) => {
@@ -52,7 +71,7 @@ export function IssueBoard({ colony }: { colony: Colony }) {
               <span style={{ height: 2, background: `color-mix(in srgb, ${accent} 45%, transparent)`, borderRadius: 999, marginTop: 4 }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
-              {items.map((i) => <IssueCard key={i.key} issue={i} agents={colony.agents} />)}
+              {items.map((i) => <IssueCard key={i.key} issue={i} agents={colony.agents} onOpen={onOpenIssue} />)}
               {items.length === 0 && (
                 <div style={{ borderRadius: 10, border: "1px dashed var(--line)", padding: "14px 10px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>empty</div>
               )}

@@ -445,7 +445,23 @@ function normalizeBoard(parsed: KanbanBoard, slug: string): KanbanBoard {
   return board;
 }
 
+// Agents and remote collectors sometimes POST structured (object) completion
+// results, and synced boards from other machines can carry them too; stored
+// verbatim, ONE such task crashes deliverable extraction and 400s every
+// subsequent board read. Coerce anything non-string to readable text.
+function coerceKanbanText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  try {
+    return JSON.stringify(value, null, 2) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function normalizeTask(task: KanbanTask): KanbanTask {
+  const result = coerceKanbanText(task.result) || undefined;
+  const body = coerceKanbanText(task.body);
   const storedDeliverables = Array.isArray(task.deliverables)
     ? (task.deliverables
         .map(normalizeDeliverable)
@@ -454,17 +470,19 @@ function normalizeTask(task: KanbanTask): KanbanTask {
   const normalizedStatus = normalizeKanbanStatus(task.status);
   const extractedDeliverables =
     normalizedStatus === "done"
-      ? extractTaskDeliverables(task, task.result, task.updatedAt)
+      ? extractTaskDeliverables({ ...task, result, body }, result, task.updatedAt)
       : [];
   return {
     ...task,
+    result,
+    body,
     status: normalizedStatus,
     attachments: Array.isArray(task.attachments) ? task.attachments : [],
     linkedDirectories: Array.isArray(task.linkedDirectories)
       ? task.linkedDirectories
       : [],
     deliverables: filterSourceDeliverables(
-      task,
+      { ...task, body },
       storedDeliverables.length ? storedDeliverables : extractedDeliverables,
     ),
     targetMachine: task.targetMachine?.key ? task.targetMachine : null,
@@ -1096,7 +1114,8 @@ export async function completeTask(
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const now = Date.now();
-  const result = input.result ?? input.summary ?? task.result;
+  const result =
+    coerceKanbanText(input.result ?? input.summary ?? task.result) || undefined;
   const loopReceipts = mergeLoopReceipts(task.loopReceipts, input.loopReceipts);
   const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
   if (gateBlock) {
@@ -1306,6 +1325,23 @@ export async function failTask(
     input.reason ??
     input.result ??
     "Task failed.";
+  if (task.status === "done" || task.status === "archived") {
+    // A stale worker (duplicate pickup, late timeout) must never reopen finished
+    // work — e.g. the agent already completed the task itself mid-chat. Record
+    // the failed run for the audit trail and leave the task untouched.
+    const run = finishActiveRun(board, taskId, "failed", { ...input, summary, failureReason });
+    board.events.unshift(
+      event(
+        "task.stale-failure-ignored",
+        `Ignored a stale failure for already-finished ${task.title}`,
+        task.id,
+        { failureReason, summary },
+        run?.id ?? input.runId ?? task.currentRunId,
+      ),
+    );
+    await writeBoard(touch(board), options);
+    return { board, task, run, retried: false, failureReason };
+  }
   const run = finishActiveRun(board, taskId, "failed", {
     ...input,
     summary,
@@ -1369,7 +1405,9 @@ export async function rerouteTaskForAutonomousPickup(
     status: "ready",
     assignee: nextAssignee,
     targetMachine: input.targetMachine === undefined ? task.targetMachine : input.targetMachine,
-    result: `${reason}\nNext autonomous delegate: ${nextAssignee}.`,
+    // The reroute reason lives in the failed run + event below — never in
+    // task.result, where it would squat over real output if the next worker
+    // completes without an explicit result (seen live 2026-07-02).
     agentSession: null,
     claimLock: undefined,
     claimExpiresAt: undefined,
@@ -1950,6 +1988,41 @@ function deliverableLabel(target: string, kind: KanbanDeliverableKind) {
   return clean.split(/[\\/]/).filter(Boolean).at(-1) || kind;
 }
 
+// Reserved / non-routable web hosts that never point at a real artifact
+// (RFC 2606 + RFC 6761 + the classic example.* apex). Agents sometimes emit
+// these as illustrative URLs; they must NOT become "live" deliverables — a
+// placeholder link is worse than no link (seen live 2026-07-02: a task recorded
+// `https://demo.sarasota-sites.example/paid?...&session_id=mock_...`).
+function isNonRoutableDeliverableUrl(url: string): boolean {
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return true; // unparseable → not a usable deliverable
+  }
+  if (/\.(?:example|invalid|test|localhost)$/.test(host)) return true;
+  if (/^(?:www\.)?example\.(?:com|org|net)$/.test(host)) return true;
+  if (host === "localhost" || host === "127.0.0.1") return true;
+  // Obvious placeholder/mock/template markers anywhere in the URL.
+  if (/\b(?:mock_|placeholder|your-|example-|<[^>]+>|\{[^}]+\}|\$\{)/i.test(url)) return true;
+  return false;
+}
+
+// A real artifact path, not a route pattern or endpoint description. Agents
+// describe API surfaces with paths like `/preview/:slug`, `/paid and /api/...`,
+// `/book?lead=` — those are absolute-looking but are not files on disk, so they
+// 404 when opened. Require a clean path with a real fs root or a file extension.
+function looksLikeArtifactFilePath(path: string): boolean {
+  // NB: whitespace is allowed — real vault/macOS paths contain spaces
+  // ("Brain Services", "Queen Bee", "Work Board"). Only query/glob/template/param
+  // syntax signals a route rather than a file.
+  if (/[?*<>{}]/.test(path)) return false; // query / glob / template → route or prose
+  if (/\/:[A-Za-z_]/.test(path)) return false; // `/:slug` style route params
+  const hasRealRoot = /^\/(?:Users|home|root|var|tmp|private|opt|mnt|Volumes)\//.test(path);
+  const hasFileExt = /\.[A-Za-z0-9]{1,8}$/.test(path.split("/").pop() ?? "");
+  return hasRealRoot || hasFileExt;
+}
+
 function deliverableFromTarget(
   target: string,
   label?: string,
@@ -1960,6 +2033,7 @@ function deliverableFromTarget(
   if (/^https?:\/\//i.test(trimmed)) {
     if (/^https?:\/\/(?:www\.)?w3\.org\/2000\/svg\b/i.test(trimmed))
       return null;
+    if (isNonRoutableDeliverableUrl(trimmed)) return null;
     const kind = normalizeDeliverableKind(undefined, undefined, trimmed);
     return {
       id: deliverableId(trimmed),
@@ -1972,6 +2046,7 @@ function deliverableFromTarget(
   const fileUrl = trimmed.match(/^file:\/\/(.+)/i)?.[1];
   const path = decodeURIComponent(fileUrl || trimmed);
   if (!isAbsolute(path)) return null;
+  if (!looksLikeArtifactFilePath(path)) return null;
   const kind = normalizeDeliverableKind(undefined, path);
   return {
     id: deliverableId(path),

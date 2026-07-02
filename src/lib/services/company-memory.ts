@@ -1,0 +1,171 @@
+import "server-only";
+
+import { promises as fs } from "fs";
+import path from "path";
+
+import { homedir } from "@/lib/home-dir";
+import type { Company } from "@/lib/types/company";
+import type { KanbanTask } from "@/lib/types/kanban";
+
+/**
+ * Durable per-company operating memory: an append-only JSONL ledger of what the
+ * company actually did — dispatches, task outcomes, metric movements, operator
+ * notes. This is the layer that stops a zero-human company from planning cold
+ * every cycle: the goal planner and every dispatched worker receive a digest of
+ * it, so cycle N+1 builds on cycle N instead of re-planning from a blank slate.
+ *
+ * Deliberately business-agnostic: records are typed events with free-text
+ * titles/details, so a web agency, a content studio, and a trading desk all
+ * accumulate memory through the same rail.
+ */
+
+export const COMPANY_MEMORY_DIR = path.join(homedir(), ".hivemindos", "company-memory");
+
+export type CompanyMemoryKind = "dispatch" | "task-completed" | "task-blocked" | "metric" | "note";
+
+export type CompanyMemoryRecord = {
+  at: number;
+  kind: CompanyMemoryKind;
+  title: string;
+  detail?: string;
+  taskId?: string;
+  agent?: string;
+  data?: Record<string, unknown>;
+};
+
+const MAX_TAIL_BYTES = 512 * 1024; // digest/read work on the newest ~0.5MB of ledger
+const MAX_DETAIL_CHARS = 500;
+
+export function companyMemoryPath(companyId: string): string {
+  const safe = companyId.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 80) || "company";
+  return path.join(COMPANY_MEMORY_DIR, `${safe}.jsonl`);
+}
+
+export async function appendCompanyMemory(companyId: string, record: Omit<CompanyMemoryRecord, "at"> & { at?: number }): Promise<void> {
+  const entry: CompanyMemoryRecord = {
+    at: record.at ?? Date.now(),
+    kind: record.kind,
+    title: (record.title ?? "").trim().slice(0, 200),
+    detail: record.detail ? record.detail.trim().slice(0, MAX_DETAIL_CHARS) : undefined,
+    taskId: record.taskId,
+    agent: record.agent,
+    data: record.data,
+  };
+  if (!entry.title) return;
+  await fs.mkdir(COMPANY_MEMORY_DIR, { recursive: true, mode: 0o700 });
+  await fs.appendFile(companyMemoryPath(companyId), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+}
+
+/** Newest-last tail of the ledger (bounded read so huge histories stay cheap). */
+export async function readCompanyMemory(companyId: string, opts: { limit?: number } = {}): Promise<CompanyMemoryRecord[]> {
+  const limit = Math.max(1, Math.min(opts.limit ?? 200, 2_000));
+  let raw: string;
+  try {
+    const file = companyMemoryPath(companyId);
+    const stat = await fs.stat(file);
+    if (stat.size > MAX_TAIL_BYTES) {
+      const handle = await fs.open(file, "r");
+      try {
+        const buffer = new Uint8Array(MAX_TAIL_BYTES);
+        await handle.read(buffer, 0, MAX_TAIL_BYTES, stat.size - MAX_TAIL_BYTES);
+        raw = Buffer.from(buffer).toString("utf8");
+        raw = raw.slice(raw.indexOf("\n") + 1); // drop the partial first line
+      } finally {
+        await handle.close();
+      }
+    } else {
+      raw = await fs.readFile(file, "utf8");
+    }
+  } catch {
+    return [];
+  }
+  const records: CompanyMemoryRecord[] = [];
+  for (const line of raw.split("\n")) {
+    const text = line.trim();
+    if (!text) continue;
+    try {
+      const parsed = JSON.parse(text) as CompanyMemoryRecord;
+      if (parsed && typeof parsed.at === "number" && typeof parsed.title === "string") records.push(parsed);
+    } catch {
+      // Skip a corrupt line rather than losing the ledger.
+    }
+  }
+  return records.slice(-limit);
+}
+
+const KIND_LABEL: Record<CompanyMemoryKind, string> = {
+  dispatch: "DISPATCHED",
+  "task-completed": "DONE",
+  "task-blocked": "BLOCKED",
+  metric: "METRIC",
+  note: "NOTE",
+};
+
+/**
+ * Compact newest-first digest for prompts. Bounded by characters so callers can
+ * budget context: planners get a longer digest, worker task bodies a shorter one.
+ */
+export async function companyMemoryDigest(companyId: string, opts: { maxChars?: number; maxRecords?: number } = {}): Promise<string> {
+  const maxChars = Math.max(200, Math.min(opts.maxChars ?? 1_600, 8_000));
+  const records = await readCompanyMemory(companyId, { limit: opts.maxRecords ?? 120 });
+  if (records.length === 0) return "";
+  const lines: string[] = [];
+  let used = 0;
+  for (const record of [...records].reverse()) {
+    const when = new Date(record.at).toISOString().slice(0, 10);
+    const parts = [`[${when}] ${KIND_LABEL[record.kind] ?? record.kind}: ${record.title}`];
+    if (record.agent) parts.push(`(${record.agent})`);
+    if (record.detail) parts.push(`— ${record.detail}`);
+    const line = parts.join(" ").slice(0, 320);
+    if (used + line.length + 1 > maxChars) break;
+    lines.push(line);
+    used += line.length + 1;
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Fold finished company-sourced Work Board tasks into company memory. Idempotent:
+ * a (taskId, terminal-status) pair is recorded once. Called from the autonomy
+ * driver's tick so memory accumulates headless, whatever path finished the task.
+ */
+export async function syncCompanyTaskOutcomes(companies: Company[], tasks: KanbanTask[]): Promise<number> {
+  let recorded = 0;
+  const byCompany = new Map<string, KanbanTask[]>();
+  for (const task of tasks) {
+    const source = task.source ?? "";
+    if (!source.startsWith("company:")) continue;
+    if (task.status !== "done" && task.status !== "needs-human") continue;
+    const companyId = source.split(":")[1] ?? "";
+    if (!companyId) continue;
+    const list = byCompany.get(companyId) ?? [];
+    list.push(task);
+    byCompany.set(companyId, list);
+  }
+  for (const [companyId, companyTasks] of byCompany) {
+    if (!companies.some((company) => company.id === companyId)) continue;
+    try {
+      const seen = new Set(
+        (await readCompanyMemory(companyId, { limit: 2_000 }))
+          .filter((record) => record.taskId && (record.kind === "task-completed" || record.kind === "task-blocked"))
+          .map((record) => `${record.taskId}:${record.kind}`),
+      );
+      for (const task of companyTasks) {
+        const kind: CompanyMemoryKind = task.status === "done" ? "task-completed" : "task-blocked";
+        if (seen.has(`${task.id}:${kind}`)) continue;
+        await appendCompanyMemory(companyId, {
+          kind,
+          title: task.title,
+          detail: (task.result ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_DETAIL_CHARS) || undefined,
+          taskId: task.id,
+          agent: task.assignee ?? undefined,
+          at: task.completedAt ?? task.updatedAt ?? Date.now(),
+        });
+        recorded += 1;
+      }
+    } catch (error) {
+      console.warn(`[company-memory] sync failed for ${companyId}:`, error instanceof Error ? error.message : error);
+    }
+  }
+  return recorded;
+}

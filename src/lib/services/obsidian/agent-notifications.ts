@@ -111,6 +111,12 @@ export async function markAllAgentNotificationsRead(options: NotificationStorage
   return listAgentNotifications({ ...options, cursor: 0, limit: 40 });
 }
 
+/** Settings only (no notification-file scan) — cheap gate check for escalation senders. */
+export async function readAgentNotificationSettings(options: NotificationStorageOptions = {}): Promise<AgentNotificationSettings> {
+  const storage = resolveNotificationStorage(options);
+  return readSettings(storage.settingsFile);
+}
+
 export async function updateAgentNotificationSettings(patch: Partial<AgentNotificationSettings>, options: NotificationStorageOptions = {}) {
   const storage = resolveNotificationStorage(options);
   await ensureNotificationRoot(storage);

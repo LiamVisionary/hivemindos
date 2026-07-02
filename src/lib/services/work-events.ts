@@ -172,6 +172,23 @@ export async function createWorkEventTrigger(
   return { trigger, event: eventResult.event, state: sortState(state) };
 }
 
+export async function deleteWorkEvent(
+  name: string,
+): Promise<{ removedEvents: number; removedTriggers: number; state: WorkEventsState }> {
+  const eventName = normalizeEventName(name);
+  const state = await readWorkEventsState();
+  const events = state.events.filter((event) => event.name !== eventName);
+  const triggers = state.triggers.filter((trigger) => trigger.eventName !== eventName);
+  const removedEvents = state.events.length - events.length;
+  const removedTriggers = state.triggers.length - triggers.length;
+  if (removedEvents === 0 && removedTriggers === 0) {
+    return { removedEvents, removedTriggers, state };
+  }
+  const next = sortState({ ...state, events, triggers });
+  await writeWorkEventsState(next);
+  return { removedEvents, removedTriggers, state: next };
+}
+
 export async function publishWorkEvent(
   input: PublishWorkEventInput,
   options: KanbanStorageOptions = {},

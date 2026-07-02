@@ -21,6 +21,7 @@ import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
 import {
   useQueenBeeVoice,
   type QueenVoicePhase,
+  type QueenVoiceWorkingStage,
 } from "./use-queen-bee-voice";
 import { useQueenChat, type QueenChatTurn } from "./queen-chat-store";
 import styles from "./queen-voice.module.css";
@@ -112,6 +113,7 @@ function TranscriptTurns({
   minimized,
   thinking,
   thinkingLabel,
+  working,
   onShowDetail,
   onCollapse,
 }: {
@@ -119,6 +121,8 @@ function TranscriptTurns({
   minimized: boolean;
   thinking: boolean;
   thinkingLabel: string;
+  /** Live stages of the in-flight voice turn (tool calls, fleet scan, ...). */
+  working: QueenVoiceWorkingStage[];
   onShowDetail: (detail: string) => void;
   onCollapse: () => void;
 }) {
@@ -153,7 +157,7 @@ function TranscriptTurns({
     if (closing) return;
     const panel = panelRef.current;
     if (panel) panel.scrollTop = panel.scrollHeight;
-  }, [turns, thinking, closing, rendered]);
+  }, [turns, thinking, working, closing, rendered]);
 
   // Collapsed (and exit finished): the history is gone; the triangle tab on the
   // input pill is the only control (see the .fr-chat-tab in PersistentHiveChat).
@@ -182,7 +186,16 @@ function TranscriptTurns({
                 // lists, links); the user's own echo stays plain text.
                 <ChatMarkdown text={turn.text} />
               ) : (
-                turn.text
+                <>
+                  {turn.text}
+                  {/* Live captions keep transcribing for a beat after the user
+                      stops (the model's trailing words land late); animated
+                      dots say "still finalizing" so the pause reads as work,
+                      not a dropped word. */}
+                  {turn.live && turn.text && !turn.text.endsWith("...") ? (
+                    <span className={styles.thinkingDots} aria-hidden="true" />
+                  ) : null}
+                </>
               )}
             </div>
             {turn.detail ? (
@@ -206,6 +219,24 @@ function TranscriptTurns({
               {thinkingLabel || "Checking"}
               <span className={styles.thinkingDots} aria-hidden="true" />
             </p>
+            {working.length ? (
+              // Compact live activity: what she is actually doing right now
+              // (thinking with which agent, tool calls, fleet scan, routing).
+              <div className={styles.workingChips} aria-live="polite">
+                {working.slice(-4).map((stage, index) => (
+                  <span
+                    key={`${stage.label}-${index}`}
+                    className={`${styles.workingChip} ${stage.done ? styles.workingChipDone : ""}`}
+                  >
+                    <span
+                      className={`${styles.workingChipDot} ${stage.done ? "" : styles.workingChipDotActive}`}
+                      aria-hidden="true"
+                    />
+                    {stage.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -593,6 +624,9 @@ export function QueenBeeVoiceOverlay({
           minimized={historyMinimized}
           thinking={open && voiceState.phase === "thinking"}
           thinkingLabel={thinkingFiller}
+          // Live stages only exist on the pipeline hook; the realtime session
+          // streams its own tool audio cues.
+          working={realtimeMode ? [] : pipeline.working}
           onShowDetail={setDetailContent}
           onCollapse={() => setHistoryMinimized(true)}
         />

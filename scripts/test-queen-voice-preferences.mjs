@@ -104,9 +104,12 @@ const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
 const route = read("src/app/api/queen-bee/voice/route.ts");
 const hook = read("src/features/queen-voice/use-queen-bee-realtime.ts");
 const turn = read("src/lib/services/queen-bee/voice-turn.ts");
+// The realtime tool declaration moved out of the route into the shared voice
+// tool bundle (also used by phone calls) — pin it there instead.
+const toolBundles = read("src/lib/services/phone/voice-tool-bundles.ts");
 
 check("CAPTURE: the realtime tool is declared, dispatched, and POSTed by one name", () => {
-  assert.match(route, /name:\s*"remember_preference"/, "tool not declared in route");
+  assert.match(toolBundles, /name:\s*"remember_preference"/, "tool not declared in the shared voice tool bundle");
   assert.match(hook, /call\.name === "remember_preference"/, "dispatch branch missing");
   assert.match(hook, /action:\s*"remember-preference"/, "client POST action missing");
   assert.match(route, /body\.action === "remember-preference"/, "server action handler missing");

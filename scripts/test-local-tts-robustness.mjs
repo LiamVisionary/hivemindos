@@ -1,0 +1,198 @@
+#!/usr/bin/env node
+// Hermetic coverage for the Local TTS failure breaker + prewarm path:
+// - breaker trips on a recorded failure, closes on success, and expires
+// - synthesizeLocalTtsWav records failures/successes into the breaker
+// - prewarm runs one warm synthesis, dedupes concurrent calls, and skips when
+//   the server was healthy moments ago
+// No live app/fleet/TTS server: fetch is fully mocked.
+import { register } from "node:module";
+import assert from "node:assert/strict";
+
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+// Keep the link-control helper off the real collector.env / linkd.
+process.env.HIVE_LINK_CONTROL_URL = "http://link.test";
+
+const {
+  localTtsBreakerState,
+  localTtsRecentlyHealthy,
+  prewarmLocalTts,
+  recordLocalTtsFailure,
+  recordLocalTtsSuccess,
+  resetLocalTtsHealth,
+} = await import("../src/lib/services/phone/local-tts-health.ts");
+const { synthesizeLocalTtsWav } = await import("../src/lib/services/phone/local-tts.ts");
+
+const ORIGIN = "http://dashboard.test";
+const APP_ID = "local:8799:universal-tts";
+const PROVIDER_ID = `local-tts:${APP_ID}`;
+
+// --- fetch mock -------------------------------------------------------------
+let speechMode = "ok"; // "ok" | "http-500" | "network" | "slow-ok"
+let speechCalls = 0;
+
+function pcmBytes(sampleCount) {
+  const bytes = new Uint8Array(sampleCount * 2);
+  for (let i = 0; i < sampleCount; i += 1) {
+    bytes[i * 2] = i % 251;
+    bytes[i * 2 + 1] = 1;
+  }
+  return bytes;
+}
+
+function speechResponse() {
+  return new Response(pcmBytes(240), {
+    status: 200,
+    headers: {
+      "content-type": "application/octet-stream",
+      "x-audio-sample-rate": "24000",
+      "x-audio-channels": "1",
+    },
+  });
+}
+
+globalThis.fetch = async (input) => {
+  const url = String(input instanceof Request ? input.url : input);
+  if (url.startsWith("http://link.test/status")) {
+    return Response.json({ ok: true, peer: {} });
+  }
+  if (url.includes("/api/fleet/discover")) {
+    return Response.json({ machines: [] });
+  }
+  if (url.includes("/api/fleet/apps")) {
+    return Response.json({ apps: [] });
+  }
+  if (url.startsWith("http://127.0.0.1:8787/apps")) {
+    return Response.json({
+      apps: [
+        {
+          id: "universal-tts",
+          name: "universal-tts",
+          description: "Universal TTS",
+          port: 8799,
+          apiBaseUrl: "http://tts.test",
+          serviceKind: "tts",
+          apiRoutes: [
+            { method: "GET", path: "/v1/audio/capabilities", summary: "caps" },
+            { method: "POST", path: "/v1/audio/speech-stream", summary: "speech" },
+          ],
+        },
+      ],
+    });
+  }
+  if (url.startsWith("http://tts.test/v1/audio/speech-stream")) {
+    speechCalls += 1;
+    if (speechMode === "network") throw new TypeError("fetch failed");
+    if (speechMode === "http-500") return new Response("boom", { status: 500 });
+    if (speechMode === "slow-ok") {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return speechResponse();
+    }
+    return speechResponse();
+  }
+  throw new Error(`Unexpected fetch in hermetic test: ${url}`);
+};
+
+// --- breaker unit behavior ---------------------------------------------------
+{
+  resetLocalTtsHealth();
+  const t0 = 1_000_000;
+  assert.equal(localTtsBreakerState(APP_ID, t0).open, false, "breaker starts closed");
+  recordLocalTtsFailure(APP_ID, "HTTP 502", t0);
+  const open = localTtsBreakerState(APP_ID, t0 + 1);
+  assert.equal(open.open, true, "breaker opens on failure");
+  assert.equal(open.lastError, "HTTP 502");
+  assert.ok(open.retryInMs > 0 && open.retryInMs <= 45_000, "retry window is bounded");
+  assert.equal(localTtsBreakerState(APP_ID, t0 + 46_000).open, false, "breaker expires");
+  recordLocalTtsFailure(APP_ID, "HTTP 502", t0);
+  recordLocalTtsSuccess(APP_ID, t0 + 2);
+  assert.equal(localTtsBreakerState(APP_ID, t0 + 3).open, false, "success closes the breaker");
+  assert.equal(localTtsRecentlyHealthy(APP_ID, t0 + 3), true, "success marks recently healthy");
+  assert.equal(localTtsRecentlyHealthy(APP_ID, t0 + 300_000), false, "recent health expires");
+  console.log("breaker unit behavior ok");
+}
+
+// --- synthesizeLocalTtsWav wires the breaker ---------------------------------
+{
+  resetLocalTtsHealth();
+  speechMode = "http-500";
+  const failed = await synthesizeLocalTtsWav({
+    origin: ORIGIN,
+    appId: APP_ID,
+    model: "qwen3-tts-0.6b-custom",
+    voice: "voice01",
+    text: "Hello",
+  });
+  assert.equal(failed.ok, false, "HTTP 500 synth reports failure");
+  assert.equal(localTtsBreakerState(APP_ID).open, true, "HTTP failure trips the breaker");
+
+  speechMode = "ok";
+  const succeeded = await synthesizeLocalTtsWav({
+    origin: ORIGIN,
+    appId: APP_ID,
+    model: "qwen3-tts-0.6b-custom",
+    voice: "voice01",
+    text: "Hello",
+  });
+  assert.equal(succeeded.ok, true, "synth succeeds against the mock server");
+  assert.equal(succeeded.bytes, 480, "PCM bytes preserved");
+  assert.equal(succeeded.wav.byteLength, 44 + 480, "WAV = RIFF header + PCM");
+  assert.equal(localTtsBreakerState(APP_ID).open, false, "success closes the breaker");
+
+  speechMode = "network";
+  const network = await synthesizeLocalTtsWav({
+    origin: ORIGIN,
+    appId: APP_ID,
+    model: "qwen3-tts-0.6b-custom",
+    voice: "voice01",
+    text: "Hello",
+  });
+  assert.equal(network.ok, false, "network error reports failure");
+  assert.equal(localTtsBreakerState(APP_ID).open, true, "network failure trips the breaker");
+  console.log("synthesizeLocalTtsWav breaker wiring ok");
+}
+
+// --- prewarm: warm run, in-flight dedupe, recently-healthy skip --------------
+{
+  resetLocalTtsHealth();
+  speechMode = "slow-ok";
+  speechCalls = 0;
+  const input = {
+    origin: ORIGIN,
+    voiceProviderId: PROVIDER_ID,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "voice01",
+  };
+  const [first, second] = await Promise.all([prewarmLocalTts(input), prewarmLocalTts(input)]);
+  assert.equal(first.ok, true, "prewarm succeeds");
+  assert.equal(first.warmed, true, "prewarm ran a warm synthesis");
+  assert.equal(second.ok, true, "concurrent prewarm succeeds");
+  assert.equal(speechCalls, 1, "concurrent prewarms dedupe to one synthesis");
+
+  speechMode = "ok";
+  const third = await prewarmLocalTts(input);
+  assert.equal(third.ok, true);
+  assert.equal(third.warmed, false, "recently-healthy prewarm skips the synthesis");
+  assert.equal(third.skipped, "recently-healthy");
+  assert.equal(speechCalls, 1, "no extra synthesis for a warm server");
+  console.log("prewarm dedupe + skip ok");
+}
+
+// --- prewarm failure reporting ------------------------------------------------
+{
+  resetLocalTtsHealth();
+  speechMode = "http-500";
+  const failed = await prewarmLocalTts({
+    origin: ORIGIN,
+    voiceProviderId: PROVIDER_ID,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "voice01",
+  });
+  assert.equal(failed.ok, false, "failed prewarm reports ok:false");
+  assert.equal(failed.warmed, false);
+  assert.ok(failed.error, "failed prewarm carries the error");
+  assert.equal(localTtsBreakerState(APP_ID).open, true, "failed prewarm trips the breaker");
+  console.log("prewarm failure reporting ok");
+}
+
+console.log("test-local-tts-robustness: all assertions passed");

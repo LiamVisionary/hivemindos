@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, rename, stat } from "node:fs/promises";
 import { cpus, freemem, totalmem } from "os";
 import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join } from "node:path";
@@ -302,6 +302,14 @@ async function persistMemorySample(
   };
   try {
     await mkdir(dirname(MEMORY_SAMPLES_FILE), { recursive: true, mode: 0o700 });
+    // Append-only and never read back by the app — rotate on size so the log
+    // can't grow without bound (observed 20MB+ after a few weeks).
+    try {
+      const { size } = await stat(MEMORY_SAMPLES_FILE);
+      if (size > 10 * 1024 * 1024) await rename(MEMORY_SAMPLES_FILE, `${MEMORY_SAMPLES_FILE}.1`);
+    } catch {
+      // Missing file — first write.
+    }
     await appendFile(MEMORY_SAMPLES_FILE, `${JSON.stringify(row)}\n`, "utf-8");
   } catch {
     // Memory telemetry should never fail the diagnostics endpoint.
