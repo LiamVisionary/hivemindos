@@ -207,7 +207,15 @@ install_go_if_missing() {
 build_hivemind_linkd_if_enabled() {
   [[ "$LINK_ENABLED" == "true" ]] || return 1
   if [[ -x "$LINK_BIN" ]]; then
-    if [[ "$LINK_BIN" -nt "$APP_DIR/cmd/hivemind-linkd/main.go" && "$LINK_BIN" -nt "$APP_DIR/go.mod" && "$LINK_BIN" -nt "$APP_DIR/go.sum" ]]; then
+    # Skip the rebuild only when the binary's embedded commit stamp matches the
+    # checkout: the watchdog's stale-build alert compares these same stamps, so
+    # an mtime-based skip left permanently "stale" binaries alerting daily even
+    # though a rebuild would not change the Go code. Pre-stamp binaries
+    # ("unknown" or no -version support) always rebuild.
+    local bin_commit repo_commit
+    bin_commit="$("$LINK_BIN" -version 2>/dev/null | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')"
+    repo_commit="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    if [[ -n "$bin_commit" && "$bin_commit" != "unknown" && "$bin_commit" == "$repo_commit" ]]; then
       hivemindos_sign_macos_binary "$LINK_BIN" "com.hivemindos.linkd"
       return 0
     fi
