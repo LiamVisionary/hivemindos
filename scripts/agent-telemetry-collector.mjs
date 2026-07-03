@@ -342,10 +342,12 @@ const hostedAppProbeTimeoutMs = Number(
 const hostedAppScanTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_APP_SCAN_TIMEOUT_MS || 4_000,
 );
+// 22000 = Syncthing BEP: a TLS-only sync protocol, never an app. Probing it
+// makes syncthing journal a TLS-handshake warning pair on every sweep.
 const excludedHostedAppPorts = new Set(
   String(
     process.env.AGENT_TELEMETRY_APP_EXCLUDE_PORTS ||
-      `${port},22,53,631,5353,5900`,
+      `${port},22,53,631,5353,5900,22000`,
   )
     .split(",")
     .map((value) => Number(value.trim()))
