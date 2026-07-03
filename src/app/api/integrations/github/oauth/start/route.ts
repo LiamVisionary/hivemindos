@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (config.missing.length) {
     return renderGitHubOAuthPage({
       title: "GitHub OAuth needs setup",
-      body: `Add <code>${config.missing.join("</code> and <code>")}</code> to shared env or the dashboard process env, then retry. Nango is not required for this fallback.`,
+      body: `Add <code>${config.missing.join("</code> and <code>")}</code> to shared env or the dashboard process env, then retry — or paste a GitHub token in Integrations instead.`,
       returnUrl: "/?view=aeon",
       status: 503,
     });

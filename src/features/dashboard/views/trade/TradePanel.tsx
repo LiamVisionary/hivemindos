@@ -70,7 +70,7 @@ const EMPTY_PORTFOLIO: DeskPortfolio = { rows: [], total: 0, dayChange: 0, dayPc
 const EMPTY_READINESS: DeskStockReadiness = {
   venue: null, liveEnabled: false, venueReady: false, paperConfigured: false, liveConfigured: false,
   paperKeys: [], liveKeys: [], buyingPower: 0, confirmations: { buy: "CONFIRM_BUY", sell: "CONFIRM_SELL" },
-  account: null, xstockTickers: [],
+  account: null, xstockTickers: [], robinhoodTickers: [], robinhoodExecutable: false,
 };
 
 // The acting-wallet choice persists across view switches / reloads / app
@@ -234,7 +234,7 @@ export function TradePanel(props: TradePanelProps) {
       if (p.accounts?.length) p.accounts.forEach((a) => add(a.network));
       else add((p.wallet as unknown as Record<string, unknown>)?.network);
     }
-    const order = ["Base", "Base Sepolia", "Ethereum", "Arbitrum", "Optimism", "Polygon", "Solana"];
+    const order = ["Base", "Base Sepolia", "Robinhood Chain", "Ethereum", "Arbitrum", "Optimism", "Polygon", "Solana"];
     return labels.sort((a, b) => {
       const ia = order.indexOf(a); const ib = order.indexOf(b);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
@@ -304,9 +304,16 @@ export function TradePanel(props: TradePanelProps) {
       const venue = (tradeAgent?.venue ?? (walletConfig.tradingVenue as DeskStockReadiness["venue"])) ?? null;
       const liveEnabled = tradeAgent?.liveEnabled ?? (walletConfig.alpacaPaper === false);
       const alpaca = readiness?.venues.alpaca;
+      const robinhood = readiness?.venues.robinhoodChain;
       const paperConfigured = alpaca?.paper.configured ?? false;
       const liveConfigured = alpaca?.live.configured ?? false;
-      const venueReady = venue === "alpaca" ? (paper ? paperConfigured : liveConfigured) : venue === "xstocks";
+      const venueReady = venue === "alpaca"
+        ? (paper ? paperConfigured : liveConfigured)
+        : venue === "xstocks"
+          ? true
+          : venue === "robinhood-chain"
+            ? Boolean(robinhood?.executable) && network === "eip155:4663"
+            : false;
       const stockReadiness: DeskStockReadiness = {
         venue, liveEnabled, venueReady, paperConfigured, liveConfigured,
         paperKeys: alpaca?.paper.keys ?? ["ALPACA_PAPER_API_KEY_ID", "ALPACA_PAPER_API_SECRET_KEY"],
@@ -315,6 +322,9 @@ export function TradePanel(props: TradePanelProps) {
         confirmations: readiness?.confirmations ?? { buy: "CONFIRM_BUY", sell: "CONFIRM_SELL" },
         account: portfolio?.account ?? null,
         xstockTickers: readiness?.venues.xstocks.supportedTickers ?? [],
+        robinhoodTickers: robinhood?.supportedTickers ?? [],
+        robinhoodExecutable: Boolean(robinhood?.executable),
+        robinhoodReason: robinhood?.reason,
       };
 
       // First load of an Alpaca wallet: the portfolio above was fetched with the
@@ -389,7 +399,7 @@ export function TradePanel(props: TradePanelProps) {
   // route (which now round-trips the venue). Bankr has no ledger record.
   const updateWallet = props.updateWallet;
   const onEnableStockVenue = useCallback(async (
-    { venue, paper: enablePaper }: { venue: "alpaca" | "xstocks"; paper: boolean },
+    { venue, paper: enablePaper }: { venue: "alpaca" | "xstocks" | "robinhood-chain"; paper: boolean },
   ): Promise<{ ok: boolean; error?: string }> => {
     if (!acting) return { ok: false, error: "Pick a wallet first." };
     const alpacaPaper = venue === "alpaca" ? enablePaper : undefined;

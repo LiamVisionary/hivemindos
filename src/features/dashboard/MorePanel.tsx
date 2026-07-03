@@ -7,8 +7,9 @@ import type { DashboardUtilityView } from "@/features/dashboard/dashboard-naviga
 import { createStyleClass } from "@/features/dashboard/style-classes";
 
 const fleetClass = createStyleClass(fleetStyles);
-const moreCardClass = "grid gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] p-4 text-left text-[var(--foreground)] transition hover:border-[var(--accent-strong)] hover:bg-[var(--surface-strong)]";
+const moreCardClass = "relative grid gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] p-4 pr-12 text-left text-[var(--foreground)] transition hover:border-[var(--accent-strong)] hover:bg-[var(--surface-strong)]";
 const moreIconClass = "flex h-9 w-9 items-center justify-center rounded-md border border-[var(--comb-line)] bg-[var(--button-accent)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4";
+const moreBadgeClass = "absolute right-3 top-3 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--danger)] px-1.5 font-mono text-[10px] font-bold leading-none text-[#1a1305]";
 
 // The More menu's reachable set is the catalog's Utilities group, so a new
 // utility view added to the dashboard registry is a compile error here until
@@ -42,6 +43,8 @@ type MorePanelCard = {
   eyebrow: string;
   title: string;
   body: string;
+  badge?: number;
+  badgeLabel?: string;
 };
 
 type MorePanelNavigationItem = MorePanelCard & {
@@ -99,9 +102,9 @@ export function MorePanel({
     },
     integrations: {
       icon: <PlugZap aria-hidden="true" />,
-      eyebrow: "Nango host",
+      eyebrow: "App connections",
       title: "Integrations",
-      body: "Choose the always-on machine for shared external API access.",
+      body: "Connect GitHub, Linear, Slack, Notion, and Google for the whole hive.",
     },
     maintenance: {
       icon: <ShieldCheck aria-hidden="true" />,
@@ -156,6 +159,8 @@ export function MorePanel({
       eyebrow: notificationUnread ? `${notificationUnread} unread` : `${notificationTotal} total`,
       title: "Alerts",
       body: "Review messages agents write into the shared inbox.",
+      badge: notificationUnread || undefined,
+      badgeLabel: notificationUnread ? `${notificationUnread} unread alerts` : undefined,
     },
     messaging: {
       icon: <MessageSquare aria-hidden="true" />,
@@ -174,6 +179,23 @@ export function MorePanel({
   };
   const systemItems: Array<MorePanelNavigationItem | MorePanelRouteItem> = MORE_PANEL_UTILITY_ORDER.map((id) => ({ id, ...utilityCards[id] }));
   systemItems.splice(2, 0, stakeItem);
+  const renderCardContent = (item: MorePanelNavigationItem | MorePanelRouteItem) => (
+    <>
+      {item.badge ? (
+        <span className={moreBadgeClass} aria-label={item.badgeLabel}>
+          {item.badge > 99 ? "99+" : item.badge}
+        </span>
+      ) : null}
+      <span className={moreIconClass}>
+        {item.icon}
+      </span>
+      <span className="grid gap-1">
+        <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
+        <strong>{item.title}</strong>
+        <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
+      </span>
+    </>
+  );
 
   return (
     <section className={fleetClass("taskPanel", "tabPanel")}>
@@ -195,14 +217,7 @@ export function MorePanel({
                 onClick={() => onNavigate(item.id)}
                 className={moreCardClass}
               >
-                <span className={moreIconClass}>
-                  {item.icon}
-                </span>
-                <span className="grid gap-1">
-                  <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
-                  <strong>{item.title}</strong>
-                  <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
-                </span>
+                {renderCardContent(item)}
               </button>
             ))}
           </div>
@@ -217,14 +232,7 @@ export function MorePanel({
                   href={item.href}
                   className={moreCardClass}
                 >
-                  <span className={moreIconClass}>
-                    {item.icon}
-                  </span>
-                  <span className="grid gap-1">
-                    <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
-                    <strong>{item.title}</strong>
-                    <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
-                  </span>
+                  {renderCardContent(item)}
                 </Link>
               ) : (
                 <button
@@ -233,14 +241,7 @@ export function MorePanel({
                   onClick={() => onNavigate(item.id)}
                   className={moreCardClass}
                 >
-                  <span className={moreIconClass}>
-                    {item.icon}
-                  </span>
-                  <span className="grid gap-1">
-                    <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
-                    <strong>{item.title}</strong>
-                    <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
-                  </span>
+                  {renderCardContent(item)}
                 </button>
               )
             ))}

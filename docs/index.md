@@ -199,7 +199,7 @@ flowchart LR
   RemoteCollectors --> RemoteRuntimes["Remote runtimes"]
   Api --> Wallets["Wallets / tokens / x402"]
   Api --> Workers["Honey ledger and compute gateway workers"]
-  Api --> Companions["GitLawb / MiroShark / Nango / Syncthing"]
+  Api --> Companions["GitLawb / MiroShark / Syncthing"]
 ```
 
 ## Current Audit Snapshot

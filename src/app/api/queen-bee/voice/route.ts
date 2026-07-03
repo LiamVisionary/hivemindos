@@ -110,8 +110,14 @@ export async function POST(request: NextRequest) {
     if (body.action === "speak-prewarm") {
       return await prewarmSpokenReplyEngine(request);
     }
+    if (body.action === "speak-metrics") {
+      return await recordSpeakPlaybackMetrics(body);
+    }
     if (body.action === "converse") {
       return await runConversationTurn(request, body);
+    }
+    if (body.action === "converse-stream") {
+      return await runConversationTurnStream(request, body);
     }
     if (body.action === "turn-progress") {
       return NextResponse.json({
@@ -447,6 +453,126 @@ async function runConversationTurn(
   }
 }
 
+// Streaming sibling of `converse`: NDJSON events (one JSON object per line)
+// let the overlay start TTS on the first spoken sentence while the model is
+// still writing, instead of waiting for the full reply.
+//   {type:"speech", text}   incremental spoken-reply text — the concatenation
+//                           (since the last reset) is exactly what to speak
+//   {type:"reset"}          a failed model attempt's speech must be discarded
+//   {type:"done", ok:true, transcript, reply, taskId?, taskTitle?, created?, route?}
+//   {type:"error", error}
+// The turn runs to completion even when the client disconnects mid-stream: a
+// barge-in must not cancel a task delegation the model already confirmed out
+// loud, so cancel/enqueue failures only stop emission, never the turn.
+async function runConversationTurnStream(
+  request: NextRequest,
+  body: Record<string, unknown>,
+) {
+  const startedAt = Date.now();
+  const transcript =
+    typeof body.transcript === "string" ? body.transcript.trim() : "";
+  if (!transcript) throw new Error("A transcript is required.");
+  const bodyText = (key: string) => {
+    const value = body[key];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  };
+  const marks: Record<string, number> = {};
+  // The polled `turn-progress` side channel stays authoritative for the
+  // overlay's working chips (see voice-turn-progress.ts for the rationale).
+  const turnId = normalizeVoiceTurnId(body.turnId);
+  if (turnId) beginVoiceTurnProgress(turnId);
+  const encoder = new TextEncoder();
+  let closed = false;
+  let speechChars = 0;
+  let resets = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      const emit = (event: Record<string, unknown>) => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+        } catch {
+          closed = true; // client went away; the turn keeps running
+        }
+      };
+      void (async () => {
+        try {
+          const result = await runQueenBeeVoiceTurn({
+            origin: request.nextUrl.origin,
+            transcript,
+            history: historyFromForm(
+              typeof body.history === "string"
+                ? body.history
+                : JSON.stringify(body.history ?? []),
+            ),
+            vaultPath: bodyText("vaultPath"),
+            brainServicesFolder: bodyText("brainServicesFolder"),
+            kanbanFolder: bodyText("kanbanFolder"),
+            fleetSnapshot: () =>
+              discoverQueenBeeFleetSnapshot(
+                request.nextUrl.origin,
+                request.headers.get("x-hivemindos-device-token"),
+              ),
+            marks,
+            progress: turnId
+              ? (label) => markVoiceTurnStage(turnId, label)
+              : undefined,
+            onSpeechDelta: (text) => {
+              if (!speechChars) marks.firstSpeechMs = Date.now() - startedAt;
+              speechChars += text.length;
+              emit({ type: "speech", text });
+            },
+            onSpeechReset: () => {
+              resets += 1;
+              speechChars = 0;
+              emit({ type: "reset" });
+            },
+          });
+          emit({ type: "done", ok: true, transcript, ...result });
+          await appendVoiceTurnTelemetry({
+            ok: true,
+            stage: "converse-stream",
+            ...marks,
+            speechChars,
+            ...(resets ? { resets } : {}),
+            totalMs: Date.now() - startedAt,
+            createdTask: Boolean(result.taskId && result.created),
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          emit({ type: "error", error: message });
+          await appendVoiceTurnTelemetry({
+            ok: false,
+            stage: "converse-stream",
+            ...marks,
+            totalMs: Date.now() - startedAt,
+            error: message,
+          });
+        } finally {
+          if (turnId) finishVoiceTurnProgress(turnId);
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            // Already closed/cancelled.
+          }
+        }
+      })();
+    },
+    cancel: () => {
+      closed = true;
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson",
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 // Multipart step one of a voice turn: transcription only, so the user's
 // words reach the screen fast while the conversational reply resolves in a
 // follow-up "converse" call.
@@ -529,10 +655,12 @@ async function speakViaLocalTts(
   request: NextRequest,
   text: string,
   calls: AgentCallPreferences,
+  timings?: Record<string, number>,
 ): Promise<
   | { ok: true; wav: ArrayBuffer; appName: string; appId: string; voice: string; model: string; bytes: number }
   | { ok: false; error: string }
 > {
+  const configStartedAt = Date.now();
   const config = await resolveLocalTtsCallConfig({
     origin: request.nextUrl.origin,
     voiceProviderId: calls.voiceProviderId,
@@ -540,6 +668,7 @@ async function speakViaLocalTts(
     voiceId: calls.voiceId,
     openingLine: "",
   }).catch(() => null);
+  if (timings) timings.configMs = Date.now() - configStartedAt;
   if (!config) return { ok: false, error: "no validated local TTS server" };
   // A server that failed seconds ago (often right before this buffered
   // fallback) will fail again; skip straight to the cloud voice instead of
@@ -558,6 +687,7 @@ async function speakViaLocalTts(
     voice: config.voice,
     text: text.slice(0, 4_000),
     signal: AbortSignal.timeout(TTS_TIMEOUT_MS),
+    timings,
   });
   if (!result.ok) return { ok: false, error: result.error };
   return {
@@ -577,7 +707,14 @@ async function speakViaLocalTts(
 // prewarm success also re-closes the failure breaker (recovery probe).
 async function prewarmSpokenReplyEngine(request: NextRequest) {
   const startedAt = Date.now();
-  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  let calls: AgentCallPreferences | null = null;
+  try {
+    calls = await readQueenBeeCallPreferences();
+  } catch {
+    // Store outage with no known-good prefs: nothing audible is at stake in a
+    // warmer, so just skip; the speak paths own the continuity decision.
+    return NextResponse.json({ ok: true, warmed: false, skipped: "call-prefs-unavailable" });
+  }
   if (
     !calls ||
     (calls.voiceRuntime !== LOCAL_TTS_RUNTIME &&
@@ -626,12 +763,27 @@ async function streamSpokenReplyPcm(
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) throw new Error("Speech text is required.");
   const startedAt = Date.now();
-  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  const timings: Record<string, number> = {};
+  let calls: AgentCallPreferences | null = null;
+  try {
+    calls = await readQueenBeeCallPreferences();
+  } catch {
+    // Store outage with no known-good prefs: hand the turn to the buffered
+    // `speak` path (the client falls back on any JSON reply), which owns the
+    // voice-continuity decision — it retries the store and reports the
+    // voiceUnavailable outage envelope rather than guessing a cloud voice.
+    return NextResponse.json(
+      { ok: false, fallback: true, reason: "call-prefs-unavailable" },
+      { status: 409 },
+    );
+  }
+  timings.prefsMs = Date.now() - startedAt;
   if (
     calls &&
     (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
       isLocalTtsProviderId(calls.voiceProviderId))
   ) {
+    const configStartedAt = Date.now();
     const config = await resolveLocalTtsCallConfig({
       origin: request.nextUrl.origin,
       voiceProviderId: calls.voiceProviderId,
@@ -639,6 +791,7 @@ async function streamSpokenReplyPcm(
       voiceId: calls.voiceId,
       openingLine: "",
     }).catch(() => null);
+    timings.configMs = Date.now() - configStartedAt;
     const breaker = config ? localTtsBreakerState(config.appId) : null;
     if (config && breaker?.open) {
       await appendVoiceTurnTelemetry({
@@ -664,6 +817,7 @@ async function streamSpokenReplyPcm(
         voice: config.voice,
         text: text.slice(0, 4_000),
         signal: AbortSignal.timeout(STREAM_SPEAK_TIMEOUT_MS),
+        timings,
       }).catch((error) => ({
         ok: false as const,
         error: error instanceof Error ? error.message : "stream failed",
@@ -677,6 +831,7 @@ async function streamSpokenReplyPcm(
           voice: config.voice,
           model: config.model,
           sampleRate: stream.sampleRate,
+          ...timings,
           ttsMs: Date.now() - startedAt, // time to first byte (stream open)
         });
         return new Response(stream.body, {
@@ -694,11 +849,37 @@ async function streamSpokenReplyPcm(
         engine: "local-tts",
         model: config.model,
         error: stream.error,
+        ...timings,
         ttsMs: Date.now() - startedAt,
       });
     }
   }
   return NextResponse.json({ ok: false, fallback: true }, { status: 409 });
+}
+
+// Fire-and-forget client beacon: playback-side timings for a streamed reply
+// (first byte, first audible audio, underruns), appended to the same telemetry
+// file as the server-side stage timings so one log answers "where did the
+// latency go" end to end.
+async function recordSpeakPlaybackMetrics(body: Record<string, unknown>) {
+  const numeric = (key: string) => {
+    const parsed = Number(body[key]);
+    return Number.isFinite(parsed) ? Math.round(parsed) : undefined;
+  };
+  await appendVoiceTurnTelemetry({
+    ok: body.ok !== false,
+    stage: "speak-playback",
+    engine: "local-tts",
+    streamOpenMs: numeric("streamOpenMs"),
+    firstByteMs: numeric("firstByteMs"),
+    firstAudioMs: numeric("firstAudioMs"),
+    playedMs: numeric("playedMs"),
+    underruns: numeric("underruns"),
+    underrunMs: numeric("underrunMs"),
+    ...(body.aborted === true ? { aborted: true } : {}),
+    ...(body.partial === true ? { partial: true } : {}),
+  });
+  return NextResponse.json({ ok: true });
 }
 
 async function streamSpokenReply(
@@ -708,18 +889,50 @@ async function streamSpokenReply(
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) throw new Error("Speech text is required.");
   const startedAt = Date.now();
+  const timings: Record<string, number> = {};
 
   // Honor a Queen Calls "Local TTS" selection: voice the reply on the chosen
   // connected TTS server instead of OpenAI cloud TTS. Any miss (no validated
   // server, app unreachable, no audio) falls through to OpenAI below.
-  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  let calls: AgentCallPreferences | null = null;
+  let callPrefsUnavailable = false;
+  try {
+    calls = await readQueenBeeCallPreferences();
+  } catch {
+    callPrefsUnavailable = true;
+  }
+  timings.prefsMs = Date.now() - startedAt;
+  if (callPrefsUnavailable) {
+    // Voice continuity: with the prefs store unreadable (and no known-good
+    // read to fall back on) we cannot know whether a local cloned voice is
+    // selected, so never guess cloud — report the outage; the overlay shows
+    // the reply as muted text with a notice, same as a local-TTS outage.
+    await appendVoiceTurnTelemetry({
+      ok: false,
+      stage: "speak",
+      engine: "none",
+      skipped: "voice-continuity",
+      localFallbackReason: "call-prefs-unavailable",
+      ...timings,
+      ttsMs: Date.now() - startedAt,
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        voiceUnavailable: true,
+        error:
+          "Queen call preferences are unreadable; holding the reply as text instead of speaking in a substitute voice.",
+      },
+      { status: 503 },
+    );
+  }
   let localFallbackReason = "";
   if (
     calls &&
     (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
       isLocalTtsProviderId(calls.voiceProviderId))
   ) {
-    const local = await speakViaLocalTts(request, text, calls).catch(
+    const local = await speakViaLocalTts(request, text, calls, timings).catch(
       (error) => ({
         ok: false as const,
         error: error instanceof Error ? error.message : "local TTS failed",
@@ -735,6 +948,7 @@ async function streamSpokenReply(
         voice: local.voice,
         model: local.model,
         audioBytes: local.bytes,
+        ...timings,
         ttsMs: Date.now() - startedAt,
       });
       return new Response(local.wav, {
@@ -745,6 +959,27 @@ async function streamSpokenReply(
       });
     }
     localFallbackReason = local.error;
+    // Voice continuity: the user explicitly selected a local cloned voice, so
+    // substituting a different cloud voice mid-conversation reads as a bug
+    // (reported 2026-07-02: replies alternated voice01/nova across TTS-server
+    // flaps). Report the outage instead; the overlay shows the reply as text
+    // and the prewarm probes restore the voice when the server recovers.
+    await appendVoiceTurnTelemetry({
+      ok: false,
+      stage: "speak",
+      engine: "none",
+      skipped: "voice-continuity",
+      localFallbackReason,
+      ttsMs: Date.now() - startedAt,
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        voiceUnavailable: true,
+        error: `The selected local TTS voice is unreachable (${localFallbackReason}).`,
+      },
+      { status: 503 },
+    );
   }
 
   const apiKey = await transcriptionApiKey();

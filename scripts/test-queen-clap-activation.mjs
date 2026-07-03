@@ -286,6 +286,21 @@ check("Queen Bee starts each voice session with one opening line", () => {
   assert.match(pipelineHook, /return await playSpokenReply\(/);
 });
 
+check("pipeline hook captures continuously with pre-roll flush", () => {
+  // One session-long mic pump fills the pre-roll ring buffer through
+  // thinking/speaking; per-turn code arms it instead of swapping handlers.
+  assert.match(pipelineHook, /const preRoll:\s*\{ at: number; pcm: Int16Array \}\[\]/);
+  assert.match(pipelineHook, /flushPreRollTo\(socket, flushSinceMs\)/);
+  assert.match(pipelineHook, /sttLiveSocket = socket/);
+  // A barge-in hands the interrupting words to the next listening turn.
+  assert.match(
+    pipelineHook,
+    /pendingFlushSinceMs = performance\.now\(\) - BARGE_IN_FLUSH_LOOKBACK_MS/,
+  );
+  // A stale prewarmed socket is replaced, never adopted dead.
+  assert.match(pipelineHook, /socket\.readyState !== WebSocket\.OPEN && !cancelled/);
+});
+
 check("clap hook stays local and tears down the microphone stream", () => {
   assert.match(hook, /getUserMedia/);
   assert.match(hook, /createScriptProcessor/);

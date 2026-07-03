@@ -67,7 +67,9 @@ const legacyOversizedAllowances = new Map([
   // Ratchet re-baselined 2026-07-02: watermarks set to then-current line counts
   // (files had silently grown past the old allowances while the gate wasn't run
   // in CI). Shrinking a file should lower its entry; growth fails the gate.
-  ["scripts/agent-telemetry-collector.mjs", 8118],
+  // 2026-07-02: +5 for the cached /apps discovery sweep (logic itself lives in
+  // scripts/lib/hosted-apps-cache.mjs; only the import + wiring is here).
+  ["scripts/agent-telemetry-collector.mjs", 8123],
   // 2026-07-02: +18 for the non-string task.result/body read+write coercion fix
   // (one poisoned task was 400ing every /api/kanban read).
   ["src/lib/services/kanban/local-kanban-store.ts", 2433],

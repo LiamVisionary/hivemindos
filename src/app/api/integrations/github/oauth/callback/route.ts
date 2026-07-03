@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     await saveGitHubTokenForAeon(payload.access_token);
     return clearCookies(renderGitHubOAuthPage({
       title: "GitHub connected",
-      body: "Saved GitHub OAuth access as <code>GH_GLOBAL</code> through hive-env-add. AEON can now use GitHub without Nango.",
+      body: "Saved GitHub OAuth access as <code>GH_GLOBAL</code> through hive-env-add. Your hive can now use GitHub on every machine.",
       returnUrl,
       returnLabel: verifiedState.source === "aeon" ? "Back to AEON overview" : "Back to integrations",
     }));

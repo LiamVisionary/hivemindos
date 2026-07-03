@@ -11,7 +11,7 @@ import {
   type WalletPickerChipTone,
 } from "@/components/wallets-drop-in/WalletPickerCard";
 import { getDisplayWalletBalanceUsd } from "@/lib/utils/agent-wallet";
-import { chainBadgeSrc, chainKeyForNetwork, chainLabelForNetwork } from "@/lib/utils/personal-wallet-grouping";
+import { chainBadgeSrc, chainKeyForNetwork, chainLabelForNetwork, type PersonalChainKey } from "@/lib/utils/personal-wallet-grouping";
 import styles from "./trade.module.css";
 
 const BANKR_LOGO_SRC = "/icons/runtimes/bankr.svg";
@@ -45,7 +45,7 @@ function tagsForPickable(pickable: PickableWallet): Array<{ label: string; src?:
 /** One executable per-chain account inside a grouped user wallet (Base, Solana …). */
 export type PickableAccount = {
   id: string;
-  chainKey: "base" | "solana" | "other";
+  chainKey: PersonalChainKey;
   network: string;
   networkLabel: string;
   address: string;

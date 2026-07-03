@@ -52,6 +52,11 @@ class HivemindRealtimePcmPlayer extends AudioWorkletProcessor {
     this.ended = false;
     this.endedPosted = false;
     this.wasUnderrunning = false;
+    // Rebuffer-on-underrun: after the queue runs dry, hold silence until this
+    // many frames accumulate instead of chasing each arriving chunk — a feed
+    // slower than realtime then produces a few clean pauses, not per-chunk
+    // syllable chopping. Grows with consecutive underruns.
+    this.resumeFrames = 0;
     this.lastStatsFrame = 0;
     this.port.onmessage = (event) => {
       const message = event.data || {};
@@ -92,6 +97,12 @@ class HivemindRealtimePcmPlayer extends AudioWorkletProcessor {
       output[channel].fill(0);
     }
     if (!this.started) return 0;
+    // Rebuffering after an underrun: stay silent until enough audio queued
+    // (unless the stream already ended - then drain whatever is left).
+    if (this.wasUnderrunning && !this.ended && this.bufferedFrames < this.resumeFrames) {
+      this.underrunFrames += outputFrames;
+      return 0;
+    }
 
     let written = 0;
     while (written < outputFrames) {
@@ -120,6 +131,12 @@ class HivemindRealtimePcmPlayer extends AudioWorkletProcessor {
       if (!this.wasUnderrunning) {
         this.wasUnderrunning = true;
         this.underruns += 1;
+        // Hold silence until this much audio re-accumulates; repeated
+        // underruns (feed slower than realtime) earn a longer runway.
+        this.resumeFrames = Math.min(
+          sampleRate * 0.72,
+          sampleRate * 0.24 * Math.min(this.underruns, 3),
+        );
         this.port.postMessage({
           type: "underrun",
           underruns: this.underruns,
@@ -442,6 +459,7 @@ export async function playRealtimePcmStream(
   let carry = new Uint8Array(0);
   let firstByteMs = 0;
   let firstAudioMs = 0;
+  let streamErrorAccepted = false;
 
   const feed = (chunk: Uint8Array) => {
     const bytes = carry.byteLength ? new Uint8Array(carry.byteLength + chunk.byteLength) : chunk;
@@ -485,7 +503,9 @@ export async function playRealtimePcmStream(
       const enoughPlayedToAccept =
         !options.signal?.aborted && typeof acceptAfterMs === "number" && player.scheduledMs >= acceptAfterMs;
       if (!enoughPlayedToAccept) throw error;
-      // Mid-stream death with real audio already queued: let it play out.
+      // Mid-stream death with real audio already queued: let it play out, but
+      // tell the caller the reply is INCOMPLETE so it can say so on screen.
+      streamErrorAccepted = true;
     }
     player.end();
     await player.waitForEnd();
@@ -503,5 +523,6 @@ export async function playRealtimePcmStream(
     firstByteMs,
     firstAudioMs: playbackFirstAudioMs || firstAudioMs,
     firstAudioAt: metrics.firstAudioAt || (firstAudioMs ? options.startedAt + firstAudioMs : 0),
+    streamErrorAccepted,
   };
 }

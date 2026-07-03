@@ -233,20 +233,37 @@ export function routeChannelMarkupDelta(
   return { content, thinking };
 }
 
+// The Queen voice pipeline flattens persona + history + the spoken utterance into
+// ONE user message (buildRuntimeVoiceUserText in queen-bee/voice-turn.ts) because
+// runtime adapters drop messages[] history. Keep these markers in sync with it.
+const QUEEN_VOICE_UTTERANCE_MARKER = "\nUser's latest spoken message:";
+const QUEEN_VOICE_UTTERANCE_END = "\nRespond now as Queen Bee";
+
 // The FAB prepends a screen-context briefing ("<capabilities…>\n\nUser request: X")
-// to the relayed message. The intent matchers below must key on the user's ACTUAL
-// request, NOT that metadata — otherwise briefing words like "run" or "Polymarket"
-// false-trigger a handler (e.g. the MiroShark x402 matcher hijacking a plain
-// "swap 1 usdc to eth"). This returns a copy of the message list whose latest user
-// message is unwrapped to just the request; the agent fallthrough keeps the original
-// (briefing intact) for context.
+// to the relayed message, and the Queen voice pipeline flattens its persona prompt
+// and history around the spoken utterance. The intent matchers below must key on
+// the user's ACTUAL request, NOT that scaffolding — otherwise briefing words like
+// "run" or "Polymarket" false-trigger a handler (e.g. the MiroShark x402 matcher
+// hijacking a plain "swap 1 usdc to eth"), and persona words like "automation"
+// fire the Bankr rail on every spoken turn. This returns a copy of the message
+// list whose latest user message is unwrapped to just the request; the agent
+// fallthrough keeps the original (scaffolding intact) for context.
+export function bareUserRequestText(text: string): string {
+  const fabMarker = text.lastIndexOf("\n\nUser request:");
+  if (fabMarker >= 0) return text.slice(fabMarker + "\n\nUser request:".length).trim();
+  const spokenMarker = text.lastIndexOf(QUEEN_VOICE_UTTERANCE_MARKER);
+  if (spokenMarker >= 0) {
+    const rest = text.slice(spokenMarker + QUEEN_VOICE_UTTERANCE_MARKER.length);
+    const end = rest.indexOf(QUEEN_VOICE_UTTERANCE_END);
+    return (end >= 0 ? rest.slice(0, end) : rest).trim();
+  }
+  return "";
+}
+
 export function unwrapLatestUserRequest(messages: IncomingMessage[]): IncomingMessage[] {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i].role !== "user") continue;
-    const text = messageText(messages[i]);
-    const marker = text.lastIndexOf("\n\nUser request:");
-    if (marker < 0) return messages;
-    const bare = text.slice(marker + "\n\nUser request:".length).trim();
+    const bare = bareUserRequestText(messageText(messages[i]));
     if (!bare) return messages;
     const copy = messages.slice();
     copy[i] = { ...messages[i], content: bare };

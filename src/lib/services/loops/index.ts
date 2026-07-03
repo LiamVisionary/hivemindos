@@ -56,6 +56,7 @@ export {
 } from "@/lib/services/loops/loop-metrics";
 export {
   detectArtifacts,
+  isReservedOrMockUrl,
   loopContractForPrompt,
   parseLoopSelfReport,
   runLoopGates,
@@ -64,6 +65,8 @@ export {
   type LoopGateJudge,
   type LoopJudgeVerdict,
   type LoopSelfReportEntry,
+  type LoopUrlProbeResult,
+  type LoopUrlProber,
   type RunLoopGatesInput,
   type RunLoopGatesResult,
 } from "@/lib/services/loops/loop-runner";

@@ -130,7 +130,7 @@ Each HivemindOS brain peer should set the same `HIVE_AEON_BRAIN_OIDC_AUDIENCE` e
 The dashboard can populate `GH_GLOBAL` through the GitHub OAuth fallback routes
 under `/api/integrations/github/oauth/*`. That path is useful when AEON needs
 GitHub Actions, workflow dispatch, issue triggers, repository sync, or private
-repository visibility checks but Nango is not configured.
+repository visibility checks without any extra integration service.
 
 ## Verification
 

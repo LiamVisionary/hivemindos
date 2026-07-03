@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     const imported = importWalletSecret(body.network || "eip155:8453", body.secret || "", body.importKind || "private-key");
-    const singleWalletName = body.name?.trim() || `My ${imported.network.startsWith("solana:") ? "Solana" : "Base"} wallet`;
+    const singleWalletName = body.name?.trim() || `My ${walletNetworkLabel(imported.network)} wallet`;
     const info = await storeWalletSecret({
       agentId,
       name: singleWalletName,
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
           provider: "manual",
           walletAddress: info.address,
           network: info.network,
-          tokenSymbol: info.network.startsWith("solana:") ? "SOL" : "ETH",
+          tokenSymbol: primaryTokenSymbol(info.network),
           custodyMode: info.custodyMode,
           updatedAt: now,
         },
@@ -110,4 +110,16 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : "Failed to import wallet.",
     }, { status: 400 });
   }
+}
+
+function walletNetworkLabel(network: string): string {
+  if (network === "eip155:4663") return "Robinhood Chain";
+  if (network.startsWith("solana:")) return "Solana";
+  if (network === "eip155:84532") return "Base Sepolia";
+  return "Base";
+}
+
+function primaryTokenSymbol(network: string): string {
+  if (network === "eip155:4663") return "USDG";
+  return network.startsWith("solana:") ? "SOL" : "ETH";
 }

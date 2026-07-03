@@ -1,6 +1,7 @@
 // Zero Human Companies — Linear-style issue board for a single colony.
 import React from "react";
 import { ISSUE_LANES } from "./data";
+import { getIssueIdentity } from "./issue-identity";
 import { PriTag, RoleGlyph } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
 
@@ -71,7 +72,7 @@ export function IssueBoard({ colony, onOpenIssue }: { colony: Colony; onOpenIssu
               <span style={{ height: 2, background: `color-mix(in srgb, ${accent} 45%, transparent)`, borderRadius: 999, marginTop: 4 }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
-              {items.map((i) => <IssueCard key={i.key} issue={i} agents={colony.agents} onOpen={onOpenIssue} />)}
+              {items.map((i) => <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} onOpen={onOpenIssue} />)}
               {items.length === 0 && (
                 <div style={{ borderRadius: 10, border: "1px dashed var(--line)", padding: "14px 10px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>empty</div>
               )}

@@ -49,6 +49,10 @@ try {
 
 async function assertSensitiveRoutesRejectAnonymous(url) {
   const probes = [
+    // No in-route requireAuth — only the src/proxy.ts gate rejects this one,
+    // so it fails if the proxy file ever stops loading (root middleware.ts
+    // was silently ignored under the src/ layout until 2026-07-03).
+    { path: "/api/notifications?limit=1", init: { method: "GET" } },
     { path: "/api/env", init: { method: "GET" } },
     { path: "/api/env", init: jsonPost({ sourceId: "shared", key: "TEST_SECRET", value: "nope" }) },
     { path: "/api/wallet/create", init: jsonPost({ agentId: "queen-bee" }) },

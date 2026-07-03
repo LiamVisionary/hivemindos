@@ -1,10 +1,10 @@
 import "server-only";
 
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
-import { sendUsdc } from "@/lib/services/wallet/chain-wallet";
+import { sendUsdStable } from "@/lib/services/wallet/chain-wallet";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
-export const PLATFORM_FEE_CONFIRMATION_NOTE = "Platform fee collected as a separate USDC transfer.";
+export const PLATFORM_FEE_CONFIRMATION_NOTE = "Platform fee collected as a separate stablecoin transfer.";
 
 const DEFAULT_FEE_BPS = 100; // 1%
 const DEFAULT_MIN_FEE_USD = 0.01;
@@ -55,6 +55,7 @@ export type PlatformFeeSource =
   | "wallet-send"
   | "dex-swap"
   | "xstocks"
+  | "robinhood-chain"
   | "alpaca-live"
   | "bankr-action"
   | "moneyclaw"
@@ -71,6 +72,7 @@ export type PlatformFeeQuote = {
   basisPoints: number;
   minFeeUsd: number;
   maxFeeUsd?: number;
+  assetSymbol: "USDC" | "USDG";
   recipient?: string;
   recipientKey?: string;
   reason?: string;
@@ -119,6 +121,7 @@ export async function quoteTradingPlatformFee(input: {
   const basisPoints = policy.basisPoints;
   const minFeeUsd = policy.minFeeUsd;
   const maxFeeUsd = policy.maxFeeUsd;
+  const assetSymbol = stableAssetSymbol(input.network);
   const amountUsd = feeAmountUsd(input.amountUsd, basisPoints, minFeeUsd, maxFeeUsd);
   if (!enabled) {
     return {
@@ -130,6 +133,7 @@ export async function quoteTradingPlatformFee(input: {
       basisPoints,
       minFeeUsd,
       maxFeeUsd: maxFeeUsd > 0 ? maxFeeUsd : undefined,
+      assetSymbol,
       reason: policy.reason || "Platform fees are disabled.",
     };
   }
@@ -144,6 +148,7 @@ export async function quoteTradingPlatformFee(input: {
       basisPoints,
       minFeeUsd,
       maxFeeUsd: maxFeeUsd > 0 ? maxFeeUsd : undefined,
+      assetSymbol,
       reason: "No fee is due for this zero-value action.",
     };
   }
@@ -158,6 +163,7 @@ export async function quoteTradingPlatformFee(input: {
       basisPoints,
       minFeeUsd,
       maxFeeUsd: maxFeeUsd > 0 ? maxFeeUsd : undefined,
+      assetSymbol,
       reason: policy.reason || `No platform fee recipient is configured for ${networkFamily(input.network)}.`,
     };
   }
@@ -171,6 +177,7 @@ export async function quoteTradingPlatformFee(input: {
     basisPoints,
     minFeeUsd,
     maxFeeUsd: maxFeeUsd > 0 ? maxFeeUsd : undefined,
+    assetSymbol,
     recipient: policy.recipient,
     recipientKey: policy.recipientKey,
   };
@@ -190,7 +197,7 @@ export async function collectTradingPlatformFee(input: {
   assertPlatformFeeCollectable(quote);
 
   try {
-    const result = await sendUsdc({
+    const result = await sendUsdStable({
       network: input.network,
       secret: input.secret,
       fromAddress: input.fromAddress,
@@ -201,19 +208,19 @@ export async function collectTradingPlatformFee(input: {
       agentId: input.agentId,
       companyId: input.companyId,
       kind: "platform-fee",
-      asset: "USDC",
+      asset: result.assetSymbol,
       amountUsd: quote.amountUsd,
       target: shortTarget(quote.recipient),
       status: "executed",
       transactionHash: result.signature,
     }).catch(() => {});
-    return { ...quote, signature: result.signature };
+    return { ...quote, assetSymbol: result.assetSymbol, signature: result.signature };
   } catch (error) {
     await appendSpend({
       agentId: input.agentId,
       companyId: input.companyId,
       kind: "platform-fee",
-      asset: "USDC",
+      asset: quote.assetSymbol,
       amountUsd: quote.amountUsd,
       target: quote.recipient ? shortTarget(quote.recipient) : undefined,
       status: "failed",
@@ -236,12 +243,12 @@ export async function assertTradingPlatformFeeReady(input: {
 export function platformFeeDetail(fee?: PlatformFeeQuote | PlatformFeeCollection): string {
   if (!fee?.enabled) return "";
   if (!fee.configured) return fee.reason ? ` Platform fee unavailable: ${fee.reason}` : " Platform fee unavailable.";
-  return ` Platform fee ${formatFeeUsd(fee.amountUsd)} USDC (${fee.basisPoints / 100}%).`;
+  return ` Platform fee ${formatFeeUsd(fee.amountUsd)} ${fee.assetSymbol} (${fee.basisPoints / 100}%).`;
 }
 
 export function platformFeeReceiptDetail(fee?: PlatformFeeCollection): string {
   if (!fee) return "";
-  return ` ${PLATFORM_FEE_CONFIRMATION_NOTE} Fee ${formatFeeUsd(fee.amountUsd)} USDC, tx ${fee.signature}.`;
+  return ` ${PLATFORM_FEE_CONFIRMATION_NOTE} Fee ${formatFeeUsd(fee.amountUsd)} ${fee.assetSymbol}, tx ${fee.signature}.`;
 }
 
 function formatFeeUsd(amountUsd: number): string {
@@ -409,4 +416,8 @@ function networkFamily(network: string): "evm" | "solana" | "unsupported" {
   if (network.startsWith("eip155:")) return "evm";
   if (network.startsWith("solana")) return "solana";
   return "unsupported";
+}
+
+function stableAssetSymbol(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
 }

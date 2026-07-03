@@ -6,6 +6,7 @@ import {
   SELL_STOCK_CONFIRMATION,
   type StockTradeSide,
   cancelAlpacaOrder,
+  checkRobinhoodChainTradingReadiness,
   discoverStockTradeQuote,
   executeStockTrade,
   fetchAlpacaPortfolio,
@@ -17,6 +18,11 @@ import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { readWalletLedger } from "@/lib/services/obsidian/wallet-ledger";
 import { hiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { supportedXStockTickers } from "@/lib/config/xstocks-tokens";
+import {
+  ROBINHOOD_CHAIN,
+  ROBINHOOD_CHAIN_TESTNET,
+  supportedRobinhoodStockTickers,
+} from "@/lib/config/robinhood-chain";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -24,7 +30,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * HTTP surface for the stock-trade rail that previously only existed inside the
- * chat agent runtime. Buy and sell, Alpaca (paper/live) and on-chain xStocks.
+ * chat agent runtime. Buy and sell through Alpaca (paper/live), on-chain
+ * xStocks, and Robinhood Chain stock-token swaps.
  *
  * The acting wallet is ALWAYS resolved server-side from the persisted wallet
  * ledger (loadGovernanceWallet) — a client request never supplies the trade
@@ -90,7 +97,10 @@ export async function GET(request: NextRequest) {
     ...ALPACA_PAPER_ENV_NAMES,
     ...ledger.records.flatMap((record) => [record.wallet?.alpacaKeyEnvName, record.wallet?.alpacaSecretEnvName].filter(Boolean) as string[]),
   ]));
-  const alpacaPresence = await hiveEnvPresence(alpacaKeys);
+  const [alpacaPresence, robinhoodReadiness] = await Promise.all([
+    hiveEnvPresence(alpacaKeys),
+    checkRobinhoodChainTradingReadiness(),
+  ]);
   const present = (key: string) => Boolean(alpacaPresence.find((item) => item.key === key)?.present);
   const liveConfigured = ALPACA_LIVE_ENV_NAMES.every(present);
   const paperOwnConfigured = ALPACA_PAPER_ENV_NAMES.every(present);
@@ -107,6 +117,13 @@ export async function GET(request: NextRequest) {
         credentials: alpacaPresence,
       },
       xstocks: { supportedTickers: supportedXStockTickers() },
+      robinhoodChain: {
+        chain: ROBINHOOD_CHAIN,
+        testnet: ROBINHOOD_CHAIN_TESTNET,
+        supportedTickers: supportedRobinhoodStockTickers(),
+        executable: robinhoodReadiness.executable,
+        reason: robinhoodReadiness.reason,
+      },
     },
     agents: tradeAgents,
   });
@@ -135,7 +152,7 @@ export async function POST(request: NextRequest) {
     // Portfolio is a read of the chosen Alpaca account — no ticker, no governance.
     if (action === "portfolio") {
       if (policy.tradingVenue !== "alpaca") {
-        return NextResponse.json({ ok: true, portfolio: null, paper, note: "Portfolio view is available for the Alpaca venue. On-chain xStocks positions live in the agent's Solana wallet." });
+        return NextResponse.json({ ok: true, portfolio: null, paper, note: "Portfolio view is available for the Alpaca venue. On-chain stock-token positions live in the acting wallet." });
       }
       const portfolio = await fetchAlpacaPortfolio({ policy, paper });
       return NextResponse.json({ ok: true, portfolio, paper });
@@ -160,14 +177,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, side, paper, quote, confirmation: stockTradeConfirmation(side) });
     }
 
-    // Execute: xStocks uses the agent's local Solana wallet for the swap; live
-    // Alpaca uses the local wallet only to collect the HivemindOS platform fee.
+    // Execute: xStocks and Robinhood Chain use the agent's local on-chain wallet
+    // for the swap; live Alpaca uses it only to collect the HivemindOS platform fee.
     let network: string | undefined;
     let secret: string | undefined;
     let fromAddress: string | undefined;
-    if (policy.tradingVenue === "xstocks") {
+    if (policy.tradingVenue === "xstocks" || policy.tradingVenue === "robinhood-chain") {
       const stored = await getWalletSecret(agentId);
-      if (!stored) return NextResponse.json({ ok: false, error: "No local Solana wallet exists for this agent." }, { status: 404 });
+      if (!stored) return NextResponse.json({ ok: false, error: `No local ${policy.tradingVenue === "xstocks" ? "Solana" : "Robinhood Chain"} wallet exists for this agent.` }, { status: 404 });
       network = stored.info.network;
       secret = stored.secret;
       fromAddress = stored.info.address;

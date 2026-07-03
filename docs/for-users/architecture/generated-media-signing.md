@@ -50,7 +50,7 @@ auth (session cookie / device token) — the signature path is an alternative
 for native loaders, never a replacement. Either way the route keeps its own
 safety checks: image extensions only, magic-number validation, size cap. The
 route authenticates itself, so it belongs to the self-authenticating
-allowlist in `middleware.ts`.
+allowlist in `src/proxy.ts`.
 
 ## Phone image generation flow
 

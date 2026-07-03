@@ -12,11 +12,16 @@
 // linkd-only machines, carries destination directories and progress, and works
 // from the dashboard. Taildrop is the phone-native ingest edge.
 //
-// Mechanics: `tailscale file get --wait <dir>` blocks until at least one file
-// is in the Taildrop inbox, moves everything into <dir> (renaming on
-// conflict), then exits — so we just loop it. If the CLI errors (tailscaled
-// down, logged out, or a GUI variant that owns the inbox and auto-saves to
-// Downloads instead), we log and retry with backoff; the watcher never spins.
+// Mechanics — two delivery variants, both covered:
+//   1. CLI inbox (Linux, headless tailscaled): `tailscale file get --wait
+//      <dir>` blocks until at least one file is in the Taildrop inbox, moves
+//      everything into <dir> (renaming on conflict), then exits — we loop it.
+//      If the CLI errors (tailscaled down / logged out) we log and back off.
+//   2. GUI-owned inbox (macOS Tailscale.app): the GUI claims received files
+//      itself and saves them to its configured folder — the CLI inbox stays
+//      empty forever (verified live 2026-07-03). For this variant, point the
+//      GUI's "save incoming files" folder at the ingest dir once (Tailscale →
+//      Settings), and the watcher's directory watch announces arrivals.
 //
 // Env knobs (all optional):
 //   HIVE_TAILDROP_INGEST_DIR   where received files land (default ~/HiveDrop)
@@ -25,12 +30,12 @@
 //                              (default 5020,5021,5111,5121,3000)
 //   HIVE_TAILDROP_ONCE=1       run a single drain pass and exit (for testing)
 
-import { mkdir, readdir, appendFile, readFile } from "node:fs/promises";
+import { mkdir, readdir, appendFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFileSync } from "node:fs";
+import { readFileSync, watch } from "node:fs";
 
 const execFileAsync = promisify(execFile);
 
@@ -166,28 +171,81 @@ export async function drainOnce(cli) {
   return { received };
 }
 
+// Names already announced (or present before we started) — the inbox drain
+// and the directory watch both feed the same dedupe so a file that the drain
+// moved into the watched dir is not announced twice.
+const announced = new Set();
+
+async function announce(name) {
+  if (announced.has(name)) return;
+  announced.add(name);
+  await log(`received ${name} -> ${join(INGEST_DIR, name)}`);
+  await postDashboardNotification(name);
+}
+
+function looksPartial(name) {
+  return name.startsWith(".") || /\.(download|part|crdownload|tmp)$/i.test(name);
+}
+
+// Directory watch: catches files delivered INTO the ingest dir by something
+// other than our own drain — chiefly the macOS GUI variant configured to save
+// incoming files there. Waits for the size to hold still before announcing so
+// a mid-write file is not reported early.
+function watchIngestDir() {
+  let scanning = false;
+  const scan = async () => {
+    if (scanning) return;
+    scanning = true;
+    try {
+      for (const name of await listDir(INGEST_DIR)) {
+        if (announced.has(name) || looksPartial(name)) continue;
+        const path = join(INGEST_DIR, name);
+        try {
+          const first = await stat(path);
+          await sleep(1_500);
+          const second = await stat(path);
+          if (first.size === second.size && second.isFile()) {
+            await announce(name);
+          }
+        } catch {
+          // vanished mid-scan (renamed away or partial cleanup) — skip
+        }
+      }
+    } finally {
+      scanning = false;
+    }
+  };
+  try {
+    watch(INGEST_DIR, () => { void scan(); });
+  } catch (error) {
+    void log(`ingest dir watch unavailable (${error.message}); relying on inbox drain only`);
+  }
+}
+
 async function main() {
   const cli = await resolveTailscaleCli();
   if (!cli) {
     await log("tailscale CLI not found — install Tailscale or set HIVE_TAILSCALE_CLI; exiting");
     process.exit(1);
   }
+  await mkdir(INGEST_DIR, { recursive: true });
+  for (const name of await listDir(INGEST_DIR)) announced.add(name); // pre-existing files are old news
   await log(`taildrop-ingest up — inbox drains to ${INGEST_DIR} (cli: ${cli})${RUN_ONCE ? " (ONCE)" : ""}`);
+  if (!RUN_ONCE) watchIngestDir();
   for (;;) {
     const startedAt = Date.now();
     const result = await drainOnce(cli);
     if (result.error) {
       // Common cases: tailscaled down / logged out, or a macOS GUI variant
-      // that owns the inbox (files auto-save to Downloads instead — nothing
-      // for the CLI to drain). Log once per pass and back off.
+      // that owns the inbox (nothing for the CLI to drain — the directory
+      // watch carries that variant). Log once per pass and back off.
       await log(`drain error: ${result.error}; retrying in ${Math.round(RETRY_MS / 1000)}s`);
       if (RUN_ONCE) break;
       await sleep(RETRY_MS);
       continue;
     }
     for (const name of result.received) {
-      await log(`received ${name} -> ${join(INGEST_DIR, name)}`);
-      await postDashboardNotification(name);
+      await announce(name);
     }
     if (RUN_ONCE) break;
     // A --wait that returned instantly with nothing new means this variant

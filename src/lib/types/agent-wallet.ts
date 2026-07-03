@@ -1,11 +1,11 @@
 export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw" | "x402" | "usepod" | "venice" | "veil";
 
 export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" | "high";
-export type AgentSpendCapAsset = "USDC" | "ETH";
+export type AgentSpendCapAsset = "USDC" | "USDG" | "ETH";
 export type AgentAssetSpendCaps = Partial<Record<AgentSpendCapAsset, number>>;
 
-/** Stock-buying rail: real brokerage (Alpaca) or on-chain tokenized equities (xStocks via Jupiter swap). */
-export type AgentTradingVenue = "alpaca" | "xstocks";
+/** Stock-buying rail: real brokerage (Alpaca) or on-chain tokenized equities. */
+export type AgentTradingVenue = "alpaca" | "xstocks" | "robinhood-chain";
 
 export interface AgentWalletConfig {
   agentId: string;

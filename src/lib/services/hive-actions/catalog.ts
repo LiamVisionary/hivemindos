@@ -604,7 +604,7 @@ export const stockTradeAction = defineHiveAction({
   id: "wallet.stock-trade",
   title: "Stock trade",
   description:
-    "Execute a governed stock or xStocks trade after explicit buy/sell confirmation.",
+    "Execute or validate a governed stock, xStocks, or Robinhood Chain stock-token trade after explicit buy/sell confirmation.",
   schema: z.object({
     agentId: z.string().optional(),
     wallet: z.record(z.string(), z.unknown()).optional(),
@@ -621,7 +621,7 @@ export const stockTradeAction = defineHiveAction({
   sideEffects: ["wallet", "payment", "network"],
   risk: "critical",
   tags: ["wallet", "payment", "stocks", "trade", "execution"],
-  aliases: ["stock_trade", "buy stock", "sell stock", "xstocks trade"],
+  aliases: ["stock_trade", "buy stock", "sell stock", "xstocks trade", "robinhood chain stock token"],
   mcp: { expose: true, compact: true, toolName: "stock_trade" },
   confirmation: {
     tokens: ["CONFIRM_BUY", "CONFIRM_SELL"],
@@ -631,9 +631,9 @@ export const stockTradeAction = defineHiveAction({
   },
   contextIndex: {
     summary:
-      "Critical governed stock/xStocks trade execution route.",
+      "Critical governed stock/xStocks/Robinhood Chain stock-token route.",
     retrievalText:
-      "Use stock_trade only after prepare/review paths establish venue, paper/live mode, symbol, side, amount, and required side-specific confirmation. CONFIRM_BUY is required for buys and CONFIRM_SELL for sells; server routes remain authoritative.",
+      "Use stock_trade only after prepare/review paths establish venue, paper/live mode, symbol, side, amount, and required side-specific confirmation. CONFIRM_BUY is required for buys and CONFIRM_SELL for sells; server routes remain authoritative. Robinhood Chain stock-token support swaps USDG through 0x on chain ID 4663 and signs with the local Robinhood Chain wallet; if 0x rejects a Stock Token for legal/eligibility restrictions, surface that block and do not route around it.",
     route: "/api/trading",
     methods: ["POST"],
   },

@@ -5,8 +5,8 @@ import { formatUnits, parseUnits } from "viem";
 import { Connection, Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { getMint } from "@solana/spl-token";
 import { base58 } from "@scure/base";
-import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { executeEvmZeroExSwap, readErc20Decimals, type ZeroExSwapQuote } from "@/lib/services/wallet/chain-wallet";
+import { zeroExFetch } from "@/lib/services/trading/zero-ex";
 import { appendSpend } from "@/lib/services/wallet/spend-ledger";
 import { evaluateSpend, resolveSpendGovernance, shouldEvaluateSpend } from "@/lib/services/wallet/spend-governance";
 import {
@@ -35,7 +35,6 @@ import {
 export const SWAP_CONFIRMATION = "CONFIRM_SWAP";
 export const MAX_SWAP_USD = 10;
 
-const ZEROX_BASE = process.env.ZEROX_API_BASE || "https://api.0x.org";
 const JUPITER_BASE = process.env.JUPITER_API_BASE || "https://lite-api.jup.ag";
 const BASE_CHAIN_ID = 8453;
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
@@ -165,18 +164,6 @@ async function resolveBaseToken(input: string): Promise<BaseToken> {
     return { address: raw, decimals, symbol: `${raw.slice(0, 6)}…${raw.slice(-4)}` };
   }
   throw new Error(`Unknown token "${input}". Use ${SWAP_TOKENS_BASE.join(", ")}, or a 0x token address.`);
-}
-
-async function zeroExFetch(path: string): Promise<Record<string, unknown>> {
-  const key = await hiveEnvValue("ZEROX_API_KEY");
-  if (!key) throw new Error("Base swaps need ZEROX_API_KEY. Add it with `hive-env-add ZEROX_API_KEY`.");
-  const response = await fetch(`${ZEROX_BASE}${path}`, {
-    headers: { "0x-api-key": key, "0x-version": "v2" },
-    signal: AbortSignal.timeout(30_000),
-  });
-  const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok || !data) throw new Error(`0x API error (HTTP ${response.status}): ${(data as { reason?: string })?.reason || "request failed"}.`);
-  return data;
 }
 
 async function baseSellUsd(sell: BaseToken, sellAtomic: bigint): Promise<number> {

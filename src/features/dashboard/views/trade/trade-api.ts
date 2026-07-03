@@ -80,7 +80,7 @@ export type TradePrepareParams = {
   prompt?: string;
 };
 
-export type StockVenue = "alpaca" | "xstocks";
+export type StockVenue = "alpaca" | "xstocks" | "robinhood-chain";
 
 export type TradingReadiness = {
   ok: boolean;
@@ -93,6 +93,29 @@ export type TradingReadiness = {
       credentials: Array<{ key: string; present: boolean }>;
     };
     xstocks: { supportedTickers: string[] };
+    robinhoodChain?: {
+      chain: {
+        name: string;
+        network: string;
+        chainId: number;
+        rpcUrl: string;
+        websocketUrl: string;
+        explorerUrl: string;
+        recommendedRpcProvider: string;
+      };
+      testnet: {
+        name: string;
+        network: string;
+        chainId: number;
+        rpcUrl: string;
+        websocketUrl: string;
+        explorerUrl: string;
+        recommendedRpcProvider: string;
+      };
+      supportedTickers: string[];
+      executable: boolean;
+      reason: string;
+    };
   };
   agents: Array<{ agentId: string; agentName: string; venue?: StockVenue; paper: boolean; liveEnabled: boolean; enabled: boolean }>;
 };

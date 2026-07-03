@@ -85,14 +85,23 @@ export function mergeLoopReceipts(existing: unknown, next: unknown) {
 
 export function loopCompletionBlock(loop: LoopSpec | undefined, receipts: LoopReceipt[]) {
   const requiredGates = loop?.evalGates.filter((gate) => gate.required) ?? [];
-  if (!requiredGates.length) return null;
   const passedGateIds = new Set(receipts.filter((receipt) => receipt.status === "passed" && receipt.gateId).map((receipt) => receipt.gateId));
   const missing = requiredGates.filter((gate) => gate.status !== "passed" && !passedGateIds.has(gate.id));
-  if (!missing.length) return null;
+  // A hard-fail receipt blocks completion regardless of whether any gate is "required".
+  // A required-gate MISS means "no evidence yet" — recoverable and, by company design,
+  // intentionally non-blocking (see buildOperatingUnitLearningLoop). A hard-fail means
+  // "affirmatively false evidence" — e.g. a claimed-live URL that is dead or on a
+  // reserved/example/mock host — which must never be allowed to pass as done.
+  const hardFails = receipts.filter((receipt) => receipt.status === "failed" && isHardFailReceipt(receipt));
+  if (!missing.length && !hardFails.length) return null;
   return {
-    missingGateIds: missing.map((gate) => gate.id),
-    missingGateTitles: missing.map((gate) => gate.title),
+    missingGateIds: [...missing.map((gate) => gate.id), ...hardFails.map((receipt) => receipt.gateId ?? receipt.id)],
+    missingGateTitles: [...missing.map((gate) => gate.title), ...hardFails.map((receipt) => receipt.summary || "Integrity check failed")],
   };
+}
+
+function isHardFailReceipt(receipt: LoopReceipt): boolean {
+  return (receipt.metadata as { hardFail?: unknown } | undefined)?.hardFail === true;
 }
 
 export function applyLoopReceipts(loop: LoopSpec | undefined, receipts: LoopReceipt[]) {

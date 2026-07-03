@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { Check } from "lucide-react";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
@@ -48,6 +50,7 @@ const USDC_BAR_COLOR = "#2775ca";
 function networkLabel(network?: string): string {
   const value = String(network || "").toLowerCase();
   if (value.includes("solana")) return "Solana mainnet";
+  if (value.includes("4663")) return "Robinhood Chain";
   if (value.includes("84532") || value.includes("sepolia")) return "Base Sepolia";
   if (value.includes("eip155") || value.includes("base") || value.includes("8453")) return "Base mainnet";
   return network || "Base mainnet";

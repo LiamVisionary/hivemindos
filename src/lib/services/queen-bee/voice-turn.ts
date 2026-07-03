@@ -19,6 +19,7 @@ import {
 } from "@/lib/services/queen-bee/control-plane";
 import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
+import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
 
 // The persisted session every Queen agent-turn shares; multi-step rail flows (a
 // swap/send/Bankr DRAFT prepared on one turn, then a confirmation on the next)
@@ -116,8 +117,34 @@ export async function runQueenBeeVoiceTurn(options: {
   marks?: Record<string, number>;
   /** Optional live stage sink (overlay progress chips). */
   progress?: (label: string) => void;
+  /**
+   * Live spoken-reply sink for the streaming converse action: emits speech
+   * text incrementally while the model writes (the concatenation across a
+   * turn equals the returned `reply`, minus any divergent tail).
+   */
+  onSpeechDelta?: (text: string) => void;
+  /** A failed attempt's already-emitted speech must be discarded downstream. */
+  onSpeechReset?: () => void;
 }): Promise<QueenVoiceTurnResult> {
-  const text = await conversationTurnText(options);
+  const emitter = options.onSpeechDelta
+    ? createVoiceSpeechEmitter(options.onSpeechDelta)
+    : null;
+  // Whatever the live extraction did not cover (non-JSON replies, the
+  // delegation receipt) is emitted before the result returns, so the client
+  // always hears the same text the buffered turn would have spoken.
+  const finish = (result: QueenVoiceTurnResult) => {
+    emitter?.finalize(result.reply);
+    return result;
+  };
+  const text = await conversationTurnText({
+    ...options,
+    onTextDelta: emitter ? (chunk) => emitter.onTextDelta(chunk) : undefined,
+    onAttemptStart: emitter
+      ? () => {
+          if (emitter.attemptReset()) options.onSpeechReset?.();
+        }
+      : undefined,
+  });
   if (text) {
     const parsed = parseVoiceTurnJson(text);
     if (parsed?.task) {
@@ -125,30 +152,32 @@ export async function runQueenBeeVoiceTurn(options: {
         parsed.task.title ? `Delegating: ${parsed.task.title}` : "Delegating the task",
       );
       const submitted = await submitQueenBeeVoiceTask(options, parsed.task);
-      return {
+      return finish({
         reply: joinSpeech(parsed.speech, submitted.summary),
         taskId: submitted.taskId,
         taskTitle: submitted.taskTitle,
         created: submitted.created,
         route: submitted.route,
-      };
+      });
     }
-    if (parsed?.speech) return { reply: parsed.speech };
-    return { reply: text.trim().slice(0, 600) };
+    if (parsed?.speech) return finish({ reply: parsed.speech });
+    return finish({ reply: text.trim().slice(0, 600) });
   }
   // Last resort: treat the utterance as a direct work request so voice keeps
-  // working even when no conversational model is reachable.
+  // working even when no conversational model is reachable. A failed attempt
+  // may have streamed partial speech already — discard it first.
+  if (emitter?.attemptReset()) options.onSpeechReset?.();
   const submitted = await submitQueenBeeVoiceTask(options, {
     title: "",
     message: options.transcript,
   });
-  return {
+  return finish({
     reply: submitted.summary,
     taskId: submitted.taskId,
     taskTitle: submitted.taskTitle,
     created: submitted.created,
     route: submitted.route,
-  };
+  });
 }
 
 // A failed runtime brain costs several spoken seconds per turn; skip it for a
@@ -200,6 +229,10 @@ async function conversationTurnText(options: {
   vaultPath?: string;
   marks?: Record<string, number>;
   progress?: (label: string) => void;
+  /** Live reply-text deltas from the CURRENT attempt only. */
+  onTextDelta?: (chunk: string) => void;
+  /** Called before every attempt so delta consumers can reset between them. */
+  onAttemptStart?: () => void;
 }) {
   // Standing preferences ("call me boss") splice onto the system prompt so
   // both the runtime brain and the OpenAI fallback honor them every turn. Note
@@ -213,6 +246,7 @@ async function conversationTurnText(options: {
     const agentStartedAt = Date.now();
     options.progress?.(`Thinking with ${agent.name || agent.id}`);
     try {
+      options.onAttemptStart?.();
       const text = await runRuntimeConversationTurn(
         options.origin,
         agent,
@@ -220,6 +254,7 @@ async function conversationTurnText(options: {
         options.history,
         systemPreamble,
         options.progress,
+        options.onTextDelta,
       );
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
@@ -238,10 +273,12 @@ async function conversationTurnText(options: {
   const openAiStartedAt = Date.now();
   options.progress?.("Thinking with OpenAI");
   try {
+    options.onAttemptStart?.();
     return await runOpenAiConversationTurn(
       options.transcript,
       options.history,
       systemPreamble,
+      options.onTextDelta,
     );
   } catch (fallbackError) {
     console.warn(
@@ -278,6 +315,7 @@ async function runOpenAiConversationTurn(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
+  onTextDelta?: (chunk: string) => void,
 ) {
   const apiKey = await transcriptionApiKey();
   if (!apiKey) {
@@ -297,20 +335,77 @@ async function runOpenAiConversationTurn(
       messages: conversationMessages(transcript, history, systemPreamble),
       max_tokens: 300,
       temperature: 0.6,
+      // Streamed turns feed the fused converse+speak pipeline; the buffered
+      // legacy action keeps the plain JSON response.
+      ...(onTextDelta ? { stream: true } : {}),
     }),
     cache: "no-store",
     signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
   });
-  const data = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: string } }>;
-    error?: { message?: string } | string;
-  } | null;
   if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as {
+      error?: { message?: string } | string;
+    } | null;
     const detail =
       typeof data?.error === "string" ? data.error : data?.error?.message;
     throw new Error(detail || `OpenAI chat returned HTTP ${response.status}.`);
   }
+  if (onTextDelta) return await readOpenAiSseText(response, onTextDelta);
+  const data = (await response.json().catch(() => null)) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  } | null;
   return data?.choices?.[0]?.message?.content?.trim() || "";
+}
+
+// Minimal OpenAI chat-completions SSE reader. readRuntimeResponseText would
+// also work now that its reasoning-preamble filter skips delta fragments, but
+// this path only ever sees OpenAI's delta shape, so the smaller reader stays.
+// Exported for the hermetic gate (this path only runs live when the runtime
+// brain is cooling down).
+export async function readOpenAiSseText(
+  response: Response,
+  onTextDelta: (chunk: string) => void,
+) {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  const consume = (raw: string) => {
+    if (!raw || raw === "[DONE]") return;
+    try {
+      const parsed = JSON.parse(raw) as {
+        choices?: Array<{ delta?: { content?: string } }>;
+      };
+      const delta =
+        parsed.choices?.map((choice) => choice.delta?.content || "").join("") ||
+        "";
+      if (delta) {
+        text += delta;
+        onTextDelta(delta);
+      }
+    } catch {
+      // Keep-alives and malformed frames are skipped.
+    }
+  };
+  const consumeFrame = (frame: string) =>
+    consume(
+      frame
+        .split(/\n/)
+        .filter((line) => line.startsWith("data: "))
+        .map((line) => line.slice(6))
+        .join("\n"),
+    );
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const frames = buffer.split(/\n\n/);
+    buffer = frames.pop() ?? "";
+    for (const frame of frames) consumeFrame(frame);
+  }
+  if (buffer) consumeFrame(buffer);
+  return text.trim();
 }
 
 export type QueenAgentTurnResult = {
@@ -609,6 +704,7 @@ async function runRuntimeConversationTurn(
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
   onActivity?: (label: string) => void,
+  onTextDelta?: (chunk: string) => void,
 ) {
   // One flattened user message (persona + history + latest): most runtime
   // adapters only see the latest user message, so a messages[] history array
@@ -627,7 +723,7 @@ async function runRuntimeConversationTurn(
     cache: "no-store",
     signal: AbortSignal.timeout(AGENT_TURN_TIMEOUT_MS),
   });
-  return readRuntimeResponseText(response, onActivity);
+  return readRuntimeResponseText(response, onActivity, onTextDelta);
 }
 
 function parseVoiceTurnJson(

@@ -1,4 +1,5 @@
 import { defineChain } from "viem";
+import { ROBINHOOD_CHAIN } from "@/lib/config/robinhood-chain";
 
 export const base = defineChain({
   id: 8453,
@@ -47,4 +48,22 @@ export const baseSepolia = defineChain({
     },
   },
   testnet: true,
+});
+
+export const robinhoodChain = defineChain({
+  id: ROBINHOOD_CHAIN.chainId,
+  name: ROBINHOOD_CHAIN.name,
+  nativeCurrency: ROBINHOOD_CHAIN.nativeCurrency,
+  rpcUrls: {
+    default: {
+      http: [ROBINHOOD_CHAIN.rpcUrl],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Blockscout",
+      url: ROBINHOOD_CHAIN.explorerUrl,
+      apiUrl: `${ROBINHOOD_CHAIN.explorerUrl}/api`,
+    },
+  },
 });

@@ -4,10 +4,11 @@ import {
   readDashboardState,
   updateDashboardState,
 } from "@/lib/services/dashboard-state";
-import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
+import { readStoredAgentProfilesStrict } from "@/lib/services/agent-profile-store";
 import {
   buildAgentCallPreferences,
   type AgentCallPreferences,
+  type AgentProfile,
 } from "@/lib/types/agent-runtime";
 
 /**
@@ -90,11 +91,51 @@ export function ttsVoiceFor(voice: string) {
  * a name match) so the prefs we read here are the exact same profile the user
  * edits — there is a single Queen for the voice chat, not a fleet of them.
  */
-export async function readQueenBeeCallPreferences(): Promise<AgentCallPreferences | null> {
-  const profiles = await readStoredAgentProfiles().catch(() => []);
+// The profile store lives inside the multi-megabyte dashboard-state file
+// (~26MB observed), and one spoken turn reads these prefs 3-4 times
+// (speak-stream, speak, prewarm). A short TTL keeps that parse off the
+// audible path; Calls-settings edits land within the window.
+const CALL_PREFS_CACHE_MS = 15_000;
+let callPrefsCache: { expiresAt: number; value: AgentCallPreferences | null } | null = null;
+
+/**
+ * Thrown when the call prefs cannot be read AND no earlier successful read is
+ * cached. Callers must treat this as an outage — never as "no local voice
+ * selected" (voice continuity: substituting a cloud voice for a selected
+ * local cloned voice is the bug this distinction prevents).
+ */
+export class QueenCallPreferencesUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super("Queen call preferences are unavailable (agent-profile store read failed).");
+    this.name = "QueenCallPreferencesUnavailableError";
+    this.cause = cause;
+  }
+}
+
+/** Test hook: clear the prefs cache (mirrors resetLocalTtsHealth). */
+export function resetQueenBeeCallPreferencesCache() {
+  callPrefsCache = null;
+}
+
+export async function readQueenBeeCallPreferences(
+  now = Date.now(),
+): Promise<AgentCallPreferences | null> {
+  if (callPrefsCache && callPrefsCache.expiresAt > now) return callPrefsCache.value;
+  let profiles: AgentProfile[];
+  try {
+    profiles = await readStoredAgentProfilesStrict();
+  } catch (error) {
+    // Store outage. Serve the last-known-good prefs when any earlier read
+    // succeeded (a stale answer beats a substituted voice; the expired cache
+    // entry is left as-is so every later call retries the store), otherwise
+    // surface the outage instead of letting it read as "cloud voice selected".
+    if (callPrefsCache) return callPrefsCache.value;
+    throw new QueenCallPreferencesUnavailableError(error);
+  }
   const queen =
     profiles.find((profile) => profile.beeRole === "queen") ??
     profiles.find((profile) => /queen/i.test(profile.name ?? ""));
-  if (!queen) return null;
-  return buildAgentCallPreferences(queen.calls);
+  const value = queen ? buildAgentCallPreferences(queen.calls) : null;
+  callPrefsCache = { expiresAt: now + CALL_PREFS_CACHE_MS, value };
+  return value;
 }

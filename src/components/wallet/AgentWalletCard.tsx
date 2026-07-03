@@ -113,6 +113,10 @@ function networkLabel(network: string) {
       return "Base mainnet";
     case "eip155:84532":
       return "Base Sepolia";
+    case "eip155:4663":
+      return "Robinhood Chain";
+    case "eip155:46630":
+      return "Robinhood Chain Testnet";
     case "solana:mainnet":
       return "Solana mainnet";
     case "solana:devnet":
@@ -892,6 +896,7 @@ export function AgentWalletCard({
                 <option value="">Off</option>
                 <option value="alpaca">Alpaca (real brokerage)</option>
                 <option value="xstocks">xStocks (on-chain)</option>
+                <option value="robinhood-chain">Robinhood Chain stock tokens</option>
               </select>
             </div>
             {wallet.tradingVenue === "alpaca" ? (
@@ -929,10 +934,9 @@ export function AgentWalletCard({
                 {wallet.alpacaPaper === false ? " LIVE mode places real brokerage orders." : " Paper mode is simulated — no real money."}
               </p>
             ) : wallet.tradingVenue === "xstocks" ? (
-              <p className={styles.sheetHelp}>
-                Swaps USDC → verified xStock tokens via Jupiter. Requires a Solana mainnet wallet.
-                {wallet.network !== "solana:mainnet" ? " This wallet is not on Solana mainnet, so on-chain buys will be rejected." : ""}
-              </p>
+              <p className={styles.sheetHelp}>Swaps USDC → verified xStock tokens via Jupiter. Requires a Solana mainnet wallet.{wallet.network !== "solana:mainnet" ? " This wallet is not on Solana mainnet, so on-chain buys will be rejected." : ""}</p>
+            ) : wallet.tradingVenue === "robinhood-chain" ? (
+              <p className={styles.sheetHelp}>Swaps USDG ↔ canonical Robinhood Stock Tokens through 0x on Robinhood Chain.{wallet.network !== "eip155:4663" ? " Use a Robinhood Chain wallet before placing Stock Token orders." : " Fund this wallet with USDG plus ETH gas before placing orders."}</p>
             ) : null}
             {veilRail && privateTransferAssets.includes("ETH") ? (
               <div className={styles.sheetField}>

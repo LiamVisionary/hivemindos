@@ -43,9 +43,11 @@ import {
   createChannelMarkupState,
   extractChunk,
   extractReasoningChunk,
+  extractUserText,
   isTerminalOpenAiStreamMetadata,
   routeChannelMarkupDelta,
   ssePayload,
+  unwrapLatestUserRequest,
   type IncomingMessage,
 } from "./messages";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
@@ -346,15 +348,20 @@ export async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
+  // Tool offers key on the user's bare request: FAB briefings and the Queen
+  // voice pipeline's flattened persona/history would otherwise re-trigger an
+  // offer on every turn (weak local models then CALL the offered tool even for
+  // "nothing much"). Falls back to the full text for ordinary chat messages.
+  const intentText = extractUserText(unwrapLatestUserRequest(messages)).trim() || userText;
   // Only advertise the image tool when the user is actually asking for an image and we
   // can reach our own dispatch route. Every other chat is byte-for-byte unchanged.
-  const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(userText);
+  const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(intentText);
   // Advertise the real-command tool to agents whose profile declares the
   // skillActions runtime capability. This gives a hivemind-os chat agent an
   // actual local-execution loop (allowlisted commands) instead of letting it
   // role-play "I ran osascript…". Agents without the capability are unchanged.
   const offerCommandTool = profile.runtimeCapabilities?.skillActions === true;
-  const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(userText);
+  const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(intentText);
   // Tool definitions advertised on every request attempt. Empty → no tools
   // field is sent and the chat path is byte-for-byte unchanged.
   const toolDefinitions = [

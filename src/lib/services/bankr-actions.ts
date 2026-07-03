@@ -90,22 +90,26 @@ export function classifyBankrActionPrompt(text: string): BankrActionDraft | null
   if (jobId && /\b(bankr|agent|job|status|check)\b/i.test(prompt)) {
     return { intent: "agent-job", prompt, jobId, readOnly: true };
   }
-  if (/\bportfolio|balances?|wallet|pnl\b/i.test(prompt) && (mentionsBankr || /\bmy\s+(?:wallet|portfolio|balances?)\b/i.test(prompt))) {
+  // Every alternative is word-anchored: a half-anchored alternation like
+  // /\bautomation|...|recurring\b/ leaves the middle words unanchored, so
+  // ordinary speech false-matched an intent ("broadcast" contains "dca",
+  // "alphabet" ends in "bet") and hijacked the turn with a Bankr call.
+  if (/\b(?:portfolio|balances?|wallets?|pnl)\b/i.test(prompt) && (mentionsBankr || /\bmy\s+(?:wallet|portfolio|balances?)\b/i.test(prompt))) {
     return { intent: "portfolio", prompt, readOnly: true };
   }
-  if (/\bpolymarket|prediction market|bet\b/i.test(prompt)) {
+  if (/\b(?:polymarket|prediction\s+markets?|bets?)\b/i.test(prompt)) {
     return { intent: "polymarket", prompt, readOnly: isReadOnlyPrompt(prompt) };
   }
-  if (/\bhyperliquid|perps?|leverage|long\s+\$?\d|short\s+\$?\d\b/i.test(prompt)) {
+  if (/\b(?:hyperliquid|perps?|perpetuals?|leverage)\b|\b(?:long|short)\s+\$?\d/i.test(prompt)) {
     return { intent: "hyperliquid", prompt, readOnly: isReadOnlyPrompt(prompt) };
   }
-  if (/\bnft|collectible|opensea\b/i.test(prompt)) {
+  if (/\b(?:nfts?|collectibles?|opensea)\b/i.test(prompt)) {
     return { intent: "nft", prompt, readOnly: isReadOnlyPrompt(prompt) };
   }
-  if (/\bautomation|automations|dca|twap|limit order|stop order|stop-loss|recurring\b/i.test(prompt)) {
+  if (/\b(?:automations?|dca|twap|limit\s+orders?|stop\s+orders?|stop-loss|recurring)\b/i.test(prompt)) {
     return { intent: "automation", prompt, readOnly: isReadOnlyPrompt(prompt) };
   }
-  if (/\blaunch\s+(?:a\s+)?token|deploy\s+(?:a\s+)?token|token\s+launch\b/i.test(prompt)) {
+  if (/\b(?:launch\s+(?:a\s+)?token|deploy\s+(?:a\s+)?token|token\s+launch)\b/i.test(prompt)) {
     return { intent: "token-launch", prompt, readOnly: false };
   }
   if (/\bclaim\b.*\bfees?\b|\bfees?\b.*\bclaim\b|\bcreator\s+fees?\b|\bfee\s+nft\b/i.test(prompt)) {

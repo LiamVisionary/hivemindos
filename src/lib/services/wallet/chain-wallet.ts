@@ -9,10 +9,15 @@ import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import bs58 from "bs58";
 import { concat, createPublicClient, createWalletClient, fallback, formatEther, formatUnits, http, maxUint256, numberToHex, parseUnits, size, webSocket } from "viem";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
+import {
+  ROBINHOOD_CHAIN,
+  ROBINHOOD_CORE_TOKENS,
+  ROBINHOOD_STOCK_TOKENS,
+} from "@/lib/config/robinhood-chain";
 import type { AgentWalletBalance, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
-import { base, baseSepolia } from "@/lib/services/wallet/base-chain";
+import { base, baseSepolia, robinhoodChain } from "@/lib/services/wallet/base-chain";
 
-export type SupportedWalletNetwork = "eip155:8453" | "eip155:84532" | "solana:mainnet" | "solana:devnet";
+export type SupportedWalletNetwork = "eip155:8453" | "eip155:84532" | "eip155:4663" | "solana:mainnet" | "solana:devnet";
 
 export type GeneratedWalletSecret = {
   network: SupportedWalletNetwork;
@@ -66,6 +71,7 @@ const BASE_USDT = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2";
 const BASE_HIVE = "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3";
 const SOLANA_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SOLANA_DEVNET_USDC = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+const USDG_ICON_URL = "https://assets.coingecko.com/coins/images/67036/large/USDG_Icon_200x200.png";
 const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
 const SOLANA_RECOVERY_PATH = "m/44'/501'/0'/0'";
 const HARDENED_OFFSET = 0x80000000;
@@ -77,6 +83,15 @@ const SOLANA_TOKEN_PROGRAMS = [
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
 ];
+
+type EvmUsdToken = {
+  address: `0x${string}`;
+  symbol: "USDC" | "USDG";
+  name: string;
+  decimals: number;
+  priceId?: string;
+  iconUrl?: string;
+};
 
 const ERC20_ABI = [
   {
@@ -140,17 +155,19 @@ const ERC20_ABI = [
 ] as const;
 
 function assertNetwork(network: string): SupportedWalletNetwork {
-  if (network === "eip155:8453" || network === "eip155:84532" || network === "solana:mainnet" || network === "solana:devnet") {
+  if (network === "eip155:8453" || network === "eip155:84532" || network === "eip155:4663" || network === "solana:mainnet" || network === "solana:devnet") {
     return network;
   }
   throw new Error(`Unsupported wallet network: ${network}`);
 }
 
 function evmChain(network: SupportedWalletNetwork) {
+  if (network === "eip155:4663") return robinhoodChain;
   return network === "eip155:84532" ? baseSepolia : base;
 }
 
 function evmRpc(network: SupportedWalletNetwork) {
+  if (network === "eip155:4663") return process.env.ROBINHOOD_CHAIN_RPC_URL || process.env.RH_RPC_URL || ROBINHOOD_CHAIN.rpcUrl;
   if (network === "eip155:84532") return process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org";
   return process.env.BASE_RPC_URL || "https://mainnet.base.org";
 }
@@ -163,6 +180,13 @@ function envRpcUrls(value: string | undefined) {
 }
 
 function evmReadRpcUrls(network: SupportedWalletNetwork) {
+  if (network === "eip155:4663") {
+    return uniqueStrings([
+      ...envRpcUrls(process.env.ROBINHOOD_CHAIN_RPC_URL),
+      ...envRpcUrls(process.env.RH_RPC_URL),
+      ROBINHOOD_CHAIN.rpcUrl,
+    ]);
+  }
   if (network === "eip155:84532") {
     return uniqueStrings([
       ...envRpcUrls(process.env.BASE_SEPOLIA_RPC_URL),
@@ -189,7 +213,28 @@ function evmReadTransport(network: SupportedWalletNetwork) {
 }
 
 function evmUsdc(network: SupportedWalletNetwork) {
+  if (network === "eip155:4663") throw new Error("USDC sends are not available on Robinhood Chain. Fund and trade with USDG there.");
   return network === "eip155:84532" ? BASE_SEPOLIA_USDC : BASE_USDC;
+}
+
+function evmUsdToken(network: SupportedWalletNetwork): EvmUsdToken {
+  if (network === "eip155:4663") {
+    return {
+      address: ROBINHOOD_CORE_TOKENS.USDG,
+      symbol: "USDG",
+      name: "Global Dollar",
+      decimals: 6,
+      iconUrl: USDG_ICON_URL,
+    };
+  }
+  return {
+    address: (network === "eip155:84532" ? BASE_SEPOLIA_USDC : BASE_USDC) as `0x${string}`,
+    symbol: "USDC",
+    name: "USD Coin",
+    decimals: 6,
+    priceId: "usd-coin",
+    iconUrl: USDC_ICON_URL,
+  };
 }
 
 function solanaRpc(network: SupportedWalletNetwork) {
@@ -222,6 +267,13 @@ async function retrySolanaRpc<T>(operation: () => Promise<T>) {
 }
 
 function knownEvmTokenAddresses(network: SupportedWalletNetwork) {
+  if (network === "eip155:4663") {
+    return uniqueEvmAddresses([
+      ROBINHOOD_CORE_TOKENS.USDG,
+      ROBINHOOD_CORE_TOKENS.WETH,
+      ...ROBINHOOD_STOCK_TOKENS.map((token) => token.address),
+    ]);
+  }
   if (network !== "eip155:8453") return [evmUsdc(network)];
   return uniqueEvmAddresses([
     BASE_USDC,
@@ -297,19 +349,22 @@ export async function getWalletBalance(address: string, networkInput: string): P
   if (!address.trim()) throw new Error("Wallet address is required.");
   if (network.startsWith("eip155:")) {
     const client = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
+    const stable = evmUsdToken(network);
+    const priceIds = ["ethereum", stable.priceId].filter((id): id is string => Boolean(id));
     const [tokenRaw, nativeRaw, prices, indexedTokens] = await Promise.all([
       client.readContract({
-        address: evmUsdc(network),
+        address: stable.address,
         abi: ERC20_ABI,
         functionName: "balanceOf",
         args: [address as `0x${string}`],
       }),
       client.getBalance({ address: address as `0x${string}` }),
-      fetchTokenPrices(["ethereum", "usd-coin"]),
+      fetchTokenPrices(priceIds),
       fetchEvmIndexedTokenBalances(address, network),
     ]);
-    const tokenBalance = Number(formatUnits(tokenRaw, 6));
+    const tokenBalance = Number(formatUnits(tokenRaw, stable.decimals));
     const nativeBalance = Number(formatEther(nativeRaw));
+    const stablePrice = stable.priceId ? prices[stable.priceId] : { usd: 1, usd_24h_change: null };
     const nativeToken = tokenRow({
       symbol: "ETH",
       name: "Ether",
@@ -319,19 +374,19 @@ export async function getWalletBalance(address: string, networkInput: string): P
       isNative: true,
       iconUrl: ETH_ICON_URL,
     });
-    const fallbackUsdc = tokenRow({
-      symbol: "USDC",
-      name: "USD Coin",
+    const fallbackStable = tokenRow({
+      symbol: stable.symbol,
+      name: stable.name,
       balance: tokenBalance,
       network,
-      price: prices["usd-coin"],
-      tokenAddress: evmUsdc(network),
-      iconUrl: USDC_ICON_URL,
+      price: stablePrice,
+      tokenAddress: stable.address,
+      iconUrl: stable.iconUrl,
     });
     const hydratedIndexedTokens = await hydrateEvmIndexedTokenQuotes(indexedTokens, network);
     const indexedOrFallbackTokens = [
-      ...hydratedIndexedTokens.filter((token) => !tokenAddressEquals(token, evmUsdc(network))),
-      fallbackUsdc,
+      ...hydratedIndexedTokens.filter((token) => !tokenAddressEquals(token, stable.address)),
+      fallbackStable,
     ];
     const knownTokens = await fetchKnownEvmTokenBalances(address, network, indexedOrFallbackTokens);
     const tokens = mergeTokenRows([
@@ -342,7 +397,7 @@ export async function getWalletBalance(address: string, networkInput: string): P
     return {
       address,
       network,
-      tokenSymbol: "USDC",
+      tokenSymbol: stable.symbol,
       tokenBalance,
       nativeBalance,
       totalValueUsd: totalTokenValueUsd(tokens),
@@ -428,21 +483,35 @@ export async function sendUsdc(params: {
   amountUsd: number;
 }): Promise<{ signature: string }> {
   const network = assertNetwork(params.network);
+  if (network === "eip155:4663") throw new Error("USDC sends are not available on Robinhood Chain. Use USDG-specific flows there.");
+  const result = await sendUsdStable({ ...params, network });
+  return { signature: result.signature };
+}
+
+export async function sendUsdStable(params: {
+  network: string;
+  secret: string;
+  fromAddress: string;
+  toAddress: string;
+  amountUsd: number;
+}): Promise<{ signature: string; assetSymbol: "USDC" | "USDG" }> {
+  const network = assertNetwork(params.network);
   if (!Number.isFinite(params.amountUsd) || params.amountUsd <= 0) throw new Error("Amount must be greater than zero.");
   if (network.startsWith("eip155:")) {
     const account = evmAccountFromSecret(params.secret);
     if (account.address.toLowerCase() !== params.fromAddress.toLowerCase()) throw new Error("Stored key does not match wallet address.");
+    const stable = evmUsdToken(network);
     const wallet = createWalletClient({ account, chain: evmChain(network), transport: http(evmRpc(network)) });
     const hash = await wallet.writeContract({
-      address: evmUsdc(network),
+      address: stable.address,
       abi: ERC20_ABI,
       functionName: "transfer",
-      args: [params.toAddress as `0x${string}`, parseUnits(params.amountUsd.toFixed(6), 6)],
+      args: [params.toAddress as `0x${string}`, parseUnits(params.amountUsd.toFixed(stable.decimals), stable.decimals)],
     });
     const publicClient = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    if (receipt.status === "reverted") throw new Error("USDC transfer reverted on-chain.");
-    return { signature: hash };
+    if (receipt.status === "reverted") throw new Error(`${stable.symbol} transfer reverted on-chain.`);
+    return { signature: hash, assetSymbol: stable.symbol };
   }
 
   const connection = new Connection(solanaRpc(network), "confirmed");
@@ -459,7 +528,7 @@ export async function sendUsdc(params: {
   }
   transaction.add(createTransferInstruction(fromAta, toAta, payer.publicKey, BigInt(Math.round(params.amountUsd * 1_000_000))));
   const signature = await sendAndConfirmTransaction(connection, transaction, [payer], { commitment: "confirmed" });
-  return { signature };
+  return { signature, assetSymbol: "USDC" };
 }
 
 /** Read an ERC-20 token's decimals on-chain (for tokens outside the curated map). */
@@ -493,7 +562,7 @@ export async function executeEvmZeroExSwap(params: {
   quote: ZeroExSwapQuote;
 }): Promise<{ approvalHash?: string; swapHash: string }> {
   const network = assertNetwork(params.network);
-  if (!network.startsWith("eip155:")) throw new Error("0x swaps require an EVM (Base) wallet.");
+  if (!network.startsWith("eip155:")) throw new Error("0x swaps require an EVM wallet.");
   const account = evmAccountFromSecret(params.secret);
   if (account.address.toLowerCase() !== params.fromAddress.toLowerCase()) throw new Error("Stored key does not match wallet address.");
   const chain = evmChain(network);
@@ -513,7 +582,8 @@ export async function executeEvmZeroExSwap(params: {
       functionName: "approve",
       args: [allowanceIssue.spender as `0x${string}`, maxUint256],
     });
-    await publicClient.waitForTransactionReceipt({ hash: approvalHash as `0x${string}` });
+    const approvalReceipt = await publicClient.waitForTransactionReceipt({ hash: approvalHash as `0x${string}` });
+    if (approvalReceipt.status === "reverted") throw new Error("0x Permit2 token approval reverted on-chain.");
   }
 
   // 2. Sign the Permit2 message (when present) and append it to the calldata.
@@ -531,7 +601,8 @@ export async function executeEvmZeroExSwap(params: {
     value: BigInt(params.quote.transaction.value || "0"),
     ...(params.quote.transaction.gas ? { gas: BigInt(params.quote.transaction.gas) } : {}),
   });
-  await publicClient.waitForTransactionReceipt({ hash: swapHash });
+  const swapReceipt = await publicClient.waitForTransactionReceipt({ hash: swapHash });
+  if (swapReceipt.status === "reverted") throw new Error("0x swap reverted on-chain.");
   return { approvalHash, swapHash };
 }
 
@@ -597,9 +668,14 @@ function parseSolanaSecret(secret: string): Uint8Array {
 }
 
 async function fetchEvmIndexedTokenBalances(address: string, network: SupportedWalletNetwork): Promise<AgentWalletTokenBalance[]> {
-  if (network !== "eip155:8453") return [];
+  const blockscoutBase = network === "eip155:8453"
+    ? "https://base.blockscout.com"
+    : network === "eip155:4663"
+      ? ROBINHOOD_CHAIN.explorerUrl
+      : "";
+  if (!blockscoutBase) return [];
   const data = await fetchJsonWithTimeout<BlockscoutTokenBalance[] | { items?: BlockscoutTokenBalance[] }>(
-    `https://base.blockscout.com/api/v2/addresses/${encodeURIComponent(address)}/token-balances`,
+    `${blockscoutBase.replace(/\/$/, "")}/api/v2/addresses/${encodeURIComponent(address)}/token-balances`,
     8000,
   );
   const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
@@ -651,7 +727,7 @@ async function fetchKnownEvmTokenBalances(
   const client = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
   const indexedAddresses = new Set(indexedTokens.map((token) => token.tokenAddress?.toLowerCase()).filter(Boolean));
   const tokenAddresses = knownEvmTokenAddresses(network).filter((tokenAddress) => !indexedAddresses.has(tokenAddress.toLowerCase()));
-  const prices = await fetchDexScreenerTokenPrices(tokenAddresses);
+  const prices = network === "eip155:8453" ? await fetchDexScreenerTokenPrices(tokenAddresses) : {};
   const rows = await Promise.all(tokenAddresses.map(async (tokenAddress): Promise<AgentWalletTokenBalance | null> => {
     const contractAddress = tokenAddress as `0x${string}`;
     const readTokenState = () => Promise.all([

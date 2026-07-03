@@ -5,6 +5,7 @@ import { decomposePrdToTaskDrafts, type QueenBeePrdTaskDraft } from "@/lib/servi
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
 import { appendCompanyMemory, companyMemoryDigest } from "@/lib/services/company-memory";
+import { dedupeDrafts } from "@/lib/services/company-task-dedup";
 import type { KanbanLoopSpec } from "@/lib/types/kanban";
 import { buildOperatingUnitLearningLoop } from "@/lib/services/loops";
 import type { FlowSpec } from "@/lib/types/agent-flow";
@@ -159,6 +160,8 @@ export type CompanyDispatchResult = {
   /** Set when the company ran as a flow (process: "sequential" | "graph"). */
   flowRunId?: string;
   process?: CompanyProcess;
+  /** How many planned drafts were dropped as duplicates of recent/in-flight work. */
+  deduped?: number;
 };
 
 // Build a sequential FlowSpec from decomposed PRD drafts: each draft becomes a step whose success
@@ -254,7 +257,7 @@ function buildCompanyLearningLoop(company: Company, draft: QueenBeePrdTaskDraft,
 export async function dispatchCompanyGoal(
   company: Company,
   fleetSnapshot: QueenBeeFleetMachine[],
-  opts: { maxTasks?: number; origin?: string; vaultPath?: string } = {},
+  opts: { maxTasks?: number; origin?: string; vaultPath?: string; recentCompanyTaskTitles?: string[] } = {},
 ): Promise<CompanyDispatchResult> {
   const goal = company.apexGoal?.title?.trim();
   if (!goal) throw new Error("Set an apex goal before launching work.");
@@ -287,6 +290,26 @@ export async function dispatchCompanyGoal(
     const { prd, title } = buildApexBrief(company);
     drafts = decomposePrdToTaskDrafts(prd, { title, maxTasks }).drafts;
     planner = "heuristic";
+  }
+
+  // Dedup against recent + in-flight company work: the planner re-proposes the
+  // same steps each re-dispatch cycle, and without this the board fills with
+  // redundant tasks (the "80 deliverables from one goal" churn). Only applied when
+  // the caller supplies the recent titles (the driver does; an explicit manual
+  // Launch does not — that stays a deliberate force-fresh dispatch).
+  let deduped = 0;
+  if (opts.recentCompanyTaskTitles?.length) {
+    const { fresh, dropped } = dedupeDrafts(drafts, opts.recentCompanyTaskTitles);
+    deduped = dropped.length;
+    if (dropped.length) {
+      console.log(`[company-dispatch] ${company.id}: dropped ${dropped.length}/${drafts.length} planned task(s) already recent or in flight`);
+    }
+    drafts = fresh;
+  }
+  if (drafts.length === 0) {
+    // Everything the planner proposed is already recent or in flight — nothing new
+    // to do this cycle. Not an error; the driver backs off and re-checks later.
+    return { goal, taskCount: 0, delegatedCount: 0, pickupCount: 0, dispatchableMembers, planner, tasks: [], deduped };
   }
 
   // A per-dispatch run id keeps each explicit "Launch / Re-launch" a fresh queen-bee
@@ -339,5 +362,6 @@ export async function dispatchCompanyGoal(
     dispatchableMembers,
     planner,
     tasks,
+    deduped,
   };
 }

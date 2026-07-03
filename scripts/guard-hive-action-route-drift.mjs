@@ -72,6 +72,8 @@ let candidateCount = 0;
 for (const file of routeFiles) {
   const relativePath = toPosix(path.relative(root, file));
   if (IGNORED_ROUTE_RE.some((pattern) => pattern.test(relativePath))) continue;
+  // git ls-files still lists tracked files whose deletion is not staged yet.
+  if (!existsSync(file)) continue;
 
   const source = readFileSync(file, "utf8");
   if (!MUTATING_METHOD_RE.test(source)) continue;

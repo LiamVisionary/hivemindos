@@ -5,7 +5,7 @@ import {
   companyDriverLeaseDisabled,
   releaseCompanyDriverLease,
 } from "@/lib/services/company-driver-lease";
-import { markCompanyDispatched, readCompanies } from "@/lib/services/companies-store";
+import { markCompanyDispatched, parseMetricNumber, readCompanies } from "@/lib/services/companies-store";
 import { countDispatchableMembers, dispatchCompanyGoal, scopeFleetToMembers } from "@/lib/services/companies-orchestration";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { redispatchReadyQueenBeeTasks, routePendingQueenBeeTasks } from "@/lib/services/queen-bee/control-plane";
@@ -55,6 +55,15 @@ function envNum(name: string, fallback: number): number {
 
 const tickIntervalMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_TICK_MS", 300_000); // 5 min
 const minRedispatchMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_MIN_REDISPATCH_MS", 1_800_000); // 30 min
+// Window over which a recently-completed company task still counts as "recent"
+// for dedup — a fresh plan shouldn't re-propose work finished within a day.
+const dedupWindowMs = () => envNum("HIVEMINDOS_COMPANY_DEDUP_WINDOW_MS", 86_400_000); // 24h
+// When the last batch drained WITHOUT completing anything, the company is stuck —
+// re-planning immediately just burns tokens, so widen the interval by this factor.
+const noProgressBackoff = () => envNum("HIVEMINDOS_COMPANY_DRIVER_NOPROGRESS_BACKOFF", 4);
+// Completed-task count past which a company at zero apex progress is flagged
+// "busy but blocked" (an outward action is almost certainly gated).
+const stalledMinDone = () => envNum("HIVEMINDOS_COMPANY_STALL_MIN_DONE", 8);
 // Standby instances (lease held elsewhere) re-check the lease this often — a
 // tiny file read — so a killed holder is replaced within about a minute.
 const standbyPollMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_STANDBY_POLL_MS", 60_000);
@@ -181,22 +190,74 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
   const tasks = board.tasks ?? [];
   const now = Date.now();
 
+  // "Busy but blocked" detector — runs for every eligible company each tick,
+  // independent of re-dispatch. A company completing lots of work while its apex
+  // metric sits at zero is almost always blocked on an outward action (paused
+  // sends for compliance, no payment rail). Surface it — the crew can't move the
+  // number on its own. notifyEscalation de-dupes on the key (12h TTL).
+  for (const company of eligible) {
+    const companyPrefix = `company:${company.id}:`;
+    const doneCount = tasks.filter((t) => (t.source ?? "").startsWith(companyPrefix) && t.status === "done").length;
+    if (doneCount < stalledMinDone()) continue;
+    const target = parseMetricNumber(company.apexGoal?.target);
+    if (!(target && target > 0)) continue;
+    if ((parseMetricNumber(company.apexGoal?.current) ?? 0) > 0) continue;
+    await notifyEscalation({
+      key: `company-progress-stalled:${company.id}`,
+      title: `${company.name}: producing work but the goal isn't moving`,
+      body: `The crew has completed ${doneCount} tasks, but ${company.apexGoal?.metric ?? "the apex metric"} is still ${company.apexGoal?.current ?? "0"} of ${company.apexGoal?.target}. This almost always means an outward action is blocked — real sends paused for compliance, or no payment rail yet. Clear the blocker; the crew can't move the number on its own.`,
+      severity: "high",
+      ttlMs: 12 * 60 * 60 * 1_000,
+      tags: ["company", "progress"],
+    }).catch(() => undefined);
+  }
+
   for (const company of eligible) {
     try {
+      const companyPrefix = `company:${company.id}:`;
       const scoped = scopeFleetToMembers(fleet, company.agentIds);
       // No member online + chat-capable → nobody to do the work; don't pile up queued tasks.
       if (countDispatchableMembers(scoped) === 0) continue;
       // Crew already has live work → let it finish before re-dispatching.
       const idents = memberIdentities(scoped);
       if (companyHasActiveWork(tasks, idents, company.id)) continue;
-      // Throttle: don't re-dispatch the same company more often than the min interval.
-      if (now - (company.lastDispatchedAt ?? 0) < minRedispatchMs()) continue;
+
+      // Progress-gated cadence: if the LAST batch drained without completing any
+      // work, the company is stuck — re-planning the same goal immediately just
+      // burns tokens, so back off to a longer interval until something completes.
+      const sinceDispatch = company.lastDispatchedAt ?? 0;
+      const completedSince = tasks.filter(
+        (t) => (t.source ?? "").startsWith(companyPrefix) && t.status === "done" && (t.completedAt ?? t.updatedAt ?? 0) > sinceDispatch,
+      ).length;
+      const noProgress = sinceDispatch > 0 && completedSince === 0;
+      const interval = noProgress ? minRedispatchMs() * noProgressBackoff() : minRedispatchMs();
+      if (now - sinceDispatch < interval) continue;
+
+      // Titles of this company's recent + in-flight tasks, so the planner's fresh
+      // batch can be deduped against work already done or under way.
+      const recentCompanyTaskTitles = tasks
+        .filter((t) => {
+          if (!(t.source ?? "").startsWith(companyPrefix)) return false;
+          const terminal = t.status === "done" || t.status === "archived";
+          if (!terminal) return true; // still open / in flight
+          return (t.completedAt ?? t.updatedAt ?? 0) > now - dedupWindowMs(); // recently finished
+        })
+        .map((t) => t.title)
+        .filter((t): t is string => Boolean(t));
 
       // Stamp BEFORE dispatching so the throttle still applies if the dispatch
       // throws — prevents a tight retry loop on a persistently failing company.
       await markCompanyDispatched(company.id, Date.now());
       const port = process.env.PORT?.trim();
-      await dispatchCompanyGoal(company, fleet, { origin: port ? `http://127.0.0.1:${port}` : undefined });
+      const result = await dispatchCompanyGoal(company, fleet, {
+        origin: port ? `http://127.0.0.1:${port}` : undefined,
+        recentCompanyTaskTitles,
+      });
+      if (result.taskCount === 0) {
+        console.log(`[company-autonomy-driver] ${company.id}: nothing new to dispatch — all ${result.deduped ?? 0} planned task(s) already recent or in flight`);
+      } else if (result.deduped) {
+        console.log(`[company-autonomy-driver] ${company.id}: dispatched ${result.taskCount} new task(s), skipped ${result.deduped} redundant`);
+      }
     } catch (error) {
       // One company's failure must never stop the loop — but the operator should
       // hear about a company that keeps failing to dispatch (6h re-notify TTL).

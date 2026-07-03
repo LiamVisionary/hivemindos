@@ -295,9 +295,10 @@ function walletProviderForDropIn(wallet: any): WalletDropInGroup {
   return "crypto";
 }
 
-function walletNetworkForDropIn(wallet: any): "base" | "base-sepolia" | "solana" {
+function walletNetworkForDropIn(wallet: any): "base" | "base-sepolia" | "solana" | "robinhood" {
   const network = String(wallet?.network ?? "").toLowerCase();
   if (network.includes("solana")) return "solana";
+  if (network.includes("4663")) return "robinhood";
   if (network.includes("sepolia")) return "base-sepolia";
   return "base";
 }
@@ -309,6 +310,7 @@ function walletBalanceUsd(wallet: any): number {
 function chainToNetwork(chain: string): string {
   const normalized = chain.toLowerCase();
   if (normalized.includes("solana")) return "solana:mainnet";
+  if (normalized.includes("robinhood")) return "eip155:4663";
   if (normalized.includes("sepolia")) return "eip155:84532";
   return "eip155:8453";
 }
@@ -446,6 +448,8 @@ function shortWalletAddress(value: unknown): string {
 function fundingNetworkLabel(network: string): string {
   if (network === "eip155:8453") return "Base";
   if (network === "eip155:84532") return "Base Sepolia";
+  if (network === "eip155:4663") return "Robinhood Chain";
+  if (network === "eip155:46630") return "Robinhood Chain Testnet";
   if (network === "solana:mainnet") return "Solana";
   if (network === "solana:devnet") return "Solana devnet";
   if (network.startsWith("eip155:")) return "EVM";
@@ -1094,7 +1098,9 @@ function WalletPanelComponent(props: any) {
       return { ok: true, name };
     },
     onCreateWallet: async (input: any) => {
-      const response = await fetch("/api/wallet/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, createKind: "multi-chain", name: input.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const chain = String(input.chain || "Base + Solana");
+      const multiChain = chain.toLowerCase().includes("base + solana");
+      const response = await fetch("/api/wallet/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, createKind: multiChain ? "multi-chain" : "single-network", network: multiChain ? undefined : chainToNetwork(chain), name: input.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
       const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not create wallet.");
       await loadPersonalWallets();

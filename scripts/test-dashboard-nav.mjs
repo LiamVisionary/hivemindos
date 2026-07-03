@@ -3,6 +3,8 @@ import { strict as assert } from "node:assert";
 
 const derivedState = readFileSync(new URL("../src/features/dashboard/hooks/use-dashboard-derived-state.tsx", import.meta.url), "utf8");
 const dashboardHeader = readFileSync(new URL("../src/features/dashboard/views/DashboardHeader.tsx", import.meta.url), "utf8");
+const appNavShelf = readFileSync(new URL("../src/components/fleet-hive/AppNavShelf.tsx", import.meta.url), "utf8");
+const morePanel = readFileSync(new URL("../src/features/dashboard/MorePanel.tsx", import.meta.url), "utf8");
 
 assert.doesNotMatch(derivedState, /type DashboardView = [^;]*"new"/, "DashboardView should not include the removed test New tab id");
 assert.doesNotMatch(derivedState, /id: "new" as const,[\s\S]*?label: "New"/, "Dashboard nav items should not include the removed test New tab");
@@ -36,5 +38,16 @@ assert.equal(navigation.shelfSlotForView("memory"), "maintenance", "Memory light
 assert.equal(navigation.shelfSlotForView("env"), "more", "Unpinned utility views light the More slot");
 assert.equal(navigation.DASHBOARD_ROUTE_LABELS.history, "Work History", "Route labels derive from the catalog");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("env"), "Utilities set includes env (the More grid renders every utility view)");
+
+assert.match(
+  appNavShelf,
+  /<NavShelfItem\s+id="more"[\s\S]*?badge=\{notificationUnread\}/,
+  "The More shelf item should receive the unread notification badge count",
+);
+assert.match(
+  morePanel,
+  /notifications:\s*\{[\s\S]*?badge:\s*notificationUnread\s*\|\|\s*undefined,[\s\S]*?badgeLabel:\s*notificationUnread\s*\?/,
+  "The More launcher should surface that count on the Alerts card, not hide it on the parent nav item",
+);
 
 console.log("Dashboard nav has the expected top-level buttons, derived shelf groups, and no duplicate ids.");

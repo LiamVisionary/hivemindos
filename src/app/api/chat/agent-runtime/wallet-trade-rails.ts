@@ -10,6 +10,7 @@ import {
   type BuyStockResult,
 } from "@/lib/services/trading/buy-stock";
 import { resolveXStock, supportedXStockTickers } from "@/lib/config/xstocks-tokens";
+import { resolveRobinhoodStockToken, supportedRobinhoodStockTickers } from "@/lib/config/robinhood-chain";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import {
   bankrActionDraftMessage,
@@ -78,6 +79,7 @@ function buyStockPolicy(wallet: AgentWalletConfig): BuyStockPolicy {
 }
 
 function detectBuyStockVenue(text: string, wallet?: AgentWalletConfig): AgentTradingVenue | null {
+  if (/\b(robinhood\s+chain|rh\s+chain|robinhood\s+stock\s+tokens?|robinhood\s+tokens?)\b/i.test(text)) return "robinhood-chain";
   if (/\b(xstock|x-stock|tokeni[sz]ed|on-?chain|solana|jupiter)\b/i.test(text)) return "xstocks";
   if (/\b(alpaca|brokerage|paper trad|real (?:stock|share|shares))\b/i.test(text)) return "alpaca";
   return wallet?.tradingVenue ?? null;
@@ -129,7 +131,7 @@ function isBuyStockDraftText(text: string) {
 }
 
 function parseBuyStockDraft(text: string): BuyStockDraft | null {
-  const venueMatch = text.match(/Venue\s+`?(alpaca|xstocks)`?/i);
+  const venueMatch = text.match(/Venue\s+`?(alpaca|xstocks|robinhood-chain)`?/i);
   if (!venueMatch) return null;
   const venue = venueMatch[1].toLowerCase() as AgentTradingVenue;
   const sideOf = (verb: string): StockTradeSide => (verb.toLowerCase() === "sell" ? "sell" : "buy");
@@ -158,7 +160,7 @@ function findBuyStockDraft(messages: IncomingMessage[]): BuyStockDraft | null {
 function validateBuyStockDraft(wallet: AgentWalletConfig | undefined, draft: BuyStockDraft, executing: boolean): string {
   const side = draft.side ?? "buy";
   if (!wallet) return "No wallet is configured for this agent.";
-  if (!wallet.tradingVenue) return "Stock trading is off. Set a trading venue (alpaca or xstocks) for this agent first.";
+  if (!wallet.tradingVenue) return "Stock trading is off. Set a trading venue (alpaca, xstocks, or robinhood-chain) for this agent first.";
   if (executing && !wallet.enabled) return "Wallet spending is off for this agent. Turn Spend on before trading.";
   const cap = buyStockCapUsd(wallet);
   if (draft.notionalUsd != null) {
@@ -170,6 +172,11 @@ function validateBuyStockDraft(wallet: AgentWalletConfig | undefined, draft: Buy
     if (!resolveXStock(draft.ticker)) return `"${draft.ticker}" is not a verified xStock. Supported: ${supportedXStockTickers().join(", ")}.`;
     if (wallet.network !== "solana:mainnet") return "xStocks swaps require a Solana mainnet wallet.";
     if (draft.qty != null && draft.notionalUsd == null) return "On-chain xStock trades are sized in USDC, not share count — give a $ amount.";
+  }
+  if (draft.venue === "robinhood-chain") {
+    if (!resolveRobinhoodStockToken(draft.ticker)) return `"${draft.ticker}" is not a canonical Robinhood Stock Token. Supported: ${supportedRobinhoodStockTickers().join(", ")}.`;
+    if (wallet.network !== "eip155:4663") return "Robinhood Chain stock tokens require a Robinhood Chain wallet (eip155:4663).";
+    if (draft.qty != null && draft.notionalUsd == null) return "Robinhood Chain Stock Token trades are sized in USDG, not share count — give a $ amount.";
   }
   if (draft.notionalUsd == null && draft.qty == null) return `Tell me how much to ${side} — a $ amount, or a share count for Alpaca.`;
   return "";
@@ -184,7 +191,9 @@ function buyStockDraftMessage(draft: BuyStockDraft, wallet: AgentWalletConfig | 
   const cap = buyStockCapUsd(wallet);
   const venueLabel = draft.venue === "alpaca"
     ? `\`alpaca\` ${wallet?.alpacaPaper === false ? "(LIVE)" : "(paper)"}`
-    : "`xstocks` (on-chain)";
+    : draft.venue === "xstocks"
+      ? "`xstocks` (on-chain)"
+      : "`robinhood-chain` (USDG on-chain)";
   const sizeLine = draft.qty != null
     ? `${verb} **${draft.qty}** shares of **${draft.ticker}**`
     : `${verb} **${draft.ticker}** for ~$${(draft.notionalUsd ?? 0).toFixed(2)}`;
@@ -206,7 +215,7 @@ function buyStockResultMessage(result: BuyStockResult, executionMs: number) {
   const verb = result.side === "sell" ? "Sell" : "Buy";
   const head = result.venue === "alpaca"
     ? `${result.paper ? "paper" : "LIVE"} brokerage order`
-    : "on-chain swap";
+    : result.venue === "xstocks" ? "on-chain swap" : "Robinhood Chain stock-token action";
   return [
     `**${verb} stock complete** · ${head}`,
     "",
@@ -246,9 +255,9 @@ function buyStockExecutionSse(input: {
         let network: string | undefined;
         let secret: string | undefined;
         let fromAddress: string | undefined;
-        if (draft.venue === "xstocks") {
+        if (draft.venue === "xstocks" || draft.venue === "robinhood-chain") {
           const stored = await getWalletSecret(input.profile.id);
-          if (!stored) throw new Error("No local Solana wallet exists for this agent.");
+          if (!stored) throw new Error(`No local ${draft.venue === "xstocks" ? "Solana" : "Robinhood Chain"} wallet exists for this agent.`);
           network = stored.info.network;
           secret = stored.secret;
           fromAddress = stored.info.address;

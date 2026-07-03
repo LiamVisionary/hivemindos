@@ -18,7 +18,7 @@ The feature surface follows the work an operator actually does: connect machines
   <section class="signalCard"><strong>Operate</strong><span>Agents, chat, Work board, Code Proof, Scheduler, Swarm, and deliverables.</span></section>
   <section class="signalCard"><strong>Remember</strong><span>Obsidian vault, shared skills, QMD, Neo4j, GBrain, Syntho, Synthesis, and notifications.</span></section>
   <section class="signalCard"><strong>Pay</strong><span>Wallets, crypto rail routing, Base/Solana, USDC, UsePod prepaid, Honey, HIVE, and x402.</span></section>
-  <section class="signalCard"><strong>Integrate</strong><span>GitLawb, MiroShark, Nango, GitHub OAuth, My Apps, phone, and work history.</span></section>
+  <section class="signalCard"><strong>Integrate</strong><span>GitLawb, MiroShark, app connections, GitHub OAuth, My Apps, phone, and work history.</span></section>
   <section class="signalCard"><strong>Maintain</strong><span>Hivemind Sync, runtime files, native helpers, memory telemetry, and repair checks.</span></section>
 </div>
 
@@ -166,7 +166,7 @@ Wallet and token features are explicit rails, not a background permission pool. 
   </section>
   <section class="docCard">
     <h3>Integrations And Work History</h3>
-    <p>GitLawb Code Proof, Nango, GitHub OAuth fallback, My Apps, API-service launchers, phone pairing, dynamic changelog, and work history.</p>
+    <p>GitLawb Code Proof, app connections, GitHub OAuth, My Apps, API-service launchers, phone pairing, dynamic changelog, and work history.</p>
     <a href="integrations-and-work-history.html">Open integrations</a>
   </section>
   <section class="docCard">

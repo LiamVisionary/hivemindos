@@ -18,6 +18,13 @@ const {
 } = await import("../src/lib/services/queen-bee/voice-turn-progress.ts");
 const { buildRuntimeVoiceUserText } = await import("../src/lib/services/queen-bee/voice-turn.ts");
 const { toolActivityLabel } = await import("../src/lib/services/phone/runtime-voice-turn.ts");
+const {
+  BARGE_IN_TUNING,
+  bargeInThreshold,
+  createBargeInDetector,
+  requestBargeInRecalibration,
+  updateBargeInDetector,
+} = await import("../src/features/queen-voice/barge-in-detector.ts");
 
 // --- turn id normalization ----------------------------------------------------
 {
@@ -99,6 +106,387 @@ const { toolActivityLabel } = await import("../src/lib/services/phone/runtime-vo
   console.log("flattened runtime prompt ok");
 }
 
+// --- rails unwrap contract ---------------------------------------------------------
+// The agent-runtime money rails and tool offers key on the user's bare request.
+// The flattened voice prompt contains rail trigger words in its own scaffolding
+// ("automation" in the persona sentence hijacked every spoken turn with a real
+// Bankr call), so the REAL builder must round-trip through the REAL unwrapper.
+{
+  const { bareUserRequestText, unwrapLatestUserRequest } = await import(
+    "../src/app/api/chat/agent-runtime/messages.ts"
+  );
+  const prompt = buildRuntimeVoiceUserText("Uh nothing much", [
+    { who: "you", text: "What's new?" },
+    { who: "queen", text: "Just waiting on your signal, Liam." },
+  ], "");
+  assert.match(prompt, /automation/i, "persona scaffolding contains rail trigger words (why unwrapping matters)");
+  assert.equal(bareUserRequestText(prompt), "Uh nothing much", "flattened prompt unwraps to the utterance");
+  const unwrapped = unwrapLatestUserRequest([{ role: "user", content: prompt }]);
+  assert.equal(unwrapped[0].content, "Uh nothing much", "rails see only the spoken utterance");
+  assert.equal(
+    bareUserRequestText("<screen context briefing>\n\nUser request: swap 1 usdc to eth"),
+    "swap 1 usdc to eth",
+    "FAB screen-context wrapper still unwraps",
+  );
+  assert.equal(bareUserRequestText("swap 1 usdc to eth"), "", "plain messages have nothing to unwrap");
+  const plain = [{ role: "user", content: "hello" }];
+  assert.equal(unwrapLatestUserRequest(plain), plain, "no marker returns the original list");
+  console.log("rails unwrap contract ok");
+}
+
+// --- streaming speech extraction + sentence chunking -------------------------------
+// The fused converse+speak turn extracts the "speech" JSON field while the
+// model is still streaming and cuts it into TTS-sized chunks (first sentence
+// ships alone so first audio never waits for the full reply).
+{
+  const { createSpeechDeltaExtractor, createSentenceChunker } = await import(
+    "../src/lib/services/queen-bee/voice-speech-stream.ts"
+  );
+
+  // Speech deltas emerge as the JSON streams, unescaped, stopping at the quote.
+  {
+    const extractor = createSpeechDeltaExtractor();
+    let out = "";
+    out += extractor.push('{"spee');
+    assert.equal(out, "", "no emission before the key completes");
+    out += extractor.push('ch": "Hey the');
+    out += extractor.push('re! I\\u2019m on it.\\nDone.", "task": null}');
+    assert.equal(out, "Hey there! I’m on it.\nDone.");
+    assert.equal(extractor.finished, true);
+    assert.equal(extractor.push('{"speech": "again"}'), "", "extractor stays finished");
+  }
+
+  // Escapes split across chunk boundaries survive.
+  {
+    const extractor = createSpeechDeltaExtractor();
+    let out = "";
+    out += extractor.push('{"speech": "a\\');
+    out += extractor.push('"b\\u00e');
+    out += extractor.push('9c"}');
+    assert.equal(out, 'a"béc');
+  }
+
+  // Markdown fences / prose before the JSON are tolerated; plain prose never
+  // emits (the caller speaks the fully-parsed reply instead).
+  {
+    const fenced = createSpeechDeltaExtractor();
+    const out = fenced.push('```json\n{"speech": "Hello."}');
+    assert.equal(out, "Hello.");
+    const prose = createSpeechDeltaExtractor();
+    assert.equal(prose.push("Sure, here you go."), "");
+    assert.equal(prose.started, false);
+  }
+
+  // The 600-char spoken cap holds.
+  {
+    const extractor = createSpeechDeltaExtractor();
+    const out = extractor.push(`{"speech": "${"x".repeat(700)}"}`);
+    assert.equal(out.length, 600);
+    assert.equal(extractor.finished, true);
+  }
+
+  // First sentence ships alone; later text accumulates into larger chunks.
+  {
+    const chunker = createSentenceChunker();
+    const first = chunker.push("On it. I will check the fleet and report back with everything I find. ");
+    assert.deepEqual(first, ["On it."], "first sentence emits immediately");
+    const second = chunker.push("The collectors look healthy so far. ");
+    assert.deepEqual(second, [], "later text accumulates until the next-chunk minimum");
+    const third = chunker.push("Two agents are mid-task right now and nothing is blocked anywhere. ");
+    assert.equal(third.length, 1, "accumulated sentences emit as one larger chunk");
+    assert.ok(third[0].startsWith("I will check"), "chunk 2 starts after chunk 1");
+    assert.ok(third[0].endsWith("blocked anywhere."), "chunk 2 ends at a sentence boundary");
+    const rest = chunker.flush();
+    assert.deepEqual(rest, [], "nothing left after clean sentence cuts");
+  }
+
+  // Decimals do not split; flush returns the unpunctuated remainder.
+  {
+    const chunker = createSentenceChunker();
+    assert.deepEqual(chunker.push("It costs $5.50 in total"), []);
+    assert.deepEqual(chunker.flush(), ["It costs $5.50 in total"]);
+  }
+
+  // A very long unpunctuated run still cuts at a word boundary.
+  {
+    const chunker = createSentenceChunker({ maxChunkChars: 40 });
+    const chunks = chunker.push("word ".repeat(20));
+    assert.ok(chunks.length >= 1, "cap forces a cut");
+    assert.ok(chunks.every((chunk) => !chunk.includes("  ") && chunk.length <= 40));
+  }
+  console.log("speech stream extractor + chunker ok");
+}
+
+// --- fused-turn speech emitter ----------------------------------------------------
+// The streaming converse action guarantees: the concatenation of emitted
+// speech (since the last reset) equals what the buffered turn would have
+// spoken — never more, at worst a divergent tail less.
+{
+  const { createVoiceSpeechEmitter } = await import(
+    "../src/lib/services/queen-bee/voice-speech-stream.ts"
+  );
+
+  // Streaming JSON: deltas emit live; finalize with the same speech re-speaks nothing.
+  {
+    const events = [];
+    const emitter = createVoiceSpeechEmitter((text) => events.push(text));
+    emitter.onTextDelta('{"speech": "On it. ');
+    emitter.onTextDelta('Checking now.", "task": null}');
+    assert.equal(events.join(""), "On it. Checking now.");
+    emitter.finalize("On it. Checking now.");
+    assert.equal(events.join(""), "On it. Checking now.", "no re-speak on finalize");
+  }
+
+  // Task turns: the delegation receipt is emitted as a late speech suffix.
+  {
+    const events = [];
+    const emitter = createVoiceSpeechEmitter((text) => events.push(text));
+    emitter.onTextDelta(
+      '{"speech": "Kicking that off.", "task": {"title": "t", "message": "m"}}',
+    );
+    assert.equal(events.join(""), "Kicking that off.");
+    emitter.finalize("Kicking that off. It was delegated to the NYC agent.");
+    assert.equal(
+      events.join(""),
+      "Kicking that off. It was delegated to the NYC agent.",
+    );
+  }
+
+  // Non-JSON replies: silent during the stream, spoken whole at finalize.
+  {
+    const events = [];
+    const emitter = createVoiceSpeechEmitter((text) => events.push(text));
+    emitter.onTextDelta("Sure, here you go.");
+    assert.deepEqual(events, [], "prose emits nothing mid-stream");
+    emitter.finalize("Sure, here you go.");
+    assert.deepEqual(events, ["Sure, here you go."]);
+  }
+
+  // Attempt fallback: emitted speech forces a reset; the retry starts clean.
+  {
+    const events = [];
+    const emitter = createVoiceSpeechEmitter((text) => events.push(text));
+    assert.equal(emitter.attemptReset(), false, "first attempt needs no reset");
+    emitter.onTextDelta('{"speech": "Half a rep');
+    assert.equal(events.join(""), "Half a rep");
+    assert.equal(emitter.attemptReset(), true, "emitted speech must be discarded");
+    assert.equal(
+      emitter.attemptReset(),
+      false,
+      "nothing new emitted, no second reset",
+    );
+    emitter.onTextDelta('{"speech": "Fresh reply."}');
+    emitter.finalize("Fresh reply.");
+    assert.equal(emitter.emitted, "Fresh reply.");
+    assert.equal(events.slice(1).join(""), "Fresh reply.");
+  }
+
+  // Divergent finalize never re-speaks (the screen text stays authoritative).
+  {
+    const events = [];
+    const emitter = createVoiceSpeechEmitter((text) => events.push(text));
+    emitter.onTextDelta('{"speech": "Alpha."}');
+    emitter.finalize("Completely different reply.");
+    assert.deepEqual(events, ["Alpha."], "no garbled overlap on divergence");
+  }
+  console.log("voice speech emitter ok");
+}
+
+// --- converse-stream NDJSON reader -------------------------------------------------
+// The overlay races pump() against the barge-in signal; the shared in-flight
+// promise must make an abandoned race unable to drop bytes or events.
+{
+  const { createNdjsonEventReader } = await import(
+    "../src/features/queen-voice/converse-stream.ts"
+  );
+  const encoder = new TextEncoder();
+  const streamOf = (chunks) =>
+    new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    });
+
+  // Events split across network chunks parse whole; malformed lines skip.
+  {
+    const reader = createNdjsonEventReader(
+      streamOf([
+        '{"type":"speech","text":"He',
+        'y."}\n{"type":"done"',
+        ',"ok":true}\nnot-json\n',
+      ]),
+    );
+    const events = [];
+    while (await reader.pump()) events.push(...reader.take());
+    events.push(...reader.take());
+    assert.deepEqual(events, [
+      { type: "speech", text: "Hey." },
+      { type: "done", ok: true },
+    ]);
+  }
+
+  // A final line without a trailing newline still lands at stream end.
+  {
+    const reader = createNdjsonEventReader(
+      streamOf(['{"type":"done","ok":true}']),
+    );
+    while (await reader.pump()) {
+      // Drain to the end; events are taken below.
+    }
+    assert.deepEqual(reader.take(), [{ type: "done", ok: true }]);
+  }
+
+  // Racing pump() never drops events (the barge-in shape): callers share the
+  // in-flight promise, and an abandoned race still parses into the buffer.
+  {
+    const reader = createNdjsonEventReader(streamOf(['{"n":1}\n', '{"n":2}\n']));
+    const inFlight = reader.pump();
+    assert.equal(reader.pump(), inFlight, "pump is shared while in flight");
+    const raced = await Promise.race([inFlight, Promise.resolve("abandoned")]);
+    assert.equal(raced, "abandoned", "the race is abandoned before bytes settle");
+    while (await reader.pump()) {
+      // Drain to the end; events are taken below.
+    }
+    assert.deepEqual(reader.take(), [{ n: 1 }, { n: 2 }], "no event lost to the race");
+  }
+  console.log("converse-stream ndjson reader ok");
+}
+
+// --- OpenAI fallback SSE reader ----------------------------------------------------
+// The streamed OpenAI conversation fallback must surface every token delta —
+// including ones a runtime-frame filter would drop ("First,") — and tolerate
+// frames split across network chunks plus the [DONE] sentinel.
+{
+  const { readOpenAiSseText } = await import(
+    "../src/lib/services/queen-bee/voice-turn.ts"
+  );
+  const encoder = new TextEncoder();
+  const sse = (payload) => `data: ${JSON.stringify(payload)}\n\n`;
+  const frames =
+    sse({ choices: [{ delta: { content: "First," } }] }) +
+    sse({ choices: [{ delta: { content: " check" } }] }).slice(0, 20);
+  const tail =
+    sse({ choices: [{ delta: { content: " check" } }] }).slice(20) +
+    sse({ choices: [{ delta: { content: " the fleet." } }] }) +
+    "data: [DONE]\n\n";
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(frames));
+      controller.enqueue(encoder.encode(tail));
+      controller.close();
+    },
+  });
+  const deltas = [];
+  const text = await readOpenAiSseText(new Response(body), (delta) =>
+    deltas.push(delta),
+  );
+  assert.equal(text, "First, check the fleet.");
+  assert.equal(deltas.join(""), "First, check the fleet.");
+  assert.ok(deltas.length >= 3, "deltas stream individually");
+  console.log("openai fallback sse reader ok");
+}
+
+// --- runtime stream error frames fail the attempt ----------------------------------
+// A mid-stream runtime error used to be swallowed (sseTextFromPayload's error
+// throw is self-caught), silently truncating the reply — with streamed TTS the
+// truncation would be spoken. readRuntimeResponseText must reject instead so
+// the attempt falls back (cooldown → OpenAI) and the client gets a reset.
+{
+  const { readRuntimeResponseText } = await import(
+    "../src/lib/services/phone/runtime-voice-turn.ts"
+  );
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode('data: {"choices":[{"delta":{"content":"Half a "}}]}\n\n'),
+      );
+      controller.enqueue(
+        encoder.encode('data: {"type":"chat.error","error":"provider rejected the key"}\n\n'),
+      );
+      controller.close();
+    },
+  });
+  const deltas = [];
+  await assert.rejects(
+    () => readRuntimeResponseText(new Response(body), undefined, (d) => deltas.push(d)),
+    /provider rejected the key/,
+    "error frames reject the attempt instead of truncating",
+  );
+  assert.deepEqual(deltas, ["Half a "], "deltas before the error still streamed");
+  console.log("runtime stream error propagation ok");
+}
+
+// --- reasoning filter never eats streamed delta fragments ---------------------------
+// The reasoning-preamble filter is tuned for whole-message runtime frames. On
+// streaming runtimes sseTextFromPayload runs per token delta, so it must pass
+// innocent mid-sentence fragments like "First," through untouched — a dropped
+// delta vanishes from BOTH the collected reply and the spoken TTS stream.
+{
+  const { readRuntimeResponseText, sseTextFromPayload } = await import(
+    "../src/lib/services/phone/runtime-voice-turn.ts"
+  );
+
+  // Delta shapes survive, whatever the fragment looks like.
+  assert.equal(
+    sseTextFromPayload(JSON.stringify({ choices: [{ delta: { content: "First," } }] })),
+    "First,",
+    "OpenAI-style delta fragment survives the filter",
+  );
+  assert.equal(
+    sseTextFromPayload(JSON.stringify({ event: { delta: "Let's" } })),
+    "Let's",
+    "event.delta fragment survives",
+  );
+  assert.equal(
+    sseTextFromPayload(JSON.stringify({ delta: "we need" })),
+    "we need",
+    "top-level delta fragment survives",
+  );
+
+  // Whole-message reasoning preambles are still dropped; real replies pass.
+  assert.equal(
+    sseTextFromPayload(
+      JSON.stringify({ choices: [{ message: { content: "We need to check the fleet first." } }] }),
+    ),
+    "",
+    "whole-message reasoning frame still filtered",
+  );
+  assert.equal(
+    sseTextFromPayload(JSON.stringify({ content: "Let's see what the user asked." })),
+    "",
+    "bare content reasoning frame still filtered",
+  );
+  assert.equal(
+    sseTextFromPayload(
+      JSON.stringify({ choices: [{ message: { content: "The fleet is healthy." } }] }),
+    ),
+    "The fleet is healthy.",
+    "ordinary whole-message reply passes",
+  );
+
+  // End to end: a streamed reply that opens with "First," reaches both the
+  // collected text and the sentence-streaming TTS sink intact.
+  const encoder = new TextEncoder();
+  const sse = (payload) => `data: ${JSON.stringify(payload)}\n\n`;
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(sse({ choices: [{ delta: { content: "First," } }] })));
+      controller.enqueue(encoder.encode(sse({ choices: [{ delta: { content: " check the fleet." } }] })));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  const deltas = [];
+  const text = await readRuntimeResponseText(new Response(body), undefined, (delta) =>
+    deltas.push(delta),
+  );
+  assert.equal(text, "First, check the fleet.", "reply text keeps the leading delta");
+  assert.equal(deltas.join(""), "First, check the fleet.", "TTS deltas keep the leading delta");
+  console.log("reasoning filter delta passthrough ok");
+}
+
 // --- tool activity labels --------------------------------------------------------
 {
   assert.equal(
@@ -122,6 +510,104 @@ const { toolActivityLabel } = await import("../src/lib/services/phone/runtime-vo
   assert.equal(toolActivityLabel(JSON.stringify({ type: "chat.text", delta: "hi" })), "");
   assert.equal(toolActivityLabel("not json"), "");
   console.log("tool activity labels ok");
+}
+
+// --- barge-in echo-floor detector ------------------------------------------------
+{
+  const FRAME_MS = 16;
+  const run = (detector, rms, fromMs, toMs) => {
+    for (let at = fromMs; at <= toMs; at += FRAME_MS) {
+      updateBargeInDetector(detector, typeof rms === "function" ? rms(at) : rms, at);
+      if (detector.triggered) return at;
+    }
+    return 0;
+  };
+
+  // Steady speaker bleed (echo) louder than the absolute floor must calibrate
+  // in, raise the threshold, and never self-interrupt.
+  {
+    const detector = createBargeInDetector(0);
+    const triggeredAt = run(detector, 0.06, 0, 5_000);
+    assert.equal(triggeredAt, 0, "steady playback echo never triggers barge-in");
+    assert.ok(
+      bargeInThreshold(detector) > 0.12,
+      `echo floor raised the threshold (got ${bargeInThreshold(detector).toFixed(3)})`,
+    );
+  }
+
+  // The user talking over quiet echo triggers after the sustain window.
+  {
+    const detector = createBargeInDetector(0);
+    run(detector, 0.015, 0, 1_000); // calibrate on faint echo
+    const triggeredAt = run(detector, 0.18, 1_016, 4_000);
+    assert.ok(triggeredAt > 0, "sustained loud speech triggers");
+    assert.ok(
+      triggeredAt - 1_016 >= BARGE_IN_TUNING.sustainMs - FRAME_MS,
+      "trigger respects the sustain window",
+    );
+  }
+
+  // The user talking over LOUD echo still triggers (well above the floor).
+  {
+    const detector = createBargeInDetector(0);
+    run(detector, 0.06, 0, 1_500);
+    const triggeredAt = run(detector, 0.4, 1_516, 5_000);
+    assert.ok(triggeredAt > 0, "speech well above loud echo triggers");
+  }
+
+  // A brief transient (door slam) shorter than the sustain window is ignored.
+  {
+    const detector = createBargeInDetector(0);
+    run(detector, 0.015, 0, 1_000);
+    run(detector, 0.3, 1_016, 1_216); // ~200ms spike
+    assert.equal(detector.triggered, false, "short transients do not trigger");
+    const after = run(detector, 0.015, 1_232, 2_500);
+    assert.equal(after, 0, "returns to quiet without triggering");
+  }
+
+  // Nothing can trigger during the calibration grace window.
+  {
+    const detector = createBargeInDetector(0);
+    const triggeredAt = run(detector, 0.4, 0, BARGE_IN_TUNING.graceMs - FRAME_MS);
+    assert.equal(triggeredAt, 0, "grace window never triggers");
+  }
+
+  // A muted mic (zero frames) never triggers.
+  {
+    const detector = createBargeInDetector(0);
+    const triggeredAt = run(detector, 0, 0, 3_000);
+    assert.equal(triggeredAt, 0, "muted mic never triggers");
+  }
+
+  // The stutter regression (2026-07-02): a gappy stream calibrates the floor
+  // on SILENCE; when her voice resumes, the bleed would read as sustained
+  // speech and self-interrupt. Underrun-driven recalibration prevents it.
+  {
+    // Grace window full of underrun silence -> floor near zero.
+    const detector = createBargeInDetector(0);
+    run(detector, 0, 0, BARGE_IN_TUNING.graceMs + 200);
+    // Playback resumes; the watcher reports the gap -> recalibrate.
+    requestBargeInRecalibration(detector, BARGE_IN_TUNING.graceMs + 216);
+    const triggeredAt = run(detector, 0.06, BARGE_IN_TUNING.graceMs + 216, 6_000);
+    assert.equal(triggeredAt, 0, "resumed playback bleed never triggers after recalibration");
+    assert.ok(
+      bargeInThreshold(detector) > 0.12,
+      "recalibration re-learned the echo floor",
+    );
+    // The user interrupting AFTER the recalibration window still works.
+    const speechAt = run(detector, 0.4, 6_016, 9_000);
+    assert.ok(speechAt > 0, "real speech still triggers after gap recovery");
+  }
+
+  // Same scenario WITHOUT recalibration self-triggers (documents why the
+  // watcher must report gaps; if this stops failing, the guard is redundant).
+  {
+    const detector = createBargeInDetector(0);
+    run(detector, 0, 0, BARGE_IN_TUNING.graceMs + 200);
+    const triggeredAt = run(detector, 0.06, BARGE_IN_TUNING.graceMs + 216, 6_000);
+    assert.ok(triggeredAt > 0, "silence-calibrated floor self-triggers without recalibration");
+  }
+  console.log("barge-in echo-floor detector ok");
 }
 
 console.log("test-queen-voice-working: all assertions passed");

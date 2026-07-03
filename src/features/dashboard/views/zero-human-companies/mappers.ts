@@ -228,6 +228,15 @@ function hash3(value: string): string {
   return String(100 + (Math.abs(h) % 900));
 }
 
+function issueCollisionSuffix(value: string): string {
+  const compact = value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  if (compact.length >= 4) return compact.slice(-4);
+
+  let h = 0;
+  for (let i = 0; i < value.length; i++) h = (h * 33 + value.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36).toUpperCase().padStart(4, "0").slice(-4);
+}
+
 function resolveAssigneeName(assignee: string | null | undefined, byId: Map<string, string>, names: Set<string>): string | null {
   if (!assignee) return null;
   if (byId.has(assignee)) return byId.get(assignee)!;
@@ -236,10 +245,24 @@ function resolveAssigneeName(assignee: string | null | undefined, byId: Map<stri
 }
 
 export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<string, string>, names: Set<string>): Issue[] {
-  return tasks
-    .filter((t) => t.status !== "archived" && STATUS_TO_LANE[t.status])
-    .map((t) => ({
-      key: `${ticker}-${hash3(t.id)}`,
+  const visibleTasks = tasks.filter((t) => t.status !== "archived" && STATUS_TO_LANE[t.status]);
+  const baseKeys = visibleTasks.map((t) => `${ticker}-${hash3(t.id)}`);
+  const baseKeyCounts = new Map<string, number>();
+  for (const baseKey of baseKeys) {
+    baseKeyCounts.set(baseKey, (baseKeyCounts.get(baseKey) ?? 0) + 1);
+  }
+  const usedKeys = new Map<string, number>();
+
+  return visibleTasks.map((t, index) => {
+    const baseKey = baseKeys[index] ?? `${ticker}-${hash3(t.id)}`;
+    const collision = (baseKeyCounts.get(baseKey) ?? 0) > 1;
+    const candidateKey = collision ? `${baseKey}-${issueCollisionSuffix(t.id)}` : baseKey;
+    const usedCount = usedKeys.get(candidateKey) ?? 0;
+    usedKeys.set(candidateKey, usedCount + 1);
+    const key = usedCount === 0 ? candidateKey : `${candidateKey}-${usedCount + 1}`;
+
+    return {
+      key,
       title: t.title || "(untitled)",
       status: STATUS_TO_LANE[t.status],
       agent: resolveAssigneeName(t.assignee, byId, names),
@@ -258,7 +281,8 @@ export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<str
         updatedAt: t.updatedAt,
         completedAt: t.completedAt,
       },
-    }));
+    };
+  });
 }
 
 function deriveVelocity(tasks: KanbanTaskLite[], days = 14): number[] {

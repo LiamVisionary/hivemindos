@@ -36,6 +36,12 @@
       "runtimeExecutable": "/usr/bin/env",
       "runtimeArgs": ["HIVEMINDOS_TAURI_DEV=1", "HIVEMINDOS_TAURI_NEXT_DIST_DIR=.next-tauri/verify-5035", "node", "node_modules/next/dist/bin/next", "dev", "-H", "127.0.0.1", "-p", "5035"],
       "port": 5035
+    },
+    {
+      "name": "hivemindos-verify-5037",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": ["HIVEMINDOS_TAURI_DEV=1", "HIVEMINDOS_TAURI_NEXT_DIST_DIR=.next-tauri/verify-5037", "node", "node_modules/next/dist/bin/next", "dev", "-H", "127.0.0.1", "-p", "5037"],
+      "port": 5037
     }
   ]
 }

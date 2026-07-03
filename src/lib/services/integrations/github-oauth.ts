@@ -1,16 +1,13 @@
-import { execFile, spawn } from "child_process";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
-import { join } from "path";
-import { promisify } from "util";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { readSharedAgentEnv, saveSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
 
 export const GITHUB_OAUTH_STATE_COOKIE = "hive_github_oauth_state";
 export const GITHUB_OAUTH_SOURCE_COOKIE = "hive_github_oauth_source";
 
 const DEFAULT_GITHUB_OAUTH_SCOPES = ["repo", "workflow", "admin:repo_hook", "read:org", "user:email"];
 const DELETE_REPO_SCOPE = "delete_repo";
-const execFileAsync = promisify(execFile);
 
 export type GitHubOAuthConfig = {
   clientId: string;
@@ -22,11 +19,11 @@ export type GitHubOAuthConfig = {
 
 export async function readGitHubOAuthConfig(request: NextRequest): Promise<GitHubOAuthConfig> {
   const sharedEnv = await readSharedAgentEnv();
-  const clientId = sanitizeGitHubCredential(envValue("GITHUB_OAUTH_CLIENT_ID", sharedEnv) || envValue("GH_OAUTH_CLIENT_ID", sharedEnv));
-  const clientSecret = sanitizeGitHubCredential(envValue("GITHUB_OAUTH_CLIENT_SECRET", sharedEnv) || envValue("GH_OAUTH_CLIENT_SECRET", sharedEnv));
-  const redirectUri = envValue("GITHUB_OAUTH_CALLBACK_URL", sharedEnv)
+  const clientId = sanitizeGitHubCredential(sharedEnvValue("GITHUB_OAUTH_CLIENT_ID", sharedEnv) || sharedEnvValue("GH_OAUTH_CLIENT_ID", sharedEnv));
+  const clientSecret = sanitizeGitHubCredential(sharedEnvValue("GITHUB_OAUTH_CLIENT_SECRET", sharedEnv) || sharedEnvValue("GH_OAUTH_CLIENT_SECRET", sharedEnv));
+  const redirectUri = sharedEnvValue("GITHUB_OAUTH_CALLBACK_URL", sharedEnv)
     || new URL("/api/integrations/github/oauth/callback", localCallbackOrigin(request)).toString();
-  const scopes = normalizeScopes(envValue("GITHUB_OAUTH_SCOPES", sharedEnv));
+  const scopes = normalizeScopes(sharedEnvValue("GITHUB_OAUTH_SCOPES", sharedEnv));
   return {
     clientId,
     clientSecret,
@@ -70,7 +67,7 @@ export function normalizeGitHubOAuthSource(source: string | null) {
 }
 
 export function githubOAuthReturnUrl(source: string) {
-  return source === "aeon" ? "/?view=aeon&aeonPanel=detail&aeonTab=overview&githubOAuth=connected" : "/?view=integrations";
+  return source === "aeon" ? "/?view=aeon&aeonPanel=detail&aeonTab=overview&githubOAuth=connected" : "/?view=integrations&connections=github";
 }
 
 export async function saveGitHubTokenForAeon(accessToken: string) {
@@ -114,70 +111,11 @@ export function renderGitHubOAuthPage(input: {
   });
 }
 
-function saveSharedAgentEnv(key: string, value: string) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), [
-      "--stdin",
-      "--scope",
-      "agent",
-      "--runtime",
-      "generic",
-      key,
-    ], {
-      stdio: ["pipe", "ignore", "pipe"],
-    });
-    let errorText = "";
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Timed out while saving the GitHub token."));
-    }, 30_000);
-    child.stderr.on("data", (chunk) => {
-      errorText += chunk.toString();
-    });
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(errorText.trim() || "hive-env-add could not save GH_GLOBAL."));
-    });
-    child.stdin.end(value);
-  });
-}
-
-async function readSharedAgentEnv() {
-  try {
-    const { stdout } = await execFileAsync(join(process.cwd(), "scripts", "hive-env-add"), [
-      "--export-json",
-      "--scope",
-      "agent",
-      "--runtime",
-      "generic",
-    ], {
-      timeout: 12_000,
-      maxBuffer: 1_000_000,
-    });
-    const payload = JSON.parse(stdout) as { values?: Record<string, string> };
-    return payload.values && typeof payload.values === "object" ? payload.values : {};
-  } catch {
-    return {};
-  }
-}
-
-function envValue(key: string, sharedEnv: Record<string, string>) {
-  return process.env[key]?.trim() || sharedEnv[key]?.trim() || "";
-}
-
 function sanitizeGitHubCredential(value: string) {
   return value.replace(/[^A-Za-z0-9]/g, "");
 }
 
-function localCallbackOrigin(request: NextRequest) {
+export function localCallbackOrigin(request: NextRequest) {
   const url = new URL(request.nextUrl.origin);
   if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
     url.hostname = "127.0.0.1";

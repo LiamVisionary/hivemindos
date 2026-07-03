@@ -103,6 +103,37 @@ const quiet = await runWatcherOnce();
 assert.equal(quiet.code, 0);
 assert.equal(notifications.length, 0, "an empty drain announces nothing");
 
+// --- Case 4: GUI-variant path — a file appearing in the ingest dir from the
+// outside (Tailscale GUI saving directly there) is announced by the dir watch,
+// and files that predate the watcher are not.
+notifications.length = 0;
+writeFileSync(join(ingestDir, "note.txt"), "predates this run"); // already there from case 1
+writeTailscaleStub(`
+if [ "$1" = "version" ]; then echo "1.99.0"; exit 0; fi
+if [ "$1" = "file" ] && [ "$2" = "get" ]; then sleep 60; exit 0; fi
+exit 1
+`);
+const watchChild = spawn(process.execPath, ["scripts/taildrop-ingest-watcher.mjs"], {
+  env: {
+    ...process.env,
+    HOME: fakeHome,
+    PATH: `${binDir}:${process.env.PATH}`,
+    HIVE_TAILSCALE_CLI: join(binDir, "tailscale"),
+    HIVE_TAILDROP_INGEST_DIR: ingestDir,
+    HIVE_TAILDROP_APP_PORTS: String(port),
+  },
+  stdio: ["ignore", "pipe", "pipe"],
+});
+await new Promise((resolve) => setTimeout(resolve, 1_200)); // let it snapshot + arm the watch
+writeFileSync(join(ingestDir, "gui-delivered.png"), "bytes from the tailscale gui");
+const deadline = Date.now() + 10_000;
+while (notifications.length === 0 && Date.now() < deadline) {
+  await new Promise((resolve) => setTimeout(resolve, 200));
+}
+watchChild.kill("SIGTERM");
+assert.equal(notifications.length, 1, "externally-delivered file announces exactly once");
+assert.match(notifications[0].body, /gui-delivered\.png/, "notification names the delivered file");
+
 server.close();
 rmSync(scratch, { recursive: true, force: true });
 console.log("taildrop ingest watcher tests passed");

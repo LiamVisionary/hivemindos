@@ -337,6 +337,7 @@ export function frNetworkLabel(net: string) {
   switch (net) {
     case "base": return "Base mainnet";
     case "base-sepolia": return "Base Sepolia";
+    case "robinhood": return "Robinhood Chain";
     case "solana": return "Solana mainnet";
     default: return net;
   }

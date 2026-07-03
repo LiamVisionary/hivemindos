@@ -71,10 +71,29 @@ import {
   reconcilePortableState,
   unpackTarToDir,
 } from "./lib/runtime-portable-state.mjs";
+import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
 // NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
 // not at top level. A -SkipDeps app-driven collector install (Windows) has no
 // node_modules, and a failed top-level import would crash the whole collector at
 // startup — so /health never comes up and the setup wizard hangs waiting for it.
+
+// Last-resort process guards. In the 2026-07-03 NYC incident a spawn EBADF
+// thrown inside the /health exec path became an unhandled rejection that
+// killed the daemon, and every fleet watchdog probe re-triggered it after
+// relaunch — a crash loop that lasted hours. This daemon is fleet-critical:
+// log the failure loudly (stack included) and keep serving.
+process.on("uncaughtException", (error, origin) => {
+  console.error(
+    `[collector] ${origin || "uncaughtException"} (kept alive):`,
+    error?.stack || error,
+  );
+});
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    "[collector] unhandledRejection (kept alive):",
+    reason instanceof Error ? reason.stack : reason,
+  );
+});
 
 const execFileAsync = promisify(execFile);
 const collectorOnly = /^(1|true|yes)$/i.test(
@@ -1059,6 +1078,9 @@ async function isImageUrl(url) {
       });
     }
     const contentType = response.headers.get("content-type") || "";
+    // Only headers matter here — drop the body so the probe socket is
+    // released immediately instead of dangling until the abort timeout.
+    await response.body?.cancel().catch(() => {});
     return (
       response.ok &&
       (contentType.startsWith("image/") ||
@@ -1091,7 +1113,10 @@ async function iconFromManifest(baseUrl, html) {
     const response = await fetch(manifestUrl, {
       signal: AbortSignal.timeout(hostedAppProbeTimeoutMs),
     });
-    if (!response.ok) return "";
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      return "";
+    }
     const manifest = await response.json();
     const icons = Array.isArray(manifest?.icons) ? manifest.icons : [];
     const icon =
@@ -1134,9 +1159,14 @@ async function probeHostedApp(listener, scheme) {
   });
   const contentType = response.headers.get("content-type") || "";
   const server = response.headers.get("server") || "";
-  const text = contentType.includes("text/html")
-    ? await response.text().catch(() => "")
-    : "";
+  let text = "";
+  if (contentType.includes("text/html")) {
+    text = await response.text().catch(() => "");
+  } else {
+    // Non-HTML bodies are never read; cancel so discovery doesn't hold one
+    // socket per probed listener until the abort timeout fires.
+    await response.body?.cancel().catch(() => {});
+  }
   const title = titleFromHtml(text, `${listener.process} on ${listener.port}`);
   const iconUrl =
     (await discoverHostedAppIcon(url, text)) ||
@@ -1237,6 +1267,8 @@ async function probeServiceHealth(listener, scheme) {
     serviceKind,
   };
 }
+
+const discoverHostedAppsCached = createHostedAppsCache(() => discoverHostedApps());
 
 async function discoverHostedApps() {
   const listeners = await localTcpListeners();
@@ -1850,6 +1882,14 @@ async function deleteRuntimeAgent(input) {
 }
 
 function jsonResponse(response, status, payload) {
+  // Handler catch blocks land here after headers (or a partial body) may have
+  // already gone out; a second writeHead throws ERR_HTTP_HEADERS_SENT and
+  // killed the whole daemon in the 2026-07-03 NYC incident (env-sync export).
+  // Just close out whatever is left of the response instead.
+  if (response.headersSent) {
+    if (!response.writableEnded) response.end();
+    return;
+  }
   response
     .writeHead(status, { "content-type": "application/json" })
     .end(JSON.stringify(payload));
@@ -2056,13 +2096,18 @@ function streamingChatProcessPayload(value) {
   return null;
 }
 
+// execFile can THROW synchronously (spawn EBADF/EMFILE when the process runs
+// out of file descriptors) instead of rejecting, so a .catch() chained on its
+// promise never fires. During the 2026-07-03 NYC incident that throw escaped
+// through readAppVersion → /health and killed the daemon. Wrap the whole body
+// so ANY failure — sync or async — returns the fallback.
 async function execJson(cmd, args, fallback) {
-  const { stdout } = await execFileAsync(cmd, args, {
-    timeout: 5000,
-    maxBuffer: 1_200_000,
-  }).catch(() => ({ stdout: "" }));
-  if (!stdout.trim()) return fallback;
   try {
+    const { stdout } = await execFileAsync(cmd, args, {
+      timeout: 5000,
+      maxBuffer: 1_200_000,
+    });
+    if (!stdout.trim()) return fallback;
     return JSON.parse(stdout);
   } catch {
     return fallback;
@@ -2074,12 +2119,16 @@ async function execText(cmd, args, fallback = "") {
 }
 
 async function execTextAt(cwd, cmd, args, fallback = "") {
-  const { stdout } = await execFileAsync(cmd, args, {
-    cwd,
-    timeout: 5000,
-    maxBuffer: 300_000,
-  }).catch(() => ({ stdout: fallback }));
-  return stdout.trim();
+  try {
+    const { stdout } = await execFileAsync(cmd, args, {
+      cwd,
+      timeout: 5000,
+      maxBuffer: 300_000,
+    });
+    return stdout.trim();
+  } catch {
+    return typeof fallback === "string" ? fallback.trim() : fallback;
+  }
 }
 
 async function readAppVersion() {
@@ -2640,7 +2689,10 @@ async function runReliabilitySync(reason) {
           `http://${host}:${reliabilityPeerPort || port}/reliability/openrouter`,
           { signal: AbortSignal.timeout(reliabilityPeerTimeoutMs) },
         );
-        if (!peerResponse.ok) continue;
+        if (!peerResponse.ok) {
+          await peerResponse.body?.cancel().catch(() => {});
+          continue;
+        }
         payload = await peerResponse.json();
       } catch {
         continue;
@@ -2773,10 +2825,18 @@ async function reconcileRuntimeFromPeer(runtime, host, selfMachineId, seen) {
   } catch {
     return null; // peer offline / not reachable
   }
-  if (!response.ok) return null; // 403/404/etc — not a same-owner runtime-state collector
+  if (!response.ok) {
+    // 403/404/etc — not a same-owner runtime-state collector. Cancel the body
+    // so the socket doesn't dangle for the full 30s abort window.
+    await response.body?.cancel().catch(() => {});
+    return null;
+  }
   const peerMachineId = String(response.headers.get("x-hivemind-machine-id") || "").trim();
   if (peerMachineId) {
-    if (peerMachineId === selfMachineId || seen.has(peerMachineId)) return null;
+    if (peerMachineId === selfMachineId || seen.has(peerMachineId)) {
+      await response.body?.cancel().catch(() => {});
+      return null;
+    }
     seen.add(peerMachineId);
   }
   const buffer = Buffer.from(await response.arrayBuffer());
@@ -4127,16 +4187,6 @@ async function runHermesIntegrationAction(action, input = {}, agent = {}) {
   return { ok: false, error: `Unsupported Hermes action: ${action}` };
 }
 
-function normalizeNangoBaseUrl(input) {
-  const value =
-    String(input || "http://localhost:3003").trim() || "http://localhost:3003";
-  const parsed = new URL(value);
-  parsed.pathname = "";
-  parsed.search = "";
-  parsed.hash = "";
-  return parsed.toString().replace(/\/+$/, "");
-}
-
 function collectorRunProcess(command, args, stdin, timeoutMs) {
   return new Promise((resolveRun, rejectRun) => {
     const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
@@ -4287,143 +4337,6 @@ async function collectorSaveRuntimeAuth(env, value) {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Could not save the credential." };
   }
-}
-
-function nangoSetupScript(baseUrl) {
-  const normalized = normalizeNangoBaseUrl(baseUrl);
-  const portValue = new URL(normalized).port || "3003";
-  return [
-    "set -euo pipefail",
-    'log() { printf \'\\n[%s] %s\\n\' "$(date -u +%H:%M:%S)" "$*"; }',
-    'run_as_root() { if [ "$(id -u)" = "0" ]; then "$@"; elif command -v sudo >/dev/null 2>&1; then sudo "$@"; else echo \'This setup needs root or passwordless sudo to install packages.\' >&2; exit 10; fi; }',
-    "log 'Checking system packages'",
-    "if ! command -v git >/dev/null 2>&1; then",
-    "  command -v apt-get >/dev/null 2>&1 || { echo 'git is missing and apt-get is unavailable.' >&2; exit 11; }",
-    "  run_as_root apt-get update",
-    "  run_as_root apt-get install -y git",
-    "fi",
-    "if ! command -v docker >/dev/null 2>&1; then",
-    "  command -v apt-get >/dev/null 2>&1 || { echo 'docker is missing and apt-get is unavailable.' >&2; exit 12; }",
-    "  run_as_root apt-get update",
-    "  run_as_root apt-get install -y docker.io docker-compose-plugin",
-    "  run_as_root systemctl enable --now docker >/dev/null 2>&1 || true",
-    "fi",
-    "DOCKER='docker'",
-    "if ! docker ps >/dev/null 2>&1; then",
-    "  if command -v sudo >/dev/null 2>&1 && sudo docker ps >/dev/null 2>&1; then DOCKER='sudo docker'; else echo 'Docker is installed, but this user cannot run docker.' >&2; exit 13; fi",
-    "fi",
-    'NANGO_DIR="${NANGO_DIR:-$HOME/nango}"',
-    'log "Preparing Nango checkout at $NANGO_DIR"',
-    'if [ ! -d "$NANGO_DIR/.git" ]; then',
-    '  rm -rf "$NANGO_DIR"',
-    '  git clone https://github.com/NangoHQ/nango.git "$NANGO_DIR"',
-    "else",
-    "  # Prior runs perl-edit the tracked docker-compose.yaml in place, so a plain",
-    "  # git pull --ff-only would refuse on the dirty tree. Restore tracked files and",
-    "  # clear the .bak first, then fast-forward; if history diverged, reset to upstream.",
-    '  git -C "$NANGO_DIR" checkout -- docker-compose.yaml >/dev/null 2>&1 || true',
-    '  rm -f "$NANGO_DIR/docker-compose.yaml.bak"',
-    '  if ! git -C "$NANGO_DIR" pull --ff-only; then',
-    "    log 'Fast-forward not possible; resetting Nango checkout to upstream'",
-    "    git -C \"$NANGO_DIR\" reset --hard '@{u}'",
-    "  fi",
-    "fi",
-    'cd "$NANGO_DIR"',
-    "if [ ! -f .env ]; then cp .env.example .env; fi",
-    "if [ -f docker-compose.yaml ]; then",
-    "  perl -0pi.bak -e 's/\\x27(?:\\$\\{NANGO_DB_PORT:-\\d+\\}|\\d+):5432\\x27/\\x2715432:5432\\x27/g; s/\\x27[^\\x27]*:6379\\x27/\\x2716379:6379\\x27/g' docker-compose.yaml",
-    "fi",
-    "set_env() {",
-    '  key="$1"',
-    '  value="$2"',
-    '  if grep -q "^${key}=" .env; then',
-    '    tmp="$(mktemp)"',
-    '    awk -v key="$key" -v value="$value" \'BEGIN{line=key "=" value} $0 ~ "^" key "=" {print line; next} {print}\' .env > "$tmp"',
-    '    cat "$tmp" > .env',
-    '    rm -f "$tmp"',
-    "  else",
-    '    printf \'%s=%s\\n\' "$key" "$value" >> .env',
-    "  fi",
-    "}",
-    "remove_env() {",
-    '  key="$1"',
-    '  if grep -q "^${key}=" .env; then',
-    '    tmp="$(mktemp)"',
-    '    awk -v key="$key" \'$0 !~ "^" key "=" {print}\' .env > "$tmp"',
-    '    cat "$tmp" > .env',
-    '    rm -f "$tmp"',
-    "  fi",
-    "}",
-    `set_env NANGO_SERVER_URL ${shellQuote(normalized)}`,
-    `set_env SERVER_PORT ${shellQuote(portValue)}`,
-    "remove_env NANGO_DB_PORT",
-    "remove_env NANGO_REDIS_PORT",
-    "log 'Starting Nango containers'",
-    "$DOCKER compose down --remove-orphans >/dev/null 2>&1 || true",
-    "$DOCKER compose up -d",
-    "log 'Nango setup command finished'",
-  ].join("\n");
-}
-
-async function checkNangoHealthFromCollector(baseUrl) {
-  const url = `${normalizeNangoBaseUrl(baseUrl)}/health`;
-  const started = Date.now();
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(3500) });
-    const text = await response.text().catch(() => "");
-    return {
-      ok: response.ok,
-      checkedAt: new Date().toISOString(),
-      url,
-      latencyMs: Date.now() - started,
-      status: response.status,
-      result: text.slice(0, 120),
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      checkedAt: new Date().toISOString(),
-      url,
-      latencyMs: Date.now() - started,
-      error:
-        error instanceof Error ? error.message : "Nango health check failed.",
-    };
-  }
-}
-
-async function waitForNangoHealthFromCollector(baseUrl) {
-  let health = await checkNangoHealthFromCollector(baseUrl);
-  if (health.ok) return health;
-  for (const delay of [2000, 4000, 8000, 12000, 20000, 30000]) {
-    await sleep(delay);
-    health = await checkNangoHealthFromCollector(baseUrl);
-    if (health.ok) return health;
-  }
-  return health;
-}
-
-async function setupNangoIntegrationHost(baseUrl) {
-  const normalized = normalizeNangoBaseUrl(baseUrl);
-  const script = nangoSetupScript(normalized);
-  const result = await collectorRunProcess("bash", ["-s"], script, 360_000);
-  const health = await waitForNangoHealthFromCollector(normalized);
-  const error = health.ok
-    ? undefined
-    : health.error ||
-      (health.status
-        ? `Nango health check returned HTTP ${health.status}.`
-        : "Nango health check did not become ready after setup.");
-  return {
-    ok: health.ok,
-    method: "collector-api",
-    target: hostname(),
-    baseUrl: normalized,
-    stdout: result.stdout.slice(-20_000),
-    stderr: result.stderr.slice(-20_000),
-    health,
-    command: script,
-    ...(error ? { error } : {}),
-  };
 }
 
 function startUpdate() {
@@ -5800,6 +5713,31 @@ async function installedRuntimes() {
     : installedRuntimesPromise;
 }
 
+// fd/resource visibility: the 2026-07-03 NYC crash loop started as fd
+// exhaustion (spawn EBADF ~10 minutes after boot). /dev/fd is the process's
+// OWN descriptor table on macOS and Linux (no lsof spawn needed), and the
+// active-resource counts point at what is holding fds (sockets vs child
+// processes vs timers), so a leak shows up in fleet telemetry before it kills.
+async function processResourceStats() {
+  const openFds = await readdir("/dev/fd")
+    .then((entries) => entries.length)
+    .catch(() => null);
+  const activeResources = {};
+  try {
+    for (const kind of process.getActiveResourcesInfo()) {
+      activeResources[kind] = (activeResources[kind] || 0) + 1;
+    }
+  } catch {
+    // experimental API — absence just means no breakdown
+  }
+  return {
+    pid: process.pid,
+    uptimeSec: Math.round(process.uptime()),
+    openFds,
+    activeResources,
+  };
+}
+
 async function collectorHealthPayload() {
   const now = Date.now();
   if (
@@ -5811,16 +5749,25 @@ async function collectorHealthPayload() {
   if (healthPayloadPromise) return healthPayloadPromise;
 
   healthPayloadPromise = (async () => {
-    const [syncthing, envSync, agents, machineId, version, system, installed] =
-      await Promise.all([
-        syncthingInstalled(),
-        resolveHiveEnvAdd(),
-        localAgents(),
-        stableMachineId(),
-        appVersion(),
-        systemStats().catch(() => null),
-        installedRuntimes().catch(() => []),
-      ]);
+    const [
+      syncthing,
+      envSync,
+      agents,
+      machineId,
+      version,
+      system,
+      installed,
+      processStats,
+    ] = await Promise.all([
+      syncthingInstalled(),
+      resolveHiveEnvAdd(),
+      localAgents(),
+      stableMachineId(),
+      appVersion(),
+      systemStats().catch(() => null),
+      installedRuntimes().catch(() => []),
+      processResourceStats().catch(() => null),
+    ]);
     const runtimes = [
       ...new Set([...agents.map((agent) => agent.runtime), ...installed]),
     ];
@@ -5833,6 +5780,7 @@ async function collectorHealthPayload() {
       collectorStartedAtMs,
       version,
       system,
+      process: processStats,
       envSync: {
         ready: envSync.ready,
         user: currentUsername(),
@@ -5845,7 +5793,6 @@ async function collectorHealthPayload() {
         collectorOnly,
         directoryBrowsing: true,
         envHttpSync: true,
-        nangoSetup: true,
         runtimes,
         runtimeIntegrations: true,
         runtimeAgentCreation: true,
@@ -5953,6 +5900,10 @@ async function hermesApiHealthy() {
       headers: hermesApiHeaders(),
       signal: controller.signal,
     });
+    // Consume the body: an unread fetch body keeps its socket out of the pool
+    // until GC, and this probe runs in a 300ms startup poll loop — a steady
+    // fd leak (see the 2026-07-03 NYC EBADF incident).
+    await response.body?.cancel().catch(() => {});
     return response.ok;
   } catch {
     return false;
@@ -6835,6 +6786,9 @@ async function snapshotFor(agent) {
   };
 }
 
+// Both readers resolve (with what arrived) on stream error too: without an
+// "error" listener a mid-body ECONNRESET is an unhandled stream error — an
+// uncaughtException — and the awaiting handler would hang forever.
 function readBody(request) {
   return new Promise((resolveBody) => {
     let body = "";
@@ -6842,6 +6796,7 @@ function readBody(request) {
       body += chunk;
     });
     request.on("end", () => resolveBody(body));
+    request.on("error", () => resolveBody(body));
   });
 }
 
@@ -6852,6 +6807,7 @@ function readBodyBuffer(request) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
     request.on("end", () => resolveBody(Buffer.concat(chunks)));
+    request.on("error", () => resolveBody(Buffer.concat(chunks)));
   });
 }
 
@@ -6905,6 +6861,9 @@ function proxyAppWebSocket(request, socket, head) {
     closeBoth();
   });
   socket.on("error", closeBoth);
+  // A clean client close emits "close" without "error"; without this the
+  // upstream socket leaks when the client goes away mid-handshake.
+  socket.on("close", closeBoth);
 }
 
 async function proxyAppHttp(request, response, targetUrl) {
@@ -6979,7 +6938,27 @@ async function proxyAppHttp(request, response, targetUrl) {
   });
 }
 
-const telemetryServer = createServer(async (request, response) => {
+// A rejection escaping the async request handler used to become a
+// process-killing unhandledRejection (2026-07-03 NYC incident — /health was
+// one such path). Fail the one request instead; never the daemon.
+const telemetryServer = createServer((request, response) => {
+  handleCollectorRequest(request, response).catch((error) => {
+    console.error(
+      `[collector] request failed: ${request.method} ${request.url}`,
+      error?.stack || error,
+    );
+    try {
+      jsonResponse(response, 500, {
+        ok: false,
+        error: "Internal collector error.",
+      });
+    } catch {
+      response.destroy();
+    }
+  });
+});
+
+async function handleCollectorRequest(request, response) {
   const requestUrl = new URL(request.url || "/", "http://127.0.0.1");
   const pathname = requestUrl.pathname;
   response.setHeader("access-control-allow-origin", "*");
@@ -7080,7 +7059,9 @@ const telemetryServer = createServer(async (request, response) => {
   }
   if (pathname === "/apps" && request.method === "GET") {
     try {
-      const apps = await discoverHostedApps();
+      const apps = await discoverHostedAppsCached(
+        requestUrl.searchParams.get("refresh") === "1",
+      );
       jsonResponse(response, 200, {
         ok: true,
         host: hostname(),
@@ -7149,25 +7130,6 @@ const telemetryServer = createServer(async (request, response) => {
           error instanceof Error
             ? error.message
             : "Could not import env variables.",
-      });
-    }
-    return;
-  }
-  if (pathname === "/integrations/nango/setup" && request.method === "POST") {
-    try {
-      const rawBody = await readBody(request);
-      const body = rawBody ? JSON.parse(rawBody) : {};
-      const result = await setupNangoIntegrationHost(
-        String(body.baseUrl || "http://localhost:3003"),
-      );
-      jsonResponse(response, result.ok ? 200 : 502, result);
-    } catch (error) {
-      jsonResponse(response, 500, {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Could not set up Nango on this collector.",
       });
     }
     return;
@@ -7989,7 +7951,7 @@ const telemetryServer = createServer(async (request, response) => {
       error: error instanceof Error ? error.message : "snapshot failed",
     });
   }
-});
+}
 
 telemetryServer.on("upgrade", (request, socket, head) => {
   const requestUrl = new URL(request.url || "/", "http://127.0.0.1");
@@ -8055,6 +8017,17 @@ async function advertiseHubMdns() {
     );
   }
 }
+
+// The keep-alive guards above must not mask a failed bind: a collector that
+// can't listen should exit so launchd's KeepAlive relaunches it, not linger
+// alive-but-deaf. (The port stays pinned — fleet discovery depends on it.)
+telemetryServer.on("error", (error) => {
+  console.error(
+    "[collector] server error (exiting for relaunch):",
+    error?.stack || error,
+  );
+  process.exit(1);
+});
 
 telemetryServer.listen(port, host, () => {
   console.log(`agent telemetry collector listening on ${host}:${port}`);

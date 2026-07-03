@@ -107,7 +107,7 @@ const MANUAL_TOOLS = [
   },
   {
     name: "stock_trade",
-    description: "EXECUTE a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage or on-chain xStocks; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Get the human's go-ahead before calling.",
+    description: "EXECUTE or validate a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage, on-chain xStocks, or Robinhood Chain stock-token swaps via USDG/0x; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Robinhood Stock Tokens may be rejected upstream for legal/eligibility restrictions; surface that block and do not route around it. Get the human's go-ahead before calling.",
     inputSchema: stockTradeSchema(),
     annotations: criticalExecutionAnnotations("stock_trade"),
   },
@@ -534,9 +534,9 @@ function stockTradeSchema() {
     type: "object",
     required: ["agentId", "side", "ticker", "confirmation"],
     properties: {
-      agentId: { type: "string", description: "Wallet/profile id to trade from. The venue (Alpaca vs xStocks) is resolved from this wallet." },
+      agentId: { type: "string", description: "Wallet/profile id to trade from. The venue (Alpaca, xStocks, or Robinhood Chain) is resolved from this wallet." },
       side: { type: "string", enum: ["buy", "sell"], description: "Trade side." },
-      ticker: { type: "string", description: "Stock ticker (e.g. AAPL) or supported xStock symbol." },
+      ticker: { type: "string", description: "Stock ticker (e.g. AAPL), supported xStock symbol, or canonical Robinhood Chain stock-token ticker." },
       notionalUsd: { type: "number", description: "USD notional to trade. Provide this or qty." },
       qty: { type: "number", description: "Share count (Alpaca only). Provide this or notionalUsd." },
       confirmation: { type: "string", description: "Must be \"CONFIRM_BUY\" for a buy or \"CONFIRM_SELL\" for a sell." },

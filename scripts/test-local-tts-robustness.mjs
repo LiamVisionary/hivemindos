@@ -12,6 +12,20 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 // Keep the link-control helper off the real collector.env / linkd.
 process.env.HIVE_LINK_CONTROL_URL = "http://link.test";
+// Keep the persisted-app cache inside a scratch dir (hermetic: no writes to
+// the real ~/.hivemindos).
+process.env.HIVEMINDOS_LOCAL_TTS_APP_CACHE_FILE = `${(await import("node:os")).tmpdir()}/hivemindos-test-local-tts-apps-${process.pid}.json`;
+// Point HOME at a scratch dir BEFORE any project import: the dashboard-state
+// path is derived from homedir() at module load, and the call-prefs coverage
+// below writes its own dashboard-state.json — it must never touch the real
+// ~/.hivemindos.
+const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
+const { join: joinPath } = await import("node:path");
+const SCRATCH_HOME = await mkdtemp(
+  joinPath((await import("node:os")).tmpdir(), "hivemindos-test-voice-home-"),
+);
+process.env.HOME = SCRATCH_HOME;
+process.env.USERPROFILE = SCRATCH_HOME;
 
 const {
   localTtsBreakerState,
@@ -193,6 +207,84 @@ globalThis.fetch = async (input) => {
   assert.ok(failed.error, "failed prewarm carries the error");
   assert.equal(localTtsBreakerState(APP_ID).open, true, "failed prewarm trips the breaker");
   console.log("prewarm failure reporting ok");
+}
+
+// --- call prefs: a store outage is never "cloud voice selected" --------------
+// Voice continuity (2026-07-02): a transient failure reading the agent-profile
+// store used to read as calls=null → "local TTS not selected" → the route
+// spoke in a substitute OpenAI voice. An outage must instead surface as
+// unavailable (route: 503 voiceUnavailable → overlay mutes) or serve the
+// last-known-good prefs.
+{
+  const {
+    QueenCallPreferencesUnavailableError,
+    readQueenBeeCallPreferences,
+    resetQueenBeeCallPreferencesCache,
+  } = await import("../src/lib/services/queen-bee/voice-settings.ts");
+
+  const stateDir = joinPath(SCRATCH_HOME, ".hivemindos");
+  const stateFile = joinPath(stateDir, "dashboard-state.json");
+  await mkdir(stateDir, { recursive: true });
+  const stateWithProfiles = (profilesJson) =>
+    JSON.stringify({
+      version: 1,
+      values: { "hivemindos.agentProfiles.v1": profilesJson },
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+  const t0 = 1_000_000;
+
+  // Cold start against a corrupt store: outage, not "no local voice selected".
+  resetQueenBeeCallPreferencesCache();
+  await writeFile(stateFile, "{ definitely not json", "utf8");
+  await assert.rejects(
+    () => readQueenBeeCallPreferences(t0),
+    QueenCallPreferencesUnavailableError,
+    "corrupt store with no known-good prefs surfaces an outage",
+  );
+
+  // A healthy read resolves the queen's local voice and seeds last-known-good.
+  await writeFile(
+    stateFile,
+    stateWithProfiles(
+      JSON.stringify([
+        {
+          id: "queen-1",
+          name: "Queen Bee",
+          beeRole: "queen",
+          calls: { voiceRuntime: "local-tts", voiceProviderId: PROVIDER_ID, voiceId: "voice01" },
+        },
+      ]),
+    ),
+    "utf8",
+  );
+  resetQueenBeeCallPreferencesCache();
+  const healthy = await readQueenBeeCallPreferences(t0);
+  assert.equal(healthy?.voiceRuntime, "local-tts", "healthy read resolves the queen's local voice");
+
+  // Store breaks after the 15s TTL: serve last-known-good, not null/throw.
+  await writeFile(stateFile, "{ definitely not json", "utf8");
+  const stale = await readQueenBeeCallPreferences(t0 + 20_000);
+  assert.equal(stale?.voiceRuntime, "local-tts", "outage after a good read serves last-known-good prefs");
+  assert.equal(stale?.voiceProviderId, PROVIDER_ID, "stale prefs keep the provider id");
+
+  // A corrupt profiles VALUE (state file itself fine) is also an outage.
+  await writeFile(stateFile, stateWithProfiles("[ not json"), "utf8");
+  resetQueenBeeCallPreferencesCache();
+  await assert.rejects(
+    () => readQueenBeeCallPreferences(t0 + 40_000),
+    QueenCallPreferencesUnavailableError,
+    "corrupt profiles value surfaces an outage, not an empty profile list",
+  );
+
+  // A missing store file is a legitimate fresh install: cloud default (null).
+  await rm(stateFile, { force: true });
+  resetQueenBeeCallPreferencesCache();
+  assert.equal(
+    await readQueenBeeCallPreferences(t0 + 60_000),
+    null,
+    "missing store reads as no prefs (fresh install), not an outage",
+  );
+  console.log("call-prefs outage continuity ok");
 }
 
 console.log("test-local-tts-robustness: all assertions passed");

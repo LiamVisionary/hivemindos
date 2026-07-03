@@ -51,7 +51,7 @@ export const DEFAULT_AGENT_WALLET: Omit<AgentWalletConfig, "agentId"> = {
 };
 
 export function assetSpendCapFor(config: Pick<AgentWalletConfig, "assetSpendCaps" | "maxPaymentUsd">, asset: AgentSpendCapAsset): number {
-  if (asset === "USDC") return normalizeMoney(config.assetSpendCaps?.USDC, config.maxPaymentUsd);
+  if (asset === "USDC" || asset === "USDG") return normalizeMoney(config.assetSpendCaps?.[asset] ?? config.assetSpendCaps?.USDC, config.maxPaymentUsd);
   const cap = Number(config.assetSpendCaps?.[asset]);
   if (!Number.isFinite(cap)) return asset === "ETH" ? 0.01 : 0;
   return Math.max(0, cap);

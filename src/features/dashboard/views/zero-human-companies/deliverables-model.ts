@@ -5,6 +5,7 @@
 // into something an operator can read at a glance: it hides the junk, dedupes,
 // and buckets the rest into Links / Reports / Data / Media / (collapsed) Working
 // files, each with a human label, a file-type icon key, and a clear action.
+import { isReservedOrMockUrl } from "@/lib/net/reserved-urls";
 import type { IssueDeliverable } from "./types";
 
 export type DeliverableCategory = "link" | "report" | "data" | "media" | "internal";
@@ -48,15 +49,6 @@ export function deliverableFileHref(d: IssueDeliverable, opts: { download?: bool
   return `/api/fleet/read-file?${params.toString()}`;
 }
 
-function isPlaceholderUrl(raw: string): boolean {
-  let host = "";
-  try { host = new URL(raw).hostname.toLowerCase(); } catch { return true; }
-  if (/\.(?:example|invalid|test|localhost)$/.test(host)) return true;
-  if (/^(?:www\.)?example\.(?:com|org|net)$/.test(host)) return true;
-  if (host === "localhost" || host === "127.0.0.1") return true;
-  return /\b(?:mock_|placeholder|your-|example-|<[^>]+>|\{[^}]+\})/i.test(raw);
-}
-
 /**
  * Can /api/fleet/read-file actually resolve + serve this path? The load-bearing
  * discriminator is that the WHOLE trimmed path must END in a file extension:
@@ -76,7 +68,10 @@ function isOpenableFilePath(path: string): boolean {
 /** url = real web link · file = openable file · placeholder = fabricated/route/command/unopenable. */
 export function deliverableOpenKind(d: IssueDeliverable): "url" | "file" | "placeholder" {
   const href = deliverableHref(d);
-  if (href) return isPlaceholderUrl(href) ? "placeholder" : "url";
+  // Reserved / example.* / non-public / mock-marker hrefs are placeholders, not
+  // live links (shared strict helper — now also hides `*.example.com` subdomains
+  // and private/loopback hosts the old apex-only check let through).
+  if (href) return isReservedOrMockUrl(href) ? "placeholder" : "url";
   const path = d.path?.trim();
   if (!path) return "placeholder";
   return isOpenableFilePath(path) ? "file" : "placeholder";
@@ -133,6 +128,15 @@ export function classifyDeliverable(d: IssueDeliverable): ClassifiedDeliverable 
 
   if (openKind === "url") {
     const url = deliverableHref(d)!;
+    // A third-party API-docs / reference page is something an agent READ, not a
+    // company output — agents leak these when they hit an error (e.g. a rate-limit
+    // 429 referencing the provider's rate-limiting docs). Not a deliverable.
+    let host = "";
+    try { host = new URL(url).hostname.toLowerCase(); } catch { /* keep */ }
+    const path = url.toLowerCase();
+    if (host.startsWith("docs.") || /\/api-reference\/|\/rate-limit/.test(path)) {
+      return internal(d, "third-party reference doc");
+    }
     const { icon, kindLabel, reviewable } = linkKind(url);
     const leadMatch = url.match(/\/preview\/([^/?#]+)/i);
     const title = leadMatch ? `Preview — ${leadMatch[1].replace(/[-_]+/g, " ")}` : humanizeLabel(label, kindLabel);

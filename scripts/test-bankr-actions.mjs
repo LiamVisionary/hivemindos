@@ -39,6 +39,28 @@ try {
   assert.equal(bankr.classifyBankrActionPrompt("search Polymarket for bitcoin markets")?.intent, "polymarket");
   assert.equal(bankr.classifyBankrActionPrompt("search Polymarket for bitcoin markets")?.readOnly, true);
 
+  // Word-anchored intents still catch the real phrasings...
+  assert.equal(bankr.classifyBankrActionPrompt("pause my DCA into ETH")?.intent, "automation");
+  assert.equal(bankr.classifyBankrActionPrompt("list my automations on bankr")?.intent, "automation");
+  assert.equal(bankr.classifyBankrActionPrompt("set a limit order for BNKR")?.intent, "automation");
+  assert.equal(bankr.classifyBankrActionPrompt("check my open perps on hyperliquid")?.intent, "hyperliquid");
+  assert.equal(bankr.classifyBankrActionPrompt("close my perpetuals")?.intent, "hyperliquid");
+  assert.equal(bankr.classifyBankrActionPrompt("show my NFTs")?.intent, "nft");
+  // ...but ordinary speech no longer false-triggers a Bankr call: half-anchored
+  // alternations previously matched substrings ("broadcast" contains "dca",
+  // "alphabet" ends in "bet") and persona/scaffolding words ("automation").
+  assert.equal(bankr.classifyBankrActionPrompt("broadcast the update to everyone"), null);
+  assert.equal(bankr.classifyBankrActionPrompt("teach me the greek alphabet"), null);
+  assert.equal(bankr.classifyBankrActionPrompt("that line is perpendicular to the wall"), null);
+  assert.equal(
+    bankr.classifyBankrActionPrompt(
+      "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive)."
+    )?.intent,
+    "automation",
+    "the persona sentence itself still matches - rails must unwrap to the bare utterance BEFORE classifying (see unwrapLatestUserRequest)",
+  );
+  assert.equal(bankr.classifyBankrActionPrompt("uh nothing much"), null);
+
   const launchDraft = bankr.classifyBankrActionPrompt("launch a token called HIVE on Bankr");
   const card = bankr.bankrActionDraftMessage(launchDraft);
   assert.match(card, /Bankr action ready/);

@@ -27,7 +27,7 @@ All routes below are served by the Next.js app under `src/app/api`.
 | `/api/gitlawb/*` | GitLawb Code Proof CLI, DID, node health, and lazy setup status |
 | `/api/honey-ledger` | Honey ledger reads, local observation submission, exchange actions |
 | `/api/integrations/github/oauth/*` | GitHub OAuth fallback that saves `GH_GLOBAL` for AEON |
-| `/api/integrations/nango/*` | Nango configuration, health, connections, and setup |
+| `/api/integrations/connections` | App connections: live provider status, token save, disconnect |
 | `/api/kanban` | Board CRUD, task lifecycle, comments, claims, runs, and events |
 | `/api/kanban/deliverable` | Open/reveal completed task deliverables |
 | `/api/machines/directories` | Machine-aware directory discovery |
@@ -162,7 +162,6 @@ Common endpoints:
 | `GET /skills` | List installed skills from known runtime providers |
 | `GET /skills/auto-sync` | Read skill auto-sync configuration/status |
 | `POST /skills/auto-sync` | Configure skill auto-sync |
-| `POST /integrations/nango/setup` | Set up Nango host on the collector machine |
 | `POST /e2e/env-sync` | Real-fleet env sync test hook |
 | `POST /e2e/skills` | Real-fleet skill sync test hook |
 | `POST /e2e/file-share` | Real-fleet encrypted file share test hook |

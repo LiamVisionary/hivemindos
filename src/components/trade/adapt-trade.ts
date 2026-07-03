@@ -29,7 +29,7 @@ export function hoursAgo(ms: number, now: number): number {
 }
 
 // ── activity ─────────────────────────────────────────────────────────────────
-const STOCK_TARGET = /^(alpaca|xstocks):/i;
+const STOCK_TARGET = /^(alpaca|xstocks|robinhood-chain):/i;
 // Stable "cash" tokens — a swap INTO one reads as a sell, OUT of one as a buy.
 const STABLE_SYMBOLS = new Set(["USDC", "USDT", "DAI", "USDS", "USDE", "PYUSD"]);
 
@@ -51,7 +51,8 @@ function activityDisplay(record: WalletActivityRecord): { kind: string; text: st
     // "alpaca:NVDA buy (paper)" → kind "Buy"/"Sell", text "NVDA buy …", via venue.
     const [venue, rest = ""] = target.split(":");
     const side = /sell/i.test(rest) ? "Sell" : "Buy";
-    return { kind: side, text: rest.trim() || "Stock trade", via: venue.toLowerCase() === "xstocks" ? "xStocks" : "Alpaca", src: "stocks" };
+    const via = venue.toLowerCase() === "xstocks" ? "xStocks" : venue.toLowerCase() === "robinhood-chain" ? "Robinhood Chain" : "Alpaca";
+    return { kind: side, text: rest.trim() || "Stock trade", via, src: "stocks" };
   }
   switch (record.kind) {
     case "trade": {

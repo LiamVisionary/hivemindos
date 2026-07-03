@@ -1,13 +1,28 @@
 "use client";
 
 import * as React from "react";
-import { playRealtimePcmStream } from "@/lib/audio/realtime-pcm-stream-player";
+import {
+  BARGE_IN_TUNING,
+  createBargeInDetector,
+  requestBargeInRecalibration,
+  updateBargeInDetector,
+} from "./barge-in-detector";
 import {
   closeRealtimeSttSocket,
   pcm16ToBase64,
   prepareRealtimeSttSession,
   resampleToPcm16,
 } from "./realtime-stt";
+import { createSentenceChunker } from "@/lib/services/queen-bee/voice-speech-stream";
+import {
+  createNdjsonEventReader,
+  type ConverseStreamEvent,
+} from "./converse-stream";
+import {
+  playSpokenReply,
+  type PlaybackActivity,
+  type SpokenReplyOutcome,
+} from "./spoken-reply-playback";
 
 export type QueenVoicePhase =
   | "starting"
@@ -58,20 +73,9 @@ const RECORDER_MIME_CANDIDATES = [
 const MIN_UTTERANCE_MS = 300;
 const COMMIT_SILENCE_MS = 600;
 const MAX_UTTERANCE_MS = 20_000;
-// Local TTS streaming: a small jitter buffer keeps first audio fast; the
-// worklet queue absorbs the rest. If nothing arrives by the deadline the
-// request is abandoned for the buffered/cloud fallback, so a wedged TTS server
-// cannot hold a turn in silence. A stream that dies after this much audio has
-// been scheduled finishes what it has instead of re-speaking from the top.
-const LOCAL_TTS_START_BUFFER_MS = 220;
-const LOCAL_TTS_FIRST_AUDIO_TIMEOUT_MS = 15_000;
-const LOCAL_TTS_ACCEPT_STREAM_ERROR_AFTER_MS = 2_000;
 // Client-side throttle for fire-and-forget TTS prewarm pings (the server
 // dedupes too; this just avoids pointless requests every turn).
 const LOCAL_TTS_PREWARM_INTERVAL_MS = 45_000;
-// speechSynthesis silently no-ops in some webviews; if speech has not started
-// by this deadline, report the reply as unplayable instead of pretending.
-const BROWSER_SYNTH_START_TIMEOUT_MS = 4_000;
 // Spoken acknowledgment for slow turns: a clip pre-synthesized on the session's
 // voice, played when the reply hasn't resolved by the delay — so delegation
 // turns answer "On it" within ~1.5s instead of long dead air.
@@ -80,14 +84,18 @@ const ACK_PLAY_DELAY_MS = 1_400;
 // Live "what she's doing" chips: poll cadence for the turn-progress endpoint
 // while a converse request is in flight.
 const TURN_PROGRESS_POLL_MS = 650;
-// Barge-in (interrupt Queen mid-reply): sustained speech above this level stops
-// playback and hands the turn back to listening. The threshold sits ~2x the
-// listening VAD floor and requires sustained energy so echo-cancelled TTS
-// bleed and transients don't self-interrupt; the grace period skips the reply's
-// own onset.
-const BARGE_IN_RMS = 0.04;
-const BARGE_IN_SUSTAIN_MS = 350;
-const BARGE_IN_GRACE_MS = 450;
+// Barge-in (interrupt Queen mid-reply) uses the adaptive echo-floor detector
+// in ./barge-in-detector.ts so her own speaker bleed cannot self-interrupt
+// playback; tuning knobs live there (BARGE_IN_TUNING).
+// Continuous capture: one session-long mic pump fills a short PCM pre-roll
+// ring buffer even while Queen Bee thinks and speaks. When a listening turn
+// arms its STT socket, the frames captured while the socket was still opening
+// — or the words that just interrupted her — are flushed in first, so turn
+// boundaries and barge-ins lose no speech.
+const PRE_ROLL_MAX_MS = 5_000;
+// Flush window behind a barge-in trigger: the sustain the detector required
+// before firing plus a lead for the first syllable's onset.
+const BARGE_IN_FLUSH_LOOKBACK_MS = BARGE_IN_TUNING.sustainMs + 480;
 // Recorder fallback only: quiet stretches bloat the Whisper upload, so the
 // recording restarts when nothing has been said for a while.
 const IDLE_RECORDER_RESTART_MS = 10_000;
@@ -108,185 +116,6 @@ function utteranceFileName(mimeType: string) {
   return mimeType.includes("mp4") ? "utterance.mp4" : "utterance.webm";
 }
 
-// Returns true only when speech audibly started (some webviews expose the API
-// but never speak; an abort mid-speech still counts as played).
-async function speakWithBrowserSynthesis(
-  text: string,
-  signal: AbortSignal,
-): Promise<boolean> {
-  if (typeof speechSynthesis === "undefined") return false;
-  return await new Promise<boolean>((resolvePlayback) => {
-    let spoke = false;
-    let settled = false;
-    let startTimer = 0;
-    const settle = (played: boolean) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(startTimer);
-      resolvePlayback(played);
-    };
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
-    utterance.onstart = () => {
-      spoke = true;
-    };
-    utterance.onend = () => settle(spoke);
-    utterance.onerror = () => settle(spoke);
-    startTimer = window.setTimeout(() => {
-      if (!spoke) {
-        speechSynthesis.cancel();
-        settle(false);
-      }
-    }, BROWSER_SYNTH_START_TIMEOUT_MS);
-    signal.addEventListener(
-      "abort",
-      () => {
-        speechSynthesis.cancel();
-        // The turn is over; do not report an aborted reply as a failure.
-        settle(true);
-      },
-      { once: true },
-    );
-    speechSynthesis.speak(utterance);
-  });
-}
-
-// Local-TTS streaming playback: request the PCM frame stream and feed it to
-// the shared jitter-buffered worklet player (the same engine local TTS calls
-// use) on the already-running VAD AudioContext, so audio starts well under a
-// second after the server's first frame and chunk seams/underruns are handled.
-// Returns false on any miss (409 when local TTS isn't selected, app down, no
-// audio before the deadline, blocked audio output) so the caller falls back to
-// the buffered path.
-async function playStreamedLocalTts(
-  text: string,
-  signal: AbortSignal,
-  context: AudioContext,
-): Promise<boolean> {
-  const startedAt = Date.now();
-  // The request lives on its own controller so the first-audio deadline can
-  // abandon a wedged request without touching the session signal.
-  const requestAbort = new AbortController();
-  const onSessionAbort = () => requestAbort.abort();
-  signal.addEventListener("abort", onSessionAbort, { once: true });
-  let sawFirstByte = false;
-  const firstAudioTimer = window.setTimeout(() => {
-    if (!sawFirstByte) requestAbort.abort();
-  }, LOCAL_TTS_FIRST_AUDIO_TIMEOUT_MS);
-  try {
-    let response: Response;
-    try {
-      response = await fetch("/api/queen-bee/voice", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "speak-stream", text }),
-        cache: "no-store",
-        signal: requestAbort.signal,
-      });
-    } catch {
-      return signal.aborted;
-    }
-    if (signal.aborted) return true;
-    const contentType = response.headers.get("content-type") || "";
-    if (!response.ok || !response.body || contentType.includes("json")) return false;
-    try {
-      const playback = await playRealtimePcmStream(response, {
-        channels: 1,
-        sampleRate: 24_000,
-        context,
-        signal,
-        startedAt,
-        startBufferMs: LOCAL_TTS_START_BUFFER_MS,
-        acceptErrorAfterMs: LOCAL_TTS_ACCEPT_STREAM_ERROR_AFTER_MS,
-        onFirstByte: () => {
-          sawFirstByte = true;
-          window.clearTimeout(firstAudioTimer);
-        },
-      });
-      return signal.aborted || playback.playedMs > 0;
-    } catch {
-      // Connect failure (blocked output), pre-audio stream death, or the
-      // first-audio watchdog firing: let the buffered path speak instead.
-      return signal.aborted;
-    }
-  } finally {
-    window.clearTimeout(firstAudioTimer);
-    signal.removeEventListener("abort", onSessionAbort);
-  }
-}
-
-type SpokenReplyOutcome = "local-stream" | "buffered" | "browser" | "none";
-
-// WKWebView's autoplay policy blocks `new Audio().play()` without a user
-// gesture, so replies are decoded and played through the already-running VAD
-// AudioContext instead (the same approach the agent call modal relies on).
-// Returns how the reply was voiced; "none" means every path failed and the
-// user heard nothing.
-async function playSpokenReply(
-  text: string,
-  signal: AbortSignal,
-  context: AudioContext | null,
-  streamLocalTts = false,
-): Promise<SpokenReplyOutcome> {
-  // Local TTS: stream frames for sub-second first audio; on any miss (not
-  // local-tts, app down) fall through to the buffered path below.
-  if (streamLocalTts && context) {
-    const streamed = await playStreamedLocalTts(text, signal, context).catch(() => false);
-    if (streamed || signal.aborted) return "local-stream";
-  }
-  let response: Response | null = null;
-  try {
-    response = await fetch("/api/queen-bee/voice", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "speak", text }),
-      cache: "no-store",
-      signal,
-    });
-  } catch {
-    response = null;
-  }
-  if (signal.aborted) return "buffered";
-  if (
-    !response?.ok ||
-    !response.headers.get("content-type")?.includes("audio/") ||
-    !context
-  ) {
-    return (await speakWithBrowserSynthesis(text, signal)) ? "browser" : "none";
-  }
-  try {
-    const encoded = await response.arrayBuffer();
-    if (signal.aborted) return "buffered";
-    const buffer = await context.decodeAudioData(encoded);
-    if (signal.aborted) return "buffered";
-    await context.resume().catch(() => undefined);
-    if (context.state !== "running") {
-      // A suspended context renders nothing and `onended` never fires — this
-      // path used to hang here until the session closed. Speak audibly instead.
-      return (await speakWithBrowserSynthesis(text, signal)) ? "browser" : "none";
-    }
-    await new Promise<void>((resolvePlayback) => {
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(context.destination);
-      const stop = () => {
-        try {
-          source.stop();
-        } catch {
-          // The source may already have ended.
-        }
-        resolvePlayback();
-      };
-      signal.addEventListener("abort", stop, { once: true });
-      source.onended = () => resolvePlayback();
-      source.start();
-    });
-    return "buffered";
-  } catch {
-    return (await speakWithBrowserSynthesis(text, signal)) ? "browser" : "none";
-  }
-}
-
 /**
  * Hands-free Queen Bee voice loop. Preferred path: microphone PCM streams
  * into an OpenAI Realtime transcription session so the user's words appear on
@@ -305,6 +134,9 @@ export function useQueenBeeVoice(
   const [turns, setTurns] = React.useState<QueenVoiceTurn[]>([]);
   const [speechDetected, setSpeechDetected] = React.useState(false);
   const [working, setWorking] = React.useState<QueenVoiceWorkingStage[]>([]);
+  // Non-fatal voice status, e.g. "local voice unreachable, replies shown as
+  // text" — the session keeps listening while it shows.
+  const [voiceNotice, setVoiceNotice] = React.useState("");
   const mutedRef = React.useRef(muted);
   // Read at playback time so the long-lived session effect never goes stale.
   const streamLocalTtsRef = React.useRef(streamLocalTts);
@@ -335,6 +167,11 @@ export function useQueenBeeVoice(
     let sttSocket: WebSocket | null = null;
     let preparedStt: Promise<WebSocket> | null = null;
     let realtimeUnavailable = false;
+    // Session-long mic pump state: PCM streams to sttLiveSocket while a
+    // listening turn is armed; the pre-roll ring buffer fills the whole time.
+    let sttLiveSocket: WebSocket | null = null;
+    let pendingFlushSinceMs = 0;
+    const preRoll: { at: number; pcm: Int16Array }[] = [];
     const abort = new AbortController();
     const mimeType = pickRecorderMimeType();
     // Finalized turns for this session, sent so Queen Bee keeps conversational context.
@@ -378,9 +215,24 @@ export function useQueenBeeVoice(
     };
 
     const closeSttSocket = () => {
-      if (processor) processor.onaudioprocess = null;
+      sttLiveSocket = null;
       closeRealtimeSttSocket(sttSocket);
       sttSocket = null;
+    };
+
+    // Replay buffered pre-roll frames captured since `sinceMs` into a freshly
+    // armed STT socket, ahead of the live pump taking over.
+    const flushPreRollTo = (socket: WebSocket, sinceMs: number) => {
+      for (const entry of preRoll) {
+        if (entry.at < sinceMs) continue;
+        if (socket.readyState !== WebSocket.OPEN) return;
+        socket.send(
+          JSON.stringify({
+            type: "input_audio_buffer.append",
+            audio: pcm16ToBase64(entry.pcm),
+          }),
+        );
+      }
     };
 
     const prepareStt = () => {
@@ -426,10 +278,14 @@ export function useQueenBeeVoice(
 
     // Pre-synthesized "On it" clip on the session's voice, decoded once and
     // kept for instant playback on slow turns. Fetched after the prewarm lands
-    // so a cold local TTS model is loaded exactly once.
+    // so a cold local TTS model is loaded exactly once; re-attempted on later
+    // turns until a clip in the RIGHT voice is cached.
     let ackBuffer: AudioBuffer | null = null;
     let ackPlayback: Promise<void> | null = null;
+    let ackFetchInFlight = false;
     const fetchAckClip = async () => {
+      if (cancelled || ackBuffer || ackFetchInFlight) return;
+      ackFetchInFlight = true;
       try {
         const response = await fetch("/api/queen-bee/voice", {
           method: "POST",
@@ -439,13 +295,61 @@ export function useQueenBeeVoice(
           signal: abort.signal,
         });
         if (cancelled || !response.ok) return;
-        if (!response.headers.get("content-type")?.includes("audio/")) return;
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("audio/")) return;
+        // Voice consistency: with a local voice selected, only a local (WAV)
+        // clip may be cached — an OpenAI mp3 fetched during a TTS-server flap
+        // would ack in a different voice for the whole session.
+        if (streamLocalTtsRef.current && !contentType.includes("wav")) return;
         const encoded = await response.arrayBuffer();
         if (cancelled || !audioContext) return;
         ackBuffer = await audioContext.decodeAudioData(encoded);
       } catch {
         // No ack clip; the turn still resolves normally, just without the cue.
+      } finally {
+        ackFetchInFlight = false;
       }
+    };
+
+    // One soft descending blip when replies go text-only (selected voice
+    // unreachable) — synthesized on the session context, no asset needed.
+    const playVoiceMutedCue = () => {
+      const context = audioContext;
+      if (!context || context.state !== "running") return;
+      try {
+        const now = context.currentTime;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(660, now);
+        oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.18);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.06, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + 0.24);
+      } catch {
+        // The cue is best-effort.
+      }
+    };
+
+    // Voice-outage bookkeeping: cue once per outage, clear when speech returns.
+    let voiceOutageActive = false;
+    const noteVoiceOutage = (
+      message = "Her voice server is unreachable, so replies show as text. The voice returns automatically once it's back.",
+    ) => {
+      if (!voiceOutageActive) {
+        voiceOutageActive = true;
+        playVoiceMutedCue();
+      }
+      setVoiceNotice(message);
+    };
+    const clearVoiceOutage = () => {
+      if (!voiceOutageActive) return;
+      voiceOutageActive = false;
+      setVoiceNotice("");
     };
     const playAckClip = () => {
       const context = audioContext;
@@ -475,40 +379,50 @@ export function useQueenBeeVoice(
     };
 
     // Watch the mic for sustained speech while Queen Bee talks; on barge-in,
-    // abort HER playback (not the session) so the turn snaps back to listening.
-    // Relies on the echo-cancelled capture chain plus an elevated, sustained
-    // threshold so her own voice through the speakers doesn't self-interrupt.
-    const watchForBargeIn = (speakAbort: AbortController, playbackSignal: AbortSignal) => {
+    // abort HER playback (not the session) so the turn snaps back to
+    // listening. The adaptive echo-floor detector calibrates on her own
+    // speaker bleed so residual echo (imperfect AEC) cannot self-interrupt —
+    // only mic energy well above that measured floor counts as the user.
+    const watchForBargeIn = (
+      speakAbort: AbortController,
+      playbackSignal: AbortSignal,
+      activity: PlaybackActivity,
+    ) => {
       if (!analyser) return () => undefined;
       const activeAnalyser = analyser;
       const samples = new Uint8Array(activeAnalyser.fftSize);
-      const startedAt = performance.now();
-      let speechSince = 0;
+      const detector = createBargeInDetector(performance.now());
+      let lastUnderrunSeen = 0;
       let frameId = 0;
       const tick = () => {
         if (cancelled || playbackSignal.aborted) return;
-        if (mutedRef.current) {
-          speechSince = 0;
-          frameId = window.requestAnimationFrame(tick);
-          return;
+        // A playback gap (buffer underrun) silences her speaker bleed; the
+        // echo floor must recalibrate around it or the resumed voice would
+        // read as the user interrupting.
+        if (activity.underrunAt > lastUnderrunSeen) {
+          lastUnderrunSeen = activity.underrunAt;
+          requestBargeInRecalibration(detector, performance.now());
         }
-        activeAnalyser.getByteTimeDomainData(samples);
-        let sum = 0;
-        for (const sample of samples) {
-          const normalized = (sample - 128) / 128;
-          sum += normalized * normalized;
-        }
-        const rms = Math.sqrt(sum / samples.length);
-        const now = performance.now();
-        if (now - startedAt > BARGE_IN_GRACE_MS && rms >= BARGE_IN_RMS) {
-          if (!speechSince) speechSince = now;
-          if (now - speechSince >= BARGE_IN_SUSTAIN_MS) {
-            setSpeechDetected(true);
-            speakAbort.abort();
-            return;
+        // Muted mic: feed zeros so the floor decays but nothing can trigger.
+        let rms = 0;
+        if (!mutedRef.current) {
+          activeAnalyser.getByteTimeDomainData(samples);
+          let sum = 0;
+          for (const sample of samples) {
+            const normalized = (sample - 128) / 128;
+            sum += normalized * normalized;
           }
-        } else {
-          speechSince = 0;
+          rms = Math.sqrt(sum / samples.length);
+        }
+        updateBargeInDetector(detector, rms, performance.now());
+        if (detector.triggered) {
+          setSpeechDetected(true);
+          // The words that interrupted her are already in the pre-roll ring
+          // buffer; hand them to the next listening turn instead of making
+          // the user repeat themselves.
+          pendingFlushSinceMs = performance.now() - BARGE_IN_FLUSH_LOOKBACK_MS;
+          speakAbort.abort();
+          return;
         }
         frameId = window.requestAnimationFrame(tick);
       };
@@ -518,22 +432,108 @@ export function useQueenBeeVoice(
 
     // Speak a reply with barge-in armed: playback runs on its own abort scope
     // combined with the session's (AbortSignal.any handles a session that is
-    // already aborted), so interrupting her never tears down the mic.
+    // already aborted), so interrupting her never tears down the mic. The
+    // shared activity object lets the watcher see playback gaps live.
     const speakReplyWithBargeIn = async (text: string): Promise<SpokenReplyOutcome> => {
       if (ackPlayback) await ackPlayback;
       const speakAbort = new AbortController();
       const playbackSignal = AbortSignal.any([abort.signal, speakAbort.signal]);
-      const stopWatching = watchForBargeIn(speakAbort, playbackSignal);
+      const activity: PlaybackActivity = { underrunAt: 0 };
+      const stopWatching = watchForBargeIn(speakAbort, playbackSignal, activity);
       try {
         return await playSpokenReply(
           text,
           playbackSignal,
           audioContext,
           streamLocalTtsRef.current,
+          activity,
         );
       } finally {
         stopWatching();
       }
+    };
+
+    // Sentence-streaming playback for one turn: chunks arrive while the model
+    // is still writing and play strictly in order through the same fallback
+    // ladder as a whole reply (playSpokenReply). ONE barge-in watcher spans
+    // the whole turn, and every chunk boundary recalibrates the echo floor the
+    // same way an underrun does — otherwise her own resumed voice would read
+    // as the user interrupting (the pinned 2026-07-02 regression shape).
+    const createChunkSpeaker = (onFirstChunk?: () => void) => {
+      const speakAbort = new AbortController();
+      const playbackSignal = AbortSignal.any([abort.signal, speakAbort.signal]);
+      const activity: PlaybackActivity = { underrunAt: 0 };
+      const outcomes: SpokenReplyOutcome[] = [];
+      let stopWatching: (() => void) | null = null;
+      let generation = 0;
+      let attemptAbort = new AbortController();
+      let muted = false;
+      let chain = Promise.resolve();
+
+      const enqueue = (chunk: string) => {
+        // Punctuation-only fragments synthesize to zero bytes, which the
+        // server records as a TTS failure and trips the 45s breaker on a
+        // healthy engine — never send them.
+        if (!/[\p{L}\p{N}]/u.test(chunk)) return;
+        const chunkGeneration = generation;
+        const attemptSignal = attemptAbort.signal;
+        const chunkSignal = AbortSignal.any([playbackSignal, attemptSignal]);
+        chain = chain.then(async () => {
+          if (cancelled || playbackSignal.aborted || muted) return;
+          if (chunkGeneration !== generation) return; // superseded by a reset
+          if (!stopWatching) {
+            if (ackPlayback) await ackPlayback;
+            onFirstChunk?.();
+            setPhase("speaking");
+            stopWatching = watchForBargeIn(speakAbort, playbackSignal, activity);
+          }
+          const outcome = await playSpokenReply(
+            chunk,
+            chunkSignal,
+            audioContext,
+            streamLocalTtsRef.current,
+            activity,
+          );
+          // A chunk cut by a mid-play reset says nothing about the turn's
+          // audibility (an abort reads back as "played"); don't record it.
+          if (!attemptSignal.aborted || playbackSignal.aborted) {
+            outcomes.push(outcome);
+            // Voice continuity: once a chunk goes text-only, the rest of the
+            // reply stays on screen instead of re-probing the down server.
+            if (outcome === "muted") muted = true;
+          }
+          // The pause before the next chunk silences her speaker bleed just
+          // like an underrun; recalibrate or the watcher self-triggers.
+          activity.underrunAt = Date.now();
+        });
+      };
+      // A failed model attempt was superseded: stop its audio mid-word and
+      // drop its queued chunks; the fallback attempt starts a new generation.
+      const resetAttempt = () => {
+        generation += 1;
+        attemptAbort.abort();
+        attemptAbort = new AbortController();
+      };
+      // Hard stop for a failed turn: kill current audio and the watcher.
+      const stop = () => {
+        speakAbort.abort();
+        stopWatching?.();
+      };
+      const end = async () => {
+        await chain;
+        stopWatching?.();
+        return outcomes;
+      };
+      return {
+        enqueue,
+        resetAttempt,
+        stop,
+        end,
+        bargeInSignal: speakAbort.signal,
+        get interrupted() {
+          return speakAbort.signal.aborted;
+        },
+      };
     };
 
     // VAD shared by both listening paths. Calls onSpeechDiscarded when a
@@ -596,13 +596,18 @@ export function useQueenBeeVoice(
       frame = window.requestAnimationFrame(tick);
     };
 
-    // Step 2 of every turn: the conversational Queen Bee reply, captions,
-    // spoken playback, then back to listening.
+    // Step 2 of every turn: the conversational Queen Bee reply streams in as
+    // NDJSON speech events; sentence chunks are spoken while the model is
+    // still writing (captions fill live), the canonical reply text lands with
+    // the final "done" event, then back to listening.
     const runConverseTurn = async (transcript: string) => {
       setPhase("thinking");
       setSpeechDetected(false);
-      // Warm the TTS model while the reply is being composed.
-      void prewarmLocalTtsEngine();
+      // Warm the TTS model while the reply is being composed; once warm,
+      // retry the ack-clip cache if it still isn't in the right voice.
+      void prewarmLocalTtsEngine().then(() => {
+        if (!cancelled) void fetchAckClip();
+      });
       // Slow-turn cue: if the reply hasn't resolved shortly, speak the cached
       // "On it" clip so delegation work never reads as dead air.
       const ackTimer = window.setTimeout(() => {
@@ -635,7 +640,7 @@ export function useQueenBeeVoice(
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            action: "converse",
+            action: "converse-stream",
             transcript,
             turnId,
             history: history.slice(-8),
@@ -643,29 +648,201 @@ export function useQueenBeeVoice(
           cache: "no-store",
           signal: AbortSignal.any([abort.signal, AbortSignal.timeout(75_000)]),
         });
-        const data = (await converseResponse
-          .json()
-          .catch(() => null)) as VoiceTurnResponse | null;
         if (cancelled) return;
         history.push({ who: "you", text: transcript });
-        if (!converseResponse.ok || !data?.ok || !data.reply) {
-          failTurn(
-            data?.error ||
-              `Queen Bee reply returned HTTP ${converseResponse.status}.`,
-          );
+        const contentType =
+          converseResponse.headers.get("content-type") || "";
+        if (
+          !converseResponse.ok ||
+          !converseResponse.body ||
+          !contentType.includes("ndjson")
+        ) {
+          // Error envelope (or a proxy that buffered the stream away): handle
+          // it the way the buffered `converse` turn always did.
+          const data = (await converseResponse
+            .json()
+            .catch(() => null)) as VoiceTurnResponse | null;
+          if (!data?.ok || !data.reply) {
+            failTurn(
+              data?.error ||
+                `Queen Bee reply returned HTTP ${converseResponse.status}.`,
+            );
+            return;
+          }
+          addTurn("queen", data.reply);
+          history.push({ who: "queen", text: data.reply });
+          setPhase("speaking");
+          // The reply is here; a late "On it" ack would talk over it.
+          window.clearTimeout(ackTimer);
+          const spoken = await speakReplyWithBargeIn(data.reply);
+          if (cancelled) return;
+          if (spoken === "none" && !abort.signal.aborted) {
+            failTurn("The reply could not be played out loud. Check the Calls voice settings and speaker output.");
+            return;
+          }
+          if (spoken === "muted") noteVoiceOutage();
+          else if (spoken === "local-stream-partial") {
+            noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.");
+          } else clearVoiceOutage();
+          startListening();
           return;
         }
-        addTurn("queen", data.reply);
-        history.push({ who: "queen", text: data.reply });
-        setPhase("speaking");
-        const spoken = await speakReplyWithBargeIn(data.reply);
+
+        // Streaming turn: speech text arrives as NDJSON events while the
+        // model writes; sentence chunks play as they complete so first audio
+        // never waits for the full reply.
+        const speaker = createChunkSpeaker(() => window.clearTimeout(ackTimer));
+        let chunker = createSentenceChunker();
+        let liveSpeech = "";
+        let queenTurnId = 0;
+        // Object holder (not plain lets): the fields are assigned inside the
+        // event closure, which TS flow analysis would otherwise narrow away.
+        const outcome: { done: ConverseStreamEvent | null; error: string } = {
+          done: null,
+          error: "",
+        };
+        const showCaption = (text: string, live: boolean) => {
+          if (!queenTurnId) queenTurnId = addTurn("queen", text || "...", live);
+          else updateTurn(queenTurnId, text || "...", live);
+        };
+        const handleEvent = (event: ConverseStreamEvent) => {
+          if (event.type === "speech" && event.text) {
+            liveSpeech += event.text;
+            showCaption(liveSpeech.trim(), true);
+            for (const chunk of chunker.push(event.text)) speaker.enqueue(chunk);
+          } else if (event.type === "reset") {
+            // A failed model attempt was superseded server-side; discard its
+            // captions, queued chunks, and any audio mid-play.
+            liveSpeech = "";
+            chunker = createSentenceChunker();
+            speaker.resetAttempt();
+            if (queenTurnId) updateTurn(queenTurnId, "...", true);
+          } else if (event.type === "done") {
+            outcome.done = event;
+          } else if (event.type === "error") {
+            outcome.error = event.error || "Queen Bee voice turn failed.";
+          }
+        };
+        const stream = createNdjsonEventReader<ConverseStreamEvent>(
+          converseResponse.body,
+        );
+        const drainEvents = () => {
+          for (const event of stream.take()) handleEvent(event);
+        };
+        // Pumps race the barge-in signal: when the user interrupts while the
+        // model is still writing, the turn must snap back to listening NOW —
+        // the pre-roll ring only holds ~5s of their words. The reader's
+        // shared pump means a lost race never drops bytes.
+        const bargeIn = new Promise<"barge-in">((resolveBargeIn) => {
+          speaker.bargeInSignal.addEventListener(
+            "abort",
+            () => resolveBargeIn("barge-in"),
+            { once: true },
+          );
+        });
+        let detached = false;
+        try {
+          for (;;) {
+            const next = await Promise.race([stream.pump(), bargeIn]);
+            if (cancelled) return;
+            if (next === "barge-in") {
+              detached = !abort.signal.aborted;
+              break;
+            }
+            drainEvents();
+            if (!next) break;
+          }
+        } catch (readError) {
+          // A dead stream (network drop, the 75s turn timeout) must also stop
+          // the chunk queue and the barge-in watcher — route it through the
+          // same failure path as a server error event.
+          outcome.error =
+            outcome.error ||
+            (readError instanceof Error
+              ? readError.message
+              : "Queen Bee voice turn failed.");
+        }
+        if (detached) {
+          // Reserve the queen's history slot NOW: the next user turn can start
+          // before the background drain finishes, and a late push would land
+          // AFTER that turn's you-entry, misattributing this reply to the next
+          // question for the rest of the session. The entry is updated in
+          // place; empty text is filtered server-side (historyFromForm).
+          const historyEntry = { who: "queen" as const, text: liveSpeech.trim() };
+          history.push(historyEntry);
+          // Finish collecting the reply in the background so the transcript
+          // and any delegation receipt still land; server-side work (task
+          // submission) is unaffected by the interruption.
+          void (async () => {
+            while (await stream.pump().catch(() => false)) drainEvents();
+            drainEvents();
+            if (cancelled) return;
+            const finalReply =
+              (outcome.done?.ok && outcome.done.reply ? outcome.done.reply : "") ||
+              liveSpeech.trim();
+            if (finalReply) {
+              showCaption(finalReply, false);
+              historyEntry.text = finalReply;
+            } else if (queenTurnId) {
+              dropTurn(queenTurnId);
+            }
+          })();
+          startListening();
+          return;
+        }
         if (cancelled) return;
-        if (spoken === "none" && !abort.signal.aborted) {
+        const finalReply =
+          outcome.done?.ok && outcome.done.reply ? outcome.done.reply : "";
+        if (outcome.error || !finalReply) {
+          speaker.stop();
+          // Part of a failed turn may already have been said out loud; keep
+          // what she audibly spoke on screen, otherwise drop the live bubble.
+          if (liveSpeech.trim()) {
+            showCaption(liveSpeech.trim(), false);
+            history.push({ who: "queen", text: liveSpeech.trim() });
+          } else if (queenTurnId) {
+            dropTurn(queenTurnId);
+          }
+          failTurn(outcome.error || "Queen Bee returned no reply.");
+          return;
+        }
+        for (const chunk of chunker.flush()) speaker.enqueue(chunk);
+        showCaption(finalReply, false);
+        history.push({ who: "queen", text: finalReply });
+        const outcomes = await speaker.end();
+        if (cancelled) return;
+        if (speaker.interrupted || abort.signal.aborted) {
+          // Barge-in during the spoken tail: the turn is over, listen now.
+          startListening();
+          return;
+        }
+        const audible = outcomes.some(
+          (outcome) =>
+            outcome === "local-stream" ||
+            outcome === "local-stream-partial" ||
+            outcome === "buffered" ||
+            outcome === "browser",
+        );
+        if (outcomes.length && !audible) {
+          if (outcomes.includes("muted")) {
+            // Voice continuity: the reply stays as text and the session keeps
+            // going; the voice returns automatically when the server does.
+            noteVoiceOutage();
+            startListening();
+            return;
+          }
           // Every voice engine failed silently; say so instead of pretending
           // the reply was spoken. The reply text stays on screen.
           failTurn("The reply could not be played out loud. Check the Calls voice settings and speaker output.");
           return;
         }
+        if (outcomes.includes("muted")) noteVoiceOutage();
+        else if (
+          outcomes.includes("local-stream-partial") ||
+          outcomes.includes("none")
+        ) {
+          noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.");
+        } else if (audible) clearVoiceOutage();
         startListening();
       } catch (turnError) {
         if (cancelled) return;
@@ -695,6 +872,10 @@ export function useQueenBeeVoice(
         failTurn("The opening line could not be played out loud. Check the Calls voice settings and speaker output.");
         return;
       }
+      if (spoken === "muted") noteVoiceOutage();
+      else if (spoken === "local-stream-partial") {
+        noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.");
+      } else clearVoiceOutage();
       startListening();
     };
 
@@ -703,6 +884,13 @@ export function useQueenBeeVoice(
     async function startRealtimeListening() {
       setPhase("listening");
       setSpeechDetected(false);
+      // Words spoken from this moment on (or since a barge-in trigger) are in
+      // the pre-roll ring buffer; they flush into the socket once it's armed,
+      // so "Your turn" registers speech immediately instead of dropping the
+      // opening words while the session connects.
+      const listeningStartedAt = performance.now();
+      const flushSinceMs = pendingFlushSinceMs || listeningStartedAt;
+      pendingFlushSinceMs = 0;
       const sessionPromise = prepareStt();
       if (!sessionPromise) {
         startRecorderListening();
@@ -711,6 +899,19 @@ export function useQueenBeeVoice(
       let socket: WebSocket;
       try {
         socket = await sessionPromise;
+        preparedStt = null;
+        if (socket.readyState !== WebSocket.OPEN && !cancelled) {
+          // A prewarmed socket can go stale during a long thinking/speaking
+          // stretch (idle sessions get closed upstream); adopting it would
+          // wedge the turn on a socket whose close event already fired.
+          const freshSession = prepareStt();
+          if (!freshSession) {
+            startRecorderListening();
+            return;
+          }
+          socket = await freshSession;
+          preparedStt = null;
+        }
       } catch (sttError) {
         realtimeUnavailable = true;
         console.warn(
@@ -720,7 +921,6 @@ export function useQueenBeeVoice(
         if (!cancelled) startRecorderListening();
         return;
       }
-      preparedStt = null;
       if (cancelled) {
         closeRealtimeSttSocket(socket);
         return;
@@ -786,27 +986,18 @@ export function useQueenBeeVoice(
         // A dropped socket mid-listen should restart, not strand the session.
         if (!cancelled && !committed && sttSocket === socket) {
           sttSocket = null;
+          sttLiveSocket = null;
+          // Recover speech that straddled the drop from the pre-roll buffer.
+          pendingFlushSinceMs = performance.now() - 1_500;
           restartTimer = window.setTimeout(startListening, 250);
         }
       });
 
-      if (processor && audioContext) {
-        const activeContext = audioContext;
-        processor.onaudioprocess = (event) => {
-          if (cancelled || committed || mutedRef.current) return;
-          if (socket.readyState !== WebSocket.OPEN) return;
-          const pcm = resampleToPcm16(
-            event.inputBuffer.getChannelData(0),
-            activeContext.sampleRate,
-          );
-          if (pcm.byteLength) {
-            send({
-              type: "input_audio_buffer.append",
-              audio: pcm16ToBase64(pcm),
-            });
-          }
-        };
-      }
+      // Arm the session-long mic pump: flush the pre-roll captured while the
+      // socket was opening (or the speech that triggered a barge-in), then
+      // let the pump stream live frames. No handler swap, no lost audio.
+      flushPreRollTo(socket, flushSinceMs);
+      sttLiveSocket = socket;
 
       startVadLoop({
         isActive: () => sttSocket === socket && !committed,
@@ -821,6 +1012,9 @@ export function useQueenBeeVoice(
         onCommit: () => {
           if (committed) return;
           committed = true;
+          // Stop live streaming; the pump keeps filling the pre-roll buffer
+          // for the next turn while this utterance is transcribed.
+          sttLiveSocket = null;
           setPhase("thinking");
           if (!liveTranscript.trim()) {
             updateTurn(ensureYouTurn(), "Transcribing...", true);
@@ -894,6 +1088,8 @@ export function useQueenBeeVoice(
       if (cancelled || !stream || !analyser) return;
       setPhase("listening");
       setSpeechDetected(false);
+      // The recorder path can't consume PCM pre-roll; drop any pending flush.
+      pendingFlushSinceMs = 0;
 
       recorderChunks = [];
       try {
@@ -985,6 +1181,32 @@ export function useQueenBeeVoice(
         sourceNode.connect(processor);
         processor.connect(silentGain);
         silentGain.connect(audioContext.destination);
+        // Session-long mic pump: always fill the pre-roll ring buffer (so
+        // turn boundaries and barge-ins lose no speech), and stream to the
+        // armed STT socket while a listening turn is live.
+        const pumpContext = audioContext;
+        processor.onaudioprocess = (event) => {
+          if (cancelled || mutedRef.current) return;
+          const pcm = resampleToPcm16(
+            event.inputBuffer.getChannelData(0),
+            pumpContext.sampleRate,
+          );
+          if (!pcm.byteLength) return;
+          const at = performance.now();
+          preRoll.push({ at, pcm });
+          while (preRoll.length && preRoll[0].at < at - PRE_ROLL_MAX_MS) {
+            preRoll.shift();
+          }
+          const liveSocket = sttLiveSocket;
+          if (liveSocket && liveSocket.readyState === WebSocket.OPEN) {
+            liveSocket.send(
+              JSON.stringify({
+                type: "input_audio_buffer.append",
+                audio: pcm16ToBase64(pcm),
+              }),
+            );
+          }
+        };
         // Start warming the local TTS model right away so the first spoken
         // reply doesn't pay a cold model load, then cache the "On it" ack clip
         // on the warmed voice for instant slow-turn cues.
@@ -1020,6 +1242,7 @@ export function useQueenBeeVoice(
       stream?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       try {
+        if (processor) processor.onaudioprocess = null;
         processor?.disconnect();
       } catch {
         // Audio nodes may already be detached.
@@ -1037,5 +1260,5 @@ export function useQueenBeeVoice(
     });
   }, [active, muted]);
 
-  return { phase, error, turns, speechDetected, working };
+  return { phase, error, turns, speechDetected, working, voiceNotice };
 }

@@ -2,6 +2,14 @@ import { shellBaseFromCollectorUrl, shellSessionUrl } from "@/app/api/fleet/shel
 import { discoverRawConnectedApps, type ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
 import {
+  APP_CACHE_MS,
+  cachedApp,
+  evictCachedApp,
+  hydratePersistedApps,
+  rememberAppById,
+  touchCachedApp,
+} from "@/lib/services/phone/local-tts-app-cache";
+import {
   isCallerAbortError,
   recordLocalTtsFailure,
   recordLocalTtsSuccess,
@@ -14,6 +22,7 @@ const DEFAULT_LOCAL_TTS_VOICE = "voice01";
 const DEFAULT_SAMPLE_RATE = 24_000;
 const DISCOVERY_TIMEOUT_MS = 12_000;
 const RAW_TTS_DISCOVERY_TIMEOUT_MS = 2_500;
+const DIRECT_HOST_DISCOVERY_TIMEOUT_MS = 4_000;
 const PROBE_TIMEOUT_MS = 8_000;
 const STREAM_TIMEOUT_MS = 120_000;
 const LAUNCH_DISCOVERY_TIMEOUT_MS = 10_000;
@@ -21,7 +30,6 @@ const LAUNCH_PROBE_TIMEOUT_MS = 8_000;
 const LAUNCH_MODEL_PROBE_TIMEOUT_MS = 4_000;
 const LAUNCH_SHELL_TIMEOUT_MS = 15_000;
 const LAUNCH_SHELL_SESSION = "local-tts-launcher";
-const APP_CACHE_MS = 5 * 60_000;
 const CANDIDATE_CACHE_MS = 60_000;
 const PREFERRED_LOCAL_TTS_MODELS = [
   "chatterbox-turbo",
@@ -182,12 +190,7 @@ type FleetLaunchMachine = {
 };
 
 const appsByOrigin = new Map<string, AppCacheEntry>();
-const appById = new Map<string, { expiresAt: number; app: HostedApp }>();
 const candidatesByOrigin = new Map<string, CandidateCacheEntry>();
-
-function cacheKey(origin: string, appId: string) {
-  return `${origin.replace(/\/+$/, "")}::${appId}`;
-}
 
 function fresh<T extends { expiresAt: number }>(entry: T | undefined) {
   return entry && entry.expiresAt > Date.now() ? entry : null;
@@ -196,17 +199,21 @@ function fresh<T extends { expiresAt: number }>(entry: T | undefined) {
 function rememberApps(origin: string, apps: HostedApp[]) {
   const expiresAt = Date.now() + APP_CACHE_MS;
   appsByOrigin.set(origin, { expiresAt, apps });
-  for (const app of apps) {
-    if (app.id && app.apiBaseUrl) appById.set(cacheKey(origin, app.id), { expiresAt, app });
-  }
+  for (const app of apps) rememberAppById(origin, app, expiresAt);
 }
 
 function rememberCandidates(origin: string, candidates: LocalTtsCandidate[]) {
   candidatesByOrigin.set(origin, { expiresAt: Date.now() + CANDIDATE_CACHE_MS, candidates });
 }
 
-function cachedApp(origin: string, appId: string) {
-  return fresh(appById.get(cacheKey(origin, appId)))?.app ?? null;
+// The one resolution path every synth/stream shares: persisted cache, then
+// in-memory cache, then (targeted) discovery. Cache lifecycle (sliding TTL,
+// failure eviction, cross-restart persistence) lives in local-tts-app-cache.
+async function resolvedTtsApp(origin: string, appId: string) {
+  await hydratePersistedApps(origin).catch(() => undefined);
+  return cachedApp(origin, appId)
+    ?? (await discoveredApps(origin, { selectedAppId: appId })).find((item) => matchesAppId(item, appId) && item.apiBaseUrl)
+    ?? null;
 }
 
 function cachedCandidates(origin: string) {
@@ -784,6 +791,23 @@ async function discoveredApps(origin: string, options?: { force?: boolean; selec
     const app = cachedApp(origin, options.selectedAppId);
     if (app) return [app];
 
+    // Fast path: the selected app id encodes its machine host — ask that
+    // machine's collector directly (~1s) before paying a fleet-wide sweep
+    // (measured ~10s), which used to land on the first spoken reply.
+    const hint = appIdHint(options.selectedAppId);
+    if (hint?.host && hint.host !== "local" && hint.host !== "localhost") {
+      const direct = await discoverRawConnectedApps(origin, {
+        timeoutMs: DIRECT_HOST_DISCOVERY_TIMEOUT_MS,
+        directHost: hint.host,
+        cachedAppsOnly: true,
+      }).catch(() => []);
+      const directApp = direct.find((item) => matchesAppId(item, options.selectedAppId!));
+      if (directApp?.apiBaseUrl) {
+        touchCachedApp(origin, options.selectedAppId, directApp);
+        return [directApp];
+      }
+    }
+
     const raw = await discoverRawConnectedApps(origin, { timeoutMs: RAW_TTS_DISCOVERY_TIMEOUT_MS }).catch(() => []);
     const rawApp = raw.find((item) => matchesAppId(item, options.selectedAppId!));
     if (rawApp) {
@@ -1210,9 +1234,12 @@ export async function synthesizeLocalTtsWav(input: {
   voice: string;
   text: string;
   signal?: AbortSignal;
+  /** Optional per-stage timing sink (latency diagnosis in telemetry). */
+  timings?: Record<string, number>;
 }): Promise<LocalTtsWavResult> {
-  const app = cachedApp(input.origin, input.appId)
-    ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
+  const appResolveStartedAt = Date.now();
+  const app = await resolvedTtsApp(input.origin, input.appId);
+  if (input.timings) input.timings.appResolveMs = Date.now() - appResolveStartedAt;
   if (!app?.apiBaseUrl) {
     // Undiscoverable app (e.g. Hivemind Link down) fails every consumer the
     // same way; remember it so fallbacks stop re-paying discovery.
@@ -1232,6 +1259,7 @@ export async function synthesizeLocalTtsWav(input: {
     instruct: "Speak warmly and clearly.",
   };
   let response: Response;
+  const upstreamStartedAt = Date.now();
   try {
     response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}/v1/audio/speech-stream`, {
       method: "POST",
@@ -1242,19 +1270,27 @@ export async function synthesizeLocalTtsWav(input: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Local TTS request failed.";
-    if (!isCallerAbortError(error)) recordLocalTtsFailure(input.appId, message);
+    if (!isCallerAbortError(error)) {
+      recordLocalTtsFailure(input.appId, message);
+      evictCachedApp(input.origin, input.appId, app);
+    }
     return { ok: false, error: message };
+  } finally {
+    if (input.timings) input.timings.upstreamOpenMs = Date.now() - upstreamStartedAt;
   }
   if (!response.ok || !response.body) {
     recordLocalTtsFailure(input.appId, `Local TTS speech returned HTTP ${response.status}.`);
+    evictCachedApp(input.origin, input.appId, app);
     return { ok: false, error: `Local TTS speech returned HTTP ${response.status}.` };
   }
   const pcm = new Uint8Array(await response.arrayBuffer());
+  if (input.timings) input.timings.upstreamBodyMs = Date.now() - upstreamStartedAt;
   if (!pcm.byteLength) {
     recordLocalTtsFailure(input.appId, "Local TTS returned no audio.");
     return { ok: false, error: "Local TTS returned no audio." };
   }
   recordLocalTtsSuccess(input.appId);
+  touchCachedApp(input.origin, input.appId, app);
   const sampleRate = Math.trunc(numberValue(response.headers.get("x-audio-sample-rate"), DEFAULT_SAMPLE_RATE));
   const channels = Math.max(1, Math.trunc(numberValue(response.headers.get("x-audio-channels"), 1)));
   return {
@@ -1286,9 +1322,12 @@ export async function streamLocalTtsPcm(input: {
   voice: string;
   text: string;
   signal?: AbortSignal;
+  /** Optional per-stage timing sink (latency diagnosis in telemetry). */
+  timings?: Record<string, number>;
 }): Promise<LocalTtsPcmStream> {
-  const app = cachedApp(input.origin, input.appId)
-    ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
+  const appResolveStartedAt = Date.now();
+  const app = await resolvedTtsApp(input.origin, input.appId);
+  if (input.timings) input.timings.appResolveMs = Date.now() - appResolveStartedAt;
   if (!app?.apiBaseUrl) {
     recordLocalTtsFailure(input.appId, "No matching connected TTS app with an API base URL was found.");
     return { ok: false, error: "No matching connected TTS app with an API base URL was found." };
@@ -1304,6 +1343,7 @@ export async function streamLocalTtsPcm(input: {
     instruct: "Speak warmly and clearly.",
   };
   let response: Response;
+  const upstreamStartedAt = Date.now();
   try {
     response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}/v1/audio/speech-stream`, {
       method: "POST",
@@ -1314,14 +1354,21 @@ export async function streamLocalTtsPcm(input: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Local TTS stream request failed.";
-    if (!isCallerAbortError(error)) recordLocalTtsFailure(input.appId, message);
+    if (!isCallerAbortError(error)) {
+      recordLocalTtsFailure(input.appId, message);
+      evictCachedApp(input.origin, input.appId, app);
+    }
     return { ok: false, error: message };
+  } finally {
+    if (input.timings) input.timings.upstreamOpenMs = Date.now() - upstreamStartedAt;
   }
   if (!response.ok || !response.body) {
     recordLocalTtsFailure(input.appId, `Local TTS stream returned HTTP ${response.status}.`);
+    evictCachedApp(input.origin, input.appId, app);
     return { ok: false, error: `Local TTS stream returned HTTP ${response.status}.` };
   }
   recordLocalTtsSuccess(input.appId);
+  touchCachedApp(input.origin, input.appId, app);
   return {
     ok: true,
     body: response.body,
@@ -1339,8 +1386,7 @@ export async function streamLocalTtsSpeech(input: {
   utteranceId?: string;
   signal?: AbortSignal;
 }) {
-  const app = cachedApp(input.origin, input.appId)
-    ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
+  const app = await resolvedTtsApp(input.origin, input.appId);
   if (!app?.apiBaseUrl) {
     recordLocalTtsFailure(input.appId, "No matching connected TTS app with an API base URL was found.");
     return Response.json({ ok: false, error: "No matching connected TTS app with an API base URL was found." }, { status: 404 });
@@ -1371,11 +1417,17 @@ export async function streamLocalTtsSpeech(input: {
   } catch (error) {
     if (!isCallerAbortError(error)) {
       recordLocalTtsFailure(input.appId, error instanceof Error ? error.message : "Local TTS stream request failed.");
+      evictCachedApp(input.origin, input.appId, app);
     }
     throw error;
   }
-  if (!response.ok) recordLocalTtsFailure(input.appId, `Local TTS stream returned HTTP ${response.status}.`);
-  else recordLocalTtsSuccess(input.appId);
+  if (!response.ok) {
+    recordLocalTtsFailure(input.appId, `Local TTS stream returned HTTP ${response.status}.`);
+    evictCachedApp(input.origin, input.appId, app);
+  } else {
+    recordLocalTtsSuccess(input.appId);
+    touchCachedApp(input.origin, input.appId, app);
+  }
   const headers = new Headers();
   headers.set("Content-Type", response.headers.get("content-type") || "application/octet-stream");
   headers.set("Cache-Control", "no-store");

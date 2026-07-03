@@ -26,18 +26,28 @@ export function sseTextFromPayload(raw: string) {
         ? parsed.error
         : parsed.event?.error || "";
     if (error.trim()) throw new Error(error.trim());
-    const text =
+    // Incremental delta fragments pass through unfiltered: a streaming runtime
+    // hits this per token, and the reasoning filter below would silently eat
+    // innocent mid-sentence fragments like "First," or "Let's" from both the
+    // collected reply and the streamed TTS deltas.
+    const deltaText =
       parsed.choices
-        ?.map(
-          (choice) => choice.delta?.content || choice.message?.content || "",
-        )
+        ?.map((choice) => choice.delta?.content || "")
         .join("") ||
       parsed.event?.delta ||
-      parsed.event?.content ||
       parsed.delta ||
+      "";
+    if (deltaText) return deltaText;
+    const text =
+      parsed.choices
+        ?.map((choice) => choice.message?.content || "")
+        .join("") ||
+      parsed.event?.content ||
       parsed.content ||
       parsed.text ||
       "";
+    // Whole-message frames only: some runtimes emit their reasoning preamble
+    // as a full content frame before the real reply.
     if (
       /^\s*(?:we need|we are asked|the user asked|i need to|let's|first,)/i.test(
         text,
@@ -94,6 +104,8 @@ export async function readRuntimeResponseText(
   response: Response,
   /** Optional live sink for non-text SSE activity (tool starts etc.). */
   onActivity?: (label: string) => void,
+  /** Optional live sink for reply-text deltas as they stream. */
+  onTextDelta?: (delta: string) => void,
 ) {
   if (!response.body) {
     const data = (await response.json().catch(() => null)) as {
@@ -113,11 +125,18 @@ export async function readRuntimeResponseText(
   let buffer = "";
   let text = "";
   const consume = (data: string) => {
+    // Runtime error frames must fail the attempt (cooldown + fallback), not
+    // silently truncate the reply: sseTextFromPayload's own error throw is
+    // self-caught (dead code), so gate here the way the phone route does.
+    const error = sseErrorFromPayload(data);
+    if (error) throw new Error(error);
     if (onActivity) {
       const label = toolActivityLabel(data);
       if (label) onActivity(label);
     }
-    text += sseTextFromPayload(data);
+    const delta = sseTextFromPayload(data);
+    if (delta && onTextDelta) onTextDelta(delta);
+    text += delta;
   };
   for (;;) {
     const { value, done } = await reader.read();

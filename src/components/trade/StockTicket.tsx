@@ -1,7 +1,7 @@
 "use client";
 
-/* StockTicket — the redesigned equities order ticket, wired to the REAL Alpaca /
-   xStocks rail (quote + execute through /api/trading, governance + CONFIRM_BUY /
+/* StockTicket — the redesigned equities order ticket, wired to the REAL stock
+   rail (quote + execute through /api/trading, governance + CONFIRM_BUY /
    CONFIRM_SELL enforced server-side). The Alpaca paper/live toggle is honored
    (a paper-only agent can never escalate to live — the server pins it too).
 
@@ -23,7 +23,7 @@ const OTHER = "__other__";
 
 export function StockTicket() {
   const desk = useTradeDesk();
-  const { agentId, paper, setPaper, stockReadiness: r, stockPortfolio, onOpenView, onChangeWallet, onEnableStockVenue, walletKind, isSolanaWallet } = desk;
+  const { agentId, paper, setPaper, stockReadiness: r, stockPortfolio, onOpenView, onChangeWallet, onEnableStockVenue, walletKind, isSolanaWallet, network } = desk;
   // Held value (USD) per ticker, shown in the ticker dropdown in the user's
   // display currency (populated only for tickers the user actually holds).
   const usdByTicker = React.useMemo(
@@ -32,7 +32,13 @@ export function StockTicket() {
   );
   const venue = r.venue;
   const isXstocks = venue === "xstocks";
-  const tickerOptions = isXstocks ? (r.xstockTickers.length ? r.xstockTickers : ["AAPLx"]) : COMMON_ALPACA_TICKERS;
+  const isRobinhood = venue === "robinhood-chain";
+  const isUsdSizedVenue = isXstocks || isRobinhood;
+  const tickerOptions = isXstocks
+    ? (r.xstockTickers.length ? r.xstockTickers : ["AAPLx"])
+    : isRobinhood
+      ? (r.robinhoodTickers.length ? r.robinhoodTickers : ["AAPL"])
+      : COMMON_ALPACA_TICKERS;
 
   const [side, setSide] = React.useState<"buy" | "sell">("buy");
   const [choice, setChoice] = React.useState(tickerOptions[0] ?? "NVDA");
@@ -48,7 +54,7 @@ export function StockTicket() {
   // saved, the venue persists on the acting wallet and this guard unmounts as
   // the real order ticket renders.
   const [enableOpen, setEnableOpen] = React.useState(false);
-  const [enVenue, setEnVenue] = React.useState<"alpaca" | "xstocks">("alpaca");
+  const [enVenue, setEnVenue] = React.useState<"alpaca" | "xstocks" | "robinhood-chain">("alpaca");
   const [enPaper, setEnPaper] = React.useState(true);
   const [enSaving, setEnSaving] = React.useState(false);
   const [enError, setEnError] = React.useState("");
@@ -65,10 +71,11 @@ export function StockTicket() {
   const ticker = choice === OTHER ? custom.trim().toUpperCase() : choice;
 
   // Real last price + 24h change for the selected Alpaca ticker (drives the cost
-  // estimate + the %-of-buying-power chips). xStocks isn't on Alpaca data.
+  // estimate + the %-of-buying-power chips). On-chain stock-token venues are not
+  // on Alpaca data.
   React.useEffect(() => {
     let ignore = false;
-    if (isXstocks || !ticker) {
+    if (isUsdSizedVenue || !ticker) {
       // Clear asynchronously so the effect never sets state synchronously.
       Promise.resolve().then(() => { if (!ignore) setPrice(null); });
       return () => { ignore = true; };
@@ -79,14 +86,14 @@ export function StockTicket() {
       setPrice(row ? { price: row.price, chg: row.change24h } : null);
     });
     return () => { ignore = true; };
-  }, [ticker, isXstocks, paper]);
+  }, [ticker, isUsdSizedVenue, paper]);
 
   const px = price?.price || 0;
   const sharesNum = Number(shares) || 0;
   const usdNum = Number(usd) || 0;
   const buyingPower = r.buyingPower;
-  // Alpaca → share-count order; xStocks → USD notional swap.
-  const notionalUsd = isXstocks ? usdNum : (px > 0 ? sharesNum * px : 0);
+  // Alpaca -> share-count order; on-chain stock-token venues -> USD notional.
+  const notionalUsd = isUsdSizedVenue ? usdNum : (px > 0 ? sharesNum * px : 0);
   const overBp = side === "buy" && buyingPower > 0 && notionalUsd > buyingPower;
   const canAct = Boolean(venue) && r.venueReady && Boolean(ticker) && notionalUsd > 0 && state !== "signing";
 
@@ -103,7 +110,7 @@ export function StockTicket() {
       // live platform fee bind to the exact USD submitted — a qty order lets a
       // stale client price under-state the gated notional. Sells keep the exact
       // share count (a sell is an inflow, not budget-gated), so "sell N" is exact.
-      ...(!isXstocks && side === "sell" ? { qty: sharesNum } : {}),
+      ...(!isUsdSizedVenue && side === "sell" ? { qty: sharesNum } : {}),
     });
     if (!response.ok || !response.result) { setState("error"); setMessage(response.error || "Trade failed."); return; }
     setState("done");
@@ -111,8 +118,8 @@ export function StockTicket() {
     playTradeSuccessSound();
     // Alpaca orders queue before they fill — show the position as pending right
     // away (with this confirmation), instead of waiting for the open-order list
-    // to catch up. xStocks is an instant on-chain swap, so just refresh.
-    if (!isXstocks && response.result.reference) {
+    // to catch up. On-chain swaps are instant, so just refresh.
+    if (venue === "alpaca" && response.result.reference) {
       desk.onOptimisticStockOrder({ orderId: response.result.reference, ticker, notionalUsd, side });
     } else {
       desk.refresh();
@@ -127,8 +134,8 @@ export function StockTicket() {
 
   const sell = side === "sell";
   const label = state === "signing" ? "Submitting…" : state === "done" ? "Order placed"
-    : !ticker ? "Pick a ticker" : !notionalUsd ? (isXstocks ? "Enter an amount" : "Enter share count")
-    : isXstocks ? `${sell ? "Sell" : "Buy"} ${trUsd2(usdNum)} ${ticker}` : `${sell ? "Sell" : "Buy"} ${sharesNum} ${ticker}`;
+    : !ticker ? "Pick a ticker" : !notionalUsd ? (isUsdSizedVenue ? "Enter an amount" : "Enter share count")
+    : isUsdSizedVenue ? `${sell ? "Sell" : "Buy"} ${trUsd2(usdNum)} ${ticker}` : `${sell ? "Sell" : "Buy"} ${sharesNum} ${ticker}`;
 
   if (!venue) {
     // Bankr is a synthetic pickable with no governed ledger record, so there's
@@ -144,8 +151,8 @@ export function StockTicket() {
 
     if (!enableOpen) {
       return (
-        <div className="tk-card">
-          <div className="tk-guard"><BIcon name="alert" size={14} /><span>Stock trading is off for this wallet. Turn it on to buy and sell — Alpaca (real brokerage, paper or live) or on-chain xStocks.</span></div>
+      <div className="tk-card">
+          <div className="tk-guard"><BIcon name="alert" size={14} /><span>Stock trading is off for this wallet. Turn it on to buy and sell — Alpaca, xStocks, or Robinhood Chain stock tokens.</span></div>
           <button type="button" className="tk-place" style={{ marginTop: 14 }} onClick={() => { setEnableOpen(true); setEnError(""); }}>Enable Stock Trading</button>
         </div>
       );
@@ -158,6 +165,7 @@ export function StockTicket() {
           <div className="dk-pl" role="radiogroup" aria-label="Trading venue" style={{ marginTop: 8 }}>
             <button type="button" data-active={enVenue === "alpaca" ? "" : undefined} disabled={enSaving} onClick={() => setEnVenue("alpaca")}>Alpaca</button>
             <button type="button" data-active={enVenue === "xstocks" ? "" : undefined} disabled={enSaving} onClick={() => setEnVenue("xstocks")}>xStocks</button>
+            <button type="button" data-active={enVenue === "robinhood-chain" ? "" : undefined} disabled={enSaving} onClick={() => setEnVenue("robinhood-chain")}>Robinhood Chain</button>
           </div>
         </div>
 
@@ -170,10 +178,15 @@ export function StockTicket() {
             </div>
             <div className="tk-usd" style={{ marginTop: 8 }}>{enPaper ? "Paper is simulated — no real money. You can switch to LIVE later." : "LIVE places real brokerage orders once Alpaca live keys are set."}</div>
           </div>
-        ) : (
+        ) : enVenue === "xstocks" ? (
           <div className="tk-leg" style={{ marginTop: 12 }}>
             <div className="lhead"><span>xStocks · Solana</span><span className="bal">On-chain via Jupiter</span></div>
             <div className="tk-usd" style={{ marginTop: 8 }}>Swaps USDC → verified xStock tokens on Solana.{isSolanaWallet ? "" : " This wallet isn't on Solana mainnet, so on-chain buys will be rejected — pick a Solana wallet."}</div>
+          </div>
+        ) : (
+          <div className="tk-leg" style={{ marginTop: 12 }}>
+            <div className="lhead"><span>Robinhood Chain</span><span className="bal">USDG via 0x</span></div>
+            <div className="tk-usd" style={{ marginTop: 8 }}>Swaps USDG ↔ canonical Robinhood Stock Tokens on chain ID 4663. Requires a Robinhood Chain wallet with USDG and ETH gas.</div>
           </div>
         )}
 
@@ -181,7 +194,7 @@ export function StockTicket() {
 
         <button type="button" className="tk-place" style={{ marginTop: 14 }} disabled={enSaving} onClick={enable}>
           {enSaving ? <BIcon name="spinner" size={15} spin /> : null}
-          {enSaving ? "Enabling…" : enVenue === "alpaca" ? `Enable Alpaca (${enPaper ? "Paper" : "Live"})` : "Enable xStocks"}
+          {enSaving ? "Enabling…" : enVenue === "alpaca" ? `Enable Alpaca (${enPaper ? "Paper" : "Live"})` : enVenue === "xstocks" ? "Enable xStocks" : "Enable Robinhood Chain"}
         </button>
         {!enSaving ? (
           <div style={{ marginTop: 10, textAlign: "center" }}><button type="button" className="fw-manage" onClick={() => { setEnableOpen(false); setEnError(""); }}>Cancel</button></div>
@@ -205,11 +218,11 @@ export function StockTicket() {
             <button type="button" data-active={paper ? "" : undefined} onClick={() => setPaper(true)}>Paper</button>
             <button type="button" data-active={!paper ? "" : undefined} data-live={!paper ? "" : undefined} disabled={!r.liveEnabled} onClick={() => setPaper(false)}>Live</button>
           </div>
-        ) : <Badge tone="honey">xStocks · Solana</Badge>}
+        ) : <Badge tone="honey">{isRobinhood ? "Robinhood Chain" : "xStocks · Solana"}</Badge>}
       </div>
 
       <div className="tk-leg">
-        <div className="lhead"><span>Symbol</span><span className="bal">{isXstocks ? "On-chain · Jupiter" : price ? `Last ${trUsd2(px)}` : "—"}</span></div>
+        <div className="lhead"><span>Symbol</span><span className="bal">{isRobinhood ? "On-chain · 4663" : isXstocks ? "On-chain · Jupiter" : price ? `Last ${trUsd2(px)}` : "—"}</span></div>
         <div className="tk-legrow">
           <div style={{ flex: "1 1 auto", minWidth: 0 }}>
             <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 19, letterSpacing: "-0.01em" }}>{ticker || "—"}</div>
@@ -224,17 +237,17 @@ export function StockTicket() {
       </div>
 
       <div className="tk-leg" style={{ marginTop: 12 }}>
-        <div className="lhead"><span>{isXstocks ? (sell ? "Proceeds (USD)" : "Spend (USD)") : (sell ? "Shares to sell" : "Shares to buy")}</span>
+        <div className="lhead"><span>{isUsdSizedVenue ? (sell ? "Proceeds (USD)" : "Spend (USD)") : (sell ? "Shares to sell" : "Shares to buy")}</span>
           <span className="bal">{venue === "alpaca" ? `${paper ? "Paper" : "LIVE"} · BP ${trUsd(buyingPower, true)}` : ""}</span></div>
         <div className="tk-legrow">
-          {isXstocks ? (
+          {isUsdSizedVenue ? (
             <input className="tk-input" inputMode="decimal" placeholder="0" value={usd}
               onChange={(e) => { setUsd(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); }} aria-label="USD amount" />
           ) : (
             <input className="tk-input" inputMode="decimal" placeholder="0" value={shares}
               onChange={(e) => { setShares(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); }} aria-label="Share count" />
           )}
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-3)" }}>{isXstocks ? "USD" : "shares"}</span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-3)" }}>{isUsdSizedVenue ? "USD" : "shares"}</span>
         </div>
         <div className="tk-usd">≈ {trUsd2(notionalUsd)} at market</div>
         {!isXstocks && !sell && px > 0 ? (
@@ -251,10 +264,15 @@ export function StockTicket() {
         {!isXstocks && px > 0 ? <ReviewLine k="Est. price" v={trUsd2(px)} /> : null}
         <ReviewLine k="Est. cost" v={trUsd2(notionalUsd)} />
         {venue === "alpaca" ? <ReviewLine k="Buying power" v={trUsd(buyingPower, true)} icon="wallet" live /> : null}
-        <ReviewLine k="Account" v={isXstocks ? "On-chain · xStocks" : paper ? "Paper (simulated)" : "LIVE brokerage"} />
+        <ReviewLine k="Account" v={isRobinhood ? "On-chain · Robinhood Chain" : isXstocks ? "On-chain · xStocks" : paper ? "Paper (simulated)" : "LIVE brokerage"} />
       </div>
 
-      {!r.venueReady && venue === "alpaca" ? (
+      {!r.venueReady && venue === "robinhood-chain" ? (
+        <div className="tk-guard">
+          <BIcon name="alert" size={14} />
+          <span>{network === "eip155:4663" ? (r.robinhoodReason || "Robinhood Chain stock-token routing is unavailable right now.") : "Pick a Robinhood Chain wallet before trading Stock Tokens."}</span>
+        </div>
+      ) : !r.venueReady && venue === "alpaca" ? (
         <div className="tk-guard">
           <BIcon name="alert" size={14} />
           <span>Alpaca {paper ? "paper" : "live"} keys aren&apos;t set ({(paper ? r.paperKeys : r.liveKeys).join(" · ")}). Add them to enable {paper ? "paper" : "LIVE"} orders.</span>
@@ -268,7 +286,7 @@ export function StockTicket() {
         {state === "signing" ? <BIcon name="spinner" size={15} spin /> : state === "done" ? <BIcon name="check" size={15} /> : null}
         {label}
       </button>
-      <div className="tk-foot"><BIcon name="shield" size={12} /> {isXstocks ? "On-chain swap · signed by this wallet" : paper ? "Paper account · Alpaca sandbox" : "LIVE · Alpaca brokerage"}</div>
+      <div className="tk-foot"><BIcon name="shield" size={12} /> {isRobinhood ? "Official contracts · USDG swap signed by this wallet" : isXstocks ? "On-chain swap · signed by this wallet" : paper ? "Paper account · Alpaca sandbox" : "LIVE · Alpaca brokerage"}</div>
 
       {!r.venueReady && venue === "alpaca" ? (
         <div style={{ marginTop: 10, textAlign: "center" }}><button type="button" className="fw-manage" onClick={() => onOpenView("env")}>Open Env to add Alpaca keys →</button></div>

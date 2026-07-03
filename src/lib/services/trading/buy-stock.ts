@@ -2,11 +2,21 @@ import "server-only";
 
 import { Connection, Keypair, VersionedTransaction } from "@solana/web3.js";
 import { base58 } from "@scure/base";
+import { formatUnits, parseUnits } from "viem";
 import {
   resolveXStock,
   supportedXStockTickers,
   SOLANA_USDC_MINT,
 } from "@/lib/config/xstocks-tokens";
+import {
+  ROBINHOOD_CHAIN,
+  ROBINHOOD_CHAIN_NETWORK,
+  ROBINHOOD_CORE_TOKENS,
+  resolveRobinhoodStockToken,
+  supportedRobinhoodStockTickers,
+} from "@/lib/config/robinhood-chain";
+import { zeroExFetch } from "@/lib/services/trading/zero-ex";
+import { executeEvmZeroExSwap, type ZeroExSwapQuote } from "@/lib/services/wallet/chain-wallet";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import {
@@ -33,12 +43,16 @@ import type { AgentTradingVenue, AgentWalletConfig } from "@/lib/types/agent-wal
  *                 reachable only when the wallet sets alpacaPaper:false.
  *   - "xstocks" — on-chain tokenized equities (Backed Finance xStocks). Buys by
  *                 swapping USDC -> the verified xStock SPL mint via Jupiter; sells
- *                 by swapping the mint -> USDC (ExactOut for the requested USDC),
+ *                 by sizing from the current quote then swapping the mint -> USDC,
  *                 signing with the agent's existing local Solana wallet.
+ *   - "robinhood-chain" — official Robinhood Stock Token contracts on Robinhood
+ *                 Chain. Buys/sells swap USDG <-> the canonical ERC-20 contract
+ *                 through 0x Swap API RFQ/AMM liquidity and sign with the agent's
+ *                 existing local Robinhood Chain EVM wallet.
  *
  * A buy requires CONFIRM_BUY, a sell CONFIRM_SELL (same shape as x402's PAY_X402).
  * Both flow through the shared spend-governance chokepoint + ledger. A buy spends
- * USDC, so the company kill switch, rolling budgets, and approval escalation all
+ * USD stablecoins, so the company kill switch, rolling budgets, and approval escalation all
  * apply; a sell is an inflow, so only the kill switch binds and it never debits
  * rolling budgets (see executeStockTrade).
  */
@@ -56,6 +70,7 @@ const ALPACA_LIVE_BASE = "https://api.alpaca.markets";
 const ALPACA_PAPER_BASE = "https://paper-api.alpaca.markets";
 const JUPITER_BASE = process.env.JUPITER_API_BASE || "https://lite-api.jup.ag";
 const DEFAULT_SLIPPAGE_BPS = 100; // 1.0% — tokenized-equity pools are thinner than majors.
+const ROBINHOOD_USDG_DECIMALS = 6;
 
 export const BUY_STOCK_CONFIRMATION = "CONFIRM_BUY";
 export const SELL_STOCK_CONFIRMATION = "CONFIRM_SELL";
@@ -89,7 +104,7 @@ export type BuyStockInput = {
   policy: BuyStockPolicy;
   /** Buy (default) turns USDC into a position; sell turns a position into USDC. */
   side?: StockTradeSide;
-  /** "AAPL" or "AAPLx" — resolved to the underlying (alpaca) or a verified mint (xstocks). */
+  /** "AAPL" or "AAPLx" — resolved to Alpaca, a verified xStock mint, or a Robinhood Chain contract. */
   ticker: string;
   /** USD value of the trade: the order notional (alpaca) or the USDC in/out leg (xstocks). */
   notionalUsd: number;
@@ -123,7 +138,7 @@ export type BuyStockResult = {
   ticker: string;
   notionalUsd: number;
   qty?: number;
-  /** alpaca order id or xstocks tx signature. */
+  /** Alpaca order id, xStocks tx signature, or future venue reference. */
   reference: string;
   /** true only for alpaca paper-trading orders. */
   paper: boolean;
@@ -177,7 +192,7 @@ function svmRpc(): string {
 function assertVenue(policy: BuyStockPolicy): AgentTradingVenue {
   if (!policy.enabled) throw new Error("This agent's wallet is not enabled.");
   if (!policy.tradingVenue) {
-    throw new Error("Stock buying is off for this agent. Set a trading venue (alpaca or xstocks) first.");
+    throw new Error("Stock buying is off for this agent. Set a trading venue (alpaca, xstocks, or robinhood-chain) first.");
   }
   return policy.tradingVenue;
 }
@@ -472,6 +487,10 @@ function assertXStocksNetwork(network: string | undefined): asserts network is "
   if (network !== "solana:mainnet") throw new Error("xStocks swaps require a Solana mainnet wallet.");
 }
 
+function assertRobinhoodChainNetwork(network: string | undefined): asserts network is typeof ROBINHOOD_CHAIN_NETWORK {
+  if (network !== ROBINHOOD_CHAIN_NETWORK) throw new Error(`Robinhood Chain stock tokens require a ${ROBINHOOD_CHAIN.network} wallet.`);
+}
+
 async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult> {
   const side = input.side ?? "buy";
   const token = resolveXStock(input.ticker);
@@ -543,6 +562,180 @@ async function executeXStocksSwap(input: BuyStockInput): Promise<BuyStockResult>
   };
 }
 
+// ---- Robinhood Chain (official stock-token allowlist via 0x Swap API) -------
+
+function robinhoodStockToken(ticker: string) {
+  const token = resolveRobinhoodStockToken(ticker);
+  if (!token) {
+    throw new Error(`"${ticker}" is not a canonical Robinhood Stock Token. Supported: ${supportedRobinhoodStockTickers().join(", ")}.`);
+  }
+  return token;
+}
+
+type RobinhoodZeroExLeg = {
+  token: ReturnType<typeof robinhoodStockToken>;
+  sellToken: `0x${string}`;
+  buyToken: `0x${string}`;
+  sellSymbol: string;
+  buySymbol: string;
+  sellDecimals: number;
+  buyDecimals: number;
+  sellAmount: bigint;
+  side: StockTradeSide;
+};
+
+type RobinhoodZeroExPrice = Record<string, unknown> & {
+  liquidityAvailable?: boolean;
+  buyAmount?: string;
+  sellAmount?: string;
+};
+
+function robinhoodZeroExPath(endpoint: "price" | "quote", leg: RobinhoodZeroExLeg, slippageBps: number, taker?: string): string {
+  const params = new URLSearchParams({
+    chainId: String(ROBINHOOD_CHAIN.chainId),
+    sellToken: leg.sellToken,
+    buyToken: leg.buyToken,
+    sellAmount: leg.sellAmount.toString(),
+    slippageBps: String(slippageBps),
+  });
+  if (taker) params.set("taker", taker);
+  return `/swap/permit2/${endpoint}?${params.toString()}`;
+}
+
+async function fetchRobinhoodZeroExPrice(leg: RobinhoodZeroExLeg, slippageBps: number): Promise<RobinhoodZeroExPrice> {
+  const price = await zeroExFetch(robinhoodZeroExPath("price", leg, slippageBps), "Robinhood Chain stock-token trades") as RobinhoodZeroExPrice;
+  if (!price.liquidityAvailable) throw new Error("0x returned no Robinhood Chain route/liquidity for this stock-token trade right now.");
+  if (!price.buyAmount) throw new Error("0x returned no output amount for this Robinhood Chain stock-token trade.");
+  return price;
+}
+
+async function fetchRobinhoodZeroExQuote(leg: RobinhoodZeroExLeg, slippageBps: number, taker: string): Promise<RobinhoodZeroExPrice & ZeroExSwapQuote> {
+  const quote = await zeroExFetch(robinhoodZeroExPath("quote", leg, slippageBps, taker), "Robinhood Chain stock-token trades") as RobinhoodZeroExPrice & ZeroExSwapQuote;
+  if (!quote.liquidityAvailable || !quote.transaction) throw new Error("0x returned no executable Robinhood Chain transaction for this stock-token trade.");
+  return quote;
+}
+
+async function prepareRobinhoodChainLeg(ticker: string, side: StockTradeSide, notionalUsd: number, slippageBps: number): Promise<{ leg: RobinhoodZeroExLeg; price: RobinhoodZeroExPrice }> {
+  const token = robinhoodStockToken(ticker);
+  const usdgAmount = parseUnits(notionalUsd.toFixed(ROBINHOOD_USDG_DECIMALS), ROBINHOOD_USDG_DECIMALS);
+  if (usdgAmount <= 0n) throw new Error("Trade amount rounds to zero USDG.");
+  if (side === "buy") {
+    const leg: RobinhoodZeroExLeg = {
+      token,
+      sellToken: ROBINHOOD_CORE_TOKENS.USDG,
+      buyToken: token.address,
+      sellSymbol: "USDG",
+      buySymbol: token.symbol,
+      sellDecimals: ROBINHOOD_USDG_DECIMALS,
+      buyDecimals: token.decimals,
+      sellAmount: usdgAmount,
+      side,
+    };
+    return { leg, price: await fetchRobinhoodZeroExPrice(leg, slippageBps) };
+  }
+
+  const sizingLeg: RobinhoodZeroExLeg = {
+    token,
+    sellToken: ROBINHOOD_CORE_TOKENS.USDG,
+    buyToken: token.address,
+    sellSymbol: "USDG",
+    buySymbol: token.symbol,
+    sellDecimals: ROBINHOOD_USDG_DECIMALS,
+    buyDecimals: token.decimals,
+    sellAmount: usdgAmount,
+    side: "buy",
+  };
+  const sizingPrice = await fetchRobinhoodZeroExPrice(sizingLeg, slippageBps);
+  const tokenAmount = BigInt(String(sizingPrice.buyAmount || "0"));
+  if (tokenAmount <= 0n) throw new Error("Could not size the Robinhood Chain stock-token sell from the current USDG price.");
+  const sellLeg: RobinhoodZeroExLeg = {
+    token,
+    sellToken: token.address,
+    buyToken: ROBINHOOD_CORE_TOKENS.USDG,
+    sellSymbol: token.symbol,
+    buySymbol: "USDG",
+    sellDecimals: token.decimals,
+    buyDecimals: ROBINHOOD_USDG_DECIMALS,
+    sellAmount: tokenAmount,
+    side,
+  };
+  return { leg: sellLeg, price: await fetchRobinhoodZeroExPrice(sellLeg, slippageBps) };
+}
+
+function robinhoodBuyUnits(price: RobinhoodZeroExPrice, leg: RobinhoodZeroExLeg): number {
+  return Number(formatUnits(BigInt(String(price.buyAmount || "0")), leg.buyDecimals));
+}
+
+async function quoteRobinhoodChainTrade(input: Pick<BuyStockInput, "side" | "ticker" | "notionalUsd" | "slippageBps">): Promise<{ token: ReturnType<typeof robinhoodStockToken>; estimatedUnits: number; realizedUsd?: number; detail: string }> {
+  const side = input.side ?? "buy";
+  const slippageBps = input.slippageBps && input.slippageBps > 0 ? input.slippageBps : DEFAULT_SLIPPAGE_BPS;
+  const { leg, price } = await prepareRobinhoodChainLeg(input.ticker, side, input.notionalUsd, slippageBps);
+  const buyUnits = robinhoodBuyUnits(price, leg);
+  const detail = side === "sell"
+    ? `Swap ~${Number(formatUnits(leg.sellAmount, leg.sellDecimals)).toPrecision(6)} ${leg.sellSymbol} -> ~${buyUnits.toFixed(6)} USDG on ${ROBINHOOD_CHAIN.name} via 0x (<=${(slippageBps / 100).toFixed(2)}% slippage).`
+    : `Swap ~$${input.notionalUsd.toFixed(2)} USDG -> ~${buyUnits.toPrecision(6)} ${leg.buySymbol} on ${ROBINHOOD_CHAIN.name} via 0x (<=${(slippageBps / 100).toFixed(2)}% slippage).`;
+  return {
+    token: leg.token,
+    estimatedUnits: side === "sell" ? Number(formatUnits(leg.sellAmount, leg.sellDecimals)) : buyUnits,
+    realizedUsd: side === "sell" ? buyUnits : undefined,
+    detail,
+  };
+}
+
+async function executeRobinhoodChainSwap(input: BuyStockInput): Promise<BuyStockResult> {
+  const side = input.side ?? "buy";
+  const token = robinhoodStockToken(input.ticker);
+  assertRobinhoodChainNetwork(input.network);
+  if (!input.secret) throw new Error("No local Robinhood Chain wallet secret is available for the swap.");
+  if (!input.fromAddress) throw new Error("No Robinhood Chain wallet address is available for the swap.");
+
+  const slippageBps = input.slippageBps && input.slippageBps > 0 ? input.slippageBps : DEFAULT_SLIPPAGE_BPS;
+  const { leg } = await prepareRobinhoodChainLeg(token.symbol, side, input.notionalUsd, slippageBps);
+  await assertTradingPlatformFeeReady({ source: "robinhood-chain", network: input.network, amountUsd: input.notionalUsd });
+  const quote = await fetchRobinhoodZeroExQuote(leg, slippageBps, input.fromAddress);
+  const { approvalHash, swapHash } = await executeEvmZeroExSwap({
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    sellToken: leg.sellToken,
+    quote,
+  });
+  const buyAmount = robinhoodBuyUnits(quote, leg);
+  const platformFee = await collectTradingPlatformFee({
+    agentId: input.agentId,
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    amountUsd: input.notionalUsd,
+    source: "robinhood-chain",
+  });
+  return {
+    ok: true,
+    side,
+    venue: "robinhood-chain",
+    ticker: token.symbol,
+    notionalUsd: input.notionalUsd,
+    reference: swapHash,
+    paper: false,
+    acquired: side === "buy" ? buyAmount : undefined,
+    platformFee,
+    status: "confirmed",
+    detail: side === "sell"
+      ? `Swapped ${Number(formatUnits(leg.sellAmount, leg.sellDecimals)).toPrecision(6)} ${token.symbol} (${token.name}) into ~${buyAmount.toFixed(6)} USDG. Tx ${swapHash}${approvalHash ? `; approval ${approvalHash}` : ""}.${platformFeeReceiptDetail(platformFee)}`
+      : `Swapped ~$${input.notionalUsd.toFixed(2)} USDG into ~${buyAmount.toPrecision(6)} ${token.symbol} (${token.name}). Tx ${swapHash}${approvalHash ? `; approval ${approvalHash}` : ""}.${platformFeeReceiptDetail(platformFee)}`,
+  };
+}
+
+export async function checkRobinhoodChainTradingReadiness(): Promise<{ executable: boolean; reason: string }> {
+  try {
+    await quoteRobinhoodChainTrade({ side: "buy", ticker: "AAPL", notionalUsd: 1, slippageBps: DEFAULT_SLIPPAGE_BPS });
+    return { executable: true, reason: "0x returned a live Robinhood Chain stock-token route for USDG -> AAPL." };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Robinhood Chain stock-token route check failed.";
+    return { executable: false, reason: message };
+  }
+}
+
 // ---- Public API -------------------------------------------------------------
 
 export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockResult> {
@@ -569,12 +762,13 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
   let approvalGrantId: string | undefined;
   let companyId: string | undefined;
   const spendForGovernance = nonSpending ? 0 : notionalUsd;
+  const spendAsset = venue === "robinhood-chain" ? "USDG" : "USDC";
   if (governance && (nonSpending || (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy))))) {
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
       kind: "trade",
-      asset: "USDC",
+      asset: spendAsset,
       amountUsd: spendForGovernance,
       target: `${venue}:${input.ticker} ${side}${isPaperTrade ? " (paper)" : ""}`,
       approvalToken: input.approvalToken,
@@ -584,13 +778,17 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
     companyId = decision.companyId;
   }
 
-  const result = venue === "alpaca" ? await executeAlpaca(input) : await executeXStocksSwap(input);
+  const result = venue === "alpaca"
+    ? await executeAlpaca(input)
+    : venue === "xstocks"
+      ? await executeXStocksSwap(input)
+      : await executeRobinhoodChainSwap(input);
 
   await appendSpend({
     agentId: input.agentId,
     companyId,
     kind: "trade",
-    asset: "USDC",
+    asset: spendAsset,
     // Non-spending trades (sells, paper) record their USD value as assetAmount
     // (not amountUsd) so they show in activity without counting against the
     // rolling spend budgets, which sum amountUsd across every kind.
@@ -631,6 +829,20 @@ export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" 
       notionalUsd,
       platformFee,
       detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${paper ? "paper" : "LIVE"}.${platformFeeDetail(platformFee)}`,
+    };
+  }
+  if (venue === "robinhood-chain") {
+    assertRobinhoodChainNetwork(input.policy.network);
+    const token = robinhoodStockToken(input.ticker);
+    const quote = await quoteRobinhoodChainTrade({ side, ticker: token.symbol, notionalUsd, slippageBps: input.slippageBps });
+    const platformFee = await quoteTradingPlatformFee({ source: "robinhood-chain", network: input.policy.network, amountUsd: notionalUsd });
+    return {
+      venue,
+      ticker: token.symbol,
+      notionalUsd,
+      estimatedUnits: side === "buy" ? quote.estimatedUnits : undefined,
+      platformFee,
+      detail: `${quote.detail}${platformFeeDetail(platformFee)}`,
     };
   }
   assertXStocksNetwork(input.policy.network);
@@ -680,6 +892,7 @@ export function summarizeBuyStockPolicy(wallet: AgentWalletConfig): string {
     `- Venue: ${venue || "(none)"}`,
     venue === "alpaca" ? `- Alpaca mode: ${wallet.alpacaPaper === false ? "LIVE brokerage" : "paper (simulated)"}` : "",
     venue === "xstocks" ? `- On-chain network: ${wallet.network}` : "",
+    venue === "robinhood-chain" ? `- Robinhood Chain network: ${wallet.network}` : "",
     `- Max per trade: $${maxTradeUsd(wallet).toFixed(2)}`,
   ].filter(Boolean).join("\n");
 }

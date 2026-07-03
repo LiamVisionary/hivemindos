@@ -243,7 +243,7 @@ function parseRecordMarkdown(filename: string, content: string): WalletLedgerRec
     x402BaseUrl: typeof fm.x402BaseUrl === "string" ? fm.x402BaseUrl : "",
     veilAutoSendEnabled: typeof fm.veilAutoSendEnabled === "boolean" ? fm.veilAutoSendEnabled : false,
     veilAutoPrivateX402: typeof fm.veilAutoPrivateX402 === "boolean" ? fm.veilAutoPrivateX402 : true,
-    tradingVenue: (fm.tradingVenue === "alpaca" || fm.tradingVenue === "xstocks") ? fm.tradingVenue : undefined,
+    tradingVenue: (fm.tradingVenue === "alpaca" || fm.tradingVenue === "xstocks" || fm.tradingVenue === "robinhood-chain") ? fm.tradingVenue : undefined,
     alpacaKeyEnvName: typeof fm.alpacaKeyEnvName === "string" && fm.alpacaKeyEnvName ? fm.alpacaKeyEnvName : undefined,
     alpacaSecretEnvName: typeof fm.alpacaSecretEnvName === "string" && fm.alpacaSecretEnvName ? fm.alpacaSecretEnvName : undefined,
     alpacaPaper: typeof fm.alpacaPaper === "boolean" ? fm.alpacaPaper : undefined,

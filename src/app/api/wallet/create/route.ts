@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     const wallet = generateWallet(body.network || "eip155:8453");
-    const singleWalletName = body.name?.trim() || `My ${wallet.network.startsWith("solana:") ? "Solana" : "Base"} wallet`;
+    const singleWalletName = body.name?.trim() || `My ${walletNetworkLabel(wallet.network)} wallet`;
     const info = await storeWalletSecret({ agentId, name: singleWalletName, address: wallet.address, network: wallet.network, secret: wallet.secret });
     if (agentId.startsWith("user:")) {
       const now = Date.now();
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
           provider: "manual",
           walletAddress: info.address,
           network: info.network,
-          tokenSymbol: info.network.startsWith("solana:") ? "SOL" : "ETH",
+          tokenSymbol: primaryTokenSymbol(info.network),
           custodyMode: info.custodyMode,
           updatedAt: now,
         },
@@ -105,4 +105,16 @@ function refreshWalletVaultBackupStatus(vaultPath?: string): Promise<VaultSyncRe
     (status) => ({ ok: true, status }),
     (error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : "Encrypted wallet vault sync failed." }),
   );
+}
+
+function walletNetworkLabel(network: string): string {
+  if (network === "eip155:4663") return "Robinhood Chain";
+  if (network.startsWith("solana:")) return "Solana";
+  if (network === "eip155:84532") return "Base Sepolia";
+  return "Base";
+}
+
+function primaryTokenSymbol(network: string): string {
+  if (network === "eip155:4663") return "USDG";
+  return network.startsWith("solana:") ? "SOL" : "ETH";
 }

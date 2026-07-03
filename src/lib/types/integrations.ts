@@ -1,62 +1,25 @@
-export type NangoHostMode = "tailnet" | "local" | "cloud";
+export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google";
 
-export type NangoProviderKey = "github" | "linear" | "slack" | "notion" | "google";
-
-export type NangoHostConfig = {
-  version: 1;
-  enabled: boolean;
-  hostMachineId: string;
-  hostMachineName: string;
-  baseUrl: string;
-  mode: NangoHostMode;
-  allowedProviders: NangoProviderKey[];
-  updatedAt: string;
-};
-
-export type NangoConnectionSummary = {
-  id: string;
-  providerConfigKey: string;
-  provider?: string;
-  displayName?: string;
-  email?: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-export type NangoHostHealth = {
-  ok: boolean;
+export type ConnectionProviderStatus = {
+  key: ConnectionProviderKey;
+  label: string;
+  detail: string;
+  /** A credential for this app is saved in the shared hive env. */
+  connected: boolean;
+  /** The saved credential passed a live check against the provider API. */
+  verified: boolean;
+  /** Verified account identity (login, email, or workspace). */
+  account?: string;
+  /** Live-check failure, when connected but not verified. */
+  error?: string;
+  tokenHint: string;
+  tokenPlaceholder: string;
+  /** In-app OAuth is available for this provider (client credentials present). */
+  oauthReady: boolean;
   checkedAt: string;
-  url: string;
-  latencyMs?: number;
-  status?: number;
-  result?: string;
-  error?: string;
 };
 
-export type NangoIntegrationPayload = {
+export type ConnectionsPayload = {
   ok: boolean;
-  config: NangoHostConfig;
-  storagePath: string;
-  env: {
-    enabled: boolean;
-    baseUrl: string;
-    hostMachineId: string;
-    secretConfigured: boolean;
-  };
-  health: NangoHostHealth;
-  connections: NangoConnectionSummary[];
-  connectionError?: string;
-  setupCommands: string[];
-};
-
-export type NangoHostSetupResult = {
-  ok: boolean;
-  method: "collector-api" | "local-shell" | "tailscale-ssh" | "plain-ssh";
-  target: string;
-  baseUrl: string;
-  stdout: string;
-  stderr: string;
-  health: NangoHostHealth;
-  command: string;
-  error?: string;
+  providers: ConnectionProviderStatus[];
 };

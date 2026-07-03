@@ -1,6 +1,10 @@
 import "server-only";
 
-import { mutateDashboardStateValue, readDashboardState } from "@/lib/services/dashboard-state";
+import {
+  mutateDashboardStateValue,
+  readDashboardState,
+  readDashboardStateStrict,
+} from "@/lib/services/dashboard-state";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
 /**
@@ -13,14 +17,17 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 const AGENT_PROFILES_KEY = "hivemindos.agentProfiles.v1";
 const AGENT_PROFILES_SUFFIX = ".agentProfiles.v1";
 
+function filterProfiles(parsed: unknown): AgentProfile[] {
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item): item is AgentProfile => (
+    Boolean(item) && typeof item === "object" && typeof (item as AgentProfile).id === "string"
+  ));
+}
+
 function parseProfiles(raw: string | null): AgentProfile[] {
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is AgentProfile => (
-      Boolean(item) && typeof item === "object" && typeof (item as AgentProfile).id === "string"
-    ));
+    return filterProfiles(JSON.parse(raw) as unknown);
   } catch {
     return [];
   }
@@ -35,6 +42,20 @@ function resolveProfilesKey(values: Record<string, string>): string {
 export async function readStoredAgentProfiles(): Promise<AgentProfile[]> {
   const state = await readDashboardState();
   return parseProfiles(state.values[resolveProfilesKey(state.values)] ?? null);
+}
+
+/**
+ * Strict variant: a state-file read/parse failure or a corrupt stored
+ * profiles value throws instead of reading as "no profiles". For callers that
+ * must not mistake a store outage for an empty profile list (voice continuity:
+ * "no queen profile" implies "cloud voice selected", which must never be
+ * inferred from a failed read of the ~26MB dashboard-state file).
+ */
+export async function readStoredAgentProfilesStrict(): Promise<AgentProfile[]> {
+  const state = await readDashboardStateStrict();
+  const raw = state.values[resolveProfilesKey(state.values)] ?? null;
+  if (!raw) return [];
+  return filterProfiles(JSON.parse(raw) as unknown);
 }
 
 export async function upsertStoredAgentProfile(agent: AgentProfile): Promise<AgentProfile> {

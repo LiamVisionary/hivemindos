@@ -6,7 +6,7 @@
    spans. Pure functions only (no React/DOM) so server routes can reuse the
    helpers too. */
 
-export type PersonalChainKey = "base" | "solana" | "other";
+export type PersonalChainKey = "base" | "solana" | "robinhood" | "other";
 
 export type PersonalWalletAccount = {
   /** Executable per-chain record id (e.g. "user:abc:eip155-8453"). The backend
@@ -57,6 +57,7 @@ export function chainBadgeSrc(chainKey: string): string | null {
 export function chainKeyForNetwork(network: string): PersonalChainKey {
   const value = String(network || "").trim().toLowerCase();
   if (value.startsWith("solana")) return "solana";
+  if (value === "eip155:4663" || value === "eip155:46630") return "robinhood";
   // Only real Base networks get the Base badge — other EVM chains are "other"
   // (generic glyph) rather than mislabelled as Base.
   if (value === "eip155:8453" || value === "eip155:84532" || value === "base" || value === "base-sepolia") return "base";
@@ -65,6 +66,7 @@ export function chainKeyForNetwork(network: string): PersonalChainKey {
 
 export function chainShortLabel(chainKey: PersonalChainKey, fallback = ""): string {
   if (chainKey === "solana") return "Solana";
+  if (chainKey === "robinhood") return "Robinhood";
   if (chainKey === "base") return "Base";
   return fallback;
 }
@@ -79,6 +81,8 @@ export function chainLabelForNetwork(network: string): string {
   const lower = value.toLowerCase();
   if (lower === "eip155:8453") return "Base";
   if (lower === "eip155:84532") return "Base Sepolia";
+  if (lower === "eip155:4663") return "Robinhood Chain";
+  if (lower === "eip155:46630") return "Robinhood Chain Testnet";
   if (lower === "eip155:1") return "Ethereum";
   if (lower === "eip155:42161") return "Arbitrum";
   if (lower === "eip155:10") return "Optimism";
@@ -104,6 +108,8 @@ export function isGenericPersonalWalletName(name: unknown): boolean {
 
 export function personalWalletNetworkLabel(network: string): string {
   if (network.includes("solana")) return "Solana mainnet";
+  if (network.includes("46630")) return "Robinhood Chain Testnet";
+  if (network.includes("4663")) return "Robinhood Chain";
   if (network.includes("84532")) return "Base Sepolia";
   if (network.includes("eip155")) return "Base mainnet";
   return network || "Base mainnet";

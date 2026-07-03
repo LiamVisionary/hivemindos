@@ -99,21 +99,36 @@ try {
   }, kanbanOptions);
   assert.equal(created.task.assignee, "queen-bee", "fixture task starts pending");
 
+  // Fleet has the company MEMBER plus a non-member (a Venice-style outsider). The
+  // pending company task must route ONLY to the member — never the outsider.
   const fleet = [{
     key: "test-machine",
     device: { name: "Test Machine", online: true, collectorUrl: "http://127.0.0.1:9/collector" },
-    agents: [{ id: "hermes-alpha", name: "hermes-alpha", runtime: "hermes" }],
+    agents: [
+      { id: "hermes-alpha", name: "hermes-alpha", runtime: "hermes" },
+      { id: "venice-outsider", name: "VeniceAgent", runtime: "hermes" },
+    ],
   }];
-  await routePendingQueenBeeTasks(fleet, { ...kanbanOptions, now: Date.now() + 10 * 60_000 });
+  const companyMembers = new Map([["co-one", new Set(["hermes-alpha"])]]);
+  await routePendingQueenBeeTasks(fleet, { ...kanbanOptions, now: Date.now() + 10 * 60_000, companyMembers });
   const boardAfter = await readBoard(null, kanbanOptions);
   const routedTask = boardAfter.tasks.find((task) => task.id === created.task.id);
-  assert.equal(routedTask.assignee, "hermes-alpha", "pending task was delegated to the online member");
+  assert.equal(routedTask.assignee, "hermes-alpha", "pending company task routes ONLY to a staffed member, not the outsider");
   assert.equal(routedTask.targetMachine?.collectorUrl, "http://127.0.0.1:9/collector", "delegation records the collector url");
   assert.equal(
     isRedispatchableReadyTask({ ...routedTask, updatedAt: Date.now() - 10 * 60_000 }, Date.now()),
     true,
     "a routed pending task becomes re-dispatchable by the stranded-task recovery",
   );
+
+  // A company with NO online members must NOT leak its task to an outsider — it stays pending.
+  const orphan = await createTask(null, {
+    title: "Orphan company task", body: "no members online", status: "ready", priority: "high",
+    workspace: "scratch", assignee: "queen-bee", source: "company:co-empty:r1", skills: ["company-goal"], targetMachine: null,
+  }, kanbanOptions);
+  await routePendingQueenBeeTasks(fleet, { ...kanbanOptions, now: Date.now() + 10 * 60_000, companyMembers: new Map([["co-empty", new Set(["nobody-here"])]]) });
+  const orphanAfter = (await readBoard(null, kanbanOptions)).tasks.find((t) => t.id === orphan.task.id);
+  assert.equal(orphanAfter.assignee, "queen-bee", "a company task with no online members stays pending, never routed to an outsider");
 
   // ── company memory: append / read / digest / idempotent sync ──────────────
   await appendCompanyMemory("co-one", { kind: "note", title: "Company launched", detail: "First cycle." });

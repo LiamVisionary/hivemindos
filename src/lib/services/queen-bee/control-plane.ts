@@ -263,14 +263,40 @@ export function isRoutablePendingQueenBeeTask(
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
 }
 
+/** The company id stamped on a company dispatch source (`company:{id}:{runId}`), or null. */
+export function companyIdFromSource(source?: string | null): string | null {
+  if (!source || !source.startsWith("company:")) return null;
+  return source.split(":")[1] || null;
+}
+
+/** Restrict a fleet snapshot to a set of member agent ids (by id/agentId/name). */
+function scopeFleetToMemberIds(fleet: QueenBeeFleetMachine[], ids: Set<string>): QueenBeeFleetMachine[] {
+  if (ids.size === 0) return [];
+  const out: QueenBeeFleetMachine[] = [];
+  for (const machine of fleet) {
+    const agents = (machine.agents ?? []).filter(
+      (a) => (a.id && ids.has(a.id)) || (a.agentId && ids.has(a.agentId)) || (a.name && ids.has(a.name)),
+    );
+    if (agents.length > 0) out.push({ ...machine, agents });
+  }
+  return out;
+}
+
 /**
  * Re-run routing for pending queen-bee tasks against the CURRENT fleet, delegate
  * the ones that now have a routable agent, and schedule their autonomous pickup.
  * Returns the number of tasks delegated. One task's failure never stops the sweep.
+ *
+ * COMPANY SCOPING (load-bearing): a pending `company:{id}:` task is routed ONLY
+ * to that company's staffed members — never to any available fleet agent. Without
+ * this, the pending re-router picked the globally-best chat agent and ran company
+ * work on non-members (seen live 2026-07-02: a Venice-provider agent and others
+ * ran Website-Outreach tasks, violating the codex/hermes-only crew). If none of a
+ * company's members are online, the task stays pending rather than leaking out.
  */
 export async function routePendingQueenBeeTasks(
   fleetSnapshot: QueenBeeFleetMachine[],
-  options: QueenBeeOptions & { now?: number } = {},
+  options: QueenBeeOptions & { now?: number; companyMembers?: Map<string, Set<string>> } = {},
 ): Promise<number> {
   if (!fleetSnapshot.length) return 0;
   const board = await readBoard(null, { vaultPath: options.vaultPath, kanbanFolder: options.kanbanFolder }).catch(() => null);
@@ -278,6 +304,16 @@ export async function routePendingQueenBeeTasks(
   const now = options.now ?? Date.now();
   const pending = (board.tasks ?? []).filter((task) => isRoutablePendingQueenBeeTask(task, now));
   if (pending.length === 0) return 0;
+
+  // Company membership: injected (tests / caller) or read from the company store.
+  // Lazy import keeps control-plane free of a static companies-store dependency.
+  const membersByCompany = options.companyMembers
+    ?? new Map(
+      (await import("@/lib/services/companies-store")
+        .then((m) => m.readCompanies())
+        .catch(() => [] as Array<{ id: string; agentIds?: string[] }>)
+      ).map((c) => [c.id, new Set(c.agentIds ?? [])]),
+    );
 
   const projectRegistry = await readQueenBeeProjectRegistry(options.vaultPath);
   const sessionOutcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
@@ -287,8 +323,18 @@ export async function routePendingQueenBeeTasks(
   let routed = 0;
   for (const task of pending) {
     try {
+      // Company tasks may only run on their own crew. Skip (leave pending) when the
+      // company is unknown or has no member currently online — never route out.
+      const companyId = companyIdFromSource(task.source);
+      let candidateFleet = fleetSnapshot;
+      if (companyId) {
+        const memberIds = membersByCompany.get(companyId);
+        if (!memberIds || memberIds.size === 0) continue;
+        candidateFleet = scopeFleetToMemberIds(fleetSnapshot, memberIds);
+        if (candidateFleet.length === 0) continue;
+      }
       const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectRegistry };
-      const chain = rankQueenBeeDelegates(intent, fleetSnapshot, routerOptions);
+      const chain = rankQueenBeeDelegates(intent, candidateFleet, routerOptions);
       const delegation = chain[0];
       if (!delegation || delegation.status !== "delegated") continue;
       const agentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;

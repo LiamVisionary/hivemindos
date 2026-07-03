@@ -3,6 +3,7 @@ import { existsSync, statSync } from "fs";
 import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { isReservedOrMockUrl } from "@/lib/net/reserved-urls";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { verifiedWorkReceiptProofsByTask } from "@/lib/services/gitlawb/work-receipts";
 import {
@@ -1988,26 +1989,6 @@ function deliverableLabel(target: string, kind: KanbanDeliverableKind) {
   return clean.split(/[\\/]/).filter(Boolean).at(-1) || kind;
 }
 
-// Reserved / non-routable web hosts that never point at a real artifact
-// (RFC 2606 + RFC 6761 + the classic example.* apex). Agents sometimes emit
-// these as illustrative URLs; they must NOT become "live" deliverables — a
-// placeholder link is worse than no link (seen live 2026-07-02: a task recorded
-// `https://demo.sarasota-sites.example/paid?...&session_id=mock_...`).
-function isNonRoutableDeliverableUrl(url: string): boolean {
-  let host = "";
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch {
-    return true; // unparseable → not a usable deliverable
-  }
-  if (/\.(?:example|invalid|test|localhost)$/.test(host)) return true;
-  if (/^(?:www\.)?example\.(?:com|org|net)$/.test(host)) return true;
-  if (host === "localhost" || host === "127.0.0.1") return true;
-  // Obvious placeholder/mock/template markers anywhere in the URL.
-  if (/\b(?:mock_|placeholder|your-|example-|<[^>]+>|\{[^}]+\}|\$\{)/i.test(url)) return true;
-  return false;
-}
-
 // A real artifact path, not a route pattern or endpoint description. Agents
 // describe API surfaces with paths like `/preview/:slug`, `/paid and /api/...`,
 // `/book?lead=` — those are absolute-looking but are not files on disk, so they
@@ -2033,7 +2014,7 @@ function deliverableFromTarget(
   if (/^https?:\/\//i.test(trimmed)) {
     if (/^https?:\/\/(?:www\.)?w3\.org\/2000\/svg\b/i.test(trimmed))
       return null;
-    if (isNonRoutableDeliverableUrl(trimmed)) return null;
+    if (isReservedOrMockUrl(trimmed)) return null;
     const kind = normalizeDeliverableKind(undefined, undefined, trimmed);
     return {
       id: deliverableId(trimmed),

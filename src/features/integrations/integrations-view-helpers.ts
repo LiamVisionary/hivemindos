@@ -1,51 +1,3 @@
-import type {
-  NangoHostConfig,
-  NangoHostSetupResult,
-  NangoIntegrationPayload,
-} from "@/lib/types/integrations";
-
-export type FleetMachine = {
-  device?: {
-    self?: boolean;
-    name?: string;
-    dnsName?: string;
-    os?: string;
-    online?: boolean;
-    ip?: string;
-    collectorUrl?: string;
-  };
-  collector?: string;
-  envSync?: { ready?: boolean };
-};
-
-export type MachineChoice = {
-  id: string;
-  name: string;
-  os: string;
-  online: boolean;
-  collectorReady: boolean;
-  envReady: boolean;
-  self: boolean;
-  baseUrl: string;
-  collectorUrl: string;
-  rank: number;
-  note: string;
-};
-
-export function setupStepForPayload(payload: NangoIntegrationPayload): "welcome" | "apps" {
-  if (payload.health.ok) return "apps";
-  if (payload.config.hostMachineId && payload.config.baseUrl) return "apps";
-  return "welcome";
-}
-
-export function setupMethodLabel(method?: NangoHostSetupResult["method"]) {
-  if (method === "collector-api") return "agent bridge";
-  if (method === "local-shell") return "local setup";
-  if (method === "tailscale-ssh") return "Tailscale";
-  if (method === "plain-ssh") return "SSH";
-  return method || "setup";
-}
-
 export function summarizeRegistrarOutput(output?: string) {
   if (!output) return "";
   const changedMatch = output.match(/Done\.\s+([^\n]+)/);
@@ -92,81 +44,6 @@ export function showManagedXReturnMessage(setMessage: (message: string) => void)
   }
 }
 
-export function machineChoices(machines: FleetMachine[], config: NangoHostConfig): MachineChoice[] {
-  const choices = machines.map((machine) => {
-    const device = machine.device ?? {};
-    const name = device.self ? "This Mac" : device.name || dnsLabel(device.dnsName) || device.ip || "Unknown machine";
-    const id = device.self ? "self" : normalizeId(device.dnsName || device.name || device.ip || name);
-    const online = device.self || device.online === true;
-    const collectorReady = machine.collector === "ready";
-    const envReady = machine.envSync?.ready === true;
-    const serverLike = /linux|ubuntu|debian|server|cloud|hetzner/i.test(`${device.os} ${name} ${device.dnsName}`);
-    const baseHost = device.self ? "127.0.0.1" : (device.dnsName || device.ip || name).replace(/\.$/, "");
-    const rank = (online ? 32 : 0) + (collectorReady ? 18 : 0) + (envReady ? 14 : 0) + (serverLike ? 28 : 0) + (device.self ? 4 : 0);
-    return {
-      id,
-      name,
-      os: device.os || "unknown OS",
-      online,
-      collectorReady,
-      envReady,
-      self: device.self === true,
-      baseUrl: `http://${baseHost}:3003`,
-      collectorUrl: device.collectorUrl || "",
-      rank,
-      note: device.self ? "current machine" : serverLike ? "always-on candidate" : "tailnet machine",
-    };
-  });
-
-  if (!choices.some((choice) => choice.id === "self")) {
-    choices.push({
-      id: "self",
-      name: "This Mac",
-      os: "local",
-      online: true,
-      collectorReady: false,
-      envReady: false,
-      self: true,
-      baseUrl: "http://127.0.0.1:3003",
-      collectorUrl: "",
-      rank: 18,
-      note: "current machine",
-    });
-  }
-
-  if (config.hostMachineId && !choices.some((choice) => choice.id === config.hostMachineId)) {
-    choices.push({
-      id: config.hostMachineId,
-      name: config.hostMachineName || config.hostMachineId,
-      os: "saved host",
-      online: false,
-      collectorReady: false,
-      envReady: false,
-      self: false,
-      baseUrl: config.baseUrl,
-      collectorUrl: "",
-      rank: 10,
-      note: "saved host",
-    });
-  }
-
-  return choices.sort((left, right) => right.rank - left.rank || left.name.localeCompare(right.name));
-}
-
-export function setupTargetFromBaseUrl(baseUrl: string) {
-  try {
-    return new URL(baseUrl).hostname.replace(/^\[|\]$/g, "");
-  } catch {
-    return baseUrl.replace(/^https?:\/\//, "").split(":")[0] || "integration-host";
-  }
-}
-
-export function friendlySetupError(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  if (/fetch failed|failed to fetch|network/i.test(message)) return "Could not reach that machine. Make sure it is online, then try again.";
-  return message || "Could not start Nango. Try again in a moment.";
-}
-
 export function splitArgs(value: string) {
   return value.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((part) => part.replace(/^"|"$/g, "")).filter(Boolean) ?? [];
 }
@@ -182,12 +59,4 @@ export function timeAgo(ts: number) {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   return `${hours}h ago`;
-}
-
-function dnsLabel(value?: string) {
-  return value?.replace(/\.$/, "").split(".")[0] ?? "";
-}
-
-function normalizeId(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-|-$/g, "") || "machine";
 }

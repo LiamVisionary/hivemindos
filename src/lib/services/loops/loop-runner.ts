@@ -1,4 +1,11 @@
 import type { LoopEvalGate, LoopReceipt, LoopSpec } from "@/lib/types/loops";
+// Reserved/mock/non-routable URL detection is shared with the deliverable UI and
+// the kanban extractor via ONE pure module (single source of truth). This module
+// is the canonical (strictest) behavior; re-exported below so loops/index.ts keeps
+// surfacing `isReservedOrMockUrl` and stays client-safe (the helper is pure).
+import { isReservedOrMockUrl } from "@/lib/net/reserved-urls";
+
+export { isReservedOrMockUrl };
 
 /**
  * Loop runner.
@@ -44,6 +51,22 @@ export type LoopGateCommandRunner = (input: {
   command: string;
 }) => Promise<LoopGateCommandResult>;
 
+export type LoopUrlProbeResult = {
+  /** HTTP status if any response was received (any method). */
+  status?: number;
+  /** True ONLY when the host definitively does not resolve (DNS NXDOMAIN), not for transient failures. */
+  dnsFailed?: boolean;
+  /** Transient/network reason when no usable HTTP response arrived (timeout, connect reset). */
+  error?: string;
+};
+
+/**
+ * Probes whether a claimed-live URL actually serves a page. Injected by the server
+ * (a real `fetch`); omitted in client bundles and replaced by a fake in hermetic
+ * tests — the runner itself never touches the network. See `makeLiveUrlProber`.
+ */
+export type LoopUrlProber = (input: { url: string }) => Promise<LoopUrlProbeResult>;
+
 export type RunLoopGatesInput = {
   loop?: LoopSpec;
   /** Raw text the worker returned for the task. */
@@ -54,6 +77,8 @@ export type RunLoopGatesInput = {
   judge?: LoopGateJudge;
   /** Shell executor for `command` gates whose workspace is reachable here. Omit for remote work. */
   runCommand?: LoopGateCommandRunner;
+  /** Liveness prober for URLs the worker CLAIMS are live. Omit → reserved/mock domains are still rejected (pure). */
+  probeUrl?: LoopUrlProber;
   now?: number;
 };
 
@@ -65,14 +90,29 @@ export type RunLoopGatesResult = {
 
 const MIN_EVIDENCE_CHARS = 40;
 
+// Stable identity for the live-URL integrity receipt. The id is stable so a clean
+// retry OVERWRITES a prior failure (mergeLoopReceipts keys by id) instead of the old
+// failure persisting forever. The verifier tag is informational (not in the registry).
+const LIVE_URL_RECEIPT_ID = "lr_live-url-integrity";
+const LIVE_URL_GATE_ID = "live-url-integrity";
+const LIVE_URL_VERIFIER = "integrity:live-url";
+/** Cap on how many claimed-live URLs one run will verify — bounds work + network. */
+const MAX_LIVE_URL_CHECKS = 6;
+
 export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGatesResult> {
   const gates = input.loop?.evalGates ?? [];
   const output = String(input.output ?? "");
   const now = input.now ?? Date.now();
-  if (!gates.length) return { receipts: [], unsatisfiedRequiredGateIds: [] };
+  // NB: do NOT early-return on an empty gate list — the live-URL integrity check below
+  // runs on the output regardless of gates, so a task with no (or only optional) gates
+  // can still be blocked for claiming a dead/fabricated live URL. The gate loop below is
+  // a no-op when there are no gates.
 
   const selfReport = parseLoopSelfReport(output);
   const artifacts = input.artifacts?.length ? input.artifacts : detectArtifacts(output);
+  // A reserved/example/mock URL must NOT count as a durable artifact — a placeholder
+  // link is worse than no link (e.g. `https://demo.…example/paid?session_id=mock_…`).
+  const routableArtifacts = artifacts.filter((item) => !/^https?:\/\//i.test(item) || !isReservedOrMockUrl(item));
   const goal = input.loop?.goal ?? "";
   const successCriteria = input.loop?.successCriteria ?? [];
   const evidenceRequired = input.loop?.evidenceRequired ?? [];
@@ -113,10 +153,10 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
     }
 
     if (gate.kind === "artifact") {
-      if (artifacts.length) {
-        receipts.push(receiptFor(gate, "passed", `Durable artifact detected: ${artifacts[0]}`, artifacts.slice(0, 6), "artifact", now));
+      if (routableArtifacts.length) {
+        receipts.push(receiptFor(gate, "passed", `Durable artifact detected: ${routableArtifacts[0]}`, routableArtifacts.slice(0, 6), "artifact", now));
       } else {
-        receipts.push(receiptFor(gate, "failed", "No durable artifact (path or URL) was found in the worker output.", [], "artifact", now));
+        receipts.push(receiptFor(gate, "failed", "No durable artifact (real path or routable URL) was found in the worker output.", [], "artifact", now));
       }
       continue;
     }
@@ -148,6 +188,31 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
     }
 
     // Unknown/other test-kind gates (e.g. evo:score) need a real benchmark; leave pending.
+  }
+
+  // ── Live-URL integrity (independent of the loop's own gates) ───────────────
+  // A deliverable/outcome that CLAIMS a live URL must not pass with a dead or
+  // fabricated link. Runs on every loop (any company/template) and emits a
+  // stable-id receipt so a clean retry overwrites a prior failure. A violation is
+  // a HARD fail — it blocks completion (→ needs-human) regardless of whether the
+  // loop's gates are "required" (see loopCompletionBlock). Only affirmatively-false
+  // evidence blocks: a missing URL never does. Reserved/mock/non-public domains are
+  // caught with NO network; a dead real URL (404/410/NXDOMAIN) needs the injected prober.
+  const liveUrl = await evaluateLiveUrlClaims(output, input.probeUrl);
+  if (liveUrl.checked.length) {
+    const failed = liveUrl.violations.length > 0;
+    receipts.push({
+      id: LIVE_URL_RECEIPT_ID,
+      gateId: LIVE_URL_GATE_ID,
+      status: failed ? "failed" : "passed",
+      summary: failed
+        ? `Claimed live URL failed verification: ${truncate(liveUrl.violations.map((v) => `${v.url} — ${v.reason}`).join("; "), 300)}`
+        : `Verified ${liveUrl.checked.length} claimed live URL(s) as reachable.`,
+      evidence: (failed ? liveUrl.violations.map((v) => `${v.url} — ${v.reason}`) : liveUrl.checked).filter(Boolean).slice(0, 8),
+      verifier: LIVE_URL_VERIFIER,
+      metadata: failed ? { source: "live-url", hardFail: true } : { source: "live-url" },
+      createdAt: now,
+    });
   }
 
   const passedGateIds = new Set(receipts.filter((r) => r.status === "passed" && r.gateId).map((r) => r.gateId));
@@ -273,6 +338,62 @@ export function detectArtifacts(text: string): string[] {
   const pattern = /(?:file:\/\/\/[^\s"'<>]+|https?:\/\/[^\s"'<>]+|\/(?:Users|Volumes|tmp|var|private|home|opt)\/[^\s"'<>]+)/gi;
   for (const match of String(text ?? "").matchAll(pattern)) found.add(match[0].replace(/[),.;]+$/, ""));
   return [...found].slice(0, 12);
+}
+
+// ── Live-URL claim verification ──────────────────────────────────────────────
+// `isReservedOrMockUrl` (reserved TLD / example.* apex-or-subdomain / non-public
+// host / mock marker) is the shared, pure helper imported + re-exported at the top
+// of this file (src/lib/net/reserved-urls.ts) — the single source of truth.
+
+/** A third-party reference/docs page an agent READ, not a live deliverable it produced. */
+function isReferenceDocUrl(url: string): boolean {
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+  return host.startsWith("docs.") || /\/api-reference\/|\/rate-limit/.test(url.toLowerCase());
+}
+
+// A URL is "presented as a live deliverable" when its shape is one operators click
+// expecting a live page (payment / booking / preview / a deploy host), OR the output
+// uses live-claiming language anywhere. Generic across companies; reference docs excluded.
+const DELIVERABLE_URL_SHAPE = /(?:\/(?:paid|checkout|pay|book|order|sign-?up)\b|\/preview\/|buy\.stripe\.com|cal\.com|calendly\.com|\.workers\.dev|\.vercel\.app|\.netlify\.app|\.pages\.dev|\.onrender\.com|\.fly\.dev|\.web\.app|\.firebaseapp\.com)/i;
+const LIVE_CLAIM_LANGUAGE = /\b(?:is\s+live|now\s+live|went\s+live|go(?:es|ing)?\s+live|live\s+(?:at|url|link|site|page|payment)|deployed|published|launched|is\s+now\s+available|(?:payment|booking|checkout|preview)\s+link|you\s+can\s+(?:pay|book|purchase|sign\s?-?up|order))\b/i;
+
+type LiveUrlViolation = { url: string; reason: string };
+
+/**
+ * Finds URLs the worker presents as live customer-facing deliverables and verifies them.
+ * - reserved/mock/non-public host → violation with NO network (option b, always on);
+ * - else, if it is deliverable-shaped and a prober is injected, probe it and treat ONLY a
+ *   definitive not-found (404/410 or NXDOMAIN) as a violation. Timeouts, 401/403, 429, and
+ *   5xx are NOT fabrication — never block on a slow or gated host (option a).
+ * Empty `checked` → nothing was claimed live (the common case; emits no receipt).
+ */
+async function evaluateLiveUrlClaims(output: string, probeUrl?: LoopUrlProber): Promise<{ checked: string[]; violations: LiveUrlViolation[] }> {
+  const claimsLive = LIVE_CLAIM_LANGUAGE.test(output);
+  const candidates = detectArtifacts(output).filter((u) => /^https?:\/\//i.test(u) && !isReferenceDocUrl(u));
+  const checked: string[] = [];
+  const violations: LiveUrlViolation[] = [];
+  const seen = new Set<string>();
+  for (const url of candidates) {
+    const deliverableShaped = DELIVERABLE_URL_SHAPE.test(url);
+    if (!deliverableShaped && !claimsLive) continue; // not presented as a live deliverable
+    const key = url.replace(/\/+$/, "");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (checked.length >= MAX_LIVE_URL_CHECKS) break; // bounded N
+    checked.push(url);
+    if (isReservedOrMockUrl(url)) {
+      violations.push({ url, reason: "reserved / example / mock / non-public host — never a real live page" });
+      continue; // no network for a URL we already know is fake
+    }
+    if (deliverableShaped && probeUrl) {
+      const result = await probeUrl({ url }).catch((error): LoopUrlProbeResult => ({ error: error instanceof Error ? error.message : String(error) }));
+      if (result.status === 404 || result.status === 410) violations.push({ url, reason: `returned HTTP ${result.status} (page does not exist)` });
+      else if (result.dnsFailed) violations.push({ url, reason: "domain does not resolve" });
+      // else: reachable, gated, slow, or transiently down → not treated as fabrication.
+    }
+  }
+  return { checked, violations };
 }
 
 function receiptFor(

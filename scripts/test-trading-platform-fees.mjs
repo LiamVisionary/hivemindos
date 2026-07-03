@@ -41,7 +41,7 @@ assert.match(contents.fees, /hostedPlatformFeePolicy/);
 assert.match(contents.fees, /collectTradingPlatformFee/);
 assert.match(contents.fees, /quoteTradingPlatformFee/);
 assert.match(contents.fees, /assertTradingPlatformFeeReady/);
-assert.match(contents.fees, /sendUsdc/);
+assert.match(contents.fees, /sendUsdStable/);
 
 assert.match(contents.ledger, /"platform-fee"/);
 assert.match(contents.walletPanel, /Platform fee/);

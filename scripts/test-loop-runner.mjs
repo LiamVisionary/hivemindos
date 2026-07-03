@@ -6,6 +6,8 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const {
   detectArtifacts,
+  isReservedOrMockUrl,
+  loopCompletionBlock,
   loopContractForPrompt,
   loopGateFromVerifier,
   mergeLoopReceipts,
@@ -235,6 +237,183 @@ function passedFor(receipts, gateId) {
     now,
   });
   assert(passedFor(accepted.receipts, "g-judge"), "the independent judge runs even when the worker tried to skip it");
+}
+
+// ── Live-URL integrity gate ──────────────────────────────────────────────────
+
+const LIVE_URL_RECEIPT_ID = "lr_live-url-integrity";
+function liveUrlReceipt(receipts) {
+  return receipts.find((r) => r.id === LIVE_URL_RECEIPT_ID);
+}
+
+// 15. isReservedOrMockUrl: reserved TLDs, example apex, mock/template markers, and
+//     loopback/link-local/private/metadata hosts are all non-live; real hosts are not.
+{
+  for (const bad of [
+    "https://demo.sarasota-sites.example/paid?session_id=mock_1782974571939&lead=ginza",
+    "https://foo.example.com/checkout",
+    "https://acme.test/book",
+    "http://localhost:3000/paid",
+    "http://127.0.0.1/pay",
+    "http://169.254.169.254/latest/meta-data", // cloud metadata (SSRF)
+    "http://10.1.2.3/checkout",
+    "http://192.168.0.5/book",
+    "http://172.16.9.9/pay",
+    "https://your-company.com/paid", // `your-` placeholder marker
+    "https://acme.com/pay/user${uid}", // un-interpolated template marker on a real host
+    "not a url",
+  ]) {
+    assert.equal(isReservedOrMockUrl(bad), true, `should flag non-live URL: ${bad}`);
+  }
+  for (const ok of [
+    "https://cal.com/real-user/intro",
+    "https://buy.stripe.com/abc123",
+    "https://acme-widgets.com/paid",
+    "https://sarasota-sites.pages.dev/preview/ginza",
+  ]) {
+    assert.equal(isReservedOrMockUrl(ok), false, `should NOT flag real URL: ${ok}`);
+  }
+}
+
+// 16. A claimed-live URL on a reserved/example/mock domain HARD-FAILS with NO prober
+//     (option b, always on) — and that hard-fail blocks completion even when the loop
+//     has ONLY optional gates (the company-loop shape).
+{
+  const optionalGate = loopGateFromVerifier("receipt:evidence", { now, required: false, id: "g-outcome" });
+  const output = "Deployed a live payment page: https://demo.sarasota-sites.example/paid?session_id=mock_1782974571939&lead=ginza";
+  const res = await runLoopGates({ loop: loopWith([optionalGate]), output, now }); // no probeUrl injected
+  const integrity = liveUrlReceipt(res.receipts);
+  assert(integrity, "a claimed-live URL should produce an integrity receipt");
+  assert.equal(integrity.status, "failed", "a reserved/mock domain must fail the integrity check");
+  assert.equal(integrity.metadata?.hardFail, true, "the failure must be a hard-fail");
+  assert(/example|mock|non-public/i.test(integrity.summary), "summary should name why it failed");
+  // The whole point: this blocks completion even though every real gate is optional.
+  const block = loopCompletionBlock(loopWith([optionalGate]), res.receipts);
+  assert(block, "a hard-fail must block completion regardless of optional gates");
+  assert(block.missingGateTitles.join(" ").toLowerCase().includes("example"), "block should surface the bad URL reason");
+}
+
+// 17. A real-domain booking URL that is dead (404 via injected prober) HARD-FAILS
+//     (option a) — this is the cal.com/nonexistent-user case. Hermetic: prober is faked.
+{
+  const output = "Booking link is live at https://cal.com/sarasota-sites/website-kickoff";
+  const probes = [];
+  const res = await runLoopGates({
+    loop: loopWith([]),
+    output,
+    probeUrl: async ({ url }) => { probes.push(url); return { status: 404 }; },
+    now,
+  });
+  assert.deepEqual(probes, ["https://cal.com/sarasota-sites/website-kickoff"], "the deliverable URL should be probed exactly once");
+  const integrity = liveUrlReceipt(res.receipts);
+  assert.equal(integrity?.status, "failed", "a 404 booking URL must fail the integrity check");
+  assert.equal(integrity.metadata?.hardFail, true);
+  assert(/404/.test(integrity.summary), "summary should cite the 404");
+}
+
+// 18. A reachable claimed-live URL (200) PASSES the integrity check (no hard-fail).
+{
+  const output = "The site is live at https://sarasota-sites.pages.dev/preview/ginza";
+  const res = await runLoopGates({
+    loop: loopWith([]),
+    output,
+    probeUrl: async () => ({ status: 200 }),
+    now,
+  });
+  const integrity = liveUrlReceipt(res.receipts);
+  assert.equal(integrity?.status, "passed", "a reachable live URL should pass the integrity check");
+  assert(!integrity.metadata?.hardFail, "a passing integrity receipt is not a hard-fail");
+  assert.equal(loopCompletionBlock(loopWith([]), res.receipts), null, "a clean live URL must not block");
+}
+
+// 19. No URL / no live claim → NO integrity receipt at all (existing behavior preserved,
+//     and the prober is never called).
+{
+  let probed = false;
+  const res = await runLoopGates({
+    loop: loopWith([]),
+    output: "I investigated the routing regression and documented the recency bonus with file:line references.",
+    probeUrl: async () => { probed = true; return { status: 200 }; },
+    now,
+  });
+  assert(!liveUrlReceipt(res.receipts), "no claimed URL → no integrity receipt");
+  assert.equal(probed, false, "the prober must not run when nothing claims a live URL");
+}
+
+// 20. Slow/gated/erroring hosts are NOT fabrication: timeout, 403, 429, and 5xx must NOT
+//     block (only 404/410/NXDOMAIN do). Guards against flaking on bot-hostile hosts.
+{
+  for (const probe of [
+    async () => ({ error: "timeout" }),
+    async () => ({ status: 403 }),
+    async () => ({ status: 429 }),
+    async () => ({ status: 503 }),
+  ]) {
+    const res = await runLoopGates({
+      loop: loopWith([]),
+      output: "Payment page is live at https://buy.stripe.com/test_abc123",
+      probeUrl: probe,
+      now,
+    });
+    const integrity = liveUrlReceipt(res.receipts);
+    assert.equal(integrity?.status, "passed", "a slow/gated/erroring host must not be treated as fabrication");
+  }
+  // But an NXDOMAIN (definitive non-resolution) IS a hard-fail.
+  const dead = await runLoopGates({
+    loop: loopWith([]),
+    output: "Payment page is live at https://buy.stripe.com/test_abc123",
+    probeUrl: async () => ({ dnsFailed: true }),
+    now,
+  });
+  assert.equal(liveUrlReceipt(dead.receipts)?.metadata?.hardFail, true, "NXDOMAIN must hard-fail");
+}
+
+// 21. Option b at the artifact gate: a reserved/example URL must NOT count as a durable
+//     artifact. A real path still passes; a reserved-URL-only output fails the gate.
+{
+  const g = gate("artifact:exists", "g-artifact");
+  const reservedOnly = await runLoopGates({
+    loop: loopWith([g]),
+    output: "Artifact: https://cdn.acme.example/report.json", // reserved, not deliverable-shaped, no live claim
+    now,
+  });
+  assert(!passedFor(reservedOnly.receipts, "g-artifact"), "a reserved-domain URL must not satisfy the artifact gate");
+  assert(!liveUrlReceipt(reservedOnly.receipts), "a non-deliverable reserved URL is not a live-claim (no integrity receipt)");
+
+  const realPathWins = await runLoopGates({
+    loop: loopWith([g]),
+    output: "Deliverable: /Users/liam/out/report.json and mirror https://cdn.acme.example/report.json",
+    now,
+  });
+  const artifactReceipt = passedFor(realPathWins.receipts, "g-artifact");
+  assert(artifactReceipt, "a real path still satisfies the artifact gate");
+  assert(artifactReceipt.evidence.every((e) => !/\.example/.test(e)), "reserved URLs must be filtered out of artifact evidence");
+}
+
+// 22. Stable receipt id: a clean retry OVERWRITES a prior failure (mergeLoopReceipts keys
+//     by id), so a fixed URL un-blocks instead of the old failure persisting forever.
+{
+  const fail = await runLoopGates({ loop: loopWith([]), output: "live at https://cal.com/ghost/x", probeUrl: async () => ({ status: 404 }), now });
+  const pass = await runLoopGates({ loop: loopWith([]), output: "live at https://cal.com/real/x", probeUrl: async () => ({ status: 200 }), now: now + 1 });
+  const failReceipt = liveUrlReceipt(fail.receipts);
+  const passReceipt = liveUrlReceipt(pass.receipts);
+  assert.equal(failReceipt.id, passReceipt.id, "both runs use the same stable receipt id");
+  const merged = mergeLoopReceipts(fail.receipts, pass.receipts);
+  const mergedIntegrity = merged.filter((r) => r.id === LIVE_URL_RECEIPT_ID);
+  assert.equal(mergedIntegrity.length, 1, "the retry must overwrite, not duplicate");
+  assert.equal(mergedIntegrity[0].status, "passed", "the passing retry wins");
+  assert.equal(loopCompletionBlock(loopWith([]), merged), null, "an overwritten pass no longer blocks");
+}
+
+// 23. A third-party reference/docs URL is not a live-claim, even with 'deployed' language.
+{
+  const res = await runLoopGates({
+    loop: loopWith([]),
+    output: "Deployed the fix after reading https://docs.venice.ai/api-reference/rate-limiting",
+    probeUrl: async () => ({ status: 404 }),
+    now,
+  });
+  assert(!liveUrlReceipt(res.receipts), "a docs/reference URL must not be verified as a live deliverable");
 }
 
 console.log("loop runner tests passed");

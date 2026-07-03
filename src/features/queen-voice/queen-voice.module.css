@@ -322,6 +322,15 @@
   }
 }
 
+/* Non-fatal voice status ("voice server unreachable, replies show as text"). */
+.voiceNotice {
+  margin: 0;
+  max-width: 300px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: rgba(255, 186, 113, 0.92);
+}
+
 @keyframes queenVoiceThinkingBreath {
   0%,
   100% {

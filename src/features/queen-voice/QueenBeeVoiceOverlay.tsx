@@ -703,6 +703,11 @@ export function QueenBeeVoiceOverlay({
             {voiceState.phase === "error" && voiceState.error ? (
               <p className={styles.errorText}>{voiceState.error}</p>
             ) : null}
+            {!realtimeMode && pipeline.voiceNotice ? (
+              // Voice continuity: her selected local voice is down, replies
+              // are text-only until it recovers - keep that visible.
+              <p className={styles.voiceNotice}>{pipeline.voiceNotice}</p>
+            ) : null}
             <button
               type="button"
               className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}

@@ -5,9 +5,11 @@ import { Settings2 } from "lucide-react";
 import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel } from "./primitives";
 import { IssueBoard } from "./IssueBoard";
 import { STATUS_TONE } from "./data";
-import type { Agent, Approval, Colony, Issue } from "./types";
 import { DeliverableCard } from "./DeliverableCard";
-import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable, type DeliverableCategory } from "./deliverables-model";
+import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable } from "./deliverables-model";
+import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
+import { getIssueIdentity } from "./issue-identity";
+import type { Agent, Approval, Colony, Issue } from "./types";
 
 export type CockpitHandlers = {
   onApprove: (approvalId: string) => void;
@@ -289,7 +291,7 @@ function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprova
           </button>
         )}
         {blocked.map((issue) => (
-          <button key={issue.work?.taskId ?? issue.key} type="button" onClick={() => onOpenIssue(issue)} style={rowStyle}>
+          <button key={getIssueIdentity(issue)} type="button" onClick={() => onOpenIssue(issue)} style={rowStyle}>
             <span aria-hidden style={{ fontSize: 15 }}>⛔</span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)", overflowWrap: "anywhere" }}>{issue.title}</span>
@@ -315,13 +317,30 @@ function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprova
 
 type CardCtx = { classified: ClassifiedDeliverable; machineName?: string; key: string };
 
-/** Human section headers for each visible category, in display order. */
-const DELIVERABLE_SECTIONS: { category: DeliverableCategory; label: string; blurb: string }[] = [
-  { category: "link", label: "Live links & sites", blurb: "Pages you can open right now" },
-  { category: "report", label: "Reports", blurb: "What the crew wrote up" },
-  { category: "data", label: "Data & spreadsheets", blurb: "Lists, trackers, and structured output" },
-  { category: "media", label: "Media", blurb: "Images and video" },
-];
+/**
+ * Company profile signal for the output spec. Identity (sector/name/blurb/apex)
+ * decides the PRODUCT kind; activity + issue titles feed ONLY outreach detection
+ * (the Comms tab) — task titles like "social media" or "booking system" describe
+ * activities and would otherwise mislabel a website agency as a media company.
+ */
+function companyProfileSignal(c: Colony): CompanyProfile {
+  const activityText = [...(c.activity ?? []), ...c.issues.map((i) => i.title)].filter(Boolean).join(" ");
+  return { sector: c.sector, name: c.name, blurb: c.blurb, apexTitle: c.apex.title, apexMetric: c.apex.metric, activityText };
+}
+
+/** Split deliverables into headline outputs / comms / the collapsed work log for a company. */
+function partitionByOutput(all: CardCtx[], spec: OutputSpec) {
+  const primary: CardCtx[] = [];
+  const comms: CardCtx[] = [];
+  const worklog: CardCtx[] = [];
+  for (const x of all) {
+    const bucket = spec.classOf(x.classified);
+    if (bucket === "primary") primary.push(x);
+    else if (bucket === "comms") comms.push(x);
+    else worklog.push(x);
+  }
+  return { primary, comms, worklog };
+}
 
 /** Flatten every company deliverable, classify, and dedupe by target (preferring the useful copy). */
 function collectCompanyDeliverables(c: Colony): CardCtx[] {
@@ -343,59 +362,73 @@ function collectCompanyDeliverables(c: Colony): CardCtx[] {
   return [...seen.values()];
 }
 
-function DeliverablesPanel({ colony: c, theme = "dark" }: { colony: Colony; theme?: "dark" | "light" }) {
-  const [showInternal, setShowInternal] = React.useState(false);
+function DeliverablesPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec: OutputSpec; theme?: "dark" | "light" }) {
+  const [showLog, setShowLog] = React.useState(false);
   const all = React.useMemo(() => collectCompanyDeliverables(c), [c]);
-  const internal = all.filter((x) => x.classified.category === "internal");
-  const visibleCount = all.length - internal.length;
+  const { primary, worklog } = React.useMemo(() => partitionByOutput(all, spec), [all, spec]);
 
   return (
     <Panel>
-      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{visibleCount} item{visibleCount === 1 ? "" : "s"}</span>}>
-        deliverables · what the company produced
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{primary.length} item{primary.length === 1 ? "" : "s"}</span>}>
+        {spec.primaryLabel}
       </SectionLabel>
-      {all.length === 0 ? (
-        <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "16px 0" }}>
-          Nothing yet — links, reports, and data appear here as the crew completes work.
+      <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", marginTop: -4, marginBottom: 14 }}>{spec.primaryBlurb}</div>
+
+      {primary.length === 0 ? (
+        <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "8px 0 14px", lineHeight: 1.5 }}>{spec.emptyHint}</div>
+      ) : (
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          {primary.map((x) => (
+            <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="hero" />
+          ))}
+        </div>
+      )}
+
+      {worklog.length > 0 && (
+        <div style={{ marginTop: 22, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
+          <button type="button" onClick={() => setShowLog((v) => !v)} style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", padding: 0, textAlign: "left" }}>
+            {showLog ? "▾" : "▸"} Work log · {worklog.length} file{worklog.length === 1 ? "" : "s"} <span style={{ opacity: 0.7 }}>— notes, trackers, and scratch the crew used to get here (not deliverables)</span>
+          </button>
+          {showLog && (
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))", marginTop: 12 }}>
+              {worklog.map((x) => (
+                <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * Conditional Comms tab for companies that do outreach. Honest empty state:
+ * individual emails are sent inside the pipeline (e.g. maps-agency via AgentMail)
+ * and don't reach the work board yet — piping live threads here is the follow-up.
+ */
+function CommsPanel({ colony: c, spec }: { colony: Colony; spec: OutputSpec }) {
+  const all = React.useMemo(() => collectCompanyDeliverables(c), [c]);
+  const comms = React.useMemo(() => partitionByOutput(all, spec).comms, [all, spec]);
+
+  return (
+    <Panel>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{spec.commsBlurb}</span>}>
+        {spec.commsLabel}
+      </SectionLabel>
+      {comms.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "34px 16px", textAlign: "center" }}>
+          <span aria-hidden style={{ fontSize: 30 }}>📬</span>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 14, fontWeight: 600, color: "var(--fg-2)" }}>No email threads here yet</span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", maxWidth: 448, lineHeight: 1.55 }}>
+            This company runs outreach, but the individual emails sent and received aren’t piped onto the board yet — they happen inside the pipeline. Streaming live threads here is the next step.
+          </span>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {DELIVERABLE_SECTIONS.map((section) => {
-            const items = all.filter((x) => x.classified.category === section.category);
-            if (items.length === 0) return null;
-            return (
-              <div key={section.category}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg-2)" }}>{section.label}</span>
-                  <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{section.blurb}</span>
-                </div>
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))" }}>
-                  {items.map((x) => (
-                    <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          {visibleCount === 0 && (
-            <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }}>
-              No opener-friendly deliverables yet — only internal working files so far.
-            </div>
-          )}
-          {internal.length > 0 && (
-            <div>
-              <button type="button" onClick={() => setShowInternal((v) => !v)} style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", padding: 0 }}>
-                {showInternal ? "▾" : "▸"} {internal.length} working file{internal.length === 1 ? "" : "s"} (internal scratch, commands, and unopenable paths)
-              </button>
-              {showInternal && (
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))", marginTop: 10 }}>
-                  {internal.map((x) => (
-                    <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+          {comms.map((x) => (
+            <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} layout="card" />
+          ))}
         </div>
       )}
     </Panel>
@@ -578,15 +611,20 @@ export function Cockpit({
   const wbPct = wb.total > 0 ? Math.round((wb.done / wb.total) * 100) : 0;
   const [tab, setTab] = React.useState("board");
 
-  // Badge the USEFUL (deduped, non-internal) count so it matches the panel — the
-  // raw per-task total double-counts shared files and includes hidden junk.
+  // The output spec decides what THIS company's deliverables are (its sites /
+  // books / clips) vs. work log, and whether it runs outreach (→ Comms tab).
+  const spec = React.useMemo(() => outputSpecForCompany(companyProfileSignal(c)), [c]);
+
+  // Badge the headline-output count so it matches the panel — the raw per-task
+  // total double-counts shared files and buries the product in scratch/log files.
   const deliverableCount = React.useMemo(
-    () => collectCompanyDeliverables(c).filter((x) => x.classified.category !== "internal").length,
-    [c],
+    () => collectCompanyDeliverables(c).filter((x) => spec.classOf(x.classified) === "primary").length,
+    [c, spec],
   );
   const tabs: { key: string; label: string; badge?: number | null }[] = [
     { key: "board", label: "Board" },
-    { key: "deliverables", label: "Deliverables", badge: deliverableCount || null },
+    { key: "deliverables", label: spec.primaryLabel, badge: deliverableCount || null },
+    ...(spec.comms ? [{ key: "comms", label: spec.commsLabel }] : []),
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
     { key: "team", label: "Team" },
     { key: "approvals", label: "Approvals", badge: c.approvals.length || null },
@@ -744,7 +782,9 @@ export function Cockpit({
         </Panel>
       )}
 
-      {active === "deliverables" && <DeliverablesPanel colony={c} theme={theme} />}
+      {active === "deliverables" && <DeliverablesPanel colony={c} spec={spec} theme={theme} />}
+
+      {active === "comms" && <CommsPanel colony={c} spec={spec} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} />}
 

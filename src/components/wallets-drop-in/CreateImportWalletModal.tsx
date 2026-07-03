@@ -27,7 +27,9 @@ type WalletLike = {
   addresses?: unknown;
 };
 
-const SUPPORTED_CHAINS = ["Base", "Solana", "Base Sepolia"];
+const MULTI_CHAIN_CREATE = "Base + Solana";
+const SUPPORTED_CHAINS = ["Base", "Solana", "Base Sepolia", "Robinhood Chain"];
+const CREATE_CHAINS = [MULTI_CHAIN_CREATE, "Base", "Solana", "Robinhood Chain"];
 
 function walletRecord(wallet: unknown): WalletLike {
   return wallet && typeof wallet === "object" ? wallet as WalletLike : {};
@@ -43,6 +45,7 @@ function chainLabelFromWallet(wallet: unknown): string {
   const record = walletRecord(wallet);
   const network = String(record.network || firstWalletAddressChain(record)).toLowerCase();
   if (network.includes("solana")) return "Solana";
+  if (network.includes("4663")) return "Robinhood Chain";
   if (network.includes("sepolia")) return "Base Sepolia";
   return "Base";
 }
@@ -68,6 +71,7 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
   const walletName = String(record.name || "");
   const [mode, setMode] = React.useState<WalletModalMode>(reimport ? "import" : "create");
   const [name, setName] = React.useState(reimport ? walletName : "");
+  const [createChain, setCreateChain] = React.useState(MULTI_CHAIN_CREATE);
   const [chain, setChain] = React.useState(chainLabelFromWallet(wallet));
   const [secret, setSecret] = React.useState("");
   const [state, setState] = React.useState("idle");
@@ -78,7 +82,7 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
     try {
       if (isCreate) {
         if (!actions?.onCreateWallet) throw new Error("Wallet creation is not available in this build.");
-        await actions.onCreateWallet({ name });
+        await actions.onCreateWallet({ name, chain: createChain });
       } else {
         if (!actions?.onImportWallet) throw new Error("Wallet import is not available in this build.");
         await actions.onImportWallet({ wallet, name, chain, secret });
@@ -98,11 +102,11 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const title = reimport ? walletName || "Reimport wallet" : isCreate ? "Create multi-chain wallet" : "Import wallet";
+  const title = reimport ? walletName || "Reimport wallet" : isCreate ? "Create wallet" : "Import wallet";
   const help = reimport
     ? "Re-derive this wallet's addresses from its seed or key. Balances and holdings refresh on import."
     : isCreate
-      ? "Generate fresh Base and Solana wallets from one recovery phrase. HivemindOS stores the secrets in the encrypted wallet vault."
+      ? "Generate a fresh wallet. Multi-chain creates Base and Solana from one recovery phrase; single-chain creates a local key for the selected network."
       : "Import an existing wallet by seed phrase or private key. Recovery phrases create supported Base and Solana wallets; private keys use the selected chain.";
   const busy = state === "checking";
   const saved = state === "saved";
@@ -110,7 +114,7 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
   const buttonText = busy
     ? isCreate ? "Creating wallet..." : "Deriving addresses..."
     : saved ? isCreate ? "Created" : "Imported"
-      : reimport ? "Reimport" : isCreate ? "Create multi-chain wallet" : "Import wallet";
+      : reimport ? "Reimport" : isCreate ? (createChain === MULTI_CHAIN_CREATE ? "Create multi-chain wallet" : `Create ${createChain} wallet`) : "Import wallet";
 
   return (
     <div className="fw-modal-back" onMouseDown={onClose}>
@@ -138,7 +142,11 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
         <p className="fw-sheet-help">{help}</p>
         {!reimport ? <label className="fb-label">Wallet name<input className="fb-field" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Ops Treasury" /></label> : null}
         {isCreate ? (
-          <div className="fw-term"><strong>Networks</strong><code>Base mainnet + Solana mainnet</code></div>
+          <label className="fb-label">Network
+            <select className="fb-select" value={createChain} onChange={(event) => setCreateChain(event.target.value)}>
+              {CREATE_CHAINS.map((option) => <option key={option}>{option}</option>)}
+            </select>
+          </label>
         ) : (
           <label className="fb-label">Private-key chain
             <select className="fb-select" value={chain} onChange={(event) => setChain(event.target.value)}>

@@ -25,10 +25,30 @@ const junk = [
   d({ kind: "file", label: "https", path: "//sarasota-demo-pipeline.hivemindos.workers.dev" }),
   d({ kind: "url", label: "paid", url: "https://demo.sarasota-sites.example/paid?session_id=mock_1782974571939&lead=ginza" }),
   d({ kind: "document", label: "Shared Brain learning note", path: "/root/Documents/Obsidian/hivemindos-vault/Memory/Distillations/Agent Memory/decision/x.md" }),
+  d({ kind: "url", label: "rate-limiting", url: "https://docs.venice.ai/api-reference/rate-limiting" }),
 ];
 for (const item of junk) {
   const c = classifyDeliverable(item);
   assert.equal(c.category, "internal", `expected internal for ${item.label} — got ${c.category} (${c.internalReason})`);
+}
+
+// ── widened 2026-07-03: UI adopts the stricter shared reserved-host set ──────
+// The reserved-URL check is now the single source of truth in src/lib/net/
+// reserved-urls.ts. That WIDENS the old apex-only isPlaceholderUrl: a *.example.com
+// SUBDOMAIN, a private / loopback / cloud-metadata host, and an un-interpolated
+// ${...} template marker were previously shown as live links; they are now correctly
+// hidden as internal placeholders. (Real hosts like cal.com / *.pages.dev are still
+// visible — covered by the link cases below.)
+const widened = [
+  d({ kind: "url", label: "checkout", url: "https://foo.example.com/checkout" }),
+  d({ kind: "url", label: "booking", url: "http://192.168.0.5/book" }),
+  d({ kind: "url", label: "metadata", url: "http://169.254.169.254/latest/meta-data" }),
+  d({ kind: "url", label: "payment", url: "https://acme.com/pay/user${uid}" }),
+];
+for (const item of widened) {
+  const c = classifyDeliverable(item);
+  assert.equal(c.category, "internal", `widened reserved-set should hide ${item.url} — got ${c.category} (${c.internalReason})`);
+  assert.equal(deliverableOpenKind(item), "placeholder", `${item.url} should be a placeholder, not a live link`);
 }
 
 // ── real artifacts → categorized with human labels ──────────────────────────

@@ -87,7 +87,7 @@ flowchart LR
   RemoteCollectors --> RemoteRuntime["Remote runtimes"]
   RemoteCollectors --> RemoteApps["Remote apps and APIs"]
   Api --> Workers["Honey / compute workers"]
-  Api --> Integrations["Nango / GitHub / UsePod / MiroShark"]
+  Api --> Integrations["App connections / GitHub / UsePod / MiroShark"]
 ```
 
 ## Product Surface Infographic

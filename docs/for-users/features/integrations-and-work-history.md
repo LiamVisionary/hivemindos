@@ -14,17 +14,17 @@ The Integrations view owns setup/debug details for external systems that should 
 
 How it works:
 
-- UI: `src/features/integrations/NangoIntegrationsView.tsx` and `src/features/integrations/GitLawbIntegrationPanel.tsx`.
-- Services: `src/lib/services/integrations/nango-client.ts` and `src/lib/services/integrations/nango-host.ts`.
-- Routes: `/api/integrations/nango`, `/api/integrations/nango/setup`, `/api/gitlawb/*`, and `/api/projects/*`.
-- Remote collector setup can proxy through `/integrations/nango/setup`.
+- UI: `src/features/integrations/ConnectionsPanel.tsx` and `src/features/integrations/GitLawbIntegrationPanel.tsx`.
+- Services: `src/lib/services/integrations/provider-connections.ts`, `src/lib/services/integrations/github-oauth.ts`, and `src/lib/services/integrations/google-oauth.ts`.
+- Routes: `/api/integrations/connections`, `/api/integrations/github/oauth/*`, `/api/integrations/google/oauth/*`, `/api/gitlawb/*`, and `/api/projects/*`.
+- Credentials are validated live against each provider, then stored in the shared hive env (`hive-env-add`), which replicates them to every machine — no host machine or separate service to run.
 
 What Integrations can do:
 
-- Read and update local Nango host config.
-- Check Nango host health.
-- List Nango connections.
-- Start setup on local or capable remote machines.
+- Connect GitHub, Linear, Slack, Notion, and Google in place, without leaving the app.
+- Connect GitHub with one click via in-app OAuth, or by pasting a personal access token.
+- Connect Google via in-app OAuth with a one-time pasted OAuth client (Desktop app type).
+- Show live per-app status (connected account, failing check) and disconnect in place.
 - Show GitLawb Code Proof readiness, local DID status, optional node status, and linked project count.
 - Install/repair the lightweight GitLawb CLI where supported.
 - Create a local GitLawb DID without public registration.
@@ -55,7 +55,7 @@ See [GitLawb Code Proof](../integrations/gitlawb.md) for setup weight, lazy node
 
 ## GitHub OAuth Fallback
 
-AEON can use a direct GitHub OAuth helper when Nango is not available or when the operator wants a simple account connection for repository automation.
+AEON uses the same direct GitHub OAuth helper as the Connections tab when the operator wants a simple account connection for repository automation.
 
 How it works:
 
@@ -131,7 +131,7 @@ What Work History can do:
 
 ## Main Code Paths
 
-- `src/features/integrations/NangoIntegrationsView.tsx`
+- `src/features/integrations/ConnectionsPanel.tsx`
 - `src/features/integrations/GitLawbIntegrationPanel.tsx`
 - `src/features/dashboard/views/MyAppsPanel.tsx`
 - `src/features/dashboard/views/PhonePanel.tsx`
@@ -139,16 +139,18 @@ What Work History can do:
 - `src/lib/services/integrations/github-oauth.ts`
 - `src/lib/services/gitlawb/gitlawb-service.ts`
 - `src/lib/services/projects/project-registry.ts`
-- `src/lib/services/integrations/nango-client.ts`
-- `src/lib/services/integrations/nango-host.ts`
+- `src/lib/services/integrations/provider-connections.ts`
+- `src/lib/services/integrations/shared-env.ts`
+- `src/lib/services/integrations/google-oauth.ts`
 - `src/lib/services/phone/call-gateway.ts`
 - `src/app/api/fleet/apps/route.ts`
 - `src/app/api/fleet/app-icon/route.ts`
 - `src/app/api/phone/route.ts`
 - `src/app/api/integrations/github/oauth/start/route.ts`
 - `src/app/api/integrations/github/oauth/callback/route.ts`
-- `src/app/api/integrations/nango/route.ts`
-- `src/app/api/integrations/nango/setup/route.ts`
+- `src/app/api/integrations/connections/route.ts`
+- `src/app/api/integrations/google/oauth/start/route.ts`
+- `src/app/api/integrations/google/oauth/callback/route.ts`
 - `src/app/api/gitlawb/**`
 - `src/app/api/projects/**`
 - `src/lib/services/work-history/dynamic-changelog.ts`
