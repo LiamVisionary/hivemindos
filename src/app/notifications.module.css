@@ -1,27 +1,57 @@
 /* ──────────────────────────────────────────────────────────────────
-   Agent notifications — editorial inbox
-   Matched to the Wallet / Trade / Brain views: a single glass panel,
-   teal as the only interaction accent, honey reserved for HIVE, and
-   hierarchy from type + spacing rather than nested boxes. Priority is
-   the one place color carries meaning (slate → low, teal → normal,
-   honey → high, rose → urgent).
+   Agent notifications — Hive dark-honey inbox
+   Palette + surface treatment lifted from the Fleet-Hive / Trade / Brain
+   views (src/components/fleet-hive/fleet-hive.css `.fr-root`): warm-neutral
+   dark panels, cream-tinted hairlines, warm text tiers, ONE honey accent
+   used sparingly, teal reserved for the live/normal signal, warm rose for
+   trouble. Tokens are scoped to `.notificationsPanel` (self-contained, no
+   dependency on `.fr-root`) and the whole view flips to the warm-paper
+   light theme by re-declaring the tokens once under [data-theme="hive-light"].
    ────────────────────────────────────────────────────────────────── */
 
 .notificationsPanel {
+  /* — tokens (dark) — values lifted from fleet-hive.css `.fr-root` — */
+  --nf-panel: #14161c;
+  --nf-panel-2: #181b22;
+  --nf-panel-hi: #1e222b;
+  --nf-line: rgba(238, 232, 220, 0.07);
+  --nf-line-2: rgba(238, 232, 220, 0.13);
+  --nf-line-3: rgba(238, 232, 220, 0.2);
+  --nf-fg: #f3f0e9;
+  --nf-fg-2: #a7a39a;
+  --nf-fg-3: #76726a;
+  --nf-fg-4: #545049;
+  --nf-honey: #e7b45c;
+  --nf-honey-2: #f0c879;
+  --nf-honey-soft: rgba(231, 180, 92, 0.13);
+  --nf-honey-line: rgba(231, 180, 92, 0.32);
+  --nf-live: #6fcdba;
+  --nf-live-soft: rgba(111, 205, 186, 0.14);
+  --nf-danger: #e58e85;
+  --nf-danger-soft: rgba(229, 142, 133, 0.13);
+  --nf-radius: 14px;
+  --nf-radius-sm: 9px;
+  --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+  --nf-display: "Space Grotesk", system-ui, sans-serif;
+  --nf-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
   display: flex;
   flex-direction: column;
   gap: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 12px;
-  background: rgba(10, 13, 19, 0.55);
-  padding: 24px 26px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+  padding: 22px 24px;
+  color: var(--nf-fg);
+  font-family: "Geist", "Inter", system-ui, sans-serif;
 }
 
-/* Header — one editorial block, actions trailing. */
+/* — Header: one editorial block, honey eyebrow, actions trailing — */
 .notificationsHeader {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px 28px;
+  gap: 14px 28px;
   align-items: flex-end;
   justify-content: space-between;
 }
@@ -30,9 +60,14 @@
   min-width: 0;
 }
 
+.notificationsHeader :global(.eyebrow) {
+  color: var(--nf-honey);
+}
+
 .notificationsHeader h2 {
   margin: 0;
-  color: var(--foreground);
+  color: var(--nf-fg);
+  font-family: var(--nf-display);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.2px;
@@ -41,10 +76,9 @@
 
 .notificationsHeader p,
 .notificationsEmpty p,
-.notificationSetting span,
 .notificationStatus {
   margin: 0;
-  color: var(--muted);
+  color: var(--nf-fg-2);
   line-height: 1.5;
 }
 
@@ -54,19 +88,18 @@
   font-size: 13px;
 }
 
-/* Controls — a light strip below the header, divider not a box. Inline
-   stats and the escalation toggle share one row. */
+/* — Controls: hairline-divided strip, not a nested box — */
 .notificationsControls {
   display: flex;
   flex-wrap: wrap;
   gap: 18px 28px;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid var(--nf-line);
   padding-top: 18px;
 }
 
-/* Inline stat row — mono labels, big numbers, no boxes (matches Wallets). */
+/* Inline stats — mono labels + big numbers, no boxes. */
 .notificationStats {
   display: flex;
   flex-wrap: wrap;
@@ -78,12 +111,12 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 3px;
   border: 0;
   background: transparent;
   padding: 0;
-  color: var(--muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 1.1px;
@@ -92,8 +125,8 @@
 }
 
 .notificationStats strong {
-  color: var(--foreground);
-  font-family: "Space Grotesk", system-ui, sans-serif;
+  color: var(--nf-fg);
+  font-family: var(--nf-display);
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.2px;
@@ -101,15 +134,14 @@
   text-transform: none;
 }
 
-/* The folder path has no <strong> count — render it as a subtle location
-   chip instead of a big stat, and let it wrap rather than truncate. */
+/* The vault folder has no <strong> count — a quiet location chip, wraps. */
 .notificationStats span:not(:has(strong)) {
   align-self: center;
   gap: 0;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--nf-line-2);
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.5);
-  color: var(--text-soft);
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg-2);
   padding: 6px 11px;
   font-size: 11px;
   letter-spacing: 0.02em;
@@ -117,15 +149,16 @@
   text-transform: none;
 }
 
+/* Escalation toggle — a quiet inset card. */
 .notificationSetting {
   display: flex;
   gap: 14px;
   align-items: center;
   justify-content: space-between;
   min-width: min(100%, 400px);
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel-2);
   padding: 11px 13px;
 }
 
@@ -136,30 +169,31 @@
 
 .notificationSetting strong {
   display: block;
-  color: var(--foreground);
+  color: var(--nf-fg);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .notificationSetting > span > span {
   display: block;
+  color: var(--nf-fg-3);
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .notificationSetting input {
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  accent-color: var(--accent);
+  accent-color: var(--nf-honey);
 }
 
-/* ─── List ────────────────────────────────────────────────────────── */
-
+/* — List — */
 .notificationList {
   display: grid;
   max-height: min(720px, calc(100vh - 320px));
   min-height: 420px;
-  gap: 14px;
+  gap: 12px;
   overflow: auto;
   padding-right: 4px;
 }
@@ -174,29 +208,27 @@
   top: 0;
   z-index: 1;
   margin: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-  background: linear-gradient(180deg, rgba(10, 13, 19, 0.96), rgba(10, 13, 19, 0.82));
-  color: var(--muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  border-bottom: 1px solid var(--nf-line);
+  background: linear-gradient(180deg, var(--nf-panel) 62%, rgba(20, 22, 28, 0));
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 1.4px;
-  padding: 8px 2px;
+  padding: 8px 2px 10px;
   text-transform: uppercase;
 }
 
-/* ─── Card ────────────────────────────────────────────────────────── */
-
+/* — Card — */
 .notificationCard {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr);
   gap: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-left-width: 3px;
-  border-radius: 12px;
-  background: rgba(10, 13, 19, 0.5);
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel-2);
   padding: 15px 16px;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
 }
 
 .notificationCard[role="button"] {
@@ -205,47 +237,31 @@
 
 .notificationCard[role="button"]:hover,
 .notificationCard[role="button"]:focus-visible {
-  border-color: rgba(94, 234, 212, 0.32);
+  border-color: var(--nf-line-3);
   transform: translateY(-1px);
   outline: none;
 }
 
+/* Unread cards sit a step brighter than read ones (priority itself is shown
+   by the priority pill, not a card accent). */
 .notificationCard.unread {
-  background:
-    linear-gradient(90deg, rgba(45, 212, 191, 0.08), transparent 46%),
-    rgba(10, 13, 19, 0.64);
-}
-
-.notificationCard.low {
-  border-left-color: rgba(148, 163, 184, 0.6);
-}
-
-.notificationCard.normal {
-  border-left-color: var(--accent);
-}
-
-.notificationCard.high {
-  border-left-color: #facc15;
-}
-
-.notificationCard.urgent {
-  border-left-color: var(--danger);
+  background: var(--nf-panel-hi);
 }
 
 .notificationGlyph {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  border: 1px solid rgba(94, 234, 212, 0.2);
-  border-radius: 11px;
-  background: rgba(45, 212, 191, 0.1);
-  color: var(--accent-strong);
+  border: 1px solid var(--nf-honey-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
 }
 
 .notificationGlyph svg {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
 }
 
 .notificationBody {
@@ -263,9 +279,10 @@
   overflow-wrap: anywhere;
   margin: 0;
   background: transparent;
-  color: var(--foreground);
-  font-size: 15.5px;
-  font-weight: 650;
+  color: var(--nf-fg);
+  font-family: var(--nf-display);
+  font-size: 15px;
+  font-weight: 600;
   letter-spacing: -0.1px;
   line-height: 1.3;
   text-transform: none;
@@ -273,8 +290,8 @@
 
 .notificationMetaRow time {
   flex: 0 0 auto;
-  color: var(--muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
   font-size: 11px;
 }
 
@@ -292,10 +309,10 @@
   min-height: 30px;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(94, 234, 212, 0.18);
+  border: 1px solid var(--nf-line-2);
   border-radius: 999px;
-  background: rgba(45, 212, 191, 0.07);
-  color: var(--text-soft);
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg-2);
   padding: 4px 11px;
 }
 
@@ -311,35 +328,33 @@
 }
 
 .notificationActorBadge b {
-  color: var(--foreground);
+  color: var(--nf-fg);
   font-size: 12px;
+  font-weight: 600;
   line-height: 1.1;
 }
 
 .notificationActorBadge small {
-  color: var(--muted);
+  color: var(--nf-fg-3);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;
 }
 
-/* Source / task pill — wraps instead of truncating (no silent ellipsis). */
+/* Source / task pill — wraps rather than ellipsis-truncating. */
 .notificationSourcePill {
   flex-wrap: wrap;
   max-width: min(100%, 460px);
-  border-color: rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.5);
-  color: var(--text-soft);
   font-size: 12.5px;
   font-weight: 600;
 }
 
 .notificationSourcePill small {
-  color: var(--muted);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1;
   text-transform: uppercase;
@@ -348,16 +363,15 @@
 .notificationSourcePill b {
   overflow-wrap: anywhere;
   min-width: 0;
-  color: var(--foreground);
+  color: var(--nf-fg);
   font-size: 12.5px;
   font-weight: 600;
-  letter-spacing: 0;
   line-height: 1.2;
 }
 
 .notificationCard p {
   margin: 0;
-  color: var(--muted);
+  color: var(--nf-fg-2);
   line-height: 1.45;
   white-space: pre-line;
 }
@@ -365,8 +379,9 @@
 .notificationMarkdown {
   display: grid;
   gap: 12px;
-  margin-top: 14px;
-  color: var(--muted);
+  margin-top: 12px;
+  color: var(--nf-fg-2);
+  font-size: 13.5px;
   line-height: 1.55;
 }
 
@@ -386,21 +401,22 @@
 }
 
 .notificationMarkdown code {
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--nf-line-2);
   border-radius: 5px;
-  background: rgba(10, 14, 21, 0.68);
-  color: var(--text-soft);
-  padding: 0.05rem 0.28rem;
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg);
+  padding: 0.05rem 0.3rem;
+  font-family: var(--nf-mono);
   font-size: 0.9em;
 }
 
 .notificationMarkdown pre {
   max-width: 100%;
   overflow: auto;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 8px;
-  background: rgba(4, 8, 14, 0.78);
-  color: var(--text-soft);
+  border: 1px solid var(--nf-line-2);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel);
+  color: var(--nf-fg);
   margin: 0;
   padding: 12px;
   white-space: pre;
@@ -413,14 +429,14 @@
 }
 
 .notificationMarkdown a {
-  color: var(--accent-strong);
+  color: var(--nf-honey);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 .notificationMarkdownHeading {
   display: block;
-  color: var(--foreground);
+  color: var(--nf-fg);
   font-weight: 700;
 }
 
@@ -439,8 +455,7 @@
   gap: 6px;
 }
 
-/* ─── Pills — one flat pill idiom, tint carries meaning ───────────── */
-
+/* — Pills: one flat idiom, tint carries meaning (matches Trade `.badge`) — */
 .priorityPill,
 .kindPill,
 .readPill,
@@ -448,14 +463,52 @@
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--nf-line-2);
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.5);
-  color: var(--text-soft);
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg-3);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
-  padding: 6px 10px;
+  padding: 5px 10px;
+}
+
+.priorityPill {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.priorityPill.normal {
+  background: var(--nf-live-soft);
+  color: var(--nf-live);
+}
+
+.priorityPill.high {
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
+}
+
+.priorityPill.urgent {
+  background: var(--nf-danger-soft);
+  color: var(--nf-danger);
+}
+
+.resolutionPill.resolved {
+  border-color: transparent;
+  background: var(--nf-live-soft);
+  color: var(--nf-live);
+}
+
+.resolutionPill.in-progress {
+  border-color: transparent;
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
+}
+
+.readPill {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--nf-fg-3);
 }
 
 .notificationActions {
@@ -467,93 +520,91 @@
 }
 
 .notificationActionError {
-  color: #fecdd3;
+  color: var(--nf-danger);
   font-size: 0.8rem;
 }
 
-:global(:root[data-theme="hive-light"]) .notificationActionError {
-  color: #9f1239;
+/* — Buttons — override the shared <Button> inside this view to the warm
+     Fleet/Trade idiom: honey primary, panel-hi secondary. Scoped to the
+     panel so the app-wide Button component is untouched. The primary
+     ("Mark read") carries no data-variant; secondaries set it. CSS-module
+     rules are unlayered, so they win over Tailwind's layered utilities. — */
+.notificationsPanel button[data-slot="button"] {
+  border-radius: var(--nf-radius-sm);
+  box-shadow: none;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.resolutionPill.resolved {
-  border-color: rgba(45, 212, 191, 0.4);
-  color: #5eead4;
+.notificationsPanel button[data-variant="secondary"] {
+  border: 1px solid var(--nf-line-2);
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg-2);
 }
 
-.resolutionPill.in-progress {
-  border-color: rgba(251, 191, 36, 0.4);
-  color: #fde68a;
+.notificationsPanel button[data-variant="secondary"]:hover {
+  border-color: var(--nf-line-3);
+  background: var(--nf-panel);
+  color: var(--nf-fg);
+}
+
+.notificationsPanel button[data-slot="button"]:not([data-variant]) {
+  border: 1px solid var(--nf-honey);
+  background: var(--nf-honey);
+  color: #1a1206;
+}
+
+.notificationsPanel button[data-slot="button"]:not([data-variant]):hover {
+  border-color: var(--nf-honey-2);
+  background: var(--nf-honey-2);
+  color: #1a1206;
 }
 
 .resolutionNote {
   margin-top: 8px;
+  color: var(--nf-live);
   font-size: 0.85rem;
-  color: #99f6e4;
 }
 
 .resolutionNote.in-progress {
-  color: #fde68a;
+  color: var(--nf-honey);
 }
 
-:global(:root[data-theme="hive-light"]) .resolutionPill.resolved,
-:global(:root[data-theme="hive-light"]) .resolutionNote {
-  color: #0d8e7e;
-}
-
-:global(:root[data-theme="hive-light"]) .resolutionPill.in-progress,
-:global(:root[data-theme="hive-light"]) .resolutionNote.in-progress {
-  color: #8c5e0a;
-}
-
-.priorityPill.high,
-.priorityPill.urgent {
-  border-color: rgba(251, 191, 36, 0.36);
-  color: #fde68a;
-}
-
-.priorityPill.urgent {
-  border-color: rgba(251, 113, 133, 0.36);
-  color: #fecdd3;
-}
-
-.readPill {
-  border-color: rgba(45, 212, 191, 0.28);
-  color: #99f6e4;
-}
-
-/* ─── Empty + status ──────────────────────────────────────────────── */
-
+/* — Empty + status — */
 .notificationsEmpty {
   display: grid;
   min-height: 360px;
   place-items: center;
-  border: 1px dashed rgba(148, 163, 184, 0.2);
-  border-radius: 12px;
-  background: rgba(10, 13, 19, 0.35);
+  border: 1px dashed var(--nf-line-2);
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel-2);
   text-align: center;
 }
 
 .notificationsEmpty svg {
   width: 34px;
   height: 34px;
-  color: var(--accent-strong);
+  color: var(--nf-honey);
 }
 
 .notificationsEmpty strong {
   display: block;
   margin-top: 10px;
-  color: var(--foreground);
+  color: var(--nf-fg);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .notificationStatus {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
   font-size: 11px;
   letter-spacing: 0.02em;
   min-height: 16px;
 }
 
+/* navBadge renders in the nav shelf OUTSIDE this panel, so it must use the
+   global tokens (the scoped --nf-* tokens don't reach it). */
 .navBadge {
   display: inline-grid;
   min-width: 17px;
@@ -562,7 +613,7 @@
   place-items: center;
   border-radius: 999px;
   background: var(--danger);
-  color: white;
+  color: #1a1206;
   font-size: 10px;
   font-style: normal;
   font-weight: 900;
@@ -570,11 +621,10 @@
   transform: none;
 }
 
-/* ─── Responsive ──────────────────────────────────────────────────── */
-
+/* — Responsive — */
 @media (max-width: 760px) {
   .notificationsPanel {
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 18px 16px;
   }
 
@@ -596,70 +646,37 @@
   }
 }
 
-/* ─── Hive-light theme ────────────────────────────────────────────── */
-
-:global(:root[data-theme="hive-light"]) .notificationsPanel,
-:global(:root[data-theme="hive-light"]) .notificationSetting,
-:global(:root[data-theme="hive-light"]) .notificationCard,
-:global(:root[data-theme="hive-light"]) .notificationsEmpty {
-  border-color: var(--comb-line);
-  background-color: var(--surface);
-  background-image: none;
-  color: var(--foreground);
-}
-
-:global(:root[data-theme="hive-light"]) .notificationSetting,
-:global(:root[data-theme="hive-light"]) .notificationStats span:not(:has(strong)),
-:global(:root[data-theme="hive-light"]) .notificationSourcePill {
-  border-color: var(--line);
-  background: var(--surface-soft);
-  color: var(--foreground);
-}
-
-:global(:root[data-theme="hive-light"]) .priorityPill,
-:global(:root[data-theme="hive-light"]) .kindPill,
-:global(:root[data-theme="hive-light"]) .readPill,
-:global(:root[data-theme="hive-light"]) .resolutionPill {
-  border-color: var(--line);
-  background: var(--surface-soft);
-  color: var(--text-soft);
-}
-
-:global(:root[data-theme="hive-light"]) .notificationGlyph,
-:global(:root[data-theme="hive-light"]) .notificationActorBadge {
-  border-color: rgba(13, 90, 78, 0.32);
-  background: rgba(13, 142, 126, 0.12);
-  color: var(--accent-strong);
-}
-
-:global(:root[data-theme="hive-light"]) .notificationsControls {
-  border-color: var(--comb-line);
-}
-
-:global(:root[data-theme="hive-light"]) .notificationsHeader h2,
-:global(:root[data-theme="hive-light"]) .notificationStats strong,
-:global(:root[data-theme="hive-light"]) .notificationMetaRow h3,
-:global(:root[data-theme="hive-light"]) .notificationActorBadge b,
-:global(:root[data-theme="hive-light"]) .notificationSourcePill b {
-  color: var(--foreground);
+/* — Hive-light theme: re-declare the token block once, warm-paper values
+     lifted from fleet-hive.css `.fr-root[data-fr-theme="light"]`. Every rule
+     above reads the tokens, so the whole view flips with no per-element
+     overrides. — */
+:global(:root[data-theme="hive-light"]) .notificationsPanel {
+  --nf-panel: #fbf8f1;
+  --nf-panel-2: #f4efe4;
+  --nf-panel-hi: #ffffff;
+  --nf-line: rgba(54, 46, 30, 0.1);
+  --nf-line-2: rgba(54, 46, 30, 0.16);
+  --nf-line-3: rgba(54, 46, 30, 0.26);
+  --nf-fg: #221d14;
+  --nf-fg-2: #5e574b;
+  --nf-fg-3: #867d6e;
+  --nf-fg-4: #a59b89;
+  --nf-honey: #b07f1c;
+  --nf-honey-2: #936811;
+  --nf-honey-soft: rgba(176, 127, 28, 0.12);
+  --nf-honey-line: rgba(176, 127, 28, 0.34);
+  --nf-live: #6f8f68;
+  --nf-live-soft: rgba(111, 143, 104, 0.14);
+  --nf-danger: #c0524d;
+  --nf-danger-soft: rgba(192, 82, 77, 0.12);
+  --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
 }
 
 :global(:root[data-theme="hive-light"]) .notificationDayGroup h3 {
-  background: linear-gradient(180deg, rgba(246, 242, 233, 0.96), rgba(246, 242, 233, 0.82));
-  color: var(--muted);
+  background: linear-gradient(180deg, var(--nf-panel) 62%, rgba(251, 248, 241, 0));
 }
 
-:global(:root[data-theme="hive-light"]) .notificationMarkdown code,
-:global(:root[data-theme="hive-light"]) .notificationMarkdown pre {
-  border-color: var(--line);
-  background: var(--surface-soft);
-  color: var(--foreground);
-}
-
-:global(:root[data-theme="hive-light"]) .priorityPill.high {
-  color: #6f5625;
-}
-
-:global(:root[data-theme="hive-light"]) .priorityPill.urgent {
-  color: #8f1d2c;
+:global(:root[data-theme="hive-light"]) .priorityPill,
+:global(:root[data-theme="hive-light"]) .readPill {
+  background: rgba(54, 46, 30, 0.06);
 }

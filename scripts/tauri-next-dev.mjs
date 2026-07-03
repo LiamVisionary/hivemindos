@@ -96,9 +96,57 @@ const requestedNextPort = readPort(
   "HIVEMINDOS_TAURI_NEXT_PORT",
 );
 
+// Many agent sessions share ONE working tree here, so a second `pnpm tauri:dev`
+// should REUSE the dev server the first one already started rather than spawn a
+// second Next dev. Each extra dev server is ~0.2-1.4GB RSS plus its own file
+// watchers writing a sibling `.next-tauri/dev-<port>` cache the other servers
+// then also watch — which is what pegs fseventsd and swaps the machine (see
+// AGENTS.md "Dev Server Ownership"). A single Next dev server can back unlimited
+// Tauri windows: they all just point at this proxy's URL.
+function identifyExistingProxy(port, host) {
+  return new Promise((resolve) => {
+    const probe = httpRequest(
+      { hostname: host, port, path: "/__hivemindos_dev_ready?scope=backend", method: "GET" },
+      (probeResponse) => {
+        probeResponse.resume();
+        // Our loading proxy answers this path with 204 (backend up) or 503
+        // (still warming); a foreign process would 404 / return HTML / reset.
+        resolve(
+          probeResponse.statusCode === 204 || probeResponse.statusCode === 503
+            ? "hivemind"
+            : "foreign",
+        );
+      },
+    );
+    probe.setTimeout(1_500, () => {
+      probe.destroy();
+      resolve("foreign");
+    });
+    probe.on("error", () => resolve("foreign"));
+    probe.end();
+  });
+}
+
 if (!(await isPortAvailable(proxyPort, proxyBindHost))) {
+  const existing =
+    process.env.HIVEMINDOS_DEV_NO_SHARE === "1"
+      ? "foreign"
+      : await identifyExistingProxy(proxyPort, browserHost);
+  if (existing === "hivemind") {
+    console.log(
+      `HivemindOS Tauri dev: reusing the dev server already serving http://${browserHost}:${proxyPort}; not starting a second Next dev server. (Set HIVEMINDOS_DEV_NO_SHARE=1 to force a private one.)`,
+    );
+    // Attach mode: own nothing, spawn nothing — just idle so Tauri's
+    // beforeDevCommand stays alive while this window loads the shared URL. The
+    // owning session keeps serving; this window recovers via the injected
+    // dev-recovery script if the shared server restarts.
+    for (const attachSignal of ["SIGINT", "SIGTERM"]) {
+      process.once(attachSignal, () => process.exit(0));
+    }
+    await new Promise(() => {});
+  }
   console.error(
-    `Tauri loading proxy port ${browserHost}:${proxyPort} is already in use. Stop the existing Tauri dev shell, then run pnpm tauri:dev again.`,
+    `Tauri loading proxy port ${browserHost}:${proxyPort} is already in use by a non-HivemindOS process. Free it or set PORT to another value, then run pnpm tauri:dev again.`,
   );
   process.exit(1);
 }
@@ -210,6 +258,17 @@ const devRecoveryScript = String.raw`
   var lastReloadAt = 0;
   var reloadCooldownMs = 20000;
   var routeLoadingTimeoutMs = 30000;
+  // Poll fast only while warming/down; back off to 5s once the backend is
+  // healthy so N shared Tauri windows don't each hammer the proxy (a fresh
+  // net.connect to Next) every single second forever.
+  var busyReadyIntervalMs = 1000;
+  var healthyReadyIntervalMs = 5000;
+  var readyTimer = null;
+
+  function scheduleReady(delay) {
+    if (readyTimer) window.clearTimeout(readyTimer);
+    readyTimer = window.setTimeout(checkReady, delay);
+  }
 
   function forceReload(reason, ignoreCooldown) {
     if (reloading || (!ignoreCooldown && Date.now() - lastReloadAt < reloadCooldownMs)) return;
@@ -226,12 +285,17 @@ const devRecoveryScript = String.raw`
         if (response.ok) {
           if (staticLoading) forceReload("route became ready", true);
           else if (readyWasDown) forceReload("dev server recovered", false);
+          readyWasDown = false;
           return;
         }
         readyWasDown = true;
       })
       .catch(function () {
         readyWasDown = true;
+      })
+      .finally(function () {
+        var busy = readyWasDown || document.querySelector("[data-hivemindos-static-loading='true']");
+        scheduleReady(busy ? busyReadyIntervalMs : healthyReadyIntervalMs);
       });
   }
 
@@ -261,7 +325,6 @@ const devRecoveryScript = String.raw`
 
   checkReady();
   checkRouteLoading();
-  window.setInterval(checkReady, 1000);
   window.setInterval(checkRouteLoading, 1000);
 })();
 </script>`;

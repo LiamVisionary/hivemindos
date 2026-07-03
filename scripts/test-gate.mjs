@@ -69,6 +69,7 @@ const TESTS = [
   "test:hyperliquid",
   "test:json-render",
   "test:kanban:concurrency",
+  "test:kanban:result-format",
   "test:kanban:shards",
   "test:linkd-staleness",
   "test:local-tts-robustness",

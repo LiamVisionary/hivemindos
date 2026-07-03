@@ -851,7 +851,9 @@ function applyMoveToBoard(
   if (!task) throw new Error("Task not found.");
   board.tasks = moveTaskBetweenColumns(board.tasks, taskId, status);
   const moved = board.tasks.find((item) => item.id === taskId);
-  if (moved && status === "ready") {
+  // Ideas is the parked backlog: a card sent back there must release its
+  // claim/assignee just like Ready, or it keeps a stale agent session around.
+  if (moved && (status === "ready" || status === "ideas")) {
     moved.assignee = undefined;
     moved.tenant = undefined;
     moved.agentSession = null;
@@ -887,7 +889,7 @@ function applyMoveToBoard(
   }
   if (
     task.currentRunId &&
-    ["ready", "needs-human", "done", "archived"].includes(
+    ["ideas", "ready", "needs-human", "done", "archived"].includes(
       moved?.status ?? status,
     )
   ) {

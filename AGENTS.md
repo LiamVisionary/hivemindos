@@ -184,6 +184,8 @@ Agents are senior software engineers in this codebase and must follow these rule
 
 ## Dev Server Ownership
 
+- Reuse a single dev server; do not spawn one per session. One Next dev server serves unlimited browser tabs, Tauri windows, and agent sessions at once — HMR reaches all of them — so before running `pnpm dev`, `pnpm tauri:dev`, or a verify/preview server, check whether one is already up for this repo and point your browser/tests/Tauri window at it instead. Check with `lsof -iTCP:5020,5021 -sTCP:LISTEN` or `curl -s -o /dev/null -w '%{http_code}' http://localhost:5020` (200/3xx/401 means a server is answering). Each extra dev server is ~0.2–1.4 GB RAM plus its own file watchers writing a sibling `.next-tauri/dev-<port>` cache the others then also watch; running several at once pegs `fseventsd` and swaps the machine, making every session laggy for everyone.
+- `pnpm tauri:dev` now auto-reuses a running HivemindOS dev server: if the proxy port (`5021`) is already served by one, it attaches its window to that shared server instead of erroring or starting a second Next dev. Pass `HIVEMINDOS_DEV_NO_SHARE=1` only when you genuinely need an isolated dev server (then run it on another port). Prefer a disposable `git worktree` when a session needs to edit against its own isolated `.next`/watchers.
 - Port `5020` is Liam's managed HivemindOS dev server. Do not kill, restart, replace, or take over the process on port `5020` unless Liam explicitly asks for that exact action.
 - If an agent needs to run a dev server for testing, use another free port such as `5021` or higher, and make it clear which URL was started.
 - Do not run commands such as `pkill node`, `kill $(lsof -ti :5020)`, or broad process cleanup that could stop Liam's managed dev server.

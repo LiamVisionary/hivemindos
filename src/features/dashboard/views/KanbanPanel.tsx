@@ -4,10 +4,15 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { createStyleClass } from "@/features/dashboard/style-classes";
+import { extractActionNeeded } from "@/features/dashboard/kanban-result-format";
+import convoStyles from "@/app/kanban-conversation.module.css";
 import type { WorkHistoryPayload } from "@/lib/types/work-history";
+import { KanbanTaskModal } from "./KanbanTaskModal";
 import { WorkSectionHeader } from "./WorkSectionHeader";
+
+const convoClass = createStyleClass(convoStyles);
 
 const EMPTY_WORK_HISTORY: WorkHistoryPayload = { projects: [], entries: [] };
 const WORK_HISTORY_PAGE_SIZE = 10;
@@ -37,7 +42,7 @@ function compactWorkHistoryTimestamp(timestamp?: string) {
 }
 
 function KanbanPanelBase(props: any) {
-  const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, addKanbanComment, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, commentDraft, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, refreshKanbanOnce, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setCommentDraft, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanError, setKanbanIncludeArchived, setKanbanLoading, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
+  const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanNotice, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, refreshKanbanOnce, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanError, setKanbanIncludeArchived, setKanbanLoading, setKanbanNotice, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
   const [workHistory, setWorkHistory] = useState<WorkHistoryPayload>(initialWorkHistory ?? EMPTY_WORK_HISTORY);
   const [workHistoryLoading, setWorkHistoryLoading] = useState(false);
   const [workHistoryLoadingMore, setWorkHistoryLoadingMore] = useState(false);
@@ -45,6 +50,7 @@ function KanbanPanelBase(props: any) {
   const [workHistoryProject, setWorkHistoryProject] = useState("");
   const [workHistoryQuery, setWorkHistoryQuery] = useState("");
   const [deliverableMenuPosition, setDeliverableMenuPosition] = useState<Record<string, any>>({});
+  const [kanbanDragOverColumn, setKanbanDragOverColumn] = useState("");
   const [codeProjects, setCodeProjects] = useState<any[]>([]);
   const [selectedCodeProjectId, setSelectedCodeProjectId] = useState("");
   const [gitlawbStatus, setGitlawbStatus] = useState<any>(null);
@@ -146,6 +152,13 @@ function KanbanPanelBase(props: any) {
     if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not open deliverable.");
   };
   const codeProjectById = useMemo(() => new Map(codeProjects.map((project) => [project.id, project])), [codeProjects]);
+  const kanbanTaskNoteCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const comment of kanbanBoard?.comments ?? []) {
+      counts[comment.taskId] = (counts[comment.taskId] ?? 0) + 1;
+    }
+    return counts;
+  }, [kanbanBoard]);
   const proofStatusRank = (status?: string) => {
     if (status === "verified") return 4;
     if (status === "linked") return 3;
@@ -288,6 +301,12 @@ function KanbanPanelBase(props: any) {
         else setWorkHistoryLoading(false);
       });
   }, [sharedVaultPath, workHistoryProject, workHistoryQuery]);
+
+  useEffect(() => {
+    if (!kanbanNotice) return;
+    const timeout = window.setTimeout(() => setKanbanNotice(""), 8000);
+    return () => window.clearTimeout(timeout);
+  }, [kanbanNotice, setKanbanNotice]);
 
   useEffect(() => {
     if (activeView !== "history") return;
@@ -469,6 +488,7 @@ function KanbanPanelBase(props: any) {
           </section>
 
           {kanbanError ? <p className={kanbanClass("kanbanError")}>{kanbanError}</p> : null}
+          {kanbanNotice ? <p className={convoClass("kanbanNotice")} role="status">{kanbanNotice}</p> : null}
 
           {selectedKanbanBulkIds.length > 0 ? (
             <section className={kanbanClass("kanbanBulkBar")} aria-label="Selected task actions">
@@ -509,10 +529,18 @@ function KanbanPanelBase(props: any) {
               <div ref={kanbanBoardScrollRef} className={kanbanClass("kanbanBoard")} aria-label="Multi-agent Kanban board" aria-busy={kanbanLoading || undefined}>
               {kanbanViewColumns.map((column) => (
                 <section
-                  className={kanbanClass("kanbanColumn", column.id)}
+                  className={`${kanbanClass("kanbanColumn", column.id)}${kanbanDragOverColumn === column.id ? ` ${convoClass("laneDropTarget")}` : ""}`}
                   key={column.id}
-                  onDragOver={(event) => event.preventDefault()}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setKanbanDragOverColumn(column.id);
+                  }}
+                  onDragLeave={(event) => {
+                    if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+                    setKanbanDragOverColumn((current) => (current === column.id ? "" : current));
+                  }}
                   onDrop={(event) => {
+                    setKanbanDragOverColumn("");
                     const taskId = event.dataTransfer.getData("text/plain");
                     if (taskId) moveKanbanTask(taskId, column.id);
                   }}
@@ -651,6 +679,7 @@ function KanbanPanelBase(props: any) {
                       const taskProject = task.projectId ? codeProjectById.get(task.projectId) : null;
                       const proofSummary = proofSummaryForTask(task);
                       const proofLabel = proofLabelForTask(task);
+                      const needsYouAsk = task.status === "needs-human" ? extractActionNeeded(task.result) : "";
                       return (
                         <article className={kanbanClass("kanbanCardShell")} key={task.id}>
                           <div
@@ -658,14 +687,15 @@ function KanbanPanelBase(props: any) {
                             role="button"
                             tabIndex={0}
                             className={kanbanClass("kanbanCard", task.id === selectedKanbanTaskId && "active", workingWithAgent && "working", staleWorking && "stale", messageExpanded && "expanded")}
-                            onClick={() => setSelectedKanbanTaskId(task.id)}
+                            onClick={() => openKanbanTaskModal(task, "chat")}
                             onKeyDown={(event) => {
                               if (event.target !== event.currentTarget) return;
                               if (event.key !== "Enter" && event.key !== " ") return;
                               event.preventDefault();
-                              setSelectedKanbanTaskId(task.id);
+                              openKanbanTaskModal(task, "chat");
                             }}
                             onDragStart={(event) => event.dataTransfer.setData("text/plain", task.id)}
+                            onDragEnd={() => setKanbanDragOverColumn("")}
                           >
                             <div className={kanbanClass("kanbanCardHeader")}>
                               <input
@@ -682,7 +712,9 @@ function KanbanPanelBase(props: any) {
                                 }}
                                 aria-label={`Select ${task.title}`}
                               />
-                              <span className={kanbanClass("priorityPill", task.priority)}>{task.priority}</span>
+                              {task.priority !== "normal" ? (
+                                <span className={kanbanClass("priorityPill", task.priority)}>{task.priority}</span>
+                              ) : null}
                               {undoInProgress ? (
                                 <span className={kanbanClass("kanbanUndoBadge")} title="Undo is underway">
                                   <RotateCcw aria-hidden="true" />
@@ -714,7 +746,7 @@ function KanbanPanelBase(props: any) {
                                 <span style={codeProofPillStyle}>{proofLabel}</span>
                               </div>
                             ) : null}
-                            <div className={kanbanClass("kanbanCardMeta")}>
+                            <div className={`${kanbanClass("kanbanCardMeta")} ${convoClass("cardQuietMeta")}`}>
                               <div className={kanbanClass("kanbanMachinePicker")} data-kanban-machine-menu="true">
                                 <button
                                   type="button"
@@ -819,7 +851,13 @@ function KanbanPanelBase(props: any) {
                                 ) : null}
                               </div>
                             </div>
-                            <div className={kanbanClass("kanbanMessageRow")}>
+                            {needsYouAsk ? (
+                              <div className={convoClass("needsYouCallout")}>
+                                <strong>Needs you</strong>
+                                <span>{needsYouAsk}</span>
+                              </div>
+                            ) : null}
+                            <div className={kanbanClass("kanbanMessageRow")} hidden={Boolean(needsYouAsk)}>
                               {terminalMessage ? (
                                 <pre className={kanbanClass("kanbanCardTerminal")}><code>{message}</code></pre>
                               ) : (
@@ -942,6 +980,30 @@ function KanbanPanelBase(props: any) {
                                     </button>
                                   )
                                 ) : null}
+                                {task.status === "needs-human" ? (
+                                  <span className={convoClass("cardQuickActions")}>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void moveKanbanTask(task.id, "ready");
+                                      }}
+                                      title="Send back to Waiting for Queen so a bee retries it"
+                                    >
+                                      Retry
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void moveKanbanTask(task.id, "done");
+                                      }}
+                                      title="Mark this task done"
+                                    >
+                                      Done
+                                    </button>
+                                  </span>
+                                ) : null}
                                 <span className={kanbanClass("kanbanCardMoveFabs")}>
                                   <button
                                     type="button"
@@ -975,10 +1037,15 @@ function KanbanPanelBase(props: any) {
                                     event.stopPropagation();
                                     openKanbanTaskModal(task, "chat");
                                   }}
-                                  aria-label={`Open agent chat for ${task.title}`}
-                                  title="Agent chat"
+                                  aria-label={`Open the conversation for ${task.title}`}
+                                  title="Conversation"
                                 >
                                   <MessageSquare aria-hidden="true" />
+                                  {(kanbanTaskNoteCounts[task.id] ?? 0) + (task.result?.trim() ? 1 : 0) > 0 ? (
+                                    <span className={convoClass("convoCountBadge")}>
+                                      {(kanbanTaskNoteCounts[task.id] ?? 0) + (task.result?.trim() ? 1 : 0)}
+                                    </span>
+                                  ) : null}
                                 </button>
                                 <CellMenu items={kanbanTaskMenuItems(task)} ariaLabel={`Actions for ${task.title}`} />
                               </span>
@@ -1159,208 +1226,67 @@ function KanbanPanelBase(props: any) {
       </section>
       ) : null}
 
-      {selectedKanbanTask && kanbanTaskModal && portalTarget ? createPortal((
-        <div
-          className={kanbanClass("kanbanModalBackdrop")}
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setKanbanTaskModal("");
-          }}
-        >
-          <section className={kanbanClass("kanbanTaskModal", kanbanTaskModal === "chat" && "chatModal")} role="dialog" aria-modal="true" aria-labelledby="kanban-task-modal-title">
-            <div className={kanbanClass("kanbanModalHeader")}>
-              <div>
-                <p className="eyebrow">{selectedKanbanTask.title}</p>
-                <h3 id="kanban-task-modal-title">
-                  {kanbanTaskModal === "assign" ? "Assign task" : kanbanTaskModal === "chat" ? "Agent chat" : kanbanTaskModal === "edit" ? "Edit & interrupt" : kanbanTaskModal === "events" ? "Task events" : "Task notes"}
-                </h3>
-              </div>
-              <CloseIconButton onClick={() => setKanbanTaskModal("")} aria-label="Close task modal" />
-            </div>
-
-            {kanbanTaskModal === "assign" ? (
-              <div className={kanbanClass("kanbanModalBody")}>
-                <label>
-                  Assignee
-                  <select
-                    value={selectedKanbanTask.assignee ?? ""}
-                    onChange={(event) => patchKanbanTask(selectedKanbanTask.id, { assignee: event.target.value })}
-                  >
-                    <option value="">Unassigned</option>
-                    {kanbanAssigneeOptions.map((assignee) => <option value={assignee} key={assignee}>{assignee}</option>)}
-                  </select>
-                </label>
-                <label>
-                  Move to
-                  <select
-                    value={selectedKanbanTask.status}
-                    onChange={(event) => moveKanbanTask(selectedKanbanTask.id, event.target.value as KanbanStatus)}
-                  >
-                    {KANBAN_COLUMNS.map((column) => <option value={column.id} key={column.id}>{column.title}</option>)}
-                  </select>
-                </label>
-              </div>
-            ) : null}
-
-            {kanbanTaskModal === "edit" ? (
-              <form className={kanbanClass("kanbanModalBody", "kanbanEditForm")} onSubmit={editAndInterruptKanbanTask}>
-                <label>
-                  Title
-                  <input
-                    value={kanbanEditDraft.title}
-                    onChange={(event) => setKanbanEditDraft((current) => ({ ...current, title: event.target.value }))}
-                    disabled={kanbanEditPendingTaskId === selectedKanbanTask.id}
-                  />
-                </label>
-                <label>
-                  Task details
-                  <textarea
-                    value={kanbanEditDraft.body}
-                    onChange={(event) => setKanbanEditDraft((current) => ({ ...current, body: event.target.value }))}
-                    disabled={kanbanEditPendingTaskId === selectedKanbanTask.id}
-                    placeholder="Add context, constraints, or the revised instruction."
-                  />
-                </label>
-                <p className={kanbanClass("kanbanEditHint")}>
-                  This resends the revised task to {selectedKanbanAgent?.name ?? "the assigned agent"} and interrupts the current run instead of assigning a new worker.
-                </p>
-                <div className={kanbanClass("kanbanEditActions")}>
-                  <button type="button" onClick={() => setKanbanTaskModal("")} disabled={kanbanEditPendingTaskId === selectedKanbanTask.id}>Cancel</button>
-                  <button type="submit" disabled={!selectedKanbanAgent || !kanbanEditDraft.title.trim() || kanbanEditPendingTaskId === selectedKanbanTask.id}>
-                    {kanbanEditPendingTaskId === selectedKanbanTask.id ? "Sending..." : "Save & interrupt"}
-                  </button>
-                </div>
-              </form>
-            ) : null}
-
-            {kanbanTaskModal === "chat" ? (
-              <div className={kanbanClass("kanbanModalBody", "kanbanChatBody")}>
-                <form className={kanbanClass("kanbanSteerComposer")} onSubmit={steerSelectedKanbanTask}>
-                  <div className={kanbanClass("kanbanSteerComposerTop")}>
-                    <div className={kanbanClass("kanbanSteerTargetWrap")} ref={kanbanSteerTargetMenuRef}>
-                      <button
-                        type="button"
-                        className={kanbanClass("kanbanSteerTargetButton")}
-                        onClick={() => setKanbanSteerTargetMenuOpen((current) => !current)}
-                        aria-label="Choose where to send this task after the message"
-                        aria-expanded={kanbanSteerTargetMenuOpen}
-                      >
-                        Send to {KANBAN_COLUMNS.find((column) => column.id === kanbanSteerTargetStatus)?.title ?? "Working"}
-                        <ChevronDown aria-hidden="true" />
-                      </button>
-                      {kanbanSteerTargetMenuOpen ? (
-                        <div className={kanbanClass("kanbanSteerTargetTooltip")} role="tooltip">
-                          <div className={kanbanClass("kanbanSteerTargetMenu")} role="menu" aria-label="Send task to">
-                            {KANBAN_STEER_TARGETS.map((column) => (
-                              <button
-                                type="button"
-                                role="menuitemradio"
-                                aria-checked={kanbanSteerTargetStatus === column.id}
-                                key={column.id}
-                                onClick={() => {
-                                  setKanbanSteerTargetStatus(column.id);
-                                  setKanbanSteerTargetMenuOpen(false);
-                                }}
-                              >
-                                <span>{column.title}</span>
-                                {kanbanSteerTargetStatus === column.id ? <Check aria-hidden="true" /> : null}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  <ComposerField
-                    value={kanbanSteerDraft}
-                    onChange={setKanbanSteerDraft}
-                    placeholder={selectedKanbanAgent ? "Message the assigned agent..." : "Assign an agent before chatting"}
-                    disabled={!selectedKanbanAgent || kanbanSteeringTaskId === selectedKanbanTask.id}
-                    busy={kanbanSteeringTaskId === selectedKanbanTask.id}
-                    compact
-                    attachments={kanbanSteerAttachments}
-                    directories={kanbanSteerDirectories}
-                    attachmentError={kanbanSteerAttachmentError}
-                    attachmentMenuOpen={kanbanSteerAttachmentMenuOpen}
-                    setAttachmentMenuOpen={setKanbanSteerAttachmentMenuOpen}
-                    attachmentMenuRef={kanbanSteerAttachmentMenuRef}
-                    fileInputRef={kanbanSteerFileInputRef}
-                    imageInputRef={kanbanSteerImageInputRef}
-                    onFileChange={handleKanbanSteerFileChange}
-                    onImageChange={handleKanbanSteerImageChange}
-                    onRemoveAttachment={removeKanbanSteerAttachment}
-                    onAttachDirectory={() => void attachKanbanSteerDirectory()}
-                    recentDirectories={recentDirectories}
-                    recentDirectoriesExpanded={recentDirectoriesExpanded}
-                    setRecentDirectoriesExpanded={setRecentDirectoriesExpanded}
-                    onAttachRecentDirectory={attachKanbanSteerRecentDirectory}
-                    onRemoveDirectory={removeKanbanSteerDirectory}
-                    recording={recording && voiceTarget === "kanban-steer"}
-                    voiceBands={voiceBands}
-                    voiceTranscript={voiceTranscript}
-                    onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording("kanban-steer")}
-                    canSend={Boolean(kanbanSteerDraft.trim() || kanbanSteerAttachments.length || kanbanSteerDirectories.length)}
-                    submitOnEnter
-                  />
-                </form>
-                <div className={kanbanClass("kanbanAgentMessages", "modalMessages")}>
-                  {selectedKanbanAgentMessages.map((message, index) => (
-                    <article className={kanbanClass("kanbanAgentMessage", message.role)} key={`${message.createdAt ?? index}-${index}`}>
-                      <div>
-                        <strong>{message.role === "user" ? "You" : selectedKanbanAgent?.name ?? "Agent"}</strong>
-                        <time>{formatMessageTimestamp(message.createdAt)}</time>
-                      </div>
-                      <ChatMarkdown text={message.content} className={kanbanClass("kanbanAgentMessageMarkdown")} />
-                      <MessageAttachments attachments={message.attachments} />
-                    </article>
-                  ))}
-                  {selectedKanbanAgentMessages.length === 0 ? <p className={kanbanClass("kanbanEmpty")}>No agent messages for this task yet.</p> : null}
-                </div>
-              </div>
-            ) : null}
-
-            {kanbanTaskModal === "notes" ? (
-              <div className={kanbanClass("kanbanModalBody")}>
-                <form className={kanbanClass("kanbanCommentForm", "compact")} onSubmit={addKanbanComment}>
-                  <input
-                    value={commentDraft}
-                    onChange={(event) => setCommentDraft(event.target.value)}
-                    placeholder="Add a task note"
-                  />
-                  <button type="submit">Add</button>
-                </form>
-                <div className={kanbanClass("kanbanThread", "modalThread")}>
-                  {selectedKanbanComments.map((comment) => (
-                    <article key={comment.id}>
-                      <strong>{comment.author}</strong>
-                      <p>{comment.body}</p>
-                      <small>{formatRelativeTime(comment.createdAt)}</small>
-                    </article>
-                  ))}
-                  {selectedKanbanComments.length === 0 ? <p className={kanbanClass("kanbanEmpty")}>No notes yet.</p> : null}
-                </div>
-              </div>
-            ) : null}
-
-            {kanbanTaskModal === "events" ? (
-              <div className={kanbanClass("kanbanModalBody")}>
-                <div className={kanbanClass("kanbanEvents", "modalEvents")}>
-                  {selectedKanbanEvents.map((event) => (
-                    <article key={event.id}>
-                      <div>
-                        <span>{kanbanEventLabel(event.kind)}</span>
-                        <time>{formatRelativeTime(event.createdAt)}</time>
-                      </div>
-                      <p>{event.message}</p>
-                    </article>
-                  ))}
-                  {selectedKanbanEvents.length === 0 ? <p className={kanbanClass("kanbanEmpty")}>No events yet.</p> : null}
-                </div>
-              </div>
-            ) : null}
-          </section>
-        </div>
-      ), portalTarget) : null}
+      <KanbanTaskModal
+        {...{
+          ChatMarkdown,
+          Check,
+          ChevronDown,
+          ComposerField,
+          KANBAN_COLUMNS,
+          KANBAN_STEER_TARGETS,
+          MessageAttachments,
+          attachKanbanSteerDirectory,
+          attachKanbanSteerRecentDirectory,
+          editAndInterruptKanbanTask,
+          formatMessageTimestamp,
+          formatRelativeTime,
+          handleKanbanSteerFileChange,
+          handleKanbanSteerImageChange,
+          kanbanAssigneeOptions,
+          kanbanClass,
+          kanbanEditDraft,
+          kanbanEditPendingTaskId,
+          kanbanEventLabel,
+          kanbanSteerAttachmentError,
+          kanbanSteerAttachmentMenuOpen,
+          kanbanSteerAttachmentMenuRef,
+          kanbanSteerAttachments,
+          kanbanSteerDirectories,
+          kanbanSteerDraft,
+          kanbanSteerFileInputRef,
+          kanbanSteerImageInputRef,
+          kanbanSteerTargetMenuOpen,
+          kanbanSteerTargetMenuRef,
+          kanbanSteerTargetStatus,
+          kanbanSteeringTaskId,
+          kanbanTaskModal,
+          moveKanbanTask,
+          patchKanbanTask,
+          recentDirectories,
+          recentDirectoriesExpanded,
+          recording,
+          removeKanbanSteerAttachment,
+          removeKanbanSteerDirectory,
+          selectedKanbanAgent,
+          selectedKanbanAgentMessages,
+          selectedKanbanComments,
+          selectedKanbanEvents,
+          selectedKanbanTask,
+          setKanbanEditDraft,
+          setKanbanSteerAttachmentMenuOpen,
+          setKanbanSteerDraft,
+          setKanbanSteerTargetMenuOpen,
+          setKanbanSteerTargetStatus,
+          setKanbanTaskModal,
+          setRecentDirectoriesExpanded,
+          startAudioRecording,
+          steerSelectedKanbanTask,
+          stopAudioRecording,
+          voiceBands,
+          voiceTarget,
+          voiceTranscript,
+        }}
+      />
 
   </>);
 }

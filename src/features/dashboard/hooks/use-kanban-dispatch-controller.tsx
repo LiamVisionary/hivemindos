@@ -1174,18 +1174,60 @@ export function useKanbanDispatchController(props: any) {
       (outgoingDirectories.length
         ? `Linked ${outgoingDirectories.length} director${outgoingDirectories.length === 1 ? "y" : "ies"}`
         : "");
-    if (
-      !selectedKanbanTask ||
-      !selectedKanbanAgent ||
-      !outgoingLabel ||
-      kanbanSteeringTaskId
-    )
-      return;
-    const setupIssue = chatSetupIssue(selectedKanbanAgent);
-    if (setupIssue) {
-      await addKanbanSystemComment(
-        selectedKanbanTask.id,
-        `Could not steer ${selectedKanbanAgent.name}: ${setupIssue}`,
+    if (!selectedKanbanTask || !outgoingLabel || kanbanSteeringTaskId) return;
+    const setupIssue = selectedKanbanAgent
+      ? chatSetupIssue(selectedKanbanAgent)
+      : "";
+    if (!selectedKanbanAgent || setupIssue) {
+      // No reachable agent on this task: keep the unified composer useful by
+      // saving the message as a task note instead of dropping it.
+      const noteBody = [
+        prompt || outgoingLabel,
+        outgoingAttachments.length
+          ? `Attachments:\n${outgoingAttachments.map((attachment) => `- ${attachment.kind}: ${attachment.name}`).join("\n")}`
+          : "",
+        outgoingDirectories.length
+          ? `Linked directories:\n${outgoingDirectories.map((directory) => `- ${directory.name}`).join("\n")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      setKanbanSteerDraft("");
+      setKanbanSteerAttachments([]);
+      setKanbanSteerDirectories([]);
+      setKanbanSteerAttachmentError("");
+      setKanbanSteerAttachmentMenuOpen(false);
+      const response = await fetch(
+        `/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...kanbanStorageBody(),
+            action: "comment",
+            taskId: selectedKanbanTask.id,
+            body: noteBody,
+            author: "dashboard",
+          }),
+        },
+      ).catch(() => null);
+      const data = (await response
+        ?.json()
+        .catch(() => null)) as KanbanResponse | null;
+      if (!response?.ok || !data?.ok) {
+        setKanbanError(data?.error ?? "Could not save the note.");
+        return;
+      }
+      if (selectedKanbanAgent && setupIssue) {
+        await addKanbanSystemComment(
+          selectedKanbanTask.id,
+          `Could not message ${selectedKanbanAgent.name} (${setupIssue}); the message was saved as a task note instead.`,
+        );
+      }
+      await refreshKanbanOnce().catch((error) =>
+        setKanbanError(
+          error instanceof Error ? error.message : "Kanban refresh failed.",
+        ),
       );
       return;
     }

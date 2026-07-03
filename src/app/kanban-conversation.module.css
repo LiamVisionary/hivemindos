@@ -1,0 +1,416 @@
+/* Unified task conversation modal + board notice styles.
+   Lives in its own module because kanban-board.module.css is at its legacy
+   size allowance; new kanban styles should land here. Raw color values match
+   the kanban board palette (the modal portals to <body>, outside the
+   .workBoardPanel token scope). */
+
+.convoFeed {
+  display: grid;
+  max-height: 520px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  gap: 8px;
+  padding-right: 2px;
+  align-content: start;
+}
+
+.convoEntry {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(238, 232, 220, 0.12);
+  border-radius: 8px;
+  background: rgba(16, 17, 22, 0.48);
+  padding: 10px 11px;
+}
+
+.convoEntry.user {
+  border-color: rgba(111, 205, 186, 0.22);
+  background: rgba(111, 205, 186, 0.08);
+}
+
+.convoEntry.note {
+  border-color: rgba(231, 180, 92, 0.22);
+  background: rgba(231, 180, 92, 0.06);
+}
+
+.convoEntry.result {
+  border-color: rgba(111, 205, 186, 0.3);
+  background: rgba(111, 205, 186, 0.05);
+}
+
+.convoEntry.system,
+.convoEntry.brief {
+  border-style: dashed;
+  background: rgba(16, 17, 22, 0.32);
+}
+
+.convoEntryHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.convoEntryHead strong {
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+.convoEntryHead time {
+  color: #76726a;
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.convoKind {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 7px;
+  border: 1px solid rgba(238, 232, 220, 0.16);
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: #a8a294;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.convoEntry.result .convoKind {
+  border-color: rgba(111, 205, 186, 0.34);
+  color: #9fe0d3;
+}
+
+.convoEntry.note .convoKind {
+  border-color: rgba(231, 180, 92, 0.34);
+  color: #f0c879;
+}
+
+/* Readable body: real line-height, wrapping code, spaced paragraphs. Fixes
+   the wall-of-text rendering that plain <p>{comment.body}</p> produced. */
+.convoBody {
+  margin: 0;
+  color: #c6d1df;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.convoBody p {
+  margin: 0;
+}
+
+.convoBody p + p,
+.convoBody ul + p,
+.convoBody ol + p,
+.convoBody pre + p {
+  margin-top: 9px;
+}
+
+.convoBody ul,
+.convoBody ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.convoBody code {
+  overflow-wrap: anywhere;
+}
+
+.convoComposerHint {
+  margin: 2px 0 0;
+  color: #76726a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.convoEmpty {
+  border: 1px dashed rgba(238, 232, 220, 0.16);
+  border-radius: 8px;
+  padding: 16px 12px;
+  color: #76726a;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Informational board banner (non-error): shown when the board adjusts or
+   cancels a move on the user's behalf. */
+.kanbanNotice {
+  border: 1px solid rgba(111, 205, 186, 0.4);
+  border-radius: 6px;
+  background: rgba(111, 205, 186, 0.09);
+  color: #9fe0d3;
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+
+/* Advanced per-card controls (machine picker, attachments) stay reachable but
+   quiet until pointed at, keeping the default card simple. */
+.cardQuietMeta {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.cardQuietMeta:hover,
+.cardQuietMeta:focus-within {
+  opacity: 1;
+}
+
+/* The human-facing ask on a Needs You card: what to decide or do, extracted
+   from the agent's result, shown instead of boilerplate body text. */
+.needsYouCallout {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(229, 142, 133, 0.38);
+  border-left-width: 3px;
+  border-radius: 7px;
+  background: rgba(229, 142, 133, 0.08);
+  padding: 8px 10px;
+}
+
+.needsYouCallout strong {
+  color: #f0b3ad;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.needsYouCallout span {
+  color: #e7d9d4;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Same ask, banner-sized, at the top of the conversation modal. */
+.needsYouBanner {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(229, 142, 133, 0.42);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: rgba(229, 142, 133, 0.09);
+  padding: 10px 12px;
+}
+
+.needsYouBanner strong {
+  color: #f0b3ad;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.needsYouBanner span {
+  color: #f1e7e3;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* Artifact paths pulled out of result prose: filename chip + open actions. */
+.convoArtifacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.convoArtifact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(238, 232, 220, 0.16);
+  border-radius: 6px;
+  background: rgba(9, 13, 20, 0.5);
+  padding: 3px 6px;
+}
+
+.convoArtifact code {
+  color: #9fe0d3;
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+
+.convoArtifact button {
+  border: 1px solid rgba(111, 205, 186, 0.28);
+  border-radius: 5px;
+  background: rgba(111, 205, 186, 0.08);
+  color: #9fe0d3;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.convoArtifact button:hover,
+.convoArtifact button:focus-visible {
+  border-color: rgba(111, 205, 186, 0.5);
+  background: rgba(111, 205, 186, 0.16);
+  outline: none;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouCallout,
+:global(:root[data-theme="hive-light"]) .needsYouBanner {
+  border-color: rgba(178, 58, 72, 0.4);
+  background: rgba(178, 58, 72, 0.07);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouCallout strong,
+:global(:root[data-theme="hive-light"]) .needsYouBanner strong {
+  color: #a83244;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouCallout span,
+:global(:root[data-theme="hive-light"]) .needsYouBanner span {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .convoArtifact {
+  border-color: var(--comb-line);
+  background: var(--surface-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .convoArtifact code {
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .convoArtifact button {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+/* Small count on the card's conversation button so a card with recorded
+   results/notes advertises that there is something to read. */
+.convoCountBadge {
+  min-width: 13px;
+  border-radius: 999px;
+  background: rgba(111, 205, 186, 0.18);
+  color: #9fe0d3;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 13px;
+  text-align: center;
+}
+
+/* One-click resolutions on Needs You cards: no arrow-decoding required. */
+.cardQuickActions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cardQuickActions button {
+  border: 1px solid rgba(231, 180, 92, 0.3);
+  border-radius: 6px;
+  background: rgba(231, 180, 92, 0.08);
+  color: #f0c879;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.cardQuickActions button:hover,
+.cardQuickActions button:focus-visible {
+  border-color: rgba(231, 180, 92, 0.55);
+  background: rgba(231, 180, 92, 0.16);
+  outline: none;
+}
+
+.cardQuickActions button:last-child {
+  border-color: rgba(111, 205, 186, 0.3);
+  background: rgba(111, 205, 186, 0.08);
+  color: #9fe0d3;
+}
+
+.cardQuickActions button:last-child:hover,
+.cardQuickActions button:last-child:focus-visible {
+  border-color: rgba(111, 205, 186, 0.55);
+  background: rgba(111, 205, 186, 0.16);
+}
+
+/* Column lights up while a card is dragged over it, so drag-and-drop
+   visibly responds before the drop. */
+.laneDropTarget {
+  outline: 1.5px dashed rgba(111, 205, 186, 0.55);
+  outline-offset: -4px;
+  background-color: rgba(111, 205, 186, 0.05) !important;
+  transition: background-color 0.12s ease;
+}
+
+:global(:root[data-theme="hive-light"]) .convoCountBadge {
+  background: rgba(13, 142, 126, 0.14);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .cardQuickActions button {
+  border-color: rgba(140, 94, 10, 0.35);
+  background: rgba(212, 180, 111, 0.14);
+  color: #6a4505;
+}
+
+:global(:root[data-theme="hive-light"]) .cardQuickActions button:last-child {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .laneDropTarget {
+  outline-color: rgba(13, 142, 126, 0.5);
+  background-color: rgba(13, 142, 126, 0.05) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry {
+  border-color: var(--comb-line);
+  background: var(--surface);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.user {
+  border-color: rgba(13, 142, 126, 0.3);
+  background: rgba(13, 142, 126, 0.08);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.note {
+  border-color: rgba(140, 94, 10, 0.28);
+  background: rgba(212, 180, 111, 0.12);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.result {
+  border-color: rgba(13, 142, 126, 0.34);
+  background: rgba(13, 142, 126, 0.05);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntryHead strong,
+:global(:root[data-theme="hive-light"]) .convoBody {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntryHead time,
+:global(:root[data-theme="hive-light"]) .convoComposerHint,
+:global(:root[data-theme="hive-light"]) .convoEmpty,
+:global(:root[data-theme="hive-light"]) .convoKind {
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.result .convoKind {
+  color: #0d5a4e;
+  border-color: rgba(13, 142, 126, 0.34);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.note .convoKind {
+  color: #8c5e0a;
+  border-color: rgba(140, 94, 10, 0.3);
+}
+
+:global(:root[data-theme="hive-light"]) .kanbanNotice {
+  border-color: rgba(13, 142, 126, 0.4);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}

@@ -4,12 +4,19 @@
 
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 export function useKanbanTaskController(props: any) {
-  const { AbortController, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent } = props;
+  const { AbortController, Archive, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent } = props;
+  // Records the user's latest manual move per task so in-flight Queen pickup
+  // (which waits through a preview delay before claiming) can tell the user
+  // moved the card away and must not overwrite that move.
+  const kanbanManualMoveRef = useRef(new Map<string, { status: KanbanStatus; at: number }>());
+  // Transient non-error board notices (e.g. "move adjusted", "run stopped");
+  // the panel auto-dismisses them.
+  const [kanbanNotice, setKanbanNotice] = useState("");
   async function createKanbanTask(event: FormEvent, status: KanbanStatus, projectId?: string) {
     event.preventDefault();
     const title = quickAddDrafts[status]?.trim();
@@ -302,9 +309,24 @@ export function useKanbanTaskController(props: any) {
 
   async function moveKanbanTask(taskId: string, status: KanbanStatus) {
     const currentTask = kanbanBoard?.tasks.find((task) => task.id === taskId);
+    // The user's move wins over any automation in flight for this card.
+    kanbanManualMoveRef.current.set(taskId, { status, at: Date.now() });
+    if (status !== "working") {
+      const activeStream = kanbanRuntimeAbortRef.current.get(taskId);
+      if (activeStream) {
+        activeStream.abort();
+        kanbanRuntimeAbortRef.current.delete(taskId);
+        if (currentTask?.status === "working") {
+          setKanbanNotice(`Stopped the active agent run on "${currentTask.title}".`);
+        }
+      }
+    }
     const targetStatus = status === "working" && !currentTask?.assignee?.trim()
       ? "ready"
       : status;
+    if (targetStatus !== status) {
+      setKanbanNotice("No agent is assigned yet, so the task went to Waiting for Queen instead — the Queen Bee picks up work from there.");
+    }
     logClientTelemetry("kanban.task.move.requested", {
       taskId,
       fromStatus: currentTask?.status ?? null,
@@ -378,19 +400,27 @@ export function useKanbanTaskController(props: any) {
   async function editAndInterruptKanbanTask(event: FormEvent) {
     event.preventDefault();
     if (!selectedKanbanTask || kanbanEditPendingTaskId) return;
-    const agent = selectedKanbanAgent;
+    const title = kanbanEditDraft.title.trim();
+    if (!title) {
+      setKanbanError("Task title is required.");
+      return;
+    }
+    const agent = selectedKanbanTask.status === "working" ? selectedKanbanAgent : null;
     if (!agent) {
-      setKanbanError("Assign this task to an available agent before using Edit & interrupt.");
+      // Plain edit: no agent is actively working this card, so just save the
+      // revised title/body without dispatching or interrupting anything.
+      setKanbanEditPendingTaskId(selectedKanbanTask.id);
+      try {
+        await patchKanbanTask(selectedKanbanTask.id, { title, body: kanbanEditDraft.body.trim() });
+        setKanbanTaskModal("");
+      } finally {
+        setKanbanEditPendingTaskId("");
+      }
       return;
     }
     const setupIssue = chatSetupIssue(agent);
     if (setupIssue) {
       setKanbanError(`Could not resend to ${agent.name}: ${setupIssue}`);
-      return;
-    }
-    const title = kanbanEditDraft.title.trim();
-    if (!title) {
-      setKanbanError("Task title is required.");
       return;
     }
 
@@ -586,7 +616,20 @@ export function useKanbanTaskController(props: any) {
         onClick: () => void moveKanbanTask(task.id, column.id),
         disabled: task.status === column.id,
       }));
+    const interruptibleAgent = task.status === "working" ? kanbanTaskAssigneeAgent(task, displayAgents) : null;
     return [
+      {
+        key: "chat",
+        label: taskComments ? `Conversation (${taskComments})` : "Conversation",
+        icon: <MessageSquare aria-hidden="true" />,
+        onClick: () => openKanbanTaskModal(task, "chat"),
+      },
+      {
+        key: "edit",
+        label: interruptibleAgent ? "Edit & interrupt" : "Edit task",
+        icon: <Pencil aria-hidden="true" />,
+        onClick: () => openKanbanTaskModal(task, "edit"),
+      },
       {
         key: "move",
         label: "Move to",
@@ -621,30 +664,22 @@ export function useKanbanTaskController(props: any) {
         onClick: () => openKanbanTaskModal(task, "assign"),
       },
       {
-        key: "chat",
-        label: "Agent chat",
-        icon: <MessageSquare aria-hidden="true" />,
-        onClick: () => openKanbanTaskModal(task, "chat"),
-      },
-      {
-        key: "edit",
-        label: "Edit & interrupt",
-        icon: <Pencil aria-hidden="true" />,
-        onClick: () => openKanbanTaskModal(task, "edit"),
-        disabled: !kanbanTaskAssigneeAgent(task, displayAgents),
-      },
-      {
-        key: "notes",
-        label: taskComments ? `Notes (${taskComments})` : "Add note",
-        icon: <Pencil aria-hidden="true" />,
-        onClick: () => openKanbanTaskModal(task, "notes"),
-      },
-      {
         key: "events",
         label: taskEvents ? `Events (${taskEvents})` : "Events",
         icon: <Eye aria-hidden="true" />,
         onClick: () => openKanbanTaskModal(task, "events"),
       },
+      ...(task.status === "archived" ? [{
+        key: "restore",
+        label: "Restore to Ideas",
+        icon: <RotateCcw aria-hidden="true" />,
+        onClick: () => void moveKanbanTask(task.id, "ideas"),
+      } satisfies CellMenuItem] : [{
+        key: "archive",
+        label: "Archive",
+        icon: <Archive aria-hidden="true" />,
+        onClick: () => void moveKanbanTask(task.id, "archived"),
+      } satisfies CellMenuItem]),
       {
         key: "delete",
         label: "Delete task",
@@ -657,6 +692,24 @@ export function useKanbanTaskController(props: any) {
   /* eslint-enable react-hooks/refs */
 
   async function orchestrateReadyKanbanTask(task: KanbanTask) {
+    const orchestrationStartedAt = Date.now();
+    // True once the user manually moves this card somewhere other than Ready
+    // after pickup began; claiming would overwrite (snap back) their move.
+    const movedAwayManually = () => {
+      const manualMove = kanbanManualMoveRef.current.get(task.id);
+      return Boolean(manualMove && manualMove.at >= orchestrationStartedAt && manualMove.status !== "ready");
+    };
+    const cancelPickupForManualMove = () => {
+      logClientTelemetry("kanban.ready.orchestrate.cancelled_manual_move", {
+        taskId: task.id,
+        manualStatus: kanbanManualMoveRef.current.get(task.id)?.status ?? null,
+      });
+      setKanbanPickupPreviewByTask((current) => {
+        const next = { ...current };
+        delete next[task.id];
+        return next;
+      });
+    };
     const undoRequested = Boolean(task.undoRequestedAt);
     const targetAgents = agentsForKanbanTask(task);
     const dispatchAgents = undoRequested
@@ -689,6 +742,10 @@ export function useKanbanTaskController(props: any) {
     const excludedAgentIds = new Set<string>();
 
     while (excludedAgentIds.size < dispatchAgents.length) {
+      if (movedAwayManually()) {
+        cancelPickupForManualMove();
+        return;
+      }
       // eslint-disable-next-line react-hooks/purity
       const now = Date.now();
       const eligibleAgents = dispatchAgents.filter((agent) => {
@@ -741,6 +798,12 @@ export function useKanbanTaskController(props: any) {
         },
       }));
       await wait(KANBAN_PICKUP_PREVIEW_MS);
+      if (movedAwayManually()) {
+        // The user moved the card during the pickup preview; claiming now
+        // would flip it back to Working against their intent.
+        cancelPickupForManualMove();
+        return;
+      }
       const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -861,5 +924,5 @@ export function useKanbanTaskController(props: any) {
   }
 
 
-  return { createKanbanTask, createKanbanBoard, patchKanbanTask, bulkPatchKanbanTasks, promoteKanbanIdea, updateKanbanTaskMachine, markKanbanTaskReviewed, requestKanbanTaskUndo, readWorkspaceGitSnapshot, kanbanWorkspaceChangeSummary, addKanbanCardFiles, openKanbanCardFilePicker, handleKanbanCardFileChange, handleKanbanCardImageChange, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, removeKanbanCardAttachment, removeKanbanCardDirectory, moveKanbanTask, deleteKanbanTask, editAndInterruptKanbanTask, openKanbanTaskModal, kanbanTaskMenuItems, orchestrateReadyKanbanTask, addKanbanSystemComment };
+  return { kanbanNotice, setKanbanNotice, createKanbanTask, createKanbanBoard, patchKanbanTask, bulkPatchKanbanTasks, promoteKanbanIdea, updateKanbanTaskMachine, markKanbanTaskReviewed, requestKanbanTaskUndo, readWorkspaceGitSnapshot, kanbanWorkspaceChangeSummary, addKanbanCardFiles, openKanbanCardFilePicker, handleKanbanCardFileChange, handleKanbanCardImageChange, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, removeKanbanCardAttachment, removeKanbanCardDirectory, moveKanbanTask, deleteKanbanTask, editAndInterruptKanbanTask, openKanbanTaskModal, kanbanTaskMenuItems, orchestrateReadyKanbanTask, addKanbanSystemComment };
 }
