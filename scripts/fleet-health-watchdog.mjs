@@ -414,10 +414,13 @@ function remediationCommand(os, kind) {
   const pattern = kind === "tts" ? "universal.?tts|mlx.?audio" : "telemetry|collector";
   const label = kind === "tts" ? "TTS" : "collector";
   if (os.includes("linux")) {
+    // --all: a STOPPED (inactive/dead) unit is invisible to plain list-units,
+    // and a deliberate `systemctl stop` also disarms Restart=always — exactly
+    // the case that needs the watchdog. Restart covers dead units too.
     return [
       "kicked=0",
-      `for U in $(systemctl --user list-units --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do systemctl --user restart "$U" 2>/dev/null && kicked=$((kicked+1)); done`,
-      `for S in $(systemctl list-units --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do sudo -n systemctl restart "$S" 2>/dev/null && kicked=$((kicked+1)); done`,
+      `for U in $(systemctl --user list-units --all --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do systemctl --user restart "$U" 2>/dev/null && kicked=$((kicked+1)); done`,
+      `for S in $(systemctl list-units --all --type=service --no-legend 2>/dev/null | grep -iE '${pattern}' | awk '{print $1}'); do sudo -n systemctl restart "$S" 2>/dev/null && kicked=$((kicked+1)); done`,
       `echo "watchdog restarted $kicked ${label} service(s)"`,
     ].join("; ");
   }
