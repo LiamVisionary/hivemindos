@@ -365,8 +365,19 @@ async function discoverMachines() {
 
 // TTS apps live behind each machine's linkd at /app-proxy/8799. Discover the
 // remote ones (their `machineBase` is the linkd base — strip the /app-proxy
-// suffix — used to kickstart the TTS service on the owning machine).
-async function discoverTtsApps() {
+// suffix — used to kickstart the TTS service on the owning machine). The
+// dashboard is the richest source; when it is unreachable or its auth is
+// misconfigured, probe each discovered machine's linkd app-proxy directly —
+// otherwise a dashboard outage strands whatever URL is in the cache
+// (2026-07-03: a stale cached URL produced a false unhealthy on NYC TTS).
+let lastTtsSource = "";
+async function logTtsSourceChange(source, detail = "") {
+  if (lastTtsSource === source) return;
+  lastTtsSource = source;
+  await log(`tts discovery via ${source}${detail ? ` — ${detail}` : ""}`);
+}
+
+async function discoverTtsApps(machines) {
   for (const port of APP_PORTS) {
     try {
       const { ok, data } = await fetchJson(`http://127.0.0.1:${port}/api/fleet/apps?fast=1`, { headers: dashboardHeaders() }, 8_000);
@@ -379,6 +390,7 @@ async function discoverTtsApps() {
         })
         .filter((a) => a.apiBaseUrl && a.machineBase && !/^https?:\/\/(127\.0\.0\.1|localhost)/i.test(a.machineBase));
       if (apps.length) {
+        await logTtsSourceChange("dashboard");
         await writeFile(TTS_CACHE, JSON.stringify(apps)).catch(() => {});
         return apps;
       }
@@ -386,8 +398,32 @@ async function discoverTtsApps() {
       // try the next port
     }
   }
+  // Dashboard unavailable: the machines list (dashboard → tailscale → cache)
+  // still knows every linkd base, and a machine that runs TTS answers
+  // /app-proxy/8799/v1/models with a non-empty catalog. Machines without a
+  // TTS app fail the probe and are skipped, never reported unhealthy.
+  const probed = [];
+  for (const machine of machines || []) {
+    if (machine.online === false || !machine.collectorUrl) continue;
+    const apiBaseUrl = `${machine.collectorUrl}/app-proxy/8799`;
+    try {
+      const { ok, data } = await fetchJson(`${apiBaseUrl}/v1/models`, {}, 5_000);
+      const models = data?.data || data?.models || [];
+      if (!ok || !Array.isArray(models) || models.length === 0) continue;
+      probed.push({ apiBaseUrl, machineBase: machine.collectorUrl, machineName: machine.name || "TTS" });
+    } catch {
+      // no TTS app-proxy on this machine
+    }
+  }
+  if (probed.length) {
+    await logTtsSourceChange("linkd app-proxy probe", `dashboard unreachable; found ${probed.length}`);
+    await writeFile(TTS_CACHE, JSON.stringify(probed)).catch(() => {});
+    return probed;
+  }
   try {
-    return JSON.parse(await readFile(TTS_CACHE, "utf8"));
+    const cached = JSON.parse(await readFile(TTS_CACHE, "utf8"));
+    await logTtsSourceChange("stale cache", `${Array.isArray(cached) ? cached.length : 0} cached targets, unverified`);
+    return cached;
   } catch {
     return [];
   }
@@ -635,7 +671,7 @@ function deepProbesEnabled() {
 async function runCycle(cycle) {
   const deep = deepProbesEnabled() && cycle % CHAT_EVERY === 0;
   const machines = await discoverMachines();
-  const ttsApps = await discoverTtsApps();
+  const ttsApps = await discoverTtsApps(machines);
   // One unified target list. Collector and TTS on the same machine are keyed
   // separately, so a TTS flap restarts ONLY the TTS daemon (and vice versa).
   const targets = [

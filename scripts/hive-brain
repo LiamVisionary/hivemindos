@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   AGENT_MEMORY_ANSWER_MIN_SCORE,
   bm25ScoresForRecords,
@@ -274,6 +275,38 @@ function candidateApiBases() {
   return [...new Set(values.map((value) => value.replace(/\/+$/, "")))];
 }
 
+const DEVICE_TOKEN_KEY = "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN";
+let cachedDeviceTokens = null;
+let activeDeviceToken = "";
+
+function envFileValue(filePath, key) {
+  try {
+    const line = fs.readFileSync(filePath, "utf8").split(/\r?\n/).find((entry) => entry.startsWith(`${key}=`));
+    return line?.slice(key.length + 1).trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// The dashboard API is auth-gated (src/proxy.ts), and the server's expected
+// token depends on how it was launched: a plainly launched dev server loads
+// the checkout's .env.local, while one launched from a shared-env shell keeps
+// that shell's token. Collect every known source — explicit env first, then
+// the checkout's .env.local, then the shared hive env — and let callApi try
+// each on an auth rejection.
+function candidateDeviceTokens() {
+  if (cachedDeviceTokens) return cachedDeviceTokens;
+  const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const roots = [process.env.HIVE_ENV_PROJECT_ROOT, scriptRoot].filter(Boolean);
+  const values = [
+    process.env[DEVICE_TOKEN_KEY]?.trim(),
+    ...roots.map((root) => envFileValue(path.join(root, ".env.local"), DEVICE_TOKEN_KEY)),
+    envFileValue(path.join(os.homedir(), ".hivemindos", ".env"), DEVICE_TOKEN_KEY),
+  ].filter((value) => value && value.length >= 24);
+  cachedDeviceTokens = [...new Set(values)];
+  return cachedDeviceTokens;
+}
+
 function requestJson(base, method, body, searchParams) {
   return new Promise((resolve, reject) => {
     const url = new URL("/api/brain/memory", base);
@@ -283,10 +316,13 @@ function requestJson(base, method, body, searchParams) {
     const payload = body ? JSON.stringify(body) : "";
     const req = http.request(url, {
       method,
-      headers: payload ? {
-        "content-type": "application/json",
-        "content-length": Buffer.byteLength(payload),
-      } : undefined,
+      headers: {
+        ...(activeDeviceToken ? { "x-hivemindos-device-token": activeDeviceToken } : {}),
+        ...(payload ? {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(payload),
+        } : {}),
+      },
       timeout: 4500,
     }, (res) => {
       let data = "";
@@ -361,54 +397,63 @@ async function callApi(input) {
     throw error;
   }
   const bases = candidateApiBases();
+  const tokens = candidateDeviceTokens();
+  // Empty string = one unauthenticated attempt (older or ungated servers).
+  const tokenAttempts = tokens.length ? tokens : [""];
   let lastError = null;
   let lastHttpError = null;
   for (const base of bases) {
-    try {
-      let result;
-      if (input.action === "remember" || input.action === "evolve") {
-        result = await requestJson(base, "POST", writePayload(input, input.action));
-      } else if (input.action === "record-usage") {
-        result = await requestJson(base, "POST", {
-          action: "record-usage",
-          vaultPath: input.vaultPath,
-          memoryIds: input.memoryIds,
-          usageType: input.usageType,
-          query: input.usageQuery,
-          usageContext: input.usageContext,
-          agentName: input.agentName,
-          runtime: input.runtime,
-          sessionId: input.sessionId,
-        });
-      } else if (input.action === "health") {
-        result = await requestJson(base, "GET", null, { mode: "health", vaultPath: input.vaultPath });
-      } else if (input.action === "consolidate") {
-        result = await requestJson(base, "POST", {
-          action: "consolidate",
-          vaultPath: input.vaultPath,
-          applyArchives: Boolean(input.applyArchives),
-        });
-      } else if (input.action === "rebuild-index") {
-        result = await requestJson(base, "POST", { action: "rebuild-index", vaultPath: input.vaultPath });
-      } else {
-        result = await requestJson(base, "GET", null, {
-          mode: input.action === "recall" ? "recall" : "answer",
-          q: input.query,
-          limit: input.limit,
-          minScore: input.minScore,
-          scope: input.scope,
-          vaultPath: input.vaultPath,
-        });
+    for (const token of tokenAttempts) {
+      activeDeviceToken = token;
+      try {
+        let result;
+        if (input.action === "remember" || input.action === "evolve") {
+          result = await requestJson(base, "POST", writePayload(input, input.action));
+        } else if (input.action === "record-usage") {
+          result = await requestJson(base, "POST", {
+            action: "record-usage",
+            vaultPath: input.vaultPath,
+            memoryIds: input.memoryIds,
+            usageType: input.usageType,
+            query: input.usageQuery,
+            usageContext: input.usageContext,
+            agentName: input.agentName,
+            runtime: input.runtime,
+            sessionId: input.sessionId,
+          });
+        } else if (input.action === "health") {
+          result = await requestJson(base, "GET", null, { mode: "health", vaultPath: input.vaultPath });
+        } else if (input.action === "consolidate") {
+          result = await requestJson(base, "POST", {
+            action: "consolidate",
+            vaultPath: input.vaultPath,
+            applyArchives: Boolean(input.applyArchives),
+          });
+        } else if (input.action === "rebuild-index") {
+          result = await requestJson(base, "POST", { action: "rebuild-index", vaultPath: input.vaultPath });
+        } else {
+          result = await requestJson(base, "GET", null, {
+            mode: input.action === "recall" ? "recall" : "answer",
+            q: input.query,
+            limit: input.limit,
+            minScore: input.minScore,
+            scope: input.scope,
+            vaultPath: input.vaultPath,
+          });
+        }
+        result.apiBase = base;
+        await flushPendingWrites(base).catch(() => undefined);
+        return result;
+      } catch (error) {
+        // An authoritative application-level rejection (duplicate gate,
+        // validation) must surface, not fall back or try other ports.
+        if (error?.status && error.body && (error.body.blocked || error.status === 400 || error.status === 409)) throw error;
+        if (error?.status) lastHttpError = error;
+        lastError = error;
+        // Only an auth rejection is worth retrying with another token; any
+        // other failure moves on to the next base.
+        if (error?.status !== 401 && error?.status !== 403) break;
       }
-      result.apiBase = base;
-      await flushPendingWrites(base).catch(() => undefined);
-      return result;
-    } catch (error) {
-      // An authoritative application-level rejection (duplicate gate,
-      // validation) must surface, not fall back or try other ports.
-      if (error?.status && error.body && (error.body.blocked || error.status === 400 || error.status === 409)) throw error;
-      if (error?.status) lastHttpError = error;
-      lastError = error;
     }
   }
   throw lastHttpError || lastError || new Error("No HivemindOS memory API base could be reached.");
@@ -1262,7 +1307,14 @@ async function main() {
         console.error("Evolve the existing memory (hive-brain evolve --memory-id <id> --content ... --reason ...) or retry with --allow-duplicate.");
         process.exit(3);
       }
-      throw error;
+      // Auth rejections are an environment problem, not a verdict on the
+      // memory operation: warn and degrade to the queue/local-fallback paths
+      // below so fleet recall keeps working while credentials get repaired.
+      if (error.status === 401 || error.status === 403) {
+        console.error(`hive-brain: dashboard API rejected every known device token (HTTP ${error.status}). Check ${DEVICE_TOKEN_KEY} in the app's .env.local and ~/.hivemindos/.env; continuing offline.`);
+      } else {
+        throw error;
+      }
     }
     if (input.action === "remember" || input.action === "evolve") {
       if (input.noQueue) throw error;

@@ -89,6 +89,8 @@ export type BrainSkillAeonSyncResult = {
   manifestPath: string;
   synced: BrainSkillSummary[];
   skipped: Array<BrainSkillSummary & { reason: string }>;
+  /** Managed mirrors GC'd because their vault source no longer exists. */
+  removed: string[];
   totalShared: number;
 };
 
@@ -314,7 +316,12 @@ function skillDirSlugFromPath(value: string | undefined) {
 
 function pathLooksInsideProviderSkillRoot(provider: BrainSkillProviderId | "shared", value: string | undefined) {
   if (provider === "shared") return false;
-  return normalizedSkillPath(value).includes(`/.${provider}/skills/`);
+  // ANY subtree of the provider home counts, not just /skills/: the scanner
+  // walks several roots (~/.aeon/skills|plugins|agents|repo/skills) and a
+  // mirror re-imported from any of them re-namespaces the slug
+  // (aeon- -> aeon-aeon-) into the unbounded duplication loop — the /skills/-
+  // only match left three of the four aeon roots unguarded (2026-07-03).
+  return normalizedSkillPath(value).includes(`/.${provider}/`);
 }
 
 function slugLooksProviderMirrored(provider: BrainSkillProviderId | "shared", slug: string | undefined) {
@@ -1479,6 +1486,14 @@ export async function syncSharedBrainSkillsToAeon(input: {
   const skipped: Array<BrainSkillSummary & { reason: string }> = [];
 
   for (const skill of inventory.shared) {
+    // A doubled same-provider prefix is by definition a recursive mirror —
+    // never project one back into the runtime dir, even if it somehow sits on
+    // the shelf (single aeon-* names stay projectable: legit converted skills
+    // like aeon-skill-converter carry one prefix).
+    if (/^aeon-aeon-/.test(skill.slug)) {
+      skipped.push({ ...skill, reason: "recursive provider mirror (doubled prefix)" });
+      continue;
+    }
     const sourceDir = dirname(skill.path);
     const destinationDir = join(skillsFolder, skill.slug);
     const destinationSkill = join(destinationDir, "SKILL.md");
@@ -1511,6 +1526,25 @@ export async function syncSharedBrainSkillsToAeon(input: {
     synced.push(skill);
   }
 
+  // GC: a managed mirror whose vault source is gone used to live forever
+  // (add/update-only sync) — that residue is what made every vault-side
+  // cleanup of the duplication plague look like it "came back" (the cleaned
+  // shelf sat next to thousands of stale runtime mirrors, 2026-07-03 NYC
+  // incident: 25,768 of them). Only dirs carrying our managed metadata are
+  // removed; native/unmanaged aeon skills are not ours to touch.
+  const removed: string[] = [];
+  const currentSlugs = new Set(inventory.shared.map((skill) => skill.slug));
+  const entries = await readdir(skillsFolder, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory() || currentSlugs.has(entry.name)) continue;
+    const staleDir = join(skillsFolder, entry.name);
+    const metadata = await readManagedMetadata(staleDir);
+    const managed = metadata?.managedBy === "hivemindos" || metadata?.provider === "shared-brain";
+    if (!managed) continue;
+    await rm(staleDir, { recursive: true, force: true });
+    removed.push(entry.name);
+  }
+
   await writeAeonSkillsManifest(manifestPath, inventory.shared, skipped);
   return {
     vaultPath: inventory.vaultPath,
@@ -1519,6 +1553,7 @@ export async function syncSharedBrainSkillsToAeon(input: {
     manifestPath,
     synced,
     skipped,
+    removed,
     totalShared: inventory.shared.length,
   };
 }
@@ -1529,13 +1564,20 @@ async function nextDestinationSlug(
   provider: BrainSkillProviderId | "shared",
   sharedBySlug: Map<string, BrainSkillSummary>,
 ) {
-  const candidates = [slug, `${provider}-${slug}`].map(sanitizeSlug);
+  // NEVER stack another provider prefix onto an already-prefixed slug:
+  // aeon-<x> colliding must become aeon-<x>-2, not aeon-aeon-<x> — the
+  // doubled-prefix minting is what fed the June-14/July-3 duplication plague
+  // (tens of thousands of aeon-aeon-* dirs fleet-wide).
+  const base = sanitizeSlug(slug);
+  const alreadyPrefixed = base.startsWith(`${provider}-`);
+  const candidates = alreadyPrefixed ? [base] : [base, sanitizeSlug(`${provider}-${slug}`)];
   for (const candidate of candidates) {
     if (!sharedBySlug.has(candidate) && !(await exists(join(skillsFolder, candidate)))) return candidate;
   }
+  const counterBase = alreadyPrefixed ? slug : `${provider}-${slug}`;
   let index = 2;
   while (true) {
-    const candidate = sanitizeSlug(`${provider}-${slug}-${index}`);
+    const candidate = sanitizeSlug(`${counterBase}-${index}`);
     if (!sharedBySlug.has(candidate) && !(await exists(join(skillsFolder, candidate)))) return candidate;
     index += 1;
   }

@@ -72,6 +72,7 @@ import {
   unpackTarToDir,
 } from "./lib/runtime-portable-state.mjs";
 import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
+import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
 // NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
 // not at top level. A -SkipDeps app-driven collector install (Windows) has no
 // node_modules, and a failed top-level import would crash the whole collector at
@@ -296,6 +297,19 @@ const maxSkillFiles = Number(
 );
 const maxSkillFileBytes = Number(
   process.env.AGENT_TELEMETRY_MAX_SKILL_FILE_BYTES || 5 * 1024 * 1024,
+);
+// Skill scans must be bounded: on the 2026-07-03 NYC box a runaway mirror left
+// 28k skill dirs, and summarizing every SKILL.md via one big Promise.all pegged
+// the process fd table in bursts (libuv opens queue ahead of reads/closes), so
+// concurrent child spawns died with EBADF — including /health's git exec.
+const skillScanConcurrency = Number(
+  process.env.AGENT_TELEMETRY_SKILL_SCAN_CONCURRENCY || 16,
+);
+const maxSkillScanFiles = Number(
+  process.env.AGENT_TELEMETRY_MAX_SKILL_SCAN_FILES || 10_000,
+);
+const skillScanWarnThreshold = Number(
+  process.env.AGENT_TELEMETRY_SKILL_SCAN_WARN_THRESHOLD || 2_000,
 );
 const skillAutoSyncPollMs = Number(
   process.env.AGENT_TELEMETRY_SKILL_AUTO_SYNC_POLL_MS || 10_000,
@@ -2171,7 +2185,11 @@ async function readProjectRegistryProjects() {
 
 async function readProjectCheckouts() {
   const projects = (await readProjectRegistryProjects()).slice(0, 25);
-  const checkouts = await Promise.all(projects.map(projectCheckoutStatus));
+  // Each status runs up to 4 git children at once; a bounded pool keeps the
+  // /health version refresh from bursting ~100 spawns (~300 pipe fds) at once.
+  const checkouts = await mapWithConcurrency(projects, 6, (project) =>
+    projectCheckoutStatus(project),
+  );
   return checkouts.filter(Boolean);
 }
 
@@ -4517,15 +4535,21 @@ async function findSkillFiles(rootPath, maxDepth) {
   const root = resolve(expandHome(rootPath));
   await access(root, constants.R_OK).catch(() => null);
   const found = [];
+  let truncated = false;
 
   async function walk(current, depth) {
-    if (depth > maxDepth) return;
+    if (depth > maxDepth || truncated) return;
     const entries = await readdir(current, { withFileTypes: true }).catch(
       () => [],
     );
     for (const entry of entries) {
+      if (truncated) return;
       if (entry.name === "SKILL.md") {
         found.push(join(current, entry.name));
+        if (found.length >= maxSkillScanFiles) {
+          truncated = true;
+          return;
+        }
         continue;
       }
       if (!entry.isDirectory() || skippedSkillDirs.has(entry.name)) continue;
@@ -4534,6 +4558,15 @@ async function findSkillFiles(rootPath, maxDepth) {
   }
 
   await walk(root, 0);
+  if (truncated) {
+    console.error(
+      `[collector] skill scan CAPPED at ${maxSkillScanFiles} SKILL.md files under ${root} — remaining skills are NOT reported. A count this size almost certainly means runaway skill mirrors; run scripts/cleanup-recursive-aeon-skill-mirrors.mjs (dry-run by default, --apply to execute).`,
+    );
+  } else if (found.length >= skillScanWarnThreshold) {
+    console.warn(
+      `[collector] skill scan found ${found.length} SKILL.md files under ${root} (warn threshold ${skillScanWarnThreshold}) — check for runaway skill mirrors (scripts/cleanup-recursive-aeon-skill-mirrors.mjs).`,
+    );
+  }
   return found;
 }
 
@@ -4616,10 +4649,13 @@ async function listInstalledSkills(options = {}) {
           ).flat(),
         ),
       ];
-      const skills = await Promise.all(
-        skillFiles.map((skillPath) =>
-          skillSummaryForProvider(provider, skillPath, options),
-        ),
+      // Bounded pool, NOT Promise.all: each summary opens SKILL.md (+ source
+      // metadata), and a pathological skills dir (NYC: 28k mirrors) must never
+      // peg the fd table — child spawns in that window die with EBADF.
+      const skills = await mapWithConcurrency(
+        skillFiles,
+        skillScanConcurrency,
+        (skillPath) => skillSummaryForProvider(provider, skillPath, options),
       );
       return {
         id: provider.id,
@@ -5711,31 +5747,6 @@ async function installedRuntimes() {
   return installedRuntimesCache
     ? installedRuntimesCache.value
     : installedRuntimesPromise;
-}
-
-// fd/resource visibility: the 2026-07-03 NYC crash loop started as fd
-// exhaustion (spawn EBADF ~10 minutes after boot). /dev/fd is the process's
-// OWN descriptor table on macOS and Linux (no lsof spawn needed), and the
-// active-resource counts point at what is holding fds (sockets vs child
-// processes vs timers), so a leak shows up in fleet telemetry before it kills.
-async function processResourceStats() {
-  const openFds = await readdir("/dev/fd")
-    .then((entries) => entries.length)
-    .catch(() => null);
-  const activeResources = {};
-  try {
-    for (const kind of process.getActiveResourcesInfo()) {
-      activeResources[kind] = (activeResources[kind] || 0) + 1;
-    }
-  } catch {
-    // experimental API — absence just means no breakdown
-  }
-  return {
-    pid: process.pid,
-    uptimeSec: Math.round(process.uptime()),
-    openFds,
-    activeResources,
-  };
 }
 
 async function collectorHealthPayload() {

@@ -78,7 +78,9 @@ const legacyOversizedAllowances = new Map([
   ["src/lib/services/obsidian/agent-memory/core.ts", 1850],
   ["src/components/wallets-drop-in/WalletsView.tsx", 1850],
   ["src/app/globals.css", 1719],
-  ["src/lib/services/obsidian/brain-skills.ts", 1625],
+  // +50 2026-07-03: aeon-mirror plague root fixes (no doubled-prefix minting,
+  // all-roots mirror guard, vault->aeon GC) with incident comments in place.
+  ["src/lib/services/obsidian/brain-skills.ts", 1675],
   ["src/lib/services/context-index.ts", 1680],
   ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1660],
   ["src/features/dashboard/views/chat/AgentSettingsModal.tsx", 1640],

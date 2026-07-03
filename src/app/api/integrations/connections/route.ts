@@ -1,3 +1,5 @@
+// guard:allow-hive-action-route - dashboard-only Settings connections management;
+// stores/removes user-pasted provider credentials, not an agent-invokable Hive action
 import {
   disconnectProvider,
   readConnectionsPayload,
