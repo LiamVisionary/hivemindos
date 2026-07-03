@@ -28,6 +28,21 @@
 //     FLEET_WATCHDOG_TELEGRAM_CHAT_ID (+ a bot token) is configured in
 //     ~/.hivemindos/.env; otherwise they are log-only.
 //
+// v3 additions:
+//   - ESCALATION: when a target's deep functional probe keeps failing across
+//     consecutive checks DESPITE remediation attempts (the 2026-07-03 NYC
+//     machine-wide MLX synth deadlock: kickstart loops for hours, health green,
+//     nobody told), the watchdog raises a human-visible alert — a Telegram
+//     alert AND an urgent entry in the dashboard notifications feed
+//     (POST /api/notifications on the local dashboard) — naming the machine,
+//     the last probe error, and the consecutive-failure count. Policy lives in
+//     scripts/lib/fleet-watchdog-escalation.mjs (hermetically tested by
+//     test:fleet-watchdog-escalation).
+//   - Local dashboard API calls send the HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+//     (env, then ~/.hivemindos/.env, then the checkout's .env.local). The
+//     dashboard's API auth gate (src/proxy.ts) 401s tokenless requests, so
+//     discovery and notification POSTs need it.
+//
 // Liveness uses the collector's /health; a DEEP probe (an actual /chat dispatch)
 // runs every Nth cycle to catch the alive-but-can't-spawn case. After
 // FAIL_THRESHOLD consecutive failures it kickstarts the collector service on the
@@ -45,14 +60,20 @@
 //   FLEET_WATCHDOG_TELEGRAM_CHAT_ID   Telegram chat id for alerts (enables push alerts)
 //   FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN bot token override (default: HIVE_TELEGRAM_BOT_TOKEN
 //                                     from ~/.hivemindos/.env)
+//   FLEET_WATCHDOG_ESCALATE_AFTER     consecutive deep failures (despite remediation) before
+//                                     a human-visible escalation (default 3)
+//   FLEET_WATCHDOG_ESCALATE_REPEAT_MS repeat interval for escalations while still failing (default 1800000)
 //   FLEET_WATCHDOG_ONCE=1             run a single cycle and exit (for testing)
 
 import { readFile, writeFile, mkdir, appendFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+
+import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -77,6 +98,8 @@ const RUN_ONCE = process.env.FLEET_WATCHDOG_ONCE === "1";
 const COLLECTOR_PORTS = Array.from({ length: 24 }, (_, i) => 8787 + i);
 const ALERT_REPEAT_MS = 30 * 60_000;
 const STALE_BUILD_ALERT_MS = 24 * 60 * 60_000;
+const ESCALATE_AFTER = Math.max(1, Number(process.env.FLEET_WATCHDOG_ESCALATE_AFTER || 3));
+const ESCALATE_REPEAT_MS = Number(process.env.FLEET_WATCHDOG_ESCALATE_REPEAT_MS || 30 * 60_000);
 
 const STATE_DIR = join(homedir(), ".hivemindos");
 const MACHINES_CACHE = join(STATE_DIR, "fleet-health-watchdog-machines.json");
@@ -121,6 +144,21 @@ function parseEnvFile(path) {
 
 const collectorEnv = parseEnvFile(join(STATE_DIR, "collector.env"));
 const hiveEnv = parseEnvFile(join(STATE_DIR, ".env"));
+const checkoutEnv = parseEnvFile(fileURLToPath(new URL("../.env.local", import.meta.url)));
+
+// Local dashboard APIs (/api/fleet/*, /api/notifications) sit behind dashboard
+// auth when it is configured; without the device token every call 401s
+// silently. Same resolution order as scripts/hivemind-mcp.
+const DASHBOARD_DEVICE_TOKEN = (
+  process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || hiveEnv.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || checkoutEnv.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || ""
+).trim();
+
+function dashboardHeaders(extra = {}) {
+  return DASHBOARD_DEVICE_TOKEN ? { ...extra, "x-hivemindos-device-token": DASHBOARD_DEVICE_TOKEN } : extra;
+}
 
 const TELEGRAM_CHAT_ID = (process.env.FLEET_WATCHDOG_TELEGRAM_CHAT_ID || hiveEnv.FLEET_WATCHDOG_TELEGRAM_CHAT_ID || "").trim();
 const TELEGRAM_BOT_TOKEN = (
@@ -162,6 +200,50 @@ async function fetchJson(url, init, timeoutMs) {
     data = { text };
   }
   return { ok: response.ok, status: response.status, data, text };
+}
+
+// Escalations must land where a human actually looks: the dashboard's
+// notifications feed (the bell + urgent badge every dashboard shows). Posted to
+// the first local dashboard that answers; best-effort — the Telegram alert and
+// the log still fire when no dashboard is up.
+async function postDashboardNotification(title, body) {
+  for (const port of APP_PORTS) {
+    try {
+      const { ok, status } = await fetchJson(`http://127.0.0.1:${port}/api/notifications`, {
+        method: "POST",
+        headers: dashboardHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({
+          notification: {
+            title,
+            body,
+            priority: "urgent",
+            kind: "alert",
+            agentId: "fleet-health-watchdog",
+            agentName: "Fleet Watchdog",
+            source: "fleet-health-watchdog",
+            tags: ["fleet-health", "escalation"],
+          },
+        }),
+      }, 8_000);
+      if (ok) return true;
+      await log(`  dashboard notification POST :${port} returned HTTP ${status}`);
+    } catch {
+      // no dashboard on this port — try the next
+    }
+  }
+  return false;
+}
+
+const escalations = createEscalationTracker({ threshold: ESCALATE_AFTER, repeatMs: ESCALATE_REPEAT_MS });
+
+// Remediation has demonstrably not fixed this target: make it loud. Telegram
+// (via the shared alert rail) + an urgent dashboard notification, both naming
+// machine, probe error, and consecutive-failure count.
+async function escalate(target, due) {
+  const message = formatEscalationAlert({ name: target.name, kind: target.kind, ...due });
+  await alert(`escalate:${target.key}`, message);
+  const posted = await postDashboardNotification(`${target.name}: ${target.kind} needs human attention`, message);
+  if (!posted) await log("  escalation dashboard notification undelivered (no local dashboard reachable)");
 }
 
 let portsByHost = {};
@@ -246,7 +328,7 @@ async function discoverViaTailscale() {
 async function discoverMachines() {
   for (const port of APP_PORTS) {
     try {
-      const { ok, data } = await fetchJson(`http://127.0.0.1:${port}/api/fleet/discover`, {}, 8_000);
+      const { ok, data } = await fetchJson(`http://127.0.0.1:${port}/api/fleet/discover`, { headers: dashboardHeaders() }, 8_000);
       if (!ok) continue;
       const raw = data.machines || data.result?.machines || [];
       const machines = raw
@@ -284,7 +366,7 @@ async function discoverMachines() {
 async function discoverTtsApps() {
   for (const port of APP_PORTS) {
     try {
-      const { ok, data } = await fetchJson(`http://127.0.0.1:${port}/api/fleet/apps?fast=1`, {}, 8_000);
+      const { ok, data } = await fetchJson(`http://127.0.0.1:${port}/api/fleet/apps?fast=1`, { headers: dashboardHeaders() }, 8_000);
       if (!ok) continue;
       const apps = (data.apps || [])
         .filter((a) => Number(a.port) === 8799 || /universal.?tts/i.test(String(a.name || "")))
@@ -579,6 +661,14 @@ async function runCycle(cycle) {
       healthy += 1;
       if (consecutiveFailures.get(target.key)) await log(`${target.name}: recovered`);
       consecutiveFailures.set(target.key, 0);
+      // Only a passing DEEP probe proves a wedge cleared — cheap probes stay
+      // green through a wedged backend (the whole NYC incident).
+      if (deep) {
+        const recovery = escalations.recordDeepRecovery(target.key);
+        if (recovery.wasEscalated) {
+          await alert(`recovered:${target.key}`, `${target.name}: ${target.kind} deep probe healthy again after escalation (${recovery.streak} failed checks)`);
+        }
+      }
       continue;
     }
     unhealthy += 1;
@@ -592,15 +682,24 @@ async function runCycle(cycle) {
       await alert(`auth:${target.key}`, `${target.name} ${result.reason}`);
       continue;
     }
+    if (result.severe) escalations.recordSevereFailure(target.key, result.reason);
     if (fails >= threshold && (cooldownUntil.get(target.key) || 0) < Date.now()) {
       await log(`${target.name}: REMEDIATING — restart ${target.kind} via ${target.local ? "local shell" : "linkd shell"}`);
       const ok = target.local
         ? await remediateLocal(target.kind)
         : await remediate(target.machineBase, target.os, target.kind);
+      escalations.recordRemediationAttempt(target.key);
       await log(`${target.name}: remediation ${ok ? "sent" : "FAILED"}; cooling down ${Math.round(COOLDOWN_MS / 1000)}s`);
       await alert(`remediate:${target.key}`, `${target.name} was down (${result.reason}) — restart ${ok ? "sent" : "FAILED"}`);
       cooldownUntil.set(target.key, Date.now() + COOLDOWN_MS);
       consecutiveFailures.set(target.key, 0);
+    }
+    // Escalate AFTER any remediation attempt this cycle: a deep wedge that has
+    // now outlasted ESCALATE_AFTER consecutive deep failures with at least one
+    // restart attempt is beyond the watchdog — tell a human, visibly.
+    if (result.severe) {
+      const due = escalations.escalationDue(target.key, Date.now());
+      if (due) await escalate(target, due);
     }
   }
   if (deep) {
@@ -611,7 +710,7 @@ async function runCycle(cycle) {
   await log(`cycle ${cycle}: ${healthy} healthy, ${unhealthy} unhealthy of ${targets.length}${deep ? " (deep probe: collector chat + TTS synth)" : ""}`);
 }
 
-await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles, self=${SELF_ENABLED ? "on" : "off"}, alerts=${TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN ? "telegram" : "log-only"}${RUN_ONCE ? " (ONCE)" : ""}`);
+await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles, self=${SELF_ENABLED ? "on" : "off"}, alerts=${TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN ? "telegram" : "log-only"}, escalate after ${ESCALATE_AFTER} deep fails (dashboard token ${DASHBOARD_DEVICE_TOKEN ? "found" : "MISSING — dashboard notifications will 401 if auth is on"})${RUN_ONCE ? " (ONCE)" : ""}`);
 let cycle = 0;
 for (;;) {
   try {
