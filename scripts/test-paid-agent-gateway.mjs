@@ -10,6 +10,7 @@ const files = {
   builderHelper: "src/lib/services/wallet/x402-builder-code.ts",
   contextIndex: "src/lib/services/context-index.ts",
   docs: "docs/for-users/features/wallets-honey-and-x402.md",
+  proxy: "src/proxy.ts",
 };
 
 const contents = Object.fromEntries(
@@ -18,6 +19,12 @@ const contents = Object.fromEntries(
     await readFile(new URL(path, ROOT), "utf8"),
   ])),
 );
+
+// The seller routes must stay exempt from the dashboard auth gate: the x402
+// handshake needs the first request to arrive credential-less so the resource
+// server can answer with the 402 challenge. Live regression coverage lives in
+// scripts/test-dashboard-api-auth.mjs (excluded from the hermetic gate).
+const proxyAllowlist = contents.proxy.match(/SELF_AUTHENTICATING_API_PREFIXES = \[[\s\S]*?\]/)?.[0] ?? "";
 
 const checks = [
   ["service uses x402 resource server", contents.service.includes("x402ResourceServer")],
@@ -45,6 +52,8 @@ const checks = [
   ["route exposes readiness", contents.route.includes("getPaidAgentGatewayStatus")],
   ["official route delegates to hosted client", contents.officialRoute.includes("proxyOfficialPaidAgentRequest")],
   ["official route exposes hosted readiness", contents.officialRoute.includes("getOfficialPaidAgentStatus")],
+  ["proxy self-auth allowlist exempts seller route", proxyAllowlist.includes("\"/api/paid-agents\"")],
+  ["proxy self-auth allowlist exempts official seller route", proxyAllowlist.includes("\"/api/official-paid-agents\"")],
   ["context index has paid gateway capability", contents.contextIndex.includes("tool-schema:paid-agent-x402-gateway")],
   ["context index names OpenAI-compatible endpoint", contents.contextIndex.includes("/api/paid-agents/<slug>/chat/completions")],
   ["context index names official hosted endpoint", contents.contextIndex.includes("/api/official-paid-agents/<slug>/chat/completions")],

@@ -1,10 +1,16 @@
 import "server-only";
 
 import { promises as fs } from "fs";
+import { statSync } from "fs";
+import { hostname } from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 
 import { homedir } from "@/lib/home-dir";
+import { normalizeMachineName } from "@/features/fleet/fleet-identity";
+import { recordCompanyConfigChange, type CompanyConfigAction } from "@/lib/services/company-governance";
+import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
   Company,
   CompanyApexGoal,
@@ -23,20 +29,284 @@ import {
   type SpendLedgerRecord,
 } from "@/lib/services/wallet/spend-ledger";
 
-export const COMPANIES_PATH = path.join(homedir(), ".hivemindos", "companies.json");
+/**
+ * Storage model (vault-primary, local-fallback — the project-registry pattern):
+ *
+ * - DEFINITIONS (charter, apex goal, crew, budgets, policy flags) live in the
+ *   Syncthing-replicated shared vault at Operations/Companies/companies.json so
+ *   every fleet machine sees the same portfolio and Obsidian can edit it.
+ * - HOT OPERATIONAL STATE (dispatch stamps + metric readings: lastDispatchedAt,
+ *   apexGoal.current/progress, revenue) lives per machine in
+ *   ~/.hivemindos/companies-runtime.json so tick-level writes never churn sync.
+ * - With no vault available, everything falls back to the legacy single local
+ *   file (~/.hivemindos/companies.json) with the original behavior.
+ *
+ * Existing local records are migrated into the vault once per machine (guarded
+ * by migratedCompanyIds in the overlay so a later delete can't be resurrected);
+ * the legacy file is left untouched as the rollback copy. Because definitions
+ * replicate, auto-dispatch is gated per company by homeMachineKey — see
+ * companyRunsOnThisMachine().
+ */
 
-async function readRaw(): Promise<Company[]> {
+export const COMPANIES_PATH = path.join(homedir(), ".hivemindos", "companies.json");
+export const COMPANIES_RUNTIME_PATH = path.join(homedir(), ".hivemindos", "companies-runtime.json");
+const VAULT_COMPANIES_FILE = path.join("Operations", "Companies", "companies.json");
+
+type CompaniesStorage = { source: "obsidian" | "local"; file: string };
+
+function resolveCompaniesStorage(): CompaniesStorage {
+  const configured = DEFAULT_SHARED_VAULT.vaultPath?.trim();
+  if (configured) {
+    const root = resolveObsidianVaultPath(configured);
+    try {
+      if (statSync(root).isDirectory()) return { source: "obsidian", file: path.join(root, VAULT_COMPANIES_FILE) };
+    } catch {
+      // Vault unavailable — fall back to the legacy local file.
+    }
+  }
+  return { source: "local", file: COMPANIES_PATH };
+}
+
+/** Per-company hot state kept out of the replicated definitions file. */
+type CompanyRuntimeState = {
+  lastDispatchedAt?: number;
+  apexGoal?: { current?: string; progress?: number };
+  revenue?: CompanyRevenue;
+  updatedAt?: string;
+};
+
+type CompanyRuntimeOverlay = {
+  version: 1;
+  /** Ids ever migrated from the legacy local file — a vault delete must stay deleted. */
+  migratedCompanyIds?: string[];
+  companies: Record<string, CompanyRuntimeState>;
+};
+
+async function readCompaniesFile(file: string): Promise<Company[]> {
   try {
-    const parsed = JSON.parse(await fs.readFile(COMPANIES_PATH, "utf8")) as unknown;
+    const parsed = JSON.parse(await fs.readFile(file, "utf8")) as unknown;
     return Array.isArray(parsed) ? (parsed as Company[]) : [];
   } catch {
     return [];
   }
 }
 
+async function writeFileAtomic(file: string, contents: string): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  await fs.writeFile(tmp, contents, { mode: 0o600 });
+  await fs.rename(tmp, file);
+}
+
+async function readRuntimeOverlay(): Promise<CompanyRuntimeOverlay> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(COMPANIES_RUNTIME_PATH, "utf8")) as CompanyRuntimeOverlay;
+    if (parsed && typeof parsed === "object" && parsed.companies && typeof parsed.companies === "object") {
+      return { version: 1, migratedCompanyIds: parsed.migratedCompanyIds ?? [], companies: parsed.companies };
+    }
+  } catch {
+    // Missing/corrupt overlay → start empty; definitions are the durable layer.
+  }
+  return { version: 1, migratedCompanyIds: [], companies: {} };
+}
+
+async function writeRuntimeOverlay(overlay: CompanyRuntimeOverlay): Promise<void> {
+  await writeFileAtomic(COMPANIES_RUNTIME_PATH, JSON.stringify(overlay, null, 2));
+}
+
+/** The replicated definition projection: everything except hot operational state. */
+function companyDefinitionOf(record: Company): Company {
+  return {
+    id: record.id,
+    name: record.name,
+    agentIds: record.agentIds,
+    charter: record.charter,
+    dailyBudgetUsd: record.dailyBudgetUsd,
+    monthlyBudgetUsd: record.monthlyBudgetUsd,
+    totalBudgetUsd: record.totalBudgetUsd,
+    frozen: record.frozen,
+    createdAt: record.createdAt,
+    createdAtMs: record.createdAtMs,
+    updatedAt: record.updatedAt,
+    ticker: record.ticker,
+    sector: record.sector,
+    blurb: record.blurb,
+    status: record.status,
+    alignment: record.alignment,
+    apexGoal: record.apexGoal
+      ? {
+          title: record.apexGoal.title,
+          metric: record.apexGoal.metric,
+          target: record.apexGoal.target,
+          unit: record.apexGoal.unit,
+        }
+      : undefined,
+    members: record.members,
+    autonomy: record.autonomy,
+    process: record.process,
+    flowTemplateId: record.flowTemplateId,
+    homeMachineKey: record.homeMachineKey,
+    projectId: record.projectId,
+  };
+}
+
+function companyRuntimeStateOf(record: Company): CompanyRuntimeState {
+  const hotGoal =
+    record.apexGoal && (record.apexGoal.current !== undefined || record.apexGoal.progress !== undefined)
+      ? { current: record.apexGoal.current, progress: record.apexGoal.progress }
+      : undefined;
+  return {
+    lastDispatchedAt: record.lastDispatchedAt,
+    apexGoal: hotGoal,
+    revenue: record.revenue,
+    updatedAt: record.updatedAt,
+  };
+}
+
+function mergeCompany(definition: Company, runtime?: CompanyRuntimeState): Company {
+  if (!runtime) return definition;
+  const apexGoal = definition.apexGoal
+    ? { ...definition.apexGoal, ...(runtime.apexGoal ?? {}) }
+    : definition.apexGoal;
+  // Callers read updatedAt as "last time anything happened" — hot or config.
+  const updatedAt =
+    runtime.updatedAt && runtime.updatedAt > definition.updatedAt ? runtime.updatedAt : definition.updatedAt;
+  return {
+    ...definition,
+    apexGoal,
+    revenue: runtime.revenue,
+    lastDispatchedAt: runtime.lastDispatchedAt,
+    updatedAt,
+  };
+}
+
+/** Definitions serialization, updatedAt excluded — hot writes must not churn Syncthing. */
+function definitionsFingerprint(records: Company[]): string {
+  return JSON.stringify(records.map((record) => ({ ...companyDefinitionOf(record), updatedAt: undefined })));
+}
+
+async function writeDefinitionsIfChanged(file: string, records: Company[]): Promise<boolean> {
+  const definitions = records.map(companyDefinitionOf);
+  const current = await readCompaniesFile(file);
+  if (current.length === definitions.length && definitionsFingerprint(current) === definitionsFingerprint(definitions)) {
+    return false;
+  }
+  await writeFileAtomic(file, JSON.stringify(definitions, null, 2));
+  return true;
+}
+
+/**
+ * One-shot-per-record migration of legacy local companies into the vault. The
+ * legacy file stays in place as the rollback copy; migratedCompanyIds prevents
+ * a company deleted from the vault from being resurrected on the next read.
+ */
+async function migrateLegacyCompanies(
+  definitions: Company[],
+  overlay: CompanyRuntimeOverlay,
+  storageFile: string,
+): Promise<Company[]> {
+  const legacy = await readCompaniesFile(COMPANIES_PATH);
+  if (legacy.length === 0) return definitions;
+  const known = new Set(definitions.map((record) => record.id));
+  const migratedIds = new Set(overlay.migratedCompanyIds ?? []);
+  const pending = legacy.filter((record) => record?.id && !known.has(record.id) && !migratedIds.has(record.id));
+  if (pending.length === 0) return definitions;
+
+  const localKey = hostname();
+  const next = [...definitions];
+  for (const record of pending) {
+    const claimed: Company = { ...record, homeMachineKey: record.homeMachineKey?.trim() || localKey };
+    next.push(companyDefinitionOf(claimed));
+    overlay.companies[record.id] = companyRuntimeStateOf(claimed);
+    migratedIds.add(record.id);
+  }
+  overlay.migratedCompanyIds = [...migratedIds];
+  await writeRuntimeOverlay(overlay);
+  await writeDefinitionsIfChanged(storageFile, next);
+  console.log(
+    `[companies-store] migrated ${pending.length} local company record(s) into the shared vault (home machine: ${localKey})`,
+  );
+  for (const record of pending) {
+    await recordConfigChange("migrated", null, { ...record, homeMachineKey: record.homeMachineKey?.trim() || localKey }, "companies-store:migration");
+  }
+  return next;
+}
+
+async function readRaw(): Promise<Company[]> {
+  const storage = resolveCompaniesStorage();
+  if (storage.source === "local") return readCompaniesFile(storage.file);
+  const [definitions, overlay] = await Promise.all([readCompaniesFile(storage.file), readRuntimeOverlay()]);
+  const migrated = await migrateLegacyCompanies(definitions, overlay, storage.file);
+  return migrated.map((definition) => mergeCompany(definition, overlay.companies[definition.id]));
+}
+
 async function writeRaw(records: Company[]): Promise<void> {
-  await fs.mkdir(path.dirname(COMPANIES_PATH), { recursive: true, mode: 0o700 });
-  await fs.writeFile(COMPANIES_PATH, JSON.stringify(records, null, 2), { mode: 0o600 });
+  const storage = resolveCompaniesStorage();
+  if (storage.source === "local") {
+    await writeFileAtomic(storage.file, JSON.stringify(records, null, 2));
+    return;
+  }
+  const overlay = await readRuntimeOverlay();
+  const nextRuntime: CompanyRuntimeOverlay["companies"] = {};
+  for (const record of records) nextRuntime[record.id] = companyRuntimeStateOf(record);
+  overlay.companies = nextRuntime; // entries for deleted companies drop out here
+  await writeRuntimeOverlay(overlay);
+  await writeDefinitionsIfChanged(storage.file, records);
+}
+
+/** Governance trail is best-effort: it must never block or fail a company write. */
+async function recordConfigChange(
+  action: CompanyConfigAction,
+  before: Company | null,
+  after: Company | null,
+  source: string,
+): Promise<void> {
+  const subject = after ?? before;
+  if (!subject) return;
+  try {
+    await recordCompanyConfigChange({
+      action,
+      companyId: subject.id,
+      companyName: subject.name,
+      before: before ? (companyDefinitionOf(before) as unknown as Record<string, unknown>) : null,
+      after: after ? (companyDefinitionOf(after) as unknown as Record<string, unknown>) : null,
+      source,
+    });
+  } catch (error) {
+    console.warn("[companies-store] governance trail write failed:", error instanceof Error ? error.message : error);
+  }
+}
+
+/**
+ * May THIS machine's autonomy driver auto-dispatch this company? In vault mode
+ * definitions replicate fleet-wide, so only the claimed home machine runs the
+ * company; an unclaimed company waits for an explicit Launch (claim-on-launch).
+ * In local mode the file is per-machine — no duplication is possible — so the
+ * gate stays open for backward compatibility.
+ */
+export function companyRunsOnThisMachine(company: Pick<Company, "homeMachineKey">): boolean {
+  if (resolveCompaniesStorage().source === "local") return true;
+  const home = normalizeMachineName(company.homeMachineKey);
+  if (!home) return false;
+  return home === normalizeMachineName(hostname());
+}
+
+export function localCompanyMachineKey(): string {
+  return hostname();
+}
+
+/** Set homeMachineKey to this machine when unset (called on explicit Launch). */
+export async function claimCompanyHomeMachine(id: string): Promise<Company | null> {
+  const records = await readRaw();
+  const company = records.find((record) => record.id === id);
+  if (!company) return null;
+  if (company.homeMachineKey?.trim()) return company;
+  const before = companyDefinitionOf(company);
+  company.homeMachineKey = hostname();
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:claim-home-machine");
+  return company;
 }
 
 export async function readCompanies(): Promise<Company[]> {
@@ -174,6 +444,7 @@ export async function setCompanyAgents(
   const records = await readRaw();
   const company = records.find((record) => record.id === id);
   if (!company) return null;
+  const before = companyDefinitionOf(company);
   const normalizedMembers = members ? normalizeMembers(members) : undefined;
   if (normalizedMembers) {
     company.members = normalizedMembers;
@@ -188,6 +459,7 @@ export async function setCompanyAgents(
   }
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:set-agents");
   return company;
 }
 
@@ -200,6 +472,7 @@ export async function addCompanyMembers(id: string, members: CompanyMember[]): P
   const records = await readRaw();
   const company = records.find((record) => record.id === id);
   if (!company) return null;
+  const before = companyDefinitionOf(company);
   const existing: CompanyMember[] = company.members?.length
     ? company.members
     : (company.agentIds ?? []).map((agentId) => ({ agentId }));
@@ -212,6 +485,7 @@ export async function addCompanyMembers(id: string, members: CompanyMember[]): P
   company.agentIds = agentIdsFromMembers(merged);
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:add-members");
   return company;
 }
 
@@ -239,6 +513,10 @@ export type UpsertCompanyInput = {
   apexGoal?: CompanyApexGoal;
   revenue?: CompanyRevenue;
   members?: CompanyMember[];
+  /** Which machine's driver owns auto-dispatch (defaults to this machine on create). */
+  homeMachineKey?: string;
+  /** Project-registry id of the company's domain code repo. */
+  projectId?: string;
 };
 
 export async function upsertCompany(input: UpsertCompanyInput): Promise<Company> {
@@ -280,12 +558,19 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     members: members ?? undefined,
     lastDispatchedAt: existing?.lastDispatchedAt,
     autonomy: existing?.autonomy,
+    process: existing?.process,
+    flowTemplateId: existing?.flowTemplateId,
+    // New companies are claimed by the machine that created them so exactly one
+    // fleet driver auto-dispatches (definitions replicate through the vault).
+    homeMachineKey: input.homeMachineKey !== undefined ? trimmed(input.homeMachineKey) : (existing?.homeMachineKey ?? (existing ? undefined : hostname())),
+    projectId: input.projectId !== undefined ? trimmed(input.projectId) : existing?.projectId,
   };
 
   const next = existing
     ? records.map((record) => (record.id === company.id ? company : record))
     : [...records, company];
   await writeRaw(next);
+  await recordConfigChange(existing ? "updated" : "created", existing ?? null, company, "companies-store:upsert");
   return company;
 }
 
@@ -305,9 +590,11 @@ export async function setCompanyAutonomy(id: string, enabled: boolean): Promise<
   const records = await readRaw();
   const company = records.find((record) => record.id === id);
   if (!company) return null;
+  const before = companyDefinitionOf(company);
   company.autonomy = enabled;
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:set-autonomy");
   return company;
 }
 
@@ -394,17 +681,21 @@ export async function setCompanyFrozen(id: string, frozen: boolean): Promise<Com
   const records = await readRaw();
   const company = records.find((record) => record.id === id);
   if (!company) return null;
+  const before = companyDefinitionOf(company);
   company.frozen = frozen;
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:set-frozen");
   return company;
 }
 
 export async function deleteCompany(id: string): Promise<boolean> {
   const records = await readRaw();
+  const removed = records.find((record) => record.id === id) ?? null;
   const next = records.filter((record) => record.id !== id);
   if (next.length === records.length) return false;
   await writeRaw(next);
+  await recordConfigChange("deleted", removed, null, "companies-store:delete");
   return true;
 }
 

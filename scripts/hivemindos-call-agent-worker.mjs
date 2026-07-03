@@ -79,12 +79,20 @@ function runtimeSessionIdFor(target) {
   return `voice-${id}`.replace(/[^A-Za-z0-9._-]+/g, "-");
 }
 
+// Hub /api routes 401 tokenless since the dashboard API auth gate moved to
+// src/proxy.ts. loadEnvFiles() has already folded .env.local and
+// ~/.hivemindos/.env into process.env by the time any call fires.
+function hubHeaders(extra = {}) {
+  const token = (process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN || "").trim();
+  return token ? { ...extra, "x-hivemindos-device-token": token } : extra;
+}
+
 async function askComputerAgent(target, message) {
   const hubUrl = String(target?.hubUrl || "").replace(/\/+$/, "");
   if (!hubUrl) return "The paired HivemindOS hub URL was not provided for this call.";
   const response = await fetch(`${hubUrl}/api/phone`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: hubHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       action: "agent-voice-turn",
       agent: target.agent,
@@ -108,7 +116,7 @@ async function postVoiceRunAction(target, body) {
   if (!hubUrl || !voiceRunId) return;
   await fetch(`${hubUrl}/api/phone`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: hubHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({ voiceRunId, ...body }),
     signal: AbortSignal.timeout(10_000),
   }).catch(() => undefined);

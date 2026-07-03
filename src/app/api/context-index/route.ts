@@ -3,6 +3,7 @@ import { searchContextIndex, writeConnectedAppsRagSnapshot, type ContextConnecte
 import { createContextXrayManifestFromContextIndex } from "@/lib/services/context-xray";
 import { importVaultToGbrain, queryGbrain } from "@/lib/services/brain/gbrain";
 import type { GBrainConfig } from "@/lib/types/agent-runtime";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,7 @@ async function connectedAppsFromExistingAppsView(request: NextRequest, includeCo
   const url = new URL("/api/fleet/apps", request.url);
   const response = await fetch(url, {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(7_000),
   }).catch(() => null);
   if (!response?.ok) return undefined;

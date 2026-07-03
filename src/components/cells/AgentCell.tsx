@@ -141,6 +141,7 @@ export function AgentCell({
               height={32}
               className="size-8 object-contain"
               aria-hidden="true"
+              unoptimized
             />
           )}
           <span

@@ -1,6 +1,7 @@
 import { shellBaseFromCollectorUrl, shellSessionUrl } from "@/app/api/fleet/shell/shell-target";
 import { discoverRawConnectedApps, type ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import {
   APP_CACHE_MS,
   cachedApp,
@@ -502,6 +503,7 @@ function runningModelsForMachine(machineName: string, collectorUrl: string, runn
 async function fleetLaunchMachines(origin: string): Promise<FleetLaunchMachine[]> {
   const response = await fetch(new URL("/api/fleet/discover?includeSnapshots=0&fresh=1", origin), {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(LAUNCH_DISCOVERY_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`Fleet discovery returned HTTP ${response.status}.`);
@@ -826,6 +828,7 @@ async function discoveredApps(origin: string, options?: { force?: boolean; selec
   }
   const normalizedPromise = fetch(new URL("/api/fleet/apps?refresh=1&fast=1", origin), {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
   })
     .then(async (response) => {

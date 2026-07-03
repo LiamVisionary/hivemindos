@@ -5,12 +5,13 @@ import {
   companyDriverLeaseDisabled,
   releaseCompanyDriverLease,
 } from "@/lib/services/company-driver-lease";
-import { markCompanyDispatched, parseMetricNumber, readCompanies } from "@/lib/services/companies-store";
+import { companyRunsOnThisMachine, markCompanyDispatched, parseMetricNumber, readCompanies } from "@/lib/services/companies-store";
 import { countDispatchableMembers, dispatchCompanyGoal, scopeFleetToMembers } from "@/lib/services/companies-orchestration";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { redispatchReadyQueenBeeTasks, routePendingQueenBeeTasks } from "@/lib/services/queen-bee/control-plane";
 import { readBoard, reclaimStaleTasks } from "@/lib/services/kanban/local-kanban-store";
-import { notifyEscalation, runEscalationSweep } from "@/lib/services/messaging/escalation-notify";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import { notifyEscalation, resolveEscalationNotification, runEscalationSweep } from "@/lib/services/messaging/escalation-notify";
 import { syncCompanyTaskOutcomes } from "@/lib/services/company-memory";
 
 /**
@@ -46,7 +47,62 @@ export type CompanyAutonomyDriverStatus = {
 
 type Runner = CompanyAutonomyDriverStatus & { stopRequested: boolean; stopped: Promise<void> };
 
-const globalState = globalThis as typeof globalThis & { __hivemindCompanyAutonomyDriver?: Runner };
+const globalState = globalThis as typeof globalThis & {
+  __hivemindCompanyAutonomyDriver?: Runner;
+  __hivemindCompanyDriverSelfPort?: string;
+  __hivemindCompanyDriverSelfBase?: string;
+};
+
+/**
+ * The server doesn't always expose its own listen port as process.env.PORT
+ * (the Tauri-spawned dev server doesn't) — and without it the driver both
+ * skipped boot autostart and self-fetched an EMPTY fleet snapshot, so it never
+ * dispatched anything while looking "running". Any request that reaches the
+ * driver/companies routes records its own port here as a fallback.
+ * globalThis-backed so dev HMR module reloads don't lose it.
+ */
+export function rememberCompanyDriverSelfPort(port: string | number | null | undefined): void {
+  const value = String(port ?? "").trim();
+  if (value && /^\d+$/.test(value)) globalState.__hivemindCompanyDriverSelfPort = value;
+}
+
+export function resolveCompanyDriverSelfPort(): string {
+  return process.env.PORT?.trim() || globalState.__hivemindCompanyDriverSelfPort || "";
+}
+
+/**
+ * Port alone isn't enough: this server may listen on ONE loopback family only
+ * (the Tauri-spawned dev server binds [::1] exclusively — a self-fetch to
+ * 127.0.0.1 on the right port still ECONNREFUSED, so every tick saw an empty
+ * fleet and dispatched nothing). Remember the full host:port a real request
+ * arrived on (works through the Tauri :5021 proxy too), and try both loopback
+ * families as fallbacks.
+ */
+export function rememberCompanyDriverSelfBase(hostHeader: string | null | undefined): void {
+  const value = (hostHeader ?? "").trim();
+  // Loopback shapes only ("127.0.0.1:5021", "localhost:5020", "[::1]:5122") —
+  // never remember an outward host as our self-fetch base.
+  if (!/^(127\.0\.0\.1|localhost|\[::1\]):\d+$/i.test(value)) return;
+  globalState.__hivemindCompanyDriverSelfBase = `http://${value}`;
+  rememberCompanyDriverSelfPort(value.match(/:(\d+)$/)?.[1]);
+}
+
+/** Ordered self-fetch candidates: last-known-good base first, then both loopback families. */
+export function resolveCompanyDriverSelfBases(): string[] {
+  const bases: string[] = [];
+  if (globalState.__hivemindCompanyDriverSelfBase) bases.push(globalState.__hivemindCompanyDriverSelfBase);
+  const port = resolveCompanyDriverSelfPort();
+  if (port) {
+    for (const host of ["127.0.0.1", "[::1]"]) {
+      const base = `http://${host}:${port}`;
+      if (!bases.includes(base)) bases.push(base);
+    }
+  }
+  return bases;
+}
+
+/** Foreign-homed companies already logged this process — one line each, not one per tick. */
+const loggedForeignCompanies = new Set<string>();
 
 function envNum(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -86,18 +142,33 @@ function sleepUnlessStopped(runner: Runner, ms: number): Promise<void> {
 
 /** Pull a live fleet snapshot by self-fetching our own discovery route (no auth). */
 async function fetchFleetSnapshot(): Promise<QueenBeeFleetMachine[]> {
-  const port = process.env.PORT?.trim();
-  if (!port) return [];
-  try {
-    const res = await fetch(`http://127.0.0.1:${port}/api/fleet/discover?stale=1&includeSnapshots=0`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
-    });
-    const json = (await res.json().catch(() => ({}))) as { machines?: QueenBeeFleetMachine[] };
-    return Array.isArray(json?.machines) ? json.machines : [];
-  } catch {
+  const bases = resolveCompanyDriverSelfBases();
+  if (!bases.length) {
+    console.warn(
+      "[company-autonomy-driver] cannot resolve this server's own address (no PORT env, no driver/companies route hit yet) — fleet snapshot unavailable, company dispatch skipped this tick",
+    );
     return [];
   }
+  for (const base of bases) {
+    try {
+      // Self-fetches 401 without a credential since the API auth gate moved to
+      // src/proxy.ts — ride the server's own device token (empty when auth is
+      // in setup mode). Without this the driver silently saw an empty fleet.
+      const res = await fetch(`${base}/api/fleet/discover?stale=1&includeSnapshots=0`, {
+        cache: "no-store",
+        headers: internalApiAuthHeaders(),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) continue;
+      const json = (await res.json().catch(() => ({}))) as { machines?: QueenBeeFleetMachine[] };
+      if (!Array.isArray(json?.machines)) continue;
+      globalState.__hivemindCompanyDriverSelfBase = base; // remember the door that worked
+      return json.machines;
+    } catch {
+      // wrong loopback family / proxy down — try the next candidate
+    }
+  }
+  return [];
 }
 
 /** Identifiers (id + name) of a company's member agents, for matching board assignees. */
@@ -111,6 +182,50 @@ function memberIdentities(scoped: QueenBeeFleetMachine[]): Set<string> {
     }
   }
   return ids;
+}
+
+// A driver that ticks with an empty fleet snapshot dispatches nothing while
+// looking healthy. Track consecutive empty snapshots and escalate — this is the
+// silent failure mode that stalled companies for hours (notifyEscalation
+// de-dupes on the key, so repeat calls past the threshold are cheap).
+let emptyFleetTicks = 0;
+let emptyFleetEscalated = false;
+async function trackFleetVisibility(machineCount: number): Promise<void> {
+  if (machineCount > 0) {
+    // Announce recovery once so the earlier alert doesn't read as still-live —
+    // an unresolved-looking "can't see the fleet" cost real diagnosis time on
+    // 2026-07-03 after the underlying cause was already fixed.
+    if (emptyFleetEscalated) {
+      emptyFleetEscalated = false;
+      // Resolve the original alarm card in place AND announce recovery — the
+      // resolved badge keeps the old card honest, the notice pings the feed.
+      await resolveEscalationNotification("company-driver-empty-fleet", {
+        status: "resolved",
+        note: `Fleet snapshot recovered (${machineCount} machine${machineCount === 1 ? "" : "s"}) — company dispatch resumed.`,
+      }).catch(() => undefined);
+      await notifyEscalation({
+        key: `company-driver-empty-fleet-recovered:${Date.now()}`,
+        title: "Company autonomy driver can see the fleet again",
+        body: `The driver's fleet snapshot is back (${machineCount} machine${machineCount === 1 ? "" : "s"}) after ${emptyFleetTicks} empty ticks — company dispatch has resumed. The earlier "can't see the fleet" alert is resolved.`,
+        severity: "high",
+        ttlMs: 0,
+        tags: ["company", "driver", "recovered"],
+      }).catch(() => undefined);
+    }
+    emptyFleetTicks = 0;
+    return;
+  }
+  emptyFleetTicks += 1;
+  if (emptyFleetTicks < 6) return; // ~30 min at the default 5-min tick
+  emptyFleetEscalated = true;
+  await notifyEscalation({
+    key: "company-driver-empty-fleet",
+    title: "Company autonomy driver can't see the fleet",
+    body: `The driver's self-fetched fleet snapshot has been empty for ${emptyFleetTicks} consecutive ticks, so no company can dispatch work. Usual causes: the server's own port is unresolvable (no PORT env and no dashboard/watchdog request yet), the self-fetch is unauthenticated against the API auth gate, or /api/fleet/discover is failing.`,
+    severity: "high",
+    ttlMs: 6 * 60 * 60 * 1_000,
+    tags: ["company", "driver"],
+  }).catch(() => undefined);
 }
 
 async function tickOnce(): Promise<void> {
@@ -127,13 +242,25 @@ async function tickOnce(): Promise<void> {
   // company eligibility: a task queued while its agent was offline must get
   // delegated once the agent returns, or it waits forever.
   const fleet = await fetchFleetSnapshot();
+  await trackFleetVisibility(fleet.length);
   const routedPending = await routePendingQueenBeeTasks(fleet, {});
   if (routedPending > 0) console.log(`[company-autonomy-driver] routed ${routedPending} pending task(s) to online agents`);
 
   const companies = await readCompanies();
-  const eligible = companies.filter(
+  const launched = companies.filter(
     (c) => c.autonomy && !c.frozen && Boolean(c.apexGoal?.title?.trim()) && (c.agentIds?.length ?? 0) > 0,
   );
+  // Company definitions replicate fleet-wide through the shared vault, so every
+  // machine's driver sees every company — only the claimed home machine may
+  // auto-dispatch, or the same goal fans out once per machine.
+  const eligible = launched.filter((c) => companyRunsOnThisMachine(c));
+  for (const foreign of launched) {
+    if (eligible.includes(foreign) || loggedForeignCompanies.has(foreign.id)) continue;
+    loggedForeignCompanies.add(foreign.id);
+    console.log(
+      `[company-autonomy-driver] ${foreign.name} (${foreign.id}) is homed on "${foreign.homeMachineKey ?? "unclaimed"}" — this machine will not auto-dispatch it`,
+    );
+  }
   // Fold finished company-sourced tasks into each company's durable memory ledger
   // BEFORE re-dispatch, so a re-plan triggered this tick already sees the outcomes.
   // Covers every company (even autonomy off) — memory accrues whenever work finishes.
@@ -248,9 +375,9 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       // Stamp BEFORE dispatching so the throttle still applies if the dispatch
       // throws — prevents a tight retry loop on a persistently failing company.
       await markCompanyDispatched(company.id, Date.now());
-      const port = process.env.PORT?.trim();
+      const origin = resolveCompanyDriverSelfBases()[0];
       const result = await dispatchCompanyGoal(company, fleet, {
-        origin: port ? `http://127.0.0.1:${port}` : undefined,
+        origin,
         recentCompanyTaskTitles,
       });
       if (result.taskCount === 0) {

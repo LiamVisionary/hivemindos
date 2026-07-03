@@ -95,6 +95,29 @@ export const QUEEN_TOOL_DEFS: QueenToolDef[] = [
   },
 ];
 
+/**
+ * Chat-only tools: offered to the TYPED hive input, whose tool loop executes
+ * client-side in queen-chat-store — NOT to the realtime voice session, whose
+ * executor doesn't know them. The typed Queen previously had no way to READ
+ * the Work Board (only create/delegate), so "what's blocking task X?" sent
+ * her hunting through agents and directories instead of the board itself.
+ */
+export const QUEEN_CHAT_ONLY_TOOL_DEFS: QueenToolDef[] = [
+  {
+    name: "read_work_board",
+    description:
+      "Read the HivemindOS Work Board directly: look up a task's current status, assignee, priority, failure reason, and latest result. Use whenever the user asks about a task, blocked or needs-human work, an escalation notification, or what a company's crew is doing. Pass taskId when you have one (t_…); otherwise pass a search phrase from the task title. With neither, returns board totals by status.",
+    parameters: {
+      type: "object",
+      properties: {
+        taskId: { type: "string", description: "Exact Work Board task id, e.g. t_mr4hb1ee_rrv9o." },
+        query: { type: "string", description: "Words from the task title to search for when no id is known." },
+      },
+      required: [],
+    },
+  },
+];
+
 /** OpenAI Realtime format: flat `{ type, name, description, parameters }`. */
 export function queenRealtimeTools() {
   return QUEEN_TOOL_DEFS.map((t) => ({
@@ -107,7 +130,7 @@ export function queenRealtimeTools() {
 
 /** OpenAI Chat Completions format: nested `{ type, function: {...} }`. */
 export function queenChatTools() {
-  return QUEEN_TOOL_DEFS.map((t) => ({
+  return [...QUEEN_TOOL_DEFS, ...QUEEN_CHAT_ONLY_TOOL_DEFS].map((t) => ({
     type: "function" as const,
     function: { name: t.name, description: t.description, parameters: t.parameters },
   }));

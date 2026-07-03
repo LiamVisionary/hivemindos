@@ -517,16 +517,16 @@
 
 .kanbanPickupPreview {
   display: inline-flex;
-  max-width: min(100%, 210px);
+  max-width: min(100%, 180px);
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   margin-right: auto;
   border: 1px solid rgba(250, 204, 21, 0.34);
   border-radius: 999px;
   background: rgba(250, 204, 21, 0.1);
-  box-shadow: 0 0 22px rgba(250, 204, 21, 0.14);
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.12);
   color: #fde68a;
-  padding: 4px 9px 4px 5px;
+  padding: 2px 8px 2px 4px;
   animation: pickupPreviewEnter 0.32s cubic-bezier(0.2, 1.35, 0.36, 1) both;
 }
 
@@ -543,8 +543,8 @@
 }
 
 .kanbanPickupPreview img {
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
   object-fit: contain;
   transform-origin: 50% 80%;
@@ -553,11 +553,15 @@
 
 .kanbanPickupPreview small {
   min-width: 0;
-  overflow-wrap: anywhere;
+  flex: 0 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #fde68a;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1.15;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
   text-transform: uppercase;
 }
 
@@ -2229,7 +2233,9 @@
 .kanbanCardShell:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .kanbanCard:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .kanbanCardShell:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
-.kanbanCard:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]) {
+.kanbanCard:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
+.kanbanCardShell:has([data-slot="cell-menu-trigger"][aria-expanded="true"]),
+.kanbanCard:has([data-slot="cell-menu-trigger"][aria-expanded="true"]) {
   position: relative;
   z-index: 35;
 }
@@ -2237,7 +2243,9 @@
 .workBoardPanel .kanbanColumn:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .workBoardPanel .kanbanCards:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .workBoardPanel .kanbanColumn:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
-.workBoardPanel .kanbanCards:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]) {
+.workBoardPanel .kanbanCards:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
+.workBoardPanel .kanbanColumn:has([data-slot="cell-menu-trigger"][aria-expanded="true"]),
+.workBoardPanel .kanbanCards:has([data-slot="cell-menu-trigger"][aria-expanded="true"]) {
   overflow: visible;
   z-index: 35;
 }

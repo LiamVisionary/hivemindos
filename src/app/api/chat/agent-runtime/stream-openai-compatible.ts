@@ -1,5 +1,6 @@
 import { HIVEMIND_OS_RUNTIME, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 import { proxyInput, proxyOutput } from "@/lib/services/agent-security-proxy";
 import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
@@ -190,7 +191,9 @@ type ImageGenerationDispatchResult = {
 async function dispatchImageGenerationViaRoute(origin: string, prompt: string, signal?: AbortSignal): Promise<ImageGenerationDispatchResult> {
   const response = await fetch(new URL("/api/chat/image-generation", origin), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    // Self-fetches 401 without the server's own device token since the API
+    // auth gate moved to src/proxy.ts.
+    headers: { "Content-Type": "application/json", ...internalApiAuthHeaders() },
     body: JSON.stringify({ prompt }),
     cache: "no-store",
     signal: signal ?? AbortSignal.timeout(IMAGE_TOOL_DISPATCH_TIMEOUT_MS),

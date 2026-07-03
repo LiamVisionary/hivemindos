@@ -1,9 +1,31 @@
 #!/usr/bin/env node
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, rm, readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const baseUrl = process.env.KANBAN_TEST_BASE_URL || "http://127.0.0.1:5020";
+
+// Dashboard /api routes 401 tokenless since the API auth gate moved to
+// src/proxy.ts (same resolution order as scripts/fleet-health-watchdog.mjs).
+function envFileValue(path, key) {
+  if (!existsSync(path)) return "";
+  const match = readFileSync(path, "utf8").match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.+)\\s*$`, "m"));
+  let value = match?.[1]?.trim() ?? "";
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+  return value.trim();
+}
+
+const deviceToken = (
+  process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || envFileValue(resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+  || envFileValue(join(homedir(), ".hivemindos", ".env"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+).trim();
+
+function dashboardHeaders(extra = {}) {
+  return deviceToken ? { ...extra, "x-hivemindos-device-token": deviceToken } : extra;
+}
 const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const vaultPath = join(tmpdir(), `hivemindos-kanban-workflow-${runId}`);
 const kanbanFolder = "Projects/Test/Kanban";
@@ -21,7 +43,7 @@ async function request(method, body = {}, params = {}) {
   }
   const response = await fetch(url, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: dashboardHeaders({ "Content-Type": "application/json" }),
     body: method === "GET" ? undefined : JSON.stringify({ vaultPath, kanbanFolder, ...body }),
   });
   const data = await response.json().catch(() => null);
@@ -36,7 +58,7 @@ async function projectRequest(path, body = {}, params = {}) {
   }
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: dashboardHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ vaultPath, ...body }),
   });
   const data = await response.json().catch(() => null);

@@ -32,6 +32,8 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
   fleetSnapshot?: QueenBeeFleetMachine[] | null;
   /** Explicit worker-class hints for routing (e.g. ["code"]); defaults to []. */
   skills?: string[] | null;
+  /** Project-registry id to stamp on the created task (routing + proof badge). */
+  projectId?: string | null;
 };
 
 export type QueenBeeFleetMachine = {
@@ -478,6 +480,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
       collectorUrl: selectedCollectorUrl,
     } : null,
     loop: input.loop ?? undefined,
+    projectId: input.projectId?.trim() || undefined,
     idempotencyKey,
   }, {
     vaultPath: input.vaultPath,

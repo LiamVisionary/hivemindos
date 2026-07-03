@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
 type RouteContext = {
-  params: Promise<{ slug: string }> | { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function GET(_request: NextRequest, context: RouteContext) {

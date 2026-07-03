@@ -385,6 +385,17 @@ function expandHome(path) {
   return path?.replace(/^~(?=$|\/)/, homedir());
 }
 
+// Demo/capture fixtures (remotion capture-real-ux.mjs) seed agent profiles
+// with localDataDir "/capture/<id>" alongside *.capture.invalid telemetry
+// hosts. The filesystem root is unwritable, so letting that placeholder
+// become HERMES_HOME kills every chat turn inside pathlib mkdir — treat it
+// as unset so callers fall back to the runtime's real home dir.
+function sanitizeLocalDataDir(value) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw || raw === "/capture" || raw.startsWith("/capture/")) return "";
+  return raw;
+}
+
 function validPort(value) {
   const portNumber = Number(value);
   return Number.isInteger(portNumber) && portNumber > 0 && portNumber <= 65535
@@ -1027,7 +1038,7 @@ async function importHermesAgentSoul(agent) {
   if (agent.runtime !== "hermes" || agent.soulPrompt?.trim()) {
     return agent;
   }
-  const profileDir = expandHome(agent.localDataDir || "");
+  const profileDir = expandHome(sanitizeLocalDataDir(agent.localDataDir));
   if (!profileDir) return agent;
   const soul = await readHermesSoul(profileDir);
   return soul ? { ...agent, soulPrompt: soul } : agent;
@@ -2989,6 +3000,37 @@ function startSyncthingDetached() {
   child.unref();
 }
 
+async function startSyncthingViaServiceManager() {
+  // The installer-managed service must stay the single owner of the Syncthing
+  // database: a raw detached spawn races the unit for the DB lock and leaves
+  // the loser crash-looping (hel1-2 reached 400k+ restarts). Only fall back
+  // to a detached spawn when no service-manager path works.
+  if (process.platform === "darwin") {
+    await execFileAsync(
+      "launchctl",
+      ["kickstart", `gui/${process.getuid()}/com.hivemindos.syncthing`],
+      { timeout: 10_000 },
+    );
+    return;
+  }
+  if (process.platform === "linux") {
+    await execFileAsync(
+      "systemctl",
+      ["--user", "start", "hivemindos-syncthing.service"],
+      {
+        timeout: 10_000,
+        env: {
+          ...process.env,
+          XDG_RUNTIME_DIR:
+            process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`,
+        },
+      },
+    );
+    return;
+  }
+  throw new Error(`no syncthing service manager on ${process.platform}`);
+}
+
 async function syncthingFetch(path, options = {}) {
   const apiKey = await readSyncthingApiKey();
   const headers = {
@@ -3030,9 +3072,13 @@ async function waitForSyncthing() {
     } catch {
       if (attempt === 0) {
         try {
-          startSyncthingDetached();
+          await startSyncthingViaServiceManager();
         } catch {
-          // setup normally owns service startup; keep polling.
+          try {
+            startSyncthingDetached();
+          } catch {
+            // setup normally owns service startup; keep polling.
+          }
         }
       }
       await sleep(1_000);
@@ -3374,7 +3420,9 @@ async function runHermes(args, timeout = 10_000) {
 }
 
 async function hermesIntegrationStatus(agent = {}) {
-  const hermesHome = expandHome(agent.localDataDir || defaultHermesDir);
+  const hermesHome = expandHome(
+    sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
+  );
   const diagnostics = [];
   const [version, tools, config] = await Promise.all([
     runHermes(["--version"]).catch((error) => {
@@ -4083,8 +4131,7 @@ async function runOpenClawIntegrationAction(action, input = {}) {
 }
 
 function hermesAgentProfileDir(agent = {}) {
-  const raw =
-    typeof agent.localDataDir === "string" ? agent.localDataDir.trim() : "";
+  const raw = sanitizeLocalDataDir(agent.localDataDir);
   if (!raw) return "";
   const dir = expandHome(raw);
   return dir && dir !== defaultHermesDir ? dir : "";
@@ -5829,7 +5876,7 @@ async function collectorHealthPayload() {
   return healthPayloadPromise;
 }
 
-async function sendHermesChat(body) {
+async function sendHermesChat(body, options = {}) {
   if (process.env.AGENT_TELEMETRY_CHAT_DISABLED === "1") {
     return {
       ok: false,
@@ -5853,7 +5900,9 @@ async function sendHermesChat(body) {
 
   const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
   const hermesHome = expandHome(
-    agent.localDataDir || body.localDataDir || defaultHermesDir,
+    sanitizeLocalDataDir(agent.localDataDir) ||
+      sanitizeLocalDataDir(body.localDataDir) ||
+      defaultHermesDir,
   );
   const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
   const bin = await resolveHermesBin();
@@ -5863,11 +5912,28 @@ async function sendHermesChat(body) {
     HERMES_HOME: hermesHome,
     PAGER: "cat",
   });
+  // Tie the hermes CLI lifetime to the HTTP caller: queen-bee delegates abort
+  // at 240s while chatTimeoutMs is 20 min, and every abandoned `hermes -z`
+  // kept running as a zombie worker burning CPU/memory (the 2026-07-03 hel1-2
+  // pile-up amplifier). execFile's AbortSignal support SIGTERMs the child when
+  // the /chat response closes early. AGENT_TELEMETRY_CHAT_ABORT_KILL=0
+  // restores the old detached behavior.
+  const abortSignal =
+    process.env.AGENT_TELEMETRY_CHAT_ABORT_KILL === "0"
+      ? undefined
+      : options.signal;
+  const abortedResult = () => ({
+    ok: false,
+    status: 499,
+    error: "Chat canceled: the requesting client disconnected.",
+    host: hostname(),
+  });
   const runHermes = async (cliArgs) => {
     const { stdout, stderr } = await execFileAsync(bin, cliArgs, {
       timeout: chatTimeoutMs,
       maxBuffer: 3_000_000,
       env,
+      ...(abortSignal ? { signal: abortSignal } : {}),
     });
     return (stdout.trim() || stderr.trim());
   };
@@ -5883,10 +5949,16 @@ async function sendHermesChat(body) {
   try {
     content = await runHermes(primaryArgs);
   } catch (error) {
-    if (JSON.stringify(primaryArgs) === JSON.stringify(fallbackArgs)) throw error;
+    if (
+      !abortSignal?.aborted &&
+      JSON.stringify(primaryArgs) === JSON.stringify(fallbackArgs)
+    )
+      throw error;
   }
+  if (abortSignal?.aborted) return abortedResult();
   if (!content && JSON.stringify(primaryArgs) !== JSON.stringify(fallbackArgs)) {
     content = await runHermes(fallbackArgs).catch(() => "");
+    if (abortSignal?.aborted) return abortedResult();
   }
   if (!content) {
     return {
@@ -6238,7 +6310,9 @@ async function listRecentHermesApiSessions(hermesHome, sinceMs = 0) {
 
 async function readRuntimeSession(runtime, options = {}) {
   if (runtime !== "hermes") return null;
-  const hermesHome = expandHome(options.localDataDir || defaultHermesDir);
+  const hermesHome = expandHome(
+    sanitizeLocalDataDir(options.localDataDir) || defaultHermesDir,
+  );
   const sessionId = options.sessionId || "";
   const sinceMs = Number(options.sinceMs || 0);
   if (sessionId) {
@@ -6558,7 +6632,9 @@ async function streamHermesChat(body, response) {
   }
   const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
   const hermesHome = expandHome(
-    agent.localDataDir || body.localDataDir || defaultHermesDir,
+    sanitizeLocalDataDir(agent.localDataDir) ||
+      sanitizeLocalDataDir(body.localDataDir) ||
+      defaultHermesDir,
   );
   const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
   // The Hermes gateway API server always runs turns on the gateway's own
@@ -6758,7 +6834,8 @@ async function streamHermesChat(body, response) {
 
 async function snapshotFor(agent) {
   const dataDir = expandHome(
-    agent.localDataDir || (agent.runtime === "hermes" ? defaultHermesDir : ""),
+    sanitizeLocalDataDir(agent.localDataDir) ||
+      (agent.runtime === "hermes" ? defaultHermesDir : ""),
   );
   const [hermesTasks, fileTasks, running] = await Promise.all([
     agent.runtime === "hermes" && dataDir
@@ -7673,7 +7750,9 @@ async function handleCollectorRequest(request, response) {
     const agents = await localAgents();
     const schedules = (
       await Promise.all(
-        agents.map((agent) => scanRuntimeSchedules(agent, agent.localDataDir)),
+        agents.map((agent) =>
+          scanRuntimeSchedules(agent, sanitizeLocalDataDir(agent.localDataDir)),
+        ),
       )
     ).flat();
     jsonResponse(response, 200, { ok: true, host: hostname(), schedules });
@@ -7905,7 +7984,13 @@ async function handleCollectorRequest(request, response) {
         await streamHermesChat(body, response);
         return;
       }
-      const result = await sendHermesChat(body);
+      // "close" with the response still unwritten = the caller disconnected
+      // mid-run; kill the spawned hermes CLI (see sendHermesChat).
+      const chatAbort = new AbortController();
+      response.on("close", () => {
+        if (!response.writableEnded) chatAbort.abort();
+      });
+      const result = await sendHermesChat(body, { signal: chatAbort.signal });
       jsonResponse(response, result.ok ? 200 : result.status || 500, result);
     } catch (error) {
       jsonResponse(response, 500, {

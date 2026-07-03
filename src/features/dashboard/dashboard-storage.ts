@@ -3,6 +3,7 @@ import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { RESEARCH_STORM_SKILL_SLUG, normalizeResearchMethod } from "@/lib/config/research-methods";
 import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
+import { normalizeAgentLocalDataDir } from "@/lib/utils/agent-local-data-dir";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
 import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
 import type { AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
@@ -92,12 +93,13 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     && !selectedCustomWorkerClassId
     && agent.researchMethod === undefined
     && !preferredSkillSlugs.includes(RESEARCH_STORM_SKILL_SLUG);
+  const localDataDir = normalizeAgentLocalDataDir(agent.localDataDir);
   return {
     ...agent,
     runtime,
-    localDataDir: runtime === "hermes" && agent.id === "hermes-orchestrator" && !agent.localDataDir
+    localDataDir: runtime === "hermes" && agent.id === "hermes-orchestrator" && !localDataDir
       ? "~/.hermes"
-      : agent.localDataDir,
+      : localDataDir,
     runtimeKind: agent.runtimeKind ?? runtimeKindsByRuntime[runtime],
     runtimeCapabilities: mergeRuntimeCapabilities(runtime, agent.runtimeCapabilities),
     a2aUrl: runtime === "aeon" ? agent.a2aUrl ?? agent.gatewayUrl : agent.a2aUrl,

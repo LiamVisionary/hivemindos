@@ -10,6 +10,7 @@ import {
 import { discoverRawConnectedApps, type ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 import { recordGenerationMetric } from "@/lib/services/generation-metrics";
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 // Shared image-generation orchestration used by both the dashboard chat route
 // (/api/chat/image-generation) and the phone API (/api/phone action
@@ -129,6 +130,7 @@ async function normalizedApps(origin: string) {
   const url = new URL("/api/fleet/apps?refresh=1&wait=1", origin);
   const response = await fetch(url, {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(18_000),
   });
   if (!response.ok) return [];

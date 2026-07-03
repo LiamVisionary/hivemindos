@@ -7,6 +7,7 @@ encrypted folder-backed note backup when GPG configuration is available.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import getpass
 import hashlib
 import json
@@ -69,6 +70,33 @@ LOCAL_ONLY_KEYS = {
 }
 
 
+_DOUBLE_QUOTE_ESCAPES = {
+    "\\": "\\", "'": "'", '"': '"', "a": "\a", "b": "\b",
+    "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v",
+}
+_DOUBLE_QUOTE_ESCAPE_RE = re.compile(r"\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|.)", re.DOTALL)
+
+
+def _decode_double_quoted(text: str) -> str:
+    """Decode backslash escapes in a double-quoted env value.
+
+    Matches python-dotenv's escape set (plus \\xNN/\\uNNNN, which the
+    collector's JSON.stringify import payloads can carry for control chars);
+    unknown escapes keep their backslash. Replaces the old unicode_escape
+    round-trip, which mangled non-ASCII text and raises DeprecationWarning
+    on unknown escapes under modern Python.
+    """
+    def replace(match: re.Match[str]) -> str:
+        token = match.group(1)
+        if len(token) == 5 and token[0] == "u":
+            return chr(int(token[1:], 16))
+        if len(token) == 3 and token[0] == "x":
+            return chr(int(token[1:], 16))
+        return _DOUBLE_QUOTE_ESCAPES.get(token, "\\" + token)
+
+    return _DOUBLE_QUOTE_ESCAPE_RE.sub(replace, text)
+
+
 def parse_env_text(data: str) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for raw_line in data.splitlines():
@@ -81,9 +109,20 @@ def parse_env_text(data: str) -> dict[str, str]:
         key = key.strip()
         value = value.strip()
         if len(value) >= 2 and value[0] == value[-1] == '"':
-            value = bytes(value[1:-1], "utf-8").decode("unicode_escape")
+            value = _decode_double_quoted(value[1:-1])
         elif len(value) >= 2 and value[0] == value[-1] == "'":
-            value = value[1:-1]
+            inner = value[1:-1]
+            if "'" in inner:
+                # Legacy shlex.quote concatenation ('don'"'"'t'): pre-fix
+                # quote_env wrote single-quote values this way; undo it so
+                # already-written values stop reading back corrupted.
+                try:
+                    parts = shlex.split(value)
+                    if len(parts) == 1:
+                        inner = parts[0]
+                except ValueError:
+                    pass
+            value = inner
         parsed[key] = value
     return parsed
 
@@ -189,67 +228,183 @@ def truthy(value: str | None) -> bool:
 
 
 def quote_env(value: str) -> str:
+    if "'" in value or "\n" in value or "\r" in value:
+        # shlex.quote encodes an embedded single quote as shell concatenation
+        # ('don'"'"'t'), which no dotenv-style reader (parse_env_text,
+        # python-dotenv, @next/env, the JS fleet parsers) can decode. Emit
+        # double quotes with backslash escapes instead — the format the
+        # collector's --import-stdin payloads already use.
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
+        return f'"{escaped}"'
     if value == "" or any(ch.isspace() or ch in "#'\"\\$`" for ch in value):
         return shlex.quote(value)
     return value
 
 
+def legacy_concat_value(raw_value: str) -> bool:
+    """True when a raw line value is pre-fix shlex.quote concatenation."""
+    value = raw_value.strip()
+    return len(value) >= 2 and value[0] == value[-1] == "'" and "'" in value[1:-1]
+
+
+@contextlib.contextmanager
+def env_file_lock(path: pathlib.Path):
+    """Serialize read-modify-write cycles on an env file across processes.
+
+    Several independent writers hit the same env files (collector-relayed
+    peer pushes, the dashboard /api/env route, manual CLI runs, setup), and
+    an unsynchronized read-modify-write loses one writer's key. The lock is
+    a sidecar file because atomic_write_text replaces the env file's inode
+    on every write, so a lock on the env file itself would not persist
+    across writes. Degrades to unlocked if the platform/filesystem cannot
+    lock, rather than failing the write.
+    """
+    lock_path = path.with_name(path.name + ".lock")
+    handle = None
+    locked = False
+    try:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handle = open(lock_path, "a+")
+            if os.name == "nt":
+                import msvcrt
+
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            locked = True
+        except OSError:
+            pass
+        yield
+    finally:
+        if handle is not None:
+            if locked:
+                try:
+                    if os.name == "nt":
+                        import msvcrt
+
+                        handle.seek(0)
+                        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                    else:
+                        import fcntl
+
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    pass
+            handle.close()
+
+
+def atomic_write_text(path: pathlib.Path, text: str) -> None:
+    """Write via a same-directory temp file + rename.
+
+    A plain write_text truncates in place, so a concurrent writer or reader
+    can observe (or interleave with) a half-written file and corrupt it —
+    the 2026-07-03 .env.local device-token line splice. mkstemp creates the
+    temp 0o600, so the secret file is never readable by other users and the
+    destination keeps that mode after the rename.
+    """
+    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(text)
+        for attempt in range(5):
+            try:
+                os.replace(tmp_name, path)
+                break
+            except PermissionError:
+                # Windows refuses the rename while another process holds the
+                # destination open; readers hold it only briefly.
+                if attempt == 4:
+                    raise
+                time.sleep(0.05)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+
+
 def update_env_file(path: pathlib.Path, key: str, value: str) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
-    lines = path.read_text().splitlines() if path.exists() else []
-    replacement = f"{key}={quote_env(value)}"
-    found = False
-    output: list[str] = []
+    with env_file_lock(path):
+        lines = path.read_text().splitlines() if path.exists() else []
+        replacement = f"{key}={quote_env(value)}"
+        found = False
+        output: list[str] = []
 
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("#") or "=" not in line:
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("#") or "=" not in line:
+                output.append(line)
+                continue
+            existing_key = line.split("=", 1)[0].removeprefix("export ").strip()
+            if existing_key == key:
+                if not found:
+                    # Rewrite legacy shlex-concatenated lines even when the
+                    # parsed value is unchanged, so touched keys heal into a
+                    # form every dotenv-style reader can parse.
+                    if parse_env_text(line).get(key) == value and not legacy_concat_value(line.split("=", 1)[1]):
+                        output.append(line)
+                    else:
+                        output.append(replacement)
+                    found = True
+                continue
             output.append(line)
-            continue
-        existing_key = line.split("=", 1)[0].removeprefix("export ").strip()
-        if existing_key == key:
-            if not found:
-                if parse_env_text(line).get(key) == value:
-                    output.append(line)
-                else:
-                    output.append(replacement)
-                found = True
-            continue
-        output.append(line)
 
-    if not found:
-        if output and output[-1].strip():
-            output.append("")
-        output.append(replacement)
+        if not found:
+            if output and output[-1].strip():
+                output.append("")
+            output.append(replacement)
 
-    next_text = "\n".join(output) + "\n"
-    if path.exists() and path.read_text() == next_text:
-        return False
-    path.write_text(next_text)
-    path.chmod(0o600)
-    return True
+        next_text = "\n".join(output) + "\n"
+        if path.exists() and path.read_text() == next_text:
+            return False
+        atomic_write_text(path, next_text)
+        return True
 
 
 def remove_env_file_key(path: pathlib.Path, key: str) -> bool:
     if not path.exists():
         return False
-    lines = path.read_text().splitlines()
-    output: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("#") or "=" not in line:
+    with env_file_lock(path):
+        lines = path.read_text().splitlines()
+        output: list[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("#") or "=" not in line:
+                output.append(line)
+                continue
+            existing_key = line.split("=", 1)[0].removeprefix("export ").strip()
+            if existing_key == key:
+                continue
             output.append(line)
-            continue
-        existing_key = line.split("=", 1)[0].removeprefix("export ").strip()
-        if existing_key == key:
-            continue
-        output.append(line)
-    next_text = "\n".join(output).rstrip() + ("\n" if output else "")
-    if path.read_text() == next_text:
-        return False
-    path.write_text(next_text)
-    path.chmod(0o600)
-    return True
+        next_text = "\n".join(output).rstrip() + ("\n" if output else "")
+        if path.read_text() == next_text:
+            return False
+        atomic_write_text(path, next_text)
+        return True
+
+
+def ensure_env_placeholder(path: pathlib.Path, key: str) -> bool:
+    """Append "KEY=" only when the key is absent, for open-and-edit UI flows.
+
+    Runs under the store lock so the read-modify-write can never drop a
+    concurrent writer's key. Deliberately never touches the updatedAt meta:
+    an empty placeholder with a fresh timestamp would win pull-reconcile on
+    peers and delete their real value.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with env_file_lock(path):
+        if key in parse_env_file(path):
+            return False
+        lines = path.read_text().splitlines() if path.exists() else []
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"{key}=")
+        atomic_write_text(path, "\n".join(lines) + "\n")
+        return True
 
 
 def env_meta_file(path: pathlib.Path) -> pathlib.Path:
@@ -278,16 +433,16 @@ def write_env_meta(path: pathlib.Path, updated_at: dict[str, float]) -> None:
     next_text = json.dumps({"version": 1, "updatedAt": dict(sorted(updated_at.items()))}, indent=2) + "\n"
     if meta_path.exists() and meta_path.read_text() == next_text:
         return
-    meta_path.write_text(next_text)
-    meta_path.chmod(0o600)
+    atomic_write_text(meta_path, next_text)
 
 
 def touch_env_meta(path: pathlib.Path, keys: Iterable[str]) -> None:
-    updated_at = read_env_meta(path)
-    now = time.time()
-    for key in keys:
-        updated_at[key] = now
-    write_env_meta(path, updated_at)
+    with env_file_lock(env_meta_file(path)):
+        updated_at = read_env_meta(path)
+        now = time.time()
+        for key in keys:
+            updated_at[key] = now
+        write_env_meta(path, updated_at)
 
 
 def read_json(path: pathlib.Path) -> dict[str, object]:
@@ -315,8 +470,8 @@ def write_json(path: pathlib.Path, data: dict[str, object]) -> bool:
     next_text = json.dumps(data, indent=2) + "\n"
     if path.exists() and path.read_text() == next_text:
         return False
-    path.write_text(next_text)
-    path.chmod(0o600)
+    # mkstemp already creates the temp 0o600, and the rename keeps that mode.
+    atomic_write_text(path, next_text)
     return True
 
 
@@ -1430,11 +1585,12 @@ def pull_reconcile(
         changed = apply_update(args, env_file, key, value, quiet=True) or changed
 
     # adopt the origin's timestamps so reconcile converges instead of ping-ponging
-    meta = read_env_meta(store)
-    for key, (_, remote_ts, _) in to_apply.items():
-        if remote_ts > 0:
-            meta[key] = remote_ts
-    write_env_meta(store, meta)
+    with env_file_lock(env_meta_file(store)):
+        meta = read_env_meta(store)
+        for key, (_, remote_ts, _) in to_apply.items():
+            if remote_ts > 0:
+                meta[key] = remote_ts
+        write_env_meta(store, meta)
 
     # pulled values supersede anything this machine still had queued for those keys
     entries = read_pending_state()
@@ -1607,6 +1763,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--ensure-placeholder",
+        action="store_true",
+        help="With a bare KEY: add 'KEY=' to the target env file only if the key is absent, under the store lock. Never stamps updatedAt meta, backs up, or syncs — for UI flows that open the file for manual editing.",
+    )
     parser.add_argument("--no-backup", action="store_true", help="Skip encrypted shared-note backup refresh")
     parser.add_argument("--no-tailnet-sync", action="store_true", help="Do not replicate this update to ready Tailnet collectors")
     parser.add_argument("--no-aeon-auto-sync", action="store_true", help="Do not sync changed shared env values to managed private AEON GitHub repos")
@@ -1758,6 +1919,27 @@ def main() -> int:
         auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
         return 0
 
+    if args.ensure_placeholder:
+        key = (args.assignment or "").strip()
+        if not key or "=" in key:
+            print("--ensure-placeholder takes a bare KEY", file=sys.stderr)
+            return 2
+        if not KEY_RE.match(key):
+            print(f"Invalid env key: {key!r}", file=sys.stderr)
+            return 2
+        if args.scope == "app":
+            target = env_file
+        elif args.scope == "agent" and args.runtime == "generic":
+            target = agent_env_file(args)
+        else:
+            print("--ensure-placeholder supports --scope app or the generic agent store", file=sys.stderr)
+            return 2
+        if ensure_env_placeholder(target, key):
+            print(f"added placeholder to {target}: {key}=")
+        else:
+            print(f"{target} already has {key}")
+        return 0
+
     if not args.assignment:
         print("Usage: hive-env-add KEY=value, hive-env-add KEY, hive-env-add --import-env, hive-env-add --import-stdin, hive-env-add --reconcile, hive-env-add --retry-pending, hive-env-add --pull-reconcile, or hive-env-add --pull-from USER@HOST", file=sys.stderr)
         return 2
@@ -1766,7 +1948,14 @@ def main() -> int:
         key, value = args.assignment.split("=", 1)
     elif args.stdin:
         key = args.assignment
+        # Strip one trailing newline so `echo value |` and `printf '%s'`
+        # agree, matching the getpass branch below. App callers pipe the
+        # value with no newline, so this only affects shell pipes.
         value = sys.stdin.read()
+        if value.endswith("\r\n"):
+            value = value[:-2]
+        elif value.endswith("\n"):
+            value = value[:-1]
     else:
         key = args.assignment
         value = getpass.getpass(f"{key}=")

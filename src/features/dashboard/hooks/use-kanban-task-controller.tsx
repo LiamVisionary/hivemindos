@@ -736,7 +736,7 @@ export function useKanbanTaskController(props: any) {
             owner.beeRole === "queen" ? "queen" : "worker",
             owner.workerClass ?? assignment.workerClass ?? "general",
           ),
-          label: assignment.mode === "queen" ? "Queen Bee picked this up" : `${beeWorkerClassLabel(assignment.workerClass)} bee picked this up`,
+          label: assignment.mode === "queen" ? "Queen Bee picked up" : `${beeWorkerClassLabel(assignment.workerClass)} bee picked up`,
           assignee: owner.name,
         },
       }));

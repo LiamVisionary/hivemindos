@@ -1,14 +1,36 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const baseUrl = process.env.HIVEMINDOS_TEST_BASE_URL || process.argv.find((arg) => arg.startsWith("--base-url="))?.slice("--base-url=".length) || "http://127.0.0.1:5033";
+
+// Dashboard /api routes 401 tokenless since the API auth gate moved to
+// src/proxy.ts (same resolution order as scripts/fleet-health-watchdog.mjs).
+function envFileValue(path, key) {
+  if (!existsSync(path)) return "";
+  const match = readFileSync(path, "utf8").match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.+)\\s*$`, "m"));
+  let value = match?.[1]?.trim() ?? "";
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+  return value.trim();
+}
+
+const deviceToken = (
+  process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || envFileValue(resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+  || envFileValue(join(homedir(), ".hivemindos", ".env"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+).trim();
+
+function dashboardHeaders(extra = {}) {
+  return deviceToken ? { ...extra, "x-hivemindos-device-token": deviceToken } : extra;
+}
 
 async function postMemory(body) {
   const response = await fetch(`${baseUrl}/api/brain/memory`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: dashboardHeaders({ "content-type": "application/json" }),
     body: JSON.stringify(body),
   });
   const data = await response.json().catch(() => null);

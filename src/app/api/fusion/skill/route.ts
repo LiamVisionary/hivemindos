@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createFusionSkill } from "@/lib/services/fusion/fusion-skill";
 import type { ContextConnectedApp } from "@/lib/services/context-index";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ async function connectedAppsFromAppsView(request: NextRequest) {
   const url = new URL("/api/fleet/apps", request.url);
   const response = await fetch(url, {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(7_000),
   }).catch(() => null);
   if (!response?.ok) return undefined;

@@ -4,9 +4,15 @@ import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { promisify } from "util";
-import { dedupeVisibleApps, normalizeAppsPayload } from "../apps-normalize";
+import {
+  dedupeVisibleApps,
+  normalizeAppsPayload,
+  peerPortalToTailnetUrl,
+  pinPeerAppProxyUrl,
+} from "../apps-normalize";
 import { fetchServiceProbe } from "../apps-service-probe";
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export const runtime = "nodejs";
 
@@ -195,11 +201,36 @@ let appsCacheGeneration = 0;
 
 type AppDiscoveryMode = "fast" | "full";
 
+// Older caches also stored cross-machine URLs minted before the linkd tailnet
+// door was pinned :8787 — direct collector-port bases (e.g. ip:8792, now
+// localhost-scoped and refused from the tailnet) and /peer/ identities
+// carrying that dead port. The dedupe merge re-elects cached entries over
+// fresh ones (richer score, shorter-URL tie-break) and writes them back to
+// disk, so a dead base self-renews forever unless healed on read
+// (2026-07-03: NYC universal-tts stuck on ip:8792 → false watchdog alerts).
+function repairCachedAppUrls(app: HostedApp): HostedApp {
+  if (app.local) return app;
+  const apiUrl = (value?: string) =>
+    pinPeerAppProxyUrl(peerPortalToTailnetUrl(value)) || undefined;
+  return {
+    ...app,
+    // openUrl keeps its /peer/ portal shape (browser HTML rewriting); only
+    // the embedded port is healed.
+    openUrl: pinPeerAppProxyUrl(app.openUrl) || app.openUrl,
+    apiBaseUrl: apiUrl(app.apiBaseUrl) || app.apiBaseUrl,
+    healthUrl: apiUrl(app.healthUrl),
+    apiRoutes: app.apiRoutes?.map((route) => ({
+      ...route,
+      url: apiUrl(route.url) || route.url,
+    })),
+  };
+}
+
 // Older caches stored raw icon values (relative hrefs, unproxied remote URLs)
 // that cannot render from the dashboard origin; rewrap or drop them so the
 // icon-keeping dedupe logic never resurrects a broken icon over a fresh one.
 function sanitizeCachedApps(apps: HostedApp[]) {
-  return apps.map((app) => {
+  return apps.map(repairCachedAppUrls).map((app) => {
     const rawIconUrl = app.iconUrl || "";
     let decodedIconUrl = rawIconUrl;
     try {
@@ -966,6 +997,13 @@ async function toHostedApp(
   const proxyUrl = rewriteCollectorUrl(app.proxyUrl, collectorUrl);
   const apiProxyUrl = rewriteCollectorUrl(app.apiProxyUrl, collectorUrl);
   const healthProxyUrl = rewriteCollectorUrl(app.healthProxyUrl, collectorUrl);
+  // API-facing URLs must be reachable fleet-wide. A /peer/<host:port> portal
+  // base only resolves through this machine's linkd control port, so unwrap
+  // it to the peer's own tailnet door for apiBaseUrl/healthUrl. openUrl keeps
+  // the portal, whose HTML rewriting the in-browser flow depends on.
+  const apiProxyTailnetUrl = peerPortalToTailnetUrl(apiProxyUrl);
+  const healthProxyTailnetUrl = peerPortalToTailnetUrl(healthProxyUrl);
+  const proxyTailnetUrl = peerPortalToTailnetUrl(proxyUrl);
   const directServiceUrl = serviceUrl(app, machine);
   const openUrl = proxyUrl || directServiceUrl;
   if (!openUrl || !Number.isInteger(port)) return null;
@@ -981,9 +1019,9 @@ async function toHostedApp(
       ? await probeHealthSignature({
           app,
           name: fallbackName,
-          proxyUrl,
-          apiProxyUrl,
-          healthProxyUrl,
+          proxyUrl: proxyTailnetUrl,
+          apiProxyUrl: apiProxyTailnetUrl,
+          healthProxyUrl: healthProxyTailnetUrl,
         })
       : null;
   const metadata = mode === "full" ? await discoverAppMetadata(openUrl) : null;
@@ -1022,8 +1060,8 @@ async function toHostedApp(
   const iconUrl = appIconDisplayUrl(discoveredIconUrl) || undefined;
   const apiBaseUrl =
     signature?.apiBaseUrl ||
-    apiProxyUrl ||
-    proxyUrl.replace(/\/+$/, "") ||
+    apiProxyTailnetUrl ||
+    proxyTailnetUrl.replace(/\/+$/, "") ||
     appOriginUrl(directServiceUrl);
   const routes =
     mode === "full" ? await serviceRouteCatalog(apiBaseUrl, serviceKind) : null;
@@ -1054,7 +1092,7 @@ async function toHostedApp(
     apiBaseUrl,
     healthUrl:
       signature?.healthUrl ||
-      healthProxyUrl ||
+      healthProxyTailnetUrl ||
       (healthPath ? `${apiBaseUrl}${normalizePath(healthPath)}` : undefined),
     apiRoutes: routes?.routes,
     apiRoutesSource: routes?.source,
@@ -1078,9 +1116,11 @@ async function safeHostedApp(
 async function fetchJson<T>(
   url: string,
   timeoutMs = COLLECTOR_TIMEOUT_MS,
+  headers?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
+    headers,
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok)
@@ -1219,9 +1259,13 @@ async function readApps(
   let fleet: { source?: string; machines?: FleetMachine[] } = {};
   let fleetError = "";
   try {
+    // Self-fetch of our own /api/fleet/discover: needs the server's device
+    // token since the API auth gate moved to src/proxy.ts. Collector fetches
+    // stay tokenless — the device token must not leak to non-dashboard hosts.
     fleet = await fetchJson<{ source?: string; machines?: FleetMachine[] }>(
       fleetUrl.toString(),
       forceCollectors ? 12_000 : COLLECTOR_TIMEOUT_MS,
+      internalApiAuthHeaders(),
     );
   } catch (error) {
     fleetError =

@@ -61,6 +61,14 @@ function openAiKey() {
     || envValue("OPENAI_API_KEY");
 }
 
+// Dashboard /api routes 401 tokenless since the API auth gate moved to
+// src/proxy.ts (same resolution order as scripts/fleet-health-watchdog.mjs).
+const DASHBOARD_DEVICE_TOKEN = envValue("HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
+
+function dashboardHeaders(extra = {}) {
+  return DASHBOARD_DEVICE_TOKEN ? { ...extra, "x-hivemindos-device-token": DASHBOARD_DEVICE_TOKEN } : extra;
+}
+
 function clean(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -185,7 +193,7 @@ async function resolveHarnessAgents(agent, message) {
 }
 
 async function json(path, init) {
-  const response = await fetch(`${APP_BASE}${path}`, init);
+  const response = await fetch(`${APP_BASE}${path}`, { ...init, headers: dashboardHeaders(init?.headers) });
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(data?.error || `${path} returned HTTP ${response.status}`);
   return data;
@@ -419,7 +427,7 @@ function bridgeRealtimeStt(client) {
 async function* runtimeTextForAgent(agent, message, runtimeSessionId) {
   const response = await fetch(`${APP_BASE}/api/chat/agent-runtime`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: dashboardHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       agent,
       messages: [
@@ -544,7 +552,7 @@ async function ttsStream(localTts, text) {
   }
   const response = await fetch(`${APP_BASE}/api/phone`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: dashboardHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
       action: "local-tts-speech-stream",
       localTts,

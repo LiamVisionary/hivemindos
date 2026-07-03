@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { discoverRawConnectedApps } from "@/lib/services/fleet/connected-apps";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export const runtime = "nodejs";
 
@@ -57,6 +58,7 @@ async function normalizedApps(origin: string) {
   const url = new URL("/api/fleet/apps?refresh=1&fast=1&wait=1", origin);
   const response = await fetch(url, {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(12_000),
   });
   if (!response.ok) throw new Error(`Apps discovery returned ${response.status}.`);

@@ -224,6 +224,8 @@ export interface CompanyMemberEdit {
 export interface CompanyEditForm extends CreateForm {
   charter?: string;
   blurb?: string;
+  /** Project-registry id of the company's domain code repo ("" = unlinked). */
+  projectId?: string;
   dailyBudgetUsd?: number;
   monthlyBudgetUsd?: number;
   totalBudgetUsd?: number;

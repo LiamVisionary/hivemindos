@@ -77,10 +77,13 @@ const MAX_UTTERANCE_MS = 20_000;
 // dedupes too; this just avoids pointless requests every turn).
 const LOCAL_TTS_PREWARM_INTERVAL_MS = 45_000;
 // Spoken acknowledgment for slow turns: a clip pre-synthesized on the session's
-// voice, played when the reply hasn't resolved by the delay — so delegation
-// turns answer "On it" within ~1.5s instead of long dead air.
+// voice, played only when NO speech text has streamed in by the delay — the
+// genuine dead-air case (pre-speech tool calls, delegation routing). Ordinary
+// replies stream their first delta in ~1-2s and cancel it. At 1.4s this fired
+// on EVERY turn (first spoken chunk needs a full sentence + synth TTFB), so
+// she acked messages that weren't even requests.
 const ACK_CLIP_TEXT = "On it. Give me a moment.";
-const ACK_PLAY_DELAY_MS = 1_400;
+const ACK_PLAY_DELAY_MS = 4_500;
 // Live "what she's doing" chips: poll cadence for the turn-progress endpoint
 // while a converse request is in flight.
 const TURN_PROGRESS_POLL_MS = 650;
@@ -96,6 +99,14 @@ const PRE_ROLL_MAX_MS = 5_000;
 // Flush window behind a barge-in trigger: the sustain the detector required
 // before firing plus a lead for the first syllable's onset.
 const BARGE_IN_FLUSH_LOOKBACK_MS = BARGE_IN_TUNING.sustainMs + 480;
+// Every ordinary listening turn also flushes pre-roll from BEFORE the
+// speaking→listening flip: speech in her playback tail is too short to
+// trigger barge-in but must still reach STT (see startRealtimeListening).
+const POST_PLAYBACK_FLUSH_LOOKBACK_MS = 800;
+// If the STT completion event never arrives after a commit (server stall,
+// swallowed frame), the turn proceeds with the live transcript instead of
+// hanging in "Transcribing..." forever.
+const STT_COMMIT_FALLBACK_MS = 4_000;
 // Recorder fallback only: quiet stretches bloat the Whisper upload, so the
 // recording restarts when nothing has been said for a while.
 const IDLE_RECORDER_RESTART_MS = 10_000;
@@ -171,6 +182,9 @@ export function useQueenBeeVoice(
     // listening turn is armed; the pre-roll ring buffer fills the whole time.
     let sttLiveSocket: WebSocket | null = null;
     let pendingFlushSinceMs = 0;
+    // Last echo/room floor the barge-in detector measured during playback —
+    // seeds the listening VAD so it starts calibrated to this acoustic scene.
+    let lastKnownEchoFloor = 0;
     const preRoll: { at: number; pcm: Int16Array }[] = [];
     const abort = new AbortController();
     const mimeType = pickRecorderMimeType();
@@ -351,6 +365,8 @@ export function useQueenBeeVoice(
       voiceOutageActive = false;
       setVoiceNotice("");
     };
+    let cancelAckPlayback: (() => void) | null = null;
+    let ackStartedAtMs = 0;
     const playAckClip = () => {
       const context = audioContext;
       if (!ackBuffer || !context || context.state !== "running" || ackPlayback) return;
@@ -370,12 +386,26 @@ export function useQueenBeeVoice(
         abort.signal.addEventListener("abort", stop, { once: true });
         source.onended = () => {
           abort.signal.removeEventListener("abort", stop);
+          cancelAckPlayback = null;
           resolvePlayback();
         };
+        ackStartedAtMs = performance.now();
+        cancelAckPlayback = stop;
         source.start();
       }).finally(() => {
         ackPlayback = null;
+        cancelAckPlayback = null;
       });
+    };
+    // The reply's first speech arrived: an ack that only just began (or never
+    // started) is cut so "On it, give me a moment" cannot play back-to-back
+    // with the reply it was covering for; one that is mid-sentence finishes
+    // (cutting a word is worse than a beat of overlap-wait).
+    const cancelPendingAck = () => {
+      if (cancelAckPlayback && performance.now() - ackStartedAtMs < 350) {
+        cancelAckPlayback();
+        cancelAckPlayback = null;
+      }
     };
 
     // Watch the mic for sustained speech while Queen Bee talks; on barge-in,
@@ -415,6 +445,7 @@ export function useQueenBeeVoice(
           rms = Math.sqrt(sum / samples.length);
         }
         updateBargeInDetector(detector, rms, performance.now());
+        lastKnownEchoFloor = detector.echoFloor;
         if (detector.triggered) {
           setSpeechDetected(true);
           // The words that interrupted her are already in the pre-roll ring
@@ -550,7 +581,13 @@ export function useQueenBeeVoice(
       const startedAt = performance.now();
       let speechStartedAt = 0;
       let lastSpeechAt = 0;
-      let noiseFloor = 0.012;
+      // Seed from the barge-in detector's measured room/echo floor (it just
+      // calibrated on this exact acoustic scene during her playback) instead
+      // of a cold constant: a cold-low floor makes post-playback ambience
+      // read as endless "speech", restarting the silence timer for seconds
+      // before the 4%-blend adaptation caught up — the "takes forever to
+      // send after I stop talking" complaint.
+      let noiseFloor = Math.min(0.03, Math.max(0.012, lastKnownEchoFloor));
       const samples = new Uint8Array(activeAnalyser.fftSize);
       const tick = () => {
         if (cancelled || !handlers.isActive()) return;
@@ -570,7 +607,13 @@ export function useQueenBeeVoice(
           handlers.onSpeechDiscarded?.();
         }
         const threshold = Math.max(0.018, noiseFloor * 3);
-        if (rms < threshold) noiseFloor = noiseFloor * 0.96 + rms * 0.04;
+        // Down-adaptation matches the barge-in detector's cadence (12% —
+        // 0.96/0.04 took ~500ms to converge); marginal above-threshold
+        // frames drift the floor UP slightly so hovering room noise cannot
+        // pin the silence timer indefinitely (mirrors floorBlendAbove).
+        if (rms < threshold) noiseFloor = noiseFloor * 0.88 + rms * 0.12;
+        else if (rms < noiseFloor * 4.5)
+          noiseFloor = noiseFloor * 0.996 + rms * 0.004;
         if (rms >= threshold) {
           if (!speechStartedAt) {
             speechStartedAt = now;
@@ -608,8 +651,9 @@ export function useQueenBeeVoice(
       void prewarmLocalTtsEngine().then(() => {
         if (!cancelled) void fetchAckClip();
       });
-      // Slow-turn cue: if the reply hasn't resolved shortly, speak the cached
-      // "On it" clip so delegation work never reads as dead air.
+      // Slow-turn cue: if no speech has streamed in by the delay, speak the
+      // cached "On it" clip so pre-speech work never reads as dead air. The
+      // first speech delta (or the buffered reply) cancels it.
       const ackTimer = window.setTimeout(() => {
         if (!cancelled && !abort.signal.aborted) playAckClip();
       }, ACK_PLAY_DELAY_MS);
@@ -674,6 +718,7 @@ export function useQueenBeeVoice(
           setPhase("speaking");
           // The reply is here; a late "On it" ack would talk over it.
           window.clearTimeout(ackTimer);
+          cancelPendingAck();
           const spoken = await speakReplyWithBargeIn(data.reply);
           if (cancelled) return;
           if (spoken === "none" && !abort.signal.aborted) {
@@ -707,6 +752,10 @@ export function useQueenBeeVoice(
         };
         const handleEvent = (event: ConverseStreamEvent) => {
           if (event.type === "speech" && event.text) {
+            // Speech is streaming — the reply is imminent; an ack now would
+            // just talk over her first sentence, and a barely-started one is cut.
+            window.clearTimeout(ackTimer);
+            cancelPendingAck();
             liveSpeech += event.text;
             showCaption(liveSpeech.trim(), true);
             for (const chunk of chunker.push(event.text)) speaker.enqueue(chunk);
@@ -887,9 +936,15 @@ export function useQueenBeeVoice(
       // Words spoken from this moment on (or since a barge-in trigger) are in
       // the pre-roll ring buffer; they flush into the socket once it's armed,
       // so "Your turn" registers speech immediately instead of dropping the
-      // opening words while the session connects.
+      // opening words while the session connects. The window reaches BACK
+      // before this moment: speech that starts in her playback tail (too
+      // short to trigger barge-in, which needs 420ms sustain) or during the
+      // speaking→listening flip was captured by the pump but used to be cut
+      // off by a flush window that started at listening-start — the classic
+      // "spoke right after her and nothing registered" turn.
       const listeningStartedAt = performance.now();
-      const flushSinceMs = pendingFlushSinceMs || listeningStartedAt;
+      const flushSinceMs =
+        pendingFlushSinceMs || listeningStartedAt - POST_PLAYBACK_FLUSH_LOOKBACK_MS;
       pendingFlushSinceMs = 0;
       const sessionPromise = prepareStt();
       if (!sessionPromise) {
@@ -960,25 +1015,36 @@ export function useQueenBeeVoice(
           payload.type ===
           "conversation.item.input_audio_transcription.completed"
         ) {
-          socket.removeEventListener("message", messageHandler);
-          closeSttSocket();
-          // Prewarm the next session while Queen Bee thinks and speaks.
-          void prepareStt()?.catch(() => undefined);
-          if (cancelled) return;
-          const finalTranscript = (payload.transcript || liveTranscript).trim();
-          if (finalTranscript) {
-            const turnId = ensureYouTurn();
-            updateTurn(turnId, finalTranscript);
-            void runConverseTurn(finalTranscript);
-          } else {
-            if (youTurnId) dropTurn(youTurnId);
-            restartTimer = window.setTimeout(startListening, 150);
-          }
+          finalizeUtterance(payload.transcript || liveTranscript);
         }
         if (payload.type === "error") {
+          window.clearTimeout(commitFallbackTimer);
           socket.removeEventListener("message", messageHandler);
           closeSttSocket();
           failTurn(payload.error?.message || "Realtime STT returned an error.");
+        }
+      };
+      // Shared by the completion event and the post-commit fallback timer: a
+      // stalled/lost completion must not strand the turn in "Transcribing...".
+      let utteranceFinalized = false;
+      let commitFallbackTimer = 0;
+      const finalizeUtterance = (finalText: string) => {
+        if (utteranceFinalized) return;
+        utteranceFinalized = true;
+        window.clearTimeout(commitFallbackTimer);
+        socket.removeEventListener("message", messageHandler);
+        closeSttSocket();
+        // Prewarm the next session while Queen Bee thinks and speaks.
+        void prepareStt()?.catch(() => undefined);
+        if (cancelled) return;
+        const finalTranscript = finalText.trim();
+        if (finalTranscript) {
+          const turnId = ensureYouTurn();
+          updateTurn(turnId, finalTranscript);
+          void runConverseTurn(finalTranscript);
+        } else {
+          if (youTurnId) dropTurn(youTurnId);
+          restartTimer = window.setTimeout(startListening, 150);
         }
       };
       socket.addEventListener("message", messageHandler);
@@ -1020,6 +1086,10 @@ export function useQueenBeeVoice(
             updateTurn(ensureYouTurn(), "Transcribing...", true);
           }
           send({ type: "input_audio_buffer.commit" });
+          commitFallbackTimer = window.setTimeout(
+            () => finalizeUtterance(liveTranscript),
+            STT_COMMIT_FALLBACK_MS,
+          );
         },
         onIdle: () => {
           // Drop silence the server has buffered so far; keeps the session lean.

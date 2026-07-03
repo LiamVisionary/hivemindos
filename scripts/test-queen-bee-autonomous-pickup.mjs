@@ -5,7 +5,12 @@ import { register } from "node:module";
 // autonomous-worker.ts now statically imports the loop runner; register the TS loader.
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
-const { runQueenBeeAutonomousPickup, shouldAutonomouslyPickupQueenBeeTask } = await import(
+const {
+  runQueenBeeAutonomousPickup,
+  scheduleQueenBeeAutonomousPickup,
+  shouldAutonomouslyPickupQueenBeeTask,
+  pickupMachineKey,
+} = await import(
   "../src/lib/services/queen-bee/autonomous-worker.ts"
 );
 const { buildLoopFromTemplate } = await import("../src/lib/services/loops/index.ts");
@@ -290,6 +295,135 @@ function loopDeps({ judgeAccepts, onComplete }) {
   assert.equal(result.status, "completed");
   assert.equal(result.agentName, "Ada Lovelace");
   assert.deepEqual(calls.map((call) => call.kind), ["claim", "chat", "reroute", "claim", "chat", "complete"]);
+}
+
+// --- Scenario 6: per-machine concurrency gate — two simultaneous pickups targeting the
+//     same machine must serialize their collector chats (default cap: 1 per machine),
+//     instead of starving each other on a small box (hel1-2 pile-up, 2026-07-03).
+{
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const gateDeps = (id) => ({
+    claim: async (slug, taskId, input) => ({ task: { ...task, id, status: "working", claimLock: input.claimer }, board: {} }),
+    fetchJson: async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      inFlight -= 1;
+      return { ok: true, text: "gated done" };
+    },
+    complete: async (slug, taskId, input) => ({ task: { ...task, id, status: "done", result: input.result }, board: {} }),
+    block: async () => {
+      throw new Error("block should not be called on successful gated pickups");
+    },
+  });
+  const [first, second] = await Promise.all([
+    runQueenBeeAutonomousPickup({ task: { ...task, id: "t_gate_a" }, delegation }, gateDeps("t_gate_a")),
+    runQueenBeeAutonomousPickup({ task: { ...task, id: "t_gate_b" }, delegation }, gateDeps("t_gate_b")),
+  ]);
+  assert.equal(first.status, "completed");
+  assert.equal(second.status, "completed");
+  assert.equal(maxInFlight, 1, "chats to one machine must be serialized by the per-machine gate");
+}
+
+// --- Scenario 7: a machine at capacity with slot wait exhausted → the pickup SKIPS
+//     (task stays ready for the next dispatch sweep) instead of blocking to needs-human.
+{
+  process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS = "0";
+  try {
+    let releaseHeldChat = () => {};
+    const heldChat = new Promise((resolve) => {
+      releaseHeldChat = resolve;
+    });
+    const holder = runQueenBeeAutonomousPickup({ task: { ...task, id: "t_gate_hold" }, delegation }, {
+      claim: async (slug, taskId, input) => ({ task: { ...task, id: "t_gate_hold", status: "working", claimLock: input.claimer }, board: {} }),
+      fetchJson: async () => {
+        await heldChat;
+        return { ok: true, text: "held done" };
+      },
+      complete: async (slug, taskId, input) => ({ task: { ...task, id: "t_gate_hold", status: "done", result: input.result }, board: {} }),
+      block: async () => {
+        throw new Error("block should not be called for the slot holder");
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25)); // let the holder take the machine slot
+    let blocked = false;
+    const skipped = await runQueenBeeAutonomousPickup({ task: { ...task, id: "t_gate_skip" }, delegation }, {
+      claim: async () => {
+        throw new Error("claim must not run while the machine is saturated");
+      },
+      fetchJson: async () => {
+        throw new Error("chat must not run while the machine is saturated");
+      },
+      complete: async () => {
+        throw new Error("complete must not run while the machine is saturated");
+      },
+      block: async () => {
+        blocked = true;
+        return { task: { ...task, id: "t_gate_skip", status: "needs-human" }, board: {} };
+      },
+    });
+    assert.equal(skipped.status, "skipped", "a capacity-only miss should skip, not block");
+    assert.equal(blocked, false, "a capacity skip must leave the task ready (no needs-human)");
+    assert.match(skipped.error, /capacity/i);
+    releaseHeldChat();
+    assert.equal((await holder).status, "completed");
+  } finally {
+    delete process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS;
+  }
+}
+
+// --- Scenario 8: schedule dedupe — a task with an in-flight pickup is not double-scheduled
+//     (pickups can now wait on a machine slot while their task is still "ready", so the
+//     driver's 5-minute re-dispatch sweep would otherwise double-run it).
+{
+  const schedTask = { ...task, id: "t_sched_dedupe" };
+  let completions = 0;
+  let notifyCompletion = () => {};
+  const completed = (count) => new Promise((resolve) => {
+    notifyCompletion = () => {
+      if (completions >= count) resolve();
+    };
+    notifyCompletion();
+  });
+  const schedDeps = {
+    claim: async (slug, taskId, input) => ({ task: { ...schedTask, status: "working", claimLock: input.claimer }, board: {} }),
+    fetchJson: async () => ({ ok: true, text: "scheduled done" }),
+    complete: async (slug, taskId, input) => {
+      completions += 1;
+      notifyCompletion();
+      return { task: { ...schedTask, status: "done", result: input.result }, board: {} };
+    },
+    block: async () => {
+      throw new Error("block should not be called for the scheduled pickup");
+    },
+  };
+  assert.equal(scheduleQueenBeeAutonomousPickup({ task: schedTask, delegation }, schedDeps), true);
+  assert.equal(
+    scheduleQueenBeeAutonomousPickup({ task: schedTask, delegation }, schedDeps),
+    false,
+    "a task with an in-flight pickup must not be scheduled again",
+  );
+  await completed(1);
+  await new Promise((resolve) => setTimeout(resolve, 10)); // let the finally clear the in-flight registry
+  assert.equal(
+    scheduleQueenBeeAutonomousPickup({ task: schedTask, delegation }, schedDeps),
+    true,
+    "a finished pickup frees the task for re-scheduling",
+  );
+  await completed(2);
+}
+
+// --- Scenario 9: machine identity — named machine wins; peer-proxy URLs resolve to the
+//     REMOTE peer (not the local :8788 proxy); plain URLs fall back to their host.
+{
+  assert.equal(pickupMachineKey(delegation, "http://collector.local:5055"), "mac");
+  assert.equal(
+    pickupMachineKey({ status: "delegated" }, "http://127.0.0.1:8788/peer/100.64.0.9%3A8787/chat"),
+    "100.64.0.9:8787",
+    "peer-proxy URLs must gate on the remote peer identity",
+  );
+  assert.equal(pickupMachineKey({ status: "delegated" }, "http://ubuntu-box:8787"), "ubuntu-box:8787");
 }
 
 console.log("Queen Bee autonomous pickup + loop receipts contract test passed.");

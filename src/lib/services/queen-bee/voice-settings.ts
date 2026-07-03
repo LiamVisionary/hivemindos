@@ -96,7 +96,21 @@ export function ttsVoiceFor(voice: string) {
 // (speak-stream, speak, prewarm). A short TTL keeps that parse off the
 // audible path; Calls-settings edits land within the window.
 const CALL_PREFS_CACHE_MS = 15_000;
-let callPrefsCache: { expiresAt: number; value: AgentCallPreferences | null } | null = null;
+
+/** The Queen agent's own selected chat model — the default PIPELINE voice
+ *  brain ("your agent's model answers voice unless you override it"). */
+export type QueenVoiceBrainDefaults = {
+  agentId: string;
+  agentName?: string;
+  provider?: string;
+  model?: string;
+} | null;
+
+let callPrefsCache: {
+  expiresAt: number;
+  value: AgentCallPreferences | null;
+  brainDefaults: QueenVoiceBrainDefaults;
+} | null = null;
 
 /**
  * Thrown when the call prefs cannot be read AND no earlier successful read is
@@ -117,10 +131,8 @@ export function resetQueenBeeCallPreferencesCache() {
   callPrefsCache = null;
 }
 
-export async function readQueenBeeCallPreferences(
-  now = Date.now(),
-): Promise<AgentCallPreferences | null> {
-  if (callPrefsCache && callPrefsCache.expiresAt > now) return callPrefsCache.value;
+async function readQueenPrefsBundle(now = Date.now()) {
+  if (callPrefsCache && callPrefsCache.expiresAt > now) return callPrefsCache;
   let profiles: AgentProfile[];
   try {
     profiles = await readStoredAgentProfilesStrict();
@@ -129,13 +141,35 @@ export async function readQueenBeeCallPreferences(
     // succeeded (a stale answer beats a substituted voice; the expired cache
     // entry is left as-is so every later call retries the store), otherwise
     // surface the outage instead of letting it read as "cloud voice selected".
-    if (callPrefsCache) return callPrefsCache.value;
+    if (callPrefsCache) return callPrefsCache;
     throw new QueenCallPreferencesUnavailableError(error);
   }
   const queen =
     profiles.find((profile) => profile.beeRole === "queen") ??
     profiles.find((profile) => /queen/i.test(profile.name ?? ""));
-  const value = queen ? buildAgentCallPreferences(queen.calls) : null;
-  callPrefsCache = { expiresAt: now + CALL_PREFS_CACHE_MS, value };
-  return value;
+  callPrefsCache = {
+    expiresAt: now + CALL_PREFS_CACHE_MS,
+    value: queen ? buildAgentCallPreferences(queen.calls) : null,
+    brainDefaults: queen
+      ? {
+          agentId: queen.id,
+          agentName: queen.name,
+          provider: queen.provider?.trim() || undefined,
+          model: queen.model?.trim() || undefined,
+        }
+      : null,
+  };
+  return callPrefsCache;
+}
+
+export async function readQueenBeeCallPreferences(
+  now = Date.now(),
+): Promise<AgentCallPreferences | null> {
+  return (await readQueenPrefsBundle(now)).value;
+}
+
+export async function readQueenBeeBrainDefaults(
+  now = Date.now(),
+): Promise<QueenVoiceBrainDefaults> {
+  return (await readQueenPrefsBundle(now)).brainDefaults;
 }

@@ -519,6 +519,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
       sector: company.sector || "",
       charter: company.charter || "",
       blurb: company.blurb || "",
+      projectId: company.projectId || "",
       dailyBudgetUsd: company.dailyBudgetUsd,
       monthlyBudgetUsd: company.monthlyBudgetUsd,
       totalBudgetUsd: company.totalBudgetUsd,

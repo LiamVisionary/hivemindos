@@ -39,6 +39,10 @@ import { readFileSync } from "node:fs";
 // ---------------------------------------------------------------------------
 const HIVE_AGENT_RUNTIME_URL =
   process.env.HIVE_AGENT_RUNTIME_URL || "http://localhost:3000/api/chat/agent-runtime";
+// The dashboard's /api routes 401 tokenless since the auth gate moved to
+// src/proxy.ts. Env-only on purpose (run via hive-env-run), matching this
+// script's secrets policy.
+const HIVE_DASHBOARD_DEVICE_TOKEN = (process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN || "").trim();
 const HIVE_AGENT_PROFILE_JSON = process.env.HIVE_AGENT_PROFILE_JSON || "";
 const ACP_CHAIN = (process.env.ACP_CHAIN || "base-sepolia").toLowerCase();
 
@@ -87,7 +91,10 @@ function loadAgentProfile() {
 async function runOnHive(profile, requirementText) {
   const res = await fetch(HIVE_AGENT_RUNTIME_URL, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(HIVE_DASHBOARD_DEVICE_TOKEN ? { "x-hivemindos-device-token": HIVE_DASHBOARD_DEVICE_TOKEN } : {}),
+    },
     body: JSON.stringify({
       agent: profile,
       messages: [{ role: "user", content: requirementText }],

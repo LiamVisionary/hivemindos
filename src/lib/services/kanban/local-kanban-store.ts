@@ -2,6 +2,11 @@ import { mkdir, open, readFile, rename, writeFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
 import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, sep } from "path";
+import {
+  invalidateKanbanShardCache,
+  readBoardViaShards,
+  writeBoardViaShards,
+} from "@/lib/services/kanban/board-shards";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { isReservedOrMockUrl } from "@/lib/net/reserved-urls";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
@@ -335,7 +340,10 @@ export async function readBoard(
 ): Promise<KanbanBoard> {
   const slug = normalizeBoardSlug(slugInput);
   const storage = resolveKanbanStorage(slug, options);
-  if (!existsSync(storage.file)) {
+  // Shard engine first: merge-friendly per-task/per-machine storage that also
+  // folds external kanban.json edits and Syncthing conflict copies back in.
+  const sharded = await readBoardViaShards(storage.file, slug);
+  if (!sharded && !existsSync(storage.file)) {
     const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(
       slug,
       options,
@@ -359,7 +367,10 @@ export async function readBoard(
     await writeBoard(board, options);
     return hydrateBoardProjectProofs(board, options);
   }
-  const board = normalizeBoard(await readBoardFile(storage.file), slug);
+  const board = normalizeBoard(
+    sharded ?? (await readBoardFile(storage.file)),
+    slug,
+  );
   if (storage.source === "obsidian" && board.tasks.length === 0) {
     const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(
       slug,
@@ -588,6 +599,7 @@ export async function archiveBoard(
   const archivedDir = join(storage.boardsRoot, "_archived");
   await mkdir(archivedDir, { recursive: true, mode: 0o700 });
   await rename(from, join(archivedDir, `${slug}-${Date.now()}`));
+  invalidateKanbanShardCache(storage.file);
 }
 
 export async function createTask(
@@ -1765,7 +1777,9 @@ async function writeBoard(
   const storage = resolveKanbanStorage(board.meta.slug, options);
   const dir = boardDirFor(storage.root, storage.boardsRoot, board.meta.slug);
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  const data = JSON.stringify(trimBoardHistoryForWrite(board), null, 2) + "\n";
+  const trimmed = trimBoardHistoryForWrite(board);
+  if (await writeBoardViaShards(storage.file, trimmed)) return;
+  const data = JSON.stringify(trimmed, null, 2) + "\n";
   const tmp = `${storage.file}.tmp.${process.pid}.${Date.now()}`;
   await writeFile(tmp, data, { mode: 0o600 });
   await rename(tmp, storage.file);

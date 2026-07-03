@@ -8,6 +8,7 @@ import type {
   AgentNotification,
   AgentNotificationKind,
   AgentNotificationPriority,
+  AgentNotificationResolution,
   AgentNotificationSettings,
   AgentNotificationSummary,
 } from "@/lib/types/agent-notifications";
@@ -15,6 +16,8 @@ import type {
 const DEFAULT_NOTIFICATIONS_FOLDER = DEFAULT_SHARED_VAULT.notificationsFolder;
 const SETTINGS_FILE = "settings.json";
 const READ_STATE_FILE = "read-state.json";
+const RESOLUTION_STATE_FILE = "resolution-state.json";
+const VALID_RESOLUTION_STATUSES = new Set(["in-progress", "resolved"]);
 const README_FILE = "README.md";
 const VALID_PRIORITIES = new Set<AgentNotificationPriority>(["low", "normal", "high", "urgent"]);
 const VALID_KINDS = new Set<AgentNotificationKind>(["message", "decision", "task", "alert", "system"]);
@@ -42,6 +45,14 @@ type ReadState = {
   updatedAt: string;
 };
 
+// Resolution lifecycle lives in a sidecar (same pattern as read receipts): the
+// markdown notes stay immutable and sync-friendly while remediation loops
+// stamp "in-progress"/"resolved" against notification ids.
+type ResolutionState = {
+  entries: Record<string, AgentNotificationResolution>;
+  updatedAt: string;
+};
+
 export type NotificationListResult = AgentNotificationSummary & {
   notifications: AgentNotification[];
   nextCursor: number | null;
@@ -60,6 +71,7 @@ export function resolveNotificationStorage(options: NotificationStorageOptions =
     stateRoot: join(root, "state"),
     settingsFile: join(root, "state", SETTINGS_FILE),
     readStateFile: join(root, "state", READ_STATE_FILE),
+    resolutionStateFile: join(root, "state", RESOLUTION_STATE_FILE),
     readmeFile: join(root, README_FILE),
   };
 }
@@ -67,12 +79,13 @@ export function resolveNotificationStorage(options: NotificationStorageOptions =
 export async function listAgentNotifications(options: NotificationStorageOptions & { cursor?: number; limit?: number } = {}): Promise<NotificationListResult> {
   const storage = resolveNotificationStorage(options);
   await ensureNotificationRoot(storage);
-  const [readState, settings, files] = await Promise.all([
+  const [readState, resolutionState, settings, files] = await Promise.all([
     readReadState(storage.readStateFile),
+    readResolutionState(storage.resolutionStateFile),
     readSettings(storage.settingsFile),
     listMarkdownFiles(storage.notificationsRoot),
   ]);
-  const notifications = (await Promise.all(files.map((file) => readNotificationFile(file, storage, readState))))
+  const notifications = (await Promise.all(files.map((file) => readNotificationFile(file, storage, readState, resolutionState))))
     .filter((notification): notification is AgentNotification => Boolean(notification))
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id));
   const cursor = Math.max(0, options.cursor ?? 0);
@@ -102,7 +115,7 @@ export async function markAllAgentNotificationsRead(options: NotificationStorage
   await ensureNotificationRoot(storage);
   const files = await listMarkdownFiles(storage.notificationsRoot);
   const state = await readReadState(storage.readStateFile);
-  const notifications = (await Promise.all(files.map((file) => readNotificationFile(file, storage, state))))
+  const notifications = (await Promise.all(files.map((file) => readNotificationFile(file, storage, state, { entries: {}, updatedAt: "" }))))
     .filter((notification): notification is AgentNotification => Boolean(notification));
   const now = new Date().toISOString();
   for (const notification of notifications) state.read[notification.id] = now;
@@ -155,7 +168,9 @@ export async function createAgentNotification(input: CreateAgentNotificationInpu
   ].filter(Boolean).join("\n");
   await mkdir(dir, { recursive: true, mode: 0o700 });
   await writeFile(file, `${frontmatter}\n\n${input.body.trim()}\n`, { mode: 0o600 });
-  return listAgentNotifications({ ...options, cursor: 0, limit: 40 });
+  // The created id rides along so producers (escalation bridge) can later
+  // stamp resolution lifecycle against this exact notification.
+  return { id, ...(await listAgentNotifications({ ...options, cursor: 0, limit: 40 })) };
 }
 
 async function ensureNotificationRoot(storage: ReturnType<typeof resolveNotificationStorage>) {
@@ -185,7 +200,7 @@ async function listMarkdownFiles(root: string): Promise<string[]> {
   return files.flat();
 }
 
-async function readNotificationFile(path: string, storage: ReturnType<typeof resolveNotificationStorage>, readState: ReadState): Promise<AgentNotification | null> {
+async function readNotificationFile(path: string, storage: ReturnType<typeof resolveNotificationStorage>, readState: ReadState, resolutionState: ResolutionState): Promise<AgentNotification | null> {
   const raw = await readFile(path, "utf-8").catch(() => "");
   if (!raw.trim()) return null;
   const { frontmatter, body } = parseFrontmatter(raw);
@@ -209,6 +224,7 @@ async function readNotificationFile(path: string, storage: ReturnType<typeof res
     read: Boolean(readAt),
     readAt,
     tags: parseTags(frontmatter.tags),
+    resolution: resolutionState.entries[id],
   };
 }
 
@@ -231,6 +247,50 @@ async function readReadState(path: string): Promise<ReadState> {
     read: parsed.read && typeof parsed.read === "object" ? parsed.read : {},
     updatedAt: parsed.updatedAt || new Date().toISOString(),
   };
+}
+
+async function readResolutionState(path: string): Promise<ResolutionState> {
+  const parsed = await readJson<Partial<ResolutionState>>(path, { entries: {}, updatedAt: "" });
+  const entries: Record<string, AgentNotificationResolution> = {};
+  for (const [id, value] of Object.entries(parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {})) {
+    if (value && typeof value === "object" && VALID_RESOLUTION_STATUSES.has((value as AgentNotificationResolution).status)) {
+      entries[id] = value as AgentNotificationResolution;
+    }
+  }
+  return { entries, updatedAt: parsed.updatedAt || "" };
+}
+
+/**
+ * Stamp (or clear, with null) the resolution lifecycle of one notification.
+ * Called by remediation loops — escalation bridge, autonomy driver — when the
+ * reported condition is being retried ("in-progress") or has cleared
+ * ("resolved"). No-ops when the stored entry already matches, so periodic
+ * sweeps don't rewrite the sidecar every tick.
+ */
+export async function setAgentNotificationResolution(
+  id: string,
+  resolution: { status: AgentNotificationResolution["status"]; note?: string; by?: string } | null,
+  options: NotificationStorageOptions = {},
+): Promise<boolean> {
+  const storage = resolveNotificationStorage(options);
+  await ensureNotificationRoot(storage);
+  const state = await readResolutionState(storage.resolutionStateFile);
+  const current = state.entries[id];
+  if (!resolution) {
+    if (!current) return false;
+    delete state.entries[id];
+  } else {
+    if (current && current.status === resolution.status && (current.note ?? "") === (resolution.note ?? "")) return false;
+    state.entries[id] = {
+      status: resolution.status,
+      note: resolution.note?.trim() || undefined,
+      by: resolution.by?.trim() || undefined,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  state.updatedAt = new Date().toISOString();
+  await writeJsonAtomic(storage.resolutionStateFile, state);
+  return true;
 }
 
 async function readSettings(path: string): Promise<AgentNotificationSettings> {

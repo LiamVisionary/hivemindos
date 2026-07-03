@@ -204,18 +204,30 @@ install_go_if_missing() {
   command -v go >/dev/null 2>&1
 }
 
+# Same criterion as the watchdog's stale-linkd alert (scripts/lib/
+# linkd-staleness.mjs — keep the path list in sync; test-linkd-staleness.mjs
+# guards the drift): the binary only goes stale when a commit actually touched
+# what `go build ./cmd/hivemind-linkd` consumes. A stamp that merely trails
+# HEAD after unrelated commits is current — rebuilding it would produce the
+# same Go code with a newer label, so every app update would pay a full Go
+# build + linkd restart for nothing. Unknown stamps (pre-stamp binary, commit
+# missing from this clone, shallow checkout) fail closed: rebuild.
+linkd_sources_unchanged_since() {
+  local bin_commit="$1" repo_commit="$2"
+  [[ "$bin_commit" =~ ^[0-9a-fA-F]{6,40}$ ]] || return 1
+  [[ "$repo_commit" =~ ^[0-9a-fA-F]{6,40}$ ]] || return 1
+  git -C "$APP_DIR" rev-parse --verify --quiet "$bin_commit^{commit}" >/dev/null 2>&1 || return 1
+  git -C "$APP_DIR" diff --quiet "$bin_commit" "$repo_commit" -- \
+    cmd/hivemind-linkd go.mod go.sum scripts/build-hivemind-linkd.sh 2>/dev/null
+}
+
 build_hivemind_linkd_if_enabled() {
   [[ "$LINK_ENABLED" == "true" ]] || return 1
   if [[ -x "$LINK_BIN" ]]; then
-    # Skip the rebuild only when the binary's embedded commit stamp matches the
-    # checkout: the watchdog's stale-build alert compares these same stamps, so
-    # an mtime-based skip left permanently "stale" binaries alerting daily even
-    # though a rebuild would not change the Go code. Pre-stamp binaries
-    # ("unknown" or no -version support) always rebuild.
     local bin_commit repo_commit
     bin_commit="$("$LINK_BIN" -version 2>/dev/null | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')"
     repo_commit="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-    if [[ -n "$bin_commit" && "$bin_commit" != "unknown" && "$bin_commit" == "$repo_commit" ]]; then
+    if linkd_sources_unchanged_since "$bin_commit" "$repo_commit"; then
       hivemindos_sign_macos_binary "$LINK_BIN" "com.hivemindos.linkd"
       return 0
     fi
@@ -1326,6 +1338,14 @@ PLIST
     maybe_allow_node_through_macos_firewall
   fi
 else
+  # The pre-rename user unit keeps the Syncthing DB lock and leaves the new
+  # unit crash-looping forever (hel1-2 reached 400k+ restarts); macOS already
+  # boots out its legacy LaunchAgent above — do the same for systemd.
+  LEGACY_SYNCTHING_SERVICE="$HOME/.config/systemd/user/omni-agent-hivemind-syncthing.service"
+  if [[ -f "$LEGACY_SYNCTHING_SERVICE" ]] && command -v systemctl >/dev/null 2>&1; then
+    systemctl --user disable --now omni-agent-hivemind-syncthing.service >/dev/null 2>&1 || true
+    rm -f "$LEGACY_SYNCTHING_SERVICE"
+  fi
   if [[ "$TAILNET_SYNC_ENABLED" == "true" ]]; then
     install_syncthing_if_missing
     if command -v syncthing >/dev/null 2>&1; then
@@ -1340,6 +1360,7 @@ Description=HivemindOS Syncthing folder sync
 Environment=SYNCTHING_GUI_ADDRESS=127.0.0.1:8384
 ExecStart=$SYNCTHING_RUNNER
 Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=default.target

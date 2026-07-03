@@ -69,7 +69,13 @@ const legacyOversizedAllowances = new Map([
   // in CI). Shrinking a file should lower its entry; growth fails the gate.
   // 2026-07-02: +5 for the cached /apps discovery sweep (logic itself lives in
   // scripts/lib/hosted-apps-cache.mjs; only the import + wiring is here).
-  ["scripts/agent-telemetry-collector.mjs", 8123],
+  // 2026-07-03: +29 for /chat abort wiring — client disconnect now SIGTERMs
+  // the spawned hermes CLI instead of leaving a 20-min zombie worker (hel1-2
+  // pile-up amplifier); kill-switch AGENT_TELEMETRY_CHAT_ABORT_KILL=0.
+  // 2026-07-03: +35 for startSyncthingViaServiceManager — syncthing recovery
+  // now starts the installer-managed unit instead of racing it with a detached
+  // spawn (hel1-2 DB-lock crash-loop, 400k+ restarts).
+  ["scripts/agent-telemetry-collector.mjs", 8187],
   // 2026-07-02: +18 for the non-string task.result/body read+write coercion fix
   // (one poisoned task was 400ing every /api/kanban read).
   ["src/lib/services/kanban/local-kanban-store.ts", 2433],

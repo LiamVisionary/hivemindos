@@ -42,6 +42,18 @@
       "runtimeExecutable": "/usr/bin/env",
       "runtimeArgs": ["HIVEMINDOS_TAURI_DEV=1", "HIVEMINDOS_TAURI_NEXT_DIST_DIR=.next-tauri/verify-5037", "node", "node_modules/next/dist/bin/next", "dev", "-H", "127.0.0.1", "-p", "5037"],
       "port": 5037
+    },
+    {
+      "name": "hivemindos-verify-5039-no-driver",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": ["HIVEMINDOS_COMPANY_AUTONOMY_DRIVER=0", "HIVEMINDOS_TAURI_DEV=1", "HIVEMINDOS_TAURI_NEXT_DIST_DIR=.next-tauri/verify-5039", "node", "node_modules/next/dist/bin/next", "dev", "-H", "127.0.0.1", "-p", "5039"],
+      "port": 5039
+    },
+    {
+      "name": "hivemindos-verify-5041-throwaway-auth",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": ["HIVEMINDOS_COMPANY_AUTONOMY_DRIVER=0", "HIVEMINDOS_DASHBOARD_AUTH_SECRET=throwaway-verify-secret-not-a-real-credential-0000", "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN=throwaway-verify-device-token-0000", "node", "node_modules/next/dist/bin/next", "dev", "-H", "127.0.0.1", "-p", "5041"],
+      "port": 5041
     }
   ]
 }

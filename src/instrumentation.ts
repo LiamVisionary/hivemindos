@@ -1,3 +1,13 @@
+// Self-POSTs to our own /api routes 401 without the server's device token
+// since the API auth gate moved to src/proxy.ts. Mirrors
+// internalApiAuthHeaders() from @/lib/utils/internal-api-auth, inlined here
+// because instrumentation.ts must not import app modules (see the bundling
+// note below). The gate verifies against this same process-env value.
+function selfApiAuthHeaders(): Record<string, string> {
+  const token = process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN?.trim() ?? "";
+  return token ? { "x-hivemindos-device-token": token } : {};
+}
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "edge") return;
 
@@ -51,7 +61,7 @@ export async function register() {
         await new Promise((resolve) => setTimeout(resolve, 4_000));
         const started = await fetch(`http://127.0.0.1:${port}/api/telegram-tip-bot`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
           body: JSON.stringify({ action: "start" }),
         })
           .then((response) => response.ok)
@@ -92,12 +102,23 @@ export async function register() {
       const value = (fromProcess || fromFile || "").replace(/^["']|["']$/g, "").toLowerCase();
       if (value === "0" || value === "false") return; // default ON
       const port = process.env.PORT?.trim();
-      if (!port) return;
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 4_000));
+      if (!port) {
+        // Some launch paths (Tauri-spawned dev server) don't set PORT, so the
+        // self-POST is impossible from here. The driver still gets revived by
+        // the /api/companies and /api/company-autonomy-driver route hooks and
+        // the fleet-health-watchdog — log so a stopped driver is diagnosable.
+        console.warn("[company-autonomy-driver] autostart skipped: PORT env unset (route hooks / watchdog will start the driver on first contact)");
+        return;
+      }
+      // Never give up: a one-shot boot window used to strand launched companies
+      // for hours when the server was slow to bind (the autostart burned its 5
+      // attempts and the driver stayed stopped until a manual poke). Retry fast
+      // during boot, then keep trying every minute until it sticks.
+      for (let attempt = 0; ; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 5 ? 4_000 : 60_000));
         const started = await fetch(`http://127.0.0.1:${port}/api/company-autonomy-driver`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
           body: JSON.stringify({ action: "start" }),
         })
           .then((response) => response.ok)
@@ -106,8 +127,10 @@ export async function register() {
           console.log("[company-autonomy-driver] auto-started");
           return;
         }
+        if (attempt === 4 || (attempt > 4 && attempt % 15 === 0)) {
+          console.error(`[company-autonomy-driver] autostart still failing after ${attempt + 1} attempts — retrying every 60s`);
+        }
       }
-      console.error("[company-autonomy-driver] autostart gave up after 5 attempts");
     } catch (error) {
       console.error("[company-autonomy-driver] autostart failed:", error instanceof Error ? error.message : error);
     }

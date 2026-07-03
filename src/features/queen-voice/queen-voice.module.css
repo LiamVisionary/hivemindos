@@ -243,6 +243,17 @@
   color: #8d9fff;
 }
 
+/* Subtle "which brain answers" tag beside Queen Bee's name: quieter than the
+   uppercase speaker label, mixed case, no letterspacing shouting. */
+.brainTag {
+  margin-left: 8px;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(235, 239, 250, 0.42);
+}
+
 .turnText {
   margin: 0;
   font-size: 14px;

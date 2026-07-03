@@ -51,6 +51,9 @@ export type RuntimeIntegrationStatus = {
     detail: string;
   }>;
   diagnostics: string[];
+  /** Present when Queen Bee voice turns are bypassing this agent's configured
+   *  model (runtime turn failing → the OpenAI fallback model answering). */
+  queenVoiceBrain?: import("@/lib/services/queen-bee/voice-brain-status").QueenVoiceBrainStatus;
   modelSelection?: RuntimeModelSelection;
   providerStatus?: {
     usePod?: {

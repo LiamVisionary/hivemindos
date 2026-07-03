@@ -1,8 +1,10 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { DASHBOARD_AUTH_HEADER } from "@/lib/utils/internal-api-auth";
+
 export const DASHBOARD_SESSION_COOKIE = "hivemindos_session";
-export const DASHBOARD_AUTH_HEADER = "x-hivemindos-device-token";
+export { DASHBOARD_AUTH_HEADER };
 
 const SESSION_VERSION = "v1";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;

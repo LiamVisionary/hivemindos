@@ -321,11 +321,23 @@ export type AgentCallMissedFallback =
   | "obsidian_note"
   | "telegram";
 
+/** Which LLM answers PIPELINE voice turns (STT → LLM → TTS). "agent" (default)
+ *  = the agent's own selected provider/model, called directly; "custom" = an
+ *  explicit voice-only override; "fleet-agent" = the ranked fleet agent's full
+ *  runtime (tools/persona, slower). Realtime hybrid runtimes ignore this. */
+export type VoiceChatBrainSource = "agent" | "custom" | "fleet-agent";
+export interface VoiceChatBrainPreference {
+  source: VoiceChatBrainSource;
+  provider?: string;
+  model?: string;
+}
+
 export interface AgentCallPreferences {
   voiceRuntime: AgentVoiceRuntime;
   voiceProviderId?: string;
   voiceModelId?: string;
   voiceId?: string;
+  voiceChatBrain?: VoiceChatBrainPreference;
   enabled: boolean;
   dailyEnabled: boolean;
   dailyCallTime: string;
@@ -358,6 +370,13 @@ export function buildAgentCallPreferences(
     voiceProviderId: input?.voiceProviderId,
     voiceModelId: input?.voiceModelId,
     voiceId: input?.voiceId,
+    voiceChatBrain: input?.voiceChatBrain?.source
+      ? {
+          source: input.voiceChatBrain.source,
+          provider: input.voiceChatBrain.provider?.trim() || undefined,
+          model: input.voiceChatBrain.model?.trim() || undefined,
+        }
+      : undefined,
     enabled: input?.enabled ?? false,
     dailyEnabled: input?.dailyEnabled ?? false,
     dailyCallTime: input?.dailyCallTime || "09:00",

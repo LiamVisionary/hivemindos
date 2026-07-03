@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 const nextArgs = [];
@@ -201,15 +205,36 @@ let warmedSinceSpawn = false;
 let warmStartupAttempts = 0;
 let warmInFlight = false;
 
+// The API auth gate (src/proxy.ts) 401s tokenless /api requests BEFORE the
+// route module loads, which both fails the ok-check and defeats the warmup.
+// Same token resolution order as scripts/fleet-health-watchdog.mjs.
+function warmEnvFileValue(path, key) {
+  if (!existsSync(path)) return "";
+  const match = readFileSync(path, "utf8").match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.+)\\s*$`, "m"));
+  let value = match?.[1]?.trim() ?? "";
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+  return value.trim();
+}
+
+function warmDeviceToken() {
+  return (
+    process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+    || warmEnvFileValue(resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+    || warmEnvFileValue(join(homedir(), ".hivemindos", ".env"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+  ).trim();
+}
+
 async function warmRoutesOnce() {
   if (!warmRoutes.length || warmInFlight) return false;
   warmInFlight = true;
+  const token = warmDeviceToken();
   let allOk = true;
   try {
     for (const route of warmRoutes) {
       try {
         const response = await fetch(`http://${warmHost}:${port}${route}`, {
           method: route.startsWith("/api/") ? "OPTIONS" : "HEAD",
+          headers: token ? { "x-hivemindos-device-token": token } : undefined,
           signal: AbortSignal.timeout(90_000),
         });
         if (!response.ok) allOk = false;

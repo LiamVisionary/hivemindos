@@ -4,6 +4,7 @@ import type { Company, CompanyProcess } from "@/lib/types/company";
 import { decomposePrdToTaskDrafts, type QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
+import { appendCompanyGovernanceProof } from "@/lib/services/company-governance";
 import { appendCompanyMemory, companyMemoryDigest } from "@/lib/services/company-memory";
 import { dedupeDrafts } from "@/lib/services/company-task-dedup";
 import type { KanbanLoopSpec } from "@/lib/types/kanban";
@@ -220,6 +221,12 @@ export async function dispatchCompanyFlow(
     title: `Started ${company.process ?? "sequential"} flow toward "${goal}"`,
     detail: `Flow run ${run.runId} with ${spec.nodes.filter((n) => n.kind === "task").length} step(s).`,
   }).catch(() => undefined);
+  await appendCompanyGovernanceProof({
+    companyId: company.id,
+    companyName: company.name,
+    event: "dispatch",
+    payload: { goal, flowRunId: run.runId, process: company.process ?? "sequential", taskCount: spec.nodes.filter((n) => n.kind === "task").length },
+  }).catch(() => undefined);
 
   return {
     goal,
@@ -333,6 +340,9 @@ export async function dispatchCompanyGoal(
         fleetSnapshot: scoped,
         skills: draft.skills,
         loop: buildCompanyLearningLoop(company, draft, runId),
+        // The company's domain repo: routes code work toward machines with the
+        // checkout and gives the task the project's GitLawb proof badge.
+        projectId: company.projectId,
         vaultPath: opts.vaultPath,
       });
       tasks.push({
@@ -352,6 +362,12 @@ export async function dispatchCompanyGoal(
     kind: "dispatch",
     title: `Dispatched ${tasks.length} task(s) toward "${goal}" (${planner} plan)`,
     detail: tasks.map((t) => t.title).join(" · "),
+  }).catch(() => undefined);
+  await appendCompanyGovernanceProof({
+    companyId: company.id,
+    companyName: company.name,
+    event: "dispatch",
+    payload: { goal, runId, planner, taskIds: tasks.map((t) => t.taskId), taskCount: tasks.length },
   }).catch(() => undefined);
 
   return {

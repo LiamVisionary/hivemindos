@@ -5,6 +5,7 @@ import type { QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decompos
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
 import { readRuntimeResponseText, voiceOptimizedAgent } from "@/lib/services/phone/runtime-voice-turn";
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 /**
  * LLM-authored decomposition of a company's apex goal into concrete, goal-specific
@@ -159,7 +160,9 @@ export async function llmDecomposeApexGoal(
       try {
         const response = await fetch(new URL("/api/chat/agent-runtime", opts.origin), {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          // Self-fetches 401 without the server's own device token since the
+          // API auth gate moved to src/proxy.ts.
+          headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
           body: JSON.stringify({
             agent: voiceOptimizedAgent(agent),
             messages: [{ role: "system", content: system }, { role: "user", content: user }],

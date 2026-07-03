@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
 import {
@@ -381,7 +382,7 @@ async function fetchRuntimeVoiceTurn(
   });
   return fetch(new URL("/api/chat/agent-runtime", request.url), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
     body: JSON.stringify({
       agent,
       messages: [

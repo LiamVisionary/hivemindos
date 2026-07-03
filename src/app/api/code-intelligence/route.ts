@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { codeIntelligenceService } from "@/lib/services/code-intelligence/service";
 import { mergeCrossServiceRoutes } from "@/lib/services/code-intelligence/cross-service";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ function num(value: unknown): number | undefined {
 
 async function fetchConnectedApps(request: NextRequest): Promise<unknown> {
   const url = new URL("/api/fleet/apps", request.url);
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(7_000) }).catch(() => null);
+  const response = await fetch(url, { cache: "no-store", headers: internalApiAuthHeaders(), signal: AbortSignal.timeout(7_000) }).catch(() => null);
   if (!response?.ok) return undefined;
   const payload = (await response.json().catch(() => null)) as { apps?: unknown } | null;
   return payload?.apps;

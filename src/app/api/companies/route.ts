@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/utils/server-auth";
 import {
   addCompanyMembers,
+  claimCompanyHomeMachine,
   companySpendRollup,
   deleteCompany,
   getCompany,
@@ -14,7 +15,11 @@ import {
   upsertCompany,
 } from "@/lib/services/companies-store";
 import { dispatchCompanyGoal } from "@/lib/services/companies-orchestration";
-import { ensureCompanyAutonomyDriver } from "@/lib/services/company-autonomy-driver";
+import {
+  ensureCompanyAutonomyDriver,
+  getCompanyAutonomyDriverStatus,
+  rememberCompanyDriverSelfBase,
+} from "@/lib/services/company-autonomy-driver";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import type {
   CompanyApexGoal,
@@ -30,14 +35,24 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
+  // Every dashboard poll is a self-heal opportunity: record the loopback
+  // address this request actually arrived on (PORT env is unset in some launch
+  // paths, and the port alone can point at the wrong loopback family) and
+  // revive the driver if its loop died — an autonomous company must never
+  // depend on a one-shot boot autostart. ensure() is a cheap no-op while the
+  // driver is running.
+  rememberCompanyDriverSelfBase(request.headers.get("host"));
   const companies = await readCompanies();
+  if (companies.some((company) => company.autonomy && !company.frozen)) ensureCompanyAutonomyDriver();
   const withRollups = await Promise.all(
     companies.map(async (company) => ({
       company,
       rollup: await companySpendRollup(company, company.agentIds?.length ?? 0),
     })),
   );
-  return NextResponse.json({ ok: true, companies: withRollups });
+  // Driver health rides along so the UI can say "stalled" instead of showing a
+  // company as running while nothing is actually dispatching.
+  return NextResponse.json({ ok: true, companies: withRollups, driver: getCompanyAutonomyDriverStatus() });
 }
 
 type CompanyBody = {
@@ -59,6 +74,8 @@ type CompanyBody = {
   apexGoal?: CompanyApexGoal;
   revenue?: CompanyRevenue;
   members?: CompanyMember[];
+  homeMachineKey?: string;
+  projectId?: string;
   // dispatch-goal
   fleetSnapshot?: QueenBeeFleetMachine[];
   maxTasks?: number;
@@ -106,6 +123,9 @@ export async function POST(request: NextRequest) {
       // Enter perpetual autonomy BEFORE dispatching: if the dispatch fails midway,
       // the company stays autonomous and the driver re-dispatches on its next tick.
       await setCompanyAutonomy(company.id, true);
+      // Claim-on-launch: an explicit Launch from this machine makes it the home
+      // machine (only the home machine's driver auto-dispatches a replicated company).
+      await claimCompanyHomeMachine(company.id);
       ensureCompanyAutonomyDriver();
       const dispatch = await dispatchCompanyGoal(company, Array.isArray(body.fleetSnapshot) ? body.fleetSnapshot : [], { maxTasks: body.maxTasks, origin: request.nextUrl.origin });
       await markCompanyDispatched(company.id, Date.now());
@@ -152,6 +172,8 @@ export async function POST(request: NextRequest) {
       apexGoal: body.apexGoal,
       revenue: body.revenue,
       members: body.members,
+      homeMachineKey: body.homeMachineKey,
+      projectId: body.projectId,
     });
     return NextResponse.json({ ok: true, company });
   } catch (error) {

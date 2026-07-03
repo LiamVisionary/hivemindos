@@ -10,6 +10,7 @@ import { officialPaidAgentCheckoutReturnUrl } from "@/lib/services/paid-agent-cl
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
 import { executeX402Fetch, type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -156,9 +157,12 @@ export async function POST(request: NextRequest) {
       fromAddress: vault.info.address,
       url: target.toString(),
       method: "POST",
+      // The target is our own /api/official-paid-agents route; self-fetches
+      // 401 without the server's device token since the gate moved to src/proxy.ts.
       headers: {
         Accept: "application/json",
         "Idempotency-Key": `hmos-model-credit-${randomUUID()}`,
+        ...internalApiAuthHeaders(),
       },
       body: {},
       policy,
@@ -219,6 +223,7 @@ async function startCardCheckout(
       "Content-Type": "application/json",
       "Idempotency-Key": `hmos-model-credit-card-${randomUUID()}`,
       ...(existingToken ? { "X-HivemindOS-Credit-Token": existingToken } : {}),
+      ...internalApiAuthHeaders(),
     },
     body: JSON.stringify({
       creditAccountId: accountId,
@@ -265,6 +270,7 @@ async function readHostedBalance(request: NextRequest, slug: string, token: stri
     headers: {
       Accept: "application/json",
       "X-HivemindOS-Credit-Token": token,
+      ...internalApiAuthHeaders(),
     },
     cache: "no-store",
     signal: AbortSignal.timeout(30_000),

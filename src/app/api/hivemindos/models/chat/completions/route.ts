@@ -7,6 +7,7 @@ import {
   upstreamHivemindosWalletPaidModel,
 } from "@/lib/config/hivemindos-wallet-paid-models";
 import { getHivemindosModelCreditToken } from "@/lib/services/hivemindos-model-credit-vault";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { executeX402Fetch, type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
 import { loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
@@ -90,8 +91,11 @@ export async function POST(request: NextRequest) {
       fromAddress: vault.info.address,
       url: target.toString(),
       method: "POST",
+      // The target is our own /api/official-paid-agents route; self-fetches
+      // 401 without the server's device token since the gate moved to src/proxy.ts.
       headers: {
         Accept: "application/json",
+        ...internalApiAuthHeaders(),
       },
       body: {
         ...body,
@@ -150,6 +154,7 @@ async function fetchWithHostedCredits(
         Accept: "application/json",
         "Content-Type": "application/json",
         "X-HivemindOS-Credit-Token": creditToken,
+        ...internalApiAuthHeaders(),
       },
       body: JSON.stringify({
         ...body,

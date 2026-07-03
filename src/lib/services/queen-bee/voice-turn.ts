@@ -20,6 +20,11 @@ import {
 import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
 import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
+import {
+  noteQueenVoiceBrainFailure,
+  noteQueenVoiceBrainSuccess,
+} from "@/lib/services/queen-bee/voice-brain-status";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 // The persisted session every Queen agent-turn shares; multi-step rail flows (a
 // swap/send/Bankr DRAFT prepared on one turn, then a confirmation on the next)
@@ -31,8 +36,12 @@ const QUEEN_VOICE_SESSION_ID = "queen-bee-voice";
 // to strip the FAB's screen-context wrapper + thread the prior draft.
 const CONFIRMATION_REQUEST = /^(?:confirm|confirmed|yes|yes,?\s*confirm|go ahead|run it|execute|send it|(?:CONFIRM|SEND|APPROVE)_[A-Z]+)$/i;
 
-// Spoken turns need tight budgets: a slow runtime attempt costs silence.
-const AGENT_TURN_TIMEOUT_MS = 10_000;
+// Spoken turns need tight budgets: a slow runtime attempt costs silence —
+// but the budget must fit the brain it times. A hermes CLI turn on an OAuth
+// provider (openai-codex) takes 8-13s warm end-to-end through
+// /api/chat/agent-runtime, so a 10s agent budget aborted into the alerted
+// OpenAI fallback right before the reply landed, on every turn.
+const AGENT_TURN_TIMEOUT_MS = 20_000;
 const OPENAI_TURN_TIMEOUT_MS = 20_000;
 const MAX_HISTORY_TURNS = 8;
 // How many capable agents the delegation path tries (in fitness order) before
@@ -40,6 +49,40 @@ const MAX_HISTORY_TURNS = 8;
 // dead-end the request.
 const MAX_AGENT_FALLBACK_ATTEMPTS = 3;
 const OPENAI_VOICE_CHAT_FALLBACK_MODEL = "gpt-4o-mini";
+
+/** The model the OpenAI fallback lane actually answers with. */
+export function voiceFallbackModelName() {
+  return process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL;
+}
+
+/**
+ * Resolved plan for WHICH brain answers a pipeline voice turn. Built by the
+ * route from the Queen's Calls prefs (`voiceChatBrain`): "direct" calls the
+ * given provider/model straight over its OpenAI-compatible chat endpoint
+ * (the agent's own selected model by default, or an explicit voice override);
+ * "fleet-agent" is the legacy ranked-agent runtime lane. The OpenAI fallback
+ * below remains the final safety net for both — and it is alerted loudly.
+ */
+export type VoiceChatBrainPlan =
+  | { kind: "fleet-agent" }
+  | {
+      /** The agent's own runtime answers — REQUIRED for OAuth-held providers
+       *  (openai-codex, copilot, xai-oauth): their credential lives inside
+       *  the runtime, so this is the only lane that uses the user's actual
+       *  credentials for that model. Slower than direct, honest by design. */
+      kind: "agent-runtime";
+      agentId: string;
+      label: string;
+    }
+  | {
+      kind: "direct";
+      provider: string;
+      model: string;
+      label: string;
+      /** Identity used for degradation status/alerts (the settings modal
+       *  matches on agent id, so "agent"-sourced plans pass the queen's). */
+      statusAgent: { id: string; name?: string; runtime?: string; provider?: string; model?: string };
+    };
 
 export type QueenVoiceHistoryTurn = { who: "you" | "queen"; text: string };
 
@@ -125,6 +168,9 @@ export async function runQueenBeeVoiceTurn(options: {
   onSpeechDelta?: (text: string) => void;
   /** A failed attempt's already-emitted speech must be discarded downstream. */
   onSpeechReset?: () => void;
+  /** Which brain answers the conversation (resolved by the route from the
+   *  Queen's Calls prefs). Defaults to the fleet-agent lane. */
+  voiceBrain?: VoiceChatBrainPlan;
 }): Promise<QueenVoiceTurnResult> {
   const emitter = options.onSpeechDelta
     ? createVoiceSpeechEmitter(options.onSpeechDelta)
@@ -233,18 +279,85 @@ async function conversationTurnText(options: {
   onTextDelta?: (chunk: string) => void;
   /** Called before every attempt so delta consumers can reset between them. */
   onAttemptStart?: () => void;
+  voiceBrain?: VoiceChatBrainPlan;
 }) {
   // Standing preferences ("call me boss") splice onto the system prompt so
   // both the runtime brain and the OpenAI fallback honor them every turn. Note
   // this fallback path can only HONOR stored preferences, not capture new ones
   // (it has no tool to call); capture happens in the default realtime session.
-  const systemPreamble = await queenVoicePreferencePreamble();
-  const agent = (await runtimeTurnCoolingDown())
-    ? null
-    : await pickConversationAgent(options.vaultPath);
+  const preferencePreamble = await queenVoicePreferencePreamble();
+  // Best-effort hive context (shared-brain recall + open work digest) rides
+  // the system preamble so EVERY brain lane can answer "check my hive brain"
+  // and "what's on our to-do list" in conversation mode. Lazy import keeps
+  // the hermetic node suites' import graph clean; the module enforces a hard
+  // time budget so a slow index never stalls a spoken turn.
+  const brainContext = await (async () => {
+    try {
+      const { queenVoiceBrainContext } = await import(
+        "@/lib/services/queen-bee/voice-brain-context"
+      );
+      return await queenVoiceBrainContext(options.transcript, {
+        vaultPath: options.vaultPath,
+      });
+    } catch {
+      return "";
+    }
+  })();
+  const systemPreamble = [preferencePreamble, brainContext]
+    .filter((part) => part && part.trim())
+    .join("\n\n");
+  const plan = options.voiceBrain ?? { kind: "fleet-agent" as const };
+  if (plan.kind === "direct") {
+    const directStartedAt = Date.now();
+    // No "Thinking with X" progress chip: the overlay shows the resolved
+    // brain as a static tag by her name; chips are for real work stages.
+    try {
+      options.onAttemptStart?.();
+      const text = await runProviderConversationTurn(
+        plan,
+        options.transcript,
+        options.history,
+        systemPreamble,
+        options.onTextDelta,
+      );
+      if (options.marks)
+        options.marks.directTurnMs = Date.now() - directStartedAt;
+      if (text.trim()) {
+        void noteQueenVoiceBrainSuccess(plan.statusAgent);
+        return text;
+      }
+      void noteQueenVoiceBrainFailure({
+        agent: plan.statusAgent,
+        error: `${plan.label} returned an empty reply.`,
+        fallbackModel: voiceFallbackModelName(),
+        vaultPath: options.vaultPath,
+      });
+    } catch (directError) {
+      if (options.marks)
+        options.marks.directTurnMs = Date.now() - directStartedAt;
+      void noteQueenVoiceBrainFailure({
+        agent: plan.statusAgent,
+        error:
+          directError instanceof Error ? directError.message : String(directError),
+        fallbackModel: voiceFallbackModelName(),
+        vaultPath: options.vaultPath,
+      });
+    }
+    // Deliberate: no fleet-agent detour on failure — the user chose a model;
+    // the OpenAI fallback below is the only substitute, and it is alerted.
+  }
+  const agent = await (async () => {
+    if (plan.kind === "direct" || (await runtimeTurnCoolingDown())) return null;
+    if (plan.kind === "agent-runtime") {
+      // Pinned to the configured agent so the turn runs on ITS credentials
+      // (OAuth providers); missing/chat-incapable pins fall to the fallback.
+      const ranked = await rankConversationAgents(options.vaultPath);
+      return ranked.find((profile) => profile.id === plan.agentId) ?? null;
+    }
+    return pickConversationAgent(options.vaultPath);
+  })();
   if (agent) {
     const agentStartedAt = Date.now();
-    options.progress?.(`Thinking with ${agent.name || agent.id}`);
     try {
       options.onAttemptStart?.();
       const text = await runRuntimeConversationTurn(
@@ -258,11 +371,27 @@ async function conversationTurnText(options: {
       );
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
-      if (text.trim()) return text;
+      if (text.trim()) {
+        // The configured brain answered — clear any degradation status.
+        void noteQueenVoiceBrainSuccess(agent);
+        return text;
+      }
+      void noteQueenVoiceBrainFailure({
+        agent,
+        error: "The runtime turn returned an empty reply.",
+        fallbackModel: voiceFallbackModelName(),
+        vaultPath: options.vaultPath,
+      });
       await startRuntimeTurnCooldown();
     } catch (turnError) {
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
+      void noteQueenVoiceBrainFailure({
+        agent,
+        error: turnError instanceof Error ? turnError.message : String(turnError),
+        fallbackModel: voiceFallbackModelName(),
+        vaultPath: options.vaultPath,
+      });
       await startRuntimeTurnCooldown();
       console.warn(
         `[queen-bee-voice] runtime conversation turn via ${agent.name || agent.id} failed; cooling down for 5 minutes:`,
@@ -271,7 +400,6 @@ async function conversationTurnText(options: {
     }
   }
   const openAiStartedAt = Date.now();
-  options.progress?.("Thinking with OpenAI");
   try {
     options.onAttemptStart?.();
     return await runOpenAiConversationTurn(
@@ -317,38 +445,120 @@ async function runOpenAiConversationTurn(
   systemPreamble?: string,
   onTextDelta?: (chunk: string) => void,
 ) {
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) {
-    throw new Error(
-      "No OpenAI key is configured for the Queen Bee voice conversation fallback.",
+  return runProviderConversationTurn(
+    { provider: "openai-api", model: voiceFallbackModelName(), label: "OpenAI" },
+    transcript,
+    history,
+    systemPreamble,
+    onTextDelta,
+  );
+}
+
+/** Resolve a provider slug to an OpenAI-compatible chat-completions endpoint
+ *  + key. OpenAI rides the existing voice key chain; everything else resolves
+ *  through the provider catalog + shared hive env (lazy imports keep those
+ *  out of the hermetic node suites' import graph). Providers without an
+ *  OpenAI-compatible base fail the turn — visibly, via the degradation alert. */
+async function resolveProviderChatEndpoint(
+  provider: string,
+): Promise<{ url: string; key: string } | null> {
+  // NOTE: OAuth-held providers (openai-codex, copilot, xai-oauth) are never
+  // resolved here — their credential lives inside the agent runtime, so the
+  // route plans them as kind:"agent-runtime" instead of a key substitution.
+  if (!provider || provider === "openai" || provider === "openai-api") {
+    const apiKey = await transcriptionApiKey();
+    return apiKey
+      ? { url: "https://api.openai.com/v1/chat/completions", key: apiKey }
+      : null;
+  }
+  const { providerCatalogEntry } = await import("@/lib/config/provider-catalog");
+  const entry = providerCatalogEntry(provider);
+  if (!entry?.baseUrl || !entry.keyEnv) return null;
+  const { hiveEnvValue } = await import("@/lib/services/shared-hive-env");
+  const key = await hiveEnvValue(entry.keyEnv).catch(() => "");
+  if (!key) return null;
+  return { url: `${entry.baseUrl.replace(/\/+$/, "")}/chat/completions`, key };
+}
+
+async function runProviderConversationTurn(
+  target: { provider: string; model: string; label: string },
+  transcript: string,
+  history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
+  onTextDelta?: (chunk: string) => void,
+) {
+  if (target.provider === "openai-oauth") {
+    // The user's ChatGPT subscription credentials (shared hive env), via the
+    // Responses backend. Lazy import: server-only module, and the hermetic
+    // node suites import this file directly.
+    const { runOpenAiOAuthChatTurn } = await import("@/lib/services/openai-oauth");
+    return runOpenAiOAuthChatTurn(
+      target.model,
+      conversationMessages(transcript, history, systemPreamble),
+      { onTextDelta, timeoutMs: OPENAI_TURN_TIMEOUT_MS },
     );
   }
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model:
-        process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
-      messages: conversationMessages(transcript, history, systemPreamble),
-      max_tokens: 300,
-      temperature: 0.6,
-      // Streamed turns feed the fused converse+speak pipeline; the buffered
-      // legacy action keeps the plain JSON response.
-      ...(onTextDelta ? { stream: true } : {}),
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
-  });
+  const endpoint = await resolveProviderChatEndpoint(target.provider);
+  if (!endpoint) {
+    throw new Error(
+      `No key or OpenAI-compatible endpoint for provider "${target.provider || "openai"}" (${target.label}).`,
+    );
+  }
+  const post = (params: Record<string, unknown>) =>
+    fetch(endpoint.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${endpoint.key}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: target.model,
+        messages: conversationMessages(transcript, history, systemPreamble),
+        // Streamed turns feed the fused converse+speak pipeline; the buffered
+        // legacy action keeps the plain JSON response.
+        ...(onTextDelta ? { stream: true } : {}),
+        ...params,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
+    });
+  // Reasoning-era OpenAI models (gpt-5*, o*) reject max_tokens/temperature and
+  // burn completion budget on thinking — they get max_completion_tokens plus
+  // low reasoning effort (the voice-latency lever: default effort adds ~1s+ to
+  // first token). Everything else gets the classic body. A 400 naming an
+  // unsupported parameter retries once with the legacy-safe body so older
+  // OpenAI-compatible servers (and misclassified models) still work.
+  const reasoningModel = /^(o\d|gpt-5)/i.test(target.model.trim());
+  let response = await post(
+    reasoningModel
+      ? { max_completion_tokens: 700, reasoning_effort: "low" }
+      : { max_tokens: 300, temperature: 0.6 },
+  );
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as {
       error?: { message?: string } | string;
     } | null;
     const detail =
       typeof data?.error === "string" ? data.error : data?.error?.message;
-    throw new Error(detail || `OpenAI chat returned HTTP ${response.status}.`);
+    const parameterError =
+      response.status === 400 &&
+      /unsupported|unrecognized|unknown|max_tokens|max_completion_tokens|reasoning_effort|temperature/i.test(detail ?? "");
+    if (!parameterError) {
+      throw new Error(detail || `${target.label} chat returned HTTP ${response.status}.`);
+    }
+    response = await post(
+      reasoningModel
+        ? { max_completion_tokens: 700 }
+        : { max_completion_tokens: 300 },
+    );
+    if (!response.ok) {
+      const retryData = (await response.json().catch(() => null)) as {
+        error?: { message?: string } | string;
+      } | null;
+      const retryDetail =
+        typeof retryData?.error === "string" ? retryData.error : retryData?.error?.message;
+      throw new Error(retryDetail || `${target.label} chat returned HTTP ${response.status}.`);
+    }
   }
   if (onTextDelta) return await readOpenAiSseText(response, onTextDelta);
   const data = (await response.json().catch(() => null)) as {
@@ -563,7 +773,7 @@ export async function runQueenBeeAgentTurn(
     try {
       const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
         body: JSON.stringify({
           agent: voiceOptimizedAgent(agent),
           messages: relayMessages,
@@ -712,7 +922,7 @@ async function runRuntimeConversationTurn(
   const userText = buildRuntimeVoiceUserText(transcript, history, systemPreamble);
   const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
     body: JSON.stringify({
       agent: voiceOptimizedAgent(agent),
       messages: [{ role: "user", content: userText }],

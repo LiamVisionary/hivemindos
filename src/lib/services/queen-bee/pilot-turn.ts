@@ -11,6 +11,7 @@ import {
 } from "@/lib/services/phone/runtime-voice-turn";
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 // Pilot turns gate a visible UI animation, so they get the same tight budget
 // philosophy as spoken turns: a slow runtime attempt costs a frozen popup.
@@ -54,7 +55,7 @@ export async function runQueenBeePilotTurn(options: {
     try {
       const response = await fetch(new URL("/api/chat/agent-runtime", options.origin), {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
         body: JSON.stringify({
           agent: voiceOptimizedAgent(agent),
           messages: [

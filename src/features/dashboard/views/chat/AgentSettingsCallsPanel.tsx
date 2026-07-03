@@ -23,7 +23,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { buildAgentCallPreferences } from "@/lib/types/agent-runtime";
-import type { AgentCallMissedFallback, AgentCallPreferences, AgentProfile } from "@/lib/types/agent-runtime";
+import type {
+  AgentCallMissedFallback,
+  AgentCallPreferences,
+  AgentProfile,
+  VoiceChatBrainPreference,
+  VoiceChatBrainSource,
+} from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft } from "@/features/dashboard/agent-settings-types";
 import { clawMobilePairingUrl, hubUrlForPairingHost } from "@/lib/phone/pairing-url";
 import { Badge, Btn, Field, GroupLabel, PanelHead, Toggle } from "./AgentSettingsModalPrimitives";
@@ -123,11 +129,28 @@ export type AgentSettingsCallsPanelProps = {
 };
 
 const VOICE_RUNTIME_LABELS: Record<string, string> = {
-  "openai-realtime": "OpenAI Realtime",
+  "openai-realtime": "Realtime hybrid (voice + brain in one)",
   "grok-voice": "Grok Voice",
   "gemini-live": "Gemini Live",
-  "local-tts": "Local TTS",
+  "openai-tts": "Cloud voice (pipeline)",
+  "local-tts": "Local voice (pipeline)",
 };
+
+// Pipeline runtimes split hearing/thinking/speaking, so the CHAT BRAIN is
+// configurable; realtime hybrids bundle the brain into the voice model.
+const PIPELINE_VOICE_RUNTIMES = new Set(["openai-tts", "local-tts"]);
+
+// Chat providers the voice brain can call directly. openai-oauth = the
+// user's ChatGPT subscription credentials (connected in-app, fleet-shared
+// via the hive env); the rest resolve via provider catalog baseUrl +
+// shared-hive-env key server-side.
+const BRAIN_PROVIDER_OPTIONS = [
+  { slug: "openai-oauth", name: "OpenAI (ChatGPT)" },
+  { slug: "openai-api", name: "OpenAI (API key)" },
+  { slug: "groq", name: "Groq" },
+  { slug: "gemini", name: "Gemini" },
+  { slug: "venice", name: "Venice" },
+];
 
 const FALLBACK_OPTIONS = [
   { value: "none", label: "None" },
@@ -340,7 +363,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
   const callTimezone = agentCallSettings.timezone || "UTC";
   const selectedTime = fmt12(agentCallSettings.dailyCallTime);
-  const voiceRuntimeOptions = ["openai-realtime", "local-tts", agentCallSettings.voiceRuntime, ...voiceOptions.map((provider) => provider.provider)]
+  const voiceRuntimeOptions = ["openai-realtime", "openai-tts", "local-tts", agentCallSettings.voiceRuntime, ...voiceOptions.map((provider) => provider.provider)]
     .filter((provider, index, list) => provider && list.indexOf(provider) === index);
   const selectedVoiceOptions = voiceOptions.filter((provider) => provider.provider === agentCallSettings.voiceRuntime);
   const selectedVoiceOption = voiceOptions.find((provider) => provider.id === agentCallSettings.voiceProviderId)
@@ -371,6 +394,113 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
 
   const updateCallSource = (source: AgentCallSourceKey, enabled: boolean) => {
     updateAgentCalls({ sources: { ...agentCallSettings.sources, [source]: enabled } });
+  };
+
+  // Chat brain for PIPELINE voice runtimes: which LLM answers spoken turns.
+  // Default "agent" = this agent's own selected provider/model (kept in sync
+  // automatically); "custom" pins a voice-only override; "fleet-agent" is the
+  // legacy ranked-agent runtime lane (tools/persona, slower).
+  const isPipelineVoiceRuntime = PIPELINE_VOICE_RUNTIMES.has(agentCallSettings.voiceRuntime);
+  const voiceBrainPref = agentCallSettings.voiceChatBrain;
+  const brainSource: VoiceChatBrainSource = voiceBrainPref?.source ?? "agent";
+  const brainProvider = voiceBrainPref?.provider || "openai-api";
+  const brainModel = voiceBrainPref?.model || "";
+  const agentBrainModelLabel = [roleModalAgent?.provider, roleModalAgent?.model]
+    .filter(Boolean)
+    .join(" / ");
+  const [brainModelOptions, setBrainModelOptions] = useState<string[]>([]);
+  useEffect(() => {
+    if (!isPipelineVoiceRuntime || brainSource !== "custom") return;
+    let cancelled = false;
+    void fetch(`/api/providers/models?provider=${encodeURIComponent(brainProvider)}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { models?: Array<{ id: string }> } | null) => {
+        if (!cancelled) setBrainModelOptions((data?.models ?? []).map((model) => model.id).filter(Boolean));
+      })
+      .catch(() => {
+        if (!cancelled) setBrainModelOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPipelineVoiceRuntime, brainSource, brainProvider]);
+
+  // ChatGPT OAuth status for spoken turns: shown whenever the selected brain
+  // would ride it (explicit openai-oauth pick, or the agent default on an
+  // OpenAI-family provider, where OAuth is preferred over the API key).
+  const oauthRelevant =
+    isPipelineVoiceRuntime &&
+    ((brainSource === "custom" && brainProvider === "openai-oauth") ||
+      (brainSource === "agent" && /^openai/i.test(roleModalAgent?.provider ?? "")));
+  const [oauthState, setOauthState] = useState<{ connected: boolean; preferApiKey: boolean } | null>(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthError, setOauthError] = useState("");
+  const [oauthAuthorizeUrl, setOauthAuthorizeUrl] = useState("");
+  useEffect(() => {
+    if (!oauthRelevant) return;
+    let cancelled = false;
+    const refresh = () =>
+      void fetch("/api/openai-oauth", { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { ok?: boolean; connected?: boolean; preferApiKey?: boolean } | null) => {
+          if (!cancelled && data?.ok) {
+            setOauthState({ connected: Boolean(data.connected), preferApiKey: Boolean(data.preferApiKey) });
+          }
+        })
+        .catch(() => undefined);
+    refresh();
+    const timer = window.setInterval(refresh, 4_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [oauthRelevant]);
+  const connectChatGptOauth = async () => {
+    setOauthBusy(true);
+    setOauthError("");
+    try {
+      const response = await fetch("/api/openai-oauth", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "start" }),
+      });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; authorizeUrl?: string; error?: string } | null;
+      if (!data?.ok || !data.authorizeUrl) throw new Error(data?.error || "Could not start the ChatGPT sign-in.");
+      setOauthAuthorizeUrl(data.authorizeUrl);
+      // Tauri's webview swallows window.open, so when no popup materializes,
+      // ask the server to open the system browser (same machine for the
+      // desktop app); the rendered link below is the last-resort fallback.
+      const popup = window.open(data.authorizeUrl, "_blank", "noopener");
+      if (!popup) {
+        const opened = await fetch("/api/system/browsers/open", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ url: data.authorizeUrl }),
+        })
+          .then((openResponse) => openResponse.ok)
+          .catch(() => false);
+        if (!opened) {
+          setOauthError("Could not open a browser automatically — use the sign-in link below.");
+        }
+      }
+    } catch (error) {
+      setOauthError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setOauthBusy(false);
+    }
+  };
+
+  const updateVoiceChatBrain = (patch: Partial<VoiceChatBrainPreference>) => {
+    const next: VoiceChatBrainPreference = {
+      source: brainSource,
+      provider: brainProvider,
+      model: brainModel,
+      ...patch,
+    };
+    // "agent" needs no pinned provider/model — it tracks the agent's own.
+    updateAgentCalls({
+      voiceChatBrain: next.source === "agent" ? { source: "agent" } : next,
+    });
   };
 
   const updateVoiceRuntime = (voiceRuntime: string) => {
@@ -809,6 +939,54 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                 </select>
               </Field>
             )}
+            {isPipelineVoiceRuntime ? (
+              <Field label="Chat brain">
+                {/* DOM boundary: option values are exactly the VoiceChatBrainSource union. */}
+                <select
+                  className="fb-select"
+                  value={brainSource}
+                  onChange={(event) => updateVoiceChatBrain({ source: event.target.value as VoiceChatBrainSource })}
+                >
+                  <option value="agent">{agentBrainModelLabel ? `Agent's model (${agentBrainModelLabel})` : "Agent's model"}</option>
+                  <option value="custom">Custom model…</option>
+                  <option value="fleet-agent">Fleet agent (auto)</option>
+                </select>
+              </Field>
+            ) : null}
+            {isPipelineVoiceRuntime && brainSource === "custom" ? (
+              <>
+                <Field label="Brain provider">
+                  <select
+                    className="fb-select"
+                    value={brainProvider}
+                    onChange={(event) => updateVoiceChatBrain({ provider: event.target.value, model: "" })}
+                  >
+                    {BRAIN_PROVIDER_OPTIONS.map((option) => <option value={option.slug} key={option.slug}>{option.name}</option>)}
+                  </select>
+                </Field>
+                <Field label="Brain model">
+                  {brainModelOptions.length ? (
+                    <select
+                      className="fb-select"
+                      value={brainModel}
+                      onChange={(event) => updateVoiceChatBrain({ model: event.target.value })}
+                    >
+                      {!brainModel ? <option value="">Pick a model…</option> : null}
+                      {[brainModel, ...brainModelOptions]
+                        .filter((model, index, list) => model && list.indexOf(model) === index)
+                        .map((model) => <option value={model} key={model}>{model}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      className="fb-field fb-mono"
+                      value={brainModel}
+                      placeholder="model id (e.g. gpt-5.5)"
+                      onChange={(event) => updateVoiceChatBrain({ model: event.target.value })}
+                    />
+                  )}
+                </Field>
+              </>
+            ) : null}
             <Field label="Missed-call fallback">
               {/* DOM boundary: the option values below are exactly the AgentCallMissedFallback union. */}
               <select className="fb-select" value={agentCallSettings.missedCallFallback} onChange={(event) => updateAgentCalls({ missedCallFallback: event.target.value as AgentCallMissedFallback })}>
@@ -816,6 +994,41 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
               </select>
             </Field>
           </div>
+
+          {isPipelineVoiceRuntime && brainSource === "agent" && !agentBrainModelLabel ? (
+            <div className="as-info">
+              <PlugZap size={16} className="ic" aria-hidden="true" />
+              <p>This agent has no provider/model selected yet, so spoken turns use the fleet agent until one is set (or pick a custom brain above).</p>
+            </div>
+          ) : null}
+
+          {oauthRelevant ? (
+            <div className="as-info">
+              <PlugZap size={16} className="ic" aria-hidden="true" />
+              <div className={styles.oauthConnect}>
+                {oauthState?.connected ? (
+                  <p>
+                    <strong>ChatGPT connected.</strong> Spoken turns prefer your subscription credentials (shared to every machine via the hive env)
+                    {oauthState.preferApiKey ? " — currently overridden to the API key by OPENAI_PREFER_API_KEY." : "."}
+                  </p>
+                ) : (
+                  <>
+                    <p><strong>ChatGPT OAuth is not connected.</strong> Spoken turns use the API key or the agent runtime until you connect it.</p>
+                    <Btn variant="primary" sm disabled={oauthBusy} onClick={() => void connectChatGptOauth()}>
+                      {oauthBusy ? "Opening sign-in…" : oauthAuthorizeUrl ? "Retry sign-in" : "Connect ChatGPT"}
+                    </Btn>
+                    {oauthAuthorizeUrl ? (
+                      <p>
+                        Sign-in opened in your browser — finish there; this panel updates by itself.{" "}
+                        <a href={oauthAuthorizeUrl} target="_blank" rel="noopener noreferrer">Open the sign-in page manually</a> if nothing appeared.
+                      </p>
+                    ) : null}
+                  </>
+                )}
+                {oauthError ? <p className="as-error">{oauthError}</p> : null}
+              </div>
+            </div>
+          ) : null}
 
           {!hasConfiguredVoices && agentCallSettings.voiceRuntime !== "local-tts" ? (
             <div className="as-info">

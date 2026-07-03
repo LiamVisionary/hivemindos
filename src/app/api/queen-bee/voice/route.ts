@@ -10,14 +10,18 @@ import {
   runQueenBeeVoiceTurn,
   submitQueenBeeVoiceTask,
   type QueenVoiceHistoryTurn,
+  type VoiceChatBrainPlan,
 } from "@/lib/services/queen-bee/voice-turn";
 import {
   QUEEN_BEE_REALTIME_VOICES,
+  readQueenBeeBrainDefaults,
   readQueenBeeCallPreferences,
   readQueenBeeVoice,
   ttsVoiceFor,
   writeQueenBeeVoice,
 } from "@/lib/services/queen-bee/voice-settings";
+import { providerCatalogEntry } from "@/lib/config/provider-catalog";
+import { openAiOAuthConfigured, preferOpenAiApiKey } from "@/lib/services/openai-oauth";
 import {
   LOCAL_TTS_RUNTIME,
   isLocalTtsProviderId,
@@ -45,6 +49,12 @@ import {
   transcribeAudioWithWhisper,
   transcriptionApiKey,
 } from "@/lib/services/phone/transcription";
+import {
+  applyOpenAiChatChunk,
+  createQueenChatStreamState,
+  createSseJsonParser,
+  finalizeQueenChatStream,
+} from "@/lib/services/queen-bee/chat-stream";
 import {
   QUEEN_INSTRUCTIONS,
   QUEEN_VOICE_STYLE,
@@ -157,6 +167,9 @@ export async function POST(request: NextRequest) {
     if (body.action === "chat-turn") {
       return await runQueenChatTurn(body);
     }
+    if (body.action === "chat-turn-stream") {
+      return await runQueenChatTurnStream(body);
+    }
     throw new Error(
       `Unknown Queen Bee voice action: ${String(body.action ?? "")}`,
     );
@@ -169,22 +182,140 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Voice settings for the overlay's picker. `localTtsSelected` lets the overlay
-// route to the non-realtime pipeline (which honors the chosen local TTS server)
-// instead of OpenAI Realtime speech-to-speech, where local TTS cannot apply.
+// Cloud-voice pipeline runtime: STT → chat model → OpenAI TTS. Sibling of
+// LOCAL_TTS_RUNTIME; both route the overlay to the non-realtime pipeline.
+const OPENAI_TTS_RUNTIME = "openai-tts";
+
+// Which brain answers a pipeline voice turn, from the Queen's Calls prefs
+// (`voiceChatBrain`): explicit custom override > the Queen agent's own
+// selected provider/model (the default — voice speaks with the model you
+// picked for the agent) > the legacy ranked fleet-agent lane.
+async function resolveVoiceChatBrainPlan(): Promise<VoiceChatBrainPlan> {
+  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  const pref = calls?.voiceChatBrain;
+  if (pref?.source === "fleet-agent") return { kind: "fleet-agent" };
+  if (pref?.source === "custom" && pref.model) {
+    const provider = pref.provider || "openai-api";
+    return {
+      kind: "direct",
+      provider,
+      model: pref.model,
+      label: `${provider} / ${pref.model} (voice override)`,
+      statusAgent: {
+        id: "queen-voice-custom-brain",
+        name: `Voice override (${provider} / ${pref.model})`,
+        provider,
+        model: pref.model,
+      },
+    };
+  }
+  const defaults = await readQueenBeeBrainDefaults().catch(() => null);
+  if (defaults?.model) {
+    const provider = defaults.provider || "openai-api";
+    // ChatGPT OAuth (the user's subscription credentials, connected in-app
+    // and fleet-shared via the hive env) is PREFERRED wherever it can serve
+    // the model: it IS the credential behind openai-codex agents, and for
+    // key-based OpenAI selections it wins over OPENAI_API_KEY unless the
+    // user set OPENAI_PREFER_API_KEY. The ChatGPT backend only serves the
+    // codex-era model families (gpt-5*/o*/codex*), so others stay key-based.
+    const oauthReady =
+      (await openAiOAuthConfigured().catch(() => false)) &&
+      !(await preferOpenAiApiKey().catch(() => false));
+    const oauthServable = /^(gpt-5|o\d|codex)/i.test(defaults.model.trim());
+    const openAiFamily =
+      provider === "openai" || provider === "openai-api" || provider === "openai-codex";
+    if (oauthReady && oauthServable && openAiFamily) {
+      return {
+        kind: "direct",
+        provider: "openai-oauth",
+        model: defaults.model,
+        label: `${defaults.agentName || "the agent"}'s model (${defaults.model} via ChatGPT OAuth)`,
+        statusAgent: {
+          id: defaults.agentId,
+          name: defaults.agentName,
+          provider: "openai-oauth",
+          model: defaults.model,
+        },
+      };
+    }
+    // Direct-callable = the server holds the SAME credential the agent uses
+    // (a key-based catalog provider read from the shared hive env). OAuth-held
+    // providers (openai-codex, copilot, xai-oauth) keep the turn inside the
+    // agent's own runtime — never a silent credential substitution.
+    const directCallable =
+      provider === "openai" ||
+      provider === "openai-api" ||
+      (() => {
+        const entry = providerCatalogEntry(provider);
+        return Boolean(entry?.baseUrl && entry.keyEnv);
+      })();
+    if (!directCallable) {
+      return {
+        kind: "agent-runtime",
+        agentId: defaults.agentId,
+        label: `${defaults.agentName || "the agent"} (${provider} / ${defaults.model} via its runtime)`,
+      };
+    }
+    return {
+      kind: "direct",
+      provider,
+      model: defaults.model,
+      label: `${defaults.agentName || "the agent"}'s model (${provider} / ${defaults.model})`,
+      statusAgent: {
+        id: defaults.agentId,
+        name: defaults.agentName,
+        provider,
+        model: defaults.model,
+      },
+    };
+  }
+  return { kind: "fleet-agent" };
+}
+
+// Voice settings for the overlay's picker. `pipelineSelected` routes the
+// overlay to the non-realtime pipeline (STT → chat model → TTS) for BOTH the
+// local-TTS and cloud-TTS voice runtimes; `localTtsSelected` additionally
+// marks that the spoken voice is a local one (voice-continuity semantics).
 export async function GET() {
   try {
     const calls = await readQueenBeeCallPreferences().catch(() => null);
+    const localTtsSelected = Boolean(
+      calls &&
+        (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
+          isLocalTtsProviderId(calls.voiceProviderId)),
+    );
+    // Subtle overlay tag naming which brain answers spoken turns; the label
+    // formats are authored by resolveVoiceChatBrainPlan above. Best-effort:
+    // a resolver failure costs the tag, never the settings payload.
+    const plan = await resolveVoiceChatBrainPlan().catch((planError) => {
+      console.warn(
+        "[queen-voice] brain plan resolution failed:",
+        planError instanceof Error ? planError.message : planError,
+      );
+      return null;
+    });
+    const brainLabel = !plan
+      ? null
+      : plan.kind === "direct"
+        ? `${plan.model} · ${
+            plan.provider === "openai-oauth"
+              ? "ChatGPT"
+              : plan.provider === "openai-api" || plan.provider === "openai"
+                ? "OpenAI"
+                : plan.provider
+          }`
+        : plan.kind === "agent-runtime"
+          ? plan.label.split(" (")[0]
+          : "auto";
     return NextResponse.json({
       ok: true,
       voice: await readQueenBeeVoice(),
       voices: QUEEN_BEE_REALTIME_VOICES,
       callVoiceRuntime: calls?.voiceRuntime ?? null,
-      localTtsSelected: Boolean(
-        calls &&
-          (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
-            isLocalTtsProviderId(calls.voiceProviderId)),
-      ),
+      localTtsSelected,
+      pipelineSelected:
+        localTtsSelected || calls?.voiceRuntime === OPENAI_TTS_RUNTIME,
+      brainLabel,
     });
   } catch (error) {
     const message =
@@ -285,11 +416,10 @@ async function mintRealtimeSession() {
 // (the "runtime can't do tool calls" path).
 const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
 
-async function runQueenChatTurn(body: Record<string, unknown>) {
+/** Shared setup for the typed chat turn (blocking and streaming variants). */
+async function prepareQueenChatTurn(body: Record<string, unknown>) {
   const apiKey = await transcriptionApiKey();
-  if (!apiKey) {
-    return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
-  }
+  if (!apiKey) return null;
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   const preamble = await queenVoicePreferencePreamble();
   const screenContext = formatDashboardScreenContextForPrompt(
@@ -304,6 +434,15 @@ async function runQueenChatTurn(body: Record<string, unknown>) {
       ].join("\n")
     : "";
   const system = [QUEEN_INSTRUCTIONS, preamble, screenContextPrompt].filter(Boolean).join(" ");
+  return { apiKey, incoming, system };
+}
+
+async function runQueenChatTurn(body: Record<string, unknown>) {
+  const prepared = await prepareQueenChatTurn(body);
+  if (!prepared) {
+    return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
+  }
+  const { apiKey, incoming, system } = prepared;
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -355,6 +494,83 @@ async function runQueenChatTurn(body: Record<string, unknown>) {
       error: error instanceof Error ? error.message : "chat turn failed",
     });
   }
+}
+
+/**
+ * Streaming variant of chat-turn: NDJSON lines — `{delta}` per content token
+ * so the reply renders as it is written, then one terminal `{done, content,
+ * toolCalls, assistant}` in the exact non-streaming shape (the client tool
+ * loop is identical either way). Errors emit `{ok:false, fallback:true}` so
+ * the client can retry via the blocking action.
+ */
+async function runQueenChatTurnStream(body: Record<string, unknown>) {
+  const prepared = await prepareQueenChatTurn(body);
+  const ndjson = { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" };
+  const line = (value: unknown) => `${JSON.stringify(value)}\n`;
+  if (!prepared) {
+    return new Response(line({ ok: false, fallback: true, error: "no-openai-key" }), { headers: ndjson });
+  }
+  const { apiKey, incoming, system } = prepared;
+  const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.OPENAI_VOICE_CHAT_MODEL || QUEEN_CHAT_MODEL_FALLBACK,
+      messages: [{ role: "system", content: system }, ...incoming],
+      tools: queenChatTools(),
+      tool_choice: "auto",
+      temperature: 0.4,
+      max_tokens: 500,
+      stream: true,
+    }),
+    cache: "no-store",
+    // Generous vs the blocking action's 20s: this bounds the WHOLE stream, and
+    // first tokens arrive within seconds so the user is never staring at it.
+    signal: AbortSignal.timeout(90_000),
+  }).catch((error: unknown) => error as Error);
+  if (upstream instanceof Error || !upstream.ok || !upstream.body) {
+    const detail = upstream instanceof Error
+      ? upstream.message
+      : `chat turn HTTP ${(upstream as Response | undefined)?.status ?? "?"}`;
+    return new Response(line({ ok: false, fallback: true, error: detail }), { headers: ndjson });
+  }
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      const state = createQueenChatStreamState();
+      const feed = createSseJsonParser();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const { done: sseDone, chunks } = feed(decoder.decode(value, { stream: true }));
+          for (const chunk of chunks) {
+            const delta = applyOpenAiChatChunk(state, chunk);
+            if (delta) controller.enqueue(encoder.encode(line({ delta })));
+          }
+          if (sseDone) break;
+        }
+        controller.enqueue(encoder.encode(line({ done: true, ok: true, ...finalizeQueenChatStream(state) })));
+      } catch (error) {
+        // Mid-stream failure: surface whatever already streamed so the client
+        // can keep it, but flag the turn incomplete for the fallback path.
+        controller.enqueue(encoder.encode(line({
+          ok: false,
+          fallback: true,
+          error: error instanceof Error ? error.message : "chat stream failed",
+        })));
+      } finally {
+        controller.close();
+        reader.cancel().catch(() => undefined);
+      }
+    },
+    cancel() {
+      reader.cancel().catch(() => undefined);
+    },
+  });
+  return new Response(stream, { headers: ndjson });
 }
 
 // Tool endpoint for the realtime session's create_hive_task function call.
@@ -430,6 +646,7 @@ async function runConversationTurn(
         ),
       marks,
       progress: turnId ? (label) => markVoiceTurnStage(turnId, label) : undefined,
+      voiceBrain: await resolveVoiceChatBrainPlan(),
     });
     await appendVoiceTurnTelemetry({
       ok: true,
@@ -527,6 +744,7 @@ async function runConversationTurnStream(
               speechChars = 0;
               emit({ type: "reset" });
             },
+            voiceBrain: await resolveVoiceChatBrainPlan(),
           });
           emit({ type: "done", ok: true, transcript, ...result });
           await appendVoiceTurnTelemetry({

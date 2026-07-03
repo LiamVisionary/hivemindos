@@ -177,6 +177,12 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // The companies API reports the autonomy driver's health alongside the list.
+  // A launched company with a dead driver looks "running" while dispatching
+  // nothing — that gap stranded the Website Outreach Agency for ~7h once, so
+  // surface it loudly. (The same GET also self-heals: the route restarts the
+  // driver, so a persistent warning means restarting is genuinely failing.)
+  const [driverWarning, setDriverWarning] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -186,6 +192,15 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       if (companiesJson.ok) {
         setData(Array.isArray(companiesJson.companies) ? companiesJson.companies : []);
         setError(null);
+        const driver = companiesJson.driver as { status?: string } | undefined;
+        const anyAutonomous = (Array.isArray(companiesJson.companies) ? companiesJson.companies : []).some(
+          (entry: { company?: { autonomy?: boolean; frozen?: boolean } }) => entry?.company?.autonomy && !entry?.company?.frozen,
+        );
+        setDriverWarning(
+          driver && driver.status !== "running" && anyAutonomous
+            ? "Autonomy driver is not running on this machine — launched companies are not dispatching work. A restart was requested automatically; if this warning persists across refreshes, check the dashboard server logs."
+            : null,
+        );
       } else if (companiesRes.status === 401) {
         setNotice(null);
         setError("Dashboard authentication required.");
@@ -405,6 +420,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
         sector: form.sector || undefined,
         charter: form.charter ?? "",
         blurb: form.blurb ?? "",
+        projectId: form.projectId ?? "",
         dailyBudgetUsd: form.dailyBudgetUsd && form.dailyBudgetUsd > 0 ? form.dailyBudgetUsd : 0,
         monthlyBudgetUsd: form.monthlyBudgetUsd && form.monthlyBudgetUsd > 0 ? form.monthlyBudgetUsd : 0,
         totalBudgetUsd: form.totalBudgetUsd && form.totalBudgetUsd > 0 ? form.totalBudgetUsd : 0,
@@ -534,7 +550,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       agentPool={agentPool}
       loading={loading || refreshing}
       initialLoading={loading}
-      error={error}
+      error={error ?? driverWarning}
       notice={notice}
       busyId={busyId}
       onRefresh={() => void refresh()}

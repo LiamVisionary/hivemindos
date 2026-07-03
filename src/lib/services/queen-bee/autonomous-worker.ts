@@ -7,6 +7,7 @@ import {
   type LoopUrlProber,
   type LoopUrlProbeResult,
 } from "../loops/loop-runner";
+import { classifyRuntimeFailureOutput } from "./worker-output-failure";
 
 // Advance an agent flow when one of its task nodes completes/fails. Dynamic, guarded import keeps
 // the flow layer off the autonomous worker's static graph and never breaks task pickup.
@@ -94,6 +95,99 @@ export type QueenBeeAutonomousPickupDeps = {
 
 const DEFAULT_PICKUP_TTL_MS = 30 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Per-machine autonomous-chat gate.
+//
+// A batch dispatch (driver re-dispatch sweep, company re-plan) used to fire
+// every pickup at once, so several `hermes -z` turns landed on one small box
+// simultaneously and starved each other past the 240s chat timeout (live on
+// hivemindos-ubuntu-8gb-hel1-2 2026-07-03 ~13:44Z: 10+ CLI boots in 13 min,
+// every delegate aborted at exactly the client timeout, while the same box
+// completed identical work when it ran alone). The gate serializes pickup
+// attempts per target machine: at most QUEEN_BEE_MACHINE_CHAT_CONCURRENCY
+// attempts (default 1) hold a machine at once; later attempts wait up to
+// QUEEN_BEE_MACHINE_SLOT_WAIT_MS (default 10 min) for a slot, then skip that
+// delegate. A pickup whose delegates were ONLY skipped for capacity leaves the
+// task "ready" for the next dispatch sweep instead of blocking it to a human.
+// Set QUEEN_BEE_MACHINE_CHAT_CONCURRENCY=0 to disable the gate entirely.
+// In-process only — the driver's machine-wide lease keeps autonomous dispatch
+// in one server process, so this covers the batch path that caused the pile-up.
+type MachineChatSlot = { active: number; waiters: Array<{ grant: () => void }> };
+const machineChatSlots = new Map<string, MachineChatSlot>();
+const inFlightPickupTaskIds = new Set<string>();
+
+function machineChatConcurrency() {
+  const raw = String(process.env.QUEEN_BEE_MACHINE_CHAT_CONCURRENCY ?? "").trim();
+  if (!raw) return 1;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return 1;
+  return parsed === 0 ? Number.POSITIVE_INFINITY : Math.floor(parsed);
+}
+
+function machineSlotWaitMs() {
+  const parsed = Number(process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS ?? 10 * 60_000);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 10 * 60_000;
+}
+
+/**
+ * Identity of the machine a delegation's chats land on. Prefers the fleet
+ * machine key/name (stable across addressing modes); falls back to the peer
+ * identity inside a link peer-proxy URL (`/peer/<host:port>/…` resolves to the
+ * REMOTE box, not the local 8788 proxy), then the collector URL host.
+ */
+export function pickupMachineKey(delegation: QueenBeeAutonomousDelegation, collectorUrl: string): string {
+  const named = String(delegation.machine?.key || delegation.machine?.device?.name || "").trim().toLowerCase();
+  if (named) return named;
+  const url = String(collectorUrl || "").trim();
+  const peer = url.match(/\/peer\/([^/?#]+)/);
+  if (peer) {
+    try {
+      return decodeURIComponent(peer[1]).toLowerCase();
+    } catch {
+      return peer[1].toLowerCase();
+    }
+  }
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return url.toLowerCase() || "unknown-machine";
+  }
+}
+
+async function acquireMachineChatSlot(key: string): Promise<boolean> {
+  const limit = machineChatConcurrency();
+  if (!Number.isFinite(limit)) return true;
+  const slot = machineChatSlots.get(key) ?? { active: 0, waiters: [] };
+  machineChatSlots.set(key, slot);
+  if (slot.active < limit) {
+    slot.active += 1;
+    return true;
+  }
+  return new Promise<boolean>((resolve) => {
+    const waiter = { grant: () => {} };
+    const timer = setTimeout(() => {
+      const index = slot.waiters.indexOf(waiter);
+      if (index >= 0) slot.waiters.splice(index, 1);
+      resolve(false);
+    }, machineSlotWaitMs());
+    waiter.grant = () => {
+      clearTimeout(timer);
+      slot.active += 1;
+      resolve(true);
+    };
+    slot.waiters.push(waiter);
+  });
+}
+
+function releaseMachineChatSlot(key: string) {
+  const slot = machineChatSlots.get(key);
+  if (!slot) return;
+  slot.active = Math.max(0, slot.active - 1);
+  const next = slot.waiters.shift();
+  if (next) next.grant();
+  else if (slot.active === 0 && slot.waiters.length === 0) machineChatSlots.delete(key);
+}
+
 export function shouldAutonomouslyPickupQueenBeeTask(input: QueenBeeAutonomousPickupInput) {
   return Boolean(
     input.task.status === "ready"
@@ -105,10 +199,19 @@ export function shouldAutonomouslyPickupQueenBeeTask(input: QueenBeeAutonomousPi
 export function scheduleQueenBeeAutonomousPickup(input: QueenBeeAutonomousPickupInput, deps: QueenBeeAutonomousPickupDeps = {}) {
   if (process.env.QUEEN_BEE_AUTONOMOUS_PICKUP === "0") return false;
   if (!shouldAutonomouslyPickupQueenBeeTask(input)) return false;
+  // A pickup can now wait minutes for a machine slot while its task stays
+  // "ready" — the next driver sweep would re-dispatch it and double-run the
+  // same task in this process. Dedupe on task id for the pickup's lifetime.
+  if (inFlightPickupTaskIds.has(input.task.id)) return false;
+  inFlightPickupTaskIds.add(input.task.id);
   setTimeout(() => {
-    void runQueenBeeAutonomousPickup(input, deps).catch((error) => {
-      console.error("Queen Bee autonomous pickup failed", error);
-    });
+    void runQueenBeeAutonomousPickup(input, deps)
+      .catch((error) => {
+        console.error("Queen Bee autonomous pickup failed", error);
+      })
+      .finally(() => {
+        inFlightPickupTaskIds.delete(input.task.id);
+      });
   }, 0);
   return true;
 }
@@ -134,6 +237,10 @@ export async function runQueenBeeAutonomousPickup(
   let lastCollectorUrl = "";
   let lastAgentName = "";
   const failures: string[] = [];
+  // Machines that already timed a waiter out this run: skip their remaining
+  // delegates immediately instead of paying the slot wait once per delegate.
+  const saturatedMachines = new Set<string>();
+  let capacitySkips = 0;
 
   for (let index = 0; index < chain.length; index += 1) {
     const delegation = chain[index];
@@ -145,6 +252,14 @@ export async function runQueenBeeAutonomousPickup(
 
     if (!canAutonomouslyRunDelegation(currentTask, delegation)) {
       failures.push(`${agentName}: no live delegated collector/agent`);
+      continue;
+    }
+
+    const machineKey = pickupMachineKey(delegation, collectorUrl);
+    if (saturatedMachines.has(machineKey) || !(await acquireMachineChatSlot(machineKey))) {
+      saturatedMachines.add(machineKey);
+      capacitySkips += 1;
+      failures.push(`${agentName}: machine "${machineKey}" is at its autonomous chat capacity`);
       continue;
     }
 
@@ -190,6 +305,17 @@ export async function runQueenBeeAutonomousPickup(
         // the work happened. Never mark a task done without real output.
         throw new Error(
           `Agent "${agentName}" returned no final response after a retry (the runtime likely ended a tool loop without emitting text). Re-route this task to a healthy fleet agent or simplify the task.`,
+        );
+      }
+
+      // A runtime that can't reach its model API returns the transport error AS its
+      // chat text ("API call failed after 3 retries: Connection error."). That is a
+      // failed pickup, not a result — completing with it poisons company memory with
+      // fake DONEs. Throw into the reroute/block machinery like any other failure.
+      const runtimeFailure = classifyRuntimeFailureOutput(text);
+      if (runtimeFailure) {
+        throw new Error(
+          `Agent "${agentName}" runtime failed instead of producing a result (${runtimeFailure}). Check the runner's model/provider connectivity, then re-route or retry.`,
         );
       }
 
@@ -248,7 +374,26 @@ export async function runQueenBeeAutonomousPickup(
         return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: finalMessage };
       }
       currentTask = (await reroute(null, input.task.id, rerouteInput(message, agentName, next), storageOptions)).task;
+    } finally {
+      releaseMachineChatSlot(machineKey);
     }
+  }
+
+  if (capacitySkips > 0) {
+    // At least one delegate was skipped only because its machine was at chat
+    // capacity, and no attempt reached a terminal outcome. The task is still
+    // "ready" (untouched, or rerouted back to ready), so leave it for the next
+    // dispatch sweep to retry once the machine drains — a transient capacity
+    // condition must not escalate the task to needs-human.
+    return {
+      ok: false,
+      status: "skipped",
+      taskId: input.task.id,
+      claimLock: lastClaimLock,
+      collectorUrl: lastCollectorUrl,
+      agentName: lastAgentName,
+      error: exhaustedMessage(failures),
+    };
   }
 
   const finalMessage = exhaustedMessage(failures.length ? failures : ["No eligible autonomous delegates were available."]);
@@ -522,7 +667,17 @@ async function defaultFetchJson(url: string, init: RequestInit) {
     data = { text };
   }
   if (!response.ok || (typeof data === "object" && data && (data as { ok?: unknown }).ok === false)) {
-    const error = typeof data === "object" && data && "error" in data ? String((data as { error?: unknown }).error) : response.statusText;
+    const record = typeof data === "object" && data ? (data as { error?: unknown; text?: unknown }) : {};
+    // Proxy hops (linkd peer proxy, reverse proxies) put the actual cause in a
+    // plain-text body — "hivemind-linkd peer proxy error: <cause>" — which a
+    // bare statusText fallback used to discard, leaving only "Bad Gateway" in
+    // the task's failure record. Surface the body so failures stay diagnosable.
+    const bodyText = typeof record.text === "string" ? record.text.trim().slice(0, 300) : "";
+    const error = record.error
+      ? String(record.error)
+      : bodyText
+        ? `${response.status} ${response.statusText || "error"}: ${bodyText}`
+        : response.statusText;
     throw new Error(error || `Collector chat failed with ${response.status}.`);
   }
   return data;

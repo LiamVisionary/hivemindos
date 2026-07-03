@@ -130,6 +130,21 @@ export interface Company {
   process?: CompanyProcess;
   /** For process: "graph" — the saved FlowSpec id to run. */
   flowTemplateId?: string;
+  /**
+   * Which machine's autonomy driver owns this company's auto-dispatch. Company
+   * definitions replicate fleet-wide through the shared vault, so without this
+   * gate every machine running the app would dispatch every company. Matched
+   * loosely (normalizeMachineName) against the local hostname; unset means
+   * unclaimed — no driver auto-dispatches until a manual Launch claims it.
+   */
+  homeMachineKey?: string;
+  /**
+   * Project-registry id of the company's domain code repo (e.g. maps-agency).
+   * Dispatched Work Board tasks carry it, so Queen Bee routes code work to
+   * machines with the right checkout and tasks pick up the project's GitLawb
+   * proof badge.
+   */
+  projectId?: string;
 }
 
 export interface CompanySpendRollup {

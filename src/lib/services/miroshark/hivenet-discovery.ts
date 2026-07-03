@@ -1,3 +1,5 @@
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+
 type FleetHostedApp = {
   id?: string;
   name?: string;
@@ -83,6 +85,7 @@ export async function discoverMiroSharkHivenetService(requestUrl?: string): Prom
 
   const response = await fetch(`${origin}/api/fleet/apps?refresh=1`, {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(60_000),
   });
   if (!response.ok) return null;

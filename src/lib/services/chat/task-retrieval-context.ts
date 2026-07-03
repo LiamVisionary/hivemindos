@@ -4,6 +4,7 @@ import { createContextXrayManifestFromContextIndex } from "@/lib/services/contex
 import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
 import { generationMetricsContext } from "@/lib/services/generation-metrics";
 import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import type { BeeWorkerClass, SharedVaultConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 const CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS = 250;
@@ -393,6 +394,7 @@ async function fetchConnectedAppsForTaskRetrieval(origin: string) {
   const url = new URL("/api/fleet/apps", origin);
   const response = await fetch(url, {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS),
   }).catch(() => null);
   if (!response?.ok) return undefined;

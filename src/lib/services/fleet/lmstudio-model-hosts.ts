@@ -1,4 +1,5 @@
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 /**
  * Fleet-wide LM Studio model resolution. Every HivemindOS machine's collector
@@ -53,7 +54,7 @@ async function fleetLmStudioHosts(requestUrl: string): Promise<FleetLmStudioHost
   hostsInFlight = (async () => {
     const fleetUrl = new URL("/api/fleet/discover", requestUrl);
     fleetUrl.searchParams.set("includeSnapshots", "0");
-    const fleetResponse = await fetch(fleetUrl, { cache: "no-store", signal: AbortSignal.timeout(12_000) }).catch(() => null);
+    const fleetResponse = await fetch(fleetUrl, { cache: "no-store", headers: internalApiAuthHeaders(), signal: AbortSignal.timeout(12_000) }).catch(() => null);
     const fleet = fleetResponse?.ok
       ? await fleetResponse.json().catch(() => null) as {
         machines?: Array<{ collector?: string; device?: { collectorUrl?: string; name?: string } }>;

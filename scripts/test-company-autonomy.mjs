@@ -18,7 +18,13 @@ const vaultPath = await mkdtemp(join(tmpdir(), "hivemind-company-autonomy-vault-
 process.env.HOME = tempHome;
 process.env.QUEEN_BEE_AUTONOMOUS_PICKUP = "0"; // routing must not fire network pickups in tests
 
-const { companyHasActiveWork } = await import("../src/lib/services/company-autonomy-driver.ts");
+const {
+  companyHasActiveWork,
+  rememberCompanyDriverSelfBase,
+  rememberCompanyDriverSelfPort,
+  resolveCompanyDriverSelfBases,
+  resolveCompanyDriverSelfPort,
+} = await import("../src/lib/services/company-autonomy-driver.ts");
 const {
   isRoutablePendingQueenBeeTask,
   isRedispatchableReadyTask,
@@ -263,6 +269,39 @@ try {
     process.env.HIVEMINDOS_COMPANY_DRIVER_LEASE = "0";
     assert.equal(companyDriverLeaseDisabled(), true, "HIVEMINDOS_COMPANY_DRIVER_LEASE=0 disables coordination");
     delete process.env.HIVEMINDOS_COMPANY_DRIVER_LEASE;
+  }
+
+  {
+    // ── driver self-port resolution ─────────────────────────────────────────
+    // Some launch paths (Tauri-spawned dev server) never set PORT, which used
+    // to make the driver self-fetch an empty fleet and dispatch nothing while
+    // looking "running". Routes remember the request port as a fallback.
+    const savedPort = process.env.PORT;
+    delete process.env.PORT;
+    assert.equal(resolveCompanyDriverSelfPort(), "", "no PORT env and no remembered port → empty");
+    rememberCompanyDriverSelfPort("not-a-port");
+    assert.equal(resolveCompanyDriverSelfPort(), "", "garbage is never remembered");
+    rememberCompanyDriverSelfPort(5122);
+    assert.equal(resolveCompanyDriverSelfPort(), "5122", "a route hit's numeric port is remembered");
+    rememberCompanyDriverSelfPort("");
+    assert.equal(resolveCompanyDriverSelfPort(), "5122", "an empty later value never clears the remembered port");
+    process.env.PORT = "5020";
+    assert.equal(resolveCompanyDriverSelfPort(), "5020", "PORT env wins over the remembered fallback");
+
+    // Full self-base memory: the port alone can point at the wrong loopback
+    // family (a [::1]-only dev server refuses 127.0.0.1 on the same port).
+    rememberCompanyDriverSelfBase("[::1]:5122");
+    assert.deepEqual(
+      resolveCompanyDriverSelfBases(),
+      ["http://[::1]:5122", "http://127.0.0.1:5020", "http://[::1]:5020"],
+      "last-known-good base first, then both loopback families on the resolved port",
+    );
+    rememberCompanyDriverSelfBase("evil.example.com:80");
+    assert.equal(resolveCompanyDriverSelfBases()[0], "http://[::1]:5122", "non-loopback hosts are never remembered");
+    rememberCompanyDriverSelfBase("127.0.0.1:5021");
+    assert.equal(resolveCompanyDriverSelfBases()[0], "http://127.0.0.1:5021", "a newer loopback door replaces the old one");
+    if (savedPort === undefined) delete process.env.PORT;
+    else process.env.PORT = savedPort;
   }
 
   console.log("company autonomy suite passed");

@@ -11,6 +11,16 @@ const SELF_AUTHENTICATING_API_PREFIXES = [
   // Authenticates inside the route: dashboard auth OR a path-scoped signed URL
   // (phone image loaders can't carry the session cookie / device token).
   "/api/chat/generated-media",
+  // Public seller endpoints for EXTERNAL buyers: payment is the auth (x402
+  // settlement or X-HivemindOS-Credit-Token), never fleet credentials. The
+  // x402 handshake requires the first request to arrive credential-less so the
+  // resource server can answer with the 402 payment challenge; a dashboard
+  // gate in front dead-ends the revenue rail. The routes fail closed on their
+  // own: seller-mode/enabled/config checks and payment verification run before
+  // any runtime work, and the official-* routes only relay allowlisted payment
+  // headers to the hosted gateway, which enforces payment upstream.
+  "/api/paid-agents",
+  "/api/official-paid-agents",
 ];
 
 function isSelfAuthenticatingApi(pathname: string) {

@@ -550,6 +550,20 @@
   color: var(--danger);
 }
 
+/* ChatGPT OAuth connect block: .as-info is a horizontal flex row, so the
+   text, button, and fallback link stack inside their own column. */
+.oauthConnect {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.oauthConnect a {
+  color: var(--honey);
+}
+
 @media (max-width: 760px) {
   .callLine,
   .eventRow {

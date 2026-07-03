@@ -23,7 +23,10 @@
 //     probing when no local dashboard is running, so the watchdog works on
 //     collector-only machines (VPS, headless boxes).
 //   - Remote linkd builds are checked on deep cycles via /_hivemind/version
-//     and stale binaries are reported (once per day per machine).
+//     and stale binaries are reported (once per day per machine). Stale means
+//     linkd SOURCES changed between the binary's stamp and the checkout — the
+//     same criterion the installer's rebuild-skip uses (lib/linkd-staleness.mjs);
+//     a stamp that merely trails HEAD after unrelated commits is current.
 //   - Alerts: remediations, failures, and linkd auth-needed go to Telegram when
 //     FLEET_WATCHDOG_TELEGRAM_CHAT_ID (+ a bot token) is configured in
 //     ~/.hivemindos/.env; otherwise they are log-only.
@@ -57,6 +60,17 @@
 //                                     TTS synth — these consume tokens/compute); off by default,
 //                                     toggleable from the Fleet view (writes the shared hive env)
 //   FLEET_WATCHDOG_CHAT_EVERY         run the deep /chat probe every Nth cycle (default 15)
+//   FLEET_WATCHDOG_TTS_MODELS         comma list of models the deep TTS probe synthesizes
+//                                     (default chatterbox-turbo,qwen3-tts-1.7b-custom —
+//                                     every backend the voice pipeline depends on;
+//                                     FLEET_WATCHDOG_TTS_MODEL still honored as fallback).
+//                                     Models a target's catalog doesn't serve are skipped;
+//                                     if none match, the first loaded catalog model is
+//                                     synthesized with the provider's default voice.
+//   FLEET_WATCHDOG_TTS_VOICE          voice for the deep synth (default voice01); if the
+//                                     target rejects it (HTTP 200 + 0 bytes) but synths
+//                                     fine voiceless, the watchdog alerts a human instead
+//                                     of restarting — a restart can't fix a missing voice
 //   FLEET_WATCHDOG_SEVERE_RECHECK_MS  delay before confirming a severe failure (default 10000)
 //   FLEET_WATCHDOG_APP_PORTS          local dashboard ports to try for discovery (default 5020,5021,5111,5121,3000)
 //   FLEET_WATCHDOG_SELF=0             disable self collector/linkd monitoring
@@ -77,6 +91,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
+import { linkdSourcesChangedBetween } from "./lib/linkd-staleness.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -87,12 +102,23 @@ const CHAT_EVERY = Math.max(1, Number(process.env.FLEET_WATCHDOG_CHAT_EVERY || 1
 const SEVERE_RECHECK_MS = Number(process.env.FLEET_WATCHDOG_SEVERE_RECHECK_MS || 10_000);
 // Deep TTS synth probe: generous timeout so a cold model LOAD (slow but real) is
 // not mistaken for a wedged backend — we judge by the result (real PCM bytes),
-// not by latency. A small/fast model keeps the probe cheap.
-const TTS_DEEP_TIMEOUT_MS = Number(process.env.FLEET_WATCHDOG_TTS_DEEP_TIMEOUT_MS || 60_000);
-const TTS_PROBE_MODEL = process.env.FLEET_WATCHDOG_TTS_MODEL || "chatterbox-turbo";
+// not by latency. Every model the voice pipeline depends on must synth: backends
+// wedge independently (2026-07-03: the qwen3 MLX sidecar hung mid-stream for
+// 30+ min while chatterbox kept passing the single-model probe, so no alert
+// fired while the Queen was voiceless). Timeout is per model; a qwen3 sidecar
+// (re)load mid-synth measured >60s but well under 180s, and a severe TTS
+// failure force-restarts after ONE confirmation — a too-tight timeout here
+// means every sidecar reload becomes a restart loop.
+const TTS_DEEP_TIMEOUT_MS = Number(process.env.FLEET_WATCHDOG_TTS_DEEP_TIMEOUT_MS || 180_000);
+const TTS_PROBE_MODELS = String(
+  process.env.FLEET_WATCHDOG_TTS_MODELS || process.env.FLEET_WATCHDOG_TTS_MODEL
+    || "chatterbox-turbo,qwen3-tts-1.7b-custom",
+).split(",").map((s) => s.trim()).filter(Boolean);
 const TTS_PROBE_VOICE = process.env.FLEET_WATCHDOG_TTS_VOICE || "voice01";
 const TTS_MIN_PCM_BYTES = 2_000;
-const APP_PORTS = String(process.env.FLEET_WATCHDOG_APP_PORTS || "5020,5021,5111,5121,3000")
+// 5122: the Tauri debug app spawns its dev dashboard there — without it the
+// watchdog can't reach the only dashboard that's up in a desktop-dev session.
+const APP_PORTS = String(process.env.FLEET_WATCHDOG_APP_PORTS || "5020,5021,5111,5121,5122,3000")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const SELF_ENABLED = process.env.FLEET_WATCHDOG_SELF !== "0";
 const RUN_ONCE = process.env.FLEET_WATCHDOG_ONCE === "1";
@@ -377,18 +403,73 @@ async function logTtsSourceChange(source, detail = "") {
   await log(`tts discovery via ${source}${detail ? ` — ${detail}` : ""}`);
 }
 
+async function ttsCatalogAlive(apiBaseUrl) {
+  try {
+    const { ok, data } = await fetchJson(`${apiBaseUrl}/v1/models`, {}, 5_000);
+    const models = data?.data || data?.models || [];
+    return ok && Array.isArray(models) && models.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// A dashboard-advertised base can be stale: the feed's cache has resurrected
+// URLs carrying a peer's local COLLECTOR port (e.g. ip:8792), dead from the
+// tailnet since collectors moved behind linkd (door pinned :8787). Verify the
+// base before trusting it; when it is dead, retry the same host through the
+// pinned linkd door, then any machines-list linkd base on that same host.
+// Same-host only — re-pointing at another machine's TTS would silently mask
+// an outage. When nothing answers, keep the advertised base so a genuinely
+// down TTS still probes unhealthy and alerts instead of vanishing.
+async function resolveTtsBase(app, machines) {
+  if (await ttsCatalogAlive(app.apiBaseUrl)) return app;
+  const candidates = [];
+  let advertisedHost = "";
+  try {
+    const url = new URL(app.machineBase);
+    advertisedHost = url.hostname;
+    if (url.port !== "8787") {
+      url.port = "8787";
+      candidates.push(url.toString().replace(/\/+$/, ""));
+    }
+  } catch {
+    return app;
+  }
+  for (const machine of machines || []) {
+    if (machine.online === false || !machine.collectorUrl) continue;
+    try {
+      if (new URL(machine.collectorUrl).hostname === advertisedHost) candidates.push(machine.collectorUrl);
+    } catch {
+      // unparseable collectorUrl — skip
+    }
+  }
+  for (const machineBase of [...new Set(candidates)]) {
+    const apiBaseUrl = `${machineBase}/app-proxy/8799`;
+    if (await ttsCatalogAlive(apiBaseUrl)) {
+      await log(`tts discovery: advertised base ${app.apiBaseUrl} unreachable — using live ${apiBaseUrl}`);
+      return { ...app, apiBaseUrl, machineBase };
+    }
+  }
+  return app;
+}
+
 async function discoverTtsApps(machines) {
   for (const port of APP_PORTS) {
     try {
       const { ok, data } = await fetchJson(`http://127.0.0.1:${port}/api/fleet/apps?fast=1`, { headers: dashboardHeaders() }, 8_000);
       if (!ok) continue;
-      const apps = (data.apps || [])
+      const advertised = (data.apps || [])
         .filter((a) => Number(a.port) === 8799 || /universal.?tts/i.test(String(a.name || "")))
         .map((a) => {
           const apiBaseUrl = String(a.apiBaseUrl || "").trim().replace(/\/+$/, "");
           return { apiBaseUrl, machineBase: apiBaseUrl.replace(/\/app-proxy\/.*$/, ""), machineName: a.machineName || a.name || "TTS" };
         })
         .filter((a) => a.apiBaseUrl && a.machineBase && !/^https?:\/\/(127\.0\.0\.1|localhost)/i.test(a.machineBase));
+      const apps = [];
+      for (const app of advertised) {
+        const resolved = await resolveTtsBase(app, machines);
+        if (!apps.some((existing) => existing.apiBaseUrl === resolved.apiBaseUrl)) apps.push(resolved);
+      }
       if (apps.length) {
         await logTtsSourceChange("dashboard");
         await writeFile(TTS_CACHE, JSON.stringify(apps)).catch(() => {});
@@ -433,38 +514,98 @@ async function discoverTtsApps(machines) {
 // (proxy EOF / connection refused) when the app + its linkd proxy are down (the
 // flapping/down case that broke voice). (/v1/voices 307-redirects through the
 // app-proxy, so it's unusable as a probe.) Deep (every Nth cycle): actually
-// synthesize a tiny clip — this catches frontend-up but model-backend-WEDGED,
-// where /v1/models still returns the static catalog. Judged by result bytes
-// under a generous timeout so a cold model load (slow but real) passes.
+// synthesize a tiny clip through EACH configured probe model that the target's
+// catalog serves — this catches frontend-up but model-backend-WEDGED, where
+// /v1/models still returns the static catalog and the other backends keep
+// answering (a wedged backend can even return HTTP 200 with 0 bytes). Judged
+// by result bytes under a generous timeout so a cold model load (slow but
+// real) passes. Genericity: the shipped model/voice defaults are ONE
+// deployment's ids, so configured models missing from the catalog are skipped
+// (the catalog is static even through a wedge, so the filter can't hide one),
+// and if none match, the first loaded catalog model is synthesized voiceless
+// (provider default voice) — a deep probe must always synth SOMETHING real. A
+// synth that returns HTTP 200 with too few bytes is ambiguous: an unknown
+// voice produces the exact same signature as a wedged backend (live-verified
+// 2026-07-03), so a voiceless retry disambiguates — retry works means the
+// backend is fine and the VOICE is missing/broken, which no restart can fix.
 async function probeTts(apiBaseUrl, deep) {
+  let catalog = [];
   try {
     const res = await fetchJson(`${apiBaseUrl}/v1/models`, {}, 10_000);
     if (!res.ok) return { healthy: false, reason: `models HTTP ${res.status} ${String(res.text).slice(0, 50)}` };
     const models = res.data?.data || res.data?.models || [];
     if (!Array.isArray(models) || models.length === 0) return { healthy: false, reason: "models empty" };
+    catalog = models
+      .map((m) => ({ id: String(m?.id ?? m ?? ""), loaded: m?.loaded === true }))
+      .filter((m) => m.id);
   } catch (error) {
     return { healthy: false, reason: `models unreachable: ${error.message}` };
   }
   if (!deep) return { healthy: true };
-  try {
-    const response = await fetch(`${apiBaseUrl}/v1/audio/speech-stream`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: TTS_PROBE_MODEL, voice: TTS_PROBE_VOICE, input: "ok", response_format: "pcm", sample_rate: 24_000, realtime_pacing: false }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(TTS_DEEP_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      const text = await response.text().catch(() => "");
-      return { healthy: false, severe: true, reason: `synth HTTP ${response.status} ${text.slice(0, 50)}` };
+  const servedIds = new Set(catalog.map((m) => m.id));
+  const skipped = TTS_PROBE_MODELS.filter((id) => !servedIds.has(id));
+  if (skipped.length) await logTtsSkippedModels(apiBaseUrl, skipped);
+  let attempts = TTS_PROBE_MODELS
+    .filter((id) => servedIds.has(id))
+    .map((model) => ({ model, voice: TTS_PROBE_VOICE }));
+  if (!attempts.length && catalog.length) {
+    attempts = [{ model: (catalog.find((m) => m.loaded) || catalog[0]).id, voice: "" }];
+  }
+  for (const { model, voice } of attempts) {
+    try {
+      const first = await ttsSynthAttempt(apiBaseUrl, model, voice);
+      if (first.ok) continue;
+      if (first.httpError) return { healthy: false, severe: true, reason: `synth(${model}) ${first.httpError}` };
+      if (voice) {
+        const retry = await ttsSynthAttempt(apiBaseUrl, model, "");
+        if (retry.ok) {
+          // Voiceless works — either the voice is broken/missing on this
+          // target, or the first attempt straddled a transient mid-stream
+          // drop (live-observed: the same voiced request returned 0B, then
+          // real PCM seconds later). One more voiced attempt disambiguates.
+          const confirm = await ttsSynthAttempt(apiBaseUrl, model, voice);
+          if (confirm.ok) continue;
+          return {
+            healthy: false,
+            remediationProof: true,
+            reason: `synth(${model}) returned ${first.bytes ?? 0}B then ${confirm.httpError || `${confirm.bytes ?? 0}B`} with voice "${voice}" but ${retry.bytes}B voiceless — voice missing/broken on this target; a restart won't fix it (repair the voice ref or set FLEET_WATCHDOG_TTS_VOICE)`,
+          };
+        }
+      }
+      // A working synth returns real PCM; a wedged backend returns a tiny
+      // proxy-error blob or an HTTP 200 with 0 bytes (hung mid-stream).
+      return { healthy: false, severe: true, reason: `synth(${model}) returned ${first.bytes}B (backend wedged)` };
+    } catch (error) {
+      return { healthy: false, severe: true, reason: `synth(${model}) failed: ${error.message}` };
     }
-    const bytes = (await response.arrayBuffer().catch(() => new ArrayBuffer(0))).byteLength;
-    // A working synth returns real PCM; a wedged backend returns a tiny proxy-error blob.
-    if (bytes < TTS_MIN_PCM_BYTES) return { healthy: false, severe: true, reason: `synth returned ${bytes}B (backend wedged)` };
-  } catch (error) {
-    return { healthy: false, severe: true, reason: `synth failed: ${error.message}` };
   }
   return { healthy: true };
+}
+
+async function ttsSynthAttempt(apiBaseUrl, model, voice) {
+  const body = { model, input: "ok", response_format: "pcm", sample_rate: 24_000, realtime_pacing: false };
+  if (voice) body.voice = voice;
+  const response = await fetch(`${apiBaseUrl}/v1/audio/speech-stream`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.timeout(TTS_DEEP_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    return { ok: false, httpError: `HTTP ${response.status} ${text.slice(0, 50)}` };
+  }
+  const bytes = (await response.arrayBuffer().catch(() => new ArrayBuffer(0))).byteLength;
+  return { ok: bytes >= TTS_MIN_PCM_BYTES, bytes };
+}
+
+const ttsSkipLoggedKeys = new Set();
+async function logTtsSkippedModels(apiBaseUrl, skipped) {
+  const key = `${apiBaseUrl} ${skipped.join(",")}`;
+  if (ttsSkipLoggedKeys.has(key)) return;
+  ttsSkipLoggedKeys.add(key);
+  await log(`tts deep probe: skipping ${skipped.join(", ")} — not in the catalog at ${apiBaseUrl}`);
 }
 
 async function probeCollector(collectorUrl, deep) {
@@ -614,13 +755,20 @@ function selfTargets() {
 }
 
 const staleBuildAlertAt = new Map();
+const linkdCurrentLogged = new Set();
+const LINKD_REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 // Deep-cycle check: does the remote linkd daemon report a build commit, and
-// does it match the checkout its collector is serving from? A mismatch means
-// the machine pulled new code but is still running an old linkd binary — the
-// silent-staleness gap. Pre-version linkd builds proxy this path through to
-// the collector (a JSON without service=hivemind-linkd), which is itself the
-// "update pending" signal.
+// did the linkd SOURCES change between that commit and the checkout its
+// collector is serving from? A bare stamp-vs-HEAD mismatch is not staleness:
+// the installer skips the Go rebuild when no linkd source changed, so after
+// any unrelated commit every healthy box keeps its old stamp forever and a
+// HEAD-equality alert can never clear (live 2026-07-03:
+// hivemindos-ubuntu-8gb-hel1-2, built b535fb9 vs checkout 09dfaa9, zero linkd
+// changes between). Alert only when a rebuild would actually change the
+// binary — the same criterion the installer's skip uses. Pre-version linkd
+// builds proxy this path through to the collector (a JSON without
+// service=hivemind-linkd), which is itself the "update pending" signal.
 async function checkLinkdBuild(machine) {
   const key = `stale:${machine.name}`;
   if ((staleBuildAlertAt.get(key) || 0) + STALE_BUILD_ALERT_MS > Date.now()) return;
@@ -636,9 +784,22 @@ async function checkLinkdBuild(machine) {
       return;
     }
     const linkdCommit = String(version.data?.commit || "").trim();
-    if (repoCommit && linkdCommit && linkdCommit !== "unknown" && !repoCommit.startsWith(linkdCommit) && !linkdCommit.startsWith(repoCommit)) {
+    if (!repoCommit || !linkdCommit || linkdCommit === "unknown") return;
+    if (repoCommit.startsWith(linkdCommit) || linkdCommit.startsWith(repoCommit)) return;
+    const changed = await linkdSourcesChangedBetween(LINKD_REPO_ROOT, linkdCommit, repoCommit);
+    if (changed === true) {
       staleBuildAlertAt.set(key, Date.now());
-      await alert(key, `${machine.name}: linkd binary is stale (built at ${linkdCommit}, checkout at ${repoCommit}) — rerun install-telemetry-collector.sh there`);
+      await alert(key, `${machine.name}: linkd binary is stale (built at ${linkdCommit}, checkout at ${repoCommit}, linkd sources changed between them) — rerun install-telemetry-collector.sh there`);
+    } else if (changed === null) {
+      // One of the commits is unknown to THIS clone (usually: this checkout
+      // is behind the remote box's). We cannot prove staleness, so don't
+      // alert on it — a false "rerun the installer" is exactly the noise
+      // this check exists to avoid. Log once a day instead.
+      staleBuildAlertAt.set(key, Date.now());
+      await log(`${machine.name}: linkd stamp ${linkdCommit} vs checkout ${repoCommit} — commit(s) unknown to this clone (behind?); cannot judge staleness, not alerting`);
+    } else if (!linkdCurrentLogged.has(`${key} ${linkdCommit} ${repoCommit}`)) {
+      linkdCurrentLogged.add(`${key} ${linkdCommit} ${repoCommit}`);
+      await log(`${machine.name}: linkd built at ${linkdCommit}, checkout at ${repoCommit} — no linkd source changes between them; binary is current`);
     }
   } catch {
     // version telemetry is best-effort; the health probes are the gate
@@ -735,10 +896,11 @@ async function runCycle(cycle) {
     consecutiveFailures.set(target.key, fails);
     const threshold = result.severe ? 1 : FAIL_THRESHOLD;
     await log(`${target.name}: unhealthy ${fails}/${threshold}${result.severe ? " (severe)" : ""} — ${result.reason}`);
-    if (result.authNeeded) {
-      // Restarting cannot re-authenticate a logged-out tsnet node; a human must
-      // click the auth URL (or provision HIVE_LINK_AUTH_KEY and restart).
-      await alert(`auth:${target.key}`, `${target.name} ${result.reason}`);
+    if (result.authNeeded || result.remediationProof) {
+      // Remediation-proof failures: restarting cannot re-authenticate a
+      // logged-out tsnet node or restore a missing TTS voice ref — a human
+      // must act (auth URL / HIVE_LINK_AUTH_KEY / FLEET_WATCHDOG_TTS_VOICE).
+      await alert(`${result.authNeeded ? "auth" : "humanfix"}:${target.key}`, `${target.name} ${result.reason}`);
       continue;
     }
     if (result.severe) escalations.recordSevereFailure(target.key, result.reason);
@@ -769,6 +931,102 @@ async function runCycle(cycle) {
   await log(`cycle ${cycle}: ${healthy} healthy, ${unhealthy} unhealthy of ${targets.length}${deep ? " (deep probe: collector chat + TTS synth)" : ""}`);
 }
 
+// ── Company autonomy driver liveness ─────────────────────────────────────────
+// Launched "zero human companies" are driven by a machine-wide loop that lives
+// INSIDE a dashboard server process and holds a lease file. When the holder
+// process dies with no standby (e.g. the only driver-hosting dev server was
+// killed), every company silently stops dispatching while still looking
+// "running" in the UI — this stranded the Website Outreach Agency for ~7h on
+// 2026-07-03. The watchdog is the outside observer: verify the lease holder is
+// alive and fresh, revive the driver on any reachable local dashboard, and
+// escalate loudly when no dashboard can host it.
+//   FLEET_WATCHDOG_COMPANY_DRIVER=0        disable this check
+//   FLEET_WATCHDOG_DRIVER_STALE_MS         lease freshness window (default 15 min)
+const DRIVER_LEASE_PATH = join(STATE_DIR, "company-autonomy-driver.lease.json");
+const DRIVER_LEASE_STALE_MS = Number(process.env.FLEET_WATCHDOG_DRIVER_STALE_MS || 15 * 60_000);
+const DRIVER_CHECK_ENABLED = process.env.FLEET_WATCHDOG_COMPANY_DRIVER !== "0";
+
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM"; // EPERM = alive but not ours
+  }
+}
+
+// Healthy = holder pid alive AND lease renewed recently. The driver renews the
+// lease every loop iteration (≤5 min ticking, ≤60s standby), so a 15-min-old
+// renewedAt means the loop is wedged or gone even if the pid survives.
+function driverLeaseHealthy() {
+  try {
+    const parsed = JSON.parse(readFileSync(DRIVER_LEASE_PATH, "utf8"));
+    if (!Number.isInteger(parsed?.pid) || parsed.pid <= 0) return false;
+    if (!pidAlive(parsed.pid)) return false;
+    return Date.now() - Number(parsed.renewedAt || 0) < DRIVER_LEASE_STALE_MS;
+  } catch {
+    return false; // missing/corrupt lease → treat as not driven; dashboards decide below
+  }
+}
+
+async function checkCompanyAutonomyDriver() {
+  if (!DRIVER_CHECK_ENABLED) return;
+  if (driverLeaseHealthy()) return;
+  let sawDashboard = false;
+  let autonomousCompanies = -1;
+  const candidateFailures = [];
+  for (const port of APP_PORTS) {
+    // Next dev servers bind IPv4 or IPv6 loopback depending on how they were
+    // spawned (the Tauri-launched dev server answers ONLY on [::1] — probing
+    // 127.0.0.1 alone missed a live dashboard in the 2026-07-03 drill).
+    for (const host of ["127.0.0.1", "[::1]"]) {
+      try {
+        // GET /api/companies doubles as the self-heal hook: the route revives the
+        // driver whenever an autonomous company exists. The response also tells
+        // us whether anything needs driving at all.
+        const companies = await fetchJson(`http://${host}:${port}/api/companies`, { headers: dashboardHeaders() }, 15_000);
+        if (!companies.ok || !Array.isArray(companies.data?.companies)) {
+          candidateFailures.push(`${host}:${port} HTTP ${companies.status}`);
+          continue;
+        }
+        sawDashboard = true;
+        autonomousCompanies = companies.data.companies.filter((entry) => entry?.company?.autonomy && !entry?.company?.frozen).length;
+        if (autonomousCompanies === 0) return; // nothing launched → a stopped driver is fine
+        const started = await fetchJson(`http://${host}:${port}/api/company-autonomy-driver`, {
+          method: "POST",
+          headers: dashboardHeaders({ "content-type": "application/json" }),
+          body: JSON.stringify({ action: "start" }),
+        }, 15_000);
+        if (started.ok && started.data?.status === "running") {
+          await log(`company driver: lease was dead/stale — ensured driver running on dashboard ${host}:${port}`);
+          return;
+        }
+        candidateFailures.push(`${host}:${port} start→${started.status}/${started.data?.status ?? "?"}`);
+      } catch (error) {
+        candidateFailures.push(`${host}:${port} ${error?.cause?.code || error?.code || error?.name || "error"}`);
+      }
+    }
+  }
+  // The failure detail is the difference between "no dashboard is running" and
+  // "a dashboard is up but refusing us" (auth, bind family, proxy) — log it.
+  await log(`company driver check found no usable dashboard: ${candidateFailures.join(", ")}`);
+  if (!sawDashboard) {
+    await alert(
+      "company-driver-down",
+      "company autonomy driver lease is dead/stale and NO local dashboard is reachable — launched companies are not being driven. Start the HivemindOS app or dev server.",
+    );
+    return;
+  }
+  await alert(
+    "company-driver-down",
+    `company autonomy driver could not be revived via any local dashboard (${APP_PORTS.map((p) => `:${p}`).join(", ")}) — launched companies are stalled.`,
+  );
+  await postDashboardNotification(
+    "Company autonomy driver down",
+    "The machine-wide company autonomy driver is not running and could not be restarted automatically. Launched zero-human companies are NOT dispatching work until it is revived.",
+  );
+}
+
 await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles, self=${SELF_ENABLED ? "on" : "off"}, alerts=${TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN ? "telegram" : "log-only"}, escalate after ${ESCALATE_AFTER} deep fails (dashboard token ${DASHBOARD_DEVICE_TOKEN ? "found" : "MISSING — dashboard notifications will 401 if auth is on"})${RUN_ONCE ? " (ONCE)" : ""}`);
 let cycle = 0;
 for (;;) {
@@ -776,6 +1034,11 @@ for (;;) {
     await runCycle(cycle);
   } catch (error) {
     await log(`cycle error: ${error.message}`);
+  }
+  try {
+    await checkCompanyAutonomyDriver();
+  } catch (error) {
+    await log(`company driver check error: ${error.message}`);
   }
   cycle += 1;
   if (RUN_ONCE) break;

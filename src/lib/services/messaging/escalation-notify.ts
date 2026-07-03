@@ -5,7 +5,11 @@ import path from "path";
 
 import { homedir } from "@/lib/home-dir";
 import { listMessagingChannels, sendHiveMessage } from "@/lib/services/messaging/channels";
-import { createAgentNotification, readAgentNotificationSettings } from "@/lib/services/obsidian/agent-notifications";
+import {
+  createAgentNotification,
+  readAgentNotificationSettings,
+  setAgentNotificationResolution,
+} from "@/lib/services/obsidian/agent-notifications";
 import { listApprovals } from "@/lib/services/wallet/spend-approvals";
 import { readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { companySpendRollup, readCompanies } from "@/lib/services/companies-store";
@@ -46,16 +50,27 @@ export type EscalationEvent = {
   tags?: string[];
 };
 
-type EscalationState = { sent: Record<string, number> };
+type EscalationState = {
+  sent: Record<string, number>;
+  /** Dedupe key → when its dashboard card was last created. Separate from `sent`
+   *  (external delivery): channel-outage retries must not mint duplicate cards. */
+  carded: Record<string, number>;
+  /** Dedupe key → vault notification id, so resolvers can stamp lifecycle on the exact card. */
+  notes: Record<string, string>;
+};
 
 type EscalationOptions = { vaultPath?: string | null };
 
 async function readState(): Promise<EscalationState> {
   try {
     const parsed = JSON.parse(await fs.readFile(ESCALATION_STATE_PATH, "utf8")) as Partial<EscalationState>;
-    return { sent: parsed.sent && typeof parsed.sent === "object" ? parsed.sent : {} };
+    return {
+      sent: parsed.sent && typeof parsed.sent === "object" ? parsed.sent : {},
+      carded: parsed.carded && typeof parsed.carded === "object" ? parsed.carded : {},
+      notes: parsed.notes && typeof parsed.notes === "object" ? parsed.notes : {},
+    };
   } catch {
-    return { sent: {} };
+    return { sent: {}, carded: {}, notes: {} };
   }
 }
 
@@ -69,7 +84,15 @@ function pruneState(state: EscalationState, now: number): EscalationState {
   for (const [key, at] of Object.entries(state.sent)) {
     if (Number.isFinite(at) && now - at < STATE_RETENTION_MS) sent[key] = at;
   }
-  return { sent };
+  const carded: Record<string, number> = {};
+  for (const [key, at] of Object.entries(state.carded)) {
+    if (Number.isFinite(at) && now - at < STATE_RETENTION_MS) carded[key] = at;
+  }
+  const notes: Record<string, string> = {};
+  for (const [key, id] of Object.entries(state.notes)) {
+    if ((sent[key] || carded[key]) && typeof id === "string" && id) notes[key] = id;
+  }
+  return { sent, carded, notes };
 }
 
 /** Channels escalations go to: the queen-bee defaults first, else every enabled channel. */
@@ -98,18 +121,34 @@ export async function notifyEscalation(event: EscalationEvent, options: Escalati
     const ttl = event.ttlMs ?? DAY_MS;
     if (lastSentAt && now - lastSentAt < ttl) return false;
 
-    // The in-app notification is created regardless of external messaging so the
-    // dashboard feed stays complete; the dedupe key gates BOTH surfaces.
-    await createAgentNotification({
-      title: event.title,
-      body: event.body,
-      priority: event.severity,
-      kind: "alert",
-      agentId: "queen-bee",
-      agentName: "Queen Bee",
-      source: "escalation-bridge",
-      tags: ["escalation", ...(event.tags ?? [])],
-    }, { vaultPath: options.vaultPath ?? undefined }).catch(() => undefined);
+    // The in-app notification is created regardless of external messaging so
+    // the dashboard feed stays complete. Its own TTL gate (`carded`) — not
+    // `sent` — governs card creation: external channel-outage retries must not
+    // mint duplicate cards. Explicit id: the default (agentName+title slug)
+    // made same-day escalations with the same title — e.g. two "Work is
+    // blocked on you" for different tasks — silently overwrite each other's
+    // card file. Key+timestamp keeps every send its own card and gives
+    // resolvers an unambiguous target.
+    const lastCardedAt = state.carded[event.key];
+    if (!lastCardedAt || now - lastCardedAt >= ttl) {
+      const created = await createAgentNotification({
+        id: `${event.key}-${now.toString(36)}`,
+        title: event.title,
+        body: event.body,
+        priority: event.severity,
+        kind: "alert",
+        agentId: "queen-bee",
+        agentName: "Queen Bee",
+        source: "escalation-bridge",
+        tags: ["escalation", ...(event.tags ?? [])],
+      }, { vaultPath: options.vaultPath ?? undefined }).catch(() => undefined);
+      if (created?.id) {
+        state.carded[event.key] = now;
+        // Remember which card this key produced so a later recovery can stamp
+        // resolution lifecycle on it (a re-notify after TTL re-points the key).
+        state.notes[event.key] = created.id;
+      }
+    }
 
     const settings = await readAgentNotificationSettings({ vaultPath: options.vaultPath ?? undefined }).catch(() => null);
     if (!settings?.highPriorityMessagingEnabled) {
@@ -137,16 +176,55 @@ export async function notifyEscalation(event: EscalationEvent, options: Escalati
         console.warn(`[escalation-notify] ${channel.provider} send failed:`, error instanceof Error ? error.message : error);
       }
     }
-    // Only mark delivered events so a transient channel outage retries next sweep.
-    if (delivered) {
-      state.sent[event.key] = now;
-      await writeState(state);
-    }
+    // Only mark delivered events so a transient channel outage retries next
+    // sweep — but always persist the card bookkeeping (carded/notes).
+    if (delivered) state.sent[event.key] = now;
+    await writeState(state);
     return delivered;
   } catch (error) {
     console.warn("[escalation-notify] escalation failed:", error instanceof Error ? error.message : error);
     return false;
   }
+}
+
+/**
+ * Stamp resolution lifecycle on the dashboard card a previously-sent escalation
+ * created (looked up by its dedupe key). Pass null to clear — the condition
+ * re-fired and the card is live again. Best-effort; false when the key never
+ * produced a card (or it aged out of state retention).
+ */
+export async function resolveEscalationNotification(
+  key: string,
+  resolution: { status: "in-progress" | "resolved"; note?: string } | null,
+  options: EscalationOptions = {},
+): Promise<boolean> {
+  try {
+    const state = await readState();
+    const id = state.notes[key];
+    if (!id) return false;
+    return await setAgentNotificationResolution(
+      id,
+      resolution ? { ...resolution, by: "escalation-bridge" } : null,
+      { vaultPath: options.vaultPath ?? undefined },
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pure: the resolution a needs-human escalation should carry given its task's
+ * CURRENT board status. null = the escalation is live (still needs-human), so
+ * any earlier in-progress/resolved stamp must be cleared.
+ */
+export function needsHumanResolutionFor(taskStatus: string | null): { status: "in-progress" | "resolved"; note: string } | null {
+  if (taskStatus === null) return { status: "resolved", note: "The task is no longer on the Work Board." };
+  if (taskStatus === "done") return { status: "resolved", note: "The task completed — no action needed anymore." };
+  if (taskStatus === "archived") return { status: "resolved", note: "The task was archived." };
+  if (taskStatus === "ready" || taskStatus === "working") {
+    return { status: "in-progress", note: "The task was re-dispatched and is being worked again — no action needed unless it blocks again." };
+  }
+  return null;
 }
 
 function companyForTask(task: Pick<KanbanTask, "source">, companies: Company[]): Company | null {
@@ -190,9 +268,27 @@ export async function runEscalationSweep(options: EscalationOptions = {}): Promi
         title: "Work is blocked on you",
         body: lines.join("\n"),
         severity: "high",
-        tags: ["kanban", "needs-human"],
+        // task:<id> is structured routing data — the notification panel's
+        // action buttons deep-link straight to this task on the Work Board.
+        tags: ["kanban", "needs-human", `task:${task.id}`],
       }, options);
       if (ok) delivered += 1;
+    }
+
+    // Lifecycle: needs-human cards auto-track their task. Re-dispatched →
+    // "resolution in progress"; completed/archived/gone → "resolved"; bounced
+    // back to needs-human → the stamp clears and the card reads live again.
+    const state = await readState();
+    const taskById = new Map((board.tasks ?? []).map((task) => [task.id, task]));
+    for (const [key, noteId] of Object.entries(state.notes)) {
+      if (!key.startsWith("task-needs-human:")) continue;
+      const task = taskById.get(key.slice("task-needs-human:".length));
+      const resolution = needsHumanResolutionFor(task ? task.status : null);
+      await setAgentNotificationResolution(
+        noteId,
+        resolution ? { ...resolution, by: "escalation-bridge" } : null,
+        { vaultPath: options.vaultPath ?? undefined },
+      ).catch(() => undefined);
     }
   } catch (error) {
     console.warn("[escalation-notify] board sweep failed:", error instanceof Error ? error.message : error);

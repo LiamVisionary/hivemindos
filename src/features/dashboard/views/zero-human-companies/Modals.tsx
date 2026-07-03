@@ -5,6 +5,7 @@
 // /api/companies.
 import React from "react";
 import { createPortal } from "react-dom";
+import { openNativeDirectory } from "@/lib/native/filesystem";
 import { RoleGlyph, SectionLabel } from "./primitives";
 import { assignAgent } from "./data";
 import type {
@@ -22,6 +23,14 @@ import type {
 } from "./types";
 
 // ── shared input primitives ──────────────────────────────────────────────
+/** A registry project as the "Code project" picker needs it. */
+type ProjectPickerEntry = { id: string; name: string; localPath?: string; repoName?: string };
+
+/** Display-only: collapse the macOS/Linux home prefix so option labels stay scannable. */
+function shortenHomePath(path: string): string {
+  return path.replace(/^\/(?:Users|home)\/[^/]+/, "~");
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -393,6 +402,7 @@ export function CreateCompanyModal({
 type EditFormState = FormState & {
   charter: string;
   blurb: string;
+  projectId: string;
   dailyBudgetUsd?: number;
   monthlyBudgetUsd?: number;
   totalBudgetUsd?: number;
@@ -435,6 +445,7 @@ function initialEditState(initial: CompanyEditForm): EditFormState {
     _tickerTouched: true,
     charter: initial.charter ?? "",
     blurb: initial.blurb ?? "",
+    projectId: initial.projectId ?? "",
     dailyBudgetUsd: initial.dailyBudgetUsd,
     monthlyBudgetUsd: initial.monthlyBudgetUsd,
     totalBudgetUsd: initial.totalBudgetUsd,
@@ -475,6 +486,7 @@ function readEditForm(form: EditFormState): CompanyEditForm {
     ...readForm(form),
     charter: form.charter.trim(),
     blurb: form.blurb.trim(),
+    projectId: form.projectId.trim(),
     dailyBudgetUsd: form.dailyBudgetUsd,
     monthlyBudgetUsd: form.monthlyBudgetUsd,
     totalBudgetUsd: form.totalBudgetUsd,
@@ -578,6 +590,100 @@ export function EditCompanyModal({
   onClose: () => void; onSave: (form: CompanyEditForm) => void;
 }) {
   const [form, setForm] = React.useState<EditFormState>(() => initialEditState(initial));
+  // Registered code projects for the "Code project" picker (structured config —
+  // never a free-text id). An id missing from the registry stays selectable so
+  // opening + saving the modal can't silently unlink it.
+  const [projects, setProjects] = React.useState<ProjectPickerEntry[]>([]);
+  const [projectLinkBusy, setProjectLinkBusy] = React.useState(false);
+  const [projectLinkError, setProjectLinkError] = React.useState<string | null>(null);
+  const [manualProjectOpen, setManualProjectOpen] = React.useState(false);
+  const [manualProject, setManualProject] = React.useState({ name: "", path: "" });
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/projects", { cache: "no-store" });
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          projects?: { id?: string; name?: string; localPath?: string; gitlawbRepo?: { repoName?: string } }[];
+        };
+        if (cancelled || !json?.ok || !Array.isArray(json.projects)) return;
+        setProjects(json.projects
+          .filter((project) => project.id)
+          .map((project) => ({
+            id: project.id!,
+            name: project.name || project.id!,
+            localPath: project.localPath,
+            repoName: project.gitlawbRepo?.repoName,
+          })));
+      } catch {
+        // Registry unreachable — the picker still offers None + the current link.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const projectOptions = React.useMemo(() => {
+    const options = [
+      { value: "", label: "None" },
+      ...projects.map((project) => ({
+        value: project.id,
+        // The name alone is meaningless in a registry of look-alike entries —
+        // show where each project actually lives.
+        label: project.localPath ? `${project.name} · ${shortenHomePath(project.localPath)}` : `${project.name} · no folder linked`,
+      })),
+    ];
+    if (form.projectId && !options.some((option) => option.value === form.projectId)) {
+      options.push({ value: form.projectId, label: `${form.projectId} (not in registry)` });
+    }
+    return options;
+  }, [projects, form.projectId]);
+  const selectedProject = projects.find((project) => project.id === form.projectId);
+
+  const registerProject = async (name: string, localPath?: string) => {
+    if (projectLinkBusy) return;
+    setProjectLinkBusy(true);
+    setProjectLinkError(null);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, localPath }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; project?: { id?: string; name?: string; localPath?: string } };
+      if (!res.ok || !json?.ok || !json.project?.id) {
+        setProjectLinkError(json?.error || "Could not register the project.");
+        return;
+      }
+      const entry: ProjectPickerEntry = { id: json.project.id, name: json.project.name || json.project.id, localPath: json.project.localPath };
+      setProjects((current) => [entry, ...current.filter((project) => project.id !== entry.id)]);
+      setForm((current) => ({ ...current, projectId: entry.id }));
+      setManualProject({ name: "", path: "" });
+      setManualProjectOpen(false);
+    } catch (error) {
+      setProjectLinkError(error instanceof Error ? error.message : "Could not register the project.");
+    } finally {
+      setProjectLinkBusy(false);
+    }
+  };
+
+  const browseForProjectFolder = async () => {
+    if (projectLinkBusy) return;
+    setProjectLinkError(null);
+    const result = await openNativeDirectory({ prompt: "Choose the folder of this company's code repo:" });
+    if (result === null) {
+      // Browser runtime: no native dialog — fall back to the labeled manual row.
+      setManualProjectOpen(true);
+      return;
+    }
+    if (result.cancelled) return;
+    if (!result.ok || !result.path) {
+      setProjectLinkError(result.error || "Could not choose a folder.");
+      return;
+    }
+    const path = result.path.replace(/\/+$/, "");
+    const name = path.split("/").filter(Boolean).at(-1) || path;
+    await registerProject(name, path);
+  };
   const canSave = form.name.trim().length > 0;
   const updateMember = (agentId: string, next: CompanyMemberEdit) => setForm((current) => ({
     ...current,
@@ -615,6 +721,36 @@ export function EditCompanyModal({
             <Field label="Blurb">
               <TextArea value={form.blurb} placeholder="One-line company tagline" onChange={(event) => setForm((current) => ({ ...current, blurb: event.target.value }))} />
             </Field>
+          </div>
+          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            <Field label="Code project" hint="The repo this company's product work lives in. New tasks carry it, so work routes to machines that have the repo checked out and shows its code proof.">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+                <Select value={form.projectId} onChange={(value) => setForm((current) => ({ ...current, projectId: value }))} options={projectOptions} />
+                <GhostBtn onClick={browseForProjectFolder}>{projectLinkBusy ? "Linking…" : "Link a folder…"}</GhostBtn>
+              </div>
+            </Field>
+            {selectedProject ? (
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", wordBreak: "break-all" }}>
+                {selectedProject.localPath ?? "No folder linked yet — tasks can't route by checkout until one is."}
+                {selectedProject.repoName ? ` · GitLawb repo: ${selectedProject.repoName}` : ""}
+              </div>
+            ) : null}
+            {projectLinkError ? (
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger-2)" }}>{projectLinkError}</div>
+            ) : null}
+            {manualProjectOpen ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr auto", gap: 8, alignItems: "end" }}>
+                <Field label="Project name">
+                  <TextInput value={manualProject.name} placeholder="maps-agency" onChange={(event) => setManualProject((current) => ({ ...current, name: event.target.value }))} />
+                </Field>
+                <Field label="Absolute folder path (advanced)" hint="Folder browsing needs the desktop app; in the browser, paste the repo path.">
+                  <TextInput value={manualProject.path} placeholder="/Users/you/code/projects/my-repo" onChange={(event) => setManualProject((current) => ({ ...current, path: event.target.value }))} />
+                </Field>
+                <PrimaryBtn disabled={!manualProject.name.trim() || projectLinkBusy} onClick={() => registerProject(manualProject.name.trim(), manualProject.path.trim() || undefined)}>
+                  {projectLinkBusy ? "Registering…" : "Register"}
+                </PrimaryBtn>
+              </div>
+            ) : null}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 130px", gap: 12, marginTop: 16 }}>
             <Field label="Current metric value">

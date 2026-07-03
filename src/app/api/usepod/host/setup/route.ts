@@ -14,6 +14,7 @@ import {
   getUsePodBondUsdcBalance,
   postUsePodOperatorBond,
 } from "@/lib/services/usepod/host-bond";
+import { writeSharedHiveEnvValues } from "@/lib/services/hive-env-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -301,45 +302,8 @@ async function savedUsePodHostBondSignature() {
   return candidates.find(Boolean) ?? "";
 }
 
-function normalizeEnvValue(value: string) {
-  return value.replace(/^export\s+/, "").trim();
-}
-
-function quoteEnvValue(value: string) {
-  if (!value || /[\s#'"\\$`]/.test(value)) {
-    return `'${value.replace(/'/g, "'\"'\"'")}'`;
-  }
-  return value;
-}
-
-function upsertEnvValues(raw: string, values: Record<string, string>) {
-  const remaining = new Map(Object.entries(values));
-  const output: string[] = [];
-  for (const line of raw.split(/\r?\n/)) {
-    if (!line.trim()) {
-      output.push(line);
-      continue;
-    }
-    const match = normalizeEnvValue(line).match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
-    if (!match || !remaining.has(match[1])) {
-      output.push(line);
-      continue;
-    }
-    const value = remaining.get(match[1]) ?? "";
-    output.push(`${match[1]}=${quoteEnvValue(value)}`);
-    remaining.delete(match[1]);
-  }
-  if (remaining.size && output.length && output[output.length - 1]?.trim()) output.push("");
-  for (const [key, value] of remaining) {
-    output.push(`${key}=${quoteEnvValue(value)}`);
-  }
-  return `${output.join("\n").replace(/\n*$/, "")}\n`;
-}
-
 async function saveUsePodHostEnvValues(values: Record<string, string>) {
-  await mkdir(dirname(HIVE_ENV_FILE), { recursive: true, mode: 0o700 });
-  const raw = await readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
-  await writeFile(HIVE_ENV_FILE, upsertEnvValues(raw, values), { mode: 0o600 });
+  await writeSharedHiveEnvValues(values);
   for (const [key, value] of Object.entries(values)) process.env[key] = value;
 }
 

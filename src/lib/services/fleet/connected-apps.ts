@@ -1,4 +1,5 @@
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export type ConnectedHostedApp = {
   id?: string;
@@ -120,9 +121,10 @@ function appName(app: CollectorApp, port: number) {
   return clean(app.name) || `App ${port}`;
 }
 
-async function fetchJson<T>(url: string, timeoutMs = RAW_DISCOVERY_TIMEOUT_MS): Promise<T> {
+async function fetchJson<T>(url: string, timeoutMs = RAW_DISCOVERY_TIMEOUT_MS, headers?: Record<string, string>): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
+    headers,
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -219,7 +221,10 @@ export async function discoverRawConnectedApps(origin: string, options?: {
   const directHost = options?.directHost?.trim().replace(/\.$/, "") || "";
   const fleet = options?.selfOnly || directHost
     ? { machines: [] }
-    : await fetchJson<{ machines?: FleetMachine[] }>(fleetUrl.toString(), options?.timeoutMs ?? RAW_DISCOVERY_TIMEOUT_MS).catch(() => ({ machines: [] }));
+    // Self-fetch of our own /api/fleet/discover: needs the server's device
+    // token since the API auth gate moved to src/proxy.ts. Collector fetches
+    // stay tokenless — the device token must not leak to non-dashboard hosts.
+    : await fetchJson<{ machines?: FleetMachine[] }>(fleetUrl.toString(), options?.timeoutMs ?? RAW_DISCOVERY_TIMEOUT_MS, internalApiAuthHeaders()).catch(() => ({ machines: [] }));
   const selfCollector: FleetMachine = {
     collector: "ready",
     collectorHost: "localhost",

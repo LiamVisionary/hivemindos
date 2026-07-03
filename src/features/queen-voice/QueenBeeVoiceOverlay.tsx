@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { AgentResponseLoader } from "@/features/chat/chat-composer";
 import { emitQueenVoiceState, listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
 import { HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET } from "./hive-chat-layout";
@@ -30,15 +31,8 @@ const QUEEN_VOICE_ACTIVATION_SOUND_SRC = "/audio/sfx/scifi-ping.wav";
 const QUEEN_VOICE_OPENING_LINE =
   "Hey Liam, I'm here. What should we work on first?";
 
-// Spoken while a tool call runs (the 10-15s dead-air pause), so the user knows
-// Queen Bee is working rather than stuck. One is picked per pause and held.
-const QUEEN_THINKING_FILLERS = [
-  "Let me check…",
-  "On it…",
-  "Let me see…",
-  "Searching your hive…",
-  "One sec, looking that up…",
-];
+// Thinking pauses render the chat route's animated loader (bee + rotating
+// phrases — AgentResponseLoader) instead of a held filler line.
 
 function playQueenVoiceActivationSound() {
   if (typeof Audio === "undefined") return;
@@ -112,7 +106,7 @@ function TranscriptTurns({
   turns,
   minimized,
   thinking,
-  thinkingLabel,
+  brainLabel,
   working,
   onShowDetail,
   onCollapse,
@@ -120,7 +114,8 @@ function TranscriptTurns({
   turns: QueenChatTurn[];
   minimized: boolean;
   thinking: boolean;
-  thinkingLabel: string;
+  /** Subtle "which brain answers" tag next to Queen Bee's name, e.g. "gpt-5.5 · ChatGPT". */
+  brainLabel: string;
   /** Live stages of the in-flight voice turn (tool calls, fleet scan, ...). */
   working: QueenVoiceWorkingStage[];
   onShowDetail: (detail: string) => void;
@@ -173,6 +168,9 @@ function TranscriptTurns({
               className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
             >
               {turn.who === "queen" ? "Queen Bee" : "You"}
+              {turn.who === "queen" && brainLabel ? (
+                <span className={styles.brainTag}>{brainLabel}</span>
+              ) : null}
             </span>
             <div
               className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""} ${turn.pending && !turn.text ? styles.turnTextThinking : ""}`}
@@ -214,11 +212,11 @@ function TranscriptTurns({
           <div className={styles.turn}>
             <span className={`${styles.turnWho} ${styles.turnWhoQueen}`}>
               Queen Bee
+              {brainLabel ? <span className={styles.brainTag}>{brainLabel}</span> : null}
             </span>
-            <p className={`${styles.turnText} ${styles.turnTextThinking}`}>
-              {thinkingLabel || "Checking"}
-              <span className={styles.thinkingDots} aria-hidden="true" />
-            </p>
+            {/* The chat route's thinking loader (bee lottie + rotating
+                animated phrases) — one thinking language across the app. */}
+            <AgentResponseLoader />
             {working.length ? (
               // Compact live activity: what she is actually doing right now
               // (thinking with which agent, tool calls, fleet scan, routing).
@@ -370,6 +368,8 @@ export function QueenBeeVoiceOverlay({
   React.useEffect(() => {
     sessionNonceRef.current = sessionNonce;
   }, [sessionNonce]);
+  // Which brain answers spoken turns — shown as a subtle tag by her name.
+  const [brainLabel, setBrainLabel] = React.useState("");
   // Re-resolved on each open and session restart so a freshly-changed Calls
   // setting takes effect without restarting the app.
   React.useEffect(() => {
@@ -378,11 +378,14 @@ export function QueenBeeVoiceOverlay({
     const nonce = sessionNonce;
     void fetch("/api/queen-bee/voice", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { localTtsSelected?: boolean } | null) => {
+      .then((data: { localTtsSelected?: boolean; pipelineSelected?: boolean; brainLabel?: string | null } | null) => {
         if (!cancelled) {
+          setBrainLabel(typeof data?.brainLabel === "string" ? data.brainLabel : "");
           setResolvedVoiceMode({
             nonce,
-            mode: data?.localTtsSelected ? "pipeline" : "realtime",
+            // pipelineSelected covers BOTH local-TTS and cloud-TTS voice
+            // runtimes; older servers only send localTtsSelected.
+            mode: (data?.pipelineSelected ?? data?.localTtsSelected) ? "pipeline" : "realtime",
           });
         }
       })
@@ -497,10 +500,6 @@ export function QueenBeeVoiceOverlay({
     voiceSeenRef.current = currentIds;
   }, [voiceState.turns, sessionNonce, realtimeMode, chatUpsertTurn, chatRemoveTurn]);
 
-  // When Queen Bee starts working a tool call she goes silent for several
-  // seconds; cue a soft sound and a held filler line so the pause reads as
-  // "working", not "stuck".
-  const [thinkingFiller, setThinkingFiller] = React.useState("");
   const [detailContent, setDetailContent] = React.useState<string | null>(null);
   // Auto-open the transaction modal when a card needing a decision arrives, then
   // auto-close it once the user responds (by voice, typed, or a modal button).
@@ -553,11 +552,7 @@ export function QueenBeeVoiceOverlay({
     const previous = prevPhaseRef.current;
     prevPhaseRef.current = voiceState.phase;
     if (voiceState.phase === "thinking" && previous !== "thinking") {
-      setThinkingFiller(
-        QUEEN_THINKING_FILLERS[
-          Math.floor(Math.random() * QUEEN_THINKING_FILLERS.length)
-        ],
-      );
+      // Soft cue so a silent tool-call pause reads as "working", not stuck.
       playQueenThinkingSound();
     }
   }, [voiceState.phase]);
@@ -623,7 +618,7 @@ export function QueenBeeVoiceOverlay({
           turns={chat.turns}
           minimized={historyMinimized}
           thinking={open && voiceState.phase === "thinking"}
-          thinkingLabel={thinkingFiller}
+          brainLabel={brainLabel}
           // Live stages only exist on the pipeline hook; the realtime session
           // streams its own tool audio cues.
           working={realtimeMode ? [] : pipeline.working}

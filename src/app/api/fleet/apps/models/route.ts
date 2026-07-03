@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export const runtime = "nodejs";
 
@@ -103,7 +104,7 @@ function modelListPaths(app: DiscoveredApp) {
 
 async function fetchAppList(origin: string): Promise<DiscoveredApp[]> {
   const url = new URL("/api/fleet/apps", origin);
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000) }).catch(() => null);
+  const response = await fetch(url, { cache: "no-store", headers: internalApiAuthHeaders(), signal: AbortSignal.timeout(10_000) }).catch(() => null);
   if (!response?.ok) return [];
   const payload = await response.json().catch(() => null) as { apps?: DiscoveredApp[] } | null;
   return Array.isArray(payload?.apps) ? payload.apps : [];

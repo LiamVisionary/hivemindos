@@ -23,6 +23,8 @@ import {
 } from "@x402/extensions/builder-code";
 import type { NextRequest } from "next/server";
 
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+
 import { homedir } from "@/lib/home-dir";
 import {
   createAgentProfile,
@@ -655,9 +657,12 @@ async function callAgentRuntime(
 ): Promise<CompletionResult> {
   const response = await fetch(new URL("/api/chat/agent-runtime", request.url), {
     method: "POST",
+    // Self-fetches 401 without the server's own device token since the API
+    // auth gate moved to src/proxy.ts.
     headers: {
       "Content-Type": "application/json",
       "X-HivemindOS-Paid-Agent-Gateway": entry.slug,
+      ...internalApiAuthHeaders(),
     },
     body: JSON.stringify({
       agent: profile,

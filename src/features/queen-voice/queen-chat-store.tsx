@@ -11,6 +11,12 @@ import {
   formatDashboardScreenContextForPrompt,
   type DashboardScreenContext,
 } from "@/features/dashboard/screen-context";
+import {
+  findWorkBoardTasks,
+  flattenKanbanColumns,
+  formatWorkBoardTaskForPrompt,
+  summarizeWorkBoardByStatus,
+} from "@/features/dashboard/work-board-lookup";
 
 export type QueenChatTurn = {
   id: string;
@@ -157,6 +163,22 @@ export function QueenChatProvider({
         await post({ action: "remember-preference", preference: String(args.preference ?? "") });
         return "Saved that preference.";
       }
+      if (name === "read_work_board") {
+        // Direct board read — the Queen answers task questions from the actual
+        // record instead of delegating a lookup to a fleet agent.
+        const res = await fetch("/api/kanban", { cache: "no-store" });
+        const data = (await res.json().catch(() => null)) as { columns?: unknown } | null;
+        if (!res.ok || !data) return "The Work Board isn't reachable right now.";
+        const tasks = flattenKanbanColumns(data.columns);
+        const taskId = String(args.taskId ?? "").trim();
+        const query = String(args.query ?? "").trim();
+        if (!taskId && !query) return summarizeWorkBoardByStatus(tasks);
+        const hits = findWorkBoardTasks(tasks, { taskId, query });
+        if (!hits.length) {
+          return `No Work Board task matched ${taskId || `"${query}"`}. ${summarizeWorkBoardByStatus(tasks)}`;
+        }
+        return hits.slice(0, 3).map(formatWorkBoardTaskForPrompt).join("\n\n");
+      }
       return "Unknown tool.";
     } catch {
       return "That tool call didn't complete.";
@@ -186,31 +208,95 @@ export function QueenChatProvider({
       messages.push({ role: "assistant", content: reply });
     };
 
+    // Human-readable status shown in the live turn while a tool runs — the
+    // silent 15-20s "thinking" gap was the tool phase, not the model.
+    const toolStatus = (name: string) => ({
+      drive_dashboard: "Driving the dashboard…",
+      ask_hivemind_agent: "Asking a hive agent…",
+      create_hive_task: "Creating the Work Board task…",
+      remember_preference: "Saving that preference…",
+      read_work_board: "Checking the Work Board…",
+    } as Record<string, string>)[name] ?? "Working on it…";
+
+    // One model turn over the streaming action: renders deltas into the live
+    // turn as they arrive and resolves with the same shape the blocking
+    // chat-turn returns. Resolves null when the server says to fall back.
+    const streamOneTurn = async (): Promise<{
+      ok?: boolean;
+      fallback?: boolean;
+      content?: string;
+      toolCalls?: Array<{ id: string; name: string; arguments: string }>;
+      assistant?: Record<string, unknown>;
+    } | null> => {
+      const res = await fetch("/api/queen-bee/voice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "chat-turn-stream", messages, screenContext }),
+      });
+      const type = res.headers.get("content-type") ?? "";
+      if (!res.ok || !res.body || !type.includes("ndjson")) return null;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const raw of lines) {
+          if (!raw.trim()) continue;
+          let event: Record<string, unknown>;
+          try { event = JSON.parse(raw); } catch { continue; }
+          if (typeof event.delta === "string" && event.delta) {
+            accumulated += event.delta;
+            updateTurn(queenId, { text: accumulated, live: true, pending: false });
+            continue;
+          }
+          if (event.done) {
+            return event as { content?: string; toolCalls?: Array<{ id: string; name: string; arguments: string }>; assistant?: Record<string, unknown> };
+          }
+          if (event.ok === false || event.fallback) return null;
+        }
+      }
+      return null; // stream ended without a terminal frame — retry blocking
+    };
+
+    const blockingTurn = async () => {
+      const res = await fetch("/api/queen-bee/voice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "chat-turn", messages, screenContext }),
+      });
+      return (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        fallback?: boolean;
+        content?: string;
+        toolCalls?: Array<{ id: string; name: string; arguments: string }>;
+        assistant?: Record<string, unknown>;
+      } | null;
+    };
+
     try {
       for (let i = 0; i < 4; i += 1) {
-        const res = await fetch("/api/queen-bee/voice", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "chat-turn", messages, screenContext }),
-        });
-        const data = (await res.json().catch(() => null)) as {
-          ok?: boolean;
-          fallback?: boolean;
-          content?: string;
-          toolCalls?: Array<{ id: string; name: string; arguments: string }>;
-          assistant?: Record<string, unknown>;
-        } | null;
+        const data = (await streamOneTurn().catch(() => null)) ?? (await blockingTurn());
         if (!data || data.fallback || data.ok === false) {
           await heuristicFallback();
           return;
         }
         const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
         if (toolCalls.length) {
-          if (data.content) updateTurn(queenId, { text: data.content, live: true, pending: false });
           if (data.assistant) messages.push(data.assistant);
           for (const tc of toolCalls) {
             let parsed: Record<string, unknown> = {};
             try { parsed = JSON.parse(tc.arguments || "{}"); } catch { parsed = {}; }
+            // Narrate the tool phase in the live turn instead of dead air.
+            updateTurn(queenId, {
+              text: [data.content?.trim(), `_${toolStatus(tc.name)}_`].filter(Boolean).join("\n\n"),
+              live: true,
+              pending: false,
+            });
             const result = await executeQueenTool(tc.name, parsed, screenContext);
             messages.push({ role: "tool", tool_call_id: tc.id, content: result });
           }

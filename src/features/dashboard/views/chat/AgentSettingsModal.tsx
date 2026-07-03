@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  AlertTriangle,
   BrainCircuit,
   Check,
   ChevronDown,
@@ -243,6 +244,11 @@ export function AgentSettingsModal(props: any) {
   const bankrCreditStatus = runtimeIntegrationStatus?.providerStatus?.bankr;
   const bankrInitialCredits = bankrCreditStatus ? { ok: true, balanceUsd: bankrCreditStatus.creditsBalanceUsd, balanceLabel: bankrCreditStatus.balanceLabel ?? (bankrCreditStatus.creditsBalanceUsd === null ? "Unknown" : undefined), error: bankrCreditStatus.error } : undefined;
   const lmStudioStatus = runtimeIntegrationStatus?.providerStatus?.lmStudio;
+  // Queen voice brain degradation: voice turns are silently bypassing this
+  // agent's configured model and falling back to the OpenAI fallback model.
+  const queenVoiceBrainAlert = runtimeIntegrationStatus?.queenVoiceBrain?.degraded
+    ? runtimeIntegrationStatus.queenVoiceBrain
+    : null;
   const fetchedSelectedModels = fetchedProviderModels[selectedProviderSlug] ?? [];
   const effectiveSelectedModels = fetchedSelectedModels.length > (selectedRuntimeModels?.length ?? 0) ? fetchedSelectedModels : (selectedRuntimeModels ?? []);
   const runtimeModelOptions = adaptiveProviderSelected
@@ -1084,6 +1090,17 @@ export function AgentSettingsModal(props: any) {
               onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && selectedProviderSlug === "openrouter" ? "openrouter" : selectedProviderSlug, modelId)}
               onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
             />
+            {queenVoiceBrainAlert ? (
+              <div className="as-info">
+                <span className="ic"><AlertTriangle size={15} aria-hidden="true" /></span>
+                <p>
+                  <strong>Voice turns are not using this model.</strong>{" "}
+                  {queenVoiceBrainAlert.lastError || "The runtime turn keeps failing."}{" "}
+                  Queen Bee is answering with the fallback model ({queenVoiceBrainAlert.fallbackModel || "gpt-4o-mini"}) until this is fixed
+                  {typeof queenVoiceBrainAlert.consecutiveFailures === "number" && queenVoiceBrainAlert.consecutiveFailures > 1 ? ` — ${queenVoiceBrainAlert.consecutiveFailures} failures in a row` : ""}.
+                </p>
+              </div>
+            ) : null}
             {lmStudioSelectedModelNeedsLoad ? (
               <div className="as-info">
                 <span className="ic"><Download size={15} aria-hidden="true" /></span>
