@@ -24,7 +24,7 @@ HivemindOS should be useful before anyone pays for a cloud feature. Start here w
 
 The line is simple: local-first control room features stay available by default, and paid services cover infrastructure that costs real money to run or maintain for users.
 
-The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, revenue-backed HIVE buybacks, and proposed seasonal HIVE reward buckets for stakers.
+The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, revenue-backed HIVE buybacks, and proposed seasonal HIVE reward pools for stakers.
 
 ## Recommended Path
 
@@ -42,7 +42,7 @@ The ecosystem plan keeps that boundary explicit: HivemindOS remains free and ope
   <li>
     <span>3</span>
     <a href="hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
-    <small>Stake-to-unlock, tier benefits, seasonal HIVE reward buckets, alpha rooms, bounties, governance, and review policy.</small>
+    <small>Stake-to-unlock, tier benefits, weighted seasonal HIVE rewards, alpha rooms, bounties, governance, and review policy.</small>
   </li>
   <li>
     <span>4</span>
@@ -72,7 +72,7 @@ If a feature needs HivemindOS to provide hosted infrastructure, shared room orch
   </section>
   <section class="docCard">
     <h3>Honey, HIVE, And Treasury</h3>
-    <p>The contribution and ownership layers: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, staking, and seasonal reward buckets.</p>
+    <p>The contribution and ownership layers: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, staking, and seasonal reward pools.</p>
     <a href="honey-hive-treasury.html">Open token model</a>
   </section>
   <section class="docCard">
@@ -82,29 +82,29 @@ If a feature needs HivemindOS to provide hosted infrastructure, shared room orch
   </section>
 </div>
 
-## Seasonal HIVE Reward Buckets
+## Seasonal HIVE Reward Pool
 
 The proposed staking reward message is simple:
 
 ```text
-Stake higher. Earn from a bigger bucket.
+Stake higher. Earn stronger reward weight.
 ```
 
-Every reward season, eligible HivemindOS revenue can fund separate HIVE reward buckets for each staking tier. Each tier splits its own bucket by time-weighted staking, so higher-tier wallets do not dilute lower-tier wallets and late stakes only earn for the time they were active.
+Every reward season, eligible HivemindOS revenue can fund one fixed HIVE reward pool. Stakers split that pool by time-weighted active stake, with higher tiers applying stronger reward weight. This keeps the company payout capped while making anonymous wallet splitting worse than staking the same HIVE in the highest tier it qualifies for.
 
 For every `$1,000,000` in eligible HivemindOS revenue, the proposed display model is:
 
-| Tier      | Bucket rate | Per `$1,000,000` eligible revenue |
-| --------- | ----------: | --------------------------------: |
-| Holder    |     0.0625% |                    `$625` in HIVE |
-| Supporter |      0.125% |                  `$1,250` in HIVE |
-| Builder   |       0.25% |                  `$2,500` in HIVE |
-| Curator   |        0.5% |                  `$5,000` in HIVE |
-| Operator  |          1% |                 `$10,000` in HIVE |
-| Visionary |          2% |                 `$20,000` in HIVE |
-| **Total** |  **3.9375%** |          **`$39,375` in HIVE rewards** |
+| Tier      | Reward weight | Boost vs Holder |
+| --------- | ------------: | --------------: |
+| Holder    |         1.00x |            Base |
+| Supporter |         1.10x |            +10% |
+| Builder   |         1.25x |            +25% |
+| Curator   |         1.45x |            +45% |
+| Operator  |         1.70x |            +70% |
+| Visionary |         2.00x |           +100% |
+| **Pool**  |              | **3.9375% / `$39,375` in HIVE rewards** |
 
-The seasonal reward rules are simple: there is no pre-season staking requirement, a wallet needs at least 7 active staking days in the season to qualify, rewards are based on how much HIVE was staked and for how long, and reward credit stops when a wallet requests unstaking. When a season publishes the HIVE price used for rewards, the page can show both the dollar value and the estimated HIVE amount. Actual payouts still need an official claim or treasury process. The current staking vault should not be described as paying HIVE rewards directly.
+The seasonal reward rules are simple: there is no pre-season staking requirement, a wallet needs at least 7 active staking days in the season to qualify, rewards are based on how much weighted HIVE was staked and for how long, and reward credit stops when a wallet requests unstaking. When a season publishes the HIVE price used for rewards, the page can show both the dollar value and the estimated HIVE amount. Actual payouts still need an official claim or treasury process. The current staking vault should not be described as paying HIVE rewards directly.
 
 ## Paid-Service Pages
 

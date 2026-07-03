@@ -18,9 +18,9 @@ export type HiveStakingTier = {
   id: HiveStakingTierId;
   label: string;
   thresholdHive: bigint;
-  rewardBucketUsdPerMillion: number;
-  bucketRateLabel: string;
-  holderMultiple: string;
+  rewardWeight: number;
+  rewardWeightLabel: string;
+  rewardBoostLabel: string;
   role: string;
 };
 
@@ -29,55 +29,55 @@ export const HIVE_STAKING_TIERS = [
     id: "holder",
     label: "Holder",
     thresholdHive: 1_000_000n,
-    rewardBucketUsdPerMillion: 625,
-    bucketRateLabel: "0.0625%",
-    holderMultiple: "1x",
-    role: "Wallet-linked identity, basic status, base rewards, and a visible place in the hive.",
+    rewardWeight: 1,
+    rewardWeightLabel: "1.00x",
+    rewardBoostLabel: "Base",
+    role: "Wallet-linked identity, basic status, base reward weight, and a visible place in the hive.",
   },
   {
     id: "supporter",
     label: "Supporter",
     thresholdHive: 10_000_000n,
-    rewardBucketUsdPerMillion: 1_250,
-    bucketRateLabel: "0.125%",
-    holderMultiple: "2x",
-    role: "2x the Holder bucket. Community access, stronger signal, better reward exposure, and eligible managed-service discounts.",
+    rewardWeight: 1.1,
+    rewardWeightLabel: "1.10x",
+    rewardBoostLabel: "+10%",
+    role: "1.10x reward weight. Community access, stronger signal, better reward exposure, and eligible managed-service discounts.",
   },
   {
     id: "builder",
     label: "Builder",
     thresholdHive: 50_000_000n,
-    rewardBucketUsdPerMillion: 2_500,
-    bucketRateLabel: "0.25%",
-    holderMultiple: "4x",
-    role: "4x the Holder bucket. Alpha workflow access, higher Honey multipliers, contributor status, and stronger seasonal rewards.",
+    rewardWeight: 1.25,
+    rewardWeightLabel: "1.25x",
+    rewardBoostLabel: "+25%",
+    role: "1.25x reward weight. Alpha workflow access, higher Honey multipliers, contributor status, and stronger seasonal rewards.",
   },
   {
     id: "curator",
     label: "Curator",
     thresholdHive: 100_000_000n,
-    rewardBucketUsdPerMillion: 5_000,
-    bucketRateLabel: "0.5%",
-    holderMultiple: "8x",
-    role: "8x the Holder bucket. Marketplace curation, bounty visibility, trust signals, better distribution surfaces, and a larger reward bucket.",
+    rewardWeight: 1.45,
+    rewardWeightLabel: "1.45x",
+    rewardBoostLabel: "+45%",
+    role: "1.45x reward weight. Marketplace curation, bounty visibility, trust signals, better distribution surfaces, and stronger reward exposure.",
   },
   {
     id: "operator",
     label: "Operator",
     thresholdHive: 250_000_000n,
-    rewardBucketUsdPerMillion: 10_000,
-    bucketRateLabel: "1%",
-    holderMultiple: "16x",
-    role: "16x the Holder bucket. Operator rooms, higher ecosystem influence, lower marketplace fees, stronger governance signal, and a major reward bucket.",
+    rewardWeight: 1.7,
+    rewardWeightLabel: "1.70x",
+    rewardBoostLabel: "+70%",
+    role: "1.70x reward weight. Operator rooms, higher ecosystem influence, lower marketplace fees, stronger governance signal, and major reward exposure.",
   },
   {
     id: "visionary",
     label: "Visionary",
     thresholdHive: 1_000_000_000n,
-    rewardBucketUsdPerMillion: 20_000,
-    bucketRateLabel: "2%",
-    holderMultiple: "32x",
-    role: "32x the Holder bucket. Highest reward bucket, highest caps, earliest access to premium reward seasons, Visionary council eligibility, strongest status, and the clearest upside exposure.",
+    rewardWeight: 2,
+    rewardWeightLabel: "2.00x",
+    rewardBoostLabel: "+100%",
+    role: "2.00x reward weight. Highest caps, earliest access to premium reward seasons, Visionary council eligibility, strongest status, and the clearest upside exposure.",
   },
 ] as const satisfies readonly HiveStakingTier[];
 

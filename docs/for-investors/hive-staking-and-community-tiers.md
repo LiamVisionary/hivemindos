@@ -163,51 +163,37 @@ These thresholds are fixed in HIVE at launch. They should not float minute-by-mi
 
 Early believers take more risk while the ecosystem is smaller, so they may earn meaningful status earlier. If HIVE appreciates later, those early locked positions become harder to replicate, which is part of the alignment mechanic.
 
-## Seasonal HIVE Reward Buckets
+## Seasonal HIVE Reward Pool
 
 Staking should feel financially meaningful, not only like a badge system.
 
 The preferred reward framing is:
 
 ```text
-Stake higher. Earn from a bigger bucket.
+Stake higher. Earn stronger reward weight.
 ```
 
-Every reward season, eligible HivemindOS revenue can fund HIVE reward buckets for stakers. Each tier gets its own bucket, and stakers inside that tier split it based on time-weighted active stake.
+Every reward season, eligible HivemindOS revenue can fund one fixed HIVE reward pool for stakers. That pool is split by time-weighted active stake, and each tier applies a reward weight to the stake while it is active.
 
 This keeps the reward ladder easy to understand:
 
-- Visionary stakers do not dilute Holders.
-- Holders split the Holder bucket.
-- Supporters split the Supporter bucket.
-- Builders split the Builder bucket.
-- Curators split the Curator bucket.
-- Operators split the Operator bucket.
-- Visionaries split the Visionary bucket.
+- The company payout stays capped by the season pool.
+- Higher tiers always have equal or stronger per-HIVE reward weight than lower tiers.
+- Splitting the same HIVE across lower-tier anonymous wallets does not create extra pool.
+- Late stakes only earn for the time they were active.
+- Unstaking stops reward credit for the requested amount.
 
 For every `$1,000,000` in eligible HivemindOS revenue, the proposed display model is:
 
-| Tier      | Stake      | Reward bucket       | Compared to Holder |
-| --------- | ---------: | ------------------: | -----------------: |
-| Holder    |    1m HIVE |   `$625` in HIVE    |                 1x |
-| Supporter |   10m HIVE | `$1,250` in HIVE    |                 2x |
-| Builder   |   50m HIVE | `$2,500` in HIVE    |                 4x |
-| Curator   |  100m HIVE | `$5,000` in HIVE    |                 8x |
-| Operator  |  250m HIVE | `$10,000` in HIVE   |                16x |
-| Visionary |    1b HIVE | `$20,000` in HIVE   |                32x |
-| **Total** |            | **`$39,375` in HIVE rewards** | |
-
-The same model as bucket rates:
-
-| Tier      | Reward bucket rate |
-| --------- | -----------------: |
-| Holder    |            0.0625% |
-| Supporter |             0.125% |
-| Builder   |              0.25% |
-| Curator   |               0.5% |
-| Operator  |                 1% |
-| Visionary |                 2% |
-| **Total** |          **3.9375%** |
+| Tier      | Stake      | Reward weight | Boost vs Holder |
+| --------- | ---------: | ------------: | --------------: |
+| Holder    |    1m HIVE |         1.00x |            Base |
+| Supporter |   10m HIVE |         1.10x |            +10% |
+| Builder   |   50m HIVE |         1.25x |            +25% |
+| Curator   |  100m HIVE |         1.45x |            +45% |
+| Operator  |  250m HIVE |         1.70x |            +70% |
+| Visionary |    1b HIVE |         2.00x |           +100% |
+| **Pool**  |            |               | **3.9375% / `$39,375` in HIVE rewards** |
 
 Each season should publish:
 
@@ -217,8 +203,8 @@ Each season should publish:
 - eligible revenue amount
 - HIVE reward amount
 - HIVE conversion price or funded HIVE amount
-- tier bucket rates
-- any per-wallet caps
+- tier reward weights
+- any caps or anti-splitting rules
 - any lock-duration bonuses
 
 Reward seasons use these timing rules:
@@ -232,28 +218,29 @@ Reward seasons use these timing rules:
 
 How your share is worked out:
 
-- First, the season sets a reward bucket for each tier.
-- Then each tier's bucket is split among eligible wallets in that tier.
-- The more HIVE you stake, and the longer it stays active during the season, the larger your share.
+- First, the season sets one reward pool.
+- Then every eligible stake segment gets `active HIVE × active time × tier weight`.
+- The pool is split by each wallet's share of total weighted stake time.
+- The more HIVE you stake, the longer it stays active, and the higher your tier weight, the larger your share.
 - If the season publishes a HIVE price for rewards, your reward value can be shown as an estimated HIVE amount.
 
 Example:
 
 ```text
 Season revenue: $1,000,000
-Holder bucket: $625 in HIVE
+Reward pool: $39,375 in HIVE
 
 You stake: 1,000,000 HIVE halfway through a 90-day season.
 Your stake counts for 45 days.
-Other eligible Holder wallets bring the total Holder staking time to the same as 165 full days of 1,000,000 HIVE.
+Other eligible weighted stake brings the season denominator to the same as 165 full days of 1,000,000 weighted HIVE.
 
 Your share: 27.27%
-Your reward: $170.45 in HIVE
+Your reward: $10,738.64 in HIVE
 ```
 
-Public copy should lead with the total pool and the 32x ladder, not tiny percentages. For example:
+Public copy should lead with the total pool and the weight ladder, not tiny percentages. For example:
 
-> Every `$1M` in eligible HivemindOS revenue can send `$39,375` worth of HIVE into staker reward buckets. Visionary gets the largest bucket: 32x the Holder bucket. Each tier splits its own bucket, so lower tiers are not diluted by higher-tier wallets.
+> Every `$1M` in eligible HivemindOS revenue can send `$39,375` worth of HIVE into the staker reward pool. Visionary gets the strongest weight at 2.00x. Rewards are split by weighted active stake, so splitting HIVE into lower-tier wallets does not create extra pool.
 
 The app follows these season rules when showing reward estimates. Actual HIVE payout still needs an official claim or treasury process. Do not describe the principal stake vault as paying rewards directly.
 

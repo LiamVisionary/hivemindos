@@ -40,9 +40,9 @@ function approx(label, actual, expected, tolerance = 0.0001) {
 
 check("tier table starts with holder", HIVE_STAKING_TIERS[0].id === "holder");
 check("tier table ends with visionary", HIVE_STAKING_TIERS.at(-1).id === "visionary");
-check("tier table includes reward bucket metadata", HIVE_STAKING_TIERS.every((tier) => Number.isFinite(tier.rewardBucketUsdPerMillion) && tier.bucketRateLabel && tier.holderMultiple));
-check("reward buckets total 39375 per million", HIVE_STAKING_TIERS.reduce((total, tier) => total + tier.rewardBucketUsdPerMillion, 0) === 39_375);
-check("visionary exposes 32x bucket", HIVE_STAKING_TIERS.at(-1)?.holderMultiple === "32x");
+check("tier table includes reward weight metadata", HIVE_STAKING_TIERS.every((tier) => Number.isFinite(tier.rewardWeight) && tier.rewardWeightLabel && tier.rewardBoostLabel));
+check("reward weights never decrease", HIVE_STAKING_TIERS.every((tier, index) => index === 0 || tier.rewardWeight >= HIVE_STAKING_TIERS[index - 1].rewardWeight));
+check("visionary exposes strongest reward weight", HIVE_STAKING_TIERS.at(-1)?.rewardWeight === 2);
 check("reward engine exports 3.9375% seasonal rate", HIVE_STAKING_REWARD_RATE_LABEL === "3.9375%");
 check("reward engine exports 39375 per million", HIVE_STAKING_REWARD_USD_PER_MILLION === 39_375);
 check("seasonal reward minimum is seven active days", HIVE_STAKING_REWARD_MIN_ACTIVE_SECONDS === 7 * 86_400);
@@ -90,16 +90,42 @@ const rewardAccount = (address) => seasonalRewards.accounts.find((account) => ac
 const holderRewardTier = seasonalRewards.tiers.find((tier) => tier.tier.id === "holder");
 check("season reward calculation returns holder tier summary", Boolean(holderRewardTier));
 check("season reward calculation returns HIVE-denominated total", seasonalRewards.totalRewardHive === 39_375_000);
-check("holder reward bucket converts to HIVE", holderRewardTier?.bucketHive === 625_000);
+check("holder weighted stake seconds are tracked", holderRewardTier?.eligibleWeightedStakeSeconds === holderRewardTier?.eligibleStakeSeconds);
 check("stake before season start earns full-season active time", rewardAccount(fullSeasonStaker)?.activeSeconds === 90 * DAY);
 check("mid-season stake has no pre-season requirement", rewardAccount(midSeasonStaker)?.eligible === true && rewardAccount(midSeasonStaker)?.activeSeconds === 45 * DAY);
 check("last-minute stake below seven active days is ineligible", rewardAccount(lateStaker)?.eligible === false && rewardAccount(lateStaker)?.rewardUsd === 0);
 check("unstake request stops seasonal accrual", rewardAccount(unstakingStaker)?.activeSeconds === 30 * DAY);
 check("ineligible last-minute stake does not dilute eligible holder denominator", holderRewardTier?.eligibleAccountCount === 3);
-approx("full-season holder receives time-weighted share", rewardAccount(fullSeasonStaker)?.rewardUsd ?? 0, 340.909091);
-approx("full-season holder receives HIVE-denominated reward", rewardAccount(fullSeasonStaker)?.rewardHive ?? 0, 340_909.090909);
-approx("mid-season holder receives prorated share", rewardAccount(midSeasonStaker)?.rewardUsd ?? 0, 170.454545);
-approx("unstaking holder only earns until request time", rewardAccount(unstakingStaker)?.rewardUsd ?? 0, 113.636364);
+approx("full-season holder receives global pool time-weighted share", rewardAccount(fullSeasonStaker)?.rewardUsd ?? 0, 21_477.272727);
+approx("full-season holder receives HIVE-denominated reward", rewardAccount(fullSeasonStaker)?.rewardHive ?? 0, 21_477_272.727273);
+approx("mid-season holder receives prorated share", rewardAccount(midSeasonStaker)?.rewardUsd ?? 0, 10_738.636364);
+approx("unstaking holder only earns until request time", rewardAccount(unstakingStaker)?.rewardUsd ?? 0, 7_159.090909);
+
+const visionaryStaker = "0x0000000000000000000000000000000000000021";
+const operatorStakers = [
+  "0x0000000000000000000000000000000000000022",
+  "0x0000000000000000000000000000000000000023",
+  "0x0000000000000000000000000000000000000024",
+  "0x0000000000000000000000000000000000000025",
+];
+const splitResistanceRewards = calculateHiveStakingSeasonRewards({
+  season: rewardSeason,
+  events: [
+    { account: visionaryStaker, type: "stake", amountHive: 1_000_000_000, timestamp: rewardSeasonStart },
+    ...operatorStakers.map((account) => ({
+      account,
+      type: "stake",
+      amountHive: 250_000_000,
+      timestamp: rewardSeasonStart,
+    })),
+  ],
+});
+const splitRewardAccount = (address) => splitResistanceRewards.accounts.find((account) => account.account === address);
+const visionaryRewardUsd = splitRewardAccount(visionaryStaker)?.rewardUsd ?? 0;
+const combinedOperatorRewardUsd = operatorStakers.reduce((total, account) => total + (splitRewardAccount(account)?.rewardUsd ?? 0), 0);
+check("single visionary stake beats four operator wallet split", visionaryRewardUsd > combinedOperatorRewardUsd);
+approx("single visionary earns its 2.0 weight share", visionaryRewardUsd, 21_283.783784);
+approx("four operators earn their combined 1.7 weight share", combinedOperatorRewardUsd, 18_091.216216);
 
 const oversizedIconUrl = `data:image/svg+xml;base64,${"A".repeat(500_000)}`;
 const stakeHref = stakeHrefForPersonalToken(

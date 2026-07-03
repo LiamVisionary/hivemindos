@@ -7,10 +7,7 @@ import {
 import { hiveTierForStakedHive } from "@/lib/services/hive-staking";
 
 export const HIVE_STAKING_REWARD_MIN_ACTIVE_SECONDS = 7 * 24 * 60 * 60;
-export const HIVE_STAKING_REWARD_USD_PER_MILLION = HIVE_STAKING_TIERS.reduce(
-  (total, tier) => total + tier.rewardBucketUsdPerMillion,
-  0,
-);
+export const HIVE_STAKING_REWARD_USD_PER_MILLION = 39_375;
 export const HIVE_STAKING_REWARD_RATE_LABEL = "3.9375%";
 
 export type HiveStakingRewardEventType = "stake" | "unstake-request";
@@ -47,15 +44,15 @@ export type HiveStakingRewardSegment = {
 
 export type HiveStakingRewardTierSummary = {
   tier: HiveStakingTier;
-  bucketUsd: number;
-  bucketHive: number | null;
   eligibleStakeSeconds: number;
+  eligibleWeightedStakeSeconds: number;
   eligibleAccountCount: number;
 };
 
 export type HiveStakingRewardAccountTierSummary = {
   tierId: HiveStakingTierId;
   stakeSeconds: number;
+  weightedStakeSeconds: number;
   rewardUsd: number;
   rewardHive: number | null;
 };
@@ -103,27 +100,34 @@ export function calculateHiveStakingSeasonRewards(params: {
   const accounts = buildAccountAccumulators(segments, minimumActiveSeconds);
   const eligibleSegments = segments.filter((segment) => accounts.get(segment.account)?.eligible);
   const tierSummaries = buildTierSummaries(season, eligibleSegments);
+  const totalRewardUsd = roundUsd(season.eligibleRevenueUsd * (HIVE_STAKING_REWARD_USD_PER_MILLION / 1_000_000));
+  const totalWeightedStakeSeconds = Array.from(tierSummaries.values()).reduce(
+    (total, summary) => total + summary.eligibleWeightedStakeSeconds,
+    0,
+  );
 
   for (const segment of eligibleSegments) {
     const account = accounts.get(segment.account);
     const tier = tierSummaries.get(segment.tierId);
-    if (!account || !tier || tier.eligibleStakeSeconds <= 0) continue;
-    const rewardUsd = tier.bucketUsd * (segment.stakeSeconds / tier.eligibleStakeSeconds);
+    if (!account || !tier || totalWeightedStakeSeconds <= 0) continue;
+    const weightedStakeSeconds = segment.stakeSeconds * tier.tier.rewardWeight;
+    const rewardUsd = totalRewardUsd * (weightedStakeSeconds / totalWeightedStakeSeconds);
     const rewardHive = usdToHive(rewardUsd, season);
     account.rewardUsd += rewardUsd;
     account.rewardHive += rewardHive ?? 0;
     const accountTier = account.tiers.get(segment.tierId) ?? {
       tierId: segment.tierId,
       stakeSeconds: 0,
+      weightedStakeSeconds: 0,
       rewardUsd: 0,
       rewardHive: null,
     };
     accountTier.rewardUsd += rewardUsd;
     accountTier.rewardHive = (accountTier.rewardHive ?? 0) + (rewardHive ?? 0);
+    accountTier.weightedStakeSeconds += weightedStakeSeconds;
     account.tiers.set(segment.tierId, accountTier);
   }
 
-  const totalRewardUsd = roundUsd(season.eligibleRevenueUsd * (HIVE_STAKING_REWARD_USD_PER_MILLION / 1_000_000));
   return {
     season,
     minimumActiveSeconds,
@@ -132,12 +136,10 @@ export function calculateHiveStakingSeasonRewards(params: {
     segments,
     tiers: HIVE_STAKING_TIERS.map((tier) => {
       const summary = tierSummaries.get(tier.id);
-      const bucketUsd = roundUsd(summary?.bucketUsd ?? tierBucketUsd(season, tier));
       return {
         tier,
-        bucketUsd,
-        bucketHive: usdToHive(bucketUsd, season),
         eligibleStakeSeconds: summary?.eligibleStakeSeconds ?? 0,
+        eligibleWeightedStakeSeconds: summary?.eligibleWeightedStakeSeconds ?? 0,
         eligibleAccountCount: summary?.eligibleAccountCount ?? 0,
       };
     }),
@@ -152,6 +154,7 @@ export function calculateHiveStakingSeasonRewards(params: {
           .map((tier) => ({
             tierId: tier.tierId,
             stakeSeconds: tier.stakeSeconds,
+            weightedStakeSeconds: roundHive(tier.weightedStakeSeconds),
             rewardUsd: roundUsd(tier.rewardUsd),
             rewardHive: tier.rewardHive == null || !season.hivePriceUsd ? null : roundHive(tier.rewardHive),
           }))
@@ -205,6 +208,7 @@ function buildAccountAccumulators(segments: HiveStakingRewardSegment[], minimumA
     const accountTier = account.tiers.get(segment.tierId) ?? {
       tierId: segment.tierId,
       stakeSeconds: 0,
+      weightedStakeSeconds: 0,
       rewardUsd: 0,
       rewardHive: null,
     };
@@ -224,9 +228,8 @@ function buildTierSummaries(season: HiveStakingRewardSeason, segments: HiveStaki
   for (const tier of HIVE_STAKING_TIERS) {
     summaries.set(tier.id, {
       tier,
-      bucketUsd: tierBucketUsd(season, tier),
-      bucketHive: tierBucketHive(season, tier),
       eligibleStakeSeconds: 0,
+      eligibleWeightedStakeSeconds: 0,
       eligibleAccountCount: 0,
     });
     accountsByTier.set(tier.id, new Set());
@@ -235,6 +238,7 @@ function buildTierSummaries(season: HiveStakingRewardSeason, segments: HiveStaki
     const summary = summaries.get(segment.tierId);
     if (!summary) continue;
     summary.eligibleStakeSeconds += segment.stakeSeconds;
+    summary.eligibleWeightedStakeSeconds += segment.stakeSeconds * summary.tier.rewardWeight;
     accountsByTier.get(segment.tierId)?.add(segment.account);
   }
   for (const [tierId, accounts] of accountsByTier) {
@@ -314,14 +318,6 @@ function normalizeEvent(event: HiveStakingRewardEvent): HiveStakingRewardEvent {
     timestamp: finiteTimestamp(event.timestamp, "event.timestamp"),
     logIndex: event.logIndex == null ? undefined : Math.trunc(finiteNonNegative(event.logIndex, "event.logIndex")),
   };
-}
-
-function tierBucketUsd(season: HiveStakingRewardSeason, tier: HiveStakingTier) {
-  return roundUsd(season.eligibleRevenueUsd * (tier.rewardBucketUsdPerMillion / 1_000_000));
-}
-
-function tierBucketHive(season: HiveStakingRewardSeason, tier: HiveStakingTier) {
-  return usdToHive(tierBucketUsd(season, tier), season);
 }
 
 function usdToHive(valueUsd: number, season: HiveStakingRewardSeason) {

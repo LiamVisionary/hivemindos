@@ -6504,3 +6504,32 @@
   - Decision: inspected
   - Reason: pip check/pip-audit/bandit/compileall/help smoke informed conditional approval
   - Path: `/tmp audit artifacts`
+## 2026-07-03T09:11:42.420293+00:00 - shared-brain
+
+- Request: Switch HIVE staking rewards from per-tier buckets to weighted global pool and draft Telegram reply
+- Source: hive-brain
+- Query: `HivemindOS HIVE staking rewards weighted stake global season pool sybil wallet splitting tier buckets`
+- Decision: retrieved
+- Reason: Full-vault recall found the older tier-specific bucket decision and investor docs; this change intentionally supersedes that framing because anonymous wallet splitting is a stronger product constraint.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Memory/Distillations/Agent Memory/decision/2026-06-24-hive-staking-seasonal-reward-bucket-model-d3f8e272d0.md
+  - Decision: rejected
+  - Reason: older bucket framing is gameable under anonymous wallet splitting
+## 2026-07-03T09:11:57.914790+00:00 - implementation
+
+- Request: Switch HIVE staking rewards from per-tier buckets to weighted global pool and draft Telegram reply
+- Source: local-project
+- Decision: adapted_code
+- Reason: Adapted the existing HivemindOS staking config, reward engine, page, tests, and investor docs in place.
+- Selected backbone: local-project:hivemind-os
+- Assimilated: scripts/test-hive-staking.mjs=>scripts/test-hive-staking.mjs::test_adapted::added split-wallet resistance coverage
+- Not assimilated: public GitHub::not-assimilated::no generic external donor needed for product-specific HIVE staking policy
+## 2026-07-03T09:12:06.879978+00:00 - verification
+
+- Request: Switch HIVE staking rewards from per-tier buckets to weighted global pool and draft Telegram reply
+- Source: local-checks
+- Decision: verified
+- Reason: App reward engine test covers the split-wallet case and focused lint/type checks passed.
+- Verification: node scripts/test-hive-staking.mjs; pnpm exec eslint touched staking files; pnpm exec tsc --noEmit --pretty false --skipLibCheck; git diff --check; rg old staking bucket fields/copy returned no live matches

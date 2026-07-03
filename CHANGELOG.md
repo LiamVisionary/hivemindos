@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-03 17:09 +0800 - HIVE staking rewards use one weighted seasonal pool instead of isolated tier buckets
+  - Status: Pushed
+  - Areas changed: `src/lib/config/hive-staking.ts` tier reward metadata, `src/lib/services/hive-staking-rewards.ts` seasonal reward engine, `src/app/stake/StakePageClient.tsx` staking UI copy/cards, `scripts/test-hive-staking.mjs`, and investor staking docs under `docs/for-investors/`.
+  - Summary: HIVE seasonal rewards now keep the same published max pool (`3.9375%`, or `$39,375` per `$1M` eligible revenue) but distribute it by global weighted active stake instead of separate per-tier buckets. Higher tiers have non-decreasing reward weights from `1.00x` to `2.00x`, so splitting the same HIVE into anonymous lower-tier wallets no longer creates a better reward path than staking at the highest qualified tier.
+  - Verification: `node scripts/test-hive-staking.mjs` (51 assertions); `pnpm exec eslint src/lib/config/hive-staking.ts src/lib/services/hive-staking-rewards.ts src/app/stake/StakePageClient.tsx scripts/test-hive-staking.mjs --max-warnings=0`; `pnpm exec tsc --noEmit --pretty false --skipLibCheck`; focused `git diff --check`; repo search confirmed no live old staking bucket field names/copy remain outside history.
+  - Intended commit message: `staking: switch HIVE rewards to weighted seasonal pool`
+
 - 2026-07-03 15:40 +0800 - Installer: linkd rebuild-skip keys off the binary's commit stamp, not mtimes
   - Status: Uncommitted
   - Areas changed: `scripts/install-telemetry-collector.sh` `build_hivemind_linkd_if_enabled` only.

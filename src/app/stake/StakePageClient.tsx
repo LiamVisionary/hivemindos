@@ -111,7 +111,7 @@ type LoadWalletsOptions = {
 // Why-stake benefits, paired with Fleet-style icon tiles. Glyphs match the
 // fr-/Reserve mock: sparkle, network, promote (arrow-up), shield.
 const STAKE_BENEFITS = [
-  { Icon: Sparkles, text: "Seasonal HIVE reward buckets by tier" },
+  { Icon: Sparkles, text: "Seasonal HIVE reward pool with tier weights" },
   { Icon: Share2, text: "Governance signaling and roadmap weight" },
   { Icon: ArrowUpFromLine, text: "Bounty boosting and curator eligibility" },
   { Icon: Shield, text: "Marketplace trust, badges, and Honey multipliers" },
@@ -559,8 +559,8 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
         <section className={styles.hero}>
           <div className={styles.heroCopy}>
             <p className={`${styles.eyebrow} ${styles.eyebrowHoney}`}><Hexagon aria-hidden="true" /> HIVE staking</p>
-            <h1>Stake HIVE for status, access, and seasonal reward buckets.</h1>
-            <p className={styles.lede}>Staking is not a payment. Your HIVE stays yours while it is locked in the Base staking contract. Higher tiers earn from bigger seasonal HIVE reward buckets when reward seasons are funded.</p>
+            <h1>Stake HIVE for status, access, and weighted seasonal rewards.</h1>
+            <p className={styles.lede}>Staking is not a payment. Your HIVE stays yours while it is locked in the Base staking contract. Higher tiers earn stronger reward weight when seasonal HIVE reward pools are funded.</p>
             <div className={styles.benefits}>
               {STAKE_BENEFITS.map(({ Icon, text }) => (
                 <span key={text} className={styles.benefit}>
@@ -646,9 +646,9 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
                     <small className={styles.tierUnit}>HIVE</small>
                   </span>
                   <div className={styles.tierReward}>
-                    <span>{tier.holderMultiple} bucket</span>
-                    <span>{tier.bucketRateLabel} eligible revenue</span>
-                    <span>{formatUsd(tier.rewardBucketUsdPerMillion)} / $1m</span>
+                    <span>{tier.rewardWeightLabel} weight</span>
+                    <span>{tier.rewardBoostLabel} boost</span>
+                    <span>weighted pool share</span>
                   </div>
                   <p>{tier.role}</p>
                 </article>
