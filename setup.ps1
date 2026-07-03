@@ -1136,8 +1136,19 @@ Write-Host "Collector:"
 # install-telemetry-collector.sh). Without this the collector never runs, so a
 # Windows machine can never host agents or report "ready" in the Fleet. Best
 # effort: a failure here must not abort setup.
+#
+# Hivemind Link gating mirrors setup.sh, which passes HIVE_LINK_ENABLED to the
+# Unix installer based on the network mode. Windows v1 is opt-in (Unix defaults
+# to "link"): pass -EnableLink when HIVE_LINK_ENABLED=true or HIVE_NETWORK_MODE
+# is explicitly "link". $env:HIVE_LINK_ENABLED also reaches the installer
+# directly (it runs in-process); the explicit switch just makes the gate
+# legible and adds the HIVE_NETWORK_MODE spelling for parity with setup.sh.
 try {
-  & (Join-Path $Root "scripts\install-telemetry-collector.ps1") -Port $CollectorPort -RepoRoot $Root
+  $collectorArgs = @{ Port = $CollectorPort; RepoRoot = $Root }
+  if ($env:HIVE_LINK_ENABLED -eq "true" -or $env:HIVE_NETWORK_MODE -eq "link") {
+    $collectorArgs.EnableLink = $true
+  }
+  & (Join-Path $Root "scripts\install-telemetry-collector.ps1") @collectorArgs
 } catch {
   Warn "Collector install did not complete: $_"
   Write-Host "  Re-run later: powershell -ExecutionPolicy Bypass -File scripts\install-telemetry-collector.ps1"

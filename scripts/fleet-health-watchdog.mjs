@@ -53,6 +53,9 @@
 //   FLEET_WATCHDOG_POLL_MS            cycle interval (default 60000)
 //   FLEET_WATCHDOG_FAIL_THRESHOLD     consecutive failures before remediation (default 3)
 //   FLEET_WATCHDOG_COOLDOWN_MS        min gap between remediations per machine (default 300000)
+//   FLEET_WATCHDOG_DEEP_PROBES=1      OPT-IN deep functional probes (agent /chat dispatch +
+//                                     TTS synth — these consume tokens/compute); off by default,
+//                                     toggleable from the Fleet view (writes the shared hive env)
 //   FLEET_WATCHDOG_CHAT_EVERY         run the deep /chat probe every Nth cycle (default 15)
 //   FLEET_WATCHDOG_SEVERE_RECHECK_MS  delay before confirming a severe failure (default 10000)
 //   FLEET_WATCHDOG_APP_PORTS          local dashboard ports to try for discovery (default 5020,5021,5111,5121,3000)
@@ -609,8 +612,28 @@ async function checkLinkdBuild(machine) {
 const consecutiveFailures = new Map();
 const cooldownUntil = new Map();
 
+// Deep functional probes dispatch a REAL agent chat (and a real TTS synth) —
+// they cost the user tokens/compute every cycle they run, so they are opt-in:
+// FLEET_WATCHDOG_DEEP_PROBES=1, settable from the dashboard (it writes the
+// shared hive env, which replicates fleet-wide). Re-read every cycle so the
+// toggle applies without a service restart. Cheap liveness probes always run.
+let deepProbesEnabledLogged = null;
+function deepProbesEnabled() {
+  const raw = (
+    process.env.FLEET_WATCHDOG_DEEP_PROBES
+    ?? parseEnvFile(join(STATE_DIR, ".env")).FLEET_WATCHDOG_DEEP_PROBES
+    ?? ""
+  ).trim();
+  const enabled = raw === "1" || raw.toLowerCase() === "true";
+  if (deepProbesEnabledLogged !== enabled) {
+    deepProbesEnabledLogged = enabled;
+    void log(`deep functional probes ${enabled ? "ENABLED (agent chat + TTS synth)" : "off (cheap liveness only; enable via FLEET_WATCHDOG_DEEP_PROBES=1)"}`);
+  }
+  return enabled;
+}
+
 async function runCycle(cycle) {
-  const deep = cycle % CHAT_EVERY === 0;
+  const deep = deepProbesEnabled() && cycle % CHAT_EVERY === 0;
   const machines = await discoverMachines();
   const ttsApps = await discoverTtsApps();
   // One unified target list. Collector and TTS on the same machine are keyed

@@ -4,6 +4,7 @@
    queen overview, machine detail, agent detail. Every action chip is wired to
    a real handler so the Hive view reaches parity with the legacy FleetView. */
 
+import { DeepProbesToggle } from "@/components/fleet/deep-probes-toggle";
 import { fleetAgentCanChat, type FleetAgentChat } from "@/components/fleet/fleet-data";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import Image from "next/image";
@@ -220,6 +221,9 @@ export function HivePanel({
           }
           return <div style={attnStyle}>{inner}</div>;
         })() : null}
+
+        <div className="fr-eyebrow" style={{ marginTop: 24, marginBottom: 8 }}>Health watchdog</div>
+        <DeepProbesToggle variant="hive" />
       </div>
     );
   } else if (sel.type === "machine") {

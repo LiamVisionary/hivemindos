@@ -208,6 +208,16 @@ if (Ask-YesNo "Stop HivemindOS Link sidecar processes?" $true) {
   Ok "Stopped HivemindOS Link sidecar processes"
 }
 
+if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, run-linkd launcher files, and installed sidecar binary?" $true) {
+  Unregister-ScheduledTask -TaskName "HivemindOS Link" -Confirm:$false -ErrorAction SilentlyContinue
+  $hiveHome = Join-Path $UserHome ".hivemindos"
+  Remove-Item (Join-Path $hiveHome "run-linkd.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-linkd-hidden.vbs") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "bin\hivemind-linkd.exe") -Force -ErrorAction SilentlyContinue
+  Ok "Removed the HivemindOS Link scheduled task, launcher files, and installed sidecar binary"
+  Warn "Tailscale sign-in state stays in ~/.hivemindos/link; a later prompt offers to remove it"
+}
+
 if (Ask-YesNo "Remove HivemindOS collector environment file ~/.hivemindos/collector.env?" $false) {
   $collectorEnv = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\collector.env"
   Remove-Item $collectorEnv -Force -ErrorAction SilentlyContinue

@@ -1567,3 +1567,16 @@ if [[ "$LINK_ACTIVE" != "true" && "$NETWORK_MANAGED_BY_SETUP" != "true" && -n "$
   echo "Tailnet reachability check from another dashboard machine:"
   echo "  curl --max-time 5 http://$IP:$PORT/health"
 fi
+
+# Fleet health watchdog: standard on every collector machine so each one
+# monitors itself (collector + linkd) and its peers. Cheap liveness probes
+# only by default — the deep functional probes (agent chat / TTS synth) cost
+# tokens and stay opt-in via FLEET_WATCHDOG_DEEP_PROBES=1 (Fleet view toggle).
+# Best-effort: a watchdog install problem must never fail collector setup.
+if [[ "${HIVE_FLEET_WATCHDOG:-true}" != "false" ]]; then
+  if "$APP_DIR/scripts/install-fleet-health-watchdog.sh" >/dev/null 2>&1; then
+    echo "Fleet health watchdog installed (self-monitoring; deep probes opt-in via the Fleet view)."
+  else
+    echo "Fleet health watchdog install skipped (run scripts/install-fleet-health-watchdog.sh manually to add self-monitoring)." >&2
+  fi
+fi

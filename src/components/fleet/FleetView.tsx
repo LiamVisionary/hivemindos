@@ -15,6 +15,7 @@ import { OrbitalGraph } from "./orbital-graph";
 import { FleetConstellationLoading, FleetDispatchLoading, FleetRosterLoading, FleetScanOverlay } from "./fleet-loading";
 import { Roster, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
 import { AeonDeleteModal, isAeonAgent, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult } from "./aeon-delete-modal";
+import { DeepProbesToggle } from "./deep-probes-toggle";
 import { EconomyStrip } from "./economy-strip";
 import type { FleetHostedApp } from "./active-apps";
 import { UsePodHostModal } from "./usepod-host-modal";
@@ -550,6 +551,13 @@ export function FleetView({
                     : "The alerts feed is quiet. New urgent or high-priority agent notifications will appear here."}
                 </div>
               </div>
+            </section>
+
+            <section>
+              <div className={styles.monoCap} style={{ color: "var(--muted)", marginBottom: 10 }}>
+                Health watchdog
+              </div>
+              <DeepProbesToggle variant="classic" />
             </section>
           </aside>
 
