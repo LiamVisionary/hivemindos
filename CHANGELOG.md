@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-03 13:50 +0800 - Fleet watchdog: drop the setup-specific Telegram bot fallback from product code
+  - Status: Uncommitted
+  - Areas changed: `scripts/fleet-health-watchdog.mjs` only — removed the `SWARM_SOVEREIGN_TELEGRAM_BOT_TOKEN` fallback from the alert token chain; the generic keys (`FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN`, then `HIVE_TELEGRAM_BOT_TOKEN`) remain.
+  - Summary: A user-audit of the fleet robustness pass ("nothing exclusive to my setup") caught one leak: the watchdog's Telegram fallback referenced a bot env key specific to this fleet. Product code now knows only the generic key names; the operator's own env was migrated (`FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN` set via hive-env-add, value untouched) so existing alerts keep flowing.
+  - Verification: `node --check` green; local watchdog restarted, banner still reports `alerts=telegram`; grep confirms zero `SWARM_SOVEREIGN` references in the script. Committed surgically (index built from the last committed version + this removal) so the concurrent uncommitted v3 escalation work in the same file stays out of this commit.
+  - Intended commit message: `fleet-watchdog: alerts use only generic Telegram env keys`
+
 - 2026-07-03 13:35 +0800 - HiveDrop: Taildrop ingest watcher — share files from the iPhone share sheet straight into the hive
   - Status: Uncommitted
   - Areas changed: new `scripts/taildrop-ingest-watcher.mjs` (loops `tailscale file get --wait`, drains the Taildrop inbox into `~/HiveDrop` — override `HIVE_TAILDROP_INGEST_DIR` — and posts a dashboard notification per received file, reusing the watchdog's device-token pattern), new `scripts/install-taildrop-ingest.sh` (LaunchAgent `com.hivemindos.taildrop-ingest` / systemd `hivemindos-taildrop-ingest.service`, mirrors the fleet-health-watchdog installer incl. uninstall), new `scripts/test-taildrop-ingest.mjs` + package.json `test:taildrop-ingest` (hermetic: stub tailscale CLI + throwaway notifications server; received/error/empty-drain cases).

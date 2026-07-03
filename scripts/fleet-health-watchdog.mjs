@@ -44,7 +44,7 @@
 //   FLEET_WATCHDOG_SELF=0             disable self collector/linkd monitoring
 //   FLEET_WATCHDOG_TELEGRAM_CHAT_ID   Telegram chat id for alerts (enables push alerts)
 //   FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN bot token override (default: HIVE_TELEGRAM_BOT_TOKEN
-//                                     then SWARM_SOVEREIGN_TELEGRAM_BOT_TOKEN from ~/.hivemindos/.env)
+//                                     from ~/.hivemindos/.env)
 //   FLEET_WATCHDOG_ONCE=1             run a single cycle and exit (for testing)
 
 import { readFile, writeFile, mkdir, appendFile } from "node:fs/promises";
@@ -127,7 +127,6 @@ const TELEGRAM_BOT_TOKEN = (
   process.env.FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN
   || hiveEnv.FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN
   || hiveEnv.HIVE_TELEGRAM_BOT_TOKEN
-  || hiveEnv.SWARM_SOVEREIGN_TELEGRAM_BOT_TOKEN
   || ""
 ).trim();
 
