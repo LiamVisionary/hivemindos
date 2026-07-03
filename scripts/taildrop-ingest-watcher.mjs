@@ -12,16 +12,20 @@
 // linkd-only machines, carries destination directories and progress, and works
 // from the dashboard. Taildrop is the phone-native ingest edge.
 //
-// Mechanics — two delivery variants, both covered:
-//   1. CLI inbox (Linux, headless tailscaled): `tailscale file get --wait
-//      <dir>` blocks until at least one file is in the Taildrop inbox, moves
-//      everything into <dir> (renaming on conflict), then exits — we loop it.
-//      If the CLI errors (tailscaled down / logged out) we log and back off.
-//   2. GUI-owned inbox (macOS Tailscale.app): the GUI claims received files
-//      itself and saves them to its configured folder — the CLI inbox stays
-//      empty forever (verified live 2026-07-03). For this variant, point the
-//      GUI's "save incoming files" folder at the ingest dir once (Tailscale →
-//      Settings), and the watcher's directory watch announces arrivals.
+// Mechanics — two delivery paths, both covered, no user configuration needed:
+//   1. CLI inbox: `tailscale file get --wait <dir>` blocks until at least one
+//      file is in the Taildrop inbox, moves everything into <dir> (renaming on
+//      conflict), then exits — we loop it. This is the only path on Linux /
+//      headless tailscaled. If the CLI errors (down / logged out) we back off.
+//   2. macOS GUI variant: the menu-bar app ALSO waits on the same inbox and
+//      auto-saves to its own folder (Downloads by default) when it wins the
+//      race — observed live 2026-07-03: one send landed in Downloads, the next
+//      landed in our CLI waiter. GUI-won files stay where Tailscale's normal
+//      UX puts them (we deliberately do NOT touch the user's Tailscale
+//      settings or watch Downloads — GUI-delivered files carry no reliable
+//      Taildrop marker: no xattr, no unified-log entry). The directory watch
+//      below additionally announces anything that lands in the ingest dir by
+//      any means (including a user who chooses to point the GUI there).
 //
 // Env knobs (all optional):
 //   HIVE_TAILDROP_INGEST_DIR   where received files land (default ~/HiveDrop)
