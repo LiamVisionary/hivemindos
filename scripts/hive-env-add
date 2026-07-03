@@ -40,6 +40,7 @@ AEON_ENV_FILE = pathlib.Path.home() / ".aeon" / ".env"
 AEON_ENV_SYNC_REPOS_FILE = pathlib.Path.home() / ".hivemindos" / "aeon-env-sync-repos.json"
 AEON_ENV_SYNC_STATE_FILE = pathlib.Path.home() / ".hivemindos" / "aeon-env-sync-state.json"
 ENV_SYNC_PENDING_FILE = pathlib.Path.home() / ".hivemindos" / "env-sync-pending.json"
+ENV_SYNC_PEER_PORTS_FILE = pathlib.Path.home() / ".hivemindos" / "env-sync-peer-ports.json"
 ENV_SYNC_PENDING_MAX_AGE_SECONDS = 14 * 24 * 3600
 MACHINE_ID_FILE = pathlib.Path.home() / ".hivemindos" / "machine-id"
 # Tailnet peers that can never host a collector; keep them out of retry accounting.
@@ -151,10 +152,11 @@ def collector_ports() -> list[str]:
         os.environ.get("HIVE_ENV_COLLECTOR_PORT", ""),
         local_setting("HIVE_ENV_COLLECTOR_PORT"),
         hive_collector_setting("AGENT_TELEMETRY_PORT"),
-        "8787",
-        "8789",
-        "8791",
     ])
+    # Match fleet discovery's probe range (8787-8810): collectors relocate when
+    # their preferred port is taken, and a narrower list here silently strands
+    # env updates for those peers in the retry queue.
+    candidates.extend(str(port) for port in range(8787, 8811))
     ports: list[str] = []
     seen: set[str] = set()
     for candidate in candidates:
@@ -928,10 +930,11 @@ def tailnet_peer_status() -> tuple[list[dict[str, str]], list[str]]:
         if not ip or ip in local_ips:
             continue
         target_host = str(peer.get("DNSName") or "").rstrip(".") or ip
+        if str(peer.get("OS") or "").lower() in COLLECTORLESS_PEER_OS:
+            continue  # skip before probing: phones never host a collector
         env_sync = env_sync_from_collector(ip)
         if not env_sync:
-            if str(peer.get("OS") or "").lower() not in COLLECTORLESS_PEER_OS:
-                unreachable.append(target_host)
+            unreachable.append(target_host)
             continue
         machine_id = env_sync.get("machineId") or ""
         # A machine can appear as two tailnet nodes (system tailscaled +
@@ -943,7 +946,27 @@ def tailnet_peer_status() -> tuple[list[dict[str, str]], list[str]]:
         if machine_id:
             seen_machine_ids.add(machine_id)
         targets.append({"host": target_host, "ip": ip, **env_sync})
-    return sorted(targets, key=lambda target: target["host"]), sorted(unreachable)
+    targets = sorted(targets, key=lambda target: target["host"])
+    return targets, sorted(drop_reachable_machine_duplicates(targets, unreachable))
+
+
+def tailnet_node_identity(host: str) -> str:
+    """Machine identity for a tailnet node name, matching the dashboard's
+    convention: strip the hivemindos- linkd prefix, keep -N suffixes (those
+    distinguish physically different machines that share a hostname)."""
+    label = host.split(".", 1)[0].strip().lower()
+    if label.startswith("hivemindos-"):
+        label = label[len("hivemindos-"):]
+    return label
+
+
+def drop_reachable_machine_duplicates(targets: list[dict[str, str]], unreachable: list[str]) -> list[str]:
+    """A machine appears as two tailnet nodes (system tailscaled + embedded
+    hivemind-linkd). When the collector is loopback-bound behind linkd, only
+    the linkd node answers; the system node must not count as an unreachable
+    peer or queued env updates are stranded forever."""
+    ready_identities = {tailnet_node_identity(target["host"]) for target in targets}
+    return [host for host in unreachable if tailnet_node_identity(host) not in ready_identities]
 
 
 def tailscale_peer_targets() -> list[dict[str, str]]:
@@ -954,8 +977,33 @@ def delivery_id(target: dict[str, str]) -> str:
     return target.get("machineId") or target["host"]
 
 
+def cached_peer_port(ip: str) -> str:
+    ports = read_plain_json(ENV_SYNC_PEER_PORTS_FILE).get("ports")
+    if isinstance(ports, dict):
+        value = str(ports.get(ip) or "")
+        if valid_port(value):
+            return value
+    return ""
+
+
+def remember_peer_port(ip: str, port: str) -> None:
+    data = read_plain_json(ENV_SYNC_PEER_PORTS_FILE)
+    ports = data.get("ports") if isinstance(data.get("ports"), dict) else {}
+    if ports.get(ip) == port:
+        return
+    ports[ip] = port
+    try:
+        write_json(ENV_SYNC_PEER_PORTS_FILE, {"version": 1, "ports": dict(sorted(ports.items()))})
+    except Exception:
+        pass  # cache only; probing still finds the port next run
+
+
 def env_sync_from_collector(ip: str) -> dict[str, str] | None:
-    for port in collector_ports():
+    ports = collector_ports()
+    cached = cached_peer_port(ip)
+    if cached and cached in ports:
+        ports = [cached, *[port for port in ports if port != cached]]
+    for port in ports:
         try:
             with urllib.request.urlopen(f"http://{ip}:{port}/health", timeout=4) as response:
                 data = json.loads(response.read().decode("utf-8"))
@@ -969,6 +1017,7 @@ def env_sync_from_collector(ip: str) -> dict[str, str] | None:
             continue
         user = str(env_sync.get("user") or "").strip()
         if KEY_RE.match(user.replace("-", "_")) or re.match(r"^[A-Za-z0-9._-]+$", user):
+            remember_peer_port(ip, port)
             return {"user": user, "port": port, "machineId": str(data.get("machineId") or "")}
     return None
 

@@ -15,6 +15,9 @@ fi
 
 mkdir -p "$OUT_DIR"
 cd "$ROOT"
-go build -o "$OUT" ./cmd/hivemind-linkd
+# Stamp the build so /version and /_hivemind/version can expose stale daemons.
+BUILD_COMMIT="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+go build -ldflags "-X main.buildCommit=$BUILD_COMMIT -X main.buildTime=$BUILD_TIME" -o "$OUT" ./cmd/hivemind-linkd
 hivemindos_sign_macos_binary "$OUT" "com.hivemindos.linkd"
 echo "$OUT"

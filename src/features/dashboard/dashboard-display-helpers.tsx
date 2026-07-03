@@ -10,6 +10,7 @@ import type {
 import {
   isLocalLinkDuplicateOfSelf,
   isLoopbackCollector,
+  isMacMachineOs,
   isMobileMachineOs,
   machineExactIdentity,
   machineIdentityFromParts,
@@ -307,6 +308,34 @@ export function machineNetworkIssue(
               'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$(command -v node)"',
               'sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$(command -v node)"',
             ]),
+      ],
+    };
+  }
+  if (
+    machine.online &&
+    machine.collector === "ready" &&
+    (machine.reportedUnreachableBy?.length ?? 0) > 0
+  ) {
+    const reporters = (machine.reportedUnreachableBy ?? []).join(", ");
+    const noun = deviceNounForOs(machine.os);
+    return {
+      label: "Peers can't reach this machine. Fix?",
+      title: "Fleet peers report this machine unreachable",
+      detail: `This dashboard reaches the machine, but ${reporters} report${(machine.reportedUnreachableBy?.length ?? 0) === 1 ? "s" : ""} it unreachable over the Tailnet — usually a dead or logged-out hivemind-linkd on this ${noun}, which makes the machine invisible to the rest of the fleet while looking healthy locally.`,
+      commands: [
+        `# On this ${noun}`,
+        'curl "http://${HIVE_LINK_CONTROL:-127.0.0.1:8788}/health"',
+        ...(isWindowsOs(machine.os)
+          ? []
+          : machine.os && !isMacMachineOs(machine.os)
+            ? ["systemctl --user restart hivemindos-linkd.service"]
+            : [
+                'launchctl kickstart -k "gui/$(id -u)/com.hivemindos.linkd.agent"',
+                "# If the agent is not loaded at all:",
+                'launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.hivemindos.linkd.agent.plist',
+              ]),
+        "# If linkd reports authNeeded, follow its authUrl or rerun:",
+        "cd ~/hivemindos && HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh",
       ],
     };
   }
@@ -664,6 +693,73 @@ export function mergeDiscoveredMachines(
     }));
 
   return dedupeDiscoveredMachines([...merged, ...preserved]);
+}
+
+// Collapse duplicate MachineGroup rows for the same physical machine (system
+// tailscale node + embedded linkd node, or a re-registered device) into one,
+// preferring the row with the richest signal and unioning agents.
+export function dedupeMachineGroups(items: MachineGroup[]) {
+  const byIdentity = new Map<string, MachineGroup>();
+  const score = (machine: MachineGroup) =>
+    (machine.self ? 10_000 : 0) +
+    (machine.collector === "ready" ? 1_000 : 0) +
+    machine.agents.length * 10 +
+    (machine.online ? 5 : 0);
+  const stableMachineId = (item: MachineGroup) => {
+    const machineId =
+      item.collector === "ready"
+        ? (item.machineId?.trim().toLowerCase() ?? "")
+        : "";
+    return /^hivemind-machine-[a-f0-9]{32}$/.test(machineId) ? machineId : "";
+  };
+  // Bridge machineId keys to name-identity keys: a bare tailscale device
+  // (no collector probe, so no machineId) must still merge with the
+  // discovered copy of the same machine, which is keyed by machineId.
+  // Identities claimed by more than one machineId are ambiguous (distinct
+  // physical machines whose names collide after -N stripping), so leave
+  // those unbridged rather than merging a shadow into the wrong machine.
+  const machineIdByNameIdentity = new Map<string, string>();
+  for (const item of items) {
+    const machineId = stableMachineId(item);
+    if (!machineId) continue;
+    // Register the exact name identity alongside machineIdentityFromParts:
+    // the self machine resolves to "self" there, but its own embedded link
+    // node can show up as a separate tailnet device whose only handle is
+    // the exact identity ("liamsmacbookpro") — without this entry that
+    // shadow never bridges to the real machine.
+    const identities = new Set(
+      [
+        machineIdentityFromParts(item),
+        machineExactIdentity(item.name, item.dnsName),
+      ].filter(Boolean),
+    );
+    for (const nameIdentity of identities) {
+      const claimed = machineIdByNameIdentity.get(nameIdentity);
+      machineIdByNameIdentity.set(
+        nameIdentity,
+        claimed && claimed !== machineId ? "" : machineId,
+      );
+    }
+  }
+  for (const item of items) {
+    const nameIdentity = machineIdentityFromParts(item);
+    const key =
+      stableMachineId(item) ||
+      machineIdByNameIdentity.get(nameIdentity) ||
+      nameIdentity;
+    const previous = byIdentity.get(key);
+    if (!previous) {
+      byIdentity.set(key, item);
+      continue;
+    }
+    const preferred = score(item) > score(previous) ? item : previous;
+    const agents = [...previous.agents, ...item.agents].filter(
+      (agent, index, all) =>
+        all.findIndex((candidate) => candidate.id === agent.id) === index,
+    );
+    byIdentity.set(key, { ...preferred, agents });
+  }
+  return [...byIdentity.values()];
 }
 
 export function machineVersionState(

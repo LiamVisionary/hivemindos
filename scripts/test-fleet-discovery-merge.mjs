@@ -20,7 +20,7 @@ const identitySource =
   )
     .replace(/^import\s+type\s+.+;\n/gm, "")
     .replace(/\bexport\s+/g, "") +
-  "\n;globalThis.__fleetIdentity = { isLocalLinkDuplicateOfSelf, isLoopbackCollector, isMobileMachineOs, machineExactIdentity, machineIdentityFromParts, shouldPreserveMissingDiscoveredMachine };";
+  "\n;globalThis.__fleetIdentity = { isLocalLinkDuplicateOfSelf, isLoopbackCollector, isMacMachineOs, isMobileMachineOs, machineExactIdentity, machineIdentityFromParts, shouldPreserveMissingDiscoveredMachine };";
 
 const identityContext = vm.createContext({ URL });
 compileIntoContext(identitySource, identityContext, "fleet-identity.ts");
@@ -208,5 +208,92 @@ assert.equal(
 );
 assert.equal(missingFromRefresh[0].device.online, false);
 
+// --- reverse reachability: peers' env-sync unreachable reports annotate the
+// target machine and surface a network issue even when the local probe is ok.
+const reachabilitySource = readFileSync(
+  new URL("../src/app/api/fleet/reverse-reachability.ts", import.meta.url),
+  "utf8",
+)
+  .replace(/^import\s+.+;\n/gm, "")
+  .replace(/\bexport\s+/g, "");
+const reachabilityContext = vm.createContext({
+  machineExactIdentity: identityContext.__fleetIdentity.machineExactIdentity,
+});
+compileIntoContext(
+  reachabilitySource + "\n;globalThis.__rr = { annotateReverseReachability };",
+  reachabilityContext,
+  "reverse-reachability.ts",
+);
+const { annotateReverseReachability } = reachabilityContext.__rr;
+
+const selfMac = {
+  device: {
+    self: true,
+    name: "This Mac",
+    dnsName: "liams-macbook-pro.example.ts.net",
+    ip: "100.1.1.1",
+  },
+};
+const reportingVps = {
+  device: {
+    self: false,
+    name: "hivemindos-ubuntu-test",
+    dnsName: "hivemindos-ubuntu-test.example.ts.net",
+    ip: "100.2.2.2",
+  },
+  envSync: {
+    maintenance: {
+      lastSummary: {
+        // Same machine reported once by DNS name and once by pinned raw IP;
+        // plus the reporter's own alias and an unknown host, both ignored.
+        pull: {
+          unreachable: [
+            "liams-macbook-pro.example.ts.net",
+            "gone-machine.example.ts.net",
+          ],
+        },
+        retry: {
+          unreachable: ["100.1.1.1", "hivemindos-ubuntu-test.example.ts.net"],
+        },
+      },
+    },
+  },
+};
+annotateReverseReachability([selfMac, reportingVps]);
+assert.equal(
+  JSON.stringify(selfMac.reportedUnreachableBy),
+  JSON.stringify(["hivemindos-ubuntu-test"]),
+  "peer unreachable reports (by name AND pinned IP) annotate the target machine once",
+);
+assert.equal(
+  reportingVps.reportedUnreachableBy,
+  undefined,
+  "a machine's own report must not mark itself unreachable",
+);
+
+const reverseIssue = machineNetworkIssue(
+  {
+    key: "mac",
+    name: "This Mac",
+    os: "macos",
+    online: true,
+    self: false,
+    collector: "ready",
+    agents: [],
+    reportedUnreachableBy: ["hivemindos-ubuntu-test"],
+  },
+  "Tailscale Running",
+);
+assert.match(
+  reverseIssue?.title ?? "",
+  /peers report this machine unreachable/i,
+  "ready-but-peer-unreachable machines surface a network issue",
+);
+assert.ok(
+  (reverseIssue?.commands ?? []).some((line) => line.includes("linkd")),
+  "reverse-reachability fix commands point at linkd",
+);
+
 console.log("✓ fleet discovery merge keeps verified bridges across device-only refreshes");
 console.log("✓ fleet discovery merge still surfaces real bridge probe failures");
+console.log("✓ reverse reachability annotates peer-reported unreachable machines");

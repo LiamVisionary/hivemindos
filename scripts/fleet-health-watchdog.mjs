@@ -10,6 +10,24 @@
 // SSH, and no pinned tailnet IPs (machines are rediscovered each cycle, so
 // addresses can change freely).
 //
+// v2 additions:
+//   - SELF monitoring: this machine's own collector and its hivemind-linkd
+//     daemon are probed too (remediated via local exec — linkd being down is
+//     exactly when the shell rail is unavailable). A dead-but-configured linkd
+//     LaunchAgent is re-bootstrapped, and an auth-needed linkd raises an alert
+//     with its auth URL instead of a pointless restart.
+//   - Severe (deep-probe) failures are CONFIRMED with a second probe after a
+//     short delay before remediating, so a DERP-relay blip can't trigger a
+//     spurious restart on a healthy machine.
+//   - Discovery falls back to `tailscale status --json` + collector port
+//     probing when no local dashboard is running, so the watchdog works on
+//     collector-only machines (VPS, headless boxes).
+//   - Remote linkd builds are checked on deep cycles via /_hivemind/version
+//     and stale binaries are reported (once per day per machine).
+//   - Alerts: remediations, failures, and linkd auth-needed go to Telegram when
+//     FLEET_WATCHDOG_TELEGRAM_CHAT_ID (+ a bot token) is configured in
+//     ~/.hivemindos/.env; otherwise they are log-only.
+//
 // Liveness uses the collector's /health; a DEEP probe (an actual /chat dispatch)
 // runs every Nth cycle to catch the alive-but-can't-spawn case. After
 // FAIL_THRESHOLD consecutive failures it kickstarts the collector service on the
@@ -17,21 +35,32 @@
 // restart storms.
 //
 // Env knobs (all optional):
-//   FLEET_WATCHDOG_POLL_MS         cycle interval (default 60000)
-//   FLEET_WATCHDOG_FAIL_THRESHOLD  consecutive failures before remediation (default 3)
-//   FLEET_WATCHDOG_COOLDOWN_MS     min gap between remediations per machine (default 300000)
-//   FLEET_WATCHDOG_CHAT_EVERY      run the deep /chat probe every Nth cycle (default 5)
-//   FLEET_WATCHDOG_APP_PORTS       local dashboard ports to try for discovery (default 5020,5021,5111,5121,3000)
-//   FLEET_WATCHDOG_ONCE=1          run a single cycle and exit (for testing)
+//   FLEET_WATCHDOG_POLL_MS            cycle interval (default 60000)
+//   FLEET_WATCHDOG_FAIL_THRESHOLD     consecutive failures before remediation (default 3)
+//   FLEET_WATCHDOG_COOLDOWN_MS        min gap between remediations per machine (default 300000)
+//   FLEET_WATCHDOG_CHAT_EVERY         run the deep /chat probe every Nth cycle (default 15)
+//   FLEET_WATCHDOG_SEVERE_RECHECK_MS  delay before confirming a severe failure (default 10000)
+//   FLEET_WATCHDOG_APP_PORTS          local dashboard ports to try for discovery (default 5020,5021,5111,5121,3000)
+//   FLEET_WATCHDOG_SELF=0             disable self collector/linkd monitoring
+//   FLEET_WATCHDOG_TELEGRAM_CHAT_ID   Telegram chat id for alerts (enables push alerts)
+//   FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN bot token override (default: HIVE_TELEGRAM_BOT_TOKEN
+//                                     then SWARM_SOVEREIGN_TELEGRAM_BOT_TOKEN from ~/.hivemindos/.env)
+//   FLEET_WATCHDOG_ONCE=1             run a single cycle and exit (for testing)
 
 import { readFile, writeFile, mkdir, appendFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { readFileSync } from "node:fs";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 const POLL_MS = Number(process.env.FLEET_WATCHDOG_POLL_MS || 60_000);
 const FAIL_THRESHOLD = Number(process.env.FLEET_WATCHDOG_FAIL_THRESHOLD || 3);
 const COOLDOWN_MS = Number(process.env.FLEET_WATCHDOG_COOLDOWN_MS || 300_000);
 const CHAT_EVERY = Math.max(1, Number(process.env.FLEET_WATCHDOG_CHAT_EVERY || 15));
+const SEVERE_RECHECK_MS = Number(process.env.FLEET_WATCHDOG_SEVERE_RECHECK_MS || 10_000);
 // Deep TTS synth probe: generous timeout so a cold model LOAD (slow but real) is
 // not mistaken for a wedged backend — we judge by the result (real PCM bytes),
 // not by latency. A small/fast model keeps the probe cheap.
@@ -41,11 +70,18 @@ const TTS_PROBE_VOICE = process.env.FLEET_WATCHDOG_TTS_VOICE || "voice01";
 const TTS_MIN_PCM_BYTES = 2_000;
 const APP_PORTS = String(process.env.FLEET_WATCHDOG_APP_PORTS || "5020,5021,5111,5121,3000")
   .split(",").map((s) => s.trim()).filter(Boolean);
+const SELF_ENABLED = process.env.FLEET_WATCHDOG_SELF !== "0";
 const RUN_ONCE = process.env.FLEET_WATCHDOG_ONCE === "1";
+// Same collector port range fleet discovery probes; collectors relocate when
+// their preferred local port is taken.
+const COLLECTOR_PORTS = Array.from({ length: 24 }, (_, i) => 8787 + i);
+const ALERT_REPEAT_MS = 30 * 60_000;
+const STALE_BUILD_ALERT_MS = 24 * 60 * 60_000;
 
 const STATE_DIR = join(homedir(), ".hivemindos");
 const MACHINES_CACHE = join(STATE_DIR, "fleet-health-watchdog-machines.json");
 const TTS_CACHE = join(STATE_DIR, "fleet-health-watchdog-tts.json");
+const PORTS_CACHE = join(STATE_DIR, "fleet-health-watchdog-ports.json");
 const LOG_PATH = join(STATE_DIR, "fleet-health-watchdog.log");
 const SHELL_SESSION = "fleet-health-watchdog";
 
@@ -62,6 +98,61 @@ async function log(message) {
   }
 }
 
+function parseEnvFile(path) {
+  try {
+    const env = {};
+    for (const raw of readFileSync(path, "utf8").split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq <= 0) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      env[key] = value;
+    }
+    return env;
+  } catch {
+    return {};
+  }
+}
+
+const collectorEnv = parseEnvFile(join(STATE_DIR, "collector.env"));
+const hiveEnv = parseEnvFile(join(STATE_DIR, ".env"));
+
+const TELEGRAM_CHAT_ID = (process.env.FLEET_WATCHDOG_TELEGRAM_CHAT_ID || hiveEnv.FLEET_WATCHDOG_TELEGRAM_CHAT_ID || "").trim();
+const TELEGRAM_BOT_TOKEN = (
+  process.env.FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN
+  || hiveEnv.FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN
+  || hiveEnv.HIVE_TELEGRAM_BOT_TOKEN
+  || hiveEnv.SWARM_SOVEREIGN_TELEGRAM_BOT_TOKEN
+  || ""
+).trim();
+
+const lastAlertAt = new Map();
+
+// Push watchdog events somewhere a human actually sees. Telegram when
+// configured; always the log. Never throws, rate-limits repeats per key.
+async function alert(key, message) {
+  const now = Date.now();
+  if ((lastAlertAt.get(key) || 0) + ALERT_REPEAT_MS > now) return;
+  lastAlertAt.set(key, now);
+  await log(`ALERT ${message}`);
+  if (!TELEGRAM_CHAT_ID || !TELEGRAM_BOT_TOKEN) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: `🩺 fleet-watchdog: ${message}` }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    await log(`  alert delivery failed: ${error.message}`);
+  }
+}
+
 async function fetchJson(url, init, timeoutMs) {
   const response = await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
   const text = await response.text().catch(() => "");
@@ -74,8 +165,85 @@ async function fetchJson(url, init, timeoutMs) {
   return { ok: response.ok, status: response.status, data, text };
 }
 
-// Rediscover the fleet each cycle from the local dashboard (no pinned IPs). Falls
-// back to the last good list so a closed dashboard doesn't blind the watchdog.
+let portsByHost = {};
+try {
+  portsByHost = JSON.parse(readFileSync(PORTS_CACHE, "utf8"));
+} catch {
+  portsByHost = {};
+}
+
+async function rememberPort(host, port) {
+  if (portsByHost[host] === port) return;
+  portsByHost[host] = port;
+  await writeFile(PORTS_CACHE, JSON.stringify(portsByHost)).catch(() => {});
+}
+
+function tailscaleCli() {
+  return [
+    "tailscale",
+    "/opt/homebrew/bin/tailscale",
+    "/opt/homebrew/opt/tailscale/bin/tailscale",
+    "/usr/local/bin/tailscale",
+    "/usr/bin/tailscale",
+    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+  ];
+}
+
+function localMachineId() {
+  try {
+    return readFileSync(join(STATE_DIR, "machine-id"), "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+// Dashboard-less discovery: enumerate online tailnet peers and find each one's
+// collector by probing the shared port range (cached port first). Lets the
+// watchdog run on collector-only machines and keeps working when the local
+// dashboard is closed. Phones never host collectors and are skipped.
+async function discoverViaTailscale() {
+  let status = null;
+  for (const cli of tailscaleCli()) {
+    try {
+      const { stdout } = await execFileAsync(cli, ["status", "--json"], { timeout: 10_000 });
+      status = JSON.parse(stdout);
+      break;
+    } catch {
+      // try the next CLI location
+    }
+  }
+  if (!status) return [];
+  const ownId = localMachineId();
+  const machines = [];
+  const seenMachineIds = new Set();
+  for (const peer of Object.values(status.Peer || {})) {
+    if (!peer || peer.Online === false) continue;
+    const os = String(peer.OS || "").toLowerCase();
+    if (os === "ios" || os === "android") continue;
+    const ip = (peer.TailscaleIPs || []).find((v) => /^\d+\.\d+\.\d+\.\d+$/.test(String(v)));
+    if (!ip) continue;
+    const name = String(peer.DNSName || "").replace(/\.$/, "").split(".")[0] || ip;
+    const cached = portsByHost[ip];
+    const ports = cached ? [cached, ...COLLECTOR_PORTS.filter((p) => p !== cached)] : COLLECTOR_PORTS;
+    for (const port of ports) {
+      try {
+        const { ok, data } = await fetchJson(`http://${ip}:${port}/health`, {}, 2_500);
+        if (!ok || data?.ok !== true || !data?.machineId) continue;
+        if (data.machineId === ownId || seenMachineIds.has(data.machineId)) break; // own/duplicate linkd node
+        seenMachineIds.add(data.machineId);
+        await rememberPort(ip, port);
+        machines.push({ name, self: false, online: true, os: os || "", collectorUrl: `http://${ip}:${port}` });
+        break;
+      } catch {
+        // closed port — keep probing
+      }
+    }
+  }
+  return machines;
+}
+
+// Rediscover the fleet each cycle: local dashboard first (richest view), then
+// tailscale CLI + port probing, then the last good cached list.
 async function discoverMachines() {
   for (const port of APP_PORTS) {
     try {
@@ -98,6 +266,11 @@ async function discoverMachines() {
     } catch {
       // try the next port
     }
+  }
+  const viaTailscale = await discoverViaTailscale().catch(() => []);
+  if (viaTailscale.length) {
+    await writeFile(MACHINES_CACHE, JSON.stringify(viaTailscale)).catch(() => {});
+    return viaTailscale;
   }
   try {
     return JSON.parse(await readFile(MACHINES_CACHE, "utf8"));
@@ -199,9 +372,45 @@ async function probeCollector(collectorUrl, deep) {
   return { healthy: true };
 }
 
+// This machine's own linkd daemon, via its loopback control API. The honest
+// /health (ok = tailscale backend Running) distinguishes daemon-down from
+// daemon-up-but-tailnet-broken; auth-needed is remediation-proof and needs a
+// human, so it alerts with the auth URL instead of restarting.
+async function probeLocalLinkd(controlUrl) {
+  try {
+    const res = await fetchJson(`${controlUrl}/health`, {}, 8_000);
+    if (res.data?.authNeeded) {
+      return { healthy: false, severe: true, authNeeded: true, reason: `linkd needs tailscale auth${res.data?.authUrl ? `: ${res.data.authUrl}` : ""}` };
+    }
+    if (res.data?.ok !== true) {
+      // Legacy builds always reply {ok:true}; a non-ok reply is the new honest
+      // health telling us the tailscale backend is down.
+      return { healthy: false, reason: `linkd backend ${String(res.data?.backendState || res.data?.error || res.text).slice(0, 60)}` };
+    }
+    return { healthy: true };
+  } catch (error) {
+    return { healthy: false, reason: `linkd control unreachable: ${error.message}` };
+  }
+}
+
 function remediationCommand(os, kind) {
   // Specific label patterns so we kickstart the right daemon and nothing else
   // (e.g. "universal-tts", NOT the unrelated mlx image sidecar).
+  if (kind === "linkd") {
+    const label = collectorEnv.HIVE_LINK_LABEL || "com.hivemindos.linkd.agent";
+    if (os.includes("linux")) {
+      return "systemctl --user restart hivemindos-linkd.service 2>/dev/null && echo 'watchdog restarted linkd' || echo 'linkd unit missing'";
+    }
+    // kickstart the loaded agent; if it is not registered at all (the failure
+    // that silently killed linkd on 2026-07-02), bootstrap the existing plist.
+    return [
+      "U=$(id -u)",
+      `launchctl kickstart -k "gui/$U/${label}" 2>/dev/null && echo "watchdog kicked linkd" && exit 0`,
+      `PLIST="$HOME/Library/LaunchAgents/${label}.plist"`,
+      `[ -f "$PLIST" ] && launchctl bootstrap "gui/$U" "$PLIST" 2>/dev/null && echo "watchdog bootstrapped linkd" && exit 0`,
+      "echo 'linkd LaunchAgent missing — rerun install-telemetry-collector.sh'",
+    ].join("; ");
+  }
   const pattern = kind === "tts" ? "universal.?tts|mlx.?audio" : "telemetry|collector";
   const label = kind === "tts" ? "TTS" : "collector";
   if (os.includes("linux")) {
@@ -237,6 +446,82 @@ async function remediate(machineBase, os, kind) {
   }
 }
 
+// Remediate a SELF target with a local shell — the local linkd being down is
+// exactly the case where the linkd-shell rail cannot help this machine.
+async function remediateLocal(kind) {
+  const os = platform() === "darwin" ? "macos" : platform();
+  try {
+    const { stdout } = await execFileAsync("/bin/sh", ["-c", remediationCommand(os, kind)], { timeout: 30_000 });
+    const summary = String(stdout || "").trim().split("\n").pop();
+    if (summary) await log(`  local remediation: ${summary}`);
+    return true;
+  } catch (error) {
+    await log(`  local remediation failed: ${error.message}`);
+    return false;
+  }
+}
+
+// Self targets: this machine's collector (loopback) and its linkd daemon.
+// Remote watchdogs can't always see either (a dead linkd hides them both), so
+// every machine watches its own.
+function selfTargets() {
+  if (!SELF_ENABLED) return [];
+  const targets = [];
+  const port = collectorEnv.AGENT_TELEMETRY_PORT || "8787";
+  targets.push({
+    key: "self:collector",
+    name: "self collector",
+    os: platform() === "darwin" ? "macos" : platform(),
+    kind: "collector",
+    local: true,
+    probe: (deep) => probeCollector(`http://127.0.0.1:${port}`, deep),
+  });
+  if (collectorEnv.HIVE_LINK_LABEL) {
+    const control = collectorEnv.HIVE_LINK_CONTROL || "127.0.0.1:8788";
+    targets.push({
+      key: "self:linkd",
+      name: "self linkd",
+      os: platform() === "darwin" ? "macos" : platform(),
+      kind: "linkd",
+      local: true,
+      probe: () => probeLocalLinkd(`http://${control}`),
+    });
+  }
+  return targets;
+}
+
+const staleBuildAlertAt = new Map();
+
+// Deep-cycle check: does the remote linkd daemon report a build commit, and
+// does it match the checkout its collector is serving from? A mismatch means
+// the machine pulled new code but is still running an old linkd binary — the
+// silent-staleness gap. Pre-version linkd builds proxy this path through to
+// the collector (a JSON without service=hivemind-linkd), which is itself the
+// "update pending" signal.
+async function checkLinkdBuild(machine) {
+  const key = `stale:${machine.name}`;
+  if ((staleBuildAlertAt.get(key) || 0) + STALE_BUILD_ALERT_MS > Date.now()) return;
+  try {
+    const [version, health] = await Promise.all([
+      fetchJson(`${machine.collectorUrl}/_hivemind/version`, {}, 8_000),
+      fetchJson(`${machine.collectorUrl}/health`, {}, 8_000),
+    ]);
+    const repoCommit = String(health.data?.version?.shortCommit || "").trim();
+    if (version.data?.service !== "hivemind-linkd") {
+      staleBuildAlertAt.set(key, Date.now());
+      await log(`${machine.name}: linkd build has no version endpoint yet (pre-stamp binary; update pending)`);
+      return;
+    }
+    const linkdCommit = String(version.data?.commit || "").trim();
+    if (repoCommit && linkdCommit && linkdCommit !== "unknown" && !repoCommit.startsWith(linkdCommit) && !linkdCommit.startsWith(repoCommit)) {
+      staleBuildAlertAt.set(key, Date.now());
+      await alert(key, `${machine.name}: linkd binary is stale (built at ${linkdCommit}, checkout at ${repoCommit}) — rerun install-telemetry-collector.sh there`);
+    }
+  } catch {
+    // version telemetry is best-effort; the health probes are the gate
+  }
+}
+
 const consecutiveFailures = new Map();
 const cooldownUntil = new Map();
 
@@ -247,13 +532,14 @@ async function runCycle(cycle) {
   // One unified target list. Collector and TTS on the same machine are keyed
   // separately, so a TTS flap restarts ONLY the TTS daemon (and vice versa).
   const targets = [
+    ...selfTargets(),
     ...machines.filter((m) => m.online !== false).map((m) => ({
       key: m.collectorUrl,
       name: m.name,
       machineBase: m.collectorUrl,
       os: m.os,
       kind: "collector",
-      probe: () => probeCollector(m.collectorUrl, deep),
+      probe: (isDeep) => probeCollector(m.collectorUrl, isDeep),
     })),
     ...ttsApps.map((a) => ({
       key: `tts:${a.apiBaseUrl}`,
@@ -261,17 +547,32 @@ async function runCycle(cycle) {
       machineBase: a.machineBase,
       os: "",
       kind: "tts",
-      probe: () => probeTts(a.apiBaseUrl, deep),
+      probe: (isDeep) => probeTts(a.apiBaseUrl, isDeep),
     })),
   ];
   if (!targets.length) {
-    await log("no targets discovered (dashboard unreachable and no cache)");
+    await log("no targets discovered (dashboard + tailscale unreachable and no cache)");
     return;
   }
   let healthy = 0;
   let unhealthy = 0;
   for (const target of targets) {
-    const result = await target.probe();
+    let result = await target.probe(deep);
+    // A deep functional probe failing is a definitive wedge — but a single
+    // sample can also be a relay blip (DERP paths EOF transiently), which used
+    // to trigger spurious restarts of healthy machines. Confirm severe
+    // failures with a second probe before acting.
+    if (!result.healthy && result.severe && !result.authNeeded) {
+      await log(`${target.name}: severe failure (${result.reason}) — confirming in ${Math.round(SEVERE_RECHECK_MS / 1000)}s`);
+      await sleep(SEVERE_RECHECK_MS);
+      const recheck = await target.probe(deep);
+      if (recheck.healthy) {
+        await log(`${target.name}: recovered on confirmation probe (transient blip, no remediation)`);
+        result = recheck;
+      } else {
+        result = { ...recheck, severe: true };
+      }
+    }
     if (result.healthy) {
       healthy += 1;
       if (consecutiveFailures.get(target.key)) await log(`${target.name}: recovered`);
@@ -281,23 +582,34 @@ async function runCycle(cycle) {
     unhealthy += 1;
     const fails = (consecutiveFailures.get(target.key) || 0) + 1;
     consecutiveFailures.set(target.key, fails);
-    // A deep functional probe (chat/synth) failing is a definitive wedge — act on
-    // one. A cheap-probe failure tolerates FAIL_THRESHOLD strikes (brief reload
-    // flaps are normal). Cooldown gates both.
     const threshold = result.severe ? 1 : FAIL_THRESHOLD;
     await log(`${target.name}: unhealthy ${fails}/${threshold}${result.severe ? " (severe)" : ""} — ${result.reason}`);
+    if (result.authNeeded) {
+      // Restarting cannot re-authenticate a logged-out tsnet node; a human must
+      // click the auth URL (or provision HIVE_LINK_AUTH_KEY and restart).
+      await alert(`auth:${target.key}`, `${target.name} ${result.reason}`);
+      continue;
+    }
     if (fails >= threshold && (cooldownUntil.get(target.key) || 0) < Date.now()) {
-      await log(`${target.name}: REMEDIATING — restart ${target.kind} via linkd shell`);
-      const ok = await remediate(target.machineBase, target.os, target.kind);
+      await log(`${target.name}: REMEDIATING — restart ${target.kind} via ${target.local ? "local shell" : "linkd shell"}`);
+      const ok = target.local
+        ? await remediateLocal(target.kind)
+        : await remediate(target.machineBase, target.os, target.kind);
       await log(`${target.name}: remediation ${ok ? "sent" : "FAILED"}; cooling down ${Math.round(COOLDOWN_MS / 1000)}s`);
+      await alert(`remediate:${target.key}`, `${target.name} was down (${result.reason}) — restart ${ok ? "sent" : "FAILED"}`);
       cooldownUntil.set(target.key, Date.now() + COOLDOWN_MS);
       consecutiveFailures.set(target.key, 0);
+    }
+  }
+  if (deep) {
+    for (const machine of machines) {
+      if (machine.collectorUrl) await checkLinkdBuild(machine);
     }
   }
   await log(`cycle ${cycle}: ${healthy} healthy, ${unhealthy} unhealthy of ${targets.length}${deep ? " (deep probe: collector chat + TTS synth)" : ""}`);
 }
 
-await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles${RUN_ONCE ? " (ONCE)" : ""}`);
+await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles, self=${SELF_ENABLED ? "on" : "off"}, alerts=${TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN ? "telegram" : "log-only"}${RUN_ONCE ? " (ONCE)" : ""}`);
 let cycle = 0;
 for (;;) {
   try {

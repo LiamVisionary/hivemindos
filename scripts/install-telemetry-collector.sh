@@ -719,37 +719,16 @@ choose_link_control_port() {
 
 choose_link_tailnet_port() {
   [[ "$LINK_ACTIVE" == "true" ]] || return 0
-  local listener
-  listener="$(port_listener_pids "$LINK_TAILNET_PORT")"
-  if [[ -z "$listener" ]]; then
-    return
+  # hivemind-linkd's tailnet listener lives inside its own tsnet userspace
+  # netstack: it binds no host port at all, so a local process on the same
+  # port NUMBER can never collide with it. The canonical Tailnet port stays
+  # pinned (default 8787) so peers (fleet discovery, hive-env sync, the
+  # watchdog) find every machine at a predictable address instead of chasing
+  # per-machine drift; override only via HIVE_LINK_TAILNET_PORT.
+  if [[ -n "${HIVE_LINK_TAILNET_PORT:-}" ]]; then
+    echo "Hivemind Link Tailnet port explicitly set to $LINK_TAILNET_PORT (HIVE_LINK_TAILNET_PORT)."
   fi
-
-  # The collector binds loopback (127.0.0.1) in Link mode while hivemind-linkd
-  # exposes the same port number on the *tailnet interface* (tsnet) — the two do
-  # not collide. A HivemindOS collector already on LINK_TAILNET_PORT is the
-  # expected occupant, so keep the canonical port instead of drifting it (e.g.
-  # 8787 -> 8789) on every reinstall.
-  if collector_health_is_hivemind "$LINK_TAILNET_PORT"; then
-    return
-  fi
-
-  local requested_port="$LINK_TAILNET_PORT"
-  local control_port="${LINK_CONTROL##*:}"
-  local candidate
-  candidate="$(choose_nearest_available_port "$requested_port" 200 "$PORT" || true)"
-  if [[ -n "$candidate" && "$candidate" == "$control_port" ]]; then
-    candidate="$(choose_nearest_available_port "$((candidate + 1))" 200 "$PORT" || true)"
-  fi
-  if [[ -n "$candidate" ]]; then
-    echo "Port $requested_port is already used by another local service, so Hivemind Link will expose the collector on the next available Tailnet port: $candidate."
-    LINK_TAILNET_PORT="$candidate"
-    return
-  fi
-
-  echo "Port $requested_port is already used by another local service, and no nearby Hivemind Link Tailnet port was free." >&2
-  echo "Stop the process on $requested_port or set HIVE_LINK_TAILNET_PORT to a free port before rerunning setup." >&2
-  exit 1
+  return 0
 }
 
 run_with_timeout() {

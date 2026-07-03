@@ -568,6 +568,9 @@ export type MachineGroup = {
     message: string;
     nextAttemptAt?: number;
   };
+  // Peers whose collector reports this machine unreachable over the tailnet
+  // (reverse-reachability signal from fleet discovery).
+  reportedUnreachableBy?: string[];
 };
 
 export type MachineDirectoryEntry = {
@@ -630,6 +633,7 @@ export type DiscoveredMachine = {
   system?: MachineSystemStats;
   lastSeenAt?: number;
   bridgeRepair?: MachineGroup["bridgeRepair"];
+  reportedUnreachableBy?: string[];
 };
 
 export type AppVersion = {

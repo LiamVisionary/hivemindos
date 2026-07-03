@@ -6,6 +6,7 @@ import {
   localTelemetryCollectorUrl,
 } from "@/lib/services/hivemind-link-control";
 import { isHivemindMachineName, isMacMachineOs, isMobileMachineOs, isVisibleFleetMachine } from "@/features/fleet/fleet-identity";
+import { annotateReverseReachability } from "@/app/api/fleet/reverse-reachability";
 import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
 import { mobileAgentProfilesForMachine } from "@/lib/services/mobile-agents/fleet";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
@@ -100,6 +101,13 @@ type CollectorEnvSync = {
   user?: string;
   command?: string;
   error?: string;
+  maintenance?: {
+    lastRunAt?: string;
+    lastSummary?: {
+      pull?: { peers?: string[]; unreachable?: string[] };
+      retry?: { remaining?: number; unreachable?: string[] };
+    };
+  };
 };
 
 type CollectorSystemStats = {
@@ -156,6 +164,11 @@ type DiscoveredMachine = {
   envSync?: CollectorEnvSync;
   system?: CollectorSystemStats;
   bridgeRepair?: BridgeRepairStatus;
+  // Peers (by display name) whose collector reports it cannot reach this
+  // machine over the tailnet — the reverse-reachability signal that exposes
+  // an asymmetric partition this dashboard's own probes cannot see (e.g. this
+  // machine reaches everyone, but its linkd is dead so nobody reaches it).
+  reportedUnreachableBy?: string[];
   agents: AgentProfile[];
   snapshots: unknown[];
 };
@@ -1252,6 +1265,7 @@ function refreshDiscovery(
           payload,
           previousPayload,
         );
+        annotateReverseReachability(stablePayload.machines);
         discoveryCache.set(cacheKey, {
           checkedAt: Date.now(),
           payload: stablePayload,
