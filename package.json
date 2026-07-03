@@ -54,6 +54,7 @@
     "test:dev-warm-routes": "node scripts/test-dev-warm-routes.mjs",
     "test:tauri-dev-resilience": "node scripts/test-tauri-dev-resilience.mjs",
     "test:fleet-agent-suppression": "node scripts/test-fleet-agent-suppression.mjs",
+    "test:fleet-watchdog-escalation": "node scripts/test-fleet-watchdog-escalation.mjs",
     "test:fleet-discovery-merge": "node scripts/test-fleet-discovery-merge.mjs",
     "test:fleet-windows-visibility": "node scripts/test-fleet-windows-visibility.mjs",
     "test:dashboard-state-snapshot": "node scripts/test-dashboard-state-snapshot.mjs",
