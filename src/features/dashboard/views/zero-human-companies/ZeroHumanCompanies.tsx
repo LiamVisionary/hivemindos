@@ -8,7 +8,7 @@ import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { getIssueIdentity } from "./issue-identity";
-import type { Agent, CardStyle, Colony, CompanyEditForm, CreateForm, Density, PoolAgent, Theme } from "./types";
+import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyRevenueShareInput, CreateForm, Density, PoolAgent, Theme } from "./types";
 
 function HiveLogo({ size = 40 }: { size?: number }) {
   const W = size, H = size;
@@ -118,6 +118,8 @@ export interface ZeroHumanCompaniesProps {
   onDispatch: (companyId: string) => void;
   /** Stop perpetual autonomy (no new dispatches; in-flight work finishes). */
   onStopAutonomy: (companyId: string) => void;
+  /** Record external revenue and optionally collect the HivemindOS share. */
+  onRecordRevenue: (companyId: string, input: CompanyRevenueShareInput) => Promise<void>;
   theme?: Theme;
   cardStyle?: CardStyle;
   density?: Density;
@@ -126,7 +128,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, error, notice, busyId, onRefresh,
-  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy,
+  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy, onRecordRevenue,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -186,6 +188,7 @@ export default function ZeroHumanCompanies({
     onEditTreasury: () => setModal({ type: "treasury", id: colony.id }),
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
     onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueId: getIssueIdentity(issue) }),
+    onRecordRevenue: (input) => void onRecordRevenue(colony.id, input),
     busyId,
   };
 

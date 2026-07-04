@@ -93,7 +93,7 @@ export const workBoardAction = defineHiveAction({
   id: "work-board.lifecycle",
   title: "Work Board lifecycle",
   description:
-    "List, create, claim, heartbeat, comment, complete, fail, block, or promote local-first Work Board tasks.",
+    "List, create, claim, heartbeat, comment, complete, fail, block, or promote local-first Work Board tasks. When you block or fail a task because it needs human input, access, approval, or a decision, include a line starting exactly `ACTION NEEDED:` in the reason telling the human precisely what to do or decide — it becomes the card's headline on the Work Board. Optionally follow it with `LINK: <url>` (where the human gets or does the thing), `OPTIONS: <a> | <b>` (for decisions), or `NEEDS: api-key <ENV_VAR_NAME>` / `NEEDS: file` / `NEEDS: text` — the board renders these as one-click controls and the answer returns to the task.",
   schema: z.object({
     action: z
       .enum([

@@ -664,6 +664,7 @@ export function ComposerField({
   disabled,
   busy,
   compact = false,
+  autoGrow = false,
   attachments,
   directories = [],
   attachmentError,
@@ -708,6 +709,10 @@ export function ComposerField({
   disabled?: boolean;
   busy?: boolean;
   compact?: boolean;
+  /** Size the textarea to its content (small when empty, grows as you type)
+   * instead of a fixed min-height. WKWebView has no `field-sizing`, so this
+   * is JS-driven. */
+  autoGrow?: boolean;
   attachments: ChatAttachment[];
   directories?: LinkedDirectory[];
   attachmentError?: string;
@@ -757,6 +762,14 @@ export function ComposerField({
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [workingDirectoryMenuOpen, setWorkingDirectoryMenuOpen] = useState(false);
   const [workingDirectoryOpening, setWorkingDirectoryOpening] = useState(false);
+  useEffect(() => {
+    if (!autoGrow) return;
+    const element = textareaRef.current;
+    if (!element) return;
+    // Collapse first so deletions shrink the box, then fit to content.
+    element.style.height = "auto";
+    element.style.height = `${Math.min(element.scrollHeight + 2, 320)}px`;
+  }, [autoGrow, composerValue]);
   const slashTokenMatch = hermesSlashCommands ? composerValue.match(/^\/([^\s/]*)$/) : null;
   const slashCommandQuery = slashTokenMatch?.[1]?.toLowerCase() ?? "";
   const filteredSlashCommands = useMemo(() => {

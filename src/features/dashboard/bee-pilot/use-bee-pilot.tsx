@@ -21,6 +21,7 @@ import {
 
 export type RunVoiceCommandOptions = { onModalOpen?: () => void; screenContext?: DashboardScreenContext };
 import { BeeFlightController } from "@/features/dashboard/bee-pilot/bee-flight";
+import { revealKanbanTaskWithBee } from "@/features/dashboard/bee-pilot/reveal-kanban-task";
 import { beeClick, beeType, findRenderedElement, scrollElementIntoView, wait, waitForElement } from "@/features/dashboard/bee-pilot/dom-actions";
 
 export type BeePilotDeps = {
@@ -39,6 +40,8 @@ export type BeePilotDeps = {
   setSchedulerDraftOpen: (open: boolean) => void;
   openSkillBrowser: () => void;
   setChatText: (text: string) => void;
+  /** Opens a task's conversation modal by id; returns false when unknown. */
+  openKanbanTaskConversation?: (taskId: string) => boolean;
   screenContext?: DashboardScreenContext;
 };
 
@@ -152,6 +155,17 @@ export function useBeePilot(deps: BeePilotDeps) {
   const [phase, setPhase] = useState<BeePilotPhase>("idle");
   const [status, setStatus] = useState("");
   const runIdRef = useRef(0);
+
+  // Deep-link landing shared by "open task" flows (notifications, palette,
+  // voice): fly to the task's card — scrolling the board to its column and the
+  // column to the card — then open its conversation.
+  const revealKanbanTask = useCallback(async (taskId: string): Promise<boolean> => {
+    return revealKanbanTaskWithBee({
+      bee,
+      taskId,
+      openConversation: () => depsRef.current.openKanbanTaskConversation?.(taskId) ?? false,
+    });
+  }, [bee]);
 
   const navigateWithBee = useCallback(async (target: DashboardRouteTarget) => {
     const current = depsRef.current;
@@ -363,6 +377,7 @@ export function useBeePilot(deps: BeePilotDeps) {
         if (!task) return `I couldn't find a task matching "${params.task ?? ""}".`;
         setStatus(`Opening "${task.title ?? task.id}"...`);
         await navigateWithBee({ view: "kanban", taskId: task.id });
+        await revealKanbanTask(task.id);
         return null;
       }
       case "create-schedule": {
@@ -411,7 +426,7 @@ export function useBeePilot(deps: BeePilotDeps) {
       default:
         return "That action isn't supported yet.";
     }
-  }, [bee, navigateWithBee]);
+  }, [bee, navigateWithBee, revealKanbanTask]);
 
   const resolvePlan = useCallback(async (
     command: string,
@@ -563,5 +578,5 @@ export function useBeePilot(deps: BeePilotDeps) {
     setStatus("");
   }, []);
 
-  return { bee, open, setOpen, input, setInput, phase, status, runCommand, runVoiceCommand, dismissStatus };
+  return { bee, open, setOpen, input, setInput, phase, status, runCommand, runVoiceCommand, dismissStatus, revealKanbanTask };
 }

@@ -1,3 +1,6 @@
+// guard:allow-hive-action-route - dashboard-only ChatGPT OAuth connect flow;
+// launches the user's interactive browser sign-in and is intentionally NOT an
+// agent-invokable Hive action (agents must never initiate credential grants).
 import { NextRequest, NextResponse } from "next/server";
 
 import {

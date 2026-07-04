@@ -727,6 +727,24 @@ export function parseStoredFleetSnapshots(snapshot: DashboardStateSnapshot = {})
   }
 }
 
+// Persisted seed only — the in-session map stays complete. The fleet merge
+// never evicts, so ephemeral per-PID agents accumulate forever; this key once
+// reached 30MB (2,822 agents), and every dashboard-state save rewrites the
+// whole store, which froze the desktop app (native invokes serialize on the
+// UI-process main thread). Keep only the most recently checked snapshots.
+const FLEET_SNAPSHOTS_PERSIST_LIMIT = 128;
+
+export function compactFleetSnapshotsForPersist(snapshots: Record<string, AgentSnapshot>): Record<string, AgentSnapshot> {
+  return Object.fromEntries(Object.entries(snapshots)
+    .filter(([, snapshot]) => snapshot?.tasks?.length > 0)
+    .sort(([, a], [, b]) => (b?.checkedAt ?? 0) - (a?.checkedAt ?? 0))
+    .slice(0, FLEET_SNAPSHOTS_PERSIST_LIMIT)
+    .map(([agentId, snapshot]) => [agentId, {
+      ...snapshot,
+      tasks: snapshot.tasks.slice(0, 12),
+    }]));
+}
+
 export function parseStoredMachineNameAliases(snapshot: DashboardStateSnapshot = {}): Record<string, string> {
   const raw = readStoredValue(snapshot, MACHINE_NAME_ALIAS_STORAGE_KEY, STORAGE_SUFFIXES.machineNameAliases);
   if (!raw) return {};

@@ -1,14 +1,17 @@
 import { spawn } from "node:child_process";
 import {
   createReadStream,
+  existsSync,
   mkdirSync,
+  readdirSync,
   rmSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { connect, createServer as createNetServer } from "node:net";
-import { extname } from "node:path";
+import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const nextEnvPath = fileURLToPath(new URL("../next-env.d.ts", import.meta.url));
@@ -579,6 +582,64 @@ proxyServer.on("upgrade", (request, socket, head) => {
   socket.on("error", () => upstream.destroy());
   socket.on("close", () => upstream.destroy());
 });
+
+const nodeModulesDir = fileURLToPath(new URL("../node_modules/", import.meta.url));
+
+// Spotlight (mds) indexes and re-scans these multi-GB, constantly-rewritten dev
+// trees, and each rewrite floods fseventsd — on a long-lived dev box that balloons
+// the daemon (seen: fseventsd at 1.6GB RSS / ~98% CPU). A `.metadata_never_index`
+// marker tells macOS to stop indexing/eventing a directory. Empty file, reversible
+// (delete it), no sudo. Dev-only tree — ships nothing to users.
+function markNoSpotlightIndex(dir) {
+  try {
+    if (!existsSync(dir)) return;
+    const marker = join(dir, ".metadata_never_index");
+    if (!existsSync(marker)) writeFileSync(marker, "");
+  } catch {
+    // Best-effort hygiene; never block dev boot on it.
+  }
+}
+
+// Each dev server writes its own .next-tauri/dev-<port> Turbopack cache and never
+// cleans up siblings, so orphaned caches from dead/crashed sessions accumulate
+// (seen: 5.6GB). Sweep dev-<port> dirs whose port has NO listener AND that haven't
+// been touched in 30 min — those are definitively dead (a live Turbopack server
+// rewrites its cache far more often). Next regenerates anything still needed.
+async function pruneStaleDevCaches() {
+  let entries;
+  try {
+    entries = readdirSync(tauriNextRootDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const staleBefore = Date.now() - 30 * 60_000;
+  for (const entry of entries) {
+    const match = entry.isDirectory() ? /^dev-(\d+)$/.exec(entry.name) : null;
+    if (!match) continue;
+    const cachePort = Number(match[1]);
+    if (cachePort === nextPort) continue;
+    const dir = join(tauriNextRootDir, entry.name);
+    try {
+      if (statSync(dir).mtimeMs > staleBefore) continue;
+    } catch {
+      continue;
+    }
+    // isPortAvailable() true => the port is free => the owning dev server is gone.
+    if (!(await isPortAvailable(cachePort, upstreamHost))) continue;
+    try {
+      rmSync(dir, { force: true, recursive: true });
+      console.log(
+        `HivemindOS Tauri dev: pruned stale Turbopack cache .next-tauri/${entry.name} (port ${cachePort} has no listener).`,
+      );
+    } catch {
+      // Another session may have removed it first; ignore.
+    }
+  }
+}
+
+markNoSpotlightIndex(tauriNextRootDir);
+markNoSpotlightIndex(nodeModulesDir);
+await pruneStaleDevCaches();
 
 rmSync(tauriNextDir, { force: true, recursive: true });
 writeDevServerInfo();

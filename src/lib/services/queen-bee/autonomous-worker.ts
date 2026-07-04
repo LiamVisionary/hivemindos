@@ -1,4 +1,4 @@
-import type { KanbanTask } from "../../types/kanban";
+import type { KanbanTask, KanbanFailureReason } from "../../types/kanban";
 import {
   loopContractForPrompt,
   runLoopGates,
@@ -75,6 +75,7 @@ type KanbanMutations = {
   complete: (slug: string | null, taskId: string, input?: Record<string, unknown>, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown; blocked?: boolean; missingGateIds?: string[] }>;
   block: (slug: string | null, taskId: string, reason: string, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown }>;
   reroute: (slug: string | null, taskId: string, input: QueenBeeAutonomousRerouteInput, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown }>;
+  fail: (slug: string | null, taskId: string, input?: Record<string, unknown>, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown; retried?: boolean; failureReason?: string }>;
 };
 
 type QueenBeeAutonomousRerouteInput = {
@@ -91,6 +92,7 @@ export type QueenBeeAutonomousPickupDeps = {
   complete?: KanbanMutations["complete"];
   block?: KanbanMutations["block"];
   reroute?: KanbanMutations["reroute"];
+  fail?: KanbanMutations["fail"];
 };
 
 const DEFAULT_PICKUP_TTL_MS = 30 * 60 * 1000;
@@ -225,6 +227,7 @@ export async function runQueenBeeAutonomousPickup(
   const complete = mutations.complete;
   const block = mutations.block;
   const reroute = mutations.reroute;
+  const fail = mutations.fail;
   const fetchJson = deps.fetchJson ?? defaultFetchJson;
   const storageOptions = { vaultPath: input.vaultPath, kanbanFolder: input.kanbanFolder };
   const chain = pickupDelegationChain(input);
@@ -365,13 +368,11 @@ export async function runQueenBeeAutonomousPickup(
       const next = nextPickupDelegation(chain, index + 1, currentTask);
       if (!next) {
         const finalMessage = exhaustedMessage(failures);
-        try {
-          await block(null, input.task.id, finalMessage, storageOptions);
-        } catch {
-          // Preserve the original failure if the board was already moved by another worker.
-        }
-        await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
-        return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: finalMessage };
+        const { retried } = await finalizeExhaustedPickup(fail, block, input.task.id, failures, finalMessage, storageOptions);
+        // A transient-only chain that auto-retried is not a flow failure — the task
+        // is back on the queue, so leave the flow untouched until it truly resolves.
+        if (!retried) await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
+        return { ok: false, status: retried ? "skipped" : "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: finalMessage };
       }
       currentTask = (await reroute(null, input.task.id, rerouteInput(message, agentName, next), storageOptions)).task;
     } finally {
@@ -397,18 +398,14 @@ export async function runQueenBeeAutonomousPickup(
   }
 
   const finalMessage = exhaustedMessage(failures.length ? failures : ["No eligible autonomous delegates were available."]);
-  try {
-    await block(null, input.task.id, finalMessage, storageOptions);
-  } catch {
-    // Preserve the original failure if the board was already moved by another worker.
-  }
-  await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
-  return { ok: false, status: "blocked", taskId: input.task.id, claimLock: lastClaimLock, collectorUrl: lastCollectorUrl, agentName: lastAgentName, error: finalMessage };
+  const { retried } = await finalizeExhaustedPickup(fail, block, input.task.id, failures, finalMessage, storageOptions);
+  if (!retried) await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
+  return { ok: false, status: retried ? "skipped" : "blocked", taskId: input.task.id, claimLock: lastClaimLock, collectorUrl: lastCollectorUrl, agentName: lastAgentName, error: finalMessage };
 }
 
 async function defaultKanbanMutations(deps: QueenBeeAutonomousPickupDeps): Promise<KanbanMutations> {
-  if (deps.claim && deps.complete && deps.block && deps.reroute) {
-    return { claim: deps.claim, complete: deps.complete, block: deps.block, reroute: deps.reroute };
+  if (deps.claim && deps.complete && deps.block && deps.reroute && deps.fail) {
+    return { claim: deps.claim, complete: deps.complete, block: deps.block, reroute: deps.reroute, fail: deps.fail };
   }
   const kanban = await import("../kanban/local-kanban-store");
   return {
@@ -416,6 +413,7 @@ async function defaultKanbanMutations(deps: QueenBeeAutonomousPickupDeps): Promi
     complete: deps.complete ?? kanban.completeTask,
     block: deps.block ?? kanban.blockTask,
     reroute: deps.reroute ?? kanban.rerouteTaskForAutonomousPickup,
+    fail: deps.fail ?? kanban.failTask,
   };
 }
 
@@ -514,7 +512,62 @@ function exhaustedMessage(failures: string[]) {
   return [
     "Queen Bee autonomous pickup exhausted all eligible delegates and now needs human input.",
     detail ? `Failures:\n${detail}` : "",
+    "ACTION NEEDED: Review the delegate failures above, fix the underlying agent or runtime issue, then move this card back to Ready for another autonomous attempt.",
   ].filter(Boolean).join("\n");
+}
+
+// A delegate failure that is purely transport-level: the box was slow/overloaded
+// (client abort at the chat timeout) or its collector gateway briefly died (502/503/
+// 504). These are self-healing — the SAME agent completes the work once the machine
+// drains — so a whole chain that failed ONLY this way should retry on a later sweep,
+// not strand the company task on a human. Content failures ("produced no output",
+// a rejected eval gate, a runtime/model error) are deliberately excluded: those need
+// a human, so a chain with any of them still escalates.
+const TRANSIENT_PICKUP_FAILURE =
+  /(timed?\s*out|timeout|aborted|abort(?:ed)? due to|bad gateway|gateway timeout|\b50[234]\b|service unavailable|temporarily unavailable|econnreset|econnrefused|socket hang ?up|connection (?:error|reset|refused)|network error|fetch failed)/i;
+
+/**
+ * The retry failure-reason for an exhausted pickup whose delegates ALL failed on
+ * transient transport errors, or `undefined` when at least one failure was real
+ * (so the caller escalates to needs-human as before). Routed through `failTask`,
+ * "timeout" is auto-retried up to the task's maxAttempts, then blocked to a human.
+ */
+function pickupExhaustionRetryReason(failures: string[]): KanbanFailureReason | undefined {
+  if (failures.length === 0) return undefined;
+  if (!failures.every((failure) => TRANSIENT_PICKUP_FAILURE.test(failure))) return undefined;
+  return "timeout";
+}
+
+/**
+ * Terminal outcome for an exhausted delegate chain: auto-retry via `failTask` when
+ * every failure was transient transport (returns retried=true → task back to Ready
+ * for the next dispatch sweep), otherwise block the card to needs-human as before.
+ */
+async function finalizeExhaustedPickup(
+  fail: KanbanMutations["fail"],
+  block: KanbanMutations["block"],
+  taskId: string,
+  failures: string[],
+  finalMessage: string,
+  storageOptions: KanbanStorageOptions,
+): Promise<{ retried: boolean }> {
+  const retryReason = pickupExhaustionRetryReason(failures);
+  if (retryReason) {
+    try {
+      const result = await fail(null, taskId, { failureReason: retryReason, summary: finalMessage, error: finalMessage }, storageOptions);
+      // retried → status is back to "ready" (attempt++), the driver re-routes it.
+      // not retried → failTask already moved it to needs-human (attempts exhausted).
+      return { retried: result?.retried === true };
+    } catch {
+      // fall through to a plain block on any failTask error
+    }
+  }
+  try {
+    await block(null, taskId, finalMessage, storageOptions);
+  } catch {
+    // Preserve the original failure if the board was already moved by another worker.
+  }
+  return { retried: false };
 }
 
 function autonomousWorkerPrompt(task: KanbanTask, marker?: string) {
@@ -522,6 +575,8 @@ function autonomousWorkerPrompt(task: KanbanTask, marker?: string) {
   return [
     `You are the selected Queen Bee delegate for Work Board task ${task.id}.`,
     "Claim and complete this task now. Return a concise result with any evidence requested by the task.",
+    "If you are blocked on human input, access, approval, or a decision, end your result with a section named exactly `ACTION NEEDED:` containing one or two imperative sentences telling the human precisely what to do or decide (include the options if there is a choice). This section becomes the card's headline on the Work Board.",
+    "When it helps the human act faster, add extra lines directly under `ACTION NEEDED:` — `LINK: <url>` pointing where they get or do the thing (for an API key, the exact page that issues it), `OPTIONS: <choice A> | <choice B>` when you need a decision, and `NEEDS: api-key <ENV_VAR_NAME>` (or `NEEDS: file` / `NEEDS: text`) naming what you are waiting for. The Work Board renders these as one-click answer buttons, a save-to-shared-env key input, or an attach-a-file prompt, and the human's answer comes back to you on this task.",
     marker ? `If the task asks for a verification marker, include this exact marker: ${marker}` : null,
     "",
     `Title: ${task.title}`,

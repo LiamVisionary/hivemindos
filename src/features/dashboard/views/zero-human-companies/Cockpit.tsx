@@ -5,11 +5,14 @@ import { Settings2 } from "lucide-react";
 import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel } from "./primitives";
 import { IssueBoard } from "./IssueBoard";
 import { STATUS_TONE } from "./data";
+import { issueBlockReason, companyIssueDiscussPrompt } from "./issue-reason";
+import { dashboardUrlForTarget } from "@/features/dashboard/dashboard-navigation";
+import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import { DeliverableCard } from "./DeliverableCard";
 import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable } from "./deliverables-model";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
 import { getIssueIdentity } from "./issue-identity";
-import type { Agent, Approval, Colony, Issue } from "./types";
+import type { Agent, Approval, Colony, CompanyRevenueShareInput, Issue } from "./types";
 
 export type CockpitHandlers = {
   onApprove: (approvalId: string) => void;
@@ -28,6 +31,8 @@ export type CockpitHandlers = {
   onEditAgent: (agentId: string) => void;
   /** Open a board card's underlying Work Board task (result + deliverables). */
   onOpenIssue: (issue: Issue) => void;
+  /** Record external company revenue and optionally collect the platform share. */
+  onRecordRevenue: (input: CompanyRevenueShareInput) => void;
   /** Approval/company id currently mutating, to disable its controls. */
   busyId: string | null;
 };
@@ -258,6 +263,7 @@ function ActivityTicker({ colony }: { colony: Colony }) {
 function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprovals }: {
   colony: Colony; onOpenIssue: (issue: Issue) => void; onGoToDeliverables: () => void; onGoToApprovals: () => void;
 }) {
+  const queenChat = useQueenChat();
   const blocked = c.issues.filter((i) => i.work?.status === "needs-human" || i.status === "board_review");
   const previewCount = React.useMemo(
     () => collectCompanyDeliverables(c).filter((x) => x.classified.reviewable).length,
@@ -270,6 +276,26 @@ function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprova
     display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", cursor: "pointer",
     borderRadius: 11, padding: "10px 12px", border: "1px solid color-mix(in srgb, var(--honey) 30%, var(--line))",
     background: "color-mix(in srgb, var(--honey) 7%, var(--bg-2))", font: "inherit", color: "inherit",
+  };
+  const actionBtnStyle: React.CSSProperties = {
+    display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer",
+    borderRadius: 8, padding: "5px 9px", font: "inherit", fontFamily: "var(--f-mono)", fontSize: 11,
+    border: "1px solid color-mix(in srgb, var(--honey) 45%, var(--line))",
+    background: "color-mix(in srgb, var(--honey) 12%, var(--bg-2))", color: "var(--honey-2)",
+  };
+  // Discuss → hand the blocked task to the Queen chat with the same "what's the next
+  // action / what needs my decision" prompt the notifications route uses.
+  const discussIssue = (issue: Issue) => {
+    void queenChat.sendText(companyIssueDiscussPrompt(c.name, issue));
+  };
+  // Open on Work Board → SPA-navigate to the task via the nav controller's popstate
+  // handler (openTask deep-open is intentionally not URL-serialized, so this scrolls
+  // the board to the task; the human opens its conversation from there).
+  const openOnWorkBoard = (taskId: string) => {
+    if (typeof window === "undefined") return;
+    const url = dashboardUrlForTarget({ view: "kanban", taskId }, window.location.pathname);
+    window.history.pushState({ dashboardTarget: { view: "kanban", taskId } }, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   return (
@@ -290,16 +316,36 @@ function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprova
             <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>Review →</span>
           </button>
         )}
-        {blocked.map((issue) => (
-          <button key={getIssueIdentity(issue)} type="button" onClick={() => onOpenIssue(issue)} style={rowStyle}>
-            <span aria-hidden style={{ fontSize: 15 }}>⛔</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)", overflowWrap: "anywhere" }}>{issue.title}</span>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>Blocked — the crew needs a decision or an unblock from you.</span>
-            </span>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>Open →</span>
-          </button>
-        ))}
+        {blocked.map((issue) => {
+          const reason = issueBlockReason(issue);
+          const taskId = issue.work?.taskId;
+          return (
+            <div key={getIssueIdentity(issue)} style={{ ...rowStyle, alignItems: "flex-start", cursor: "default", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%" }}>
+                <span aria-hidden style={{ fontSize: 15, marginTop: 1 }}>⛔</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenIssue(issue)}
+                    title="Open the task result and deliverables"
+                    style={{ display: "block", textAlign: "left", width: "100%", cursor: "pointer", background: "none", border: "none", padding: 0, fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)", overflowWrap: "anywhere" }}
+                  >
+                    {issue.title}
+                  </button>
+                  <span style={{ display: "block", marginTop: 3, fontFamily: "var(--f-mono)", fontSize: 10.5, lineHeight: 1.4, color: "var(--danger-2)", overflowWrap: "anywhere" }}>
+                    {reason || "Blocked — the crew needs a decision or an unblock from you."}
+                  </span>
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingLeft: 25 }}>
+                <button type="button" onClick={() => discussIssue(issue)} style={actionBtnStyle}>💬 Discuss</button>
+                {taskId && (
+                  <button type="button" onClick={() => openOnWorkBoard(taskId)} style={actionBtnStyle}>📋 Open on Work Board</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
         {previewCount > 0 && (
           <button type="button" onClick={onGoToDeliverables} style={rowStyle}>
             <span aria-hidden style={{ fontSize: 15 }}>🌐</span>
@@ -504,6 +550,96 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function money(value?: number): string {
+  return `$${Math.max(0, Number(value) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: CockpitHandlers }) {
+  const busy = handlers.busyId === c.id;
+  const [amount, setAmount] = React.useState("");
+  const [source, setSource] = React.useState<CompanyRevenueShareInput["source"]>("manual");
+  const [collectFee, setCollectFee] = React.useState(true);
+  const [collectingAgentId, setCollectingAgentId] = React.useState(c.agents[0]?.id ?? "");
+  const amountUsd = Number(amount);
+  const rollup = c.revenueShare;
+  const firstAgentId = c.agents.find((agent) => agent.id)?.id ?? "";
+  const effectiveAgentId = c.agents.some((agent) => agent.id === collectingAgentId) ? collectingAgentId : firstAgentId;
+  const canSubmit = Number.isFinite(amountUsd) && amountUsd > 0 && (!collectFee || Boolean(effectiveAgentId));
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canSubmit || busy) return;
+    handlers.onRecordRevenue({
+      amountUsd,
+      source,
+      collectFee,
+      collectingAgentId: collectFee ? effectiveAgentId : undefined,
+    });
+    setAmount("");
+  };
+
+  return (
+    <Panel>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey-2)" }}>policy share</span>}>revenue share</SectionLabel>
+      <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
+        <MiniMetric label="recorded revenue" value={money(rollup?.totalRevenueUsd)} />
+        <MiniMetric label="share collected" value={money(rollup?.shareCollectedUsd)} />
+        <MiniMetric label="share pending" value={money(rollup?.sharePendingUsd)} />
+        <MiniMetric label="events" value={String(rollup?.eventCount ?? 0)} />
+      </div>
+      <form onSubmit={submit} style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", alignItems: "center" }}>
+        <input
+          aria-label="Revenue amount USD"
+          type="number"
+          min="0"
+          step="0.01"
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+          placeholder="0.00"
+          style={{ minWidth: 0, height: 34, borderRadius: 8, border: "1px solid var(--line-2)", background: "var(--bg-2)", color: "var(--fg)", padding: "0 10px", fontFamily: "var(--f-mono)", fontSize: 12 }}
+        />
+        <select
+          aria-label="Revenue source"
+          value={source}
+          onChange={(event) => setSource(event.target.value as CompanyRevenueShareInput["source"])}
+          style={{ minWidth: 0, height: 34, borderRadius: 8, border: "1px solid var(--line-2)", background: "var(--bg-2)", color: "var(--fg)", padding: "0 10px", fontFamily: "var(--f-mono)", fontSize: 12 }}
+        >
+          <option value="manual">Manual</option>
+          <option value="stripe">Stripe</option>
+          <option value="invoice">Invoice</option>
+          <option value="x402">x402</option>
+          <option value="marketplace">Marketplace</option>
+          <option value="other">Other</option>
+        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)", whiteSpace: "nowrap" }}>
+            <input type="checkbox" checked={collectFee} onChange={(event) => setCollectFee(event.target.checked)} />
+            collect
+          </label>
+          <select
+            aria-label="Collecting agent wallet"
+            disabled={!collectFee || c.agents.length === 0}
+            value={effectiveAgentId}
+            onChange={(event) => setCollectingAgentId(event.target.value)}
+            style={{ flex: 1, minWidth: 0, height: 34, borderRadius: 8, border: "1px solid var(--line-2)", background: "var(--bg-2)", color: "var(--fg)", padding: "0 10px", fontFamily: "var(--f-mono)", fontSize: 12, opacity: collectFee ? 1 : 0.5 }}
+          >
+            {c.agents.length === 0 ? <option value="">No agent wallet</option> : null}
+            {c.agents.map((agent) => (
+              <option key={agent.id ?? agent.name} value={agent.id ?? ""}>{agent.name}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          disabled={!canSubmit || busy}
+          style={{ height: 34, minWidth: 150, padding: "0 13px", borderRadius: 8, cursor: !canSubmit || busy ? "not-allowed" : "pointer", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.06, border: "1px solid color-mix(in srgb, var(--honey) 45%, transparent)", background: !canSubmit || busy ? "var(--bg-3)" : "var(--honey-2)", color: !canSubmit || busy ? "var(--fg-4)" : "var(--bg-0)", opacity: busy ? 0.6 : 1 }}
+        >
+          {busy ? "…" : collectFee ? "Record + collect" : "Record"}
+        </button>
+      </form>
+    </Panel>
+  );
+}
+
 function TreasurySection({ colony: c, handlers }: { colony: Colony; handlers: CockpitHandlers }) {
   const busy = handlers.busyId === c.id;
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -552,6 +688,8 @@ function TreasurySection({ colony: c, handlers }: { colony: Colony; handlers: Co
           )}
         </Panel>
       </div>
+
+      <RevenueSharePanel colony={c} handlers={handlers} />
 
       {/* kill switch + disband — the company's hard governance controls */}
       <Panel style={c.frozen ? { borderColor: "color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 7%, var(--bg-1))" } : undefined}>

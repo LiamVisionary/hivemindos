@@ -66,6 +66,26 @@ try {
   assert.equal(blocked.blocked, true, "code-fix task should block without required receipts");
   assert.equal(blocked.task.status, "needs-human");
   assert(blocked.task.result.includes("Loop gate block"), "blocked result should explain missing loop gates");
+  assert(/\nACTION NEEDED:/.test(blocked.task.result), "blocked result should carry an explicit ACTION NEEDED ask for the Work Board headline");
+
+  // Human answers the blocked ask: the answer lands in the task body (so the
+  // next worker run sees it), the card returns to Ready with the SAME assignee,
+  // and a comment records the reply on the timeline.
+  const answered = await kanbanPost({
+    action: "answer",
+    taskId: codeTask.task.id,
+    answer: "Use the existing corepack pnpm shim; approved to continue.",
+  });
+  assert.equal(answered.ok, true);
+  assert.equal(answered.task.status, "ready", "answered task returns to the dispatch queue");
+  assert.equal(answered.task.assignee, "Loop Code Agent", "answer preserves the asking agent");
+  assert(answered.task.body.includes("Human answer"), "answer is stamped into the task body");
+  assert(answered.task.body.includes("corepack pnpm shim"), "answer text reaches the body");
+  assert.equal(answered.pickupScheduled, false, "no autonomous pickup without a delegated collector target");
+  assert(
+    answered.board.comments.some((comment) => comment.taskId === codeTask.task.id && comment.body.includes("corepack pnpm shim")),
+    "answer recorded as a task comment",
+  );
 
   const codeDone = await complete(codeTask.task.id, {
     summary: "Code fix completed with loop receipts.",

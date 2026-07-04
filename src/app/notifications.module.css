@@ -524,40 +524,43 @@
   font-size: 0.8rem;
 }
 
-/* — Buttons — override the shared <Button> inside this view to the warm
-     Fleet/Trade idiom: honey primary, panel-hi secondary. Scoped to the
-     panel so the app-wide Button component is untouched. The primary
-     ("Mark read") carries no data-variant; secondaries set it. CSS-module
-     rules are unlayered, so they win over Tailwind's layered utilities. — */
+/* Buttons — re-skin the shared <Button> inside this view to the warm dark-honey
+   palette: honey primary, transparent hairline secondaries that fill on hover.
+   WEIGHT is not set here — buttons inherit the app-wide font-normal (400) from
+   the shared Button component (src/components/ui/button.tsx). Scoped to this
+   panel via the <Button> data-attrs; CSS-module rules are unlayered so they win
+   over Tailwind's layered utilities. */
 .notificationsPanel button[data-slot="button"] {
   border-radius: var(--nf-radius-sm);
   box-shadow: none;
-  font-weight: 600;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  letter-spacing: 0;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
 }
 
+/* Secondary — transparent with a hairline, fills gently on hover. */
 .notificationsPanel button[data-variant="secondary"] {
   border: 1px solid var(--nf-line-2);
-  background: var(--nf-panel-hi);
+  background: transparent;
   color: var(--nf-fg-2);
 }
 
 .notificationsPanel button[data-variant="secondary"]:hover {
   border-color: var(--nf-line-3);
-  background: var(--nf-panel);
+  background: var(--nf-panel-hi);
   color: var(--nf-fg);
 }
 
+/* Primary — a single honey fill. */
 .notificationsPanel button[data-slot="button"]:not([data-variant]) {
-  border: 1px solid var(--nf-honey);
+  border: 1px solid transparent;
   background: var(--nf-honey);
-  color: #1a1206;
+  color: #1a1305;
 }
 
 .notificationsPanel button[data-slot="button"]:not([data-variant]):hover {
-  border-color: var(--nf-honey-2);
-  background: var(--nf-honey-2);
-  color: #1a1206;
+  background: var(--nf-honey);
+  color: #1a1305;
+  filter: brightness(1.05);
 }
 
 .resolutionNote {

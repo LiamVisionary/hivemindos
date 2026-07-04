@@ -43,5 +43,13 @@ opt-level = 3
 panic = "unwind"
 strip = true
 
+# Dev builds keep the app crate unoptimized for fast iteration, but optimize
+# dependencies: wry runs invoke handling and response serialization on the
+# UI-process main thread, and debug-mode serde_json/tauri/wry there made every
+# dashboard interaction stall for seconds (WKWebView input + compositing wait
+# on that same thread). One-time dependency rebuild cost, then cached.
+[profile.dev.package."*"]
+opt-level = 2
+
 [lints.rust]
 unsafe_code = "forbid"

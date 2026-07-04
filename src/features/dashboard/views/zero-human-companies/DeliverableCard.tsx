@@ -157,7 +157,7 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
   return (
     <>
       <button type="button" onClick={() => setViewing(true)} style={surface} {...hoverProps}>{body}</button>
-      {viewing && <FileViewerModal deliverable={deliverable} machineName={machineName} theme={theme} onClose={() => setViewing(false)} />}
+      {viewing && <FileViewerModal deliverable={deliverable} displayTitle={title} displayKind={kindLabel} machineName={machineName} theme={theme} onClose={() => setViewing(false)} />}
     </>
   );
 }

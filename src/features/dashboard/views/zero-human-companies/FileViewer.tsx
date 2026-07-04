@@ -21,14 +21,235 @@ type ViewerState =
 
 const TEXT_TYPES = /^(?:text\/|application\/json|application\/csv|application\/xml|application\/x-ndjson)/i;
 const TEXT_EXT = /\.(?:md|markdown|txt|json|jsonl|csv|tsv|log|yaml|yml|xml|html?|ts|tsx|js|mjs|py|sh|css)$/i;
+const MARKDOWN_EXT = /\.(?:md|markdown)$/i;
+const DOCUMENT_TEXT_EXT = /\.(?:txt)$/i;
+const RAW_TEXT_EXT = /\.(?:json|jsonl|csv|tsv|log|yaml|yml|xml|html?|ts|tsx|js|mjs|py|sh|css)$/i;
 
 function fileNameOf(d: IssueDeliverable): string {
   const base = (d.path || d.label || "file").split(/[\\/]/).filter(Boolean).at(-1) || "file";
   return base.split(/[?#]/)[0] || "file";
 }
 
-export function FileViewerModal({ deliverable, machineName, theme = "dark", onClose }: {
-  deliverable: IssueDeliverable; machineName?: string; theme?: Theme; onClose: () => void;
+function textMode(fileName: string, kind?: string): "markdown" | "document" | "raw" {
+  if (MARKDOWN_EXT.test(fileName)) return "markdown";
+  if (RAW_TEXT_EXT.test(fileName)) return "raw";
+  const label = `${kind ?? ""} ${fileName}`.toLowerCase();
+  if (DOCUMENT_TEXT_EXT.test(fileName) || /\b(report|document|brief|memo|result|note)\b/.test(label)) return "document";
+  return "raw";
+}
+
+function stripFrontmatter(text: string): string {
+  return text.replace(/^---\s*\n[\s\S]*?\n---\s*\n?/, "").trim();
+}
+
+function safeHref(href: string): string {
+  const trimmed = href.trim();
+  if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed) || trimmed.startsWith("#")) return trimmed;
+  return "#";
+}
+
+function inlineMarkdown(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<>()]+)/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > cursor) nodes.push(text.slice(cursor, match.index));
+    const token = match[0];
+    if (token.startsWith("`") && token.endsWith("`")) {
+      nodes.push(<code key={`code-${match.index}`}>{token.slice(1, -1)}</code>);
+    } else if (token.startsWith("**") && token.endsWith("**")) {
+      nodes.push(<strong key={`strong-${match.index}`}>{inlineMarkdown(token.slice(2, -2))}</strong>);
+    } else if (token.startsWith("[")) {
+      const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
+      const href = safeHref(link?.[2] ?? "#");
+      const external = /^https?:\/\//i.test(href);
+      nodes.push(
+        <a key={`link-${match.index}`} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined}>
+          {link?.[1] ?? token}
+        </a>,
+      );
+    } else {
+      const href = safeHref(token.replace(/[.,;:!?]+$/, ""));
+      const trailing = token.slice(href.length);
+      nodes.push(<a key={`url-${match.index}`} href={href} target="_blank" rel="noreferrer">{href}</a>);
+      if (trailing) nodes.push(trailing);
+    }
+    cursor = match.index + token.length;
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes;
+}
+
+function keyValueLine(line: string): { key: string; value: string } | null {
+  const match = /^([A-Za-z][A-Za-z0-9 _/-]{1,32}):\s+(.+)$/.exec(line.trim());
+  if (!match) return null;
+  return { key: match[1].trim(), value: match[2].trim() };
+}
+
+function isTableDivider(line: string): boolean {
+  return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(line);
+}
+
+function splitTableRow(line: string): string[] {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+}
+
+function renderDocumentBlocks(text: string, markdown: boolean): React.ReactNode[] {
+  const lines = stripFrontmatter(text).split(/\r?\n/);
+  const blocks: React.ReactNode[] = [];
+  let index = 0;
+  const nextKey = (kind: string) => `${kind}-${index}-${blocks.length}`;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmed = line.trim();
+    if (!trimmed) {
+      index += 1;
+      continue;
+    }
+
+    if (markdown && trimmed.startsWith("```")) {
+      const code: string[] = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith("```")) {
+        code.push(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) index += 1;
+      blocks.push(<pre className="zhc-file-document-code" key={nextKey("code")}><code>{code.join("\n")}</code></pre>);
+      continue;
+    }
+
+    if (markdown && /^-{3,}$/.test(trimmed)) {
+      blocks.push(<hr key={nextKey("hr")} />);
+      index += 1;
+      continue;
+    }
+
+    if (markdown) {
+      const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+      if (heading) {
+        const level = heading[1].length;
+        const content = inlineMarkdown(heading[2]);
+        blocks.push(level === 1
+          ? <h1 key={nextKey("h1")}>{content}</h1>
+          : level === 2
+            ? <h2 key={nextKey("h2")}>{content}</h2>
+            : <h3 key={nextKey("h3")}>{content}</h3>);
+        index += 1;
+        continue;
+      }
+    }
+
+    if (markdown && index + 1 < lines.length && /\|/.test(trimmed) && isTableDivider(lines[index + 1])) {
+      const header = splitTableRow(trimmed);
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && /\|/.test(lines[index].trim())) {
+        rows.push(splitTableRow(lines[index]));
+        index += 1;
+      }
+      blocks.push(
+        <div className="zhc-file-document-tableWrap" key={nextKey("table")}>
+          <table>
+            <thead><tr>{header.map((cell, cellIndex) => <th key={`h-${cellIndex}`}>{inlineMarkdown(cell)}</th>)}</tr></thead>
+            <tbody>{rows.map((row, rowIndex) => <tr key={`r-${rowIndex}`}>{row.map((cell, cellIndex) => <td key={`c-${cellIndex}`}>{inlineMarkdown(cell)}</td>)}</tr>)}</tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
+    const meta = keyValueLine(trimmed);
+    if (meta && !/^https?:\/\//i.test(meta.value)) {
+      const items = [meta];
+      index += 1;
+      while (index < lines.length) {
+        const next = keyValueLine(lines[index]);
+        if (!next) break;
+        items.push(next);
+        index += 1;
+      }
+      blocks.push(
+        <dl className="zhc-file-document-meta" key={nextKey("meta")}>
+          {items.map((item) => (
+            <React.Fragment key={item.key}>
+              <dt>{item.key}</dt>
+              <dd>{inlineMarkdown(item.value)}</dd>
+            </React.Fragment>
+          ))}
+        </dl>,
+      );
+      continue;
+    }
+
+    if (/^\s*[-*]\s+/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^\s*[-*]\s+/.test(lines[index])) {
+        items.push(lines[index].replace(/^\s*[-*]\s+/, "").trim());
+        index += 1;
+      }
+      blocks.push(<ul key={nextKey("ul")}>{items.map((item, itemIndex) => <li key={itemIndex}>{inlineMarkdown(item)}</li>)}</ul>);
+      continue;
+    }
+
+    if (/^\s*\d+[.)]\s+/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^\s*\d+[.)]\s+/.test(lines[index])) {
+        items.push(lines[index].replace(/^\s*\d+[.)]\s+/, "").trim());
+        index += 1;
+      }
+      blocks.push(<ol key={nextKey("ol")}>{items.map((item, itemIndex) => <li key={itemIndex}>{inlineMarkdown(item)}</li>)}</ol>);
+      continue;
+    }
+
+    if (markdown && /^>\s+/.test(line)) {
+      const quote: string[] = [];
+      while (index < lines.length && /^>\s+/.test(lines[index])) {
+        quote.push(lines[index].replace(/^>\s+/, ""));
+        index += 1;
+      }
+      blocks.push(<blockquote key={nextKey("quote")}>{quote.map((item, itemIndex) => <p key={itemIndex}>{inlineMarkdown(item)}</p>)}</blockquote>);
+      continue;
+    }
+
+    const paragraph: string[] = [];
+    while (index < lines.length && lines[index].trim()) {
+      if (markdown && /^(#{1,3})\s+|```|^\s*[-*]\s+|^\s*\d+[.)]\s+|^>\s+/.test(lines[index])) break;
+      const nextMeta = keyValueLine(lines[index]);
+      if (nextMeta && !/^https?:\/\//i.test(nextMeta.value)) break;
+      if (index + 1 < lines.length && /\|/.test(lines[index]) && isTableDivider(lines[index + 1])) break;
+      paragraph.push(lines[index].trim());
+      index += 1;
+    }
+    if (paragraph.length) blocks.push(<p key={nextKey("p")}>{inlineMarkdown(paragraph.join(" "))}</p>);
+  }
+
+  return blocks;
+}
+
+function DocumentTextView({ text, markdown }: { text: string; markdown: boolean }) {
+  return (
+    <article className="zhc-file-document scrollbar-thin">
+      {renderDocumentBlocks(text, markdown)}
+    </article>
+  );
+}
+
+function RawTextView({ text }: { text: string }) {
+  return <pre className="zhc-file-raw scrollbar-thin">{text}</pre>;
+}
+
+function TextPreview({ text, fileName, kind }: { text: string; fileName: string; kind?: string }) {
+  const mode = textMode(fileName, kind);
+  return mode === "raw"
+    ? <RawTextView text={text} />
+    : <DocumentTextView text={text} markdown={mode === "markdown"} />;
+}
+
+export function FileViewerModal({ deliverable, displayTitle, displayKind, machineName, theme = "dark", onClose }: {
+  deliverable: IssueDeliverable; displayTitle?: string; displayKind?: string; machineName?: string; theme?: Theme; onClose: () => void;
 }) {
   const [state, setState] = React.useState<ViewerState>({ phase: "loading" });
   const fileName = fileNameOf(deliverable);
@@ -72,14 +293,15 @@ export function FileViewerModal({ deliverable, machineName, theme = "dark", onCl
     };
   }, [deliverable, fileName, machineName]);
 
-  const subtitle = [deliverable.kind, deliverable.path, machineName ? `on ${machineName}` : null].filter(Boolean).join(" · ");
+  const modalTitle = displayTitle?.trim() || fileName;
+  const subtitle = [displayKind || deliverable.kind || "File", machineName ? `on ${machineName}` : null].filter(Boolean).join(" · ");
   const downloadUrl = "downloadUrl" in state ? state.downloadUrl : null;
   const footer = downloadUrl ? (
-    <a href={downloadUrl} download={fileName} style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", border: "1px solid var(--line-2)", borderRadius: 8, background: "var(--bg-3)", color: "var(--cyan-2)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "6px 12px" }}>↓ download {fileName}</a>
+    <a href={downloadUrl} download={fileName} style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", border: "1px solid var(--line-2)", borderRadius: 8, background: "var(--bg-3)", color: "var(--cyan-2)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "6px 12px" }}>Download {fileName}</a>
   ) : null;
 
   return (
-    <Modal title={fileName} subtitle={subtitle} onClose={onClose} width={900} theme={theme} zIndex={2147483100} footer={footer}>
+    <Modal title={modalTitle} subtitle={subtitle} onClose={onClose} width={920} theme={theme} zIndex={2147483100} footer={footer}>
       {state.phase === "loading" && (
         <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "24px 0", textAlign: "center" }}>Loading file…</div>
       )}
@@ -89,7 +311,7 @@ export function FileViewerModal({ deliverable, machineName, theme = "dark", onCl
         </div>
       )}
       {state.phase === "text" && (
-        <pre style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "var(--f-mono)", fontSize: 12, lineHeight: 1.55, color: "var(--fg-2)", maxHeight: "70vh", overflow: "auto", borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "12px 14px" }} className="scrollbar-thin">{state.text}</pre>
+        <TextPreview text={state.text} fileName={state.fileName} kind={deliverable.kind} />
       )}
       {state.phase === "image" && (
         // Client-side blob: object URL from an authed fetch — next/image can't

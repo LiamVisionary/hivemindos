@@ -3,6 +3,7 @@ import type { KanbanStatus } from "@/lib/types/kanban";
 import {
   addComment,
   addLink,
+  answerHumanTask,
   archiveBoard,
   blockTask,
   bulkPatchTasks,
@@ -129,6 +130,31 @@ export async function POST(request: NextRequest) {
     if (body.action === "unblock") {
       const result = await unblockTask(boardSlug, body.taskId, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
+    if (body.action === "answer") {
+      const result = await answerHumanTask(boardSlug, body.taskId, { answer: body.answer, author: body.author }, storageOptions);
+      // Resume with the SAME agent that asked: when the card still carries a
+      // delegated target, schedule an immediate autonomous pickup instead of
+      // waiting for the next re-dispatch sweep (same delegation shape as
+      // redispatchReadyQueenBeeTasks).
+      const task = result.task;
+      const assignee = task.assignee?.trim();
+      const collectorUrl = task.targetMachine?.collectorUrl;
+      let pickupScheduled = false;
+      if (assignee && assignee !== "queen-bee" && collectorUrl) {
+        const { scheduleQueenBeeAutonomousPickup } = await import("@/lib/services/queen-bee/autonomous-worker");
+        pickupScheduled = scheduleQueenBeeAutonomousPickup({
+          task,
+          delegation: {
+            status: "delegated",
+            agent: { name: assignee, runtime: "hermes", runtimeCapabilities: { chat: true } },
+            machine: { key: task.targetMachine?.key, device: { name: task.targetMachine?.name, collectorUrl } },
+          },
+          vaultPath: storageOptions.vaultPath,
+          kanbanFolder: storageOptions.kanbanFolder,
+        });
+      }
+      return NextResponse.json({ ok: true, ...result, pickupScheduled, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "promote") {
       const result = await promoteTask(boardSlug, body.taskId, body, storageOptions);

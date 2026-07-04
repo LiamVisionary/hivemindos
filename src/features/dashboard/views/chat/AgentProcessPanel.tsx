@@ -75,6 +75,7 @@ function processDisplayEvents(events: ProcessEvent[] = []) {
     const label = String(event?.label ?? "").trim();
     const detail = String(event?.detail ?? "").trim();
     if (/assistant started writing|assistant wrote in session|agent replied|queued chat request/i.test(label)) return false;
+    if (/^Attached .+ session$/i.test(label)) return false;
     if (/^Runtime event$/i.test(label) || /^Runtime event$/i.test(detail)) return false;
     return true;
   });

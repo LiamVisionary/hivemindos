@@ -10,6 +10,7 @@ import type {
   CompanyCapabilityCapital,
   CompanySpendRollup,
 } from "@/lib/types/company";
+import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
 import { computeLoopCapabilityCapital } from "@/lib/services/loops";
 import type {
@@ -409,12 +410,13 @@ function deriveCapabilityCapital(
 export interface BuildColonyInput {
   company: Company;
   rollup: CompanySpendRollup;
+  revenueShare?: CompanyRevenueRollup;
   approvals: ApprovalRow[];
   agentsById: Map<string, AgentLite>;
   tasks: KanbanTaskLite[];
 }
 
-export function buildColony({ company, rollup, approvals, agentsById, tasks }: BuildColonyInput): Colony {
+export function buildColony({ company, rollup, revenueShare, approvals, agentsById, tasks }: BuildColonyInput): Colony {
   const safeName = (company.name || "").trim() || company.id || "Untitled company";
   const ticker = (company.ticker || safeName.replace(/[^a-z]/gi, "").slice(0, 4) || "ORG").toUpperCase();
   const agents = buildAgents(company, agentsById, rollup);
@@ -501,6 +503,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
     burn,
     capabilityCapital,
     revenue,
+    revenueShare,
     velocity: deriveVelocity(liveTasks),
     approvals: approvals.map((a) => mapApproval(a, company.dailyBudgetUsd)),
     agents,

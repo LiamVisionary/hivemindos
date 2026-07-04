@@ -60,6 +60,7 @@ export type PlatformFeeSource =
   | "bankr-action"
   | "moneyclaw"
   | "x402-paid-api"
+  | "company-revenue"
   | "veil-transfer"
   | "veil-x402";
 

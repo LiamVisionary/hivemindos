@@ -51,13 +51,18 @@ fn read_values() -> Map<String, Value> {
     }
 }
 
+// Both commands are async so they run on the async runtime instead of the
+// UI-process main thread. The store can reach tens of megabytes, and wry
+// delivers sync-command invokes (and serializes their responses) on the main
+// thread — which stalled every WKWebView input event and layer-tree commit
+// behind multi-second JSON work, freezing the whole dev app per interaction.
 #[tauri::command]
-pub fn dashboard_state_read() -> Value {
+pub async fn dashboard_state_read() -> Value {
     json!({ "ok": true, "values": Value::Object(read_values()) })
 }
 
 #[tauri::command]
-pub fn dashboard_state_write(
+pub async fn dashboard_state_write(
     values: Option<HashMap<String, String>>,
     remove: Option<Vec<String>>,
 ) -> Result<Value, String> {
@@ -83,7 +88,7 @@ pub fn dashboard_state_write(
     let updated_at = chrono::Utc::now().to_rfc3339();
     let document = json!({
         "version": 1,
-        "values": Value::Object(current.clone()),
+        "values": Value::Object(current),
         "updatedAt": updated_at,
     });
 
@@ -107,5 +112,8 @@ pub fn dashboard_state_write(
     }
     fs::rename(&temporary, &path).map_err(|error| error.to_string())?;
 
-    Ok(json!({ "ok": true, "values": Value::Object(current), "updatedAt": updated_at }))
+    // Deliberately no `values` echo: the only caller (dashboard-state-client.ts
+    // postDashboardState) reads just `ok`, and echoing the full store shipped
+    // the entire multi-megabyte state back through IPC on every save.
+    Ok(json!({ "ok": true, "updatedAt": updated_at }))
 }

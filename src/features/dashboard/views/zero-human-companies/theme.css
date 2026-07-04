@@ -87,6 +87,201 @@
 .zhc-root .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .zhc-root .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
 
+.zhc-root .zhc-file-document {
+  max-height: 70vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg-2) 96%, white), var(--bg-1)),
+    var(--bg-1);
+  color: var(--fg-2);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.72;
+  padding: clamp(24px, 4vw, 44px);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 6%, transparent), 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.zhc-root .zhc-file-document > * {
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.zhc-root .zhc-file-document > :first-child {
+  margin-top: 0;
+}
+
+.zhc-root .zhc-file-document > :last-child {
+  margin-bottom: 0;
+}
+
+.zhc-root .zhc-file-document h1,
+.zhc-root .zhc-file-document h2,
+.zhc-root .zhc-file-document h3 {
+  color: var(--fg);
+  font-family: var(--f-display);
+  letter-spacing: 0;
+  line-height: 1.18;
+}
+
+.zhc-root .zhc-file-document h1 {
+  margin: 0 0 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  font-size: 28px;
+  font-weight: 650;
+}
+
+.zhc-root .zhc-file-document h2 {
+  margin: 34px auto 12px;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.zhc-root .zhc-file-document h3 {
+  margin: 26px auto 10px;
+  color: var(--honey-2);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.zhc-root .zhc-file-document p {
+  margin: 0 auto 16px;
+}
+
+.zhc-root .zhc-file-document strong {
+  color: var(--fg);
+  font-weight: 650;
+}
+
+.zhc-root .zhc-file-document a {
+  color: var(--cyan-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.zhc-root .zhc-file-document code {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--cyan) 8%, var(--bg-2));
+  color: var(--fg);
+  font-family: var(--f-mono);
+  font-size: 0.86em;
+  padding: 0.12em 0.38em;
+}
+
+.zhc-root .zhc-file-document ul,
+.zhc-root .zhc-file-document ol {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  margin-bottom: 20px;
+  padding-left: 1.2rem;
+}
+
+.zhc-root .zhc-file-document li {
+  padding-left: 0.2rem;
+}
+
+.zhc-root .zhc-file-document li::marker {
+  color: var(--honey-2);
+  font-weight: 700;
+}
+
+.zhc-root .zhc-file-document blockquote {
+  border-left: 3px solid var(--cyan);
+  margin-top: 18px;
+  margin-bottom: 20px;
+  padding: 8px 0 8px 16px;
+  color: var(--fg-3);
+}
+
+.zhc-root .zhc-file-document hr {
+  height: 1px;
+  border: 0;
+  background: var(--line);
+  margin: 28px auto;
+}
+
+.zhc-root .zhc-file-document-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 14px;
+  margin-top: -6px;
+  margin-bottom: 28px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--honey) 6%, var(--bg-2));
+  padding: 12px 14px;
+}
+
+.zhc-root .zhc-file-document-meta dt {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.zhc-root .zhc-file-document-meta dd {
+  margin: 0;
+  color: var(--fg-2);
+  overflow-wrap: anywhere;
+}
+
+.zhc-root .zhc-file-document-tableWrap {
+  overflow-x: auto;
+  margin-top: 18px;
+  margin-bottom: 24px;
+}
+
+.zhc-root .zhc-file-document table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.zhc-root .zhc-file-document th,
+.zhc-root .zhc-file-document td {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.zhc-root .zhc-file-document th {
+  color: var(--fg);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.zhc-root .zhc-file-document-code,
+.zhc-root .zhc-file-raw {
+  margin: 0;
+  max-height: 70vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 12px 14px;
+}
+
+.zhc-root .zhc-file-document-code code {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
 @keyframes zhc-pulse-dot {
   0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
   50% { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 6%, transparent); }

@@ -23,83 +23,47 @@
   opacity: 1;
 }
 
-.glowSvg {
+/* Screen-perimeter glow body: a soft purple halo hugging the viewport edges
+   (inset box-shadow), gently cycling hue. Matches the Page Agent whole-page
+   glow; replaced the earlier SVG rounded-rect trace + warm brand gradient. */
+.glowFrame {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  transform: translateZ(0);
+  /* static base — also what shows under reduced motion */
+  box-shadow:
+    inset 0 0 44px 2px rgba(124, 77, 255, 0.5),
+    inset 0 0 120px 18px rgba(124, 77, 255, 0.22);
 }
 
-.glowBreath {
-  opacity: 0.92;
+.glowRootActive .glowFrame {
+  animation: queenVoiceEdgeGlow 3.6s ease-in-out infinite;
 }
 
-.glowTraceOuter,
-.glowTraceBloom,
-.glowTraceCore {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-  mix-blend-mode: screen;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.glowTraceOuter {
-  stroke-width: 26;
-  opacity: 0.32;
-  animation: queenVoiceGlowOuterBreath 4.8s ease-in-out infinite;
-}
-
-.glowTraceBloom {
-  stroke-width: 16;
-  opacity: 0.42;
-  animation: queenVoiceGlowBloomBreath 4.8s ease-in-out infinite;
-}
-
-.glowTraceCore {
-  stroke-width: 6;
-  opacity: 0.18;
-  animation: queenVoiceGlowCoreBreath 4.8s ease-in-out infinite;
-}
-
-@keyframes queenVoiceGlowOuterBreath {
+/* purple -> magenta -> indigo */
+@keyframes queenVoiceEdgeGlow {
   0%,
   100% {
-    filter: blur(14px) saturate(1.32);
-    opacity: 0.22;
+    box-shadow:
+      inset 0 0 44px 2px rgba(124, 77, 255, 0.5),
+      inset 0 0 120px 18px rgba(124, 77, 255, 0.22);
   }
 
-  50% {
-    filter: blur(24px) saturate(1.5);
-    opacity: 0.42;
-  }
-}
-
-@keyframes queenVoiceGlowBloomBreath {
-  0%,
-  100% {
-    filter: blur(9px) saturate(1.32);
-    opacity: 0.28;
+  33% {
+    box-shadow:
+      inset 0 0 48px 3px rgba(184, 91, 255, 0.52),
+      inset 0 0 130px 20px rgba(184, 91, 255, 0.24);
   }
 
-  50% {
-    filter: blur(17px) saturate(1.45);
-    opacity: 0.48;
+  66% {
+    box-shadow:
+      inset 0 0 44px 2px rgba(99, 110, 241, 0.5),
+      inset 0 0 120px 18px rgba(99, 110, 241, 0.2);
   }
 }
 
-@keyframes queenVoiceGlowCoreBreath {
-  0%,
-  100% {
-    filter: blur(5px) saturate(1.24);
-    opacity: 0.1;
-  }
-
-  50% {
-    filter: blur(9px) saturate(1.34);
-    opacity: 0.18;
+@media (prefers-reduced-motion: reduce) {
+  .glowRootActive .glowFrame {
+    animation: none;
   }
 }
 

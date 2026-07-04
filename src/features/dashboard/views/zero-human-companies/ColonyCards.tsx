@@ -26,6 +26,9 @@ export function ColonyCard({ colony: c, density, showBudget, onOpen }: CardProps
   const ringIsMetric = !!(r && r.isApex && r.pct != null);
   const ringPct = ringIsMetric ? (r!.pct as number) : (fresh ? 0 : c.alignment);
   const ringColor = ringIsMetric ? (r!.up ? "var(--cyan)" : "var(--danger)") : alignColor;
+  // Everything on this company waiting on a human decision — blocked issues plus
+  // pending spend approvals — surfaced as a badge so blockers show from the landing.
+  const needsYou = c.issues.filter((i) => i.work?.status === "needs-human" || i.status === "board_review").length + c.approvals.length;
 
   return (
     <div
@@ -47,6 +50,19 @@ export function ColonyCard({ colony: c, density, showBudget, onOpen }: CardProps
         <span style={{ fontFamily: "var(--f-display)", fontSize: 20, fontWeight: 600, letterSpacing: -0.4, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
         <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{c.ticker}</span>
         <span style={{ flex: 1 }} />
+        {needsYou > 0 && (
+          <span
+            title={`${needsYou} item${needsYou === 1 ? "" : "s"} waiting on your decision`}
+            style={{
+              flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4,
+              borderRadius: 999, padding: "2px 8px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600,
+              color: "var(--danger-2)", background: "color-mix(in srgb, var(--danger) 15%, transparent)",
+              border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)",
+            }}
+          >
+            ⛔ {needsYou} needs you
+          </span>
+        )}
         <StatusPill status={c.status} />
       </div>
 
@@ -146,6 +162,7 @@ export function MinimalColonyCard({ colony: c, density, showBudget, onOpen }: Ca
   const alignColor = fresh ? "var(--fg-3)" : c.alignment >= 75 ? "var(--cyan)" : c.alignment >= 55 ? "var(--honey-2)" : "var(--danger)";
   const pad = compact ? 26 : 34;
   const minH = compact ? 300 : 360;
+  const blockedCount = c.issues.filter((i) => i.work?.status === "needs-human" || i.status === "board_review").length;
   return (
     <div
       onClick={() => onOpen(c.id)}
@@ -165,6 +182,9 @@ export function MinimalColonyCard({ colony: c, density, showBudget, onOpen }: Ca
         <span style={{ width: 7, height: 7, borderRadius: 999, background: tone.dot }} />
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: tone.color, textTransform: "uppercase", letterSpacing: 0.1 }}>{tone.label}</span>
         <span style={{ flex: 1 }} />
+        {blockedCount > 0 && (
+          <span title={`${blockedCount} item${blockedCount === 1 ? "" : "s"} waiting on your decision`} style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--danger-2)", whiteSpace: "nowrap" }}>⛔ {blockedCount} needs you</span>
+        )}
         {c.approvals.length > 0 && (
           <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--honey-2)", whiteSpace: "nowrap" }}>{c.approvals.length} to approve</span>
         )}

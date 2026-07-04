@@ -213,7 +213,7 @@ function rememberCandidates(origin: string, candidates: LocalTtsCandidate[]) {
 async function resolvedTtsApp(origin: string, appId: string) {
   await hydratePersistedApps(origin).catch(() => undefined);
   return cachedApp(origin, appId)
-    ?? (await discoveredApps(origin, { selectedAppId: appId })).find((item) => matchesAppId(item, appId) && item.apiBaseUrl)
+    ?? findMatchingApp(await discoveredApps(origin, { selectedAppId: appId }), appId)
     ?? null;
 }
 
@@ -238,6 +238,21 @@ function matchesAppId(app: HostedApp, selectedAppId: string) {
   const candidate = appIdHint(app.id);
   if (!selected || !candidate || selected.host !== candidate.host) return false;
   return selected.port === candidate.port;
+}
+
+// A machine hostname rename (macOS conflict-renames, tsnet re-registration)
+// rotates every hosted-app id on that machine, so a host-pinned selection can
+// never re-match strictly. When no app matches the pinned host, fall back to
+// the single TTS-capable app on the same port; with zero or several
+// candidates the pin stays unresolved rather than guessing across machines.
+function findMatchingApp(apps: HostedApp[], selectedAppId: string) {
+  const strict = apps.find((app) => matchesAppId(app, selectedAppId) && app.apiBaseUrl);
+  if (strict) return strict;
+  const selected = appIdHint(selectedAppId);
+  if (!selected) return undefined;
+  const samePort = apps.filter((app) =>
+    app.apiBaseUrl && appIdHint(app.id)?.port === selected.port && hasLocalTtsCapabilitySurface(app));
+  return samePort.length === 1 ? samePort[0] : undefined;
 }
 
 export function isLocalTtsProviderId(value?: string): value is string {
@@ -811,9 +826,12 @@ async function discoveredApps(origin: string, options?: { force?: boolean; selec
     }
 
     const raw = await discoverRawConnectedApps(origin, { timeoutMs: RAW_TTS_DISCOVERY_TIMEOUT_MS }).catch(() => []);
-    const rawApp = raw.find((item) => matchesAppId(item, options.selectedAppId!));
+    const rawApp = findMatchingApp(raw, options.selectedAppId);
     if (rawApp) {
       rememberApps(origin, raw);
+      // Re-pin under the selected id so the next resolve is a cache hit even
+      // when the app's id rotated with its machine hostname.
+      touchCachedApp(origin, options.selectedAppId, rawApp);
       return [rawApp];
     }
   }
@@ -1097,7 +1115,7 @@ export async function manageLocalTtsModel(input: {
   detail?: unknown;
 }> {
   const app = cachedApp(input.origin, input.appId)
-    ?? (await discoveredApps(input.origin, { selectedAppId: input.appId })).find((item) => matchesAppId(item, input.appId) && item.apiBaseUrl);
+    ?? findMatchingApp(await discoveredApps(input.origin, { selectedAppId: input.appId }), input.appId);
   if (!app?.apiBaseUrl) return { ok: false, message: "No matching connected TTS app with an API base URL was found." };
 
   const providersPayload = await appJson(app, "/providers").catch(() => appJson(app, "/runtimes").catch(() => null));

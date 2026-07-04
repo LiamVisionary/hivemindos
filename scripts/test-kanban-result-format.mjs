@@ -10,6 +10,11 @@ const {
   extractResultArtifacts,
   formatPlainResultBody,
   extractActionNeeded,
+  extractHumanAsk,
+  parseTaskBrief,
+  taskBriefHeadline,
+  isBriefGuidanceSection,
+  isBriefGuidanceText,
 } = await import("../src/features/dashboard/kanban-result-format.ts");
 
 // The real Ada Lovelace deliverability result that motivated this formatter.
@@ -67,6 +72,136 @@ const adaResult = "Deliverability setup result recorded by Ada Lovelace: AgentMa
   assert.equal(extractActionNeeded(undefined), "", "undefined result yields empty ask");
   const lastResort = extractActionNeeded("Everything went fine. Task closed early.");
   assert.equal(lastResort, "Task closed early.", "falls back to the final sentence");
+}
+
+// --- extractHumanAsk: structured needs-human asks -------------------------
+
+{
+  const full = extractHumanAsk([
+    "Research stalled at the API layer.",
+    "",
+    "ACTION NEEDED: Create an OpenAI API key and provide it so outreach drafting can continue.",
+    "LINK: https://platform.openai.com/api-keys — OpenAI key page",
+    "OPTIONS: Use my existing key | Create a new key",
+    "NEEDS: api-key OPENAI_API_KEY",
+  ].join("\n"));
+  assert.ok(full, "structured ask parsed");
+  assert.ok(full.ask.startsWith("Create an OpenAI API key"), "ask text extracted");
+  assert.equal(full.links.length, 1, "LINK line parsed");
+  assert.equal(full.links[0].url, "https://platform.openai.com/api-keys");
+  assert.equal(full.links[0].label, "OpenAI key page", "explicit link label kept");
+  assert.deepEqual(full.options, ["Use my existing key", "Create a new key"], "OPTIONS split on pipes");
+  assert.deepEqual(full.input, { kind: "api-key", envKey: "OPENAI_API_KEY" }, "NEEDS parsed with env key");
+}
+
+{
+  const bare = extractHumanAsk("ACTION NEEDED: Approve the plan at https://example.com/plans/7 before I proceed.");
+  assert.equal(bare.links.length, 1, "bare URL in the ask becomes a link");
+  assert.equal(bare.links[0].url, "https://example.com/plans/7", "trailing punctuation stripped");
+  assert.ok(!bare.ask.includes("https://"), "URL removed from the ask prose");
+  assert.ok(bare.ask.includes("Approve the plan"), "ask prose preserved");
+}
+
+{
+  const inferred = extractHumanAsk("ACTION NEEDED: Provide the ANTHROPIC_API_KEY API key so the drafting agent can run.");
+  assert.equal(inferred.input?.kind, "api-key", "api-key inferred from prose");
+  assert.equal(inferred.input?.envKey, "ANTHROPIC_API_KEY", "env-shaped token picked up");
+}
+
+{
+  const decision = extractHumanAsk("ACTION NEEDED: Should I send the outreach batch now?\nOPTIONS: Yes | No | Wait until Monday");
+  assert.deepEqual(decision.options, ["Yes", "No", "Wait until Monday"]);
+  assert.equal(decision.input, undefined, "no input control for a pure decision");
+}
+
+{
+  const file = extractHumanAsk("ACTION NEEDED: Attach the signed contract PDF so I can countersign.\nNEEDS: file");
+  assert.deepEqual(file.input, { kind: "file", envKey: undefined }, "file ask parsed");
+  assert.equal(file.options.length, 0);
+}
+
+{
+  assert.equal(extractHumanAsk(""), null, "empty result yields no ask");
+  assert.equal(extractHumanAsk(undefined), null, "undefined result yields no ask");
+  const plain = extractHumanAsk("ACTION NEEDED: Reply with the preferred launch date.");
+  assert.equal(plain.links.length, 0);
+  assert.equal(plain.options.length, 0);
+  assert.equal(plain.input, undefined, "plain text ask has no inferred controls");
+}
+
+// --- parseTaskBrief: control-plane dispatch briefs -------------------------
+
+const controlPlaneBrief = [
+  "Created by the Queen Bee control plane.",
+  "",
+  "Source: company:df5c0f4a-4c12:mr4zji71",
+  "Mode: act",
+  "Intent fingerprint: 92127d3c8356d5314cc3a06e",
+  "Worker class: planner",
+  "Delegated agent: Grace Hopper",
+  "Target machine: hivemindos-ubuntu-8gb-hel1-2",
+  "Loop contract",
+  "Mode: optimizer",
+  "Goal: Resolve email deliverability setup issues",
+  "Success criteria: Weekly Revenue moves toward 5k.; The result includes reusable learning.",
+  "Request",
+  "Address the failures in the outreach email deliverability setup.",
+  "Complete this scoped task and record the result on the Work Board.",
+  "---",
+  "Company: Website Outreach Agency (Web Development)",
+  "Apex goal: Earn $250k/yr creating and shipping websites",
+  "Metric: Weekly Revenue -> target 5k (current 0)",
+  "Charter: Autonomous Sarasota web agency",
+  "",
+  "What the company has done recently (newest first):",
+  "[2026-07-03] DONE: Verify outreach email deliverability setup (HermesMain) — Completed deliverability verification",
+  "[2026-07-03] BLOCKED: Verify outreach email deliverability setup (HermesMain) — Queen Bee autonomous pickup exhausted",
+  "",
+  "Do not repeat work listed as DONE above. Record a concrete, durable result on the Work Board.",
+].join("\n");
+
+{
+  const brief = parseTaskBrief(controlPlaneBrief);
+  assert.ok(brief, "control-plane brief parses");
+  const first = brief.sections[0];
+  assert.equal(first.title, undefined, "leading section untitled");
+  assert.equal(first.blocks[0].kind, "prose", "intro prose kept first");
+  assert.ok(first.blocks[0].text.includes("Queen Bee control plane"));
+  const fieldsBlock = first.blocks.find((b) => b.kind === "fields");
+  assert.equal(fieldsBlock.fields.length, 6, "routing fields grouped");
+  assert.equal(fieldsBlock.fields[0].key, "Source");
+  const loop = brief.sections.find((s) => s.title === "Loop contract");
+  assert.ok(loop, "Loop contract section detected");
+  assert.ok(loop.blocks[0].fields.some((f) => f.key === "Goal"), "loop fields parsed");
+  const request = brief.sections.find((s) => s.title === "Request");
+  assert.ok(request.blocks[0].text.startsWith("Address the failures"), "request prose parsed");
+  const activity = brief.sections.find((s) => s.title === "Recent company activity");
+  const items = activity.blocks.find((b) => b.kind === "activity").items;
+  assert.equal(items.length, 2, "digest lines become activity items");
+  assert.equal(items[0].kind, "DONE");
+  assert.equal(items[1].kind, "BLOCKED");
+  assert.equal(items[0].date, "2026-07-03");
+  assert.equal(taskBriefHeadline(brief), "Address the failures in the outreach email deliverability setup.", "headline = first Request line");
+}
+
+{
+  assert.equal(parseTaskBrief("Just a hand-written task body with one Note: inline."), null, "ordinary bodies do not parse as briefs");
+  assert.equal(parseTaskBrief(""), null);
+  assert.equal(parseTaskBrief(undefined), null);
+}
+
+// --- brief guidance classification -----------------------------------------
+
+{
+  assert.equal(isBriefGuidanceSection({ title: "Routing contract", blocks: [] }), true);
+  assert.equal(isBriefGuidanceSection({ title: "Queen Bee delegation", blocks: [] }), true);
+  assert.equal(isBriefGuidanceSection({ title: "Request", blocks: [] }), false);
+  assert.equal(isBriefGuidanceSection({ blocks: [] }), false, "untitled sections are not guidance by title");
+  assert.equal(isBriefGuidanceText("Do not repeat work listed as DONE above. Record a concrete, durable result on the Work Board."), true);
+  assert.equal(isBriefGuidanceText("If you are blocked on human input, access, approval, or a decision, end your result with ACTION NEEDED."), true);
+  assert.equal(isBriefGuidanceText("Complete this scoped task and record the result on the Work Board."), true);
+  assert.equal(isBriefGuidanceText("Address the failures in the outreach email deliverability setup."), false);
+  assert.equal(isBriefGuidanceText("Created by the Queen Bee control plane."), false);
 }
 
 console.log("kanban-result-format: all assertions passed");

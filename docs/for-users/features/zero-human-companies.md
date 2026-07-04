@@ -104,6 +104,14 @@ For official paid access, managed credits, marketplace revenue, hosted-agent acc
 
 Self-hosted operators may configure their own wallets, pay-to addresses, providers, quotas, and terms. Those flows should be presented as self-hosted, not as official HivemindOS-managed revenue or entitlement.
 
+## Revenue Share
+
+Zero Human Companies can now record external revenue events and collect the HivemindOS company revenue share through the same policy-driven platform-fee rail used by local wallet payments.
+
+The Treasury tab shows recorded revenue, quoted share, collected share, and pending share for the company. Operators can record a revenue event by amount and source, and can optionally collect the share immediately from a selected company agent wallet. Collection requires explicit `COLLECT_COMPANY_REVENUE_FEE` confirmation and writes the fee as a visible platform-fee receipt in wallet activity.
+
+This does not make the downloadable app the authority over official revenue. External revenue is charged only when it is recorded or settled through a trusted route such as `/api/company-revenue`, a hosted HivemindOS marketplace/billing service, or a verifiable third-party payment rail. Off-app cash, invoices, Stripe revenue, or marketplace sales that never report into one of those routes are not automatically charged by the local app.
+
 ## Related Docs
 
 - [Work Board And Scheduler](work-and-scheduler.html) covers task storage, dispatch, loop contracts, eval gates, deliverables, scheduler work, and work history.

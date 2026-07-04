@@ -8,6 +8,7 @@
   "scripts": {
     "test": "node scripts/test-gate.mjs",
     "dev": "node scripts/dev-server.mjs",
+    "dev:ui": "node scripts/dev-ui.mjs",
     "hive:update": "bash scripts/update-hivemindos.sh",
     "build": "scripts/run-with-memory-limit.sh --limit-mb 5000 --timeout-seconds 300 -- next build --webpack",
     "dashboard-auth": "node scripts/dashboard-auth.mjs",
@@ -77,6 +78,7 @@
     "test:company-autonomy": "node scripts/test-company-autonomy.mjs",
     "test:company-deliverables": "node scripts/test-company-deliverables.mjs",
     "test:company-outputs": "node scripts/test-company-outputs.mjs",
+    "test:company-revenue-share": "node scripts/test-company-revenue-share.mjs",
     "test:company-task-dedup": "node scripts/test-company-task-dedup.mjs",
     "test:company-vault-store": "node scripts/test-company-vault-store.mjs",
     "test:native-first-launch-privacy": "node scripts/test-native-first-launch-privacy.mjs",
@@ -214,6 +216,7 @@
     "lucide-react": "^1.16.0",
     "neo4j-driver": "^6.0.1",
     "next": "16.2.6",
+    "page-agent": "^1.11.0",
     "qrcode": "^1.5.4",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",

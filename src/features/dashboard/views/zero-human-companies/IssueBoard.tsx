@@ -2,6 +2,7 @@
 import React from "react";
 import { ISSUE_LANES } from "./data";
 import { getIssueIdentity } from "./issue-identity";
+import { issueBlockReason } from "./issue-reason";
 import { PriTag, RoleGlyph } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
 
@@ -12,6 +13,9 @@ function IssueCard({ issue, agents, onOpen }: { issue: Issue; agents: Agent[]; o
   // demo cards have no backing task and stay inert.
   const openable = Boolean(issue.work && onOpen);
   const deliverables = issue.work?.deliverables.length ?? 0;
+  // "Needs you" cards surface WHY they're blocked inline, so the human sees the
+  // reason (e.g. an API limit) without opening the task.
+  const blockReason = issue.status === "board_review" ? issueBlockReason(issue) : "";
   return (
     <div
       role={openable ? "button" : undefined}
@@ -32,6 +36,20 @@ function IssueCard({ issue, agents, onOpen }: { issue: Issue; agents: Agent[]; o
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{issue.pts} pt</span>
       </div>
       <div style={{ fontSize: 12.5, lineHeight: 1.35, color: "var(--fg)", fontWeight: 500, textWrap: "pretty" }}>{issue.title}</div>
+      {blockReason && (
+        <div
+          title={blockReason}
+          style={{
+            fontSize: 11, lineHeight: 1.35, color: "var(--danger-2)",
+            background: "color-mix(in srgb, var(--danger) 12%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
+            borderRadius: 7, padding: "5px 7px", textWrap: "pretty",
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}
+        >
+          {blockReason}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 1 }}>
         {a ? (
           <>

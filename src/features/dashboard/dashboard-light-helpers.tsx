@@ -7,6 +7,7 @@ import { beeRoleLabel, beeWorkerClassLabel, chooseBeeAssignment } from "@/lib/se
 import { agentAliasMap, agentWorkspaceKey } from "@/features/fleet/fleet-identity";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { runtimeCan } from "@/features/dashboard/dashboard-storage";
+import { parseTaskBrief, taskBriefHeadline } from "@/features/dashboard/kanban-result-format";
 import type { AgentTask, ChatMessage, ChatTreeItem, DashboardView, MachineGroup, WorkView } from "@/features/dashboard/dashboard-types";
 
 const STARTER_AGENT_IDS = new Set([
@@ -111,7 +112,14 @@ export function chatSetupIssue(agent: AgentProfile) {
 
 export function kanbanCardMessage(task: KanbanTask) {
   const body = task.body?.trim();
-  if (body) return body;
+  if (body) {
+    // Control-plane dispatch briefs lead with routing metadata; the card
+    // preview should show the actual request instead (full brief renders
+    // structured in the conversation modal).
+    const brief = parseTaskBrief(body);
+    const headline = brief ? taskBriefHeadline(brief) : "";
+    return headline || body;
+  }
 
   const result = task.result?.trim();
   if (!result) return "No task body yet.";
@@ -223,7 +231,9 @@ export function kanbanTaskDispatchPrompt(task: KanbanTask, assignment: ReturnTyp
     needsVisualHandoff
       ? "If your result creates writing, research, planning, or QA context for a downstream visual/image task, include a final section named exactly `VISUAL_BRIEF:` with the prompt an artist agent should use. Do not create the image yourself unless you are the artist worker."
       : "",
-    "Complete the task as far as your runtime/tools allow. If you are blocked, say exactly what human input, access, or setup is needed. End with a concise result summary and any evidence.",
+    "Complete the task as far as your runtime/tools allow. End with a concise result summary and any evidence.",
+    "If you are blocked on human input, access, approval, or a decision, end your result with a section named exactly `ACTION NEEDED:` containing one or two imperative sentences telling the human precisely what to do or decide (include the options if there is a choice). This section becomes the card's headline on the Work Board.",
+    "When it helps the human act faster, add extra lines directly under `ACTION NEEDED:` — `LINK: <url>` pointing where they get or do the thing (for an API key, the exact page that issues it), `OPTIONS: <choice A> | <choice B>` when you need a decision, and `NEEDS: api-key <ENV_VAR_NAME>` (or `NEEDS: file` / `NEEDS: text`) naming what you are waiting for. The Work Board renders these as one-click answer buttons, a save-to-shared-env key input, or an attach-a-file prompt, and the human's answer comes back to you on this task.",
   ].filter(Boolean).join("\n\n");
 }
 

@@ -942,7 +942,7 @@
   gap: 14px;
   height: 100%;
   min-height: 0;
-  padding: 0 24px 24px;
+  padding: 16px 24px 24px;
 }
 
 .workBoardShell > [data-work-section-header="true"] {

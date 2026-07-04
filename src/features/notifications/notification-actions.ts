@@ -81,7 +81,9 @@ export function deriveNotificationActions(notification: NotificationActionSource
   const taskId = notificationTaskId(notification);
 
   if (taskId) {
-    actions.push({ type: "navigate", label: "Open task", target: { view: "kanban", taskId } });
+    // openTask deep-links all the way: scroll the board to the card and open
+    // its conversation (bee-piloted), not just switch to the kanban view.
+    actions.push({ type: "navigate", label: "Open task", target: { view: "kanban", taskId, openTask: true } });
   } else if (hasTag(notification, "needs-human", "kanban", "needs human", "work board") || /needs (you|human)|blocked on you|work board/.test(text)) {
     actions.push({ type: "navigate", label: "Open Work Board", target: { view: "kanban" } });
   }

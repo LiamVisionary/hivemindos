@@ -2,11 +2,12 @@
 // @ts-nocheck
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { createStyleClass } from "@/features/dashboard/style-classes";
-import { extractActionNeeded, extractResultArtifacts, formatPlainResultBody } from "@/features/dashboard/kanban-result-format";
+import { extractHumanAsk, extractResultArtifacts, formatPlainResultBody, isBriefGuidanceSection, isBriefGuidanceText, parseTaskBrief } from "@/features/dashboard/kanban-result-format";
+import { KanbanNeedsHumanPanel } from "./KanbanNeedsHumanPanel";
 import convoStyles from "@/app/kanban-conversation.module.css";
 
 const convoClass = createStyleClass(convoStyles);
@@ -16,11 +17,16 @@ const convoClass = createStyleClass(convoStyles);
 // messages into a single timeline, so a "Needs You" task always shows what the
 // agent last said even when no streaming chat history exists on this device.
 export function KanbanTaskModal(props: any) {
-  const { ChatMarkdown, Check, ChevronDown, ComposerField, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, editAndInterruptKanbanTask, formatMessageTimestamp, formatRelativeTime, handleKanbanSteerFileChange, handleKanbanSteerImageChange, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanEventLabel, kanbanAssigneeOptions, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanTaskModal, moveKanbanTask, patchKanbanTask, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanSteerAttachment, removeKanbanSteerDirectory, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, setKanbanEditDraft, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setRecentDirectoriesExpanded, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, voiceBands, voiceTarget, voiceTranscript } = props;
+  const { ChatMarkdown, Check, ChevronDown, ComposerField, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, answerKanbanNeedsHuman, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, editAndInterruptKanbanTask, formatMessageTimestamp, formatRelativeTime, handleKanbanSteerFileChange, handleKanbanSteerImageChange, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanEventLabel, kanbanAssigneeOptions, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanTaskModal, moveKanbanTask, patchKanbanTask, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanSteerAttachment, removeKanbanSteerDirectory, saveKanbanNeedsHumanApiKey, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, setKanbanEditDraft, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setRecentDirectoriesExpanded, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, voiceBands, voiceTarget, voiceTranscript } = props;
   const portalTarget = typeof document === "undefined" ? null : document.body;
   // Legacy "notes" openers land on the unified conversation too.
   const modal = kanbanTaskModal === "notes" ? "chat" : kanbanTaskModal;
   const task = selectedKanbanTask;
+  // Agent operating boilerplate in control-plane briefs is collapsed by
+  // default. The toggle stores WHICH task it was opened for, so switching
+  // tasks resets it without an effect.
+  const [briefGuidanceFor, setBriefGuidanceFor] = useState("");
+  const showBriefGuidance = Boolean(task) && briefGuidanceFor === task?.id;
   const agent = selectedKanbanAgent;
   const editPending = Boolean(task) && kanbanEditPendingTaskId === task?.id;
   const interrupting = task?.status === "working" && Boolean(agent);
@@ -38,11 +44,13 @@ export function KanbanTaskModal(props: any) {
     if (body) {
       // The brief anchors the feed (sorts oldest, at the bottom) so the
       // conversation stands alone without flipping back to the card.
+      // Control-plane dispatch briefs parse into a structured layout.
       entries.push({
         id: `brief-${task.id}`,
         kind: "brief",
         author: "Task brief",
         body,
+        brief: parseTaskBrief(body),
         at: task.createdAt,
       });
     }
@@ -69,6 +77,7 @@ export function KanbanTaskModal(props: any) {
     // split unformatted walls of text into paragraphs (display only — the
     // stored task data is untouched). Live chat messages pass through as-is.
     for (const entry of entries) {
+      if (entry.brief) continue; // structured briefs render themselves
       const { artifacts, remainder } = extractResultArtifacts(entry.body);
       entry.artifactLinks = artifacts;
       entry.body = formatPlainResultBody(remainder);
@@ -86,7 +95,7 @@ export function KanbanTaskModal(props: any) {
     return entries.sort((a, b) => (b.at ?? 0) - (a.at ?? 0));
   }, [task, agent, selectedKanbanComments, selectedKanbanAgentMessages]);
 
-  const needsYouAsk = task?.status === "needs-human" ? extractActionNeeded(task.result) : "";
+  const needsHumanAsk = task?.status === "needs-human" ? extractHumanAsk(task.result) : null;
 
   const openArtifact = async (artifact: any, action: "open" | "reveal") => {
     const response = await fetch("/api/kanban/deliverable", {
@@ -177,14 +186,20 @@ export function KanbanTaskModal(props: any) {
         ) : null}
 
         {modal === "chat" ? (
-          <div className={kanbanClass("kanbanModalBody", "kanbanChatBody")}>
-            {needsYouAsk ? (
+          <div className={`${kanbanClass("kanbanModalBody", "kanbanChatBody")} ${convoClass("convoScrollBody")}`}>
+            {needsHumanAsk ? (
               <div className={convoClass("needsYouBanner")} role="status">
                 <strong>Needs you</strong>
-                <span>{needsYouAsk}</span>
+                <span>{needsHumanAsk.ask}</span>
+                <KanbanNeedsHumanPanel
+                  key={task.id}
+                  ask={needsHumanAsk}
+                  onAnswer={(answer) => answerKanbanNeedsHuman(task, answer)}
+                  onSaveApiKey={(envKey, value) => saveKanbanNeedsHumanApiKey(task, envKey, value)}
+                />
               </div>
             ) : null}
-            <form className={kanbanClass("kanbanSteerComposer")} onSubmit={steerSelectedKanbanTask}>
+            <form className={`${kanbanClass("kanbanSteerComposer")} ${convoClass("convoComposer")}`} onSubmit={steerSelectedKanbanTask}>
               {agent ? (
                 <div className={kanbanClass("kanbanSteerComposerTop")}>
                   <div className={kanbanClass("kanbanSteerTargetWrap")} ref={kanbanSteerTargetMenuRef}>
@@ -229,6 +244,7 @@ export function KanbanTaskModal(props: any) {
                 disabled={kanbanSteeringTaskId === task.id}
                 busy={kanbanSteeringTaskId === task.id}
                 compact
+                autoGrow
                 attachments={kanbanSteerAttachments}
                 directories={kanbanSteerDirectories}
                 attachmentError={kanbanSteerAttachmentError}
@@ -271,7 +287,81 @@ export function KanbanTaskModal(props: any) {
                     </strong>
                     <time>{formatMessageTimestamp(entry.at)}</time>
                   </div>
-                  <ChatMarkdown text={entry.body} className={convoClass("convoBody")} />
+                  {entry.brief ? (() => {
+                    // Agent operating boilerplate stays behind a toggle: count
+                    // what would be hidden, then render the human-facing rest.
+                    const hiddenCount = entry.brief.sections.reduce((count, section) => {
+                      if (isBriefGuidanceSection(section)) return count + 1;
+                      return count + section.blocks.reduce((inner, briefBlock) => briefBlock.kind === "prose"
+                        ? inner + briefBlock.text.split("\n\n").filter(isBriefGuidanceText).length
+                        : inner, 0);
+                    }, 0);
+                    return (
+                      <div className={convoClass("briefView")}>
+                        {entry.brief.sections.map((section, sectionIndex) => {
+                          if (!showBriefGuidance && isBriefGuidanceSection(section)) return null;
+                          const blocks = section.blocks
+                            .map((briefBlock, blockIndex) => {
+                              if (briefBlock.kind === "fields") {
+                                return (
+                                  <dl className={convoClass("briefFields")} key={blockIndex}>
+                                    {briefBlock.fields.map((field, fieldIndex) => (
+                                      <div key={`${field.key}-${fieldIndex}`}>
+                                        <dt>{field.key}</dt>
+                                        <dd>{field.value}</dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                );
+                              }
+                              if (briefBlock.kind === "activity") {
+                                return (
+                                  <ul className={convoClass("briefActivity")} key={blockIndex}>
+                                    {briefBlock.items.map((item, itemIndex) => (
+                                      <li key={itemIndex}>
+                                        <time>{item.date}</time>
+                                        <span className={convoClass("briefActivityKind", item.kind.toLowerCase())}>{item.kind}</span>
+                                        <span className={convoClass("briefActivityText")}>{item.text}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                );
+                              }
+                              const paragraphs = briefBlock.text.split("\n\n")
+                                .filter((paragraph) => showBriefGuidance || !isBriefGuidanceText(paragraph));
+                              if (!paragraphs.length) return null;
+                              return (
+                                <div className={convoClass("briefProse")} key={blockIndex}>
+                                  {paragraphs.map((paragraph, paragraphIndex) => (
+                                    <p key={paragraphIndex}>{paragraph}</p>
+                                  ))}
+                                </div>
+                              );
+                            })
+                            .filter(Boolean);
+                          if (!blocks.length) return null;
+                          return (
+                            <section className={convoClass("briefSection")} key={`${entry.id}-section-${sectionIndex}`}>
+                              {section.title ? <h4 className={convoClass("briefTitle")}>{section.title}</h4> : null}
+                              {blocks}
+                            </section>
+                          );
+                        })}
+                        {hiddenCount > 0 ? (
+                          <button
+                            type="button"
+                            className={convoClass("briefGuidanceToggle")}
+                            onClick={() => setBriefGuidanceFor(showBriefGuidance ? "" : task.id)}
+                            aria-expanded={showBriefGuidance}
+                          >
+                            {showBriefGuidance ? "Hide agent instructions" : `Show agent instructions (${hiddenCount})`}
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })() : (
+                    <ChatMarkdown text={entry.body} className={convoClass("convoBody")} />
+                  )}
                   {entry.artifactLinks?.length ? (
                     <div className={convoClass("convoArtifacts")}>
                       {entry.artifactLinks.map((artifact) => (
@@ -297,7 +387,7 @@ export function KanbanTaskModal(props: any) {
 
         {modal === "events" ? (
           <div className={kanbanClass("kanbanModalBody")}>
-            <div className={kanbanClass("kanbanEvents", "modalEvents")}>
+            <div className={`${kanbanClass("kanbanEvents", "modalEvents")} ${convoClass("convoNoScroll")}`}>
               {selectedKanbanEvents.map((event) => (
                 <article key={event.id}>
                   <div>

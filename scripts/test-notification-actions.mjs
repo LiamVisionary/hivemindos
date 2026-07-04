@@ -36,7 +36,7 @@ const types = (actions) => actions.map((a) => a.type);
     tags: ["escalation", "kanban", "needs-human", "task:t_mr4hb1ee_rrv9o"],
   });
   assert.equal(notificationTaskId({ ...base, title: "", body: "", tags: ["task:t_mr4hb1ee_rrv9o"] }), "t_mr4hb1ee_rrv9o");
-  assert.deepEqual(actions[0], { type: "navigate", label: "Open task", target: { view: "kanban", taskId: "t_mr4hb1ee_rrv9o" } });
+  assert.deepEqual(actions[0], { type: "navigate", label: "Open task", target: { view: "kanban", taskId: "t_mr4hb1ee_rrv9o", openTask: true } }, "Open task deep-links (openTask reveals + opens the card, not just the view)");
   assert.ok(labels(actions).includes("Open Companies"), "company mention → companies deep link");
   assert.ok(!types(actions).includes("work-board"), "a notification about an existing task is not re-sent to the board");
   assert.ok(types(actions).includes("discuss"), "discuss is always offered");

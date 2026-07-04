@@ -41,15 +41,6 @@ function playQueenVoiceActivationSound() {
   void audio.play().catch(() => undefined);
 }
 
-// A softer cue the moment Queen Bee starts working a tool call.
-function playQueenThinkingSound() {
-  if (typeof Audio === "undefined") return;
-  const audio = new Audio(QUEEN_VOICE_ACTIVATION_SOUND_SRC);
-  audio.volume = 0.4;
-  audio.playbackRate = 0.82;
-  void audio.play().catch(() => undefined);
-}
-
 function statusLabel(
   phase: QueenVoicePhase,
   muted: boolean,
@@ -547,16 +538,6 @@ export function QueenBeeVoiceOverlay({
       break;
     }
   }, [chat.turns]);
-  const prevPhaseRef = React.useRef<QueenVoicePhase>("starting");
-  React.useEffect(() => {
-    const previous = prevPhaseRef.current;
-    prevPhaseRef.current = voiceState.phase;
-    if (voiceState.phase === "thinking" && previous !== "thinking") {
-      // Soft cue so a silent tool-call pause reads as "working", not stuck.
-      playQueenThinkingSound();
-    }
-  }, [voiceState.phase]);
-
   React.useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;

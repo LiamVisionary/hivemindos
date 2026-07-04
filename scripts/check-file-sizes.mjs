@@ -61,7 +61,14 @@ const legacyOversizedAllowances = new Map([
   ["src/app/fleet.module.css", 4722],
   ["src/app/kanban-board.module.css", 4528],
   ["src/app/vault.module.css", 1568],
-  ["src/features/dashboard/DashboardApp.tsx", 4724],
+  // 2026-07-04: +2 for the needs-human answer controller wiring (import + hook
+  // call; the logic itself lives in use-kanban-needs-human-controller.tsx).
+  // 2026-07-04: +12 for the KanbanPanel handler-stabilization perf fix (import +
+  // useStableHandlers block; mechanism lives in use-stable-handlers.ts).
+  // 2026-07-04: +14 for the notification→task deep-link reveal wiring (ref
+  // bridge to the nav controller + openKanbanTaskConversation bee-pilot dep;
+  // the flight logic lives in bee-pilot/reveal-kanban-task.ts).
+  ["src/features/dashboard/DashboardApp.tsx", 4752],
   ["src/lib/services/hive-actions/catalog.ts", 1633],
   ["src/features/dashboard/views/AeonAutopilotPanel.tsx", 3857],
   // Ratchet re-baselined 2026-07-02: watermarks set to then-current line counts
@@ -78,7 +85,10 @@ const legacyOversizedAllowances = new Map([
   ["scripts/agent-telemetry-collector.mjs", 8187],
   // 2026-07-02: +18 for the non-string task.result/body read+write coercion fix
   // (one poisoned task was 400ing every /api/kanban read).
-  ["src/lib/services/kanban/local-kanban-store.ts", 2433],
+  // 2026-07-04: +57 for answerHumanTask — the needs-human answer mutation
+  // (answer into body, comment, back to Ready with assignee preserved). It uses
+  // the store's private withBoardMutation/event/touch internals, so it lives here.
+  ["src/lib/services/kanban/local-kanban-store.ts", 2490],
   ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
   ["src/lib/services/obsidian/agent-memory/core.ts", 1850],

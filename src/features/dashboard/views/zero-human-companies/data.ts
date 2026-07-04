@@ -19,7 +19,7 @@ export const ISSUE_LANES: { key: IssueStatus; label: string; hint: string }[] = 
   { key: "todo", label: "Backlog", hint: "scoped · unassigned" },
   { key: "in_progress", label: "In progress", hint: "agent executing" },
   { key: "in_review", label: "In review", hint: "reviewer auditing" },
-  { key: "board_review", label: "Board review", hint: "escalated to Queen" },
+  { key: "board_review", label: "Needs you", hint: "awaiting your decision" },
   { key: "done", label: "Shipped", hint: "merged · immutable" },
 ];
 

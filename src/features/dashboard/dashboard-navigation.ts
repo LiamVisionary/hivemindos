@@ -37,6 +37,10 @@ export type DashboardRouteTarget = {
   agentId?: string;
   taskId?: string;
   chatLeaf?: string;
+  /** Deep-link intent: scroll the Work Board to `taskId` and open its
+   * conversation (bee-piloted). Intentionally never serialized into URLs or
+   * persisted routes, so restored sessions don't replay the flight. */
+  openTask?: boolean;
 };
 
 export type DashboardRouteCatalogItem = {

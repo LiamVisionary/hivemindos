@@ -1163,11 +1163,16 @@ export function useKanbanDispatchController(props: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayAgents, hydrated, kanbanBoard]);
 
-  async function steerSelectedKanbanTask(event: FormEvent) {
-    event.preventDefault();
-    const prompt = kanbanSteerDraft.trim();
-    const outgoingAttachments = kanbanSteerAttachments;
-    const outgoingDirectories = kanbanSteerDirectories;
+  // `overrides` lets needs-human quick actions (decision buttons, API-key
+  // saves) reuse the whole steer pipeline programmatically without touching
+  // whatever the user has staged in the composer.
+  async function steerSelectedKanbanTask(event?: FormEvent, overrides?: { prompt?: string; targetStatus?: string }) {
+    event?.preventDefault();
+    const overridePrompt = overrides?.prompt?.trim();
+    const steerTargetStatus = overrides?.targetStatus ?? kanbanSteerTargetStatus;
+    const prompt = overridePrompt ?? kanbanSteerDraft.trim();
+    const outgoingAttachments = overridePrompt ? [] : kanbanSteerAttachments;
+    const outgoingDirectories = overridePrompt ? [] : kanbanSteerDirectories;
     const outgoingLabel =
       prompt ||
       attachmentSummary(outgoingAttachments) ||
@@ -1192,11 +1197,13 @@ export function useKanbanDispatchController(props: any) {
       ]
         .filter(Boolean)
         .join("\n\n");
-      setKanbanSteerDraft("");
-      setKanbanSteerAttachments([]);
-      setKanbanSteerDirectories([]);
-      setKanbanSteerAttachmentError("");
-      setKanbanSteerAttachmentMenuOpen(false);
+      if (!overridePrompt) {
+        setKanbanSteerDraft("");
+        setKanbanSteerAttachments([]);
+        setKanbanSteerDirectories([]);
+        setKanbanSteerAttachmentError("");
+        setKanbanSteerAttachmentMenuOpen(false);
+      }
       const response = await fetch(
         `/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`,
         {
@@ -1234,7 +1241,7 @@ export function useKanbanDispatchController(props: any) {
 
     const localTaskId = `kanban-steer-${selectedKanbanTask.id}-${Date.now()}`;
     const targetColumn = KANBAN_COLUMNS.find(
-      (column) => column.id === kanbanSteerTargetStatus,
+      (column) => column.id === steerTargetStatus,
     );
     const directorySummary = outgoingDirectories.length
       ? `Linked directories:\n${outgoingDirectories.map((directory) => `- ${directory.name}`).join("\n")}`
@@ -1253,18 +1260,20 @@ export function useKanbanDispatchController(props: any) {
       selectedKanbanTask.result
         ? `Current task notes:\n${selectedKanbanTask.result}`
         : "",
-      kanbanSteerTargetStatus === "ideas"
+      steerTargetStatus === "ideas"
         ? "Planning mode: reply with guidance or a concise response, but do not continue execution unless asked later."
         : "Use this guidance for the active work. Reply with a concise update, blocker, or result.",
     ]
       .filter(Boolean)
       .join("\n\n");
 
-    setKanbanSteerDraft("");
-    setKanbanSteerAttachments([]);
-    setKanbanSteerDirectories([]);
-    setKanbanSteerAttachmentError("");
-    setKanbanSteerAttachmentMenuOpen(false);
+    if (!overridePrompt) {
+      setKanbanSteerDraft("");
+      setKanbanSteerAttachments([]);
+      setKanbanSteerDirectories([]);
+      setKanbanSteerAttachmentError("");
+      setKanbanSteerAttachmentMenuOpen(false);
+    }
     setKanbanSteeringTaskId(selectedKanbanTask.id);
     upsertTask({
       id: localTaskId,
@@ -1291,9 +1300,9 @@ export function useKanbanDispatchController(props: any) {
     });
 
     try {
-      if (selectedKanbanTask.status !== kanbanSteerTargetStatus) {
+      if (selectedKanbanTask.status !== steerTargetStatus) {
         await patchKanbanTask(selectedKanbanTask.id, {
-          status: kanbanSteerTargetStatus,
+          status: steerTargetStatus,
         });
       }
       const contextMessages = (messagesByAgent[selectedKanbanAgent.id] ?? [])

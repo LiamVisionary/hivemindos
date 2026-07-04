@@ -23,6 +23,10 @@ type NavigationTask = {
 type UseDashboardNavigationControllerOptions = {
   activeView: DashboardView;
   hydrated: boolean;
+  /** Bee-piloted deep-link landing: scroll the Work Board to the task and open
+   * its conversation. Invoked for targets that set `openTask` (notification
+   * "Open task" buttons, notification card clicks) — never for restored routes. */
+  revealKanbanTask?: (taskId: string) => void;
   selectedAgentId: string;
   selectedChatLeafKey: string;
   selectedKanbanTaskId: string;
@@ -47,6 +51,7 @@ export function initialDashboardView(): DashboardView {
 export function useDashboardNavigationController({
   activeView,
   hydrated,
+  revealKanbanTask,
   selectedAgentId,
   selectedChatLeafKey,
   selectedKanbanTaskId,
@@ -70,7 +75,10 @@ export function useDashboardNavigationController({
     if (target.taskId) setSelectedKanbanTaskId(target.taskId);
     if (target.chatLeaf) setSelectedChatLeafKey(target.chatLeaf);
     setActiveView(target.view);
-  }, [setActiveView, setSelectedAgentId, setSelectedChatLeafKey, setSelectedKanbanTaskId, setVaultPanelMode]);
+    if (target.openTask && target.taskId && (target.view === "kanban" || target.view === "history")) {
+      revealKanbanTask?.(target.taskId);
+    }
+  }, [revealKanbanTask, setActiveView, setSelectedAgentId, setSelectedChatLeafKey, setSelectedKanbanTaskId, setVaultPanelMode]);
 
   const popoutDashboardTarget = useCallback((target: DashboardRouteTarget) => {
     void openNativeRouteWindow(target);
@@ -81,7 +89,7 @@ export function useDashboardNavigationController({
     const matchedTask = tasks.find((task) => task.title && text.includes(task.title.toLowerCase()));
 
     if (matchedTask) {
-      navigateDashboardTarget({ view: "kanban", taskId: matchedTask.id, agentId: matchedTask.agentId });
+      navigateDashboardTarget({ view: "kanban", taskId: matchedTask.id, agentId: matchedTask.agentId, openTask: true });
       return;
     }
 

@@ -297,6 +297,91 @@ function loopDeps({ judgeAccepts, onComplete }) {
   assert.deepEqual(calls.map((call) => call.kind), ["claim", "chat", "reroute", "claim", "chat", "complete"]);
 }
 
+// --- Scenario 5b: a chain that fails ONLY on transient transport errors (client
+//     timeout + collector 502) auto-retries via failTask instead of stranding the
+//     company task on a human (the hel1-2 pile-up left a real task blocked ~16h).
+{
+  const calls = [];
+  let failInput = null;
+  const result = await runQueenBeeAutonomousPickup({
+    task,
+    delegation,
+    delegationChain: [delegation, fallbackDelegation],
+  }, {
+    claim: async (slug, taskId, input) => {
+      calls.push("claim");
+      return { task: { ...task, status: "working", assignee: input.assignee, claimLock: input.claimer }, board: {} };
+    },
+    fetchJson: async (url, init) => {
+      const body = JSON.parse(String(init.body));
+      calls.push("chat");
+      if (body.agent.name === "Grace Hopper") throw new Error("The operation was aborted due to timeout");
+      throw new Error("Bad Gateway");
+    },
+    reroute: async (slug, taskId, input) => {
+      calls.push("reroute");
+      return { task: { ...task, status: "ready", assignee: "Ada Lovelace", targetMachine: input.targetMachine }, board: {} };
+    },
+    complete: async () => { throw new Error("complete should not run when every delegate fails"); },
+    block: async () => { throw new Error("a transient-only exhaustion must NOT block to needs-human"); },
+    fail: async (slug, taskId, input) => {
+      failInput = input;
+      return { task: { ...task, status: "ready", attempt: 2 }, board: {}, retried: true };
+    },
+  });
+  assert.equal(result.status, "skipped", "a transient-only chain should auto-retry (skipped), not block");
+  assert.equal(failInput?.failureReason, "timeout", "transient exhaustion should fail with the retryable 'timeout' reason");
+  assert.deepEqual(calls, ["claim", "chat", "reroute", "claim", "chat"]);
+}
+
+// --- Scenario 5c: a transient-only exhaustion whose retry budget is spent →
+//     failTask escalates to needs-human (retried:false) and the pickup reports blocked.
+{
+  let failCalled = false;
+  const result = await runQueenBeeAutonomousPickup({ task, delegation }, {
+    claim: async (slug, taskId, input) => ({ task: { ...task, status: "working", claimLock: input.claimer }, board: {} }),
+    fetchJson: async () => { throw new Error("The operation was aborted due to timeout"); },
+    complete: async () => { throw new Error("complete should not run"); },
+    reroute: async () => { throw new Error("reroute should not run with a single delegate"); },
+    block: async () => { throw new Error("block should not be called when routing through failTask"); },
+    fail: async (slug, taskId, input) => {
+      failCalled = true;
+      assert.equal(input.failureReason, "timeout");
+      return { task: { ...task, status: "needs-human", result: input.summary }, board: {}, retried: false };
+    },
+  });
+  assert.equal(failCalled, true, "transient exhaustion should route through failTask");
+  assert.equal(result.status, "blocked", "an exhausted-retry transient failure should report blocked (needs-human)");
+}
+
+// --- Scenario 5d: a chain mixing a transient error with a REAL failure (no output)
+//     must still escalate — the transient auto-retry only fires when EVERY delegate
+//     failed on transport, so a genuine problem is never silently spun on.
+{
+  let blockCalled = false;
+  const result = await runQueenBeeAutonomousPickup({
+    task,
+    delegation,
+    delegationChain: [delegation, fallbackDelegation],
+  }, {
+    claim: async (slug, taskId, input) => ({ task: { ...task, status: "working", assignee: input.assignee, claimLock: input.claimer }, board: {} }),
+    fetchJson: async (url, init) => {
+      const body = JSON.parse(String(init.body));
+      if (body.agent.name === "Grace Hopper") throw new Error("The operation was aborted due to timeout");
+      return { ok: true, text: "   " }; // Ada returns no usable output → a real failure
+    },
+    reroute: async (slug, taskId, input) => ({ task: { ...task, status: "ready", assignee: "Ada Lovelace", targetMachine: input.targetMachine }, board: {} }),
+    complete: async () => { throw new Error("complete should not run for empty output"); },
+    fail: async () => { throw new Error("a mixed chain must NOT route through the transient retry"); },
+    block: async (slug, taskId, reason) => {
+      blockCalled = true;
+      return { task: { ...task, status: "needs-human", result: reason }, board: {} };
+    },
+  });
+  assert.equal(blockCalled, true, "a mixed chain (transient + real) must block to needs-human");
+  assert.equal(result.status, "blocked");
+}
+
 // --- Scenario 6: per-machine concurrency gate — two simultaneous pickups targeting the
 //     same machine must serialize their collector chats (default cap: 1 per machine),
 //     instead of starving each other on a small box (hel1-2 pile-up, 2026-07-03).

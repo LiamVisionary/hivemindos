@@ -12,6 +12,8 @@ const files = {
   sendRoute: "src/app/api/wallet/send/route.ts",
   x402: "src/lib/services/wallet/x402-agent-fetch.ts",
   x402Route: "src/app/api/wallet/x402/route.ts",
+  companyRevenue: "src/lib/services/company-revenue-share.ts",
+  companyRevenueRoute: "src/app/api/company-revenue/route.ts",
   veilTransferRoute: "src/app/api/wallet/veil/transfer/route.ts",
   veilX402Route: "src/app/api/wallet/veil/x402/route.ts",
   swap: "src/lib/services/trading/dex-swap.ts",
@@ -21,6 +23,7 @@ const files = {
   tradeView: "src/components/trade/CapabilityRail.tsx",
   walletPanel: "src/features/dashboard/views/WalletPanel.tsx",
   docs: "docs/for-users/features/wallets-honey-and-x402.md",
+  zhcDocs: "docs/for-users/features/zero-human-companies.md",
   env: ".env.example",
   contextIndex: "src/lib/services/context-index.ts",
 };
@@ -69,6 +72,11 @@ assert.match(contents.x402, /assertTradingPlatformFeeReady/);
 assert.match(contents.x402, /collectTradingPlatformFee/);
 assert.match(contents.x402, /platformFee/);
 assert.match(contents.x402Route, /fromAddress: stored\.info\.address/);
+assert.match(contents.fees, /"company-revenue"/);
+assert.match(contents.companyRevenue, /source: "company-revenue"/);
+assert.match(contents.companyRevenue, /COMPANY_REVENUE_FEE_CONFIRMATION/);
+assert.match(contents.companyRevenue, /collectTradingPlatformFee/);
+assert.match(contents.companyRevenueRoute, /\/api\/company-revenue|recordCompanyRevenue/);
 
 assert.match(contents.veilTransferRoute, /source: "veil-transfer"/);
 assert.match(contents.veilTransferRoute, /quoteTradingPlatformFee/);
@@ -95,6 +103,8 @@ assert.match(contents.env, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=/);
 assert.match(contents.docs, /Trading Platform Fees/);
 assert.match(contents.docs, /HivemindOS-hosted infrastructure by default/);
 assert.match(contents.docs, /official HivemindOS-wide revenue enforcement/);
+assert.match(contents.zhcDocs, /Revenue Share/);
+assert.match(contents.zhcDocs, /company revenue share/);
 assert.match(contents.contextIndex, /Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint/);
 
 console.log("Trading platform fee checks passed.");

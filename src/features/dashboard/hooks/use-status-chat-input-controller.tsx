@@ -1127,7 +1127,6 @@ export function useStatusChatInputController(props: any) {
     let sawDone = false;
     let contentEventsSincePaint = 0;
     let currentRuntimeSessionId = requestRuntimeSessionId || "";
-    let attachedRuntimeSessionId = "";
     let recoveredAssistantText = "";
     let streamedAssistantText = "";
     let latestSessionSummary = "";
@@ -1152,10 +1151,6 @@ export function useStatusChatInputController(props: any) {
           runId: taskId,
           status: "active",
         });
-        if (attachedRuntimeSessionId !== sessionId) {
-          attachedRuntimeSessionId = sessionId;
-          appendRunChatProcess(`Attached ${runtimeLabel} session`, sessionId);
-        }
       }
       const sessionMessages = Array.isArray(session.messages) ? session.messages : [];
       const currentUserIndex = findCurrentRequestSessionUserIndex(sessionMessages);
@@ -1323,7 +1318,6 @@ export function useStatusChatInputController(props: any) {
             maybeStartImageGenerationCard(processEvent.label, processEvent.detail);
           }
           if (parsed.session?.id) {
-            appendRunChatProcess(`Attached ${runtimeLabel} session`, parsed.session.id);
             setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: parsed.session.id }));
             if (requestStillSelected()) setSelectedChatRuntimeSessionId(parsed.session.id);
             continue;

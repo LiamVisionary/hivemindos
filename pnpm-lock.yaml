@@ -149,6 +149,9 @@ importers:
       next:
         specifier: 16.2.6
         version: 16.2.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.3)(react@19.2.3)
+      page-agent:
+        specifier: ^1.11.0
+        version: 1.11.0(zod@4.3.6)
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -2361,6 +2364,36 @@ packages:
   /@openzeppelin/contracts@5.6.1:
     resolution: {integrity: sha512-Ly6SlsVJ3mj+b18W3R8gNufB7dTICT105fJhodGAGgyC2oqnBAhqSiNDJ8V8DLY05cCz81GLI0CU5vNYA1EC/w==}
     dev: true
+
+  /@page-agent/core@1.11.0(zod@4.3.6):
+    resolution: {integrity: sha512-loeD+78vGfxBDj6tFnExhEIreb2NiyFfIxEkILYcfWyz8qUp9vZTpJm/hRNN0EkBsaPF328LfDydMcVKcZIEvw==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    dependencies:
+      '@page-agent/llms': 1.11.0(zod@4.3.6)
+      '@page-agent/page-controller': 1.11.0
+      chalk: 5.6.2
+      zod: 4.3.6
+    dev: false
+
+  /@page-agent/llms@1.11.0(zod@4.3.6):
+    resolution: {integrity: sha512-9coqfbv/jNa7XwwGlQUNrwb3pBgpjgRbAfzB2AYDekyoYtyKsWCFlh6O62ANq3qeqqAOgDWYuuB+Dh7npq2Q3g==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    dependencies:
+      chalk: 5.6.2
+      zod: 4.3.6
+    dev: false
+
+  /@page-agent/page-controller@1.11.0:
+    resolution: {integrity: sha512-DOG386ur+0yeC/jKECdGP97ugN+HDuyxPbmdvoUjMWpQcfIFh7QD+wIhdygKPWOvOnwzQxsehzf6IdVdlMQgfg==}
+    dependencies:
+      ai-motion: 0.4.8
+    dev: false
+
+  /@page-agent/ui@1.11.0:
+    resolution: {integrity: sha512-XSJlaNzj3j+uSNfGkkkxw6hyKw+d8fuZd/N1/NrxvTJIiUhVMXQ1PE30JRu5yWzbvmezKSCmloz8wbq4sWsrFw==}
+    dev: false
 
   /@pinojs/redact@0.4.0:
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -7048,6 +7081,10 @@ packages:
       humanize-ms: 1.2.1
     dev: false
 
+  /ai-motion@0.4.8:
+    resolution: {integrity: sha512-9nQVjf8lrYQWSW0sZdb9bES4x8Ei1w9C0S62po2KvRbMjslmjm0WMeszyW771SEauDnu4YGWqurLZ/gCkCTosQ==}
+    dev: false
+
   /ai@5.0.179(zod@4.3.6):
     resolution: {integrity: sha512-tuq/r2FH/pBuY3jo0yHF3UglDV73WONGLhW80DuwgO6w0ftPIqRsAm5p9cE3Bu4LfEuCkMXpiUG/pQRzqKRRaA==}
     engines: {node: '>=18'}
@@ -10531,6 +10568,19 @@ packages:
   /p-try@2.2.0:
     resolution: {integrity: sha512-R4nPAVTAU0B9D35/Gk3uJf/7XYbQcyohSKdvAxIRSNghFl4e71hVoGnBNQz9cWaXxO2I10KTC+3jMdvvoKw6dQ==}
     engines: {node: '>=6'}
+    dev: false
+
+  /page-agent@1.11.0(zod@4.3.6):
+    resolution: {integrity: sha512-zoV2WAxRlIbt80CZzPtpw+DyBdLMRwarJJT7JJSYysUnw72SA/CaG54VpHv3bzbAXrPUZgHXqnn/9FPb3OKRIA==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    dependencies:
+      '@page-agent/core': 1.11.0(zod@4.3.6)
+      '@page-agent/llms': 1.11.0(zod@4.3.6)
+      '@page-agent/page-controller': 1.11.0
+      '@page-agent/ui': 1.11.0
+      chalk: 5.6.2
+      zod: 4.3.6
     dev: false
 
   /parent-module@1.0.1:

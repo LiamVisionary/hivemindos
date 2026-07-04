@@ -17,9 +17,10 @@ import {
   DEMO_CREATE_SEED_CREW,
 } from "./zhc-demo-data";
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
-import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CreateForm, GovEvent, PoolAgent } from "./types";
+import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, PoolAgent } from "./types";
+import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 
-type CompanyEntry = { company: Company; rollup: CompanySpendRollup };
+type CompanyEntry = { company: Company; rollup: CompanySpendRollup; revenueShare?: CompanyRevenueRollup };
 
 const POLL_MS = 15_000;
 const USE_ZHC_DEMO_DATA = false;
@@ -141,6 +142,34 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
     setBusyId(null);
   }, [replaceColony]);
 
+  const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
+    replaceColony(companyId, (colony) => {
+      const current = colony.revenueShare ?? {
+        companyId,
+        eventCount: 0,
+        totalRevenueUsd: 0,
+        shareQuotedUsd: 0,
+        shareCollectedUsd: 0,
+        sharePendingUsd: 0,
+        shareFailedUsd: 0,
+        shareUnavailableUsd: 0,
+      };
+      const fee = Math.max(0.01, Math.round(input.amountUsd * 0.01 * 100) / 100);
+      return {
+        ...colony,
+        revenueShare: {
+          ...current,
+          eventCount: current.eventCount + 1,
+          totalRevenueUsd: Math.round((current.totalRevenueUsd + input.amountUsd) * 100) / 100,
+          shareQuotedUsd: Math.round((current.shareQuotedUsd + fee) * 100) / 100,
+          shareCollectedUsd: input.collectFee ? Math.round((current.shareCollectedUsd + fee) * 100) / 100 : current.shareCollectedUsd,
+          sharePendingUsd: input.collectFee ? current.sharePendingUsd : Math.round((current.sharePendingUsd + fee) * 100) / 100,
+          lastRevenueAt: new Date().toISOString(),
+        },
+      };
+    });
+  }, [replaceColony]);
+
   return (
     <ZeroHumanCompanies
       colonies={colonies}
@@ -162,6 +191,7 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
       onDelete={(companyId) => setColonies((current) => current.filter((colony) => colony.id !== companyId))}
       onDispatch={handleDispatch}
       onStopAutonomy={handleStopAutonomy}
+      onRecordRevenue={handleRecordRevenue}
       theme={theme}
     />
   );
@@ -323,6 +353,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
           approvals: approvalsByCompany.get(company.id) ?? [],
           agentsById,
           tasks: companyTasks,
+          revenueShare: entry.revenueShare,
         }));
       } catch {
         // Skip a malformed record rather than blanking the whole portfolio.
@@ -544,6 +575,41 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     }
   }, [refresh]);
 
+  const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
+    setBusyId(companyId);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/company-revenue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "record",
+          companyId,
+          amountUsd: input.amountUsd,
+          source: input.source,
+          collectFee: input.collectFee,
+          collectingAgentId: input.collectingAgentId,
+          confirmation: input.collectFee ? "COLLECT_COMPANY_REVENUE_FEE" : undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!json.ok) {
+        setError(json.error || "Could not record company revenue.");
+      } else {
+        setError(null);
+        const record = json.record as { amountUsd?: number; fee?: { amountUsd?: number; status?: string } } | undefined;
+        const amount = typeof record?.amountUsd === "number" ? `$${record.amountUsd.toFixed(2)}` : "Revenue";
+        const fee = typeof record?.fee?.amountUsd === "number" ? `$${record.fee.amountUsd.toFixed(2)}` : "share";
+        setNotice(record?.fee?.status === "collected"
+          ? `${amount} recorded. HivemindOS share collected: ${fee}.`
+          : `${amount} recorded. HivemindOS share pending: ${fee}.`);
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh]);
+
   return (
     <ZeroHumanCompanies
       colonies={colonies}
@@ -563,6 +629,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
+      onRecordRevenue={handleRecordRevenue}
       theme={theme}
     />
   );

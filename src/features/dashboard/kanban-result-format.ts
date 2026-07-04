@@ -90,3 +90,202 @@ function clipActionText(text: string) {
   const lastBreak = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("; "), cut.lastIndexOf(", "));
   return `${cut.slice(0, lastBreak > 120 ? lastBreak + 1 : 300).trim()} …`;
 }
+
+// ---------------------------------------------------------------------------
+// Structured needs-human asks. Agents may follow their `ACTION NEEDED:` section
+// with optional sibling labeled lines (same ALL-CAPS-label convention, so the
+// ask extractor above naturally stops before them):
+//   LINK: https://platform.openai.com/api-keys
+//   OPTIONS: Yes | No
+//   NEEDS: api-key OPENAI_API_KEY   (or `NEEDS: file` / `NEEDS: text`)
+// extractHumanAsk parses those into a shape the Work Board can render as
+// one-click controls: link buttons, decision buttons, an API-key input, or an
+// attach-a-file hint.
+
+export type HumanAskLink = { url: string; label: string };
+export type HumanAskInput = { kind: "api-key" | "file" | "text"; envKey?: string };
+export type HumanAsk = {
+  ask: string;
+  links: HumanAskLink[];
+  options: string[];
+  input?: HumanAskInput;
+};
+
+const LINK_LINE = /(?:^|\n)\s*LINKS?\s*:\s*(\S[^\n]*)/gi;
+const OPTIONS_LINE = /(?:^|\n)\s*OPTIONS\s*:\s*(\S[^\n]*)/i;
+const NEEDS_LINE = /(?:^|\n)\s*NEEDS\s*:\s*(api[\s_-]?key|key|secret|token|file|text)\b[ \t]*([A-Z_][A-Z0-9_]*)?/i;
+const BARE_URL = /https?:\/\/[^\s"'<>()\[\]]+/g;
+// An env-var-shaped credential name mentioned in prose, e.g. OPENAI_API_KEY.
+const ENV_KEY_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*(?:_(?:KEY|TOKEN|SECRET))\b|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_API_[A-Z0-9_]+\b/;
+
+function linkLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    const path = parsed.pathname.replace(/\/+$/, "");
+    return path && path !== "/" ? `${host}${path.length > 24 ? `${path.slice(0, 24)}…` : path}` : host;
+  } catch {
+    return url;
+  }
+}
+
+function trimUrl(raw: string): string {
+  return raw.replace(/[.,;:!?]+$/, "");
+}
+
+/** Structured, renderable form of a needs-human ask: the human-facing text plus
+ * any links, decision options, and expected input the agent declared (or that
+ * can be conservatively inferred). Returns null when there is no ask at all. */
+export function extractHumanAsk(result: string | undefined | null): HumanAsk | null {
+  const text = result?.trim();
+  if (!text) return null;
+  let ask = extractActionNeeded(text);
+  if (!ask) return null;
+
+  const links: HumanAskLink[] = [];
+  const seenUrls = new Set<string>();
+  const addLink = (rawUrl: string, label?: string) => {
+    const url = trimUrl(rawUrl.trim());
+    if (!/^https?:\/\//i.test(url) || seenUrls.has(url)) return;
+    seenUrls.add(url);
+    links.push({ url, label: label?.trim() || linkLabel(url) });
+  };
+  for (const match of text.matchAll(LINK_LINE)) {
+    // `LINK: <url>` or `LINK: <url> — optional label`
+    const value = match[1].trim();
+    const url = value.match(BARE_URL)?.[0];
+    if (!url) continue;
+    const label = value.replace(url, "").replace(/^[\s\-–—:]+|[\s\-–—:]+$/g, "");
+    addLink(url, label || undefined);
+  }
+  // Bare URLs inside the ask itself become link buttons and leave the prose.
+  for (const url of ask.match(BARE_URL) ?? []) addLink(url);
+  ask = ask.replace(BARE_URL, "").replace(/\(\s*\)/g, "").replace(/[ \t]{2,}/g, " ").replace(/[ \t]+([.,;:])/g, "$1").trim();
+
+  const optionsRaw = text.match(OPTIONS_LINE)?.[1] ?? "";
+  const options = optionsRaw
+    .split("|")
+    .map((option) => option.trim())
+    .filter(Boolean)
+    .filter((option, index, all) => all.indexOf(option) === index)
+    .slice(0, 6);
+
+  let input: HumanAskInput | undefined;
+  const needs = text.match(NEEDS_LINE);
+  if (needs) {
+    const kindRaw = needs[1].toLowerCase().replace(/[\s_-]/g, "");
+    const kind: HumanAskInput["kind"] = kindRaw === "file" ? "file" : kindRaw === "text" ? "text" : "api-key";
+    input = { kind, envKey: needs[2] || undefined };
+  } else if (/\bAPI[ _-]?key\b/i.test(ask)) {
+    // Conservative inference: the ask names an API key and (ideally) an
+    // env-var-shaped name. Rendering an optional key input is harmless.
+    input = { kind: "api-key", envKey: ask.match(ENV_KEY_TOKEN)?.[0] };
+  }
+
+  return { ask, links, options, input };
+}
+
+// --- Control-plane task briefs ---------------------------------------------
+// Queen Bee control-plane dispatches write long machine-shaped task bodies
+// (key-value routing lines, "Loop contract"/"Request"/"Routing contract"
+// sections, and a `[YYYY-MM-DD] KIND: ...` company-memory digest). Parsed here
+// so the UI can lay them out legibly instead of dumping raw prompt text.
+
+export type TaskBriefField = { key: string; value: string };
+export type TaskBriefActivity = { date: string; kind: string; text: string };
+export type TaskBriefBlock =
+  | { kind: "fields"; fields: TaskBriefField[] }
+  | { kind: "prose"; text: string }
+  | { kind: "activity"; items: TaskBriefActivity[] };
+export type TaskBriefSection = { title?: string; blocks: TaskBriefBlock[] };
+export type ParsedTaskBrief = { sections: TaskBriefSection[] };
+
+const BRIEF_FIELD_LINE = /^([A-Z][A-Za-z][A-Za-z /&'-]{0,30}):\s+(.+)$/;
+const BRIEF_ACTIVITY_LINE = /^\[(\d{4}-\d{2}-\d{2})\]\s+([A-Z][A-Z-]{2,14}):\s*(.+)$/;
+const BRIEF_HEADER_LINE = /^(?:#{1,3}\s+)?([A-Z][A-Za-z ]{2,38})$/;
+
+/** Parse a control-plane dispatch brief into ordered sections of key-value
+ * fields, prose, and activity-digest items. Returns null for ordinary task
+ * bodies (fewer than 3 key-value lines) so hand-written briefs render as-is. */
+export function parseTaskBrief(text: string | undefined | null): ParsedTaskBrief | null {
+  const raw = text?.trim();
+  if (!raw) return null;
+  const lines = raw.split(/\r?\n/).map((line) => line.trim());
+  if (lines.filter((line) => BRIEF_FIELD_LINE.test(line)).length < 3) return null;
+
+  const sections: TaskBriefSection[] = [];
+  let current: TaskBriefSection = { blocks: [] };
+  const flush = () => {
+    if (current.title || current.blocks.length) sections.push(current);
+  };
+  const block = <K extends TaskBriefBlock["kind"]>(kind: K): Extract<TaskBriefBlock, { kind: K }> => {
+    const last = current.blocks[current.blocks.length - 1];
+    if (last?.kind === kind) return last as Extract<TaskBriefBlock, { kind: K }>;
+    const created = (kind === "fields"
+      ? { kind, fields: [] }
+      : kind === "activity"
+        ? { kind, items: [] }
+        : { kind, text: "" }) as Extract<TaskBriefBlock, { kind: K }>;
+    current.blocks.push(created);
+    return created;
+  };
+
+  for (const line of lines) {
+    if (!line) continue;
+    if (line === "---") {
+      flush();
+      current = { blocks: [] };
+      continue;
+    }
+    const activity = line.match(BRIEF_ACTIVITY_LINE);
+    if (activity) {
+      block("activity").items.push({ date: activity[1], kind: activity[2], text: activity[3] });
+      continue;
+    }
+    if (/^What the company has done recently/i.test(line)) {
+      flush();
+      current = { title: "Recent company activity", blocks: [] };
+      continue;
+    }
+    const header = line.match(BRIEF_HEADER_LINE);
+    if (header) {
+      flush();
+      current = { title: header[1], blocks: [] };
+      continue;
+    }
+    const field = line.match(BRIEF_FIELD_LINE);
+    if (field) {
+      block("fields").fields.push({ key: field[1], value: field[2] });
+      continue;
+    }
+    const prose = block("prose");
+    prose.text = prose.text ? `${prose.text}\n\n${line}` : line;
+  }
+  flush();
+  return sections.length ? { sections } : null;
+}
+
+/** The human-meaning headline of a control-plane brief: the first prose line
+ * of its Request section. Used for compact card previews. */
+export function taskBriefHeadline(brief: ParsedTaskBrief): string {
+  const request = brief.sections.find((section) => section.title?.toLowerCase() === "request");
+  const prose = request?.blocks.find((item): item is Extract<TaskBriefBlock, { kind: "prose" }> => item.kind === "prose");
+  return prose?.text.split("\n\n")[0] ?? "";
+}
+
+// Agent-facing boilerplate inside a brief (routing contracts, "do not repeat
+// work", ACTION NEEDED formatting rules). The modal hides these behind a
+// "Show agent instructions" toggle — humans reading a brief want the request
+// and the state, not the worker's operating manual.
+const GUIDANCE_SECTION_TITLE = /^(?:routing contract|queen bee delegation)$/i;
+const GUIDANCE_PROSE = /\b(?:do not repeat work listed|if you are blocked on human input|when it helps the human act faster|complete (?:this|the) (?:scoped )?task and record|record (?:a concrete, durable|the) result on the work board|use shared brain memory|treat existing notes as authoritative|end with a concise result summary|include a final section named exactly|suggested worker class)\b/i;
+
+/** True when a brief section is agent operating instructions by title. */
+export function isBriefGuidanceSection(section: TaskBriefSection): boolean {
+  return Boolean(section.title && GUIDANCE_SECTION_TITLE.test(section.title));
+}
+
+/** True when a prose paragraph is agent operating boilerplate. */
+export function isBriefGuidanceText(text: string): boolean {
+  return GUIDANCE_PROSE.test(text);
+}

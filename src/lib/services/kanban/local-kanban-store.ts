@@ -1137,7 +1137,8 @@ export async function completeTask(
     // Preserve the real worker output (and any artifacts/passed-gate progress) instead of
     // overwriting it with the missing-receipts summary — a human needs to see what was
     // actually produced before they can unblock it.
-    const blockNote = `⚠ Loop gate block — missing passing eval receipts: ${gateBlock.missingGateTitles.join(", ")}.`;
+    const gateTitles = gateBlock.missingGateTitles.join(", ");
+    const blockNote = `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: Review the output above, then attach passing eval receipts for ${gateTitles} or move the card forward manually.`;
     const preservedResult = result?.trim()
       ? `${result.trim()}\n\n${blockNote}`
       : `${input.summary?.trim() || "Completion blocked."} ${blockNote}`;
@@ -1516,6 +1517,65 @@ export async function unblockTask(
   );
   board.events.unshift(
     event("task.unblocked", `Unblocked ${task.title}`, task.id, { status }),
+  );
+  await writeBoard(touch(board), options);
+  return { board, task: changed };
+  });
+}
+
+/**
+ * Resolve a needs-human task with the human's answer: the answer lands in the
+ * task body (autonomous pickups prompt from the body, so the next worker run
+ * actually sees it), a comment records it on the timeline, and the card moves
+ * back to "ready" with assignee + targetMachine preserved so the SAME agent
+ * that asked picks it back up. Callers with a delegated target should schedule
+ * an immediate autonomous pickup after this returns.
+ */
+export async function answerHumanTask(
+  slug: string | null,
+  taskId: string,
+  input: { answer: string; author?: string },
+  options: KanbanStorageOptions = {},
+) {
+  return withBoardMutation(slug, options, async () => {
+  const board = await readBoard(slug, options);
+  const task = board.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  if (task.status !== "needs-human")
+    throw new Error(`Task is '${task.status}'; answer only applies to Needs You tasks.`);
+  const answer = input.answer.trim();
+  if (!answer) throw new Error("An answer is required.");
+  const now = Date.now();
+  const author = input.author?.trim() || "dashboard";
+  const stampedAnswer = `— Human answer (${new Date(now).toISOString()}) —\n${answer}`;
+  const changed: KanbanTask = {
+    ...task,
+    status: "ready",
+    body: task.body?.trim() ? `${task.body.replace(/\s+$/, "")}\n\n${stampedAnswer}` : stampedAnswer,
+    claimLock: undefined,
+    claimExpiresAt: undefined,
+    lastHeartbeatAt: undefined,
+    currentRunId: undefined,
+    updatedAt: now,
+  };
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  const comment: KanbanComment = {
+    id: `c_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    taskId,
+    author,
+    body: answer,
+    createdAt: now,
+  };
+  board.comments.push(comment);
+  board.events.unshift(
+    event(
+      "task.human-answered",
+      `${author === "dashboard" ? "You" : author} answered ${task.title}; back to ${task.assignee?.trim() || "the queue"}`,
+      taskId,
+      { answer: answer.slice(0, 300) },
+    ),
   );
   await writeBoard(touch(board), options);
   return { board, task: changed };

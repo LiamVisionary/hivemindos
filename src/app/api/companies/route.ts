@@ -20,6 +20,7 @@ import {
   getCompanyAutonomyDriverStatus,
   rememberCompanyDriverSelfBase,
 } from "@/lib/services/company-autonomy-driver";
+import { companyRevenueRollup, readCompanyRevenueLedger } from "@/lib/services/company-revenue-share";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import type {
   CompanyApexGoal,
@@ -44,10 +45,12 @@ export async function GET(request: NextRequest) {
   rememberCompanyDriverSelfBase(request.headers.get("host"));
   const companies = await readCompanies();
   if (companies.some((company) => company.autonomy && !company.frozen)) ensureCompanyAutonomyDriver();
+  const revenueRecords = await readCompanyRevenueLedger().catch(() => []);
   const withRollups = await Promise.all(
     companies.map(async (company) => ({
       company,
       rollup: await companySpendRollup(company, company.agentIds?.length ?? 0),
+      revenueShare: await companyRevenueRollup(company.id, revenueRecords),
     })),
   );
   // Driver health rides along so the UI can say "stalled" instead of showing a

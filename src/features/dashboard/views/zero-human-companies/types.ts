@@ -1,6 +1,7 @@
 // Zero Human Companies — shared types.
 // Ported from the nextjs-companies prototype; `id` fields added on Agent /
 // PoolAgent so the live view can persist real agent membership.
+import type { CompanyRevenueEventSource, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -163,6 +164,7 @@ export interface Colony {
   burn: Burn;
   capabilityCapital: CapabilityCapital;
   revenue?: Revenue;
+  revenueShare?: CompanyRevenueRollup;
   velocity: number[];
   approvals: Approval[];
   agents: Agent[];
@@ -183,6 +185,13 @@ export interface Colony {
    * and `$`/`%` formatting — this is what the user actually set.
    */
   edit: CompanyEditForm;
+}
+
+export interface CompanyRevenueShareInput {
+  amountUsd: number;
+  source: CompanyRevenueEventSource;
+  collectFee: boolean;
+  collectingAgentId?: string;
 }
 
 /** A fully-configured agent from the org roster, available to assign. */

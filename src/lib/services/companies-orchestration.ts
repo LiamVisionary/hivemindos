@@ -137,6 +137,8 @@ export function companyWorkerContext(company: Company, memoryDigest: string): st
   lines.push(
     "",
     "Do not repeat work listed as DONE above. Record a concrete, durable result on the Work Board — it becomes company memory for the next cycle.",
+    "If you are blocked on human input, access, approval, or a decision, end your result with a section named exactly `ACTION NEEDED:` containing one or two imperative sentences telling the human precisely what to do or decide (include the options if there is a choice). This section becomes the card's headline on the Work Board.",
+    "When it helps the human act faster, add extra lines directly under `ACTION NEEDED:` — `LINK: <url>` pointing where they get or do the thing, `OPTIONS: <choice A> | <choice B>` when you need a decision, and `NEEDS: api-key <ENV_VAR_NAME>` (or `NEEDS: file` / `NEEDS: text`) naming what you are waiting for. The Work Board renders these as one-click controls and the human's answer comes back to you on this task.",
   );
   return lines.filter((line) => line !== "").join("\n");
 }

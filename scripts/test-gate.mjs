@@ -41,6 +41,7 @@ const TESTS = [
   "test:company-autonomy",
   "test:company-deliverables",
   "test:company-outputs",
+  "test:company-revenue-share",
   "test:company-task-dedup",
   "test:company-vault-store",
   "test:compiled-knowledge",
