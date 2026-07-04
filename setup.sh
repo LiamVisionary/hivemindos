@@ -2000,6 +2000,72 @@ node "$ROOT/scripts/seed-vault-foundation.mjs" \
 ensure_hive_pulse_python
 install_hive_env_add
 
+# Daily business report: a per-operator digest of their OWN companies (revenue,
+# spend, apex-goal progress, activity) written into DAILY-BRIEF.md each morning,
+# so the Queen has a standing "how are my companies doing" brief. Reads only the
+# local company store, so every user gets only their own companies. Non-fatal:
+# a failed install must never break setup.
+install_company_daily_report() {
+  local src="$ROOT/scripts/automations/hive-company-daily-report.py"
+  local automations_dir="$HOME/.hivemindos/automations"
+  local logs_dir="$HOME/.hivemindos/logs"
+  if [[ ! -f "$src" ]]; then
+    warn "Company daily report script missing at $src; skipping its install"
+    return 0
+  fi
+  mkdir -p "$automations_dir" "$logs_dir" || { warn "Could not create $automations_dir; skipping company daily report"; return 0; }
+  if ! cp "$src" "$automations_dir/hive-company-daily-report.py"; then
+    warn "Could not copy the company daily report script; skipping"
+    return 0
+  fi
+  chmod +x "$automations_dir/hive-company-daily-report.py" 2>/dev/null || true
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    info "→ Company daily report installed at $automations_dir; schedule it daily via cron/systemd (macOS installs a launchd job automatically)."
+    return 0
+  fi
+
+  local plist="$HOME/Library/LaunchAgents/com.hivemindos.company-daily-report.plist"
+  mkdir -p "$HOME/Library/LaunchAgents" || { warn "Could not create LaunchAgents dir; skipping company daily report schedule"; return 0; }
+  cat > "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hivemindos.company-daily-report</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\$PATH"; export HIVE_COMPANY_REPORT_VAULT="$shared_vault_path"; exec python3 "$automations_dir/hive-company-daily-report.py"</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>5</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>$logs_dir/company-daily-report.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>$logs_dir/company-daily-report.err.log</string>
+  <key>WorkingDirectory</key>
+  <string>$HOME</string>
+</dict>
+</plist>
+EOF
+  if command -v launchctl >/dev/null 2>&1; then
+    launchctl unload "$plist" 2>/dev/null || true
+    launchctl load -w "$plist" 2>/dev/null || warn "Could not load the company daily report launchd job; load $plist manually"
+  fi
+  info "→ Company daily report scheduled daily at 08:05 (launchd com.hivemindos.company-daily-report)."
+}
+install_company_daily_report
+
 configure_shared_skills
 
 setup_cache_dir="$ROOT/.setup-cache"
