@@ -166,18 +166,22 @@
 .title {
   margin: 0;
   font-family: var(--f-display);
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
-  letter-spacing: -0.015em;
-  line-height: 1.14;
+  letter-spacing: -0.018em;
+  line-height: 1.12;
   color: var(--fg);
 }
+/* Slightly smaller title for the form / working steps (email · code · init). */
+.titleSm { font-size: 21px; }
 .lede {
   margin: 0;
   font-size: 14px;
   line-height: 1.55;
   color: var(--fg-2);
+  max-width: 42ch;
 }
+.centerStep .lede { margin-inline: auto; }
 .lede strong { color: var(--fg); font-weight: 600; }
 
 /* --- Capability list (intro) -------------------------------------------- */
@@ -248,9 +252,10 @@
 }
 .codeInput {
   font-family: var(--f-mono);
-  font-size: 15px;
-  letter-spacing: 0;
-  text-align: left;
+  font-size: 23px;
+  letter-spacing: 0.42em;
+  text-align: center;
+  padding-left: 0.42em;
 }
 
 /* --- Verified: animated checkmark (teal / live) -------------------------- */
@@ -271,6 +276,12 @@
   animation: cbRing 2.4s ease-out infinite;
 }
 .verifiedRing[data-delay="true"] { animation-delay: 1.2s; }
+.verifiedGlow {
+  position: absolute;
+  inset: 8px;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--live-soft), transparent 70%);
+}
 .verifiedCheck {
   position: relative;
   filter: drop-shadow(0 0 12px var(--live-glow));
@@ -352,11 +363,13 @@
   position: absolute;
   inset: 8px;
   background: radial-gradient(circle, var(--live-soft), transparent 70%);
-  border: 1.5px solid var(--live-line);
   border-radius: 999px;
-  animation: cbPop 520ms cubic-bezier(0.2, 0.9, 0.2, 1.4) both;
 }
-.successCheck { position: relative; filter: drop-shadow(0 0 12px var(--live-glow)); }
+.successCheck {
+  position: relative;
+  filter: drop-shadow(0 0 12px var(--live-glow));
+  animation: cbPop 480ms cubic-bezier(0.2, 0.9, 0.2, 1.4) both;
+}
 .successCheck path {
   stroke-dasharray: 56;
   stroke-dashoffset: 56;

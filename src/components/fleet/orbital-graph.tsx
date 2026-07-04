@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import type { FleetAlert, FleetMachine, FleetTask } from "./fleet-data";
+import { readQueenVoiceAmplitude } from "@/lib/audio/queen-voice-amplitude";
 import styles from "./orbital-graph.module.css";
 
 export interface OrbitalGraphProps {
@@ -141,6 +142,14 @@ export function OrbitalGraph({
       ctx.clearRect(0, 0, w, h);
       const { cx, cy, R } = orbGeometry(w, h);
 
+      // Voice-reactive breathe: while the Queen speaks in voice chat, her live
+      // output amplitude (0..1, envelope-followed to hit the beat) swells the
+      // core glow and particle cloud. 0 when she's silent, so the sphere rests
+      // at its baseline. Only the core breathes — the HUD rings/markers keep a
+      // fixed geometry (the DOM markers are positioned off the unpulsed R).
+      const { level: voiceAmp } = readQueenVoiceAmplitude();
+      const corePulse = 1 + voiceAmp * 0.09;
+
       // Faint backdrop grid.
       ctx.strokeStyle = "rgba(90, 140, 220, 0.05)";
       ctx.lineWidth = 1;
@@ -149,15 +158,16 @@ export function OrbitalGraph({
       for (let gy = 0.5; gy < h; gy += 48) { ctx.moveTo(0, gy); ctx.lineTo(w, gy); }
       ctx.stroke();
 
-      // Core glow.
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.1);
-      glow.addColorStop(0, "rgba(200, 230, 255, 0.85)");
-      glow.addColorStop(0.22, "rgba(110, 170, 255, 0.32)");
-      glow.addColorStop(0.6, "rgba(45, 95, 210, 0.10)");
+      // Core glow — brightens and swells with her voice.
+      const glowR = R * 1.1 * corePulse;
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+      glow.addColorStop(0, `rgba(200, 230, 255, ${Math.min(1, 0.85 + voiceAmp * 0.15)})`);
+      glow.addColorStop(0.22, `rgba(110, 170, 255, ${Math.min(1, 0.32 + voiceAmp * 0.3)})`);
+      glow.addColorStop(0.6, `rgba(45, 95, 210, ${Math.min(1, 0.10 + voiceAmp * 0.14)})`);
       glow.addColorStop(1, "rgba(45, 95, 210, 0)");
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(cx, cy, R * 1.1, 0, Math.PI * 2);
+      ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
       ctx.fill();
 
       // Particle sphere, rotating about Y with a fixed tilt.
@@ -172,9 +182,9 @@ export function OrbitalGraph({
         const z2 = p.y * sinT + z1 * cosT;
         const depth = (z2 + 1) / 2; // 0 far .. 1 near
         const twinkle = 0.65 + 0.35 * Math.sin(now * 0.002 + p.twinkle);
-        const alpha = (0.10 + 0.45 * depth) * twinkle * (1.25 - p.r * 0.5);
-        const px = cx + x1 * R * p.r;
-        const py = cy + y2 * R * p.r * 0.96;
+        const alpha = (0.10 + 0.45 * depth) * twinkle * (1.25 - p.r * 0.5) * (1 + voiceAmp * 0.85);
+        const px = cx + x1 * R * p.r * corePulse;
+        const py = cy + y2 * R * p.r * 0.96 * corePulse;
         ctx.fillStyle = p.r < 0.22
           ? `rgba(225, 240, 255, ${Math.min(1, alpha + 0.25)})`
           : `rgba(150, 200, 255, ${alpha})`;

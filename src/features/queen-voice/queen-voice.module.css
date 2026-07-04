@@ -243,6 +243,17 @@
   animation: queenVoiceThinkingDots 1.2s steps(4, end) infinite;
 }
 
+/* Typed tool phase inside a queen turn: the bee thinking-loader stacked above
+   the specific tool-status chip ("Asking a hive agent…"). Mirrors the voice
+   thinking block so text and voice share one thinking language. */
+.turnWorking {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  font-style: normal;
+}
+
 /* Compact live-activity chips inside the thinking bubble: what Queen Bee is
    doing right now (agent brain, tool calls, fleet scan, routing). */
 .workingChips {

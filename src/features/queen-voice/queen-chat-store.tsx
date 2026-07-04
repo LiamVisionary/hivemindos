@@ -17,6 +17,7 @@ import {
   formatWorkBoardTaskForPrompt,
   summarizeWorkBoardByStatus,
 } from "@/features/dashboard/work-board-lookup";
+import { fetchAgentStatusAnswer } from "@/features/dashboard/agent-status-fetch";
 
 export type QueenChatTurn = {
   id: string;
@@ -26,6 +27,9 @@ export type QueenChatTurn = {
   live?: boolean;
   /** Awaiting the Queen's reply (typed path). */
   pending?: boolean;
+  /** Live tool-phase status label (typed path) — drives the per-turn bee
+   *  thinking loader while a tool runs, e.g. "Asking a hive agent…". */
+  working?: string;
   /** Richer markdown findings, shown in a modal on demand. */
   detail?: string;
   source: "text" | "voice";
@@ -179,6 +183,12 @@ export function QueenChatProvider({
         }
         return hits.slice(0, 3).map(formatWorkBoardTaskForPrompt).join("\n\n");
       }
+      if (name === "read_agent_status") {
+        // Direct fleet read — the Queen answers "is HermesMain down / timing
+        // out?" from live telemetry (and offers a fix when it's unhealthy)
+        // instead of deflecting. Shared with the voice executor so both match.
+        return fetchAgentStatusAnswer(String(args.agentName ?? ""));
+      }
       return "Unknown tool.";
     } catch {
       return "That tool call didn't complete.";
@@ -216,6 +226,7 @@ export function QueenChatProvider({
       create_hive_task: "Creating the Work Board task…",
       remember_preference: "Saving that preference…",
       read_work_board: "Checking the Work Board…",
+      read_agent_status: "Checking agent status…",
     } as Record<string, string>)[name] ?? "Working on it…";
 
     // One model turn over the streaming action: renders deltas into the live
@@ -251,7 +262,8 @@ export function QueenChatProvider({
           try { event = JSON.parse(raw); } catch { continue; }
           if (typeof event.delta === "string" && event.delta) {
             accumulated += event.delta;
-            updateTurn(queenId, { text: accumulated, live: true, pending: false });
+            // Real text is streaming again — drop any lingering tool-phase bee.
+            updateTurn(queenId, { text: accumulated, live: true, pending: false, working: undefined });
             continue;
           }
           if (event.done) {
@@ -291,9 +303,13 @@ export function QueenChatProvider({
           for (const tc of toolCalls) {
             let parsed: Record<string, unknown> = {};
             try { parsed = JSON.parse(tc.arguments || "{}"); } catch { parsed = {}; }
-            // Narrate the tool phase in the live turn instead of dead air.
+            // Narrate the tool phase in the live turn instead of dead air: the
+            // status drives a per-turn bee loader (see QueenBeeVoiceOverlay), so
+            // it must NOT be embedded in the markdown text — the chat renderer
+            // has no underscore-italic rule and would print the `_` literally.
             updateTurn(queenId, {
-              text: [data.content?.trim(), `_${toolStatus(tc.name)}_`].filter(Boolean).join("\n\n"),
+              text: data.content?.trim() || "",
+              working: toolStatus(tc.name),
               live: true,
               pending: false,
             });
@@ -303,12 +319,12 @@ export function QueenChatProvider({
           continue; // loop back so she can read the tool results
         }
         const reply = data.content?.trim() || "Done.";
-        updateTurn(queenId, { text: reply, live: false, pending: false });
+        updateTurn(queenId, { text: reply, live: false, pending: false, working: undefined });
         messages.push({ role: "assistant", content: reply });
         return;
       }
       // iteration cap reached — leave whatever she last said, stop the spinner
-      updateTurn(queenId, { live: false, pending: false });
+      updateTurn(queenId, { live: false, pending: false, working: undefined });
     } catch {
       await heuristicFallback().catch(() => {
         updateTurn(queenId, { text: "I couldn't reach the Queen just now.", live: false, pending: false });

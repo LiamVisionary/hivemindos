@@ -310,8 +310,8 @@ function EmailStep({ email, setEmail, inputRef, busy, onSend }: {
 }) {
   return (
     <div className={styles.step}>
-      <h2 id="clawbank-onboarding-title" className={styles.title}>Where should we send your code?</h2>
-      <p className={styles.lede}>ClawBank emails a one-time login code to register your account.</p>
+      <h2 id="clawbank-onboarding-title" className={`${styles.title} ${styles.titleSm}`}>Where should we send your code?</h2>
+      <p className={styles.lede}>ClawBank emails a one-time login code to register your account. The key is minted server-side and never touches the browser.</p>
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Email</span>
         <input
@@ -346,7 +346,7 @@ function CodeStep({ email, code, setCode, inputRef, busy, onVerify }: {
 }) {
   return (
     <div className={styles.step}>
-      <h2 id="clawbank-onboarding-title" className={styles.title}>Enter your code.</h2>
+      <h2 id="clawbank-onboarding-title" className={`${styles.title} ${styles.titleSm}`}>Enter your code.</h2>
       <p className={styles.lede}>We sent a login code to <strong>{email}</strong>. Codes expire quickly.</p>
       <label className={styles.field}>
         <span className={styles.fieldLabel}>Login code</span>
@@ -381,6 +381,7 @@ function VerifiedStep() {
       <div className={styles.verifiedMark} aria-hidden="true">
         <span className={styles.verifiedRing} />
         <span className={styles.verifiedRing} data-delay="true" />
+        <span className={styles.verifiedGlow} />
         <svg className={styles.verifiedCheck} viewBox="0 0 52 52" width="60" height="60">
           <circle className={styles.verifiedCircle} cx="26" cy="26" r="23" fill="none" stroke="currentColor" strokeWidth="2.4" />
           <path className={styles.verifiedTick} d="M15 27 L23 34.5 L38 18" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
@@ -405,7 +406,7 @@ function InitializingStep() {
         <span className={styles.spark} style={{ "--i": 1 } as React.CSSProperties} />
         <span className={styles.spark} style={{ "--i": 2 } as React.CSSProperties} />
       </div>
-      <h2 id="clawbank-onboarding-title" className={styles.title}>Initializing ClawBank…</h2>
+      <h2 id="clawbank-onboarding-title" className={`${styles.title} ${styles.titleSm}`}>Initializing ClawBank…</h2>
       <p className={styles.lede}>Minting your account key and wiring it into the hive. One moment.</p>
     </div>
   );
@@ -416,7 +417,7 @@ function SuccessStep() {
     <div className={`${styles.step} ${styles.centerStep}`}>
       <div className={styles.successMark} aria-hidden="true">
         <span className={styles.successRing} />
-        <svg className={styles.successCheck} viewBox="0 0 52 52" width="56" height="56">
+        <svg className={styles.successCheck} viewBox="0 0 52 52" width="58" height="58">
           <path d="M14 27 L23 36 L39 18" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>

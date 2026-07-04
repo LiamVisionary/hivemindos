@@ -8,6 +8,7 @@
  */
 
 import { playRealtimePcmStream } from "@/lib/audio/realtime-pcm-stream-player";
+import { tapQueenOutput } from "@/lib/audio/queen-voice-amplitude";
 
 // Local TTS streaming: a small jitter buffer keeps first audio fast; the
 // worklet queue absorbs the rest (underruns degrade to brief pauses, not
@@ -122,6 +123,12 @@ async function playStreamedLocalTts(
         onFirstByte: () => {
           sawFirstByte = true;
           window.clearTimeout(firstAudioTimer);
+          // Audio is resuming after the inter-chunk (or session-start) silence,
+          // so her bleed is about to return to the mic: recalibrate the echo
+          // floor around the onset (it fires ~a buffer ahead of real audio, so
+          // the short window is open before the bleed lands) or the resumed
+          // bleed reads as a barge-in and self-interrupts.
+          if (activity) activity.underrunAt = Date.now();
         },
         onUnderrun: () => {
           // Playback gap: her voice stops bleeding into the mic, so the
@@ -244,6 +251,9 @@ export async function playSpokenReply(
       const source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(context.destination);
+      // Side-tap the buffered clip too, so the fleet animation breathes to her
+      // voice on the cloud-TTS / fallback path, not just streamed local TTS.
+      tapQueenOutput(source, context);
       const stop = () => {
         try {
           source.stop();
@@ -254,6 +264,10 @@ export async function playSpokenReply(
       };
       signal.addEventListener("abort", stop, { once: true });
       source.onended = () => resolvePlayback();
+      // Buffered path resume: her bleed returns as this clip starts, so
+      // recalibrate the echo floor around the onset (mirrors the streaming
+      // onFirstByte anchor) or the resumed bleed self-interrupts.
+      if (activity) activity.underrunAt = Date.now();
       source.start();
     });
     return "buffered";

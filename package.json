@@ -77,6 +77,7 @@
     "test:collector-chat-abort": "node scripts/test-collector-chat-abort.mjs",
     "test:company-autonomy": "node scripts/test-company-autonomy.mjs",
     "test:company-deliverables": "node scripts/test-company-deliverables.mjs",
+    "test:company-issues": "node scripts/test-company-issues.mjs",
     "test:company-outputs": "node scripts/test-company-outputs.mjs",
     "test:company-revenue-share": "node scripts/test-company-revenue-share.mjs",
     "test:company-task-dedup": "node scripts/test-company-task-dedup.mjs",

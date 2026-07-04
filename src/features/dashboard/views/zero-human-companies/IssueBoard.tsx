@@ -1,12 +1,27 @@
 // Zero Human Companies — Linear-style issue board for a single colony.
 import React from "react";
+import { CompanyIssueActionButtons } from "./CompanyIssueActions";
 import { ISSUE_LANES } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import { issueBlockReason } from "./issue-reason";
 import { PriTag, RoleGlyph } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
 
-function IssueCard({ issue, agents, onOpen }: { issue: Issue; agents: Agent[]; onOpen?: (issue: Issue) => void }) {
+function IssueCard({
+  issue,
+  agents,
+  companyName,
+  onOpen,
+  onResolveIssue,
+  busy,
+}: {
+  issue: Issue;
+  agents: Agent[];
+  companyName: string;
+  onOpen?: (issue: Issue) => void;
+  onResolveIssue?: (issue: Issue) => void;
+  busy?: boolean;
+}) {
   const a = issue.agent;
   const stateAgent = a ? agents.find((x) => x.name === a) : null;
   // Live cards carry the real Work Board record and open the task detail;
@@ -44,11 +59,14 @@ function IssueCard({ issue, agents, onOpen }: { issue: Issue; agents: Agent[]; o
             background: "color-mix(in srgb, var(--danger) 12%, transparent)",
             border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
             borderRadius: 7, padding: "5px 7px", textWrap: "pretty",
-            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+            overflowWrap: "anywhere",
           }}
         >
           {blockReason}
         </div>
+      )}
+      {blockReason && (
+        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpen} onResolveIssue={onResolveIssue} busy={busy} />
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 1 }}>
         {a ? (
@@ -71,7 +89,19 @@ function IssueCard({ issue, agents, onOpen }: { issue: Issue; agents: Agent[]; o
   );
 }
 
-export function IssueBoard({ colony, onOpenIssue }: { colony: Colony; onOpenIssue?: (issue: Issue) => void }) {
+export function IssueBoard({
+  colony,
+  companyName = colony.name,
+  onOpenIssue,
+  onResolveIssue,
+  busyId,
+}: {
+  colony: Colony;
+  companyName?: string;
+  onOpenIssue?: (issue: Issue) => void;
+  onResolveIssue?: (issue: Issue) => void;
+  busyId?: string | null;
+}) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${ISSUE_LANES.length}, minmax(168px, 1fr))`, gap: 12, minWidth: "min-content" }}>
       {ISSUE_LANES.map((lane) => {
@@ -90,7 +120,17 @@ export function IssueBoard({ colony, onOpenIssue }: { colony: Colony; onOpenIssu
               <span style={{ height: 2, background: `color-mix(in srgb, ${accent} 45%, transparent)`, borderRadius: 999, marginTop: 4 }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
-              {items.map((i) => <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} onOpen={onOpenIssue} />)}
+              {items.map((i) => (
+                <IssueCard
+                  key={getIssueIdentity(i)}
+                  issue={i}
+                  agents={colony.agents}
+                  companyName={companyName}
+                  onOpen={onOpenIssue}
+                  onResolveIssue={onResolveIssue}
+                  busy={busyId === i.work?.taskId}
+                />
+              ))}
               {items.length === 0 && (
                 <div style={{ borderRadius: 10, border: "1px dashed var(--line)", padding: "14px 10px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>empty</div>
               )}

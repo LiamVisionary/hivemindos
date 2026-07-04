@@ -607,6 +607,85 @@ const {
     const triggeredAt = run(detector, 0.06, BARGE_IN_TUNING.graceMs + 216, 6_000);
     assert.ok(triggeredAt > 0, "silence-calibrated floor self-triggers without recalibration");
   }
+
+  // 2026-07-04 regression guard: recalibration is anchored at the audio RESUME
+  // and kept short (recalibrateMs), so a user speaking mid-reply — between the
+  // resume onsets — still breaks in. The bug this replaces fired a 1000ms
+  // window at EVERY chunk seam, which blanketed the reply and made her
+  // un-interruptible (barge-in trigger rate 0%).
+  {
+    const detector = createBargeInDetector(0);
+    // Session start + her bleed established, then a chunk resumes -> a short
+    // recalibration window absorbs the bleed onset.
+    run(detector, 0.03, 0, 1_000);
+    requestBargeInRecalibration(detector, 1_000);
+    const windowEnd = 1_000 + BARGE_IN_TUNING.recalibrateMs;
+    run(detector, 0.03, 1_000, windowEnd + 200);
+    // Once the window closes the user talks over her continuing bleed and MUST
+    // break in within the sustain window — not be absorbed into the floor.
+    const start = windowEnd + 208;
+    const triggeredAt = run(detector, 0.18, start, start + 2_000);
+    assert.ok(triggeredAt > 0, "user interrupts after a resume-recalibration window");
+    assert.ok(
+      triggeredAt - start <= BARGE_IN_TUNING.sustainMs + 3 * FRAME_MS,
+      `barge-in fires within the sustain window (took ${triggeredAt - start}ms)`,
+    );
+    // The window must be short enough to leave most of a typical ~2.5s chunk
+    // interruptible; a full-second window would recreate the blanket bug.
+    assert.ok(
+      BARGE_IN_TUNING.recalibrateMs <= 700,
+      "resume-recalibration window stays short",
+    );
+  }
+
+  // 2026-07-04 onset-coincidence guard: once her bleed is ESTABLISHED, a
+  // resume-recalibration window still absorbs her own continuing bleed (no
+  // self-trigger), but a user talking over it — louder than any bleed she has
+  // produced — breaks in mid-window instead of being latched into the floor.
+  // This is the residual "onset latch": before the peak-keyed guard, starting
+  // to talk exactly as a new sentence resumed stayed deaf for a few pauses.
+  {
+    // Establish her bleed, then open a resume window: her own bleed is absorbed.
+    const quiet = createBargeInDetector(0);
+    run(quiet, 0.03, 0, 1_500);
+    assert.ok(quiet.peakFloor > BARGE_IN_TUNING.initialFloor, "her bleed is established");
+    requestBargeInRecalibration(quiet, 1_500);
+    assert.equal(quiet.guardActiveWindow, true, "guard arms once bleed is established");
+    const noTrigger = run(quiet, 0.03, 1_516, 1_516 + BARGE_IN_TUNING.recalibrateMs);
+    assert.equal(noTrigger, 0, "her own resumed bleed is absorbed, not read as barge-in");
+
+    // Same established window, but the user talks over her from the instant it
+    // opens; a conversational level (well above her bleed ceiling) must break in.
+    const loud = createBargeInDetector(0);
+    run(loud, 0.03, 0, 1_500);
+    requestBargeInRecalibration(loud, 1_500);
+    const start = 1_516;
+    const onsetAt = run(loud, 0.3, start, start + 1_500);
+    assert.ok(onsetAt > 0, "user breaks in during an established-bleed resume window");
+    assert.ok(
+      onsetAt - start <= BARGE_IN_TUNING.sustainMs + 4 * FRAME_MS,
+      `onset-coincidence fires within the sustain window (took ${onsetAt - start}ms)`,
+    );
+  }
+
+  // The gate that keeps the guard safe: an UNESTABLISHED resume window (silent
+  // grace / synth TTFB > grace, so no bleed reference yet) falls back to
+  // unconditional absorb. Her first resumed bleed — louder than the near-zero
+  // floor but the only bleed sample there is — must NOT self-trigger. This is
+  // the trap an ungated peak-keyed guard reopens (it lets that first bleed pass
+  // its own amplitude discriminator); the establishment gate closes it.
+  {
+    const detector = createBargeInDetector(0);
+    run(detector, 0, 0, BARGE_IN_TUNING.graceMs + 200); // slow synth: grace is silent
+    requestBargeInRecalibration(detector, BARGE_IN_TUNING.graceMs + 216);
+    assert.equal(
+      detector.guardActiveWindow,
+      false,
+      "guard stays disarmed with no established bleed reference",
+    );
+    const triggeredAt = run(detector, 0.06, BARGE_IN_TUNING.graceMs + 216, 6_000);
+    assert.equal(triggeredAt, 0, "first resumed bleed after a slow synth never self-triggers");
+  }
   console.log("barge-in echo-floor detector ok");
 }
 

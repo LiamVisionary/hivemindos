@@ -118,6 +118,9 @@ export interface IssueDeliverable {
 export interface IssueReceipt {
   title: string;
   status: "passed" | "failed" | "skipped";
+  /** The concrete commands/probes and their results behind this receipt — the
+   * proof the human can expand under a failed gate instead of taking it on faith. */
+  evidence?: string[];
 }
 
 /**

@@ -17,7 +17,8 @@ import {
   DEMO_CREATE_SEED_CREW,
 } from "./zhc-demo-data";
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
-import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, PoolAgent } from "./types";
+import { resolvedIssueAnswer } from "./issue-resume";
+import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 
 type CompanyEntry = { company: Company; rollup: CompanySpendRollup; revenueShare?: CompanyRevenueRollup };
@@ -142,6 +143,25 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
     setBusyId(null);
   }, [replaceColony]);
 
+  const handleResolveIssue = React.useCallback((companyId: string, issue: Issue) => {
+    const taskId = issue.work?.taskId;
+    setBusyId(taskId ?? issue.key);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.map((item) => {
+        const same = (taskId && item.work?.taskId === taskId) || item.key === issue.key;
+        return same
+          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${resolvedIssueAnswer(item)}`.trim() } : item.work }
+          : item;
+      }),
+      governance: [
+        { kind: "reflect" as const, text: `Human marked ${issue.title} resolved; the task is back in the queue.`, agent: "human", since: "now" },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
   const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
     replaceColony(companyId, (colony) => {
       const current = colony.revenueShare ?? {
@@ -191,6 +211,7 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
       onDelete={(companyId) => setColonies((current) => current.filter((colony) => colony.id !== companyId))}
       onDispatch={handleDispatch}
       onStopAutonomy={handleStopAutonomy}
+      onResolveIssue={(companyId, issue) => handleResolveIssue(companyId, issue)}
       onRecordRevenue={handleRecordRevenue}
       theme={theme}
     />
@@ -575,6 +596,43 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     }
   }, [refresh]);
 
+  const handleResolveIssue = React.useCallback(async (companyId: string, issue: Issue) => {
+    const taskId = issue.work?.taskId;
+    if (!taskId) {
+      setError("This issue does not have a Work Board task to resume.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    setBusyId(taskId);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/kanban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "answer",
+          taskId,
+          answer: resolvedIssueAnswer(issue),
+          author: "dashboard",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Could not mark this issue resolved.");
+      } else {
+        setError(null);
+        setNotice(
+          json.pickupScheduled
+            ? `${companyName}: marked resolved. ${issue.agent || "The agent"} is picking the task back up now.`
+            : `${companyName}: marked resolved. The task is back in the Work Board queue.`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh]);
+
   const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
     setBusyId(companyId);
     setNotice(null);
@@ -629,6 +687,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
+      onResolveIssue={(companyId, issue) => void handleResolveIssue(companyId, issue)}
       onRecordRevenue={handleRecordRevenue}
       theme={theme}
     />

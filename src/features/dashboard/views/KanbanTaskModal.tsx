@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { createStyleClass } from "@/features/dashboard/style-classes";
-import { extractHumanAsk, extractResultArtifacts, formatPlainResultBody, isBriefGuidanceSection, isBriefGuidanceText, parseTaskBrief } from "@/features/dashboard/kanban-result-format";
+import { extractHumanAsk, extractResultArtifacts, formatPlainResultBody, isBriefGuidanceSection, isBriefGuidanceText, isBriefTechnicalField, parseTaskBrief } from "@/features/dashboard/kanban-result-format";
 import { KanbanNeedsHumanPanel } from "./KanbanNeedsHumanPanel";
 import convoStyles from "@/app/kanban-conversation.module.css";
 
@@ -22,9 +22,10 @@ export function KanbanTaskModal(props: any) {
   // Legacy "notes" openers land on the unified conversation too.
   const modal = kanbanTaskModal === "notes" ? "chat" : kanbanTaskModal;
   const task = selectedKanbanTask;
-  // Agent operating boilerplate in control-plane briefs is collapsed by
-  // default. The toggle stores WHICH task it was opened for, so switching
-  // tasks resets it without an effect.
+  // Dispatch plumbing in control-plane briefs (routing/worker/machine fields
+  // and agent operating boilerplate) is collapsed by default behind a "technical
+  // details" toggle. The toggle stores WHICH task it was opened for, so
+  // switching tasks resets it without an effect.
   const [briefGuidanceFor, setBriefGuidanceFor] = useState("");
   const showBriefGuidance = Boolean(task) && briefGuidanceFor === task?.id;
   const agent = selectedKanbanAgent;
@@ -292,9 +293,11 @@ export function KanbanTaskModal(props: any) {
                     // what would be hidden, then render the human-facing rest.
                     const hiddenCount = entry.brief.sections.reduce((count, section) => {
                       if (isBriefGuidanceSection(section)) return count + 1;
-                      return count + section.blocks.reduce((inner, briefBlock) => briefBlock.kind === "prose"
-                        ? inner + briefBlock.text.split("\n\n").filter(isBriefGuidanceText).length
-                        : inner, 0);
+                      return count + section.blocks.reduce((inner, briefBlock) => {
+                        if (briefBlock.kind === "prose") return inner + briefBlock.text.split("\n\n").filter(isBriefGuidanceText).length;
+                        if (briefBlock.kind === "fields") return inner + briefBlock.fields.filter(isBriefTechnicalField).length;
+                        return inner;
+                      }, 0);
                     }, 0);
                     return (
                       <div className={convoClass("briefView")}>
@@ -303,9 +306,13 @@ export function KanbanTaskModal(props: any) {
                           const blocks = section.blocks
                             .map((briefBlock, blockIndex) => {
                               if (briefBlock.kind === "fields") {
+                                const fields = showBriefGuidance
+                                  ? briefBlock.fields
+                                  : briefBlock.fields.filter((field) => !isBriefTechnicalField(field));
+                                if (!fields.length) return null;
                                 return (
                                   <dl className={convoClass("briefFields")} key={blockIndex}>
-                                    {briefBlock.fields.map((field, fieldIndex) => (
+                                    {fields.map((field, fieldIndex) => (
                                       <div key={`${field.key}-${fieldIndex}`}>
                                         <dt>{field.key}</dt>
                                         <dd>{field.value}</dd>
@@ -354,7 +361,7 @@ export function KanbanTaskModal(props: any) {
                             onClick={() => setBriefGuidanceFor(showBriefGuidance ? "" : task.id)}
                             aria-expanded={showBriefGuidance}
                           >
-                            {showBriefGuidance ? "Hide agent instructions" : `Show agent instructions (${hiddenCount})`}
+                            {showBriefGuidance ? "Hide technical details" : `Show technical details (${hiddenCount})`}
                           </button>
                         ) : null}
                       </div>

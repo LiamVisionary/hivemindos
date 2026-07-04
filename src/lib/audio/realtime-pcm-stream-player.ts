@@ -1,5 +1,7 @@
 "use client";
 
+import { tapQueenOutput } from "@/lib/audio/queen-voice-amplitude";
+
 export type RealtimePcmPlaybackMetrics = {
   firstByteMs: number;
   firstAudioMs: number;
@@ -316,6 +318,9 @@ export class RealtimePcmStreamPlayer {
     gain.gain.value = 1;
     node.connect(gain);
     gain.connect(context.destination);
+    // Side-tap the single node every queen PCM frame passes through, so the
+    // fleet animation can breathe to her live streamed-TTS amplitude.
+    tapQueenOutput(gain, context);
     node.port.onmessage = (event: MessageEvent<WorkletEvent>) => this.handleWorkletEvent(event.data);
     postToWorklet(node, { type: "configure", channels: this.inputChannels });
     this.context = context;

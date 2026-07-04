@@ -5,14 +5,12 @@ import { Settings2 } from "lucide-react";
 import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel } from "./primitives";
 import { IssueBoard } from "./IssueBoard";
 import { STATUS_TONE } from "./data";
-import { issueBlockReason, companyIssueDiscussPrompt } from "./issue-reason";
-import { dashboardUrlForTarget } from "@/features/dashboard/dashboard-navigation";
-import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
+import { CompanyIssueSummaryCard, isCompanyReviewIssue } from "./CompanyIssueActions";
 import { DeliverableCard } from "./DeliverableCard";
 import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable } from "./deliverables-model";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
-import { getIssueIdentity } from "./issue-identity";
 import type { Agent, Approval, Colony, CompanyRevenueShareInput, Issue } from "./types";
+import type { CompanyEmailDirection, CompanyEmailThread, CompanyEmailThreadsResult, CompanyMailbox, MailProviderSummary } from "@/lib/services/agent-mailboxes";
 
 export type CockpitHandlers = {
   onApprove: (approvalId: string) => void;
@@ -31,6 +29,8 @@ export type CockpitHandlers = {
   onEditAgent: (agentId: string) => void;
   /** Open a board card's underlying Work Board task (result + deliverables). */
   onOpenIssue: (issue: Issue) => void;
+  /** Human fixed the blocker; answer the Needs-You task so it resumes. */
+  onResolveIssue: (issue: Issue) => void;
   /** Record external company revenue and optionally collect the platform share. */
   onRecordRevenue: (input: CompanyRevenueShareInput) => void;
   /** Approval/company id currently mutating, to disable its controls. */
@@ -260,11 +260,10 @@ function ActivityTicker({ colony }: { colony: Colony }) {
  * approval, and customer-facing previews ready to review before they go out. If
  * there's nothing to act on, it renders nothing.
  */
-function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprovals }: {
-  colony: Colony; onOpenIssue: (issue: Issue) => void; onGoToDeliverables: () => void; onGoToApprovals: () => void;
+function ReviewStrip({ colony: c, onOpenIssue, onResolveIssue, busyId, onGoToDeliverables, onGoToApprovals }: {
+  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; busyId: string | null; onGoToDeliverables: () => void; onGoToApprovals: () => void;
 }) {
-  const queenChat = useQueenChat();
-  const blocked = c.issues.filter((i) => i.work?.status === "needs-human" || i.status === "board_review");
+  const blocked = c.issues.filter(isCompanyReviewIssue);
   const previewCount = React.useMemo(
     () => collectCompanyDeliverables(c).filter((x) => x.classified.reviewable).length,
     [c],
@@ -277,27 +276,6 @@ function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprova
     borderRadius: 11, padding: "10px 12px", border: "1px solid color-mix(in srgb, var(--honey) 30%, var(--line))",
     background: "color-mix(in srgb, var(--honey) 7%, var(--bg-2))", font: "inherit", color: "inherit",
   };
-  const actionBtnStyle: React.CSSProperties = {
-    display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer",
-    borderRadius: 8, padding: "5px 9px", font: "inherit", fontFamily: "var(--f-mono)", fontSize: 11,
-    border: "1px solid color-mix(in srgb, var(--honey) 45%, var(--line))",
-    background: "color-mix(in srgb, var(--honey) 12%, var(--bg-2))", color: "var(--honey-2)",
-  };
-  // Discuss → hand the blocked task to the Queen chat with the same "what's the next
-  // action / what needs my decision" prompt the notifications route uses.
-  const discussIssue = (issue: Issue) => {
-    void queenChat.sendText(companyIssueDiscussPrompt(c.name, issue));
-  };
-  // Open on Work Board → SPA-navigate to the task via the nav controller's popstate
-  // handler (openTask deep-open is intentionally not URL-serialized, so this scrolls
-  // the board to the task; the human opens its conversation from there).
-  const openOnWorkBoard = (taskId: string) => {
-    if (typeof window === "undefined") return;
-    const url = dashboardUrlForTarget({ view: "kanban", taskId }, window.location.pathname);
-    window.history.pushState({ dashboardTarget: { view: "kanban", taskId } }, "", url);
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  };
-
   return (
     <div style={{ borderRadius: 14, border: "1px solid color-mix(in srgb, var(--honey) 40%, transparent)", background: "color-mix(in srgb, var(--honey) 6%, var(--bg-1))", padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -317,33 +295,15 @@ function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprova
           </button>
         )}
         {blocked.map((issue) => {
-          const reason = issueBlockReason(issue);
-          const taskId = issue.work?.taskId;
           return (
-            <div key={getIssueIdentity(issue)} style={{ ...rowStyle, alignItems: "flex-start", cursor: "default", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, width: "100%" }}>
-                <span aria-hidden style={{ fontSize: 15, marginTop: 1 }}>⛔</span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenIssue(issue)}
-                    title="Open the task result and deliverables"
-                    style={{ display: "block", textAlign: "left", width: "100%", cursor: "pointer", background: "none", border: "none", padding: 0, fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)", overflowWrap: "anywhere" }}
-                  >
-                    {issue.title}
-                  </button>
-                  <span style={{ display: "block", marginTop: 3, fontFamily: "var(--f-mono)", fontSize: 10.5, lineHeight: 1.4, color: "var(--danger-2)", overflowWrap: "anywhere" }}>
-                    {reason || "Blocked — the crew needs a decision or an unblock from you."}
-                  </span>
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingLeft: 25 }}>
-                <button type="button" onClick={() => discussIssue(issue)} style={actionBtnStyle}>💬 Discuss</button>
-                {taskId && (
-                  <button type="button" onClick={() => openOnWorkBoard(taskId)} style={actionBtnStyle}>📋 Open on Work Board</button>
-                )}
-              </div>
-            </div>
+            <CompanyIssueSummaryCard
+              key={issue.work?.taskId ?? issue.key}
+              companyName={c.name}
+              issue={issue}
+              onOpenIssue={onOpenIssue}
+              onResolveIssue={onResolveIssue}
+              busy={busyId === issue.work?.taskId}
+            />
           );
         })}
         {previewCount > 0 && (
@@ -358,6 +318,36 @@ function ReviewStrip({ colony: c, onOpenIssue, onGoToDeliverables, onGoToApprova
         )}
       </div>
     </div>
+  );
+}
+
+function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, busyId }: {
+  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; busyId: string | null;
+}) {
+  const reviewIssues = c.issues.filter(isCompanyReviewIssue);
+  const activeIssues = c.issues.filter((issue) => issue.status !== "done");
+  return (
+    <Panel>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{reviewIssues.length} need{reviewIssues.length === 1 ? "s" : ""} you · {activeIssues.length} active</span>}>
+        issues
+      </SectionLabel>
+      {reviewIssues.length === 0 ? (
+        <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "20px 0" }}>No unresolved issues — the crew can keep moving on its own.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {reviewIssues.map((issue) => (
+            <CompanyIssueSummaryCard
+              key={issue.work?.taskId ?? issue.key}
+              companyName={c.name}
+              issue={issue}
+              onOpenIssue={onOpenIssue}
+              onResolveIssue={onResolveIssue}
+              busy={busyId === issue.work?.taskId}
+            />
+          ))}
+        </div>
+      )}
+    </Panel>
   );
 }
 
@@ -448,33 +438,307 @@ function DeliverablesPanel({ colony: c, spec, theme = "dark" }: { colony: Colony
   );
 }
 
+const EMAIL_DIRECTION_META: Record<CompanyEmailDirection, { glyph: string; label: string; color: string }> = {
+  outbound: { glyph: "↑", label: "sent", color: "var(--cyan-2)" },
+  inbound: { glyph: "↓", label: "reply", color: "var(--honey-2)" },
+  mixed: { glyph: "↕", label: "thread", color: "var(--fg-2)" },
+};
+
+/** One outreach thread: who's on the other end, subject, preview, provenance. */
+function EmailThreadCard({ thread }: { thread: CompanyEmailThread }) {
+  const dir = EMAIL_DIRECTION_META[thread.direction] ?? EMAIL_DIRECTION_META.mixed;
+  const who = thread.correspondents.length > 0 ? thread.correspondents.join(", ") : "—";
+  const when = dispatchedAgo(thread.updatedAt);
+  return (
+    <div style={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "13px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span title={dir.label} aria-label={dir.label} style={{ flexShrink: 0, display: "inline-grid", placeItems: "center", width: 20, height: 20, borderRadius: 6, background: `color-mix(in srgb, ${dir.color} 16%, transparent)`, color: dir.color, fontSize: 12, fontWeight: 700 }}>{dir.glyph}</span>
+        <span title={who} style={{ flex: 1, minWidth: 0, fontFamily: "var(--f-mono)", fontSize: 11.5, color: "var(--fg-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{who}</span>
+        <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 8.5, letterSpacing: 0.04, textTransform: "uppercase", color: "var(--fg-4)", border: "1px solid var(--line)", borderRadius: 5, padding: "1px 5px" }}>{thread.providerLabel}</span>
+        {when && <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", whiteSpace: "nowrap" }}>{when}</span>}
+      </div>
+      <div style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, color: "var(--fg)", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{thread.subject}</div>
+      {thread.preview && (
+        <div style={{ fontSize: 11.5, color: "var(--fg-3)", lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{thread.preview}</div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)" }}>
+        <span title={thread.inboxAddress} style={{ maxWidth: 190, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✉ {thread.inboxAddress}</span>
+        <span>· {thread.messageCount} msg{thread.messageCount === 1 ? "" : "s"}</span>
+        {thread.attachmentCount > 0 && <span>· 📎 {thread.attachmentCount}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** Compact per-provider status chips (AgentMail / Cloudflare Inbox) so an
+ *  empty or partial Emails tab explains which providers are wired. */
+function MailProviderStrip({ providers }: { providers: MailProviderSummary[] }) {
+  if (providers.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 14 }}>
+      {providers.map((p) => {
+        const color = p.connected ? "var(--cyan-2)" : "var(--fg-4)";
+        const summary = p.connected ? (p.threadCount > 0 ? `${p.threadCount} thread${p.threadCount === 1 ? "" : "s"}` : p.inboxCount > 0 ? `${p.inboxCount} inbox${p.inboxCount === 1 ? "" : "es"}` : "connected") : "not connected";
+        return (
+          <span key={p.id} title={p.note || summary} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-3)", border: "1px solid var(--line)", borderRadius: 999, padding: "3px 9px" }}>
+            <span className={"dot" + (p.connected && p.threadCount > 0 ? " live" : "")} style={{ color }} />
+            {p.label}
+            <span style={{ color: "var(--fg-4)" }}>· {summary}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One agent mailbox in the roster view — clickable to focus its threads. Issue
+ *  mailboxes (undeployed / blocked) get a danger accent so they read as attention. */
+function AgentMailboxCard({ mailbox, agentName, onOpen }: { mailbox: CompanyMailbox; agentName?: string; onOpen: () => void }) {
+  const issue = mailbox.status === "issue";
+  const statusColor = issue ? "var(--danger-2)" : mailbox.threadCount > 0 ? "var(--cyan-2)" : "var(--fg-4)";
+  const statusLabel = issue ? "needs attention" : mailbox.threadCount > 0 ? `${mailbox.threadCount} thread${mailbox.threadCount === 1 ? "" : "s"}` : "ready";
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={`Open ${mailbox.address}`}
+      style={{
+        textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", gap: 8, padding: "13px 14px", borderRadius: 12,
+        border: `1px solid ${issue ? "color-mix(in srgb, var(--danger) 42%, transparent)" : "var(--line)"}`,
+        background: issue ? "color-mix(in srgb, var(--danger) 7%, var(--bg-2))" : "var(--bg-2)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden style={{ fontSize: 15 }}>{issue ? "⚠️" : "✉️"}</span>
+        <span title={agentName || mailbox.agentId} style={{ flex: 1, minWidth: 0, fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agentName || mailbox.agentId || "Shared inbox"}</span>
+        <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 8.5, letterSpacing: 0.04, textTransform: "uppercase", color: "var(--fg-4)", border: "1px solid var(--line)", borderRadius: 5, padding: "1px 5px" }}>{mailbox.providerLabel}</span>
+      </div>
+      <span title={mailbox.address} style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mailbox.address}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, fontFamily: "var(--f-mono)", fontSize: 10, color: statusColor }}>
+        <span className={"dot" + (!issue && mailbox.threadCount > 0 ? " live" : "")} style={{ color: statusColor }} />
+        {statusLabel}
+        <span style={{ flex: 1 }} />
+        <span style={{ color: "var(--fg-4)" }}>open →</span>
+      </div>
+      {issue && mailbox.detail && (
+        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)", lineHeight: 1.4 }}>{mailbox.detail}</span>
+      )}
+    </button>
+  );
+}
+
+/** A company member agent that has no mailbox on any provider — a soft issue card. */
+function NoMailboxCard({ agentName }: { agentName: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "13px 14px", borderRadius: 12, border: "1px dashed var(--line-2)", background: "var(--bg-2)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden style={{ fontSize: 15, opacity: 0.7 }}>📭</span>
+        <span title={agentName} style={{ flex: 1, minWidth: 0, fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agentName}</span>
+      </div>
+      <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", lineHeight: 1.4 }}>No mailbox yet — provision one from this agent&apos;s settings to give it outreach email.</span>
+    </div>
+  );
+}
+
+/** "Showing <address> ✕" chip when the all-mail list is focused on one mailbox. */
+function MailFilterChip({ address, onClear }: { address: string; onClear: () => void }) {
+  return (
+    <div style={{ display: "flex", marginBottom: 12 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)", border: "1px solid var(--line-2)", borderRadius: 999, padding: "4px 6px 4px 11px", background: "var(--bg-2)" }}>
+        <span style={{ color: "var(--fg-4)" }}>showing</span>
+        <span title={address} style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✉ {address}</span>
+        <button type="button" onClick={onClear} aria-label="Clear mailbox filter" title="Clear filter" style={{ display: "inline-grid", placeItems: "center", width: 18, height: 18, cursor: "pointer", border: "none", borderRadius: 999, background: "var(--bg-3)", color: "var(--fg-3)", fontSize: 11 }}>✕</button>
+      </span>
+    </div>
+  );
+}
+
+/** Centered icon + copy used for every non-thread state of the Emails tab. */
+function EmailsPlaceholder({ icon, title, body, tone = "muted" }: { icon: string; title: string; body: string; tone?: "muted" | "warn" }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "34px 16px", textAlign: "center" }}>
+      <span aria-hidden style={{ fontSize: 30 }}>{icon}</span>
+      <span style={{ fontFamily: "var(--f-display)", fontSize: 14, fontWeight: 600, color: tone === "warn" ? "var(--danger-2)" : "var(--fg-2)" }}>{title}</span>
+      <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", maxWidth: 448, lineHeight: 1.55 }}>{body}</span>
+    </div>
+  );
+}
+
+type CompanyEmailsResponse = CompanyEmailThreadsResult & { ok?: boolean; error?: string };
+
 /**
- * Conditional Comms tab for companies that do outreach. Honest empty state:
- * individual emails are sent inside the pipeline (e.g. maps-agency via AgentMail)
- * and don't reach the work board yet — piping live threads here is the follow-up.
+ * Comms tab for outreach companies. Streams the crew's real email threads across
+ * every mail provider (AgentMail, Cloudflare Agentic Inbox) via
+ * /api/companies/{id}/emails — lazily, since this only mounts when the Emails tab
+ * is open, so it never touches the hot companies-list path. A per-provider status
+ * strip plus honest, distinct empty states (provider not connected, no mailboxes
+ * yet, mailboxes-live-but-no-threads, load error) keep an empty tab legible. A
+ * segmented toggle switches between "All mail" (the merged thread list, default)
+ * and "Mailboxes" — a roster of the crew's agent mailboxes where broken/undeployed
+ * ones surface as attention cards; clicking a mailbox focuses the all-mail list on
+ * its threads. Any comms-classified board deliverables are still shown below.
  */
-function CommsPanel({ colony: c, spec }: { colony: Colony; spec: OutputSpec }) {
+function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec: OutputSpec; theme?: "dark" | "light" }) {
   const all = React.useMemo(() => collectCompanyDeliverables(c), [c]);
-  const comms = React.useMemo(() => partitionByOutput(all, spec).comms, [all, spec]);
+  const commsDeliverables = React.useMemo(() => partitionByOutput(all, spec).comms, [all, spec]);
+
+  const [data, setData] = React.useState<CompanyEmailThreadsResult | null>(null);
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const [nonce, setNonce] = React.useState(0);
+
+  React.useEffect(() => {
+    let ignore = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/companies/${encodeURIComponent(c.id)}/emails`, { cache: "no-store" });
+        const payload = (await res.json().catch(() => ({}))) as CompanyEmailsResponse;
+        if (ignore) return;
+        if (!res.ok || payload.ok === false) throw new Error(payload.error || "Could not load email threads.");
+        setData(payload);
+        setError("");
+      } catch (err) {
+        if (ignore) return;
+        setError(err instanceof Error ? err.message : "Could not load email threads.");
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      ignore = true;
+    };
+  }, [c.id, nonce]);
+
+  const threads = data?.threads ?? [];
+  const mailboxes = React.useMemo(() => data?.mailboxes ?? [], [data]);
+  const [view, setView] = React.useState<"all" | "mailboxes">("all");
+  const [focusAddress, setFocusAddress] = React.useState<string | null>(null);
+
+  const agentNameById = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of c.agents) if (a.id) map.set(a.id, a.name);
+    return map;
+  }, [c.agents]);
+
+  // Company member agents with no mailbox on any provider → surfaced as issue cards.
+  const agentsWithoutMailbox = React.useMemo(() => {
+    const withMailbox = new Set(mailboxes.map((m) => m.agentId).filter((id): id is string => Boolean(id)));
+    return c.agents.filter((a) => a.id && !withMailbox.has(a.id));
+  }, [c.agents, mailboxes]);
+
+  const mailboxCount = mailboxes.length + (data?.configured ? agentsWithoutMailbox.length : 0);
+  const issueCount = mailboxes.filter((m) => m.status === "issue").length + (data?.configured ? agentsWithoutMailbox.length : 0);
+  const openMailbox = (address: string) => { setFocusAddress(address); setView("all"); };
+  const shownThreads = focusAddress ? threads.filter((t) => t.inboxAddress.trim().toLowerCase() === focusAddress.trim().toLowerCase()) : threads;
+  const showToggle = Boolean(data) && (mailboxCount > 0 || threads.length > 0);
 
   return (
     <Panel>
-      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{spec.commsBlurb}</span>}>
+      <SectionLabel
+        right={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{spec.commsBlurb}</span>
+            <button
+              type="button"
+              onClick={() => setNonce((n) => n + 1)}
+              disabled={loading}
+              title="Refresh email threads"
+              aria-label="Refresh email threads"
+              style={{ display: "inline-grid", placeItems: "center", width: 24, height: 24, cursor: loading ? "default" : "pointer", border: "1px solid var(--line-2)", borderRadius: 7, background: "transparent", color: "var(--fg-4)", opacity: loading ? 0.5 : 1, fontSize: 12 }}
+            >
+              {loading ? "…" : "↻"}
+            </button>
+          </span>
+        }
+      >
         {spec.commsLabel}
       </SectionLabel>
-      {comms.length === 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "34px 16px", textAlign: "center" }}>
-          <span aria-hidden style={{ fontSize: 30 }}>📬</span>
-          <span style={{ fontFamily: "var(--f-display)", fontSize: 14, fontWeight: 600, color: "var(--fg-2)" }}>No email threads here yet</span>
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", maxWidth: 448, lineHeight: 1.55 }}>
-            This company runs outreach, but the individual emails sent and received aren’t piped onto the board yet — they happen inside the pipeline. Streaming live threads here is the next step.
-          </span>
+
+      {data && <MailProviderStrip providers={data.providers} />}
+
+      {showToggle && (
+        <div style={{ display: "flex", gap: 4, padding: 3, borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-1)", alignSelf: "flex-start", marginBottom: 14 }}>
+          {([["all", "All mail", threads.length], ["mailboxes", "Mailboxes", mailboxCount]] as const).map(([key, label, count]) => {
+            const on = view === key;
+            const badge = key === "mailboxes" && issueCount > 0 ? issueCount : count || null;
+            const badgeIssue = key === "mailboxes" && issueCount > 0;
+            return (
+              <button key={key} type="button" onClick={() => setView(key)} style={{ display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer", border: "1px solid " + (on ? "var(--line-2)" : "transparent"), background: on ? "var(--bg-3)" : "transparent", color: on ? "var(--fg)" : "var(--fg-3)", borderRadius: 7, padding: "6px 12px", fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 600, letterSpacing: 0.08, textTransform: "uppercase" }}>
+                {label}
+                {badge ? (
+                  <span style={{ display: "inline-grid", placeItems: "center", minWidth: 16, height: 16, padding: "0 5px", borderRadius: 999, background: badgeIssue ? "var(--danger)" : "var(--honey-2)", color: "var(--bg-0)", fontFamily: "var(--f-mono)", fontSize: 9.5, fontWeight: 700 }}>{badge}</span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
+      )}
+
+      {loading && !data ? (
+        <EmailsPlaceholder icon="📬" title="Loading threads…" body="Fetching the crew's outreach across its mail providers." />
+      ) : error ? (
+        <EmailsPlaceholder icon="⚠️" title="Couldn't load email threads" body={error} tone="warn" />
+      ) : view === "mailboxes" ? (
+        mailboxCount > 0 ? (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>
+                {mailboxes.length} mailbox{mailboxes.length === 1 ? "" : "es"}{issueCount > 0 ? ` · ${issueCount} need${issueCount === 1 ? "s" : ""} attention` : ""} · click one to see its mail
+              </span>
+              <span style={{ flex: 1 }} />
+              <button type="button" onClick={() => { setView("all"); setFocusAddress(null); }} style={{ cursor: "pointer", border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-3)", borderRadius: 8, padding: "5px 11px", fontFamily: "var(--f-mono)", fontSize: 10.5 }}>View all mail →</button>
+            </div>
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+              {mailboxes.map((mb) => (
+                <AgentMailboxCard key={`${mb.provider}:${mb.address}`} mailbox={mb} agentName={mb.agentId ? agentNameById.get(mb.agentId) : undefined} onOpen={() => openMailbox(mb.address)} />
+              ))}
+              {data?.configured && agentsWithoutMailbox.map((a) => (
+                <NoMailboxCard key={`nomailbox:${a.id ?? a.name}`} agentName={a.name} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <EmailsPlaceholder
+            icon={data?.configured ? "📭" : "🔌"}
+            title={data?.configured ? "No mailboxes provisioned yet" : "No mail provider connected"}
+            body={data?.detail || "Provision a mailbox from an agent's settings to give this crew outreach email."}
+          />
+        )
+      ) : shownThreads.length > 0 ? (
+        <>
+          {focusAddress && <MailFilterChip address={focusAddress} onClear={() => setFocusAddress(null)} />}
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
+            {shownThreads.map((t) => (
+              <EmailThreadCard key={t.id} thread={t} />
+            ))}
+          </div>
+          {!focusAddress && data?.detail && (
+            <div style={{ marginTop: 12, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{data.detail}</div>
+          )}
+        </>
+      ) : focusAddress ? (
+        <>
+          <MailFilterChip address={focusAddress} onClear={() => setFocusAddress(null)} />
+          <EmailsPlaceholder icon="📭" title="No threads in this mailbox yet" body={`${focusAddress} hasn't exchanged any email yet. Clear the filter to see all mail.`} />
+        </>
       ) : (
-        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
-          {comms.map((x) => (
-            <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} layout="card" />
-          ))}
+        <EmailsPlaceholder
+          icon={data?.configured ? "📭" : "🔌"}
+          title={data?.configured ? "No email threads here yet" : "No mail provider connected"}
+          body={data?.detail || "This company runs outreach, but no live threads have landed on the board yet."}
+        />
+      )}
+
+      {commsDeliverables.length > 0 && (
+        <div style={{ marginTop: threads.length > 0 ? 22 : 14, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
+          <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", marginBottom: 12 }}>Also referenced on the board</div>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+            {commsDeliverables.map((x) => (
+              <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
+            ))}
+          </div>
         </div>
       )}
     </Panel>
@@ -759,8 +1023,10 @@ export function Cockpit({
     () => collectCompanyDeliverables(c).filter((x) => spec.classOf(x.classified) === "primary").length,
     [c, spec],
   );
-  const tabs: { key: string; label: string; badge?: number | null }[] = [
+  const issueCount = c.issues.filter(isCompanyReviewIssue).length;
+  const tabs: { key: string; label: string; badge?: number | null; tone?: "danger" }[] = [
     { key: "board", label: "Board" },
+    { key: "issues", label: "Issues", badge: issueCount || null, tone: "danger" },
     { key: "deliverables", label: spec.primaryLabel, badge: deliverableCount || null },
     ...(spec.comms ? [{ key: "comms", label: spec.commsLabel }] : []),
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
@@ -818,7 +1084,7 @@ export function Cockpit({
 
       <ApexStrip colony={c} />
 
-      <ReviewStrip colony={c} onOpenIssue={handlers.onOpenIssue} onGoToDeliverables={() => setTab("deliverables")} onGoToApprovals={() => setTab("approvals")} />
+      <ReviewStrip colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} busyId={handlers.busyId} onGoToDeliverables={() => setTab("deliverables")} onGoToApprovals={() => setTab("approvals")} />
 
       {/* segmented section control */}
       <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-1)", alignSelf: "flex-start", flexWrap: "wrap" }}>
@@ -828,7 +1094,7 @@ export function Cockpit({
             <button key={x.key} onClick={() => setTab(x.key)} style={{ display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer", border: "1px solid " + (on ? "var(--line-2)" : "transparent"), background: on ? "var(--bg-3)" : "transparent", color: on ? "var(--fg)" : "var(--fg-3)", borderRadius: 8, padding: "7px 14px", fontFamily: "var(--f-display)", fontSize: 12.5, fontWeight: 600, letterSpacing: 0.1, textTransform: "uppercase", transition: "background 140ms ease, color 140ms ease" }}>
               {x.label}
               {x.badge ? (
-                <span style={{ display: "inline-grid", placeItems: "center", minWidth: 17, height: 17, padding: "0 5px", borderRadius: 999, background: "var(--honey-2)", color: "var(--bg-0)", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 700 }}>{x.badge}</span>
+                <span style={{ display: "inline-grid", placeItems: "center", minWidth: 17, height: 17, padding: "0 5px", borderRadius: 999, background: x.tone === "danger" ? "var(--danger)" : "var(--honey-2)", color: "var(--bg-0)", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 700 }}>{x.badge}</span>
               ) : null}
             </button>
           );
@@ -915,14 +1181,16 @@ export function Cockpit({
             <div style={{ width: wbPct + "%", height: "100%", background: "var(--cyan)", transition: "width 600ms ease" }} />
           </div>
           <div style={{ overflowX: "auto", paddingBottom: 4 }} className="scrollbar-thin">
-            <IssueBoard colony={c} onOpenIssue={handlers.onOpenIssue} />
+            <IssueBoard colony={c} companyName={c.name} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} busyId={handlers.busyId} />
           </div>
         </Panel>
       )}
 
+      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} busyId={handlers.busyId} />}
+
       {active === "deliverables" && <DeliverablesPanel colony={c} spec={spec} theme={theme} />}
 
-      {active === "comms" && <CommsPanel colony={c} spec={spec} />}
+      {active === "comms" && <CommsPanel colony={c} spec={spec} theme={theme} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} />}
 

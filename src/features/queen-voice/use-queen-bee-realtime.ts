@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { fetchAgentStatusAnswer } from "@/features/dashboard/agent-status-fetch";
 import { isLikelyEcho } from "./echo-detection";
 import {
   closeRealtimeSttSocket,
@@ -9,6 +10,10 @@ import {
   resampleToPcm16,
 } from "./realtime-stt";
 import type { QueenVoicePhase, QueenVoiceTurn } from "./use-queen-bee-voice";
+import {
+  createStreamOutputAnalyser,
+  useQueenVoiceLevelPump,
+} from "@/lib/audio/queen-voice-amplitude";
 
 type RealtimeSessionInfo = {
   ok?: boolean;
@@ -194,6 +199,14 @@ async function createHiveTask(args: Record<string, unknown>) {
   }
 }
 
+async function readAgentStatus(args: Record<string, unknown>) {
+  // Shared with the typed chat executor: reads live fleet telemetry and, when a
+  // matched agent is unhealthy, appends a nudge to OFFER a create_hive_task fix.
+  // The Queen relays the result and only creates the task once the user agrees.
+  const agentName = typeof args.agentName === "string" ? args.agentName : "";
+  return fetchAgentStatusAnswer(agentName);
+}
+
 /**
  * Full speech-to-speech Queen Bee session over OpenAI Realtime (WebRTC):
  * semantic turn detection, live captions for both sides, and a
@@ -214,6 +227,11 @@ export function useQueenBeeRealtime(
   const [failed, setFailed] = React.useState(false);
   const mutedRef = React.useRef(muted);
   const trackRef = React.useRef<MediaStreamTrack | null>(null);
+  // Analyser built off her remote WebRTC audio track, read by the fleet
+  // voice-reactive animation while she speaks. Analysis only — the <audio>
+  // element still does the actual playback.
+  const queenOutputAnalyserRef = React.useRef<AnalyserNode | null>(null);
+  useQueenVoiceLevelPump(queenOutputAnalyserRef, phase === "speaking");
   const onFailedRef = React.useRef(onFailed);
   const onDriveDashboardRef = React.useRef(onDriveDashboard);
 
@@ -238,6 +256,7 @@ export function useQueenBeeRealtime(
     let nextTurnId = 1;
     let connectTimeout = 0;
     let localStream: MediaStream | null = null;
+    let queenOutputTap: { analyser: AnalyserNode; dispose: () => void } | null = null;
     const handledFunctionCalls = new Set<string>();
     const peer = new RTCPeerConnection();
     const channel = peer.createDataChannel("oai-events");
@@ -570,6 +589,8 @@ export function useQueenBeeRealtime(
           output = await driveDashboard(call.args, onDriveDashboardRef.current);
         } else if (call.name === "remember_preference") {
           output = await rememberPreference(call.args);
+        } else if (call.name === "read_agent_status") {
+          output = await readAgentStatus(call.args);
         } else {
           output = `Unknown tool: ${call.name}`;
         }
@@ -586,7 +607,8 @@ export function useQueenBeeRealtime(
     });
 
     peer.addEventListener("track", (event) => {
-      audio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+      const stream = event.streams[0] ?? new MediaStream([event.track]);
+      audio.srcObject = stream;
       void audio.play().catch((playError) => {
         fail(
           playError instanceof Error
@@ -594,6 +616,12 @@ export function useQueenBeeRealtime(
             : "Reply audio was blocked by the webview.",
         );
       });
+      // Tap her remote audio for the fleet voice-reactive animation. Best-effort:
+      // a blocked analysis context just leaves the pulse idle, playback is
+      // unaffected. Verify on-device (WKWebView may keep the context suspended).
+      queenOutputTap?.dispose();
+      queenOutputTap = createStreamOutputAnalyser(stream);
+      queenOutputAnalyserRef.current = queenOutputTap?.analyser ?? null;
     });
     peer.addEventListener("connectionstatechange", () => {
       if (cancelled) return;
@@ -712,6 +740,9 @@ export function useQueenBeeRealtime(
       }
       closeRealtimeSttSocket(captionSocket);
       void captionContext?.close().catch(() => undefined);
+      queenOutputTap?.dispose();
+      queenOutputTap = null;
+      queenOutputAnalyserRef.current = null;
       localStream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
       audio.pause();

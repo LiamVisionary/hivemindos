@@ -23,6 +23,10 @@ import {
   type PlaybackActivity,
   type SpokenReplyOutcome,
 } from "./spoken-reply-playback";
+import {
+  getQueenOutputAnalyser,
+  useQueenVoiceLevelPump,
+} from "@/lib/audio/queen-voice-amplitude";
 
 export type QueenVoicePhase =
   | "starting"
@@ -99,6 +103,13 @@ const PRE_ROLL_MAX_MS = 5_000;
 // Flush window behind a barge-in trigger: the sustain the detector required
 // before firing plus a lead for the first syllable's onset.
 const BARGE_IN_FLUSH_LOOKBACK_MS = BARGE_IN_TUNING.sustainMs + 480;
+// The barge-in watcher runs on requestAnimationFrame, which WKWebView can
+// starve for seconds while the page is otherwise idle (the same class of bug
+// the Lottie player works around; see src/components/ui/lottie-player.tsx).
+// Her spoken tail is exactly such an idle stretch, so a low-frequency timer
+// backstop runs the watcher tick when rAF has stalled, keeping barge-in alive.
+const BARGE_IN_BACKSTOP_INTERVAL_MS = 33;
+const BARGE_IN_RAF_STALL_MS = 66;
 // Every ordinary listening turn also flushes pre-roll from BEFORE the
 // speaking→listening flip: speech in her playback tail is too short to
 // trigger barge-in but must still reach STT (see startRealtimeListening).
@@ -152,6 +163,11 @@ export function useQueenBeeVoice(
   // Read at playback time so the long-lived session effect never goes stale.
   const streamLocalTtsRef = React.useRef(streamLocalTts);
   const streamRef = React.useRef<MediaStream | null>(null);
+  // Analyser tapped off her OUTPUT audio (all pipeline paths share this
+  // session's context), read by the fleet voice-reactive animation while she
+  // speaks. Set once the session context exists; see the effect below.
+  const queenOutputAnalyserRef = React.useRef<AnalyserNode | null>(null);
+  useQueenVoiceLevelPump(queenOutputAnalyserRef, phase === "speaking");
 
   React.useEffect(() => {
     mutedRef.current = muted;
@@ -424,11 +440,16 @@ export function useQueenBeeVoice(
       const detector = createBargeInDetector(performance.now());
       let lastUnderrunSeen = 0;
       let frameId = 0;
-      const tick = () => {
-        if (cancelled || playbackSignal.aborted) return;
-        // A playback gap (buffer underrun) silences her speaker bleed; the
-        // echo floor must recalibrate around it or the resumed voice would
-        // read as the user interrupting.
+      let lastTickAt = performance.now();
+      // One watcher pass. Returns false once the watch is over (session/turn
+      // aborted, or a barge-in fired) so both the rAF loop and the timer
+      // backstop stop rescheduling.
+      const runTick = () => {
+        if (cancelled || playbackSignal.aborted) return false;
+        lastTickAt = performance.now();
+        // A playback gap (buffer underrun) or the next chunk's audio resuming
+        // returns her speaker bleed; the echo floor must recalibrate around it
+        // or the resumed voice would read as the user interrupting.
         if (activity.underrunAt > lastUnderrunSeen) {
           lastUnderrunSeen = activity.underrunAt;
           requestBargeInRecalibration(detector, performance.now());
@@ -453,12 +474,25 @@ export function useQueenBeeVoice(
           // the user repeat themselves.
           pendingFlushSinceMs = performance.now() - BARGE_IN_FLUSH_LOOKBACK_MS;
           speakAbort.abort();
-          return;
+          return false;
         }
-        frameId = window.requestAnimationFrame(tick);
+        return true;
       };
+      const tick = () => {
+        if (runTick()) frameId = window.requestAnimationFrame(tick);
+      };
+      // Timer backstop: only does work when rAF has visibly stalled, so it is a
+      // no-op cost while rAF is healthy but keeps the watcher ticking at ~30Hz
+      // through a WKWebView rAF freeze during her spoken tail.
+      const backstopId = window.setInterval(() => {
+        if (performance.now() - lastTickAt <= BARGE_IN_RAF_STALL_MS) return;
+        if (!runTick()) window.clearInterval(backstopId);
+      }, BARGE_IN_BACKSTOP_INTERVAL_MS);
       frameId = window.requestAnimationFrame(tick);
-      return () => window.cancelAnimationFrame(frameId);
+      return () => {
+        window.cancelAnimationFrame(frameId);
+        window.clearInterval(backstopId);
+      };
     };
 
     // Speak a reply with barge-in armed: playback runs on its own abort scope
@@ -533,9 +567,13 @@ export function useQueenBeeVoice(
             // reply stays on screen instead of re-probing the down server.
             if (outcome === "muted") muted = true;
           }
-          // The pause before the next chunk silences her speaker bleed just
-          // like an underrun; recalibrate or the watcher self-triggers.
-          activity.underrunAt = Date.now();
+          // NOTE: do NOT recalibrate here. The seam between chunks is a silent
+          // gap the user can barge into — marking it as an underrun opened a
+          // suppression window at every sentence boundary that made her
+          // un-interruptible (2026-07-04). The echo floor is instead
+          // recalibrated when the NEXT chunk's audio actually resumes
+          // (onFirstByte -> activity.underrunAt, in spoken-reply-playback.ts),
+          // which is the only moment her bleed returns.
         });
       };
       // A failed model attempt was superseded: stop its audio mid-word and
@@ -1240,6 +1278,9 @@ export function useQueenBeeVoice(
         if (!AudioContextClass)
           throw new Error("Web Audio is not available in this browser.");
         audioContext = new AudioContextClass();
+        // Eagerly create the shared queen-output analyser so playback nodes tap
+        // the same instance the fleet animation reads (WeakMap-keyed by context).
+        queenOutputAnalyserRef.current = getQueenOutputAnalyser(audioContext);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 1024;
         const sourceNode = audioContext.createMediaStreamSource(stream);
@@ -1318,6 +1359,7 @@ export function useQueenBeeVoice(
         // Audio nodes may already be detached.
       }
       void audioContext?.close().catch(() => undefined);
+      queenOutputAnalyserRef.current = null;
       if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     };
   }, [active, openingLine]);

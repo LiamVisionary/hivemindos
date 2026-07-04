@@ -79,6 +79,8 @@ Palmier Pro requires macOS 26 Tahoe on Apple Silicon. When the app is open, it e
 
 Agent Settings exposes a mailbox action for existing agents. The intended user flow is: select an agent, press **Create mailbox**, and receive a persistent address for that agent. The app stores mailbox ownership under HivemindOS state and does not ask the user for per-agent IMAP, SMTP, password, or host settings in the primary flow.
 
+Once agents have mailboxes, the outreach threads they send and receive are streamed onto a company's cockpit in the [Zero Human Companies](zero-human-companies.html) **Emails** tab, which reads across AgentMail and Cloudflare Agentic Inbox and lists the crew's mailboxes with per-mailbox status.
+
 `GET /api/agents/mailbox?agentId=<agent>` returns existing mailbox records plus provider readiness. `POST /api/agents/mailbox` with `action: "create"`, `agentId`, and `agentName` attempts live provisioning. A mailbox is marked ready only when the selected provider can both receive mail for the address and send live internet email from the same domain. If no provider is live-ready, the API returns a blocked provider report with concrete setup blockers instead of creating a fake mailbox.
 
 AgentMail is one hosted backend for this contract. Configure `AGENTMAIL_API_KEY` in shared env; optional `AGENTMAIL_DOMAIN` or `HIVEMINDOS_AGENTMAIL_DOMAIN` selects a verified custom domain, otherwise the provider defaults to `agentmail.to`. HivemindOS creates each inbox with a deterministic `client_id` so retries do not create duplicate AgentMail inboxes. Optional `AGENTMAIL_API_BASE_URL` or `AGENTMAIL_API_URL` can point at another AgentMail-compatible API host.

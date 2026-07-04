@@ -51,7 +51,7 @@ Looped work is where operator intent turns into agent execution. A loop contract
 <div class="docGrid">
   <section class="docCard">
     <h3>Zero Human Companies</h3>
-    <p>Agent-run company cockpits with charters, crews, apex goals, approvals, budgets, kill switches, Work Board dispatch, and capability-capital learning summaries.</p>
+    <p>Agent-run company cockpits with charters, crews, apex goals, approvals, budgets, kill switches, Work Board dispatch, outreach email threads across the crew's mailboxes, and capability-capital learning summaries.</p>
     <a href="zero-human-companies.html">Open company docs</a>
   </section>
   <section class="docCard">

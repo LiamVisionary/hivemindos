@@ -190,6 +190,43 @@
   50% { transform: scale(1.08); opacity: 1; }
 }
 
+/* The Queen's honey halo. Idle: a slow ambient breathe. While she's speaking in
+   voice chat, useQueenVoicePulse marks the cell [data-voice="speaking"] and
+   writes --queen-amp (0..1) each frame, so the halo swells and brightens on the
+   exact beat/volume of her voice. See src/lib/audio/queen-voice-amplitude.ts. */
+.fr-queen-glow {
+  position: absolute;
+  inset: -30px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--honey-soft), transparent 66%);
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  animation: fr-cell-breathe 4s ease-in-out infinite;
+}
+.fr-queen-cell[data-voice="speaking"] .fr-queen-glow {
+  animation: none;
+  transform: scale(calc(1 + var(--queen-amp, 0) * 0.7));
+  opacity: calc(0.5 + var(--queen-amp, 0) * 0.5);
+  transition: transform 60ms linear, opacity 60ms linear;
+}
+/* a subtler sympathetic pulse on the Queen herself, so the whole cell — not
+   just the halo — breathes with her voice */
+.fr-queen-core {
+  transform-origin: 50% 50%;
+  transition: transform 60ms linear;
+}
+.fr-queen-cell[data-voice="speaking"] .fr-queen-core {
+  transform: scale(calc(1 + var(--queen-amp, 0) * 0.1));
+}
+@media (prefers-reduced-motion: reduce) {
+  .fr-queen-glow { animation: none; }
+  .fr-queen-cell[data-voice="speaking"] .fr-queen-glow {
+    transform: none;
+    opacity: calc(0.6 + var(--queen-amp, 0) * 0.3);
+  }
+  .fr-queen-cell[data-voice="speaking"] .fr-queen-core { transform: none; }
+}
+
 /* thin metric bar */
 .fr-meter { height: 3px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
 .fr-meter > i { display: block; height: 100%; border-radius: 99px; background: var(--fg-3); transition: width .5s cubic-bezier(.2, .7, .3, 1); }

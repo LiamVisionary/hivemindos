@@ -173,7 +173,26 @@ function TranscriptTurns({
               ) : turn.who === "queen" ? (
                 // Queen replies are markdown (code spans like `CONFIRM_SWAP`, bold,
                 // lists, links); the user's own echo stays plain text.
-                <ChatMarkdown text={turn.text} />
+                <>
+                  {turn.text ? <ChatMarkdown text={turn.text} /> : null}
+                  {turn.live && turn.working ? (
+                    // Typed tool phase: the same bee thinking-loader as the chat
+                    // route, with the specific tool status as a working chip —
+                    // one thinking language across voice and text.
+                    <div className={styles.turnWorking}>
+                      <AgentResponseLoader />
+                      <div className={styles.workingChips} aria-live="polite">
+                        <span className={styles.workingChip}>
+                          <span
+                            className={`${styles.workingChipDot} ${styles.workingChipDotActive}`}
+                            aria-hidden="true"
+                          />
+                          {turn.working}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <>
                   {turn.text}

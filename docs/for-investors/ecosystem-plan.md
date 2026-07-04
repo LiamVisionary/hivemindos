@@ -86,9 +86,9 @@ HivemindOS earns a usage fee on supported on-chain and trading actions taken fro
 
 - A platform fee of **1% with a $0.01 minimum** on local USDC sends, DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC transfer after the action succeeds.
 - A Hyperliquid builder fee of 0.5 bps (0.005%) on eligible filled local Hyperliquid orders, approved separately by the user.
-- A Zero Human Company revenue share on recorded company revenue events. The local app can record the event and collect the policy share from a selected company agent wallet, while official marketplace or hosted-company revenue should be enforced by HivemindOS-controlled billing infrastructure or a verifiable payment rail.
+- A Zero Human Company revenue share of **2% with a $0.01 minimum** on recorded company revenue events, net of refunds and chargebacks when the settlement route knows them. The local app can record the event and collect the share from a selected company agent wallet, while official marketplace or hosted-company revenue should be enforced by HivemindOS-controlled billing infrastructure or a verifiable payment rail.
 
-Paper trades, read-only checks, and no-payment x402 calls are never charged. The fee rate and recipient addresses are controlled by the official platform-fee policy (a Cloudflare Worker), not hardcoded in the app, and proceeds feed the same treasury and allocation below. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) for the mechanism.
+Paper trades, read-only checks, and no-payment x402 calls are never charged. Recipient addresses and official wallet-fee policy are controlled by HivemindOS-managed infrastructure, and proceeds feed the same treasury and allocation below. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) for the mechanism.
 
 Current examples:
 
@@ -96,7 +96,7 @@ Current examples:
 | --- | ---: | ---: |
 | Wallet send, swap, live stock, xStock, paid API, or private payment | `$100` | `$1.00` |
 | Wallet send, swap, live stock, xStock, paid API, or private payment | `$0.25` | `$0.01` minimum |
-| Recorded Zero Human Company revenue | `$500` | `$5.00` |
+| Recorded Zero Human Company revenue | `$500` | `$10.00` |
 | Hyperliquid eligible fill | `$10,000` | `$0.50` |
 
 ### Hosted Agent And Model Messages

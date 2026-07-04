@@ -15,12 +15,21 @@ const {
   createSseJsonParser,
   finalizeQueenChatStream,
 } = await import("../src/lib/services/queen-bee/chat-stream.ts");
+const { queenChatTools, queenRealtimeTools } = await import("../src/lib/services/queen-bee/queen-brain.ts");
 const {
   findWorkBoardTasks,
   flattenKanbanColumns,
   formatWorkBoardTaskForPrompt,
   summarizeWorkBoardByStatus,
 } = await import("../src/features/dashboard/work-board-lookup.ts");
+const {
+  findFleetAgents,
+  fixTaskSuggestion,
+  flattenFleetAgents,
+  formatAgentStatusForPrompt,
+  isAgentUnhealthy,
+  summarizeFleetByStatus,
+} = await import("../src/features/dashboard/agent-status-lookup.ts");
 
 // ── content deltas accumulate and are forwarded one by one ──────────────────
 {
@@ -101,6 +110,124 @@ const {
   assert.match(block, /blocked on the user/);
   assert.match(block, /agent-error/);
   assert.match(summarizeWorkBoardByStatus(tasks), /ready: 1/);
+}
+
+// ── fleet agent status: join agent→machine→snapshot, find, format ────────────
+{
+  // Mirrors /api/fleet/discover?includeSnapshots=1 machines[]: HermesMain is
+  // configured on an online box whose collector is up, but its runtime probe
+  // timed out (runtimeReachable:false) with a failed run — the exact "timeout"
+  // shape the Queen must READ instead of asserting or deflecting.
+  const machines = [
+    {
+      device: { name: "This Mac", os: "darwin", online: true, self: true },
+      collector: "ready",
+      // Reported unreachable by a peer: the box is locally up but a partition
+      // stops cross-machine dispatch to it — the real HermesMain timeout.
+      reportedUnreachableBy: ["nyc-mac"],
+      agents: [{ id: "a_hermes_main", name: "HermesMain", runtime: "hermes", workerClass: "code" }],
+      snapshots: [
+        {
+          agentId: "a_hermes_main",
+          ok: false,
+          runtimeReachable: false,
+          processRunning: true,
+          summary: "Runtime probe timed out.",
+          error: "request timed out after 8000ms",
+          tasks: [
+            { title: "Loop Eval - Research", status: "failed", lastMessage: "worker timeout: no response", updatedAt: 1 },
+            { title: "Older done run", status: "completed", lastMessage: "ok", updatedAt: 0 },
+          ],
+        },
+      ],
+    },
+    {
+      // Clean online box hosting a healthy idle agent — the negative control.
+      device: { name: "cloud-1", os: "linux", online: true },
+      collector: "ready",
+      agents: [{ id: "a_idle", name: "ResearchBee", runtime: "hermes" }],
+      snapshots: [
+        { agentId: "a_idle", ok: true, runtimeReachable: true, processRunning: true, summary: "Idle. No current task." },
+      ],
+    },
+    {
+      device: { name: "hel1-2", os: "linux", online: false },
+      collector: "offline",
+      agents: [{ id: "a_off", name: "EdgeBee", runtime: "aeon" }],
+      snapshots: [],
+    },
+  ];
+
+  const agents = flattenFleetAgents(machines);
+  assert.equal(agents.length, 3, "one entry per agent across machines");
+  // garbled payload degrades to empty, never throws
+  assert.deepEqual(flattenFleetAgents(null), []);
+  assert.deepEqual(flattenFleetAgents({ nope: true }), []);
+
+  // find by exact name (case-insensitive), then substring
+  const hermes = findFleetAgents(agents, { name: "hermesmain" });
+  assert.equal(hermes.length, 1);
+  assert.equal(hermes[0].agent.id, "a_hermes_main");
+  assert.equal(findFleetAgents(agents, { name: "bee" }).length, 2, "substring matches ResearchBee + EdgeBee");
+  assert.deepEqual(findFleetAgents(agents, { name: "ghost" }), []);
+
+  // snapshot joined by snapshot.agentId === agent.id
+  assert.equal(hermes[0].snapshot?.error, "request timed out after 8000ms");
+
+  const block = formatAgentStatusForPrompt(hermes[0]);
+  assert.match(block, /HermesMain \(hermes\)/);
+  assert.match(block, /This Mac · darwin — online/);
+  assert.match(block, /Reported unreachable by: nyc-mac/);
+  assert.match(block, /runtime unreachable/);
+  assert.match(block, /request timed out/);
+  assert.match(block, /Recent failure — Loop Eval - Research/);
+  assert.doesNotMatch(block, /Older done run/, "completed runs are not listed as failures");
+
+  // offline machine with no snapshot still formats without throwing
+  const edge = findFleetAgents(agents, { name: "EdgeBee" })[0];
+  const edgeBlock = formatAgentStatusForPrompt(edge);
+  assert.match(edgeBlock, /hel1-2 · linux — offline/);
+  assert.match(edgeBlock, /No live snapshot returned/);
+
+  const summary = summarizeFleetByStatus(agents);
+  assert.match(summary, /3 agents/);
+  assert.match(summary, /1 online/, "only ResearchBee is online + ok");
+  assert.match(summary, /reporting errors/);
+  assert.equal(summarizeFleetByStatus([]), "No agents found in the fleet right now.");
+
+  // ── unhealthy detection + propose-and-confirm fix suggestion ──────────────
+  const researchBee = findFleetAgents(agents, { name: "ResearchBee" })[0];
+  assert.equal(isAgentUnhealthy(hermes[0]), true, "runtime unreachable + error + partition");
+  assert.equal(isAgentUnhealthy(researchBee), false, "online + ok = healthy");
+  assert.equal(isAgentUnhealthy(edge), true, "offline machine");
+
+  // a matched unhealthy agent yields a create_hive_task offer naming it
+  const suggestion = fixTaskSuggestion(hermes);
+  assert.match(suggestion, /HermesMain looks unhealthy/);
+  assert.match(suggestion, /Diagnose & fix HermesMain/);
+  assert.match(suggestion, /create_hive_task/);
+  assert.match(suggestion, /only once the user agrees/);
+  // healthy agents produce no nudge (no unsolicited fix task)
+  assert.equal(fixTaskSuggestion([researchBee]), null);
+  assert.equal(fixTaskSuggestion([]), null);
+  // multiple unhealthy agents are listed, task named after the first
+  const multi = fixTaskSuggestion([hermes[0], edge]);
+  assert.match(multi, /HermesMain and EdgeBee look unhealthy/);
+  assert.match(multi, /Diagnose & fix HermesMain/);
+}
+
+// ── read_agent_status is offered to BOTH surfaces; read_work_board typed-only ──
+{
+  const chatNames = queenChatTools().map((t) => t.function.name);
+  const voiceNames = queenRealtimeTools().map((t) => t.name);
+  // typed chat: both read tools plus create_hive_task (the fix rail)
+  assert.ok(chatNames.includes("read_agent_status"), "typed chat offers read_agent_status");
+  assert.ok(chatNames.includes("read_work_board"), "typed chat offers read_work_board");
+  assert.ok(chatNames.includes("create_hive_task"), "typed chat can create the fix task");
+  // voice: read_agent_status + create_hive_task wired; read_work_board is NOT
+  assert.ok(voiceNames.includes("read_agent_status"), "voice offers read_agent_status");
+  assert.ok(voiceNames.includes("create_hive_task"), "voice can create the fix task");
+  assert.ok(!voiceNames.includes("read_work_board"), "voice does not offer read_work_board (no executor)");
 }
 
 console.log("PASS test-queen-chat-stream");

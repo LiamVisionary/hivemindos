@@ -15,6 +15,8 @@ export const QUEEN_INSTRUCTIONS = [
   "CONFIRMATIONS ARE EXACT TOKENS, NOT CONVERSATION. When a tool returns a confirmation prompt, show the user the EXACT word or token to reply with (e.g. tell them to reply CONFIRM_SWAP, or confirm), do not soften it into your own phrasing. When the user then replies to confirm a pending action - whether they type a bare token like CONFIRM_SWAP / SEND_USDC or a word like confirm, yes, or send it - relay their reply to ask_hivemind_agent EXACTLY as they typed it: no rephrasing, no added words, and do NOT ask them to confirm again. That exact token finalizes the prepared transaction on the rails; any paraphrase silently fails it and loops.",
   "When the global hive input provides current dashboard context, use it to resolve words like this screen, this view, this section, selected item, or open modal; do not ask the user to repeat visible context unless the provided context is insufficient.",
   "Answer general questions about what you can do from the capability list above, directly and confidently. Use ask_hivemind_agent to verify or perform a SPECIFIC capability (a particular wallet, app, note, or status). Never deny a capability or claim you lack access based on your own assumptions.",
+  "When the user asks how an agent is doing, or whether one is offline, timing out, stuck, or erroring, call read_agent_status to check the live fleet before you answer - do NOT tell them to look on their own system, and NEVER claim an agent is down, timing out, or failing unless read_agent_status actually shows it. Pass the agent's name (e.g. 'HermesMain'); call it with no name for a fleet-wide health summary.",
+  "When read_agent_status shows an agent offline, erroring, or timing out, don't stop at reporting it - OFFER to queue a diagnosis-and-fix job so the hive fixes it itself, and when the user agrees, call create_hive_task (e.g. title 'Diagnose & fix HermesMain timeout', with the status details in the message) so a fleet worker investigates and repairs it. Only create the task after they confirm; a fleet agent, not the user, does the fixing.",
   "Use create_hive_task ONLY when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result. NEVER use create_hive_task for a money movement (swap, send, transfer, buy, sell, trade, pay, collect fees) or to confirm one - those are simple, direct actions that ask_hivemind_agent executes on the rails, not work to delegate.",
   "Use drive_dashboard for NAVIGATION and UI setup in the dashboard they are looking at: open or switch a screen (wallets, work board, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for one of their agents, add a task to the board, or open an agent's settings or chat. Pass the user's request VERBATIM as the command; a visible bee flies the interface and clicks for them, and you confirm what happened from the tool result. Prefer drive_dashboard over ask_hivemind_agent for navigating to or opening parts of the app - but NEVER use drive_dashboard to move money: a swap, send, transfer, buy, sell, trade, or payment always goes to ask_hivemind_agent, never drive_dashboard, even when the user is already looking at the Trade or Wallets screen.",
   "When the user states a LASTING preference about how you should talk to or treat them - how to address them ('call me boss'), a language, a tone, or how long your replies should be - call remember_preference with that preference the moment they say it, then confirm naturally. This is what makes the preference stick across future chats; agreeing without calling the tool will not be remembered.",
@@ -96,11 +98,36 @@ export const QUEEN_TOOL_DEFS: QueenToolDef[] = [
 ];
 
 /**
+ * A live-fleet read the Queen offers in BOTH modalities — typed (via
+ * QUEEN_CHAT_ONLY_TOOL_DEFS below) and spoken (via queenRealtimeTools). "Is
+ * HermesMain timing out?" used to make her assert or deflect instead of
+ * checking; now she reads the real telemetry, and on trouble offers a
+ * create_hive_task fix (propose-and-confirm — the fleet does the fixing).
+ */
+const READ_AGENT_STATUS_TOOL_DEF: QueenToolDef = {
+  name: "read_agent_status",
+  description:
+    "Read the LIVE status of the HivemindOS agent fleet directly: whether a named agent is online, reachable, or erroring, which machine and runtime it runs on, a health summary, and its most recent failed runs. Use whenever the user asks how an agent is doing, why one is timing out, stuck, offline, or failing, or to check overall fleet health. Pass agentName to look up one agent (e.g. 'HermesMain'); with no arguments it returns fleet-wide online/offline/error totals. This reads real fleet telemetry - never assert an agent is down or timing out without checking it here first.",
+  parameters: {
+    type: "object",
+    properties: {
+      agentName: {
+        type: "string",
+        description: "Name of the agent to check, e.g. 'HermesMain'. Omit to get fleet-wide status totals.",
+      },
+    },
+    required: [],
+  },
+};
+
+/**
  * Chat-only tools: offered to the TYPED hive input, whose tool loop executes
- * client-side in queen-chat-store — NOT to the realtime voice session, whose
- * executor doesn't know them. The typed Queen previously had no way to READ
- * the Work Board (only create/delegate), so "what's blocking task X?" sent
- * her hunting through agents and directories instead of the board itself.
+ * client-side in queen-chat-store — NOT to the realtime voice session (its
+ * executor doesn't know them). read_work_board is the one here: the typed
+ * Queen previously had no way to read the Work Board (only create/delegate),
+ * so "what's blocking task X?" sent her hunting through agents and directories
+ * instead of the board itself. (read_agent_status rides along for typed chat
+ * too, but unlike read_work_board it is ALSO wired into voice below.)
  */
 export const QUEEN_CHAT_ONLY_TOOL_DEFS: QueenToolDef[] = [
   {
@@ -116,11 +143,17 @@ export const QUEEN_CHAT_ONLY_TOOL_DEFS: QueenToolDef[] = [
       required: [],
     },
   },
+  READ_AGENT_STATUS_TOOL_DEF,
 ];
 
-/** OpenAI Realtime format: flat `{ type, name, description, parameters }`. */
+/**
+ * OpenAI Realtime format: flat `{ type, name, description, parameters }`. Voice
+ * gets the shared core tools PLUS read_agent_status — checking fleet health and
+ * offering a fix is as useful spoken as typed. (read_work_board stays typed-only;
+ * its executor isn't wired into the realtime session.)
+ */
 export function queenRealtimeTools() {
-  return QUEEN_TOOL_DEFS.map((t) => ({
+  return [...QUEEN_TOOL_DEFS, READ_AGENT_STATUS_TOOL_DEF].map((t) => ({
     type: "function" as const,
     name: t.name,
     description: t.description,

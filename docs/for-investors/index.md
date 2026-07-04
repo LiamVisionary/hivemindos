@@ -14,6 +14,7 @@ Revenue comes from optional premium services, trading and on-chain fees, hosted 
 | Revenue stream | Current number | What that means |
 | --- | ---: | --- |
 | Wallet sends, swaps, live stocks, xStocks, x402, and private payments | **1%**, with a **$0.01 minimum** | A `$100` action produces `$1.00` in revenue. A tiny `$0.25` test action produces the `$0.01` minimum. |
+| Zero Human Company revenue share | **2%**, with a **$0.01 minimum** | A company running in HivemindOS that records `$1,000` in revenue produces `$20.00` in HivemindOS revenue. |
 | Hyperliquid builder fee | **0.005%** of eligible filled notional | A `$10,000` fill produces `$0.50` in revenue. |
 | Hosted HivemindOS agent/model messages | **$0.001 per successful hosted chat completion** on the current default hosted paid agent | `1,000` messages produces `$1`. `100,000` messages produces `$100`. `1,000,000` messages produces `$1,000`. |
 | Future paid infrastructure | TBD by product | Hive Cloud, managed compute, marketplace fees, and enterprise contracts. |
@@ -171,7 +172,7 @@ Marketplace creators can choose pricing models such as free, pay-per-use, lifeti
 
 Enterprise covers SSO, teams, compliance, private deployments, and support contracts.
 
-Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven **1% platform fee with a $0.01 minimum** on supported local-wallet actions: USDC sends, DEX swaps, xStocks trades, live Alpaca orders, public x402 payments, and Veil private transfers. Official builds also collect a **0.005% Hyperliquid builder fee** on eligible local Hyperliquid fills. Paper trades and read-only checks are never charged. Rates and recipient addresses live in the official platform-fee policy, not the app. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
+Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven **1% platform fee with a $0.01 minimum** on supported local-wallet actions: USDC sends, DEX swaps, xStocks trades, live Alpaca orders, public x402 payments, and Veil private transfers. Zero Human Companies running in HivemindOS use a **2% revenue share with a $0.01 minimum** on recorded company revenue. Official builds also collect a **0.005% Hyperliquid builder fee** on eligible local Hyperliquid fills. Paper trades and read-only checks are never charged. Recipient addresses and official wallet-fee policy stay in HivemindOS-managed infrastructure. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
 
 ## HIVE Staker Discounts
 

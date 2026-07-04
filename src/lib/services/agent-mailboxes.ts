@@ -5,7 +5,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
-import { AGENTIC_INBOX_PROJECT_DIR } from "@/lib/services/cloudflare/agentic-inbox-setup";
+import { AGENTIC_INBOX_PROJECT_DIR, readAgenticInboxStatus } from "@/lib/services/cloudflare/agentic-inbox-setup";
 import { hiveEnvPresence, hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 const execFileAsync = promisify(execFile);
@@ -100,6 +100,29 @@ type AgentMailInbox = {
   id?: string;
   email?: string;
   client_id?: string;
+  display_name?: string;
+  metadata?: Record<string, unknown> | null;
+  updated_at?: string;
+  created_at?: string;
+};
+
+/** One thread as returned by `GET /v0/inboxes/{inbox_id}/threads`. */
+type AgentMailThread = {
+  inbox_id?: string;
+  thread_id?: string;
+  last_message_id?: string;
+  labels?: unknown;
+  timestamp?: string;
+  received_timestamp?: string;
+  sent_timestamp?: string;
+  senders?: unknown;
+  recipients?: unknown;
+  subject?: string;
+  preview?: string;
+  attachments?: unknown;
+  message_count?: number;
+  updated_at?: string;
+  created_at?: string;
 };
 
 type AgentMailErrorEnvelope = {
@@ -850,4 +873,470 @@ function dedupe(values: string[]) {
 
 function compactRecord(values: Record<string, string | undefined>) {
   return Object.fromEntries(Object.entries(values).filter((entry): entry is [string, string] => typeof entry[1] === "string" && Boolean(entry[1].trim())));
+}
+
+// ── Reading email threads (the Zero Human Companies "Emails" tab) ────────────
+// Everything above PROVISIONS inboxes; this reads what those inboxes have
+// actually exchanged so the board can stream a crew's real outreach and the
+// replies that came back. Read-only: no send/reply happens here.
+//
+// This is provider-agnostic: every readable mail provider registers a reader in
+// MAIL_PROVIDER_READERS and normalizes into the shared CompanyEmailThread shape.
+// Adding a provider is one entry + one reader — the API route and UI are generic.
+//   - agentmail: threads API, inboxes resolved cross-machine by the client_id we
+//     stamp at provisioning (`hivemindos-agent-mailbox:<agentId>`) + metadata,
+//     with the per-machine local store as a fast-path supplement.
+//   - cloudflare-agentic-inbox: the deployed Worker's /api/inbox/messages store
+//     (inbound only), filtered to the company's Cloudflare mailbox addresses.
+// (ClawBank is intentionally NOT a mail provider: its only comms tool is
+// `discover_coms_users`, a user directory — it exposes no readable inbox.)
+
+export type MailProviderId = "agentmail" | "cloudflare-agentic-inbox";
+export type CompanyEmailDirection = "outbound" | "inbound" | "mixed";
+
+/** A normalized outreach thread from any provider, UI-ready. */
+export type CompanyEmailThread = {
+  /** Stable, unique per (provider, inbox, thread) — safe as a React key. */
+  id: string;
+  /** Which mail provider this thread came from. */
+  provider: MailProviderId;
+  providerLabel: string;
+  /** Company member agent that owns the inbox (when resolvable). */
+  agentId?: string;
+  inboxAddress: string;
+  threadId: string;
+  subject: string;
+  preview: string;
+  /** The non-inbox participants — the leads/prospects on the other side. */
+  correspondents: string[];
+  direction: CompanyEmailDirection;
+  messageCount: number;
+  attachmentCount: number;
+  /** Epoch ms of the most recent activity, for sorting/display. */
+  updatedAt: number;
+  labels: string[];
+};
+
+export type CompanyMailboxStatus = "ready" | "issue" | "unknown";
+
+/** One agent mailbox for the company, for the "Mailboxes" roster view. */
+export type CompanyMailbox = {
+  /** Company member agent that owns this mailbox (absent for account-level providers). */
+  agentId?: string;
+  provider: MailProviderId;
+  providerLabel: string;
+  address: string;
+  /** "issue" surfaces broken/undeployed/blocked mailboxes as attention cards. */
+  status: CompanyMailboxStatus;
+  /** Why it's an issue (or a short ready detail). */
+  detail?: string;
+  /** Threads attributed to this mailbox (filled after threads are merged). */
+  threadCount: number;
+};
+
+/** Per-provider status the UI shows so an empty tab is legible. */
+export type MailProviderSummary = {
+  id: MailProviderId;
+  label: string;
+  /** Provider is configured/reachable (regardless of whether it has threads). */
+  connected: boolean;
+  /** Inboxes resolved for this company on this provider. */
+  inboxCount: number;
+  threadCount: number;
+  /** Honest one-line status (why it's empty, or an error). */
+  note?: string;
+};
+
+export type CompanyEmailThreadsResult = {
+  /** True when ANY provider is connected. */
+  configured: boolean;
+  /** One-line headline status for the UI. */
+  detail: string;
+  providers: MailProviderSummary[];
+  /** Every resolved agent mailbox, with per-mailbox issue status + thread count. */
+  mailboxes: CompanyMailbox[];
+  threads: CompanyEmailThread[];
+  /** True when more threads exist than the returned cap. */
+  truncated: boolean;
+};
+
+/** What a single provider reader returns to the orchestrator. */
+type MailReaderResult = {
+  connected: boolean;
+  /** Resolved mailboxes for this company on this provider (threadCount filled later). */
+  mailboxes: CompanyMailbox[];
+  threads: CompanyEmailThread[];
+  note?: string;
+};
+
+type MailProviderReader = {
+  id: MailProviderId;
+  label: string;
+  read: (agentIds: string[]) => Promise<MailReaderResult>;
+};
+
+const MAIL_PROVIDER_LABELS: Record<MailProviderId, string> = {
+  agentmail: "AgentMail",
+  "cloudflare-agentic-inbox": "Cloudflare Inbox",
+};
+
+const COMPANY_EMAIL_MAX_INBOXES = 12; // bound inbox fan-out per company/provider
+const COMPANY_EMAIL_THREADS_PER_INBOX = 20; // AgentMail page size per inbox
+const COMPANY_EMAIL_TOTAL_LIMIT = 40; // merged threads returned to the UI
+const COMPANY_EMAIL_INBOX_PAGES = 5; // bound the AgentMail inbox-list sweep
+const CLOUDFLARE_INBOX_MESSAGE_LIMIT = 100; // Worker /api/inbox/messages cap
+
+const MAIL_PROVIDER_READERS: MailProviderReader[] = [
+  { id: "agentmail", label: MAIL_PROVIDER_LABELS.agentmail, read: readAgentMailForCompany },
+  { id: "cloudflare-agentic-inbox", label: MAIL_PROVIDER_LABELS["cloudflare-agentic-inbox"], read: readCloudflareInboxForCompany },
+];
+
+/**
+ * Read a company's outreach threads across every mail provider. Runs each
+ * provider's reader independently (one failing never sinks the others), merges
+ * threads newest-first, and reports honest per-provider status so an empty tab
+ * explains itself: not-connected vs. no-mailboxes vs. mailboxes-live-no-threads.
+ */
+export async function readCompanyEmailThreads(input: {
+  agentIds: string[];
+  totalLimit?: number;
+}): Promise<CompanyEmailThreadsResult> {
+  const agentIds = dedupe((input.agentIds ?? []).map((id) => (typeof id === "string" ? id.trim() : "")));
+  const totalLimit = clampInt(input.totalLimit ?? COMPANY_EMAIL_TOTAL_LIMIT, 1, 200);
+
+  const results = await Promise.all(
+    MAIL_PROVIDER_READERS.map(async (reader) => {
+      try {
+        return { reader, ...(await reader.read(agentIds)) };
+      } catch (error) {
+        return {
+          reader,
+          connected: false,
+          mailboxes: [] as CompanyMailbox[],
+          threads: [] as CompanyEmailThread[],
+          note: error instanceof Error ? error.message : `${reader.label} lookup failed.`,
+        };
+      }
+    }),
+  );
+
+  const merged = results.flatMap((r) => r.threads).sort((left, right) => right.updatedAt - left.updatedAt);
+  const mailboxes = results.flatMap((r) => r.mailboxes);
+  // Attribute merged threads back to each mailbox by provider + inbox address.
+  for (const mailbox of mailboxes) {
+    const addr = mailbox.address.trim().toLowerCase();
+    mailbox.threadCount = merged.filter(
+      (thread) => thread.provider === mailbox.provider && thread.inboxAddress.trim().toLowerCase() === addr,
+    ).length;
+  }
+  mailboxes.sort((left, right) => {
+    if ((left.status === "issue") !== (right.status === "issue")) return left.status === "issue" ? -1 : 1;
+    if (left.threadCount !== right.threadCount) return right.threadCount - left.threadCount;
+    return left.address.localeCompare(right.address);
+  });
+
+  const providers: MailProviderSummary[] = results.map((r) => ({
+    id: r.reader.id,
+    label: r.reader.label,
+    connected: r.connected,
+    inboxCount: r.mailboxes.length,
+    threadCount: r.threads.length,
+    note: r.note,
+  }));
+  const truncated = merged.length > totalLimit;
+  return {
+    configured: providers.some((p) => p.connected),
+    detail: composeMailDetail(providers, merged.length, truncated, totalLimit, agentIds.length),
+    providers,
+    mailboxes,
+    threads: merged.slice(0, totalLimit),
+    truncated,
+  };
+}
+
+function composeMailDetail(
+  providers: MailProviderSummary[],
+  threadCount: number,
+  truncated: boolean,
+  totalLimit: number,
+  agentCount: number,
+): string {
+  if (agentCount === 0) return "Staff this company with agents to give it mailboxes.";
+  const connected = providers.filter((p) => p.connected);
+  if (connected.length === 0) {
+    return providers.find((p) => p.note)?.note || "No mail provider is connected yet.";
+  }
+  if (threadCount === 0) {
+    const inboxes = connected.reduce((sum, p) => sum + p.inboxCount, 0);
+    const names = connected.map((p) => p.label).join(", ");
+    return inboxes > 0
+      ? `Mailboxes are live across ${names} — no threads yet. Outreach the crew sends will stream here.`
+      : `Connected to ${names}, but no mailboxes are provisioned for this crew yet.`;
+  }
+  const shown = truncated ? totalLimit : threadCount;
+  const perProvider = connected.filter((p) => p.threadCount > 0).map((p) => `${p.label} (${p.threadCount})`).join(", ");
+  return `${shown}${truncated ? ` of ${threadCount}` : ""} thread${threadCount === 1 ? "" : "s"} across ${perProvider}.`;
+}
+
+// ── AgentMail provider ───────────────────────────────────────────────────────
+async function readAgentMailForCompany(agentIds: string[]): Promise<MailReaderResult> {
+  const token = await hiveEnvValue("AGENTMAIL_API_KEY");
+  if (!token) return { connected: false, mailboxes: [], threads: [], note: "AgentMail isn't connected (set AGENTMAIL_API_KEY)." };
+
+  let apiBaseUrl: string;
+  try {
+    apiBaseUrl = normalizeAgentMailApiBaseUrl(
+      (await hiveEnvValue("AGENTMAIL_API_BASE_URL")) || (await hiveEnvValue("AGENTMAIL_API_URL")) || DEFAULT_AGENTMAIL_API_BASE_URL,
+    );
+  } catch {
+    return { connected: false, mailboxes: [], threads: [], note: "AgentMail API base URL is misconfigured." };
+  }
+  if (agentIds.length === 0) return { connected: true, mailboxes: [], threads: [] };
+
+  const inboxes = await resolveAgentMailInboxes({ agentIds, apiBaseUrl, token });
+  const mailboxes: CompanyMailbox[] = inboxes.map((inbox) => ({
+    agentId: inbox.agentId,
+    provider: "agentmail",
+    providerLabel: MAIL_PROVIDER_LABELS.agentmail,
+    address: inbox.address,
+    status: inbox.blocked ? "issue" : "ready",
+    detail: inbox.blocked ? inbox.detail || "Mailbox is blocked." : undefined,
+    threadCount: 0,
+  }));
+  if (inboxes.length === 0) return { connected: true, mailboxes, threads: [] };
+
+  const perInbox = await Promise.all(
+    inboxes.slice(0, COMPANY_EMAIL_MAX_INBOXES).map(async (inbox) => {
+      const response = await agentMailRequest<{ threads?: AgentMailThread[] }>(
+        apiBaseUrl,
+        `/v0/inboxes/${encodeURIComponent(inbox.inboxId)}/threads?limit=${COMPANY_EMAIL_THREADS_PER_INBOX}`,
+        token,
+      );
+      if (!response.ok) return [] as CompanyEmailThread[];
+      return (response.result?.threads ?? []).map((thread) => normalizeAgentMailThread(thread, inbox));
+    }),
+  );
+  return { connected: true, mailboxes, threads: perInbox.flat() };
+}
+
+type ResolvedAgentMailInbox = { agentId?: string; inboxId: string; address: string; blocked?: boolean; detail?: string };
+
+/**
+ * Map a company's member agent ids to their AgentMail inboxes. Merges the local
+ * per-machine store (fast path) with a bounded sweep of AgentMail's own inbox
+ * list matched by the provisioning-time `client_id` / metadata — so a mailbox
+ * provisioned on any fleet machine still resolves here. Deduped by inbox id.
+ */
+async function resolveAgentMailInboxes(input: {
+  agentIds: string[];
+  apiBaseUrl: string;
+  token: string;
+}): Promise<ResolvedAgentMailInbox[]> {
+  const clientIdToAgent = new Map(input.agentIds.map((agentId) => [agentMailClientId(agentId), agentId] as const));
+  const wantedAgentIds = new Set(input.agentIds);
+  const found = new Map<string, ResolvedAgentMailInbox>();
+
+  // Fast path: the local store, if this machine provisioned the mailboxes.
+  for (const agentId of input.agentIds) {
+    for (const mailbox of await listAgentMailboxes(agentId)) {
+      if (mailbox.providerId !== "agentmail") continue;
+      const inboxId = mailbox.providerResourceIds?.inboxId || mailbox.address;
+      const blocked = mailbox.status !== "ready";
+      if (inboxId && !found.has(inboxId)) {
+        found.set(inboxId, { agentId, inboxId, address: mailbox.address, blocked, detail: blocked ? mailbox.detail : undefined });
+      }
+    }
+  }
+
+  // Cross-machine source of truth: AgentMail's inbox list, matched by client_id
+  // / metadata. Paginated with a hard page cap so one tab open can't sweep an
+  // arbitrarily large account.
+  let pageToken = "";
+  for (let page = 0; page < COMPANY_EMAIL_INBOX_PAGES; page += 1) {
+    const query = new URLSearchParams({ limit: "100" });
+    if (pageToken) query.set("page_token", pageToken);
+    const response = await agentMailRequest<{ inboxes?: AgentMailInbox[]; next_page_token?: string }>(
+      input.apiBaseUrl,
+      `/v0/inboxes?${query.toString()}`,
+      input.token,
+    );
+    if (!response.ok) break;
+    for (const inbox of response.result?.inboxes ?? []) {
+      const inboxId = inbox.inbox_id || inbox.id;
+      if (!inboxId) continue;
+      const clientId = typeof inbox.client_id === "string" ? inbox.client_id : "";
+      const metaAgentId = readMetadataAgentId(inbox.metadata);
+      const matchedAgentId = clientIdToAgent.get(clientId) ?? (metaAgentId && wantedAgentIds.has(metaAgentId) ? metaAgentId : undefined);
+      if (!matchedAgentId) continue;
+      const address = cleanMailboxAddress(inbox.email) || cleanMailboxAddress(inboxId);
+      const existing = found.get(inboxId);
+      if (existing) {
+        if (!existing.agentId) existing.agentId = matchedAgentId;
+        if (!existing.address && address) existing.address = address;
+      } else {
+        found.set(inboxId, { agentId: matchedAgentId, inboxId, address: address || inboxId });
+      }
+    }
+    pageToken = typeof response.result?.next_page_token === "string" ? response.result.next_page_token : "";
+    if (!pageToken) break;
+  }
+
+  return [...found.values()];
+}
+
+function normalizeAgentMailThread(thread: AgentMailThread, inbox: { agentId?: string; inboxId: string; address: string }): CompanyEmailThread {
+  const self = inbox.address.trim().toLowerCase();
+  const isSelf = (participant: string) => Boolean(self) && participant.toLowerCase().includes(self);
+  const senders = parseParticipants(thread.senders);
+  const recipients = parseParticipants(thread.recipients);
+  const correspondents = dedupe([...senders, ...recipients].filter((participant) => !isSelf(participant)));
+  const hasSent = Boolean(thread.sent_timestamp) || senders.some(isSelf);
+  const hasReceived = Boolean(thread.received_timestamp) || recipients.some(isSelf);
+  const direction: CompanyEmailDirection = hasSent && hasReceived ? "mixed" : hasReceived && !hasSent ? "inbound" : "outbound";
+  const threadId = (thread.thread_id || thread.last_message_id || "").trim() || `${inbox.inboxId}-thread`;
+  return {
+    id: `agentmail:${inbox.inboxId}:${threadId}`,
+    provider: "agentmail",
+    providerLabel: MAIL_PROVIDER_LABELS.agentmail,
+    agentId: inbox.agentId,
+    inboxAddress: inbox.address,
+    threadId,
+    subject: (thread.subject || "").trim() || "(no subject)",
+    preview: (thread.preview || "").trim(),
+    correspondents,
+    direction,
+    messageCount: Math.max(1, Math.round(Number(thread.message_count) || 1)),
+    attachmentCount: parseCount(thread.attachments),
+    updatedAt:
+      parseTimestampMs(thread.updated_at)
+      || parseTimestampMs(thread.timestamp)
+      || parseTimestampMs(thread.sent_timestamp)
+      || parseTimestampMs(thread.received_timestamp)
+      || parseTimestampMs(thread.created_at)
+      || 0,
+    labels: parseParticipants(thread.labels),
+  };
+}
+
+// ── Cloudflare Agentic Inbox provider ────────────────────────────────────────
+// The deployed Worker keeps every received email in one Durable-Object store and
+// exposes POST /api/inbox/messages ({ id, sender, recipient, subject, receivedAt }).
+// It's inbound-only, so each message becomes a one-message inbound thread. We
+// resolve the company's Cloudflare mailbox addresses from the local store and
+// keep only messages addressed to them.
+type CloudflareInboxMessage = { id?: string; sender?: string; recipient?: string; subject?: string; receivedAt?: string };
+
+async function readCloudflareInboxForCompany(agentIds: string[]): Promise<MailReaderResult> {
+  // Resolve this company's Cloudflare mailboxes from the local store first, so a
+  // provisioned-but-undeployed inbox still shows up as an issue card.
+  const cfMailboxes: CompanyMailbox[] = [];
+  const addressToAgent = new Map<string, string>();
+  for (const agentId of agentIds) {
+    for (const mailbox of await listAgentMailboxes(agentId)) {
+      if (mailbox.providerId !== "cloudflare-agentic-inbox" || !mailbox.address) continue;
+      const address = mailbox.address.trim();
+      if (addressToAgent.has(address.toLowerCase())) continue;
+      addressToAgent.set(address.toLowerCase(), agentId);
+      cfMailboxes.push({
+        agentId,
+        provider: "cloudflare-agentic-inbox",
+        providerLabel: MAIL_PROVIDER_LABELS["cloudflare-agentic-inbox"],
+        address,
+        status: mailbox.status === "ready" ? "ready" : "issue",
+        detail: mailbox.status === "ready" ? undefined : mailbox.detail,
+        threadCount: 0,
+      });
+    }
+  }
+
+  const markIssue = (detail: string): CompanyMailbox[] => cfMailboxes.map((mb) => ({ ...mb, status: "issue", detail }));
+
+  const status = await readAgenticInboxStatus();
+  const workerUrl = status.openUrl?.trim();
+  if (!workerUrl) {
+    return { connected: false, mailboxes: markIssue("Cloudflare Agentic Inbox isn't deployed yet."), threads: [], note: "Cloudflare Agentic Inbox isn't deployed yet." };
+  }
+  if (cfMailboxes.length === 0) return { connected: true, mailboxes: [], threads: [] };
+
+  const response = await fetch(`${workerUrl.replace(/\/+$/, "")}/api/inbox/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ limit: CLOUDFLARE_INBOX_MESSAGE_LIMIT }),
+  }).catch((error: unknown) => (error instanceof Error ? error : new Error("Cloudflare inbox request failed.")));
+  if (response instanceof Error) return { connected: true, mailboxes: markIssue(response.message), threads: [], note: response.message };
+
+  const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; messages?: CloudflareInboxMessage[] };
+  if (!response.ok || payload.ok === false) {
+    return { connected: true, mailboxes: markIssue("Cloudflare inbox did not return messages."), threads: [], note: "Cloudflare inbox did not return messages." };
+  }
+
+  const threads: CompanyEmailThread[] = [];
+  for (const message of payload.messages ?? []) {
+    const recipient = (message.recipient || "").trim().toLowerCase();
+    const match = [...addressToAgent.entries()].find(([addr]) => recipient.includes(addr));
+    if (!match) continue; // only this company's Cloudflare addresses
+    const [, agentId] = match;
+    const threadId = (message.id || "").trim() || `msg-${threads.length}`;
+    threads.push({
+      id: `cloudflare:${threadId}`,
+      provider: "cloudflare-agentic-inbox",
+      providerLabel: MAIL_PROVIDER_LABELS["cloudflare-agentic-inbox"],
+      agentId,
+      inboxAddress: message.recipient || match[0],
+      threadId,
+      subject: (message.subject || "").trim() || "(no subject)",
+      preview: "",
+      correspondents: message.sender ? [message.sender.trim()] : [],
+      direction: "inbound",
+      messageCount: 1,
+      attachmentCount: 0,
+      updatedAt: parseTimestampMs(message.receivedAt),
+      labels: ["received"],
+    });
+  }
+  return { connected: true, mailboxes: cfMailboxes, threads };
+}
+
+/** Parse an AgentMail participant/label list — tolerant of string or object entries. */
+function parseParticipants(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (trimmed) out.push(trimmed);
+    } else if (item && typeof item === "object") {
+      const record = item as Record<string, unknown>;
+      const label = String(record.email ?? record.address ?? record.name ?? "").trim();
+      if (label) out.push(label);
+    }
+  }
+  return out;
+}
+
+function parseCount(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.round(value));
+  if (Array.isArray(value)) return value.length;
+  return 0;
+}
+
+function parseTimestampMs(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value > 1e12 ? value : value * 1000;
+  if (typeof value === "string" && value.trim()) {
+    const ms = Date.parse(value.trim());
+    return Number.isFinite(ms) ? ms : 0;
+  }
+  return 0;
+}
+
+function readMetadataAgentId(metadata: unknown): string {
+  if (!metadata || typeof metadata !== "object") return "";
+  const value = (metadata as Record<string, unknown>).hivemindos_agent_id;
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  const rounded = Math.round(Number(value));
+  if (!Number.isFinite(rounded)) return min;
+  return Math.max(min, Math.min(max, rounded));
 }

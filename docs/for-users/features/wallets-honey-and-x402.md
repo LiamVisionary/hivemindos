@@ -159,22 +159,24 @@ The downloadable app cannot be the authority for official HivemindOS revenue: us
 
 - `HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config`
 
-That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official policy is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. Today that includes local USDC sends, local DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, Veil private transfers, Veil private x402 payments, and recorded Zero Human Company revenue-share events. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. The fee transfer is recorded in wallet activity as a platform-fee item so it remains visible to the user.
+That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official local-wallet platform fee is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. Today that includes local USDC sends, local DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, Veil private transfers, and Veil private x402 payments. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. The fee transfer is recorded in wallet activity as a platform-fee item so it remains visible to the user.
 
-Zero Human Company revenue-share events are recorded through `/api/company-revenue` and shown in the company Treasury tab. Recording revenue alone updates the company revenue ledger; collecting the HivemindOS share requires explicit confirmation and a selected company agent wallet. External revenue that never reports into HivemindOS, a hosted HivemindOS billing service, or a verifiable settlement rail is not automatically charged by the local app.
+Zero Human Company revenue-share events are recorded through `/api/company-revenue` and shown in the company Treasury tab. They use the same visible collection rail, but the default company revenue share is **2% with a $0.01 minimum**. Recording revenue alone updates the company revenue ledger; collecting the HivemindOS share requires explicit confirmation and a selected company agent wallet. External revenue that never reports into HivemindOS, a hosted HivemindOS billing service, or a verifiable settlement rail is not automatically charged by the local app.
 
 Simple examples:
 
-| Action amount | Platform fee |
-| ---: | ---: |
-| `$0.25` | `$0.01` minimum |
-| `$100` | `$1.00` |
-| `$1,000` | `$10.00` |
+| Action | Amount | Fee |
+| --- | ---: | ---: |
+| Wallet send, swap, stock, x402, or private payment | `$0.25` | `$0.01` minimum |
+| Wallet send, swap, stock, x402, or private payment | `$100` | `$1.00` |
+| Recorded Zero Human Company revenue | `$100` | `$2.00` |
+| Recorded Zero Human Company revenue | `$1,000` | `$20.00` |
 
 Self-hosted operators can override the hosted policy for their own install by setting `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED` or local recipient variables. Fee-rate defaults alone keep using the hosted official policy:
 
 - `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED=true`
 - `HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=100` for a 1% fee
+- `HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=200` for a 2% Zero Human Company revenue share
 - `HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD=0.01` for a minimum fee
 - Optional: `HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD=<max-fee>`
 - `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<base-or-evm-address>` for Base wallet sends, Base DEX swaps, live Alpaca fee collection, public x402, and Veil-backed private payments

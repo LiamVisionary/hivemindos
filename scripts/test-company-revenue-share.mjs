@@ -18,7 +18,10 @@ const vaultPath = await mkdtemp(join(tmpdir(), "hivemind-company-revenue-vault-"
 process.env.HOME = tempHome;
 process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH = vaultPath;
 process.env.HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED = "true";
-process.env.HIVEMINDOS_TRADING_PLATFORM_FEE_BPS = "100";
+delete process.env.HIVEMINDOS_TRADING_PLATFORM_FEE_BPS;
+delete process.env.HIVEMINDOS_PLATFORM_FEE_BPS;
+delete process.env.HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS;
+delete process.env.HIVEMINDOS_ZHC_REVENUE_SHARE_BPS;
 process.env.HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD = "0.01";
 process.env.HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM = "0x1111111111111111111111111111111111111111";
 process.env.HIVEMINDOS_PLATFORM_FEE_POLICY_URL = "disabled";
@@ -32,6 +35,7 @@ const {
   recordCompanyRevenue,
 } = await import("../src/lib/services/company-revenue-share.ts");
 const { upsertCompany } = await import("../src/lib/services/companies-store.ts");
+const { quoteTradingPlatformFee } = await import("../src/lib/services/wallet/platform-fees.ts");
 const { readSpendLedger } = await import("../src/lib/services/wallet/spend-ledger.ts");
 
 try {
@@ -41,10 +45,14 @@ try {
     apexGoal: { title: "Reach $10k MRR", metric: "MRR", target: "10000", unit: "currency" },
   });
 
+  const walletQuote = await quoteTradingPlatformFee({ source: "wallet-send", amountUsd: 125, network: "eip155:8453" });
+  assert.equal(walletQuote.amountUsd, 1.25, "ordinary wallet platform fee remains 1%");
+  assert.equal(walletQuote.basisPoints, 100);
+
   const quote = await quoteCompanyRevenueShare({ amountUsd: 125, network: "eip155:8453" });
   assert.equal(quote.status, "quoted");
-  assert.equal(quote.amountUsd, 1.25);
-  assert.equal(quote.basisPoints, 100);
+  assert.equal(quote.amountUsd, 2.5);
+  assert.equal(quote.basisPoints, 200);
   assert.equal(quote.recipient, "0x1111111111111111111111111111111111111111");
 
   const first = await recordCompanyRevenue({
@@ -57,10 +65,10 @@ try {
   });
   assert.equal(first.duplicate, false);
   assert.equal(first.record.status, "fee-pending");
-  assert.equal(first.record.fee.amountUsd, 1.25);
+  assert.equal(first.record.fee.amountUsd, 2.5);
   assert.equal(first.rollup.eventCount, 1);
   assert.equal(first.rollup.totalRevenueUsd, 125);
-  assert.equal(first.rollup.sharePendingUsd, 1.25);
+  assert.equal(first.rollup.sharePendingUsd, 2.5);
   assert.match(await readFile(COMPANY_REVENUE_LEDGER_PATH, "utf8"), /inv-001/);
 
   const duplicate = await recordCompanyRevenue({
@@ -94,11 +102,11 @@ try {
   assert.equal(tiny.record.fee.amountUsd, 0.01, "minimum fee applies to tiny revenue");
   assert.equal(tiny.rollup.eventCount, 2);
   assert.equal(tiny.rollup.totalRevenueUsd, 125.25);
-  assert.equal(tiny.rollup.sharePendingUsd, 1.26);
+  assert.equal(tiny.rollup.sharePendingUsd, 2.51);
 
   const rollup = await companyRevenueRollup(company.id);
   assert.equal(rollup.shareCollectedUsd, 0);
-  assert.equal(rollup.shareQuotedUsd, 1.26);
+  assert.equal(rollup.shareQuotedUsd, 2.51);
   assert.deepEqual(await readSpendLedger(), [], "recording external revenue does not count as company spend");
 
   console.log("company revenue-share suite passed");

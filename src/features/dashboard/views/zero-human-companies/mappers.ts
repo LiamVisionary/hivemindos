@@ -277,7 +277,7 @@ export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<str
         body: t.body,
         result: t.result,
         deliverables: (t.deliverables ?? []).map((d) => ({ id: d.id, label: d.label, kind: d.kind, path: d.path, url: d.url })),
-        receipts: (t.loopReceipts ?? []).map((r) => ({ title: r.summary || r.gateId || "receipt", status: r.status })),
+        receipts: (t.loopReceipts ?? []).map((r) => ({ title: r.summary || r.gateId || "receipt", status: r.status, evidence: r.evidence ?? [] })),
         machineName: t.targetMachine?.name || undefined,
         updatedAt: t.updatedAt,
         completedAt: t.completedAt,

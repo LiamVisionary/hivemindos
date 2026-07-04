@@ -275,10 +275,18 @@ export function taskBriefHeadline(brief: ParsedTaskBrief): string {
 
 // Agent-facing boilerplate inside a brief (routing contracts, "do not repeat
 // work", ACTION NEEDED formatting rules). The modal hides these behind a
-// "Show agent instructions" toggle — humans reading a brief want the request
+// "Show technical details" toggle — humans reading a brief want the request
 // and the state, not the worker's operating manual.
 const GUIDANCE_SECTION_TITLE = /^(?:routing contract|queen bee delegation)$/i;
 const GUIDANCE_PROSE = /\b(?:do not repeat work listed|if you are blocked on human input|when it helps the human act faster|complete (?:this|the) (?:scoped )?task and record|record (?:a concrete, durable|the) result on the work board|use shared brain memory|treat existing notes as authoritative|end with a concise result summary|include a final section named exactly|suggested worker class)\b/i;
+
+// Machine-facing dispatch/routing fields — intent fingerprints, worker class,
+// target machine, source, and the loop's mode/eval-gate plumbing. These are how
+// the control plane routed the task, not what the human needs to understand it,
+// so they collapse under the same "technical details" toggle as the guidance
+// above. Company identity (Company/Apex goal/Metric/Charter) and the loop's
+// Goal/Success criteria stay visible on purpose.
+const TECHNICAL_FIELD_KEY = /^(?:source|mode|intent fingerprint|worker class|delegated agent|target machine|eval gates)$/i;
 
 /** True when a brief section is agent operating instructions by title. */
 export function isBriefGuidanceSection(section: TaskBriefSection): boolean {
@@ -288,4 +296,10 @@ export function isBriefGuidanceSection(section: TaskBriefSection): boolean {
 /** True when a prose paragraph is agent operating boilerplate. */
 export function isBriefGuidanceText(text: string): boolean {
   return GUIDANCE_PROSE.test(text);
+}
+
+/** True when a brief field is machine-facing dispatch/routing plumbing rather
+ * than something a human owner needs to read. */
+export function isBriefTechnicalField(field: TaskBriefField): boolean {
+  return TECHNICAL_FIELD_KEY.test(field.key.trim());
 }

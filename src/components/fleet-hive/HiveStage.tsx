@@ -5,7 +5,8 @@
    along the threads. Everything is laid out on a fixed 1440×980 canvas that
    FleetHiveView scales to fit. */
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useRef } from "react";
+import { useQueenVoicePulse } from "@/lib/audio/queen-voice-amplitude";
 import type { AgentState, HiveMachine, HiveMachineKind, HiveSelection } from "./fleet-hive-types";
 import { frMachineState, frStateMeta } from "./fleet-hive-types";
 import {
@@ -231,6 +232,11 @@ export function HiveStage({
 }) {
   const layout = useMemo(() => frBuildLayout(machines), [machines]);
   const activeMachineId = sel.type === "machine" ? sel.id : sel.type === "agent" ? sel.machineId : null;
+  // The Queen cell breathes to her voice while she speaks in voice chat: the
+  // pulse hook writes `--queen-amp` (0..1) on this node every frame (imperative,
+  // so HiveStage's fleet-poll re-renders never touch the 60fps path).
+  const queenCellRef = useRef<HTMLDivElement | null>(null);
+  useQueenVoicePulse(queenCellRef);
 
   const threads = machines.map((m, i) => {
     const L = layout[m.id];
@@ -344,6 +350,7 @@ export function HiveStage({
 
       {/* the Queen */}
       <div
+        ref={queenCellRef}
         onClick={(e) => { e.stopPropagation(); onSelect({ type: "queen" }); }}
         onDoubleClick={(e) => { e.stopPropagation(); onOpenQueenSettings?.(); }}
         title={onOpenQueenSettings ? "The Queen · orchestrator (double-click to open settings)" : "The Queen · orchestrator"}
@@ -357,14 +364,17 @@ export function HiveStage({
         {/* inner lift layer — selection scale + hover lift live in CSS, mirroring
             the worker/machine cells. */}
         <div className="fr-queen-lift">
-          <div style={{ position: "absolute", inset: -30, borderRadius: "50%", background: "radial-gradient(circle, var(--honey-soft), transparent 66%)", animation: "fr-cell-breathe 4s ease-in-out infinite", pointerEvents: "none" }} />
+          {/* honey halo: idle breathe by default; while she speaks in voice chat
+              it tracks her voice amplitude via --queen-amp (see fleet-hive.css
+              and src/lib/audio/queen-voice-amplitude.ts). */}
+          <div className="fr-queen-glow" />
           {/* opaque fill — no backdrop-filter (it was clipped to the hex on WebKit
               but drew a rectangular box around it on Chromium/WebView2; see HiveCell). */}
           <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))" }} />
           <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
             <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={sel.type === "queen" ? "var(--honey)" : "var(--honey-line)"} strokeWidth={sel.type === "queen" ? 2.2 : 1.6} strokeLinejoin="round" />
           </svg>
-          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+          <div className="fr-queen-core" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.45))" }} />
           </div>

@@ -7,6 +7,7 @@ import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 export const PLATFORM_FEE_CONFIRMATION_NOTE = "Platform fee collected as a separate stablecoin transfer.";
 
 const DEFAULT_FEE_BPS = 100; // 1%
+const DEFAULT_COMPANY_REVENUE_FEE_BPS = 200; // 2%
 const DEFAULT_MIN_FEE_USD = 0.01;
 const DEFAULT_MAX_FEE_USD = 0;
 const DEFAULT_OFFICIAL_POLICY_URL = "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config";
@@ -22,6 +23,11 @@ const ENABLED_KEYS = [
 const FEE_BPS_KEYS = [
   "HIVEMINDOS_TRADING_PLATFORM_FEE_BPS",
   "HIVEMINDOS_PLATFORM_FEE_BPS",
+] as const;
+
+const COMPANY_REVENUE_FEE_BPS_KEYS = [
+  "HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS",
+  "HIVEMINDOS_ZHC_REVENUE_SHARE_BPS",
 ] as const;
 
 const MIN_FEE_KEYS = [
@@ -87,6 +93,7 @@ type PlatformFeePolicy = {
   source: "local-env" | "hosted" | "disabled";
   enabled: boolean;
   basisPoints: number;
+  companyRevenueBasisPoints?: number;
   minFeeUsd: number;
   maxFeeUsd: number;
   recipient?: string;
@@ -99,6 +106,9 @@ type HostedPolicyResponse = {
   enabled?: unknown;
   basisPoints?: unknown;
   feeBps?: unknown;
+  companyRevenueBasisPoints?: unknown;
+  companyRevenueFeeBps?: unknown;
+  sourceBasisPoints?: Record<string, unknown>;
   minFeeUsd?: unknown;
   maxFeeUsd?: unknown;
   recipients?: {
@@ -119,7 +129,7 @@ export async function quoteTradingPlatformFee(input: {
 }): Promise<PlatformFeeQuote> {
   const policy = await resolvePlatformFeePolicy(input.network);
   const enabled = policy.enabled;
-  const basisPoints = policy.basisPoints;
+  const basisPoints = await basisPointsForSource(input.source, policy);
   const minFeeUsd = policy.minFeeUsd;
   const maxFeeUsd = policy.maxFeeUsd;
   const assetSymbol = stableAssetSymbol(input.network);
@@ -315,6 +325,9 @@ async function hostedPlatformFeePolicy(network: string): Promise<PlatformFeePoli
   const policy = await fetchHostedPolicy(url).catch(() => null);
   if (!policy?.ok) return fallback;
   const basisPoints = numberFrom(policy.basisPoints ?? policy.feeBps, DEFAULT_FEE_BPS);
+  const companyRevenueBasisPoints = numberFromOptional(
+    policy.sourceBasisPoints?.["company-revenue"] ?? policy.companyRevenueBasisPoints ?? policy.companyRevenueFeeBps,
+  );
   const minFeeUsd = numberFrom(policy.minFeeUsd, DEFAULT_MIN_FEE_USD);
   const maxFeeUsd = numberFrom(policy.maxFeeUsd, DEFAULT_MAX_FEE_USD);
   const recipient = hostedRecipientForNetwork(network, policy);
@@ -323,6 +336,7 @@ async function hostedPlatformFeePolicy(network: string): Promise<PlatformFeePoli
     source: "hosted",
     enabled,
     basisPoints,
+    companyRevenueBasisPoints,
     minFeeUsd,
     maxFeeUsd,
     recipient: recipient?.value,
@@ -377,6 +391,23 @@ async function firstNumber(keys: readonly string[], fallback: number): Promise<n
   return fallback;
 }
 
+async function firstNumberOptional(keys: readonly string[]): Promise<number | undefined> {
+  for (const key of keys) {
+    const raw = await hiveEnvValue(key).catch(() => "");
+    if (!raw.trim()) continue;
+    const value = Number(raw);
+    if (Number.isFinite(value) && value >= 0) return value;
+  }
+  return undefined;
+}
+
+async function basisPointsForSource(source: PlatformFeeSource, policy: PlatformFeePolicy): Promise<number> {
+  if (source !== "company-revenue") return policy.basisPoints;
+  const explicitCompanyOverride = await firstNumberOptional(COMPANY_REVENUE_FEE_BPS_KEYS);
+  if (explicitCompanyOverride !== undefined) return explicitCompanyOverride;
+  return policy.companyRevenueBasisPoints ?? DEFAULT_COMPANY_REVENUE_FEE_BPS;
+}
+
 function feeAmountUsd(amountUsd: number, basisPoints: number, minFeeUsd: number, maxFeeUsd: number): number {
   const baseAmount = Number(amountUsd);
   if (!Number.isFinite(baseAmount) || baseAmount <= 0 || basisPoints <= 0) return 0;
@@ -398,6 +429,11 @@ function booleanFrom(value: unknown, fallback: boolean) {
 function numberFrom(value: unknown, fallback: number) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
+function numberFromOptional(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : undefined;
 }
 
 async function recipientForNetwork(network: string): Promise<{ key: string; value: string } | null> {

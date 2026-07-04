@@ -38,6 +38,8 @@ const contents = Object.fromEntries(
 assert.match(contents.fees, /HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED/);
 assert.match(contents.fees, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM/);
 assert.match(contents.fees, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA/);
+assert.match(contents.fees, /DEFAULT_COMPANY_REVENUE_FEE_BPS = 200/);
+assert.match(contents.fees, /HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS/);
 assert.match(contents.fees, /DEFAULT_OFFICIAL_POLICY_URL/);
 assert.match(contents.fees, /fetchHostedPolicy/);
 assert.match(contents.fees, /hostedPlatformFeePolicy/);
@@ -99,12 +101,13 @@ assert.match(contents.workerBoundary, /HivemindOS-controlled infrastructure/);
 
 assert.match(contents.env, /HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https:\/\/hivemindos-paid-agent-gateway\.hivemindos\.workers\.dev\/api\/platform-fees\/config/);
 assert.match(contents.env, /HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=100/);
+assert.match(contents.env, /HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=200/);
 assert.match(contents.env, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=/);
 assert.match(contents.docs, /Trading Platform Fees/);
 assert.match(contents.docs, /HivemindOS-hosted infrastructure by default/);
 assert.match(contents.docs, /official HivemindOS-wide revenue enforcement/);
 assert.match(contents.zhcDocs, /Revenue Share/);
-assert.match(contents.zhcDocs, /company revenue share/);
+assert.match(contents.zhcDocs, /2% of recorded company revenue/);
 assert.match(contents.contextIndex, /Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint/);
 
 console.log("Trading platform fee checks passed.");

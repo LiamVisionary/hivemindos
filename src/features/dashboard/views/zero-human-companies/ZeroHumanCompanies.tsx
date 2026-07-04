@@ -8,7 +8,7 @@ import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { getIssueIdentity } from "./issue-identity";
-import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyRevenueShareInput, CreateForm, Density, PoolAgent, Theme } from "./types";
+import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyRevenueShareInput, CreateForm, Density, Issue, PoolAgent, Theme } from "./types";
 
 function HiveLogo({ size = 40 }: { size?: number }) {
   const W = size, H = size;
@@ -118,6 +118,8 @@ export interface ZeroHumanCompaniesProps {
   onDispatch: (companyId: string) => void;
   /** Stop perpetual autonomy (no new dispatches; in-flight work finishes). */
   onStopAutonomy: (companyId: string) => void;
+  /** Mark a Needs-You issue fixed and resume its Work Board task. */
+  onResolveIssue: (companyId: string, issue: Issue) => void;
   /** Record external revenue and optionally collect the HivemindOS share. */
   onRecordRevenue: (companyId: string, input: CompanyRevenueShareInput) => Promise<void>;
   theme?: Theme;
@@ -128,7 +130,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, error, notice, busyId, onRefresh,
-  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy, onRecordRevenue,
+  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRecordRevenue,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -188,6 +190,7 @@ export default function ZeroHumanCompanies({
     onEditTreasury: () => setModal({ type: "treasury", id: colony.id }),
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
     onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueId: getIssueIdentity(issue) }),
+    onResolveIssue: (issue) => onResolveIssue(colony.id, issue),
     onRecordRevenue: (input) => void onRecordRevenue(colony.id, input),
     busyId,
   };
@@ -279,8 +282,22 @@ export default function ZeroHumanCompanies({
         // Resolve from the live colonies each render so polling keeps the detail fresh.
         const target = colonies.find((c) => c.id === modal.id);
         const issue = target?.issues.find((i) => getIssueIdentity(i) === modal.issueId);
+        const apex = target?.apex;
+        const metricLine = apex?.metric
+          ? `${apex.metric}${apex.target ? ` → target ${apex.target}` : ""}${apex.current ? ` (current ${apex.current})` : ""}`
+          : undefined;
         return issue?.work ? (
-          <TaskDetailModal issue={issue} colonyName={target!.name} theme={theme} onClose={closeModal} />
+          <TaskDetailModal
+            issue={issue}
+            colonyName={target!.name}
+            companyId={target!.id}
+            apexGoal={apex?.title}
+            metric={metricLine}
+            theme={theme}
+            onClose={closeModal}
+            onResolveIssue={(item) => onResolveIssue(target!.id, item)}
+            busy={busyId === issue.work?.taskId}
+          />
         ) : null;
       })()}
     </div>
