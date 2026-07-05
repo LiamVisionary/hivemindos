@@ -7198,6 +7198,28 @@ async function handleCollectorRequest(request, response) {
         });
         return;
       }
+      // Per-machine secrets must never be SET BY A REMOTE PEER. This /env
+      // endpoint exists only for relayed fleet pushes, and hive-env-add's
+      // apply path doesn't gate on LOCAL_ONLY_KEYS, so without this a peer's
+      // scope-all push overwrites this machine's own dashboard auth
+      // token/secret (each hub generates + verifies its own in .env.local) —
+      // which silently breaks this machine's phone pairing / API auth (observed
+      // 2026-07-05). Mirror the relevant hive-env-add LOCAL_ONLY_KEYS here and
+      // drop them from any inbound push.
+      const REMOTE_REJECTED_KEYS = new Set([
+        "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN",
+        "HIVEMINDOS_DASHBOARD_AUTH_SECRET",
+      ]);
+      const rejected = Object.keys(entries).filter((key) =>
+        REMOTE_REJECTED_KEYS.has(key),
+      );
+      for (const key of rejected) delete entries[key];
+      if (!Object.keys(entries).length) {
+        // Every pushed key was a per-machine secret we won't accept remotely —
+        // ack it (so the peer's retry queue clears) but write nothing.
+        jsonResponse(response, 200, { ok: true, updated: 0, rejected: rejected.length });
+        return;
+      }
       await runHiveEnvImport({
         entries,
         scope:
@@ -7213,6 +7235,7 @@ async function handleCollectorRequest(request, response) {
       jsonResponse(response, 200, {
         ok: true,
         updated: Object.keys(entries).length,
+        ...(rejected.length ? { rejected: rejected.length } : {}),
       });
     } catch (error) {
       jsonResponse(response, 500, {

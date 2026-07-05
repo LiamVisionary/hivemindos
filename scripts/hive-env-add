@@ -49,6 +49,15 @@ COLLECTORLESS_PEER_OS = {"ios", "android"}
 
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 LOCAL_ONLY_KEYS = {
+    # The dashboard auth token + secret are PER-MACHINE credentials: each hub
+    # generates its own in its checkout .env.local (scripts/dashboard-auth.mjs),
+    # and each hub verifies against its own. Fleet-replicating them makes one
+    # machine's push clobber another's, which breaks that machine's phone
+    # pairing / API auth (observed 2026-07-05: a peer scope-all push overwrote
+    # this machine's shared-env copy, so its gateway served a token the local
+    # hub rejected). They must never sync — inbound OR outbound.
+    "HIVEMINDOS_DASHBOARD_AUTH_SECRET",
+    "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN",
     "HIVE_AGENT_ENV_FILE",
     "HIVE_ENV_BACKUP_DIR",
     "HIVE_ENV_COLLECTOR_PORT",
