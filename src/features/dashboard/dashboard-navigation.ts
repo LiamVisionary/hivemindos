@@ -87,7 +87,7 @@ const DASHBOARD_ROUTE_CATALOG_BY_ID = {
   chat: { label: "Chat", routeLabel: "Agent Chat", detail: "Talk with an agent", group: "Primary", shortcut: "Cmd+4", keywords: ["chat", "agent chat", "conversation"], shelfGroup: 0 },
   wallet: { label: "Wallets", detail: "Agent wallets and usage", group: "Primary", shortcut: "Cmd+5", keywords: ["wallet", "honey", "spend", "usage", "tokens"], shelfGroup: 0 },
   trade: { label: "Trade", detail: "Buy, sell, and swap crypto & stocks", group: "Primary", keywords: ["trade", "trading", "buy", "sell", "swap", "stock", "stocks", "shares", "crypto", "perps", "options", "polymarket", "bridge", "xstocks", "alpaca", "robinhood"], shelfGroup: 0 },
-  governance: { label: "Zero Human Company", detail: "Companies, budgets, spend approvals", group: "Utilities", keywords: ["zero human company", "zhc", "governance", "company", "companies", "budget", "approval", "approvals", "kill switch", "spend"] },
+  governance: { label: "Companies", routeLabel: "Zero Human Company", detail: "Companies, budgets, spend approvals", group: "Utilities", keywords: ["zero human company", "zhc", "governance", "company", "companies", "budget", "approval", "approvals", "kill switch", "spend"], shelfGroup: 2 },
   more: { label: "More", detail: "Utility launcher", group: "Primary", shortcut: "Cmd+6", keywords: ["more", "utilities", "launcher"] },
   scheduler: { label: "Schedules", routeLabel: "Scheduler", detail: "Shared schedules and jobs", group: "Work", keywords: ["schedule", "scheduler", "jobs", "recurring"], shelfGroup: 1 },
   swarm: { label: "Swarm", detail: "MiroShark simulations", group: "Work", keywords: ["swarm", "miroshark", "simulation", "rehearsal"], shelfGroup: 1 },
@@ -102,8 +102,8 @@ const DASHBOARD_ROUTE_CATALOG_BY_ID = {
   files: { label: "Files", detail: "Scoped runtime files", group: "Utilities", keywords: ["files", "browser", "runtime files"] },
   sessions: { label: "Sessions", detail: "Runtime transcript search", group: "Utilities", keywords: ["sessions", "search", "transcripts"] },
   tools: { label: "Tools", detail: "Callable agent handles", group: "Utilities", keywords: ["tools", "handles", "capabilities"] },
-  maintenance: { label: "Diagnostics", detail: "Fleet checks and repairs", group: "Utilities", keywords: ["diagnostics", "maintenance", "repair", "health"], shelfGroup: 2 },
-  memory: { label: "Memory", detail: "Runtime memory telemetry", group: "Utilities", keywords: ["memory", "rss", "leaks", "telemetry"], shelfSlot: "maintenance" },
+  maintenance: { label: "Diagnostics", detail: "Fleet checks and repairs", group: "Utilities", keywords: ["diagnostics", "maintenance", "repair", "health"] },
+  memory: { label: "Memory", detail: "Runtime memory telemetry", group: "Utilities", keywords: ["memory", "rss", "leaks", "telemetry"] },
   phone: { label: "Phone", detail: "Call prompts", group: "Utilities", keywords: ["phone", "calls", "prompts"] },
 } as const satisfies Record<DashboardView, DashboardRouteCatalogEntry>;
 

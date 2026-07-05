@@ -5,10 +5,11 @@
    along the threads. Everything is laid out on a fixed 1440×980 canvas that
    FleetHiveView scales to fit. */
 
-import { Fragment, useMemo, useRef } from "react";
+import { Fragment, forwardRef, useMemo, useRef } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQueenVoicePulse } from "@/lib/audio/queen-voice-amplitude";
 import type { AgentState, HiveMachine, HiveMachineKind, HiveSelection } from "./fleet-hive-types";
-import { frMachineState, frStateMeta } from "./fleet-hive-types";
+import { frMachineState } from "./fleet-hive-types";
 import {
   AGENT_SIZE, FR_HEX_CLIP, HIVE_H, HIVE_W, MACHINE_SIZE, QX, QY,
   frAddMachinePos, frAgentNameSegments, frBuildLayout, type Pt,
@@ -20,21 +21,27 @@ interface Tone {
   glow: string | null;
 }
 
-// ---- the hex cell ---------------------------------------------------------
-function HiveCell({
-  x, y, size, tone, selected, dim, pulse, bounce, onClick, title, children, z,
-}: {
+interface HiveCellProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children" | "onClick" | "title"> {
   x: number; y: number; size: number; tone: Tone;
   selected?: boolean; dim?: boolean; pulse?: boolean; bounce?: boolean;
-  onClick?: () => void; title?: string; children?: React.ReactNode; z?: number;
-}) {
+  onClick?: React.MouseEventHandler<HTMLDivElement>; title?: string; children?: React.ReactNode; z?: number;
+}
+
+// ---- the hex cell ---------------------------------------------------------
+const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
+  x, y, size, tone, selected, dim, pulse, bounce, onClick, title, children, z,
+  className, style, ...triggerProps
+}, ref) {
   return (
     <div
-      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      {...triggerProps}
+      ref={ref}
+      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
       title={title}
-      className="fr-cell"
+      className={className ? `fr-cell ${className}` : "fr-cell"}
       data-selected={selected ? "true" : undefined}
       style={{
+        ...style,
         position: "absolute", left: x, top: y, width: size, height: size,
         // the outer node only holds the absolute-centering; the lift layer below
         // owns scale/translate (selection + hover) entirely in CSS, so neither
@@ -78,7 +85,7 @@ function HiveCell({
       </div>
     </div>
   );
-}
+});
 
 function frMachineTone(state: AgentState, selected: boolean): Tone {
   const base: Tone =
@@ -137,8 +144,8 @@ function AgentEdgeName({ name, selected }: { name: string; selected: boolean }) 
   // Each lower hex edge is ~42 units long. Rather than squeezing a long segment
   // with lengthAdjust (which smears the glyphs into an illegible blur — very
   // visible on long auto-generated names like the e2e agents), truncate it to
-  // what actually fits and add an ellipsis. The full name stays on hover (the
-  // cell's title attribute).
+  // what actually fits and add an ellipsis. The small hover tooltip keeps the
+  // full name reachable.
   const EDGE_FIT_W = 42;
   const maxChars = Math.max(2, Math.floor(EDGE_FIT_W / (fs * 0.56)));
   const clamp = (s: string) => (s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + "…" : s);
@@ -158,15 +165,24 @@ function AgentEdgeName({ name, selected }: { name: string; selected: boolean }) 
   );
 }
 
+interface AddAgentCellProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children" | "onClick" | "title"> {
+  x: number; y: number; size: number; dim?: boolean; title?: string; label?: string; dataBee?: string; onClick?: React.MouseEventHandler<HTMLDivElement>;
+}
+
 // ---- dashed "add" cell (per-machine "add agent", or the global "add machine") -
-function AddAgentCell({ x, y, size, dim, title, label, dataBee, onClick }: { x: number; y: number; size: number; dim?: boolean; title?: string; label?: string; dataBee?: string; onClick?: () => void }) {
+const AddAgentCell = forwardRef<HTMLDivElement, AddAgentCellProps>(function AddAgentCell({
+  x, y, size, dim, title, label, dataBee, onClick, className, style, ...triggerProps
+}, ref) {
   return (
     <div
-      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      {...triggerProps}
+      ref={ref}
+      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
       title={title}
-      className="fr-addcell"
+      className={className ? `fr-addcell ${className}` : "fr-addcell"}
       data-bee={dataBee}
       style={{
+        ...style,
         position: "absolute", left: x, top: y, width: size, height: size,
         transform: "translate(-50%, -50%)", cursor: onClick ? "pointer" : "default", zIndex: 2,
         opacity: dim ? 0.32 : 0.9, transition: "opacity .4s",
@@ -188,7 +204,7 @@ function AddAgentCell({ x, y, size, dim, title, label, dataBee, onClick }: { x: 
       ) : null}
     </div>
   );
-}
+});
 
 // ---- pheromone thread + travelling light ----------------------------------
 function Thread({ a, b, lit, flow, delay = 0, dur = 2.6 }: { a: Pt; b: Pt; lit?: boolean; flow?: boolean; delay?: number; dur?: number }) {
@@ -262,35 +278,36 @@ export function HiveStage({
           const tone = frAgentTone(agent.state, selected);
           const dim = !!activeMachineId && activeMachineId !== m.id;
           return (
-            <HiveCell
-              key={agent.id}
-              x={pos.x} y={pos.y} size={AGENT_SIZE} tone={tone}
-              selected={selected} dim={dim} pulse={agent.state === "working"}
-              bounce={newAgentId === agent.id}
-              // First click selects the petal; clicking it again while already
-              // selected opens its settings (so a double-click on an unselected
-              // agent lands straight in its AgentSettingsModal).
-              onClick={() =>
-                selected && onOpenAgentSettings
-                  ? onOpenAgentSettings(m.id, agent.id)
-                  : onSelect({ type: "agent", id: agent.id, machineId: m.id })
-              }
-              title={
-                onOpenAgentSettings
-                  ? `${agent.name} · ${frStateMeta(agent.state).label} (click again to open settings)`
-                  : `${agent.name} · ${frStateMeta(agent.state).label}`
-              }
-              z={selected ? 7 : 3}
-            >
-              <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={agent.iconSrc || workerBeeSrc} alt="" width={81} height={81}
-                  style={{ transform: "translateY(-4%)", opacity: agent.state === "ready" && !selected ? 0.78 : 1, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.4))" }}
-                />
-              </span>
-              <AgentEdgeName name={agent.name} selected={selected} />
-            </HiveCell>
+            <Tooltip key={agent.id}>
+              <TooltipTrigger asChild>
+                <HiveCell
+                  x={pos.x} y={pos.y} size={AGENT_SIZE} tone={tone}
+                  selected={selected} dim={dim} pulse={agent.state === "working"}
+                  bounce={newAgentId === agent.id}
+                  // First click selects the petal; clicking it again while already
+                  // selected opens its settings (so a double-click on an unselected
+                  // agent lands straight in its AgentSettingsModal).
+                  onClick={() => {
+                    if (selected && onOpenAgentSettings) {
+                      onOpenAgentSettings(m.id, agent.id);
+                      return;
+                    }
+                    onSelect({ type: "agent", id: agent.id, machineId: m.id });
+                  }}
+                  z={selected ? 7 : 3}
+                >
+                  <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={agent.iconSrc || workerBeeSrc} alt="" width={81} height={81}
+                      style={{ transform: "translateY(-4%)", opacity: agent.state === "ready" && !selected ? 0.78 : 1, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.4))" }}
+                    />
+                  </span>
+                  <AgentEdgeName name={agent.name} selected={selected} />
+                </HiveCell>
+              </TooltipTrigger>
+              <TooltipContent>{agent.name}</TooltipContent>
+            </Tooltip>
           );
         }),
       )}
@@ -301,12 +318,16 @@ export function HiveStage({
         if (!ap) return null;
         const dim = !!activeMachineId && activeMachineId !== m.id;
         return (
-          <AddAgentCell
-            key={"add-" + m.id} x={ap.x} y={ap.y} size={AGENT_SIZE} dim={dim}
-            title={`Add agent to ${m.name}`}
-            dataBee={`fleet-hive-add-${m.name}`}
-            onClick={onAddAgent ? () => onAddAgent(m) : () => onSelect({ type: "machine", id: m.id })}
-          />
+          <Tooltip key={"add-" + m.id}>
+            <TooltipTrigger asChild>
+              <AddAgentCell
+                x={ap.x} y={ap.y} size={AGENT_SIZE} dim={dim}
+                dataBee={`fleet-hive-add-${m.name}`}
+                onClick={onAddAgent ? () => onAddAgent(m) : () => onSelect({ type: "machine", id: m.id })}
+              />
+            </TooltipTrigger>
+            <TooltipContent>Add agent to {m.name}</TooltipContent>
+          </Tooltip>
         );
       })}
 
@@ -319,19 +340,24 @@ export function HiveStage({
         const tone = frMachineTone(st, selected);
         return (
           <Fragment key={m.id}>
-            <HiveCell
-              x={L.pos.x} y={L.pos.y} size={MACHINE_SIZE} tone={tone}
-              selected={selected} dim={dim} pulse={st === "working"}
-              onClick={() => onSelect({ type: "machine", id: m.id })}
-              title={`${m.name} · ${m.role}`} z={selected ? 8 : 5}
-            >
-              {/* icon centred in the hex; the name hugs the lower edges using
-                  the same edge-label logic as the agent cells. */}
-              <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
-                <MachineKindIcon kind={m.kind} size={39} color={selected ? "var(--honey)" : m.role === "Primary" ? "var(--honey)" : "var(--fg-2)"} />
-              </span>
-              <AgentEdgeName name={m.name} selected={selected} />
-            </HiveCell>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <HiveCell
+                  x={L.pos.x} y={L.pos.y} size={MACHINE_SIZE} tone={tone}
+                  selected={selected} dim={dim} pulse={st === "working"}
+                  onClick={() => onSelect({ type: "machine", id: m.id })}
+                  z={selected ? 8 : 5}
+                >
+                  {/* icon centred in the hex; the name hugs the lower edges using
+                      the same edge-label logic as the agent cells. */}
+                  <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
+                    <MachineKindIcon kind={m.kind} size={39} color={selected ? "var(--honey)" : m.role === "Primary" ? "var(--honey)" : "var(--fg-2)"} />
+                  </span>
+                  <AgentEdgeName name={m.name} selected={selected} />
+                </HiveCell>
+              </TooltipTrigger>
+              <TooltipContent>{m.name}</TooltipContent>
+            </Tooltip>
           </Fragment>
         );
       })}
@@ -341,49 +367,58 @@ export function HiveStage({
       {onAddMachine ? (() => {
         const amp = frAddMachinePos(machines);
         return (
-          <AddAgentCell
-            x={amp.x} y={amp.y} size={MACHINE_SIZE} title="Onboard a new machine"
-            label="New Machine" onClick={() => onAddMachine()}
-          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <AddAgentCell
+                x={amp.x} y={amp.y} size={MACHINE_SIZE}
+                label="New Machine" onClick={() => onAddMachine()}
+              />
+            </TooltipTrigger>
+            <TooltipContent>Initialize new machine</TooltipContent>
+          </Tooltip>
         );
       })() : null}
 
       {/* the Queen */}
-      <div
-        ref={queenCellRef}
-        onClick={(e) => { e.stopPropagation(); onSelect({ type: "queen" }); }}
-        onDoubleClick={(e) => { e.stopPropagation(); onOpenQueenSettings?.(); }}
-        title={onOpenQueenSettings ? "The Queen · orchestrator (double-click to open settings)" : "The Queen · orchestrator"}
-        className="fr-queen-cell"
-        data-selected={sel.type === "queen" ? "true" : undefined}
-        style={{
-          position: "absolute", left: QX, top: QY, width: 150, height: 150,
-          transform: "translate(-50%, -50%)", cursor: "pointer", zIndex: 9,
-        }}
-      >
-        {/* inner lift layer — selection scale + hover lift live in CSS, mirroring
-            the worker/machine cells. */}
-        <div className="fr-queen-lift">
-          {/* honey halo: idle breathe by default; while she speaks in voice chat
-              it tracks her voice amplitude via --queen-amp (see fleet-hive.css
-              and src/lib/audio/queen-voice-amplitude.ts). */}
-          <div className="fr-queen-glow" />
-          {/* opaque fill — no backdrop-filter (it was clipped to the hex on WebKit
-              but drew a rectangular box around it on Chromium/WebView2; see HiveCell). */}
-          <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))" }} />
-          <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
-            <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={sel.type === "queen" ? "var(--honey)" : "var(--honey-line)"} strokeWidth={sel.type === "queen" ? 2.2 : 1.6} strokeLinejoin="round" />
-          </svg>
-          <div className="fr-queen-core" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.45))" }} />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            ref={queenCellRef}
+            onClick={(e) => { e.stopPropagation(); onSelect({ type: "queen" }); }}
+            onDoubleClick={(e) => { e.stopPropagation(); onOpenQueenSettings?.(); }}
+            className="fr-queen-cell"
+            data-selected={sel.type === "queen" ? "true" : undefined}
+            style={{
+              position: "absolute", left: QX, top: QY, width: 150, height: 150,
+              transform: "translate(-50%, -50%)", cursor: "pointer", zIndex: 9,
+            }}
+          >
+            {/* inner lift layer — selection scale + hover lift live in CSS, mirroring
+                the worker/machine cells. */}
+            <div className="fr-queen-lift">
+              {/* honey halo: idle breathe by default; while she speaks in voice chat
+                  it tracks her voice amplitude via --queen-amp (see fleet-hive.css
+                  and src/lib/audio/queen-voice-amplitude.ts). */}
+              <div className="fr-queen-glow" />
+              {/* opaque fill — no backdrop-filter (it was clipped to the hex on WebKit
+                  but drew a rectangular box around it on Chromium/WebView2; see HiveCell). */}
+              <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))" }} />
+              <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
+                <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={sel.type === "queen" ? "var(--honey)" : "var(--honey-line)"} strokeWidth={sel.type === "queen" ? 2.2 : 1.6} strokeLinejoin="round" />
+              </svg>
+              <div className="fr-queen-core" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.45))" }} />
+              </div>
+              <div style={{ position: "absolute", left: "50%", top: "calc(100% + 6px)", transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none" }}>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 13, color: "var(--honey)" }}>Queen</div>
+                <div style={{ fontSize: 9.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", marginTop: 1 }}>orchestrator</div>
+              </div>
+            </div>
           </div>
-          <div style={{ position: "absolute", left: "50%", top: "calc(100% + 6px)", transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none" }}>
-            <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 13, color: "var(--honey)" }}>Queen</div>
-            <div style={{ fontSize: 9.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", marginTop: 1 }}>orchestrator</div>
-          </div>
-        </div>
-      </div>
+        </TooltipTrigger>
+        <TooltipContent>Queen Bee</TooltipContent>
+      </Tooltip>
     </div>
   );
 }

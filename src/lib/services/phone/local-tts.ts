@@ -8,6 +8,7 @@ import {
   evictCachedApp,
   hydratePersistedApps,
   persistedAppHint,
+  probeAppHealthy,
   rememberAppById,
   touchCachedApp,
 } from "@/lib/services/phone/local-tts-app-cache";
@@ -26,10 +27,6 @@ const DISCOVERY_TIMEOUT_MS = 12_000;
 const RAW_TTS_DISCOVERY_TIMEOUT_MS = 2_500;
 const DIRECT_HOST_DISCOVERY_TIMEOUT_MS = 4_000;
 const PROBE_TIMEOUT_MS = 8_000;
-// Fast health probe used to revalidate a durable disk hint before trusting it
-// for a synth — a live hint answers in well under this, a dead one costs at
-// most this instead of a slow synth timeout, then falls through to discovery.
-const PERSISTED_HINT_PROBE_TIMEOUT_MS = 1_500;
 const STREAM_TIMEOUT_MS = 120_000;
 const LAUNCH_DISCOVERY_TIMEOUT_MS = 10_000;
 const LAUNCH_PROBE_TIMEOUT_MS = 8_000;
@@ -213,33 +210,13 @@ function rememberCandidates(origin: string, candidates: LocalTtsCandidate[]) {
 }
 
 // Disk hints (origin::appId) that failed a health probe this session: skip
-// re-probing them so a permanently-moved selection pays the probe cost once,
-// not on every resolve. Cleared on process restart; a fresh success re-arms
-// the hot cache so a recovered app is reused without ever consulting this.
+// re-probing so a permanently-moved selection pays the probe once, not every
+// resolve. A later discovery re-pin clears the mark (below).
 const hintProbedBad = new Set<string>();
 
-// One fast health check against a resolved app's proxy URL, used to decide
-// whether a durable disk hint is still live before a synth commits to it.
-async function probeTtsAppHealthy(app: HostedApp): Promise<boolean> {
-  const base = app.apiBaseUrl?.replace(/\/+$/, "");
-  if (!base) return false;
-  const url = `${base}/health`;
-  try {
-    const response = await fetch(url, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(PERSISTED_HINT_PROBE_TIMEOUT_MS),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-// The one resolution path every synth/stream shares: hot in-memory cache, then
-// the durable disk hint (revalidated with a fast health probe so a transient
-// TTS flap never forces a cold fleet sweep on the next open), then (targeted)
-// discovery. Cache lifecycle (sliding TTL, failure eviction, cross-restart
-// persistence) lives in local-tts-app-cache.
+// The one resolution path every synth/stream shares: hot cache → durable disk
+// hint (health-probed so a transient TTS flap never forces a cold fleet sweep
+// next open) → discovery. Lifecycle lives in local-tts-app-cache.
 async function resolvedTtsApp(origin: string, appId: string) {
   await hydratePersistedApps(origin).catch(() => undefined);
   const cached = cachedApp(origin, appId);
@@ -247,17 +224,14 @@ async function resolvedTtsApp(origin: string, appId: string) {
   const hintKey = `${origin}::${appId}`;
   const hint = persistedAppHint(appId);
   if (hint?.apiBaseUrl && !hintProbedBad.has(hintKey)) {
-    if (await probeTtsAppHealthy(hint)) {
-      // Live hint: promote it back to the hot cache and skip the fleet sweep.
-      touchCachedApp(origin, appId, hint);
+    if (await probeAppHealthy(hint)) {
+      touchCachedApp(origin, appId, hint); // live: promote to hot cache
       return hint;
     }
     hintProbedBad.add(hintKey);
   }
   const resolved = findMatchingApp(await discoveredApps(origin, { selectedAppId: appId }), appId) ?? null;
-  // Discovery re-pinned a live URL under this id, so the hint is trustworthy
-  // again — let a future eviction re-probe it instead of always rediscovering.
-  if (resolved) hintProbedBad.delete(hintKey);
+  if (resolved) hintProbedBad.delete(hintKey); // re-pinned: hint trustworthy again
   return resolved;
 }
 

@@ -5,7 +5,7 @@ import type { Dispatch, FormEvent, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import type { FusionSkillResult } from "@/lib/services/fusion/fusion-skill";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
-import type { SkillBrowserSkill, SkillBrowserView } from "@/features/dashboard/dashboard-types";
+import type { SkillBrowserAttachmentTarget, SkillBrowserSkill, SkillBrowserView } from "@/features/dashboard/dashboard-types";
 import { BBtn, Badge, BIcon, type BIconName, Toggle } from "./skill-browser/primitives";
 import { Fusion } from "./skill-browser/Fusion";
 import "./skill-browser/skill-browser.css";
@@ -20,18 +20,20 @@ type SkillBrowserModalProps = {
   installGithubSkillToBrain: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   openSkillBrowser: () => void | Promise<void>;
   openAgentSkillBrowser: () => void | Promise<void>;
+  setSkillBrowserAttachTarget: Dispatch<SetStateAction<SkillBrowserAttachmentTarget | null>>;
   setSkillBrowserGithubUrl: Dispatch<SetStateAction<string>>;
   setSkillBrowserOpen: Dispatch<SetStateAction<boolean>>;
   setSkillBrowserSearch: Dispatch<SetStateAction<string>>;
   setSkillBrowserView: Dispatch<SetStateAction<SkillBrowserView>>;
   setSkillBrowserWrittenContent: Dispatch<SetStateAction<string>>;
   sharedVaultPath?: string;
+  skillBrowserAttachTarget?: SkillBrowserAttachmentTarget | null;
   skillBrowserGithubInstalling: boolean;
   skillBrowserGithubUrl: string;
   skillBrowserImporting: string;
   skillBrowserLoading: boolean;
   skillBrowserEnriching: boolean;
-  skillBrowserMode: "brain" | "agent-class";
+  skillBrowserMode: "brain" | "agent-class" | "attach";
   skillBrowserOpen: boolean;
   skillBrowserSearch: string;
   skillBrowserSkills: SkillBrowserSkill[];
@@ -164,29 +166,6 @@ function dedupeSkillRecords(skills: SkillBrowserSkill[]) {
   return [...bySlug.values()];
 }
 
-function nameFromSkillSlug(slug: string) {
-  return slug
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join(" ") || slug;
-}
-
-function skillFromAttachedSlug(slug: string): SkillBrowserSkill {
-  return {
-    id: `attached-${slug}`,
-    slug,
-    name: nameFromSkillSlug(slug),
-    description: "Attached to this agent class. Shared-brain metadata is not loaded yet.",
-    source: "Agent class",
-    category: "Attached",
-    providerId: "shared",
-    imported: true,
-    capabilities: [],
-    envKeys: [],
-  };
-}
-
 function skillFromFusionResult(result: FusionSkillResult): SkillBrowserSkill {
   return {
     id: `shared-${result.skill.slug}`,
@@ -223,22 +202,22 @@ function CatalogCard({
   importing,
   onInstall,
   skill,
-  agentMode,
+  selectionMode,
   attached,
   onToggleAttach,
 }: {
   importing: string;
   onInstall: (skill: SkillBrowserSkill) => void;
   skill: SkillBrowserSkill;
-  agentMode?: boolean;
+  selectionMode?: boolean;
   attached?: boolean;
   onToggleAttach?: (skill: SkillBrowserSkill) => void;
 }) {
   const busy = importing === skill.id;
   const needsHermes = Boolean(skill.requiresHermesUpdate);
-  // In agent-class mode a card that's already in the shared brain offers an
-  // Attach toggle (bind it to this agent class) instead of Install/Re-sync.
-  const showAttach = Boolean(agentMode && (skill.imported || skill.providerId === "shared"));
+  // In selection mode a card that's already in the shared brain offers an
+  // Attach toggle instead of Install/Re-sync.
+  const showAttach = Boolean(selectionMode && (skill.imported || skill.providerId === "shared"));
   // Cards default to a fixed height (the description is clamped). When the copy
   // overflows that clamp we reveal an expand caret; expanding grows only this
   // card (the grid is align-items: start, so row-mates are unaffected).
@@ -461,12 +440,14 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
     openAgentSkillBrowser,
     openSkillBrowser,
     removeAgentPreferredSkill,
+    setSkillBrowserAttachTarget,
     setSkillBrowserGithubUrl,
     setSkillBrowserOpen,
     setSkillBrowserSearch,
     setSkillBrowserView,
     setSkillBrowserWrittenContent,
     sharedVaultPath,
+    skillBrowserAttachTarget,
     skillBrowserGithubInstalling,
     skillBrowserGithubUrl,
     skillBrowserImporting,
@@ -486,6 +467,9 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
   const [localStatus, setLocalStatus] = React.useState("");
   const [removingSkillId, setRemovingSkillId] = React.useState("");
   const agentMode = skillBrowserMode === "agent-class";
+  const attachTarget = skillBrowserMode === "attach" ? skillBrowserAttachTarget ?? null : null;
+  const attachMode = Boolean(attachTarget);
+  const selectionMode = agentMode || attachMode;
   const query = skillBrowserSearch.trim().toLowerCase();
   const browserRecords = React.useMemo(() => {
     const safeSkills = Array.isArray(skillBrowserSkills) ? skillBrowserSkills : [];
@@ -500,15 +484,17 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
   const installedSkills = sharedAttachableSkills.filter((skill) => skillMatches(skill, query));
   const packSkills = browserRecords.filter(isPackSkill);
   const importableCount = browserRecords.filter((skill) => !isPackSkill(skill) && !skill.imported).length;
-  const attached = React.useMemo(() => new Set(agentSettingsPreferredSkills), [agentSettingsPreferredSkills]);
+  const attachedSlugs = attachTarget?.selectedSlugs ?? agentSettingsPreferredSkills;
+  const attached = React.useMemo(() => new Set(attachedSlugs), [attachedSlugs]);
   const refreshBrowser = agentMode ? openAgentSkillBrowser : openSkillBrowser;
   const status = localStatus || skillBrowserStatus;
 
   const close = React.useCallback(() => {
     setLocalStatus("");
     setRemovingSkillId("");
+    setSkillBrowserAttachTarget(null);
     setSkillBrowserOpen(false);
-  }, [setSkillBrowserOpen]);
+  }, [setSkillBrowserAttachTarget, setSkillBrowserOpen]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -524,6 +510,16 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
   }, [importRemoteSkillToBrain]);
 
   const toggleAttach = React.useCallback((skill: SkillBrowserSkill) => {
+    if (attachTarget) {
+      const current = attachTarget.selectedSlugs;
+      const next = attached.has(skill.slug)
+        ? current.filter((slug) => slug !== skill.slug)
+        : [...current, skill.slug];
+      attachTarget.onChange(next);
+      setSkillBrowserAttachTarget((target) => target ? { ...target, selectedSlugs: next } : target);
+      setLocalStatus(`${attached.has(skill.slug) ? "Removed" : "Attached"} ${skill.name}.`);
+      return;
+    }
     if (attached.has(skill.slug)) {
       removeAgentPreferredSkill(skill.slug);
       setLocalStatus(`Removed ${skill.name} from this agent class.`);
@@ -531,7 +527,7 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
     }
     addAgentPreferredSkill(skill.slug);
     setLocalStatus(`Attached ${skill.name} to this agent class.`);
-  }, [addAgentPreferredSkill, attached, removeAgentPreferredSkill]);
+  }, [addAgentPreferredSkill, attached, attachTarget, removeAgentPreferredSkill, setSkillBrowserAttachTarget]);
 
   const resyncSkill = React.useCallback((skill: SkillBrowserSkill) => {
     setLocalStatus("");
@@ -609,11 +605,11 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 13 }}>
             <span className="fb-tile" style={{ width: 40, height: 40, color: "var(--honey)" }}><BIcon name="sparkles" size={19} /></span>
             <div>
-              <div className="fb-eyebrow">{agentMode ? "Skills · Agent class" : "Add to shared brain"}</div>
-              <h3 id="skill-browser-title">{agentMode ? "Attach skills" : "Skill browser"}</h3>
-              <p>{agentMode
+              <div className="fb-eyebrow">{attachTarget?.eyebrow ?? (agentMode ? "Skills · Agent class" : "Add to shared brain")}</div>
+              <h3 id="skill-browser-title">{attachTarget?.title ?? (agentMode ? "Attach skills" : "Skill browser")}</h3>
+              <p>{attachTarget?.description ?? (agentMode
                 ? "Choose which shared-brain recipes this agent class may use. Attached skills load into every agent of this class."
-                : "Browse, import, audit, author, and fuse operational recipes available to every agent in the hive."}</p>
+                : "Browse, import, audit, author, and fuse operational recipes available to every agent in the hive.")}</p>
             </div>
           </div>
           <button type="button" className="sb-x" onClick={close} aria-label="Close" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={16} sw={2} /></button>
@@ -655,21 +651,25 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
               </form>
               {skillBrowserLoading ? <div className="sb-empty">Checking installed skills and catalogs...</div> : catalogSkills.length ? (
                 <div className="sb-grid">
-                  {catalogSkills.map((skill) => <CatalogCard key={skill.id} skill={skill} importing={skillBrowserImporting} onInstall={installSkill} agentMode={agentMode} attached={attached.has(skill.slug)} onToggleAttach={toggleAttach} />)}
+                  {catalogSkills.map((skill) => <CatalogCard key={skill.id} skill={skill} importing={skillBrowserImporting} selectionMode={selectionMode} attached={attached.has(skill.slug)} onInstall={installSkill} onToggleAttach={toggleAttach} />)}
                 </div>
               ) : <div className="sb-empty">No skills match "{skillBrowserSearch}".</div>}
             </>
           ) : skillBrowserView === "installed" ? (
-            <InstalledList
-              skills={installedSkills}
-              importing={skillBrowserImporting}
-              removing={removingSkillId}
-              onConvert={convertSkill}
-              onFlash={setLocalStatus}
-              onRemove={(skill) => void removeSkill(skill)}
-              onResync={resyncSkill}
-              search={skillBrowserSearch}
-            />
+            selectionMode ? (
+              <AttachList attached={attached} onToggle={toggleAttach} skills={installedSkills} />
+            ) : (
+              <InstalledList
+                skills={installedSkills}
+                importing={skillBrowserImporting}
+                removing={removingSkillId}
+                onConvert={convertSkill}
+                onFlash={setLocalStatus}
+                onRemove={(skill) => void removeSkill(skill)}
+                onResync={resyncSkill}
+                search={skillBrowserSearch}
+              />
+            )
           ) : skillBrowserView === "packs" ? (
             (skillBrowserLoading || skillBrowserEnriching) && !packSkills.length ? (
               <PackSkeletonGrid />
@@ -738,7 +738,7 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
           <span className="sb-status">
             {status ? <><span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--live)", flex: "0 0 auto" }} />{status}</>
               : hermesUpdateRequired ? `Hermes update available: ${hermesUpdateRequiredDetail || "update-gated skills are marked."}`
-                : agentMode ? `${attached.size} attached · ${sharedAttachableSkills.length} available in brain`
+                : selectionMode ? `${attached.size} ${attachTarget?.statusLabel ?? "attached"} · ${sharedAttachableSkills.length} available in brain`
                   : `${installedSkills.length} installed · ${importableCount} importable`}
           </span>
           <BBtn variant="primary" sm onClick={close}><BIcon name="check" size={14} />Done</BBtn>

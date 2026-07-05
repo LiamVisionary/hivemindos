@@ -144,7 +144,9 @@ export function buildAgentProfileContext(profile: AgentProfile): string {
     profile.machineName ? `- Machine: ${profile.machineName}` : "",
     profile.beeRole ? `- Bee role: ${profile.beeRole}` : "",
     profile.workerClass ? `- Worker class: ${profile.workerClass}` : "",
-    profile.provider || profile.model ? `- Preferred model: ${[profile.provider, profile.model].filter(Boolean).join("/")}` : "",
+    profile.provider || profile.model
+      ? `- Configured model: ${[profile.provider, profile.model].filter(Boolean).join("/")}. When asked which model or LLM you are or run on, answer plainly: report the actual serving model if your runtime's own context names one, otherwise report this configured selection (noting it is the configured choice). Never claim you cannot know your model.`
+      : "",
     usePod ? `- UsePod rail: prepaid marketplace inference${usePod.spendPreset ? `, ${usePod.spendPreset} spend caps` : ""}${usePod.lastBalanceRemaining ? `, last balance ${usePod.lastBalanceRemaining}` : ""}` : "",
     profile.soulPrompt?.trim() ? `Agent soul (identity, voice, boundaries):\n${profile.soulPrompt.trim()}` : "",
     profile.skillProfilePrompt?.trim() ? `- Suited for: ${profile.skillProfilePrompt.trim()}` : "",

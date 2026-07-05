@@ -3,107 +3,21 @@
 /**
  * Page Agent lab — a self-contained proof surface for alibaba/page-agent.
  *
- * This page mounts an in-page GUI agent (Page Agent) and gives it a small demo
- * UI to drive: a form, a dropdown, a checkbox, and a counter. Instruct it from
- * the chat pill (bottom-centre) — e.g. "set name to Ada Lovelace, email
- * ada@example.com, choose the Engineer role, tick subscribe, then submit" — and
- * the agent reads the DOM, plans, and clicks for real via the OpenRouter-backed
- * proxy at /api/page-agent.
+ * Renders a small demo UI (form, dropdown, checkbox, counter) and mounts the
+ * reusable {@link PageAgentPanel}, so the in-page agent can read the DOM, plan,
+ * and click for real via the OpenRouter-backed proxy at /api/page-agent. The
+ * panel owns the agent + chat surface; this page only supplies things to drive.
  *
- * It is DELIBERATELY isolated from the real dashboard: nothing money-moving is
- * reachable here, and the agent never touches wallet/trade code.
- *
- * UI: Page Agent ships its own vanilla-DOM Panel, but we dispose it right after
- * construction (`agent.panel.dispose()` only removes its own DOM/listeners, the
- * agent keeps working) and render our OWN chat surface that mirrors the app's
- * "Message the hive" pill (fleet-hive `.fr-chat` + Queen transcript bubbles),
- * keeping a purple glow on the input. Page Agent touches `window`/`document` at
- * module load, so the library is imported lazily inside the effect.
+ * DELIBERATELY isolated from the real dashboard: nothing money-moving is
+ * reachable here.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
-// Type-only import: erased at compile time, so it never executes page-agent's
-// module code. The runtime import stays dynamic and client-only in the effect.
-import type { PageAgent } from "page-agent";
-
+import { PageAgentPanel } from "./PageAgentPanel";
 import styles from "./page-agent-lab.module.css";
 
-// A tool-capable model routed through our proxy. The proxy also defaults this
-// server-side, but we send it explicitly so the choice is visible here.
-// (`openai/gpt-4o-mini` is blocked by this OpenRouter account's data policy;
-// this open model is verified to work, is policy-compliant, and follows
-// page-agent's action schema reliably.)
-const PAGE_AGENT_MODEL = "qwen/qwen3-235b-a22b-2507";
-
-type AgentStatus = "idle" | "running" | "completed" | "error" | "stopped";
-
-/** One rendered line in a run's transcript. */
-type StepLine = { kind: "goal" | "result" | "error"; text: string };
-
-/** One instruction the user gave + the agent's transcript for it. */
-type ChatRun = { id: number; task: string; lines: StepLine[]; done: boolean };
-
-/** Collapse a page-agent history array into readable transcript lines. */
-function linesFromHistory(history: readonly unknown[]): StepLine[] {
-  const lines: StepLine[] = [];
-  for (const raw of history) {
-    const ev = raw as {
-      type?: string;
-      reflection?: { next_goal?: string };
-      action?: { output?: string; name?: string };
-      message?: string;
-    };
-    if (ev.type === "step") {
-      const goal = ev.reflection?.next_goal?.trim();
-      const output = ev.action?.output?.trim();
-      if (goal) lines.push({ kind: "goal", text: goal });
-      if (output) lines.push({ kind: "result", text: output });
-    } else if (ev.type === "error") {
-      if (ev.message) lines.push({ kind: "error", text: ev.message });
-    }
-  }
-  return lines;
-}
-
-function activityLabel(activity: {
-  type?: string;
-  tool?: string;
-} | null): string | null {
-  if (!activity) return null;
-  switch (activity.type) {
-    case "thinking":
-      return "Thinking…";
-    case "executing":
-      return activity.tool === "click_element_by_index"
-        ? "Clicking…"
-        : activity.tool === "input_text"
-          ? "Typing…"
-          : activity.tool === "select_dropdown_option"
-            ? "Choosing…"
-            : "Working…";
-    case "retrying":
-      return "Retrying…";
-    default:
-      return null;
-  }
-}
-
 export default function PageAgentLab() {
-  const agentRef = useRef<PageAgent | null>(null);
-  const listenerCleanupRef = useRef<(() => void) | null>(null);
-  const runIdRef = useRef(0);
-  const [agentState, setAgentState] = useState<"loading" | "ready" | "error">(
-    "loading",
-  );
-  const [agentError, setAgentError] = useState<string>("");
-  const [status, setStatus] = useState<AgentStatus>("idle");
-  const [runs, setRuns] = useState<ChatRun[]>([]);
-  const [activity, setActivity] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Demo UI state — the surface the agent manipulates.
   const [submitted, setSubmitted] = useState<null | {
     name: string;
     email: string;
@@ -112,122 +26,9 @@ export default function PageAgentLab() {
   }>(null);
   const [count, setCount] = useState(0);
 
-  useEffect(() => {
-    let disposed = false;
-
-    (async () => {
-      try {
-        const mod = await import("page-agent");
-        if (disposed) return;
-
-        const agent = new mod.PageAgent({
-          baseURL: "/api/page-agent",
-          model: PAGE_AGENT_MODEL,
-          apiKey: "hivemindos-proxy",
-          language: "en-US",
-          customFetch: (input: RequestInfo | URL, init?: RequestInit) =>
-            fetch(input, { ...init, credentials: "include" }),
-          // Turn off page-agent's built-in mask (its bright multi-colour frame +
-          // synthetic cursor). We render our own soft purple perimeter glow
-          // instead (see .runFrame). This does not affect the agent's ability to
-          // read or click elements — that runs off DOM analysis, not the mask.
-          enableMask: false,
-          // --- Safety rails (on from the first increment) ---
-          customTools: { execute_javascript: null },
-          maxSteps: 20,
-        });
-
-        // Drop page-agent's built-in vanilla-DOM Panel — we render our own
-        // Queen-styled chat surface below and drive the agent through its events.
-        agent.panel.dispose();
-
-        const onHistory = () => {
-          const lines = linesFromHistory(agent.history);
-          setRuns((prev) => {
-            if (prev.length === 0) return prev;
-            const next = prev.slice();
-            const last = { ...next[next.length - 1] };
-            if (last.done) return prev;
-            last.lines = lines;
-            next[next.length - 1] = last;
-            return next;
-          });
-        };
-        const onStatus = () => {
-          const s = agent.status as AgentStatus;
-          setStatus(s);
-          if (s === "completed" || s === "error" || s === "stopped") {
-            setActivity(null);
-            setRuns((prev) => {
-              if (prev.length === 0) return prev;
-              const next = prev.slice();
-              next[next.length - 1] = { ...next[next.length - 1], done: true };
-              return next;
-            });
-          }
-        };
-        const onActivity = (e: Event) => {
-          setActivity(activityLabel((e as CustomEvent).detail ?? null));
-        };
-
-        agent.addEventListener("historychange", onHistory);
-        agent.addEventListener("statuschange", onStatus);
-        agent.addEventListener("activity", onActivity);
-
-        listenerCleanupRef.current = () => {
-          agent.removeEventListener("historychange", onHistory);
-          agent.removeEventListener("statuschange", onStatus);
-          agent.removeEventListener("activity", onActivity);
-        };
-        agentRef.current = agent;
-        setAgentState("ready");
-      } catch (error) {
-        if (disposed) return;
-        setAgentError(
-          error instanceof Error ? error.message : "Failed to load Page Agent.",
-        );
-        setAgentState("error");
-      }
-    })();
-
-    return () => {
-      disposed = true;
-      listenerCleanupRef.current?.();
-      listenerCleanupRef.current = null;
-      agentRef.current?.dispose();
-      agentRef.current = null;
-    };
-  }, []);
-
-  // Keep the transcript pinned to the newest line as the agent works.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [runs, activity]);
-
-  const runTask = useCallback((task: string) => {
-    const agent = agentRef.current;
-    const trimmed = task.trim();
-    if (!agent || !trimmed || agent.status === "running") return;
-    setRuns((prev) => [
-      ...prev,
-      { id: ++runIdRef.current, task: trimmed, lines: [], done: false },
-    ]);
-    setDraft("");
-    void agent.execute(trimmed).catch(() => {
-      /* terminal errors surface via the statuschange/historychange handlers */
-    });
-  }, []);
-
-  const onChatSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    runTask(draft);
-  };
-
   const onFormSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
+    const data = new FormData(event.currentTarget);
     setSubmitted({
       name: String(data.get("name") || ""),
       email: String(data.get("email") || ""),
@@ -236,31 +37,14 @@ export default function PageAgentLab() {
     });
   };
 
-  const running = status === "running";
-  const hasTranscript = runs.length > 0;
-
   return (
     <div className={styles.lab}>
-      {/* Soft purple glow hugging the viewport edges while the agent works —
-          replaces page-agent's built-in multi-colour mask frame. */}
-      <div
-        className={`${styles.runFrame}${running ? " " + styles.runFrameActive : ""}`}
-        aria-hidden="true"
-      />
       <header className={styles.head}>
         <h1 className={styles.title}>Page Agent — Lab</h1>
         <p className={styles.sub}>
           An in-page GUI agent driving this page&apos;s own UI with natural
           language. Instruct it from the pill below. Nothing here touches
           wallets, trading, or the fleet — this is an isolated proof surface.
-        </p>
-        <p className={styles.status} data-testid="agent-status">
-          Agent:{" "}
-          {agentState === "loading"
-            ? "loading…"
-            : agentState === "ready"
-              ? "ready"
-              : `error — ${agentError}`}
         </p>
       </header>
 
@@ -357,105 +141,7 @@ export default function PageAgentLab() {
         </div>
       </section>
 
-      {/* Chat surface — mirrors the app's "Message the hive" pill, with a purple
-          glow on the input. Fixed to the bottom-centre like the real FAB. */}
-      <div className={styles.dock}>
-        {hasTranscript ? (
-          <div className={styles.transcript}>
-            <div className={styles.transcriptScroll} ref={scrollRef} aria-live="polite">
-              {runs.map((run) => (
-                <div key={run.id} className={styles.turnGroup}>
-                  <div className={styles.turn}>
-                    <span className={`${styles.who} ${styles.whoYou}`}>You</span>
-                    <p className={styles.turnText}>{run.task}</p>
-                  </div>
-                  {run.lines.map((line, i) => (
-                    <div className={styles.turn} key={i}>
-                      <span className={`${styles.who} ${styles.whoAgent}`}>
-                        Page Agent
-                      </span>
-                      <p
-                        className={`${styles.turnText} ${
-                          line.kind === "error" ? styles.turnTextError : ""
-                        }`}
-                      >
-                        {line.text}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              {running && activity ? (
-                <div className={styles.turn}>
-                  <span className={`${styles.who} ${styles.whoAgent}`}>
-                    Page Agent
-                  </span>
-                  <p className={`${styles.turnText} ${styles.turnTextThinking}`}>
-                    {activity}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
-        <form
-          className={`${styles.chat}${running ? " " + styles.chatBusy : ""}`}
-          onSubmit={onChatSubmit}
-        >
-          {/* animated blurred gradient halo (behind), then the frosted body */}
-          <span className={styles.chatGlow} aria-hidden="true" />
-          <span className={styles.chatSkin} aria-hidden="true" />
-          <span className={styles.orb} aria-hidden="true">
-            <span className={styles.orbRing} />
-            <span className={styles.orbCore} />
-          </span>
-          <span className={styles.chatLabel}>Instruct the agent</span>
-          <span className={styles.chatField}>
-            <input
-              className={styles.chatInput}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Tell the agent what to do…"
-              aria-label="Instruct the agent"
-              disabled={agentState !== "ready"}
-            />
-            {running ? (
-              <button
-                type="button"
-                className={styles.chatStop}
-                aria-label="Stop"
-                title="Stop"
-                onClick={() => void agentRef.current?.stop()}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />
-                </svg>
-              </button>
-            ) : (
-              <button
-                type="submit"
-                className={styles.chatSend}
-                aria-label="Send"
-                disabled={agentState !== "ready" || !draft.trim()}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 19V5M5 12l7-7 7 7" />
-                </svg>
-              </button>
-            )}
-          </span>
-        </form>
-      </div>
+      <PageAgentPanel placement="center" />
     </div>
   );
 }

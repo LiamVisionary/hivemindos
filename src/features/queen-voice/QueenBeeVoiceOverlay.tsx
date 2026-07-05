@@ -16,6 +16,7 @@ import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { AgentResponseLoader } from "@/features/chat/chat-composer";
 import { emitQueenVoiceState, listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
+import { VoiceWaveform } from "./VoiceWaveform";
 import { HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET } from "./hive-chat-layout";
 import { useQueenClapActivation } from "./use-queen-clap-activation";
 import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
@@ -159,8 +160,11 @@ function TranscriptTurns({
               className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
             >
               {turn.who === "queen" ? "Queen Bee" : "You"}
-              {turn.who === "queen" && brainLabel ? (
-                <span className={styles.brainTag}>{brainLabel}</span>
+              {/* Per-turn truth first: typed turns are tagged with the brain
+                  the chat-turn response says actually answered; the static
+                  voice-plan tag only applies to voice-sourced turns. */}
+              {turn.who === "queen" && (turn.brain || (turn.source === "voice" && brainLabel)) ? (
+                <span className={styles.brainTag}>{turn.brain || brainLabel}</span>
               ) : null}
             </span>
             <div
@@ -480,17 +484,39 @@ export function QueenBeeVoiceOverlay({
   // per voice session so turns from different sessions never collide, and mirror
   // the hooks' echo-drops by removing ids that vanished since the last tick.
   const voiceSeenRef = React.useRef<Set<string>>(new Set());
-  const voiceSessionRef = React.useRef(0);
+  // RANDOM namespace, re-minted per session. It must be unique across overlay
+  // remounts AND hook restarts: with a resettable numeric counter, a session
+  // restarted mid-conversation (dev Fast Refresh, error recovery) re-issued
+  // turn ids from 1 under the SAME namespace — its rows then patched an
+  // earlier session's history rows in place and the diff removed/re-appended
+  // others, scrambling who/text/order in the shared chat.
+  const voiceSessionKeyRef = React.useRef("");
   const prevSessionNonceRef = React.useRef(sessionNonce);
   const prevRealtimeModeRef = React.useRef(realtimeMode);
+  const prevVoiceSerialRef = React.useRef(-1);
   React.useEffect(() => {
-    if (sessionNonce !== prevSessionNonceRef.current || realtimeMode !== prevRealtimeModeRef.current) {
+    // A NEW namespace is minted only while a session is genuinely (re)starting
+    // — overlay open and the voice mode resolved. Re-minting while closed (the
+    // toggle-close nonce bump) or before the mode resolves would re-mirror the
+    // previous session's stale rows under fresh ids, duplicating history.
+    if (
+      open &&
+      voiceModeForOpen !== null &&
+      (!voiceSessionKeyRef.current ||
+        sessionNonce !== prevSessionNonceRef.current ||
+        realtimeMode !== prevRealtimeModeRef.current ||
+        voiceState.sessionSerial !== prevVoiceSerialRef.current)
+    ) {
       prevSessionNonceRef.current = sessionNonce;
       prevRealtimeModeRef.current = realtimeMode;
-      voiceSessionRef.current += 1;
+      prevVoiceSerialRef.current = voiceState.sessionSerial;
+      voiceSessionKeyRef.current = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       voiceSeenRef.current = new Set();
     }
-    const sid = voiceSessionRef.current;
+    // Nothing mirrored yet this overlay instance (e.g. remounted while
+    // closed): stay hands-off so finished history is never rewritten.
+    if (!voiceSessionKeyRef.current) return;
+    const sid = voiceSessionKeyRef.current;
     const currentIds = new Set<string>();
     for (const turn of voiceState.turns) {
       const storeId = `voice-${sid}-${turn.id}`;
@@ -508,7 +534,7 @@ export function QueenBeeVoiceOverlay({
       if (!currentIds.has(prevId)) chatRemoveTurn(prevId);
     }
     voiceSeenRef.current = currentIds;
-  }, [voiceState.turns, sessionNonce, realtimeMode, chatUpsertTurn, chatRemoveTurn]);
+  }, [voiceState.turns, voiceState.sessionSerial, sessionNonce, realtimeMode, open, voiceModeForOpen, chatUpsertTurn, chatRemoveTurn]);
 
   const [detailContent, setDetailContent] = React.useState<string | null>(null);
   // Auto-open the transaction modal when a card needing a decision arrives, then
@@ -695,6 +721,11 @@ export function QueenBeeVoiceOverlay({
               />
               {statusLabel(voiceState.phase, muted, voiceState.speechDetected)}
             </span>
+            <VoiceWaveform
+              analyserRef={voiceState.micAnalyserRef}
+              muted={muted}
+            />
+
             {voiceState.phase === "error" && voiceState.error ? (
               <p className={styles.errorText}>{voiceState.error}</p>
             ) : null}

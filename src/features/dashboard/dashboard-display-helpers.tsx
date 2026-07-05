@@ -571,10 +571,27 @@ export function dedupeDiscoveredMachines(machines: DiscoveredMachine[]) {
   return [...byIdentity.values()];
 }
 
+// Queen is dashboard-owned: never accept a queen claim from discovery (old
+// fleet collectors still self-declare their OpenClaw as one). Local twin of
+// dashboard-storage's sanitizeDiscoveredAgentRoles — this module region runs
+// standalone in the hermetic fleet-discovery-merge suite, so no cross-module
+// call is possible here; keep both in sync.
+function demoteDiscoveredQueenClaims(machines: DiscoveredMachine[]): DiscoveredMachine[] {
+  return machines.map((machine) => (
+    machine.agents?.some((agent) => agent.beeRole === "queen")
+      ? {
+        ...machine,
+        agents: machine.agents.map((agent) => (agent.beeRole === "queen" ? { ...agent, beeRole: "worker" as const } : agent)),
+      }
+      : machine
+  ));
+}
+
 export function mergeDiscoveredMachines(
   current: DiscoveredMachine[],
-  incoming: DiscoveredMachine[],
+  rawIncoming: DiscoveredMachine[],
 ) {
+  const incoming = demoteDiscoveredQueenClaims(rawIncoming);
   const currentByKey = new Map(
     current.map((machine) => [discoveredMachineIdentity(machine), machine]),
   );

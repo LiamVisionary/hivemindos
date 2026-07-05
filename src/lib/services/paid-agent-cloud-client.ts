@@ -11,10 +11,16 @@ export const OFFICIAL_PAID_AGENT_BASE_URL_ENV = "HIVEMINDOS_OFFICIAL_PAID_AGENT_
 export const OFFICIAL_PAID_AGENT_PUBLIC_BASE_URL_ENV = "NEXT_PUBLIC_HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL";
 export const OFFICIAL_PAID_AGENT_ALLOW_INSECURE_ENV = "HIVEMINDOS_OFFICIAL_PAID_AGENT_ALLOW_INSECURE";
 export const DEFAULT_OFFICIAL_PAID_AGENT_BASE_URL = "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev";
+// Free-tier model calls go to the same HivemindOS-controlled gateway, which
+// owns the daily allowance (per device + per IP + global). The override env is
+// for self-hosters and local testing only — the official free tier must stay
+// behind hosted enforcement, never a direct model origin in shipped config.
+export const FREE_MODELS_BASE_URL_ENV = "HIVEMINDOS_FREE_MODELS_BASE_URL";
 
 const DEFAULT_SLUG = "default";
 const STATUS_TIMEOUT_MS = 8_000;
 const PROXY_TIMEOUT_MS = 600_000;
+const MODEL_LIST_TIMEOUT_MS = 5_000;
 
 const REQUEST_HEADER_ALLOWLIST = new Set([
   "accept",
@@ -111,6 +117,59 @@ export async function proxyOfficialPaidAgentCreditCheckoutRequest(request: NextR
 
 export async function proxyOfficialPaidAgentCreditBalanceRequest(request: NextRequest, slug: string): Promise<Response> {
   return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "balance"], "GET");
+}
+
+export type OfficialGatewayModel = {
+  id: string;
+  displayName?: string;
+};
+
+// Dynamic model inventory from the hosted gateway (OpenAI-style
+// GET <base>/api/paid-agents/<slug>/models). Older gateway deploys may not
+// expose it yet; callers must treat an empty list as "static options only".
+export async function fetchOfficialPaidAgentModelList(slug?: string): Promise<OfficialGatewayModel[]> {
+  const resolution = resolveOfficialPaidAgentBaseUrl();
+  if (!resolution.url) return [];
+  const target = officialPaidAgentTargetUrl(resolution.url, slug, ["models"]);
+  try {
+    const response = await fetch(target, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-HivemindOS-Official-Paid-Agent-Client": "models",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS),
+    });
+    if (!response.ok) return [];
+    const payload = await response.json().catch(() => null) as { data?: unknown; models?: unknown } | null;
+    const rows = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : [];
+    return rows.flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const record = row as Record<string, unknown>;
+      const id = String(record.id || record.model || "").trim();
+      if (!id) return [];
+      const displayName = String(record.display_name || record.name || "").trim();
+      return [{ id, displayName: displayName || undefined }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+// Where a free-tier chat completion goes. Default is the hosted gateway's
+// free-models surface (which enforces the daily allowance); the env override
+// exists for self-hosters and local testing of the free rail.
+export function freeModelChatCompletionsUrl(upstreamModel: string): string {
+  const override = (process.env[FREE_MODELS_BASE_URL_ENV] || "").trim().replace(/\/+$/, "");
+  if (override) return `${override}/chat/completions`;
+  const resolution = resolveOfficialPaidAgentBaseUrl();
+  if (!resolution.url) return "";
+  const target = new URL(resolution.url);
+  target.pathname = joinUrlPath(target.pathname, "api", "free-models", upstreamModel, "chat", "completions");
+  target.search = "";
+  target.hash = "";
+  return target.toString();
 }
 
 export function officialPaidAgentCheckoutReturnUrl(status: OfficialPaidAgentCheckoutReturnStatus, slug?: string): string {

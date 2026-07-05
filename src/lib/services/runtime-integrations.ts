@@ -417,7 +417,7 @@ async function augmentGatewayModelProviders(
     },
     hivemindosModels: {
       status: "ready",
-      message: "Uses hosted credits by default, with optional local x402 wallet funding for crypto users.",
+      message: "Free Swarm Sovereign Scout by default; hosted credits or an x402 wallet unlock wallet-paid routes.",
       modelCount: walletPaidModels.length,
       checkedAt: new Date().toISOString(),
     },
@@ -496,7 +496,20 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     // route through the collector's local signing proxy, which injects the
     // SIWX header. Point the provider's base_url there with no key_env.
     const veniceProxyBase = provider === "venice" ? veniceWalletProxyBase(agent) : null;
-    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) {
+    const gateway = MODEL_PROVIDER_GATEWAYS[provider];
+    if (gateway && !gateway.hermes) {
+      // Dashboard-internal gateways (hivemindos-models: custom wallet-agent
+      // headers against the local app origin) cannot be expressed as a hermes
+      // provider block — writing one anyway creates a base_url-less entry the
+      // CLI rejects with "Unknown provider". Dashboard chat executes these
+      // server-side (isHivemindosWalletPaidModelProfile in stream-http-runtime),
+      // so record NOTHING in the hermes config and say where the model runs.
+      return {
+        ok: true,
+        message: `${provider}/${model} is served by HivemindOS itself for ${agent?.name || "this agent"} — dashboard chats use it directly; no hermes CLI config was changed. Runs driven through the hermes CLI outside the dashboard keep the CLI's own default model.`,
+      };
+    }
+    if (gateway?.hermes) {
       await addHermesProvider(provider, model, profileEnv, veniceProxyBase ? { base_url: veniceProxyBase, key_env: "" } : undefined);
     } else await addHermesModel(provider, model, undefined, profileEnv);
     if (profileEnv) {

@@ -85,6 +85,67 @@ export interface CompanyMember {
 export type CompanyProcess = "hierarchical" | "sequential" | "graph";
 
 /**
+ * One sellable product/package in a company's catalog. Field names deliberately
+ * match the self-serve offer funnel's `packages[]` shape ({key, name, amountUsd,
+ * description, recommended}) so agents can drop catalog entries straight into
+ * client offers without remapping.
+ */
+export interface CompanyProduct {
+  /** Stable slug key, e.g. "starter-launch". */
+  key: string;
+  name: string;
+  /** Price in USD. */
+  amountUsd: number;
+  description?: string;
+  /** Highlighted as the default pick in offers and the UI. */
+  recommended?: boolean;
+  /** Billing cadence. Absent/"one-time" = a one-off sale; "month"/"year" = recurring. */
+  interval?: "one-time" | "month" | "year";
+  /** "package" (core offer, default) or "addon" (optional extra, e.g. a care plan). */
+  kind?: "package" | "addon";
+}
+
+/**
+ * The company's official product catalog — the single source of truth for what
+ * the company sells and at what price. It lives in the replicated definitions
+ * file (Operations/Companies/companies.json in the shared vault), so every
+ * machine and every dispatched agent reads the same prices, and UI edits
+ * propagate fleet-wide. Companies that sell no fixed products simply have no
+ * catalog (the Products tab stays hidden).
+ */
+export interface CompanyProductCatalog {
+  items: CompanyProduct[];
+  /** Where the initial catalog came from: "ui", "repo:<file>", or "shared-brain". */
+  seededFrom?: string;
+  updatedAt?: string;
+}
+
+/**
+ * A concrete price-change request raised by the crew when the evidence they
+ * gather (reply objections, quote-vs-close rates, abandoned checkouts) points
+ * at pricing as the conversion blocker. Pending proposals live on the company
+ * definition (replicated + governance-tracked) and surface under the Approvals
+ * tab; approving applies the change to the catalog, and either outcome lands in
+ * company memory so the crew learns the decision instead of re-proposing it.
+ */
+export interface CompanyPricingProposal {
+  id: string;
+  /** Catalog product this targets (CompanyProduct.key). */
+  productKey: string;
+  /** Product name snapshot at proposal time (display survives later renames). */
+  productName: string;
+  currentAmountUsd: number;
+  proposedAmountUsd: number;
+  /** The concrete evidence the crew cited. */
+  why?: string;
+  /** Work Board task whose result raised this. */
+  sourceTaskId?: string;
+  /** Agent that raised it. */
+  proposedBy?: string;
+  createdAt: string;
+}
+
+/**
  * A standing directive / knowledge entry injected into a company by a human
  * (Learning tab) or captured from rejecting a deliverable. Directives are
  * appended to the standing context on EVERY dispatched task
@@ -94,8 +155,10 @@ export interface CompanyDirective {
   id: string;
   /** The instruction / knowledge / redirect, in the human's words. */
   text: string;
-  /** Optional shared-brain skill slug the crew should read/use for this. */
+  /** Optional legacy first shared-brain skill slug the crew should read/use for this. */
   skill?: string;
+  /** Shared-brain skill slugs the crew should read/use for this. */
+  skills?: string[];
   /** Reference attachments (reuses the task/chat attachment model). */
   attachments?: KanbanTaskAttachment[];
   /** How it was created: a Learning-tab injection, or feedback from a rejected deliverable. */
@@ -168,6 +231,14 @@ export interface Company {
    * proof badge.
    */
   projectId?: string;
+  /**
+   * Official product catalog (what the company sells, at what price). Replicates
+   * with the definitions through the shared vault; agents quote these prices via
+   * the standing worker context. Absent = the company sells no fixed products.
+   */
+  products?: CompanyProductCatalog;
+  /** Pending crew-raised price-change requests (resolved ones are removed; outcomes live in company memory). */
+  pricingProposals?: CompanyPricingProposal[];
   /** Which analytics provider this company's numbers come from. Unset = not configured (guided setup shown). */
   analyticsProvider?: AnalyticsProviderKey;
   /** Per-company analytics link (project/site id + optional self-host). Credentials live in shared hive env, not here. */

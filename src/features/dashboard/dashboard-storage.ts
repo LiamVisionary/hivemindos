@@ -78,10 +78,6 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
   const runtime = normalizeAgentRuntime(agent.runtime);
   const workerClass = agent.workerClass ?? "general";
   const workerPreset = beeWorkerPreset(workerClass);
-  const beeRole = runtime === "openclaw" && agent.beeRole === "queen"
-    ? "worker"
-    : agent.beeRole;
-  const inferredQueen = beeRole === "queen" || (runtime !== "openclaw" && /queen|orchestrat|lead|main/i.test(agent.name));
   const customWorkerClasses = agent.customWorkerClasses?.length
     ? agent.customWorkerClasses
     : agent.customWorkerClass
@@ -106,7 +102,9 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     telemetryUrl: normalizeAgentTelemetryUrl(agent.telemetryUrl),
     aeonBranch: runtime === "aeon" ? agent.aeonBranch ?? "main" : agent.aeonBranch,
     aeonMode: runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
-    beeRole: beeRole ?? (inferredQueen ? "queen" : "worker"),
+    // Queen is an explicit, list-level choice (auto-crowned by model strength
+    // in useQueenCrown when absent) — never inferred per-agent from the name.
+    beeRole: agent.beeRole ?? "worker",
     workerClass,
     customWorkerClasses,
     selectedCustomWorkerClassId,
@@ -687,17 +685,34 @@ export function formatHiveAmount(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: value < 1 ? 6 : 2 });
 }
 
+/**
+ * Collectors have no authority to declare a Queen Bee — the queen is a
+ * dashboard-level choice, and old collectors in the field still self-declare
+ * their detected OpenClaw runtime as one. Demote any discovered "queen" to a
+ * worker before the fleet renders or persists it.
+ */
+export function sanitizeDiscoveredAgentRoles(machines: DiscoveredMachine[]): DiscoveredMachine[] {
+  return machines.map((machine) => (
+    machine.agents?.some((agent) => agent.beeRole === "queen")
+      ? {
+        ...machine,
+        agents: machine.agents.map((agent) => (agent.beeRole === "queen" ? { ...agent, beeRole: "worker" as const } : agent)),
+      }
+      : machine
+  ));
+}
+
 export function parseStoredDiscoveredMachines(snapshot: DashboardStateSnapshot = {}): DiscoveredMachine[] {
   const raw = readStoredValue(snapshot, DISCOVERED_MACHINES_STORAGE_KEY, STORAGE_SUFFIXES.discoveredMachines);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as DiscoveredMachine[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((machine) => (
+    return sanitizeDiscoveredAgentRoles(parsed.filter((machine) => (
       machine?.device
       && typeof machine.device.name === "string"
       && typeof machine.collector === "string"
-    ));
+    )));
   } catch {
     return [];
   }

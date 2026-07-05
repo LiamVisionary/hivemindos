@@ -6,7 +6,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { openNativeDirectory } from "@/lib/native/filesystem";
-import { RoleGlyph, SectionLabel } from "./primitives";
+import { RoleGlyph, SectionLabel, Spinner } from "./primitives";
 import { assignAgent } from "./data";
 import type {
   Agent,
@@ -302,7 +302,7 @@ export function AgentBrowserModal({
             {crew.length ? `${crew.length} new agent${crew.length > 1 ? "s" : ""} will report to ${queen ? queen.name : "the Queen"}` : "no agents selected yet"}
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={!crew.length || busy} onClick={() => onConfirm(crew)}>{busy ? "Adding…" : `Add ${crew.length || ""} to crew`}</PrimaryBtn>
+          <PrimaryBtn disabled={!crew.length || busy} onClick={() => onConfirm(crew)}>{busy ? <><Spinner size={12} /> Adding</> : `Add ${crew.length || ""} to crew`}</PrimaryBtn>
         </>
       }
     >
@@ -387,7 +387,7 @@ export function CreateCompanyModal({
           {step > 0 && <GhostBtn onClick={() => setStep(step - 1)}>Back</GhostBtn>}
           {step === 0
             ? <PrimaryBtn disabled={!canNext} onClick={() => setStep(1)}>Next · staff the crew</PrimaryBtn>
-            : <PrimaryBtn disabled={crew.length === 0 || busy} onClick={create}>{busy ? "Founding…" : `Found ${form.name || "company"}`}</PrimaryBtn>}
+            : <PrimaryBtn disabled={crew.length === 0 || busy} onClick={create}>{busy ? <><Spinner size={12} /> Founding</> : `Found ${form.name || "company"}`}</PrimaryBtn>}
         </>
       }
     >
@@ -718,7 +718,7 @@ export function EditCompanyModal({
             Saves company metadata, treasury caps, revenue metrics, and member fields.
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={!canSave || busy} onClick={() => onSave(readEditForm(form))}>{busy ? "Saving…" : "Save changes"}</PrimaryBtn>
+          <PrimaryBtn disabled={!canSave || busy} onClick={() => onSave(readEditForm(form))}>{busy ? <><Spinner size={12} /> Saving</> : "Save changes"}</PrimaryBtn>
         </>
       }
     >
@@ -1017,7 +1017,7 @@ export function TreasurySettingsModal({
             Saves only company budgets, spend freeze, and member daily caps.
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={busy} onClick={save}>{busy ? "Saving…" : "Save treasury"}</PrimaryBtn>
+          <PrimaryBtn disabled={busy} onClick={save}>{busy ? <><Spinner size={12} /> Saving</> : "Save treasury"}</PrimaryBtn>
         </>
       }
     >
@@ -1094,7 +1094,7 @@ export function AgentMemberSettingsModal({
             Updates this agent’s company role, work state, task caption, and daily cap.
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={busy} onClick={save}>{busy ? "Saving…" : "Save agent"}</PrimaryBtn>
+          <PrimaryBtn disabled={busy} onClick={save}>{busy ? <><Spinner size={12} /> Saving</> : "Save agent"}</PrimaryBtn>
         </>
       }
     >

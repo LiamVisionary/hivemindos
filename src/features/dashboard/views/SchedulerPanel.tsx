@@ -3,8 +3,10 @@
 // Partially typed 2026-07-02; the typing pass ran out of session mid-file and the remaining errors are deferred (see CHANGELOG).
 "use client";
 
+import { useMemo, useState } from "react";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { computeScheduleHealthWarnings } from "../schedule-health";
 import { WorkSectionHeader } from "./WorkSectionHeader";
 
 export function SchedulerPanel(props: any) {
@@ -13,11 +15,20 @@ export function SchedulerPanel(props: any) {
   // picker is fed from the runtime skill list in aeon mode (the shared-brain list is the
   // wrong source there and is usually empty).
   const modalSkillOptions = activeView === "aeon" ? (aeonSkillOptions ?? []) : sharedSkillOptions;
+  // Loop-health guard: duplicate enabled loops and enabled-but-dead loops
+  // surface here so silent double-fires/rot get seen (2026-07-05 audit).
+  // Mount-time clock keeps render pure; staleness thresholds are days-scale,
+  // so a long-lived panel drifting by hours is immaterial.
+  const [healthCheckedAt] = useState(() => Date.now());
+  const scheduleHealthWarnings = useMemo(
+    () => computeScheduleHealthWarnings(schedules ?? [], healthCheckedAt),
+    [schedules, healthCheckedAt],
+  );
   return (<>
       {activeView === "scheduler" ? (
       <section
         className="grid min-h-0 overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]"
-        style={{ height: "100%", gridTemplateRows: "auto minmax(0, 1fr)" }}
+        style={{ height: "100%", gridTemplateRows: scheduleHealthWarnings.length ? "auto auto minmax(0, 1fr)" : "auto minmax(0, 1fr)" }}
       >
         <WorkSectionHeader
           activeView="scheduler"
@@ -31,6 +42,16 @@ export function SchedulerPanel(props: any) {
             { value: schedulerJobs.length, label: "total" },
           ]}
         />
+        {scheduleHealthWarnings.length ? (
+          <div className="flex max-h-36 flex-col gap-1.5 overflow-y-auto border-b border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] px-4 py-2.5" role="status" aria-live="polite">
+            {scheduleHealthWarnings.map((warning) => (
+              <div key={`${warning.kind}-${warning.scheduleIds.join("-")}`} className="text-xs leading-relaxed">
+                <strong className="text-[rgba(253,230,138,0.95)]">{warning.title}.</strong>{" "}
+                <span className="text-[var(--muted)]">{warning.detail}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="min-h-0 overflow-hidden">
         <SchedulerView
           jobs={schedulerJobs}

@@ -302,3 +302,103 @@
   animation: zhcLoadingSweep 1.6s ease-in-out infinite;
   pointer-events: none;
 }
+
+/* --------------------------------------------------------------------------
+   Loading primitives. NEVER render a bare "Loading…" / "…" string for a
+   pending state — use one of these so every loader is animated: a spinner
+   (inline/button busy state), a skeleton (shape-matched placeholder), or an
+   indeterminate loading bar. Backed by the React helpers in primitives.tsx
+   (Spinner / Skeleton / SkeletonText / LoadingBar).
+   -------------------------------------------------------------------------- */
+@keyframes zhcSpin { to { transform: rotate(360deg); } }
+@keyframes zhcSkelShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes zhcBarSlide {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+
+/* Inline rotating ring — inherits currentColor, sizes to width/height. Unscoped
+   (not under .zhc-root) so it also works in modals that portal to document.body. */
+.zhc-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-top-color: currentColor;
+  animation: zhcSpin 0.66s linear infinite;
+  vertical-align: -0.14em;
+  flex-shrink: 0;
+}
+
+/* Shimmering placeholder block. */
+.zhc-root .zhc-skel {
+  background: linear-gradient(
+    90deg,
+    var(--line) 0%,
+    color-mix(in srgb, var(--fg) 8%, var(--line-2)) 50%,
+    var(--line) 100%
+  );
+  background-size: 200% 100%;
+  animation: zhcSkelShimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* Indeterminate loading bar. */
+.zhc-root .zhc-progress {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line);
+}
+.zhc-root .zhc-progress::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -35%;
+  width: 35%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--honey-2), transparent);
+  animation: zhcBarSlide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zhc-spinner,
+  .zhc-root .zhc-skel,
+  .zhc-root .zhc-progress::after,
+  .zhc-root .zhc-loading-card::after { animation: none; }
+  .zhc-root .zhc-skel { background: var(--line-2); }
+  .zhc-root .zhc-progress::after { left: 0; width: 100%; opacity: 0.5; }
+}
+
+/* --------------------------------------------------------------------------
+   Button hover / press feedback. Inline styles can't express :hover, so this
+   is the single source for it: every button in the ZHC view gets a subtle
+   brightness lift + press, and outline/ghost buttons opt into a crisper
+   currentColor tint via .zhc-btn-ghost. Link chips that portal outside
+   .zhc-root use the token-free .zhc-linkchip.
+   -------------------------------------------------------------------------- */
+.zhc-root button:not(:disabled) {
+  transition: filter 0.13s ease, background-color 0.13s ease, border-color 0.13s ease, transform 0.05s ease;
+}
+.zhc-root button:not(:disabled):hover { filter: brightness(1.13); }
+.zhc-root button:not(:disabled):active { transform: translateY(0.5px); }
+
+.zhc-btn-ghost {
+  transition: filter 0.13s ease, background-color 0.13s ease, border-color 0.13s ease, transform 0.05s ease;
+}
+.zhc-root .zhc-btn-ghost:not(:disabled):hover {
+  filter: none;
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+  border-color: color-mix(in srgb, currentColor 45%, var(--line-2));
+}
+.zhc-btn-ghost:not(:disabled):active { transform: translateY(0.5px); }
+
+.zhc-linkchip { transition: filter 0.13s ease, background-color 0.13s ease, border-color 0.13s ease; }
+.zhc-linkchip:not([aria-disabled="true"]):hover {
+  filter: brightness(1.15);
+  background-color: color-mix(in srgb, currentColor 12%, transparent);
+}

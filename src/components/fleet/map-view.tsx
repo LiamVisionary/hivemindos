@@ -65,6 +65,12 @@ const EDGE_STROKE_END = "var(--edge-stroke-end, rgba(255, 212, 90, 0.55))";
 // fill, more stretch. This is THE knob for map squish.
 const MAP_MAX_ANISOTROPY = 1.8;
 
+// Latitude bounds of the ne_110m coastline data (its own bbox). Used to center
+// the map vertically on the visible landmass instead of on the fleet pins, so a
+// northern-hemisphere-only fleet doesn't leave a dead band above the map.
+const COASTLINE_LAT_MAX = 83.65;
+const COASTLINE_LAT_MIN = -85.61;
+
 // Coincident machines (atlas + honeycomb in Brooklyn) get a small offset so
 // pins don't fully overlap.
 const PIN_OFFSET: Record<string, [number, number]> = {
@@ -107,7 +113,14 @@ export function MapView({
       .map((line) => coastlinePath(line, projection.project, w, h))
       .filter(Boolean);
   }, [h, projection, w]);
-  const bounds = React.useMemo(() => mapContentBounds(machines, edges, pos), [edges, machines, pos]);
+  // Vertical extent of the projected landmass — folded into the content bounds so
+  // the map centers on the world vertically (fleet pins still drive the horizontal
+  // center). Without this a northern-only fleet leaves a dead band above the map.
+  const regionYBounds = React.useMemo(() => ({
+    minY: projection.project(0, COASTLINE_LAT_MAX).y,
+    maxY: projection.project(0, COASTLINE_LAT_MIN).y,
+  }), [projection]);
+  const bounds = React.useMemo(() => mapContentBounds(machines, edges, pos, regionYBounds), [edges, machines, pos, regionYBounds]);
   const latestBeeMapRef = React.useRef({ edges, pos });
 
   const clampPan = React.useCallback((next: { x: number; y: number }) => {
@@ -587,6 +600,7 @@ function mapContentBounds(
   machines: FleetMachine[],
   edges: Array<[string, string]>,
   pos: Record<string, { x: number; y: number }>,
+  regionYBounds?: { minY: number; maxY: number },
 ) {
   const padding = 90;
   const pinWidth = 56;
@@ -615,6 +629,13 @@ function mapContentBounds(
     if (!A || !B) continue;
     const dist = Math.hypot(B.x - A.x, B.y - A.y);
     includePoint((A.x + B.x) / 2, (A.y + B.y) / 2 - Math.min(60, dist * 0.18));
+  }
+
+  // Extend the VERTICAL extent to the projected landmass (not the horizontal —
+  // pins own the horizontal center) so the map is framed on the world.
+  if (regionYBounds) {
+    minY = Math.min(minY, regionYBounds.minY);
+    maxY = Math.max(maxY, regionYBounds.maxY);
   }
 
   if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {

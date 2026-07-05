@@ -189,6 +189,19 @@ export async function syncCompanyTaskOutcomes(companies: Company[], tasks: Kanba
           at: task.completedAt ?? task.updatedAt ?? Date.now(),
         });
         recorded += 1;
+        // Same exactly-once window as the ledger write: a result carrying
+        // `PRICING PROPOSAL:` markers files pending price-change requests for
+        // human review under Approvals. Best-effort — a filing failure must
+        // never block memory accrual. (Dynamic import mirrors the store's own
+        // company-memory import and avoids a static cycle.)
+        if (/PRICING PROPOSAL:/i.test(task.result ?? "")) {
+          try {
+            const { fileTaskPricingProposals } = await import("@/lib/services/company-products");
+            await fileTaskPricingProposals(companyId, task);
+          } catch (error) {
+            console.warn(`[company-memory] pricing-proposal filing failed for ${task.id}:`, error instanceof Error ? error.message : error);
+          }
+        }
       }
     } catch (error) {
       console.warn(`[company-memory] sync failed for ${companyId}:`, error instanceof Error ? error.message : error);

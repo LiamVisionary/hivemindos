@@ -7,8 +7,11 @@ import {
   HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL,
   HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
   HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS,
+  isCustomHivemindosWalletPaidModel,
+  isFreeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidModel,
 } from "@/lib/config/hivemindos-wallet-paid-models";
+import { ModelPillSelector, type ModelPillOption } from "./ModelPillSelector";
 import { fetchPersonalWalletBalance, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
@@ -208,6 +211,13 @@ export function GuidedHivemindosModelsSetup({
   const [walletAddress, setWalletAddress] = useState(agent?.hivemindosModels?.walletAddress ?? "");
   const [walletNetwork, setWalletNetwork] = useState(agent?.hivemindosModels?.walletNetwork ?? "");
   const [creditState, setCreditState] = useState<ModelCreditState>({});
+  // The free model lives in the custom picker list (not the route tiles), so
+  // the picker starts open whenever the saved model is not a route tile.
+  const [customPickerOpen, setCustomPickerOpen] = useState(() => (
+    isCustomHivemindosWalletPaidModel(initialModel) || isFreeHivemindosWalletPaidModel(initialModel)
+  ));
+  const [gatewayModelOptions, setGatewayModelOptions] = useState<ModelPillOption[]>([]);
+  const [gatewayModelsLoading, setGatewayModelsLoading] = useState(true);
   const [creditRefreshing, setCreditRefreshing] = useState(false);
   const [creditFunding, setCreditFunding] = useState(false);
   const [cardCreditAmount, setCardCreditAmount] = useState<CardCreditAmountOption>(10);
@@ -273,8 +283,15 @@ export function GuidedHivemindosModelsSetup({
   const effectiveCreditAccountId = agent?.hivemindosModels?.creditAccountId?.trim() || creditAccountId;
   const creditLookupId = fundingMode === "credits" ? effectiveCreditAccountId : effectiveWalletVaultId;
   const cardFundingReady = hasFundedModelCredits(creditState, agent?.hivemindosModels);
-  const setupReady = fundingMode === "credits" ? Boolean(effectiveCreditAccountId && cardFundingReady) : walletReady;
-  const showRoutePreference = setupReady;
+  const fundingReady = fundingMode === "credits" ? Boolean(effectiveCreditAccountId && cardFundingReady) : walletReady;
+  // The free model needs no funding, so the route/model choice always renders.
+  // The funding panel appears for wallet-paid routes, and stays visible once a
+  // wallet or credits exist so switching to the free model never strands an
+  // already-configured funding source.
+  const selectedModelIsFree = isFreeHivemindosWalletPaidModel(selectedModel);
+  const setupReady = selectedModelIsFree || fundingReady;
+  const fundingConfigured = walletReady || cardFundingReady;
+  const showFundingPanel = !selectedModelIsFree || fundingConfigured;
   const cardCheckoutPolling = fundingMode === "credits" && cardCheckoutPollUntil > 0 && !cardFundingReady;
   const cardTopUpAmountUsd = cardCreditAmount === "custom" ? Math.round(moneyValue(customCardCreditAmount) * 100) / 100 : cardCreditAmount;
   const cardTopUpAmountValid = cardTopUpAmountUsd >= 1 && cardTopUpAmountUsd <= 500;
@@ -321,13 +338,15 @@ export function GuidedHivemindosModelsSetup({
     const nextWalletNetwork = config.walletNetwork ?? effectiveWalletNetwork;
     const nextConfig = { ...existingConfig, ...config };
     const nextCardFundingReady = hasFundedModelCredits(creditStateRef.current, nextConfig);
-    const isReady = nextFundingMode === "credits"
+    const nextModel = normalizeHivemindosWalletPaidModel(model);
+    const nextModelIsFree = isFreeHivemindosWalletPaidModel(nextModel);
+    const isReady = nextModelIsFree || (nextFundingMode === "credits"
       ? Boolean(nextCreditAccountId && nextCardFundingReady)
-      : Boolean(nextWalletVaultId && nextWalletAddress);
+      : Boolean(nextWalletVaultId && nextWalletAddress));
     const now = new Date().toISOString();
     return {
       provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
-      model: normalizeHivemindosWalletPaidModel(model),
+      model: nextModel,
       token: "",
       hivemindosModels: {
         ...existingConfig,
@@ -338,9 +357,11 @@ export function GuidedHivemindosModelsSetup({
         walletNetwork: nextWalletNetwork,
         lastCheckedAt: now,
         lastTestStatus: isReady ? "ready" : nextFundingMode === "credits" ? "needs-credits" : "needs-wallet",
-        lastStatusMessage: isReady
-          ? nextFundingMode === "credits" ? "Hosted credits are set for HivemindOS Models." : "Wallet is saved for HivemindOS Models."
-          : nextFundingMode === "credits" ? "Add card credits for HivemindOS Models." : "Choose or create a wallet for HivemindOS Models.",
+        lastStatusMessage: nextModelIsFree
+          ? "Swarm Sovereign Scout is free — no funding needed."
+          : isReady
+            ? nextFundingMode === "credits" ? "Hosted credits are set for HivemindOS Models." : "Wallet is saved for HivemindOS Models."
+            : nextFundingMode === "credits" ? "Add card credits for HivemindOS Models." : "Choose or create a wallet for HivemindOS Models.",
         lastCreditBalanceUsd: existingConfig.lastCreditBalanceUsd,
         lastCreditBalanceLabel: existingConfig.lastCreditBalanceLabel,
         lastCreditCheckedAt: existingConfig.lastCreditCheckedAt,
@@ -414,6 +435,43 @@ export function GuidedHivemindosModelsSetup({
       });
     return () => { ignore = true; };
   }, [creditLookupId, fundingMode, persistModelCreditBalance]);
+
+  // Live model list from the local gateway route (static routes plus any
+  // models the hosted gateway advertises), free Swarm Sovereign Scout first.
+  useEffect(() => {
+    let ignore = false;
+    void fetch("/api/hivemindos/models/models", { cache: "no-store" })
+      .then((response) => response.json().catch(() => null))
+      .then((data: { data?: Array<{ id?: string; display_name?: string; metadata?: { subtitle?: string; group?: string; badge?: string } }> } | null) => {
+        if (ignore) return;
+        const rows = Array.isArray(data?.data) ? data.data : [];
+        const options = rows.flatMap((row): ModelPillOption[] => {
+          const id = String(row?.id || "").trim();
+          if (!id) return [];
+          return [{
+            id,
+            name: String(row?.display_name || id),
+            subtitle: row?.metadata?.subtitle,
+            group: row?.metadata?.group,
+            badge: row?.metadata?.badge,
+          }];
+        });
+        if (options.length) setGatewayModelOptions(options);
+      })
+      .catch(() => undefined)
+      .finally(() => { if (!ignore) setGatewayModelsLoading(false); });
+    return () => { ignore = true; };
+  }, []);
+
+  const modelPillOptions = gatewayModelOptions.length
+    ? gatewayModelOptions
+    : HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.map((model): ModelPillOption => ({
+      id: model.id,
+      name: model.name,
+      subtitle: model.subtitle,
+      group: model.group,
+      badge: model.badge,
+    }));
 
   useEffect(() => {
     if (!isTauriDesktopRuntime()) return undefined;
@@ -762,8 +820,14 @@ export function GuidedHivemindosModelsSetup({
           <Wallet aria-hidden="true" />
         </div>
         <div className={styles.headText}>
-          <h2>HivemindOS Models funding</h2>
-          <p>{setupReady ? "No-key model calls are ready for this agent." : "Add card credits or attach a crypto wallet."}</p>
+          <h2>HivemindOS Models</h2>
+          <p>
+            {selectedModelIsFree
+              ? "Swarm Sovereign Scout is free to use. Pick a wallet-paid route to unlock premium models."
+              : setupReady
+                ? "No-key model calls are ready for this agent."
+                : "Wallet-paid routes need card credits or a crypto wallet."}
+          </p>
         </div>
         <button type="button" className={styles.closeButton} aria-label="Close HivemindOS Models setup" onClick={onCancel}>
           <X aria-hidden="true" />
@@ -774,7 +838,7 @@ export function GuidedHivemindosModelsSetup({
         className={[
           styles.body,
           setupView === "browse" ? styles.bodyBrowse : "",
-          setupView !== "browse" ? (showRoutePreference ? styles.bodyWithModel : styles.bodyFundingOnly) : "",
+          setupView !== "browse" ? (showFundingPanel ? styles.bodyWithModel : styles.bodyFundingOnly) : "",
         ].filter(Boolean).join(" ")}
       >
         {setupView === "browse" ? (
@@ -796,6 +860,7 @@ export function GuidedHivemindosModelsSetup({
           </div>
         ) : (
           <>
+            {showFundingPanel ? (
             <section className={`${styles.panel} ${styles.paymentPanel}`}>
               <span className={styles.eyebrow}>Funding</span>
               <h3>{fundingMode === "credits" ? "Hosted model credits" : walletReady ? "Wallet saved" : "Choose a wallet"}</h3>
@@ -951,36 +1016,60 @@ export function GuidedHivemindosModelsSetup({
                 </>
               )}
             </section>
-
-            {showRoutePreference ? (
-              <section className={`${styles.panel} ${styles.modelPanel}`}>
-                <span className={styles.eyebrow}>Model route</span>
-                <h3>Route preference</h3>
-                <div className={styles.models}>
-                  {HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.map((model) => (
-                    <button
-                      key={model.id}
-                      type="button"
-                      className={styles.model}
-                      data-active={selectedModel === model.id || undefined}
-                      aria-pressed={selectedModel === model.id}
-                      onClick={() => void applyModel(model.id)}
-                    >
-                      <span>{model.name}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className={styles.muted}>{HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((model) => model.id === selectedModel)?.subtitle ?? "Best wallet-paid route"}</p>
-              </section>
             ) : null}
+
+            <section className={`${styles.panel} ${styles.modelPanel}`}>
+              <span className={styles.eyebrow}>Model route</span>
+              <h3>Route preference</h3>
+              <div className={styles.models}>
+                {HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.filter((model) => model.tier !== "free").map((model) => (
+                  <button
+                    key={model.id}
+                    type="button"
+                    className={styles.model}
+                    data-active={(selectedModel === model.id && !customPickerOpen) || undefined}
+                    aria-pressed={selectedModel === model.id}
+                    onClick={() => {
+                      setCustomPickerOpen(false);
+                      void applyModel(model.id);
+                    }}
+                  >
+                    <span>{model.name}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={styles.model}
+                  data-active={customPickerOpen || isCustomHivemindosWalletPaidModel(selectedModel) || selectedModelIsFree || undefined}
+                  aria-pressed={customPickerOpen || isCustomHivemindosWalletPaidModel(selectedModel) || selectedModelIsFree}
+                  onClick={() => setCustomPickerOpen((open) => !open)}
+                >
+                  <span>Custom</span>
+                </button>
+              </div>
+              {customPickerOpen ? (
+                <ModelPillSelector
+                  models={modelPillOptions}
+                  selectedModelId={selectedModel}
+                  emptyLabel={gatewayModelsLoading ? "Loading gateway models..." : "No gateway models available."}
+                  searchPlaceholder="Search gateway models"
+                  onSelectModel={(modelId) => void applyModel(modelId)}
+                />
+              ) : null}
+              <p className={styles.muted}>
+                {HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((model) => model.id === selectedModel)?.subtitle
+                  ?? modelPillOptions.find((model) => model.id === selectedModel)?.subtitle
+                  ?? (isCustomHivemindosWalletPaidModel(selectedModel) ? "Wallet-paid gateway model" : "Free daily allowance · no wallet needed")}
+              </p>
+            </section>
           </>
         )}
       </div>
 
       <div className={styles.foot}>
-        <div className={styles.msg}>{message || (fundingMode === "credits" ? "Card credits are stored in the hosted HivemindOS Models balance." : walletReady ? "This wallet is durable even if agent setup is canceled." : "Wallets are saved as soon as they are created or linked.")}</div>
+        <div className={styles.msg}>{message || (selectedModelIsFree ? "The free model has a daily allowance per device. Wallet-paid routes unlock premium models." : fundingMode === "credits" ? "Card credits are stored in the hosted HivemindOS Models balance." : walletReady ? "This wallet is durable even if agent setup is canceled." : "Wallets are saved as soon as they are created or linked.")}</div>
         <div className={styles.footActions}>
-          {fundingMode === "wallet" && walletReady ? (
+          {showFundingPanel && fundingMode === "wallet" && walletReady ? (
             <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={isBusy} onClick={openWalletBrowser}>
               Change wallet
             </button>

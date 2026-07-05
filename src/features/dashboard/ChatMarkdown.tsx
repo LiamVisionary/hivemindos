@@ -2,6 +2,7 @@ import { memo, useState, type MouseEvent, type ReactNode } from "react";
 
 import chatStyles from "@/app/chat.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
+import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 
 const chatClass = createStyleClass(chatStyles);
 const indentBlockStyle = {
@@ -82,29 +83,11 @@ function safeMarkdownHref(href: string) {
   return "#";
 }
 
-function externalHttpHref(href: string) {
-  return /^https?:\/\//i.test(href);
-}
-
-async function openHrefInChrome(href: string) {
-  try {
-    const response = await fetch("/api/system/browsers/open", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: href, browserId: "chrome" }),
-    });
-    const data = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
-    if (!response.ok || !data?.ok) throw new Error(data?.error ?? "Could not open the external link.");
-  } catch {
-    window.open(href, "_blank", "noopener,noreferrer");
-  }
-}
-
 function handleMarkdownLinkClick(event: MouseEvent<HTMLAnchorElement>, href: string) {
   event.stopPropagation();
-  if (!externalHttpHref(href)) return;
+  if (!isExternalHttpUrl(href)) return;
   event.preventDefault();
-  void openHrefInChrome(href);
+  void openExternalUrl(href, "chrome");
 }
 
 function splitTrailingUrlPunctuation(value: string) {
@@ -407,8 +390,8 @@ function renderInlineMarkdown(text: string, options: { links?: "anchor" | "text"
           href={href}
           key={`${index}-link`}
           onClick={(event) => handleMarkdownLinkClick(event, href)}
-          rel={externalHttpHref(href) ? "noopener noreferrer" : undefined}
-          target={externalHttpHref(href) ? "_blank" : undefined}
+          rel={isExternalHttpUrl(href) ? "noopener noreferrer" : undefined}
+          target={isExternalHttpUrl(href) ? "_blank" : undefined}
         >
           {link[1]}
         </a>
@@ -421,8 +404,8 @@ function renderInlineMarkdown(text: string, options: { links?: "anchor" | "text"
           href={safeHref}
           key={`${index}-link`}
           onClick={(event) => handleMarkdownLinkClick(event, safeHref)}
-          rel={externalHttpHref(safeHref) ? "noopener noreferrer" : undefined}
-          target={externalHttpHref(safeHref) ? "_blank" : undefined}
+          rel={isExternalHttpUrl(safeHref) ? "noopener noreferrer" : undefined}
+          target={isExternalHttpUrl(safeHref) ? "_blank" : undefined}
         >
           {href}
         </a>

@@ -515,6 +515,8 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     hasApexGoal: Boolean(company.apexGoal?.title?.trim()),
     autonomy: Boolean(company.autonomy),
     directives: company.directives,
+    products: company.products,
+    pricingProposals: company.pricingProposals,
     // Raw values for the edit form — the user's own input, not the derived
     // display fallbacks (`apex`, formatted target, etc.).
     edit: {

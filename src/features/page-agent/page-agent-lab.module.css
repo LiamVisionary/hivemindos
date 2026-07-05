@@ -241,6 +241,14 @@
   pointer-events: none;
 }
 
+/* Right-anchored placement — used in the real dashboard so the Page Agent pill
+   does not collide with the bottom-centre "Message the hive" pill. */
+.dockRight {
+  left: auto;
+  right: 22px;
+  align-items: flex-end;
+}
+
 /* ---- transcript (Queen bubble match) ---- */
 .transcript {
   pointer-events: auto;

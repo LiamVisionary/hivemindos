@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, Check, CheckCircle2, ClipboardList, ExternalLink, MessageSquare, PenLine } from "lucide-react";
+import { AlertTriangle, Archive, Check, CheckCircle2, ClipboardList, ExternalLink, MessageSquare, PenLine } from "lucide-react";
 import { dashboardUrlForTarget } from "@/features/dashboard/dashboard-navigation";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
+import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import { getIssueIdentity } from "./issue-identity";
 import { companyIssueDiscussPrompt, issueAgeLabel, issueBlockReason } from "./issue-reason";
 import { issueReviewablePreviews, type PreviewDecision } from "./preview-review";
+import { Spinner } from "./primitives";
 import type { Issue } from "./types";
 
 export function isCompanyReviewIssue(issue: Issue): boolean {
@@ -45,6 +47,7 @@ export function CompanyIssueActionButtons({
   onOpenIssue,
   onResolveIssue,
   onReviewPreview,
+  onDismiss,
   busy,
 }: {
   companyName: string;
@@ -52,6 +55,8 @@ export function CompanyIssueActionButtons({
   onOpenIssue?: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
   onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
+  /** Set aside this issue: archive its task off the board (persistent, reversible). */
+  onDismiss?: (issues: Issue[]) => void;
   busy?: boolean;
 }) {
   const queenChat = useQueenChat();
@@ -66,6 +71,9 @@ export function CompanyIssueActionButtons({
   const canReviewPreview = reviewablePreviews.length > 0;
   const previewUrl = reviewablePreviews.find((preview) => preview.url)?.url;
   const showResolve = isCompanyReviewIssue(issue) && Boolean(onResolveIssue) && !canReviewPreview;
+  // Shown for any review issue: a task-backed one archives; a taskless one (no
+  // Work Board record to archive) falls back to hiding it from the view.
+  const showDismiss = Boolean(onDismiss) && isCompanyReviewIssue(issue);
   const resolveDisabled = busy || !taskId;
   const reviewDisabled = busy || !taskId;
   const discussIssue = (event: React.MouseEvent) => {
@@ -76,6 +84,11 @@ export function CompanyIssueActionButtons({
     stop(event);
     if (resolveDisabled) return;
     onResolveIssue?.(issue);
+  };
+  const dismissIssue = (event: React.MouseEvent) => {
+    stop(event);
+    if (busy) return;
+    onDismiss?.([issue]);
   };
   const approvePreview = (event: React.MouseEvent) => {
     stop(event);
@@ -108,20 +121,27 @@ export function CompanyIssueActionButtons({
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {onOpenIssue && issue.work ? (
-          <button type="button" onClick={openDetails} style={buttonBase}>
+          <button type="button" className="zhc-btn-ghost" onClick={openDetails} style={buttonBase}>
             <ClipboardList size={14} aria-hidden /> Issue
           </button>
         ) : null}
         {previewUrl ? (
-          <a href={previewUrl} target="_blank" rel="noreferrer" onClick={stop} style={{ ...buttonBase, textDecoration: "none" }}>
+          <a
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="zhc-linkchip"
+            onClick={(event) => { stop(event); if (previewUrl && isExternalHttpUrl(previewUrl)) { event.preventDefault(); void openExternalUrl(previewUrl); } }}
+            style={{ ...buttonBase, textDecoration: "none" }}
+          >
             <ExternalLink size={14} aria-hidden /> Open preview
           </a>
         ) : null}
-        <button type="button" onClick={discussIssue} style={buttonBase}>
+        <button type="button" className="zhc-btn-ghost" onClick={discussIssue} style={buttonBase}>
           <MessageSquare size={14} aria-hidden /> Discuss
         </button>
         {taskId ? (
-          <button type="button" onClick={openBoard} style={buttonBase}>
+          <button type="button" className="zhc-btn-ghost" onClick={openBoard} style={buttonBase}>
             <ClipboardList size={14} aria-hidden /> Work Board
           </button>
         ) : null}
@@ -129,6 +149,7 @@ export function CompanyIssueActionButtons({
           <>
             <button
               type="button"
+              className="zhc-btn-ghost"
               onClick={toggleChanges}
               title="Send the crew specific changes and have them regenerate this preview for another review."
               style={{
@@ -154,13 +175,14 @@ export function CompanyIssueActionButtons({
                 opacity: reviewDisabled ? 0.6 : 1,
               }}
             >
-              <Check size={14} aria-hidden /> {busy ? "Sending…" : "Approve"}
+              {busy ? <Spinner size={14} /> : <Check size={14} aria-hidden />} {busy ? "Sending" : "Approve"}
             </button>
           </>
         ) : null}
         {showResolve ? (
           <button
             type="button"
+            className="zhc-btn-ghost"
             onClick={resolveIssue}
             disabled={resolveDisabled}
             title={taskId ? "Tell the Work Board this blocker is fixed and resume the same task." : "This issue is not linked to a Work Board task yet."}
@@ -173,7 +195,19 @@ export function CompanyIssueActionButtons({
               opacity: resolveDisabled ? 0.6 : 1,
             }}
           >
-            <CheckCircle2 size={14} aria-hidden /> {busy ? "Resuming..." : "Mark Resolved"}
+            {busy ? <Spinner size={14} /> : <CheckCircle2 size={14} aria-hidden />} {busy ? "Retrying" : "Handled — retry"}
+          </button>
+        ) : null}
+        {showDismiss ? (
+          <button
+            type="button"
+            className="zhc-btn-ghost"
+            onClick={dismissIssue}
+            disabled={busy}
+            title={taskId ? "Set this aside: archive its task off the board. It stops showing as an issue and stops re-escalating. Reversible from the Work Board." : "Hide this from the review list (there's no Work Board task to archive)."}
+            style={{ ...buttonBase, color: "var(--fg-3)", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
+          >
+            <Archive size={14} aria-hidden /> Dismiss
           </button>
         ) : null}
       </div>
@@ -207,9 +241,9 @@ export function CompanyIssueActionButtons({
                 opacity: reviewDisabled || !notes.trim() ? 0.6 : 1,
               }}
             >
-              <PenLine size={14} aria-hidden /> {busy ? "Sending…" : "Send change request"}
+              {busy ? <Spinner size={14} /> : <PenLine size={14} aria-hidden />} {busy ? "Sending" : "Send change request"}
             </button>
-            <button type="button" onClick={(event) => { stop(event); setChangeMode(false); }} style={buttonBase}>
+            <button type="button" className="zhc-btn-ghost" onClick={(event) => { stop(event); setChangeMode(false); }} style={buttonBase}>
               Cancel
             </button>
           </div>
@@ -225,6 +259,7 @@ export function CompanyIssueSummaryCard({
   onOpenIssue,
   onResolveIssue,
   onReviewPreview,
+  onDismiss,
   busy,
 }: {
   companyName: string;
@@ -232,6 +267,7 @@ export function CompanyIssueSummaryCard({
   onOpenIssue: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
   onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
+  onDismiss?: (issues: Issue[]) => void;
   busy?: boolean;
 }) {
   const reason = issueBlockReason(issue);
@@ -276,7 +312,7 @@ export function CompanyIssueSummaryCard({
         {reason || "Blocked - the crew needs a decision or an unblock from you."}
       </div>
       <div style={{ paddingLeft: 26 }}>
-        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busy} />
+        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} onDismiss={onDismiss} busy={busy} />
       </div>
     </div>
   );

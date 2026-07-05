@@ -5,12 +5,15 @@
 // load, refresh nonce, and four honest states — loading / error / unconfigured
 // (guided setup) / credential-missing / live. No CockpitHandlers wiring needed.
 import React from "react";
-import { Panel, Ring, SectionLabel } from "./primitives";
+import { Panel, Ring, SectionLabel, Spinner, Skeleton } from "./primitives";
+import { AnalyticsProviderCards } from "./AnalyticsProviderCards";
 import type { Colony } from "./types";
 import type {
+  AnalyticsProviderKey,
   AnalyticsProviderStatus,
   AnalyticsSummary,
   AnalyticsSummaryResult,
+  CompanyAnalyticsConfig,
 } from "@/lib/services/company-analytics/types";
 
 function num(n?: number): string {
@@ -59,24 +62,17 @@ function AnalyticsPlaceholder({
   );
 }
 
-function ProviderChips({ providers }: { providers: AnalyticsProviderStatus[] }) {
+/** Shape-matched skeleton echoing the live dashboard's ring + stat tiles. */
+function AnalyticsLoadingSkeleton() {
   return (
-    <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", marginTop: 14 }}>
-      {providers.map((p) => {
-        const ready = !p.requiresCredential || p.credentialPresent;
-        const color = ready ? "var(--cyan-2)" : "var(--fg-4)";
-        const keyLabel = !p.requiresCredential ? "no key needed" : p.credentialPresent ? "key set" : "no key";
-        return (
-          <div key={p.key} style={{ display: "flex", flexDirection: "column", gap: 6, padding: "12px 13px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-2)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="dot" style={{ color }} />
-              <span style={{ flex: 1, fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{p.label}</span>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color }}>{keyLabel}</span>
-            </div>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", lineHeight: 1.45 }}>{p.detail}</span>
-          </div>
-        );
-      })}
+    <div role="status" aria-label="Loading analytics" style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", padding: "10px 0" }}>
+      <Skeleton width={64} height={64} radius={999} />
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <Skeleton width={58} height={22} />
+          <Skeleton width={44} height={9} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -152,6 +148,7 @@ export function AnalyticsPanel({ colony: c }: { colony: Colony }) {
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [nonce, setNonce] = React.useState(0);
+  const [manage, setManage] = React.useState(false);
 
   React.useEffect(() => {
     let ignore = false;
@@ -180,6 +177,20 @@ export function AnalyticsPanel({ colony: c }: { colony: Colony }) {
   }, [c.id, nonce]);
 
   const providerLabel = data && data.state !== "unconfigured" ? data.providerLabel : undefined;
+  const configuredProvider: AnalyticsProviderKey | undefined =
+    data && data.state !== "unconfigured" ? data.provider : undefined;
+  const configuredConfig: CompanyAnalyticsConfig | undefined =
+    data && data.state !== "unconfigured" ? data.config : undefined;
+
+  const renderCards = (providers: AnalyticsProviderStatus[]) => (
+    <AnalyticsProviderCards
+      companyId={c.id}
+      providers={providers}
+      activeProvider={configuredProvider}
+      activeConfig={configuredConfig}
+      onChanged={() => setNonce((n) => n + 1)}
+    />
+  );
 
   return (
     <Panel>
@@ -195,7 +206,7 @@ export function AnalyticsPanel({ colony: c }: { colony: Colony }) {
               aria-label="Refresh analytics"
               style={{ display: "inline-grid", placeItems: "center", width: 24, height: 24, cursor: loading ? "default" : "pointer", border: "1px solid var(--line-2)", borderRadius: 7, background: "transparent", color: "var(--fg-4)", opacity: loading ? 0.5 : 1, fontSize: 12 }}
             >
-              {loading ? "…" : "↻"}
+              {loading ? <Spinner size={12} /> : "↻"}
             </button>
           </span>
         }
@@ -204,7 +215,7 @@ export function AnalyticsPanel({ colony: c }: { colony: Colony }) {
       </SectionLabel>
 
       {loading && !data ? (
-        <AnalyticsPlaceholder icon="📊" title="Loading analytics…" body="Fetching this company's at-a-glance numbers from its provider." />
+        <AnalyticsLoadingSkeleton />
       ) : error ? (
         <AnalyticsPlaceholder icon="⚠️" title="Couldn't load analytics" body={error} tone="warn" />
       ) : data?.state === "unconfigured" ? (
@@ -214,30 +225,47 @@ export function AnalyticsPanel({ colony: c }: { colony: Colony }) {
             title="No analytics connected yet"
             body={
               <>
-                Pick a provider in <b>Edit → Analytics provider</b> and set its project id. Connect the provider&apos;s API
-                key once in <b>Settings → Connections</b> (or via <code>hive-env-add</code>) — every company then reads from
-                it. The HivemindOS-funnel provider needs no key.
+                Connect a provider and pick its project right here on the cards below — the credential is checked live and
+                stored once in your shared hive env, so every company can use it. The HivemindOS-funnel provider needs no key.
               </>
             }
           />
-          <ProviderChips providers={data.providers} />
+          {renderCards(data.providers)}
         </>
       ) : data?.state === "credential-missing" ? (
-        <AnalyticsPlaceholder
-          icon="🔑"
-          title={`${data.providerLabel} is linked, but its key isn't set`}
-          body={
-            <>
-              Connect <b>{data.providerLabel}</b> in <b>Settings → Connections</b> (or add{" "}
-              <code>{data.credentialEnvKey}</code> to your shared hive env) to pull live numbers. {data.detail}
-            </>
-          }
-          tone="warn"
-        />
+        <>
+          <AnalyticsPlaceholder
+            icon="🔑"
+            title={`${data.providerLabel} is linked, but not connected yet`}
+            body={
+              <>
+                Connect <b>{data.providerLabel}</b> on its card below (or add <code>{data.credentialEnvKey}</code> to your
+                shared hive env) to pull live numbers. {data.detail}
+              </>
+            }
+            tone="warn"
+          />
+          {renderCards(data.providers)}
+        </>
       ) : data?.state === "error" ? (
-        <AnalyticsPlaceholder icon="⚠️" title={`${data.providerLabel ?? "Analytics"} query failed`} body={data.error} tone="warn" />
+        <>
+          <AnalyticsPlaceholder icon="⚠️" title={`${data.providerLabel ?? "Analytics"} query failed`} body={data.error} tone="warn" />
+          {data.providers ? renderCards(data.providers) : null}
+        </>
       ) : data?.state === "live" ? (
-        <LiveDashboard summary={data.summary} providerLabel={data.providerLabel} />
+        <>
+          <LiveDashboard summary={data.summary} providerLabel={data.providerLabel} />
+          <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+            <button
+              type="button"
+              onClick={() => setManage((v) => !v)}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: 0 }}
+            >
+              {manage ? "▾ Hide providers" : "▸ Manage / switch provider"}
+            </button>
+            {manage && renderCards(data.providers)}
+          </div>
+        </>
       ) : (
         <AnalyticsPlaceholder icon="📊" title="No analytics" body="Nothing to show yet." />
       )}

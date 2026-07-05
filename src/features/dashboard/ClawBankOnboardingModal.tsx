@@ -4,36 +4,34 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom";
 import Image from "next/image";
 
-import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { normalizeClawBankLoginCode } from "./clawbank-login-code";
 import styles from "./ClawBankOnboardingModal.module.css";
 
 /**
- * Optional post-setup step that offers to enable ClawBank for the user's agents.
+ * Guided ClawBank setup for the user's agents (email -> code -> mint). The
+ * whole flow runs against /api/clawbank/auth; the long-lived key is minted and
+ * saved to the shared hive env server-side and never returns to the browser.
  *
- * Self-contained like ProgressRewardPopup: on mount it checks one-time "shown"
- * state + live ClawBank readiness, and only surfaces when ClawBank is not yet
- * configured and the user hasn't dismissed it. The whole flow (request code ->
- * verify code -> mint + persist the API key) runs against /api/clawbank/auth;
- * the long-lived key is minted and saved to the shared hive env server-side and
- * never returns to the browser.
+ * On open it checks live readiness (GET /api/clawbank) and shows an
+ * "already connected" view instead of re-prompting registration when a
+ * credential is already configured.
  */
 
-const CLAWBANK_SETUP_STATE_KEY = "hivemindos.clawbankSetup.shown.v1";
-// ClawBank is BUTTON-ONLY: it never auto-pops (it used to surface mid-setup).
-// Open it on demand by dispatching this window event from a button, e.g.
-//   window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT))
-export const CLAWBANK_OPEN_EVENT = "hivemindos.clawbank.open";
+// Event names live in src/lib so shared components can import them too;
+// re-exported here so existing feature-side imports keep working.
+export { CLAWBANK_OPEN_EVENT, CLAWBANK_UPDATED_EVENT } from "@/lib/utils/clawbank-events";
+import { CLAWBANK_OPEN_EVENT, CLAWBANK_UPDATED_EVENT } from "@/lib/utils/clawbank-events";
 const CLAWBANK_LOGO_PATH = "/icons/runtimes/clawbank.svg";
 
-type Step = "intro" | "email" | "code" | "verified" | "initializing" | "success";
+type Step = "intro" | "email" | "code" | "verified" | "initializing" | "success" | "already";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Progress-rail position for each step, and the per-dot "on" thresholds
 // (intro · email · code · verified · success — initializing folds into the
-// verified→success span and lights the last dot's live state).
-const STEP_INDEX: Record<Step, number> = { intro: 0, email: 1, code: 2, verified: 3, initializing: 4, success: 5 };
+// verified→success span and lights the last dot's live state; "already"
+// lights the full rail since there is nothing left to do).
+const STEP_INDEX: Record<Step, number> = { intro: 0, email: 1, code: 2, verified: 3, initializing: 4, success: 5, already: 5 };
 const RAIL_THRESHOLDS = [0, 1, 2, 3, 5];
 
 // The biggest things ClawBank gives an agent — shown on the intro and (present
@@ -57,6 +55,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
   const bootstrapTokenRef = useRef<string>("");
   const codeInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
@@ -66,13 +65,36 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
   // before/during the machine-setup wizard.)
   useEffect(() => {
     if (!enabled) return;
-    const onOpen = () => setOpen(true);
+    const onOpen = () => {
+      setOpen(true);
+      setStep("intro");
+      setError("");
+    };
     window.addEventListener(CLAWBANK_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(CLAWBANK_OPEN_EVENT, onOpen);
   }, [enabled]);
 
-  const dismiss = useCallback((reason: "skipped" | "enabled") => {
-    void saveDashboardStateValue(CLAWBANK_SETUP_STATE_KEY, reason);
+  // Readiness check on open: when a ClawBank credential is already configured,
+  // show "already connected" instead of walking the user into re-registering.
+  // Only flips the view if they are still on the intro (never yanks a flow).
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/clawbank", { cache: "no-store", signal: controller.signal });
+        const data = await res.json().catch(() => null) as { configured?: boolean; me?: { email?: string } | null } | null;
+        if (!data?.configured) return;
+        setAccountEmail(typeof data.me?.email === "string" ? data.me.email : "");
+        setStep((current) => (current === "intro" ? "already" : current));
+      } catch {
+        // Status unavailable — proceed with the normal setup flow.
+      }
+    })();
+    return () => controller.abort();
+  }, [open]);
+
+  const dismiss = useCallback(() => {
     setOpen(false);
   }, []);
 
@@ -82,7 +104,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && step !== "initializing") dismiss("skipped");
+      if (event.key === "Escape" && step !== "initializing") dismiss();
     };
     window.addEventListener("keydown", onKey);
     return () => {
@@ -166,6 +188,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
       if (!res.ok || !data?.ok) throw new Error(data?.error || "Could not finish enabling ClawBank.");
       bootstrapTokenRef.current = "";
       setStep("success");
+      window.dispatchEvent(new Event(CLAWBANK_UPDATED_EVENT));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not finish enabling ClawBank.");
       setStep("verified");
@@ -176,7 +199,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
 
   const lockBackdrop = step === "initializing";
   const stepIndex = STEP_INDEX[step];
-  const tone = step === "verified" || step === "initializing" || step === "success" ? "live" : undefined;
+  const tone = step === "verified" || step === "initializing" || step === "success" || step === "already" ? "live" : undefined;
 
   return createPortal(
     <div
@@ -184,7 +207,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
       role="presentation"
       data-step={step}
       onMouseDown={(event) => {
-        if (!lockBackdrop && event.target === event.currentTarget) dismiss("skipped");
+        if (!lockBackdrop && event.target === event.currentTarget) dismiss();
       }}
     >
       <section
@@ -194,7 +217,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
         aria-labelledby="clawbank-onboarding-title"
       >
         {step !== "initializing" && step !== "success" ? (
-          <button className={styles.close} type="button" aria-label="Skip ClawBank setup" onClick={() => dismiss("skipped")}>
+          <button className={styles.close} type="button" aria-label="Skip ClawBank setup" onClick={dismiss}>
             <CloseIcon />
           </button>
         ) : null}
@@ -225,6 +248,8 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
             <VerifiedStep />
           ) : step === "initializing" ? (
             <InitializingStep />
+          ) : step === "already" ? (
+            <AlreadyStep email={accountEmail} />
           ) : (
             <SuccessStep />
           )}
@@ -237,9 +262,13 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
             <p className={styles.disclaimer}>ClawBank capabilities require email registration.</p>
           ) : null}
           <div className={styles.footActions}>
-            {step === "intro" ? (
+            {step === "already" ? (
+              <button className={styles.primary} type="button" data-tone="live" onClick={dismiss}>
+                <BeeIcon /> Done
+              </button>
+            ) : step === "intro" ? (
               <>
-                <button className={styles.ghost} type="button" onClick={() => dismiss("skipped")}>
+                <button className={styles.ghost} type="button" onClick={dismiss}>
                   Skip for now
                 </button>
                 <button className={styles.primary} type="button" onClick={() => setStep("email")}>
@@ -265,7 +294,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
                 Initialize ClawBank
               </button>
             ) : (
-              <button className={styles.primary} type="button" data-tone="live" data-ready={step === "success" ? "true" : undefined} disabled={step !== "success"} onClick={() => dismiss("enabled")}>
+              <button className={styles.primary} type="button" data-tone="live" data-ready={step === "success" ? "true" : undefined} disabled={step !== "success"} onClick={dismiss}>
                 {step === "success" ? <><BeeIcon /> Buzz on</> : <><Spinner /> Initializing…</>}
               </button>
             )}
@@ -431,6 +460,31 @@ function SuccessStep() {
         <li><CashOutIcon /> Cash out on-chain funds to USD</li>
       </ul>
       <p className={styles.swarmLine}>Time to get swarming.</p>
+    </div>
+  );
+}
+
+function AlreadyStep({ email }: { email: string }) {
+  return (
+    <div className={`${styles.step} ${styles.centerStep}`}>
+      <div className={styles.successMark} aria-hidden="true">
+        <span className={styles.successRing} />
+        <svg className={styles.successCheck} viewBox="0 0 52 52" width="58" height="58">
+          <path d="M14 27 L23 36 L39 18" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <h2 id="clawbank-onboarding-title" className={styles.title}>ClawBank is already connected.</h2>
+      <p className={styles.lede}>
+        {email ? <>Your hive is banking as <strong>{email}</strong>.</> : "Your hive already has its ClawBank credential."} Your agents can:
+      </p>
+      <ul className={styles.successList}>
+        <li><BankIcon /> Open a real bank account &amp; move USD</li>
+        <li><WalletIcon /> Hold crypto &amp; send gas-free USDC</li>
+        <li><ChartIcon /> Trade tokens autonomously</li>
+        <li><BuildingIcon /> Form their own US company</li>
+        <li><CashOutIcon /> Cash out on-chain funds to USD</li>
+      </ul>
+      <p className={styles.swarmLine}>Manage or disconnect it from Integrations.</p>
     </div>
   );
 }

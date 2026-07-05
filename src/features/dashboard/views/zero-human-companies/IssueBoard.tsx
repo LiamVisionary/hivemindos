@@ -6,8 +6,29 @@ import { ISSUE_LANES } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import { groupIssuesByReason, issueBlockReason } from "./issue-reason";
 import type { PreviewDecision } from "./preview-review";
-import { PriTag, RoleGlyph } from "./primitives";
+import { PriTag, RoleGlyph, Skeleton } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
+
+/** Shape-matched shimmer cards for a lane whose tasks haven't loaded yet — beats
+ *  flashing "empty" in every column until the Work Board fetch lands. */
+function LaneSkeleton({ count }: { count: number }) {
+  return (
+    <div role="status" aria-label="Loading tasks" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} style={{ borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "10px 11px", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Skeleton width={22} height={11} radius={4} />
+            <Skeleton width={34} height={9} />
+            <span style={{ flex: 1 }} />
+            <Skeleton width={20} height={9} />
+          </div>
+          <Skeleton width="92%" height={12} />
+          <Skeleton width="56%" height={12} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function IssueCard({
   issue,
@@ -16,6 +37,7 @@ function IssueCard({
   onOpen,
   onResolveIssue,
   onReviewPreview,
+  onDismiss,
   busy,
 }: {
   issue: Issue;
@@ -24,6 +46,7 @@ function IssueCard({
   onOpen?: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
   onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
+  onDismiss?: (issues: Issue[]) => void;
   busy?: boolean;
 }) {
   const a = issue.agent;
@@ -70,7 +93,7 @@ function IssueCard({
         </div>
       )}
       {blockReason && (
-        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpen} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busy} />
+        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpen} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} onDismiss={onDismiss} busy={busy} />
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 1 }}>
         {a ? (
@@ -99,14 +122,19 @@ export function IssueBoard({
   onOpenIssue,
   onResolveIssue,
   onReviewPreview,
+  onDismissIssues,
   busyId,
+  boardLoading = false,
 }: {
   colony: Colony;
   companyName?: string;
   onOpenIssue?: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
   onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
+  onDismissIssues?: (issues: Issue[]) => void;
   busyId?: string | null;
+  /** Tasks fetch still in flight — show lane skeletons instead of "empty". */
+  boardLoading?: boolean;
 }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${ISSUE_LANES.length}, minmax(168px, 1fr))`, gap: 12, minWidth: "min-content" }}>
@@ -120,27 +148,33 @@ export function IssueBoard({
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span className="mono-cap" style={{ color: accent }}>{lane.label}</span>
-                <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>{items.length}</span>
+                {boardLoading ? <Skeleton width={10} height={10} radius={3} /> : <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>{items.length}</span>}
               </div>
               <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: "var(--fg-4)", letterSpacing: 0.04 }}>{lane.hint}</span>
               <span style={{ height: 2, background: `color-mix(in srgb, ${accent} 45%, transparent)`, borderRadius: 999, marginTop: 4 }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
-              {lane.key === "board_review" && onOpenIssue
-                ? groupIssuesByReason(items).map((group) =>
-                  group.issues.length > 1 && group.info.consolidatable ? (
-                    <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={companyName} onOpenIssue={onOpenIssue} />
-                  ) : (
-                    group.issues.map((i) => (
-                      <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} companyName={companyName} onOpen={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busyId === i.work?.taskId} />
-                    ))
-                  ),
-                )
-                : items.map((i) => (
-                  <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} companyName={companyName} onOpen={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busyId === i.work?.taskId} />
-                ))}
-              {items.length === 0 && (
-                <div style={{ borderRadius: 10, border: "1px dashed var(--line)", padding: "14px 10px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>empty</div>
+              {boardLoading ? (
+                <LaneSkeleton count={lane.key === "in_progress" ? 2 : 1} />
+              ) : (
+                <>
+                  {lane.key === "board_review" && onOpenIssue
+                    ? groupIssuesByReason(items).map((group) =>
+                      group.issues.length > 1 && group.info.consolidatable ? (
+                        <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={companyName} onOpenIssue={onOpenIssue} onDismiss={onDismissIssues} />
+                      ) : (
+                        group.issues.map((i) => (
+                          <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} companyName={companyName} onOpen={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} onDismiss={onDismissIssues} busy={busyId === i.work?.taskId} />
+                        ))
+                      ),
+                    )
+                    : items.map((i) => (
+                      <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} companyName={companyName} onOpen={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} onDismiss={onDismissIssues} busy={busyId === i.work?.taskId} />
+                    ))}
+                  {items.length === 0 && (
+                    <div style={{ borderRadius: 10, border: "1px dashed var(--line)", padding: "14px 10px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>empty</div>
+                  )}
+                </>
               )}
             </div>
           </div>

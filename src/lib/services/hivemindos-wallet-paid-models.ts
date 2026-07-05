@@ -6,6 +6,7 @@ import {
   HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL,
   HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
   HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS,
+  isFreeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidSlug,
 } from "@/lib/config/hivemindos-wallet-paid-models";
@@ -45,20 +46,22 @@ export function resolveHivemindosWalletPaidModelRuntimeConfig(
   if (!requestOrigin) {
     throw new Error("HivemindOS Models need the dashboard request origin to route wallet-paid calls.");
   }
+  const model = selectedHivemindosWalletPaidModel(profile);
   const funding = profile.hivemindosModels ?? {};
   const fundingAccountId = funding.fundingMode === "credits"
     ? funding.creditAccountId?.trim() || funding.walletVaultId?.trim() || wallet?.agentId?.trim() || profile.id?.trim()
     : funding.walletVaultId?.trim() || funding.creditAccountId?.trim() || wallet?.agentId?.trim() || profile.id?.trim();
-  if (!fundingAccountId) {
+  // The free model needs no funding source; wallet-paid routes still do.
+  if (!fundingAccountId && !isFreeHivemindosWalletPaidModel(model)) {
     throw new Error("Add HivemindOS Models credits or select a local funding wallet before chatting.");
   }
   return {
     baseUrl: `${requestOrigin.replace(/\/+$/, "")}/api/hivemindos/models`,
     chatPath: "/chat/completions",
     statusPath: "/models",
-    model: selectedHivemindosWalletPaidModel(profile),
+    model,
     headers: {
-      "X-HivemindOS-Wallet-Agent-Id": fundingAccountId,
+      "X-HivemindOS-Wallet-Agent-Id": fundingAccountId || "free-tier",
       "X-HivemindOS-Wallet-Model-Slug": hivemindosWalletPaidModelAgentSlug(),
     },
   };

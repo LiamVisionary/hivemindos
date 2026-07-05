@@ -18,6 +18,9 @@ import type {
   CompanyMember,
   CompanyMemberSpend,
   CompanyMetricUnit,
+  CompanyPricingProposal,
+  CompanyProduct,
+  CompanyProductCatalog,
   CompanyRevenue,
   CompanySpendRollup,
   CompanyStatus,
@@ -148,6 +151,8 @@ function companyDefinitionOf(record: Company): Company {
     flowTemplateId: record.flowTemplateId,
     homeMachineKey: record.homeMachineKey,
     projectId: record.projectId,
+    products: record.products,
+    pricingProposals: record.pricingProposals,
     analyticsProvider: record.analyticsProvider,
     analyticsConfig: record.analyticsConfig,
     directives: record.directives,
@@ -413,6 +418,199 @@ function normalizeRevenue(value: unknown): CompanyRevenue | undefined {
   };
 }
 
+/** Slug key for a product derived from its name when none is given. */
+function productKeyFrom(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "product";
+}
+
+const PRODUCT_INTERVALS: NonNullable<CompanyProduct["interval"]>[] = ["one-time", "month", "year"];
+
+/** Normalize one product entry; null when it has no usable name or price. */
+function normalizeProduct(value: unknown, taken: Set<string>): CompanyProduct | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const name = trimmed(raw.name);
+  const amount = Number(raw.amountUsd);
+  if (!name || !Number.isFinite(amount) || amount < 0) return null;
+  let key = trimmed(raw.key)?.toLowerCase() || productKeyFrom(name);
+  while (taken.has(key)) key = `${key}-2`;
+  taken.add(key);
+  const interval = typeof raw.interval === "string" && (PRODUCT_INTERVALS as string[]).includes(raw.interval)
+    ? (raw.interval as CompanyProduct["interval"])
+    : undefined;
+  return {
+    key,
+    name,
+    amountUsd: Math.round(amount * 100) / 100,
+    description: trimmed(raw.description),
+    recommended: raw.recommended === true || undefined,
+    interval: interval === "one-time" ? undefined : interval,
+    kind: raw.kind === "addon" ? "addon" : undefined,
+  };
+}
+
+/** Normalize a product catalog; undefined when the input has no valid items and no seed marker. */
+function normalizeProductCatalog(value: unknown): CompanyProductCatalog | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const taken = new Set<string>();
+  const items = (Array.isArray(raw.items) ? raw.items : [])
+    .map((item) => normalizeProduct(item, taken))
+    .filter((item): item is CompanyProduct => item !== null);
+  // "Recommended" is THE default pick agents lead with in offers — at most one
+  // per group (packages / add-ons); the first marked one wins, extras clear.
+  const recommendedSeen = new Set<string>();
+  for (const item of items) {
+    if (!item.recommended) continue;
+    const group = item.kind === "addon" ? "addon" : "package";
+    if (recommendedSeen.has(group)) delete item.recommended;
+    else recommendedSeen.add(group);
+  }
+  const seededFrom = trimmed(raw.seededFrom);
+  // An empty catalog with a seed marker is meaningful: "seeded/considered, then
+  // emptied by the human" — it must not be re-seeded on the next read.
+  if (items.length === 0 && !seededFrom) return undefined;
+  return { items, seededFrom, updatedAt: trimmed(raw.updatedAt) };
+}
+
+/**
+ * Replace a company's product catalog (the Products tab save path and the
+ * seeders both land here so every change hits the replicated vault file and the
+ * governance trail).
+ */
+export async function setCompanyProducts(
+  id: string,
+  input: { items: CompanyProduct[] | unknown[]; seededFrom?: string },
+  source = "companies-store:set-products",
+): Promise<Company | null> {
+  const records = await readRaw();
+  const company = records.find((record) => record.id === id);
+  if (!company) return null;
+  const before = companyDefinitionOf(company);
+  const catalog = normalizeProductCatalog({
+    items: input.items,
+    seededFrom: input.seededFrom ?? company.products?.seededFrom ?? "ui",
+    updatedAt: new Date().toISOString(),
+  });
+  company.products = catalog;
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  await recordConfigChange("updated", before, company, source);
+  return company;
+}
+
+export type ProposePricingChangeInput = {
+  /** Catalog product reference: matched against CompanyProduct.key, then name (case-insensitive). */
+  productRef: string;
+  proposedAmountUsd: number;
+  why?: string;
+  sourceTaskId?: string;
+  proposedBy?: string;
+};
+
+/**
+ * File a crew-raised price-change request against a catalog product. The
+ * proposal is pending human review under Approvals — prices NEVER change here.
+ * One pending proposal per product: a newer one for the same product replaces
+ * the older (freshest evidence wins). Returns null when the company or the
+ * referenced product doesn't exist, or the proposal is a no-op (same price).
+ */
+export async function proposeCompanyPricingChange(
+  companyId: string,
+  input: ProposePricingChangeInput,
+): Promise<CompanyPricingProposal | null> {
+  const proposedAmountUsd = Math.round(Number(input.proposedAmountUsd) * 100) / 100;
+  if (!Number.isFinite(proposedAmountUsd) || proposedAmountUsd < 0) return null;
+  const ref = input.productRef?.trim().toLowerCase();
+  if (!ref) return null;
+
+  const records = await readRaw();
+  const company = records.find((record) => record.id === companyId);
+  if (!company) return null;
+  const items = company.products?.items ?? [];
+  const product = items.find((item) => item.key === ref) ?? items.find((item) => item.name.toLowerCase() === ref);
+  if (!product) return null;
+  if (product.amountUsd === proposedAmountUsd) return null;
+
+  const before = companyDefinitionOf(company);
+  const proposal: CompanyPricingProposal = {
+    id: `prc_${randomUUID()}`,
+    productKey: product.key,
+    productName: product.name,
+    currentAmountUsd: product.amountUsd,
+    proposedAmountUsd,
+    why: trimmed(input.why),
+    sourceTaskId: trimmed(input.sourceTaskId),
+    proposedBy: trimmed(input.proposedBy),
+    createdAt: new Date().toISOString(),
+  };
+  company.pricingProposals = [
+    ...(company.pricingProposals ?? []).filter((pending) => pending.productKey !== product.key),
+    proposal,
+  ];
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:propose-pricing");
+
+  const { appendCompanyMemory } = await import("@/lib/services/company-memory");
+  await appendCompanyMemory(companyId, {
+    kind: "note",
+    title: `Pricing change requested: ${product.name} $${product.amountUsd.toLocaleString("en-US")} → $${proposedAmountUsd.toLocaleString("en-US")} (awaiting human approval)`,
+    detail: proposal.why,
+    taskId: proposal.sourceTaskId,
+    agent: proposal.proposedBy,
+  }).catch(() => undefined);
+  return proposal;
+}
+
+/**
+ * Human decision on a pending pricing proposal. Approve applies the new price
+ * to the catalog (the shared-brain value every agent quotes); reject leaves the
+ * catalog untouched. Either way the proposal is removed and the outcome is
+ * recorded in company memory, so the crew learns the decision instead of
+ * re-proposing it every cycle.
+ */
+export async function resolveCompanyPricingProposal(
+  companyId: string,
+  proposalId: string,
+  decision: "approve" | "reject",
+  note?: string,
+): Promise<Company | null> {
+  const records = await readRaw();
+  const company = records.find((record) => record.id === companyId);
+  if (!company) return null;
+  const proposal = (company.pricingProposals ?? []).find((pending) => pending.id === proposalId);
+  if (!proposal) return null;
+
+  const before = companyDefinitionOf(company);
+  company.pricingProposals = (company.pricingProposals ?? []).filter((pending) => pending.id !== proposalId);
+  if (decision === "approve" && company.products) {
+    company.products = {
+      ...company.products,
+      items: company.products.items.map((item) =>
+        item.key === proposal.productKey ? { ...item, amountUsd: proposal.proposedAmountUsd } : item,
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  await recordConfigChange("updated", before, company, `companies-store:pricing-${decision}`);
+
+  const { appendCompanyMemory } = await import("@/lib/services/company-memory");
+  const priceMove = `${proposal.productName} $${proposal.currentAmountUsd.toLocaleString("en-US")} → $${proposal.proposedAmountUsd.toLocaleString("en-US")}`;
+  await appendCompanyMemory(companyId, {
+    kind: "note",
+    title:
+      decision === "approve"
+        ? `Pricing approved by the human: ${priceMove} — the catalog now carries the new price; quote it everywhere.`
+        : `Pricing change rejected by the human: ${priceMove} stays at $${proposal.currentAmountUsd.toLocaleString("en-US")} — do not re-propose without materially new evidence.`,
+    detail: note?.trim() || proposal.why,
+    taskId: proposal.sourceTaskId,
+  }).catch(() => undefined);
+  return company;
+}
+
 /** Normalize a per-agent member list, deduping by agentId (last write wins). */
 function normalizeMembers(value: unknown): CompanyMember[] | undefined {
   if (!Array.isArray(value)) return undefined;
@@ -526,6 +724,8 @@ export type UpsertCompanyInput = {
   homeMachineKey?: string;
   /** Project-registry id of the company's domain code repo. */
   projectId?: string;
+  /** Official product catalog (what the company sells, at what price). */
+  products?: CompanyProductCatalog;
   /** Which analytics provider this company's numbers come from. */
   analyticsProvider?: Company["analyticsProvider"];
   /** Per-company analytics link (project/site id + optional self-host). */
@@ -579,6 +779,9 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     // fleet driver auto-dispatches (definitions replicate through the vault).
     homeMachineKey: input.homeMachineKey !== undefined ? trimmed(input.homeMachineKey) : (existing?.homeMachineKey ?? (existing ? undefined : hostname())),
     projectId: input.projectId !== undefined ? trimmed(input.projectId) : existing?.projectId,
+    products: input.products !== undefined ? normalizeProductCatalog(input.products) : existing?.products,
+    // Proposals are crew/human-resolved only — never writable through upsert.
+    pricingProposals: existing?.pricingProposals,
     analyticsProvider: input.analyticsProvider !== undefined ? input.analyticsProvider : existing?.analyticsProvider,
     analyticsConfig:
       input.analyticsConfig !== undefined
@@ -600,21 +803,29 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
  * deliverable-rejection redirect). It lands in the crew's dispatch context on
  * the next cycle without any charter edit.
  */
+function normalizeDirectiveSkillSlugs(input: { skill?: string; skills?: string[] }) {
+  return [...new Set([
+    ...(Array.isArray(input.skills) ? input.skills : []),
+    ...(input.skill ? [input.skill] : []),
+  ].map((slug) => slug.trim()).filter(Boolean))];
+}
+
 export async function addCompanyDirective(
   companyId: string,
-  input: { text: string; skill?: string; attachments?: CompanyDirective["attachments"]; source?: CompanyDirective["source"]; deliverableRef?: string },
+  input: { text: string; skill?: string; skills?: string[]; attachments?: CompanyDirective["attachments"]; source?: CompanyDirective["source"]; deliverableRef?: string },
 ): Promise<Company | null> {
   const text = input.text?.trim();
   if (!text) throw new Error("Directive text is required.");
   const records = await readRaw();
   const existing = records.find((record) => record.id === companyId);
   if (!existing) return null;
+  const skills = normalizeDirectiveSkillSlugs(input);
   const entry: CompanyDirective = {
     id: `dir_${randomUUID()}`,
     text,
     source: input.source === "reject" ? "reject" : "inject",
     createdAt: new Date().toISOString(),
-    ...(input.skill?.trim() ? { skill: input.skill.trim() } : {}),
+    ...(skills.length ? { skill: skills[0], skills } : {}),
     ...(input.deliverableRef?.trim() ? { deliverableRef: input.deliverableRef.trim() } : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
   };
@@ -751,6 +962,30 @@ export async function setCompanyFrozen(id: string, frozen: boolean): Promise<Com
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
   await recordConfigChange("updated", before, company, "companies-store:set-frozen");
+  return company;
+}
+
+/** Merge-safe update of ONLY a company's analytics link (provider + project/site/
+ *  property config), so the Analytics tab's cards can (re)point a company without a
+ *  full upsert that could blank other fields. An empty provider unlinks and clears
+ *  the config. */
+export async function setCompanyAnalytics(
+  id: string,
+  provider: Company["analyticsProvider"] | "" | undefined,
+  config?: { projectId?: string; host?: string },
+): Promise<Company | null> {
+  const records = await readRaw();
+  const company = records.find((record) => record.id === id);
+  if (!company) return null;
+  const before = companyDefinitionOf(company);
+  const nextProvider = provider ? provider : undefined;
+  company.analyticsProvider = nextProvider;
+  company.analyticsConfig = nextProvider
+    ? { projectId: trimmed(config?.projectId), host: trimmed(config?.host) }
+    : undefined;
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:set-analytics");
   return company;
 }
 

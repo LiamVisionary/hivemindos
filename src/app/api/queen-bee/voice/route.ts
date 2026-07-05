@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
 import {
   coerceActingWalletSource,
+  resolveProviderChatEndpoint,
   runQueenBeeAgentTurn,
   runQueenBeeVoiceTurn,
   submitQueenBeeVoiceTask,
@@ -62,6 +63,7 @@ import {
   queenChatTools,
   queenRealtimeTools,
 } from "@/lib/services/queen-bee/queen-brain";
+import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
 import {
   coerceDashboardScreenContext,
   formatDashboardScreenContextForPrompt,
@@ -347,9 +349,15 @@ async function mintRealtimeSession() {
   // Splice any standing user preferences ("call me boss") onto the base
   // instructions so every new session opens already knowing them.
   const preferencePreamble = await queenVoicePreferencePreamble();
-  const instructions = preferencePreamble
-    ? `${QUEEN_REALTIME_INSTRUCTIONS} ${preferencePreamble}`
-    : QUEEN_REALTIME_INSTRUCTIONS;
+  const instructions = [
+    QUEEN_REALTIME_INSTRUCTIONS,
+    queenModelTransparencyNote(model, "OpenAI Realtime (Queen Bee's voice brain)", {
+      relayTool: true,
+    }),
+    preferencePreamble,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const response = await fetch(
     "https://api.openai.com/v1/realtime/client_secrets",
     {
@@ -417,10 +425,91 @@ async function mintRealtimeSession() {
 // (the "runtime can't do tool calls" path).
 const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
 
+/** One answering brain the typed lane can call directly. */
+type QueenTypedChatBrain = {
+  url: string;
+  key: string;
+  model: string;
+  providerSlug: string;
+  /** Per-turn overlay tag, e.g. "gpt-5.5 · venice". */
+  label: string;
+  /** True when this is the user's configured Calls-settings chat brain. */
+  configured: boolean;
+};
+
+function queenBrainProviderLabel(provider: string) {
+  if (provider === "openai-oauth") return "ChatGPT";
+  if (!provider || provider === "openai" || provider === "openai-api") return "OpenAI";
+  return provider;
+}
+
+/**
+ * The typed lane's answering brains, in preference order: the configured
+ * Calls-settings chat brain when it is directly callable with a plain key,
+ * then the built-in OpenAI lane. OAuth-held (openai-oauth) and runtime-held
+ * (agent-runtime/fleet-agent) plans cannot run the typed tool loop here, so
+ * they keep the built-in lane — the per-turn brain tag and transparency note
+ * stay honest about which brain actually answered either way.
+ */
+async function resolveQueenTypedChatBrains(): Promise<QueenTypedChatBrain[]> {
+  const brains: QueenTypedChatBrain[] = [];
+  const plan = await resolveVoiceChatBrainPlan().catch(() => null);
+  if (plan && plan.kind === "direct" && plan.provider !== "openai-oauth" && plan.model) {
+    const endpoint = await resolveProviderChatEndpoint(plan.provider).catch(() => null);
+    if (endpoint) {
+      brains.push({
+        url: endpoint.url,
+        key: endpoint.key,
+        model: plan.model,
+        providerSlug: plan.provider,
+        label: `${plan.model} · ${queenBrainProviderLabel(plan.provider)}`,
+        configured: true,
+      });
+    }
+  }
+  const apiKey = await transcriptionApiKey();
+  const builtinModel = process.env.OPENAI_VOICE_CHAT_MODEL || QUEEN_CHAT_MODEL_FALLBACK;
+  const duplicate = brains.some(
+    (brain) => brain.model === builtinModel && brain.url.startsWith("https://api.openai.com/"),
+  );
+  if (apiKey && !duplicate) {
+    brains.push({
+      url: "https://api.openai.com/v1/chat/completions",
+      key: apiKey,
+      model: builtinModel,
+      providerSlug: "openai",
+      label: `${builtinModel} · OpenAI`,
+      configured: false,
+    });
+  }
+  return brains;
+}
+
+/** Chat-completions body for one brain. Reasoning-era OpenAI models reject
+ *  max_tokens/temperature (see runProviderConversationTurn in voice-turn.ts). */
+function queenChatRequestBody(
+  brain: QueenTypedChatBrain,
+  system: string,
+  incoming: unknown[],
+  extra?: Record<string, unknown>,
+) {
+  const reasoningModel = /^(o\d|gpt-5|codex)/i.test(brain.model.trim());
+  return {
+    model: brain.model,
+    messages: [{ role: "system", content: system }, ...incoming],
+    tools: queenChatTools(),
+    tool_choice: "auto",
+    ...(reasoningModel
+      ? { max_completion_tokens: 700, reasoning_effort: "low" }
+      : { temperature: 0.4, max_tokens: 500 }),
+    ...extra,
+  };
+}
+
 /** Shared setup for the typed chat turn (blocking and streaming variants). */
 async function prepareQueenChatTurn(body: Record<string, unknown>) {
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) return null;
+  const brains = await resolveQueenTypedChatBrains();
+  if (!brains.length) return null;
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   const preamble = await queenVoicePreferencePreamble();
   const screenContext = formatDashboardScreenContextForPrompt(
@@ -434,8 +523,22 @@ async function prepareQueenChatTurn(body: Record<string, unknown>) {
         screenContext,
       ].join("\n")
     : "";
-  const system = [QUEEN_INSTRUCTIONS, preamble, screenContextPrompt].filter(Boolean).join(" ");
-  return { apiKey, incoming, system };
+  // Each brain gets its OWN transparency note naming the model this request is
+  // about to invoke — this is what lets her answer "which LLM?" honestly.
+  const systemFor = (brain: QueenTypedChatBrain) =>
+    [
+      QUEEN_INSTRUCTIONS,
+      queenModelTransparencyNote(
+        brain.model,
+        `${queenBrainProviderLabel(brain.providerSlug)} (Queen Bee's typed chat brain)`,
+        { relayTool: true },
+      ),
+      preamble,
+      screenContextPrompt,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  return { brains, incoming, systemFor };
 }
 
 async function runQueenChatTurn(body: Record<string, unknown>) {
@@ -443,58 +546,56 @@ async function runQueenChatTurn(body: Record<string, unknown>) {
   if (!prepared) {
     return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
   }
-  const { apiKey, incoming, system } = prepared;
-  try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: process.env.OPENAI_VOICE_CHAT_MODEL || QUEEN_CHAT_MODEL_FALLBACK,
-        messages: [{ role: "system", content: system }, ...incoming],
-        tools: queenChatTools(),
-        tool_choice: "auto",
-        temperature: 0.4,
-        max_tokens: 500,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
-    });
-    const data = (await response.json().catch(() => null)) as {
-      choices?: Array<{
-        message?: {
-          content?: string | null;
-          tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>;
-        };
-      }>;
-      error?: { message?: string } | string;
-    } | null;
-    if (!response.ok) {
-      const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
-      return NextResponse.json({ ok: false, fallback: true, error: detail || `chat turn HTTP ${response.status}` });
+  const { brains, incoming, systemFor } = prepared;
+  // Configured brain first, built-in OpenAI lane second — a failing configured
+  // provider degrades to the built-in lane instead of dead-ending the turn,
+  // and `brainLabel` always names the brain that actually answered.
+  let lastError = "";
+  for (const brain of brains) {
+    try {
+      const response = await fetch(brain.url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${brain.key}`, "content-type": "application/json" },
+        body: JSON.stringify(queenChatRequestBody(brain, systemFor(brain), incoming)),
+        cache: "no-store",
+        signal: AbortSignal.timeout(20_000),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        choices?: Array<{
+          message?: {
+            content?: string | null;
+            tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>;
+          };
+        }>;
+        error?: { message?: string } | string;
+      } | null;
+      if (!response.ok) {
+        const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
+        lastError = detail || `chat turn HTTP ${response.status}`;
+        continue;
+      }
+      const message = data?.choices?.[0]?.message ?? {};
+      const toolCalls = Array.isArray(message.tool_calls)
+        ? message.tool_calls
+            .filter((tc) => tc?.function?.name)
+            .map((tc) => ({
+              id: String(tc.id ?? ""),
+              name: String(tc.function?.name ?? ""),
+              arguments: String(tc.function?.arguments ?? "{}"),
+            }))
+        : [];
+      return NextResponse.json({
+        ok: true,
+        content: typeof message.content === "string" ? message.content : "",
+        toolCalls,
+        assistant: message,
+        brainLabel: brain.label,
+      });
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "chat turn failed";
     }
-    const message = data?.choices?.[0]?.message ?? {};
-    const toolCalls = Array.isArray(message.tool_calls)
-      ? message.tool_calls
-          .filter((tc) => tc?.function?.name)
-          .map((tc) => ({
-            id: String(tc.id ?? ""),
-            name: String(tc.function?.name ?? ""),
-            arguments: String(tc.function?.arguments ?? "{}"),
-          }))
-      : [];
-    return NextResponse.json({
-      ok: true,
-      content: typeof message.content === "string" ? message.content : "",
-      toolCalls,
-      assistant: message,
-    });
-  } catch (error) {
-    return NextResponse.json({
-      ok: false,
-      fallback: true,
-      error: error instanceof Error ? error.message : "chat turn failed",
-    });
   }
+  return NextResponse.json({ ok: false, fallback: true, error: lastError || "chat turn failed" });
 }
 
 /**
@@ -511,30 +612,34 @@ async function runQueenChatTurnStream(body: Record<string, unknown>) {
   if (!prepared) {
     return new Response(line({ ok: false, fallback: true, error: "no-openai-key" }), { headers: ndjson });
   }
-  const { apiKey, incoming, system } = prepared;
-  const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.OPENAI_VOICE_CHAT_MODEL || QUEEN_CHAT_MODEL_FALLBACK,
-      messages: [{ role: "system", content: system }, ...incoming],
-      tools: queenChatTools(),
-      tool_choice: "auto",
-      temperature: 0.4,
-      max_tokens: 500,
-      stream: true,
-    }),
-    cache: "no-store",
-    // Generous vs the blocking action's 20s: this bounds the WHOLE stream, and
-    // first tokens arrive within seconds so the user is never staring at it.
-    signal: AbortSignal.timeout(90_000),
-  }).catch((error: unknown) => error as Error);
+  const { brains, incoming, systemFor } = prepared;
+  // Try brains in order for the INITIAL connection (configured brain, then the
+  // built-in OpenAI lane); once a stream has started, mid-stream failures keep
+  // the existing partial-result + fallback signaling.
+  let upstream: Response | Error = new Error("no chat brain available");
+  let answeringBrain = brains[0];
+  for (const brain of brains) {
+    answeringBrain = brain;
+    upstream = await fetch(brain.url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${brain.key}`, "content-type": "application/json" },
+      body: JSON.stringify(
+        queenChatRequestBody(brain, systemFor(brain), incoming, { stream: true }),
+      ),
+      cache: "no-store",
+      // Generous vs the blocking action's 20s: this bounds the WHOLE stream, and
+      // first tokens arrive within seconds so the user is never staring at it.
+      signal: AbortSignal.timeout(90_000),
+    }).catch((error: unknown) => error as Error);
+    if (!(upstream instanceof Error) && upstream.ok && upstream.body) break;
+  }
   if (upstream instanceof Error || !upstream.ok || !upstream.body) {
     const detail = upstream instanceof Error
       ? upstream.message
       : `chat turn HTTP ${(upstream as Response | undefined)?.status ?? "?"}`;
     return new Response(line({ ok: false, fallback: true, error: detail }), { headers: ndjson });
   }
+  const brainLabel = answeringBrain?.label ?? "";
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -553,7 +658,7 @@ async function runQueenChatTurnStream(body: Record<string, unknown>) {
           }
           if (sseDone) break;
         }
-        controller.enqueue(encoder.encode(line({ done: true, ok: true, ...finalizeQueenChatStream(state) })));
+        controller.enqueue(encoder.encode(line({ done: true, ok: true, brainLabel, ...finalizeQueenChatStream(state) })));
       } catch (error) {
         // Mid-stream failure: surface whatever already streamed so the client
         // can keep it, but flag the turn incomplete for the fallback path.

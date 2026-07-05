@@ -1,4 +1,4 @@
-export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "posthog" | "plausible";
+export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "posthog" | "plausible" | "clawbank";
 
 export type ConnectionProviderStatus = {
   key: ConnectionProviderKey;

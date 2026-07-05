@@ -1,8 +1,10 @@
-import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, HivemindosModelsAgentConfig, ResearchMethod, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeAgentRole, BeeWorkerClass, CustomWorkerClassProfile, HivemindosModelsAgentConfig, ResearchMethod, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 export type AgentCreateDraft = {
   name: string;
   runtime: AgentRuntime;
+  /** Preset by guided flows (e.g. "Create Queen Bee"); runtime matrix default otherwise. */
+  beeRole?: BeeAgentRole;
   provider?: string;
   model?: string;
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;

@@ -17,6 +17,7 @@ import {
   submitQueenBeeMessage,
   type QueenBeeFleetMachine,
 } from "@/lib/services/queen-bee/control-plane";
+import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
 import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
 import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
@@ -459,7 +460,7 @@ async function runOpenAiConversationTurn(
  *  through the provider catalog + shared hive env (lazy imports keep those
  *  out of the hermetic node suites' import graph). Providers without an
  *  OpenAI-compatible base fail the turn — visibly, via the degradation alert. */
-async function resolveProviderChatEndpoint(
+export async function resolveProviderChatEndpoint(
   provider: string,
 ): Promise<{ url: string; key: string } | null> {
   // NOTE: OAuth-held providers (openai-codex, copilot, xai-oauth) are never
@@ -487,6 +488,14 @@ async function runProviderConversationTurn(
   systemPreamble?: string,
   onTextDelta?: (chunk: string) => void,
 ) {
+  // Every provider-direct lane invokes target.model itself, so the injected
+  // identity is exact — "which model are you?" gets a real answer per lane.
+  systemPreamble = [
+    systemPreamble?.trim(),
+    queenModelTransparencyNote(target.model, target.provider),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   if (target.provider === "openai-oauth") {
     // The user's ChatGPT subscription credentials (shared hive env), via the
     // Responses backend. Lazy import: server-only module, and the hermetic
@@ -689,7 +698,11 @@ async function runOpenAiAgentTurn(request: string, systemPreamble?: string): Pro
         {
           role: "system",
           content:
-            "You are Queen Bee's fallback brain. The user's HivemindOS agents are unavailable, so answer the request directly and briefly from your own knowledge. If it strictly needs their computer, files, or wallet, say plainly that you couldn't reach an agent to do it." +
+            "You are Queen Bee's fallback brain. The user's HivemindOS agents are unavailable, so answer the request directly and briefly from your own knowledge. If it strictly needs their computer, files, or wallet, say plainly that you couldn't reach an agent to do it. " +
+            queenModelTransparencyNote(
+              process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
+              "OpenAI (fallback lane)",
+            ) +
             (systemPreamble ? ` ${systemPreamble}` : ""),
         },
         { role: "user", content: request },

@@ -38,6 +38,29 @@ export const plausibleAdapter: AnalyticsAdapter = {
   configFieldHint: "The site as registered in Plausible, e.g. example.com.",
   configFieldPlaceholder: "example.com",
   requiresCredential: true,
+  connectVia: "key",
+  // List the sites this key can see so setup offers a picker. NOTE: Plausible's Sites
+  // API is an Enterprise-plan feature and a site object carries only `domain` (no
+  // display name), so the domain is both the id and the label. On a non-Enterprise key
+  // this throws (plan-gated) and the UI falls back to manual domain entry.
+  async listResources(credential) {
+    try {
+      const json = await fetchJsonWithTimeout("https://plausible.io/api/v1/sites?limit=100", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${credential}`, "User-Agent": "hivemindos-analytics" },
+      });
+      const sites = ((json as { sites?: { domain?: string }[] }).sites ?? []).filter((s) => s && s.domain);
+      if (!sites.length) {
+        throw new Error("No sites returned. The Sites API needs an Enterprise plan — enter the site domain manually.");
+      }
+      return { resources: sites.map((s) => ({ id: s.domain as string, name: s.domain as string })) };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Couldn't list Plausible sites (${message}). The Sites API is Enterprise-only — enter the site domain manually instead.`,
+      );
+    }
+  },
   async getSummary(ctx, { rangeDays }) {
     const siteId = (ctx.config.projectId || "").trim();
     if (!siteId) throw new Error("Plausible site domain is not set for this company.");

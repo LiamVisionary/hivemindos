@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { Bot, BrainCircuit, Phone, PlugZap, Settings2, ShieldCheck } from "lucide-react";
 import type { HivemindosModelsAgentConfig, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
+import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 
 const TEXT_COMMIT_DELAY_MS = 200;
 
@@ -92,7 +93,10 @@ export function hasHivemindosModelsSetup(config: HivemindosModelsAgentConfig = {
   );
 }
 
-export function isHivemindosModelsSetupReady(config: HivemindosModelsAgentConfig = {}) {
+export function isHivemindosModelsSetupReady(config: HivemindosModelsAgentConfig = {}, model?: string | null) {
+  // The free model (also the provider default when no model is set) needs no
+  // funding; only wallet-paid routes require credits or a wallet.
+  if (isFreeHivemindosWalletPaidModel(model)) return true;
   const fundedCredits = Boolean(
     moneyValue(config.lastCreditBalanceUsd) > 0
       || moneyValue(config.lastCreditBalanceLabel) > 0,

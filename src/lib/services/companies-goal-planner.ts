@@ -62,6 +62,25 @@ export function userPrompt(company: Company, history?: string): string {
   if (apex?.metric || apex?.target) lines.push(`Metric: ${apex?.metric || "—"}${apex?.target ? ` → target ${apex.target}` : ""}${apex?.current ? ` (current ${apex.current})` : ""}`);
   const mission = (company.blurb || company.charter || "").trim();
   if (mission) lines.push(`Mission: ${mission}`);
+  const products = company.products?.items ?? [];
+  if (products.length) {
+    lines.push(
+      `Official products & pricing (plan sales/outreach around exactly these): ${products
+        .map((p) => `${p.name} $${p.amountUsd.toLocaleString("en-US")}${p.interval === "month" ? "/mo" : p.interval === "year" ? "/yr" : ""}${p.recommended ? " (recommended)" : ""}`)
+        .join("; ")}`,
+    );
+    lines.push(
+      "If recent activity suggests price is blocking conversions, one good task is a pricing-evidence review (objections, quote-vs-close, checkout drop-off) that ends in a PRICING PROPOSAL for human approval — never a task that changes prices directly.",
+    );
+  }
+  const pendingPricing = company.pricingProposals ?? [];
+  if (pendingPricing.length) {
+    lines.push(
+      `Pricing proposals already awaiting human decision (do not plan duplicate proposals): ${pendingPricing
+        .map((p) => `${p.productName} → $${p.proposedAmountUsd.toLocaleString("en-US")}`)
+        .join("; ")}`,
+    );
+  }
   lines.push(`Crew roles available: ${crewRoster(company)}`);
   const trimmedHistory = history?.trim();
   if (trimmedHistory) {

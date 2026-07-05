@@ -8,8 +8,24 @@ import { Panel, SectionLabel } from "./primitives";
 import type { Colony } from "./types";
 import type { CompanyDirective } from "@/lib/types/company";
 import { CompanyDirectiveComposer, type DirectiveDraft } from "./CompanyDirectiveComposer";
+import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 
-export function CompanyKnowledgePanel({ colony: c }: { colony: Colony }) {
+type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
+
+function directiveSkillSlugs(directive: CompanyDirective) {
+  return [...new Set([
+    ...(Array.isArray(directive.skills) ? directive.skills : []),
+    ...(directive.skill ? [directive.skill] : []),
+  ].map((slug) => slug.trim()).filter(Boolean))];
+}
+
+export function CompanyKnowledgePanel({
+  colony: c,
+  openSkillAttachmentBrowser,
+}: {
+  colony: Colony;
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+}) {
   // Show the company's directives from props until this panel makes an edit,
   // then show the server's authoritative response. (Avoids a set-state-in-effect.)
   const [localDirectives, setLocalDirectives] = React.useState<CompanyDirective[] | null>(null);
@@ -64,28 +80,32 @@ export function CompanyKnowledgePanel({ colony: c }: { colony: Colony }) {
         placeholder="e.g. Use the portfolio offer API (POST liamvisionary.com/api/offer, bearer PORTFOLIO_OFFER_API_TOKEN) for client previews — not the old Worker…"
         submitLabel="Inject knowledge"
         busy={busy}
+        openSkillAttachmentBrowser={openSkillAttachmentBrowser}
         onSubmit={inject}
       />
       {error && <div style={{ marginTop: 8, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger-2)" }}>{error}</div>}
 
       {directives.length > 0 ? (
         <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-          {directives.map((d) => (
-            <div key={d.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)" }}>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.06, color: d.source === "reject" ? "var(--danger-2)" : "var(--cyan-2)", border: "1px solid var(--line-2)", borderRadius: 5, padding: "2px 6px", flexShrink: 0 }}>
-                {d.source === "reject" ? "redirect" : "inject"}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: "var(--f-body)", fontSize: 13, color: "var(--fg)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{d.text}</div>
-                <div style={{ marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>
-                  {d.skill ? <span>skill: {d.skill}</span> : null}
-                  {d.deliverableRef ? <span>re: {d.deliverableRef}</span> : null}
-                  {d.attachments?.length ? <span>{d.attachments.length} attachment{d.attachments.length === 1 ? "" : "s"}</span> : null}
+          {directives.map((d) => {
+            const skills = directiveSkillSlugs(d);
+            return (
+              <div key={d.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)" }}>
+                <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.06, color: d.source === "reject" ? "var(--danger-2)" : "var(--cyan-2)", border: "1px solid var(--line-2)", borderRadius: 5, padding: "2px 6px", flexShrink: 0 }}>
+                  {d.source === "reject" ? "redirect" : "inject"}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: "var(--f-body)", fontSize: 13, color: "var(--fg)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{d.text}</div>
+                  <div style={{ marginTop: 4, display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>
+                    {skills.length ? <span>skills: {skills.join(", ")}</span> : null}
+                    {d.deliverableRef ? <span>re: {d.deliverableRef}</span> : null}
+                    {d.attachments?.length ? <span>{d.attachments.length} attachment{d.attachments.length === 1 ? "" : "s"}</span> : null}
+                  </div>
                 </div>
+                <button type="button" onClick={() => remove(d.id)} disabled={busy} aria-label="Remove directive" title="Remove" style={{ cursor: "pointer", border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-4)", borderRadius: 7, width: 24, height: 24, fontSize: 11, flexShrink: 0 }}>✕</button>
               </div>
-              <button type="button" onClick={() => remove(d.id)} disabled={busy} aria-label="Remove directive" title="Remove" style={{ cursor: "pointer", border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-4)", borderRadius: 7, width: 24, height: 24, fontSize: 11, flexShrink: 0 }}>✕</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div style={{ marginTop: 14, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>No standing directives yet — inject one above, or reject a deliverable to redirect the crew.</div>

@@ -160,6 +160,10 @@ export function NativeFirstRunOnboarding() {
   // spinning. Kept short (tail) since it's a live activity feed, not a full log.
   const [setupLines, setSetupLines] = useState<string[]>([]);
   const [setupExitError, setSetupExitError] = useState("");
+  // ClawBank may already be configured (re-run setup, credential replicated from
+  // another machine). When it is, the final button finishes instead of opening
+  // the ClawBank registration modal.
+  const [clawbankConfigured, setClawbankConfigured] = useState(false);
 
   const detectedAgents = useMemo(() => status?.detected_agents?.length
     ? status.detected_agents
@@ -191,6 +195,24 @@ export function NativeFirstRunOnboarding() {
       setMemoryAgents((current) => current.length === ALL_AGENT_IDS.length ? installed : current);
     }
   }, [demoMode]);
+
+  // Check ClawBank readiness when the success screen appears. Errors fall back
+  // to offering setup — the ClawBank modal re-checks and shows "already
+  // connected" itself, so a false negative here never re-registers an account.
+  useEffect(() => {
+    if (step !== "done") return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/clawbank", { cache: "no-store", signal: controller.signal });
+        const data = await res.json().catch(() => null) as { configured?: boolean } | null;
+        if (data?.configured) setClawbankConfigured(true);
+      } catch {
+        // Offer setup as usual.
+      }
+    })();
+    return () => controller.abort();
+  }, [step]);
 
   useEffect(() => {
     // Run synchronously on mount rather than via setTimeout(…, 0): deferring to a
@@ -502,7 +524,7 @@ export function NativeFirstRunOnboarding() {
                 <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" disabled><IconSpinner /> Working…</button>
               </>
             ) : (
-              <button className={`${styles.btn} ${styles.primary} ${styles.grow}`} type="button" data-tone="live" onClick={() => { dismiss(); window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }}>Next <IconArrow /></button>
+              <button className={`${styles.btn} ${styles.primary} ${styles.grow}`} type="button" data-tone="live" onClick={() => { dismiss(); if (!clawbankConfigured) window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }}>{clawbankConfigured ? "Finish" : "Next"} <IconArrow /></button>
             )}
           </div>
         </footer>

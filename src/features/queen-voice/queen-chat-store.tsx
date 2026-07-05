@@ -32,6 +32,10 @@ export type QueenChatTurn = {
   working?: string;
   /** Richer markdown findings, shown in a modal on demand. */
   detail?: string;
+  /** Which brain actually answered this turn (e.g. "gpt-4o-mini · OpenAI"),
+   *  reported by the chat-turn response — per-turn truth, unlike the overlay's
+   *  static voice-brain tag. */
+  brain?: string;
   source: "text" | "voice";
 };
 
@@ -238,6 +242,7 @@ export function QueenChatProvider({
       content?: string;
       toolCalls?: Array<{ id: string; name: string; arguments: string }>;
       assistant?: Record<string, unknown>;
+      brainLabel?: string;
     } | null> => {
       const res = await fetch("/api/queen-bee/voice", {
         method: "POST",
@@ -267,7 +272,7 @@ export function QueenChatProvider({
             continue;
           }
           if (event.done) {
-            return event as { content?: string; toolCalls?: Array<{ id: string; name: string; arguments: string }>; assistant?: Record<string, unknown> };
+            return event as { content?: string; toolCalls?: Array<{ id: string; name: string; arguments: string }>; assistant?: Record<string, unknown>; brainLabel?: string };
           }
           if (event.ok === false || event.fallback) return null;
         }
@@ -287,6 +292,7 @@ export function QueenChatProvider({
         content?: string;
         toolCalls?: Array<{ id: string; name: string; arguments: string }>;
         assistant?: Record<string, unknown>;
+        brainLabel?: string;
       } | null;
     };
 
@@ -312,6 +318,7 @@ export function QueenChatProvider({
               working: toolStatus(tc.name),
               live: true,
               pending: false,
+              ...(data.brainLabel ? { brain: data.brainLabel } : {}),
             });
             const result = await executeQueenTool(tc.name, parsed, screenContext);
             messages.push({ role: "tool", tool_call_id: tc.id, content: result });
@@ -319,7 +326,13 @@ export function QueenChatProvider({
           continue; // loop back so she can read the tool results
         }
         const reply = data.content?.trim() || "Done.";
-        updateTurn(queenId, { text: reply, live: false, pending: false, working: undefined });
+        updateTurn(queenId, {
+          text: reply,
+          live: false,
+          pending: false,
+          working: undefined,
+          ...(data.brainLabel ? { brain: data.brainLabel } : {}),
+        });
         messages.push({ role: "assistant", content: reply });
         return;
       }

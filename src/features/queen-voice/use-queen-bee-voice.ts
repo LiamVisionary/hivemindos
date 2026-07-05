@@ -141,9 +141,10 @@ function utteranceFileName(mimeType: string) {
 /**
  * Hands-free Queen Bee voice loop. Preferred path: microphone PCM streams
  * into an OpenAI Realtime transcription session so the user's words appear on
- * screen while they speak; an energy-based VAD commits each utterance and the
- * final transcript goes straight to the conversational Queen Bee turn. When
- * realtime STT is unavailable, falls back to MediaRecorder + Whisper.
+ * screen while they speak; an energy-based VAD (timer-backstopped against
+ * WKWebView rAF starvation) commits each utterance and the final transcript
+ * goes straight to the conversational Queen Bee turn. When realtime STT is
+ * unavailable, falls back to MediaRecorder + Whisper.
  */
 export function useQueenBeeVoice(
   active: boolean,
@@ -154,6 +155,11 @@ export function useQueenBeeVoice(
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
   const [turns, setTurns] = React.useState<QueenVoiceTurn[]>([]);
+  // Bumped every time a session (re)connects and resets `turns`. The overlay's
+  // history bridge keys its id namespace on this so a restarted session (dev
+  // Fast Refresh, error recovery) can never collide with — and scramble — the
+  // rows an earlier session already wrote to the shared chat.
+  const [sessionSerial, setSessionSerial] = React.useState(0);
   const [speechDetected, setSpeechDetected] = React.useState(false);
   const [working, setWorking] = React.useState<QueenVoiceWorkingStage[]>([]);
   // Non-fatal voice status, e.g. "local voice unreachable, replies shown as
@@ -168,6 +174,9 @@ export function useQueenBeeVoice(
   // speaks. Set once the session context exists; see the effect below.
   const queenOutputAnalyserRef = React.useRef<AnalyserNode | null>(null);
   useQueenVoiceLevelPump(queenOutputAnalyserRef, phase === "speaking");
+  // Analyser on the MIC input (the same node the VAD/barge-in watchers read),
+  // exposed for the control bar's live input waveform.
+  const micAnalyserRef = React.useRef<AnalyserNode | null>(null);
 
   React.useEffect(() => {
     mutedRef.current = muted;
@@ -627,8 +636,13 @@ export function useQueenBeeVoice(
       // send after I stop talking" complaint.
       let noiseFloor = Math.min(0.03, Math.max(0.012, lastKnownEchoFloor));
       const samples = new Uint8Array(activeAnalyser.fftSize);
-      const tick = () => {
-        if (cancelled || !handlers.isActive()) return;
+      let lastTickAt = performance.now();
+      // One VAD pass. Returns false once the loop is over (commit fired,
+      // idle-reset, or torn down) so both the rAF loop and the timer
+      // backstop stop rescheduling.
+      const runTick = (): boolean => {
+        if (cancelled || !handlers.isActive()) return false;
+        lastTickAt = performance.now();
         activeAnalyser.getByteTimeDomainData(samples);
         let sum = 0;
         for (const sample of samples) {
@@ -636,7 +650,7 @@ export function useQueenBeeVoice(
           sum += normalized * normalized;
         }
         const rms = mutedRef.current ? 0 : Math.sqrt(sum / samples.length);
-        const now = performance.now();
+        const now = lastTickAt;
         if (mutedRef.current && speechStartedAt) {
           // Muting mid-utterance discards it instead of committing a fragment.
           speechStartedAt = 0;
@@ -669,11 +683,23 @@ export function useQueenBeeVoice(
           utteranceMs > MAX_UTTERANCE_MS
         ) {
           handlers.onCommit();
-          return;
+          return false;
         }
-        if (!speechStartedAt && handlers.onIdle?.(now - startedAt)) return;
-        frame = window.requestAnimationFrame(tick);
+        if (!speechStartedAt && handlers.onIdle?.(now - startedAt)) return false;
+        return true;
       };
+      const tick = () => {
+        if (runTick()) frame = window.requestAnimationFrame(tick);
+        else window.clearInterval(backstopId);
+      };
+      // Timer backstop, same defense as the barge-in watcher: WKWebView can
+      // starve rAF for seconds while the page idles, which froze this loop
+      // mid-turn — end of speech was only detected once a click/tap woke rAF
+      // again. The backstop only does work when rAF has visibly stalled.
+      const backstopId = window.setInterval(() => {
+        if (performance.now() - lastTickAt <= BARGE_IN_RAF_STALL_MS) return;
+        if (!runTick()) window.clearInterval(backstopId);
+      }, BARGE_IN_BACKSTOP_INTERVAL_MS);
       frame = window.requestAnimationFrame(tick);
     };
 
@@ -1020,6 +1046,13 @@ export function useQueenBeeVoice(
       }
       sttSocket = socket;
 
+      // End-of-speech is the CLIENT's call on this path: gpt-realtime-whisper
+      // streams transcription deltas continuously but rejects server-side
+      // turn_detection outright (the client_secrets mint 400s — verified
+      // 2026-07-05), so the energy VAD below decides when the utterance is
+      // over and commits it. The VAD loop is timer-backstopped against
+      // WKWebView rAF starvation — the freeze that used to leave turns stuck
+      // in "listening" until a click/tap woke rAF and the commit finally ran.
       let committed = false;
       let liveTranscript = "";
       let youTurnId = 0;
@@ -1146,9 +1179,18 @@ export function useQueenBeeVoice(
       setPhase("thinking");
       setSpeechDetected(false);
       const youTurnId = addTurn("you", "Transcribing...", true);
-      abort.signal.addEventListener("abort", () => dropTurn(youTurnId), {
-        once: true,
-      });
+      // Session teardown must only drop a STILL-PENDING placeholder. Once the
+      // transcript lands, this turn is conversation history — the unremoved
+      // listener used to fire on End and silently delete the user's finalized
+      // messages (the overlay bridge mirrors removals into the shared chat).
+      let youTurnSettled = false;
+      abort.signal.addEventListener(
+        "abort",
+        () => {
+          if (!youTurnSettled) dropTurn(youTurnId);
+        },
+        { once: true },
+      );
       try {
         const form = new FormData();
         form.set(
@@ -1179,11 +1221,13 @@ export function useQueenBeeVoice(
           );
           return;
         }
+        youTurnSettled = true;
         updateTurn(youTurnId, transcribed.transcript);
         await runConverseTurn(transcribed.transcript);
       } catch (turnError) {
         if (cancelled) return;
         dropTurn(youTurnId);
+        youTurnSettled = true;
         failTurn(
           turnError instanceof Error
             ? turnError.message
@@ -1259,6 +1303,7 @@ export function useQueenBeeVoice(
         setPhase("starting");
         setError("");
         setTurns([]);
+        setSessionSerial((serial) => serial + 1);
         setSpeechDetected(false);
         if (!navigator.mediaDevices?.getUserMedia) {
           throw new Error(
@@ -1285,6 +1330,7 @@ export function useQueenBeeVoice(
         analyser.fftSize = 1024;
         const sourceNode = audioContext.createMediaStreamSource(stream);
         sourceNode.connect(analyser);
+        micAnalyserRef.current = analyser;
         // Silent processor chain keeps PCM flowing for realtime STT streaming.
         processor = audioContext.createScriptProcessor(4096, 1, 1);
         const silentGain = audioContext.createGain();
@@ -1360,6 +1406,7 @@ export function useQueenBeeVoice(
       }
       void audioContext?.close().catch(() => undefined);
       queenOutputAnalyserRef.current = null;
+      micAnalyserRef.current = null;
       if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     };
   }, [active, openingLine]);
@@ -1372,5 +1419,5 @@ export function useQueenBeeVoice(
     });
   }, [active, muted]);
 
-  return { phase, error, turns, speechDetected, working, voiceNotice };
+  return { phase, error, turns, speechDetected, working, voiceNotice, micAnalyserRef, sessionSerial };
 }

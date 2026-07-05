@@ -10,13 +10,16 @@ import {
   markCompanyDispatched,
   readCompanies,
   removeCompanyDirective,
+  resolveCompanyPricingProposal,
   setCompanyAgents,
+  setCompanyAnalytics,
   setCompanyAutonomy,
   setCompanyFrozen,
   updateCompanyMetric,
   upsertCompany,
 } from "@/lib/services/companies-store";
 import { dispatchCompanyGoal } from "@/lib/services/companies-orchestration";
+import { ensureCompanyProductsSeeded } from "@/lib/services/company-products";
 import {
   ensureCompanyAutonomyDriver,
   getCompanyAutonomyDriverStatus,
@@ -47,8 +50,19 @@ export async function GET(request: NextRequest) {
   // depend on a one-shot boot autostart. ensure() is a cheap no-op while the
   // driver is running.
   rememberCompanyDriverSelfBase(request.headers.get("host"));
-  const companies = await readCompanies();
+  let companies = await readCompanies();
   if (companies.some((company) => company.autonomy && !company.frozen)) ensureCompanyAutonomyDriver();
+  // First-read product seeding: a company that never had a catalog inherits
+  // default pricing from its attached repo's conventional pricing file (a
+  // write-once vault update), so its Products tab appears without a manual
+  // setup step. No-op for every company that already has (or emptied) one.
+  // Sequential on purpose: each seed is a read-modify-write of the shared
+  // definitions file, so parallel seeds could drop each other's write.
+  companies = await (async () => {
+    const seeded: Company[] = [];
+    for (const company of companies) seeded.push(await ensureCompanyProductsSeeded(company).catch(() => company));
+    return seeded;
+  })();
   const revenueRecords = await readCompanyRevenueLedger().catch(() => []);
   const withRollups = await Promise.all(
     companies.map(async (company) => ({
@@ -96,8 +110,11 @@ type CompanyBody = {
   source?: string;
   note?: string;
   // add-directive / remove-directive
-  directive?: { text?: string; skill?: string; attachments?: KanbanTaskAttachment[]; source?: "inject" | "reject"; deliverableRef?: string };
+  directive?: { text?: string; skill?: string; skills?: string[]; attachments?: KanbanTaskAttachment[]; source?: "inject" | "reject"; deliverableRef?: string };
   directiveId?: string;
+  // resolve-pricing (human decision on a crew-raised price-change request)
+  proposalId?: string;
+  decision?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -162,6 +179,7 @@ export async function POST(request: NextRequest) {
       const company = await addCompanyDirective(body.id.trim(), {
         text: body.directive.text,
         skill: body.directive.skill,
+        skills: body.directive.skills,
         attachments: body.directive.attachments,
         source: body.directive.source,
         deliverableRef: body.directive.deliverableRef,
@@ -175,6 +193,14 @@ export async function POST(request: NextRequest) {
       if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
       return NextResponse.json({ ok: true, company });
     }
+    if (action === "resolve-pricing") {
+      if (!body.id?.trim() || !body.proposalId?.trim()) return NextResponse.json({ ok: false, error: "id and proposalId are required" }, { status: 400 });
+      const decision = body.decision === "approve" ? "approve" : body.decision === "reject" ? "reject" : null;
+      if (!decision) return NextResponse.json({ ok: false, error: "decision must be approve or reject" }, { status: 400 });
+      const company = await resolveCompanyPricingProposal(body.id.trim(), body.proposalId.trim(), decision, body.note);
+      if (!company) return NextResponse.json({ ok: false, error: "Company or proposal not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, company });
+    }
     if (action === "stop-autonomy") {
       if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
       const company = await setCompanyAutonomy(body.id.trim(), false);
@@ -185,6 +211,14 @@ export async function POST(request: NextRequest) {
       if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
       const removed = await deleteCompany(body.id.trim());
       return NextResponse.json({ ok: removed, error: removed ? undefined : "Company not found." }, { status: removed ? 200 : 404 });
+    }
+    if (action === "set-analytics") {
+      // Merge-safe: sets ONLY the analytics link so the Analytics tab's provider
+      // cards can (re)point a company without a full upsert blanking other fields.
+      if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      const company = await setCompanyAnalytics(body.id.trim(), body.analyticsProvider, body.analyticsConfig);
+      if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, company });
     }
     const company = await upsertCompany({
       id: body.id,

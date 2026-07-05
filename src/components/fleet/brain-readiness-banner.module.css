@@ -1,0 +1,177 @@
+/* Brain-readiness banner — matches the fleet "Hive" view's warm-neutral
+   palette (fleet-hive.css) but deliberately reads as an ALERT strip: a
+   tone-tinted wash + tinted hairlines + a filled pill CTA (same language as
+   the gold "Call" button) so it doesn't blend into the panel chrome.
+   Renders OUTSIDE .fr-root, so tokens are re-declared here, scoped to
+   .banner, with a [data-theme="hive-light"] mirror. Honey = queen attention,
+   live-teal = ready-to-enable. */
+
+.banner {
+  --brb-display: "Space Grotesk", system-ui, sans-serif;
+  --brb-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --brb-panel: linear-gradient(180deg, rgba(24, 27, 34, 0.94), rgba(16, 17, 22, 0.9));
+  --brb-fg: #f3f0e9;
+  --brb-fg-2: #b5b0a5;
+  --brb-fg-3: #8a857b;
+
+  /* tone (honey by default; loops tone overrides below) */
+  --brb-tint: #e7b45c;
+  --brb-tint-strong: #f0c879;
+  --brb-tint-ink: #241c0d;
+  --brb-tint-wash: linear-gradient(180deg, rgba(231, 180, 92, 0.2), rgba(231, 180, 92, 0.05));
+  --brb-tint-line: rgba(231, 180, 92, 0.55);
+  --brb-tint-soft: rgba(231, 180, 92, 0.16);
+  --brb-tint-glow: rgba(231, 180, 92, 0.22);
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--brb-tint-line);
+  border-bottom: 1px solid var(--brb-tint-line);
+  background: var(--brb-tint-wash), var(--brb-panel);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px -18px var(--brb-tint-glow);
+  color: var(--brb-fg);
+  backdrop-filter: blur(10px);
+}
+
+.banner[data-tone="loops"] {
+  --brb-tint: #6fcdba;
+  --brb-tint-strong: #8adcc9;
+  --brb-tint-ink: #06231d;
+  --brb-tint-wash: linear-gradient(180deg, rgba(111, 205, 186, 0.18), rgba(111, 205, 186, 0.04));
+  --brb-tint-line: rgba(111, 205, 186, 0.5);
+  --brb-tint-soft: rgba(111, 205, 186, 0.14);
+  --brb-tint-glow: rgba(111, 205, 186, 0.2);
+}
+
+:global([data-theme="hive-light"]) .banner {
+  --brb-panel: linear-gradient(180deg, rgba(251, 248, 241, 0.96), rgba(244, 239, 228, 0.92));
+  --brb-fg: #262218;
+  --brb-fg-2: #55503f;
+  --brb-fg-3: #7d7663;
+  --brb-tint: #8c5e0a;
+  --brb-tint-strong: #a87413;
+  --brb-tint-ink: #fdf8ec;
+  --brb-tint-wash: linear-gradient(180deg, rgba(184, 130, 22, 0.22), rgba(184, 130, 22, 0.07));
+  --brb-tint-line: rgba(140, 94, 10, 0.5);
+  --brb-tint-soft: rgba(184, 130, 22, 0.16);
+  --brb-tint-glow: rgba(140, 94, 10, 0.18);
+}
+
+:global([data-theme="hive-light"]) .banner[data-tone="loops"] {
+  --brb-tint: #0d8e7e;
+  --brb-tint-strong: #0f9f8d;
+  --brb-tint-ink: #f0faf7;
+  --brb-tint-wash: linear-gradient(180deg, rgba(13, 142, 126, 0.18), rgba(13, 142, 126, 0.06));
+  --brb-tint-line: rgba(13, 90, 78, 0.45);
+  --brb-tint-soft: rgba(13, 142, 126, 0.14);
+  --brb-tint-glow: rgba(13, 142, 126, 0.16);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 11px;
+  border: 1px solid var(--brb-tint-line);
+  background: var(--brb-tint-soft);
+  color: var(--brb-tint-strong);
+}
+
+.badge svg {
+  width: 16px;
+  height: 16px;
+}
+
+.copy {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.eyebrow {
+  font-family: var(--brb-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brb-tint-strong);
+}
+
+.title {
+  font-family: var(--brb-display);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--brb-fg);
+}
+
+.detail {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--brb-fg-2);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--brb-tint-line);
+  background: linear-gradient(180deg, var(--brb-tint-strong), var(--brb-tint));
+  color: var(--brb-tint-ink);
+  font-family: var(--brb-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 6px 18px -8px var(--brb-tint-glow);
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+
+.action:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.action:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
+.dismiss {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 999px;
+  color: var(--brb-fg-3);
+  font-family: var(--brb-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+
+.dismiss:hover {
+  color: var(--brb-fg);
+}

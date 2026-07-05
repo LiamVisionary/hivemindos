@@ -1214,7 +1214,7 @@ run_helper() {
 }
 
 run_helper "$ROOT" "\$@" || true
-for root in "\$PWD" "\$HOME/hivemindos" "\$HOME/omni-agent-hivemind" "\$HOME/Documents/code/projects/hivemind-os"; do
+for root in "\$PWD" "\$HOME/hivemindos" "\$HOME/hivemind-os" "\$HOME/Documents/code/projects/hivemind-os"; do
   run_helper "\$root" "\$@" || true
 done
 found="\$(find "\$HOME" -maxdepth 6 -type f -path "*/scripts/\$command_name" 2>/dev/null | head -1 || true)"

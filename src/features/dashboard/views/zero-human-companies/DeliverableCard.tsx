@@ -6,6 +6,7 @@
 // open in the in-app viewer, and junk never reaches this component (the model
 // buckets it into the collapsed "working files" group).
 import React from "react";
+import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import { FileViewerModal } from "./FileViewer";
 import { RejectDeliverableModal } from "./RejectDeliverableModal";
 import { Snackbar } from "./Snackbar";
@@ -153,7 +154,14 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
   const hoverProps = { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) };
 
   const cardEl = isLink ? (
-    <a href={url} target="_blank" rel="noreferrer" style={surface} {...hoverProps}>{body}</a>
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      style={surface}
+      {...hoverProps}
+      onClick={(event) => { if (url && isExternalHttpUrl(url)) { event.preventDefault(); void openExternalUrl(url); } }}
+    >{body}</a>
   ) : action === "none" ? (
     <div style={{ ...surface, opacity: 0.75 }} title={item.internalReason ? `${deliverable.path || deliverableHref(deliverable) || ""} — ${item.internalReason}` : undefined}>{body}</div>
   ) : (

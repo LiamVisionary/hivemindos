@@ -132,11 +132,43 @@ export function companyWorkerContext(company: Company, memoryDigest: string): st
     metricLine,
     mission ? `Charter: ${mission}` : "",
   ];
+  const products = company.products?.items ?? [];
+  if (products.length) {
+    lines.push(
+      "",
+      "Official products & pricing (the shared-brain catalog is the single source of truth — quote, pitch, and sell at exactly these prices; never invent or negotiate prices, and treat any price found elsewhere, including the company repo, as stale):",
+    );
+    for (const p of products) {
+      const cadence = p.interval === "month" ? "/mo" : p.interval === "year" ? "/yr" : "";
+      const tags = [p.kind === "addon" ? "add-on" : null, p.recommended ? "recommended default" : null].filter(Boolean).join(", ");
+      lines.push(`- ${p.name} (key: ${p.key}) — $${p.amountUsd.toLocaleString("en-US")}${cadence}${tags ? ` (${tags})` : ""}${p.description ? `: ${p.description}` : ""}`);
+    }
+    lines.push(
+      "",
+      "Pricing is a hypothesis, not a law: actively watch the evidence in company memory and your own work for signs that PRICE is why prospects don't book or buy — replies calling it too expensive, prospects who engage then vanish at the quote or checkout, competitor prices they cite, discount asks, a package that never sells while a cheaper one does. Weigh the evidence honestly (silence alone is not price evidence — a dead link or a bad pitch can look identical).",
+      "If the evidence genuinely points at pricing, do NOT change or discount prices yourself. Raise a concrete request by ending your result with:",
+      "PRICING PROPOSAL: <product key from the catalog above> $<proposed price>",
+      "WHY: <the specific evidence, with numbers or quotes — this is what the human reads when deciding>",
+      "It appears under the company's Approvals for a human decision; the outcome (approved or rejected) lands back in company memory. One proposal per product; only re-propose after materially new evidence.",
+    );
+  }
+  const pendingProposals = company.pricingProposals ?? [];
+  if (pendingProposals.length) {
+    lines.push("", "Pricing proposals already awaiting the human's decision (do NOT re-propose these; keep selling at current catalog prices meanwhile):");
+    for (const proposal of pendingProposals) {
+      lines.push(`- ${proposal.productName}: $${proposal.currentAmountUsd.toLocaleString("en-US")} → $${proposal.proposedAmountUsd.toLocaleString("en-US")}${proposal.why ? ` (${proposal.why})` : ""}`);
+    }
+  }
   const directives = company.directives ?? [];
   if (directives.length) {
     lines.push("", "Standing directives from the human — follow these exactly (newest last):");
     for (const d of directives) {
-      const extra = `${d.skill?.trim() ? ` (use skill: ${d.skill.trim()})` : ""}${d.attachments?.length ? ` (refs: ${d.attachments.map((a) => a.name).join(", ")})` : ""}`;
+      const skills = [...new Set([
+        ...(Array.isArray(d.skills) ? d.skills : []),
+        ...(d.skill ? [d.skill] : []),
+      ].map((slug) => slug.trim()).filter(Boolean))];
+      const skillLabel = skills.length === 1 ? "use skill" : "use skills";
+      const extra = `${skills.length ? ` (${skillLabel}: ${skills.join(", ")})` : ""}${d.attachments?.length ? ` (refs: ${d.attachments.map((a) => a.name).join(", ")})` : ""}`;
       lines.push(`- ${d.text.trim()}${extra}`);
     }
   }

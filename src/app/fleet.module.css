@@ -24,6 +24,13 @@
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
 }
 
+/* A full-bleed banner strip (brain readiness) sits flush at the panel top —
+   square the top corners so overflow:hidden doesn't clip it rounded. */
+.fleetConstellationPanel[data-flush-banner] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 .fleetViewport {
   min-height: 0;
   flex: 1 1 auto;

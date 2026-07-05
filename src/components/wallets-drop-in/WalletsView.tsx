@@ -7,6 +7,7 @@ import "./wallets.css";
 import * as D from "./wallet-data";
 import type { DropInWallet, WalletBankrInfo, WalletHolding, WalletRail, WalletRailId, WalletRuntimeData, WalletTokenMeta } from "./wallet-data";
 import { chainBadgeSrc, type GroupedPersonalWallet } from "@/lib/utils/personal-wallet-grouping";
+import { ClawBankStatusCard } from "./ClawBankStatusCard";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions, type WalletRewardsActionsSlice } from "./WalletRewardsActions";
 import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
@@ -1543,6 +1544,7 @@ function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }: { action
         <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)" }}>{ready} of {FR_RAIL_CONFIG.length} ready</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16, alignItems: "start" }}>
+        <ClawBankStatusCard />
         {FR_RAIL_CONFIG.map((r) => {
           const agents = frRailAgents(r.id);
           const isReady = r.enabled && r.setup === "ready";

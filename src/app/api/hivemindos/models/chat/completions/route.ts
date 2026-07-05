@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   HIVEMINDOS_WALLET_PAID_MODELS_NAME,
+  isFreeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidSlug,
   upstreamHivemindosWalletPaidModel,
 } from "@/lib/config/hivemindos-wallet-paid-models";
+import { freeTierDeviceId } from "@/lib/services/free-tier-identity";
 import { getHivemindosModelCreditToken } from "@/lib/services/hivemindos-model-credit-vault";
+import { freeModelChatCompletionsUrl } from "@/lib/services/paid-agent-cloud-client";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { executeX402Fetch, type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
@@ -36,11 +39,17 @@ export async function POST(request: NextRequest) {
   }
 
   const slug = normalizeHivemindosWalletPaidSlug(request.headers.get("x-hivemindos-wallet-model-slug"));
+  const model = normalizeHivemindosWalletPaidModel(String(body.model || ""));
+  const upstreamModel = upstreamHivemindosWalletPaidModel(model);
+  // The free model never touches credits or wallets: it goes to the hosted
+  // free-models surface, which is the authority on the daily allowance.
+  if (isFreeHivemindosWalletPaidModel(model)) {
+    return fetchFreeModelCompletion(body, upstreamModel, model);
+  }
+
   const creditToken = await getHivemindosModelCreditToken(agentId, slug).catch(() => "");
   const target = new URL(`/api/official-paid-agents/${slug}/chat/completions`, request.url);
   const paidBase = new URL(`/api/official-paid-agents/${slug}`, request.url).toString().replace(/\/+$/, "");
-  const model = normalizeHivemindosWalletPaidModel(String(body.model || ""));
-  const upstreamModel = upstreamHivemindosWalletPaidModel(model);
   if (creditToken) {
     return fetchWithHostedCredits(target, creditToken, body, upstreamModel, model);
   }
@@ -137,6 +146,80 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "HivemindOS Models wallet-paid request failed.";
     return jsonError(message, errorStatusFor(message));
+  }
+}
+
+const FREE_ALLOWANCE_HEADERS = [
+  "x-hivemindos-free-remaining-requests",
+  "x-hivemindos-free-remaining-tokens",
+  "x-hivemindos-free-reset-at",
+  "retry-after",
+];
+
+function applyFreeAllowanceHeaders(upstream: Response, next: NextResponse) {
+  for (const name of FREE_ALLOWANCE_HEADERS) {
+    const value = upstream.headers.get(name);
+    if (value) next.headers.set(name, value);
+  }
+}
+
+async function fetchFreeModelCompletion(
+  body: OpenAIChatCompletionBody,
+  upstreamModel: string,
+  model: string,
+) {
+  const target = freeModelChatCompletionsUrl(upstreamModel);
+  if (!target) {
+    return jsonError("The free HivemindOS model endpoint is not configured.", 424);
+  }
+  const deviceId = await freeTierDeviceId();
+  try {
+    const response = await fetch(target, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-HivemindOS-Free-Device": deviceId,
+      },
+      body: JSON.stringify({
+        ...body,
+        model: upstreamModel,
+        stream: false,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS),
+    });
+    const bodyPreview = await response.text();
+    const bodyJson = jsonFromText(bodyPreview);
+    if (!response.ok) {
+      const limited = response.status === 429;
+      const next = NextResponse.json({
+        ok: false,
+        error: upstreamError(bodyJson) || (limited
+          ? "Today's free Swarm Sovereign Scout allowance is used up. It resets daily — or pick a wallet-paid route."
+          : `The free HivemindOS model returned HTTP ${response.status}.`),
+        status: response.status,
+        paid: "free",
+        amountUsd: 0,
+      }, { status: response.status >= 400 && response.status < 600 ? response.status : 502 });
+      applyFreeAllowanceHeaders(response, next);
+      return next;
+    }
+
+    const payload = openAiCompletionPayload(bodyJson, bodyPreview, model);
+    const next = NextResponse.json(payload, {
+      status: 200,
+      headers: {
+        "X-HivemindOS-Wallet-Paid": "free",
+        "X-HivemindOS-Wallet-Paid-Network": "hosted",
+        "X-HivemindOS-Wallet-Paid-Amount-Usd": "0",
+      },
+    });
+    applyFreeAllowanceHeaders(response, next);
+    return next;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The free HivemindOS model request failed.";
+    return jsonError(message, 502);
   }
 }
 

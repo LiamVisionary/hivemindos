@@ -1,4 +1,5 @@
 import type { RuntimeModelSelection } from "@/features/dashboard/dashboard-types";
+import { scoreModelStrength } from "@/lib/config/model-strength";
 
 type RuntimeModelProvider = RuntimeModelSelection["providers"][number];
 type RuntimeModelOption = RuntimeModelProvider["models"][number];
@@ -26,18 +27,9 @@ function modelSearchText(model: RuntimeModelOption) {
 
 function scoreModel(model: RuntimeModelOption) {
   const text = modelSearchText(model);
-  let score = 0;
-  if (text.includes("gpt-5")) score += 920;
-  if (text.includes("codex")) score += 880;
-  if (text.includes("claude-4") || text.includes("claude-sonnet-4") || text.includes("claude-opus-4")) score += 860;
-  if (text.includes("qwen3.7") || text.includes("qwen3-7") || text.includes("qwen-3.7")) score += 840;
-  if (text.includes("max")) score += 70;
-  if (text.includes("pro")) score += 55;
-  if (text.includes("sonnet")) score += 45;
-  if (text.includes("reason")) score += 35;
-  if (text.includes("mini")) score -= 80;
-  if (text.includes("nano")) score -= 90;
-  if (text.includes("small")) score -= 60;
+  // Family ranking is single-sourced in the model-strength matrix; only the
+  // catalog-specific demotions (previews, deprecations) live here.
+  let score = scoreModelStrength(text).score;
   if (text.includes("preview")) score -= 15;
   if (text.includes("deprecated")) score -= 200;
   return score;

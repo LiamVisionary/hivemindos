@@ -2,26 +2,34 @@
 // Zero Human Companies — single colony cockpit (tabbed).
 import React from "react";
 import { Settings2 } from "lucide-react";
-import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel } from "./primitives";
+import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel, Spinner, Skeleton, SkeletonText } from "./primitives";
 import { IssueBoard } from "./IssueBoard";
 import { STATUS_TONE } from "./data";
 import { CompanyIssueSummaryCard, isCompanyReviewIssue } from "./CompanyIssueActions";
 import { SetupBlockerBand } from "./SetupBlockerBand";
+import { EmailQaBand } from "./EmailQaBand";
 import { ConsolidatedIssueCard } from "./ConsolidatedIssueCard";
 import { EmailThreadModal } from "./EmailThreadModal";
 import { groupIssuesByReason } from "./issue-reason";
 import type { PreviewDecision } from "./preview-review";
 import { DeliverableCard } from "./DeliverableCard";
 import { AnalyticsPanel } from "./AnalyticsPanel";
+import { ProductsPanel } from "./ProductsPanel";
 import { CompanyKnowledgePanel } from "./CompanyKnowledgePanel";
 import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable } from "./deliverables-model";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
 import type { Agent, Approval, Colony, CompanyRevenueShareInput, Issue } from "./types";
+import type { CompanyPricingProposal } from "@/lib/types/company";
 import type { CompanyEmailDirection, CompanyEmailThread, CompanyEmailThreadsResult, CompanyMailbox, MailProviderSummary } from "@/lib/services/agent-mailboxes";
+import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
+
+type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 
 export type CockpitHandlers = {
   onApprove: (approvalId: string) => void;
   onReject: (approvalId: string) => void;
+  /** Human decision on a crew-raised pricing proposal (approve applies the catalog change). */
+  onResolvePricing: (proposalId: string, decision: "approve" | "reject") => void;
   onFreeze: (frozen: boolean) => void;
   onDelete: () => void;
   /** Launch perpetual autonomy: decompose the apex goal + dispatch to the crew. */
@@ -38,6 +46,9 @@ export type CockpitHandlers = {
   onOpenIssue: (issue: Issue) => void;
   /** Human fixed the blocker; answer the Needs-You task so it resumes. */
   onResolveIssue: (issue: Issue) => void;
+  /** Set aside issues: archive their tasks off the board (persistent, reversible).
+   *  Pass a single-item array for one issue, or the whole chain for a group. */
+  onDismissIssues: (issues: Issue[]) => void;
   /** Approve a customer-facing preview, or send the crew change notes to regenerate it. */
   onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
   /** Record external company revenue and optionally collect the platform share. */
@@ -193,8 +204,34 @@ function ApprovalCard({ ap, onApprove, onReject, busy }: { ap: Approval; onAppro
       </div>
       <div style={{ fontSize: 13, color: "var(--fg)", fontWeight: 500, lineHeight: 1.4, textWrap: "pretty", flex: 1 }}>{ap.title}</div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        <button disabled={busy} onClick={onApprove} style={btn("var(--cyan)", true, busy)}>{busy ? "…" : "approve"}</button>
+        <button disabled={busy} onClick={onApprove} style={btn("var(--cyan)", true, busy)}>{busy ? <Spinner size={11} /> : "approve"}</button>
         <button disabled={busy} onClick={onReject} style={btn("var(--fg-3)", false, busy)}>reject</button>
+      </div>
+    </div>
+  );
+}
+
+/** A crew-raised price-change request: approve applies it to the shared-brain catalog. */
+function PricingProposalCard({ proposal, onApprove, onReject, busy }: { proposal: CompanyPricingProposal; onApprove: () => void; onReject: () => void; busy: boolean }) {
+  const up = proposal.proposedAmountUsd > proposal.currentAmountUsd;
+  return (
+    <div style={{ borderRadius: 11, border: "1px solid color-mix(in srgb, var(--honey) 30%, var(--line))", background: "var(--bg-2)", padding: "13px 14px", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
+        <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: "var(--honey-2)", textTransform: "uppercase", letterSpacing: 0.06, border: "1px solid color-mix(in srgb, var(--honey) 40%, transparent)", borderRadius: 4, padding: "1px 5px" }}>pricing change</span>
+        <span style={{ flex: 1 }} />
+        {proposal.proposedBy && <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>req. {proposal.proposedBy}</span>}
+      </div>
+      <div style={{ fontSize: 13, color: "var(--fg)", fontWeight: 500, lineHeight: 1.4, textWrap: "pretty" }}>
+        {proposal.productName}:{" "}
+        <span style={{ fontFamily: "var(--f-mono)", textDecoration: "line-through", color: "var(--fg-4)" }}>${proposal.currentAmountUsd.toLocaleString("en-US")}</span>{" "}
+        → <span style={{ fontFamily: "var(--f-mono)", color: up ? "var(--honey-2)" : "var(--cyan)" }}>${proposal.proposedAmountUsd.toLocaleString("en-US")}</span>
+      </div>
+      {proposal.why && (
+        <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.45, marginTop: 7, textWrap: "pretty", flex: 1 }}>{proposal.why}</div>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <button disabled={busy} onClick={onApprove} style={btn("var(--cyan)", true, busy)} title="Apply the new price to the shared-brain catalog">{busy ? <Spinner size={11} /> : "approve new price"}</button>
+        <button disabled={busy} onClick={onReject} style={btn("var(--fg-3)", false, busy)} title="Keep the current price; the crew learns the decision">reject</button>
       </div>
     </div>
   );
@@ -345,8 +382,8 @@ function ReviewStrip({ colony: c, deliverableCount, deliverableLabel, onGoToIssu
   );
 }
 
-function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onReviewPreview, busyId }: {
-  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; busyId: string | null;
+function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onReviewPreview, onDismissIssues, busyId }: {
+  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; onDismissIssues: (issues: Issue[]) => void; busyId: string | null;
 }) {
   const reviewIssues = c.issues.filter(isCompanyReviewIssue);
   const activeIssues = c.issues.filter((issue) => issue.status !== "done");
@@ -356,13 +393,14 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onReviewPreview, 
         issues
       </SectionLabel>
       <SetupBlockerBand companyId={c.id} />
+      <EmailQaBand key={c.id} companyId={c.id} />
       {reviewIssues.length === 0 ? (
         <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "20px 0" }}>No unresolved issues — the crew can keep moving on its own.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {groupIssuesByReason(reviewIssues).map((group) =>
             group.issues.length > 1 && group.info.consolidatable ? (
-              <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={c.name} onOpenIssue={onOpenIssue} />
+              <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={c.name} onOpenIssue={onOpenIssue} onDismiss={onDismissIssues} />
             ) : (
               group.issues.map((issue) => (
                 <CompanyIssueSummaryCard
@@ -372,6 +410,7 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onReviewPreview, 
                   onOpenIssue={onOpenIssue}
                   onResolveIssue={onResolveIssue}
                   onReviewPreview={onReviewPreview}
+                  onDismiss={onDismissIssues}
                   busy={busyId === issue.work?.taskId}
                 />
               ))
@@ -611,6 +650,26 @@ function EmailsPlaceholder({ icon, title, body, tone = "muted" }: { icon: string
   );
 }
 
+/** Shape-matched skeleton for the thread grid while mail loads. */
+function EmailsLoadingSkeleton() {
+  return (
+    <div role="status" aria-label="Loading email threads" style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 12, background: "var(--bg-2)", padding: 14, display: "flex", flexDirection: "column", gap: 11 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Skeleton width={30} height={30} radius={8} />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+              <Skeleton width="58%" height={11} />
+              <Skeleton width="38%" height={9} />
+            </div>
+          </div>
+          <SkeletonText lines={2} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 type CompanyEmailsResponse = CompanyEmailThreadsResult & { ok?: boolean; error?: string };
 
 /**
@@ -700,7 +759,7 @@ function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec:
               aria-label="Refresh email threads"
               style={{ display: "inline-grid", placeItems: "center", width: 24, height: 24, cursor: loading ? "default" : "pointer", border: "1px solid var(--line-2)", borderRadius: 7, background: "transparent", color: "var(--fg-4)", opacity: loading ? 0.5 : 1, fontSize: 12 }}
             >
-              {loading ? "…" : "↻"}
+              {loading ? <Spinner size={12} /> : "↻"}
             </button>
           </span>
         }
@@ -729,7 +788,7 @@ function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec:
       )}
 
       {loading && !data ? (
-        <EmailsPlaceholder icon="📬" title="Loading threads…" body="Fetching the crew's outreach across its mail providers." />
+        <EmailsLoadingSkeleton />
       ) : error ? (
         <EmailsPlaceholder icon="⚠️" title="Couldn't load email threads" body={error} tone="warn" />
       ) : view === "mailboxes" ? (
@@ -807,7 +866,13 @@ function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec:
   );
 }
 
-function CapabilityCapitalPanel({ colony: c }: { colony: Colony }) {
+function CapabilityCapitalPanel({
+  colony: c,
+  openSkillAttachmentBrowser,
+}: {
+  colony: Colony;
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+}) {
   const cc = c.capabilityCapital;
   const gatePct = cc.evalGates > 0 ? Math.round((cc.passedEvalGates / cc.evalGates) * 100) : 0;
   const stats = [
@@ -863,7 +928,7 @@ function CapabilityCapitalPanel({ colony: c }: { colony: Colony }) {
           ))}
         </div>
       </Panel>
-      <CompanyKnowledgePanel colony={c} />
+      <CompanyKnowledgePanel colony={c} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />
     </div>
   );
 }
@@ -960,7 +1025,7 @@ function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: 
           disabled={!canSubmit || busy}
           style={{ height: 34, minWidth: 150, padding: "0 13px", borderRadius: 8, cursor: !canSubmit || busy ? "not-allowed" : "pointer", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.06, border: "1px solid color-mix(in srgb, var(--honey) 45%, transparent)", background: !canSubmit || busy ? "var(--bg-3)" : "var(--honey-2)", color: !canSubmit || busy ? "var(--fg-4)" : "var(--bg-0)", opacity: busy ? 0.6 : 1 }}
         >
-          {busy ? "…" : collectFee ? "Record + collect" : "Record"}
+          {busy ? <Spinner size={12} /> : collectFee ? "Record + collect" : "Record"}
         </button>
       </form>
     </Panel>
@@ -1038,7 +1103,7 @@ function TreasurySection({ colony: c, handlers }: { colony: Colony; handlers: Co
               color: c.frozen ? "var(--cyan-2)" : "var(--danger-2)", opacity: busy ? 0.5 : 1,
             }}
           >
-            {busy ? "…" : c.frozen ? "Unfreeze company" : "Freeze company"}
+            {busy ? <Spinner size={12} /> : c.frozen ? "Unfreeze company" : "Freeze company"}
           </button>
           {confirmDelete ? (
             <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
@@ -1066,11 +1131,14 @@ function KStat({ n, label, tone, last }: { n: number; label: string; tone?: "hon
 
 // ── The cockpit ────────────────────────────────────────────────────────────
 export function Cockpit({
-  colony: c, colonies, showBudget, onBack, onSwitch, onAddAgents, handlers, theme = "dark",
+  colony: c, colonies, showBudget, onBack, onSwitch, onAddAgents, openSkillAttachmentBrowser, handlers, theme = "dark", initialTasksLoading = false,
 }: {
   colony: Colony; colonies: Colony[]; showBudget: boolean;
   onBack: () => void; onSwitch: (id: string) => void; onAddAgents: () => void;
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   handlers: CockpitHandlers; theme?: "dark" | "light";
+  /** True until the first Work Board tasks fetch lands — shows board lane skeletons. */
+  initialTasksLoading?: boolean;
 }) {
   const wb = c.workBlock;
   const wbPct = wb.total > 0 ? Math.round((wb.done / wb.total) * 100) : 0;
@@ -1082,20 +1150,33 @@ export function Cockpit({
 
   // Badge the headline-output count so it matches the panel — the raw per-task
   // total double-counts shared files and buries the product in scratch/log files.
+  // Rejected deliverables are recorded as `reject` directives (matched by title,
+  // same contract the panel uses) and must not keep drawing the badge's attention.
+  const rejectedDeliverableTitles = React.useMemo(
+    () => new Set((c.directives ?? []).filter((d) => d.source === "reject" && d.deliverableRef).map((d) => d.deliverableRef as string)),
+    [c.directives],
+  );
   const deliverableCount = React.useMemo(
-    () => collectCompanyDeliverables(c).filter((x) => spec.classOf(x.classified) === "primary").length,
-    [c, spec],
+    () =>
+      collectCompanyDeliverables(c).filter(
+        (x) => spec.classOf(x.classified) === "primary" && !rejectedDeliverableTitles.has(x.classified.title),
+      ).length,
+    [c, spec, rejectedDeliverableTitles],
   );
   const issueCount = c.issues.filter(isCompanyReviewIssue).length;
+  const pricingProposals = c.pricingProposals ?? [];
   const tabs: { key: string; label: string; badge?: number | null; tone?: "danger" }[] = [
     { key: "board", label: "Board" },
     { key: "issues", label: "Issues", badge: issueCount || null, tone: "danger" },
     { key: "deliverables", label: spec.primaryLabel, badge: deliverableCount || null },
     ...(spec.comms ? [{ key: "comms", label: spec.commsLabel }] : []),
+    // Only companies that sell fixed products carry a catalog (repo-seeded or
+    // human-set in the shared brain) — no catalog, no Products tab.
+    ...(c.products ? [{ key: "products", label: "Products", badge: c.products.items.length || null }] : []),
     { key: "analytics", label: "Analytics" },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
     { key: "team", label: "Team" },
-    { key: "approvals", label: "Approvals", badge: c.approvals.length || null },
+    { key: "approvals", label: "Approvals", badge: c.approvals.length + pricingProposals.length || null },
     { key: "governance", label: "Governance" },
     ...(showBudget ? [{ key: "treasury", label: "Treasury" }] : []),
   ];
@@ -1142,7 +1223,7 @@ export function Cockpit({
         <div style={{ display: "flex", gap: 0, paddingTop: 2 }}>
           <KStat n={c.issues.filter((i) => i.status === "done").length} label="shipped" />
           <KStat n={c.agents.filter((a) => a.state === "working").length} label="at work" />
-          <KStat n={c.approvals.length} label="to approve" tone={c.approvals.length ? "honey" : null} last />
+          <KStat n={c.approvals.length + pricingProposals.length} label="to approve" tone={c.approvals.length + pricingProposals.length ? "honey" : null} last />
         </div>
       </div>
 
@@ -1207,7 +1288,7 @@ export function Cockpit({
                       color: "var(--warn)", opacity: busy ? 0.6 : 1,
                     }}
                   >
-                    {busy ? "…" : "■ Stop autonomy"}
+                    {busy ? <><Spinner size={13} /> Stopping</> : "■ Stop autonomy"}
                   </button>
                 ) : (
                   <button
@@ -1222,7 +1303,7 @@ export function Cockpit({
                       color: launchDisabled ? "var(--fg-4)" : "var(--bg-0)", opacity: launchDisabled ? 0.6 : 1,
                     }}
                   >
-                    {busy ? "Launching…" : launchedAgo ? "▶ Re-launch autonomy" : "▶ Launch autonomous work"}
+                    {busy ? <><Spinner size={13} /> Launching</> : launchedAgo ? "▶ Re-launch autonomy" : "▶ Launch autonomous work"}
                   </button>
                 )}
               </div>
@@ -1236,29 +1317,42 @@ export function Cockpit({
               </div>
               <div style={{ fontFamily: "var(--f-display)", fontSize: 19, fontWeight: 600, letterSpacing: -0.4, marginTop: 4 }}>{wb.name}</div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontFamily: "var(--f-display)", fontSize: 22, fontWeight: 600, color: "var(--fg)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{wb.done}<span style={{ color: "var(--fg-4)", fontSize: 15 }}>/{wb.total}</span></div>
-              <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3 }}>eta {wb.eta}</div>
+            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}>
+              {initialTasksLoading ? (
+                <>
+                  <Skeleton width={52} height={22} radius={5} />
+                  <Skeleton width={38} height={9} />
+                </>
+              ) : (
+                <>
+                  <div style={{ fontFamily: "var(--f-display)", fontSize: 22, fontWeight: 600, color: "var(--fg)", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{wb.done}<span style={{ color: "var(--fg-4)", fontSize: 15 }}>/{wb.total}</span></div>
+                  <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3 }}>eta {wb.eta}</div>
+                </>
+              )}
             </div>
           </div>
           <div style={{ height: 5, borderRadius: 999, background: "var(--bg-3)", overflow: "hidden", marginBottom: 20 }}>
             <div style={{ width: wbPct + "%", height: "100%", background: "var(--cyan)", transition: "width 600ms ease" }} />
           </div>
           <div style={{ overflowX: "auto", paddingBottom: 4 }} className="scrollbar-thin">
-            <IssueBoard colony={c} companyName={c.name} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} busyId={handlers.busyId} />
+            <IssueBoard colony={c} companyName={c.name} boardLoading={initialTasksLoading} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} />
           </div>
         </Panel>
       )}
 
-      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} busyId={handlers.busyId} />}
+      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} />}
 
       {active === "deliverables" && <DeliverablesPanel colony={c} spec={spec} theme={theme} />}
 
       {active === "comms" && <CommsPanel colony={c} spec={spec} theme={theme} />}
 
+      {active === "products" && (
+        <ProductsPanel colony={c} pendingProposals={pricingProposals} onGoToApprovals={() => setTab("approvals")} />
+      )}
+
       {active === "analytics" && <AnalyticsPanel colony={c} />}
 
-      {active === "learning" && <CapabilityCapitalPanel colony={c} />}
+      {active === "learning" && <CapabilityCapitalPanel colony={c} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />}
 
       {active === "team" && (
         <Panel>
@@ -1275,10 +1369,23 @@ export function Cockpit({
 
       {active === "approvals" && (
         <Panel>
-          <SectionLabel right={c.approvals.length > 0 ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey-2)" }}>{c.approvals.length} waiting</span> : null}>needs your approval · human-in-the-loop</SectionLabel>
-          {c.approvals.length === 0 ? (
+          <SectionLabel right={c.approvals.length + pricingProposals.length > 0 ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey-2)" }}>{c.approvals.length + pricingProposals.length} waiting</span> : null}>needs your approval · human-in-the-loop</SectionLabel>
+          {pricingProposals.length > 0 && (
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", marginBottom: c.approvals.length ? 16 : 0 }}>
+              {pricingProposals.map((proposal) => (
+                <PricingProposalCard
+                  key={proposal.id}
+                  proposal={proposal}
+                  busy={handlers.busyId === proposal.id}
+                  onApprove={() => handlers.onResolvePricing(proposal.id, "approve")}
+                  onReject={() => handlers.onResolvePricing(proposal.id, "reject")}
+                />
+              ))}
+            </div>
+          )}
+          {c.approvals.length === 0 && pricingProposals.length === 0 ? (
             <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "20px 0" }}>✓ nothing pending — the colony is self-governing within policy.</div>
-          ) : (
+          ) : c.approvals.length === 0 ? null : (
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
               {c.approvals.map((ap) => (
                 <ApprovalCard

@@ -5946,26 +5946,62 @@ async function sendHermesChat(body, options = {}) {
   // only then report an honest error instead of returning ok:true with empty text.
   const primaryArgs = hermesCliArgs(agent, ["-z", text]);
   const fallbackArgs = ["-z", text];
+  const scopedModelRun =
+    JSON.stringify(primaryArgs) !== JSON.stringify(fallbackArgs);
   let content = "";
+  let primaryError = "";
   try {
     content = await runHermes(primaryArgs);
   } catch (error) {
-    if (
-      !abortSignal?.aborted &&
-      JSON.stringify(primaryArgs) === JSON.stringify(fallbackArgs)
-    )
-      throw error;
+    if (!abortSignal?.aborted && !scopedModelRun) throw error;
+    const maybe = error && typeof error === "object" ? error : {};
+    primaryError = String(
+      (maybe.stderr || "").trim() ||
+        (maybe.stdout || "").trim() ||
+        maybe.message ||
+        "",
+    );
   }
   if (abortSignal?.aborted) return abortedResult();
-  if (!content && JSON.stringify(primaryArgs) !== JSON.stringify(fallbackArgs)) {
+  // The agent's selected model/provider being unrunnable is a configuration
+  // error the user must SEE — answering anyway from the default hermes config
+  // silently serves a different (possibly paid) model while the dashboard
+  // claims the selected one (the 2026-07-05 Swarm Sovereign Scout → gpt-5.5
+  // incident). Config-shaped failures return the real error; only a silent
+  // empty run keeps the fallback, and then the swap is declared in the payload.
+  const configShapedError =
+    /unknown provider|unknown model|unsupported model|no such model|invalid provider|not a valid model/i.test(
+      primaryError,
+    );
+  if (scopedModelRun && configShapedError) {
+    return {
+      ok: false,
+      status: 502,
+      error:
+        `The agent's selected model (${agent.provider || "?"} / ${agent.model || "?"}) cannot run on this machine's hermes config: ${primaryError}` +
+        " Fix the agent's provider/model selection (or this machine's hermes providers) instead of relying on a silent default-model fallback.",
+      host: hostname(),
+    };
+  }
+  let modelFallback = null;
+  if (!content && scopedModelRun) {
     content = await runHermes(fallbackArgs).catch(() => "");
     if (abortSignal?.aborted) return abortedResult();
+    if (content) {
+      modelFallback = {
+        requestedProvider: agent.provider || "",
+        requestedModel: agent.model || "",
+        reason: primaryError || "the selected model produced no output",
+        note: "Answered by this machine's default hermes model config, NOT the agent's selected model.",
+      };
+    }
   }
   if (!content) {
     return {
       ok: false,
       status: 502,
       error:
+        primaryError ||
         "Hermes produced no output (silent failure). Check the agent's model/provider config or simplify the prompt.",
       host: hostname(),
     };
@@ -5975,6 +6011,12 @@ async function sendHermesChat(body, options = {}) {
     text: content,
     choices: [{ message: { role: "assistant", content } }],
     host: hostname(),
+    ...(modelFallback
+      ? {
+          modelFallback,
+          warning: `Model fallback: the selected ${modelFallback.requestedProvider}/${modelFallback.requestedModel} failed (${modelFallback.reason}); this reply came from the machine's default hermes model.`,
+        }
+      : {}),
   };
 }
 

@@ -103,6 +103,7 @@ const TESTS = [
   "test:queen-voice-prefs",
   "test:queen-voice-working",
   "test:runtime-portable-state",
+  "test:schedule-health",
   "test:shared-brain-index",
   "test:skill-loop-guard",
   "test:swarm-goal",

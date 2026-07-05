@@ -8,6 +8,8 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, MessageSquare, Paperclip } from "lucide-react";
 import { RejectDeliverableModal } from "./RejectDeliverableModal";
+import { SkeletonText, Spinner } from "./primitives";
+import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import type { CompanyEmailThread } from "@/lib/services/agent-mailboxes";
 
 const DIRECTION_LABEL: Record<string, string> = {
@@ -33,6 +35,20 @@ export function EmailThreadModal({
   const [correcting, setCorrecting] = React.useState(false);
   const [detail, setDetail] = React.useState<{ body?: string; links?: { label: string; url: string }[]; attachments?: { name: string; url?: string }[]; note?: string } | null>(null);
   const [loadingDetail, setLoadingDetail] = React.useState(() => !thread.body);
+  // Which external URL is mid-open — drives a spinner on the clicked chip. In the
+  // Tauri shell the open shells out to the OS browser and can take a couple of
+  // seconds; without this the chip looked dead until the browser finally appeared.
+  const [openingUrl, setOpeningUrl] = React.useState<string | null>(null);
+
+  const openLink = React.useCallback(async (url: string) => {
+    if (!isExternalHttpUrl(url)) return;
+    setOpeningUrl(url);
+    try {
+      await openExternalUrl(url);
+    } finally {
+      setOpeningUrl((current) => (current === url ? null : current));
+    }
+  }, []);
 
   // The maps-agency outbox ships its body in the list; other providers (AgentMail,
   // Cloudflare) don't — fetch the full body + attachments lazily on open.
@@ -91,13 +107,16 @@ export function EmailThreadModal({
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, letterSpacing: 0.06, textTransform: "uppercase", color: "var(--fg-4)" }}>Links in this email</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {links.map((link, index) => (
-                  <a key={index} href={link.url} target="_blank" rel="noreferrer" title={link.url} style={{ display: "inline-flex", alignItems: "center", gap: 6, maxWidth: 340, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--cyan-2)", textDecoration: "none", border: "1px solid color-mix(in srgb, var(--cyan) 35%, var(--line))", borderRadius: 8, padding: "5px 10px" }}>
-                    <ExternalLink size={13} aria-hidden style={{ flexShrink: 0 }} />
-                    <span style={{ fontWeight: 600, flexShrink: 0 }}>{link.label}</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--fg-4)" }}>{link.url.replace(/^https?:\/\//, "")}</span>
-                  </a>
-                ))}
+                {links.map((link, index) => {
+                  const opening = openingUrl === link.url;
+                  return (
+                    <a key={index} href={link.url} target="_blank" rel="noreferrer" title={link.url} aria-busy={opening} className="zhc-linkchip" onClick={(event) => { if (isExternalHttpUrl(link.url)) { event.preventDefault(); void openLink(link.url); } }} style={{ display: "inline-flex", alignItems: "center", gap: 6, maxWidth: 340, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--cyan-2)", textDecoration: "none", border: "1px solid color-mix(in srgb, var(--cyan) 35%, var(--line))", borderRadius: 8, padding: "5px 10px" }}>
+                      {opening ? <Spinner size={13} style={{ flexShrink: 0 }} /> : <ExternalLink size={13} aria-hidden style={{ flexShrink: 0 }} />}
+                      <span style={{ fontWeight: 600, flexShrink: 0 }}>{opening ? "Opening…" : link.label}</span>
+                      {!opening && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--fg-4)" }}>{link.url.replace(/^https?:\/\//, "")}</span>}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -108,8 +127,8 @@ export function EmailThreadModal({
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {attachments.map((attachment, index) =>
                   attachment.url ? (
-                    <a key={index} href={attachment.url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-2)", textDecoration: "none", border: "1px solid var(--line)", borderRadius: 8, padding: "5px 10px" }}>
-                      <Paperclip size={13} aria-hidden /> {attachment.name}
+                    <a key={index} href={attachment.url} target="_blank" rel="noreferrer" aria-busy={openingUrl === attachment.url} className="zhc-linkchip" onClick={(event) => { if (attachment.url && isExternalHttpUrl(attachment.url)) { event.preventDefault(); void openLink(attachment.url); } }} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-2)", textDecoration: "none", border: "1px solid var(--line)", borderRadius: 8, padding: "5px 10px" }}>
+                      {openingUrl === attachment.url ? <Spinner size={13} /> : <Paperclip size={13} aria-hidden />} {openingUrl === attachment.url ? "Opening…" : attachment.name}
                     </a>
                   ) : (
                     <span key={index} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", border: "1px solid var(--line)", borderRadius: 8, padding: "5px 10px" }}>
@@ -122,7 +141,9 @@ export function EmailThreadModal({
           ) : null}
 
           <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--f-body)", fontSize: 13, lineHeight: 1.6, color: body ? "var(--fg-2)" : "var(--fg-4)", background: "var(--bg-1)", border: "1px solid var(--line)", borderRadius: 10, padding: "13px 15px" }}>
-            {loadingDetail && !body ? "Loading the full email…" : body || detailNote || "(no body captured for this message)"}
+            {loadingDetail && !body ? (
+              <div role="status" aria-label="Loading the full email"><SkeletonText lines={5} /></div>
+            ) : body || detailNote || "(no body captured for this message)"}
           </div>
         </div>
 

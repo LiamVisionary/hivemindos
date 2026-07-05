@@ -21,8 +21,10 @@ import { resolvedIssueAnswer } from "./issue-resume";
 import { issuePreviewUrl, previewReviewAnswer, type PreviewDecision } from "./preview-review";
 import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
+import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 
 type CompanyEntry = { company: Company; rollup: CompanySpendRollup; revenueShare?: CompanyRevenueRollup };
+type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 
 const POLL_MS = 15_000;
 const USE_ZHC_DEMO_DATA = false;
@@ -50,7 +52,13 @@ function memberEditFromAgent(agent: Agent): CompanyMemberEdit {
   };
 }
 
-function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
+function ZeroHumanCompaniesDemoView({
+  theme = "dark",
+  openSkillAttachmentBrowser,
+}: {
+  theme?: "dark" | "light";
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+} = {}) {
   const [colonies, setColonies] = React.useState<Colony[]>(DEMO_COLONIES);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const portfolioColonies = colonies;
@@ -156,7 +164,21 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
           : item;
       }),
       governance: [
-        { kind: "reflect" as const, text: `Human marked ${issue.title} resolved; the task is back in the queue.`, agent: "human", since: "now" },
+        { kind: "reflect" as const, text: `Human handled the blocker on ${issue.title}; the task is back in the queue to retry.`, agent: "human", since: "now" },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const handleDismissIssues = React.useCallback((companyId: string, issues: Issue[]) => {
+    const keys = new Set(issues.map((issue) => issue.work?.taskId ?? issue.key));
+    setBusyId(issues[0]?.work?.taskId ?? issues[0]?.key ?? companyId);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.filter((item) => !keys.has(item.work?.taskId ?? item.key)),
+      governance: [
+        { kind: "reflect" as const, text: `Human dismissed ${issues.length} issue${issues.length === 1 ? "" : "s"} — set aside off the board.`, agent: "human", since: "now" },
         ...colony.governance,
       ].slice(0, 5),
     }));
@@ -208,27 +230,50 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
       onAddAgents={handleAddAgents}
       onApprove={(companyId, approvalId) => decideApproval(companyId, approvalId, "approved")}
       onReject={(companyId, approvalId) => decideApproval(companyId, approvalId, "denied")}
+      onResolvePricing={(companyId, proposalId) =>
+        replaceColony(companyId, (colony) => ({
+          ...colony,
+          pricingProposals: (colony.pricingProposals ?? []).filter((proposal) => proposal.id !== proposalId),
+        }))
+      }
       onFreeze={handleFreeze}
       onDelete={(companyId) => setColonies((current) => current.filter((colony) => colony.id !== companyId))}
       onDispatch={handleDispatch}
       onStopAutonomy={handleStopAutonomy}
       onResolveIssue={(companyId, issue) => handleResolveIssue(companyId, issue)}
+      onDismissIssues={(companyId, issues) => handleDismissIssues(companyId, issues)}
       onRecordRevenue={handleRecordRevenue}
+      openSkillAttachmentBrowser={openSkillAttachmentBrowser}
       theme={theme}
     />
   );
 }
 
-function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
+function ZeroHumanCompaniesLiveView({
+  theme = "dark",
+  openSkillAttachmentBrowser,
+}: {
+  theme?: "dark" | "light";
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+} = {}) {
   const [data, setData] = React.useState<CompanyEntry[]>([]);
   const [agents, setAgents] = React.useState<AgentLite[]>([]);
   const [approvals, setApprovals] = React.useState<ApprovalRow[]>([]);
   const [tasks, setTasks] = React.useState<KanbanTaskLite[]>([]);
   const [loading, setLoading] = React.useState(true);
+  // Companies come back from their own fetch and flip `loading` false BEFORE the
+  // separate Work Board tasks fetch lands — so the cockpit renders with every
+  // lane empty for a beat. Track the first tasks fetch on its own so the board
+  // can show skeletons (not a wall of "empty") until real tasks arrive.
+  const [tasksLoaded, setTasksLoaded] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // "Hide locally" fallback for dismissed issues that have NO backing Work Board
+  // task to archive — keyed by issue.key. Task-backed dismisses archive for real;
+  // this only holds the ones there's nothing to persist against. Resets on reload.
+  const [dismissedIssueKeys, setDismissedIssueKeys] = React.useState<ReadonlySet<string>>(() => new Set());
   // The companies API reports the autonomy driver's health alongside the list.
   // A launched company with a dead driver looks "running" while dispatching
   // nothing — that gap stranded the Website Outreach Agency for ~7h once, so
@@ -317,6 +362,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       setError("Could not reach the companies API.");
     } finally {
       setLoading(false);
+      setTasksLoaded(true);
       setRefreshing(false);
     }
   }, []);
@@ -369,20 +415,26 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
         // (seen live 2026-07-02: 11 stray tasks). Source-only keeps it clean.
         const sourcePrefix = `company:${company.id}:`;
         const companyTasks = tasks.filter((t) => t.source?.startsWith(sourcePrefix));
-        out.push(buildColony({
+        const colony = buildColony({
           company,
           rollup: entry.rollup ?? { companyId: company.id, memberCount: company.agentIds?.length ?? 0, dailySpentUsd: 0, monthlySpentUsd: 0, totalSpentUsd: 0, dailyRemainingUsd: null, monthlyRemainingUsd: null, totalRemainingUsd: null },
           approvals: approvalsByCompany.get(company.id) ?? [],
           agentsById,
           tasks: companyTasks,
           revenueShare: entry.revenueShare,
-        }));
+        });
+        // Drop issues the human hid locally (dismisses with no task to archive).
+        out.push(
+          dismissedIssueKeys.size
+            ? { ...colony, issues: colony.issues.filter((issue) => !dismissedIssueKeys.has(issue.work?.taskId ?? issue.key)) }
+            : colony,
+        );
       } catch {
         // Skip a malformed record rather than blanking the whole portfolio.
       }
     }
     return out;
-  }, [data, agentsById, approvalsByCompany, tasks]);
+  }, [data, agentsById, approvalsByCompany, tasks, dismissedIssueKeys]);
 
   // ── mutations ──────────────────────────────────────────────────────────
   const membersFromCrew = React.useCallback((crew: Agent[], queenId: string | null): CompanyMember[] => {
@@ -528,6 +580,25 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     }
   }, [refresh]);
 
+  const resolvePricing = React.useCallback(async (companyId: string, proposalId: string, decision: "approve" | "reject") => {
+    setBusyId(proposalId);
+    try {
+      const result = await postCompanies({ action: "resolve-pricing", id: companyId, proposalId, decision });
+      if (!result.ok) {
+        setError(result.error || "Could not resolve the pricing request.");
+      } else {
+        setNotice(
+          decision === "approve"
+            ? "New price applied to the catalog — the crew quotes it from the next dispatch."
+            : "Pricing request rejected — the crew keeps the current price and learns the decision.",
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh]);
+
   const handleFreeze = React.useCallback(async (companyId: string, frozen: boolean) => {
     setBusyId(companyId);
     try {
@@ -639,6 +710,55 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     }
   }, [data, refresh]);
 
+  const handleDismissIssues = React.useCallback(async (companyId: string, issues: Issue[]) => {
+    if (issues.length === 0) return;
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    // Hide every dismissed issue locally and IMMEDIATELY, keyed the same way the
+    // colonies memo filters (`work.taskId ?? key`). This is what makes the click
+    // always take effect: task-backed issues are also archived below, but the
+    // local hide is what survives a mid-flight background poll or a driver
+    // re-escalation that would otherwise re-surface the card and make the button
+    // look broken. Resets on reload — if the archive fails, the issue returns.
+    setDismissedIssueKeys((prev) => {
+      const next = new Set(prev);
+      for (const issue of issues) next.add(issue.work?.taskId ?? issue.key);
+      return next;
+    });
+    const taskIds = issues.map((issue) => issue.work?.taskId).filter((id): id is string => Boolean(id));
+    if (taskIds.length === 0) {
+      setError(null);
+      setNotice(`${companyName}: hid ${issues.length} issue${issues.length === 1 ? "" : "s"} from this view.`);
+      return;
+    }
+    setBusyId(taskIds[0]);
+    setNotice(null);
+    try {
+      // Set aside = archive the underlying task(s): they leave needs-human, stop
+      // showing as issues, and stop re-escalating. Reversible from the Work Board.
+      const results = await Promise.all(
+        taskIds.map((taskId) =>
+          fetch("/api/kanban", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskId, status: "archived" }),
+          }).then((res) => res.ok).catch(() => false),
+        ),
+      );
+      const ok = results.filter(Boolean).length;
+      const taskless = issues.length - taskIds.length;
+      if (ok === 0) {
+        setError("Could not archive these issues off the board — they'll return on reload.");
+      } else {
+        setError(null);
+        const hidNote = taskless > 0 ? ` (${taskless} hidden locally)` : "";
+        setNotice(`${companyName}: dismissed ${ok} issue${ok === 1 ? "" : "s"} — archived off the board.${hidNote}`);
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh]);
+
   const handleReviewPreview = React.useCallback(async (companyId: string, issue: Issue, decision: PreviewDecision, notes: string) => {
     const taskId = issue.work?.taskId;
     if (!taskId) {
@@ -721,6 +841,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       agentPool={agentPool}
       loading={loading || refreshing}
       initialLoading={loading}
+      initialTasksLoading={!tasksLoaded}
       error={error ?? driverWarning}
       notice={notice}
       busyId={busyId}
@@ -730,18 +851,29 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       onAddAgents={handleAddAgents}
       onApprove={(_companyId, approvalId) => void decideApproval(approvalId, "approved")}
       onReject={(_companyId, approvalId) => void decideApproval(approvalId, "denied")}
+      onResolvePricing={(companyId, proposalId, decision) => void resolvePricing(companyId, proposalId, decision)}
       onFreeze={(companyId, frozen) => void handleFreeze(companyId, frozen)}
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
       onResolveIssue={(companyId, issue) => void handleResolveIssue(companyId, issue)}
+      onDismissIssues={(companyId, issues) => void handleDismissIssues(companyId, issues)}
       onReviewPreview={(companyId, issue, decision, notes) => void handleReviewPreview(companyId, issue, decision, notes)}
       onRecordRevenue={handleRecordRevenue}
+      openSkillAttachmentBrowser={openSkillAttachmentBrowser}
       theme={theme}
     />
   );
 }
 
-export function ZeroHumanCompaniesView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
-  return USE_ZHC_DEMO_DATA ? <ZeroHumanCompaniesDemoView theme={theme} /> : <ZeroHumanCompaniesLiveView theme={theme} />;
+export function ZeroHumanCompaniesView({
+  theme = "dark",
+  openSkillAttachmentBrowser,
+}: {
+  theme?: "dark" | "light";
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+} = {}) {
+  return USE_ZHC_DEMO_DATA
+    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />
+    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />;
 }

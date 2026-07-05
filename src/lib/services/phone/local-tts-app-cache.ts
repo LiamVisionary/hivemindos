@@ -82,6 +82,25 @@ export function persistedAppHint(selectedAppId: string): ConnectedHostedApp | nu
   return persistedApps.get(selectedAppId)?.app ?? null;
 }
 
+// One fast health check against a resolved app's proxy URL: decides whether a
+// durable disk hint is still live before a synth commits to it. A live hint
+// answers well under the timeout; a dead one costs at most this instead of a
+// slow synth timeout, then the caller falls through to discovery.
+const HINT_PROBE_TIMEOUT_MS = 1_500;
+export async function probeAppHealthy(app: ConnectedHostedApp): Promise<boolean> {
+  const base = app.apiBaseUrl?.replace(/\/+$/, "");
+  if (!base) return false;
+  try {
+    const response = await fetch(`${base}/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(HINT_PROBE_TIMEOUT_MS),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function hydratePersistedApps(origin: string) {
   if (!persistedAppsLoad) {
     persistedAppsLoad = (async () => {

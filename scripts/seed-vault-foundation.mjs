@@ -1170,6 +1170,24 @@ const workflows = [
     outputStandard: "Include source metadata, concise summary, key claims, contradictions with existing notes, project relevance, and unanswered questions.",
   },
   {
+    slug: "weekly-current-signal-research",
+    name: "Weekly Current-Signal Research",
+    every: "weekly Saturday 09:00",
+    skills: ["hive-pulse", "storm-research"],
+    paths: ["Projects", "Shared Context.md", "Memory/Imported Sources"],
+    intent: "Run the weekly research machine: gather current signal on the vault's active topics, pass every claim through a skeptic review, and land survivors as sourced research notes plus durable compiled knowledge.",
+    read: [
+      "`Projects/` active project notes and their open questions",
+      "`Shared Context.md` standing priorities",
+      "`Memory/Imported Sources/` recent entries, so the sweep extends rather than repeats them",
+    ],
+    write: [
+      "`Memory/Imported Sources/YYYY-MM-DD-<topic>.md` — one note per SURVIVING topic; every claim carries source, date, and confidence",
+      `durable entities/concepts into \`${folders.synthesisFolder}/Compiled Knowledge/<domain>/\` through the compile-knowledge API or skill`,
+    ],
+    outputStandard: "Pipeline, in order: (1) derive 3-6 research topics from Projects/ open questions and Shared Context.md; (2) gather current signal per topic — web/social sweep in the hive-pulse style; (3) label EVERY claim with source, date, and confidence; (4) skeptic pass — flag weak claims, contradictions, and stale sources, and DROP what fails review; (5) write survivors to Memory/Imported Sources/ (reviewed research never lands in Intake/); (6) promote durable entities and concepts to Compiled Knowledge. Keep raw intake and reviewed research separated. A topic that yields nothing durable gets one honest line saying so, not padding.",
+  },
+  {
     slug: "vault-health-check",
     name: "Vault Health Check",
     every: "monthly first Monday 09:00",

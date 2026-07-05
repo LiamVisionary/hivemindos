@@ -7,7 +7,9 @@
 // a raw "auth required" JSON in a stray tab (seen live 2026-07-02). Text/JSON/CSV/
 // markdown/images/PDF render inline; anything else offers a download.
 import React from "react";
+import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import { Modal } from "./Modals";
+import { SkeletonText, LoadingBar } from "./primitives";
 import { deliverableFileHref } from "./deliverables-model";
 import type { IssueDeliverable, Theme } from "./types";
 
@@ -65,14 +67,20 @@ function inlineMarkdown(text: string): React.ReactNode[] {
       const href = safeHref(link?.[2] ?? "#");
       const external = /^https?:\/\//i.test(href);
       nodes.push(
-        <a key={`link-${match.index}`} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined}>
+        <a
+          key={`link-${match.index}`}
+          href={href}
+          target={external ? "_blank" : undefined}
+          rel={external ? "noreferrer" : undefined}
+          onClick={external ? (event) => { event.preventDefault(); void openExternalUrl(href); } : undefined}
+        >
           {link?.[1] ?? token}
         </a>,
       );
     } else {
       const href = safeHref(token.replace(/[.,;:!?]+$/, ""));
       const trailing = token.slice(href.length);
-      nodes.push(<a key={`url-${match.index}`} href={href} target="_blank" rel="noreferrer">{href}</a>);
+      nodes.push(<a key={`url-${match.index}`} href={href} target="_blank" rel="noreferrer" onClick={(event) => { if (isExternalHttpUrl(href)) { event.preventDefault(); void openExternalUrl(href); } }}>{href}</a>);
       if (trailing) nodes.push(trailing);
     }
     cursor = match.index + token.length;
@@ -303,7 +311,10 @@ export function FileViewerModal({ deliverable, displayTitle, displayKind, machin
   return (
     <Modal title={modalTitle} subtitle={subtitle} onClose={onClose} width={920} theme={theme} zIndex={2147483100} footer={footer}>
       {state.phase === "loading" && (
-        <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "24px 0", textAlign: "center" }}>Loading file…</div>
+        <div role="status" aria-label="Loading file" style={{ padding: "8px 0 16px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <LoadingBar />
+          <SkeletonText lines={6} />
+        </div>
       )}
       {state.phase === "error" && (
         <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--danger-2)", lineHeight: 1.6, borderRadius: 10, border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", padding: "12px 14px" }}>

@@ -9,6 +9,8 @@ import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
 import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { BrainReadinessBanner } from "@/components/fleet/brain-readiness-banner";
+import type { BrainReadiness } from "@/features/dashboard/hooks/use-brain-readiness";
 import type { DashboardView, HivemindLinkClientStatus, MachineGroup } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
@@ -49,6 +51,7 @@ type AgentsPanelProps = {
   FleetView: ComponentType<FleetViewProps>;
   Trash2: IconComponent;
   activeView: DashboardView;
+  brainReadiness?: BrainReadiness | null;
   tailnetCleanup?: TailnetCleanupBanner;
   addAgentToMachine: (machine: MachineGroup) => void;
   agents: AgentProfile[];
@@ -175,6 +178,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     FleetView,
     Trash2,
     activeView,
+    brainReadiness,
     tailnetCleanup,
     addAgentToMachine,
     agents,
@@ -459,7 +463,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   return (
     <>
       {activeView === "agents" ? (
-        <section className={fleetClass("fleetConstellationPanel", "tabPanel")}>
+        <section className={fleetClass("fleetConstellationPanel", "tabPanel")} data-flush-banner={brainReadiness && brainReadiness.status !== "hidden" ? "" : undefined}>
           {showHivemindLinkConnectedBanner ? (
             <div className="relative mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(20,184,166,0.38)] bg-[rgba(20,184,166,0.12)] px-4 py-3 pr-12 text-sm text-[var(--foreground)]">
               <div>
@@ -506,6 +510,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
               />
             </div>
           ) : null}
+          {brainReadiness ? <BrainReadinessBanner readiness={brainReadiness} /> : null}
           {tailnetCleanup?.visible ? (
             <div className={styles.tailnetCleanupBanner} role="status" aria-live="polite">
               <span className={styles.tailnetCleanupIcon} aria-hidden="true">

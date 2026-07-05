@@ -46,6 +46,16 @@ type ProcessEventLike = {
   detail?: unknown;
 };
 
+export function isHiddenChatProcessEvent(event: ProcessEventLike = {}) {
+  const label = String(event?.label ?? "").trim();
+  const detail = String(event?.detail ?? "").trim();
+  if (/assistant started writing|assistant wrote in session|agent replied|queued chat request/i.test(label)) return true;
+  if (/^Attached .+ session$/i.test(label)) return true;
+  if (/^Runtime session active$/i.test(label)) return true;
+  if (/^Runtime event$/i.test(label) || /^Runtime event$/i.test(detail)) return true;
+  return false;
+}
+
 const PROVIDER_LABELS: Record<string, string> = {
   "openai-codex": "OpenAI Codex",
   openai: "OpenAI",
@@ -224,6 +234,7 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string) {
 export function processText(events: ProcessEventLike[] = []) {
   return events
     .slice(-12)
+    .filter((event) => !isHiddenChatProcessEvent(event))
     .map((event) => {
       const label = String(event?.label ?? "event").trim();
       const detail = String(event?.detail ?? "").trim();

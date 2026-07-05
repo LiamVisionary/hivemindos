@@ -3,7 +3,7 @@
 // PoolAgent so the live view can persist real agent membership.
 import type { CompanyRevenueEventSource, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
-import type { CompanyDirective } from "@/lib/types/company";
+import type { CompanyDirective, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -186,6 +186,10 @@ export interface Colony {
   autonomy?: boolean;
   /** Standing directives injected by a human or captured from rejecting a deliverable. */
   directives?: CompanyDirective[];
+  /** Official product catalog from the shared brain; non-empty items → the Products tab shows. */
+  products?: CompanyProductCatalog;
+  /** Crew-raised price-change requests awaiting the human (shown under Approvals + a Products banner). */
+  pricingProposals?: CompanyPricingProposal[];
   /**
    * Raw, unformatted company values used to seed the edit form. Distinct from
    * display fields above (`apex`, `ticker`, …), which carry derived fallbacks

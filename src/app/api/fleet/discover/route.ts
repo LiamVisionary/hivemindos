@@ -882,7 +882,7 @@ function bridgeRepairScript() {
     'if curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then',
     "  exit 0",
     "fi",
-    'for d in "$HOME/Documents/code/projects/hivemind-os" "$HOME/Documents/code/projects/hivemindos" "$HOME/hivemind-os" "$HOME/hivemindos" "$HOME/openclaw-next" "/root/omni-agent-hivemind" "/root/hivemindos" "/opt/hivemindos"; do',
+    'for d in "$HOME/Documents/code/projects/hivemind-os" "$HOME/Documents/code/projects/hivemindos" "$HOME/hivemind-os" "$HOME/hivemindos" "$HOME/openclaw-next" "/root/hivemindos" "/opt/hivemindos"; do',
     '  if [ -f "$d/scripts/install-telemetry-collector.sh" ]; then',
     '    cd "$d"',
     "    HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh >/tmp/hivemindos-bridge-auto-repair.log 2>&1 || { tail -80 /tmp/hivemindos-bridge-auto-repair.log >&2 || true; exit 1; }",

@@ -209,6 +209,14 @@ Agents are senior software engineers in this codebase and must follow these rule
 - Prefer wrapping, taller rows/cards, or responsive layout adjustments over hiding content.
 - Do not use free-text inputs for configuration values, filesystem paths, model IDs, runtime/provider settings, or similar structured choices in the primary UI. Prefer dropdowns, pickers, segmented controls, buttons, browse flows, or discovered options. If arbitrary text is genuinely required, put it inside a clearly labeled expandable Advanced section and keep the default path input-free.
 
+## Loading States
+
+- **NEVER render a static loading indicator.** A bare `Loading…`, `Fetching…`, `Saving…`, or a lone `…` string with no motion is banned everywhere in the app. Every pending state must be animated so the UI reads as alive, not frozen.
+- Reach for, in order of preference: a **skeleton loader** shaped like the content it replaces (cards, rows, stat tiles, text lines) for region/panel loads; an **indeterminate loading bar** for progress-style waits; an inline **spinner** for button/inline busy states. A skeleton that mirrors the final layout beats a spinner for anything larger than a button.
+- Keep a text label if it aids clarity, but it must sit **alongside** an animated element (spinner + word), never stand alone. Swap a button's leading icon for a spinner while busy rather than showing both.
+- Preserve accessibility: wrap region skeletons in `role="status"` with an `aria-label` (e.g. "Loading email threads") so screen readers still announce the pending state, and respect `prefers-reduced-motion`.
+- Zero Human Companies is the reference implementation. Reuse its canonical loader primitives from `src/features/dashboard/views/zero-human-companies/primitives.tsx` — `Spinner`, `Skeleton`, `SkeletonText`, `LoadingBar` (CSS in `theme.css`: `.zhc-spinner` / `.zhc-skel` / `.zhc-progress`). Do not hand-roll a new one-off loader; extend or mirror these.
+
 ## Directory Browsing
 
 - When adding any UI that browses for a directory, reuse the existing machine-aware browsing flow instead of building a new picker.

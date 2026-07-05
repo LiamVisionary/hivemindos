@@ -8,6 +8,7 @@
    is computed deterministically from the machine index so the layout works for
    any real fleet payload (not just the original demo machines). */
 
+import { axialToPixelWithStep, hexSpiral } from "@/components/fleet/hex-math";
 import type { HiveAgent, HiveMachine } from "./fleet-hive-types";
 
 // The hive canvas holds ONLY the queen + machine ring + agent petals; the detail
@@ -33,6 +34,10 @@ export const AGENT_SIZE = CELL;
 const APO = 0.43;
 const QUEEN_SIZE = 150;
 const QUEEN_CLEARANCE = QUEEN_SIZE / 2 + CELL / 2 + BASE_CLEARANCE_PAD * CELL_SCALE;
+const CELL_STEP = 2 * APO * CELL + 1;
+const CELL_COLLISION_PAD = 10;
+const MACHINE_COLLISION_PAD = 18;
+const SLOT_SEARCH_EXTRA_CELLS = 96;
 
 export interface Pt {
   x: number;
@@ -44,6 +49,13 @@ export interface MachineLayout {
   ang: number;
   agents: { agent: HiveAgent; pos: Pt }[];
   addPos: Pt;
+}
+
+export interface HiveLayoutRect {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
 }
 
 export function frPolar(cx: number, cy: number, r: number, deg: number): Pt {
@@ -59,45 +71,67 @@ export function frMachineAngle(index: number, total: number): number {
   return -90 + (360 / total) * index;
 }
 
-// Agents tessellate around their machine as a true honeycomb: the first six
-// share the machine's six hex edges, and any beyond fill outward rings that
-// share edges with the inner ring. Slots that would intrude into the Queen's
-// cell are skipped so dense machine clusters leave a clean centre.
-export function frAgentSlots(mx: number, my: number, ang: number, n: number): Pt[] {
+// Agents use the same axial spiral as the classic Fleet hive. The redesigned
+// view only filters that shared candidate sequence so cells avoid the Queen and
+// already-placed neighbouring machine clusters.
+export function frAgentSlots(mx: number, my: number, n: number, obstacles: HiveLayoutRect[] = []): Pt[] {
   if (n <= 0) return [];
-  const dist = 2 * APO * CELL + 1; // edge-to-edge neighbour distance
-  // Six neighbour step vectors at 0,60,…,300° — the directions our hex shares edges.
-  const step = (i: number): Pt => {
-    const a = ((((i % 6) + 6) % 6) * 60 * Math.PI) / 180;
-    return { x: Math.cos(a) * dist, y: Math.sin(a) * dist };
-  };
-  // Begin each ring on the side facing the machine's outward direction.
-  const norm = ((ang % 360) + 360) % 360;
-  const startDir = ((Math.round(norm / 60) % 6) + 6) % 6;
   const out: Pt[] = [];
-  const isConnectedSlot = (pos: Pt) =>
-    Math.hypot(pos.x - mx, pos.y - my) <= dist * 1.08
-    || out.some((slot) => Math.hypot(pos.x - slot.x, pos.y - slot.y) <= dist * 1.08);
-  const maxRing = Math.max(8, n + 6);
-  for (let ring = 1; out.length < n && ring <= maxRing; ring++) {
-    const s = step(startDir);
-    let px = mx + s.x * ring;
-    let py = my + s.y * ring;
-    for (let side = 0; side < 6 && out.length < n; side++) {
-      const walk = step(startDir + 2 + side);
-      for (let i = 0; i < ring && out.length < n; i++) {
-        const pos = { x: px, y: py };
-        if (frClearsQueen(pos) && isConnectedSlot(pos)) out.push(pos);
-        px += walk.x;
-        py += walk.y;
-      }
-    }
+  const candidates = frSpiralCandidates(n);
+  for (const pos of candidates) {
+    const point = frSlotPoint(mx, my, pos);
+    if (frSlotClears(point, obstacles)) out.push(point);
+    if (out.length >= n) break;
+  }
+  if (out.length >= n) return out;
+
+  // If a very dense live fleet exhausts the search area, keep the hive usable by
+  // falling back to the classic spiral order. The normal path above should cover
+  // realistic dashboard payloads.
+  for (const pos of candidates) {
+    const point = frSlotPoint(mx, my, pos);
+    if (!out.some((slot) => slot.x === point.x && slot.y === point.y)) out.push(point);
+    if (out.length >= n) break;
   }
   return out;
 }
 
 export function frClearsQueen(pos: Pt): boolean {
   return Math.hypot(pos.x - QX, pos.y - QY) >= QUEEN_CLEARANCE;
+}
+
+function frSpiralCandidates(count: number): Array<[number, number]> {
+  return hexSpiral(Math.max(count + SLOT_SEARCH_EXTRA_CELLS, 18)).slice(1);
+}
+
+function frSlotPoint(mx: number, my: number, [q, r]: [number, number]): Pt {
+  const offset = axialToPixelWithStep(q, r, CELL_STEP);
+  return { x: mx + offset.x, y: my + offset.y };
+}
+
+function frSlotClears(pos: Pt, obstacles: HiveLayoutRect[]): boolean {
+  if (!frClearsQueen(pos)) return false;
+  const rect = frCellRect(pos);
+  return obstacles.every((obstacle) => !frRectsOverlap(rect, obstacle, CELL_COLLISION_PAD));
+}
+
+function frCellRect(pos: Pt, pad = CELL_COLLISION_PAD): HiveLayoutRect {
+  const half = CELL / 2 + pad;
+  return {
+    minX: pos.x - half,
+    minY: pos.y - half,
+    maxX: pos.x + half,
+    maxY: pos.y + half,
+  };
+}
+
+function frRectsOverlap(left: HiveLayoutRect, right: HiveLayoutRect, gap = 0) {
+  return !(
+    left.maxX + gap <= right.minX ||
+    left.minX - gap >= right.maxX ||
+    left.maxY + gap <= right.minY ||
+    left.minY - gap >= right.maxY
+  );
 }
 
 /** Where the dashed "onboard a new machine" cell sits: in the widest angular
@@ -131,17 +165,28 @@ export function frAddMachinePos(machines: HiveMachine[]): Pt {
 export function frBuildLayout(machines: HiveMachine[]): Record<string, MachineLayout> {
   const map: Record<string, MachineLayout> = {};
   const total = machines.length;
-  machines.forEach((m, index) => {
+  const machinePlacements = machines.map((m, index) => {
     const ang = frMachineAngle(index, total);
     const pos = frPolar(QX, QY, RING, ang);
-    // Compute one extra petal slot for the dashed "add agent" cell.
-    const slots = frAgentSlots(pos.x, pos.y, ang, m.agents.length + 1);
+    return { machine: m, pos, ang };
+  });
+  const placedRects: HiveLayoutRect[] = [];
+  machinePlacements.forEach(({ machine: m, pos, ang }) => {
+    const otherMachineRects = machinePlacements
+      .filter((placement) => placement.machine.id !== m.id)
+      .map((placement) => frCellRect(placement.pos, MACHINE_COLLISION_PAD));
+    // Compute one extra classic honeycomb slot for the dashed "add agent" cell.
+    const slots = frAgentSlots(pos.x, pos.y, m.agents.length + 1, [...otherMachineRects, ...placedRects]);
     map[m.id] = {
       pos,
       ang,
       agents: m.agents.map((a, i) => ({ agent: a, pos: slots[i] })),
       addPos: slots[m.agents.length] || slots[slots.length - 1] || pos,
     };
+    placedRects.push(
+      frCellRect(pos, MACHINE_COLLISION_PAD),
+      ...slots.map((slot) => frCellRect(slot)),
+    );
   });
   return map;
 }

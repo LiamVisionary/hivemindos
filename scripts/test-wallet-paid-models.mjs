@@ -107,7 +107,7 @@ const [
 ]);
 
 includes(gatewayConfig, "HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER", "provider gateway config");
-includes(gatewayConfig, "Wallet-paid models · no API key", "provider gateway copy");
+includes(gatewayConfig, "Free + wallet-paid models · no API key", "provider gateway copy");
 
 includes(runtimeIntegrations, "hivemindosWalletPaidModelOptions", "runtime provider model discovery");
 includes(runtimeIntegrations, "/api/hivemindos/models/models", "runtime provider model source");
@@ -127,14 +127,23 @@ includes(walletPaidService, "X-HivemindOS-Wallet-Agent-Id", "wallet-paid runtime
 includes(walletPaidService, "funding.walletVaultId", "wallet-paid runtime resolver setup wallet id");
 includes(walletPaidService, "funding.creditAccountId", "wallet-paid runtime resolver hosted credit account id");
 includes(walletPaidService, "/api/hivemindos/models", "wallet-paid runtime resolver");
+includes(walletPaidService, "!fundingAccountId && !isFreeHivemindosWalletPaidModel(model)", "wallet-paid runtime resolver skips funding requirement for the free model");
 
 includes(modelsRoute, "hivemindosWalletPaidModelOptions", "models list route");
 includes(modelsRoute, "owned_by: \"hivemindos\"", "models list route ownership");
+includes(modelsRoute, "fetchOfficialPaidAgentModelList", "models list route pulls hosted gateway inventory");
+includes(modelsRoute, "customHivemindosWalletPaidModelId", "models list route exposes gateway models as custom ids");
 includes(walletPaidModelsConfig, "upstreamHivemindosWalletPaidModel", "wallet-paid model upstream alias mapping");
 includes(walletPaidModelsConfig, "gpt-5.4-mini", "wallet-paid default upstream model id");
 includes(walletPaidModelsConfig, "gpt-5.4-nano", "wallet-paid fast upstream model id");
 includes(walletPaidModelsConfig, "gpt-5.5", "wallet-paid frontier upstream model id");
 includes(walletPaidModelsConfig, "claude-opus-4.8", "wallet-paid research upstream model id");
+includes(walletPaidModelsConfig, "hivemindos/swarm-sovereign-scout", "free model id");
+includes(walletPaidModelsConfig, "swarm-sovereign-scout-12b", "free model upstream id");
+includes(walletPaidModelsConfig, "tier: \"free\"", "free model tier");
+includes(walletPaidModelsConfig, "HIVEMINDOS_CUSTOM_MODEL_PREFIX", "custom gateway model prefix");
+includes(walletPaidModelsConfig, "isFreeHivemindosWalletPaidModel", "free model predicate");
+includes(walletPaidModelsConfig, "HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL = HIVEMINDOS_FREE_MODEL_ID", "free model is the provider default");
 
 includes(agentRuntimeTypes, "interface HivemindosModelsAgentConfig", "agent profile wallet-paid config");
 includes(agentRuntimeTypes, "hivemindosModels?: HivemindosModelsAgentConfig", "agent profile wallet-paid config field");
@@ -196,9 +205,15 @@ includes(setupComponent, "async function finishSetup", "guided setup Done comple
 includes(setupComponent, "completionConfig.lastCreditBalanceLabel", "guided setup Done persists local refreshed credit balance before closing");
 includes(setupComponent, "await onComplete(profilePatch(completionConfig))", "guided setup Done saves completion config before close");
 includes(setupComponent, "onCancel();", "guided setup Done closes after saving");
-includes(setupComponent, "const showRoutePreference = setupReady", "guided setup hides route preference until funding is configured");
-includes(setupComponent, "showRoutePreference ? (", "guided setup conditionally renders route preference panel");
+includes(setupComponent, "const selectedModelIsFree = isFreeHivemindosWalletPaidModel(selectedModel)", "guided setup detects the free model");
+includes(setupComponent, "const setupReady = selectedModelIsFree || fundingReady", "guided setup needs no funding for the free model");
+includes(setupComponent, "const showFundingPanel = !selectedModelIsFree || fundingConfigured", "guided setup keeps configured funding visible and hides it only for unfunded free-model use");
+includes(setupComponent, ".filter((model) => model.tier !== \"free\")", "guided setup keeps the free model out of the route tiles (it lives in the custom picker)");
+includes(setupComponent, "showFundingPanel ? (", "guided setup conditionally renders the funding panel");
 includes(setupComponent, "HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS", "guided setup model route selection");
+includes(setupComponent, "ModelPillSelector", "guided setup reuses the shared model selector for custom models");
+includes(setupComponent, "customPickerOpen", "guided setup custom gateway model picker");
+includes(setupComponent, "/api/hivemindos/models/models", "guided setup pulls the dynamic gateway model list");
 includes(setupComponent, "WalletSelectPanel", "guided setup embedded wallet picker");
 includes(setupComponent, "HivemindosModelsSetup.module.css", "guided setup dark honey stylesheet");
 includes(setupComponent, "isLocalPaymentSigningWallet", "guided setup local signing wallet gate");
@@ -242,6 +257,7 @@ includes(agentSettingsModal, "fundingMode", "agent settings modal preserves Hive
 includes(agentSettingsModal, "lastCreditBalanceLabel", "agent settings modal preserves HivemindOS Models credit balance");
 assert.ok(!agentSettingsModal.includes(") : hivemindosModelsSelected ? ("), "agent settings modal should not render completed HivemindOS Models setup solely because the provider is selected");
 includes(agentSettingsPrimitives, "moneyValue(config.lastCreditBalanceUsd) > 0", "agent settings readiness requires funded hosted credits");
+includes(agentSettingsPrimitives, "if (isFreeHivemindosWalletPaidModel(model)) return true", "agent settings readiness treats the free model as ready");
 assert.ok(!agentSettingsPrimitives.includes("config.lastCheckoutSessionId\n      || config.lastCreditBalanceUsd"), "agent settings readiness should not treat an opened checkout session as ready");
 includes(walletPanel, "buildLlmFundingSourceMeta", "wallet panel LLM funding source metadata");
 includes(walletPanel, "Hosted model credits", "wallet panel card-funded LLM funding source metadata");
@@ -266,6 +282,10 @@ includes(proxyRoute, "autoPayEnabled: true", "wallet-paid proxy treats the selec
 includes(proxyRoute, "wallet.custodyMode !== \"local\"", "wallet-paid proxy local custody gate");
 includes(proxyRoute, "/api/official-paid-agents/${slug}/chat/completions", "wallet-paid proxy official target");
 includes(proxyRoute, "stream: false", "wallet-paid proxy settlement mode");
+includes(proxyRoute, "isFreeHivemindosWalletPaidModel(model)", "free model branch skips credits and wallets");
+includes(proxyRoute, "fetchFreeModelCompletion", "free model rail handler");
+includes(proxyRoute, "X-HivemindOS-Free-Device", "free model rail sends the anonymous device id");
+includes(proxyRoute, "freeModelChatCompletionsUrl", "free model rail targets the hosted free-models surface");
 assert.ok(!proxyRoute.includes("wallet.provider !== \"x402\""), "wallet-paid proxy should not require the selected LLM funding wallet to be the general x402 provider");
 
 assert.ok(!/payTo\s*[:=]/.test(proxyRoute), "wallet-paid proxy must not accept or set client-side payTo");
@@ -315,6 +335,9 @@ includes(paidAgentCloudClient, "officialPaidAgentCheckoutReturnUrl", "official p
 includes(paidAgentCloudClient, "models\", \"credits\", \"return", "official paid-agent checkout return URL path");
 includes(paidAgentCloudClient, "x-hivemindos-credit-token", "official paid-agent proxy forwards credit token header");
 includes(paidAgentCloudClient, "x-hivemindos-credit-balance-usd", "official paid-agent proxy exposes credit balance header");
+includes(paidAgentCloudClient, "fetchOfficialPaidAgentModelList", "official paid-agent client lists gateway models");
+includes(paidAgentCloudClient, "freeModelChatCompletionsUrl", "official paid-agent client resolves the free-models surface");
+includes(paidAgentCloudClient, "FREE_MODELS_BASE_URL_ENV", "free-models base override env");
 includes(officialCreditTopUpRoute, "proxyOfficialPaidAgentCreditTopUpRequest", "official credit top-up route");
 includes(officialCreditCheckoutRoute, "proxyOfficialPaidAgentCreditCheckoutRequest", "official credit checkout route");
 includes(officialCreditBalanceRoute, "proxyOfficialPaidAgentCreditBalanceRequest", "official credit balance route");

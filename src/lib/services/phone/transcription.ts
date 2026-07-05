@@ -45,6 +45,13 @@ export async function createRealtimeTranscriptionClientSecret() {
               language: "en",
               delay: "minimal",
             },
+            // NO turn_detection: gpt-realtime-whisper is a continuous
+            // streaming transcriber and the client_secrets endpoint returns
+            // 400 "Turn detection is not supported for this transcription
+            // model" for any turn_detection config (verified live
+            // 2026-07-05). End-of-speech is therefore the CLIENT's job — the
+            // voice hooks run an energy VAD and send
+            // input_audio_buffer.commit; see use-queen-bee-voice.ts.
             turn_detection: null,
           },
         },

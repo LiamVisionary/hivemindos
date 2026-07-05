@@ -546,6 +546,18 @@
   box-shadow: 0 0 10px #ff6778;
 }
 
+/* Live mic waveform in the control bar; the canvas draws with `color`
+   (theme + muted state live here, not in JS). */
+.waveformCanvas {
+  display: block;
+  flex: none;
+  color: #7ef0b2;
+}
+
+.waveformCanvasMuted {
+  color: #ff6778;
+}
+
 .controlButton {
   display: inline-flex;
   align-items: center;
@@ -703,6 +715,14 @@
   border-color: rgba(176, 127, 28, 0.36);
   background: rgba(176, 127, 28, 0.14);
   color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .waveformCanvas {
+  color: #1f8f5b;
+}
+
+:global(:root[data-theme="hive-light"]) .waveformCanvasMuted {
+  color: #c4485a;
 }
 
 :global(:root[data-theme="hive-light"]) .turnWho,

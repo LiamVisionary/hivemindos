@@ -4,12 +4,16 @@
 // handlers are supplied by ZeroHumanCompaniesView (which talks to the app APIs).
 import React from "react";
 import { Portfolio } from "./ColonyCards";
+import { Spinner } from "./primitives";
 import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { getIssueIdentity } from "./issue-identity";
 import type { PreviewDecision } from "./preview-review";
 import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyRevenueShareInput, CreateForm, Density, Issue, PoolAgent, Theme } from "./types";
+import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
+
+type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 
 function HiveLogo({ size = 40 }: { size?: number }) {
   const W = size, H = size;
@@ -59,7 +63,7 @@ function Masthead({
         </div>
         <div style={{ textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", letterSpacing: 0.08, textTransform: "uppercase" }}>
           {pendingFirstSync ? (
-            <span style={{ color: "var(--cyan-2)" }}>syncing company registry</span>
+            <span style={{ color: "var(--cyan-2)", display: "inline-flex", alignItems: "center", gap: 8 }}><Spinner size={11} /> syncing company registry</span>
           ) : (
             <><span style={{ color: "var(--cyan-2)" }}>{s.working} agents at work</span> · {s.colonies} {s.colonies === 1 ? "company" : "companies"} · 0 humans</>
           )}
@@ -69,7 +73,7 @@ function Masthead({
           disabled={loading}
           style={{ justifySelf: "end", display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: "1px solid var(--line-2)", borderRadius: 8, cursor: loading ? "default" : "pointer", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "6px 12px", textTransform: "uppercase", letterSpacing: 0.06, opacity: loading ? 0.6 : 1 }}
         >
-          {loading ? "syncing…" : "↻ refresh"}
+          {loading ? <><Spinner size={11} /> syncing</> : "↻ refresh"}
         </button>
       </div>
 
@@ -100,6 +104,9 @@ export interface ZeroHumanCompaniesProps {
   initialCreateCrew?: Agent[];
   loading: boolean;
   initialLoading?: boolean;
+  /** True until the first Work Board tasks fetch lands — drives the cockpit board's
+   *  lane skeletons so tasks don't flash as "empty" before they arrive. */
+  initialTasksLoading?: boolean;
   error?: string | null;
   notice?: string | null;
   /** id currently mutating (approval id or company id), to disable its controls. */
@@ -113,6 +120,8 @@ export interface ZeroHumanCompaniesProps {
   onAddAgents: (companyId: string, crew: Agent[]) => Promise<void>;
   onApprove: (companyId: string, approvalId: string) => void;
   onReject: (companyId: string, approvalId: string) => void;
+  /** Decide a crew-raised pricing proposal (approve applies the catalog change). */
+  onResolvePricing: (companyId: string, proposalId: string, decision: "approve" | "reject") => void;
   onFreeze: (companyId: string, frozen: boolean) => void;
   onDelete: (companyId: string) => void;
   /** Launch perpetual autonomy: decompose the apex goal + dispatch to the crew. */
@@ -121,10 +130,13 @@ export interface ZeroHumanCompaniesProps {
   onStopAutonomy: (companyId: string) => void;
   /** Mark a Needs-You issue fixed and resume its Work Board task. */
   onResolveIssue: (companyId: string, issue: Issue) => void;
+  /** Set aside issues: archive their tasks off the board (one, or a whole group). */
+  onDismissIssues: (companyId: string, issues: Issue[]) => void;
   /** Approve a customer-facing preview or send the crew change notes to regenerate it. */
   onReviewPreview?: (companyId: string, issue: Issue, decision: PreviewDecision, notes: string) => void;
   /** Record external revenue and optionally collect the HivemindOS share. */
   onRecordRevenue: (companyId: string, input: CompanyRevenueShareInput) => Promise<void>;
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   theme?: Theme;
   cardStyle?: CardStyle;
   density?: Density;
@@ -132,8 +144,9 @@ export interface ZeroHumanCompaniesProps {
 }
 
 export default function ZeroHumanCompanies({
-  colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, error, notice, busyId, onRefresh,
-  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onReviewPreview, onRecordRevenue,
+  colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, initialTasksLoading = false, error, notice, busyId, onRefresh,
+  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onResolvePricing, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onDismissIssues, onReviewPreview, onRecordRevenue,
+  openSkillAttachmentBrowser,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -185,6 +198,7 @@ export default function ZeroHumanCompanies({
   const cockpitHandlers: CockpitHandlers | null = colony && {
     onApprove: (approvalId) => onApprove(colony.id, approvalId),
     onReject: (approvalId) => onReject(colony.id, approvalId),
+    onResolvePricing: (proposalId, decision) => onResolvePricing(colony.id, proposalId, decision),
     onFreeze: (frozen) => onFreeze(colony.id, frozen),
     onDelete: () => onDelete(colony.id),
     onDispatch: () => onDispatch(colony.id),
@@ -194,6 +208,7 @@ export default function ZeroHumanCompanies({
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
     onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueId: getIssueIdentity(issue) }),
     onResolveIssue: (issue) => onResolveIssue(colony.id, issue),
+    onDismissIssues: (issues) => onDismissIssues(colony.id, issues),
     onReviewPreview: onReviewPreview ? (issue, decision, notes) => onReviewPreview(colony.id, issue, decision, notes) : undefined,
     onRecordRevenue: (input) => void onRecordRevenue(colony.id, input),
     busyId,
@@ -247,9 +262,11 @@ export default function ZeroHumanCompanies({
             colonies={colonies}
             showBudget={showBudget}
             theme={theme}
+            initialTasksLoading={initialTasksLoading}
             onBack={() => setOpenId(null)}
             onSwitch={setOpenId}
             onAddAgents={() => setModal({ type: "browse", id: colony.id })}
+            openSkillAttachmentBrowser={openSkillAttachmentBrowser}
             handlers={cockpitHandlers}
           />
         )}

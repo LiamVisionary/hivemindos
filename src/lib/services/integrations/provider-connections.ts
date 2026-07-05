@@ -1,5 +1,6 @@
 import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayload } from "@/lib/types/integrations";
 import { readSharedAgentEnv, removeSharedAgentEnv, saveSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
+import { CLAWBANK_TOKEN_ENV_NAMES, clawbankMe } from "@/lib/services/clawbank";
 
 type VerifyResult = { ok: boolean; account?: string; error?: string };
 
@@ -9,6 +10,9 @@ type ProviderSpec = {
   detail: string;
   /** Env key that holds the account credential; presence means "connected". */
   tokenEnvKey: string;
+  /** Legacy env-key names also accepted (read for status, removed on disconnect).
+   *  New tokens are always saved under tokenEnvKey. */
+  tokenEnvAliases?: string[];
   /** Short instructions shown next to the token field. */
   tokenHint: string;
   tokenPlaceholder: string;
@@ -86,6 +90,16 @@ const PROVIDERS: ProviderSpec[] = [
     tokenPlaceholder: "",
     verify: verifyPlausible,
   },
+  {
+    key: "clawbank",
+    label: "ClawBank",
+    detail: "Banking, a self-custody wallet, trading, LLC formation, and USD off-ramp for your agents.",
+    tokenEnvKey: CLAWBANK_TOKEN_ENV_NAMES[0],
+    tokenEnvAliases: CLAWBANK_TOKEN_ENV_NAMES.slice(1),
+    tokenHint: "Use the guided email setup, or paste an API token minted by `clawbank login`.",
+    tokenPlaceholder: "ClawBank API token",
+    verify: verifyClawBank,
+  },
 ];
 
 export function connectionProvider(key: string) {
@@ -114,7 +128,11 @@ export async function saveProviderToken(providerKey: string, token: string): Pro
 export async function disconnectProvider(providerKey: string) {
   const provider = connectionProvider(providerKey);
   if (!provider) throw new Error(`Unknown provider: ${providerKey}`);
-  await removeSharedAgentEnv(provider.tokenEnvKey);
+  const sharedEnv = await readSharedAgentEnv();
+  // Remove the canonical key plus any legacy alias that is actually set —
+  // otherwise a provider with an old-name credential stays "connected".
+  const keys = [provider.tokenEnvKey, ...(provider.tokenEnvAliases ?? []).filter((alias) => sharedEnvValue(alias, sharedEnv))];
+  for (const key of keys) await removeSharedAgentEnv(key);
 }
 
 export async function saveGoogleOAuthClient(clientId: string, clientSecret: string) {
@@ -127,7 +145,9 @@ export async function saveGoogleOAuthClient(clientId: string, clientSecret: stri
 }
 
 async function providerStatus(provider: ProviderSpec, sharedEnv: Record<string, string>): Promise<ConnectionProviderStatus> {
-  const token = sharedEnvValue(provider.tokenEnvKey, sharedEnv);
+  const token = [provider.tokenEnvKey, ...(provider.tokenEnvAliases ?? [])]
+    .map((key) => sharedEnvValue(key, sharedEnv))
+    .find(Boolean) ?? "";
   const base: ConnectionProviderStatus = {
     key: provider.key,
     label: provider.label,
@@ -327,6 +347,18 @@ async function verifyPlausible(token: string): Promise<VerifyResult> {
     if (response.status === 401) return { ok: false, error: payload?.error || "Plausible rejected the request." };
     if (response.status >= 500) return { ok: false, error: `Plausible is unavailable (HTTP ${response.status}).` };
     return { ok: true };
+  });
+}
+
+// ClawBank verification reuses the canonical service client (normalized
+// envelope + error mapping) instead of a hand-rolled fetch. `clawbankMe(token)`
+// checks the supplied token against live GET /api/v1/me.
+async function verifyClawBank(token: string): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const me = await clawbankMe(token);
+    if (!me.ok) return { ok: false, error: me.error || `ClawBank rejected the token (HTTP ${me.status}).` };
+    const wallet = me.data?.wallet?.address;
+    return { ok: true, account: me.data?.email || (wallet ? `wallet ${wallet.slice(0, 6)}…${wallet.slice(-4)}` : undefined) };
   });
 }
 

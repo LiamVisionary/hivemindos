@@ -7,7 +7,7 @@
 // "Discuss all" that asks the Queen to fix the whole class at once, and an
 // expandable list of the underlying tasks (each opens its task detail to act).
 import React from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
+import { AlertTriangle, Archive, ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import { issueAgeLabel, type IssueReasonInfo } from "./issue-reason";
 import type { Issue } from "./types";
@@ -17,11 +17,15 @@ export function ConsolidatedIssueCard({
   issues,
   companyName,
   onOpenIssue,
+  onDismiss,
 }: {
   info: IssueReasonInfo;
   issues: Issue[];
   companyName: string;
   onOpenIssue: (issue: Issue) => void;
+  /** Set aside issues: archive their tasks off the board. Pass the whole chain to
+   *  dismiss all at once, or a single-item array to dismiss one. */
+  onDismiss?: (issues: Issue[]) => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const queenChat = useQueenChat();
@@ -68,6 +72,7 @@ export function ConsolidatedIssueCard({
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingLeft: 26 }}>
         <button
           type="button"
+          className="zhc-btn-ghost"
           onClick={discussClass}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", borderRadius: 8, padding: "5px 9px",
@@ -80,6 +85,7 @@ export function ConsolidatedIssueCard({
         </button>
         <button
           type="button"
+          className="zhc-btn-ghost"
           onClick={() => setOpen((value) => !value)}
           aria-expanded={open}
           style={{
@@ -90,6 +96,20 @@ export function ConsolidatedIssueCard({
           {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
           {open ? "Hide tasks" : `Show ${issues.length} tasks`}
         </button>
+        {onDismiss ? (
+          <button
+            type="button"
+            className="zhc-btn-ghost"
+            onClick={() => onDismiss(issues)}
+            title={`Set aside all ${issues.length} tasks in this group — archive them off the board so they stop showing as issues and stop re-escalating. Reversible from the Work Board.`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", borderRadius: 8, padding: "5px 9px",
+              font: "inherit", fontFamily: "var(--f-mono)", fontSize: 11, border: "1px solid var(--line)", background: "transparent", color: "var(--fg-3)",
+            }}
+          >
+            <Archive size={14} aria-hidden /> Dismiss all {issues.length}
+          </button>
+        ) : null}
       </div>
 
       {open ? (
@@ -97,23 +117,37 @@ export function ConsolidatedIssueCard({
           {issues.map((issue) => {
             const age = issueAgeLabel(issue);
             return (
-              <button
+              <div
                 key={issue.work?.taskId ?? issue.key}
-                type="button"
-                onClick={() => onOpenIssue(issue)}
-                title="Open this task's result and deliverables"
-                style={{
-                  display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", cursor: "pointer",
-                  borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "7px 9px",
-                }}
+                style={{ display: "flex", alignItems: "center", gap: 4, width: "100%", borderRadius: 8, border: "1px solid var(--line)", background: "var(--bg-2)" }}
               >
-                <span style={{ flex: 1, minWidth: 0, fontSize: 11.8, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{issue.title}</span>
-                <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)" }}>
-                  {issue.key}
-                  {issue.agent ? ` · ${issue.agent}` : ""}
-                  {age ? ` · ${age}` : ""}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  className="zhc-btn-ghost"
+                  onClick={() => onOpenIssue(issue)}
+                  title="Open this task's result and deliverables"
+                  style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, textAlign: "left", cursor: "pointer", background: "none", border: "none", padding: "7px 9px", font: "inherit" }}
+                >
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 11.8, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{issue.title}</span>
+                  <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)" }}>
+                    {issue.key}
+                    {issue.agent ? ` · ${issue.agent}` : ""}
+                    {age ? ` · ${age}` : ""}
+                  </span>
+                </button>
+                {onDismiss ? (
+                  <button
+                    type="button"
+                    className="zhc-btn-ghost"
+                    onClick={() => onDismiss([issue])}
+                    title="Dismiss just this one — archive its task off the board."
+                    aria-label="Dismiss this issue"
+                    style={{ display: "grid", placeItems: "center", flexShrink: 0, width: 26, height: 26, marginRight: 5, borderRadius: 7, cursor: "pointer", background: "transparent", border: "1px solid transparent", color: "var(--fg-4)" }}
+                  >
+                    <Archive size={13} aria-hidden />
+                  </button>
+                ) : null}
+              </div>
             );
           })}
         </div>

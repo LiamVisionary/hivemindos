@@ -16,6 +16,16 @@ export type CompanyAnalyticsConfig = {
   host?: string;
 };
 
+/** A provider-side project/site/property the user can pick, discovered from the
+ *  connected credential — so no one has to type an id. `id` is what we persist as
+ *  `CompanyAnalyticsConfig.projectId`; `name` is the human label. */
+export type AnalyticsResource = { id: string; name: string; hint?: string };
+
+/** How a provider's shared credential is connected: a pasted key, or the shared
+ *  Google OAuth account (GA4). Drives both the card's connect affordance and how
+ *  the server resolves the credential. */
+export type AnalyticsConnectMode = "key" | "google-oauth";
+
 export type AnalyticsFunnelStep = { name: string; count: number; conversionPct?: number };
 export type AnalyticsPoint = { date: string; visitors: number; conversions?: number };
 export type AnalyticsEvent = { name: string; count: number };
@@ -66,8 +76,18 @@ export type AnalyticsAdapter = {
   configFieldHint: string;
   configFieldPlaceholder: string;
   requiresCredential: boolean;
+  /** How the shared credential is connected. Defaults to "key" when omitted. */
+  connectVia?: AnalyticsConnectMode;
   /** Read-only summary fetch. MUST throw a human-readable Error on failure. */
   getSummary(ctx: AnalyticsAdapterContext, opts: { rangeDays: number }): Promise<AnalyticsSummary>;
+  /**
+   * Discover the projects/sites/properties the connected credential can see, so the
+   * setup UI offers a picker instead of a free-text id. `credential` is resolved by
+   * the server (a key, or a minted Google access token). MUST throw a human-readable
+   * Error the UI can show (e.g. plan-gated, wrong scope) so callers fall back to
+   * manual entry. Omit when a provider can't enumerate from its credential alone.
+   */
+  listResources?(credential: string): Promise<{ resources: AnalyticsResource[]; host?: string }>;
 };
 
 /** Reported to the guided-setup picker: credential present-by-name (not live-verified). */
@@ -82,11 +102,26 @@ export type AnalyticsProviderStatus = {
   configFieldLabel: string;
   configFieldHint: string;
   configFieldPlaceholder: string;
+  /** How the card connects this provider's shared credential (key paste vs Google OAuth). */
+  connectVia: AnalyticsConnectMode;
+  /** Whether the card can auto-discover projects for this provider (has listResources). */
+  canEnumerate: boolean;
 };
 
-/** Four honest states, parallel to the Emails tab. */
+/** Four honest states, parallel to the Emails tab. Every state now also carries the
+ *  provider roster (`providers`) so the tab's cards render in any state, and the
+ *  configured states carry the company's current `config` so a card shows what it's
+ *  pointed at. */
 export type AnalyticsSummaryResult =
-  | { ok: true; state: "live"; provider: AnalyticsProviderKey; providerLabel: string; summary: AnalyticsSummary }
+  | {
+      ok: true;
+      state: "live";
+      provider: AnalyticsProviderKey;
+      providerLabel: string;
+      summary: AnalyticsSummary;
+      providers: AnalyticsProviderStatus[];
+      config?: CompanyAnalyticsConfig;
+    }
   | { ok: true; state: "unconfigured"; providers: AnalyticsProviderStatus[] }
   | {
       ok: true;
@@ -95,8 +130,18 @@ export type AnalyticsSummaryResult =
       providerLabel: string;
       credentialEnvKey: string;
       detail: string;
+      providers: AnalyticsProviderStatus[];
+      config?: CompanyAnalyticsConfig;
     }
-  | { ok: false; state: "error"; provider?: AnalyticsProviderKey; providerLabel?: string; error: string };
+  | {
+      ok: false;
+      state: "error";
+      provider?: AnalyticsProviderKey;
+      providerLabel?: string;
+      error: string;
+      providers?: AnalyticsProviderStatus[];
+      config?: CompanyAnalyticsConfig;
+    };
 
 /** Parse a display metric like "$1,240" or "3,410" into a number, or undefined. */
 export function parseMetricNumber(value?: string | null): number | undefined {

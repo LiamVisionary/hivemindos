@@ -44,7 +44,7 @@ import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { normalizeResearchMethod } from "@/lib/config/research-methods";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
-import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
+import { HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL, HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
 import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
@@ -229,7 +229,10 @@ export function AgentSettingsModal(props: any) {
   const veniceSelected = selectedProviderSlug === "venice";
   const veniceSetupComplete = isVeniceSetupReady(veniceConfig);
   const veniceCreateBlocked = Boolean(agentCreateMachine && veniceSelected && !veniceSetupComplete);
-  const hivemindosModelsSetupComplete = isHivemindosModelsSetupReady(hivemindosModelsConfig);
+  const hivemindosModelsSetupComplete = isHivemindosModelsSetupReady(
+    hivemindosModelsConfig,
+    agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model,
+  );
   const shouldShowHivemindosModelsSetup = hivemindosModelsSelected && (!hivemindosModelsSetupComplete || hivemindosModelsSetupOpen);
   const hivemindosModelsCreateBlocked = Boolean(agentCreateMachine && hivemindosModelsSelected && !hivemindosModelsSetupComplete);
   const agentTaskPreferences = (agentCreateMachine ? agentCreateDraft.taskPreferences : roleModalAgent?.taskPreferences) ?? [];
@@ -807,7 +810,7 @@ export function AgentSettingsModal(props: any) {
   function selectHivemindosModelsProvider() {
     const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
     const availableModels = runtimeModelProviders.find((provider) => provider.slug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER)?.models?.map((modelOption) => modelOption.id) ?? [];
-    const model = currentModel && availableModels.includes(currentModel) ? currentModel : HIVEMINDOS_MODELS_PROVIDER?.defaultModel || "hivemindos/auto";
+    const model = currentModel && availableModels.includes(currentModel) ? currentModel : HIVEMINDOS_MODELS_PROVIDER?.defaultModel || HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL;
     const patch = {
       provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
       model,

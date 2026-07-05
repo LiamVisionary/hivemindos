@@ -9,6 +9,14 @@ The public app may call official HivemindOS endpoints for:
 - Honey/HIVE ledger reads, signed reward receipts, and managed Honey credits.
 - Trusted reward compute through the official compute gateway.
 - x402 paid-agent calls through the official paid-agent gateway.
+- Free-tier model calls through the official gateway's `free-models` surface
+  (`POST <gateway>/api/free-models/<model>/chat/completions`, plus the dynamic
+  model inventory at `GET <gateway>/api/paid-agents/<slug>/models`). The
+  hosted gateway is the sole authority on the free daily allowance — metered
+  per anonymous device id (`X-HivemindOS-Free-Device`) and per client IP, with
+  a global daily budget — and reports remaining allowance via
+  `X-HivemindOS-Free-Remaining-Requests` / `-Tokens` / `-Reset-At` headers and
+  `429` + `Retry-After` when exhausted.
 - Official platform-fee and Hyperliquid builder-code policy.
 - Production health-report collection for official builds.
 

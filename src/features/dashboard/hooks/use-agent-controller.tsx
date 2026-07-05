@@ -532,7 +532,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       aeonMode: autopilotRuntime ? agentCreateDraft.aeonMode || autopilotDefaults?.mode : undefined,
       a2aUrl: autopilotRuntime ? autopilotGatewayUrl : undefined,
       gatewayUrl: autopilotRuntime ? autopilotGatewayUrl : baseAgent.gatewayUrl,
-      beeRole: "worker",
+      beeRole: agentCreateDraft.beeRole ?? baseAgent.beeRole,
       workerClass: agentCreateDraft.workerClass,
       customWorkerClass: agentCreateDraft.customWorkerClass,
       customWorkerClasses: agentCreateDraft.customWorkerClasses,

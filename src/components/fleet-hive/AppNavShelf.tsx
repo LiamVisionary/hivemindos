@@ -10,7 +10,7 @@
    receives a DashboardView id; wire it to the dashboard view switch. */
 
 import { Fragment, memo, useEffect, useRef, useState } from "react";
-import { Brain } from "lucide-react";
+import { Brain, Building2 } from "lucide-react";
 import { APP_NAV_SHELF_GROUPS, shelfSlotForView } from "@/features/dashboard/dashboard-navigation";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
@@ -43,6 +43,8 @@ function FrNavIcon({ id }: { id: string }) {
       return (<svg {...p}><rect x="3" y="6" width="18" height="13" rx="2.2" /><path d="M3 9.5h18" /><circle cx="16.5" cy="13.5" r="1.1" fill="currentColor" stroke="none" /></svg>);
     case "trade":
       return (<svg {...p}><path d="M8 4v3M8 16v4" /><rect x="6" y="7" width="4" height="9" rx="1" /><path d="M16 4v4M16 17v3" /><rect x="14" y="8" width="4" height="9" rx="1" /></svg>);
+    case "governance":
+      return <Building2 aria-hidden="true" width={20} height={20} strokeWidth={1.7} />;
     case "scheduler":
       return (<svg {...p}><rect x="3.5" y="4.5" width="17" height="16" rx="2.2" /><path d="M3.5 9h17M8 3v3M16 3v3" /><path d="M12 12v2.5l1.6 1" /></svg>);
     case "swarm":

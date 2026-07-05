@@ -8,6 +8,8 @@
 // the shared env via POST /api/env (hive-env-add), and the card collapses away.
 import React from "react";
 import { AlertTriangle, Check, ExternalLink, KeyRound } from "lucide-react";
+import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
+import { Spinner } from "./primitives";
 
 type SetupBlocker = {
   envKey: string;
@@ -100,6 +102,7 @@ function SetupBlockerCard({ blocker, onResolved }: { blocker: SetupBlocker; onRe
                 href={link.url}
                 target="_blank"
                 rel="noreferrer"
+                onClick={(event) => { if (isExternalHttpUrl(link.url)) { event.preventDefault(); void openExternalUrl(link.url); } }}
                 style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)", textDecoration: "none", border: "1px solid var(--line)", borderRadius: 999, padding: "3px 9px" }}
               >
                 <ExternalLink size={12} aria-hidden /> {link.label}
@@ -149,7 +152,7 @@ function SetupBlockerCard({ blocker, onResolved }: { blocker: SetupBlocker; onRe
                   opacity: busy || !value.trim() ? 0.55 : 1,
                 }}
               >
-                <Check size={13} aria-hidden /> {busy ? "Saving…" : "Save & resume"}
+                {busy ? <Spinner size={13} /> : <Check size={13} aria-hidden />} {busy ? "Saving" : "Save & resume"}
               </button>
             </div>
             <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)" }}>

@@ -136,3 +136,38 @@ export function Panel({
 export function CardLabel({ children }: { children: React.ReactNode }) {
   return <span className="mono-cap" style={{ color: "var(--fg-4)" }}>{children}</span>;
 }
+
+// ── Loading primitives ────────────────────────────────────────────────────
+// House rule: NEVER render a bare "Loading…" / "…" string for a pending state.
+// Every loader in this route is animated — a spinner for inline/button busy
+// states, a shape-matched skeleton for regions, or an indeterminate bar. CSS
+// lives in theme.css (.zhc-spinner / .zhc-skel / .zhc-progress).
+
+/** Inline animated spinner — the canonical busy indicator. Inherits
+ *  currentColor, so it drops into any button or label at the given px size. */
+export function Spinner({ size = 13, style }: { size?: number; style?: React.CSSProperties }) {
+  return <span className="zhc-spinner" aria-hidden style={{ width: size, height: size, ...style }} />;
+}
+
+/** A single shimmering skeleton block. */
+export function Skeleton({
+  width = "100%", height = 12, radius = 6, style,
+}: { width?: number | string; height?: number | string; radius?: number; style?: React.CSSProperties }) {
+  return <div className="zhc-skel" aria-hidden style={{ width, height, borderRadius: radius, ...style }} />;
+}
+
+/** N shimmering text lines (last line shortened) for body/text placeholders. */
+export function SkeletonText({ lines = 3, gap = 9 }: { lines?: number; gap?: number }) {
+  return (
+    <div aria-hidden style={{ display: "flex", flexDirection: "column", gap }}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton key={i} height={11} width={i === lines - 1 ? "54%" : `${88 - (i % 3) * 11}%`} />
+      ))}
+    </div>
+  );
+}
+
+/** Indeterminate loading bar — for a determinate-looking "work in progress". */
+export function LoadingBar({ style }: { style?: React.CSSProperties }) {
+  return <div className="zhc-progress" role="progressbar" aria-label="Loading" style={style} />;
+}

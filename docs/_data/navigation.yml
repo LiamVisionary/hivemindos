@@ -72,6 +72,8 @@ sections:
             url: /for-users/features/integrations-and-work-history.html
           - title: MiroShark And OpenClaw
             url: /for-users/features/miroshark-and-openclaw.html
+          - title: Page Agent (Experimental)
+            url: /for-users/features/page-agent.html
 
       - title: Whole Brain
         url: /for-users/whole-brain/

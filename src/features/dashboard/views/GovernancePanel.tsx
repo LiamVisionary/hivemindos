@@ -7,15 +7,22 @@
 // kanban APIs, with a per-company cockpit (board, team, approvals, governance,
 // treasury + kill switch).
 import { ZeroHumanCompaniesView } from "./zero-human-companies/ZeroHumanCompaniesView";
+import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 
-export function GovernancePanel({ theme = "dark" }: { theme?: "dark" | "light" }) {
+export function GovernancePanel({
+  theme = "dark",
+  openSkillAttachmentBrowser,
+}: {
+  theme?: "dark" | "light";
+  openSkillAttachmentBrowser?: (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
+}) {
   // The shell (.commandMain) is viewport-capped with overflow hidden, so every
   // route panel owns its own scrolling via the global .tabPanel contract (see
   // sibling panels). Without this wrapper the company cockpit/board clipped at
   // the fold with no scrollbar once real companies had more content than fits.
   return (
     <section className="tabPanel" aria-label="Zero Human Companies">
-      <ZeroHumanCompaniesView theme={theme} />
+      <ZeroHumanCompaniesView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />
     </section>
   );
 }

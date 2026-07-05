@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayload } from "@/lib/types/integrations";
+import { CLAWBANK_OPEN_EVENT, CLAWBANK_UPDATED_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
 import { BBtn, BIcon, ServiceGlyph } from "./integrations-primitives";
 import { readJson } from "./integrations-view-helpers";
 
 type FetchErrorPayload = { error?: string; message?: string };
 
-const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: string }> = {
+const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: string; logo?: string }> = {
   github: { mono: "Gh", accent: "#c7ccd4" },
   linear: { mono: "Li", accent: "#9b8cf0" },
   slack: { mono: "Sl", accent: "#e09a86" },
@@ -15,7 +17,31 @@ const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: stri
   google: { mono: "Go", accent: "#6f9bd6" },
   posthog: { mono: "Ph", accent: "#f0a868" },
   plausible: { mono: "Pl", accent: "#4fb5a3" },
+  clawbank: { mono: "Cb", accent: "#e6dcc6", logo: "/icons/runtimes/clawbank.svg" },
 };
+
+/** Provider tile: the real logo when we ship one (ClawBank), else the mono glyph. */
+function ProviderGlyph({ providerKey, size = 38, radius = 11 }: { providerKey: ConnectionProviderKey; size?: number; radius?: number }) {
+  const style = PROVIDER_STYLE[providerKey];
+  if (!style.logo) return <ServiceGlyph accent={style.accent} mono={style.mono} size={size} radius={radius} />;
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        flex: "0 0 auto",
+        display: "grid",
+        placeItems: "center",
+        background: `color-mix(in srgb, ${style.accent} 15%, var(--panel-2))`,
+        border: `1px solid color-mix(in srgb, ${style.accent} 34%, transparent)`,
+      }}
+    >
+      <Image src={style.logo} alt="" aria-hidden width={Math.round(size * 0.62)} height={Math.round(size * 0.62)} unoptimized />
+    </span>
+  );
+}
 
 const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
   github: "/api/integrations/github/oauth/start?source=integrations",
@@ -55,7 +81,17 @@ export function ConnectionsPanel() {
       const search = params.toString();
       window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
     }
-    return () => window.clearTimeout(timer);
+    // The ClawBank guided setup runs in its own modal (email → code → mint);
+    // when it lands a key, re-read so the card flips to Connected.
+    const onClawBankUpdated = () => {
+      setMessage("ClawBank connected.");
+      void refresh();
+    };
+    window.addEventListener(CLAWBANK_UPDATED_EVENT, onClawBankUpdated);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(CLAWBANK_UPDATED_EVENT, onClawBankUpdated);
+    };
   }, [refresh]);
 
   const providers = payload?.providers ?? [];
@@ -91,7 +127,7 @@ export function ConnectionsPanel() {
           <div className="ni-agrid">
             {providers.map((provider) => (
               <button key={provider.key} type="button" className="ni-acard" data-on={provider.connected ? "" : undefined} onClick={() => { setMessage(""); setOpenKey(provider.key); }}>
-                <ServiceGlyph accent={PROVIDER_STYLE[provider.key].accent} mono={PROVIDER_STYLE[provider.key].mono} size={56} radius={16} />
+                <ProviderGlyph providerKey={provider.key} size={56} radius={16} />
                 <strong>{provider.label}</strong>
                 <span className="adet">{provider.detail}</span>
                 <StatusPill provider={provider} />
@@ -143,9 +179,9 @@ function ConnectModal({
   const [show, setShow] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [note, setNote] = React.useState("");
-  const style = PROVIDER_STYLE[provider.key];
   const oauthUrl = OAUTH_START_URL[provider.key];
   const isGoogle = provider.key === "google";
+  const isClawBank = provider.key === "clawbank";
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -206,7 +242,7 @@ function ConnectModal({
       <div className="fm-modal" role="dialog" aria-modal="true" aria-label={`Connect ${provider.label}`}>
         <div className="fm-mhead">
           <div style={{ display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 }}>
-            <ServiceGlyph accent={style.accent} mono={style.mono} size={40} radius={11} />
+            <ProviderGlyph providerKey={provider.key} size={40} radius={11} />
             <div style={{ minWidth: 0 }}>
               <div className="fb-eyebrow" style={{ marginBottom: 6 }}>{provider.connected ? "Connected" : "Connect app"}</div>
               <h3>{provider.label}</h3>
@@ -233,6 +269,19 @@ function ConnectModal({
             </BBtn>
           ) : null}
 
+          {isClawBank ? (
+            <BBtn
+              variant="primary"
+              onClick={() => {
+                onClose();
+                window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT));
+              }}
+              style={{ justifySelf: "start", padding: "11px 18px", fontSize: 13.5 }}
+            >
+              <BIcon name="key" size={15} /> Set up with email
+            </BBtn>
+          ) : null}
+
           {googleNeedsClient ? (
             <div style={{ display: "grid", gap: 12 }}>
               <div className="fm-note"><BIcon name="shield" size={15} /><span>{provider.tokenHint} Give it the redirect URI below (Desktop app clients accept it automatically).</span></div>
@@ -253,7 +302,7 @@ function ConnectModal({
 
           {!isGoogle ? (
             <div style={{ display: "grid", gap: 9 }}>
-              <div className="fm-sec" style={{ margin: "2px 0 0" }}>{oauthUrl && provider.oauthReady ? "Or paste a token" : "Paste a token"}</div>
+              <div className="fm-sec" style={{ margin: "2px 0 0" }}>{isClawBank || (oauthUrl && provider.oauthReady) ? "Or paste a token" : "Paste a token"}</div>
               <div className="fm-note"><BIcon name="shield" size={15} /><span>{provider.tokenHint} The token is checked live, then stored in the shared hive env.</span></div>
               <label className="fb-label">{provider.label} token
                 <div className="fm-keyrow">

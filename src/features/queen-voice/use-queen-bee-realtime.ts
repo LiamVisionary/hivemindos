@@ -225,6 +225,9 @@ export function useQueenBeeRealtime(
   const [turns, setTurns] = React.useState<QueenVoiceTurn[]>([]);
   const [speechDetected, setSpeechDetected] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // Bumped per (re)connect alongside the `turns` reset; the overlay's history
+  // bridge keys its id namespace on this — see useQueenBeeVoice.sessionSerial.
+  const [sessionSerial, setSessionSerial] = React.useState(0);
   const mutedRef = React.useRef(muted);
   const trackRef = React.useRef<MediaStreamTrack | null>(null);
   // Analyser built off her remote WebRTC audio track, read by the fleet
@@ -232,6 +235,9 @@ export function useQueenBeeRealtime(
   // element still does the actual playback.
   const queenOutputAnalyserRef = React.useRef<AnalyserNode | null>(null);
   useQueenVoiceLevelPump(queenOutputAnalyserRef, phase === "speaking");
+  // Analyser on the MIC input (tapped off the caption context), exposed for
+  // the control bar's live input waveform.
+  const micAnalyserRef = React.useRef<AnalyserNode | null>(null);
   const onFailedRef = React.useRef(onFailed);
   const onDriveDashboardRef = React.useRef(onDriveDashboard);
 
@@ -381,6 +387,11 @@ export function useQueenBeeRealtime(
         if (!AudioContextClass) return;
         captionContext = new AudioContextClass();
         const source = captionContext.createMediaStreamSource(localStream);
+        // Side-tap for the control bar's live mic waveform (analysis only).
+        const micAnalyser = captionContext.createAnalyser();
+        micAnalyser.fftSize = 1024;
+        source.connect(micAnalyser);
+        micAnalyserRef.current = micAnalyser;
         captionProcessor = captionContext.createScriptProcessor(4096, 1, 1);
         const silentGain = captionContext.createGain();
         silentGain.gain.value = 0;
@@ -638,6 +649,7 @@ export function useQueenBeeRealtime(
         setPhase("starting");
         setError("");
         setTurns([]);
+        setSessionSerial((serial) => serial + 1);
         setFailed(false);
         const startedAt = performance.now();
         const mark = (label: string) =>
@@ -743,6 +755,7 @@ export function useQueenBeeRealtime(
       queenOutputTap?.dispose();
       queenOutputTap = null;
       queenOutputAnalyserRef.current = null;
+      micAnalyserRef.current = null;
       localStream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
       audio.pause();
@@ -751,5 +764,5 @@ export function useQueenBeeRealtime(
     };
   }, [active, openingLine]);
 
-  return { phase, error, turns, speechDetected, failed };
+  return { phase, error, turns, speechDetected, failed, micAnalyserRef, sessionSerial };
 }

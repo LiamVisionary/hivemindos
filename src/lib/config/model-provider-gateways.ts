@@ -86,7 +86,7 @@ export const MODEL_PROVIDER_GATEWAYS: Record<string, ModelProviderGateway> = {
   [HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER]: {
     slug: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
     name: HIVEMINDOS_WALLET_PAID_MODELS_NAME,
-    detail: "Wallet-paid models · no API key",
+    detail: "Free + wallet-paid models · no API key",
     iconPath: "/icons/runtimes/hive-fusion.svg",
     iconMode: "mask",
     fallback: "HM",

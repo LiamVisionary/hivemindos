@@ -416,6 +416,15 @@ export type SkillBrowserSkill = {
 
 export type SkillBrowserView = "catalog" | "installed" | "packs" | "audit" | "write" | "fusion";
 
+export type SkillBrowserAttachmentTarget = {
+  selectedSlugs: string[];
+  onChange: (slugs: string[]) => void;
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+  statusLabel?: string;
+};
+
 export type HermesUpdateSkillLike = {
   slug: string;
   name: string;
