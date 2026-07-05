@@ -1501,7 +1501,8 @@ async function detectedOpenClawAgent() {
     localDataDir: defaultOpenClawDir,
     provider: parsed?.provider,
     model: parsed?.model,
-    beeRole: "queen",
+    // Queen is a dashboard-level choice — a detected runtime must never self-declare it.
+    beeRole: "worker",
     workerClass: "general",
   });
 }
