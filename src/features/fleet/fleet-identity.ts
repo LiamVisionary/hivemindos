@@ -149,12 +149,13 @@ export type TailnetSelfNode = { name?: string | null; dnsName?: string | null };
 export function tailnetSelfIdentityCandidates(
   tailnetSelf: TailnetSelfNode | null | undefined,
 ): string[] {
-  if (!tailnetSelf) return [];
-  const candidates = [
-    machineExactIdentity(undefined, tailnetSelf.dnsName ?? undefined),
-    machineExactIdentity(tailnetSelf.name ?? undefined, undefined),
-  ];
-  return [...new Set(candidates.filter(Boolean))];
+  // dnsName ONLY: the MagicDNS name is sticky and unique per node. The
+  // reported `name` is tailscaled's HostName — on macOS the ComputerName,
+  // which two of Liam's MacBooks share — so deriving an identity from it
+  // would let one machine's collector claim (and fold away) the OTHER
+  // machine's system node.
+  const identity = machineExactIdentity(undefined, tailnetSelf?.dnsName ?? undefined);
+  return identity ? [identity] : [];
 }
 
 export function machineHivemindBase(

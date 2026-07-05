@@ -652,18 +652,17 @@ fn tailnet_self_identities(machine: &Value) -> Vec<String> {
     let Some(tailnet_self) = machine.get("tailnetSelf") else {
         return Vec::new();
     };
-    let name = tailnet_self.get("name").and_then(Value::as_str).unwrap_or("");
+    // dnsName ONLY: the MagicDNS name is sticky and unique per node, while
+    // the reported `name` (tailscaled HostName = macOS ComputerName) can be
+    // shared by two physical machines — deriving an identity from it would
+    // let one machine's collector claim the OTHER machine's system node.
     let dns_name = tailnet_self.get("dnsName").and_then(Value::as_str).unwrap_or("");
-    let mut identities = Vec::new();
-    for identity in [
-        exact_machine_identity("", dns_name),
-        exact_machine_identity(name, ""),
-    ] {
-        if !identity.is_empty() && !identities.contains(&identity) {
-            identities.push(identity);
-        }
+    let identity = exact_machine_identity("", dns_name);
+    if identity.is_empty() {
+        Vec::new()
+    } else {
+        vec![identity]
     }
-    identities
 }
 
 fn machine_device_identity(machine: &Value) -> String {
@@ -694,6 +693,15 @@ fn fold_ready_tailnet_self(machines: Vec<Value>) -> Vec<Value> {
         .into_iter()
         .filter(|machine| {
             if machine.get("collector").and_then(Value::as_str) == Some("ready") {
+                return true;
+            }
+            // Self is never folded by a remote collector's claims.
+            if machine
+                .get("device")
+                .and_then(|device| device.get("self"))
+                .and_then(Value::as_bool)
+                == Some(true)
+            {
                 return true;
             }
             let identity = machine_device_identity(machine);
@@ -775,25 +783,40 @@ mod tests {
         // An OS hostname rename rotated the linkd tsnet node name; the system
         // node kept its sticky old MagicDNS name. The ready collector claims
         // the system node via /health tailnetSelf → the empty ghost folds.
+        // tailnetSelf `name` is tailscaled's HostName = the macOS
+        // ComputerName BOTH MacBooks share — identity comes from dnsName only.
         let ready = json!({
             "device": { "name": "LiamsMBP481146", "dnsName": "hivemindos-liamsmbp481146-lan.tail1.ts.net" },
             "collector": "ready",
-            "tailnetSelf": { "name": "LiamsMBP481146", "dnsName": "liams-macbook-pro-1.tail1.ts.net" },
+            "tailnetSelf": { "name": "Liam's MacBook Pro", "dnsName": "liams-macbook-pro-1.tail1.ts.net" },
         });
         let ghost = json!({
             "device": { "name": "Liam's MacBook Pro", "dnsName": "liams-macbook-pro-1.tail1.ts.net" },
             "collector": "offline",
         });
-        // A DIFFERENT machine sharing the hostname family must survive.
+        // A DIFFERENT machine sharing the ComputerName must survive, even
+        // with its collector down.
         let sibling = json!({
             "device": { "name": "Liam's MacBook Pro", "dnsName": "liams-macbook-pro.tail1.ts.net" },
             "collector": "offline",
         });
-        let machines = fold_ready_tailnet_self(vec![ready, ghost, sibling]);
-        assert_eq!(machines.len(), 2);
+        // Self is untouchable even on an identity collision.
+        let self_machine = json!({
+            "device": { "self": true, "name": "This Mac", "dnsName": "liams-macbook-pro-1.tail1.ts.net" },
+            "collector": "offline",
+        });
+        let machines =
+            fold_ready_tailnet_self(vec![ready, ghost, sibling, self_machine]);
+        assert_eq!(machines.len(), 3);
         assert!(!machines.iter().any(|machine| {
-            machine.get("device").and_then(|d| d.get("dnsName")).and_then(Value::as_str)
+            let device = machine.get("device");
+            device.and_then(|d| d.get("dnsName")).and_then(Value::as_str)
                 == Some("liams-macbook-pro-1.tail1.ts.net")
+                && device.and_then(|d| d.get("self")).and_then(Value::as_bool) != Some(true)
+        }));
+        assert!(machines.iter().any(|machine| {
+            machine.get("device").and_then(|d| d.get("self")).and_then(Value::as_bool)
+                == Some(true)
         }));
     }
 

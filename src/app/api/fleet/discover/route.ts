@@ -1431,8 +1431,7 @@ function machineBaseCandidates(machine: { device: Device; tailnetSelf?: TailnetS
   // Exact identity only (keeps tailscale's `-N` suffix): a `-1` node is a
   // different physical machine with the same hostname, not a duplicate. A
   // ready collector additionally claims its self-reported system tailnet
-  // node, so a hostname rename (rotated linkd tsnet name, sticky system
-  // node name) still folds both nodes into one machine.
+  // node, so a hostname rename still folds both nodes into one machine.
   return [
     deviceIdentityKey(machine.device),
     ...tailnetSelfIdentityCandidates(machine.tailnetSelf),
@@ -1444,6 +1443,8 @@ function hasFreshReadyDuplicate(
   readyMachineBases: Set<string>,
 ) {
   if (machine.collector === "ready") return false;
+  // A remote collector's claims never fold the local machine out of its own fleet.
+  if (machine.device.self) return false;
   return machineBaseCandidates(machine).some((base) =>
     readyMachineBases.has(base),
   );

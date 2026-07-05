@@ -58,8 +58,11 @@ assert.equal(normalizeMachineName(undefined), "");
 // `liams-macbook-pro-1` MagicDNS name. The collector self-reports the system
 // node; its candidates must hit the ghost device's exact identity so
 // discovery folds the pair back into one machine.
+// Real /health value from the NYC box: tailscaled's HostName is the macOS
+// ComputerName, which BOTH MacBooks share — identity must come from dnsName
+// only, or NYC's collector would claim This Mac's system node too.
 const nycTailnetSelf = {
-  name: "LiamsMBP481146",
+  name: "Liam’s MacBook Pro",
   dnsName: "liams-macbook-pro-1.tail629894.ts.net",
 };
 const ghostIdentity = machineExactIdentity(
@@ -79,13 +82,18 @@ assert.ok(
   ),
   "candidates stay scoped to the self-declared system node",
 );
-// A sibling Mac sharing the hostname family keeps its distinct identity —
-// candidates never strip the `-N` suffix.
+// The OTHER MacBook shares the ComputerName; its system node's identity must
+// NEVER be claimed — candidates come from the unique dnsName only.
 assert.ok(
   !tailnetSelfIdentityCandidates(nycTailnetSelf).includes(
     machineExactIdentity("Liam's MacBook Pro", "liams-macbook-pro.tail629894.ts.net"),
   ),
-  "the OTHER MacBook sharing the hostname stays distinct",
+  "the OTHER MacBook sharing the ComputerName stays distinct",
+);
+assert.deepEqual(
+  tailnetSelfIdentityCandidates({ name: "Liam’s MacBook Pro" }),
+  [],
+  "a name-only tailnetSelf (no dnsName) claims nothing",
 );
 assert.deepEqual(tailnetSelfIdentityCandidates(null), []);
 assert.deepEqual(tailnetSelfIdentityCandidates(undefined), []);
