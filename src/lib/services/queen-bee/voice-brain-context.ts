@@ -3,7 +3,12 @@ import "server-only";
 import { answerFromAgentMemory } from "@/lib/services/obsidian/agent-memory";
 import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
 import { readBoard } from "@/lib/services/kanban/local-kanban-store";
-import { buildHiveDailyReport, formatHiveDailyReportVoiceDigest } from "@/lib/services/company-daily-report";
+import {
+  buildHiveDailyReport,
+  formatHiveDailyReportVoiceDigest,
+  getCachedHiveDailyReport,
+  warmHiveDailyReport,
+} from "@/lib/services/company-daily-report";
 
 /**
  * Fast, best-effort hive context for one spoken conversation turn: relevant
@@ -60,8 +65,15 @@ async function openWorkDigest(vaultPath?: string | null) {
 }
 
 async function businessDigest() {
-  // Local-only sources (companies + ledgers + memory); email/integration checks
-  // are network hops, so they stay OFF here to respect the per-turn budget.
+  // Prefer the report warmed at session start (speak-prewarm): it already paid
+  // for the email + integration network hops, so the counts are read instantly
+  // and included in the spoken digest.
+  const cached = getCachedHiveDailyReport();
+  if (cached) return cached.empty ? "" : formatHiveDailyReportVoiceDigest(cached);
+  // Cold/stale cache (no prewarm yet): kick a background warm for later turns —
+  // NOT awaited, so a network hop can never blow this turn's budget — and serve
+  // the fast local-only digest (companies + ledgers + memory) right now.
+  void warmHiveDailyReport();
   const report = await buildHiveDailyReport({ includeEmail: false, includeIntegrations: false });
   if (report.empty) return "";
   return formatHiveDailyReportVoiceDigest(report);

@@ -33,6 +33,7 @@ import {
   localTtsBreakerState,
   prewarmLocalTts,
 } from "@/lib/services/phone/local-tts-health";
+import { warmHiveDailyReport } from "@/lib/services/company-daily-report";
 import {
   beginVoiceTurnProgress,
   finishVoiceTurnProgress,
@@ -925,6 +926,11 @@ async function speakViaLocalTts(
 // prewarm success also re-closes the failure breaker (recovery probe).
 async function prewarmSpokenReplyEngine(request: NextRequest) {
   const startedAt = Date.now();
+  // Voice-session start: warm the business report (email + integration counts,
+  // both network hops) so the spoken digest can include them from cache without
+  // ever blocking a turn. Fire-and-forget — the warmer owns its own errors and
+  // nothing audible depends on it here.
+  void warmHiveDailyReport();
   let calls: AgentCallPreferences | null = null;
   try {
     calls = await readQueenBeeCallPreferences();

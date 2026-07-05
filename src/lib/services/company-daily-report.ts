@@ -230,6 +230,45 @@ async function readIntegrations(): Promise<HiveDailyReportIntegration[]> {
   }
 }
 
+// ─────────────────────────── session cache ───────────────────────────
+
+/**
+ * The full report (email + integrations) needs network hops, so it can't run in
+ * the ~900ms voice-turn budget. Instead we warm it ONCE at voice-session start
+ * (speak-prewarm) into this process-level cache; the voice digest then reads the
+ * cached counts instantly every turn. A short TTL + a lazy background refresh
+ * keep it current without ever blocking a spoken turn.
+ */
+type CachedReport = { at: number; report: HiveDailyReport };
+const FULL_REPORT_TTL_MS = 3 * 60_000;
+let cachedFullReport: CachedReport | null = null;
+let warmInFlight: Promise<HiveDailyReport> | null = null;
+
+/** The warmed full report if still fresh, else null (caller falls back to local-only). */
+export function getCachedHiveDailyReport(maxAgeMs = FULL_REPORT_TTL_MS): HiveDailyReport | null {
+  if (!cachedFullReport) return null;
+  return Date.now() - cachedFullReport.at <= maxAgeMs ? cachedFullReport.report : null;
+}
+
+/**
+ * Compute the full report (email + integrations) and cache it. De-duped: a
+ * concurrent warm reuses the in-flight promise. Never throws — a warm failure
+ * just leaves the previous cache (or none) in place.
+ */
+export async function warmHiveDailyReport(): Promise<HiveDailyReport | null> {
+  if (warmInFlight) return warmInFlight.catch(() => null);
+  warmInFlight = (async () => {
+    try {
+      const report = await buildHiveDailyReport({ includeEmail: true, includeIntegrations: true });
+      cachedFullReport = { at: Date.now(), report };
+      return report;
+    } finally {
+      warmInFlight = null;
+    }
+  })();
+  return warmInFlight.catch(() => null);
+}
+
 // ─────────────────────────── formatting ───────────────────────────
 
 function usd(value: number): string {
@@ -271,6 +310,9 @@ export function formatHiveDailyReportVoiceDigest(report: HiveDailyReport): strin
     const apex = apexLine(company);
     if (apex) bits.push(apex);
     bits.push(`revenue ${usd(company.revenue.totalRevenueUsd)} (${company.revenue.eventCount} event${company.revenue.eventCount === 1 ? "" : "s"})`);
+    if (company.email?.configured) {
+      bits.push(`${company.email.threadCount}${company.email.truncated ? "+" : ""} recent email thread${company.email.threadCount === 1 ? "" : "s"}`);
+    }
     bits.push(`last 24h: ${activityPhrase(company.activity24h)}`);
     if (company.frozen) bits.push("FROZEN");
     const tag = company.ticker ? ` (${company.ticker})` : "";
