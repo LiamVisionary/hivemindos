@@ -89,24 +89,39 @@ def revenue_by_company() -> dict[str, dict[str, Any]]:
     return rollup
 
 
+def to_ms(value: Any) -> float | None:
+    """Epoch ms from a number or ISO string (mirrors the TS toEpochMs), so a
+    legacy string-`at` line is counted once, not dropped and not re-counted."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return dt.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000
+        except ValueError:
+            return None
+    return None
+
+
 def activity(company_id: str) -> dict[str, dict[str, int]]:
-    """Count company-memory events in the 24h/7d windows. Matches the TS reader's
-    numeric-`at` guard, which drops the duplicate legacy string-`at` lines."""
+    """Count company-memory events in the 24h/7d windows. Dedupes exact-duplicate
+    ledger lines and coerces string `at` to ms, matching the TS reader."""
     path = HOME / "company-memory" / f"{re.sub(r'[^a-zA-Z0-9_-]+', '-', company_id)[:80] or 'company'}.jsonl"
     win24: Counter[str] = Counter()
     win7d: Counter[str] = Counter()
+    seen: set[str] = set()
     try:
         for line in path.read_text().splitlines():
             line = line.strip()
-            if not line:
+            if not line or line in seen:
                 continue
+            seen.add(line)
             try:
                 record = json.loads(line)
             except Exception:
                 continue
-            at = record.get("at")
+            at = to_ms(record.get("at"))
             kind = record.get("kind")
-            if not isinstance(at, (int, float)) or not kind:
+            if at is None or not kind:
                 continue
             if at >= NOW_MS - D7_MS:
                 win7d[kind] += 1

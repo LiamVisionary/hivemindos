@@ -41,9 +41,27 @@ export function companyMemoryPath(companyId: string): string {
   return path.join(COMPANY_MEMORY_DIR, `${safe}.jsonl`);
 }
 
+/**
+ * Coerce a timestamp to epoch ms. The `at` field MUST always be stored as a
+ * number: a string `at` (e.g. an ISO `task.completedAt` that leaked past the
+ * KanbanTask `number` type) is invisible to readCompanyMemory's number guard,
+ * so it never lands in syncCompanyTaskOutcomes' dedup set — and the same task
+ * outcome gets re-appended on every autonomy-driver tick, ballooning the ledger
+ * with hundreds of identical lines. Coercing at BOTH the write and read boundary
+ * makes that failure impossible regardless of what a caller passes.
+ */
+function toEpochMs(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
 export async function appendCompanyMemory(companyId: string, record: Omit<CompanyMemoryRecord, "at"> & { at?: number }): Promise<void> {
   const entry: CompanyMemoryRecord = {
-    at: record.at ?? Date.now(),
+    at: toEpochMs(record.at, Date.now()),
     kind: record.kind,
     title: (record.title ?? "").trim().slice(0, 200),
     detail: record.detail ? record.detail.trim().slice(0, MAX_DETAIL_CHARS) : undefined,
@@ -80,12 +98,21 @@ export async function readCompanyMemory(companyId: string, opts: { limit?: numbe
     return [];
   }
   const records: CompanyMemoryRecord[] = [];
+  const seenLines = new Set<string>();
   for (const line of raw.split("\n")) {
     const text = line.trim();
-    if (!text) continue;
+    // Drop exact-duplicate ledger lines so a machine whose file still carries the
+    // legacy re-append dupes reads clean without waiting on a compaction pass.
+    if (!text || seenLines.has(text)) continue;
+    seenLines.add(text);
     try {
       const parsed = JSON.parse(text) as CompanyMemoryRecord;
-      if (parsed && typeof parsed.at === "number" && typeof parsed.title === "string") records.push(parsed);
+      if (!parsed || typeof parsed.title !== "string") continue;
+      // Coerce a legacy string `at` back to a number instead of dropping the
+      // record: dropping it is exactly what hid these lines from the deduper.
+      const at = toEpochMs((parsed as { at?: unknown }).at, NaN);
+      if (!Number.isFinite(at)) continue;
+      records.push({ ...parsed, at });
     } catch {
       // Skip a corrupt line rather than losing the ledger.
     }
