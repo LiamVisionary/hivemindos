@@ -23,11 +23,14 @@ export async function GET() {
       owned_by: "hivemindos",
       display_name: model.displayName || model.id,
       metadata: {
-        subtitle: "Wallet-paid gateway model",
+        subtitle: retailPriceSubtitle(model.promptUsdPerToken, model.completionUsdPerToken) || "Wallet-paid gateway model",
         group: "Gateway",
         badge: "Wallet",
         tier: "paid",
         upstreamModel: model.id,
+        created: model.created,
+        promptUsdPerToken: model.promptUsdPerToken,
+        completionUsdPerToken: model.completionUsdPerToken,
       },
     }));
 
@@ -52,4 +55,17 @@ export async function GET() {
       ...customEntries,
     ],
   });
+}
+
+// "$0.94 in · $5.63 out /1M" — retail per-million-token prices (markup already
+// applied by the gateway), compact enough for a model chip subtitle.
+function retailPriceSubtitle(promptUsdPerToken?: number, completionUsdPerToken?: number): string {
+  if (promptUsdPerToken === undefined || completionUsdPerToken === undefined) return "";
+  const perMillion = (value: number) => {
+    const usd = value * 1_000_000;
+    if (usd === 0) return "$0";
+    if (usd >= 100) return `$${Math.round(usd)}`;
+    return `$${usd.toFixed(2).replace(/0$/, "")}`;
+  };
+  return `${perMillion(promptUsdPerToken)} in · ${perMillion(completionUsdPerToken)} out /1M`;
 }

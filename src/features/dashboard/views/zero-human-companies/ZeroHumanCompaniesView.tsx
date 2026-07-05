@@ -17,7 +17,7 @@ import {
   DEMO_CREATE_SEED_CREW,
 } from "./zhc-demo-data";
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
-import { resolvedIssueAnswer } from "./issue-resume";
+import { resolvedIssueAnswer, retryDelegationIssueAnswer } from "./issue-resume";
 import { issuePreviewUrl, previewReviewAnswer, type PreviewDecision } from "./preview-review";
 import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
@@ -171,6 +171,24 @@ function ZeroHumanCompaniesDemoView({
     setBusyId(null);
   }, [replaceColony]);
 
+  const handleRetryIssues = React.useCallback((companyId: string, issues: Issue[]) => {
+    const keys = new Set(issues.map((issue) => issue.work?.taskId ?? issue.key));
+    setBusyId(issues[0]?.work?.taskId ?? issues[0]?.key ?? companyId);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.map((item) =>
+        keys.has(item.work?.taskId ?? item.key)
+          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${retryDelegationIssueAnswer(item)}`.trim() } : item.work }
+          : item,
+      ),
+      governance: [
+        { kind: "reflect" as const, text: `Human re-queued ${issues.length} infrastructure-blocked task${issues.length === 1 ? "" : "s"} for another autonomous attempt.`, agent: "human", since: "now" },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
   const handleDismissIssues = React.useCallback((companyId: string, issues: Issue[]) => {
     const keys = new Set(issues.map((issue) => issue.work?.taskId ?? issue.key));
     setBusyId(issues[0]?.work?.taskId ?? issues[0]?.key ?? companyId);
@@ -241,6 +259,7 @@ function ZeroHumanCompaniesDemoView({
       onDispatch={handleDispatch}
       onStopAutonomy={handleStopAutonomy}
       onResolveIssue={(companyId, issue) => handleResolveIssue(companyId, issue)}
+      onRetryIssues={(companyId, issues) => handleRetryIssues(companyId, issues)}
       onDismissIssues={(companyId, issues) => handleDismissIssues(companyId, issues)}
       onRecordRevenue={handleRecordRevenue}
       openSkillAttachmentBrowser={openSkillAttachmentBrowser}
@@ -710,6 +729,59 @@ function ZeroHumanCompaniesLiveView({
     }
   }, [data, refresh]);
 
+  const handleRetryIssues = React.useCallback(async (companyId: string, issues: Issue[]) => {
+    const taskIds = issues.map((issue) => issue.work?.taskId).filter((id): id is string => Boolean(id));
+    if (taskIds.length === 0) {
+      setError("These issues have no Work Board tasks to re-run.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    setBusyId(taskIds[0]);
+    setNotice(null);
+    try {
+      // Same `answer` rail as Mark Resolved, one POST per task: the retry note
+      // stamps into the body, the task returns to Ready, and pickup is scheduled.
+      // Zero-human boards have no hand-move, so this IS the re-run mechanism.
+      const results = await Promise.all(
+        issues.map((issue) => {
+          const taskId = issue.work?.taskId;
+          if (!taskId) return Promise.resolve({ ok: false, pickupScheduled: false });
+          return fetch("/api/kanban", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "answer",
+              taskId,
+              answer: retryDelegationIssueAnswer(issue),
+              author: "dashboard",
+            }),
+          })
+            .then(async (res) => {
+              const json = await res.json().catch(() => ({}));
+              return { ok: res.ok && json.ok === true, pickupScheduled: json.pickupScheduled === true };
+            })
+            .catch(() => ({ ok: false, pickupScheduled: false }));
+        }),
+      );
+      const ok = results.filter((result) => result.ok).length;
+      const pickingUp = results.filter((result) => result.ok && result.pickupScheduled).length;
+      if (ok === 0) {
+        setError("Could not re-queue these tasks — check the dashboard server logs.");
+      } else {
+        setError(null);
+        const failNote = ok < taskIds.length ? ` (${taskIds.length - ok} failed to re-queue)` : "";
+        setNotice(
+          pickingUp > 0
+            ? `${companyName}: re-queued ${ok} task${ok === 1 ? "" : "s"} — ${pickingUp === ok ? "the crew is picking them back up now" : `${pickingUp} picking up now, the rest on the next sweep`}.${failNote}`
+            : `${companyName}: re-queued ${ok} task${ok === 1 ? "" : "s"} for the next dispatch sweep.${failNote}`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh]);
+
   const handleDismissIssues = React.useCallback(async (companyId: string, issues: Issue[]) => {
     if (issues.length === 0) return;
     const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
@@ -857,6 +929,7 @@ function ZeroHumanCompaniesLiveView({
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
       onResolveIssue={(companyId, issue) => void handleResolveIssue(companyId, issue)}
+      onRetryIssues={(companyId, issues) => void handleRetryIssues(companyId, issues)}
       onDismissIssues={(companyId, issues) => void handleDismissIssues(companyId, issues)}
       onReviewPreview={(companyId, issue, decision, notes) => void handleReviewPreview(companyId, issue, decision, notes)}
       onRecordRevenue={handleRecordRevenue}

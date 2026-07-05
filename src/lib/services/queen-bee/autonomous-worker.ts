@@ -84,6 +84,7 @@ type QueenBeeAutonomousRerouteInput = {
   nextAssignee: string;
   nextRuntime?: string;
   targetMachine?: KanbanTask["targetMachine"];
+  failedClaimLock?: string;
 };
 
 export type QueenBeeAutonomousPickupDeps = {
@@ -96,6 +97,17 @@ export type QueenBeeAutonomousPickupDeps = {
 };
 
 const DEFAULT_PICKUP_TTL_MS = 30 * 60 * 1000;
+
+// A claim/reroute rejection that means another dispatcher owns the task RIGHT NOW:
+// `claimTask` throws "Task is not ready to claim." when the task is working/locked,
+// and `rerouteTaskForAutonomousPickup` throws "claimed by another worker" when a
+// different run's claim lock is live. Seen 2026-07-05 (WEBS): two dispatch sweeps
+// interleaved on one task — each reroute briefly re-readied it, the other sweep
+// claimed it, and the loser's "not ready to claim" lines (non-transient) forced a
+// purely-transient outage chain into needs-human. The correct move for the losing
+// run is to back off entirely: the task IS being worked; rerouting would steal the
+// winner's claim, and more claim attempts just race again.
+const CLAIM_CONFLICT = /not ready to claim|claimed by another worker/i;
 
 // ---------------------------------------------------------------------------
 // Per-machine autonomous-chat gate.
@@ -240,6 +252,28 @@ export async function runQueenBeeAutonomousPickup(
   let lastCollectorUrl = "";
   let lastAgentName = "";
   const failures: string[] = [];
+  // Back off without touching the board: another dispatcher owns the task, so this
+  // run must not reroute (steal the claim), block, or burn a retry attempt.
+  const backOff = (reason: string): QueenBeeAutonomousPickupResult => ({
+    ok: false,
+    status: "skipped",
+    taskId: input.task.id,
+    claimLock: lastClaimLock,
+    collectorUrl: lastCollectorUrl,
+    agentName: lastAgentName,
+    error: reason,
+  });
+  // Reroute to the next delegate, or null when the store refused because another
+  // run's claim lock is live (the caller backs off instead of fighting it).
+  const rerouteOrConflict = async (message: string, failedAgentName: string, next: QueenBeeAutonomousDelegation, failedClaimLock: string) => {
+    try {
+      return (await reroute(null, input.task.id, rerouteInput(message, failedAgentName, next, failedClaimLock), storageOptions)).task;
+    } catch (error) {
+      const rerouteMessage = error instanceof Error ? error.message : String(error);
+      if (CLAIM_CONFLICT.test(rerouteMessage)) return null;
+      throw error;
+    }
+  };
   // Machines that already timed a waiter out this run: skip their remaining
   // delegates immediately instead of paying the slot wait once per delegate.
   const saturatedMachines = new Set<string>();
@@ -361,9 +395,14 @@ export async function runQueenBeeAutonomousPickup(
         await advanceFlowIfTagged(input.task, "failed", message, input.vaultPath);
         return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: exhaustedMessage(failures) };
       }
-      currentTask = (await reroute(null, input.task.id, rerouteInput(message, agentName, next), storageOptions)).task;
+      const rerouted = await rerouteOrConflict(message, agentName, next, claimLock);
+      if (!rerouted) return backOff(`Backed off: another worker claimed task ${input.task.id} while ${agentName}'s gate failure was being rerouted.`);
+      currentTask = rerouted;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Queen Bee autonomous pickup failed.";
+      if (CLAIM_CONFLICT.test(message)) {
+        return backOff(`Backed off: ${agentName} could not claim task ${input.task.id} — another dispatcher already holds it (${message})`);
+      }
       failures.push(`${agentName}: ${message}`);
       const next = nextPickupDelegation(chain, index + 1, currentTask);
       if (!next) {
@@ -374,7 +413,9 @@ export async function runQueenBeeAutonomousPickup(
         if (!retried) await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
         return { ok: false, status: retried ? "skipped" : "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: finalMessage };
       }
-      currentTask = (await reroute(null, input.task.id, rerouteInput(message, agentName, next), storageOptions)).task;
+      const rerouted = await rerouteOrConflict(message, agentName, next, claimLock);
+      if (!rerouted) return backOff(`Backed off: another worker claimed task ${input.task.id} while ${agentName}'s failure was being rerouted.`);
+      currentTask = rerouted;
     } finally {
       releaseMachineChatSlot(machineKey);
     }
@@ -485,13 +526,14 @@ function nextPickupDelegation(chain: QueenBeeAutonomousDelegation[], startIndex:
   return null;
 }
 
-function rerouteInput(reason: string, failedAgentName: string, next: QueenBeeAutonomousDelegation): QueenBeeAutonomousRerouteInput {
+function rerouteInput(reason: string, failedAgentName: string, next: QueenBeeAutonomousDelegation, failedClaimLock?: string): QueenBeeAutonomousRerouteInput {
   return {
     reason: `Autonomous pickup failed for ${failedAgentName}: ${reason}`,
     failedAgentName,
     nextAssignee: delegationAgentName(next),
     nextRuntime: next.agent?.runtime,
     targetMachine: targetMachineForDelegation(next),
+    failedClaimLock,
   };
 }
 
@@ -526,15 +568,36 @@ function exhaustedMessage(failures: string[]) {
 const TRANSIENT_PICKUP_FAILURE =
   /(timed?\s*out|timeout|aborted|abort(?:ed)? due to|bad gateway|gateway timeout|\b50[234]\b|service unavailable|temporarily unavailable|econnreset|econnrefused|socket hang ?up|connection (?:error|reset|refused)|network error|fetch failed)/i;
 
+// Infrastructure failures that are not raw transport but still say nothing about
+// the WORK: a machine at its autonomous chat capacity (the slot frees up), a
+// delegate with no live collector in this snapshot (the machine comes back), or
+// a claim race with another dispatcher. Live 2026-07-05 (WEBS t_mr7nmkl4_vr67n):
+// a chain of 4 transport + 2 capacity lines — 100% infrastructure — escalated to
+// needs-human because capacity lines failed the transport-only regex below.
+const INFRA_PICKUP_FAILURE =
+  /(at its autonomous chat capacity|no live delegated collector\/agent|not ready to claim|claimed by another worker)/i;
+
+/**
+ * True when one "Failures:" line describes infrastructure (transport, capacity,
+ * machine offline, dispatch race) rather than the work itself failing. Shared
+ * with the driver's infra-rescue sweep so both ends use one vocabulary.
+ */
+export function isInfrastructurePickupFailure(line: string): boolean {
+  return TRANSIENT_PICKUP_FAILURE.test(line) || INFRA_PICKUP_FAILURE.test(line);
+}
+
 /**
  * The retry failure-reason for an exhausted pickup whose delegates ALL failed on
- * transient transport errors, or `undefined` when at least one failure was real
- * (so the caller escalates to needs-human as before). Routed through `failTask`,
- * "timeout" is auto-retried up to the task's maxAttempts, then blocked to a human.
+ * infrastructure (transient transport, machine capacity, machine offline), or
+ * `undefined` when at least one failure was real — no output, a runtime/model
+ * error, a rejected gate — so the caller escalates to needs-human as before.
+ * Routed through `failTask`, "timeout" is auto-retried up to the task's
+ * maxAttempts, then blocked to a human (where the driver's infra-rescue sweep
+ * can still recover it once the machine is confirmed healthy).
  */
 function pickupExhaustionRetryReason(failures: string[]): KanbanFailureReason | undefined {
   if (failures.length === 0) return undefined;
-  if (!failures.every((failure) => TRANSIENT_PICKUP_FAILURE.test(failure))) return undefined;
+  if (!failures.every((failure) => isInfrastructurePickupFailure(failure))) return undefined;
   return "timeout";
 }
 

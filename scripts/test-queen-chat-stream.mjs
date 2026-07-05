@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { register } from "node:module";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+register(new URL("./lib/json-esm-loader.mjs", import.meta.url));
 
 const {
   applyOpenAiChatChunk,
@@ -15,7 +16,12 @@ const {
   createSseJsonParser,
   finalizeQueenChatStream,
 } = await import("../src/lib/services/queen-bee/chat-stream.ts");
-const { queenChatTools, queenRealtimeTools } = await import("../src/lib/services/queen-bee/queen-brain.ts");
+const {
+  QUEEN_INSTRUCTIONS,
+  queenChatTools,
+  queenInstructionsForPersonality,
+  queenRealtimeTools,
+} = await import("../src/lib/services/queen-bee/queen-brain.ts");
 const {
   findWorkBoardTasks,
   flattenKanbanColumns,
@@ -30,6 +36,14 @@ const {
   isAgentUnhealthy,
   summarizeFleetByStatus,
 } = await import("../src/features/dashboard/agent-status-lookup.ts");
+
+// ── typed Queen chat uses the same default/custom personality layer ──────────
+{
+  assert.match(QUEEN_INSTRUCTIONS, /sharp wit/, "default Queen personality missing from typed chat instructions");
+  const custom = queenInstructionsForPersonality("Custom typed Queen personality.");
+  assert.match(custom, /Custom typed Queen personality\./, "custom Queen personality missing from typed chat instructions");
+  assert.doesNotMatch(custom, /sharp wit/, "custom Queen personality should replace the default");
+}
 
 // ── content deltas accumulate and are forwarded one by one ──────────────────
 {

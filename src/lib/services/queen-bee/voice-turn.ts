@@ -17,8 +17,10 @@ import {
   submitQueenBeeMessage,
   type QueenBeeFleetMachine,
 } from "@/lib/services/queen-bee/control-plane";
+import { formatQueenBeePersonalityInstruction } from "@/lib/config/queen-bee-personality";
 import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
 import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
+import { readQueenBeeBrainDefaults } from "@/lib/services/queen-bee/voice-settings";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
 import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
 import {
@@ -95,7 +97,7 @@ export type QueenVoiceTurnResult = {
   route?: unknown;
 };
 
-const QUEEN_VOICE_SYSTEM_PROMPT = [
+const QUEEN_VOICE_TURN_INSTRUCTIONS = [
   "You are Queen Bee, the single coordinator voice of HivemindOS, in a live spoken conversation with the user.",
   'Reply with STRICT JSON only, no markdown fences, matching: {"speech": string, "task": null | {"title": string, "message": string}}.',
   "speech: one or two short, natural spoken sentences. No markdown, no lists, no reasoning preambles.",
@@ -103,7 +105,14 @@ const QUEEN_VOICE_SYSTEM_PROMPT = [
   "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive).",
   "Greetings, questions, status chat, and thinking-out-loud get task: null and a conversational speech reply.",
   "When you do create a task, make title a short imperative summary, message the full work request in the user's words, and have speech briefly confirm what you are kicking off.",
-].join(" ");
+];
+
+function queenVoiceSystemPrompt(personality?: string | null) {
+  return [
+    formatQueenBeePersonalityInstruction(personality),
+    ...QUEEN_VOICE_TURN_INSTRUCTIONS,
+  ].join(" ");
+}
 
 /**
  * One self-contained prompt for runtime (CLI/gateway) agents. The agent-runtime
@@ -117,6 +126,7 @@ export function buildRuntimeVoiceUserText(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
+  personality?: string | null,
 ) {
   const recent = history.slice(-MAX_HISTORY_TURNS);
   const transcriptBlock = recent.length
@@ -129,7 +139,7 @@ export function buildRuntimeVoiceUserText(
       ].join("\n")
     : "";
   return [
-    QUEEN_VOICE_SYSTEM_PROMPT,
+    queenVoiceSystemPrompt(personality),
     systemPreamble?.trim() || "",
     "",
     transcriptBlock,
@@ -287,6 +297,8 @@ async function conversationTurnText(options: {
   // this fallback path can only HONOR stored preferences, not capture new ones
   // (it has no tool to call); capture happens in the default realtime session.
   const preferencePreamble = await queenVoicePreferencePreamble();
+  const queenDefaults = await readQueenBeeBrainDefaults().catch(() => null);
+  const queenPersonality = queenDefaults?.soulPrompt;
   // Best-effort hive context (shared-brain recall + open work digest) rides
   // the system preamble so EVERY brain lane can answer "check my hive brain"
   // and "what's on our to-do list" in conversation mode. Lazy import keeps
@@ -320,6 +332,7 @@ async function conversationTurnText(options: {
         options.history,
         systemPreamble,
         options.onTextDelta,
+        queenPersonality,
       );
       if (options.marks)
         options.marks.directTurnMs = Date.now() - directStartedAt;
@@ -369,6 +382,7 @@ async function conversationTurnText(options: {
         systemPreamble,
         options.progress,
         options.onTextDelta,
+        queenPersonality,
       );
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
@@ -408,6 +422,7 @@ async function conversationTurnText(options: {
       options.history,
       systemPreamble,
       options.onTextDelta,
+      queenPersonality,
     );
   } catch (fallbackError) {
     console.warn(
@@ -425,14 +440,15 @@ function conversationMessages(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
+  personality?: string | null,
 ) {
   const historyMessages = history.slice(-MAX_HISTORY_TURNS).map((turn) => ({
     role: turn.who === "queen" ? "assistant" : "user",
     content: turn.text.slice(0, 600),
   }));
   const system = systemPreamble?.trim()
-    ? `${QUEEN_VOICE_SYSTEM_PROMPT} ${systemPreamble.trim()}`
-    : QUEEN_VOICE_SYSTEM_PROMPT;
+    ? `${queenVoiceSystemPrompt(personality)} ${systemPreamble.trim()}`
+    : queenVoiceSystemPrompt(personality);
   return [
     { role: "system", content: system },
     ...historyMessages,
@@ -445,6 +461,7 @@ async function runOpenAiConversationTurn(
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
   onTextDelta?: (chunk: string) => void,
+  personality?: string | null,
 ) {
   return runProviderConversationTurn(
     { provider: "openai-api", model: voiceFallbackModelName(), label: "OpenAI" },
@@ -452,6 +469,7 @@ async function runOpenAiConversationTurn(
     history,
     systemPreamble,
     onTextDelta,
+    personality,
   );
 }
 
@@ -487,6 +505,7 @@ async function runProviderConversationTurn(
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
   onTextDelta?: (chunk: string) => void,
+  personality?: string | null,
 ) {
   // Every provider-direct lane invokes target.model itself, so the injected
   // identity is exact — "which model are you?" gets a real answer per lane.
@@ -503,7 +522,7 @@ async function runProviderConversationTurn(
     const { runOpenAiOAuthChatTurn } = await import("@/lib/services/openai-oauth");
     return runOpenAiOAuthChatTurn(
       target.model,
-      conversationMessages(transcript, history, systemPreamble),
+      conversationMessages(transcript, history, systemPreamble, personality),
       { onTextDelta, timeoutMs: OPENAI_TURN_TIMEOUT_MS },
     );
   }
@@ -522,7 +541,7 @@ async function runProviderConversationTurn(
       },
       body: JSON.stringify({
         model: target.model,
-        messages: conversationMessages(transcript, history, systemPreamble),
+        messages: conversationMessages(transcript, history, systemPreamble, personality),
         // Streamed turns feed the fused converse+speak pipeline; the buffered
         // legacy action keeps the plain JSON response.
         ...(onTextDelta ? { stream: true } : {}),
@@ -928,11 +947,12 @@ async function runRuntimeConversationTurn(
   systemPreamble?: string,
   onActivity?: (label: string) => void,
   onTextDelta?: (chunk: string) => void,
+  personality?: string | null,
 ) {
   // One flattened user message (persona + history + latest): most runtime
   // adapters only see the latest user message, so a messages[] history array
   // never reached them - see buildRuntimeVoiceUserText.
-  const userText = buildRuntimeVoiceUserText(transcript, history, systemPreamble);
+  const userText = buildRuntimeVoiceUserText(transcript, history, systemPreamble, personality);
   const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
     method: "POST",
     headers: { "content-type": "application/json", ...internalApiAuthHeaders() },

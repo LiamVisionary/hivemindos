@@ -8,6 +8,7 @@ import { Spinner } from "./primitives";
 import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { TaskDetailModal } from "./TaskDetailModal";
+import { agentsAtWork } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import type { PreviewDecision } from "./preview-review";
 import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyRevenueShareInput, CreateForm, Density, Issue, PoolAgent, Theme } from "./types";
@@ -45,7 +46,7 @@ function Masthead({
   const s = {
     colonies: companies.length,
     agents: companies.reduce((n, c) => n + c.agents.length, 0),
-    working: companies.reduce((n, c) => n + c.agents.filter((a) => a.state === "working").length, 0),
+    working: companies.reduce((n, c) => n + agentsAtWork(c), 0),
     shipped: companies.reduce((n, c) => n + c.issues.filter((i) => i.status === "done").length, 0),
     approvals: companies.reduce((n, c) => n + c.approvals.length, 0),
     avgAlign: companies.length ? Math.round(companies.reduce((n, c) => n + c.alignment, 0) / companies.length) : 0,
@@ -130,6 +131,8 @@ export interface ZeroHumanCompaniesProps {
   onStopAutonomy: (companyId: string) => void;
   /** Mark a Needs-You issue fixed and resume its Work Board task. */
   onResolveIssue: (companyId: string, issue: Issue) => void;
+  /** Re-queue a group of infra-blocked tasks for autonomous pickup (answer rail). */
+  onRetryIssues?: (companyId: string, issues: Issue[]) => void;
   /** Set aside issues: archive their tasks off the board (one, or a whole group). */
   onDismissIssues: (companyId: string, issues: Issue[]) => void;
   /** Approve a customer-facing preview or send the crew change notes to regenerate it. */
@@ -145,7 +148,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, initialTasksLoading = false, error, notice, busyId, onRefresh,
-  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onResolvePricing, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onDismissIssues, onReviewPreview, onRecordRevenue,
+  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onResolvePricing, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
   openSkillAttachmentBrowser,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
@@ -208,6 +211,7 @@ export default function ZeroHumanCompanies({
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
     onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueId: getIssueIdentity(issue) }),
     onResolveIssue: (issue) => onResolveIssue(colony.id, issue),
+    onRetryIssues: onRetryIssues ? (issues) => onRetryIssues(colony.id, issues) : undefined,
     onDismissIssues: (issues) => onDismissIssues(colony.id, issues),
     onReviewPreview: onReviewPreview ? (issue, decision, notes) => onReviewPreview(colony.id, issue, decision, notes) : undefined,
     onRecordRevenue: (input) => void onRecordRevenue(colony.id, input),

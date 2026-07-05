@@ -22,6 +22,11 @@ import {
   recordLoopAntiPatterns,
   recordLoopExperiment,
 } from "@/lib/services/kanban/loop-optimizer";
+import {
+  classifyKanbanFailure,
+  isRetryableFailureReason,
+  normalizeFailureReason,
+} from "@/lib/services/kanban/kanban-failure-classification";
 import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
 import {
   gitLawbProofForProject,
@@ -139,6 +144,8 @@ type AutonomousRerouteInput = {
   nextAssignee: string;
   nextRuntime?: string;
   targetMachine?: KanbanTask["targetMachine"];
+  /** The claim lock the failing pickup held. When set, reroute refuses to clobber a DIFFERENT run's live claim. */
+  failedClaimLock?: string;
 };
 
 type ClaimNextTaskInput = ClaimTaskInput & {
@@ -1406,6 +1413,13 @@ export async function rerouteTaskForAutonomousPickup(
   if (task.status === "done" || task.status === "archived") {
     throw new Error("Completed or archived tasks cannot be autonomously rerouted.");
   }
+  // Two dispatch sweeps can race one task: each reroute briefly re-readies it, the
+  // other sweep claims it, and an unguarded reroute here would fail the winner's
+  // live run and steal the task back (seen interleaving live 2026-07-05, WEBS).
+  // When the caller identifies its own claim, refuse to reroute over anyone else's.
+  if (input.failedClaimLock && task.claimLock && task.claimLock !== input.failedClaimLock) {
+    throw new Error("Task is claimed by another worker; refusing to reroute over a live claim.");
+  }
   const nextAssignee = input.nextAssignee.trim();
   if (!nextAssignee) throw new Error("Autonomous reroute requires a next assignee.");
   const now = Date.now();
@@ -1534,7 +1548,7 @@ export async function unblockTask(
 export async function answerHumanTask(
   slug: string | null,
   taskId: string,
-  input: { answer: string; author?: string },
+  input: { answer: string; author?: string; stampLabel?: string; resetAttempts?: boolean },
   options: KanbanStorageOptions = {},
 ) {
   return withBoardMutation(slug, options, async () => {
@@ -1547,7 +1561,7 @@ export async function answerHumanTask(
   if (!answer) throw new Error("An answer is required.");
   const now = Date.now();
   const author = input.author?.trim() || "dashboard";
-  const stampedAnswer = `— Human answer (${new Date(now).toISOString()}) —\n${answer}`;
+  const stampedAnswer = `— ${input.stampLabel?.trim() || "Human answer"} (${new Date(now).toISOString()}) —\n${answer}`;
   const changed: KanbanTask = {
     ...task,
     status: "ready",
@@ -1556,6 +1570,9 @@ export async function answerHumanTask(
     claimExpiresAt: undefined,
     lastHeartbeatAt: undefined,
     currentRunId: undefined,
+    // An infrastructure rescue restores the attempt budget: the spent attempts
+    // never exercised the work, so the re-run must not strand on its first blip.
+    attempt: input.resetAttempts ? 1 : task.attempt,
     updatedAt: now,
   };
   board.tasks = board.tasks.map((item) =>
@@ -1906,59 +1923,6 @@ function positiveNumber(value?: number | null) {
 function positiveInteger(value?: number | null) {
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric > 0 ? numeric : undefined;
-}
-
-function normalizeFailureReason(
-  value?: string | null,
-): KanbanFailureReason | undefined {
-  if (!value) return undefined;
-  const normalized = value.trim().toLowerCase().replace(/_/g, "-");
-  return [
-    "agent-error",
-    "timeout",
-    "runtime-offline",
-    "runtime-recovery",
-    "local-directory-error",
-    "manual",
-  ].includes(normalized)
-    ? (normalized as KanbanFailureReason)
-    : undefined;
-}
-
-function classifyKanbanFailure(value?: string | null): KanbanFailureReason {
-  const normalized = value?.toLowerCase() ?? "";
-  if (
-    /local directory|workdir|workspace path|folder|enoent|permission denied/.test(
-      normalized,
-    )
-  )
-    return "local-directory-error";
-  if (/orphan|recover|reclaim|daemon restart|runtime recovery/.test(normalized))
-    return "runtime-recovery";
-  if (
-    /offline|unreachable|connection refused|network|econnrefused|not available/.test(
-      normalized,
-    )
-  )
-    return "runtime-offline";
-  if (
-    /timeout|timed out|expired|stale|heartbeat|no progress|without worker progress/.test(
-      normalized,
-    )
-  )
-    return "timeout";
-  if (/manual|cancelled|canceled|user requested/.test(normalized))
-    return "manual";
-  return "agent-error";
-}
-
-function isRetryableFailureReason(reason: KanbanFailureReason) {
-  return [
-    "timeout",
-    "runtime-offline",
-    "runtime-recovery",
-    "local-directory-error",
-  ].includes(reason);
 }
 
 function transitionTaskAfterFailure(

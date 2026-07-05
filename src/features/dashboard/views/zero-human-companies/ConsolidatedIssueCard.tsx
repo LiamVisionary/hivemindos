@@ -7,9 +7,10 @@
 // "Discuss all" that asks the Queen to fix the whole class at once, and an
 // expandable list of the underlying tasks (each opens its task detail to act).
 import React from "react";
-import { AlertTriangle, Archive, ChevronDown, ChevronRight, MessageSquare } from "lucide-react";
+import { AlertTriangle, Archive, ChevronDown, ChevronRight, MessageSquare, RotateCcw } from "lucide-react";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import { issueAgeLabel, type IssueReasonInfo } from "./issue-reason";
+import { Spinner } from "./primitives";
 import type { Issue } from "./types";
 
 export function ConsolidatedIssueCard({
@@ -17,15 +18,24 @@ export function ConsolidatedIssueCard({
   issues,
   companyName,
   onOpenIssue,
+  onRetryAll,
   onDismiss,
+  busy = false,
 }: {
   info: IssueReasonInfo;
   issues: Issue[];
   companyName: string;
   onOpenIssue: (issue: Issue) => void;
+  /** Re-queue every task in this group for autonomous pickup (the Work Board
+   *  `answer` rail — zero-human boards have no hand-move). The primary action
+   *  for systemic infra blockers: a collector blip or dispatch race resolves by
+   *  re-running, not by a human doing the work. */
+  onRetryAll?: (issues: Issue[]) => void;
   /** Set aside issues: archive their tasks off the board. Pass the whole chain to
    *  dismiss all at once, or a single-item array to dismiss one. */
   onDismiss?: (issues: Issue[]) => void;
+  /** True while a task in this group is being re-queued/archived. */
+  busy?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const queenChat = useQueenChat();
@@ -70,6 +80,24 @@ export function ConsolidatedIssueCard({
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingLeft: 26 }}>
+        {onRetryAll ? (
+          <button
+            type="button"
+            className="zhc-btn-ghost"
+            onClick={() => onRetryAll(issues)}
+            disabled={busy}
+            title={`Put all ${issues.length} tasks back in the queue for autonomous pickup. Right move when the blocker was infrastructure (machine unreachable, capacity, a dispatch race) — the crew re-attempts the same work.`}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, cursor: busy ? "wait" : "pointer", borderRadius: 8, padding: "5px 9px",
+              font: "inherit", fontFamily: "var(--f-mono)", fontSize: 11,
+              border: "1px solid color-mix(in srgb, var(--honey) 45%, var(--line))",
+              background: "color-mix(in srgb, var(--honey) 12%, var(--bg-2))", color: "var(--honey-2)",
+              opacity: busy ? 0.7 : 1,
+            }}
+          >
+            {busy ? <Spinner size={14} /> : <RotateCcw size={14} aria-hidden />} Re-run all {issues.length}
+          </button>
+        ) : null}
         <button
           type="button"
           className="zhc-btn-ghost"

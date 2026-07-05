@@ -7,6 +7,7 @@ import { register } from "node:module";
 import assert from "node:assert/strict";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+register(new URL("./lib/json-esm-loader.mjs", import.meta.url));
 
 const {
   beginVoiceTurnProgress,
@@ -82,6 +83,7 @@ const {
   ];
   const prompt = buildRuntimeVoiceUserText("Sure", history, "Call the user boss.");
   assert.ok(prompt.includes("Queen Bee"), "persona present");
+  assert.ok(prompt.includes("sharp wit"), "default Queen personality present");
   assert.ok(prompt.includes('"speech"'), "JSON contract present");
   assert.ok(/never greet again/i.test(prompt), "anti-re-greeting instruction present");
   assert.ok(prompt.includes("Call the user boss."), "preference preamble spliced in");
@@ -95,6 +97,9 @@ const {
 
   const noHistory = buildRuntimeVoiceUserText("Hello", [], "");
   assert.ok(!noHistory.includes("Conversation so far"), "no empty history block");
+  const customPersonality = buildRuntimeVoiceUserText("Hello", [], "", "Custom Queen personality.");
+  assert.ok(customPersonality.includes("Custom Queen personality."), "custom Queen personality present");
+  assert.ok(!customPersonality.includes("sharp wit"), "custom Queen personality replaces the default");
 
   const long = Array.from({ length: 20 }, (_, index) => ({
     who: index % 2 ? "queen" : "you",

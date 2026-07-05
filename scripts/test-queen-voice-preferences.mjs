@@ -130,7 +130,7 @@ check("INJECT: the fallback + relay paths thread the preamble into the prompt", 
   assert.match(turn, /queenVoicePreferencePreamble\(/, "fallback never reads stored preferences");
   assert.match(
     turn,
-    /conversationMessages\(transcript, history, systemPreamble\)/,
+    /conversationMessages\(transcript, history, systemPreamble, personality\)/,
     "system preamble not threaded into conversationMessages",
   );
 });

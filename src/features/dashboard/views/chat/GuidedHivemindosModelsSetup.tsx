@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Coins, Copy, CreditCard, LoaderCircle, Plus, RefreshCcw, Search, Wallet, X } from "lucide-react";
+import { Bot, Check, ChevronRight, Coins, Copy, CreditCard, LoaderCircle, Network, Plus, RefreshCcw, Search, Sparkles, Wallet, X, Zap } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type { AgentProfile, HivemindosModelsAgentConfig } from "@/lib/types/agent-runtime";
 import {
   HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL,
@@ -10,8 +11,8 @@ import {
   isCustomHivemindosWalletPaidModel,
   isFreeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidModel,
+  upstreamHivemindosWalletPaidModel,
 } from "@/lib/config/hivemindos-wallet-paid-models";
-import { ModelPillSelector, type ModelPillOption } from "./ModelPillSelector";
 import { fetchPersonalWalletBalance, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
@@ -24,6 +25,7 @@ import {
   resolvePickableAccount,
   type PickableAgent,
 } from "../trade/wallet-pickables";
+import { scoreModelStrength } from "@/lib/config/model-strength";
 import styles from "./HivemindosModelsSetup.module.css";
 
 const CARD_CREDIT_AMOUNT_OPTIONS = [10, 25, 50, 100] as const;
@@ -39,9 +41,70 @@ type SetupWallet = {
   kind?: "personal" | "agent";
 };
 
-type SetupView = "setup" | "browse";
 type FundingMode = NonNullable<HivemindosModelsAgentConfig["fundingMode"]>;
 type CardCreditAmountOption = (typeof CARD_CREDIT_AMOUNT_OPTIONS)[number] | "custom";
+
+type FundState = {
+  gate: boolean;
+  pendingModel: string;
+};
+
+type GatewayModelOption = {
+  id: string;
+  name: string;
+  subtitle?: string;
+  group?: string;
+  badge?: string;
+  created?: number;
+  promptUsdPerToken?: number;
+  completionUsdPerToken?: number;
+};
+
+type GatewayModelSort = "top" | "new" | "cheap" | "pricey" | "az";
+
+// Three grid rows per page (the grid renders 4 columns at the modal's width).
+const GATEWAY_MODELS_PAGE_SIZE = 12;
+
+const GATEWAY_MODEL_SORTS: Array<{ id: GatewayModelSort; label: string }> = [
+  { id: "top", label: "Top" },
+  { id: "new", label: "New" },
+  { id: "cheap", label: "Cheapest" },
+  { id: "pricey", label: "Priciest" },
+  { id: "az", label: "A–Z" },
+];
+
+function gatewayModelPriceUsd(option: GatewayModelOption): number | null {
+  if (option.promptUsdPerToken === undefined || option.completionUsdPerToken === undefined) return null;
+  return option.promptUsdPerToken + option.completionUsdPerToken;
+}
+
+function sortGatewayModels(options: GatewayModelOption[], sort: GatewayModelSort): GatewayModelOption[] {
+  const rows = [...options];
+  switch (sort) {
+    case "top":
+      return rows.sort((left, right) => (
+        scoreModelStrength(upstreamHivemindosWalletPaidModel(right.id)).score
+        - scoreModelStrength(upstreamHivemindosWalletPaidModel(left.id)).score
+      ));
+    case "new":
+      return rows.sort((left, right) => (right.created ?? 0) - (left.created ?? 0));
+    case "cheap":
+      return rows.sort((left, right) => (gatewayModelPriceUsd(left) ?? Number.POSITIVE_INFINITY) - (gatewayModelPriceUsd(right) ?? Number.POSITIVE_INFINITY));
+    case "pricey":
+      return rows.sort((left, right) => (gatewayModelPriceUsd(right) ?? -1) - (gatewayModelPriceUsd(left) ?? -1));
+    case "az":
+    default:
+      return rows.sort((left, right) => left.name.localeCompare(right.name));
+  }
+}
+
+// Icons for the auto-router tier chips, keyed by model id.
+const TIER_CHIP_ICONS: Record<string, LucideIcon> = {
+  "hivemindos/auto": Network,
+  "hivemindos/fast": Zap,
+  "hivemindos/frontier": Sparkles,
+  "hivemindos/research": Search,
+};
 
 type ModelCreditState = {
   ok?: boolean;
@@ -70,7 +133,6 @@ type GuidedHivemindosModelsSetupProps = {
   displayAgents?: PickableAgent[];
   walletsByAgent?: Record<string, unknown>;
   sharedVault?: { enabled?: boolean; vaultPath?: string } | null;
-  onCancel: () => void;
   onComplete: (patch: Partial<AgentProfile>) => void | Promise<void>;
 };
 
@@ -190,19 +252,19 @@ export function GuidedHivemindosModelsSetup({
   displayAgents = [],
   walletsByAgent,
   sharedVault,
-  onCancel,
   onComplete,
 }: GuidedHivemindosModelsSetupProps) {
   const initialModel = normalizeHivemindosWalletPaidModel(agent?.model || HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL);
-  const [setupView, setSetupView] = useState<SetupView>("setup");
   const [creating, setCreating] = useState(false);
   const [personalBalancesLoading, setPersonalBalancesLoading] = useState(false);
   const [linkingWalletId, setLinkingWalletId] = useState("");
   const [message, setMessage] = useState("");
   const [personalWallets, setPersonalWallets] = useState<Array<Record<string, unknown>>>([]);
   const [selectedModel, setSelectedModel] = useState(initialModel);
+  // `||` not `??`: create drafts seed fundingMode as "" (AgentSettingsModal),
+  // which must fall through to the card-credits default like a missing value.
   const [fundingMode, setFundingMode] = useState<FundingMode>(
-    agent?.hivemindosModels?.fundingMode ?? (agent?.hivemindosModels?.walletVaultId ? "wallet" : "credits"),
+    agent?.hivemindosModels?.fundingMode || (agent?.hivemindosModels?.walletVaultId ? "wallet" : "credits"),
   );
   const [creditAccountId] = useState(() => (
     agent?.hivemindosModels?.creditAccountId?.trim() || createCreditAccountId(agent?.id)
@@ -211,13 +273,19 @@ export function GuidedHivemindosModelsSetup({
   const [walletAddress, setWalletAddress] = useState(agent?.hivemindosModels?.walletAddress ?? "");
   const [walletNetwork, setWalletNetwork] = useState(agent?.hivemindosModels?.walletNetwork ?? "");
   const [creditState, setCreditState] = useState<ModelCreditState>({});
-  // The free model lives in the custom picker list (not the route tiles), so
-  // the picker starts open whenever the saved model is not a route tile.
-  const [customPickerOpen, setCustomPickerOpen] = useState(() => (
-    isCustomHivemindosWalletPaidModel(initialModel) || isFreeHivemindosWalletPaidModel(initialModel)
-  ));
-  const [gatewayModelOptions, setGatewayModelOptions] = useState<ModelPillOption[]>([]);
+  const [gatewayModelOptions, setGatewayModelOptions] = useState<GatewayModelOption[]>([]);
   const [gatewayModelsLoading, setGatewayModelsLoading] = useState(true);
+  const [modelQuery, setModelQuery] = useState("");
+  const [modelSort, setModelSort] = useState<GatewayModelSort>("top");
+  const [modelPage, setModelPage] = useState(0);
+  // Funding modal: opened from the balance pill (gate=false) or by picking a
+  // paid model while unfunded (gate=true + the pending model to apply after).
+  const [fund, setFund] = useState<FundState | null>(null);
+  const [fundBrowse, setFundBrowse] = useState(false);
+  const [fundDone, setFundDone] = useState(false);
+  const [fundedSignal, setFundedSignal] = useState(0);
+  const pendingModelRef = useRef("");
+  const handledFundedSignalRef = useRef(0);
   const [creditRefreshing, setCreditRefreshing] = useState(false);
   const [creditFunding, setCreditFunding] = useState(false);
   const [cardCreditAmount, setCardCreditAmount] = useState<CardCreditAmountOption>(10);
@@ -283,15 +351,12 @@ export function GuidedHivemindosModelsSetup({
   const effectiveCreditAccountId = agent?.hivemindosModels?.creditAccountId?.trim() || creditAccountId;
   const creditLookupId = fundingMode === "credits" ? effectiveCreditAccountId : effectiveWalletVaultId;
   const cardFundingReady = hasFundedModelCredits(creditState, agent?.hivemindosModels);
-  const fundingReady = fundingMode === "credits" ? Boolean(effectiveCreditAccountId && cardFundingReady) : walletReady;
-  // The free model needs no funding, so the route/model choice always renders.
-  // The funding panel appears for wallet-paid routes, and stays visible once a
-  // wallet or credits exist so switching to the free model never strands an
-  // already-configured funding source.
+  // The free model needs no funding. Funding lives behind the balance pill and
+  // the paid-model gate: an unfunded click on a paid model opens the funding
+  // modal, and a configured wallet/credit source is always reachable from the
+  // pill — switching to the free model never strands it.
   const selectedModelIsFree = isFreeHivemindosWalletPaidModel(selectedModel);
-  const setupReady = selectedModelIsFree || fundingReady;
   const fundingConfigured = walletReady || cardFundingReady;
-  const showFundingPanel = !selectedModelIsFree || fundingConfigured;
   const cardCheckoutPolling = fundingMode === "credits" && cardCheckoutPollUntil > 0 && !cardFundingReady;
   const cardTopUpAmountUsd = cardCreditAmount === "custom" ? Math.round(moneyValue(customCardCreditAmount) * 100) / 100 : cardCreditAmount;
   const cardTopUpAmountValid = cardTopUpAmountUsd >= 1 && cardTopUpAmountUsd <= 500;
@@ -308,6 +373,12 @@ export function GuidedHivemindosModelsSetup({
     : savedFundingBalanceUsd !== null && savedFundingBalanceUsd > 0
       ? `${formatUsd(savedFundingBalanceUsd)} is available for HivemindOS Models. Add more USDC and native gas here when you want more runway.`
       : `Fund this address with USDC and enough native gas for payments on ${networkLabel(effectiveWalletNetwork)}.`;
+  // The balance pill shows one number: the hosted credit balance for the card
+  // path, or the linked wallet's live balance for the wallet path.
+  const creditBalanceForPill = modelCreditBalanceUsd(creditState) ?? moneyValue(agent?.hivemindosModels?.lastCreditBalanceUsd);
+  const pillBalanceUsd = fundingMode === "wallet" && walletReady
+    ? (savedFundingBalanceUsd ?? creditBalanceForPill)
+    : creditBalanceForPill;
   const modelCreditLabel = creditRefreshing && creditState.balanceUsd == null
     ? "Checking credits"
     : typeof creditState.balanceUsd === "number"
@@ -442,10 +513,10 @@ export function GuidedHivemindosModelsSetup({
     let ignore = false;
     void fetch("/api/hivemindos/models/models", { cache: "no-store" })
       .then((response) => response.json().catch(() => null))
-      .then((data: { data?: Array<{ id?: string; display_name?: string; metadata?: { subtitle?: string; group?: string; badge?: string } }> } | null) => {
+      .then((data: { data?: Array<{ id?: string; display_name?: string; metadata?: { subtitle?: string; group?: string; badge?: string; created?: number; promptUsdPerToken?: number; completionUsdPerToken?: number } }> } | null) => {
         if (ignore) return;
         const rows = Array.isArray(data?.data) ? data.data : [];
-        const options = rows.flatMap((row): ModelPillOption[] => {
+        const options = rows.flatMap((row): GatewayModelOption[] => {
           const id = String(row?.id || "").trim();
           if (!id) return [];
           return [{
@@ -454,6 +525,9 @@ export function GuidedHivemindosModelsSetup({
             subtitle: row?.metadata?.subtitle,
             group: row?.metadata?.group,
             badge: row?.metadata?.badge,
+            created: typeof row?.metadata?.created === "number" ? row.metadata.created : undefined,
+            promptUsdPerToken: typeof row?.metadata?.promptUsdPerToken === "number" ? row.metadata.promptUsdPerToken : undefined,
+            completionUsdPerToken: typeof row?.metadata?.completionUsdPerToken === "number" ? row.metadata.completionUsdPerToken : undefined,
           }];
         });
         if (options.length) setGatewayModelOptions(options);
@@ -463,15 +537,33 @@ export function GuidedHivemindosModelsSetup({
     return () => { ignore = true; };
   }, []);
 
-  const modelPillOptions = gatewayModelOptions.length
-    ? gatewayModelOptions
-    : HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.map((model): ModelPillOption => ({
-      id: model.id,
-      name: model.name,
-      subtitle: model.subtitle,
-      group: model.group,
-      badge: model.badge,
-    }));
+  // Three-row layout data: free hero card, auto-router tiers, dynamic gateway list.
+  const freeModelOption = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((option) => option.tier === "free");
+  const tierOptions = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.filter((option) => option.tier !== "free");
+  const gatewayCustomModels = gatewayModelOptions.filter((option) => isCustomHivemindosWalletPaidModel(option.id));
+  const trimmedModelQuery = modelQuery.trim().toLowerCase();
+  const matchingGatewayModels = sortGatewayModels(
+    trimmedModelQuery
+      ? gatewayCustomModels.filter((option) => (
+        `${option.name} ${option.subtitle ?? ""} ${upstreamHivemindosWalletPaidModel(option.id)}`.toLowerCase().includes(trimmedModelQuery)
+      ))
+      : gatewayCustomModels,
+    modelSort,
+  );
+  const gatewayPageCount = Math.max(1, Math.ceil(matchingGatewayModels.length / GATEWAY_MODELS_PAGE_SIZE));
+  const gatewayPage = Math.min(modelPage, gatewayPageCount - 1);
+  const visibleGatewayModels = matchingGatewayModels.slice(
+    gatewayPage * GATEWAY_MODELS_PAGE_SIZE,
+    gatewayPage * GATEWAY_MODELS_PAGE_SIZE + GATEWAY_MODELS_PAGE_SIZE,
+  );
+
+  const modelDisplayName = useCallback((modelId: string): string => {
+    const staticOption = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((option) => option.id === modelId);
+    if (staticOption) return staticOption.name;
+    const gatewayOption = gatewayModelOptions.find((option) => option.id === modelId);
+    if (gatewayOption) return gatewayOption.name;
+    return upstreamHivemindosWalletPaidModel(modelId);
+  }, [gatewayModelOptions]);
 
   useEffect(() => {
     if (!isTauriDesktopRuntime()) return undefined;
@@ -527,6 +619,7 @@ export function GuidedHivemindosModelsSetup({
           if (funded) {
             setCardCheckoutPollUntil(0);
             setMessage("HivemindOS Models credits funded.");
+            setFundedSignal((signal) => signal + 1);
             return;
           }
         }
@@ -543,7 +636,7 @@ export function GuidedHivemindosModelsSetup({
     };
   }, [cardCheckoutPollUntil, cardFundingReady, creditLookupId, fundingMode, persistModelCreditBalance]);
 
-  async function applyModel(model: string) {
+  const applyModel = useCallback(async (model: string) => {
     const normalized = normalizeHivemindosWalletPaidModel(model);
     setSelectedModel(normalized);
     setMessage("");
@@ -552,7 +645,58 @@ export function GuidedHivemindosModelsSetup({
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not update HivemindOS Models settings.");
     }
+  }, [onComplete, profilePatch]);
+
+  // Picking a paid model while unfunded opens the funding modal as a gate; the
+  // pending model applies automatically the moment funding lands.
+  function pickModel(modelId: string, tier: "free" | "paid") {
+    if (tier === "free" || fundingConfigured) {
+      void applyModel(modelId);
+      return;
+    }
+    pendingModelRef.current = modelId;
+    setFundDone(false);
+    setFundBrowse(false);
+    setFund({ gate: true, pendingModel: modelId });
   }
+
+  function openFundingModal() {
+    pendingModelRef.current = "";
+    setFundDone(false);
+    setFundBrowse(false);
+    setFund({ gate: false, pendingModel: "" });
+  }
+
+  const closeFundingModal = useCallback(() => {
+    pendingModelRef.current = "";
+    setFund(null);
+    setFundBrowse(false);
+  }, []);
+
+  // Funding success (card credits landed, crypto deposit confirmed, or a wallet
+  // was created/linked): show the done beat and apply any gated pending model.
+  useEffect(() => {
+    if (!fundedSignal || handledFundedSignalRef.current === fundedSignal) return;
+    handledFundedSignalRef.current = fundedSignal;
+    setFundDone(true);
+    const pending = pendingModelRef.current;
+    if (pending) {
+      pendingModelRef.current = "";
+      setFund((current) => (current ? { ...current, pendingModel: "" } : current));
+      void applyModel(pending);
+    }
+  }, [fundedSignal, applyModel]);
+
+  useEffect(() => {
+    if (!fund) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      closeFundingModal();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [fund, closeFundingModal]);
 
   async function selectFundingMode(mode: FundingMode) {
     setFundingMode(mode);
@@ -590,7 +734,7 @@ export function GuidedHivemindosModelsSetup({
       setWalletVaultId(data.wallet.vaultId);
       setWalletAddress(data.wallet.address);
       setWalletNetwork(data.wallet.network);
-      setSetupView("setup");
+      setFundBrowse(false);
       setFundingMode("wallet");
       const patch = profilePatch({
         fundingMode: "wallet",
@@ -604,6 +748,7 @@ export function GuidedHivemindosModelsSetup({
       });
       await onComplete(patch);
       setMessage("Wallet saved. It now appears in Wallets.");
+      setFundedSignal((signal) => signal + 1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "HivemindOS wallet creation failed.");
     } finally {
@@ -613,7 +758,7 @@ export function GuidedHivemindosModelsSetup({
 
   function openWalletBrowser() {
     setMessage("");
-    setSetupView("browse");
+    setFundBrowse(true);
   }
 
   async function linkWallet(pickable: PickableWallet) {
@@ -646,7 +791,7 @@ export function GuidedHivemindosModelsSetup({
       setWalletVaultId(data.wallet.vaultId);
       setWalletAddress(data.wallet.address);
       setWalletNetwork(data.wallet.network);
-      setSetupView("setup");
+      setFundBrowse(false);
       setFundingMode("wallet");
       await onComplete(profilePatch({
         fundingMode: "wallet",
@@ -659,6 +804,7 @@ export function GuidedHivemindosModelsSetup({
         lastStatusMessage: "Wallet linked and saved to Wallets.",
       }));
       setMessage("Wallet linked and saved to Wallets.");
+      setFundedSignal((signal) => signal + 1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not link wallet.");
     } finally {
@@ -694,6 +840,7 @@ export function GuidedHivemindosModelsSetup({
       if (funded) {
         setCardCheckoutPollUntil(0);
         setMessage("HivemindOS Models credits funded.");
+        setFundedSignal((signal) => signal + 1);
       }
     } catch (error) {
       setCreditState({ ok: false, error: error instanceof Error ? error.message : "Could not read model credits." });
@@ -729,6 +876,9 @@ export function GuidedHivemindosModelsSetup({
         lastStatusMessage: data.message || "HivemindOS Models credits funded.",
       }));
       setMessage(data.message || "HivemindOS Models credits funded.");
+      if (moneyValue(data.balanceUsd) > 0 || moneyValue(data.balanceLabel) > 0) {
+        setFundedSignal((signal) => signal + 1);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Could not top up model credits.";
       setCreditState((current) => ({ ...current, ok: false, error: errorMessage }));
@@ -792,293 +942,395 @@ export function GuidedHivemindosModelsSetup({
     }
   }
 
-  async function finishSetup() {
-    setMessage("");
-    try {
-      const completionConfig: Partial<HivemindosModelsAgentConfig> = fundingMode === "credits"
-        ? { fundingMode: "credits", creditAccountId: effectiveCreditAccountId }
-        : { fundingMode: "wallet" };
-      const currentCreditBalanceUsd = fundingMode === "credits" ? modelCreditBalanceUsd(creditStateRef.current) : null;
-      if (currentCreditBalanceUsd !== null && currentCreditBalanceUsd > 0) {
-        completionConfig.lastCreditBalanceUsd = String(currentCreditBalanceUsd);
-        completionConfig.lastCreditBalanceLabel = creditStateRef.current.balanceLabel && moneyValue(creditStateRef.current.balanceLabel) > 0
-          ? creditStateRef.current.balanceLabel
-          : formatUsd(currentCreditBalanceUsd);
-        completionConfig.lastCreditCheckedAt = new Date().toISOString();
-      }
-      await onComplete(profilePatch(completionConfig));
-      onCancel();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not finish HivemindOS Models setup.");
-    }
-  }
-
   return (
     <div className={styles.root}>
-      <div className={styles.head}>
-        <div className={styles.brandIcon}>
-          <Wallet aria-hidden="true" />
-        </div>
-        <div className={styles.headText}>
-          <h2>HivemindOS Models</h2>
-          <p>
-            {selectedModelIsFree
-              ? "Swarm Sovereign Scout is free to use. Pick a wallet-paid route to unlock premium models."
-              : setupReady
-                ? "No-key model calls are ready for this agent."
-                : "Wallet-paid routes need card credits or a crypto wallet."}
-          </p>
-        </div>
-        <button type="button" className={styles.closeButton} aria-label="Close HivemindOS Models setup" onClick={onCancel}>
-          <X aria-hidden="true" />
-        </button>
-      </div>
-
-      <div
-        className={[
-          styles.body,
-          setupView === "browse" ? styles.bodyBrowse : "",
-          setupView !== "browse" ? (showFundingPanel ? styles.bodyWithModel : styles.bodyFundingOnly) : "",
-        ].filter(Boolean).join(" ")}
-      >
-        {setupView === "browse" ? (
-          <div className={styles.browseStack}>
-            <WalletSelectPanel
-              pickables={walletPickables}
-              getSurvivalSnapshot={getSurvivalSnapshot}
-              currentId={currentWalletId}
-              onConfirm={linkSelectedWallet}
-              onCancel={() => setSetupView("setup")}
-              title="Link a funding wallet"
-              subtitle="Pick one of your local wallets or a configured agent wallet. Balances match the Wallets and Trade views."
-              confirmLabel={linkingWalletId ? "Linking wallet" : "Use for LLM calls"}
-              cancelLabel="Back"
-              confirmDisabled={isBusy}
-              emptyCopy={personalBalancesLoading ? "Loading local wallets..." : "No local signing wallets were found."}
-              panelClassName={styles.walletSelectorEmbed}
-            />
-          </div>
-        ) : (
-          <>
-            {showFundingPanel ? (
-            <section className={`${styles.panel} ${styles.paymentPanel}`}>
-              <span className={styles.eyebrow}>Funding</span>
-              <h3>{fundingMode === "credits" ? "Hosted model credits" : walletReady ? "Wallet saved" : "Choose a wallet"}</h3>
-              <div className={styles.fundingModes} role="group" aria-label="HivemindOS Models funding method">
-                <button
-                  type="button"
-                  className={styles.fundingMode}
-                  data-active={fundingMode === "credits" || undefined}
-                  aria-pressed={fundingMode === "credits"}
-                  onClick={() => void selectFundingMode("credits")}
-                >
-                  <CreditCard aria-hidden="true" />
-                  Card credits
-                </button>
-                <button
-                  type="button"
-                  className={styles.fundingMode}
-                  data-active={fundingMode === "wallet" || undefined}
-                  aria-pressed={fundingMode === "wallet"}
-                  onClick={() => void selectFundingMode("wallet")}
-                >
-                  <Wallet aria-hidden="true" />
-                  Crypto wallet
-                </button>
-              </div>
-
-              {fundingMode === "credits" ? (
+      <div className={styles.body}>
+        <section className={styles.panelBody}>
+          <div className={styles.modelHead}>
+            <span className={styles.modelHeadLabel}>Model · <b>HivemindOS Models</b></span>
+            <button
+              type="button"
+              className={styles.balancePill}
+              data-funded={fundingConfigured || undefined}
+              title={fundingConfigured ? "Manage funding" : "Add credits"}
+              onClick={openFundingModal}
+            >
+              {fundingConfigured ? (
                 <>
-                  <p className={styles.muted}>Add hosted HivemindOS Models credits with a card. Future responses debit this balance by actual model usage.</p>
-                  <div className={styles.creditBox}>
-                    <div className={styles.creditMain}>
-                      <span className={styles.creditIcon}><Coins aria-hidden="true" /></span>
-                      <div className={styles.creditText}>
-                        <span className={styles.fieldLabel}>Model credits</span>
-                        <strong>{modelCreditLabel}</strong>
-                        <span>{modelCreditHelp}</span>
-                      </div>
-                    </div>
-                    <div className={styles.cardAmounts} role="group" aria-label="Card credit amount">
-                      {CARD_CREDIT_AMOUNT_OPTIONS.map((amount) => (
-                        <button
-                          key={amount}
-                          type="button"
-                          className={styles.amountChoice}
-                          data-active={cardCreditAmount === amount || undefined}
-                          aria-pressed={cardCreditAmount === amount}
-                          onClick={() => setCardCreditAmount(amount)}
-                        >
-                          {formatUsd(amount)}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        className={styles.amountChoice}
-                        data-active={cardCreditAmount === "custom" || undefined}
-                        aria-pressed={cardCreditAmount === "custom"}
-                        onClick={() => setCardCreditAmount("custom")}
-                      >
-                        Custom
-                      </button>
-                    </div>
-                    {cardCreditAmount === "custom" ? (
-                      <label className={styles.customAmount}>
-                        <span>Custom amount</span>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min="1"
-                          max="500"
-                          step="1"
-                          value={customCardCreditAmount}
-                          onChange={(event) => setCustomCardCreditAmount(event.target.value)}
-                        />
-                      </label>
-                    ) : null}
-                    <div className={styles.creditActions}>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.ghost} ${styles.iconOnly}`}
-                        disabled={creditRefreshing || creditFunding}
-                        aria-label="Refresh HivemindOS Models credits"
-                        onClick={() => void refreshModelCredits()}
-                      >
-                        <RefreshCcw className={creditRefreshing ? styles.spin : ""} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.primary}`}
-                        disabled={isBusy || creditRefreshing || creditFunding || !cardTopUpAmountValid}
-                        onClick={() => void startCardCreditCheckout()}
-                      >
-                        {creditFunding ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <CreditCard aria-hidden="true" />}
-                        {cardTopUpAmountValid ? `Add ${formatUsd(cardTopUpAmountUsd)} with card` : "Add credits with card"}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : walletReady ? (
-                <>
-                  <div className={styles.status}>
-                    <span className={styles.stat}><Wallet aria-hidden="true" /><b>{networkLabel(effectiveWalletNetwork)}</b></span>
-                    <span className={styles.stat} data-tone="live"><Check aria-hidden="true" /><b>Saved to Wallets</b></span>
-                    {savedFundingBalanceCopy ? (
-                      <span className={styles.stat} data-tone={savedFundingBalanceUsd && savedFundingBalanceUsd > 0 ? "live" : "balance"}><b>{savedFundingBalanceCopy}</b></span>
-                    ) : null}
-                  </div>
-                  <CodeLine label="Funding address" value={effectiveWalletAddress} />
-                  <p className={styles.muted}>{savedFundingHelp}</p>
-                  <div className={styles.creditBox}>
-                    <div className={styles.creditMain}>
-                      <span className={styles.creditIcon}><Coins aria-hidden="true" /></span>
-                      <div className={styles.creditText}>
-                        <span className={styles.fieldLabel}>Model credits</span>
-                        <strong>{modelCreditLabel}</strong>
-                        <span>{modelCreditHelp}</span>
-                      </div>
-                    </div>
-                    <div className={styles.creditActions}>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.ghost} ${styles.iconOnly}`}
-                        disabled={creditRefreshing || creditFunding}
-                        aria-label="Refresh HivemindOS Models credits"
-                        onClick={() => void refreshModelCredits()}
-                      >
-                        <RefreshCcw className={creditRefreshing ? styles.spin : ""} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.primary}`}
-                        disabled={isBusy || creditRefreshing || creditFunding}
-                        onClick={() => void topUpModelCredits()}
-                      >
-                        {creditFunding ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                        Fund with crypto
-                      </button>
-                    </div>
-                  </div>
+                  <span className={styles.balanceDot} />
+                  <span className={styles.balanceAmt}>{formatUsd(Math.max(0, pillBalanceUsd || 0))}</span>
+                  <span className={styles.balanceCar}><ChevronRight aria-hidden="true" /></span>
                 </>
               ) : (
                 <>
-                  <p className={styles.muted}>Create a fresh Base wallet for this agent, or link a local wallet already stored by HivemindOS.</p>
-                  <div className={styles.actionRow}>
-                    <button type="button" className={`${styles.btn} ${styles.primary}`} disabled={isBusy} onClick={() => void createWallet()}>
-                      {creating ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                      New wallet
-                    </button>
-                    <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={isBusy} onClick={openWalletBrowser}>
-                      <Search aria-hidden="true" />
-                      Existing wallet
-                    </button>
-                  </div>
+                  <Coins aria-hidden="true" />
+                  Add credits
+                  <span className={styles.balanceCar}><ChevronRight aria-hidden="true" /></span>
                 </>
               )}
-            </section>
-            ) : null}
+            </button>
+          </div>
 
-            <section className={`${styles.panel} ${styles.modelPanel}`}>
-              <span className={styles.eyebrow}>Model route</span>
-              <h3>Route preference</h3>
-              <div className={styles.models}>
-                {HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.filter((model) => model.tier !== "free").map((model) => (
-                  <button
-                    key={model.id}
-                    type="button"
-                    className={styles.model}
-                    data-active={(selectedModel === model.id && !customPickerOpen) || undefined}
-                    aria-pressed={selectedModel === model.id}
-                    onClick={() => {
-                      setCustomPickerOpen(false);
-                      void applyModel(model.id);
-                    }}
-                  >
-                    <span>{model.name}</span>
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className={styles.model}
-                  data-active={customPickerOpen || isCustomHivemindosWalletPaidModel(selectedModel) || selectedModelIsFree || undefined}
-                  aria-pressed={customPickerOpen || isCustomHivemindosWalletPaidModel(selectedModel) || selectedModelIsFree}
-                  onClick={() => setCustomPickerOpen((open) => !open)}
-                >
-                  <span>Custom</span>
-                </button>
-              </div>
-              {customPickerOpen ? (
-                <ModelPillSelector
-                  models={modelPillOptions}
-                  selectedModelId={selectedModel}
-                  emptyLabel={gatewayModelsLoading ? "Loading gateway models..." : "No gateway models available."}
-                  searchPlaceholder="Search gateway models"
-                  onSelectModel={(modelId) => void applyModel(modelId)}
-                />
-              ) : null}
-              <p className={styles.muted}>
-                {HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((model) => model.id === selectedModel)?.subtitle
-                  ?? modelPillOptions.find((model) => model.id === selectedModel)?.subtitle
-                  ?? (isCustomHivemindosWalletPaidModel(selectedModel) ? "Wallet-paid gateway model" : "Free daily allowance · no wallet needed")}
-              </p>
-            </section>
-          </>
-        )}
-      </div>
-
-      <div className={styles.foot}>
-        <div className={styles.msg}>{message || (selectedModelIsFree ? "The free model has a daily allowance per device. Wallet-paid routes unlock premium models." : fundingMode === "credits" ? "Card credits are stored in the hosted HivemindOS Models balance." : walletReady ? "This wallet is durable even if agent setup is canceled." : "Wallets are saved as soon as they are created or linked.")}</div>
-        <div className={styles.footActions}>
-          {showFundingPanel && fundingMode === "wallet" && walletReady ? (
-            <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={isBusy} onClick={openWalletBrowser}>
-              Change wallet
+          {freeModelOption ? (
+            <button
+              type="button"
+              className={styles.freeHero}
+              data-active={selectedModelIsFree || undefined}
+              aria-pressed={selectedModelIsFree}
+              onClick={() => pickModel(freeModelOption.id, "free")}
+            >
+              <span className={styles.freeHex}><Bot aria-hidden="true" /></span>
+              <span style={{ minWidth: 0 }}>
+                <span className={styles.freeName}>{freeModelOption.name}<span className={styles.freeBadge}>Free</span></span>
+                <span className={styles.freeSub}>{freeModelOption.subtitle}</span>
+              </span>
+              <span className={styles.freeCheck}><Check aria-hidden="true" /></span>
             </button>
           ) : null}
-          <button type="button" className={`${styles.btn} ${styles.primary}`} disabled={!setupReady || isBusy} onClick={() => void finishSetup()}>
-            Done
-          </button>
-        </div>
+
+          <div className={styles.subhead}>Routing tiers<span className={styles.subheadTag}>· auto-router picks the model</span><span className={styles.subheadSpacer} /></div>
+          <div className={styles.chipGrid}>
+            {tierOptions.map((option) => {
+              const TierIcon = TIER_CHIP_ICONS[option.id] ?? Network;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={styles.chip}
+                  data-active={selectedModel === option.id || undefined}
+                  aria-pressed={selectedModel === option.id}
+                  onClick={() => pickModel(option.id, "paid")}
+                >
+                  <span className={styles.chipName}><TierIcon aria-hidden="true" />{option.name}</span>
+                  <span className={styles.chipSub}>{option.subtitle} · <span className={styles.mono}>{option.upstreamModel}</span></span>
+                  {!fundingConfigured ? <span className={styles.chipNeed} title="Requires credits"><Coins aria-hidden="true" /></span> : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className={styles.subhead}>
+            All models{gatewayCustomModels.length ? <span className={styles.subheadTag}>· {gatewayCustomModels.length} on the gateway</span> : null}
+            <span className={styles.subheadSpacer} />
+            {gatewayCustomModels.length ? (
+              <span className={styles.sortRow} role="group" aria-label="Sort gateway models">
+                {GATEWAY_MODEL_SORTS.map((sort) => (
+                  <button
+                    key={sort.id}
+                    type="button"
+                    className={styles.sortPill}
+                    data-active={modelSort === sort.id || undefined}
+                    aria-pressed={modelSort === sort.id}
+                    onClick={() => {
+                      setModelSort(sort.id);
+                      setModelPage(0);
+                    }}
+                  >
+                    {sort.label}
+                  </button>
+                ))}
+              </span>
+            ) : null}
+          </div>
+          <div className={styles.searchBox}>
+            <Search aria-hidden="true" />
+            <input
+              value={modelQuery}
+              onChange={(event) => {
+                setModelQuery(event.target.value);
+                setModelPage(0);
+              }}
+              placeholder="Search gateway models"
+              aria-label="Search gateway models"
+            />
+          </div>
+          {gatewayModelsLoading && !gatewayCustomModels.length ? (
+            <p className={styles.loadingLine} role="status" aria-label="Loading gateway models">
+              <LoaderCircle className={styles.spin} aria-hidden="true" />
+              Loading gateway models
+            </p>
+          ) : (
+            <div className={styles.chipGrid}>
+              {visibleGatewayModels.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={styles.chip}
+                  data-active={selectedModel === option.id || undefined}
+                  aria-pressed={selectedModel === option.id}
+                  onClick={() => pickModel(option.id, "paid")}
+                >
+                  <span className={styles.chipName}>{option.name}</span>
+                  <span className={styles.chipSub}>{option.subtitle || upstreamHivemindosWalletPaidModel(option.id)}</span>
+                  {!fundingConfigured ? <span className={styles.chipNeed} title="Requires credits"><Coins aria-hidden="true" /></span> : null}
+                </button>
+              ))}
+              {!matchingGatewayModels.length ? (
+                <p className={styles.muted} style={{ gridColumn: "1 / -1" }}>
+                  {trimmedModelQuery
+                    ? `No gateway models match “${modelQuery.trim()}”.`
+                    : "No gateway models are available yet. Routing tiers still work."}
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          {matchingGatewayModels.length > GATEWAY_MODELS_PAGE_SIZE ? (
+            <div className={styles.pagerRow}>
+              <button
+                type="button"
+                className={styles.pagerBtn}
+                disabled={gatewayPage === 0}
+                aria-label="Previous models page"
+                onClick={() => setModelPage(Math.max(0, gatewayPage - 1))}
+              >
+                <ChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} />
+              </button>
+              <span className={styles.pagerLabel}>
+                {gatewayPage * GATEWAY_MODELS_PAGE_SIZE + 1}–{Math.min((gatewayPage + 1) * GATEWAY_MODELS_PAGE_SIZE, matchingGatewayModels.length)} of {matchingGatewayModels.length}
+              </span>
+              <button
+                type="button"
+                className={styles.pagerBtn}
+                disabled={gatewayPage >= gatewayPageCount - 1}
+                aria-label="Next models page"
+                onClick={() => setModelPage(Math.min(gatewayPageCount - 1, gatewayPage + 1))}
+              >
+                <ChevronRight aria-hidden="true" />
+              </button>
+            </div>
+          ) : null}
+
+          {!fundingConfigured ? (
+            <div className={styles.note}><Coins aria-hidden="true" />Scout stays free. Routing tiers and paid models unlock once you add credits.</div>
+          ) : null}
+
+          {message ? <div className={styles.msg}>{message}</div> : null}
+        </section>
       </div>
+
+      {fund ? (
+        <div
+          className={styles.fundOverlay}
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeFundingModal(); }}
+        >
+          <section className={styles.fundModal} role="dialog" aria-modal="true" aria-label="Fund HivemindOS Models">
+            <div className={styles.fundHead}>
+              <span className={styles.fundTile}><Wallet aria-hidden="true" /></span>
+              <div className={styles.fundHeadText}>
+                <h3>Fund HivemindOS Models</h3>
+                <p>Credits pay per-request across every wallet-paid route and model.</p>
+              </div>
+              <button type="button" className={styles.closeButton} onClick={closeFundingModal} aria-label="Close funding">
+                <X aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className={styles.fundBody}>
+              {fundDone ? (
+                <div className={styles.fundDone}>
+                  <span className={styles.doneMark}><Check aria-hidden="true" /></span>
+                  <h4>{cardFundingReady ? "Credits added" : "Wallet ready"}</h4>
+                  <p>{message || "Wallet-paid routes and models are unlocked for this agent."}</p>
+                </div>
+              ) : fundBrowse ? (
+                <WalletSelectPanel
+                  pickables={walletPickables}
+                  getSurvivalSnapshot={getSurvivalSnapshot}
+                  currentId={currentWalletId}
+                  onConfirm={linkSelectedWallet}
+                  onCancel={() => setFundBrowse(false)}
+                  title="Link a funding wallet"
+                  subtitle="Pick one of your local wallets or a configured agent wallet. Balances match the Wallets and Trade views."
+                  confirmLabel={linkingWalletId ? "Linking wallet" : "Use for LLM calls"}
+                  cancelLabel="Back"
+                  confirmDisabled={isBusy}
+                  emptyCopy={personalBalancesLoading ? "Loading local wallets..." : "No local signing wallets were found."}
+                  panelClassName={styles.walletSelectorEmbed}
+                />
+              ) : (
+                <>
+                  {fund.gate ? (
+                    <div className={styles.gateBanner}>
+                      <span className={styles.gateIcon}><Coins aria-hidden="true" /></span>
+                      <span className={styles.gateText}>
+                        <b>{fund.pendingModel ? `${modelDisplayName(fund.pendingModel)} requires credits to use.` : "This model requires credits to use."}</b> Fund now to continue.
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className={styles.fundingModes} role="group" aria-label="HivemindOS Models funding method">
+                    <button
+                      type="button"
+                      className={styles.fundingMode}
+                      data-active={fundingMode === "credits" || undefined}
+                      aria-pressed={fundingMode === "credits"}
+                      onClick={() => void selectFundingMode("credits")}
+                    >
+                      <CreditCard aria-hidden="true" />
+                      Card credits
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.fundingMode}
+                      data-active={fundingMode === "wallet" || undefined}
+                      aria-pressed={fundingMode === "wallet"}
+                      onClick={() => void selectFundingMode("wallet")}
+                    >
+                      <Wallet aria-hidden="true" />
+                      Crypto wallet
+                    </button>
+                  </div>
+
+                  {fundingMode === "credits" ? (
+                    <div className={styles.creditBox}>
+                      <div className={styles.creditMain}>
+                        <span className={styles.creditIcon}><Coins aria-hidden="true" /></span>
+                        <div className={styles.creditText}>
+                          <span className={styles.fieldLabel}>Model credits</span>
+                          <strong>{modelCreditLabel}</strong>
+                          <span>{modelCreditHelp}</span>
+                        </div>
+                      </div>
+                      <div className={styles.cardAmounts} role="group" aria-label="Card credit amount">
+                        {CARD_CREDIT_AMOUNT_OPTIONS.map((amount) => (
+                          <button
+                            key={amount}
+                            type="button"
+                            className={styles.amountChoice}
+                            data-active={cardCreditAmount === amount || undefined}
+                            aria-pressed={cardCreditAmount === amount}
+                            onClick={() => setCardCreditAmount(amount)}
+                          >
+                            {formatUsd(amount)}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className={styles.amountChoice}
+                          data-active={cardCreditAmount === "custom" || undefined}
+                          aria-pressed={cardCreditAmount === "custom"}
+                          onClick={() => setCardCreditAmount("custom")}
+                        >
+                          Custom
+                        </button>
+                      </div>
+                      {cardCreditAmount === "custom" ? (
+                        <label className={styles.customAmount}>
+                          <span>Custom amount</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min="1"
+                            max="500"
+                            step="1"
+                            value={customCardCreditAmount}
+                            onChange={(event) => setCustomCardCreditAmount(event.target.value)}
+                          />
+                        </label>
+                      ) : null}
+                      <div className={styles.creditActions}>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.ghost} ${styles.iconOnly}`}
+                          disabled={creditRefreshing || creditFunding}
+                          aria-label="Refresh HivemindOS Models credits"
+                          onClick={() => void refreshModelCredits()}
+                        >
+                          <RefreshCcw className={creditRefreshing ? styles.spin : ""} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.primary}`}
+                          disabled={isBusy || creditRefreshing || creditFunding || !cardTopUpAmountValid}
+                          onClick={() => void startCardCreditCheckout()}
+                        >
+                          {creditFunding ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <CreditCard aria-hidden="true" />}
+                          {cardTopUpAmountValid ? `Add ${formatUsd(cardTopUpAmountUsd)} with card` : "Add credits with card"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : walletReady ? (
+                    <div className={styles.creditBox}>
+                      <div className={styles.status}>
+                        <span className={styles.stat}><Wallet aria-hidden="true" /><b>{networkLabel(effectiveWalletNetwork)}</b></span>
+                        <span className={styles.stat} data-tone="live"><Check aria-hidden="true" /><b>Saved to Wallets</b></span>
+                        {savedFundingBalanceCopy ? (
+                          <span className={styles.stat} data-tone={savedFundingBalanceUsd && savedFundingBalanceUsd > 0 ? "live" : "balance"}><b>{savedFundingBalanceCopy}</b></span>
+                        ) : null}
+                      </div>
+                      <CodeLine label="Funding address" value={effectiveWalletAddress} />
+                      <p className={styles.muted}>{savedFundingHelp}</p>
+                      <div className={styles.creditMain}>
+                        <span className={styles.creditIcon}><Coins aria-hidden="true" /></span>
+                        <div className={styles.creditText}>
+                          <span className={styles.fieldLabel}>Model credits</span>
+                          <strong>{modelCreditLabel}</strong>
+                          <span>{modelCreditHelp}</span>
+                        </div>
+                      </div>
+                      <div className={styles.creditActions}>
+                        <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={isBusy} onClick={openWalletBrowser}>
+                          Change wallet
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.ghost} ${styles.iconOnly}`}
+                          disabled={creditRefreshing || creditFunding}
+                          aria-label="Refresh HivemindOS Models credits"
+                          onClick={() => void refreshModelCredits()}
+                        >
+                          <RefreshCcw className={creditRefreshing ? styles.spin : ""} aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.primary}`}
+                          disabled={isBusy || creditRefreshing || creditFunding}
+                          onClick={() => void topUpModelCredits()}
+                        >
+                          {creditFunding ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Plus aria-hidden="true" />}
+                          Fund with crypto
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.creditBox}>
+                      <div className={styles.creditMain}>
+                        <span className={styles.creditIcon}><Wallet aria-hidden="true" /></span>
+                        <div className={styles.creditText}>
+                          <span className={styles.fieldLabel}>Crypto wallet</span>
+                          <strong>Pay with USDC</strong>
+                          <span>Create a fresh Base wallet for this agent, or link a local wallet HivemindOS already holds.</span>
+                        </div>
+                      </div>
+                      <div className={styles.creditActions}>
+                        <button type="button" className={`${styles.btn} ${styles.primary}`} disabled={isBusy} onClick={() => void createWallet()}>
+                          {creating ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Plus aria-hidden="true" />}
+                          New wallet
+                        </button>
+                        <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={isBusy} onClick={openWalletBrowser}>
+                          <Search aria-hidden="true" />
+                          Existing wallet
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className={styles.fundFoot}>
+              <span className={styles.fundFootMsg}>
+                {message || (fundingMode === "credits" ? "Card credits are stored in your hosted HivemindOS balance." : "Wallets stay usable even if setup is canceled.")}
+              </span>
+              <button type="button" className={`${styles.btn} ${fundDone ? styles.primary : styles.ghost}`} onClick={closeFundingModal}>
+                {fundDone ? "Done" : "Close"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

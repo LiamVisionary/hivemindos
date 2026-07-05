@@ -48,6 +48,7 @@
     "test:fusion": "node scripts/test-fusion.mjs",
     "test:e2e:queen-bee": "node scripts/e2e-queen-bee-real-chat.mjs",
     "test:queen-bee:autonomous": "node scripts/test-queen-bee-autonomous-pickup.mjs",
+    "test:queen-bee:infra-rescue": "node scripts/test-queen-bee-infra-rescue.mjs",
     "test:queen-bee:router": "node scripts/test-queen-bee-router-delegation.mjs",
     "test:queen-bee:redispatch": "node scripts/test-queen-bee-redispatch.mjs",
     "test:queen-voice-events": "node scripts/test-queen-voice-events.mjs",

@@ -363,9 +363,10 @@ export function HiveStage({
       })}
 
       {/* dashed "add machine" cell — sits just outside the ring in the widest
-          gap between machines, so it never stacks under a bottom machine */}
+          gap between machines (sliding further out when agent petals crowd that
+          spot), so it never stacks under existing hive cells */}
       {onAddMachine ? (() => {
-        const amp = frAddMachinePos(machines);
+        const amp = frAddMachinePos(machines, layout);
         return (
           <Tooltip>
             <TooltipTrigger asChild>

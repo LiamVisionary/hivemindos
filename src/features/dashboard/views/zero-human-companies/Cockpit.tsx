@@ -4,7 +4,7 @@ import React from "react";
 import { Settings2 } from "lucide-react";
 import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel, Spinner, Skeleton, SkeletonText } from "./primitives";
 import { IssueBoard } from "./IssueBoard";
-import { STATUS_TONE } from "./data";
+import { agentsAtWork, STATUS_TONE } from "./data";
 import { CompanyIssueSummaryCard, isCompanyReviewIssue } from "./CompanyIssueActions";
 import { SetupBlockerBand } from "./SetupBlockerBand";
 import { EmailQaBand } from "./EmailQaBand";
@@ -46,6 +46,8 @@ export type CockpitHandlers = {
   onOpenIssue: (issue: Issue) => void;
   /** Human fixed the blocker; answer the Needs-You task so it resumes. */
   onResolveIssue: (issue: Issue) => void;
+  /** Re-queue a group of infra-blocked tasks for autonomous pickup (answer rail). */
+  onRetryIssues?: (issues: Issue[]) => void;
   /** Set aside issues: archive their tasks off the board (persistent, reversible).
    *  Pass a single-item array for one issue, or the whole chain for a group. */
   onDismissIssues: (issues: Issue[]) => void;
@@ -382,8 +384,8 @@ function ReviewStrip({ colony: c, deliverableCount, deliverableLabel, onGoToIssu
   );
 }
 
-function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onReviewPreview, onDismissIssues, busyId }: {
-  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; onDismissIssues: (issues: Issue[]) => void; busyId: string | null;
+function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onRetryIssues, onReviewPreview, onDismissIssues, busyId }: {
+  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; onRetryIssues?: (issues: Issue[]) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; onDismissIssues: (issues: Issue[]) => void; busyId: string | null;
 }) {
   const reviewIssues = c.issues.filter(isCompanyReviewIssue);
   const activeIssues = c.issues.filter((issue) => issue.status !== "done");
@@ -400,7 +402,7 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onReviewPreview, 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {groupIssuesByReason(reviewIssues).map((group) =>
             group.issues.length > 1 && group.info.consolidatable ? (
-              <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={c.name} onOpenIssue={onOpenIssue} onDismiss={onDismissIssues} />
+              <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={c.name} onOpenIssue={onOpenIssue} onRetryAll={onRetryIssues} onDismiss={onDismissIssues} busy={group.issues.some((issue) => issue.work?.taskId === busyId)} />
             ) : (
               group.issues.map((issue) => (
                 <CompanyIssueSummaryCard
@@ -1222,7 +1224,7 @@ export function Cockpit({
         </div>
         <div style={{ display: "flex", gap: 0, paddingTop: 2 }}>
           <KStat n={c.issues.filter((i) => i.status === "done").length} label="shipped" />
-          <KStat n={c.agents.filter((a) => a.state === "working").length} label="at work" />
+          <KStat n={agentsAtWork(c)} label="at work" />
           <KStat n={c.approvals.length + pricingProposals.length} label="to approve" tone={c.approvals.length + pricingProposals.length ? "honey" : null} last />
         </div>
       </div>
@@ -1335,12 +1337,12 @@ export function Cockpit({
             <div style={{ width: wbPct + "%", height: "100%", background: "var(--cyan)", transition: "width 600ms ease" }} />
           </div>
           <div style={{ overflowX: "auto", paddingBottom: 4 }} className="scrollbar-thin">
-            <IssueBoard colony={c} companyName={c.name} boardLoading={initialTasksLoading} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} />
+            <IssueBoard colony={c} companyName={c.name} boardLoading={initialTasksLoading} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onRetryIssues={handlers.onRetryIssues} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} />
           </div>
         </Panel>
       )}
 
-      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} />}
+      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onRetryIssues={handlers.onRetryIssues} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} />}
 
       {active === "deliverables" && <DeliverablesPanel colony={c} spec={spec} theme={theme} />}
 

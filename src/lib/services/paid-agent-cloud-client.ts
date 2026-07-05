@@ -122,6 +122,11 @@ export async function proxyOfficialPaidAgentCreditBalanceRequest(request: NextRe
 export type OfficialGatewayModel = {
   id: string;
   displayName?: string;
+  /** Unix seconds the model was published upstream (for "New" sorting). */
+  created?: number;
+  /** Retail USD per token (markup already applied by the gateway). */
+  promptUsdPerToken?: number;
+  completionUsdPerToken?: number;
 };
 
 // Dynamic model inventory from the hosted gateway (OpenAI-style
@@ -150,7 +155,17 @@ export async function fetchOfficialPaidAgentModelList(slug?: string): Promise<Of
       const id = String(record.id || record.model || "").trim();
       if (!id) return [];
       const displayName = String(record.display_name || record.name || "").trim();
-      return [{ id, displayName: displayName || undefined }];
+      const created = Number(record.created);
+      const pricing = record.pricing && typeof record.pricing === "object" ? record.pricing as Record<string, unknown> : null;
+      const promptUsdPerToken = pricing ? Number(pricing.prompt) : NaN;
+      const completionUsdPerToken = pricing ? Number(pricing.completion) : NaN;
+      return [{
+        id,
+        displayName: displayName || undefined,
+        created: Number.isFinite(created) && created > 0 ? Math.floor(created) : undefined,
+        promptUsdPerToken: Number.isFinite(promptUsdPerToken) && promptUsdPerToken >= 0 ? promptUsdPerToken : undefined,
+        completionUsdPerToken: Number.isFinite(completionUsdPerToken) && completionUsdPerToken >= 0 ? completionUsdPerToken : undefined,
+      }];
     });
   } catch {
     return [];

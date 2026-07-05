@@ -48,7 +48,7 @@ const machines = [
 const layout = frBuildLayout(machines);
 const cells = [
   { id: "queen", center: { x: QX, y: QY }, size: 150 },
-  { id: "add-machine", center: frAddMachinePos(machines), size: MACHINE_SIZE },
+  { id: "add-machine", center: frAddMachinePos(machines, layout), size: MACHINE_SIZE },
 ];
 
 for (const hiveMachine of machines) {
@@ -70,6 +70,43 @@ for (let leftIndex = 0; leftIndex < cells.length; leftIndex += 1) {
       false,
       `${left.id} overlaps ${right.id}`,
     );
+  }
+}
+
+// Dense fleets grow agent petals past the add-machine cell's base radius; the
+// cell must slide outward instead of rendering underneath them (regression:
+// the New Machine cell stacked under agent hexes at zIndex 2).
+for (const [denseTotal, denseAgents] of [[6, 6], [6, 10], [4, 12], [2, 9]]) {
+  const denseMachines = Array.from({ length: denseTotal }, (_, machineIndex) =>
+    machine(
+      `dense-${machineIndex}`,
+      `Dense ${machineIndex}`,
+      machineIndex === 0 ? "Primary" : "Worker",
+      Array.from({ length: denseAgents }, (_, agentIndex) =>
+        agent(`dense-${machineIndex}-a${agentIndex}`, `Dense Agent ${machineIndex}-${agentIndex}`, "ready"),
+      ),
+    ),
+  );
+  const denseLayout = frBuildLayout(denseMachines);
+  const denseAddMachine = hexPolygon({
+    id: "dense-add-machine",
+    center: frAddMachinePos(denseMachines, denseLayout),
+    size: MACHINE_SIZE,
+  });
+  for (const denseMachine of denseMachines) {
+    const machineLayout = denseLayout[denseMachine.id];
+    const denseCells = [
+      { id: `${denseMachine.id}:machine`, center: machineLayout.pos, size: MACHINE_SIZE },
+      { id: `${denseMachine.id}:add`, center: machineLayout.addPos, size: AGENT_SIZE },
+      ...machineLayout.agents.map(({ agent: hiveAgent, pos }) => ({ id: hiveAgent.id, center: pos, size: AGENT_SIZE })),
+    ];
+    for (const cell of denseCells) {
+      assert.equal(
+        polygonsOverlap(denseAddMachine, hexPolygon(cell)),
+        false,
+        `dense fleet ${denseTotal}×${denseAgents}: add-machine cell overlaps ${cell.id}`,
+      );
+    }
   }
 }
 

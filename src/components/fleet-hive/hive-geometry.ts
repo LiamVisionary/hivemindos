@@ -137,8 +137,10 @@ function frRectsOverlap(left: HiveLayoutRect, right: HiveLayoutRect, gap = 0) {
 /** Where the dashed "onboard a new machine" cell sits: in the widest angular
  *  gap between machines (biased toward straight-down for the familiar feel),
  *  just outside the ring — so it never stacks on top of a machine that happens
- *  to land directly below the Queen. */
-export function frAddMachinePos(machines: HiveMachine[]): Pt {
+ *  to land directly below the Queen. Dense fleets grow agent petals past that
+ *  base radius, so when the layout is provided the cell slides further outward
+ *  along the same angle until it clears every placed machine/agent/add cell. */
+export function frAddMachinePos(machines: HiveMachine[], layout?: Record<string, MachineLayout>): Pt {
   const total = machines.length;
   const radius = RING + BASE_ADD_MACHINE_GAP * CELL_SCALE; // just beyond the agent petals
   if (total === 0) return frPolar(QX, QY, radius, 90); // straight down when empty
@@ -157,6 +159,19 @@ export function frAddMachinePos(machines: HiveMachine[]): Pt {
     if (size > best.size + 0.5 || (Math.abs(size - best.size) <= 0.5 && downness < best.downness)) {
       best = { mid, size, downness };
     }
+  }
+  const obstacles: HiveLayoutRect[] = [];
+  if (layout) {
+    for (const m of machines) {
+      const L = layout[m.id];
+      if (!L) continue;
+      obstacles.push(frCellRect(L.pos, MACHINE_COLLISION_PAD), frCellRect(L.addPos));
+      for (const a of L.agents) obstacles.push(frCellRect(a.pos));
+    }
+  }
+  for (let r = radius; r <= radius + CELL_STEP * 8; r += CELL_STEP / 4) {
+    const point = frPolar(QX, QY, r, best.mid);
+    if (frSlotClears(point, obstacles)) return point;
   }
   return frPolar(QX, QY, radius, best.mid);
 }
@@ -211,7 +226,7 @@ export function frContentBounds(
     if (L.addPos) acc(L.addPos.x, L.addPos.y, CELL / 2);
     for (const a of L.agents) acc(a.pos.x, a.pos.y, CELL / 2 + 14); // agent cell + edge name
   }
-  const addMachine = frAddMachinePos(machines); // the "onboard a machine" cell
+  const addMachine = frAddMachinePos(machines, layout); // the "onboard a machine" cell
   acc(addMachine.x, addMachine.y, CELL / 2);
   const pad = 16;
   return {

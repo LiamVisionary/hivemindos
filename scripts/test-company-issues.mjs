@@ -9,6 +9,7 @@ import { register } from "node:module";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const { resolvedIssueAnswer } = await import("../src/features/dashboard/views/zero-human-companies/issue-resume.ts");
+const { agentsAtWork } = await import("../src/features/dashboard/views/zero-human-companies/data.ts");
 
 const issue = {
   title: "Resolve email deliverability setup issues",
@@ -25,6 +26,30 @@ assert.match(answer, /t_agentmail_domain_gate/, "answer includes the task id for
 assert.match(answer, /Domain limit exceeded/, "answer preserves the prior blocker");
 assert.match(answer, /re-check the external\/provider state/i, "answer tells the agent to verify, not blindly proceed");
 assert.match(answer, /only proceed to sends, DNS changes, spend, or completion after the real checks pass/i, "answer preserves governance gates");
+
+assert.equal(
+  agentsAtWork({
+    agents: [
+      { name: "HermesMain", state: "ready" },
+      { name: "Ada Lovelace", state: "ready" },
+    ],
+    issues: [
+      { title: "Launch verified follow-up sequence", status: "in_progress", agent: "HermesMain" },
+      { title: "Review pricing objections", status: "in_progress", agent: "HermesMain" },
+      { title: "Ship old batch", status: "done", agent: "Ada Lovelace" },
+    ],
+  }),
+  1,
+  "agents-at-work counts unique live in-progress assignees, not stale persisted crew state or cards",
+);
+assert.equal(
+  agentsAtWork({
+    agents: [{ name: "Ada Lovelace", state: "working" }],
+    issues: [],
+  }),
+  1,
+  "agents-at-work keeps the explicit working crew-state fallback",
+);
 
 const actionsSource = readFileSync("src/features/dashboard/views/zero-human-companies/CompanyIssueActions.tsx", "utf8");
 assert.match(actionsSource, /Mark Resolved/, "issue action card exposes Mark Resolved");
@@ -43,5 +68,85 @@ assert.match(liveSource, /pickupScheduled/, "live resolver reports immediate pic
 
 const boardSource = readFileSync("src/features/dashboard/views/zero-human-companies/IssueBoard.tsx", "utf8");
 assert.doesNotMatch(boardSource, /WebkitLineClamp|textOverflow:\s*"ellipsis"/, "issue blockers are not silently truncated");
+
+// ── classifyIssueReason: exhausted-pickup cards must name the REAL cause ─────
+const { classifyIssueReason } = await import("../src/features/dashboard/views/zero-human-companies/issue-reason.ts");
+
+const exhausted = (lines) => ({
+  work: {
+    taskId: "t_reason_test",
+    result: [
+      "Queen Bee autonomous pickup exhausted all eligible delegates and now needs human input.",
+      "Failures:",
+      ...lines.map((line) => `- ${line}`),
+      "ACTION NEEDED: Review the delegate failures above.",
+    ].join("\n"),
+  },
+});
+
+// The live WEBS shape (2026-07-05): transport failures + claim-race collateral must
+// classify as "machine unreachable", NOT the generic "No delegates available".
+const unreachableInfo = classifyIssueReason(exhausted([
+  "Ida B. Wells: The operation was aborted due to timeout",
+  "Grace Hopper: 502 Bad Gateway: hivemind-linkd proxy error: dial tcp 127.0.0.1:8787: connect: connection refused",
+  "HermesMain: fetch failed",
+  "Octavia Butler: Task is not ready to claim.",
+  "Ada Lovelace: Task is not ready to claim.",
+]));
+assert.equal(unreachableInfo.category, "delegates-unreachable", "transport failures classify as unreachable");
+assert.match(unreachableInfo.reason, /down or restarting/i, "reason points at the collector, not worker classes");
+assert.equal(unreachableInfo.consolidatable, true, "unreachable cards consolidate");
+
+// Pure claim-race chains (all lines are race collateral) name the race.
+const raceInfo = classifyIssueReason(exhausted([
+  "Grace Hopper: Task is not ready to claim.",
+  "Ada Lovelace: Task is not ready to claim.",
+]));
+assert.equal(raceInfo.signature, "delegation:race", "pure claim races get their own signature");
+assert.match(raceInfo.reason, /re-run/i, "race cards say the work is safe to re-run");
+
+// Existing classes keep their behavior.
+const offlineInfo = classifyIssueReason(exhausted(["Grace Hopper: no live delegated collector/agent"]));
+assert.equal(offlineInfo.category, "delegates-offline");
+const busyInfo = classifyIssueReason(exhausted(['Grace Hopper: machine "mac" is at its autonomous chat capacity']));
+assert.equal(busyInfo.category, "delegates-busy");
+const mixedInfo = classifyIssueReason(exhausted([
+  "Grace Hopper: no live delegated collector/agent",
+  "Ada Lovelace: The operation was aborted due to timeout",
+]));
+assert.equal(mixedInfo.signature, "delegation:mixed", "multiple causes still merge into the mixed card");
+const genericInfo = classifyIssueReason(exhausted(["Grace Hopper: something novel went wrong"]));
+assert.equal(genericInfo.category, "no-delegates", "unrecognized failures keep the generic fallback");
+
+// A genuine human ask stays a distinct, non-consolidatable card.
+const askInfo = classifyIssueReason({ work: { taskId: "t_ask", result: "ACTION NEEDED: Choose the pricing tier.", body: "" } });
+assert.equal(askInfo.category, "needs-input");
+assert.equal(askInfo.consolidatable, false);
+
+// ── Re-run: zero-human boards can't be hand-moved, so consolidated infra
+// blockers need an in-UI re-queue that rides the same answer rail as Mark
+// Resolved (answer → body stamp → Ready → immediate pickup).
+const { retryDelegationIssueAnswer } = await import("../src/features/dashboard/views/zero-human-companies/issue-resume.ts");
+const retryAnswer = retryDelegationIssueAnswer({
+  title: "Track revenue metrics from outreach efforts",
+  work: { taskId: "t_retry_test", result: "Queen Bee autonomous pickup exhausted all eligible delegates and now needs human input.\nFailures:\n- Emerson: The operation was aborted due to timeout" },
+});
+assert.match(retryAnswer, /re-run/i, "retry answer states the human intent");
+assert.match(retryAnswer, /t_retry_test/, "retry answer carries the task id for provenance");
+assert.match(retryAnswer, /not on the work itself/i, "retry answer tells the agent the failure was infrastructure");
+assert.match(retryAnswer, /escalate again/i, "retry answer forbids blind retry loops on a repeat failure");
+
+const consolidatedSource = readFileSync("src/features/dashboard/views/zero-human-companies/ConsolidatedIssueCard.tsx", "utf8");
+assert.match(consolidatedSource, /Re-run all \{issues\.length\}/, "consolidated card exposes a group Re-run action");
+assert.match(consolidatedSource, /onRetryAll/, "consolidated card takes the retry handler");
+assert.match(consolidatedSource, /busy \? <Spinner/, "the Re-run button shows an animated spinner while busy (no static loading state)");
+
+const viewSource = readFileSync("src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx", "utf8");
+assert.match(viewSource, /retryDelegationIssueAnswer\(issue\)/, "live retry handler stamps the retry answer");
+assert.match(viewSource, /onRetryIssues=\{\(companyId, issues\) => void handleRetryIssues/, "live view wires the bulk retry handler");
+const retryStart = viewSource.indexOf("const handleRetryIssues = React.useCallback(async");
+const retryEnd = viewSource.indexOf("const handleDismissIssues = React.useCallback(async");
+assert(retryStart >= 0 && retryEnd > retryStart, "live view keeps a bulk retry handler beside the dismiss handler");
+assert.doesNotMatch(viewSource.slice(retryStart, retryEnd), /archived/, "re-run must never archive — that is Dismiss's job");
 
 console.log("company-issues: all assertions passed");

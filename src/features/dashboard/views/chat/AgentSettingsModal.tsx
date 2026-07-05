@@ -26,6 +26,7 @@ import {
 import { AgentBrowserModal } from "./AgentBrowserModal";
 import { AgentSettingsCallsPanel } from "./AgentSettingsCallsPanel";
 import { AgentSettingsModalFrame } from "./AgentSettingsModalFrame";
+import { AgentSettingsQueenPersonalityPanel } from "./AgentSettingsQueenPersonalityPanel";
 // AgentSettingsToolsPanel owns the Agent mailbox "Create mailbox" action.
 import { AgentSettingsToolsPanel } from "./AgentSettingsToolsPanel";
 import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
@@ -199,7 +200,6 @@ export function AgentSettingsModal(props: any) {
   const [savedAgentSoulsStatus, setSavedAgentSoulsStatus] = useState("");
   const [soulSaveTitle, setSoulSaveTitle] = useState("");
   const [showAllProviders, setShowAllProviders] = useState(false);
-  const [hivemindosModelsSetupOpen, setHivemindosModelsSetupOpen] = useState(false);
   const [envPresentKeys, setEnvPresentKeys] = useState(() => new Set());
   const [envHermesKeys, setEnvHermesKeys] = useState(() => new Set());
   const [envLoaded, setEnvLoaded] = useState(false);
@@ -233,7 +233,10 @@ export function AgentSettingsModal(props: any) {
     hivemindosModelsConfig,
     agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model,
   );
-  const shouldShowHivemindosModelsSetup = hivemindosModelsSelected && (!hivemindosModelsSetupComplete || hivemindosModelsSetupOpen);
+  // The HivemindOS Models panel IS the model selector for this provider — it
+  // always renders inline while the provider is selected (no separate setup
+  // screen; funding lives in the panel's own modal).
+  const shouldShowHivemindosModelsSetup = hivemindosModelsSelected;
   const hivemindosModelsCreateBlocked = Boolean(agentCreateMachine && hivemindosModelsSelected && !hivemindosModelsSetupComplete);
   const agentTaskPreferences = (agentCreateMachine ? agentCreateDraft.taskPreferences : roleModalAgent?.taskPreferences) ?? [];
   const researchSubclassSelected = agentSettingsWorkerClass === "research" && !agentSettingsCustomWorker;
@@ -649,11 +652,6 @@ export function AgentSettingsModal(props: any) {
     void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
   }
 
-  function closeHivemindosModelsSetup() {
-    setHivemindosModelsSetupOpen(false);
-    setRuntimeModelSetupMode(null);
-  }
-
   function openAeonGithubOauth() {
     if (aeonOauthConnecting) return;
     setAeonOauthConnecting(true);
@@ -832,7 +830,6 @@ export function AgentSettingsModal(props: any) {
         lastStatusMessage: hivemindosModelsConfig.lastStatusMessage || "",
       },
     };
-    setHivemindosModelsSetupOpen(true);
     updateAgentRuntimeModel(HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER, model);
     if (agentCreateMachine) {
       setAgentCreateDraft((current) => ({ ...current, ...patch, name: current.name.trim() ? current.name : defaultNameForRuntime(current.runtime, HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER) }));
@@ -1045,7 +1042,6 @@ export function AgentSettingsModal(props: any) {
           </div>
         ) : shouldShowHivemindosModelsSetup ? (
           <div className="as-block">
-            <GroupLabel>HivemindOS Models setup</GroupLabel>
             <GuidedHivemindosModelsSetup
               key={hivemindosModelsSetupTarget?.id ?? "new-hivemindos-models"}
               agent={hivemindosModelsSetupTarget}
@@ -1053,7 +1049,6 @@ export function AgentSettingsModal(props: any) {
               displayAgents={displayAgents}
               walletsByAgent={walletsByAgent}
               sharedVault={sharedVault}
-              onCancel={closeHivemindosModelsSetup}
               onComplete={applyHivemindosModelsSetupProfile}
             />
           </div>
@@ -1198,6 +1193,15 @@ export function AgentSettingsModal(props: any) {
   }
 
   function renderWorkerPanel() {
+    if (isQueenSettings) {
+      return (
+        <AgentSettingsQueenPersonalityPanel
+          iconSrc={agentSettingsWorkerImage}
+          personality={currentSoulPrompt}
+          onChange={updateAgentSoulPrompt}
+        />
+      );
+    }
     if (!showWorkerClassSection) return null;
     if (agentWorkerClassView !== "presets") {
       return (

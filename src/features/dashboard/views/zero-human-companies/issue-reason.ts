@@ -40,7 +40,13 @@ function lastSectionLine(text?: string): string {
 // offline vs at capacity vs a genuine human ask), and gives issues a `signature`
 // so near-identical ones can be consolidated instead of spamming the board.
 
-export type IssueReasonCategory = "delegates-offline" | "delegates-busy" | "no-delegates" | "needs-input" | "other";
+export type IssueReasonCategory =
+  | "delegates-offline"
+  | "delegates-busy"
+  | "delegates-unreachable"
+  | "no-delegates"
+  | "needs-input"
+  | "other";
 
 export type IssueReasonInfo = {
   category: IssueReasonCategory;
@@ -58,6 +64,12 @@ const DELEGATE_EXHAUSTED = /exhausted all eligible delegates/i;
 const NO_ELIGIBLE = /no eligible autonomous delegates were available/i;
 const NO_LIVE_COLLECTOR = /no live delegated collector\/agent/i;
 const AT_CAPACITY = /at its autonomous chat capacity/i;
+// Transport-level chat failures: the delegate existed but its machine's collector
+// couldn't be reached (down/restarting/overloaded). Mirrors the autonomous worker's
+// TRANSIENT_PICKUP_FAILURE vocabulary — these self-heal once the machine is back.
+const UNREACHABLE = /(timed?\s*out|timeout|bad gateway|gateway timeout|\b50[234]\b|service unavailable|temporarily unavailable|connection (?:error|reset|refused)|connect: connection refused|econnreset|econnrefused|socket hang ?up|network error|fetch failed|proxy error)/i;
+// Collateral of two dispatch sweeps racing one task — not a distinct cause.
+const CLAIM_RACE = /not ready to claim|claimed by another worker/i;
 
 /** Pull the "- <agent>: <reason>" lines under a "Failures:" section of a result. */
 function extractFailureLines(result: string): string[] {
@@ -87,7 +99,12 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
     const failures = extractFailureLines(result);
     const offline = failures.filter((line) => NO_LIVE_COLLECTOR.test(line)).length;
     const busy = failures.filter((line) => AT_CAPACITY.test(line)).length;
-    if (offline > 0 && busy === 0) {
+    // Claim-race lines are collateral of the same underlying event, so they never
+    // count as their own cause unless NOTHING else explains the exhaustion.
+    const unreachable = failures.filter((line) => !NO_LIVE_COLLECTOR.test(line) && !AT_CAPACITY.test(line) && UNREACHABLE.test(line)).length;
+    const raced = failures.filter((line) => CLAIM_RACE.test(line)).length;
+    const causes = [offline, busy, unreachable].filter((count) => count > 0).length;
+    if (causes === 1 && offline > 0) {
       return {
         category: "delegates-offline",
         label: "Delegates offline",
@@ -96,7 +113,7 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
         consolidatable: true,
       };
     }
-    if (busy > 0 && offline === 0) {
+    if (causes === 1 && busy > 0) {
       return {
         category: "delegates-busy",
         label: "Delegates at capacity",
@@ -105,12 +122,30 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
         consolidatable: true,
       };
     }
-    if (offline > 0 || busy > 0) {
+    if (causes === 1 && unreachable > 0) {
+      return {
+        category: "delegates-unreachable",
+        label: "Machine unreachable",
+        reason: `Delegate chats failed on transport (timeouts / refused connections) — the target machine's collector was likely down or restarting. Usually self-heals; re-run once the machine is back.`,
+        signature: "delegation:unreachable",
+        consolidatable: true,
+      };
+    }
+    if (causes > 1) {
       return {
         category: "delegates-offline",
         label: "Delegates unavailable",
-        reason: `Delegates couldn't take the work (${offline} offline, ${busy} at capacity).`,
+        reason: `Delegates couldn't take the work (${offline} offline, ${unreachable} unreachable, ${busy} at capacity).`,
         signature: "delegation:mixed",
+        consolidatable: true,
+      };
+    }
+    if (raced > 0) {
+      return {
+        category: "delegates-busy",
+        label: "Dispatch race",
+        reason: "Two dispatch sweeps raced for this task and the loser escalated it — the work was actually claimed. Safe to re-run.",
+        signature: "delegation:race",
         consolidatable: true,
       };
     }

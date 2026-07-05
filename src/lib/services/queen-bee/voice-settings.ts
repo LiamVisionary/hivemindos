@@ -104,6 +104,7 @@ export type QueenVoiceBrainDefaults = {
   agentName?: string;
   provider?: string;
   model?: string;
+  soulPrompt?: string;
 } | null;
 
 let callPrefsCache: {
@@ -156,6 +157,7 @@ async function readQueenPrefsBundle(now = Date.now()) {
           agentName: queen.name,
           provider: queen.provider?.trim() || undefined,
           model: queen.model?.trim() || undefined,
+          soulPrompt: queen.soulPrompt?.trim() || undefined,
         }
       : null,
   };

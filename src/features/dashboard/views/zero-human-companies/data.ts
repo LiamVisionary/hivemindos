@@ -39,12 +39,28 @@ export const ROLE_GLYPH: Record<string, string> = {
 export function portfolioStats(list: Colony[]) {
   const colonies = list.length;
   const agents = list.reduce((n, c) => n + c.agents.length, 0);
-  const working = list.reduce((n, c) => n + c.agents.filter((a) => a.state === "working").length, 0);
+  const working = list.reduce((n, c) => n + agentsAtWork(c), 0);
   const shipped = list.reduce((n, c) => n + c.issues.filter((i) => i.status === "done").length, 0);
   const approvals = list.reduce((n, c) => n + c.approvals.length, 0);
   const burnToday = list.reduce((n, c) => n + c.burn.today, 0);
   const avgAlign = colonies ? Math.round(list.reduce((n, c) => n + c.alignment, 0) / colonies) : 0;
   return { colonies, agents, working, shipped, approvals, burnToday, avgAlign };
+}
+
+function agentKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+export function agentsAtWork(colony: Colony): number {
+  const names = new Set<string>();
+  for (const issue of colony.issues) {
+    if (issue.status !== "in_progress") continue;
+    if (issue.agent?.trim()) names.add(agentKey(issue.agent));
+  }
+  for (const agent of colony.agents) {
+    if (agent.state === "working" && agent.name.trim()) names.add(agentKey(agent.name));
+  }
+  return names.size;
 }
 
 /** default company budget: half the agent's general wallet cap (rounded to $5). */

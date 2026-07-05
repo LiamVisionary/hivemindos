@@ -121,6 +121,7 @@ export function IssueBoard({
   companyName = colony.name,
   onOpenIssue,
   onResolveIssue,
+  onRetryIssues,
   onReviewPreview,
   onDismissIssues,
   busyId,
@@ -130,6 +131,8 @@ export function IssueBoard({
   companyName?: string;
   onOpenIssue?: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
+  /** Re-queue a group of infra-blocked tasks for autonomous pickup (answer rail). */
+  onRetryIssues?: (issues: Issue[]) => void;
   onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
   onDismissIssues?: (issues: Issue[]) => void;
   busyId?: string | null;
@@ -161,7 +164,7 @@ export function IssueBoard({
                   {lane.key === "board_review" && onOpenIssue
                     ? groupIssuesByReason(items).map((group) =>
                       group.issues.length > 1 && group.info.consolidatable ? (
-                        <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={companyName} onOpenIssue={onOpenIssue} onDismiss={onDismissIssues} />
+                        <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={companyName} onOpenIssue={onOpenIssue} onRetryAll={onRetryIssues} onDismiss={onDismissIssues} busy={group.issues.some((issue) => issue.work?.taskId === busyId)} />
                       ) : (
                         group.issues.map((i) => (
                           <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} companyName={companyName} onOpen={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} onDismiss={onDismissIssues} busy={busyId === i.work?.taskId} />

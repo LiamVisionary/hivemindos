@@ -382,6 +382,98 @@ function loopDeps({ judgeAccepts, onComplete }) {
   assert.equal(result.status, "blocked");
 }
 
+// --- Scenario 5e: claim race — another dispatcher already holds the task, so the
+//     losing pickup must back off entirely: no reroute (it would steal the winner's
+//     claim), no block, no retry-attempt burn (WEBS interleaving, 2026-07-05).
+{
+  const result = await runQueenBeeAutonomousPickup({
+    task,
+    delegation,
+    delegationChain: [delegation, fallbackDelegation],
+  }, {
+    claim: async () => { throw new Error("Task is not ready to claim."); },
+    fetchJson: async () => { throw new Error("chat must not run when the claim lost the race"); },
+    complete: async () => { throw new Error("complete must not run when the claim lost the race"); },
+    reroute: async () => { throw new Error("reroute must not run — it would steal the other worker's claim"); },
+    block: async () => { throw new Error("a claim race must not block the task to needs-human"); },
+    fail: async () => { throw new Error("a claim race must not consume a retry attempt"); },
+  });
+  assert.equal(result.status, "skipped", "losing a claim race should skip, not escalate");
+  assert.match(result.error, /another dispatcher/i);
+}
+
+// --- Scenario 5f: reroute conflict — a delegate fails, but before the reroute lands
+//     another dispatcher claims the task. The store refuses to clobber the live claim
+//     and the pickup backs off instead of fighting it.
+{
+  let blockCalled = false;
+  const result = await runQueenBeeAutonomousPickup({
+    task,
+    delegation,
+    delegationChain: [delegation, fallbackDelegation],
+  }, {
+    claim: async (slug, taskId, input) => ({ task: { ...task, status: "working", claimLock: input.claimer }, board: {} }),
+    fetchJson: async () => { throw new Error("The operation was aborted due to timeout"); },
+    reroute: async (slug, taskId, input) => {
+      assert.match(input.failedClaimLock, /^queen-bee-autonomous:/, "reroute must carry the failing run's claim lock");
+      throw new Error("Task is claimed by another worker; refusing to reroute over a live claim.");
+    },
+    complete: async () => { throw new Error("complete must not run"); },
+    block: async () => {
+      blockCalled = true;
+      return { task: { ...task, status: "needs-human" }, board: {} };
+    },
+    fail: async () => { throw new Error("a reroute conflict must not consume a retry attempt"); },
+  });
+  assert.equal(result.status, "skipped", "a reroute conflict should back off, not escalate");
+  assert.equal(blockCalled, false, "a reroute conflict must leave the board to the claim's owner");
+  assert.match(result.error, /another worker claimed/i);
+}
+
+// --- Scenario 5g: a chain mixing machine-capacity skips with transport failures is
+//     100% infrastructure and must auto-retry via failTask — NOT strand on a human.
+//     (Live 2026-07-05, WEBS t_mr7nmkl4_vr67n: 2 capacity + 4 transport lines escalated
+//     because capacity lines failed the transport-only transient regex.)
+{
+  process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS = "0";
+  try {
+    // Saturate machine "mac" with a held chat so the chain's first delegate skips on capacity.
+    let releaseHeldChat = () => {};
+    const heldChat = new Promise((resolve) => { releaseHeldChat = resolve; });
+    const holder = runQueenBeeAutonomousPickup({ task: { ...task, id: "t_mixed_hold" }, delegation }, {
+      claim: async (slug, taskId, input) => ({ task: { ...task, id: "t_mixed_hold", status: "working", claimLock: input.claimer }, board: {} }),
+      fetchJson: async () => { await heldChat; return { ok: true, text: "held done" }; },
+      complete: async (slug, taskId, input) => ({ task: { ...task, id: "t_mixed_hold", status: "done", result: input.result }, board: {} }),
+      block: async () => { throw new Error("holder must not block"); },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    let failInput = null;
+    const result = await runQueenBeeAutonomousPickup({
+      task: { ...task, id: "t_mixed_chain" },
+      delegation,
+      delegationChain: [delegation, fallbackDelegation],
+    }, {
+      claim: async (slug, taskId, input) => ({ task: { ...task, id: "t_mixed_chain", status: "working", assignee: input.assignee, claimLock: input.claimer }, board: {} }),
+      fetchJson: async () => { throw new Error("The operation was aborted due to timeout"); },
+      reroute: async () => { throw new Error("reroute should not run — the capacity skip advances the chain itself"); },
+      complete: async () => { throw new Error("complete must not run"); },
+      block: async () => { throw new Error("a capacity+transport chain is pure infrastructure and must NOT block to needs-human"); },
+      fail: async (slug, taskId, input) => {
+        failInput = input;
+        return { task: { ...task, id: "t_mixed_chain", status: "ready", attempt: 2 }, board: {}, retried: true };
+      },
+    });
+    assert.equal(result.status, "skipped", "a capacity+transport chain should auto-retry (skipped)");
+    assert.equal(failInput?.failureReason, "timeout", "mixed infra exhaustion routes through the retryable 'timeout' reason");
+    assert.match(failInput?.summary ?? "", /capacity/i, "the capacity line is preserved in the failure record");
+    releaseHeldChat();
+    assert.equal((await holder).status, "completed");
+  } finally {
+    delete process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS;
+  }
+}
+
 // --- Scenario 6: per-machine concurrency gate — two simultaneous pickups targeting the
 //     same machine must serialize their collector chats (default cap: 1 per machine),
 //     instead of starving each other on a small box (hel1-2 pile-up, 2026-07-03).
@@ -509,6 +601,49 @@ function loopDeps({ judgeAccepts, onComplete }) {
     "peer-proxy URLs must gate on the remote peer identity",
   );
   assert.equal(pickupMachineKey({ status: "delegated" }, "http://ubuntu-box:8787"), "ubuntu-box:8787");
+}
+
+// --- Scenario 10: real-store reroute guard — rerouteTaskForAutonomousPickup must
+//     refuse to clobber a DIFFERENT run's live claim, but still allow the claim
+//     holder itself (and legacy callers that pass no lock) to reroute.
+{
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { createTask, claimTask, rerouteTaskForAutonomousPickup } = await import("../src/lib/services/kanban/local-kanban-store.ts");
+  const vaultPath = await mkdtemp(join(tmpdir(), "hivemind-pickup-reroute-guard-"));
+  const options = { vaultPath, kanbanFolder: "Operations/Work Board" };
+  try {
+    const { task: created } = await createTask(null, { title: "Guarded reroute", status: "ready" }, options);
+    await claimTask(null, created.id, { claimer: "queen-bee-autonomous:guard:winner:1" }, options);
+
+    await assert.rejects(
+      rerouteTaskForAutonomousPickup(null, created.id, {
+        reason: "loser run rerouting after a lost race",
+        nextAssignee: "Ada Lovelace",
+        failedClaimLock: "queen-bee-autonomous:guard:loser:1",
+      }, options),
+      /claimed by another worker/i,
+      "a reroute carrying a different run's lock must be refused",
+    );
+
+    const { task: rerouted } = await rerouteTaskForAutonomousPickup(null, created.id, {
+      reason: "claim holder rerouting its own failed delegate",
+      nextAssignee: "Grace Hopper",
+      failedClaimLock: "queen-bee-autonomous:guard:winner:1",
+    }, options);
+    assert.equal(rerouted.status, "ready", "the claim holder's own reroute must still work");
+    assert.equal(rerouted.assignee, "Grace Hopper");
+
+    await claimTask(null, created.id, { claimer: "queen-bee-autonomous:guard:winner:2" }, options);
+    const { task: legacyRerouted } = await rerouteTaskForAutonomousPickup(null, created.id, {
+      reason: "legacy caller with no lock",
+      nextAssignee: "Ada Lovelace",
+    }, options);
+    assert.equal(legacyRerouted.status, "ready", "callers that pass no lock keep the old behavior");
+  } finally {
+    await rm(vaultPath, { recursive: true, force: true });
+  }
 }
 
 console.log("Queen Bee autonomous pickup + loop receipts contract test passed.");

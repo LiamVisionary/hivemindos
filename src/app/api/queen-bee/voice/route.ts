@@ -22,6 +22,12 @@ import {
   writeQueenBeeVoice,
 } from "@/lib/services/queen-bee/voice-settings";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
+import {
+  hivemindosWalletPaidModelAgentSlug,
+  isHivemindosWalletPaidModelProfile,
+  selectedHivemindosWalletPaidModel,
+} from "@/lib/services/hivemindos-wallet-paid-models";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { openAiOAuthConfigured, preferOpenAiApiKey } from "@/lib/services/openai-oauth";
 import {
   LOCAL_TTS_RUNTIME,
@@ -58,9 +64,9 @@ import {
   finalizeQueenChatStream,
 } from "@/lib/services/queen-bee/chat-stream";
 import {
-  QUEEN_INSTRUCTIONS,
   QUEEN_VOICE_STYLE,
   queenChatTools,
+  queenInstructionsForPersonality,
   queenRealtimeTools,
 } from "@/lib/services/queen-bee/queen-brain";
 import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
@@ -91,7 +97,10 @@ const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_REALTIME_MODEL = "gpt-realtime";
 
 // Voice modality = the one shared Queen brain + a spoken-style addendum.
-const QUEEN_REALTIME_INSTRUCTIONS = `${QUEEN_INSTRUCTIONS}${QUEEN_VOICE_STYLE}`;
+function queenRealtimeInstructionsForPersonality(personality?: string | null) {
+  return `${queenInstructionsForPersonality(personality)}${QUEEN_VOICE_STYLE}`;
+}
+
 const QUEEN_REALTIME_TOOLS = queenRealtimeTools();
 
 /**
@@ -168,10 +177,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, preferences });
     }
     if (body.action === "chat-turn") {
-      return await runQueenChatTurn(body);
+      return await runQueenChatTurn(body, request.nextUrl.origin);
     }
     if (body.action === "chat-turn-stream") {
-      return await runQueenChatTurnStream(body);
+      return await runQueenChatTurnStream(body, request.nextUrl.origin);
     }
     throw new Error(
       `Unknown Queen Bee voice action: ${String(body.action ?? "")}`,
@@ -346,11 +355,12 @@ async function mintRealtimeSession() {
   }
   const voice = await readQueenBeeVoice();
   const model = process.env.OPENAI_REALTIME_MODEL || DEFAULT_REALTIME_MODEL;
+  const defaults = await readQueenBeeBrainDefaults().catch(() => null);
   // Splice any standing user preferences ("call me boss") onto the base
   // instructions so every new session opens already knowing them.
   const preferencePreamble = await queenVoicePreferencePreamble();
   const instructions = [
-    QUEEN_REALTIME_INSTRUCTIONS,
+    queenRealtimeInstructionsForPersonality(defaults?.soulPrompt),
     queenModelTransparencyNote(model, "OpenAI Realtime (Queen Bee's voice brain)", {
       relayTool: true,
     }),
@@ -428,13 +438,20 @@ const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
 /** One answering brain the typed lane can call directly. */
 type QueenTypedChatBrain = {
   url: string;
+  /** Bearer key; empty when the brain authenticates via custom headers. */
   key: string;
+  /** Extra request headers (wallet-paid gateway auth, internal self-fetch auth). */
+  headers?: Record<string, string>;
   model: string;
   providerSlug: string;
   /** Per-turn overlay tag, e.g. "gpt-5.5 · venice". */
   label: string;
-  /** True when this is the user's configured Calls-settings chat brain. */
+  /** True when this is the queen agent's own selected model. */
   configured: boolean;
+  /** False when the endpoint answers only buffered JSON (no SSE). */
+  streaming?: boolean;
+  /** Per-brain budget; the wallet-paid gateway can cold-start its host. */
+  timeoutMs?: number;
 };
 
 function queenBrainProviderLabel(provider: string) {
@@ -444,25 +461,48 @@ function queenBrainProviderLabel(provider: string) {
 }
 
 /**
- * The typed lane's answering brains, in preference order: the configured
- * Calls-settings chat brain when it is directly callable with a plain key,
- * then the built-in OpenAI lane. OAuth-held (openai-oauth) and runtime-held
- * (agent-runtime/fleet-agent) plans cannot run the typed tool loop here, so
- * they keep the built-in lane — the per-turn brain tag and transparency note
- * stay honest about which brain actually answered either way.
+ * The typed lane's answering brains, in preference order. REGULAR typed chat
+ * follows the QUEEN AGENT'S OWN selected provider/model — the Calls-settings
+ * chat-brain override applies only to voice/calls (resolveVoiceChatBrainPlan).
+ * Serving classes: the HivemindOS-models gateway (custom wallet headers, the
+ * upstream does native tool calls), then plain key-based OpenAI-compatible
+ * providers. OAuth-held (openai-oauth/codex) and runtime-held selections
+ * cannot run the typed client-side tool loop, so they fall to the built-in
+ * OpenAI lane — declared by the per-turn brain tag, never silent.
  */
-async function resolveQueenTypedChatBrains(): Promise<QueenTypedChatBrain[]> {
+async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedChatBrain[]> {
   const brains: QueenTypedChatBrain[] = [];
-  const plan = await resolveVoiceChatBrainPlan().catch(() => null);
-  if (plan && plan.kind === "direct" && plan.provider !== "openai-oauth" && plan.model) {
-    const endpoint = await resolveProviderChatEndpoint(plan.provider).catch(() => null);
+  const defaults = await readQueenBeeBrainDefaults().catch(() => null);
+  const provider = defaults?.provider?.trim() || "";
+  if (defaults?.model && isHivemindosWalletPaidModelProfile({ provider })) {
+    const model = selectedHivemindosWalletPaidModel({ model: defaults.model });
+    brains.push({
+      url: `${origin.replace(/\/+$/, "")}/api/hivemindos/models/chat/completions`,
+      key: "",
+      headers: {
+        "X-HivemindOS-Wallet-Agent-Id": defaults.agentId || "free-tier",
+        "X-HivemindOS-Wallet-Model-Slug": hivemindosWalletPaidModelAgentSlug(),
+        // Self-fetch through the proxy auth gate.
+        ...internalApiAuthHeaders(),
+      },
+      model,
+      providerSlug: provider,
+      label: `${model} · HivemindOS models`,
+      configured: true,
+      // The gateway buffers upstream responses (stream:false) and its free
+      // host can cold-start, so: no SSE, generous budget.
+      streaming: false,
+      timeoutMs: 120_000,
+    });
+  } else if (defaults?.model && provider !== "openai-oauth" && provider !== "openai-codex") {
+    const endpoint = await resolveProviderChatEndpoint(provider).catch(() => null);
     if (endpoint) {
       brains.push({
         url: endpoint.url,
         key: endpoint.key,
-        model: plan.model,
-        providerSlug: plan.provider,
-        label: `${plan.model} · ${queenBrainProviderLabel(plan.provider)}`,
+        model: defaults.model,
+        providerSlug: provider,
+        label: `${defaults.model} · ${queenBrainProviderLabel(provider)}`,
         configured: true,
       });
     }
@@ -483,6 +523,59 @@ async function resolveQueenTypedChatBrains(): Promise<QueenTypedChatBrain[]> {
     });
   }
   return brains;
+}
+
+function queenBrainRequestHeaders(brain: QueenTypedChatBrain): Record<string, string> {
+  return {
+    "content-type": "application/json",
+    ...(brain.key ? { Authorization: `Bearer ${brain.key}` } : {}),
+    ...(brain.headers ?? {}),
+  };
+}
+
+/** One buffered chat-completions call against one brain. Returns the terminal
+ *  payload shape both chat-turn actions hand to the client, or throws. */
+async function queenChatBlockingRequest(
+  brain: QueenTypedChatBrain,
+  system: string,
+  incoming: unknown[],
+) {
+  const response = await fetch(brain.url, {
+    method: "POST",
+    headers: queenBrainRequestHeaders(brain),
+    body: JSON.stringify(queenChatRequestBody(brain, system, incoming)),
+    cache: "no-store",
+    signal: AbortSignal.timeout(brain.timeoutMs ?? 20_000),
+  });
+  const data = (await response.json().catch(() => null)) as {
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+        tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>;
+      };
+    }>;
+    error?: { message?: string } | string;
+  } | null;
+  if (!response.ok) {
+    const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
+    throw new Error(detail || `chat turn HTTP ${response.status}`);
+  }
+  const message = data?.choices?.[0]?.message ?? {};
+  const toolCalls = Array.isArray(message.tool_calls)
+    ? message.tool_calls
+        .filter((tc) => tc?.function?.name)
+        .map((tc) => ({
+          id: String(tc.id ?? ""),
+          name: String(tc.function?.name ?? ""),
+          arguments: String(tc.function?.arguments ?? "{}"),
+        }))
+    : [];
+  return {
+    content: typeof message.content === "string" ? message.content : "",
+    toolCalls,
+    assistant: message,
+    brainLabel: brain.label,
+  };
 }
 
 /** Chat-completions body for one brain. Reasoning-era OpenAI models reject
@@ -507,10 +600,11 @@ function queenChatRequestBody(
 }
 
 /** Shared setup for the typed chat turn (blocking and streaming variants). */
-async function prepareQueenChatTurn(body: Record<string, unknown>) {
-  const brains = await resolveQueenTypedChatBrains();
+async function prepareQueenChatTurn(body: Record<string, unknown>, origin: string) {
+  const brains = await resolveQueenTypedChatBrains(origin);
   if (!brains.length) return null;
   const incoming = Array.isArray(body.messages) ? body.messages : [];
+  const defaults = await readQueenBeeBrainDefaults().catch(() => null);
   const preamble = await queenVoicePreferencePreamble();
   const screenContext = formatDashboardScreenContextForPrompt(
     coerceDashboardScreenContext(body.screenContext),
@@ -527,7 +621,7 @@ async function prepareQueenChatTurn(body: Record<string, unknown>) {
   // about to invoke — this is what lets her answer "which LLM?" honestly.
   const systemFor = (brain: QueenTypedChatBrain) =>
     [
-      QUEEN_INSTRUCTIONS,
+      queenInstructionsForPersonality(defaults?.soulPrompt),
       queenModelTransparencyNote(
         brain.model,
         `${queenBrainProviderLabel(brain.providerSlug)} (Queen Bee's typed chat brain)`,
@@ -541,58 +635,29 @@ async function prepareQueenChatTurn(body: Record<string, unknown>) {
   return { brains, incoming, systemFor };
 }
 
-async function runQueenChatTurn(body: Record<string, unknown>) {
-  const prepared = await prepareQueenChatTurn(body);
+async function runQueenChatTurn(body: Record<string, unknown>, origin: string) {
+  const prepared = await prepareQueenChatTurn(body, origin);
   if (!prepared) {
     return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
   }
   const { brains, incoming, systemFor } = prepared;
-  // Configured brain first, built-in OpenAI lane second — a failing configured
-  // provider degrades to the built-in lane instead of dead-ending the turn,
-  // and `brainLabel` always names the brain that actually answered.
+  // The agent's own brain first, built-in OpenAI lane last — a failing
+  // configured brain degrades to the built-in lane instead of dead-ending the
+  // turn, `brainLabel` always names the brain that actually answered, and any
+  // skipped configured brain is DECLARED via brainFallback (never silent).
   let lastError = "";
+  const skipped: Array<{ label: string; error: string }> = [];
   for (const brain of brains) {
     try {
-      const response = await fetch(brain.url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${brain.key}`, "content-type": "application/json" },
-        body: JSON.stringify(queenChatRequestBody(brain, systemFor(brain), incoming)),
-        cache: "no-store",
-        signal: AbortSignal.timeout(20_000),
-      });
-      const data = (await response.json().catch(() => null)) as {
-        choices?: Array<{
-          message?: {
-            content?: string | null;
-            tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: string } }>;
-          };
-        }>;
-        error?: { message?: string } | string;
-      } | null;
-      if (!response.ok) {
-        const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
-        lastError = detail || `chat turn HTTP ${response.status}`;
-        continue;
-      }
-      const message = data?.choices?.[0]?.message ?? {};
-      const toolCalls = Array.isArray(message.tool_calls)
-        ? message.tool_calls
-            .filter((tc) => tc?.function?.name)
-            .map((tc) => ({
-              id: String(tc.id ?? ""),
-              name: String(tc.function?.name ?? ""),
-              arguments: String(tc.function?.arguments ?? "{}"),
-            }))
-        : [];
+      const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming);
       return NextResponse.json({
         ok: true,
-        content: typeof message.content === "string" ? message.content : "",
-        toolCalls,
-        assistant: message,
-        brainLabel: brain.label,
+        ...result,
+        ...(skipped.length ? { brainFallback: skipped[0] } : {}),
       });
     } catch (error) {
       lastError = error instanceof Error ? error.message : "chat turn failed";
+      skipped.push({ label: brain.label, error: lastError });
     }
   }
   return NextResponse.json({ ok: false, fallback: true, error: lastError || "chat turn failed" });
@@ -605,41 +670,69 @@ async function runQueenChatTurn(body: Record<string, unknown>) {
  * loop is identical either way). Errors emit `{ok:false, fallback:true}` so
  * the client can retry via the blocking action.
  */
-async function runQueenChatTurnStream(body: Record<string, unknown>) {
-  const prepared = await prepareQueenChatTurn(body);
+async function runQueenChatTurnStream(body: Record<string, unknown>, origin: string) {
+  const prepared = await prepareQueenChatTurn(body, origin);
   const ndjson = { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" };
   const line = (value: unknown) => `${JSON.stringify(value)}\n`;
   if (!prepared) {
     return new Response(line({ ok: false, fallback: true, error: "no-openai-key" }), { headers: ndjson });
   }
   const { brains, incoming, systemFor } = prepared;
-  // Try brains in order for the INITIAL connection (configured brain, then the
-  // built-in OpenAI lane); once a stream has started, mid-stream failures keep
-  // the existing partial-result + fallback signaling.
+  // Try brains in order for the INITIAL connection (the agent's own brain,
+  // then the built-in OpenAI lane). Buffered-only brains (the HivemindOS
+  // models gateway) answer as one terminal frame — the client tool loop is
+  // identical, the reply just lands at once instead of token-by-token. Once
+  // an SSE stream has started, mid-stream failures keep the existing
+  // partial-result + fallback signaling.
   let upstream: Response | Error = new Error("no chat brain available");
   let answeringBrain = brains[0];
+  let lastError = "";
+  const skipped: Array<{ label: string; error: string }> = [];
   for (const brain of brains) {
+    if (brain.streaming === false) {
+      try {
+        const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming);
+        return new Response(
+          line({
+            done: true,
+            ok: true,
+            ...result,
+            ...(skipped.length ? { brainFallback: skipped[0] } : {}),
+          }),
+          { headers: ndjson },
+        );
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "chat turn failed";
+        skipped.push({ label: brain.label, error: lastError });
+        continue;
+      }
+    }
     answeringBrain = brain;
     upstream = await fetch(brain.url, {
       method: "POST",
-      headers: { Authorization: `Bearer ${brain.key}`, "content-type": "application/json" },
+      headers: queenBrainRequestHeaders(brain),
       body: JSON.stringify(
         queenChatRequestBody(brain, systemFor(brain), incoming, { stream: true }),
       ),
       cache: "no-store",
       // Generous vs the blocking action's 20s: this bounds the WHOLE stream, and
       // first tokens arrive within seconds so the user is never staring at it.
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(Math.max(90_000, brain.timeoutMs ?? 0)),
     }).catch((error: unknown) => error as Error);
     if (!(upstream instanceof Error) && upstream.ok && upstream.body) break;
+    skipped.push({
+      label: brain.label,
+      error: upstream instanceof Error ? upstream.message : `chat turn HTTP ${upstream.status}`,
+    });
   }
   if (upstream instanceof Error || !upstream.ok || !upstream.body) {
     const detail = upstream instanceof Error
       ? upstream.message
-      : `chat turn HTTP ${(upstream as Response | undefined)?.status ?? "?"}`;
+      : lastError || `chat turn HTTP ${(upstream as Response | undefined)?.status ?? "?"}`;
     return new Response(line({ ok: false, fallback: true, error: detail }), { headers: ndjson });
   }
   const brainLabel = answeringBrain?.label ?? "";
+  const brainFallback = skipped.length ? skipped[0] : undefined;
   const reader = upstream.body.getReader();
   const decoder = new TextDecoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -658,7 +751,13 @@ async function runQueenChatTurnStream(body: Record<string, unknown>) {
           }
           if (sseDone) break;
         }
-        controller.enqueue(encoder.encode(line({ done: true, ok: true, brainLabel, ...finalizeQueenChatStream(state) })));
+        controller.enqueue(encoder.encode(line({
+          done: true,
+          ok: true,
+          brainLabel,
+          ...(brainFallback ? { brainFallback } : {}),
+          ...finalizeQueenChatStream(state),
+        })));
       } catch (error) {
         // Mid-stream failure: surface whatever already streamed so the client
         // can keep it, but flag the turn incomplete for the fallback path.

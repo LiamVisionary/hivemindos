@@ -9,6 +9,7 @@ import { companyRunsOnThisMachine, markCompanyDispatched, parseMetricNumber, rea
 import { countDispatchableMembers, dispatchCompanyGoal, scopeFleetToMembers } from "@/lib/services/companies-orchestration";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { redispatchReadyQueenBeeTasks, routePendingQueenBeeTasks } from "@/lib/services/queen-bee/control-plane";
+import { rescueInfraStrandedTasks } from "@/lib/services/queen-bee/infra-rescue";
 import { readBoard, reclaimStaleTasks } from "@/lib/services/kanban/local-kanban-store";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { notifyEscalation, resolveEscalationNotification, runEscalationSweep } from "@/lib/services/messaging/escalation-notify";
@@ -240,6 +241,17 @@ async function tickOnce(): Promise<void> {
   // autonomous task left stranded "ready" (e.g. a server restart killed its in-process pickup).
   // This is what makes autonomous loops survive a crash/restart instead of stalling forever.
   await reclaimStaleTasks(null, {}, {});
+  // Rescue infrastructure-stranded needs-human tasks BEFORE the ready re-dispatch,
+  // so a task whose collector just came back is re-queued and re-dispatched in the
+  // SAME tick instead of waiting a human click (zero-human boards have no hand-move).
+  try {
+    const rescue = await rescueInfraStrandedTasks();
+    if (rescue.rescued.length > 0) {
+      console.log(`[company-autonomy-driver] infra-rescue re-queued ${rescue.rescued.length} stranded task(s): ${rescue.rescued.map((r) => r.taskId).join(", ")}`);
+    }
+  } catch (error) {
+    console.warn("[company-autonomy-driver] infra-rescue sweep failed:", error instanceof Error ? error.message : error);
+  }
   const redispatched = await redispatchReadyQueenBeeTasks({});
   if (redispatched > 0) console.log(`[company-autonomy-driver] re-dispatched ${redispatched} stranded ready task(s)`);
 
