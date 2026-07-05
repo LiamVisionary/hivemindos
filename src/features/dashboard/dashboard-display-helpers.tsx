@@ -15,6 +15,7 @@ import {
   machineExactIdentity,
   machineIdentityFromParts,
   shouldPreserveMissingDiscoveredMachine,
+  tailnetSelfIdentityCandidates,
 } from "@/features/fleet/fleet-identity";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
@@ -521,12 +522,19 @@ export function discoveredMachineScore(machine: DiscoveredMachine) {
 
 function machineBaseCandidates(machine: DiscoveredMachine) {
   // Exact identity only (keeps tailscale's `-N` suffix): a `-1` node is a
-  // different physical machine with the same hostname, not a duplicate.
+  // different physical machine with the same hostname, not a duplicate. A
+  // ready collector additionally claims its self-reported system tailnet
+  // node (dnsName-only, see tailnetSelfIdentityCandidates), so a machine
+  // preserved from before a hostname rename still folds instead of living
+  // on as an offline ghost.
   const identity = machineExactIdentity(
     machine.device.name,
     machine.device.dnsName,
   );
-  return identity ? [identity] : [];
+  return [
+    ...(identity ? [identity] : []),
+    ...tailnetSelfIdentityCandidates(machine.tailnetSelf),
+  ];
 }
 
 function hasFreshReadyDuplicate(

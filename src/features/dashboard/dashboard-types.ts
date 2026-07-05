@@ -649,6 +649,9 @@ export type DiscoveredMachine = {
   collector: MachineGroup["collector"];
   collectorHost?: string;
   machineId?: string;
+  // The machine's self-declared system tailnet node (collector /health
+  // `tailnetSelf`) — lets merging fold a rename-orphaned system node.
+  tailnetSelf?: { name?: string | null; dnsName?: string | null };
   agents: AgentProfile[];
   snapshots: AgentSnapshot[];
   version?: AppVersion;

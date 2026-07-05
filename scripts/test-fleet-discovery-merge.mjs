@@ -20,7 +20,7 @@ const identitySource =
   )
     .replace(/^import\s+type\s+.+;\n/gm, "")
     .replace(/\bexport\s+/g, "") +
-  "\n;globalThis.__fleetIdentity = { isLocalLinkDuplicateOfSelf, isLoopbackCollector, isMacMachineOs, isMobileMachineOs, machineExactIdentity, machineIdentityFromParts, shouldPreserveMissingDiscoveredMachine };";
+  "\n;globalThis.__fleetIdentity = { isLocalLinkDuplicateOfSelf, isLoopbackCollector, isMacMachineOs, isMobileMachineOs, machineExactIdentity, machineIdentityFromParts, shouldPreserveMissingDiscoveredMachine, tailnetSelfIdentityCandidates };";
 
 const identityContext = vm.createContext({ URL });
 compileIntoContext(identitySource, identityContext, "fleet-identity.ts");
@@ -207,6 +207,58 @@ assert.equal(
   "a machine absent from refreshes is still marked offline",
 );
 assert.equal(missingFromRefresh[0].device.online, false);
+
+// --- hostname rename (NYC 2026-07-05): a machine preserved from BEFORE the
+// rename must fold into the ready collector machine that claims its system
+// node via /health tailnetSelf, not live on as an offline ghost.
+const preRenameNyc = {
+  device: {
+    self: false,
+    name: "Liam’s MacBook Pro",
+    dnsName: "liams-macbook-pro-1.tail1.ts.net",
+    os: "macOS",
+    online: true,
+    ip: "100.0.0.9",
+    collectorUrl: "",
+  },
+  collector: "offline",
+  agents: [{ id: "agent-nyc", name: "Hermes", runtime: "hermes" }],
+  snapshots: [],
+};
+const postRenameReady = {
+  ...readyUbuntuMachine(),
+  device: {
+    ...readyUbuntuMachine().device,
+    name: "LiamsMBP481146",
+    dnsName: "hivemindos-liamsmbp481146-lan.tail1.ts.net",
+    os: "macOS",
+    ip: "100.0.0.10",
+  },
+  machineId: "hivemind-machine-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  tailnetSelf: {
+    name: "Liam’s MacBook Pro",
+    dnsName: "liams-macbook-pro-1.tail1.ts.net",
+  },
+};
+const mergedRename = mergeDiscoveredMachines([preRenameNyc], [postRenameReady]);
+assert.equal(
+  mergedRename.length,
+  1,
+  "a rename-orphaned machine folds into the collector that claims it via tailnetSelf",
+);
+assert.equal(mergedRename[0].collector, "ready");
+
+// Without the tailnetSelf claim the machine is still preserved (offline) — the
+// fold must never widen into dropping genuinely-missing machines.
+const mergedNoClaim = mergeDiscoveredMachines(
+  [preRenameNyc],
+  [{ ...postRenameReady, tailnetSelf: undefined }],
+);
+assert.equal(
+  mergedNoClaim.length,
+  2,
+  "an unclaimed missing machine with agents is still preserved",
+);
 
 // --- reverse reachability: peers' env-sync unreachable reports annotate the
 // target machine and surface a network issue even when the local probe is ok.
