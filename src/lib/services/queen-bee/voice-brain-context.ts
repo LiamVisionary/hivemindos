@@ -3,11 +3,18 @@ import "server-only";
 import { answerFromAgentMemory } from "@/lib/services/obsidian/agent-memory";
 import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
 import { readBoard } from "@/lib/services/kanban/local-kanban-store";
+import {
+  buildHiveDailyReport,
+  formatHiveDailyReportVoiceDigest,
+  getCachedHiveDailyReport,
+  warmHiveDailyReport,
+} from "@/lib/services/company-daily-report";
 
 /**
  * Fast, best-effort hive context for one spoken conversation turn: relevant
- * shared-brain memories + a compact open-work digest — so the Queen can
- * answer "check my hive brain" or "what's on our to-do list" in CONVERSATION
+ * shared-brain memories + a compact open-work digest + a live business digest of
+ * the operator's own companies — so the Queen can answer "check my hive brain",
+ * "what's on our to-do list", or "how are my companies doing" in CONVERSATION
  * mode (the direct chat lanes have no tools; only delegated tasks get the
  * full agent runtime). Mirrors buildSharedBrainMemoryContext's formatting and
  * untrusted-context wrapping; a hard per-source time budget guarantees a slow
@@ -57,13 +64,29 @@ async function openWorkDigest(vaultPath?: string | null) {
   ].join("\n");
 }
 
+async function businessDigest() {
+  // Prefer the report warmed at session start (speak-prewarm): it already paid
+  // for the email + integration network hops, so the counts are read instantly
+  // and included in the spoken digest.
+  const cached = getCachedHiveDailyReport();
+  if (cached) return cached.empty ? "" : formatHiveDailyReportVoiceDigest(cached);
+  // Cold/stale cache (no prewarm yet): kick a background warm for later turns —
+  // NOT awaited, so a network hop can never blow this turn's budget — and serve
+  // the fast local-only digest (companies + ledgers + memory) right now.
+  void warmHiveDailyReport();
+  const report = await buildHiveDailyReport({ includeEmail: false, includeIntegrations: false });
+  if (report.empty) return "";
+  return formatHiveDailyReportVoiceDigest(report);
+}
+
 export async function queenVoiceBrainContext(
   transcript: string,
   options: { vaultPath?: string | null } = {},
 ): Promise<string> {
-  const [memories, board] = await Promise.all([
+  const [memories, board, business] = await Promise.all([
     withBudget(recallContext(transcript, options.vaultPath)),
     withBudget(openWorkDigest(options.vaultPath)),
+    withBudget(businessDigest()),
   ]);
-  return [memories, board].filter(Boolean).join("\n\n");
+  return [memories, board, business].filter(Boolean).join("\n\n");
 }
