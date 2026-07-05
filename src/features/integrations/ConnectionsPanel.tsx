@@ -13,6 +13,8 @@ const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: stri
   slack: { mono: "Sl", accent: "#e09a86" },
   notion: { mono: "No", accent: "#d8d6cf" },
   google: { mono: "Go", accent: "#6f9bd6" },
+  posthog: { mono: "Ph", accent: "#f0a868" },
+  plausible: { mono: "Pl", accent: "#4fb5a3" },
 };
 
 const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {

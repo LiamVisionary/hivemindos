@@ -68,6 +68,24 @@ const PROVIDERS: ProviderSpec[] = [
     tokenPlaceholder: "",
     verify: verifyGoogle,
   },
+  {
+    key: "posthog",
+    label: "PostHog",
+    detail: "Per-company product analytics (funnels, events, visitors) via HogQL.",
+    tokenEnvKey: "POSTHOG_PERSONAL_API_KEY",
+    tokenHint: "PostHog → Settings → Personal API keys. Grant query:read (and user:read so we can verify + show your account).",
+    tokenPlaceholder: "phx_...",
+    verify: verifyPostHog,
+  },
+  {
+    key: "plausible",
+    label: "Plausible",
+    detail: "Privacy-friendly web analytics. The key is checked against each company's site when its Analytics tab loads.",
+    tokenEnvKey: "PLAUSIBLE_API_KEY",
+    tokenHint: "Plausible → Settings → API keys. Validated per site at query time (Plausible can't check a key without a site).",
+    tokenPlaceholder: "",
+    verify: verifyPlausible,
+  },
 ];
 
 export function connectionProvider(key: string) {
@@ -255,6 +273,61 @@ async function googleAccountEmail(accessToken: string) {
   } catch {
     return "";
   }
+}
+
+// PostHog personal API keys are region-bound (US vs EU cloud). We can't run a real
+// HogQL query at connect time (the project id is per-company, not part of this shared
+// key), so identity is verified via /api/users/@me/. Confirmed live (2026-07-04): an
+// invalid key returns HTTP 401 `authentication_failed` on both clouds; a genuine key
+// returns 200 (identity) or 403 when it's scoped without user:read. Try US then EU
+// before declaring the key bad.
+const POSTHOG_VERIFY_HOSTS = ["https://us.posthog.com", "https://eu.posthog.com"];
+
+async function verifyPostHog(token: string): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const lastError = "PostHog rejected the key (HTTP 401).";
+    for (const host of POSTHOG_VERIFY_HOSTS) {
+      const response = await fetch(`${host}/api/users/@me/`, {
+        cache: "no-store",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "User-Agent": USER_AGENT,
+        },
+        signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+      });
+      // 401 = wrong cloud or bad key — try the other region before giving up.
+      if (response.status === 401) continue;
+      // 403 = authenticated but the key lacks user:read — still a genuine key.
+      if (response.status === 403) return { ok: true };
+      if (!response.ok) return { ok: false, error: `PostHog rejected the key (HTTP ${response.status}).` };
+      const user = (await response.json().catch(() => null)) as { email?: string; first_name?: string } | null;
+      return { ok: true, account: user?.email || user?.first_name };
+    }
+    return { ok: false, error: lastError };
+  });
+}
+
+// Plausible's Stats API can't validate a key without a site_id (which is per-company
+// here), and it conflates "bad key" with "no access to this site" — both return 401
+// when a site_id is present (confirmed live 2026-07-04). So the only honest connect-time
+// check is reachability: hit the Stats API WITHOUT a site_id and confirm we reached
+// Plausible. A present bearer there returns 400 "Missing site ID"; a missing/empty one
+// returns 401 "Missing API key". The key's real per-site validity is proven when a
+// company's Analytics tab runs a query. (This means "verified" for Plausible attests
+// connectivity, not that the specific key is live — the copy above says so.)
+async function verifyPlausible(token: string): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const response = await fetch("https://plausible.io/api/v1/stats/aggregate?metrics=visitors", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}`, "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (response.status === 401) return { ok: false, error: payload?.error || "Plausible rejected the request." };
+    if (response.status >= 500) return { ok: false, error: `Plausible is unavailable (HTTP ${response.status}).` };
+    return { ok: true };
+  });
 }
 
 async function apiCheck(run: () => Promise<VerifyResult>): Promise<VerifyResult> {

@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
-import { AlertTriangle, CheckCircle2, ClipboardList, MessageSquare } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ClipboardList, ExternalLink, MessageSquare, PenLine } from "lucide-react";
 import { dashboardUrlForTarget } from "@/features/dashboard/dashboard-navigation";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import { getIssueIdentity } from "./issue-identity";
 import { companyIssueDiscussPrompt, issueAgeLabel, issueBlockReason } from "./issue-reason";
+import { issueReviewablePreviews, type PreviewDecision } from "./preview-review";
 import type { Issue } from "./types";
 
 export function isCompanyReviewIssue(issue: Issue): boolean {
@@ -43,18 +44,30 @@ export function CompanyIssueActionButtons({
   issue,
   onOpenIssue,
   onResolveIssue,
+  onReviewPreview,
   busy,
 }: {
   companyName: string;
   issue: Issue;
   onOpenIssue?: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
+  onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
   busy?: boolean;
 }) {
   const queenChat = useQueenChat();
+  const [changeMode, setChangeMode] = React.useState(false);
+  const [notes, setNotes] = React.useState("");
   const taskId = issue.work?.taskId;
-  const showResolve = isCompanyReviewIssue(issue) && Boolean(onResolveIssue);
+  // A reviewable customer-facing preview (e.g. a `/preview/<lead>` mockup) parked
+  // for the operator's sign-off gets its own Approve / Request changes pair, which
+  // replaces the generic "Mark Resolved" — both resume the same task, but these
+  // stamp a preview-specific decision so the crew knows to send vs. revise.
+  const reviewablePreviews = Boolean(onReviewPreview) && isCompanyReviewIssue(issue) ? issueReviewablePreviews(issue) : [];
+  const canReviewPreview = reviewablePreviews.length > 0;
+  const previewUrl = reviewablePreviews.find((preview) => preview.url)?.url;
+  const showResolve = isCompanyReviewIssue(issue) && Boolean(onResolveIssue) && !canReviewPreview;
   const resolveDisabled = busy || !taskId;
+  const reviewDisabled = busy || !taskId;
   const discussIssue = (event: React.MouseEvent) => {
     stop(event);
     void queenChat.sendText(companyIssueDiscussPrompt(companyName, issue));
@@ -63,6 +76,24 @@ export function CompanyIssueActionButtons({
     stop(event);
     if (resolveDisabled) return;
     onResolveIssue?.(issue);
+  };
+  const approvePreview = (event: React.MouseEvent) => {
+    stop(event);
+    if (reviewDisabled) return;
+    setChangeMode(false);
+    onReviewPreview?.(issue, "approve", "");
+  };
+  const toggleChanges = (event: React.MouseEvent) => {
+    stop(event);
+    setChangeMode((open) => !open);
+  };
+  const sendChanges = (event: React.MouseEvent) => {
+    stop(event);
+    const text = notes.trim();
+    if (!text || reviewDisabled) return;
+    onReviewPreview?.(issue, "changes", text);
+    setChangeMode(false);
+    setNotes("");
   };
   const openDetails = (event: React.MouseEvent) => {
     stop(event);
@@ -74,37 +105,115 @@ export function CompanyIssueActionButtons({
   };
 
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {onOpenIssue && issue.work ? (
-        <button type="button" onClick={openDetails} style={buttonBase}>
-          <ClipboardList size={14} aria-hidden /> Issue
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {onOpenIssue && issue.work ? (
+          <button type="button" onClick={openDetails} style={buttonBase}>
+            <ClipboardList size={14} aria-hidden /> Issue
+          </button>
+        ) : null}
+        {previewUrl ? (
+          <a href={previewUrl} target="_blank" rel="noreferrer" onClick={stop} style={{ ...buttonBase, textDecoration: "none" }}>
+            <ExternalLink size={14} aria-hidden /> Open preview
+          </a>
+        ) : null}
+        <button type="button" onClick={discussIssue} style={buttonBase}>
+          <MessageSquare size={14} aria-hidden /> Discuss
         </button>
-      ) : null}
-      <button type="button" onClick={discussIssue} style={buttonBase}>
-        <MessageSquare size={14} aria-hidden /> Discuss
-      </button>
-      {taskId ? (
-        <button type="button" onClick={openBoard} style={buttonBase}>
-          <ClipboardList size={14} aria-hidden /> Work Board
-        </button>
-      ) : null}
-      {showResolve ? (
-        <button
-          type="button"
-          onClick={resolveIssue}
-          disabled={resolveDisabled}
-          title={taskId ? "Tell the Work Board this blocker is fixed and resume the same task." : "This issue is not linked to a Work Board task yet."}
-          style={{
-            ...buttonBase,
-            border: "1px solid color-mix(in srgb, var(--cyan) 45%, var(--line))",
-            background: "color-mix(in srgb, var(--cyan) 13%, var(--bg-2))",
-            color: "var(--cyan-2)",
-            cursor: resolveDisabled ? "default" : "pointer",
-            opacity: resolveDisabled ? 0.6 : 1,
-          }}
-        >
-          <CheckCircle2 size={14} aria-hidden /> {busy ? "Resuming..." : "Mark Resolved"}
-        </button>
+        {taskId ? (
+          <button type="button" onClick={openBoard} style={buttonBase}>
+            <ClipboardList size={14} aria-hidden /> Work Board
+          </button>
+        ) : null}
+        {canReviewPreview ? (
+          <>
+            <button
+              type="button"
+              onClick={toggleChanges}
+              title="Send the crew specific changes and have them regenerate this preview for another review."
+              style={{
+                ...buttonBase,
+                border: changeMode ? "1px solid var(--honey-2)" : buttonBase.border,
+                background: changeMode ? "color-mix(in srgb, var(--honey) 22%, var(--bg-2))" : buttonBase.background,
+              }}
+            >
+              <PenLine size={14} aria-hidden /> Request changes
+            </button>
+            <button
+              type="button"
+              onClick={approvePreview}
+              disabled={reviewDisabled}
+              title={taskId ? "Approve this preview and let the crew take the next step (send it to the lead)." : "This preview is not linked to a Work Board task yet."}
+              style={{
+                ...buttonBase,
+                border: "1px solid var(--cyan)",
+                background: "var(--cyan)",
+                color: "var(--bg)",
+                fontWeight: 700,
+                cursor: reviewDisabled ? "default" : "pointer",
+                opacity: reviewDisabled ? 0.6 : 1,
+              }}
+            >
+              <Check size={14} aria-hidden /> {busy ? "Sending…" : "Approve"}
+            </button>
+          </>
+        ) : null}
+        {showResolve ? (
+          <button
+            type="button"
+            onClick={resolveIssue}
+            disabled={resolveDisabled}
+            title={taskId ? "Tell the Work Board this blocker is fixed and resume the same task." : "This issue is not linked to a Work Board task yet."}
+            style={{
+              ...buttonBase,
+              border: "1px solid color-mix(in srgb, var(--cyan) 45%, var(--line))",
+              background: "color-mix(in srgb, var(--cyan) 13%, var(--bg-2))",
+              color: "var(--cyan-2)",
+              cursor: resolveDisabled ? "default" : "pointer",
+              opacity: resolveDisabled ? 0.6 : 1,
+            }}
+          >
+            <CheckCircle2 size={14} aria-hidden /> {busy ? "Resuming..." : "Mark Resolved"}
+          </button>
+        ) : null}
+      </div>
+      {canReviewPreview && changeMode ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }} onClick={stop}>
+          <textarea
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            placeholder="What should change? e.g. warmer tone, feature their lunch specials, drop the price to $1,200, use their real photos…"
+            rows={3}
+            autoFocus
+            style={{
+              width: "100%", boxSizing: "border-box", resize: "vertical",
+              borderRadius: 8, border: "1px solid var(--line-2)", background: "var(--bg-2)",
+              color: "var(--fg)", font: "inherit", fontFamily: "var(--f-mono)", fontSize: 11.5,
+              lineHeight: 1.5, padding: "8px 10px",
+            }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={sendChanges}
+              disabled={reviewDisabled || !notes.trim()}
+              style={{
+                ...buttonBase,
+                border: "1px solid var(--honey-2)",
+                background: "var(--honey-2)",
+                color: "var(--bg)",
+                fontWeight: 700,
+                cursor: reviewDisabled || !notes.trim() ? "default" : "pointer",
+                opacity: reviewDisabled || !notes.trim() ? 0.6 : 1,
+              }}
+            >
+              <PenLine size={14} aria-hidden /> {busy ? "Sending…" : "Send change request"}
+            </button>
+            <button type="button" onClick={(event) => { stop(event); setChangeMode(false); }} style={buttonBase}>
+              Cancel
+            </button>
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -115,12 +224,14 @@ export function CompanyIssueSummaryCard({
   issue,
   onOpenIssue,
   onResolveIssue,
+  onReviewPreview,
   busy,
 }: {
   companyName: string;
   issue: Issue;
   onOpenIssue: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
+  onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
   busy?: boolean;
 }) {
   const reason = issueBlockReason(issue);
@@ -165,7 +276,7 @@ export function CompanyIssueSummaryCard({
         {reason || "Blocked - the crew needs a decision or an unblock from you."}
       </div>
       <div style={{ paddingLeft: 26 }}>
-        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpenIssue} onResolveIssue={onResolveIssue} busy={busy} />
+        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busy} />
       </div>
     </div>
   );

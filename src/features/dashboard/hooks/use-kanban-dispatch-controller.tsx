@@ -8,6 +8,7 @@ import {
   responseErrorMessage,
   runtimeErrorMessage,
 } from "./runtime-stream-errors";
+import { requestKanbanWorkReceipt } from "./kanban-work-receipts";
 
 export function useKanbanDispatchController(props: any) {
   const {
@@ -188,36 +189,14 @@ export function useKanbanDispatchController(props: any) {
     );
   }
 
-  // Asks the collector on the agent's machine to sign a work receipt (per-agent
-  // DID over the workspace git state). Fire-and-forget: a missing receipt never
-  // blocks task completion, it just leaves the task without a verified proof.
   function requestWorkReceipt(task: KanbanTask, agent: AgentProfile) {
-    void fetch("/api/work-receipts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        collectorUrl: agent.telemetryUrl,
-        agentId: agent.agentId || agent.id,
-        agentName: agent.name,
-        taskId: task.id,
-        taskTitle: task.title,
-        board: kanbanBoardSlug,
-        repoPath: appVersion?.appDir,
-      }),
-    })
-      .then(async (response) => {
-        const data = (await response.json().catch(() => null)) as {
-          ok?: boolean;
-          error?: string;
-        } | null;
-        logClientTelemetry("kanban.work_receipt", {
-          taskId: task.id,
-          agentId: agent.id,
-          ok: Boolean(data?.ok),
-          error: data?.ok ? undefined : data?.error,
-        });
-      })
-      .catch(() => undefined);
+    requestKanbanWorkReceipt({
+      agent,
+      appDir: appVersion?.appDir,
+      boardSlug: kanbanBoardSlug,
+      logClientTelemetry,
+      task,
+    });
   }
 
   async function readCurrentKanbanDispatchTask(taskId: string) {
@@ -281,6 +260,30 @@ export function useKanbanDispatchController(props: any) {
       status: "needs-human",
       agentSession: null,
     });
+    return true;
+  }
+
+  async function patchKanbanTaskFromOwnedDispatch(
+    task: KanbanTask,
+    agent: AgentProfile,
+    patch: KanbanTaskPatch,
+    reason: string,
+  ) {
+    const current = await readCurrentKanbanDispatchTask(task.id);
+    if (!current || !kanbanDispatchFailureStillOwnsTask(current, agent)) {
+      logClientTelemetry("kanban.dispatch.patch_skipped_stale_owner", {
+        taskId: task.id,
+        agentId: agent.id,
+        agentName: agent.name,
+        reason,
+        currentStatus: current?.status ?? null,
+        currentAssignee: current?.assignee ?? null,
+        currentClaimLock: current?.claimLock ?? null,
+      });
+      await refreshKanbanOnce().catch(() => undefined);
+      return false;
+    }
+    await patchKanbanTask(task.id, patch);
     return true;
   }
 
@@ -419,10 +422,11 @@ export function useKanbanDispatchController(props: any) {
               sessionId: parsed.session.id,
               messageCount: parsed.session.messageCount ?? 0,
             });
-            await patchKanbanTask(task.id, {
+            const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
               agentSession: lastAgentSession,
               result: `${agent.name} accepted the task. Waiting for agent update.`,
-            });
+            }, "session-accepted");
+            if (!patched) return { ok: true, message: "Task moved away before the agent session update." };
             continue;
           }
           const chunk = parsed.choices?.[0]?.delta?.content;
@@ -490,13 +494,14 @@ export function useKanbanDispatchController(props: any) {
               lastMessage: result,
               completedAt: Date.now(),
             });
-            await createKanbanArtistHandoffTask(task, agent, result);
-            requestWorkReceipt(task, agent);
-            await patchKanbanTask(task.id, {
+            const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
               status: "done",
               agentSession: null,
               result,
-            });
+            }, "completed-from-session");
+            if (!patched) return { ok: true, message: "Task moved away before session completion." };
+            await createKanbanArtistHandoffTask(task, agent, result);
+            requestWorkReceipt(task, agent);
             await addKanbanSystemComment(
               task.id,
               `${agent.name} completed the delegated work from the Work board.`,
@@ -525,7 +530,7 @@ export function useKanbanDispatchController(props: any) {
           sawAgentSession,
         });
         updateTask(localTaskId, { status: "active", lastMessage: message });
-        await patchKanbanTask(task.id, {
+        const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
           status: "working",
           assignee: agent.name,
           tenant:
@@ -533,7 +538,8 @@ export function useKanbanDispatchController(props: any) {
               ? "queen-bee"
               : `${assignment.workerClass}-worker`,
           result: message,
-        });
+        }, "awaiting-agent-update");
+        if (!patched) return { ok: true, message: "Task moved away before the awaiting-agent update." };
         return { ok: true, message };
       }
 
@@ -554,12 +560,13 @@ export function useKanbanDispatchController(props: any) {
             lastMessage: workspaceSummary,
             completedAt: Date.now(),
           });
-          requestWorkReceipt(task, agent);
-          await patchKanbanTask(task.id, {
+          const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
             status: "done",
             agentSession: null,
             result: workspaceSummary,
-          });
+          }, "completed-from-workspace");
+          if (!patched) return { ok: true, message: "Task moved away before workspace completion." };
+          requestWorkReceipt(task, agent);
           await addKanbanSystemComment(
             task.id,
             `${agent.name} completed delegated work with workspace changes.`,
@@ -588,9 +595,10 @@ export function useKanbanDispatchController(props: any) {
         lastMessage: result,
         completedAt: Date.now(),
       });
+      const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, { status: "done", result }, "completed-from-stream");
+      if (!patched) return { ok: true, message: "Task moved away before stream completion." };
       await createKanbanArtistHandoffTask(task, agent, result);
       requestWorkReceipt(task, agent);
-      await patchKanbanTask(task.id, { status: "done", result });
       await addKanbanSystemComment(
         task.id,
         `${agent.name} completed the delegated work from the Work board.`,
@@ -619,12 +627,13 @@ export function useKanbanDispatchController(props: any) {
               lastMessage: workspaceSummary,
               completedAt: Date.now(),
             });
-            requestWorkReceipt(task, agent);
-            await patchKanbanTask(task.id, {
+            const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
               status: "done",
               agentSession: null,
               result: workspaceSummary,
-            });
+            }, "no-progress-workspace-completed");
+            if (!patched) return { ok: true, message: "Task moved away before timeout workspace completion." };
+            requestWorkReceipt(task, agent);
             await addKanbanSystemComment(
               task.id,
               `${agent.name} completed delegated work with workspace changes.`,
@@ -646,13 +655,14 @@ export function useKanbanDispatchController(props: any) {
             lastMessage: message,
             completedAt: Date.now(),
           });
-          await patchKanbanTask(task.id, {
+          const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
             status: "ready",
             assignee: "",
             tenant: "",
             agentSession: null,
             result: message,
-          });
+          }, "no-progress-requeue");
+          if (!patched) return { ok: true, message: "Task moved away before timeout requeue." };
           await addKanbanSystemComment(task.id, message);
           return { ok: true, message };
         }
@@ -708,7 +718,7 @@ export function useKanbanDispatchController(props: any) {
       if (transientDelegation) {
         if (!isKanbanAwaitingAgentUpdate(task)) {
           const waitingMessage = `${agent.name} accepted the runtime connection and may still be working. Waiting for telemetry or agent output after the dashboard timeout.`;
-          await patchKanbanTask(task.id, {
+          const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
             status: "working",
             assignee: agent.name,
             tenant:
@@ -716,7 +726,8 @@ export function useKanbanDispatchController(props: any) {
                 ? "queen-bee"
                 : `${assignment.workerClass}-worker`,
             result: waitingMessage,
-          });
+          }, "transient-delegation-waiting");
+          if (!patched) return { ok: true, message };
         }
         return { ok: true, message };
       }
@@ -1074,7 +1085,7 @@ export function useKanbanDispatchController(props: any) {
           latestCount,
           latestAssistantLength: latestAssistant?.content.length ?? 0,
         });
-        await patchKanbanTask(task.id, {
+        const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
           agentSession: {
             ...session,
             updatedAt: sessionUpdatedAt,
@@ -1091,7 +1102,8 @@ export function useKanbanDispatchController(props: any) {
                     ),
                 }
               : {}),
-        });
+        }, "session-poll-update");
+        if (!patched) return;
       }
     } finally {
       kanbanSessionPollInFlightRef.current.delete(inFlightKey);

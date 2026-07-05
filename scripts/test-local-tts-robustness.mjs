@@ -94,6 +94,9 @@ globalThis.fetch = async (input) => {
       ],
     });
   }
+  if (url === "http://tts.test/health") {
+    return Response.json({ ok: true });
+  }
   if (url.startsWith("http://tts.test/v1/audio/speech-stream")) {
     speechCalls += 1;
     if (speechMode === "network") throw new TypeError("fetch failed");
@@ -285,6 +288,50 @@ globalThis.fetch = async (input) => {
     "missing store reads as no prefs (fresh install), not an outage",
   );
   console.log("call-prefs outage continuity ok");
+}
+
+// --- persisted app hint survives eviction (the cold-open fix, 2026-07-05) ----
+// A transient TTS flap (NYC box briefly unreachable) evicts the HOT cache, but
+// must NOT discard the DURABLE disk hint — otherwise the next cold open pays a
+// full ~12s fleet sweep. The hint is instead revalidated with a fast health
+// probe on reuse; a genuinely-moved URL is overwritten by the next discovery.
+{
+  const cache = await import("../src/lib/services/phone/local-tts-app-cache.ts");
+  const HINT_ORIGIN = "http://hint.test";
+  // Selected id encodes the OLD host; the resolved app's own id the NEW host
+  // (a machine rename rotates the id) — mirrors the real hostname-rename case.
+  const SELECTED_ID = "hivemindos-old-host.tail.ts.net:8799:aaaa";
+  const app = {
+    id: "hivemindos-new-host.tail.ts.net:8799:bbbb",
+    name: "universal-tts",
+    apiBaseUrl: "http://tts.test",
+    port: 8799,
+  };
+
+  cache.touchCachedApp(HINT_ORIGIN, SELECTED_ID, app);
+  assert.equal(
+    cache.cachedApp(HINT_ORIGIN, SELECTED_ID)?.id,
+    app.id,
+    "a successful synth caches the app under the selected id",
+  );
+  assert.equal(
+    cache.persistedAppHint(SELECTED_ID)?.id,
+    app.id,
+    "and records a durable disk hint under the selected id",
+  );
+
+  cache.evictCachedApp(HINT_ORIGIN, SELECTED_ID, app);
+  assert.equal(
+    cache.cachedApp(HINT_ORIGIN, SELECTED_ID),
+    null,
+    "a transient failure evicts the HOT cache entry",
+  );
+  assert.equal(
+    cache.persistedAppHint(SELECTED_ID)?.id,
+    app.id,
+    "but KEEPS the durable hint — the next cold open revalidates it instead of a fleet sweep",
+  );
+  console.log("persisted app hint survives eviction ok");
 }
 
 console.log("test-local-tts-robustness: all assertions passed");

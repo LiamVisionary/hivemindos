@@ -7,13 +7,14 @@ import path from "path";
 import { randomUUID } from "crypto";
 
 import { homedir } from "@/lib/home-dir";
-import { normalizeMachineName } from "@/features/fleet/fleet-identity";
+import { sameMachineIdentity } from "@/features/fleet/fleet-identity";
 import { recordCompanyConfigChange, type CompanyConfigAction } from "@/lib/services/company-governance";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
   Company,
   CompanyApexGoal,
+  CompanyDirective,
   CompanyMember,
   CompanyMemberSpend,
   CompanyMetricUnit,
@@ -147,6 +148,9 @@ function companyDefinitionOf(record: Company): Company {
     flowTemplateId: record.flowTemplateId,
     homeMachineKey: record.homeMachineKey,
     projectId: record.projectId,
+    analyticsProvider: record.analyticsProvider,
+    analyticsConfig: record.analyticsConfig,
+    directives: record.directives,
   };
 }
 
@@ -283,12 +287,17 @@ async function recordConfigChange(
  * company; an unclaimed company waits for an explicit Launch (claim-on-launch).
  * In local mode the file is per-machine — no duplication is possible — so the
  * gate stays open for backward compatibility.
+ *
+ * The match is drift-tolerant (sameMachineIdentity): a macOS box whose `.local`
+ * name rotated its numeric suffix (e.g. `…-20942.local` → `…-21403.local`) still
+ * counts as its own home machine, instead of silently stranding the company as
+ * "homed elsewhere" and dispatching nothing.
  */
 export function companyRunsOnThisMachine(company: Pick<Company, "homeMachineKey">): boolean {
   if (resolveCompaniesStorage().source === "local") return true;
-  const home = normalizeMachineName(company.homeMachineKey);
+  const home = (company.homeMachineKey ?? "").trim();
   if (!home) return false;
-  return home === normalizeMachineName(hostname());
+  return sameMachineIdentity(home, hostname());
 }
 
 export function localCompanyMachineKey(): string {
@@ -517,6 +526,12 @@ export type UpsertCompanyInput = {
   homeMachineKey?: string;
   /** Project-registry id of the company's domain code repo. */
   projectId?: string;
+  /** Which analytics provider this company's numbers come from. */
+  analyticsProvider?: Company["analyticsProvider"];
+  /** Per-company analytics link (project/site id + optional self-host). */
+  analyticsConfig?: Company["analyticsConfig"];
+  /** Standing directives (Learning-tab injections + deliverable-rejection feedback). */
+  directives?: Company["directives"];
 };
 
 export async function upsertCompany(input: UpsertCompanyInput): Promise<Company> {
@@ -564,6 +579,12 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     // fleet driver auto-dispatches (definitions replicate through the vault).
     homeMachineKey: input.homeMachineKey !== undefined ? trimmed(input.homeMachineKey) : (existing?.homeMachineKey ?? (existing ? undefined : hostname())),
     projectId: input.projectId !== undefined ? trimmed(input.projectId) : existing?.projectId,
+    analyticsProvider: input.analyticsProvider !== undefined ? input.analyticsProvider : existing?.analyticsProvider,
+    analyticsConfig:
+      input.analyticsConfig !== undefined
+        ? { projectId: trimmed(input.analyticsConfig.projectId), host: trimmed(input.analyticsConfig.host) }
+        : existing?.analyticsConfig,
+    directives: input.directives !== undefined ? input.directives : existing?.directives,
   };
 
   const next = existing
@@ -571,6 +592,50 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     : [...records, company];
   await writeRaw(next);
   await recordConfigChange(existing ? "updated" : "created", existing ?? null, company, "companies-store:upsert");
+  return company;
+}
+
+/**
+ * Append a standing directive to a company (Learning-tab injection or a
+ * deliverable-rejection redirect). It lands in the crew's dispatch context on
+ * the next cycle without any charter edit.
+ */
+export async function addCompanyDirective(
+  companyId: string,
+  input: { text: string; skill?: string; attachments?: CompanyDirective["attachments"]; source?: CompanyDirective["source"]; deliverableRef?: string },
+): Promise<Company | null> {
+  const text = input.text?.trim();
+  if (!text) throw new Error("Directive text is required.");
+  const records = await readRaw();
+  const existing = records.find((record) => record.id === companyId);
+  if (!existing) return null;
+  const entry: CompanyDirective = {
+    id: `dir_${randomUUID()}`,
+    text,
+    source: input.source === "reject" ? "reject" : "inject",
+    createdAt: new Date().toISOString(),
+    ...(input.skill?.trim() ? { skill: input.skill.trim() } : {}),
+    ...(input.deliverableRef?.trim() ? { deliverableRef: input.deliverableRef.trim() } : {}),
+    ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+  };
+  const company: Company = { ...existing, directives: [...(existing.directives ?? []), entry], updatedAt: new Date().toISOString() };
+  await writeRaw(records.map((record) => (record.id === companyId ? company : record)));
+  await recordConfigChange("updated", existing, company, "companies-store:add-directive");
+  return company;
+}
+
+/** Remove a standing directive by id. */
+export async function removeCompanyDirective(companyId: string, directiveId: string): Promise<Company | null> {
+  const records = await readRaw();
+  const existing = records.find((record) => record.id === companyId);
+  if (!existing) return null;
+  const company: Company = {
+    ...existing,
+    directives: (existing.directives ?? []).filter((directive) => directive.id !== directiveId),
+    updatedAt: new Date().toISOString(),
+  };
+  await writeRaw(records.map((record) => (record.id === companyId ? company : record)));
+  await recordConfigChange("updated", existing, company, "companies-store:remove-directive");
   return company;
 }
 

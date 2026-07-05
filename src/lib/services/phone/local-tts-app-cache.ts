@@ -63,13 +63,23 @@ export function touchCachedApp(origin: string, selectedAppId: string, app: Conne
 }
 
 // A failed synth/stream against a resolved base URL means that URL may be
-// stale (moved proxy, restarted linkd); drop it so the next attempt
-// rediscovers instead of re-failing from cache for the rest of the TTL.
+// stale (moved proxy, restarted linkd); drop the HOT in-memory entry so the
+// next attempt re-resolves instead of re-failing from cache for the rest of
+// the TTL. The DURABLE disk hint is deliberately KEPT: a transient TTS flap
+// (NYC box briefly down) must not force the next cold start to pay a ~12s
+// fleet sweep — the hint is revalidated with one fast health probe on reuse
+// (see resolvedTtsApp), and a genuinely-moved URL is overwritten by the next
+// successful discovery.
 export function evictCachedApp(origin: string, selectedAppId: string, app?: ConnectedHostedApp | null) {
   appById.delete(cacheKey(origin, selectedAppId));
   if (app?.id && app.id !== selectedAppId) appById.delete(cacheKey(origin, app.id));
-  const removed = persistedApps.delete(selectedAppId) || Boolean(app?.id && persistedApps.delete(app.id));
-  if (removed) schedulePersistApps();
+}
+
+// The durable "last known good" app for a selected id, from the persisted
+// hint set (survives restarts and transient failures). Unlike cachedApp this
+// is NOT trusted blindly — the caller health-probes it before a synth.
+export function persistedAppHint(selectedAppId: string): ConnectedHostedApp | null {
+  return persistedApps.get(selectedAppId)?.app ?? null;
 }
 
 export async function hydratePersistedApps(origin: string) {

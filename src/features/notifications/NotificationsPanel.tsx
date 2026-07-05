@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { useCallback, useState } from "react";
-import { ArrowUpRight, Bell, Check, CheckCheck, KanbanSquare, MessageSquare, RefreshCcw } from "lucide-react";
+import { ArrowUpRight, Bell, Check, CheckCheck, ChevronLeft, ChevronRight, KanbanSquare, MessageSquare, RefreshCcw } from "lucide-react";
 
 import notificationStyles from "@/app/notifications.module.css";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   notificationTaskId,
   type NotificationActionDescriptor,
 } from "@/features/notifications/notification-actions";
+import { clusterNotifications } from "@/features/notifications/notification-clustering";
 import {
   notificationActorMeta,
   notificationDisplayBody,
@@ -81,6 +82,10 @@ export function NotificationsPanel({
   const [boardTasks, setBoardTasks] = useState<Record<string, string>>({});
   const [boardBusyId, setBoardBusyId] = useState<string | null>(null);
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  // Consolidated look-alike notifications page through one card at a time.
+  // Keyed by `${dayLabel}::${clusterKey}` so same-titled stacks in different
+  // day groups keep independent positions.
+  const [clusterCursor, setClusterCursor] = useState<Record<string, number>>({});
 
   const sendToBoard = useCallback(async (notification: AgentNotification) => {
     setBoardBusyId(notification.id);
@@ -149,6 +154,132 @@ export function NotificationsPanel({
     void discussWithQueen(notification, action.prompt);
   }, [discussWithQueen, onNavigateTarget, sendToBoard]);
 
+  const renderNotificationCard = (notification: AgentNotification) => {
+    const actor = notificationActorMeta(notification);
+    const sourceLabel = notificationSourceLabel(notification);
+    return (
+      <article
+        key={notification.id}
+        className={notificationClass("notificationCard", notification.priority, !notification.read && "unread")}
+        role={onOpenNotification ? "button" : undefined}
+        tabIndex={onOpenNotification ? 0 : undefined}
+        onClick={() => onOpenNotification?.(notification)}
+        onKeyDown={(event) => {
+          if (!onOpenNotification) return;
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpenNotification(notification);
+          }
+        }}
+      >
+        <div className={notificationClass("notificationGlyph")}>
+          {notificationIcon(notification.kind, notification.priority)}
+        </div>
+        <div className={notificationClass("notificationBody")}>
+          <div className={notificationClass("notificationMetaRow")}>
+            <div>
+              <h3>{notificationDisplayTitle(notification)}</h3>
+              <div className={notificationClass("notificationActorRow")}>
+                <span className={notificationClass("notificationActorBadge", actor.icon && "withIcon")}>
+                  {actor.icon ? <Image src={actor.icon} alt="" width={20} height={20} aria-hidden="true" unoptimized /> : null}
+                  <span>
+                    <b>{actor.label}</b>
+                    <small>{actor.role}</small>
+                  </span>
+                </span>
+                {sourceLabel ? (
+                  <span className={notificationClass("notificationSourcePill")}>
+                    {sourceLabel.startsWith("Task: ") ? (
+                      <>
+                        <small>Task</small>
+                        <b>{sourceLabel.slice("Task: ".length)}</b>
+                      </>
+                    ) : sourceLabel}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <time>{formatNotificationDate(notification.createdAt)}</time>
+          </div>
+          {notification.body ? (
+            <ChatMarkdown
+              text={notificationDisplayBody(notification)}
+              className={notificationClass("notificationMarkdown")}
+              headingClassName={notificationClass("notificationMarkdownHeading")}
+            />
+          ) : null}
+          {notification.resolution ? (
+            <p className={notificationClass("resolutionNote", notification.resolution.status)}>
+              {notification.resolution.status === "resolved" ? "Resolved" : "Resolution in progress"}
+              {notification.resolution.note ? ` — ${notification.resolution.note}` : ""}
+              <time> ({formatNotificationDate(notification.resolution.updatedAt)})</time>
+            </p>
+          ) : null}
+          <div className={notificationClass("notificationFooter")}>
+            <div className={notificationClass("notificationTags")}>
+              {notification.resolution ? (
+                <span className={notificationClass("resolutionPill", notification.resolution.status)}>
+                  {notification.resolution.status === "resolved" ? "✓ resolved" : "resolution in progress…"}
+                </span>
+              ) : null}
+              <span className={notificationClass("priorityPill", notification.priority)}>{notificationPriorityLabel(notification.priority)}</span>
+              <span className={notificationClass("kindPill")}>{notificationKindLabel(notification.kind)}</span>
+              {notification.read ? <span className={notificationClass("readPill")}>read</span> : null}
+              {/* task:<id> tags are structured routing data for the action buttons, not labels */}
+              {notification.tags.filter((tag) => !tag.toLowerCase().startsWith("task:")).slice(0, 4).map((tag) => <span className={notificationClass("kindPill")} key={`${notification.id}-${tag}`}>{notificationTagLabel(tag)}</span>)}
+            </div>
+            {!notification.read ? (
+              <Button type="button" size="sm" variant="secondary" onClick={(event) => {
+                event.stopPropagation();
+                onMarkRead(notification.id);
+              }}>
+                <Check aria-hidden="true" />
+                Read
+              </Button>
+            ) : null}
+          </div>
+          <div className={notificationClass("notificationActions")}>
+            {boardTasks[notification.id] ? (
+              <Button type="button" size="sm" onClick={(event) => {
+                event.stopPropagation();
+                onNavigateTarget?.({ view: "kanban", taskId: boardTasks[notification.id] });
+              }}>
+                <KanbanSquare aria-hidden="true" />
+                On the board — open task
+              </Button>
+            ) : null}
+            {deriveNotificationActions(notification).map((action) => {
+              if (action.type === "work-board" && boardTasks[notification.id]) return null;
+              if (action.type === "navigate" && !onNavigateTarget) return null;
+              const busy = action.type === "work-board" && boardBusyId === notification.id;
+              return (
+                <Button
+                  key={`${notification.id}-action-${action.label}`}
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    runAction(notification, action);
+                  }}
+                >
+                  {action.type === "discuss" ? <MessageSquare aria-hidden="true" />
+                    : action.type === "work-board" ? <KanbanSquare aria-hidden="true" />
+                    : <ArrowUpRight aria-hidden="true" />}
+                  {busy ? "Sending…" : action.label}
+                </Button>
+              );
+            })}
+            {actionErrors[notification.id] ? (
+              <span className={notificationClass("notificationActionError")}>{actionErrors[notification.id]}</span>
+            ) : null}
+          </div>
+        </div>
+      </article>
+    );
+  };
+
   return (
     <section className={notificationClass("notificationsPanel", "tabPanel")}>
       <div className={notificationClass("notificationsHeader")}>
@@ -201,129 +332,47 @@ export function NotificationsPanel({
           {notificationGroups.map((group) => (
             <section key={group.label} className={notificationClass("notificationDayGroup")}>
               <h3>{group.label}</h3>
-              {group.items.map((notification) => {
-                const actor = notificationActorMeta(notification);
-                const sourceLabel = notificationSourceLabel(notification);
+              {clusterNotifications(group.items).map((cluster) => {
+                const total = cluster.items.length;
+                if (total === 1) return renderNotificationCard(cluster.items[0]);
+                const stateKey = `${group.label}::${cluster.key}`;
+                const activeIndex = Math.min(clusterCursor[stateKey] ?? 0, total - 1);
+                const unreadCount = cluster.items.filter((item) => !item.read).length;
+                const goTo = (index: number) =>
+                  setClusterCursor((prev) => ({ ...prev, [stateKey]: Math.max(0, Math.min(total - 1, index)) }));
                 return (
-                  <article
-                    key={notification.id}
-                    className={notificationClass("notificationCard", notification.priority, !notification.read && "unread")}
-                    role={onOpenNotification ? "button" : undefined}
-                    tabIndex={onOpenNotification ? 0 : undefined}
-                    onClick={() => onOpenNotification?.(notification)}
-                    onKeyDown={(event) => {
-                      if (!onOpenNotification) return;
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        onOpenNotification(notification);
-                      }
-                    }}
-                  >
-                    <div className={notificationClass("notificationGlyph")}>
-                      {notificationIcon(notification.kind, notification.priority)}
+                  <div key={cluster.key} className={notificationClass("notificationCluster")}>
+                    <div className={notificationClass("notificationPager")}>
+                      <div className={notificationClass("notificationPagerNav")}>
+                        <button
+                          type="button"
+                          className={notificationClass("notificationPagerArrow")}
+                          aria-label="Previous alert in this group"
+                          disabled={activeIndex === 0}
+                          onClick={() => goTo(activeIndex - 1)}
+                        >
+                          <ChevronLeft aria-hidden="true" />
+                        </button>
+                        <span className={notificationClass("notificationPagerCount")}>{activeIndex + 1}/{total}</span>
+                        <button
+                          type="button"
+                          className={notificationClass("notificationPagerArrow")}
+                          aria-label="Next alert in this group"
+                          disabled={activeIndex === total - 1}
+                          onClick={() => goTo(activeIndex + 1)}
+                        >
+                          <ChevronRight aria-hidden="true" />
+                        </button>
+                      </div>
+                      <span
+                        className={notificationClass("notificationPagerBadge", unreadCount > 0 && "unread")}
+                        title={`${total} similar notifications collapsed${unreadCount ? ` — ${unreadCount} unread` : ""}`}
+                      >
+                        +{total - 1} similar{unreadCount ? ` · ${unreadCount} unread` : ""}
+                      </span>
                     </div>
-                    <div className={notificationClass("notificationBody")}>
-                      <div className={notificationClass("notificationMetaRow")}>
-                        <div>
-                          <h3>{notificationDisplayTitle(notification)}</h3>
-                          <div className={notificationClass("notificationActorRow")}>
-                            <span className={notificationClass("notificationActorBadge", actor.icon && "withIcon")}>
-                              {actor.icon ? <Image src={actor.icon} alt="" width={20} height={20} aria-hidden="true" unoptimized /> : null}
-                              <span>
-                                <b>{actor.label}</b>
-                                <small>{actor.role}</small>
-                              </span>
-                            </span>
-                            {sourceLabel ? (
-                              <span className={notificationClass("notificationSourcePill")}>
-                                {sourceLabel.startsWith("Task: ") ? (
-                                  <>
-                                    <small>Task</small>
-                                    <b>{sourceLabel.slice("Task: ".length)}</b>
-                                  </>
-                                ) : sourceLabel}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <time>{formatNotificationDate(notification.createdAt)}</time>
-                      </div>
-                      {notification.body ? (
-                        <ChatMarkdown
-                          text={notificationDisplayBody(notification)}
-                          className={notificationClass("notificationMarkdown")}
-                          headingClassName={notificationClass("notificationMarkdownHeading")}
-                        />
-                      ) : null}
-                      {notification.resolution ? (
-                        <p className={notificationClass("resolutionNote", notification.resolution.status)}>
-                          {notification.resolution.status === "resolved" ? "Resolved" : "Resolution in progress"}
-                          {notification.resolution.note ? ` — ${notification.resolution.note}` : ""}
-                          <time> ({formatNotificationDate(notification.resolution.updatedAt)})</time>
-                        </p>
-                      ) : null}
-                      <div className={notificationClass("notificationFooter")}>
-                        <div className={notificationClass("notificationTags")}>
-                          {notification.resolution ? (
-                            <span className={notificationClass("resolutionPill", notification.resolution.status)}>
-                              {notification.resolution.status === "resolved" ? "✓ resolved" : "resolution in progress…"}
-                            </span>
-                          ) : null}
-                          <span className={notificationClass("priorityPill", notification.priority)}>{notificationPriorityLabel(notification.priority)}</span>
-                          <span className={notificationClass("kindPill")}>{notificationKindLabel(notification.kind)}</span>
-                          {notification.read ? <span className={notificationClass("readPill")}>read</span> : null}
-                          {/* task:<id> tags are structured routing data for the action buttons, not labels */}
-                          {notification.tags.filter((tag) => !tag.toLowerCase().startsWith("task:")).slice(0, 4).map((tag) => <span className={notificationClass("kindPill")} key={`${notification.id}-${tag}`}>{notificationTagLabel(tag)}</span>)}
-                        </div>
-                        {!notification.read ? (
-                          <Button type="button" size="sm" variant="secondary" onClick={(event) => {
-                            event.stopPropagation();
-                            onMarkRead(notification.id);
-                          }}>
-                            <Check aria-hidden="true" />
-                            Read
-                          </Button>
-                        ) : null}
-                      </div>
-                      <div className={notificationClass("notificationActions")}>
-                        {boardTasks[notification.id] ? (
-                          <Button type="button" size="sm" onClick={(event) => {
-                            event.stopPropagation();
-                            onNavigateTarget?.({ view: "kanban", taskId: boardTasks[notification.id] });
-                          }}>
-                            <KanbanSquare aria-hidden="true" />
-                            On the board — open task
-                          </Button>
-                        ) : null}
-                        {deriveNotificationActions(notification).map((action) => {
-                          if (action.type === "work-board" && boardTasks[notification.id]) return null;
-                          if (action.type === "navigate" && !onNavigateTarget) return null;
-                          const busy = action.type === "work-board" && boardBusyId === notification.id;
-                          return (
-                            <Button
-                              key={`${notification.id}-action-${action.label}`}
-                              type="button"
-                              size="sm"
-                              variant="secondary"
-                              disabled={busy}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                runAction(notification, action);
-                              }}
-                            >
-                              {action.type === "discuss" ? <MessageSquare aria-hidden="true" />
-                                : action.type === "work-board" ? <KanbanSquare aria-hidden="true" />
-                                : <ArrowUpRight aria-hidden="true" />}
-                              {busy ? "Sending…" : action.label}
-                            </Button>
-                          );
-                        })}
-                        {actionErrors[notification.id] ? (
-                          <span className={notificationClass("notificationActionError")}>{actionErrors[notification.id]}</span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </article>
+                    {renderNotificationCard(cluster.items[activeIndex])}
+                  </div>
                 );
               })}
             </section>

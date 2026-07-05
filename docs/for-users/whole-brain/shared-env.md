@@ -26,6 +26,14 @@ The whole brain has two different kinds of memory:
 
 That split matters. The vault is meant to be read by agents. Secrets are not.
 
+## Precedence: Project First, Hive Env Fallback
+
+The shared file is a *default*, not an override. When something inside a project needs a variable, it reads the project's own value first — the project's `.env`/`.env.local`, its config, or an explicit shell export — and falls back to `~/.hivemindos/.env` only for keys the project does not set itself.
+
+That gives you easy per-project overrides: set a key inside the project to override the shared value for that project alone, and leave it unset to inherit the fleet-wide default. Nothing shared changes.
+
+`hive-env-run -- <command>` already follows this order — it loads `~/.hivemindos/.env` as a base, then overlays the current process environment, so anything the project or shell already set wins on top. HivemindOS-managed agents get the same rule in their instructions.
+
 ## The Helpers
 
 Setup installs these helpers into `~/.local/bin`:
@@ -163,6 +171,7 @@ HIVE_ENV_PUBLIC_KEY
 - Prefer `hive-env-remove KEY` when a shared key should stop being available.
 - Prefer `hive-env-run -- command` when a tool needs the shared env for one run.
 - If a project needs shared credentials, load `~/.hivemindos/.env` at runtime instead of persisting secrets into the repo.
+- Resolve project-first: use the project's own env value when it is set, and fall back to `~/.hivemindos/.env` only for keys the project does not define.
 
 ## Main Code Paths
 

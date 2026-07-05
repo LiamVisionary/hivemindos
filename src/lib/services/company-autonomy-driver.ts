@@ -120,6 +120,12 @@ const noProgressBackoff = () => envNum("HIVEMINDOS_COMPANY_DRIVER_NOPROGRESS_BAC
 // Completed-task count past which a company at zero apex progress is flagged
 // "busy but blocked" (an outward action is almost certainly gated).
 const stalledMinDone = () => envNum("HIVEMINDOS_COMPANY_STALL_MIN_DONE", 8);
+// Revenue-nudge cadence: at most one low-priority "goal hasn't moved" note per
+// company per WEEK (a young company at $0 is expected, not a defect). Grace: no
+// nudge until the company has had a fair run. Set the interval to 0 or
+// HIVEMINDOS_COMPANY_REVENUE_NUDGE=0 to silence it entirely.
+const revenueNudgeTtlMs = () => envNum("HIVEMINDOS_COMPANY_REVENUE_NUDGE_TTL_MS", 7 * 86_400_000); // weekly
+const revenueNudgeMinAgeMs = () => envNum("HIVEMINDOS_COMPANY_REVENUE_NUDGE_MIN_AGE_MS", 7 * 86_400_000); // 7-day grace
 // Standby instances (lease held elsewhere) re-check the lease this often — a
 // tiny file read — so a killed holder is replaced within about a minute.
 const standbyPollMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_STANDBY_POLL_MS", 60_000);
@@ -317,26 +323,35 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
   const tasks = board.tasks ?? [];
   const now = Date.now();
 
-  // "Busy but blocked" detector — runs for every eligible company each tick,
-  // independent of re-dispatch. A company completing lots of work while its apex
-  // metric sits at zero is almost always blocked on an outward action (paused
-  // sends for compliance, no payment rail). Surface it — the crew can't move the
-  // number on its own. notifyEscalation de-dupes on the key (12h TTL).
-  for (const company of eligible) {
-    const companyPrefix = `company:${company.id}:`;
-    const doneCount = tasks.filter((t) => (t.source ?? "").startsWith(companyPrefix) && t.status === "done").length;
-    if (doneCount < stalledMinDone()) continue;
-    const target = parseMetricNumber(company.apexGoal?.target);
-    if (!(target && target > 0)) continue;
-    if ((parseMetricNumber(company.apexGoal?.current) ?? 0) > 0) continue;
-    await notifyEscalation({
-      key: `company-progress-stalled:${company.id}`,
-      title: `${company.name}: producing work but the goal isn't moving`,
-      body: `The crew has completed ${doneCount} tasks, but ${company.apexGoal?.metric ?? "the apex metric"} is still ${company.apexGoal?.current ?? "0"} of ${company.apexGoal?.target}. This almost always means an outward action is blocked — real sends paused for compliance, or no payment rail yet. Clear the blocker; the crew can't move the number on its own.`,
-      severity: "high",
-      ttlMs: 12 * 60 * 60 * 1_000,
-      tags: ["company", "progress"],
-    }).catch(() => undefined);
+  // Weekly revenue check — a low-priority, in-app-only FYI, NOT a blocking alarm.
+  // A company sitting at $0 apex is EXPECTED early on: conversions lag outreach by
+  // weeks, so treating it as "work is blocked on you" every 12h is noise. This
+  // fires at most once a week, only after a grace period, at low severity, framed
+  // as "here's why the number hasn't moved" rather than "fix this now". It also
+  // never pings external channels (isExternallyDeliverable gates that). Silence
+  // entirely with HIVEMINDOS_COMPANY_REVENUE_NUDGE=0.
+  if (process.env.HIVEMINDOS_COMPANY_REVENUE_NUDGE !== "0" && revenueNudgeTtlMs() > 0) {
+    for (const company of eligible) {
+      const companyPrefix = `company:${company.id}:`;
+      const doneCount = tasks.filter((t) => (t.source ?? "").startsWith(companyPrefix) && t.status === "done").length;
+      if (doneCount < stalledMinDone()) continue;
+      const target = parseMetricNumber(company.apexGoal?.target);
+      if (!(target && target > 0)) continue;
+      if ((parseMetricNumber(company.apexGoal?.current) ?? 0) > 0) continue;
+      // Grace: a company that hasn't had a fair run yet gets no revenue nudge —
+      // $0 in week one is not something to flag.
+      if (now - (company.createdAtMs ?? now) < revenueNudgeMinAgeMs()) continue;
+      const metric = company.apexGoal?.metric ?? "the apex metric";
+      const current = company.apexGoal?.current ?? "0";
+      await notifyEscalation({
+        key: `company-progress-stalled:${company.id}`,
+        title: `${company.name}: weekly revenue check — ${metric} still at ${current}`,
+        body: `Weekly status: the crew has shipped ${doneCount} tasks, but ${metric} is still ${current} of ${company.apexGoal?.target}. That's normal early on — conversions lag outreach by weeks. If it stays flat, the usual reasons are: no bookings/payments have closed yet, real sends are gated for compliance, or the metric isn't wired to your booking/Stripe events (so real revenue wouldn't show here even if it happened). No action needed — this is an FYI, at most once a week.`,
+        severity: "low",
+        ttlMs: revenueNudgeTtlMs(),
+        tags: ["company", "progress"],
+      }).catch(() => undefined);
+    }
   }
 
   for (const company of eligible) {

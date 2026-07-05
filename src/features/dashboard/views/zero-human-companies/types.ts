@@ -2,6 +2,8 @@
 // Ported from the nextjs-companies prototype; `id` fields added on Agent /
 // PoolAgent so the live view can persist real agent membership.
 import type { CompanyRevenueEventSource, CompanyRevenueRollup } from "@/lib/types/company-revenue";
+import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
+import type { CompanyDirective } from "@/lib/types/company";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -182,6 +184,8 @@ export interface Colony {
   hasApexGoal?: boolean;
   /** True when perpetual autonomy is on — the driver keeps re-dispatching until stopped/frozen. */
   autonomy?: boolean;
+  /** Standing directives injected by a human or captured from rejecting a deliverable. */
+  directives?: CompanyDirective[];
   /**
    * Raw, unformatted company values used to seed the edit form. Distinct from
    * display fields above (`apex`, `ticker`, …), which carry derived fallbacks
@@ -238,6 +242,12 @@ export interface CompanyEditForm extends CreateForm {
   blurb?: string;
   /** Project-registry id of the company's domain code repo ("" = unlinked). */
   projectId?: string;
+  /** Analytics provider link ("" = not configured; guided setup shown in the tab). */
+  analyticsProvider?: AnalyticsProviderKey | "";
+  /** Provider project/site id (PostHog project id, Plausible domain, GA4 property). */
+  analyticsProjectId?: string;
+  /** Optional self-hosted analytics base URL. */
+  analyticsHost?: string;
   dailyBudgetUsd?: number;
   monthlyBudgetUsd?: number;
   totalBudgetUsd?: number;

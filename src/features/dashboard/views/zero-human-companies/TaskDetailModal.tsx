@@ -9,6 +9,7 @@ import { SectionLabel } from "./primitives";
 import { DeliverableCard } from "./DeliverableCard";
 import { CompanyIssueActionButtons, isCompanyReviewIssue } from "./CompanyIssueActions";
 import { bucketDeliverables } from "./deliverables-model";
+import type { PreviewDecision } from "./preview-review";
 import type { Issue, Theme } from "./types";
 
 const RECEIPT_TONE: Record<string, string> = { passed: "var(--cyan-2)", failed: "var(--danger-2)", skipped: "var(--fg-4)" };
@@ -21,8 +22,8 @@ type Explanation = { headline: string; steps: string[]; detail: string };
 // task that changed since the last explanation re-explains instead of going stale.
 const explanationCache = new Map<string, Explanation>();
 
-export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric, theme = "dark", onClose, onResolveIssue, busy }: {
-  issue: Issue; colonyName: string; companyId?: string; apexGoal?: string; metric?: string; theme?: Theme; onClose: () => void; onResolveIssue?: (issue: Issue) => void; busy?: boolean;
+export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric, theme = "dark", onClose, onResolveIssue, onReviewPreview, busy }: {
+  issue: Issue; colonyName: string; companyId?: string; apexGoal?: string; metric?: string; theme?: Theme; onClose: () => void; onResolveIssue?: (issue: Issue) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; busy?: boolean;
 }) {
   const work = issue.work;
   const [showInternal, setShowInternal] = React.useState(false);
@@ -81,7 +82,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
         {isCompanyReviewIssue(issue) && (
           <div style={{ borderRadius: 12, border: "1px solid color-mix(in srgb, var(--honey) 32%, var(--line))", background: "color-mix(in srgb, var(--honey) 7%, var(--bg-2))", padding: "12px 14px" }}>
             <SectionLabel>issue actions</SectionLabel>
-            <CompanyIssueActionButtons companyName={colonyName} issue={issue} onResolveIssue={onResolveIssue} busy={busy} />
+            <CompanyIssueActionButtons companyName={colonyName} issue={issue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busy} />
           </div>
         )}
         {canExplain && (

@@ -48,6 +48,37 @@ export function normalizeMachineName(value?: string) {
   return value?.toLowerCase().replace(/[^a-z0-9]+/g, "") ?? "";
 }
 
+/**
+ * A machine's identity stripped of macOS Bonjour `.local` name drift. The SAME
+ * Mac re-announces as `Name-<digits>.local` with a rotating numeric suffix after
+ * reboots / DHCP / VPN churn — so the plain normalized name changes even though
+ * the box didn't. We drop a trailing `-<digits>.local` (or a bare `.local`) to a
+ * stable stem. Non-`.local` hosts (Linux / tailnet boxes like `hel1-2`) are left
+ * intact so genuinely distinct machines never collapse onto one stem.
+ */
+export function machineIdentityStem(value?: string | null) {
+  const raw = value?.trim() ?? "";
+  const dotLocal = /^(.*?)(?:-\d+)?\.local$/i.exec(raw);
+  return normalizeMachineName(dotLocal ? dotLocal[1] : raw);
+}
+
+/**
+ * Do a stored machine key and a live hostname denote the same machine? Exact
+ * normalized match first (unchanged behaviour), then a stem match that tolerates
+ * `.local` suffix drift — the failure mode that silently stranded vault
+ * companies whose `homeMachineKey` was pinned to a now-rotated `.local` name
+ * (WEBS, 2026-07-04). Trade-off: two Macs that only ever differed by a small
+ * mDNS collision suffix (`mac-2.local` vs `mac-3.local`) would share a stem; in
+ * this fleet the base names are unique, and stranding-on-drift is the worse bug.
+ */
+export function sameMachineIdentity(a?: string | null, b?: string | null) {
+  const na = normalizeMachineName(a ?? undefined);
+  const nb = normalizeMachineName(b ?? undefined);
+  if (na && na === nb) return true;
+  const stem = machineIdentityStem(a);
+  return Boolean(stem) && stem === machineIdentityStem(b);
+}
+
 export function isHivemindMachineName(name?: string, dnsName?: string) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   return (

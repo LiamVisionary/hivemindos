@@ -132,6 +132,14 @@ export function companyWorkerContext(company: Company, memoryDigest: string): st
     metricLine,
     mission ? `Charter: ${mission}` : "",
   ];
+  const directives = company.directives ?? [];
+  if (directives.length) {
+    lines.push("", "Standing directives from the human — follow these exactly (newest last):");
+    for (const d of directives) {
+      const extra = `${d.skill?.trim() ? ` (use skill: ${d.skill.trim()})` : ""}${d.attachments?.length ? ` (refs: ${d.attachments.map((a) => a.name).join(", ")})` : ""}`;
+      lines.push(`- ${d.text.trim()}${extra}`);
+    }
+  }
   const digest = memoryDigest.trim();
   if (digest) lines.push("", "What the company has done recently (newest first):", digest);
   lines.push(

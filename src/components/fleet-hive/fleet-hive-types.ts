@@ -5,6 +5,7 @@
    lockstep. */
 
 import type { AgentState, FleetAgent, FleetMachine, MachineVersionState } from "@/components/fleet/fleet-data";
+import type { MachineDelegationHealth } from "./machine-delegation-health";
 
 export type { AgentState, MachineVersionState };
 
@@ -44,6 +45,10 @@ export interface HiveMachine {
   versionState: MachineVersionState;
   uptime: string;
   agents: HiveAgent[];
+  /** Work-Board-derived delegation health — how many needs-human tasks this box
+   *  is silently failing right now. Undefined until the Work Board is joined in;
+   *  when `degraded`, the cell must read as troubled instead of healthy-green. */
+  health?: MachineDelegationHealth;
   /** the original fleet machine, kept so callbacks fire with real objects */
   source: FleetMachine;
 }

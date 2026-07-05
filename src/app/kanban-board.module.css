@@ -289,7 +289,7 @@
 
 .kanbanColumnHeader {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: start;
   gap: 8px 10px;
   min-height: 0;
@@ -351,10 +351,30 @@
   cursor: pointer;
 }
 
+.kanbanClearColumnTasks {
+  min-height: 28px;
+  border: 1px solid rgba(238, 232, 220, 0.14);
+  border-radius: 6px;
+  background: rgba(9, 13, 20, 0.3);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  padding: 4px 8px;
+  white-space: normal;
+}
+
 .kanbanAddColumnTask:hover,
-.kanbanEmptyAction:hover {
+.kanbanEmptyAction:hover,
+.kanbanClearColumnTasks:hover:not(:disabled) {
   border-color: rgba(111, 205, 186, 0.5);
   background: rgba(111, 205, 186, 0.12);
+}
+
+.kanbanClearColumnTasks:disabled {
+  cursor: wait;
+  opacity: 0.52;
 }
 
 .kanbanAddColumnTask svg,
@@ -1462,7 +1482,7 @@
 
 .workBoardPanel .kanbanColumnHeader {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: start;
   gap: 8px 10px;
   min-height: 68px;
@@ -1521,6 +1541,17 @@
   border-color: rgba(238, 232, 220, 0.12);
   background: rgba(255, 255, 255, 0.026);
   color: var(--lane-title);
+}
+
+.workBoardPanel .kanbanClearColumnTasks {
+  min-height: 24px;
+  align-self: start;
+  border-color: rgba(238, 232, 220, 0.12);
+  background: rgba(255, 255, 255, 0.026);
+  color: var(--kb-muted);
+  font-size: 10.5px;
+  font-weight: 850;
+  padding: 3px 7px;
 }
 
 .workBoardPanel .kanbanCards {
@@ -4038,6 +4069,18 @@
 }
 .workBoardPanel .workBoardHeader { border-bottom-color: var(--fc-line) !important; }
 
+.workBoardPanel:not(.workHistoryPanel) .workBoardShell {
+  display: flex;
+  flex-direction: column;
+}
+
+.workBoardPanel:not(.workHistoryPanel) .kanbanWorkspace {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* board + columns */
 .workBoardPanel .kanbanBoard {
   grid-template-columns: repeat(auto-fit, minmax(252px, 1fr)) !important;
@@ -4118,10 +4161,27 @@
   background: transparent !important;
   color: var(--fc-fg-3) !important;
 }
-.workBoardPanel .kanbanAddColumnTask:hover {
+.workBoardPanel .kanbanClearColumnTasks {
+  min-height: 26px !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 4px 8px !important;
+}
+.workBoardPanel .kanbanAddColumnTask:hover,
+.workBoardPanel .kanbanClearColumnTasks:hover:not(:disabled) {
   border-color: var(--fc-honey-line) !important;
   background: var(--fc-honey-soft) !important;
   color: var(--fc-honey) !important;
+}
+.workBoardPanel .kanbanClearColumnTasks:disabled {
+  cursor: wait;
+  color: var(--fc-fg-4) !important;
+  opacity: 0.62;
 }
 .workBoardPanel .kanbanCards { padding: 12px 12px 4px !important; gap: 10px !important; }
 
@@ -4460,6 +4520,9 @@
 
 /* bulk bar */
 .workBoardPanel .kanbanBulkBar {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
   border: 1px solid var(--fc-line-2) !important;
   border-radius: var(--fc-radius-sm) !important;
   background: var(--fc-panel-2) !important;

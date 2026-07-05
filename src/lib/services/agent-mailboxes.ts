@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import { AGENTIC_INBOX_PROJECT_DIR, readAgenticInboxStatus } from "@/lib/services/cloudflare/agentic-inbox-setup";
 import { hiveEnvPresence, hiveEnvValue } from "@/lib/services/shared-hive-env";
+import { readMapsAgencyOutboxForCompany } from "@/lib/services/company-outreach-outbox";
 
 const execFileAsync = promisify(execFile);
 const STORE_VERSION = 1;
@@ -891,8 +892,13 @@ function compactRecord(values: Record<string, string | undefined>) {
 // (ClawBank is intentionally NOT a mail provider: its only comms tool is
 // `discover_coms_users`, a user directory — it exposes no readable inbox.)
 
-export type MailProviderId = "agentmail" | "cloudflare-agentic-inbox";
-export type CompanyEmailDirection = "outbound" | "inbound" | "mixed";
+export type MailProviderId = "agentmail" | "cloudflare-agentic-inbox" | "maps-agency-outbox";
+export type CompanyEmailDirection = "outbound" | "inbound" | "mixed" | "queued";
+
+/** A clickable link surfaced from an email body (CTA / booking / preview). */
+export type CompanyEmailLink = { label: string; url: string };
+/** A real file attachment, when the provider exposes one. */
+export type CompanyEmailAttachment = { name: string; url?: string };
 
 /** A normalized outreach thread from any provider, UI-ready. */
 export type CompanyEmailThread = {
@@ -912,6 +918,12 @@ export type CompanyEmailThread = {
   direction: CompanyEmailDirection;
   messageCount: number;
   attachmentCount: number;
+  /** Full body of the representative message, when available (for the detail view). Capped. */
+  body?: string;
+  /** Notable links embedded in the email (CTA / booking / preview), openable in the detail view. */
+  links?: CompanyEmailLink[];
+  /** Real file attachments, when the provider exposes them. */
+  attachments?: CompanyEmailAttachment[];
   /** Epoch ms of the most recent activity, for sorting/display. */
   updatedAt: number;
   labels: string[];
@@ -961,7 +973,7 @@ export type CompanyEmailThreadsResult = {
 };
 
 /** What a single provider reader returns to the orchestrator. */
-type MailReaderResult = {
+export type MailReaderResult = {
   connected: boolean;
   /** Resolved mailboxes for this company on this provider (threadCount filled later). */
   mailboxes: CompanyMailbox[];
@@ -969,15 +981,27 @@ type MailReaderResult = {
   note?: string;
 };
 
+/** Everything a provider reader needs to scope mail to one company. */
+export type MailReaderContext = {
+  /** The company's member agent ids (mailbox-per-agent providers key off these). */
+  agentIds: string[];
+  /** The company id — providers whose source is the company itself (its outreach
+   *  engine outbox) scope by this rather than by agent ids. */
+  companyId: string;
+  /** Project-registry id of the company's domain code repo, when set. */
+  projectId?: string;
+};
+
 type MailProviderReader = {
   id: MailProviderId;
   label: string;
-  read: (agentIds: string[]) => Promise<MailReaderResult>;
+  read: (ctx: MailReaderContext) => Promise<MailReaderResult>;
 };
 
 const MAIL_PROVIDER_LABELS: Record<MailProviderId, string> = {
   agentmail: "AgentMail",
   "cloudflare-agentic-inbox": "Cloudflare Inbox",
+  "maps-agency-outbox": "Outreach Engine",
 };
 
 const COMPANY_EMAIL_MAX_INBOXES = 12; // bound inbox fan-out per company/provider
@@ -989,6 +1013,7 @@ const CLOUDFLARE_INBOX_MESSAGE_LIMIT = 100; // Worker /api/inbox/messages cap
 const MAIL_PROVIDER_READERS: MailProviderReader[] = [
   { id: "agentmail", label: MAIL_PROVIDER_LABELS.agentmail, read: readAgentMailForCompany },
   { id: "cloudflare-agentic-inbox", label: MAIL_PROVIDER_LABELS["cloudflare-agentic-inbox"], read: readCloudflareInboxForCompany },
+  { id: "maps-agency-outbox", label: MAIL_PROVIDER_LABELS["maps-agency-outbox"], read: readMapsAgencyOutboxForCompany },
 ];
 
 /**
@@ -999,15 +1024,22 @@ const MAIL_PROVIDER_READERS: MailProviderReader[] = [
  */
 export async function readCompanyEmailThreads(input: {
   agentIds: string[];
+  companyId: string;
+  projectId?: string;
   totalLimit?: number;
 }): Promise<CompanyEmailThreadsResult> {
   const agentIds = dedupe((input.agentIds ?? []).map((id) => (typeof id === "string" ? id.trim() : "")));
   const totalLimit = clampInt(input.totalLimit ?? COMPANY_EMAIL_TOTAL_LIMIT, 1, 200);
+  const ctx: MailReaderContext = {
+    agentIds,
+    companyId: typeof input.companyId === "string" ? input.companyId.trim() : "",
+    projectId: typeof input.projectId === "string" ? input.projectId.trim() || undefined : undefined,
+  };
 
   const results = await Promise.all(
     MAIL_PROVIDER_READERS.map(async (reader) => {
       try {
-        return { reader, ...(await reader.read(agentIds)) };
+        return { reader, ...(await reader.read(ctx)) };
       } catch (error) {
         return {
           reader,
@@ -1061,7 +1093,7 @@ function composeMailDetail(
   totalLimit: number,
   agentCount: number,
 ): string {
-  if (agentCount === 0) return "Staff this company with agents to give it mailboxes.";
+  if (agentCount === 0 && threadCount === 0) return "Staff this company with agents to give it mailboxes.";
   const connected = providers.filter((p) => p.connected);
   if (connected.length === 0) {
     return providers.find((p) => p.note)?.note || "No mail provider is connected yet.";
@@ -1079,7 +1111,7 @@ function composeMailDetail(
 }
 
 // ── AgentMail provider ───────────────────────────────────────────────────────
-async function readAgentMailForCompany(agentIds: string[]): Promise<MailReaderResult> {
+async function readAgentMailForCompany({ agentIds }: MailReaderContext): Promise<MailReaderResult> {
   const token = await hiveEnvValue("AGENTMAIL_API_KEY");
   if (!token) return { connected: false, mailboxes: [], threads: [], note: "AgentMail isn't connected (set AGENTMAIL_API_KEY)." };
 
@@ -1218,6 +1250,119 @@ function normalizeAgentMailThread(thread: AgentMailThread, inbox: { agentId?: st
   };
 }
 
+// ── Per-thread detail (full body + real attachments) ─────────────────────────
+// The thread LIST stays lean (subject/preview/counts). The Emails tab detail
+// modal fetches the full body + attachments on open, per provider, keyed off the
+// thread id prefix. The maps-agency outbox already ships its body in the list, so
+// the modal never asks us for it. AgentMail is fetched from its documented message
+// API; Cloudflare needs a Worker message-detail endpoint that isn't deployed yet.
+
+type AgentMailAttachment = { attachment_id?: string; filename?: string; content_type?: string; size?: number; content_disposition?: string };
+type AgentMailMessage = { message_id?: string; text?: string; html?: string; preview?: string; attachments?: AgentMailAttachment[]; timestamp?: string };
+type AgentMailThreadDetail = { messages?: AgentMailMessage[] };
+
+export type CompanyEmailThreadDetail = {
+  body?: string;
+  links?: CompanyEmailLink[];
+  attachments?: CompanyEmailAttachment[];
+  /** Honest one-line reason when a provider can't return a full body yet. */
+  note?: string;
+};
+
+/**
+ * Full body + attachments for one thread, dispatched by the provider encoded in
+ * the thread id (`agentmail:<inboxId>:<threadId>` / `cloudflare:<id>` /
+ * `maps-agency-outbox:…`). Returns {} for providers whose body already rode the
+ * list payload (the outbox), so the caller falls back to the thread it already has.
+ */
+export async function readCompanyEmailThreadDetail(input: { threadId: string }): Promise<CompanyEmailThreadDetail> {
+  const threadId = (input.threadId || "").trim();
+  if (threadId.startsWith("agentmail:")) {
+    const rest = threadId.slice("agentmail:".length);
+    const split = rest.indexOf(":");
+    const inboxId = split >= 0 ? rest.slice(0, split) : "";
+    const providerThreadId = split >= 0 ? rest.slice(split + 1) : rest;
+    if (!inboxId || !providerThreadId) return { note: "Malformed AgentMail thread id." };
+    return readAgentMailThreadDetail(inboxId, providerThreadId);
+  }
+  if (threadId.startsWith("cloudflare:")) {
+    return { note: "Cloudflare inbox message bodies aren't available yet — the inbox Worker needs its message-detail endpoint deployed." };
+  }
+  // maps-agency-outbox and any future body-in-list provider: nothing to fetch.
+  return {};
+}
+
+async function readAgentMailThreadDetail(inboxId: string, threadId: string): Promise<CompanyEmailThreadDetail> {
+  const token = await hiveEnvValue("AGENTMAIL_API_KEY");
+  if (!token) return { note: "AgentMail isn't connected (set AGENTMAIL_API_KEY)." };
+  let apiBaseUrl: string;
+  try {
+    apiBaseUrl = normalizeAgentMailApiBaseUrl(
+      (await hiveEnvValue("AGENTMAIL_API_BASE_URL")) || (await hiveEnvValue("AGENTMAIL_API_URL")) || DEFAULT_AGENTMAIL_API_BASE_URL,
+    );
+  } catch {
+    return { note: "AgentMail API base URL is misconfigured." };
+  }
+
+  const response = await agentMailRequest<AgentMailThreadDetail>(
+    apiBaseUrl,
+    `/v0/inboxes/${encodeURIComponent(inboxId)}/threads/${encodeURIComponent(threadId)}`,
+    token,
+  );
+  if (!response.ok) return { note: "Couldn't load this AgentMail thread." };
+  const messages = Array.isArray(response.result?.messages) ? response.result!.messages! : [];
+  const latest = messages[messages.length - 1] ?? {};
+  const body = (latest.text || htmlToPlainText(latest.html) || latest.preview || "").trim().slice(0, 20000);
+  const links = extractLinksFromText(body);
+
+  // Resolve a presigned download URL per attachment (bounded; only on modal open).
+  const attachments: CompanyEmailAttachment[] = [];
+  for (const attachment of (latest.attachments ?? []).slice(0, 12)) {
+    if (!attachment.filename) continue;
+    let url: string | undefined;
+    if (attachment.attachment_id && latest.message_id) {
+      const download = await agentMailRequest<{ download_url?: string }>(
+        apiBaseUrl,
+        `/v0/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(latest.message_id)}/attachments/${encodeURIComponent(attachment.attachment_id)}`,
+        token,
+      );
+      if (download.ok && typeof download.result?.download_url === "string") url = download.result.download_url;
+    }
+    attachments.push({ name: attachment.filename, url });
+  }
+  return { body, links, attachments };
+}
+
+/** Loose http(s) links from a plain-text body, deduped and capped. */
+function extractLinksFromText(text: string): CompanyEmailLink[] {
+  const urls = new Set<string>();
+  const matches = text.match(/https?:\/\/[^\s<>")\]]+/g);
+  if (matches) for (const match of matches) urls.add(match.replace(/[.,);]+$/, ""));
+  const out: CompanyEmailLink[] = [];
+  for (const url of urls) {
+    if (out.length >= 8) break;
+    out.push({ label: "Link", url });
+  }
+  return out;
+}
+
+/** Minimal HTML→text fallback for when a message has no plain-text part. */
+function htmlToPlainText(html?: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|tr|li|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 // ── Cloudflare Agentic Inbox provider ────────────────────────────────────────
 // The deployed Worker keeps every received email in one Durable-Object store and
 // exposes POST /api/inbox/messages ({ id, sender, recipient, subject, receivedAt }).
@@ -1226,7 +1371,7 @@ function normalizeAgentMailThread(thread: AgentMailThread, inbox: { agentId?: st
 // keep only messages addressed to them.
 type CloudflareInboxMessage = { id?: string; sender?: string; recipient?: string; subject?: string; receivedAt?: string };
 
-async function readCloudflareInboxForCompany(agentIds: string[]): Promise<MailReaderResult> {
+async function readCloudflareInboxForCompany({ agentIds }: MailReaderContext): Promise<MailReaderResult> {
   // Resolve this company's Cloudflare mailboxes from the local store first, so a
   // provisioned-but-undeployed inbox still shows up as an issue card.
   const cfMailboxes: CompanyMailbox[] = [];

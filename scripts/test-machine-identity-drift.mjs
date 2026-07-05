@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+// Hermetic: a company's homeMachineKey gate must survive macOS Bonjour `.local`
+// name drift. The SAME Mac re-announces as `Name-<digits>.local` with a rotating
+// numeric suffix after reboots/DHCP churn; the old exact-normalized compare then
+// read it as a different machine and stranded every vault company homed on the
+// old name (WEBS, 2026-07-04: pinned to `Liams-MacBook-Pro-20942.local`, box now
+// `…-21403.local` — autonomy driver silently dispatched nothing for 25h+).
+import assert from "node:assert/strict";
+import { register } from "node:module";
+
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const { sameMachineIdentity, machineIdentityStem, normalizeMachineName } = await import(
+  "../src/features/fleet/fleet-identity.ts"
+);
+
+// ── the exact drift that stranded WEBS: same Mac, rotated .local suffix ──────
+assert.equal(
+  sameMachineIdentity("Liams-MacBook-Pro-20942.local", "Liams-MacBook-Pro-21403.local"),
+  true,
+  "rotated `.local` numeric suffix on the same Mac still matches",
+);
+assert.equal(
+  sameMachineIdentity("Liams-MacBook-Pro-20942.local", "Liams-MacBook-Pro.local"),
+  true,
+  "suffixed and bare `.local` forms of the same Mac match",
+);
+
+// ── exact / normalized equality still holds (unchanged behaviour) ───────────
+assert.equal(sameMachineIdentity("hel1-2", "hel1-2"), true);
+assert.equal(sameMachineIdentity("Liams-MacBook-Pro-21403.local", "liamsmacbookpro21403local"), true, "normalization is punctuation/case-insensitive");
+
+// ── genuinely different machines must NOT collapse ──────────────────────────
+assert.equal(sameMachineIdentity("hel1-2", "hel1-3"), false, "distinct non-.local Linux boxes stay distinct (no blanket digit strip)");
+assert.equal(sameMachineIdentity("Liams-MacBook-Pro-20942.local", "Liams-Mac-mini-1.local"), false, "different base names never merge");
+assert.equal(sameMachineIdentity("nyc-mac.local", "hel1-2"), false);
+
+// ── stem is stable across drift; leaves non-.local hosts intact ─────────────
+assert.equal(machineIdentityStem("Liams-MacBook-Pro-20942.local"), "liamsmacbookpro");
+assert.equal(machineIdentityStem("Liams-MacBook-Pro-21403.local"), "liamsmacbookpro");
+assert.equal(machineIdentityStem("Liams-MacBook-Pro.local"), "liamsmacbookpro");
+assert.equal(machineIdentityStem("hel1-2"), "hel12", "no `.local` → not stem-stripped");
+assert.equal(machineIdentityStem("hel1-3"), "hel13");
+
+// ── empty / nullish inputs never spuriously match ───────────────────────────
+assert.equal(sameMachineIdentity("", "Liams-MacBook-Pro-21403.local"), false);
+assert.equal(sameMachineIdentity(null, null), false, "two unset keys are not 'the same machine'");
+assert.equal(sameMachineIdentity(undefined, ""), false);
+assert.equal(normalizeMachineName(undefined), "");
+
+console.log("machine-identity-drift: all assertions passed");

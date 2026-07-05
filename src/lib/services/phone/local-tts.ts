@@ -7,6 +7,7 @@ import {
   cachedApp,
   evictCachedApp,
   hydratePersistedApps,
+  persistedAppHint,
   rememberAppById,
   touchCachedApp,
 } from "@/lib/services/phone/local-tts-app-cache";
@@ -25,6 +26,10 @@ const DISCOVERY_TIMEOUT_MS = 12_000;
 const RAW_TTS_DISCOVERY_TIMEOUT_MS = 2_500;
 const DIRECT_HOST_DISCOVERY_TIMEOUT_MS = 4_000;
 const PROBE_TIMEOUT_MS = 8_000;
+// Fast health probe used to revalidate a durable disk hint before trusting it
+// for a synth — a live hint answers in well under this, a dead one costs at
+// most this instead of a slow synth timeout, then falls through to discovery.
+const PERSISTED_HINT_PROBE_TIMEOUT_MS = 1_500;
 const STREAM_TIMEOUT_MS = 120_000;
 const LAUNCH_DISCOVERY_TIMEOUT_MS = 10_000;
 const LAUNCH_PROBE_TIMEOUT_MS = 8_000;
@@ -207,14 +212,53 @@ function rememberCandidates(origin: string, candidates: LocalTtsCandidate[]) {
   candidatesByOrigin.set(origin, { expiresAt: Date.now() + CANDIDATE_CACHE_MS, candidates });
 }
 
-// The one resolution path every synth/stream shares: persisted cache, then
-// in-memory cache, then (targeted) discovery. Cache lifecycle (sliding TTL,
-// failure eviction, cross-restart persistence) lives in local-tts-app-cache.
+// Disk hints (origin::appId) that failed a health probe this session: skip
+// re-probing them so a permanently-moved selection pays the probe cost once,
+// not on every resolve. Cleared on process restart; a fresh success re-arms
+// the hot cache so a recovered app is reused without ever consulting this.
+const hintProbedBad = new Set<string>();
+
+// One fast health check against a resolved app's proxy URL, used to decide
+// whether a durable disk hint is still live before a synth commits to it.
+async function probeTtsAppHealthy(app: HostedApp): Promise<boolean> {
+  const base = app.apiBaseUrl?.replace(/\/+$/, "");
+  if (!base) return false;
+  const url = `${base}/health`;
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(PERSISTED_HINT_PROBE_TIMEOUT_MS),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// The one resolution path every synth/stream shares: hot in-memory cache, then
+// the durable disk hint (revalidated with a fast health probe so a transient
+// TTS flap never forces a cold fleet sweep on the next open), then (targeted)
+// discovery. Cache lifecycle (sliding TTL, failure eviction, cross-restart
+// persistence) lives in local-tts-app-cache.
 async function resolvedTtsApp(origin: string, appId: string) {
   await hydratePersistedApps(origin).catch(() => undefined);
-  return cachedApp(origin, appId)
-    ?? findMatchingApp(await discoveredApps(origin, { selectedAppId: appId }), appId)
-    ?? null;
+  const cached = cachedApp(origin, appId);
+  if (cached) return cached;
+  const hintKey = `${origin}::${appId}`;
+  const hint = persistedAppHint(appId);
+  if (hint?.apiBaseUrl && !hintProbedBad.has(hintKey)) {
+    if (await probeTtsAppHealthy(hint)) {
+      // Live hint: promote it back to the hot cache and skip the fleet sweep.
+      touchCachedApp(origin, appId, hint);
+      return hint;
+    }
+    hintProbedBad.add(hintKey);
+  }
+  const resolved = findMatchingApp(await discoveredApps(origin, { selectedAppId: appId }), appId) ?? null;
+  // Discovery re-pinned a live URL under this id, so the hint is trustworthy
+  // again — let a future eviction re-probe it instead of always rediscovering.
+  if (resolved) hintProbedBad.delete(hintKey);
+  return resolved;
 }
 
 function cachedCandidates(origin: string) {
@@ -810,15 +854,21 @@ async function discoveredApps(origin: string, options?: { force?: boolean; selec
 
     // Fast path: the selected app id encodes its machine host — ask that
     // machine's collector directly (~1s) before paying a fleet-wide sweep
-    // (measured ~10s), which used to land on the first spoken reply.
-    const hint = appIdHint(options.selectedAppId);
-    if (hint?.host && hint.host !== "local" && hint.host !== "localhost") {
+    // (measured ~10s), which used to land on the first spoken reply. Prefer a
+    // durable hint's LAST-KNOWN-LIVE host (its own id encodes the current
+    // host) over the selected id's: when a machine renames itself the pinned
+    // host goes dead and probing it just burns the timeout.
+    const hintHost = appIdHint(persistedAppHint(options.selectedAppId)?.id)?.host;
+    const directHost = hintHost || appIdHint(options.selectedAppId)?.host;
+    if (directHost && directHost !== "local" && directHost !== "localhost") {
       const direct = await discoverRawConnectedApps(origin, {
         timeoutMs: DIRECT_HOST_DISCOVERY_TIMEOUT_MS,
-        directHost: hint.host,
+        directHost,
         cachedAppsOnly: true,
       }).catch(() => []);
-      const directApp = direct.find((item) => matchesAppId(item, options.selectedAppId!));
+      // Port-fallback match (not strict): the app id rotates with the host, so
+      // a renamed machine's app only matches on host+port, not the full id.
+      const directApp = findMatchingApp(direct, options.selectedAppId);
       if (directApp?.apiBaseUrl) {
         touchCachedApp(origin, options.selectedAppId, directApp);
         return [directApp];

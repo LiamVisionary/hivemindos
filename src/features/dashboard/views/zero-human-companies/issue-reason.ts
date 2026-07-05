@@ -33,14 +33,147 @@ function lastSectionLine(text?: string): string {
   return "";
 }
 
+// ── Reason classifier ────────────────────────────────────────────────────────
+// The autonomous worker stamps EVERY exhausted pickup with the same generic
+// header ("…exhausted all eligible delegates…") and buries the real cause in the
+// "Failures:" detail lines. This reads those lines so a card shows WHY (delegates
+// offline vs at capacity vs a genuine human ask), and gives issues a `signature`
+// so near-identical ones can be consolidated instead of spamming the board.
+
+export type IssueReasonCategory = "delegates-offline" | "delegates-busy" | "no-delegates" | "needs-input" | "other";
+
+export type IssueReasonInfo = {
+  category: IssueReasonCategory;
+  /** Short label for the card / a consolidated group header. */
+  label: string;
+  /** One-line human reason. */
+  reason: string;
+  /** Grouping key — issues that share it are "the same blocker" and can merge. */
+  signature: string;
+  /** True when this class is safe to consolidate (a shared systemic blocker, not a distinct ask). */
+  consolidatable: boolean;
+};
+
+const DELEGATE_EXHAUSTED = /exhausted all eligible delegates/i;
+const NO_ELIGIBLE = /no eligible autonomous delegates were available/i;
+const NO_LIVE_COLLECTOR = /no live delegated collector\/agent/i;
+const AT_CAPACITY = /at its autonomous chat capacity/i;
+
+/** Pull the "- <agent>: <reason>" lines under a "Failures:" section of a result. */
+function extractFailureLines(result: string): string[] {
+  const out: string[] = [];
+  let inFailures = false;
+  for (const raw of result.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (/^Failures:/i.test(line)) { inFailures = true; continue; }
+    if (!inFailures) continue;
+    if (line === "") continue;
+    if (/^ACTION\s*NEEDED/i.test(line)) break;
+    out.push(line.replace(/^[-*]\s*/, ""));
+  }
+  return out;
+}
+
 /**
- * One-line reason a company issue is blocked on a human. Prefers the task's
- * result summary; falls back to the tail of its body. "" when nothing usable.
+ * Classify why a "Needs you" issue is blocked. Delegation-exhaustion issues (the
+ * generic pileup) get a real, specific reason and a shared signature so they
+ * consolidate; a genuine human ask stays its own card.
+ */
+export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo {
+  const result = issue.work?.result || "";
+  const body = issue.work?.body || "";
+
+  if (DELEGATE_EXHAUSTED.test(result) || NO_ELIGIBLE.test(`${result}\n${body}`)) {
+    const failures = extractFailureLines(result);
+    const offline = failures.filter((line) => NO_LIVE_COLLECTOR.test(line)).length;
+    const busy = failures.filter((line) => AT_CAPACITY.test(line)).length;
+    if (offline > 0 && busy === 0) {
+      return {
+        category: "delegates-offline",
+        label: "Delegates offline",
+        reason: `No agent's machine is reachable — ${offline} delegate${offline === 1 ? "" : "s"} have no live collector, so nothing can pick this up.`,
+        signature: "delegation:offline",
+        consolidatable: true,
+      };
+    }
+    if (busy > 0 && offline === 0) {
+      return {
+        category: "delegates-busy",
+        label: "Delegates at capacity",
+        reason: "Every eligible delegate machine is at its autonomous capacity — the work is queued behind other runs.",
+        signature: "delegation:busy",
+        consolidatable: true,
+      };
+    }
+    if (offline > 0 || busy > 0) {
+      return {
+        category: "delegates-offline",
+        label: "Delegates unavailable",
+        reason: `Delegates couldn't take the work (${offline} offline, ${busy} at capacity).`,
+        signature: "delegation:mixed",
+        consolidatable: true,
+      };
+    }
+    return {
+      category: "no-delegates",
+      label: "No delegates available",
+      reason: "No eligible autonomous delegate could pick this up — check the crew's machines and worker classes.",
+      signature: "delegation:none",
+      consolidatable: true,
+    };
+  }
+
+  // A genuine, distinct human ask — its own card, never merged.
+  const reason = firstMeaningfulLine(result) || lastSectionLine(body);
+  return {
+    category: "needs-input",
+    label: "Needs your input",
+    reason,
+    signature: `task:${issue.work?.taskId ?? reason}`,
+    consolidatable: false,
+  };
+}
+
+/**
+ * One-line reason a company issue is blocked on a human. Uses the classifier so
+ * delegation-exhaustion cards show the REAL cause, not the generic header.
  */
 export function issueBlockReason(issue: Pick<Issue, "work">): string {
   const work = issue.work;
   if (!work) return "";
-  return firstMeaningfulLine(work.result) || lastSectionLine(work.body);
+  return classifyIssueReason(issue).reason || firstMeaningfulLine(work.result) || lastSectionLine(work.body);
+}
+
+export type IssueGroup = {
+  /** Stable render key. */
+  signature: string;
+  info: IssueReasonInfo;
+  issues: Issue[];
+};
+
+/**
+ * Group "Needs you" issues by shared reason so identical systemic blockers (e.g.
+ * 12 tasks all "delegates offline") collapse into ONE card instead of spamming the
+ * board, while genuine distinct human asks stay their own cards. First-appearance
+ * order is preserved.
+ */
+export function groupIssuesByReason(issues: Issue[]): IssueGroup[] {
+  const order: string[] = [];
+  const byKey = new Map<string, IssueGroup>();
+  for (const issue of issues) {
+    const info = classifyIssueReason(issue);
+    // Consolidatable classes merge on their signature; distinct asks get a unique
+    // per-issue key so they never merge.
+    const key = info.consolidatable ? info.signature : `${info.signature}:${issue.key}`;
+    const group = byKey.get(key);
+    if (group) {
+      group.issues.push(issue);
+    } else {
+      byKey.set(key, { signature: key, info, issues: [issue] });
+      order.push(key);
+    }
+  }
+  return order.map((key) => byKey.get(key)!);
 }
 
 /**

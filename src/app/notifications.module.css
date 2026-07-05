@@ -219,6 +219,108 @@
   text-transform: uppercase;
 }
 
+/* — Consolidated cluster: a paged stack of look-alike notifications, so a
+   batch of identical escalations reads as one card you step through — */
+.notificationCluster {
+  display: grid;
+  gap: 8px;
+}
+
+.notificationPager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.notificationPagerNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 999px;
+  background: var(--nf-panel-2);
+  padding: 3px;
+}
+
+.notificationPagerArrow {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nf-fg-2);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.notificationPagerArrow:hover:not(:disabled) {
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
+}
+
+.notificationPagerArrow:disabled {
+  color: var(--nf-fg-4);
+  cursor: default;
+}
+
+.notificationPagerArrow svg {
+  width: 16px;
+  height: 16px;
+}
+
+.notificationPagerCount {
+  min-width: 46px;
+  text-align: center;
+  font-family: var(--nf-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--nf-fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.notificationPagerBadge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 999px;
+  background: var(--nf-panel-2);
+  padding: 4px 11px;
+  color: var(--nf-fg-2);
+  font-family: var(--nf-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+.notificationPagerBadge.unread {
+  border-color: var(--nf-honey-line);
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
+}
+
+/* Stacked-card affordance: a hairline peeking below the paged card signals
+   there are more behind it. */
+.notificationCluster .notificationCard {
+  position: relative;
+}
+
+.notificationCluster .notificationCard::after {
+  content: "";
+  position: absolute;
+  inset: auto 7px -5px 7px;
+  height: 6px;
+  border: 1px solid var(--nf-line);
+  border-top: 0;
+  border-radius: 0 0 var(--nf-radius) var(--nf-radius);
+  background: var(--nf-panel-2);
+  z-index: -1;
+}
+
 /* — Card — */
 .notificationCard {
   display: grid;

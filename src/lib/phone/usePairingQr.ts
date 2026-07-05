@@ -46,8 +46,23 @@ export function usePairingQr(enabled = true) {
           if (!cancelled) setError("Couldn't determine this machine's tailnet address. Is Tailscale up?");
           return;
         }
+        // Provision the dashboard device token into the QR so the paired phone
+        // authenticates to this hub's /api gate with no user-visible token step.
+        // Best-effort: if auth is off (token null) or the fetch fails, pair
+        // without one — the phone still falls back to a gateway token fetch.
+        let token: string | undefined;
+        try {
+          const tokRes = await fetch("/api/phone/pairing-token");
+          if (tokRes.ok) {
+            const tokData = await tokRes.json();
+            if (typeof tokData?.token === "string" && tokData.token) token = tokData.token;
+          }
+        } catch {
+          // No token available → tokenless pairing (auth-off fleets, or the
+          // phone resolves it from a gateway later).
+        }
         const url = hubUrlForPairingHost(host);
-        const pair = clawMobilePairingUrl({ hubUrl: url, name, machineId });
+        const pair = clawMobilePairingUrl({ hubUrl: url, name, machineId, token });
         const dataUrl = await QRCode.toDataURL(pair, { width: 320, margin: 2 });
         if (!cancelled) {
           setError(null);

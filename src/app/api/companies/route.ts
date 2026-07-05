@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/utils/server-auth";
 import {
+  addCompanyDirective,
   addCompanyMembers,
   claimCompanyHomeMachine,
   companySpendRollup,
@@ -8,6 +9,7 @@ import {
   getCompany,
   markCompanyDispatched,
   readCompanies,
+  removeCompanyDirective,
   setCompanyAgents,
   setCompanyAutonomy,
   setCompanyFrozen,
@@ -23,10 +25,12 @@ import {
 import { companyRevenueRollup, readCompanyRevenueLedger } from "@/lib/services/company-revenue-share";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import type {
+  Company,
   CompanyApexGoal,
   CompanyMember,
   CompanyRevenue,
 } from "@/lib/types/company";
+import type { KanbanTaskAttachment } from "@/lib/types/kanban";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +83,8 @@ type CompanyBody = {
   members?: CompanyMember[];
   homeMachineKey?: string;
   projectId?: string;
+  analyticsProvider?: Company["analyticsProvider"];
+  analyticsConfig?: Company["analyticsConfig"];
   // dispatch-goal
   fleetSnapshot?: QueenBeeFleetMachine[];
   maxTasks?: number;
@@ -89,6 +95,9 @@ type CompanyBody = {
   revenueDelta?: string;
   source?: string;
   note?: string;
+  // add-directive / remove-directive
+  directive?: { text?: string; skill?: string; attachments?: KanbanTaskAttachment[]; source?: "inject" | "reject"; deliverableRef?: string };
+  directiveId?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -147,6 +156,25 @@ export async function POST(request: NextRequest) {
       if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
       return NextResponse.json({ ok: true, company });
     }
+    if (action === "add-directive") {
+      if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      if (!body.directive?.text?.trim()) return NextResponse.json({ ok: false, error: "Directive text is required." }, { status: 400 });
+      const company = await addCompanyDirective(body.id.trim(), {
+        text: body.directive.text,
+        skill: body.directive.skill,
+        attachments: body.directive.attachments,
+        source: body.directive.source,
+        deliverableRef: body.directive.deliverableRef,
+      });
+      if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, company });
+    }
+    if (action === "remove-directive") {
+      if (!body.id?.trim() || !body.directiveId?.trim()) return NextResponse.json({ ok: false, error: "id and directiveId are required" }, { status: 400 });
+      const company = await removeCompanyDirective(body.id.trim(), body.directiveId.trim());
+      if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, company });
+    }
     if (action === "stop-autonomy") {
       if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
       const company = await setCompanyAutonomy(body.id.trim(), false);
@@ -177,6 +205,8 @@ export async function POST(request: NextRequest) {
       members: body.members,
       homeMachineKey: body.homeMachineKey,
       projectId: body.projectId,
+      analyticsProvider: body.analyticsProvider,
+      analyticsConfig: body.analyticsConfig,
     });
     return NextResponse.json({ ok: true, company });
   } catch (error) {

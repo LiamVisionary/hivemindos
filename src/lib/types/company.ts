@@ -1,4 +1,6 @@
 import type { LoopCapabilityCapital } from "@/lib/types/loops";
+import type { AnalyticsProviderKey, CompanyAnalyticsConfig } from "@/lib/services/company-analytics/types";
+import type { KanbanTaskAttachment } from "@/lib/types/kanban";
 
 /**
  * A Company groups agents into an accountable business unit: a shared charter, a
@@ -82,6 +84,27 @@ export interface CompanyMember {
  */
 export type CompanyProcess = "hierarchical" | "sequential" | "graph";
 
+/**
+ * A standing directive / knowledge entry injected into a company by a human
+ * (Learning tab) or captured from rejecting a deliverable. Directives are
+ * appended to the standing context on EVERY dispatched task
+ * (companyWorkerContext), so the crew is redirected without editing the charter.
+ */
+export interface CompanyDirective {
+  id: string;
+  /** The instruction / knowledge / redirect, in the human's words. */
+  text: string;
+  /** Optional shared-brain skill slug the crew should read/use for this. */
+  skill?: string;
+  /** Reference attachments (reuses the task/chat attachment model). */
+  attachments?: KanbanTaskAttachment[];
+  /** How it was created: a Learning-tab injection, or feedback from a rejected deliverable. */
+  source: "inject" | "reject";
+  /** When source === "reject": the deliverable key/title being redirected. */
+  deliverableRef?: string;
+  createdAt: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -145,6 +168,16 @@ export interface Company {
    * proof badge.
    */
   projectId?: string;
+  /** Which analytics provider this company's numbers come from. Unset = not configured (guided setup shown). */
+  analyticsProvider?: AnalyticsProviderKey;
+  /** Per-company analytics link (project/site id + optional self-host). Credentials live in shared hive env, not here. */
+  analyticsConfig?: CompanyAnalyticsConfig;
+  /**
+   * Standing directives injected by a human (Learning tab) or captured from a
+   * rejected deliverable. Appended to every dispatched task's context so the
+   * crew follows them without a charter edit. Newest last.
+   */
+  directives?: CompanyDirective[];
 }
 
 export interface CompanySpendRollup {

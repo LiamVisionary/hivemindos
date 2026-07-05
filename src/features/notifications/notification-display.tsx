@@ -27,6 +27,9 @@ export function groupNotifications(notifications: AgentNotification[]) {
   }, []);
 }
 
+// Look-alike consolidation lives in the pure ./notification-clustering module
+// (no JSX) so the hermetic node suite can exercise it directly.
+
 export function notificationIcon(kind: AgentNotification["kind"], priority: AgentNotification["priority"]) {
   if (priority === "urgent" || priority === "high") return <CircleAlert aria-hidden="true" />;
   if (kind === "task" || kind === "decision") return <Check aria-hidden="true" />;

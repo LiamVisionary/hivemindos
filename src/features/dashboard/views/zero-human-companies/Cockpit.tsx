@@ -6,7 +6,14 @@ import { STATE_COLOR, Ring, RoleGlyph, StatusPill, BurnBar, SectionLabel, Panel 
 import { IssueBoard } from "./IssueBoard";
 import { STATUS_TONE } from "./data";
 import { CompanyIssueSummaryCard, isCompanyReviewIssue } from "./CompanyIssueActions";
+import { SetupBlockerBand } from "./SetupBlockerBand";
+import { ConsolidatedIssueCard } from "./ConsolidatedIssueCard";
+import { EmailThreadModal } from "./EmailThreadModal";
+import { groupIssuesByReason } from "./issue-reason";
+import type { PreviewDecision } from "./preview-review";
 import { DeliverableCard } from "./DeliverableCard";
+import { AnalyticsPanel } from "./AnalyticsPanel";
+import { CompanyKnowledgePanel } from "./CompanyKnowledgePanel";
 import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable } from "./deliverables-model";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
 import type { Agent, Approval, Colony, CompanyRevenueShareInput, Issue } from "./types";
@@ -31,6 +38,8 @@ export type CockpitHandlers = {
   onOpenIssue: (issue: Issue) => void;
   /** Human fixed the blocker; answer the Needs-You task so it resumes. */
   onResolveIssue: (issue: Issue) => void;
+  /** Approve a customer-facing preview, or send the crew change notes to regenerate it. */
+  onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
   /** Record external company revenue and optionally collect the platform share. */
   onRecordRevenue: (input: CompanyRevenueShareInput) => void;
   /** Approval/company id currently mutating, to disable its controls. */
@@ -260,58 +269,73 @@ function ActivityTicker({ colony }: { colony: Colony }) {
  * approval, and customer-facing previews ready to review before they go out. If
  * there's nothing to act on, it renders nothing.
  */
-function ReviewStrip({ colony: c, onOpenIssue, onResolveIssue, busyId, onGoToDeliverables, onGoToApprovals }: {
-  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; busyId: string | null; onGoToDeliverables: () => void; onGoToApprovals: () => void;
+/**
+ * Top-of-cockpit summary. Instead of listing every blocked issue (which spammed
+ * the header with one card per needs-human task), it collapses to at most three
+ * compact rows: money to approve, a single "there are X issues" tile, and a
+ * single "you have X deliverables" tile — each a button that jumps to its tab.
+ * Issues + deliverables sit side-by-side (2 columns) when both have items, and a
+ * lone category auto-expands to full width.
+ */
+function ReviewStrip({ colony: c, deliverableCount, deliverableLabel, onGoToIssues, onGoToDeliverables, onGoToApprovals }: {
+  colony: Colony; deliverableCount: number; deliverableLabel: string;
+  onGoToIssues: () => void; onGoToDeliverables: () => void; onGoToApprovals: () => void;
 }) {
-  const blocked = c.issues.filter(isCompanyReviewIssue);
+  const issueCount = c.issues.filter(isCompanyReviewIssue).length;
   const previewCount = React.useMemo(
     () => collectCompanyDeliverables(c).filter((x) => x.classified.reviewable).length,
     [c],
   );
-  const total = blocked.length + c.approvals.length + (previewCount > 0 ? 1 : 0);
-  if (total === 0) return null;
+  const approvals = c.approvals.length;
+  const hasIssues = issueCount > 0;
+  const hasDeliverables = deliverableCount > 0;
+  if (!hasIssues && !hasDeliverables && approvals === 0) return null;
 
-  const rowStyle: React.CSSProperties = {
-    display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", cursor: "pointer",
-    borderRadius: 11, padding: "10px 12px", border: "1px solid color-mix(in srgb, var(--honey) 30%, var(--line))",
-    background: "color-mix(in srgb, var(--honey) 7%, var(--bg-2))", font: "inherit", color: "inherit",
-  };
+  const needsAction = hasIssues || approvals > 0 || previewCount > 0;
+  const tile = (accent: string): React.CSSProperties => ({
+    display: "flex", alignItems: "center", gap: 12, width: "100%", minWidth: 0, textAlign: "left", cursor: "pointer",
+    borderRadius: 12, padding: "13px 15px", font: "inherit", color: "inherit",
+    border: `1px solid color-mix(in srgb, ${accent} 30%, var(--line))`,
+    background: `color-mix(in srgb, ${accent} 7%, var(--bg-2))`,
+  });
+  const label = deliverableLabel.trim().toLowerCase() || "deliverables";
+
   return (
     <div style={{ borderRadius: 14, border: "1px solid color-mix(in srgb, var(--honey) 40%, transparent)", background: "color-mix(in srgb, var(--honey) 6%, var(--bg-1))", padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span aria-hidden style={{ fontSize: 14 }}>⚑</span>
-        <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey-2)", letterSpacing: 0.02 }}>Needs your review</span>
+        <span aria-hidden style={{ fontSize: 14 }}>{needsAction ? "⚑" : "◆"}</span>
+        <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey-2)", letterSpacing: 0.02 }}>{needsAction ? "Needs your review" : "At a glance"}</span>
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>the crew handles the rest on its own</span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {c.approvals.length > 0 && (
-          <button type="button" onClick={onGoToApprovals} style={rowStyle}>
-            <span aria-hidden style={{ fontSize: 15 }}>💳</span>
+
+      {approvals > 0 && (
+        <button type="button" onClick={onGoToApprovals} style={{ ...tile("var(--honey)"), marginBottom: 8 }}>
+          <span aria-hidden style={{ fontSize: 16 }}>💳</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{approvals} spend approval{approvals === 1 ? "" : "s"} waiting</span>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>An agent wants to spend money — approve or deny.</span>
+          </span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>Review →</span>
+        </button>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: hasIssues && hasDeliverables ? "1fr 1fr" : "1fr", gap: 8 }}>
+        {hasIssues && (
+          <button type="button" onClick={onGoToIssues} style={tile("var(--danger)")}>
+            <span aria-hidden style={{ fontSize: 16 }}>⚠️</span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{c.approvals.length} spend approval{c.approvals.length === 1 ? "" : "s"} waiting</span>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>An agent wants to spend money — approve or deny.</span>
+              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{issueCount === 1 ? "There is 1 issue" : `There are ${issueCount} issues`}</span>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>The crew is blocked and needs your input.</span>
             </span>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>Review →</span>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>View →</span>
           </button>
         )}
-        {blocked.map((issue) => {
-          return (
-            <CompanyIssueSummaryCard
-              key={issue.work?.taskId ?? issue.key}
-              companyName={c.name}
-              issue={issue}
-              onOpenIssue={onOpenIssue}
-              onResolveIssue={onResolveIssue}
-              busy={busyId === issue.work?.taskId}
-            />
-          );
-        })}
-        {previewCount > 0 && (
-          <button type="button" onClick={onGoToDeliverables} style={rowStyle}>
-            <span aria-hidden style={{ fontSize: 15 }}>🌐</span>
+        {hasDeliverables && (
+          <button type="button" onClick={onGoToDeliverables} style={tile("var(--live)")}>
+            <span aria-hidden style={{ fontSize: 16 }}>📦</span>
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{previewCount} customer preview{previewCount === 1 ? "" : "s"} ready</span>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>Preview sites built for specific leads — look before they go out.</span>
+              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>You have {deliverableCount} {label}</span>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>{previewCount > 0 ? `${previewCount} ready for your review before they go out.` : "Shipped by the crew — open to browse."}</span>
             </span>
             <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey-2)", flexShrink: 0 }}>View →</span>
           </button>
@@ -321,8 +345,8 @@ function ReviewStrip({ colony: c, onOpenIssue, onResolveIssue, busyId, onGoToDel
   );
 }
 
-function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, busyId }: {
-  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; busyId: string | null;
+function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onReviewPreview, busyId }: {
+  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; busyId: string | null;
 }) {
   const reviewIssues = c.issues.filter(isCompanyReviewIssue);
   const activeIssues = c.issues.filter((issue) => issue.status !== "done");
@@ -331,20 +355,28 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, busyId }: {
       <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{reviewIssues.length} need{reviewIssues.length === 1 ? "s" : ""} you · {activeIssues.length} active</span>}>
         issues
       </SectionLabel>
+      <SetupBlockerBand companyId={c.id} />
       {reviewIssues.length === 0 ? (
         <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "20px 0" }}>No unresolved issues — the crew can keep moving on its own.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {reviewIssues.map((issue) => (
-            <CompanyIssueSummaryCard
-              key={issue.work?.taskId ?? issue.key}
-              companyName={c.name}
-              issue={issue}
-              onOpenIssue={onOpenIssue}
-              onResolveIssue={onResolveIssue}
-              busy={busyId === issue.work?.taskId}
-            />
-          ))}
+          {groupIssuesByReason(reviewIssues).map((group) =>
+            group.issues.length > 1 && group.info.consolidatable ? (
+              <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={c.name} onOpenIssue={onOpenIssue} />
+            ) : (
+              group.issues.map((issue) => (
+                <CompanyIssueSummaryCard
+                  key={issue.work?.taskId ?? issue.key}
+                  companyName={c.name}
+                  issue={issue}
+                  onOpenIssue={onOpenIssue}
+                  onResolveIssue={onResolveIssue}
+                  onReviewPreview={onReviewPreview}
+                  busy={busyId === issue.work?.taskId}
+                />
+              ))
+            ),
+          )}
         </div>
       )}
     </Panel>
@@ -402,6 +434,10 @@ function DeliverablesPanel({ colony: c, spec, theme = "dark" }: { colony: Colony
   const [showLog, setShowLog] = React.useState(false);
   const all = React.useMemo(() => collectCompanyDeliverables(c), [c]);
   const { primary, worklog } = React.useMemo(() => partitionByOutput(all, spec), [all, spec]);
+  const rejectedRefs = React.useMemo(
+    () => new Set((c.directives ?? []).filter((d) => d.source === "reject" && d.deliverableRef).map((d) => d.deliverableRef as string)),
+    [c.directives],
+  );
 
   return (
     <Panel>
@@ -415,7 +451,7 @@ function DeliverablesPanel({ colony: c, spec, theme = "dark" }: { colony: Colony
       ) : (
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
           {primary.map((x) => (
-            <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="hero" />
+            <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="hero" />
           ))}
         </div>
       )}
@@ -428,7 +464,7 @@ function DeliverablesPanel({ colony: c, spec, theme = "dark" }: { colony: Colony
           {showLog && (
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))", marginTop: 12 }}>
               {worklog.map((x) => (
-                <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
+                <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="card" />
               ))}
             </div>
           )}
@@ -442,15 +478,24 @@ const EMAIL_DIRECTION_META: Record<CompanyEmailDirection, { glyph: string; label
   outbound: { glyph: "↑", label: "sent", color: "var(--cyan-2)" },
   inbound: { glyph: "↓", label: "reply", color: "var(--honey-2)" },
   mixed: { glyph: "↕", label: "thread", color: "var(--fg-2)" },
+  queued: { glyph: "⏸", label: "queued", color: "var(--fg-3)" },
 };
 
 /** One outreach thread: who's on the other end, subject, preview, provenance. */
-function EmailThreadCard({ thread }: { thread: CompanyEmailThread }) {
+function EmailThreadCard({ thread, onOpen }: { thread: CompanyEmailThread; onOpen?: (thread: CompanyEmailThread) => void }) {
   const dir = EMAIL_DIRECTION_META[thread.direction] ?? EMAIL_DIRECTION_META.mixed;
   const who = thread.correspondents.length > 0 ? thread.correspondents.join(", ") : "—";
   const when = dispatchedAgo(thread.updatedAt);
+  const openable = Boolean(onOpen);
   return (
-    <div style={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "13px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+    <div
+      role={openable ? "button" : undefined}
+      tabIndex={openable ? 0 : undefined}
+      onClick={openable ? () => onOpen!(thread) : undefined}
+      onKeyDown={openable ? (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen!(thread); } } : undefined}
+      title={openable ? "Open this email" : undefined}
+      style={{ borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "13px 14px", display: "flex", flexDirection: "column", gap: 8, cursor: openable ? "pointer" : undefined }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span title={dir.label} aria-label={dir.label} style={{ flexShrink: 0, display: "inline-grid", placeItems: "center", width: 20, height: 20, borderRadius: 6, background: `color-mix(in srgb, ${dir.color} 16%, transparent)`, color: dir.color, fontSize: 12, fontWeight: 700 }}>{dir.glyph}</span>
         <span title={who} style={{ flex: 1, minWidth: 0, fontFamily: "var(--f-mono)", fontSize: 11.5, color: "var(--fg-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{who}</span>
@@ -465,6 +510,8 @@ function EmailThreadCard({ thread }: { thread: CompanyEmailThread }) {
         <span title={thread.inboxAddress} style={{ maxWidth: 190, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✉ {thread.inboxAddress}</span>
         <span>· {thread.messageCount} msg{thread.messageCount === 1 ? "" : "s"}</span>
         {thread.attachmentCount > 0 && <span>· 📎 {thread.attachmentCount}</span>}
+        {(thread.links?.length ?? 0) > 0 && <span>· 🔗 {thread.links!.length}</span>}
+        {openable && <span style={{ marginLeft: "auto" }}>open ↗</span>}
       </div>
     </div>
   );
@@ -581,11 +628,16 @@ type CompanyEmailsResponse = CompanyEmailThreadsResult & { ok?: boolean; error?:
 function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec: OutputSpec; theme?: "dark" | "light" }) {
   const all = React.useMemo(() => collectCompanyDeliverables(c), [c]);
   const commsDeliverables = React.useMemo(() => partitionByOutput(all, spec).comms, [all, spec]);
+  const rejectedRefs = React.useMemo(
+    () => new Set((c.directives ?? []).filter((d) => d.source === "reject" && d.deliverableRef).map((d) => d.deliverableRef as string)),
+    [c.directives],
+  );
 
   const [data, setData] = React.useState<CompanyEmailThreadsResult | null>(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [nonce, setNonce] = React.useState(0);
+  const [openThread, setOpenThread] = React.useState<CompanyEmailThread | null>(null);
 
   React.useEffect(() => {
     let ignore = false;
@@ -711,7 +763,7 @@ function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec:
           {focusAddress && <MailFilterChip address={focusAddress} onClear={() => setFocusAddress(null)} />}
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
             {shownThreads.map((t) => (
-              <EmailThreadCard key={t.id} thread={t} />
+              <EmailThreadCard key={t.id} thread={t} onOpen={setOpenThread} />
             ))}
           </div>
           {!focusAddress && data?.detail && (
@@ -736,10 +788,20 @@ function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony; spec:
           <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", marginBottom: 12 }}>Also referenced on the board</div>
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
             {commsDeliverables.map((x) => (
-              <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} layout="card" />
+              <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="card" />
             ))}
           </div>
         </div>
+      )}
+
+      {openThread && (
+        <EmailThreadModal
+          thread={openThread}
+          companyId={c.id}
+          companyName={c.name}
+          onClose={() => setOpenThread(null)}
+          onCorrected={() => { setOpenThread(null); setNonce((n) => n + 1); }}
+        />
       )}
     </Panel>
   );
@@ -801,6 +863,7 @@ function CapabilityCapitalPanel({ colony: c }: { colony: Colony }) {
           ))}
         </div>
       </Panel>
+      <CompanyKnowledgePanel colony={c} />
     </div>
   );
 }
@@ -1029,6 +1092,7 @@ export function Cockpit({
     { key: "issues", label: "Issues", badge: issueCount || null, tone: "danger" },
     { key: "deliverables", label: spec.primaryLabel, badge: deliverableCount || null },
     ...(spec.comms ? [{ key: "comms", label: spec.commsLabel }] : []),
+    { key: "analytics", label: "Analytics" },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
     { key: "team", label: "Team" },
     { key: "approvals", label: "Approvals", badge: c.approvals.length || null },
@@ -1084,7 +1148,7 @@ export function Cockpit({
 
       <ApexStrip colony={c} />
 
-      <ReviewStrip colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} busyId={handlers.busyId} onGoToDeliverables={() => setTab("deliverables")} onGoToApprovals={() => setTab("approvals")} />
+      <ReviewStrip colony={c} deliverableCount={deliverableCount} deliverableLabel={spec.primaryLabel} onGoToIssues={() => setTab("issues")} onGoToDeliverables={() => setTab("deliverables")} onGoToApprovals={() => setTab("approvals")} />
 
       {/* segmented section control */}
       <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, border: "1px solid var(--line)", background: "var(--bg-1)", alignSelf: "flex-start", flexWrap: "wrap" }}>
@@ -1181,16 +1245,18 @@ export function Cockpit({
             <div style={{ width: wbPct + "%", height: "100%", background: "var(--cyan)", transition: "width 600ms ease" }} />
           </div>
           <div style={{ overflowX: "auto", paddingBottom: 4 }} className="scrollbar-thin">
-            <IssueBoard colony={c} companyName={c.name} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} busyId={handlers.busyId} />
+            <IssueBoard colony={c} companyName={c.name} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} busyId={handlers.busyId} />
           </div>
         </Panel>
       )}
 
-      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} busyId={handlers.busyId} />}
+      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onReviewPreview={handlers.onReviewPreview} busyId={handlers.busyId} />}
 
       {active === "deliverables" && <DeliverablesPanel colony={c} spec={spec} theme={theme} />}
 
       {active === "comms" && <CommsPanel colony={c} spec={spec} theme={theme} />}
+
+      {active === "analytics" && <AnalyticsPanel colony={c} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} />}
 

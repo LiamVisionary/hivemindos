@@ -10,6 +10,11 @@ import { isFleetMachineMobile, type FleetAgent, type FleetMachine } from "./flee
 import { FleetSelectionTooltipContent } from "./selection-tooltip";
 import type { MachineUpdateButtonDetail, MachineUpdateButtonStatus } from "./roster";
 import coastlineData from "./data/ne_110m_coastline";
+// Self-provide the fleet token scope (`--edge-stroke-start`, fonts, hex tones).
+// The classic FleetView wraps us in `.root`, but the hive FleetHiveView does not
+// import these tokens — without our own `.root` the coastline stroke resolves to
+// an undefined var and SVG falls back to `stroke: none` (invisible outlines).
+import styles from "./fleet-tokens.module.css";
 
 interface MapViewProps {
   width?: number;
@@ -43,6 +48,22 @@ type CoastlineFeatureCollection = {
 };
 
 const COASTLINE_LINES = extractCoastlineLines(coastlineData);
+
+// The map is the single source of truth for its own look. `styles.root` (applied
+// to the container below) supplies these edge tokens theme-aware, but every SVG
+// use also carries an inline dark-theme fallback so the map can never render
+// invisible if it is ever mounted outside a fleet token scope (the exact bug that
+// hid the coastlines under the hive layout, which doesn't import fleet-tokens).
+const EDGE_STROKE_START = "var(--edge-stroke-start, rgba(94, 234, 212, 0.50))";
+const EDGE_STROKE_END = "var(--edge-stroke-end, rgba(255, 212, 90, 0.55))";
+
+// How much more one axis may be scaled than the other before we stop stretching.
+// The projection maps the fleet's lon span to width and lat span to height; a
+// globe-spanning, low-latitude-spread fleet would otherwise squish coastlines
+// ~5x vertically. Capping the ratio keeps continents recognizable while still
+// filling the frame. 1 = perfectly aspect-correct (thin band); higher = more
+// fill, more stretch. This is THE knob for map squish.
+const MAP_MAX_ANISOTROPY = 1.8;
 
 // Coincident machines (atlas + honeycomb in Brooklyn) get a small offset so
 // pins don't fully overlap.
@@ -186,7 +207,7 @@ export function MapView({
   return (
     <div
       ref={viewportRef}
-      className="relative h-full w-full overflow-hidden"
+      className={`${styles.root} relative h-full w-full overflow-hidden`}
       style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -231,8 +252,8 @@ export function MapView({
       >
         <defs>
           <linearGradient id="fleetMapArc" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%"   stopColor="var(--edge-stroke-start)" />
-            <stop offset="100%" stopColor="var(--edge-stroke-end)" />
+            <stop offset="0%"   stopColor={EDGE_STROKE_START} />
+            <stop offset="100%" stopColor={EDGE_STROKE_END} />
           </linearGradient>
         </defs>
         {/* Graticule */}
@@ -244,13 +265,15 @@ export function MapView({
             <line key={"v" + i} y1={0} y2={h} x1={((i + 1) * w) / 8} x2={((i + 1) * w) / 8} strokeDasharray="2 4" />
           ))}
         </g>
-        {/* Natural Earth coastline silhouettes */}
+        {/* Natural Earth coastline silhouettes — dotted region outlines.
+            Round-capped near-zero dashes render as evenly spaced dots; the
+            0.7px hairline was effectively invisible against the dark canvas. */}
         <g
           fill="none"
-          stroke="var(--edge-stroke-start)"
-          strokeWidth={0.7}
-          strokeDasharray="0.8 3"
-          opacity={0.55}
+          stroke={EDGE_STROKE_START}
+          strokeWidth={1.4}
+          strokeLinecap="round"
+          strokeDasharray="0.1 4.5"
         >
           {regionPaths.map((d, i) => <path key={i} d={d} />)}
         </g>
@@ -441,6 +464,23 @@ function createFleetProjection(machines: FleetMachine[], width: number, height: 
   maxLon = lonCenter + lonSpan / 2 + lonPad;
   minLat = latCenter - latSpan / 2 - latPad;
   maxLat = latCenter + latSpan / 2 + latPad;
+
+  // Clamp anisotropy so continents don't stretch. Widen (never crop) whichever
+  // window axis is too zoomed-in until pixels-per-degree on the two axes are
+  // within MAP_MAX_ANISOTROPY of each other, keeping the same center.
+  let lonWindow = maxLon - minLon;
+  let latWindow = maxLat - minLat;
+  const pxPerLon = width / lonWindow;
+  const pxPerLat = height / latWindow;
+  if (pxPerLat > pxPerLon * MAP_MAX_ANISOTROPY) {
+    latWindow = height / (pxPerLon * MAP_MAX_ANISOTROPY);
+  } else if (pxPerLon > pxPerLat * MAP_MAX_ANISOTROPY) {
+    lonWindow = width / (pxPerLat * MAP_MAX_ANISOTROPY);
+  }
+  minLon = lonCenter - lonWindow / 2;
+  maxLon = lonCenter + lonWindow / 2;
+  minLat = latCenter - latWindow / 2;
+  maxLat = latCenter + latWindow / 2;
 
   return {
     project: (lon: number, lat: number) => {

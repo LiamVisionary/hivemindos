@@ -8,6 +8,7 @@ import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { getIssueIdentity } from "./issue-identity";
+import type { PreviewDecision } from "./preview-review";
 import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyRevenueShareInput, CreateForm, Density, Issue, PoolAgent, Theme } from "./types";
 
 function HiveLogo({ size = 40 }: { size?: number }) {
@@ -120,6 +121,8 @@ export interface ZeroHumanCompaniesProps {
   onStopAutonomy: (companyId: string) => void;
   /** Mark a Needs-You issue fixed and resume its Work Board task. */
   onResolveIssue: (companyId: string, issue: Issue) => void;
+  /** Approve a customer-facing preview or send the crew change notes to regenerate it. */
+  onReviewPreview?: (companyId: string, issue: Issue, decision: PreviewDecision, notes: string) => void;
   /** Record external revenue and optionally collect the HivemindOS share. */
   onRecordRevenue: (companyId: string, input: CompanyRevenueShareInput) => Promise<void>;
   theme?: Theme;
@@ -130,7 +133,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, error, notice, busyId, onRefresh,
-  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRecordRevenue,
+  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onReviewPreview, onRecordRevenue,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -191,6 +194,7 @@ export default function ZeroHumanCompanies({
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
     onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueId: getIssueIdentity(issue) }),
     onResolveIssue: (issue) => onResolveIssue(colony.id, issue),
+    onReviewPreview: onReviewPreview ? (issue, decision, notes) => onReviewPreview(colony.id, issue, decision, notes) : undefined,
     onRecordRevenue: (input) => void onRecordRevenue(colony.id, input),
     busyId,
   };
@@ -296,6 +300,7 @@ export default function ZeroHumanCompanies({
             theme={theme}
             onClose={closeModal}
             onResolveIssue={(item) => onResolveIssue(target!.id, item)}
+            onReviewPreview={onReviewPreview ? (item, decision, notes) => onReviewPreview(target!.id, item, decision, notes) : undefined}
             busy={busyId === issue.work?.taskId}
           />
         ) : null;

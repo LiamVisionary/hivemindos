@@ -961,7 +961,7 @@ function Write-HivemindManagedBlock {
   $lines.Add("")
   $lines.Add("## Shared Hive Env")
   $lines.Add("")
-  $lines.Add("Shared credentials live in ``~/.hivemindos/.env``. Use ``hive-env-check KEY`` to verify presence and ``hive-env-run -- <command>`` to run tools/apps with the shared env loaded. Do not read, print, summarize, or copy secret values; refer to credentials by variable name and set/missing status only. When making a project consume shared credentials, load the ``shared-hive-env`` skill and default project runtime loading to ``~/.hivemindos/.env`` without persisting secrets into project files.")
+  $lines.Add("Shared credentials live in ``~/.hivemindos/.env``. Use ``hive-env-check KEY`` to verify presence and ``hive-env-run -- <command>`` to run tools/apps with the shared env loaded. Do not read, print, summarize, or copy secret values; refer to credentials by variable name and set/missing status only. Env precedence — project first, hive env as fallback: when working inside a project and you need a variable, read the project's own value first (its ``.env``/``.env.local``, config, or an explicit shell export), and fall back to the shared hive env only for keys the project does not set. This makes ``~/.hivemindos/.env`` a fleet-wide default any project can override locally — set a key in the project to override the shared value, leave it unset to inherit. When making a project consume shared credentials, load the ``shared-hive-env`` skill and load them at runtime without persisting secrets into project files; ``hive-env-run -- <command>`` loads the hive env as a base and lets the project/process env win on top.")
   $lines.Add("<!-- END HIVEMINDOS_SHARED_SKILLS -->")
   Set-Content -Path $Path -Value $lines
 }

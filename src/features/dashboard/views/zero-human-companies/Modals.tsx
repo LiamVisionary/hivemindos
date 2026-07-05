@@ -21,6 +21,8 @@ import type {
   Role,
   Theme,
 } from "./types";
+import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
+import { ANALYTICS_ADAPTERS, analyticsAdapter } from "@/lib/services/company-analytics/registry-meta";
 
 // ── shared input primitives ──────────────────────────────────────────────
 /** A registry project as the "Code project" picker needs it. */
@@ -403,6 +405,9 @@ type EditFormState = FormState & {
   charter: string;
   blurb: string;
   projectId: string;
+  analyticsProvider: AnalyticsProviderKey | "";
+  analyticsProjectId: string;
+  analyticsHost: string;
   dailyBudgetUsd?: number;
   monthlyBudgetUsd?: number;
   totalBudgetUsd?: number;
@@ -446,6 +451,9 @@ function initialEditState(initial: CompanyEditForm): EditFormState {
     charter: initial.charter ?? "",
     blurb: initial.blurb ?? "",
     projectId: initial.projectId ?? "",
+    analyticsProvider: initial.analyticsProvider ?? "",
+    analyticsProjectId: initial.analyticsProjectId ?? "",
+    analyticsHost: initial.analyticsHost ?? "",
     dailyBudgetUsd: initial.dailyBudgetUsd,
     monthlyBudgetUsd: initial.monthlyBudgetUsd,
     totalBudgetUsd: initial.totalBudgetUsd,
@@ -487,6 +495,9 @@ function readEditForm(form: EditFormState): CompanyEditForm {
     charter: form.charter.trim(),
     blurb: form.blurb.trim(),
     projectId: form.projectId.trim(),
+    analyticsProvider: form.analyticsProvider,
+    analyticsProjectId: form.analyticsProjectId.trim(),
+    analyticsHost: form.analyticsHost.trim(),
     dailyBudgetUsd: form.dailyBudgetUsd,
     monthlyBudgetUsd: form.monthlyBudgetUsd,
     totalBudgetUsd: form.totalBudgetUsd,
@@ -750,6 +761,24 @@ export function EditCompanyModal({
                   {projectLinkBusy ? "Registering…" : "Register"}
                 </PrimaryBtn>
               </div>
+            ) : null}
+          </div>
+          <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
+            <Field label="Analytics provider" hint="Where this company's at-a-glance numbers come from. Connect the credential once in Settings → Connections; set the per-company project id here.">
+              <Select
+                value={form.analyticsProvider}
+                onChange={(value) => setForm((current) => ({ ...current, analyticsProvider: value as AnalyticsProviderKey | "" }))}
+                options={[{ value: "", label: "None (guided setup in the tab)" }, ...ANALYTICS_ADAPTERS.map((a) => ({ value: a.key, label: a.label }))]}
+              />
+            </Field>
+            {form.analyticsProvider ? (
+              <Field label={analyticsAdapter(form.analyticsProvider)?.configFieldLabel ?? "Project / site id"} hint={analyticsAdapter(form.analyticsProvider)?.configFieldHint}>
+                <TextInput
+                  value={form.analyticsProjectId}
+                  placeholder={analyticsAdapter(form.analyticsProvider)?.configFieldPlaceholder ?? ""}
+                  onChange={(event) => setForm((current) => ({ ...current, analyticsProjectId: event.target.value }))}
+                />
+              </Field>
             ) : null}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 130px", gap: 12, marginTop: 16 }}>

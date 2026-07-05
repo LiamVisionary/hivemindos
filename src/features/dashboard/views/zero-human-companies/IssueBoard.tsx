@@ -1,9 +1,11 @@
 // Zero Human Companies — Linear-style issue board for a single colony.
 import React from "react";
 import { CompanyIssueActionButtons } from "./CompanyIssueActions";
+import { ConsolidatedIssueCard } from "./ConsolidatedIssueCard";
 import { ISSUE_LANES } from "./data";
 import { getIssueIdentity } from "./issue-identity";
-import { issueBlockReason } from "./issue-reason";
+import { groupIssuesByReason, issueBlockReason } from "./issue-reason";
+import type { PreviewDecision } from "./preview-review";
 import { PriTag, RoleGlyph } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
 
@@ -13,6 +15,7 @@ function IssueCard({
   companyName,
   onOpen,
   onResolveIssue,
+  onReviewPreview,
   busy,
 }: {
   issue: Issue;
@@ -20,6 +23,7 @@ function IssueCard({
   companyName: string;
   onOpen?: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
+  onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
   busy?: boolean;
 }) {
   const a = issue.agent;
@@ -66,7 +70,7 @@ function IssueCard({
         </div>
       )}
       {blockReason && (
-        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpen} onResolveIssue={onResolveIssue} busy={busy} />
+        <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpen} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busy} />
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 1 }}>
         {a ? (
@@ -94,12 +98,14 @@ export function IssueBoard({
   companyName = colony.name,
   onOpenIssue,
   onResolveIssue,
+  onReviewPreview,
   busyId,
 }: {
   colony: Colony;
   companyName?: string;
   onOpenIssue?: (issue: Issue) => void;
   onResolveIssue?: (issue: Issue) => void;
+  onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void;
   busyId?: string | null;
 }) {
   return (
@@ -120,17 +126,19 @@ export function IssueBoard({
               <span style={{ height: 2, background: `color-mix(in srgb, ${accent} 45%, transparent)`, borderRadius: 999, marginTop: 4 }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
-              {items.map((i) => (
-                <IssueCard
-                  key={getIssueIdentity(i)}
-                  issue={i}
-                  agents={colony.agents}
-                  companyName={companyName}
-                  onOpen={onOpenIssue}
-                  onResolveIssue={onResolveIssue}
-                  busy={busyId === i.work?.taskId}
-                />
-              ))}
+              {lane.key === "board_review" && onOpenIssue
+                ? groupIssuesByReason(items).map((group) =>
+                  group.issues.length > 1 && group.info.consolidatable ? (
+                    <ConsolidatedIssueCard key={group.signature} info={group.info} issues={group.issues} companyName={companyName} onOpenIssue={onOpenIssue} />
+                  ) : (
+                    group.issues.map((i) => (
+                      <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} companyName={companyName} onOpen={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busyId === i.work?.taskId} />
+                    ))
+                  ),
+                )
+                : items.map((i) => (
+                  <IssueCard key={getIssueIdentity(i)} issue={i} agents={colony.agents} companyName={companyName} onOpen={onOpenIssue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busyId === i.work?.taskId} />
+                ))}
               {items.length === 0 && (
                 <div style={{ borderRadius: 10, border: "1px dashed var(--line)", padding: "14px 10px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>empty</div>
               )}

@@ -44,11 +44,21 @@ export type EscalationEvent = {
   key: string;
   title: string;
   body: string;
-  severity: "high" | "urgent";
+  /**
+   * high/urgent are true escalations — they also fan out to the user's messaging
+   * channels. low/normal are in-app-only informational nudges (weekly status,
+   * FYI): they still create a deduped dashboard card but never ping Telegram/etc.
+   */
+  severity: "low" | "normal" | "high" | "urgent";
   /** Re-notify interval. Defaults to 24h. */
   ttlMs?: number;
   tags?: string[];
 };
+
+/** Only true escalations (high/urgent) fan out to external messaging channels. */
+function isExternallyDeliverable(severity: EscalationEvent["severity"]): boolean {
+  return severity === "high" || severity === "urgent";
+}
 
 type EscalationState = {
   sent: Record<string, number>;
@@ -104,7 +114,7 @@ async function escalationChannels(options: EscalationOptions) {
 }
 
 function formatMessage(event: EscalationEvent): string {
-  const icon = event.severity === "urgent" ? "🚨" : "⚠️";
+  const icon = event.severity === "urgent" ? "🚨" : event.severity === "high" ? "⚠️" : "ℹ️";
   return `${icon} HivemindOS — ${event.title}\n\n${event.body}`;
 }
 
@@ -148,6 +158,15 @@ export async function notifyEscalation(event: EscalationEvent, options: Escalati
         // resolution lifecycle on it (a re-notify after TTL re-points the key).
         state.notes[event.key] = created.id;
       }
+    }
+
+    // Informational nudges (low/normal) live only in the dashboard feed — the
+    // card above is the whole delivery. Record sent so the TTL dedupe holds and
+    // return false: nothing reached an external channel by design.
+    if (!isExternallyDeliverable(event.severity)) {
+      state.sent[event.key] = now;
+      await writeState(state);
+      return false;
     }
 
     const settings = await readAgentNotificationSettings({ vaultPath: options.vaultPath ?? undefined }).catch(() => null);

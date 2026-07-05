@@ -514,6 +514,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     lastDispatchedAt: company.lastDispatchedAt,
     hasApexGoal: Boolean(company.apexGoal?.title?.trim()),
     autonomy: Boolean(company.autonomy),
+    directives: company.directives,
     // Raw values for the edit form — the user's own input, not the derived
     // display fallbacks (`apex`, formatted target, etc.).
     edit: {
@@ -523,6 +524,9 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
       charter: company.charter || "",
       blurb: company.blurb || "",
       projectId: company.projectId || "",
+      analyticsProvider: company.analyticsProvider ?? "",
+      analyticsProjectId: company.analyticsConfig?.projectId ?? "",
+      analyticsHost: company.analyticsConfig?.host ?? "",
       dailyBudgetUsd: company.dailyBudgetUsd,
       monthlyBudgetUsd: company.monthlyBudgetUsd,
       totalBudgetUsd: company.totalBudgetUsd,

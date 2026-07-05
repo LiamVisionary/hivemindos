@@ -7,6 +7,8 @@
 // buckets it into the collapsed "working files" group).
 import React from "react";
 import { FileViewerModal } from "./FileViewer";
+import { RejectDeliverableModal } from "./RejectDeliverableModal";
+import { Snackbar } from "./Snackbar";
 import { deliverableHref } from "./deliverables-model";
 import type { ClassifiedDeliverable, DeliverableIcon } from "./deliverables-model";
 import type { Theme } from "./types";
@@ -79,10 +81,13 @@ function HeroChrome({ isLink, text }: { isLink: boolean; text: string }) {
   );
 }
 
-export function DeliverableCard({ item, machineName, theme = "dark", layout = "card" }: {
-  item: ClassifiedDeliverable; machineName?: string; theme?: Theme; layout?: "card" | "row" | "hero";
+export function DeliverableCard({ item, machineName, theme = "dark", layout = "card", companyId, initiallyRejected = false }: {
+  item: ClassifiedDeliverable; machineName?: string; theme?: Theme; layout?: "card" | "row" | "hero"; companyId?: string; initiallyRejected?: boolean;
 }) {
   const [viewing, setViewing] = React.useState(false);
+  const [rejecting, setRejecting] = React.useState(false);
+  const [rejected, setRejected] = React.useState(false);
+  const [toast, setToast] = React.useState(false);
   const [hover, setHover] = React.useState(false);
   const { deliverable, icon, title, kindLabel, action, url } = item;
   const isLink = action === "visit" && !!url;
@@ -147,17 +152,50 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
 
   const hoverProps = { onMouseEnter: () => setHover(true), onMouseLeave: () => setHover(false) };
 
-  if (isLink) {
-    return <a href={url} target="_blank" rel="noreferrer" style={surface} {...hoverProps}>{body}</a>;
-  }
-  if (action === "none") {
-    return <div style={{ ...surface, opacity: 0.75 }} title={item.internalReason ? `${deliverable.path || deliverableHref(deliverable) || ""} — ${item.internalReason}` : undefined}>{body}</div>;
-  }
-  // Real file → open the authenticated in-app viewer.
-  return (
+  const cardEl = isLink ? (
+    <a href={url} target="_blank" rel="noreferrer" style={surface} {...hoverProps}>{body}</a>
+  ) : action === "none" ? (
+    <div style={{ ...surface, opacity: 0.75 }} title={item.internalReason ? `${deliverable.path || deliverableHref(deliverable) || ""} — ${item.internalReason}` : undefined}>{body}</div>
+  ) : (
+    // Real file → open the authenticated in-app viewer.
     <>
       <button type="button" onClick={() => setViewing(true)} style={surface} {...hoverProps}>{body}</button>
       {viewing && <FileViewerModal deliverable={deliverable} displayTitle={title} displayKind={kindLabel} machineName={machineName} theme={theme} onClose={() => setViewing(false)} />}
     </>
+  );
+
+  // Once rejected (just now or on a prior cycle), the deliverable is no longer a
+  // live output — show a struck-through tombstone; the redirect lives on as a
+  // standing directive in company knowledge.
+  if (rejected || initiallyRejected) {
+    return (
+      <>
+        <div title="Rejected — the crew was redirected via a standing directive" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 14, border: "1px dashed var(--line-2)", background: "var(--bg-2)", opacity: 0.62 }}>
+          <span aria-hidden style={{ fontSize: 15 }}>🚫</span>
+          <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--f-display)", fontSize: 13, color: "var(--fg-3)", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
+          <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)" }}>rejected · crew redirected</span>
+        </div>
+        {toast && <Snackbar message="Rejected deliverable" sub="Feedback directed to company" onClose={() => setToast(false)} />}
+      </>
+    );
+  }
+
+  if (!companyId) return cardEl;
+  // A human can reject a deliverable to redirect the crew — the feedback becomes
+  // a standing directive in company knowledge (RejectDeliverableModal).
+  return (
+    <div style={{ position: "relative" }}>
+      {cardEl}
+      <button
+        type="button"
+        onClick={() => setRejecting(true)}
+        title="Reject & redirect the crew"
+        aria-label="Reject deliverable"
+        style={{ position: "absolute", top: 8, right: 8, zIndex: 2, cursor: "pointer", border: "1px solid var(--line-2)", background: "color-mix(in srgb, var(--danger) 14%, var(--bg-2))", color: "var(--danger-2)", borderRadius: 8, padding: "3px 9px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, letterSpacing: 0.04 }}
+      >
+        reject
+      </button>
+      {rejecting && <RejectDeliverableModal companyId={companyId} deliverableRef={title} onClose={() => setRejecting(false)} onDone={() => { setRejected(true); setToast(true); }} />}
+    </div>
   );
 }

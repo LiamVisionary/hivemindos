@@ -17,6 +17,29 @@ export function useKanbanTaskController(props: any) {
   // Transient non-error board notices (e.g. "move adjusted", "run stopped");
   // the panel auto-dismisses them.
   const [kanbanNotice, setKanbanNotice] = useState("");
+  const [kanbanClearingColumnId, setKanbanClearingColumnId] = useState("");
+
+  function stopLocalKanbanTaskActivity(taskId: string, status: KanbanStatus, task?: KanbanTask | null, options: { at?: number; notify?: boolean } = {}) {
+    kanbanManualMoveRef.current.set(taskId, { status, at: options.at ?? Date.now() });
+    const activeStream = kanbanRuntimeAbortRef.current.get(taskId);
+    activeStream?.abort();
+    kanbanRuntimeAbortRef.current.delete(taskId);
+    kanbanReadyPickupInFlightRef.current.delete(taskId);
+    kanbanReadyPickupAttemptRef.current.delete(taskId);
+    if (task) {
+      kanbanReadyPickupAttemptRef.current.delete(`working:${kanbanReadyPickupSignature(task, displayAgents)}`);
+    }
+    setKanbanPickupPreviewByTask((current) => {
+      if (!current[taskId]) return current;
+      const next = { ...current };
+      delete next[taskId];
+      return next;
+    });
+    if (options.notify && task?.status === "working") {
+      setKanbanNotice(`Stopped the active agent run on "${task.title}".`);
+    }
+  }
+
   async function createKanbanTask(event: FormEvent, status: KanbanStatus, projectId?: string) {
     event.preventDefault();
     const title = quickAddDrafts[status]?.trim();
@@ -141,6 +164,75 @@ export function useKanbanTaskController(props: any) {
     if (failures.length) setKanbanError(`${failures.length} selected task${failures.length === 1 ? "" : "s"} could not be updated.`);
     else setKanbanError("");
     await refreshKanbanOnce().catch((error) => setKanbanError(error instanceof Error ? error.message : "Kanban refresh failed."));
+  }
+
+  async function clearKanbanColumnTasks(column: KanbanColumn, columnTasks: KanbanTask[]) {
+    const tasks = columnTasks.filter((task) => task.status !== "archived");
+    if (!tasks.length || kanbanClearingColumnId) return;
+    const activeTasks = tasks.filter((task) => task.status === "working");
+    const confirmed = await confirmUserAction([
+      `Clear all ${tasks.length} task${tasks.length === 1 ? "" : "s"} from ${column.title}?`,
+      "They will move to Archive and leave the active board.",
+      activeTasks.length
+        ? `This will stop ${activeTasks.length} active agent run${activeTasks.length === 1 ? "" : "s"}.`
+        : "",
+    ].filter(Boolean).join("\n\n"));
+    if (!confirmed) return;
+
+    const ids = tasks.map((task) => task.id);
+    const idSet = new Set(ids);
+    const now = Date.now();
+    setKanbanClearingColumnId(column.id);
+    setKanbanBulkPending(true);
+    setKanbanError("");
+    for (const task of tasks) {
+      stopLocalKanbanTaskActivity(task.id, "archived", task, { at: now });
+    }
+
+    try {
+      const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...kanbanStorageBody(),
+          action: "bulk",
+          ids,
+          patch: { status: "archived" },
+        }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as KanbanResponse & { results?: Array<{ ok: boolean; error?: string }> } | null;
+      if (!response?.ok || !data?.ok) {
+        setKanbanError(data?.error ?? "Could not clear that row.");
+        return;
+      }
+      const failures = data.results?.filter((result) => !result.ok) ?? [];
+      if (data.board) {
+        setKanbanBoard(data.board);
+        setKanbanStorage(data.storage ?? null);
+      }
+      setSelectedKanbanTaskIds((current: Record<string, boolean>) => {
+        const next = { ...current };
+        for (const taskId of ids) delete next[taskId];
+        return next;
+      });
+      if (selectedKanbanTaskId && idSet.has(selectedKanbanTaskId)) {
+        setSelectedKanbanTaskId("");
+        setKanbanTaskModal("");
+      }
+      if (failures.length) {
+        setKanbanError(`${failures.length} task${failures.length === 1 ? "" : "s"} could not be cleared.`);
+      } else {
+        setKanbanNotice(
+          activeTasks.length
+            ? `Archived ${tasks.length} ${column.title} task${tasks.length === 1 ? "" : "s"} and stopped ${activeTasks.length} active run${activeTasks.length === 1 ? "" : "s"}.`
+            : `Archived ${tasks.length} ${column.title} task${tasks.length === 1 ? "" : "s"}.`,
+        );
+      }
+      await refreshKanbanOnce().catch((error) => setKanbanError(error instanceof Error ? error.message : "Kanban refresh failed."));
+    } finally {
+      setKanbanBulkPending(false);
+      setKanbanClearingColumnId("");
+    }
   }
 
   async function promoteKanbanIdea(task: KanbanTask, mode: "specify" | "decompose") {
@@ -310,16 +402,10 @@ export function useKanbanTaskController(props: any) {
   async function moveKanbanTask(taskId: string, status: KanbanStatus) {
     const currentTask = kanbanBoard?.tasks.find((task) => task.id === taskId);
     // The user's move wins over any automation in flight for this card.
-    kanbanManualMoveRef.current.set(taskId, { status, at: Date.now() });
     if (status !== "working") {
-      const activeStream = kanbanRuntimeAbortRef.current.get(taskId);
-      if (activeStream) {
-        activeStream.abort();
-        kanbanRuntimeAbortRef.current.delete(taskId);
-        if (currentTask?.status === "working") {
-          setKanbanNotice(`Stopped the active agent run on "${currentTask.title}".`);
-        }
-      }
+      stopLocalKanbanTaskActivity(taskId, status, currentTask, { notify: true });
+    } else {
+      kanbanManualMoveRef.current.set(taskId, { status, at: Date.now() });
     }
     const targetStatus = status === "working" && !currentTask?.assignee?.trim()
       ? "ready"
@@ -373,6 +459,7 @@ export function useKanbanTaskController(props: any) {
   async function deleteKanbanTask(task: KanbanTask) {
     const confirmed = await confirmUserAction(`Delete "${task.title}" from the Work board? This also removes its notes and task links.`);
     if (!confirmed) return;
+    stopLocalKanbanTaskActivity(task.id, "archived", task);
     const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -387,8 +474,6 @@ export function useKanbanTaskController(props: any) {
       setSelectedKanbanTaskId("");
       setKanbanTaskModal("");
     }
-    kanbanRuntimeAbortRef.current.get(task.id)?.abort();
-    kanbanRuntimeAbortRef.current.delete(task.id);
     if (data.board) {
       setKanbanBoard(data.board);
       setKanbanStorage(data.storage ?? null);
@@ -924,5 +1009,5 @@ export function useKanbanTaskController(props: any) {
   }
 
 
-  return { kanbanNotice, setKanbanNotice, createKanbanTask, createKanbanBoard, patchKanbanTask, bulkPatchKanbanTasks, promoteKanbanIdea, updateKanbanTaskMachine, markKanbanTaskReviewed, requestKanbanTaskUndo, readWorkspaceGitSnapshot, kanbanWorkspaceChangeSummary, addKanbanCardFiles, openKanbanCardFilePicker, handleKanbanCardFileChange, handleKanbanCardImageChange, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, removeKanbanCardAttachment, removeKanbanCardDirectory, moveKanbanTask, deleteKanbanTask, editAndInterruptKanbanTask, openKanbanTaskModal, kanbanTaskMenuItems, orchestrateReadyKanbanTask, addKanbanSystemComment };
+  return { kanbanNotice, setKanbanNotice, kanbanClearingColumnId, createKanbanTask, createKanbanBoard, patchKanbanTask, bulkPatchKanbanTasks, clearKanbanColumnTasks, promoteKanbanIdea, updateKanbanTaskMachine, markKanbanTaskReviewed, requestKanbanTaskUndo, readWorkspaceGitSnapshot, kanbanWorkspaceChangeSummary, addKanbanCardFiles, openKanbanCardFilePicker, handleKanbanCardFileChange, handleKanbanCardImageChange, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, removeKanbanCardAttachment, removeKanbanCardDirectory, moveKanbanTask, deleteKanbanTask, editAndInterruptKanbanTask, openKanbanTaskModal, kanbanTaskMenuItems, orchestrateReadyKanbanTask, addKanbanSystemComment };
 }

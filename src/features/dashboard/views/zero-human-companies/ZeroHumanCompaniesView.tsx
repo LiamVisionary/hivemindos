@@ -18,6 +18,7 @@ import {
 } from "./zhc-demo-data";
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
 import { resolvedIssueAnswer } from "./issue-resume";
+import { issuePreviewUrl, previewReviewAnswer, type PreviewDecision } from "./preview-review";
 import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 
@@ -473,6 +474,11 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
         charter: form.charter ?? "",
         blurb: form.blurb ?? "",
         projectId: form.projectId ?? "",
+        analyticsProvider: form.analyticsProvider || undefined,
+        analyticsConfig:
+          form.analyticsProjectId || form.analyticsHost
+            ? { projectId: form.analyticsProjectId || undefined, host: form.analyticsHost || undefined }
+            : undefined,
         dailyBudgetUsd: form.dailyBudgetUsd && form.dailyBudgetUsd > 0 ? form.dailyBudgetUsd : 0,
         monthlyBudgetUsd: form.monthlyBudgetUsd && form.monthlyBudgetUsd > 0 ? form.monthlyBudgetUsd : 0,
         totalBudgetUsd: form.totalBudgetUsd && form.totalBudgetUsd > 0 ? form.totalBudgetUsd : 0,
@@ -633,6 +639,47 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     }
   }, [data, refresh]);
 
+  const handleReviewPreview = React.useCallback(async (companyId: string, issue: Issue, decision: PreviewDecision, notes: string) => {
+    const taskId = issue.work?.taskId;
+    if (!taskId) {
+      setError("This preview has no Work Board task to route your review to.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    const who = issue.agent || "the crew";
+    setBusyId(taskId);
+    setNotice(null);
+    try {
+      // Same `answer` rail as Mark Resolved: stamp the decision into the parked
+      // task and the same agent resumes — send it, or revise and re-submit.
+      const res = await fetch("/api/kanban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "answer",
+          taskId,
+          answer: previewReviewAnswer(issue, decision, notes, issuePreviewUrl(issue)),
+          author: "dashboard",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Could not send your preview review to the crew.");
+      } else {
+        setError(null);
+        const soon = json.pickupScheduled ? "now" : "on the next pickup";
+        setNotice(
+          decision === "approve"
+            ? `${companyName}: preview approved. ${who} is taking the next step ${soon}.`
+            : `${companyName}: change request sent. ${who} is revising the preview ${soon}.`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh]);
+
   const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
     setBusyId(companyId);
     setNotice(null);
@@ -688,6 +735,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
       onResolveIssue={(companyId, issue) => void handleResolveIssue(companyId, issue)}
+      onReviewPreview={(companyId, issue, decision, notes) => void handleReviewPreview(companyId, issue, decision, notes)}
       onRecordRevenue={handleRecordRevenue}
       theme={theme}
     />
