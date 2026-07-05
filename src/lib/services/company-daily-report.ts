@@ -141,7 +141,7 @@ async function buildCompanyKpis(
     companySpendRollup(company, memberCount, opts.now),
     readCompanyMemory(company.id, { limit: ACTIVITY_MEMORY_LIMIT }),
     opts.includeEmail && memberCount > 0
-      ? readCompanyEmailThreads({ agentIds: company.agentIds, totalLimit: EMAIL_THREAD_CAP }).catch(() => null)
+      ? readCompanyEmailThreads({ agentIds: company.agentIds, companyId: company.id, totalLimit: EMAIL_THREAD_CAP }).catch(() => null)
       : Promise.resolve(null),
   ]);
 

@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import { AGENTIC_INBOX_PROJECT_DIR, readAgenticInboxStatus } from "@/lib/services/cloudflare/agentic-inbox-setup";
+import { createWorkerRoutingRule, readCloudflareRoutingStatus, resolveCloudflareZone } from "@/lib/services/cloudflare/cloudflare-email-api";
 import { hiveEnvPresence, hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { readMapsAgencyOutboxForCompany } from "@/lib/services/company-outreach-outbox";
 
@@ -68,31 +69,6 @@ export type AgentMailboxProviderStatus = {
 type AgentMailboxStore = {
   version: number;
   mailboxes: AgentMailbox[];
-};
-
-type CloudflareZone = {
-  id?: string;
-  name?: string;
-  status?: string;
-};
-
-type CloudflareRoutingSettings = {
-  enabled?: boolean;
-  status?: string;
-  name?: string;
-};
-
-type CloudflareRoutingRule = {
-  id?: string;
-  enabled?: boolean;
-  name?: string;
-};
-
-type CloudflareEnvelope<T> = {
-  success?: boolean;
-  result?: T;
-  errors?: Array<{ code?: number; message?: string }>;
-  messages?: Array<{ code?: number; message?: string }>;
 };
 
 type AgentMailInbox = {
@@ -565,15 +541,10 @@ async function provisionCloudflareMailbox(input: AgentMailboxProvisionInput): Pr
   const zoneId = input.providerStatus.cloudflare?.zoneId;
   const workerName = input.providerStatus.cloudflare?.workerName || DEFAULT_CLOUDFLARE_WORKER_NAME;
   if (!token || !zoneId) throw new Error("Cloudflare mailbox provider is missing a verified zone.");
-  const response = await cloudflareRequest<CloudflareRoutingRule>(`/zones/${encodeURIComponent(zoneId)}/email/routing/rules`, token, {
-    method: "POST",
-    body: {
-      enabled: true,
-      name: `HivemindOS ${input.agentName}`,
-      matchers: [{ type: "literal", field: "to", value: input.address }],
-      actions: [{ type: "worker", value: [workerName] }],
-      priority: 0,
-    },
+  const response = await createWorkerRoutingRule(token, zoneId, {
+    address: input.address,
+    ruleName: `HivemindOS ${input.agentName}`,
+    workerName,
   });
   if (!response.ok) {
     throw new Error(response.error || "Cloudflare routing rule creation failed.");
@@ -584,57 +555,6 @@ async function provisionCloudflareMailbox(input: AgentMailboxProvisionInput): Pr
       routingRuleId: response.result?.id || "",
       workerName,
     },
-  };
-}
-
-async function resolveCloudflareZone(input: {
-  token: string;
-  accountId: string;
-  configuredDomain: string;
-  configuredZoneId: string;
-  liveCheck: boolean;
-}): Promise<{ zone?: CloudflareZone; error?: string } | undefined> {
-  if (!input.liveCheck) {
-    if (input.configuredDomain || input.configuredZoneId) {
-      return { zone: { id: input.configuredZoneId || undefined, name: input.configuredDomain || undefined } };
-    }
-    return undefined;
-  }
-  if (input.configuredZoneId) {
-    const response = await cloudflareRequest<CloudflareZone>(`/zones/${encodeURIComponent(input.configuredZoneId)}`, input.token);
-    if (!response.ok) return { error: response.error || "Cloudflare zone lookup failed." };
-    return { zone: response.result };
-  }
-  if (input.configuredDomain) {
-    const query = new URLSearchParams({ name: input.configuredDomain, status: "active", per_page: "5" });
-    if (input.accountId) query.set("account.id", input.accountId);
-    const response = await cloudflareRequest<CloudflareZone[]>(`/zones?${query}`, input.token);
-    if (!response.ok) return { error: response.error || "Cloudflare domain lookup failed." };
-    const zone = response.result?.find((item) => item.name === input.configuredDomain) ?? response.result?.[0];
-    return zone ? { zone } : { error: `Cloudflare domain ${input.configuredDomain} was not found or is not active.` };
-  }
-  if (!input.accountId) return undefined;
-  const query = new URLSearchParams({ "account.id": input.accountId, status: "active", per_page: "50" });
-  const response = await cloudflareRequest<CloudflareZone[]>(`/zones?${query}`, input.token);
-  if (!response.ok) return { error: response.error || "Cloudflare zones could not be listed." };
-  const zones = response.result?.filter((zone) => zone.id && zone.name) ?? [];
-  if (zones.length === 1) return { zone: zones[0] };
-  if (zones.length > 1) return { error: "Multiple Cloudflare zones are available, so HivemindOS needs one email domain selected once for mailbox provisioning." };
-  return { error: "No active Cloudflare zones are available for mailbox provisioning." };
-}
-
-async function readCloudflareRoutingStatus(token: string, zoneId: string) {
-  const response = await cloudflareRequest<CloudflareRoutingSettings>(`/zones/${encodeURIComponent(zoneId)}/email/routing`, token);
-  if (!response.ok) {
-    return { ok: false, detail: response.error || "Cloudflare Email Routing status could not be verified.", status: "unknown" };
-  }
-  const status = response.result?.status || (response.result?.enabled ? "ready" : "unconfigured");
-  return {
-    ok: response.result?.enabled === true && status === "ready",
-    detail: response.result?.enabled === true && status === "ready"
-      ? "Cloudflare Email Routing is enabled and ready."
-      : `Cloudflare Email Routing is ${status}.`,
-    status,
   };
 }
 
@@ -655,31 +575,6 @@ async function readCloudflareSendingStatus(input: { token: string; accountId: st
       ? `Cloudflare Email Sending is enabled for ${input.domain}.`
       : `Cloudflare Email Sending did not report ${input.domain} as an onboarded sending domain.`,
   };
-}
-
-async function cloudflareRequest<T>(
-  path: string,
-  token: string,
-  init: { method?: string; body?: unknown } = {},
-): Promise<{ ok: true; result?: T } | { ok: false; error: string }> {
-  const response = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
-    method: init.method || "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  }).catch((error: unknown) => error instanceof Error ? error : new Error("Cloudflare request failed."));
-  if (response instanceof Error) return { ok: false, error: response.message };
-  const payload = await response.json().catch(() => ({})) as CloudflareEnvelope<T>;
-  if (!response.ok || payload.success === false) {
-    return {
-      ok: false,
-      error: payload.errors?.map((error) => error.message || `Cloudflare error ${error.code}`).filter(Boolean).join("; ")
-        || `Cloudflare API returned HTTP ${response.status}.`,
-    };
-  }
-  return { ok: true, result: payload.result };
 }
 
 async function agentMailRequest<T>(

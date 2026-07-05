@@ -46,6 +46,9 @@ export type FoundryServicePreflight = {
   key: string;
   ok: boolean;
   detail: string;
+  /** Readiness hints (domain, Email Routing, R2) set `blocking: false` so they
+   *  inform without gating the Deploy button. Omitted/true means it blocks. */
+  blocking?: boolean;
 };
 
 export type FoundryServiceAction = {

@@ -58,7 +58,7 @@ export type InstallableServiceStatus = {
     approvedAt?: string;
   };
   projectDir?: string;
-  preflight?: Array<{ key: string; ok: boolean; detail: string }>;
+  preflight?: Array<{ key: string; ok: boolean; detail: string; blocking?: boolean }>;
   preflightActions?: Array<{
     action: InstallableServiceAction;
     label: string;

@@ -89,7 +89,7 @@ type InstallableServiceStatus = {
     approvedAt?: string;
   };
   projectDir?: string;
-  preflight?: Array<{ key: string; ok: boolean; detail: string }>;
+  preflight?: Array<{ key: string; ok: boolean; detail: string; blocking?: boolean }>;
   preflightActions?: Array<{
     action: InstallableServiceAction;
     label: string;
@@ -199,7 +199,9 @@ function installableServiceBlocked(service: InstallableServiceStatus | undefined
   ) return false;
   if (isInstallOnlyCliService(service) && service.installed) return true;
   if (action === "install" && /required before|is required before|is required to install/i.test(service.detail)) return true;
-  if (service.id === "agentic-inbox" && action === "start") return Boolean(service.preflight?.some((item) => !item.ok));
+  // Only the core scaffold/wrangler/auth checks block Deploy; domain/routing/R2
+  // are readiness hints (blocking: false) that are resolved during/after deploy.
+  if (service.id === "agentic-inbox" && action === "start") return Boolean(service.preflight?.some((item) => item.blocking !== false && !item.ok));
   return false;
 }
 
