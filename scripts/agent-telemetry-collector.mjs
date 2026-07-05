@@ -73,6 +73,7 @@ import {
 } from "./lib/runtime-portable-state.mjs";
 import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
+import { tailnetSelfNode } from "./lib/tailnet-self.mjs";
 // NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
 // not at top level. A -SkipDeps app-driven collector install (Windows) has no
 // node_modules, and a failed top-level import would crash the whole collector at
@@ -5819,6 +5820,7 @@ async function collectorHealthPayload() {
       system,
       installed,
       processStats,
+      tailnetSelf,
     ] = await Promise.all([
       syncthingInstalled(),
       resolveHiveEnvAdd(),
@@ -5828,6 +5830,7 @@ async function collectorHealthPayload() {
       systemStats().catch(() => null),
       installedRuntimes().catch(() => []),
       processResourceStats().catch(() => null),
+      tailnetSelfNode().catch(() => null),
     ]);
     const runtimes = [
       ...new Set([...agents.map((agent) => agent.runtime), ...installed]),
@@ -5836,6 +5839,7 @@ async function collectorHealthPayload() {
       ok: true,
       host: hostname(),
       machineId,
+      tailnetSelf,
       mode: collectorOnly ? "collector-only" : "full",
       collectorStartedAt,
       collectorStartedAtMs,

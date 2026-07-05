@@ -5,7 +5,7 @@ import {
   hivemindLinkControlUrl,
   localTelemetryCollectorUrl,
 } from "@/lib/services/hivemind-link-control";
-import { isHivemindMachineName, isMacMachineOs, isMobileMachineOs, isVisibleFleetMachine } from "@/features/fleet/fleet-identity";
+import { isHivemindMachineName, isMacMachineOs, isMobileMachineOs, isVisibleFleetMachine, tailnetSelfIdentityCandidates, type TailnetSelfNode } from "@/features/fleet/fleet-identity";
 import { annotateReverseReachability } from "@/app/api/fleet/reverse-reachability";
 import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
 import { mobileAgentProfilesForMachine } from "@/lib/services/mobile-agents/fleet";
@@ -159,6 +159,7 @@ type DiscoveredMachine = {
   collector: string;
   collectorHost?: string;
   machineId?: string;
+  tailnetSelf?: TailnetSelfNode;
   version?: CollectorVersion;
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
@@ -613,6 +614,7 @@ type CollectorProbeResult = {
   system?: CollectorSystemStats;
   collectorHost?: string;
   machineId?: string;
+  tailnetSelf?: TailnetSelfNode;
 };
 
 function collectorUrlWithPort(rawUrl: string, port: number) {
@@ -745,6 +747,7 @@ async function probeCollector(
   )) as {
     host?: string;
     machineId?: string;
+    tailnetSelf?: TailnetSelfNode;
     version?: CollectorVersion;
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
@@ -767,6 +770,7 @@ async function probeCollector(
     system: healthData.system,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
+    tailnetSelf: healthData.tailnetSelf,
   };
 }
 
@@ -1014,6 +1018,7 @@ async function probeCollectorViaTailscale(
   )) as {
     host?: string;
     machineId?: string;
+    tailnetSelf?: TailnetSelfNode;
     version?: CollectorVersion;
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
@@ -1040,6 +1045,7 @@ async function probeCollectorViaTailscale(
     system: healthData.system,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
+    tailnetSelf: healthData.tailnetSelf,
   };
 }
 
@@ -1147,6 +1153,7 @@ async function readDiscovery(
           collector: "ready",
           collectorHost: probe.collectorHost,
           machineId: probe.machineId,
+          tailnetSelf: probe.tailnetSelf,
           version: probe.version,
           capabilities: probe.capabilities,
           envSync: probe.envSync,
@@ -1171,6 +1178,7 @@ async function readDiscovery(
           collector: "ready",
           collectorHost: probe.collectorHost,
           machineId: probe.machineId,
+          tailnetSelf: probe.tailnetSelf,
           version: probe.version,
           capabilities: probe.capabilities,
           envSync: probe.envSync,
@@ -1184,6 +1192,7 @@ async function readDiscovery(
           collector: "ready",
           collectorHost: probe.collectorHost,
           machineId: probe.machineId,
+          tailnetSelf: probe.tailnetSelf,
           version: probe.version,
           capabilities: probe.capabilities,
           envSync: probe.envSync,
@@ -1418,10 +1427,16 @@ function dedupeMachines<
   return [...byIdentity.values()];
 }
 
-function machineBaseCandidates(machine: { device: Device }) {
+function machineBaseCandidates(machine: { device: Device; tailnetSelf?: TailnetSelfNode }) {
   // Exact identity only (keeps tailscale's `-N` suffix): a `-1` node is a
-  // different physical machine with the same hostname, not a duplicate.
-  return [deviceIdentityKey(machine.device)].filter(Boolean);
+  // different physical machine with the same hostname, not a duplicate. A
+  // ready collector additionally claims its self-reported system tailnet
+  // node, so a hostname rename (rotated linkd tsnet name, sticky system
+  // node name) still folds both nodes into one machine.
+  return [
+    deviceIdentityKey(machine.device),
+    ...tailnetSelfIdentityCandidates(machine.tailnetSelf),
+  ].filter(Boolean);
 }
 
 function hasFreshReadyDuplicate(

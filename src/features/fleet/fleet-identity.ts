@@ -135,6 +135,28 @@ export function machineExactIdentity(name?: string, dnsName?: string) {
   return value.replace(/^hivemindos/, "").replace(/local$/, "");
 }
 
+/**
+ * A collector's /health may report the machine's system tailscaled node as
+ * `tailnetSelf`. An OS hostname rename (macOS mDNS-conflict renames append
+ * random digits) makes the linkd tsnet node re-register under the NEW name
+ * while the system node keeps its sticky old MagicDNS name — name matching
+ * alone then splits one physical machine into a ready collector machine plus
+ * an empty ghost. Discovery folds any tailnet device whose exact identity is
+ * one of these self-declared candidates into the collector machine.
+ */
+export type TailnetSelfNode = { name?: string | null; dnsName?: string | null };
+
+export function tailnetSelfIdentityCandidates(
+  tailnetSelf: TailnetSelfNode | null | undefined,
+): string[] {
+  if (!tailnetSelf) return [];
+  const candidates = [
+    machineExactIdentity(undefined, tailnetSelf.dnsName ?? undefined),
+    machineExactIdentity(tailnetSelf.name ?? undefined, undefined),
+  ];
+  return [...new Set(candidates.filter(Boolean))];
+}
+
 export function machineHivemindBase(
   name?: string,
   dnsName?: string,
