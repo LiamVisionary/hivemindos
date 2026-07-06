@@ -139,6 +139,21 @@ function imageGenerationToolDefinition() {
 type AccumulatedToolCall = { id: string; name: string; arguments: string };
 type ToolCallOutcome = { toolResultContent: string; fallbackText: string; finalText?: string };
 
+function firstCommandFailureLine(result: { error?: string; stderr?: string }) {
+  const text = (result.error || result.stderr || "unknown error").trim();
+  return text.split(/\n/).map((line) => line.trim()).find(Boolean) || "unknown error";
+}
+
+function commandFailureFallbackText(commandLine: string, result: { command?: string; error?: string; stderr?: string }) {
+  const command = result.command?.trim() || commandLine.trim() || "the command";
+  const failure = firstCommandFailureLine(result);
+  if (/not allowlisted/i.test(failure)) {
+    return `I couldn't run \`${command}\` because it is not in this agent's local command allowlist.`;
+  }
+  const label = commandLine.trim() || command;
+  return `I tried \`${label}\`, but it failed: ${failure}`;
+}
+
 function parseToolCallArguments(raw: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(raw || "{}");
@@ -426,7 +441,7 @@ export async function streamOpenAICompatibleRuntime(
           status: "failed",
         }));
         await appendRuntimeChatSessionEvent(runtimeSessionId, "Command failed", message).catch(() => undefined);
-        finalTexts.push(`Command failed: ${message}`);
+        finalTexts.push("I couldn't run that command because the tool call did not include a command.");
         continue;
       }
       recordRuntimeTelemetry(telemetry, "agent_runtime.command_tool.dispatch", {
@@ -466,7 +481,7 @@ export async function streamOpenAICompatibleRuntime(
       });
       finalTexts.push(result.ok
         ? commandSuccessText(label, commandLine)
-        : `Command failed: ${result.error ?? result.stderr ?? "unknown error"}`);
+        : commandFailureFallbackText(commandLine, result));
     }
     return { events, text: finalTexts.filter(Boolean).join("\n\n") || "Done." };
   };
@@ -1099,7 +1114,7 @@ export async function streamOpenAICompatibleRuntime(
           }),
           fallbackText: result.ok
             ? `Ran \`${commandLine}\`.`
-            : `Command failed: ${result.error ?? result.stderr ?? "unknown error"}`,
+            : commandFailureFallbackText(commandLine, result),
         };
       };
 

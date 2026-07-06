@@ -74,6 +74,11 @@ import {
 import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
 import { tailnetSelfNode } from "./lib/tailnet-self.mjs";
+import {
+  createSyncthingApiKeyResolver,
+  defaultSyncthingConfigCandidates,
+} from "./lib/syncthing-api-key.mjs";
+import { isMacosProtectedAppDataPath } from "./lib/macos-privacy-paths.mjs";
 // NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
 // not at top level. A -SkipDeps app-driven collector install (Windows) has no
 // node_modules, and a failed top-level import would crash the whole collector at
@@ -271,6 +276,9 @@ const skillProviderRoots = [
     ],
   },
 ];
+
+const allowCollectorAppDataReads =
+  process.env.AGENT_TELEMETRY_ALLOW_APP_DATA_READS === "1";
 const skippedSkillDirs = new Set([
   ".git",
   "node_modules",
@@ -483,6 +491,32 @@ function runtimeProcessEnv(extra = {}) {
     PATH: pathParts.join(delimiter),
     ...extra,
   });
+}
+
+function hermesSafeFileSearchRoots(hermesHome = defaultHermesDir) {
+  const explicit = process.env.HERMES_SAFE_FILE_SEARCH_ROOTS?.trim();
+  if (explicit) return explicit;
+  return [
+    defaultSyncPath,
+    appDir,
+    join(homedir(), "Documents"),
+    join(homedir(), ".hivemindos"),
+    hermesHome,
+  ]
+    .map((root) => resolve(expandHome(root)))
+    .filter(Boolean)
+    .filter((root, index, roots) => roots.indexOf(root) === index)
+    .join(delimiter);
+}
+
+function hermesPrivacyGuardEnv(hermesHome = defaultHermesDir) {
+  return {
+    HERMES_SAFE_FILE_SEARCH_ROOTS: hermesSafeFileSearchRoots(hermesHome),
+    HERMES_ALLOW_HOME_WIDE_FILE_SEARCH:
+      process.env.HERMES_ALLOW_HOME_WIDE_FILE_SEARCH || "0",
+    HERMES_ALLOW_MACOS_APP_DATA_SEARCH:
+      process.env.HERMES_ALLOW_MACOS_APP_DATA_SEARCH || "0",
+  };
 }
 
 // The collector captures process.env at startup, so shared credentials added
@@ -961,8 +995,10 @@ async function processCwd(pid) {
 async function projectSearchRoots(startDir) {
   let current = resolve(startDir || ".");
   const home = homedir();
+  if (isMacosProtectedAppDataPath(current)) return [];
   const roots = [];
   for (let depth = 0; depth < 8; depth += 1) {
+    if (isMacosProtectedAppDataPath(current)) break;
     roots.push(current);
     const parent = dirname(current);
     if (
@@ -2287,30 +2323,12 @@ function safeFolderId(value) {
   );
 }
 
-function syncthingConfigCandidates() {
-  return [
+const readSyncthingApiKey = createSyncthingApiKeyResolver({
+  configCandidates: [
     process.env.SYNCTHING_CONFIG_PATH,
-    join(
-      homedir(),
-      "Library",
-      "Application Support",
-      "Syncthing",
-      "config.xml",
-    ),
-    join(homedir(), ".local", "state", "syncthing", "config.xml"),
-    join(homedir(), ".config", "syncthing", "config.xml"),
-  ].filter(Boolean);
-}
-
-async function readSyncthingApiKey() {
-  if (process.env.SYNCTHING_API_KEY) return process.env.SYNCTHING_API_KEY;
-  for (const path of syncthingConfigCandidates()) {
-    const raw = await readFile(path, "utf8").catch(() => "");
-    const match = raw.match(/<apikey>([^<]+)<\/apikey>/i);
-    if (match?.[1]) return match[1].trim();
-  }
-  return "";
-}
+    ...(allowCollectorAppDataReads ? defaultSyncthingConfigCandidates() : []),
+  ].filter(Boolean),
+});
 
 async function resolveSyncthingBin() {
   if (process.env.SYNCTHING_BIN) return process.env.SYNCTHING_BIN;
@@ -5916,6 +5934,7 @@ async function sendHermesChat(body, options = {}) {
     ...hermesModelHostEnv(body, agent),
     HERMES_HOME: hermesHome,
     PAGER: "cat",
+    ...hermesPrivacyGuardEnv(hermesHome),
   });
   // Tie the hermes CLI lifetime to the HTTP caller: queen-bee delegates abort
   // at 240s while chatTimeoutMs is 20 min, and every abandoned `hermes -z`
@@ -6059,6 +6078,7 @@ async function ensureHermesApiServer(hermesHome) {
         API_SERVER_PORT: String(hermesApiPort),
         ...(hermesApiKey ? { API_SERVER_KEY: hermesApiKey } : {}),
         PAGER: "cat",
+        ...hermesPrivacyGuardEnv(hermesHome),
       }),
       stdio: ["ignore", "inherit", "inherit"],
     });
@@ -6734,6 +6754,7 @@ async function streamHermesChat(body, response) {
       HERMES_HOME: hermesHome,
       HERMES_ACCEPT_HOOKS: "1",
       PAGER: "cat",
+      ...hermesPrivacyGuardEnv(hermesHome),
     }),
     stdio: ["ignore", "pipe", "pipe"],
   });

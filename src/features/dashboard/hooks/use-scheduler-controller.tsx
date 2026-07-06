@@ -5,13 +5,14 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { sameMachineIdentity, stableHivemindMachineId } from "@/features/fleet/fleet-identity";
 import { openNativeDirectory } from "@/lib/native/filesystem";
 import { readNativeSharedSchedules } from "@/lib/native/scheduler";
 import { runtimeSchedulerFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
 export function useSchedulerController(props: any) {
-  const { RUNTIME_LABELS, SCHEDULER_DYNAMIC_SKILL_ACTIONS_ENABLED, SCHEDULER_HERMES_SKILL_CONTEXT_ENABLED, SCHEDULER_MODEL_OPTIONS, SCHEDULER_RUN_STALE_MS, agents, appVersion, appendMessage, chatSetupIssue, createDefaultAgentWallet, displayAgents, displayMachineName, editingScheduleId, formatRelativeTime, honeyLedgerEnabled, logClientTelemetry, refreshHoneyLedger, scheduleDraft, schedules, selectedAgent, setEditingScheduleId, setMessagesByAgent, setScheduleDraft, setScheduleImportStatus, setScheduleImporting, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerRunStates, setSchedulerSelectedStep, setSchedulerSkillSearch, setSchedules, sharedVault, updateTask, upsertTask, walletsByAgent } = props;
+  const { RUNTIME_LABELS, SCHEDULER_DYNAMIC_SKILL_ACTIONS_ENABLED, SCHEDULER_HERMES_SKILL_CONTEXT_ENABLED, SCHEDULER_MODEL_OPTIONS, SCHEDULER_RUN_STALE_MS, agents, appVersion, appendMessage, chatSetupIssue, createDefaultAgentWallet, displayAgents, displayMachineName, editingScheduleId, formatRelativeTime, honeyLedgerEnabled, logClientTelemetry, machineGroups, refreshHoneyLedger, scheduleDraft, schedules, selectedAgent, setEditingScheduleId, setMessagesByAgent, setScheduleDraft, setScheduleImportStatus, setScheduleImporting, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerRunStates, setSchedulerSelectedStep, setSchedulerSkillSearch, setSchedules, sharedVault, updateTask, upsertTask, walletsByAgent } = props;
   function toggleScheduleSkill(slug: string) {
     setScheduleDraft((current) => ({
       ...current,
@@ -474,6 +475,17 @@ export function useSchedulerController(props: any) {
     ].filter(Boolean).join("\n");
   }
 
+  // The stable machine id (collector-reported, rename-proof) for the machine
+  // an agent lives on — the shared-vault schedule mirrors key their
+  // per-machine directory on it so hostname churn doesn't fork the tree.
+  function schedulerMachineIdForAgent(agent?: AgentProfile) {
+    if (!agent) return "";
+    const groups: MachineGroup[] = machineGroups ?? [];
+    const group = groups.find((item) => item.agents?.some((member) => member.id === agent.id))
+      ?? groups.find((item) => Boolean(agent.machineName) && sameMachineIdentity(item.name, agent.machineName));
+    return stableHivemindMachineId(group?.machineId);
+  }
+
   function schedulerSharedSnapshot(schedule: AgentSchedule) {
     const agent = displayAgents.find((item) => item.id === schedule.agentId);
     return {
@@ -482,6 +494,7 @@ export function useSchedulerController(props: any) {
       agentId: schedule.agentId,
       agentName: agent?.name ?? "",
       machineName: agent?.machineName ?? "dashboard",
+      machineId: schedulerMachineIdForAgent(agent),
       runtime: schedule.externalSource ?? agent?.runtime ?? "dashboard",
       enabled: schedule.enabled,
       every: schedule.every,
@@ -582,11 +595,20 @@ export function useSchedulerController(props: any) {
     const agentName = typeof snapshot.agentName === "string" ? snapshot.agentName : "";
     const sourceAgentId = typeof snapshot.agentId === "string" ? snapshot.agentId : "";
     const sourceMachineName = typeof snapshot.machineName === "string" ? snapshot.machineName : "";
+    const sourceMachineId = stableHivemindMachineId(typeof snapshot.machineId === "string" ? snapshot.machineId : "");
     const externalJobId = typeof snapshot.externalJobId === "string" ? snapshot.externalJobId : "";
     const idHints = [id, externalJobId].filter(Boolean).join(" ");
     const sameMachine = (item: AgentProfile) => sourceMachineName && item.machineName === sourceMachineName;
+    // The stable machine id outlives hostname renames, so it locates the
+    // schedule's machine even after the name in the snapshot has gone stale.
+    const machineForId = sourceMachineId
+      ? (machineGroups ?? []).find((item: MachineGroup) => stableHivemindMachineId(item.machineId) === sourceMachineId)
+      : undefined;
+    const onSourceMachine = new Set((machineForId?.agents ?? []).map((item: AgentProfile) => item.id));
     const agent = displayAgents.find((item) => item.id === sourceAgentId)
       ?? displayAgents.find((item) => idHints.includes(item.id))
+      ?? displayAgents.find((item) => agentName && onSourceMachine.has(item.id) && item.name === agentName)
+      ?? displayAgents.find((item) => runtime && onSourceMachine.has(item.id) && item.runtime === runtime)
       ?? displayAgents.find((item) => agentName && sameMachine(item) && item.name === agentName)
       ?? displayAgents.find((item) => runtime && sameMachine(item) && item.runtime === runtime)
       ?? displayAgents.find((item) => agentName && item.name === agentName)

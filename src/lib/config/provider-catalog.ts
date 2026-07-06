@@ -67,6 +67,8 @@ const EXTRA_PROVIDERS: ProviderCatalogEntry[] = [
   { slug: "anthropic", name: "Anthropic", keyEnv: "ANTHROPIC_API_KEY", fallback: "AN", baseUrl: "https://api.anthropic.com/v1", modelsAuth: "x-api-key", modelsHeaders: { "anthropic-version": "2023-06-01" } },
   { slug: "groq", name: "Groq", keyEnv: "GROQ_API_KEY", fallback: "GQ", baseUrl: "https://api.groq.com/openai/v1" },
   { slug: "gemini", name: "Gemini", keyEnv: "GEMINI_API_KEY", fallback: "GM", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },
+  // xAI (Grok) — OpenAI-compatible chat, used as a spoken-turn brain (no realtime/TTS API).
+  { slug: "xai", name: "Grok (xAI)", keyEnv: "XAI_API_KEY", fallback: "GK", baseUrl: "https://api.x.ai/v1" },
 ];
 
 export const PROVIDER_CATALOG: ProviderCatalogEntry[] = [

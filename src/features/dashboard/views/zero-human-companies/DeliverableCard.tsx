@@ -183,7 +183,7 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
           <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--f-display)", fontSize: 13, color: "var(--fg-3)", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
           <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)" }}>rejected · crew redirected</span>
         </div>
-        {toast && <Snackbar message="Rejected deliverable" sub="Feedback directed to company" onClose={() => setToast(false)} />}
+        {toast && <Snackbar message="Rejected deliverable" sub="Feedback directed to company" theme={theme} onClose={() => setToast(false)} />}
       </>
     );
   }
@@ -203,7 +203,7 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
       >
         reject
       </button>
-      {rejecting && <RejectDeliverableModal companyId={companyId} deliverableRef={title} onClose={() => setRejecting(false)} onDone={() => { setRejected(true); setToast(true); }} />}
+      {rejecting && <RejectDeliverableModal companyId={companyId} deliverableRef={title} theme={theme} onClose={() => setRejecting(false)} onDone={() => { setRejected(true); setToast(true); }} />}
     </div>
   );
 }

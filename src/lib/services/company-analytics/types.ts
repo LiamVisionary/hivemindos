@@ -35,11 +35,17 @@ export type AnalyticsEvent = { name: string; count: number };
 export type AnalyticsSummary = {
   rangeDays: number;
   visitors?: number;
+  pageviews?: number;
+  sessions?: number;
   conversions?: number;
   conversionRatePct?: number;
   revenueUsd?: number;
   revenueDisplay?: string;
   topEvents?: AnalyticsEvent[];
+  /** Most-visited paths (PostHog: $pathname). name = path, count = pageviews. */
+  topPages?: AnalyticsEvent[];
+  /** Top referrers/sources (PostHog: $referring_domain). name = domain, count = pageviews. */
+  topSources?: AnalyticsEvent[];
   funnel?: AnalyticsFunnelStep[];
   timeseries?: AnalyticsPoint[];
 };

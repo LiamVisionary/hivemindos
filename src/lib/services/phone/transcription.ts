@@ -2,7 +2,20 @@ import { readManagedVoiceConfig } from "@/lib/services/phone/realtime-voice";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 const TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
+// Turn-taking sessions (the Queen voice loop): server-side VAD ends each
+// utterance. Measured with identical spoken audio (2026-07-06): final
+// transcript 614ms after speech end vs 1376ms for the continuous model behind
+// a client VAD — and the server VAD replaces the client energy heuristics
+// (noise floors, rAF loops) entirely.
+const TURN_TRANSCRIPTION_MODEL = "gpt-4o-mini-transcribe";
+// Continuous sessions (live captions for the speech-to-speech overlay, the
+// agent call modal): gpt-realtime-whisper streams transcript deltas WHILE the
+// user speaks (~0.6s behind), but rejects ANY turn_detection config (the
+// client_secrets mint 400s — verified live 2026-07-05), so callers run their
+// own end-of-speech and commit manually.
 const REALTIME_TRANSCRIPTION_MODEL = "gpt-realtime-whisper";
+
+export type RealtimeTranscriptionMode = "turns" | "continuous";
 
 export async function transcriptionApiKey() {
   return await hiveEnvValue("OPENAI_TRANSCRIBE_KEY")
@@ -24,9 +37,20 @@ async function localWhisperApiKey() {
     || await hiveEnvValue("OPENAI_TRANSCRIBE_KEY");
 }
 
-export async function createRealtimeTranscriptionClientSecret() {
+export async function createRealtimeTranscriptionClientSecret(
+  mode: RealtimeTranscriptionMode = "turns",
+) {
   const apiKey = await transcriptionApiKey();
   if (!apiKey) throw new Error("Realtime STT requires OPENAI_TRANSCRIBE_KEY, OPENAI_REALTIME_KEY, or an OpenAI voice key.");
+  const model =
+    process.env.OPENAI_REALTIME_TRANSCRIBE_MODEL ||
+    (mode === "turns" ? TURN_TRANSCRIPTION_MODEL : REALTIME_TRANSCRIPTION_MODEL);
+  // gpt-realtime-whisper hard-rejects turn_detection (and is the only model
+  // taking the `delay` knob), so the VAD choice follows the resolved model —
+  // an env override to it still works, it just puts end-of-speech back on
+  // the client.
+  const continuousModel = /realtime-whisper/i.test(model);
+  const serverVad = mode === "turns" && !continuousModel;
   const response = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
@@ -41,18 +65,18 @@ export async function createRealtimeTranscriptionClientSecret() {
           input: {
             format: { type: "audio/pcm", rate: 24_000 },
             transcription: {
-              model: process.env.OPENAI_REALTIME_TRANSCRIBE_MODEL || REALTIME_TRANSCRIPTION_MODEL,
+              model,
               language: "en",
-              delay: "minimal",
+              ...(continuousModel ? { delay: "minimal" } : {}),
             },
-            // NO turn_detection: gpt-realtime-whisper is a continuous
-            // streaming transcriber and the client_secrets endpoint returns
-            // 400 "Turn detection is not supported for this transcription
-            // model" for any turn_detection config (verified live
-            // 2026-07-05). End-of-speech is therefore the CLIENT's job — the
-            // voice hooks run an energy VAD and send
-            // input_audio_buffer.commit; see use-queen-bee-voice.ts.
-            turn_detection: null,
+            turn_detection: serverVad
+              ? {
+                  type: "server_vad",
+                  threshold: 0.5,
+                  prefix_padding_ms: 300,
+                  silence_duration_ms: 450,
+                }
+              : null,
           },
         },
       },
@@ -77,8 +101,12 @@ export async function createRealtimeTranscriptionClientSecret() {
     ok: true,
     clientSecret: value,
     expiresAt,
-    model: process.env.OPENAI_REALTIME_TRANSCRIBE_MODEL || REALTIME_TRANSCRIPTION_MODEL,
+    model,
     sampleRate: 24_000,
+    // Who ends an utterance in this session: "server" = the session's VAD
+    // auto-commits (client listens for speech_started/stopped/completed);
+    // "client" = the caller runs its own VAD and commits manually.
+    turnDetection: serverVad ? ("server" as const) : ("client" as const),
   };
 }
 

@@ -15,7 +15,7 @@ function LaneSkeleton({ count }: { count: number }) {
   return (
     <div role="status" aria-label="Loading tasks" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} style={{ borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", padding: "10px 11px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div key={i} style={{ borderRadius: 10, border: "1px solid var(--line)", background: "var(--panel-2)", padding: "10px 11px", display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <Skeleton width={22} height={11} radius={4} />
             <Skeleton width={34} height={9} />
@@ -65,8 +65,9 @@ function IssueCard({
       onClick={openable ? () => onOpen!(issue) : undefined}
       onKeyDown={openable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen!(issue); } } : undefined}
       title={openable ? "Open the task result and deliverables" : undefined}
+      className={openable ? "zhc-btn-ghost" : undefined}
       style={{
-        borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)",
+        borderRadius: 10, border: "1px solid var(--line)", background: "var(--panel-2)",
         padding: "10px 11px", display: "flex", flexDirection: "column", gap: 8,
         cursor: openable ? "pointer" : undefined,
       }}
@@ -106,7 +107,7 @@ function IssueCard({
         )}
         <span style={{ flex: 1 }} />
         {deliverables > 0 && (
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--cyan-2)" }} title={`${deliverables} deliverable${deliverables === 1 ? "" : "s"}`}>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--live)" }} title={`${deliverables} deliverable${deliverables === 1 ? "" : "s"}`}>
             ⎘ {deliverables}
           </span>
         )}
@@ -140,12 +141,12 @@ export function IssueBoard({
   boardLoading?: boolean;
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${ISSUE_LANES.length}, minmax(168px, 1fr))`, gap: 12, minWidth: "min-content" }}>
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${ISSUE_LANES.length}, minmax(178px, 1fr))`, gap: 12, minWidth: "min-content" }}>
       {ISSUE_LANES.map((lane) => {
         const items = colony.issues.filter((i) => i.status === lane.key);
-        const accent = lane.key === "done" ? "var(--cyan-2)"
-          : lane.key === "board_review" ? "var(--honey-2)"
-          : lane.key === "in_review" ? "var(--honey)" : "var(--fg-3)";
+        const accent = lane.key === "done" ? "var(--live)"
+          : lane.key === "board_review" || lane.key === "in_review" ? "var(--honey)"
+          : lane.key === "in_progress" ? "var(--fg-2)" : "var(--fg-3)";
         return (
           <div key={lane.key} style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>

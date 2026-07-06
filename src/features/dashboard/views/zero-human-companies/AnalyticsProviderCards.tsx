@@ -54,9 +54,9 @@ function Btn({
         fontSize: 11,
         fontWeight: 600,
         cursor: disabled || busy ? "default" : "pointer",
-        border: primary ? "none" : "1px solid var(--line-2)",
-        background: primary ? "var(--honey-2)" : "transparent",
-        color: primary ? "var(--bg)" : "var(--fg-2)",
+        border: primary ? "1px solid var(--btn-line)" : "1px solid var(--line-2)",
+        background: primary ? "var(--btn-bg)" : "transparent",
+        color: primary ? "var(--btn-fg)" : "var(--fg-2)",
         opacity: disabled || busy ? 0.55 : 1,
       }}
     >

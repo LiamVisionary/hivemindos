@@ -399,6 +399,16 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
         .map((t) => t.title)
         .filter((t): t is string => Boolean(t));
 
+      // Lifetime completed titles (newest first) for the planner's "already
+      // built — don't recreate" inventory. Deliberately NOT fed to the hard
+      // dedupe: dropping every similar title forever would block legitimately
+      // recurring ops work; the planner just needs to SEE what exists.
+      const completedCompanyTaskTitles = tasks
+        .filter((t) => (t.source ?? "").startsWith(companyPrefix) && t.status === "done")
+        .sort((a, b) => (b.completedAt ?? b.updatedAt ?? 0) - (a.completedAt ?? a.updatedAt ?? 0))
+        .map((t) => t.title)
+        .filter((t): t is string => Boolean(t));
+
       // Stamp BEFORE dispatching so the throttle still applies if the dispatch
       // throws — prevents a tight retry loop on a persistently failing company.
       await markCompanyDispatched(company.id, Date.now());
@@ -406,6 +416,7 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       const result = await dispatchCompanyGoal(company, fleet, {
         origin,
         recentCompanyTaskTitles,
+        completedCompanyTaskTitles,
       });
       if (result.taskCount === 0) {
         console.log(`[company-autonomy-driver] ${company.id}: nothing new to dispatch — all ${result.deduped ?? 0} planned task(s) already recent or in flight`);
@@ -427,6 +438,53 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       }).catch(() => undefined);
     }
   }
+}
+
+/**
+ * Run ONE driver tick through this module's CURRENT code. Exposed for the
+ * driver route's `action: "tick"`: in dev, an API request always compiles the
+ * latest source, so ticks driven through the route pick up driver fixes with
+ * NO server restart — "restart the dev server" must never be the remedy for a
+ * driver bug. The machine-wide lease still gates it: only the lease-holder
+ * process (the route runs inside it) may tick, so a standby process's route
+ * cannot double-dispatch.
+ */
+export async function runCompanyDriverTickNow(): Promise<{ ticked: boolean; reason?: string }> {
+  if (companyAutonomyDriverDisabled()) return { ticked: false, reason: "driver disabled via HIVEMINDOS_COMPANY_AUTONOMY_DRIVER=0" };
+  if (!companyDriverLeaseDisabled()) {
+    const lease = await acquireOrRenewCompanyDriverLease();
+    if (!lease.held) return { ticked: false, reason: `company-driver lease held by pid ${lease.holder?.pid ?? "?"}` };
+  }
+  await tickOnce();
+  return { ticked: true };
+}
+
+/**
+ * Prefer ticking through our own driver route over calling tickOnce from this
+ * module instance: a long-lived loop holds whatever code it booted with, and
+ * in dev that meant every driver fix silently waited for a server restart. The
+ * route compiles fresh on request, so the loop always executes current logic.
+ * Falls back to the in-process tick when no self base is known yet or the
+ * route is unreachable (packaged static mode) — behavior is identical there.
+ */
+async function tickPreferringFreshRoute(): Promise<void> {
+  for (const base of resolveCompanyDriverSelfBases()) {
+    try {
+      const response = await fetch(`${base}/api/company-autonomy-driver`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...internalApiAuthHeaders() },
+        body: JSON.stringify({ action: "tick" }),
+        signal: AbortSignal.timeout(10 * 60_000),
+      });
+      if (!response.ok) continue;
+      const json = await response.json().catch(() => null) as { ok?: unknown; ticked?: unknown } | null;
+      if (json?.ok === true && json?.ticked === true) return;
+      if (json?.ok === true) return; // lease moved between checks — the holder ticks
+    } catch {
+      // try the next loopback candidate, then fall back in-process
+    }
+  }
+  await tickOnce();
 }
 
 async function loop(runner: Runner): Promise<void> {
@@ -458,7 +516,7 @@ async function loop(runner: Runner): Promise<void> {
     if (runner.stopRequested) break;
     if (ticking) {
       try {
-        await tickOnce();
+        await tickPreferringFreshRoute();
         runner.tickCount = (runner.tickCount ?? 0) + 1;
         runner.lastTickAt = new Date().toISOString();
         runner.lastError = undefined;

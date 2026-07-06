@@ -14,6 +14,7 @@
 // the sent corpus is clean.
 import React from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, GraduationCap, Loader2, MailWarning, Sparkles, X } from "lucide-react";
+import { Spinner } from "./primitives";
 
 type Severity = "high" | "medium" | "low";
 
@@ -158,7 +159,7 @@ function GroupCard({ companyId, group, onHandled }: { companyId: string; group: 
               type="button" onClick={teach} disabled={busy}
               style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: busy ? "default" : "pointer", borderRadius: 8, padding: "6px 11px", font: "inherit", fontFamily: "var(--f-mono)", fontSize: 11, fontWeight: 700, border: "1px solid var(--honey)", background: "var(--honey)", color: "var(--bg)", opacity: busy ? 0.6 : 1 }}
             >
-              <GraduationCap size={13} aria-hidden /> {busy ? "Teaching…" : "Teach the crew"}
+              {busy ? <Spinner size={13} /> : <GraduationCap size={13} aria-hidden />} {busy ? "Teaching" : "Teach the crew"}
             </button>
             <button
               type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}

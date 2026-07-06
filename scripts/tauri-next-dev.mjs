@@ -420,6 +420,11 @@ function proxyTimeoutForRequest(clientRequest) {
   // Fleet updates run a remote update plus a verification poll (route maxDuration 360s).
   if (clientRequest.url?.startsWith("/api/fleet/update")) return 7 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;
+  // Chunk/asset requests routinely block behind a Turbopack compile (or a
+  // backend respawn boot). Killing them fast surfaces in the app as
+  // "ChunkLoadError: Failed to load chunk" — an unrecoverable-looking wedge —
+  // instead of a slow load, so wait out the compile.
+  if (clientRequest.url?.startsWith("/_next/")) return 60_000;
   if (clientRequest.headers.accept?.includes("text/html")) return 15_000;
   return 2_500;
 }

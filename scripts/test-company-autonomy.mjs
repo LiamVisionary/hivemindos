@@ -187,6 +187,37 @@ try {
   assert.match(prompt, /Recent company activity \(newest first\):/, "prompt includes history header");
   assert.match(prompt, /Emailed 5 leads/, "prompt includes history lines");
 
+  // ── worker context: customer-facing URLs must be listed as deliverables ────
+  {
+    const { companyWorkerContext } = await import("../src/lib/services/companies-orchestration.ts");
+    const ctx = companyWorkerContext(
+      { id: "x", name: "Co", agentIds: [], frozen: false, createdAt: "", createdAtMs: 0, updatedAt: "", apexGoal: { title: "Goal" } },
+      "",
+    );
+    assert.match(ctx, /CUSTOMER-FACING/, "worker contract requires customer-facing URLs under Deliverables:");
+    assert.match(ctx, /`Deliverables:` heading/, "worker contract names the exact heading the extractor reads");
+  }
+
+  // ── planner prompt: lifetime completed-work inventory (anti-remint) ────────
+  {
+    const manyTitles = Array.from({ length: 60 }, (_, i) => `Completed task ${i + 1}`);
+    const withInventory = userPrompt(
+      { id: "x", name: "Co", agentIds: [], frozen: false, createdAt: "", createdAtMs: 0, updatedAt: "", apexGoal: { title: "Goal" } },
+      "[2026-07-02] DONE: Emailed 5 leads",
+      ["Create automated pitch emails for outreach", "  ", ...manyTitles],
+    );
+    assert.match(withInventory, /ALREADY completed/, "prompt includes the completed-work inventory header");
+    assert.match(withInventory, /- Create automated pitch emails for outreach/, "prompt lists prior completed titles");
+    assert.doesNotMatch(withInventory, /Completed task 40/, "inventory is capped (blank titles dropped, max 40)");
+    assert.match(withInventory, /Completed task 39/, "inventory keeps titles up to the cap");
+    const noInventory = userPrompt(
+      { id: "x", name: "Co", agentIds: [], frozen: false, createdAt: "", createdAtMs: 0, updatedAt: "", apexGoal: { title: "Goal" } },
+      undefined,
+      [],
+    );
+    assert.doesNotMatch(noInventory, /ALREADY completed/, "no inventory section when nothing has completed");
+  }
+
   // ── deliverable hygiene: fabricated URLs + route patterns are NOT extracted ──
   const realFile = join(vaultPath, "leads.csv");
   await (await import("node:fs/promises")).writeFile(realFile, "name,site\nGinza,none\n");
@@ -206,6 +237,7 @@ try {
       "- real leads file: " + realFile,
       "- vault report: " + spacedVaultFile,
       "- live worker: https://sarasota-demo-pipeline.hivemindos.workers.dev",
+      "- booking: https://cal.com/liamvisionary/discovery}",
     ].join("\n"),
   }, kanbanOptions);
   const dboard = await readBoard(null, kanbanOptions);
@@ -216,6 +248,25 @@ try {
   assert.ok(targets.includes(realFile), "the real file path IS extracted as a deliverable");
   assert.ok(targets.includes(spacedVaultFile), "a real vault path with spaces IS kept as a deliverable");
   assert.ok(targets.some((t) => (t || "").includes("workers.dev")), "the real live worker URL IS a deliverable");
+  // Trailing brace/bracket from templated result text must not survive into the
+  // URL (live junk 2026-07-06: "https://cal.com/liamvisionary/discovery}").
+  assert.ok(!targets.some((t) => /[}\]]$/.test(t || "")), "extracted URLs never keep trailing }/]");
+
+  // ── batch deliverables: per-lead URL batches survive past the old 12-cap ────
+  // (live 2026-07-06: a 3-lead send batch's 6 customer-facing URLs were silently
+  // sliced off behind 12 internal file entries; the shelf showed empty.)
+  {
+    const batch = await createTask(null, {
+      title: "Send batch with many per-lead URLs", status: "ready", priority: "normal", workspace: "scratch",
+      assignee: "hermes-alpha", source: "company:co-hy:r2",
+    }, kanbanOptions);
+    const urlLines = Array.from({ length: 15 }, (_, i) => `- preview lead ${i + 1}: https://preview.liamvisionary.com/p/lead-${i + 1}`);
+    await completeTask(null, batch.task.id, { result: ["Deliverables:", ...urlLines].join("\n") }, kanbanOptions);
+    const batchBoard = await readBoard(null, kanbanOptions);
+    const batchTask = batchBoard.tasks.find((t) => t.id === batch.task.id);
+    const urlCount = (batchTask.deliverables ?? []).filter((x) => x.url).length;
+    assert.ok(urlCount >= 15, `all 15 per-lead URLs survive as deliverables (got ${urlCount})`);
+  }
 
   // ── driver lease: exactly one active driver per machine ─────────────────
   {
@@ -302,6 +353,22 @@ try {
     assert.equal(resolveCompanyDriverSelfBases()[0], "http://127.0.0.1:5021", "a newer loopback door replaces the old one");
     if (savedPort === undefined) delete process.env.PORT;
     else process.env.PORT = savedPort;
+  }
+
+  // ── Fresh-code ticks: driver fixes must land with NO server restart ────────
+  // The loop prefers ticking through its own route (compiled fresh per request
+  // in dev), and the route exposes a lease-gated `tick` action for it. A user
+  // must never be told to restart a server to pick up a driver fix.
+  {
+    const { runCompanyDriverTickNow } = await import("../src/lib/services/company-autonomy-driver.ts");
+    assert.equal(typeof runCompanyDriverTickNow, "function", "driver exposes a single-tick entry for the route");
+    const driverSource = await readFile(new URL("../src/lib/services/company-autonomy-driver.ts", import.meta.url), "utf8");
+    assert.match(driverSource, /tickPreferringFreshRoute\(\)/, "the driver loop ticks through the fresh route, not its stale module");
+    assert.match(driverSource, /action: "tick"/, "the loop self-POSTs the tick action");
+    assert.match(driverSource, /await tickOnce\(\);\s*\n\}/m, "route-unreachable falls back to the in-process tick");
+    const routeSource = await readFile(new URL("../src/app/api/company-autonomy-driver/route.ts", import.meta.url), "utf8");
+    assert.match(routeSource, /action === "tick"/, "driver route accepts the tick action");
+    assert.match(routeSource, /runCompanyDriverTickNow\(\)/, "route tick runs the freshly-compiled single-tick entry");
   }
 
   console.log("company autonomy suite passed");

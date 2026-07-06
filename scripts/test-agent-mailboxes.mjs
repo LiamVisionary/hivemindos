@@ -11,6 +11,7 @@ register(new URL("./lib/json-esm-loader.mjs", import.meta.url));
 
 const tempRoot = await mkdtemp(join(tmpdir(), "hivemindos-agent-mailboxes-"));
 process.env.HIVEMINDOS_AGENT_MAILBOX_STORE_PATH = join(tempRoot, "agent-mailboxes.json");
+process.env.HIVE_ENV_FILE = join(tempRoot, "empty.env");
 
 const service = await import("../src/lib/services/agent-mailboxes.ts");
 
@@ -106,6 +107,34 @@ try {
   const serviceSource = readFileSync("src/lib/services/agent-mailboxes.ts", "utf8");
   assert.match(serviceSource, /AGENTMAIL_API_KEY/);
   assert.match(serviceSource, /\/v0\/inboxes/);
+
+  const originalFetch = globalThis.fetch;
+  const originalCloudflareToken = process.env.CLOUDFLARE_API_TOKEN;
+  const originalCloudflareAccount = process.env.CLOUDFLARE_ACCOUNT_ID;
+  let fetchCalls = 0;
+  process.env.CLOUDFLARE_API_TOKEN = "fixture-token";
+  process.env.CLOUDFLARE_ACCOUNT_ID = "fixture-account";
+  globalThis.fetch = async (url) => {
+    fetchCalls += 1;
+    throw new Error(`Unexpected network call while reading company mailboxes: ${String(url)}`);
+  };
+  try {
+    const companyMail = await service.readCompanyEmailThreads({
+      agentIds: ["agent-without-cloudflare-mailbox"],
+      companyId: "company-without-cloudflare-mailbox",
+      totalLimit: 10,
+    });
+    assert.equal(fetchCalls, 0, "companies with no Cloudflare mailboxes must not run the live Cloudflare inbox status probe");
+    const cloudflare = companyMail.providers.find((provider) => provider.id === "cloudflare-agentic-inbox");
+    assert.equal(cloudflare?.connected, false);
+    assert.equal(cloudflare?.inboxCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCloudflareToken === undefined) delete process.env.CLOUDFLARE_API_TOKEN;
+    else process.env.CLOUDFLARE_API_TOKEN = originalCloudflareToken;
+    if (originalCloudflareAccount === undefined) delete process.env.CLOUDFLARE_ACCOUNT_ID;
+    else process.env.CLOUDFLARE_ACCOUNT_ID = originalCloudflareAccount;
+  }
 
   const modalSource = readFileSync("src/features/dashboard/views/chat/AgentSettingsModal.tsx", "utf8");
   assert.match(modalSource, /\/api\/agents\/mailbox/);

@@ -110,6 +110,51 @@ for (const [denseTotal, denseAgents] of [[6, 6], [6, 10], [4, 12], [2, 9]]) {
   }
 }
 
+// When one gap is crowded by a dense cluster, the add-machine cell must move to
+// a genuinely free gap at ring radius — not flee outward/off-canvas along the
+// crowded angle (regression: cell rendered near the bottom screen edge while
+// other gaps sat empty).
+{
+  const emptyPos = frAddMachinePos([]);
+  const ringRadius = Math.hypot(emptyPos.x - QX, emptyPos.y - QY);
+  // 5 machines spread evenly; the two flanking the bottom gap (54° and 126°)
+  // carry heavy agent loads, the rest are empty.
+  const lopsidedMachines = Array.from({ length: 5 }, (_, machineIndex) =>
+    machine(
+      `lop-${machineIndex}`,
+      `Lopsided ${machineIndex}`,
+      machineIndex === 0 ? "Primary" : "Worker",
+      machineIndex === 2 || machineIndex === 3
+        ? Array.from({ length: 12 }, (_, agentIndex) =>
+            agent(`lop-${machineIndex}-a${agentIndex}`, `Lop Agent ${machineIndex}-${agentIndex}`, "ready"))
+        : [],
+    ),
+  );
+  const lopsidedLayout = frBuildLayout(lopsidedMachines);
+  const lopsidedAdd = frAddMachinePos(lopsidedMachines, lopsidedLayout);
+  const lopsidedRadius = Math.hypot(lopsidedAdd.x - QX, lopsidedAdd.y - QY);
+  assert.ok(
+    lopsidedRadius <= ringRadius + 0.5,
+    `add-machine cell should sit at ring radius in a free gap (got ${Math.round(lopsidedRadius)} vs ring ${Math.round(ringRadius)})`,
+  );
+  const lopsidedAddHex = hexPolygon({ id: "lopsided-add-machine", center: lopsidedAdd, size: MACHINE_SIZE });
+  for (const lopsidedMachine of lopsidedMachines) {
+    const machineLayout = lopsidedLayout[lopsidedMachine.id];
+    const lopsidedCells = [
+      { id: `${lopsidedMachine.id}:machine`, center: machineLayout.pos, size: MACHINE_SIZE },
+      { id: `${lopsidedMachine.id}:add`, center: machineLayout.addPos, size: AGENT_SIZE },
+      ...machineLayout.agents.map(({ agent: hiveAgent, pos }) => ({ id: hiveAgent.id, center: pos, size: AGENT_SIZE })),
+    ];
+    for (const cell of lopsidedCells) {
+      assert.equal(
+        polygonsOverlap(lopsidedAddHex, hexPolygon(cell)),
+        false,
+        `lopsided fleet: add-machine cell overlaps ${cell.id}`,
+      );
+    }
+  }
+}
+
 assert.ok(FR_HEX_CLIP.includes("polygon("), "fleet hive cell clip path remains polygon-based");
 assert.ok(CELL > 0, "fleet hive cell size is positive");
 

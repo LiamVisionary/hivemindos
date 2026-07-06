@@ -5,7 +5,7 @@
 // cluttering the view. Its own file to keep the Modals ↔ FileViewer graph acyclic.
 import React from "react";
 import { Modal } from "./Modals";
-import { SectionLabel } from "./primitives";
+import { SectionLabel, Spinner } from "./primitives";
 import { DeliverableCard } from "./DeliverableCard";
 import { CompanyIssueActionButtons, isCompanyReviewIssue } from "./CompanyIssueActions";
 import { bucketDeliverables } from "./deliverables-model";
@@ -73,8 +73,10 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
     colonyName,
   ].filter(Boolean);
   const buckets = bucketDeliverables(work.deliverables);
-  // The explainer is worth offering whenever there's something to explain.
-  const canExplain = Boolean(companyId) && Boolean(work.result?.trim() || work.receipts.length);
+  // This explainer is specifically for blocked / needs-human cards; shipped
+  // work already has the result and receipts below.
+  const isBlockedForHuman = issue.status === "board_review" || work.status === "needs-human";
+  const canExplain = isBlockedForHuman && Boolean(companyId) && Boolean(work.result?.trim() || work.receipts.length);
 
   return (
     <Modal title={issue.title} subtitle={subtitleParts.join(" · ")} onClose={onClose} width={780} theme={theme}>
@@ -103,7 +105,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
                     cursor: explaining ? "default" : "pointer",
                   }}
                 >
-                  {explaining ? "Asking the Queen…" : explainError ? "Try again" : "Explain this for me"}
+                  {explaining ? <><Spinner size={12} /> Asking the Queen</> : explainError ? "Try again" : "Explain this for me"}
                 </button>
               )}
             </div>

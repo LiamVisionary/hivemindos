@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-06T03:51:48.884148+00:00",
+  "request": "Build Shepherd-inspired reversible company runs and proposals for Zero Human Companies",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/company-memory.ts",
+      "target_path": "src/lib/services/company-runs.ts",
+      "reuse_type": "adapted_code",
+      "note": "per-company durable ledger path, bounded reads/writes, and event memory shape"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/brain-review-queue.ts",
+      "target_path": "src/lib/services/company-runs.ts",
+      "reuse_type": "adapted_code",
+      "note": "idempotent proposal creation plus approve/reject/apply settlement lifecycle"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/company-governance.ts",
+      "target_path": "src/lib/services/company-runs.ts",
+      "reuse_type": "adapted_code",
+      "note": "bounded governance-style operational record with sanitized payload fields"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/companies-orchestration.ts",
+      "target_path": "src/lib/services/company-runs.ts",
+      "reuse_type": "adapted_code",
+      "note": "dispatch result/task trace metadata modeled as run input/output/events"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
+      "target_path": "src/features/dashboard/views/zero-human-companies/CompanyRunsPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "panel/card/tab UI patterns reused for company trace and proposal cards"
+    },
+    {
+      "source_repo": "shepherd-agents/shepherd",
+      "source_path": "README.md",
+      "target_path": "src/lib/types/company-runs.ts",
+      "reuse_type": "translated_code",
+      "note": "retained-output select/discard/replay concepts translated into company proposal statuses and replay requests"
+    }
+  ]
+}

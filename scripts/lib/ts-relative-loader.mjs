@@ -19,6 +19,15 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === "server-only") {
     return { url: "data:text/javascript,export default undefined;", shortCircuit: true };
   }
+  // Bundlers accept bare `import data from "./x.json"`; Node's loader demands
+  // `with { type: "json" }` and hard-fails the whole import graph without it.
+  // Stamp the attribute at resolve time so hermetic suites can import app
+  // modules whose deep graph includes a JSON import (e.g. bee-worker-presets
+  // importing bee-worker-souls.json).
+  if (specifier.endsWith(".json")) {
+    const resolved = await nextResolve(specifier, context);
+    return { ...resolved, importAttributes: { ...(resolved.importAttributes ?? {}), type: "json" } };
+  }
   if (specifier === "next/server") {
     return nextResolve("next/server.js", context);
   }

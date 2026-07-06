@@ -28,6 +28,7 @@ mod runtime_files;
 mod runtime_usage;
 mod scheduler;
 mod setup;
+mod speech;
 mod wallet_export;
 
 #[cfg(not(debug_assertions))]
@@ -1587,7 +1588,10 @@ pub fn run() {
             dashboard_state::dashboard_state_write,
             deliverables::download_aeon_deliverable,
             deliverables::send_aeon_deliverable,
-            desktop_navigation::open_route_window
+            desktop_navigation::open_route_window,
+            speech::speech_recognition_available,
+            speech::speech_recognition_start,
+            speech::speech_recognition_stop
         ])
         .build(tauri::generate_context!())
         .expect("error while building HivemindOS desktop")

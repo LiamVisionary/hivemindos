@@ -1,91 +1,162 @@
 /* Zero Human Companies — scoped theme.
    All tokens live under .zhc-root so they never clobber the dashboard's global
-   Tailwind tokens. Fonts (Space Grotesk / Geist / JetBrains Mono) are already
-   loaded app-wide in src/app/layout.tsx, so there is NO @import here. */
+   Tailwind tokens. Fonts (Space Grotesk / Inter / JetBrains Mono) are already
+   loaded app-wide in src/app/layout.tsx, so there is NO @import here.
+
+   Palette is the "Zero Human Companies" Claude Design handoff: a warm honey /
+   clay system. Older token names (--bg-0..4, --cyan*, --danger-2, --warn,
+   --panel-bg) are kept as aliases so any un-reskinned CSS still resolves. */
 
 .zhc-root {
   /* type */
   --f-display: "Space Grotesk", system-ui, sans-serif;
-  --f-body: "Geist", "Inter", system-ui, sans-serif;
+  --f-body: "Inter", "Geist", system-ui, sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* dark (default) */
-  --bg-0: #06080d;
-  --bg-1: #0a0e16;
-  --bg-2: #10151f;
-  --bg-3: #161c2a;
-  --bg-4: #1d2334;
-  --line: rgba(148, 163, 184, 0.12);
-  --line-2: rgba(148, 163, 184, 0.22);
-  --fg: #f4f7fb;
-  --fg-2: #c6d1df;
-  --fg-3: #8e9bb1;
-  --fg-4: #5a6478;
+  /* ---- dark (default) ---- */
+  --bg: #0c0d11;
+  --bg-soft: #101116;
+  --panel: #14161c;
+  --panel-2: #181b22;
+  --panel-hi: #1e222b;
 
-  --cyan: #2dd4bf;
-  --cyan-2: #5eead4;
-  --cyan-glow: rgba(45, 212, 191, 0.32);
-  --honey: #f2b705;
-  --honey-2: #ffd45a;
-  --honey-glow: rgba(242, 183, 5, 0.32);
-  --danger: #fb7185;
-  --danger-2: #fecdd3;
-  --warn: #facc15;
+  --line: rgba(238, 232, 220, 0.07);
+  --line-2: rgba(238, 232, 220, 0.13);
+  --line-3: rgba(238, 232, 220, 0.20);
 
-  --panel-bg: rgba(16, 20, 29, 0.78);
+  --fg: #f3f0e9;
+  --fg-2: #a7a39a;
+  --fg-3: #76726a;
+  --fg-4: #545049;
 
+  --honey: #e7b45c;
+  --honey-2: #f0c879;
+  --honey-soft: rgba(231, 180, 92, 0.13);
+  --honey-line: rgba(231, 180, 92, 0.32);
+
+  --live: #6fcdba;
+  --live-soft: rgba(111, 205, 186, 0.14);
+  --danger: #e58e85;
+  --danger-soft: rgba(229, 142, 133, 0.13);
+
+  --need-bg: rgba(231, 180, 92, 0.13);
+  --need-bd: rgba(231, 180, 92, 0.32);
+  --row-access-bg: color-mix(in srgb, var(--honey) 9%, var(--panel));
+  --row-access-bd: color-mix(in srgb, var(--honey) 40%, transparent);
+  --row-blocked-bg: color-mix(in srgb, var(--danger) 14%, var(--panel));
+  --row-blocked-bd: color-mix(in srgb, var(--danger) 48%, transparent);
+  --row-live-bg: color-mix(in srgb, var(--live) 12%, var(--panel));
+  --row-live-bd: color-mix(in srgb, var(--live) 40%, transparent);
+
+  --btn-bg: #e7b45c;
+  --btn-fg: #1a1305;
+  --btn-line: #e7b45c;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+
+  /* ---- back-compat aliases (older tokens referenced by un-reskinned CSS) ---- */
+  --bg-0: var(--bg);
+  --bg-1: var(--bg-soft);
+  --bg-2: var(--panel);
+  --bg-3: var(--panel-2);
+  --bg-4: var(--panel-hi);
+  --cyan: var(--live);
+  --cyan-2: #86d8c8;
+  --cyan-glow: rgba(111, 205, 186, 0.32);
+  --honey-glow: rgba(231, 180, 92, 0.32);
+  --danger-2: #f0b3ad;
+  --warn: var(--honey-2);
+  --panel-bg: rgba(20, 22, 28, 0.82);
+
+  color-scheme: dark;
   color: var(--fg);
   font-family: var(--f-body);
 }
 
 .zhc-root[data-theme="light"] {
-  --bg-0: #f1ede3;
-  --bg-1: #f6f2e9;
-  --bg-2: #fbf8f1;
-  --bg-3: #f4efe4;
-  --bg-4: #e8dfcf;
-  --line: rgba(54, 46, 30, 0.10);
-  --line-2: rgba(54, 46, 30, 0.16);
-  --fg: #221d14;
-  --fg-2: #5e574b;
-  --fg-3: #867d6e;
-  --fg-4: #a59b89;
+  /* ---- hive-light / clay ---- */
+  --bg: #f3ecd6;
+  --bg-soft: #ede4c8;
+  --panel: #f9f2e2;
+  --panel-2: #efe6cf;
+  --panel-hi: #fdf8ec;
 
-  --cyan: #5f8f5a;
-  --cyan-2: #4f7d4b;
-  --cyan-glow: rgba(95, 143, 90, 0.22);
-  --honey: #b07f1c;
-  --honey-2: #936811;
-  --honey-glow: rgba(176, 127, 28, 0.24);
-  --danger: #c0524d;
-  --danger-2: #963a37;
-  --warn: #936811;
+  --line: rgba(92, 75, 45, 0.18);
+  --line-2: rgba(92, 75, 45, 0.30);
+  --line-3: rgba(92, 75, 45, 0.44);
 
-  --panel-bg: rgba(251, 248, 241, 0.94);
+  --fg: #2a1c05;
+  --fg-2: #4a3a1f;
+  --fg-3: #6e5c3d;
+  --fg-4: #8a7a5a;
+
+  --honey: #bd6a4a;
+  --honey-2: #a1512f;
+  --honey-soft: rgba(189, 106, 74, 0.10);
+  --honey-line: rgba(189, 106, 74, 0.38);
+
+  --live: #0d8e7e;
+  --live-soft: rgba(13, 142, 126, 0.16);
+  --danger: #b42342;
+  --danger-soft: rgba(180, 35, 66, 0.13);
+
+  --need-bg: rgba(189, 106, 74, 0.05);
+  --need-bd: rgba(189, 106, 74, 0.24);
+  --row-access-bg: var(--panel);
+  --row-access-bd: color-mix(in srgb, var(--honey) 26%, transparent);
+  --row-blocked-bg: color-mix(in srgb, var(--danger) 5%, var(--panel));
+  --row-blocked-bd: color-mix(in srgb, var(--danger) 30%, transparent);
+  --row-live-bg: var(--panel);
+  --row-live-bd: color-mix(in srgb, var(--live) 28%, transparent);
+
+  --btn-bg: #bd6a4a;
+  --btn-fg: #f6ece1;
+  --btn-line: #bd6a4a;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
+
+  --cyan-2: #0d8e7e;
+  --cyan-glow: rgba(13, 142, 126, 0.20);
+  --honey-glow: rgba(189, 106, 74, 0.24);
+  --danger-2: #8f1a33;
+  --panel-bg: rgba(249, 242, 226, 0.94);
+  color-scheme: light;
 }
 
 .zhc-root, .zhc-root * { box-sizing: border-box; }
 
-/* utility mono caps */
+/* utility mono caps — .mcap matches the design handoff; .mono-cap is the legacy alias */
+.zhc-root .mcap,
 .zhc-root .mono-cap {
   font-family: var(--f-mono);
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--fg-3);
 }
 
 /* shared status dot */
 .zhc-root .dot {
-  display: inline-block; width: 6px; height: 6px; border-radius: 999px;
+  display: inline-block; width: 7px; height: 7px; border-radius: 999px;
   background: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+  flex: 0 0 auto;
 }
-.zhc-root .dot.live { animation: zhc-pulse-dot 1.6s ease-in-out infinite; }
+.zhc-root .dot.live { animation: zhc-pulse-dot 2.4s ease-in-out infinite; }
 
-.zhc-root .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
-.zhc-root .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-.zhc-root .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
+/* fade-in for view transitions (design handoff .frfade) */
+.zhc-root .frfade { animation: zhcFade 0.4s ease both; }
+
+/* thin scrollbar — both the legacy .scrollbar-thin and the handoff .frsc */
+.zhc-root .scrollbar-thin, .zhc-root .frsc { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.zhc-root .scrollbar-thin::-webkit-scrollbar,
+.zhc-root .frsc::-webkit-scrollbar { width: 7px; height: 7px; }
+.zhc-root .scrollbar-thin::-webkit-scrollbar-track,
+.zhc-root .frsc::-webkit-scrollbar-track { background: transparent; }
+.zhc-root .scrollbar-thin::-webkit-scrollbar-thumb,
+.zhc-root .frsc::-webkit-scrollbar-thumb {
+  background: var(--line-2); border-radius: 999px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+.zhc-root :focus-visible { outline: 2px solid var(--honey-line); outline-offset: 2px; }
 
 .zhc-root .zhc-file-document {
   max-height: 70vh;
@@ -283,10 +354,10 @@
 }
 
 @keyframes zhc-pulse-dot {
-  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
-  50% { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 6%, transparent); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent); }
 }
-@keyframes zhcFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes zhcFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes zhcRise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes zhcLoadingSweep {
   from { transform: translateX(-120%) skewX(-12deg); }

@@ -31,6 +31,14 @@ tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
 url = "2"
 
+# On-device speech recognition (macOS SFSpeechRecognizer, Windows WinRT)
+# for free live voice captions — Queen voice works without an OpenAI key.
+# The FFI is isolated in this path crate because the speech bindings need
+# `unsafe` and this crate's lint forbids it; the sub-crate is the single
+# audited unsafe boundary.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+hivemindos-speech-native = { path = "speech-native" }
+
 # Vendored inside src-tauri (not the repo-root vendor/) so the Go module's
 # `go mod vendor` can never delete the patched crate.
 [patch.crates-io]

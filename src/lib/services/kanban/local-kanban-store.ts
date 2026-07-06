@@ -708,6 +708,10 @@ function applyPatchToBoard(
     patch.status && KANBAN_STATUSES.includes(patch.status)
       ? patch.status
       : undefined;
+  // Patch-to-done is a completion too — same misattribution guard as completeTask.
+  if (nextStatus === "done") {
+    assertResultNotMisattributed(board, taskId, patch.result ?? task.result);
+  }
   const retryingWorking =
     nextStatus === "working" && isRetryBlockerResult(task.result);
   const changedBase = {
@@ -1125,6 +1129,26 @@ export async function heartbeatTask(
   });
 }
 
+/**
+ * Completion integrity: a substantial result that is byte-identical to a
+ * DIFFERENT task's result is a misattributed agent-session output, not work —
+ * two tasks cannot honestly produce the same multi-hundred-char text. (Live
+ * 2026-07-05/06: clusters of tasks "completed" seconds after claim with the
+ * same Bankr wallet-portfolio dump, twice, poisoning the done column.) Throws
+ * so every completion path — autonomous pickup, dashboard, API patch — rejects
+ * the write and the task stays claimed/working for an honest attempt.
+ */
+function assertResultNotMisattributed(board: KanbanBoard, taskId: string, result: string | undefined): void {
+  const normalized = (result ?? "").trim();
+  if (normalized.length < 200) return;
+  const twin = board.tasks.find((item) => item.id !== taskId && (item.result ?? "").trim() === normalized);
+  if (twin) {
+    throw new Error(
+      `Completion rejected: the result is byte-identical to task ${twin.id} ("${twin.title.slice(0, 60)}") — that is a misattributed session output, not this task's work. Re-run the task and return ITS deliverable.`,
+    );
+  }
+}
+
 export async function completeTask(
   slug: string | null,
   taskId: string,
@@ -1138,6 +1162,7 @@ export async function completeTask(
   const now = Date.now();
   const result =
     coerceKanbanText(input.result ?? input.summary ?? task.result) || undefined;
+  assertResultNotMisattributed(board, taskId, result);
   const loopReceipts = mergeLoopReceipts(task.loopReceipts, input.loopReceipts);
   const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
   if (gateBlock) {
@@ -2049,7 +2074,7 @@ function deliverableFromTarget(
   label?: string,
   createdAt = Date.now(),
 ): KanbanDeliverable | null {
-  const trimmed = target.trim().replace(/[),.;:]+$/, "");
+  const trimmed = target.trim().replace(/[),.;:}\]]+$/, "");
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) {
     if (/^https?:\/\/(?:www\.)?w3\.org\/2000\/svg\b/i.test(trimmed))
@@ -2100,8 +2125,14 @@ function extractKanbanDeliverables(
     const item = deliverableFromTarget(match[0], undefined, createdAt);
     if (item) deliverables.set(item.path || item.url || item.id, item);
   }
-  return [...deliverables.values()].slice(0, 12);
+  return [...deliverables.values()].slice(0, 24);
 }
+
+// A per-lead batch legitimately carries dozens of deliverables (N leads × a
+// preview + an offer URL). The old cap of 12 silently dropped everything past
+// the internal files recorded first — live 2026-07-06: 3 sent pitches, 6
+// customer-facing URLs sliced off, Deliverables shelf empty.
+const MERGED_DELIVERABLE_CAP = 40;
 
 function mergeDeliverables(
   existing: KanbanDeliverable[] | undefined,
@@ -2120,7 +2151,12 @@ function mergeDeliverables(
     const key = item.path || item.url || item.id;
     if (!merged.has(key)) merged.set(key, item);
   }
-  return [...merged.values()].slice(0, 12);
+  const all = [...merged.values()];
+  if (all.length <= MERGED_DELIVERABLE_CAP) return all;
+  // Overflow: customer-facing URLs are the product — internal files lose first.
+  const urls = all.filter((item) => item.url && !item.path);
+  const files = all.filter((item) => !(item.url && !item.path));
+  return [...urls, ...files].slice(0, MERGED_DELIVERABLE_CAP);
 }
 
 function extractTaskDeliverables(

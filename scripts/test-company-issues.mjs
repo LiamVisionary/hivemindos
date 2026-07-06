@@ -60,6 +60,12 @@ const cockpitSource = readFileSync("src/features/dashboard/views/zero-human-comp
 assert.match(cockpitSource, /key: "issues"/, "cockpit tab row includes Issues");
 assert.match(cockpitSource, /IssuesPanel/, "cockpit has a dedicated issues panel");
 assert.match(cockpitSource, /onResolveIssue/, "cockpit passes issue resolution handler");
+assert.match(cockpitSource, /function IssuesLoadingSkeleton/, "issues panel has a skeleton pending state");
+assert.match(cockpitSource, /aria-label="Loading company issues"/, "issues pending state is animated and accessible");
+assert.match(cockpitSource, /loading=\{initialTasksLoading\}/, "issues panel receives the initial task-loading state");
+assert.match(cockpitSource, /const activeIssueCount = c\.issues\.filter\(\(issue\) => issue\.status !== "done"\)\.length/, "Issues tab badge counts all active issues");
+assert.match(cockpitSource, /badge: activeIssueCount \|\| null/, "Issues tab badge is wired to the active issue count");
+assert.match(cockpitSource, /badgeLoading: initialTasksLoading && activeIssueCount === 0/, "Issues tab shows a skeleton badge while issue counts hydrate");
 
 const liveSource = readFileSync("src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx", "utf8");
 assert.match(liveSource, /action: "answer"/, "live resolver uses the Work Board answer action");
@@ -68,6 +74,9 @@ assert.match(liveSource, /pickupScheduled/, "live resolver reports immediate pic
 
 const boardSource = readFileSync("src/features/dashboard/views/zero-human-companies/IssueBoard.tsx", "utf8");
 assert.doesNotMatch(boardSource, /WebkitLineClamp|textOverflow:\s*"ellipsis"/, "issue blockers are not silently truncated");
+const taskModalSource = readFileSync("src/features/dashboard/views/zero-human-companies/TaskDetailModal.tsx", "utf8");
+assert.match(taskModalSource, /issue\.status === "board_review" \|\| work\.status === "needs-human"/, "blocked-task explainer is gated to needs-human cards");
+assert.match(taskModalSource, /const canExplain = isBlockedForHuman && Boolean\(companyId\)/, "completed shipped cards do not show the blocked-task explainer");
 
 // ── classifyIssueReason: exhausted-pickup cards must name the REAL cause ─────
 const { classifyIssueReason } = await import("../src/features/dashboard/views/zero-human-companies/issue-reason.ts");

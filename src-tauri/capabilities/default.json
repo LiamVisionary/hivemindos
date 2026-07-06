@@ -62,6 +62,9 @@
     "allow-download-aeon-deliverable",
     "allow-send-aeon-deliverable",
     "allow-open-route-window",
-    "allow-wallet-secret-export-save"
+    "allow-wallet-secret-export-save",
+    "allow-speech-recognition-available",
+    "allow-speech-recognition-start",
+    "allow-speech-recognition-stop"
   ]
 }

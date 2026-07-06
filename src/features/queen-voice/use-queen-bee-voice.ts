@@ -9,10 +9,18 @@ import {
 } from "./barge-in-detector";
 import {
   closeRealtimeSttSocket,
+  createRealtimeSttPrewarmCache,
   pcm16ToBase64,
-  prepareRealtimeSttSession,
+  raceSttArmDeadline,
   resampleToPcm16,
+  type RealtimeSttSession,
 } from "./realtime-stt";
+import type { SttCaptionStream } from "./stt-caption-stream";
+import {
+  startLocalCaptionStream,
+  startTurnCaptionStream,
+} from "./caption-source";
+import { runRecordedVoiceTurn } from "./recorded-turn";
 import { createSentenceChunker } from "@/lib/services/queen-bee/voice-speech-stream";
 import {
   createNdjsonEventReader,
@@ -23,6 +31,8 @@ import {
   type PlaybackActivity,
   type SpokenReplyOutcome,
 } from "./spoken-reply-playback";
+import { startEnergyVadLoop, VAD_MAX_UTTERANCE_MS } from "./energy-vad-loop";
+import { createVoiceAckCues } from "./voice-ack-cues";
 import {
   getQueenOutputAnalyser,
   useQueenVoiceLevelPump,
@@ -74,19 +84,15 @@ const RECORDER_MIME_CANDIDATES = [
   "audio/mp4",
 ];
 
-const MIN_UTTERANCE_MS = 300;
-const COMMIT_SILENCE_MS = 600;
-const MAX_UTTERANCE_MS = 20_000;
 // Client-side throttle for fire-and-forget TTS prewarm pings (the server
 // dedupes too; this just avoids pointless requests every turn).
 const LOCAL_TTS_PREWARM_INTERVAL_MS = 45_000;
-// Spoken acknowledgment for slow turns: a clip pre-synthesized on the session's
-// voice, played only when NO speech text has streamed in by the delay — the
-// genuine dead-air case (pre-speech tool calls, delegation routing). Ordinary
-// replies stream their first delta in ~1-2s and cancel it. At 1.4s this fired
-// on EVERY turn (first spoken chunk needs a full sentence + synth TTFB), so
-// she acked messages that weren't even requests.
-const ACK_CLIP_TEXT = "On it. Give me a moment.";
+// Spoken acknowledgment for slow turns (clip logic in voice-ack-cues.ts):
+// played only when NO speech text has streamed in by the delay — the genuine
+// dead-air case (pre-speech tool calls, delegation routing). Ordinary replies
+// stream their first delta in ~1-2s and cancel it. At 1.4s this fired on
+// EVERY turn (first spoken chunk needs a full sentence + synth TTFB), so she
+// acked messages that weren't even requests.
 const ACK_PLAY_DELAY_MS = 4_500;
 // Live "what she's doing" chips: poll cadence for the turn-progress endpoint
 // while a converse request is in flight.
@@ -99,7 +105,9 @@ const TURN_PROGRESS_POLL_MS = 650;
 // arms its STT socket, the frames captured while the socket was still opening
 // — or the words that just interrupted her — are flushed in first, so turn
 // boundaries and barge-ins lose no speech.
-const PRE_ROLL_MAX_MS = 5_000;
+// Covers the STT arming deadline plus the post-playback lookback, so words
+// spoken while a slow mint is still connecting survive to the flush.
+const PRE_ROLL_MAX_MS = 8_000;
 // Flush window behind a barge-in trigger: the sustain the detector required
 // before firing plus a lead for the first syllable's onset.
 const BARGE_IN_FLUSH_LOOKBACK_MS = BARGE_IN_TUNING.sustainMs + 480;
@@ -118,6 +126,17 @@ const POST_PLAYBACK_FLUSH_LOOKBACK_MS = 800;
 // swallowed frame), the turn proceeds with the live transcript instead of
 // hanging in "Transcribing..." forever.
 const STT_COMMIT_FALLBACK_MS = 4_000;
+// A prewarmed STT session older than this at adoption is discarded and
+// re-minted: sockets idling through a long queen reply can be half-dead
+// upstream while readyState still reads OPEN — audio then goes nowhere until
+// the late close event, which read as multi-second transcription delays.
+const STT_PREWARM_MAX_AGE_MS = 20_000;
+// Hard deadline for a listening turn to arm its STT socket — a stalled mint
+// (dev cold compile measured 40s+, or a wedged network) used to strand
+// "listening" with a live waveform while speech went nowhere. On expiry the
+// turn falls back to the recorder path and says so; the stalled mint keeps
+// running and becomes the next turn's prewarm.
+const STT_ARM_TIMEOUT_MS = 6_000;
 // Recorder fallback only: quiet stretches bloat the Whisper upload, so the
 // recording restarts when nothing has been said for a while.
 const IDLE_RECORDER_RESTART_MS = 10_000;
@@ -140,11 +159,14 @@ function utteranceFileName(mimeType: string) {
 
 /**
  * Hands-free Queen Bee voice loop. Preferred path: microphone PCM streams
- * into an OpenAI Realtime transcription session so the user's words appear on
- * screen while they speak; an energy-based VAD (timer-backstopped against
- * WKWebView rAF starvation) commits each utterance and the final transcript
- * goes straight to the conversational Queen Bee turn. When realtime STT is
- * unavailable, falls back to MediaRecorder + Whisper.
+ * into an OpenAI Realtime transcription session whose SERVER-side VAD ends
+ * each utterance (speech events + auto-commit; final transcript ~0.6s after
+ * the user stops) and the transcript goes straight to the conversational
+ * Queen Bee turn. Sessions minted without server VAD (env-forced
+ * gpt-realtime-whisper, older servers) fall back to a client energy VAD
+ * (timer-backstopped against WKWebView rAF starvation) with a manual commit.
+ * When realtime STT is unavailable entirely, falls back to MediaRecorder +
+ * Whisper.
  */
 export function useQueenBeeVoice(
   active: boolean,
@@ -190,7 +212,6 @@ export function useQueenBeeVoice(
     if (!active) return undefined;
 
     let cancelled = false;
-    let frame = 0;
     let resumeTimer = 0;
     let restartTimer = 0;
     let nextTurnId = 1;
@@ -201,11 +222,13 @@ export function useQueenBeeVoice(
     let recorder: MediaRecorder | null = null;
     let recorderChunks: Blob[] = [];
     let sttSocket: WebSocket | null = null;
-    let preparedStt: Promise<WebSocket> | null = null;
+    const sttPrewarm = createRealtimeSttPrewarmCache();
     let realtimeUnavailable = false;
     // Session-long mic pump state: PCM streams to sttLiveSocket while a
     // listening turn is armed; the pre-roll ring buffer fills the whole time.
     let sttLiveSocket: WebSocket | null = null;
+    // Live words-while-speaking per listening turn (see stt-caption-stream.ts).
+    let captionStream: SttCaptionStream | null = null;
     let pendingFlushSinceMs = 0;
     // Last echo/room floor the barge-in detector measured during playback —
     // seeds the listening VAD so it starts calibrated to this acoustic scene.
@@ -255,6 +278,8 @@ export function useQueenBeeVoice(
 
     const closeSttSocket = () => {
       sttLiveSocket = null;
+      captionStream?.close();
+      captionStream = null;
       closeRealtimeSttSocket(sttSocket);
       sttSocket = null;
     };
@@ -274,16 +299,8 @@ export function useQueenBeeVoice(
       }
     };
 
-    const prepareStt = () => {
-      if (realtimeUnavailable) return null;
-      if (!preparedStt) {
-        preparedStt = prepareRealtimeSttSession().catch((sttError) => {
-          preparedStt = null;
-          throw sttError;
-        });
-      }
-      return preparedStt;
-    };
+    const prepareStt = () =>
+      realtimeUnavailable ? null : sttPrewarm.prepare();
 
     const failTurn = (message: string) => {
       if (cancelled) return;
@@ -315,64 +332,16 @@ export function useQueenBeeVoice(
       }).then(() => undefined, () => undefined);
     };
 
-    // Pre-synthesized "On it" clip on the session's voice, decoded once and
-    // kept for instant playback on slow turns. Fetched after the prewarm lands
-    // so a cold local TTS model is loaded exactly once; re-attempted on later
-    // turns until a clip in the RIGHT voice is cached.
-    let ackBuffer: AudioBuffer | null = null;
-    let ackPlayback: Promise<void> | null = null;
-    let ackFetchInFlight = false;
-    const fetchAckClip = async () => {
-      if (cancelled || ackBuffer || ackFetchInFlight) return;
-      ackFetchInFlight = true;
-      try {
-        const response = await fetch("/api/queen-bee/voice", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "speak", text: ACK_CLIP_TEXT }),
-          cache: "no-store",
-          signal: abort.signal,
-        });
-        if (cancelled || !response.ok) return;
-        const contentType = response.headers.get("content-type") || "";
-        if (!contentType.includes("audio/")) return;
-        // Voice consistency: with a local voice selected, only a local (WAV)
-        // clip may be cached — an OpenAI mp3 fetched during a TTS-server flap
-        // would ack in a different voice for the whole session.
-        if (streamLocalTtsRef.current && !contentType.includes("wav")) return;
-        const encoded = await response.arrayBuffer();
-        if (cancelled || !audioContext) return;
-        ackBuffer = await audioContext.decodeAudioData(encoded);
-      } catch {
-        // No ack clip; the turn still resolves normally, just without the cue.
-      } finally {
-        ackFetchInFlight = false;
-      }
-    };
-
-    // One soft descending blip when replies go text-only (selected voice
-    // unreachable) — synthesized on the session context, no asset needed.
-    const playVoiceMutedCue = () => {
-      const context = audioContext;
-      if (!context || context.state !== "running") return;
-      try {
-        const now = context.currentTime;
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-        oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(660, now);
-        oscillator.frequency.exponentialRampToValueAtTime(440, now + 0.18);
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.exponentialRampToValueAtTime(0.06, now + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-        oscillator.connect(gain);
-        gain.connect(context.destination);
-        oscillator.start(now);
-        oscillator.stop(now + 0.24);
-      } catch {
-        // The cue is best-effort.
-      }
-    };
+    // Pre-synthesized "On it" clip + voice-outage blip (voice-ack-cues.ts).
+    // The clip is fetched after the prewarm lands so a cold local TTS model
+    // is loaded exactly once; re-attempted on later turns until a clip in the
+    // RIGHT voice is cached.
+    const cues = createVoiceAckCues({
+      signal: abort.signal,
+      getContext: () => audioContext,
+      isLocalVoiceSelected: () => streamLocalTtsRef.current,
+    });
+    const { fetchAckClip, playAckClip, cancelPendingAck } = cues;
 
     // Voice-outage bookkeeping: cue once per outage, clear when speech returns.
     let voiceOutageActive = false;
@@ -381,7 +350,7 @@ export function useQueenBeeVoice(
     ) => {
       if (!voiceOutageActive) {
         voiceOutageActive = true;
-        playVoiceMutedCue();
+        cues.playVoiceMutedCue();
       }
       setVoiceNotice(message);
     };
@@ -389,48 +358,6 @@ export function useQueenBeeVoice(
       if (!voiceOutageActive) return;
       voiceOutageActive = false;
       setVoiceNotice("");
-    };
-    let cancelAckPlayback: (() => void) | null = null;
-    let ackStartedAtMs = 0;
-    const playAckClip = () => {
-      const context = audioContext;
-      if (!ackBuffer || !context || context.state !== "running" || ackPlayback) return;
-      const buffer = ackBuffer;
-      ackPlayback = new Promise<void>((resolvePlayback) => {
-        const source = context.createBufferSource();
-        source.buffer = buffer;
-        source.connect(context.destination);
-        const stop = () => {
-          try {
-            source.stop();
-          } catch {
-            // The source may already have ended.
-          }
-          resolvePlayback();
-        };
-        abort.signal.addEventListener("abort", stop, { once: true });
-        source.onended = () => {
-          abort.signal.removeEventListener("abort", stop);
-          cancelAckPlayback = null;
-          resolvePlayback();
-        };
-        ackStartedAtMs = performance.now();
-        cancelAckPlayback = stop;
-        source.start();
-      }).finally(() => {
-        ackPlayback = null;
-        cancelAckPlayback = null;
-      });
-    };
-    // The reply's first speech arrived: an ack that only just began (or never
-    // started) is cut so "On it, give me a moment" cannot play back-to-back
-    // with the reply it was covering for; one that is mid-sentence finishes
-    // (cutting a word is worse than a beat of overlap-wait).
-    const cancelPendingAck = () => {
-      if (cancelAckPlayback && performance.now() - ackStartedAtMs < 350) {
-        cancelAckPlayback();
-        cancelAckPlayback = null;
-      }
     };
 
     // Watch the mic for sustained speech while Queen Bee talks; on barge-in,
@@ -509,7 +436,7 @@ export function useQueenBeeVoice(
     // already aborted), so interrupting her never tears down the mic. The
     // shared activity object lets the watcher see playback gaps live.
     const speakReplyWithBargeIn = async (text: string): Promise<SpokenReplyOutcome> => {
-      if (ackPlayback) await ackPlayback;
+      if (cues.ackPlaying()) await cues.waitForAckPlayback();
       const speakAbort = new AbortController();
       const playbackSignal = AbortSignal.any([abort.signal, speakAbort.signal]);
       const activity: PlaybackActivity = { underrunAt: 0 };
@@ -556,7 +483,7 @@ export function useQueenBeeVoice(
           if (cancelled || playbackSignal.aborted || muted) return;
           if (chunkGeneration !== generation) return; // superseded by a reset
           if (!stopWatching) {
-            if (ackPlayback) await ackPlayback;
+            if (cues.ackPlaying()) await cues.waitForAckPlayback();
             onFirstChunk?.();
             setPhase("speaking");
             stopWatching = watchForBargeIn(speakAbort, playbackSignal, activity);
@@ -614,8 +541,15 @@ export function useQueenBeeVoice(
       };
     };
 
-    // VAD shared by both listening paths. Calls onSpeechDiscarded when a
-    // mid-utterance mute throws the fragment away, onCommit at end of speech.
+    // Client energy VAD (extracted to energy-vad-loop.ts, timer-backstopped
+    // against WKWebView rAF stalls) — used by the recorder fallback and by
+    // sessions minted without server VAD. The noise floor seeds from the
+    // barge-in detector's measured room/echo floor (it just calibrated on
+    // this exact acoustic scene during her playback) instead of a cold
+    // constant: a cold-low floor made post-playback ambience read as endless
+    // "speech", restarting the silence timer for seconds — the "takes
+    // forever to send after I stop talking" complaint.
+    let stopVadLoop: (() => void) | null = null;
     const startVadLoop = (handlers: {
       isActive: () => boolean;
       onSpeechStart?: () => void;
@@ -625,82 +559,27 @@ export function useQueenBeeVoice(
     }) => {
       if (!analyser) return;
       const activeAnalyser = analyser;
-      const startedAt = performance.now();
-      let speechStartedAt = 0;
-      let lastSpeechAt = 0;
-      // Seed from the barge-in detector's measured room/echo floor (it just
-      // calibrated on this exact acoustic scene during her playback) instead
-      // of a cold constant: a cold-low floor makes post-playback ambience
-      // read as endless "speech", restarting the silence timer for seconds
-      // before the 4%-blend adaptation caught up — the "takes forever to
-      // send after I stop talking" complaint.
-      let noiseFloor = Math.min(0.03, Math.max(0.012, lastKnownEchoFloor));
       const samples = new Uint8Array(activeAnalyser.fftSize);
-      let lastTickAt = performance.now();
-      // One VAD pass. Returns false once the loop is over (commit fired,
-      // idle-reset, or torn down) so both the rAF loop and the timer
-      // backstop stop rescheduling.
-      const runTick = (): boolean => {
-        if (cancelled || !handlers.isActive()) return false;
-        lastTickAt = performance.now();
-        activeAnalyser.getByteTimeDomainData(samples);
-        let sum = 0;
-        for (const sample of samples) {
-          const normalized = (sample - 128) / 128;
-          sum += normalized * normalized;
-        }
-        const rms = mutedRef.current ? 0 : Math.sqrt(sum / samples.length);
-        const now = lastTickAt;
-        if (mutedRef.current && speechStartedAt) {
-          // Muting mid-utterance discards it instead of committing a fragment.
-          speechStartedAt = 0;
-          lastSpeechAt = 0;
-          setSpeechDetected(false);
-          handlers.onSpeechDiscarded?.();
-        }
-        const threshold = Math.max(0.018, noiseFloor * 3);
-        // Down-adaptation matches the barge-in detector's cadence (12% —
-        // 0.96/0.04 took ~500ms to converge); marginal above-threshold
-        // frames drift the floor UP slightly so hovering room noise cannot
-        // pin the silence timer indefinitely (mirrors floorBlendAbove).
-        if (rms < threshold) noiseFloor = noiseFloor * 0.88 + rms * 0.12;
-        else if (rms < noiseFloor * 4.5)
-          noiseFloor = noiseFloor * 0.996 + rms * 0.004;
-        if (rms >= threshold) {
-          if (!speechStartedAt) {
-            speechStartedAt = now;
-            setSpeechDetected(true);
-            handlers.onSpeechStart?.();
-          }
-          lastSpeechAt = now;
-        }
-        const utteranceMs = speechStartedAt ? now - speechStartedAt : 0;
-        const silenceMs = lastSpeechAt ? now - lastSpeechAt : 0;
-        if (
-          (speechStartedAt &&
-            utteranceMs > MIN_UTTERANCE_MS &&
-            silenceMs > COMMIT_SILENCE_MS) ||
-          utteranceMs > MAX_UTTERANCE_MS
-        ) {
-          handlers.onCommit();
-          return false;
-        }
-        if (!speechStartedAt && handlers.onIdle?.(now - startedAt)) return false;
-        return true;
-      };
-      const tick = () => {
-        if (runTick()) frame = window.requestAnimationFrame(tick);
-        else window.clearInterval(backstopId);
-      };
-      // Timer backstop, same defense as the barge-in watcher: WKWebView can
-      // starve rAF for seconds while the page idles, which froze this loop
-      // mid-turn — end of speech was only detected once a click/tap woke rAF
-      // again. The backstop only does work when rAF has visibly stalled.
-      const backstopId = window.setInterval(() => {
-        if (performance.now() - lastTickAt <= BARGE_IN_RAF_STALL_MS) return;
-        if (!runTick()) window.clearInterval(backstopId);
-      }, BARGE_IN_BACKSTOP_INTERVAL_MS);
-      frame = window.requestAnimationFrame(tick);
+      stopVadLoop?.();
+      stopVadLoop = startEnergyVadLoop(
+        {
+          ...handlers,
+          isActive: () => !cancelled && handlers.isActive(),
+          isMuted: () => mutedRef.current,
+          onSpeechDetected: setSpeechDetected,
+          readRms: () => {
+            if (mutedRef.current) return 0;
+            activeAnalyser.getByteTimeDomainData(samples);
+            let sum = 0;
+            for (const sample of samples) {
+              const normalized = (sample - 128) / 128;
+              sum += normalized * normalized;
+            }
+            return Math.sqrt(sum / samples.length);
+          },
+        },
+        Math.min(0.03, Math.max(0.012, lastKnownEchoFloor)),
+      );
     };
 
     // Step 2 of every turn: the conversational Queen Bee reply streams in as
@@ -1015,21 +894,60 @@ export function useQueenBeeVoice(
         startRecorderListening();
         return;
       }
-      let socket: WebSocket;
+      // One absolute arming deadline per turn, shared by prewarm adoption and
+      // a fresh re-mint. The abandoned mint is NOT cancelled — it resolves
+      // into preparedStt for the next turn (or teardown closes it).
+      const withArmDeadline = (promise: Promise<RealtimeSttSession>) =>
+        raceSttArmDeadline(promise, listeningStartedAt, STT_ARM_TIMEOUT_MS);
+      const armTimedOut = (abandoned: Promise<RealtimeSttSession>) => {
+        console.warn(
+          `[queen-voice] stt not armed +${Math.round(performance.now() - listeningStartedAt)}ms (mint stalled); recorder fallback for this turn`,
+        );
+        // An abandoned-mint failure already resets the prewarm cache.
+        void abandoned.catch(() => undefined);
+        if (cancelled) return;
+        noteVoiceOutage(
+          "Live transcription is taking a moment to connect, so this turn uses standard transcription. If you already said something, say it again.",
+        );
+        startRecorderListening();
+      };
+      let session: RealtimeSttSession;
       try {
-        socket = await sessionPromise;
-        preparedStt = null;
-        if (socket.readyState !== WebSocket.OPEN && !cancelled) {
-          // A prewarmed socket can go stale during a long thinking/speaking
-          // stretch (idle sessions get closed upstream); adopting it would
-          // wedge the turn on a socket whose close event already fired.
+        const adopted = await withArmDeadline(sessionPromise);
+        if (adopted === "arm-timeout") {
+          armTimedOut(sessionPromise);
+          return;
+        }
+        session = adopted;
+        const prewarmAgeMs = sttPrewarm.ageMs();
+        sttPrewarm.take();
+        // A prewarmed socket can go stale during a long thinking/speaking
+        // stretch: idle sessions get closed upstream — sometimes half-dead
+        // with readyState still OPEN, so appended audio silently goes nowhere
+        // until the late close event restarts the turn ("first transcription
+        // took 5+ seconds"). Re-mint instead of adopting anything old; the
+        // fresh mint (~0.9s) overlaps the pre-roll flush, losing no speech.
+        const prewarmTooOld = prewarmAgeMs > STT_PREWARM_MAX_AGE_MS;
+        if (
+          (session.socket.readyState !== WebSocket.OPEN || prewarmTooOld) &&
+          !cancelled
+        ) {
+          console.info(
+            `[queen-voice] stt prewarm ${prewarmTooOld ? `too old (${Math.round(prewarmAgeMs / 1000)}s)` : "already closed"}; minting fresh session`,
+          );
+          closeRealtimeSttSocket(session.socket);
           const freshSession = prepareStt();
           if (!freshSession) {
             startRecorderListening();
             return;
           }
-          socket = await freshSession;
-          preparedStt = null;
+          const fresh = await withArmDeadline(freshSession);
+          if (fresh === "arm-timeout") {
+            armTimedOut(freshSession);
+            return;
+          }
+          session = fresh;
+          sttPrewarm.take();
         }
       } catch (sttError) {
         realtimeUnavailable = true;
@@ -1041,22 +959,45 @@ export function useQueenBeeVoice(
         return;
       }
       if (cancelled) {
-        closeRealtimeSttSocket(socket);
+        closeRealtimeSttSocket(session.socket);
         return;
       }
+      const socket = session.socket;
+      const serverVad = session.serverVad;
       sttSocket = socket;
 
-      // End-of-speech is the CLIENT's call on this path: gpt-realtime-whisper
-      // streams transcription deltas continuously but rejects server-side
-      // turn_detection outright (the client_secrets mint 400s — verified
-      // 2026-07-05), so the energy VAD below decides when the utterance is
-      // over and commits it. The VAD loop is timer-backstopped against
-      // WKWebView rAF starvation — the freeze that used to leave turns stuck
-      // in "listening" until a click/tap woke rAF and the commit finally ran.
-      let committed = false;
+      // Turn lifecycle, two modes decided by the mint handshake:
+      // - serverVad (default, gpt-4o-mini-transcribe): OpenAI's VAD ends the
+      //   utterance — speech_started/speech_stopped arrive as events, the
+      //   segment auto-commits, and the final transcript lands ~0.6s after
+      //   the user stops (measured 2026-07-06: 614ms vs 1376ms for the old
+      //   client-VAD + continuous-model path). No client energy heuristics.
+      // - client VAD (env-forced gpt-realtime-whisper, or an older server):
+      //   the model streams deltas WHILE the user speaks but rejects
+      //   turn_detection, so the timer-backstopped energy VAD below decides
+      //   end of speech and commits manually.
+      let committed = false; // client-VAD path only
       let liveTranscript = "";
+      // Server mode: finalized segments already transcribed this turn — a
+      // quick resume after a short pause merges instead of losing words.
+      let committedTranscript = "";
       let youTurnId = 0;
+      let speechActive = false;
+      let speechStartedAtMs = 0;
+      // Committed segments whose transcription is still in flight; a mute
+      // discard swallows exactly that many late `completed` events.
+      let pendingTranscripts = 0;
+      let swallowTranscripts = 0;
+      let utteranceFinalized = false;
+      let commitFallbackTimer = 0;
+      let serverWatcher = 0;
       let lastIdleClearAt = performance.now();
+      let lastStopAtMs = 0;
+      // Terse turn timings in the console — the dev server forwards these
+      // into its log, so STT lag reports can be diagnosed from timestamps
+      // instead of feel ("was it the VAD, the transcribe, or the reply?").
+      const sinceListening = () =>
+        `+${Math.round(performance.now() - listeningStartedAt)}ms`;
       const ensureYouTurn = () => {
         if (!youTurnId) youTurnId = addTurn("you", "...", true);
         return youTurnId;
@@ -1066,6 +1007,8 @@ export function useQueenBeeVoice(
           socket.send(JSON.stringify(payload));
         }
       };
+      const shownTranscript = () =>
+        `${committedTranscript} ${liveTranscript}`.trim();
 
       const messageHandler = (event: MessageEvent<string>) => {
         let payload: SttEvent | null = null;
@@ -1075,40 +1018,105 @@ export function useQueenBeeVoice(
           return;
         }
         if (
+          serverVad &&
+          payload.type === "input_audio_buffer.speech_started"
+        ) {
+          speechActive = true;
+          if (!speechStartedAtMs) speechStartedAtMs = performance.now();
+          console.info(`[queen-voice] stt speech_started ${sinceListening()}`);
+          setSpeechDetected(true);
+          ensureYouTurn();
+          // Speech resumed before the previous segment finalized the turn —
+          // its completion will merge instead of finalizing, so the
+          // stop-armed fallback must not fire mid-sentence either.
+          window.clearTimeout(commitFallbackTimer);
+          commitFallbackTimer = 0;
+        }
+        if (
+          serverVad &&
+          payload.type === "input_audio_buffer.speech_stopped"
+        ) {
+          // The server VAD called end-of-speech and auto-committed the
+          // segment; its transcription is in flight (~0.5s).
+          speechActive = false;
+          pendingTranscripts += 1;
+          lastStopAtMs = performance.now();
+          console.info(`[queen-voice] stt speech_stopped ${sinceListening()}`);
+          setSpeechDetected(false);
+          setPhase("thinking");
+          // "Transcribing..." only when there's no live caption to keep.
+          if (!shownTranscript() && !captionStream?.text()) {
+            updateTurn(ensureYouTurn(), "Transcribing...", true);
+          }
+          if (!commitFallbackTimer) {
+            commitFallbackTimer = window.setTimeout(
+              () => finalizeUtterance(shownTranscript()),
+              STT_COMMIT_FALLBACK_MS,
+            );
+          }
+        }
+        if (
           payload.type ===
             "conversation.item.input_audio_transcription.delta" &&
           payload.delta
         ) {
           liveTranscript += payload.delta;
-          updateTurn(ensureYouTurn(), liveTranscript.trim() || "...", true);
+          updateTurn(ensureYouTurn(), shownTranscript() || "...", true);
         }
         if (
           payload.type ===
           "conversation.item.input_audio_transcription.completed"
         ) {
-          finalizeUtterance(payload.transcript || liveTranscript);
+          if (!serverVad) {
+            finalizeUtterance(payload.transcript || liveTranscript);
+            return;
+          }
+          if (pendingTranscripts > 0) pendingTranscripts -= 1;
+          if (swallowTranscripts > 0) {
+            // Transcription of a segment the user muted away — drop it.
+            swallowTranscripts -= 1;
+            return;
+          }
+          committedTranscript =
+            `${committedTranscript} ${(payload.transcript || liveTranscript).trim()}`.trim();
+          liveTranscript = "";
+          if (speechActive || pendingTranscripts > 0) {
+            // The user resumed talking before this segment's transcription
+            // landed; merge the next segment into this same turn rather
+            // than cutting them off mid-thought.
+            return;
+          }
+          finalizeUtterance(committedTranscript);
         }
         if (payload.type === "error") {
           window.clearTimeout(commitFallbackTimer);
+          window.clearInterval(serverWatcher);
           socket.removeEventListener("message", messageHandler);
           closeSttSocket();
           failTurn(payload.error?.message || "Realtime STT returned an error.");
         }
       };
-      // Shared by the completion event and the post-commit fallback timer: a
-      // stalled/lost completion must not strand the turn in "Transcribing...".
-      let utteranceFinalized = false;
-      let commitFallbackTimer = 0;
+      // Shared by the completion event, the fallback timer, and the stuck-VAD
+      // cap: a stalled/lost completion must not strand the turn in
+      // "Transcribing...".
       const finalizeUtterance = (finalText: string) => {
         if (utteranceFinalized) return;
         utteranceFinalized = true;
+        // A lost/empty authoritative transcript falls back to the caption the
+        // user watched build — visible words must not vanish. Read before
+        // closeSttSocket() discards the stream.
+        const finalTranscript =
+          finalText.trim() || (mutedRef.current ? "" : captionStream?.text() || "");
+        console.info(
+          `[queen-voice] stt transcript settled ${sinceListening()}${lastStopAtMs ? ` (${Math.round(performance.now() - lastStopAtMs)}ms after speech_stopped)` : ""}, ${finalTranscript.length} chars`,
+        );
         window.clearTimeout(commitFallbackTimer);
+        window.clearInterval(serverWatcher);
         socket.removeEventListener("message", messageHandler);
         closeSttSocket();
         // Prewarm the next session while Queen Bee thinks and speaks.
         void prepareStt()?.catch(() => undefined);
         if (cancelled) return;
-        const finalTranscript = finalText.trim();
         if (finalTranscript) {
           const turnId = ensureYouTurn();
           updateTurn(turnId, finalTranscript);
@@ -1121,9 +1129,17 @@ export function useQueenBeeVoice(
       socket.addEventListener("message", messageHandler);
       socket.addEventListener("close", () => {
         // A dropped socket mid-listen should restart, not strand the session.
-        if (!cancelled && !committed && sttSocket === socket) {
+        if (
+          !cancelled &&
+          !utteranceFinalized &&
+          !committed &&
+          sttSocket === socket
+        ) {
+          window.clearInterval(serverWatcher);
           sttSocket = null;
           sttLiveSocket = null;
+          captionStream?.close();
+          captionStream = null;
           // Recover speech that straddled the drop from the pre-roll buffer.
           pendingFlushSinceMs = performance.now() - 1_500;
           restartTimer = window.setTimeout(startListening, 250);
@@ -1135,6 +1151,66 @@ export function useQueenBeeVoice(
       // let the pump stream live frames. No handler swap, no lost audio.
       flushPreRollTo(socket, flushSinceMs);
       sttLiveSocket = socket;
+      console.info(
+        `[queen-voice] stt listening armed ${sinceListening()} (serverVad=${String(serverVad)})`,
+      );
+
+      if (serverVad) {
+        // Parallel caption stream paints the live turn while the user talks;
+        // the authoritative transcript replaces it at settle. Source comes
+        // from the caption matrix: free native/web speech when the
+        // environment has one, the paid OpenAI caption session otherwise.
+        captionStream?.close();
+        captionStream = startTurnCaptionStream({
+          initialFrames: () =>
+            preRoll.filter((f) => f.at >= flushSinceMs).map((f) => f.pcm),
+          onText: (caption) => {
+            // The authoritative path wins the moment it has any text, and a
+            // trailing delta after a mute-discard must not resurrect the turn.
+            if (cancelled || utteranceFinalized || mutedRef.current) return;
+            if (committedTranscript || liveTranscript || !caption) return;
+            updateTurn(ensureYouTurn(), caption, true);
+          },
+        });
+        // The client-side jobs left in server mode run on a plain interval
+        // (rAF is not trustworthy in WKWebView): discard an utterance the
+        // user muted away mid-sentence, and cap a VAD held open by steady
+        // background noise.
+        serverWatcher = window.setInterval(() => {
+          if (cancelled || utteranceFinalized || sttSocket !== socket) {
+            window.clearInterval(serverWatcher);
+            return;
+          }
+          if (
+            mutedRef.current &&
+            (speechActive || liveTranscript || committedTranscript || youTurnId)
+          ) {
+            // Muting mid-utterance discards it instead of sending a fragment.
+            speechActive = false;
+            speechStartedAtMs = 0;
+            liveTranscript = "";
+            committedTranscript = "";
+            captionStream?.reset();
+            swallowTranscripts = pendingTranscripts;
+            send({ type: "input_audio_buffer.clear" });
+            window.clearTimeout(commitFallbackTimer);
+            commitFallbackTimer = 0;
+            setSpeechDetected(false);
+            setPhase("listening");
+            if (youTurnId) {
+              dropTurn(youTurnId);
+              youTurnId = 0;
+            }
+          }
+          if (
+            speechStartedAtMs &&
+            performance.now() - speechStartedAtMs > VAD_MAX_UTTERANCE_MS
+          ) {
+            finalizeUtterance(shownTranscript());
+          }
+        }, 200);
+        return;
+      }
 
       startVadLoop({
         isActive: () => sttSocket === socket && !committed,
@@ -1174,67 +1250,22 @@ export function useQueenBeeVoice(
       });
     }
 
-    // Fallback path: record the utterance and transcribe it with Whisper.
-    const runVoiceTurnFromRecording = async (audio: Blob) => {
-      setPhase("thinking");
-      setSpeechDetected(false);
-      const youTurnId = addTurn("you", "Transcribing...", true);
-      // Session teardown must only drop a STILL-PENDING placeholder. Once the
-      // transcript lands, this turn is conversation history — the unremoved
-      // listener used to fire on End and silently delete the user's finalized
-      // messages (the overlay bridge mirrors removals into the shared chat).
-      let youTurnSettled = false;
-      abort.signal.addEventListener(
-        "abort",
-        () => {
-          if (!youTurnSettled) dropTurn(youTurnId);
-        },
-        { once: true },
-      );
-      try {
-        const form = new FormData();
-        form.set(
-          "audio",
-          new File([audio], utteranceFileName(mimeType), {
-            type: audio.type || mimeType || "audio/webm",
-          }),
-        );
-        const transcribeResponse = await fetch("/api/queen-bee/voice", {
-          method: "POST",
-          body: form,
-          cache: "no-store",
-          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(60_000)]),
-        });
-        const transcribed = (await transcribeResponse
-          .json()
-          .catch(() => null)) as VoiceTurnResponse | null;
-        if (cancelled) return;
-        if (
-          !transcribeResponse.ok ||
-          !transcribed?.ok ||
-          !transcribed.transcript
-        ) {
-          dropTurn(youTurnId);
-          failTurn(
-            transcribed?.error ||
-              `Queen Bee transcription returned HTTP ${transcribeResponse.status}.`,
-          );
-          return;
-        }
-        youTurnSettled = true;
-        updateTurn(youTurnId, transcribed.transcript);
-        await runConverseTurn(transcribed.transcript);
-      } catch (turnError) {
-        if (cancelled) return;
-        dropTurn(youTurnId);
-        youTurnSettled = true;
-        failTurn(
-          turnError instanceof Error
-            ? turnError.message
-            : "Queen Bee voice turn failed.",
-        );
-      }
-    };
+    // Fallback path: record the utterance and transcribe it with Whisper
+    // (extracted to recorded-turn.ts).
+    const runVoiceTurnFromRecording = (audio: Blob) =>
+      runRecordedVoiceTurn(audio, {
+        abortSignal: abort.signal,
+        isCancelled: () => cancelled,
+        mimeType,
+        utteranceFileName,
+        setPhase,
+        setSpeechDetected,
+        addTurn,
+        updateTurn,
+        dropTurn,
+        failTurn,
+        runConverseTurn,
+      });
 
     function startRecorderListening() {
       if (cancelled || !stream || !analyser) return;
@@ -1242,6 +1273,22 @@ export function useQueenBeeVoice(
       setSpeechDetected(false);
       // The recorder path can't consume PCM pre-roll; drop any pending flush.
       pendingFlushSinceMs = 0;
+
+      // Free local captions (native/web speech): live words while talking,
+      // and — when present at commit — the transcript itself, so this path
+      // no longer needs an OpenAI key at all. Absent a free source this
+      // stream stays silently empty and the Whisper upload runs as before.
+      let liveTurnId = 0;
+      captionStream?.close();
+      const captions = startLocalCaptionStream({
+        initialFrames: () => [],
+        onText: (caption) => {
+          if (cancelled || mutedRef.current || !recorder || !caption) return;
+          if (!liveTurnId) liveTurnId = addTurn("you", caption, true);
+          else updateTurn(liveTurnId, caption, true);
+        },
+      });
+      captionStream = captions;
 
       recorderChunks = [];
       try {
@@ -1270,7 +1317,26 @@ export function useQueenBeeVoice(
             type: mimeType || "audio/webm",
           });
           recorderChunks = [];
-          if (!cancelled && blob.size) void runVoiceTurnFromRecording(blob);
+          if (cancelled) return;
+          const captionTranscript = captions.text();
+          captions.close();
+          if (captionStream === captions) captionStream = null;
+          if (captionTranscript) {
+            // Free path: the local recognizer already transcribed the turn —
+            // no upload, no key.
+            setPhase("thinking");
+            setSpeechDetected(false);
+            const turnId = liveTurnId || addTurn("you", captionTranscript, true);
+            liveTurnId = 0;
+            updateTurn(turnId, captionTranscript);
+            void runConverseTurn(captionTranscript);
+            return;
+          }
+          if (liveTurnId) {
+            dropTurn(liveTurnId);
+            liveTurnId = 0;
+          }
+          if (blob.size) void runVoiceTurnFromRecording(blob);
         };
         recorder.stop();
         recorder = null;
@@ -1362,6 +1428,7 @@ export function useQueenBeeVoice(
                 audio: pcm16ToBase64(pcm),
               }),
             );
+            captionStream?.push(pcm);
           }
         };
         // Start warming the local TTS model right away so the first spoken
@@ -1370,6 +1437,10 @@ export function useQueenBeeVoice(
         void prewarmLocalTtsEngine().then(() => {
           if (!cancelled) void fetchAckClip();
         });
+        // Mint the first STT session now, overlapping the greeting — the
+        // first listening turn otherwise pays the whole mint (worst case a
+        // dev-server cold compile of /api/phone) inside its arming deadline.
+        void prepareStt()?.catch(() => undefined);
         void runOpeningTurn();
       } catch (connectError) {
         if (!cancelled) {
@@ -1388,14 +1459,12 @@ export function useQueenBeeVoice(
     return () => {
       cancelled = true;
       abort.abort();
-      if (frame) window.cancelAnimationFrame(frame);
+      stopVadLoop?.();
       if (resumeTimer) window.clearTimeout(resumeTimer);
       if (restartTimer) window.clearTimeout(restartTimer);
       stopRecorder();
       closeSttSocket();
-      void preparedStt
-        ?.then((socket) => closeRealtimeSttSocket(socket))
-        .catch(() => undefined);
+      sttPrewarm.closePending();
       stream?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       try {

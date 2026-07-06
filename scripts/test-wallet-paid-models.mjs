@@ -46,6 +46,7 @@ const [
   x402Executor,
   walletPaidModelsConfig,
   creditRoute,
+  agentController,
   creditVault,
   paidAgentCloudClient,
   tauriCargo,
@@ -87,6 +88,7 @@ const [
   source("src/lib/services/wallet/x402-agent-fetch.ts"),
   source("src/lib/config/hivemindos-wallet-paid-models.ts"),
   source("src/app/api/hivemindos/models/credits/route.ts"),
+  source("src/features/dashboard/hooks/use-agent-controller.tsx"),
   source("src/lib/services/hivemindos-model-credit-vault.ts"),
   source("src/lib/services/paid-agent-cloud-client.ts"),
   source("src-tauri/Cargo.toml"),
@@ -128,6 +130,7 @@ includes(walletPaidService, "funding.walletVaultId", "wallet-paid runtime resolv
 includes(walletPaidService, "funding.creditAccountId", "wallet-paid runtime resolver hosted credit account id");
 includes(walletPaidService, "/api/hivemindos/models", "wallet-paid runtime resolver");
 includes(walletPaidService, "!fundingAccountId && !isFreeHivemindosWalletPaidModel(model)", "wallet-paid runtime resolver skips funding requirement for the free model");
+includes(walletPaidService, "...internalApiAuthHeaders()", "wallet-paid runtime resolver authenticates the dashboard self-fetch (proxy gate)");
 
 includes(modelsRoute, "hivemindosWalletPaidModelOptions", "models list route");
 includes(modelsRoute, "owned_by: \"hivemindos\"", "models list route ownership");
@@ -176,9 +179,14 @@ includes(setupComponent, "getDisplayWalletBalanceUsd", "guided setup saved walle
 includes(setupComponent, "groupedUserPickables", "guided setup user-wallet picker source");
 includes(setupComponent, "agentPickable", "guided setup agent-wallet picker source");
 includes(setupComponent, "resolvePickableAccount", "guided setup resolves grouped wallet accounts");
-includes(setupComponent, "Funding address", "guided setup funding flow");
-includes(setupComponent, "Saved to Wallets", "guided setup wallet persistence copy");
-includes(setupComponent, "savedFundingBalanceCopy", "guided setup saved wallet balance copy");
+includes(setupComponent, "walletBalanceLabel", "guided setup compact wallet balance badge copy");
+includes(setupComponent, "chainIconSrc(effectiveWalletNetwork)", "guided setup compact chain icon");
+includes(setupComponent, "styles.walletFundingBadge", "guided setup compact wallet funding badge");
+includes(setupComponent, "styles.walletSwitchButton", "guided setup embeds wallet switch in the compact badge");
+assert.ok(!setupComponent.includes("Funding address"), "guided setup wallet-ready modal should not show the raw funding address block");
+assert.ok(!setupComponent.includes("Saved to Wallets"), "guided setup wallet-ready modal should not keep the old saved-wallet status chip");
+assert.ok(!/saved to Wallets/i.test(setupComponent), "guided setup wallet-ready flow should not reuse the old saved-wallet chip copy");
+assert.ok(!setupComponent.includes("savedFundingBalanceCopy"), "guided setup should not use the old separate wallet balance status chip");
 includes(setupComponent, "/api/hivemindos/models/credits", "guided setup model credits route");
 includes(setupComponent, "Card credits", "guided setup card credit mode");
 includes(setupComponent, "Crypto wallet", "guided setup crypto wallet mode");
@@ -205,6 +213,9 @@ includes(setupComponent, "const selectedModelIsFree = isFreeHivemindosWalletPaid
 assert.ok(!setupComponent.includes("async function finishSetup"), "embedded panel has no Done handler of its own — every change persists immediately via onComplete");
 assert.ok(!setupComponent.includes("onCancel: () => void"), "embedded panel takes no onCancel prop (only the wallet browser's internal Back remains)");
 includes(setupComponent, "const fundingConfigured = walletReady || cardFundingReady", "guided setup derives one funded flag for the balance pill and paid-model gate");
+includes(setupComponent, "const modelCreditPillBalanceUsd", "guided setup balance pill derives the hosted model-credit balance");
+includes(setupComponent, "data-funded={modelCreditPillFunded || undefined}", "guided setup balance pill is funded only by hosted model credits");
+assert.ok(!setupComponent.includes("pillBalanceUsd"), "guided setup balance pill should not fall back to the connected wallet balance");
 includes(setupComponent, ".filter((option) => option.tier !== \"free\")", "guided setup keeps the free model out of the routing-tier chips (it is the hero card)");
 includes(setupComponent, "styles.freeHero", "guided setup renders the free Scout hero card row");
 includes(setupComponent, "styles.balancePill", "guided setup renders the tappable balance pill that opens funding");
@@ -238,9 +249,12 @@ includes(setupStyles, "balancePill", "guided setup balance pill styling");
 includes(setupStyles, "chipGrid", "guided setup model chip grid styling");
 includes(setupStyles, "fundOverlay", "guided setup funding modal overlay styling");
 includes(setupStyles, "gateBanner", "guided setup funding gate banner styling");
+includes(setupStyles, "walletFundingBadge", "guided setup compact wallet badge styling");
+includes(setupStyles, "walletSwitchButton", "guided setup compact wallet switch segment styling");
 includes(setupStyles, "walletSelectorEmbed", "guided setup embedded wallet picker styling");
 includes(setupStyles, "[data-theme=\"hive-light\"]", "guided setup light theme token bridge");
 assert.ok(!setupStyles.includes("browseActions"), "guided setup styles should not keep the hidden browse New wallet action");
+assert.ok(!setupStyles.includes(".status"), "guided setup styles should not keep the old wallet status chip row");
 assert.ok(!setupStyles.includes("min-height: min(720px"), "guided setup shell should not reserve a tall empty modal body after compact wallet setup");
 
 includes(walletSelectModal, "export function WalletSelectPanel", "wallet picker embedded panel export");
@@ -277,7 +291,7 @@ includes(proxyRoute, "loadGovernanceWallet", "wallet-paid proxy");
 includes(proxyRoute, "getWalletSecret", "wallet-paid proxy");
 includes(proxyRoute, "executeX402Fetch", "wallet-paid proxy");
 includes(proxyRoute, "upstreamHivemindosWalletPaidModel", "wallet-paid proxy maps public model aliases to upstream ids");
-includes(proxyRoute, "getHivemindosModelCreditToken", "wallet-paid proxy reads prepaid model credit token");
+includes(proxyRoute, "resolvePooledHivemindosModelCreditToken", "wallet-paid proxy reads the shared prepaid credit pool");
 includes(proxyRoute, "X-HivemindOS-Credit-Token", "wallet-paid proxy forwards hosted credit token");
 includes(proxyRoute, "fetchWithHostedCredits", "wallet-paid proxy uses stored credits without a local wallet secret");
 includes(proxyRoute, "X-HivemindOS-Models-Credit-Balance-Usd", "wallet-paid proxy exposes hosted model credit balance");
@@ -311,7 +325,7 @@ includes(creditVault, "storeHivemindosModelCreditToken", "credit token vault sto
 includes(creditVault, "getHivemindosModelCreditToken", "credit token vault reads tokens");
 
 includes(creditRoute, "storeHivemindosModelCreditToken", "model credits route persists hosted credit token");
-includes(creditRoute, "getHivemindosModelCreditToken", "model credits route reads hosted credit token");
+includes(creditRoute, "resolvePooledHivemindosModelCreditToken", "model credits route reads the shared credit pool");
 includes(creditRoute, "method === \"card\"", "model credits route supports card checkout funding");
 includes(creditRoute, "creditAccountId", "model credits route accepts hosted credit account ids");
 includes(creditRoute, "executeX402Fetch", "model credits route signs official top-up");
@@ -320,6 +334,20 @@ includes(creditRoute, "approvalRequiredOverUsd: 0", "model credits route treats 
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/top-up", "model credits route calls official top-up endpoint");
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/checkout", "model credits route calls official card checkout endpoint");
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/balance", "model credits route calls official balance endpoint");
+
+// Hosted model credits are one shared pool per install. Every server-side
+// token read goes through the pooled resolver (shared account first, legacy
+// per-agent/draft ids adopted into the pool on first use), top-ups store the
+// returned token under the shared account, and the wallet top-up sends the
+// existing pool token so the hosted gateway credits the same account.
+includes(walletPaidModelsConfig, "HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID", "shared credit pool account id constant");
+includes(creditVault, "resolvePooledHivemindosModelCreditToken", "credit vault exposes the pooled resolver");
+includes(creditVault, "HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID", "pooled resolver keys the shared account");
+includes(creditRoute, "walletAgentId: HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID", "top-ups store tokens under the shared pool");
+includes(creditRoute, "existingPoolToken", "wallet top-up reuses the pool token so the gateway credits one account");
+includes(setupComponent, "HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID", "panel resolves the shared credit pool");
+assert.ok(!setupComponent.includes("hmos-model-credits:"), "panel no longer mints per-draft credit account ids");
+assert.ok(!agentController.includes("hmos-model-credits:"), "agent create no longer needs a credits re-key");
 includes(creditRoute, "officialPaidAgentCheckoutReturnUrl(\"success\", slug)", "model credits route uses hosted success return URL");
 includes(creditRoute, "officialPaidAgentCheckoutReturnUrl(\"cancel\", slug)", "model credits route uses hosted cancel return URL");
 assert.ok(!creditRoute.includes("creditToken,"), "model credits route should not return the hosted bearer token to the client as a bare field");

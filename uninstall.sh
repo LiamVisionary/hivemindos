@@ -305,6 +305,11 @@ if ask "Remove HivemindOS collector environment file ~/.hivemindos/collector.env
   ok "Removed ~/.hivemindos/collector.env"
 fi
 
+if ask "Remove HivemindOS Syncthing API key cache ~/.hivemindos/syncthing-api-key?" "no"; then
+  rm -f "$HOME/.hivemindos/syncthing-api-key"
+  ok "Removed ~/.hivemindos/syncthing-api-key"
+fi
+
 if ask "Remove HivemindOS GitLawb config/status cache from ~/.hivemindos/gitlawb?" "yes"; then
   rm -rf "$HOME/.hivemindos/gitlawb/status.json" "$HOME/.hivemindos/gitlawb/setup-status.json"
   ok "Removed HivemindOS GitLawb status cache"

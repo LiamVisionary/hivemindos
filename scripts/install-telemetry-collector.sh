@@ -23,6 +23,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$APP_DIR/scripts/macos-background-helpers.sh"
 COLLECTOR="$APP_DIR/scripts/agent-telemetry-collector.mjs"
 SYNCTHING_RUNNER="$APP_DIR/scripts/run-syncthing.sh"
+SYNCTHING_API_KEY_CACHE="$HOME/.hivemindos/syncthing-api-key"
 LINK_BIN="${HIVE_LINK_BIN:-$APP_DIR/bin/hivemind-linkd}"
 LINK_LABEL="${HIVE_LINK_LABEL:-com.hivemindos.linkd.agent}"
 LINK_LEGACY_LABEL="com.hivemindos.linkd"
@@ -121,6 +122,36 @@ resolve_macos_sync_helper() {
     "$MACOS_SYNC_HELPER_HOME" \
     "$APP_DIR/src-tauri/resources/hivemindos-sync-helper/$MACOS_SYNC_HELPER_NAME" \
     "$APP_DIR/resources/hivemindos-sync-helper/$MACOS_SYNC_HELPER_NAME"
+}
+
+syncthing_config_candidates() {
+  if [[ -n "${SYNCTHING_CONFIG_PATH:-}" ]]; then
+    printf "%s\n" "$SYNCTHING_CONFIG_PATH"
+  fi
+  printf "%s\n" \
+    "$HOME/Library/Application Support/Syncthing/config.xml" \
+    "$HOME/.local/state/syncthing/config.xml" \
+    "$HOME/.config/syncthing/config.xml"
+}
+
+cache_syncthing_api_key_for_collector() {
+  local key="${SYNCTHING_API_KEY:-}"
+  local config_path
+  if [[ -z "$key" ]]; then
+    while IFS= read -r config_path; do
+      [[ -r "$config_path" ]] || continue
+      key="$(sed -n 's/.*<apikey>\([^<]*\)<\/apikey>.*/\1/p' "$config_path" 2>/dev/null | head -1 | tr -d '\000\r\n' || true)"
+      [[ -n "$key" ]] && break
+    done < <(syncthing_config_candidates)
+  fi
+  [[ -n "$key" ]] || return 0
+  mkdir -p "$(dirname "$SYNCTHING_API_KEY_CACHE")"
+  local tmp="$SYNCTHING_API_KEY_CACHE.$$"
+  umask 077
+  printf "%s\n" "$key" > "$tmp"
+  chmod 600 "$tmp" 2>/dev/null || true
+  mv "$tmp" "$SYNCTHING_API_KEY_CACHE"
+  echo "Cached Syncthing API key for the local collector without exposing it in the LaunchAgent."
 }
 
 run_privileged() {
@@ -1253,6 +1284,7 @@ PLIST
       launchctl_bounded 5 unload "$SYNCTHING_PLIST" >/dev/null 2>&1 || true
       launchctl_bounded 5 load "$SYNCTHING_PLIST"
       launchctl_bounded 5 kickstart -k "gui/$(id -u)/com.hivemindos.syncthing" >/dev/null 2>&1 || true
+      cache_syncthing_api_key_for_collector
       echo "Installed Syncthing macOS LaunchAgent on 127.0.0.1:8384"
     else
       echo "Syncthing is unavailable; Hivemind Sync shared-brain folder sync is disabled." >&2
@@ -1483,6 +1515,8 @@ SERVICE
     echo "HivemindOS collector installed."
   fi
 fi
+
+cache_syncthing_api_key_for_collector
 
 mkdir -p "$HOME/.hivemindos"
 {

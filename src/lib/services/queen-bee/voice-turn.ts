@@ -7,6 +7,7 @@ import {
   type AgentProfile,
   type AgentRuntime,
 } from "@/lib/types/agent-runtime";
+import { isHivemindosWalletPaidModelProfile } from "@/lib/services/hivemindos-wallet-paid-models";
 import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
 import {
   readRuntimeResponseText,
@@ -28,6 +29,10 @@ import {
   noteQueenVoiceBrainSuccess,
 } from "@/lib/services/queen-bee/voice-brain-status";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import {
+  voiceTaskApprovalPrompt,
+  voiceTaskSubmissionAuthorized,
+} from "@/lib/services/queen-bee/voice-task-approval";
 
 // The persisted session every Queen agent-turn shares; multi-step rail flows (a
 // swap/send/Bankr DRAFT prepared on one turn, then a confirmation on the next)
@@ -45,6 +50,11 @@ const CONFIRMATION_REQUEST = /^(?:confirm|confirmed|yes|yes,?\s*confirm|go ahead
 // /api/chat/agent-runtime, so a 10s agent budget aborted into the alerted
 // OpenAI fallback right before the reply landed, on every turn.
 const AGENT_TURN_TIMEOUT_MS = 20_000;
+// The HivemindOS-models gateway buffers upstream responses (no deltas until
+// done) and its free host can cold-start, so 20s aborts into the alerted
+// OpenAI fallback + 5-minute cooldown on every cold turn. Mirrors the typed
+// chat lane's 120s budget for the same brain class (resolveQueenTypedChatBrains).
+const WALLET_PAID_AGENT_TURN_TIMEOUT_MS = 120_000;
 const OPENAI_TURN_TIMEOUT_MS = 20_000;
 const MAX_HISTORY_TURNS = 8;
 // How many capable agents the delegation path tries (in fitness order) before
@@ -103,6 +113,7 @@ const QUEEN_VOICE_TURN_INSTRUCTIONS = [
   "speech: one or two short, natural spoken sentences. No markdown, no lists, no reasoning preambles.",
   "You are MID-conversation: never greet again, never reintroduce yourself, never restart the conversation - answer the latest message directly in context.",
   "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive).",
+  "If you choose a next step after an open-ended prompt like 'you tell me', keep task null and ask for approval. Only set task after the user's latest message asks for specific work or confirms your immediately previous task proposal.",
   "Greetings, questions, status chat, and thinking-out-loud get task: null and a conversational speech reply.",
   "When you do create a task, make title a short imperative summary, message the full work request in the user's words, and have speech briefly confirm what you are kicking off.",
 ];
@@ -205,6 +216,10 @@ export async function runQueenBeeVoiceTurn(options: {
   if (text) {
     const parsed = parseVoiceTurnJson(text);
     if (parsed?.task) {
+      if (!voiceTaskSubmissionAuthorized(options.transcript, options.history)) {
+        if (emitter?.attemptReset()) options.onSpeechReset?.();
+        return finish({ reply: voiceTaskApprovalPrompt(parsed.task) });
+      }
       options.progress?.(
         parsed.task.title ? `Delegating: ${parsed.task.title}` : "Delegating the task",
       );
@@ -220,20 +235,12 @@ export async function runQueenBeeVoiceTurn(options: {
     if (parsed?.speech) return finish({ reply: parsed.speech });
     return finish({ reply: text.trim().slice(0, 600) });
   }
-  // Last resort: treat the utterance as a direct work request so voice keeps
-  // working even when no conversational model is reachable. A failed attempt
-  // may have streamed partial speech already — discard it first.
+  // Last resort: stay conversational. Never turn a model outage or empty reply
+  // into a Work Board mutation; the user must explicitly authorize queued work.
   if (emitter?.attemptReset()) options.onSpeechReset?.();
-  const submitted = await submitQueenBeeVoiceTask(options, {
-    title: "",
-    message: options.transcript,
-  });
   return finish({
-    reply: submitted.summary,
-    taskId: submitted.taskId,
-    taskTitle: submitted.taskTitle,
-    created: submitted.created,
-    route: submitted.route,
+    reply:
+      "I couldn't get a clean enough reply to act. Tell me exactly what to queue and I will ask before sending it to the Work Board.",
   });
 }
 
@@ -964,7 +971,11 @@ async function runRuntimeConversationTurn(
       latencyMode: "voice",
     }),
     cache: "no-store",
-    signal: AbortSignal.timeout(AGENT_TURN_TIMEOUT_MS),
+    signal: AbortSignal.timeout(
+      isHivemindosWalletPaidModelProfile(agent)
+        ? WALLET_PAID_AGENT_TURN_TIMEOUT_MS
+        : AGENT_TURN_TIMEOUT_MS,
+    ),
   });
   return readRuntimeResponseText(response, onActivity, onTextDelta);
 }

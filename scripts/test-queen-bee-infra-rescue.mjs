@@ -12,7 +12,7 @@ import { register } from "node:module";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const { rescueInfraStrandedTasks, isInfrastructureOnlyExhaustion, isInfraStrandedResult, INFRA_RESCUE_MARKER } = await import("../src/lib/services/queen-bee/infra-rescue.ts");
-const { createTask, claimTask, blockTask, readBoard } = await import("../src/lib/services/kanban/local-kanban-store.ts");
+const { createTask, claimTask, blockTask, completeTask, patchTask, readBoard } = await import("../src/lib/services/kanban/local-kanban-store.ts");
 
 const INFRA_RESULT = [
   "Queen Bee autonomous pickup exhausted all eligible delegates and now needs human input.",
@@ -113,6 +113,34 @@ try {
     assert.equal(killed.rescued.length, 0, "HIVEMINDOS_COMPANY_INFRA_RESCUE=0 disables the sweep");
   } finally {
     delete process.env.HIVEMINDOS_COMPANY_INFRA_RESCUE;
+  }
+
+  // ── Completion integrity: a result byte-identical to ANOTHER task's result is a
+  // misattributed session output (live: Bankr wallet dumps stamped on 3 tasks at
+  // once, twice) and must be rejected on every completion path.
+  {
+    const DUMP = `**Bankr read complete** · Wallet portfolio\n${JSON.stringify({ success: true, balances: { fake: true } })}\n`.padEnd(300, "x");
+    const { task: first } = await createTask(null, { title: "Legit first task", status: "ready", maxAttempts: 3 }, options);
+    await claimTask(null, first.id, { claimer: "test:first" }, options);
+    await completeTask(null, first.id, { result: DUMP }, options);
+
+    const { task: second } = await createTask(null, { title: "Victim task", status: "ready", maxAttempts: 3 }, options);
+    await claimTask(null, second.id, { claimer: "test:second" }, options);
+    await assert.rejects(
+      completeTask(null, second.id, { result: DUMP }, options),
+      /misattributed session output/i,
+      "completeTask rejects a duplicate substantial result",
+    );
+    await assert.rejects(
+      patchTask(null, second.id, { status: "done", result: DUMP }, options),
+      /misattributed session output/i,
+      "patch-to-done rejects a duplicate substantial result",
+    );
+    const guardBoard = await readBoard(null, options);
+    assert.equal(guardBoard.tasks.find((t) => t.id === second.id).status, "working", "the victim task stays claimed for an honest attempt");
+    // Distinct substantial results and short identical ones still complete fine.
+    await completeTask(null, second.id, { result: `${DUMP} — but genuinely different content for task two.` }, options);
+    assert.equal((await readBoard(null, options)).tasks.find((t) => t.id === second.id).status, "done");
   }
 
   console.log("infra-rescue: all assertions passed");

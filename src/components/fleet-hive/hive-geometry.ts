@@ -134,12 +134,12 @@ function frRectsOverlap(left: HiveLayoutRect, right: HiveLayoutRect, gap = 0) {
   );
 }
 
-/** Where the dashed "onboard a new machine" cell sits: in the widest angular
- *  gap between machines (biased toward straight-down for the familiar feel),
- *  just outside the ring — so it never stacks on top of a machine that happens
- *  to land directly below the Queen. Dense fleets grow agent petals past that
- *  base radius, so when the layout is provided the cell slides further outward
- *  along the same angle until it clears every placed machine/agent/add cell. */
+/** Where the dashed "onboard a new machine" cell sits: just outside the ring,
+ *  in an angular gap between machines. Without a layout it takes the widest gap
+ *  (biased toward straight-down for the familiar feel). With the layout, every
+ *  gap competes and the winner is the clear spot needing the LEAST outward
+ *  escape from the ring — so a dense cluster crowding one gap sends the cell to
+ *  a genuinely free gap instead of pushing it ever further off-canvas. */
 export function frAddMachinePos(machines: HiveMachine[], layout?: Record<string, MachineLayout>): Pt {
   const total = machines.length;
   const radius = RING + BASE_ADD_MACHINE_GAP * CELL_SCALE; // just beyond the agent petals
@@ -147,7 +147,7 @@ export function frAddMachinePos(machines: HiveMachine[], layout?: Record<string,
   const angs = machines
     .map((_, i) => ((frMachineAngle(i, total) % 360) + 360) % 360)
     .sort((a, b) => a - b);
-  let best = { mid: 90, size: -1, downness: Infinity };
+  const gaps: { mid: number; size: number; downness: number }[] = [];
   for (let i = 0; i < angs.length; i++) {
     const a = angs[i];
     const b = i + 1 < angs.length ? angs[i + 1] : angs[0] + 360;
@@ -155,25 +155,33 @@ export function frAddMachinePos(machines: HiveMachine[], layout?: Record<string,
     const mid = ((a + b) / 2) % 360;
     const diff = Math.abs(mid - 90) % 360;
     const downness = Math.min(diff, 360 - diff); // angular distance to straight-down
-    // Prefer the widest gap; break ties toward the bottom of the ring.
-    if (size > best.size + 0.5 || (Math.abs(size - best.size) <= 0.5 && downness < best.downness)) {
-      best = { mid, size, downness };
-    }
+    gaps.push({ mid, size, downness });
   }
+  // Prefer the widest gap; break ties toward the bottom of the ring.
+  const widerOrLower = (gap: { size: number; downness: number }, than: { size: number; downness: number }) =>
+    gap.size > than.size + 0.5 || (Math.abs(gap.size - than.size) <= 0.5 && gap.downness < than.downness);
+  const widest = gaps.reduce((best, gap) => (widerOrLower(gap, best) ? gap : best));
+  if (!layout) return frPolar(QX, QY, radius, widest.mid);
+
   const obstacles: HiveLayoutRect[] = [];
-  if (layout) {
-    for (const m of machines) {
-      const L = layout[m.id];
-      if (!L) continue;
-      obstacles.push(frCellRect(L.pos, MACHINE_COLLISION_PAD), frCellRect(L.addPos));
-      for (const a of L.agents) obstacles.push(frCellRect(a.pos));
+  for (const m of machines) {
+    const L = layout[m.id];
+    if (!L) continue;
+    obstacles.push(frCellRect(L.pos, MACHINE_COLLISION_PAD), frCellRect(L.addPos));
+    for (const a of L.agents) obstacles.push(frCellRect(a.pos));
+  }
+  let best: { pt: Pt; extra: number; size: number; downness: number } | null = null;
+  for (const gap of gaps) {
+    for (let extra = 0; extra <= CELL_STEP * 8; extra += CELL_STEP / 4) {
+      const pt = frPolar(QX, QY, radius + extra, gap.mid);
+      if (!frSlotClears(pt, obstacles)) continue;
+      if (!best || extra < best.extra - 0.5 || (Math.abs(extra - best.extra) <= 0.5 && widerOrLower(gap, best))) {
+        best = { pt, extra, size: gap.size, downness: gap.downness };
+      }
+      break; // this gap's nearest clear spot found; try the next gap
     }
   }
-  for (let r = radius; r <= radius + CELL_STEP * 8; r += CELL_STEP / 4) {
-    const point = frPolar(QX, QY, r, best.mid);
-    if (frSlotClears(point, obstacles)) return point;
-  }
-  return frPolar(QX, QY, radius, best.mid);
+  return best ? best.pt : frPolar(QX, QY, radius, widest.mid);
 }
 
 /** Build a layout map: machine id -> { pos, ang, agents, addPos }. */

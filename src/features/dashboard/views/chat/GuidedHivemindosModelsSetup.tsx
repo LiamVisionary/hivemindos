@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Check, ChevronRight, Coins, Copy, CreditCard, LoaderCircle, Network, Plus, RefreshCcw, Search, Sparkles, Wallet, X, Zap } from "lucide-react";
+import { Bot, Check, ChevronRight, Coins, CreditCard, LoaderCircle, Network, Plus, RefreshCcw, Repeat2, Search, Sparkles, Wallet, X, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { AgentProfile, HivemindosModelsAgentConfig } from "@/lib/types/agent-runtime";
 import {
+  HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID,
   HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL,
   HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
   HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS,
@@ -59,6 +60,54 @@ type GatewayModelOption = {
   promptUsdPerToken?: number;
   completionUsdPerToken?: number;
 };
+
+/** Client mirror of FreeModelAllowanceSnapshot (the service module is
+ *  server-only — it reads the snapshot file). */
+type FreeAllowanceSnapshot = {
+  remainingRequests: number | null;
+  remainingTokens: number | null;
+  resetAt: string | null;
+  observedAt: string;
+  highWaterRequests: number | null;
+  highWaterTokens: number | null;
+};
+
+function compactTokenCount(tokens: number) {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`;
+  return String(tokens);
+}
+
+type FreeMeterState = { fraction: number; label: string; exhausted: boolean };
+
+/** Meter shape from the last-seen allowance snapshot. The gateway reports only
+ *  "remaining", so the denominator is the highest value seen this reset
+ *  window; a past reset marker means the window rolled over and the allowance
+ *  is full again. Derived at fetch time (not render) so it stays pure. */
+function deriveFreeMeter(allowance: FreeAllowanceSnapshot | null, nowMs: number): FreeMeterState | null {
+  if (!allowance) return null;
+  const resetMs = allowance.resetAt ? Date.parse(allowance.resetAt) : NaN;
+  if (Number.isFinite(resetMs) && resetMs <= nowMs) {
+    return { fraction: 1, label: "Full daily allowance available", exhausted: false };
+  }
+  const remaining = allowance.remainingRequests;
+  const ceiling = allowance.highWaterRequests;
+  if (remaining === null || ceiling === null || ceiling <= 0) return null;
+  const tokens = allowance.remainingTokens;
+  // Zero tokens exhausts the allowance even with requests nominally left —
+  // the hosted gateway 429s either way (observed live 2026-07-05).
+  if (remaining <= 0 || tokens === 0) {
+    const resetLabel = Number.isFinite(resetMs)
+      ? ` — resets ${new Date(resetMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+      : " — resets daily";
+    return { fraction: 0, label: `Daily allowance used up${resetLabel}`, exhausted: true };
+  }
+  return {
+    fraction: Math.max(0, Math.min(1, remaining / ceiling)),
+    label: `${remaining} ${remaining === 1 ? "request" : "requests"}${tokens !== null ? ` · ${compactTokenCount(tokens)} tokens` : ""} left today`,
+    exhausted: false,
+  };
+}
 
 type GatewayModelSort = "top" | "new" | "cheap" | "pricey" | "az";
 
@@ -146,6 +195,12 @@ function networkLabel(network = "") {
   return network || "Unknown";
 }
 
+function chainIconSrc(network = "") {
+  return network.startsWith("solana:")
+    ? "/icons/wallet/chains/solana.svg"
+    : "/icons/wallet/chains/base.svg";
+}
+
 function walletAddressForPickable(pickable: PickableWallet): string {
   const wallet = pickable.wallet as unknown as Record<string, unknown>;
   return String(wallet.walletAddress || wallet.vaultAddress || wallet.address || "").trim();
@@ -193,15 +248,6 @@ function modelCreditBalanceUsd(state: ModelCreditState): number | null {
   return state.configured ? 0 : null;
 }
 
-function createCreditAccountId(agentId = ""): string {
-  const stableAgentId = agentId.trim();
-  if (stableAgentId && !stableAgentId.startsWith("new-")) return `agent:${stableAgentId}`;
-  const randomId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
-  return `hmos-model-credits:${randomId}`;
-}
-
 async function openCheckoutUrl(checkoutUrl: string): Promise<"system" | "popup" | "blocked"> {
   const trimmedUrl = checkoutUrl.trim();
   if (!trimmedUrl) return "blocked";
@@ -220,30 +266,6 @@ async function openCheckoutUrl(checkoutUrl: string): Promise<"system" | "popup" 
 
   const opened = window.open(trimmedUrl, "_blank", "noopener,noreferrer");
   return opened ? "popup" : "blocked";
-}
-
-function CodeLine({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div className={styles.field}>
-      <span className={styles.fieldLabel}>{label}</span>
-      <div className={styles.code}>
-        <code title={value}>{value}</code>
-        <button
-          type="button"
-          className={styles.copy}
-          aria-label={`Copy ${label}`}
-          onClick={() => {
-            void navigator.clipboard?.writeText(value);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1400);
-          }}
-        >
-          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 export function GuidedHivemindosModelsSetup({
@@ -266,15 +288,17 @@ export function GuidedHivemindosModelsSetup({
   const [fundingMode, setFundingMode] = useState<FundingMode>(
     agent?.hivemindosModels?.fundingMode || (agent?.hivemindosModels?.walletVaultId ? "wallet" : "credits"),
   );
-  const [creditAccountId] = useState(() => (
-    agent?.hivemindosModels?.creditAccountId?.trim() || createCreditAccountId(agent?.id)
-  ));
+  // Hosted model credits are one shared pool for the whole install. The
+  // agent's legacy per-agent id (if any) still rides along in the GET so the
+  // server can adopt pre-pool tokens into the pool on first use.
+  const legacyCreditAccountId = agent?.hivemindosModels?.creditAccountId?.trim() || "";
   const [walletVaultId, setWalletVaultId] = useState(agent?.hivemindosModels?.walletVaultId ?? "");
   const [walletAddress, setWalletAddress] = useState(agent?.hivemindosModels?.walletAddress ?? "");
   const [walletNetwork, setWalletNetwork] = useState(agent?.hivemindosModels?.walletNetwork ?? "");
   const [creditState, setCreditState] = useState<ModelCreditState>({});
   const [gatewayModelOptions, setGatewayModelOptions] = useState<GatewayModelOption[]>([]);
   const [gatewayModelsLoading, setGatewayModelsLoading] = useState(true);
+  const [freeMeter, setFreeMeter] = useState<FreeMeterState | null>(null);
   const [modelQuery, setModelQuery] = useState("");
   const [modelSort, setModelSort] = useState<GatewayModelSort>("top");
   const [modelPage, setModelPage] = useState(0);
@@ -348,8 +372,9 @@ export function GuidedHivemindosModelsSetup({
   const effectiveWalletNetwork = walletNetwork || (selfFundingAddress ? selfFundingPickable?.wallet.network ?? "" : "");
   const walletReady = Boolean(effectiveWalletVaultId && effectiveWalletAddress);
   const existingHivemindosModels = agent?.hivemindosModels;
-  const effectiveCreditAccountId = agent?.hivemindosModels?.creditAccountId?.trim() || creditAccountId;
-  const creditLookupId = fundingMode === "credits" ? effectiveCreditAccountId : effectiveWalletVaultId;
+  const effectiveCreditAccountId = legacyCreditAccountId || HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID;
+  const creditLookupId = (fundingMode === "credits" ? effectiveCreditAccountId : effectiveWalletVaultId)
+    || HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID;
   const cardFundingReady = hasFundedModelCredits(creditState, agent?.hivemindosModels);
   // The free model needs no funding. Funding lives behind the balance pill and
   // the paid-model gate: an unfunded click on a paid model opens the funding
@@ -363,22 +388,20 @@ export function GuidedHivemindosModelsSetup({
   const currentWalletId = effectiveWalletVaultId;
   const savedFundingPickable = effectiveWalletVaultId ? resolvePickableAccount(walletPickables, effectiveWalletVaultId) : null;
   const savedFundingBalanceUsd = savedFundingPickable ? getDisplayWalletBalanceUsd(savedFundingPickable.wallet) : null;
-  const savedFundingBalanceCopy = savedFundingPickable?.pending
+  const walletBalanceLabel = savedFundingPickable?.pending
     ? "Refreshing balance"
     : savedFundingBalanceUsd !== null
-      ? `Balance ${formatUsd(savedFundingBalanceUsd)}`
-      : "";
-  const savedFundingHelp = savedFundingPickable?.pending
-    ? `Refreshing this wallet's live balance on ${networkLabel(effectiveWalletNetwork)}.`
-    : savedFundingBalanceUsd !== null && savedFundingBalanceUsd > 0
-      ? `${formatUsd(savedFundingBalanceUsd)} is available for HivemindOS Models. Add more USDC and native gas here when you want more runway.`
-      : `Fund this address with USDC and enough native gas for payments on ${networkLabel(effectiveWalletNetwork)}.`;
-  // The balance pill shows one number: the hosted credit balance for the card
-  // path, or the linked wallet's live balance for the wallet path.
-  const creditBalanceForPill = modelCreditBalanceUsd(creditState) ?? moneyValue(agent?.hivemindosModels?.lastCreditBalanceUsd);
-  const pillBalanceUsd = fundingMode === "wallet" && walletReady
-    ? (savedFundingBalanceUsd ?? creditBalanceForPill)
-    : creditBalanceForPill;
+      ? formatUsd(savedFundingBalanceUsd)
+      : "Balance unknown";
+  const walletChainLabel = networkLabel(effectiveWalletNetwork);
+  const walletChainIcon = chainIconSrc(effectiveWalletNetwork);
+  // The panel pill is the hosted model-credit balance only. Wallet balances are
+  // shown in the wallet funding badge inside the modal.
+  const cachedCreditBalanceUsd = moneyValue(agent?.hivemindosModels?.lastCreditBalanceUsd)
+    || moneyValue(agent?.hivemindosModels?.lastCreditBalanceLabel);
+  const creditBalanceForPill = modelCreditBalanceUsd(creditState) ?? cachedCreditBalanceUsd;
+  const modelCreditPillBalanceUsd = Math.max(0, creditBalanceForPill);
+  const modelCreditPillFunded = modelCreditPillBalanceUsd > 0;
   const modelCreditLabel = creditRefreshing && creditState.balanceUsd == null
     ? "Checking credits"
     : typeof creditState.balanceUsd === "number"
@@ -506,6 +529,28 @@ export function GuidedHivemindosModelsSetup({
       });
     return () => { ignore = true; };
   }, [creditLookupId, fundingMode, persistModelCreditBalance]);
+
+  // Free-tier usage meter: last-seen allowance recorded by the local gateway
+  // proxy from real Scout calls (the hosted gateway has no query endpoint —
+  // probing would spend allowance). Refreshed on mount and window focus so a
+  // chat in another view updates the meter when the user returns here.
+  useEffect(() => {
+    let ignore = false;
+    const load = () => {
+      void fetch("/api/hivemindos/models/free-allowance", { cache: "no-store" })
+        .then((response) => response.json().catch(() => null))
+        .then((data: { ok?: boolean; allowance?: FreeAllowanceSnapshot | null } | null) => {
+          if (!ignore && data?.ok) setFreeMeter(deriveFreeMeter(data.allowance ?? null, Date.now()));
+        })
+        .catch(() => undefined);
+    };
+    load();
+    window.addEventListener("focus", load);
+    return () => {
+      ignore = true;
+      window.removeEventListener("focus", load);
+    };
+  }, []);
 
   // Live model list from the local gateway route (static routes plus any
   // models the hosted gateway advertises), free Swarm Sovereign Scout first.
@@ -744,10 +789,10 @@ export function GuidedHivemindosModelsSetup({
         fundingWalletKind: data.wallet.kind ?? "agent",
         fundingWalletLabel: "This agent wallet",
         lastTestStatus: "ready",
-        lastStatusMessage: "Wallet saved. It now appears in Wallets.",
+        lastStatusMessage: "Funding wallet ready.",
       });
       await onComplete(patch);
-      setMessage("Wallet saved. It now appears in Wallets.");
+      setMessage("Funding wallet ready.");
       setFundedSignal((signal) => signal + 1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "HivemindOS wallet creation failed.");
@@ -801,9 +846,9 @@ export function GuidedHivemindosModelsSetup({
         fundingWalletKind: data.wallet.kind ?? fundingKindForPickable(pickable),
         fundingWalletLabel: pickable.name,
         lastTestStatus: "ready",
-        lastStatusMessage: "Wallet linked and saved to Wallets.",
+        lastStatusMessage: "Funding wallet ready.",
       }));
-      setMessage("Wallet linked and saved to Wallets.");
+      setMessage("Funding wallet ready.");
       setFundedSignal((signal) => signal + 1);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not link wallet.");
@@ -951,23 +996,13 @@ export function GuidedHivemindosModelsSetup({
             <button
               type="button"
               className={styles.balancePill}
-              data-funded={fundingConfigured || undefined}
-              title={fundingConfigured ? "Manage funding" : "Add credits"}
+              data-funded={modelCreditPillFunded || undefined}
+              title={modelCreditPillFunded ? "Manage model credits" : "Add model credits"}
               onClick={openFundingModal}
             >
-              {fundingConfigured ? (
-                <>
-                  <span className={styles.balanceDot} />
-                  <span className={styles.balanceAmt}>{formatUsd(Math.max(0, pillBalanceUsd || 0))}</span>
-                  <span className={styles.balanceCar}><ChevronRight aria-hidden="true" /></span>
-                </>
-              ) : (
-                <>
-                  <Coins aria-hidden="true" />
-                  Add credits
-                  <span className={styles.balanceCar}><ChevronRight aria-hidden="true" /></span>
-                </>
-              )}
+              {modelCreditPillFunded ? <span className={styles.balanceDot} /> : <Coins aria-hidden="true" />}
+              <span className={styles.balanceAmt}>{formatUsd(modelCreditPillBalanceUsd)}</span>
+              <span className={styles.balanceCar}><ChevronRight aria-hidden="true" /></span>
             </button>
           </div>
 
@@ -983,6 +1018,24 @@ export function GuidedHivemindosModelsSetup({
               <span style={{ minWidth: 0 }}>
                 <span className={styles.freeName}>{freeModelOption.name}<span className={styles.freeBadge}>Free</span></span>
                 <span className={styles.freeSub}>{freeModelOption.subtitle}</span>
+                {freeMeter ? (
+                  <span
+                    className={styles.freeMeter}
+                    data-exhausted={freeMeter.exhausted || undefined}
+                  >
+                    <span
+                      className={styles.freeMeterBar}
+                      role="img"
+                      aria-label={`Free allowance: ${freeMeter.label}`}
+                    >
+                      <span
+                        className={styles.freeMeterFill}
+                        style={{ width: `${Math.round(freeMeter.fraction * 100)}%` }}
+                      />
+                    </span>
+                    <span className={styles.freeMeterLabel}>{freeMeter.label}</span>
+                  </span>
+                ) : null}
               </span>
               <span className={styles.freeCheck}><Check aria-hidden="true" /></span>
             </button>
@@ -1253,15 +1306,25 @@ export function GuidedHivemindosModelsSetup({
                     </div>
                   ) : walletReady ? (
                     <div className={styles.creditBox}>
-                      <div className={styles.status}>
-                        <span className={styles.stat}><Wallet aria-hidden="true" /><b>{networkLabel(effectiveWalletNetwork)}</b></span>
-                        <span className={styles.stat} data-tone="live"><Check aria-hidden="true" /><b>Saved to Wallets</b></span>
-                        {savedFundingBalanceCopy ? (
-                          <span className={styles.stat} data-tone={savedFundingBalanceUsd && savedFundingBalanceUsd > 0 ? "live" : "balance"}><b>{savedFundingBalanceCopy}</b></span>
-                        ) : null}
+                      <div className={styles.walletFundingBadge}>
+                        <span className={styles.walletFundingMain}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={walletChainIcon} alt="" aria-hidden="true" />
+                          <span>
+                            <b>{walletBalanceLabel}</b>
+                            <small>{walletChainLabel} wallet</small>
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.walletSwitchButton}
+                          disabled={isBusy}
+                          onClick={openWalletBrowser}
+                          aria-label={`Change ${walletChainLabel} funding wallet`}
+                        >
+                          <Repeat2 aria-hidden="true" />
+                        </button>
                       </div>
-                      <CodeLine label="Funding address" value={effectiveWalletAddress} />
-                      <p className={styles.muted}>{savedFundingHelp}</p>
                       <div className={styles.creditMain}>
                         <span className={styles.creditIcon}><Coins aria-hidden="true" /></span>
                         <div className={styles.creditText}>
@@ -1271,9 +1334,6 @@ export function GuidedHivemindosModelsSetup({
                         </div>
                       </div>
                       <div className={styles.creditActions}>
-                        <button type="button" className={`${styles.btn} ${styles.ghost}`} disabled={isBusy} onClick={openWalletBrowser}>
-                          Change wallet
-                        </button>
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.ghost} ${styles.iconOnly}`}

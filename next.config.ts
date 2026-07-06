@@ -56,16 +56,19 @@ const nextConfig: NextConfig = {
   // trades a little build time to cut webpack's peak memory so it stays under
   // the heap cap on CI runners (avoids the 8 GB OOM). Next 15.2+.
   //
-  // Dev (not building): enable Turbopack's persistent filesystem cache so the
-  // cold first-compile of each of this app's ~278 routes survives a dev-server
-  // restart (frequent here — memory kills, multiple sessions, watchman churn)
-  // instead of being re-paid every boot. Next 16.2 reads compiled route entries
-  // from disk before recompiling. Set HIVEMINDOS_DEV_FS_CACHE=0 to disable if a
-  // stale-cache bug is suspected.
+  // Dev (not building): Turbopack's persistent filesystem cache is OPT-IN
+  // (HIVEMINDOS_DEV_FS_CACHE=1). It was default-on to make cold first-compiles
+  // survive dev-server restarts, but it has a known stale-chunk bug (vercel/next.js
+  // discussion #86912): after some HMR updates the dev server keeps serving a
+  // module graph that references an evicted async chunk, so lazy views throw
+  // "ChunkLoadError: Failed to load chunk ..." and even a hard reload keeps
+  // failing until the server restarts — the exact restart pain the cache was
+  // meant to avoid. Turbopack ships chunk-load retries in 16.3; revisit the
+  // default then. Explicit `false` also overrides Next 16.2's own default-on.
   experimental:
     isTauriBuild || isTauriStaticBuild
       ? { webpackBuildWorker: true, webpackMemoryOptimizations: true }
-      : { turbopackFileSystemCacheForDev: process.env.HIVEMINDOS_DEV_FS_CACHE !== "0" },
+      : { turbopackFileSystemCacheForDev: process.env.HIVEMINDOS_DEV_FS_CACHE === "1" },
   // Pin file tracing to the repo so Next never infers a wider root and walks
   // directories it cannot read (Windows profile junctions EPERM on scandir).
   outputFileTracingRoot: projectRoot,

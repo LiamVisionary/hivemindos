@@ -21,6 +21,7 @@ const {
   queenChatTools,
   queenInstructionsForPersonality,
   queenRealtimeTools,
+  userAuthorizedHiveTaskCreation,
 } = await import("../src/lib/services/queen-bee/queen-brain.ts");
 const {
   findWorkBoardTasks,
@@ -242,6 +243,20 @@ const {
   assert.ok(voiceNames.includes("read_agent_status"), "voice offers read_agent_status");
   assert.ok(voiceNames.includes("create_hive_task"), "voice can create the fix task");
   assert.ok(!voiceNames.includes("read_work_board"), "voice does not offer read_work_board (no executor)");
+}
+
+// ── create_hive_task propose-then-confirm is enforced mechanically ──
+// Scout queued a "Fix agent errors" Work Board task off a bare "hi"
+// (2026-07-06); the instruction layer alone does not bind small models.
+{
+  // No work ask, no affirmation → the tool call must be downgraded to a proposal.
+  for (const msg of ["hi", "what's new?", "how are the agents doing?", "is everything ok with the fleet?", ""]) {
+    assert.equal(userAuthorizedHiveTaskCreation(msg), false, `"${msg}" must NOT authorize task creation`);
+  }
+  // Explicit work requests and whole-message affirmatives authorize creation.
+  for (const msg of ["fix the agent errors", "queue a task to research competitors", "remind me tomorrow", "yes", "queue it", "go ahead!", "sure, thanks"]) {
+    assert.equal(userAuthorizedHiveTaskCreation(msg), true, `"${msg}" must authorize task creation`);
+  }
 }
 
 console.log("PASS test-queen-chat-stream");

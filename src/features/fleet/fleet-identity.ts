@@ -79,6 +79,18 @@ export function sameMachineIdentity(a?: string | null, b?: string | null) {
   return Boolean(stem) && stem === machineIdentityStem(b);
 }
 
+/**
+ * The collector-reported stable machine id (`~/.hivemindos/machine-id`,
+ * `hivemind-machine-<32 hex>`). It survives hostname renames, so durable
+ * per-machine keys (e.g. shared-vault schedule mirrors) should key on it
+ * instead of the machine NAME, which macOS mDNS-conflict renames rotate.
+ * Returns the normalized id, or "" when the value is not a well-formed id.
+ */
+export function stableHivemindMachineId(value?: string | null) {
+  const id = value?.trim().toLowerCase() ?? "";
+  return /^hivemind-machine-[a-f0-9]{32}$/.test(id) ? id : "";
+}
+
 export function isHivemindMachineName(name?: string, dnsName?: string) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   return (

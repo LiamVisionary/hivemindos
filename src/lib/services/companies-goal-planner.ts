@@ -52,7 +52,10 @@ function systemPrompt(maxTasks: number): string {
   ].join("\n");
 }
 
-export function userPrompt(company: Company, history?: string): string {
+/** How many lifetime completed-task titles the planner prompt carries. */
+const COMPLETED_INVENTORY_LIMIT = 40;
+
+export function userPrompt(company: Company, history?: string, completedTitles?: readonly string[]): string {
   const apex = company.apexGoal;
   const goal = apex?.title?.trim() || company.name;
   const lines = [
@@ -82,6 +85,18 @@ export function userPrompt(company: Company, history?: string): string {
     );
   }
   lines.push(`Crew roles available: ${crewRoster(company)}`);
+  // Lifetime inventory of finished work. The recent-activity digest below only
+  // reaches back a few records, so without this the planner re-mints assets the
+  // company built days ago (live 2026-07-06: a second "outreach email templates"
+  // task 3.5 days after the first — the original had rolled off every window).
+  const inventory = (completedTitles ?? []).map((t) => t.trim()).filter(Boolean).slice(0, COMPLETED_INVENTORY_LIMIT);
+  if (inventory.length) {
+    lines.push(
+      "",
+      "Work this company has ALREADY completed (these assets exist — never plan a task that recreates one; plan tasks that USE them or advance past them):",
+      ...inventory.map((t) => `- ${t}`),
+    );
+  }
   const trimmedHistory = history?.trim();
   if (trimmedHistory) {
     lines.push("", "Recent company activity (newest first):", trimmedHistory, "");
@@ -164,12 +179,12 @@ async function runOpenAiDecompose(system: string, user: string): Promise<string>
 
 export async function llmDecomposeApexGoal(
   company: Company,
-  opts: { origin?: string; vaultPath?: string; maxTasks?: number; history?: string } = {},
+  opts: { origin?: string; vaultPath?: string; maxTasks?: number; history?: string; completedTitles?: readonly string[] } = {},
 ): Promise<QueenBeePrdTaskDraft[] | null> {
   if (!company.apexGoal?.title?.trim()) return null;
   const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
   const system = systemPrompt(maxTasks);
-  const user = userPrompt(company, opts.history);
+  const user = userPrompt(company, opts.history, opts.completedTitles);
 
   // 1. Brain: the company's own chat-capable fleet agent (agent-scoped model),
   //    via the same /api/chat/agent-runtime path queen-bee's pilot/voice turns use.

@@ -43,6 +43,12 @@ type Snapshot = {
   online: boolean;
 };
 
+type DaemonServiceStatus = {
+  installed: boolean;
+  running: boolean;
+  detail?: string;
+};
+
 type ApiResult = { ok: boolean; error?: string; config?: CopyTradingConfig };
 async function api(body: unknown): Promise<ApiResult> {
   const res = await fetch("/api/trading/copy-trade", {
@@ -55,12 +61,39 @@ async function api(body: unknown): Promise<ApiResult> {
   return (await res.json().catch(() => ({ ok: false, error: "Bad response." }))) as ApiResult;
 }
 
+type ServiceResult = { ok: boolean; error?: string; service?: DaemonServiceStatus };
+
+async function readCopyTradingService(signal?: AbortSignal): Promise<DaemonServiceStatus | null> {
+  const res = await fetch("/api/fleet/apps/installable-services?id=copy-trading-daemon", {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+    signal,
+  }).catch(() => null);
+  if (!res) return null;
+  const data = (await res.json().catch(() => null)) as ServiceResult | null;
+  return data?.ok && data.service ? data.service : null;
+}
+
+async function installCopyTradingService(): Promise<ServiceResult> {
+  const res = await fetch("/api/fleet/apps/installable-services", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ id: "copy-trading-daemon", action: "install" }),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!res) return { ok: false, error: "Network error." };
+  return (await res.json().catch(() => ({ ok: false, error: "Bad response." }))) as ServiceResult;
+}
+
 export function CopyTradingPanel(props: Props) {
   const { agentId, walletShort, walletAddress, walletKind, custody, network, walletChains, onSelectChain } = props;
   const [snap, setSnap] = React.useState<Snapshot | null>(null);
+  const [daemonService, setDaemonService] = React.useState<DaemonServiceStatus | null>(null);
   const [draft, setDraft] = React.useState<CopyTradingConfig | null>(null);
   const [showAdv, setShowAdv] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [daemonBusy, setDaemonBusy] = React.useState(false);
+  const [daemonError, setDaemonError] = React.useState("");
   const [error, setError] = React.useState("");
 
   const supported = isCopyTradeNetwork(network);
@@ -68,7 +101,11 @@ export function CopyTradingPanel(props: Props) {
   const supportedChains = walletChains.filter((c) => isCopyTradeNetwork(c.network));
 
   const refresh = React.useCallback(async (signal?: AbortSignal) => {
-    const res = await fetch("/api/trading/copy-trade", { headers: { accept: "application/json" }, cache: "no-store", signal }).catch(() => null);
+    const [res, service] = await Promise.all([
+      fetch("/api/trading/copy-trade", { headers: { accept: "application/json" }, cache: "no-store", signal }).catch(() => null),
+      readCopyTradingService(signal),
+    ]);
+    if (service) setDaemonService(service);
     if (!res) return;
     const data = (await res.json().catch(() => null)) as ({ ok: boolean } & Snapshot) | null;
     if (data?.ok) setSnap({ configs: data.configs ?? [], states: data.states ?? {}, engine: data.engine ?? null, online: Boolean(data.online) });
@@ -110,15 +147,33 @@ export function CopyTradingPanel(props: Props) {
     await refresh();
   };
 
+  const installDaemon = async () => {
+    setDaemonBusy(true);
+    setDaemonError("");
+    const res = await installCopyTradingService();
+    setDaemonBusy(false);
+    if (!res.ok) {
+      setDaemonError(res.error || "Could not install the copy-trading service.");
+      return;
+    }
+    if (res.service) setDaemonService(res.service);
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    await refresh();
+  };
+
   const configs = snap?.configs ?? [];
   const mine = configs.filter((c) => c.agentId === agentId && c.network === network);
   const others = configs.filter((c) => !(c.agentId === agentId && c.network === network));
+  const daemonReady = Boolean(snap && (snap.online || daemonService?.installed));
+  const waitingForSnapshot = !snap;
 
   return (
     <div className={styles.wrap}>
-      <EngineStatus snap={snap} />
+      <EngineStatus snap={snap} service={daemonService} installing={daemonBusy} error={daemonError} onInstall={installDaemon} />
 
-      {!supported ? (
+      {!daemonReady ? (
+        waitingForSnapshot ? null : <DaemonSetupGate installing={daemonBusy} />
+      ) : !supported ? (
         <div className={styles.gate}>
           <b>Copy trading runs on Base or Solana.</b> The acting wallet is on a different chain.
           {supportedChains.length ? (
@@ -173,7 +228,7 @@ export function CopyTradingPanel(props: Props) {
         </>
       )}
 
-      {others.length ? (
+      {daemonReady && others.length ? (
         <div>
           <div className={styles.sectionLbl}>Other wallets &amp; chains</div>
           <ConfigList
@@ -189,20 +244,30 @@ export function CopyTradingPanel(props: Props) {
         </div>
       ) : null}
 
-      {error && !draft ? <p className={styles.err}>{error}</p> : null}
+      {daemonReady && error && !draft ? <p className={styles.err}>{error}</p> : null}
 
-      <p className={styles.cap}>
-        Mirrors run server-side, capped at ${MAX_COPY_TRADE_USD}/swap with your wallet&apos;s spend governance. New configs
-        start in <b>dry-run</b> (detect &amp; log only) until you turn it off. Switching the acting wallet does not stop
-        a running config.
-      </p>
+      {daemonReady ? (
+        <p className={styles.cap}>
+          Mirrors run server-side, capped at ${MAX_COPY_TRADE_USD}/swap with your wallet&apos;s spend governance. New configs
+          start in <b>dry-run</b> (detect &amp; log only) until you turn it off. Switching the acting wallet does not stop
+          a running config.
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function EngineStatus({ snap }: { snap: Snapshot | null }) {
-  if (!snap) return null;
-  if (snap.online && snap.engine) {
+function EngineStatus(props: { snap: Snapshot | null; service: DaemonServiceStatus | null; installing: boolean; error: string; onInstall: () => void }) {
+  const { snap, service } = props;
+  if (!snap && !service) {
+    return (
+      <div className={`${styles.status} ${styles.statusOff}`}>
+        <BIcon name="spinner" size={14} spin />
+        <span className={styles.statusText}>Checking copy-trading service status.</span>
+      </div>
+    );
+  }
+  if (snap?.online && snap.engine) {
     return (
       <div className={`${styles.status} ${styles.statusOk}`}>
         <span className={styles.statusDot} />
@@ -210,10 +275,36 @@ function EngineStatus({ snap }: { snap: Snapshot | null }) {
       </div>
     );
   }
+  const installed = Boolean(service?.installed);
+  const buttonLabel = props.installing ? "Installing..." : installed ? "Restart service" : "Install service";
+  const detail = props.installing
+    ? "Installing the copy-trading service — config controls will appear after setup finishes."
+    : installed
+      ? "Copy-trading service installed, but no fresh daemon heartbeat is available yet. Configs can be edited, but they won't run until the daemon starts."
+      : "Background engine offline — install the service before creating copy configs. You can still run the foreground daemon for logs.";
   return (
-    <div className={`${styles.status} ${styles.statusOff}`}>
-      <span className={styles.statusDot} />
-      Background engine offline — configs won&apos;t run until it&apos;s started. Run <span className={styles.statusCmd}>pnpm copy-trading:daemon</span> (or install the service).
+    <>
+      <div className={`${styles.status} ${styles.statusOff}`}>
+        <span className={styles.statusDot} />
+        <span className={styles.statusText}>{detail} <span className={styles.statusCmd}>pnpm copy-trading:daemon</span></span>
+        <BBtn variant="primary" sm disabled={props.installing} onClick={props.onInstall}>
+          <BIcon name={props.installing ? "spinner" : installed ? "refresh" : "download"} size={14} spin={props.installing} /> {buttonLabel}
+        </BBtn>
+      </div>
+      {props.error ? <p className={styles.statusErr}>{props.error}</p> : null}
+    </>
+  );
+}
+
+function DaemonSetupGate(props: { installing: boolean }) {
+  return (
+    <div className={styles.gate}>
+      <b>{props.installing ? "Installing the copy-trading service." : "Install the copy-trading service first."}</b>{" "}
+      {props.installing ? (
+        <span className={styles.inlineBusy}><BIcon name="spinner" size={13} spin /> Preparing the background daemon.</span>
+      ) : (
+        "Copy configs stay hidden until a durable daemon is installed, so a half-configured wallet cannot look ready when nothing will run."
+      )}
     </div>
   );
 }

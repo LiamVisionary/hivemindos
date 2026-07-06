@@ -44,8 +44,8 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", background: "var(--bg-2)",
-  border: "1px solid var(--line-2)", borderRadius: 9, padding: "9px 11px", colorScheme: "dark",
+  width: "100%", boxSizing: "border-box", background: "var(--panel-2)",
+  border: "1px solid var(--line-2)", borderRadius: 9, padding: "9px 11px",
   color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 13.5, outline: "none",
 };
 
@@ -172,7 +172,7 @@ function GhostBtn({ children, onClick }: { children: React.ReactNode; onClick?: 
 
 function PrimaryBtn({ children, onClick, disabled }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{ padding: "9px 18px", borderRadius: 9, cursor: disabled ? "not-allowed" : "pointer", border: "1px solid color-mix(in srgb, var(--honey) 50%, transparent)", background: disabled ? "var(--bg-3)" : "var(--honey-2)", color: disabled ? "var(--fg-4)" : "var(--bg-0)", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.06, opacity: disabled ? 0.6 : 1 }}>{children}</button>
+    <button onClick={onClick} disabled={disabled} style={{ padding: "9px 18px", borderRadius: 9, cursor: disabled ? "not-allowed" : "pointer", border: "1px solid var(--btn-line)", background: disabled ? "var(--panel-2)" : "var(--btn-bg)", color: disabled ? "var(--fg-4)" : "var(--btn-fg)", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.04, opacity: disabled ? 0.6 : 1 }}>{children}</button>
   );
 }
 
@@ -185,7 +185,7 @@ const ROLE_TINT: Record<string, string> = {
 function AgentPickRow({ agent, onAdd }: { agent: PoolAgent; onAdd: (a: PoolAgent) => void }) {
   const [hover, setHover] = React.useState(false);
   return (
-    <button onClick={() => onAdd(agent)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ textAlign: "left", cursor: "pointer", display: "flex", gap: 11, alignItems: "center", width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid " + (hover ? "var(--line-2)" : "var(--line)"), background: hover ? "var(--bg-2)" : "transparent", transition: "background 140ms, border-color 140ms" }}>
+    <button onClick={() => onAdd(agent)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ textAlign: "left", cursor: "pointer", display: "flex", gap: 11, alignItems: "center", width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid " + (hover ? "var(--line-3)" : "var(--line)"), background: hover ? "var(--panel-2)" : "transparent", transition: "background 140ms, border-color 140ms" }}>
       <RoleGlyph role={agent.role} size={30} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -737,7 +737,7 @@ export function EditCompanyModal({
             <Field label="Code project" hint="The repo this company's product work lives in. New tasks carry it, so work routes to machines that have the repo checked out and shows its code proof.">
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
                 <Select value={form.projectId} onChange={(value) => setForm((current) => ({ ...current, projectId: value }))} options={projectOptions} />
-                <GhostBtn onClick={browseForProjectFolder}>{projectLinkBusy ? "Linking…" : "Link a folder…"}</GhostBtn>
+                <GhostBtn onClick={browseForProjectFolder}>{projectLinkBusy ? <><Spinner size={11} /> Linking</> : "Link a folder…"}</GhostBtn>
               </div>
             </Field>
             {selectedProject ? (
@@ -758,7 +758,7 @@ export function EditCompanyModal({
                   <TextInput value={manualProject.path} placeholder="/Users/you/code/projects/my-repo" onChange={(event) => setManualProject((current) => ({ ...current, path: event.target.value }))} />
                 </Field>
                 <PrimaryBtn disabled={!manualProject.name.trim() || projectLinkBusy} onClick={() => registerProject(manualProject.name.trim(), manualProject.path.trim() || undefined)}>
-                  {projectLinkBusy ? "Registering…" : "Register"}
+                  {projectLinkBusy ? <><Spinner size={11} /> Registering</> : "Register"}
                 </PrimaryBtn>
               </div>
             ) : null}
@@ -948,9 +948,9 @@ function TreasuryMemberCapRow({
   const walletCap = agent?.walletCap ?? 0;
   const overWallet = walletCap > 0 && (cap ?? 0) > walletCap;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "12px 0", borderTop: "1px solid var(--line)" }}>
-      <div style={{ flex: "1 1 210px", minWidth: 180, display: "flex", alignItems: "center", gap: 10 }}>
-        <RoleGlyph role={member.role} size={30} />
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 0", borderTop: "1px solid var(--line)" }}>
+      <div style={{ flex: "1 1 220px", minWidth: 190, display: "flex", alignItems: "center", gap: 10 }}>
+        <RoleGlyph role={member.role} size={28} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 650, color: "var(--fg)", lineHeight: 1.25 }}>{member.name}</div>
           <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3, lineHeight: 1.35 }}>
@@ -958,7 +958,7 @@ function TreasuryMemberCapRow({
           </div>
         </div>
       </div>
-      <div style={{ flex: "1 1 220px", minWidth: 190 }}>
+      <div style={{ flex: "0 1 210px", minWidth: 160, maxWidth: 210 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 7, fontFamily: "var(--f-mono)", fontVariantNumeric: "tabular-nums", marginBottom: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: over ? "var(--danger-2)" : "var(--honey-2)" }}>{used}% used</span>
           <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{cap ? `$${cap}/day cap` : "uncapped"}</span>
@@ -972,7 +972,7 @@ function TreasuryMemberCapRow({
           </div>
         ) : null}
       </div>
-      <div style={{ flex: "0 1 150px", minWidth: 132 }}>
+      <div style={{ flex: "0 0 118px" }}>
         <Field label="Daily cap">
           <NumericInput value={member.companyCap} step={5} placeholder="0" onChange={onChangeCap} />
         </Field>
@@ -1010,10 +1010,10 @@ export function TreasurySettingsModal({
       subtitle={`${colony.name} · company budgets and agent spend caps`}
       theme={theme}
       onClose={onClose}
-      width={860}
+      width={700}
       footer={
         <>
-          <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
+          <span style={{ flex: "1 1 180px", minWidth: 0, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", lineHeight: 1.35 }}>
             Saves only company budgets, spend freeze, and member daily caps.
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
@@ -1021,9 +1021,9 @@ export function TreasurySettingsModal({
         </>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <EditSection title="company budget">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 174px), 186px))", gap: 10, justifyContent: "start" }}>
             <Field label="Daily budget USD">
               <NumericInput value={form.dailyBudgetUsd} step={5} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, dailyBudgetUsd: value }))} />
             </Field>

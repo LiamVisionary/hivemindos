@@ -757,7 +757,9 @@ function useDashboardLocalTts(connection: AgentCallLocalTts | undefined, runtime
         const tokenResponse = await fetch("/api/phone", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "local-tts-stt-client-secret" }),
+          // Continuous mode: this modal runs its own VAD + manual commit and
+          // shows live deltas while the user talks.
+          body: JSON.stringify({ action: "local-tts-stt-client-secret", mode: "continuous" }),
           cache: "no-store",
         });
         const tokenPayload = await tokenResponse.json().catch(() => null) as { clientSecret?: string; error?: string } | null;

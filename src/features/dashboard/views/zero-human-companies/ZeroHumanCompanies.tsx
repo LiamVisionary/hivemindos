@@ -30,18 +30,50 @@ function HiveLogo({ size = 40 }: { size?: number }) {
 }
 
 function Big({ n, label, sub, tone, last }: { n: React.ReactNode; label: string; sub?: string; tone?: "honey" | null; last?: boolean }) {
-  const c = tone === "honey" ? "var(--honey-2)" : "var(--fg)";
+  const c = tone === "honey" ? "var(--honey)" : "var(--fg)";
   return (
-    <div style={{ textAlign: "left", padding: "0 18px", borderRight: last ? "none" : "1px solid var(--line)" }}>
+    <div style={{ textAlign: "left", padding: "0 20px", borderRight: last ? "none" : "1px solid var(--line)" }}>
       <div style={{ fontFamily: "var(--f-display)", fontSize: 30, fontWeight: 600, color: c, lineHeight: 1, letterSpacing: -0.8, fontVariantNumeric: "tabular-nums" }}>{n}</div>
-      <div className="mono-cap" style={{ color: "var(--fg-4)", marginTop: 5 }}>{label}{sub ? <span style={{ color: "var(--fg-4)", opacity: 0.7 }}> · {sub}</span> : null}</div>
+      <div className="mcap" style={{ color: "var(--fg-4)", marginTop: 6 }}>{label}{sub ? <span style={{ color: "var(--fg-4)", opacity: 0.7 }}> · {sub}</span> : null}</div>
     </div>
   );
 }
 
+/** Rounded pill button used in the masthead / breadcrumb control row. */
+export function PillButton({
+  onClick, disabled, children, title,
+}: { onClick?: () => void; disabled?: boolean; children: React.ReactNode; title?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="zhc-btn-ghost"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 8, background: "transparent",
+        border: "1px solid var(--line-2)", borderRadius: 999, cursor: disabled ? "default" : "pointer",
+        color: "var(--fg-2)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "7px 14px",
+        opacity: disabled ? 0.6 : 1, whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Theme toggle pill (in-view light/dark for the ZHC panel). */
+export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  return (
+    <PillButton onClick={onToggle} title="Toggle light / dark">
+      <span style={{ fontSize: 13, lineHeight: 1 }}>{theme === "dark" ? "☼" : "☾"}</span>
+      {theme === "dark" ? "Light" : "Dark"}
+    </PillButton>
+  );
+}
+
 function Masthead({
-  view, companies, loading, initialLoading, onRefresh,
-}: { view: "portfolio" | "cockpit"; companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void }) {
+  companies, loading, initialLoading, onRefresh, theme, onToggleTheme,
+}: { companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void; theme: Theme; onToggleTheme: () => void }) {
   const pendingFirstSync = initialLoading && companies.length === 0;
   const s = {
     colonies: companies.length,
@@ -53,45 +85,42 @@ function Masthead({
   };
   const metric = (value: React.ReactNode) => pendingFirstSync ? "—" : value;
   return (
-    <header style={{ position: "relative", zIndex: 2, padding: "20px 36px 16px", borderBottom: "1px solid var(--line)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 24 }}>
+    <header style={{ position: "relative", zIndex: 2, padding: "26px 40px 0" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", gap: 24, paddingBottom: 22, borderBottom: "1px solid var(--line)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
-          <HiveLogo size={40} />
+          <HiveLogo size={42} />
           <div>
-            <div className="mono-cap" style={{ color: "var(--honey-2)", whiteSpace: "nowrap" }}>HIVEMIND · AUTONOMOUS ORGS</div>
-            <div style={{ fontFamily: "var(--f-display)", fontSize: 17, fontWeight: 700, letterSpacing: -0.2, whiteSpace: "nowrap" }}>Zero Human Companies</div>
+            <div className="mcap" style={{ color: "var(--honey)", whiteSpace: "nowrap" }}>Hivemind · Autonomous Orgs</div>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 700, letterSpacing: -0.2, whiteSpace: "nowrap" }}>Zero Human Companies</div>
           </div>
         </div>
-        <div style={{ textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", letterSpacing: 0.08, textTransform: "uppercase" }}>
+        <div style={{ textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", letterSpacing: 0.06 }}>
           {pendingFirstSync ? (
-            <span style={{ color: "var(--cyan-2)", display: "inline-flex", alignItems: "center", gap: 8 }}><Spinner size={11} /> syncing company registry</span>
+            <span style={{ color: "var(--live)", display: "inline-flex", alignItems: "center", gap: 8 }}><Spinner size={11} /> syncing company registry</span>
           ) : (
-            <><span style={{ color: "var(--cyan-2)" }}>{s.working} agents at work</span> · {s.colonies} {s.colonies === 1 ? "company" : "companies"} · 0 humans</>
+            <><span style={{ color: "var(--live)" }}>{s.working} agents at work</span> · {s.colonies} {s.colonies === 1 ? "company" : "companies"} · 0 humans</>
           )}
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          style={{ justifySelf: "end", display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: "1px solid var(--line-2)", borderRadius: 8, cursor: loading ? "default" : "pointer", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "6px 12px", textTransform: "uppercase", letterSpacing: 0.06, opacity: loading ? 0.6 : 1 }}
-        >
-          {loading ? <><Spinner size={11} /> syncing</> : "↻ refresh"}
-        </button>
+        <div style={{ justifySelf: "end", display: "flex", alignItems: "center", gap: 8 }}>
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          <PillButton onClick={onRefresh} disabled={loading} title="Refresh company registry">
+            {loading ? <><Spinner size={11} /> syncing</> : "↻ refresh"}
+          </PillButton>
+        </div>
       </div>
 
-      {view === "portfolio" && (
-        <div style={{ marginTop: 22, display: "grid", gridTemplateColumns: "1fr auto", gap: 24, alignItems: "end" }}>
-          <h1 style={{ margin: 0, fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 46, lineHeight: 1.0, letterSpacing: -1.8 }}>
-            Companies that run <span style={{ color: "var(--honey-2)", fontWeight: 600 }}>themselves.</span>
-          </h1>
-          <div style={{ display: "flex", gap: 0, paddingBottom: 6 }}>
-            <Big n={metric(s.colonies)} label="colonies" />
-            <Big n={metric(s.agents)} label="agents" sub={pendingFirstSync ? undefined : "0 humans"} />
-            <Big n={metric(s.shipped)} label="shipped" />
-            <Big n={metric(s.avgAlign + "%")} label="aligned" />
-            <Big n={metric(s.approvals)} label="to approve" tone={!pendingFirstSync && s.approvals ? "honey" : null} last />
-          </div>
+      <div style={{ marginTop: 34, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 32, flexWrap: "wrap" }}>
+        <h1 style={{ margin: 0, fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 52, lineHeight: 1.0, letterSpacing: -1.8, maxWidth: 620 }}>
+          Companies that run <span style={{ color: "var(--honey)" }}>themselves.</span>
+        </h1>
+        <div style={{ display: "flex", gap: 0 }}>
+          <Big n={metric(s.colonies)} label="colonies" />
+          <Big n={metric(s.agents)} label="agents" sub={pendingFirstSync ? undefined : "0 humans"} />
+          <Big n={metric(s.shipped)} label="shipped" />
+          <Big n={metric(s.avgAlign + "%")} label="aligned" />
+          <Big n={metric(s.approvals)} label="to approve" tone={!pendingFirstSync && s.approvals ? "honey" : null} last />
         </div>
-      )}
+      </div>
     </header>
   );
 }
@@ -165,6 +194,22 @@ export default function ZeroHumanCompanies({
   const [submitting, setSubmitting] = React.useState(false);
   const closeModal = React.useCallback(() => setModal(null), []);
 
+  // In-view light/dark for this panel. Defaults to the global dashboard theme
+  // (which flows in via `theme`); the toggle pill sets a local override. When the
+  // global theme changes we drop the override during render (the React-recommended
+  // "adjust state when a prop changes" pattern) so the panel never drifts from the
+  // app's chosen theme.
+  const [themeOverride, setThemeOverride] = React.useState<Theme | null>(null);
+  const [lastGlobalTheme, setLastGlobalTheme] = React.useState<Theme>(theme);
+  if (theme !== lastGlobalTheme) {
+    setLastGlobalTheme(theme);
+    setThemeOverride(null);
+  }
+  const themeState: Theme = themeOverride ?? theme;
+  const toggleTheme = React.useCallback(() => {
+    setThemeOverride((prev) => ((prev ?? theme) === "dark" ? "light" : "dark"));
+  }, [theme]);
+
   const visiblePortfolioColonies = portfolioColonies ?? colonies;
   const colony = openId ? colonies.find((c) => c.id === openId) ?? null : null;
   const view: "portfolio" | "cockpit" = colony ? "cockpit" : "portfolio";
@@ -219,27 +264,29 @@ export default function ZeroHumanCompanies({
   };
 
   return (
-    <div className="zhc-root" data-theme={theme} style={{ position: "relative", minHeight: "100%", background: "var(--bg-0)", color: "var(--fg)", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)" }}>
+    <div className="zhc-root frfade" data-theme={themeState} style={{ position: "relative", minHeight: "100%", background: "var(--bg)", color: "var(--fg)", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)" }}>
       {/* backdrop — subtle warm wash + hex pattern, contained to the panel */}
-      <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 60% at 50% -10%, rgba(255,212,90,0.05), transparent 60%)" }} />
-      <svg aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.035, pointerEvents: "none" }}>
+      <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--honey) 6%, transparent), transparent 60%)" }} />
+      <svg aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.06, pointerEvents: "none" }}>
         <defs>
           <pattern id="zhcHex" width="48" height="55" patternUnits="userSpaceOnUse">
-            <polygon points="24,1 47,14 47,40 24,53 1,40 1,14" fill="none" stroke="rgba(255,212,90,0.4)" strokeWidth="0.5" />
+            <polygon points="24,1 47,14 47,40 24,53 1,40 1,14" fill="none" stroke="var(--honey-line)" strokeWidth="0.5" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#zhcHex)" />
       </svg>
 
       <div style={{ position: "relative", zIndex: 1 }}>
-        <Masthead view={view} companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} />
+        {view === "portfolio" && (
+          <Masthead companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} theme={themeState} onToggleTheme={toggleTheme} />
+        )}
         {error ? (
-          <div style={{ margin: "12px 36px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger-2)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
+          <div style={{ margin: "12px 40px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
             {error}
           </div>
         ) : null}
         {notice && !error ? (
-          <div style={{ margin: "12px 36px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--cyan) 35%, transparent)", background: "color-mix(in srgb, var(--cyan) 10%, transparent)", color: "var(--cyan-2)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
+          <div style={{ margin: "12px 40px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--live) 35%, transparent)", background: "color-mix(in srgb, var(--live) 10%, transparent)", color: "var(--live)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
             {notice}
           </div>
         ) : null}
@@ -265,7 +312,10 @@ export default function ZeroHumanCompanies({
             colony={colony}
             colonies={colonies}
             showBudget={showBudget}
-            theme={theme}
+            theme={themeState}
+            onToggleTheme={toggleTheme}
+            onRefresh={onRefresh}
+            refreshing={loading}
             initialTasksLoading={initialTasksLoading}
             onBack={() => setOpenId(null)}
             onSwitch={setOpenId}
@@ -277,30 +327,30 @@ export default function ZeroHumanCompanies({
       </div>
 
       {modal && modal.type === "create" && (
-        <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={theme} onClose={closeModal} onCreate={handleCreate} />
+        <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={themeState} onClose={closeModal} onCreate={handleCreate} />
       )}
       {modal && modal.type === "edit" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <EditCompanyModal initial={target.edit} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+          <EditCompanyModal initial={target.edit} busy={submitting} theme={themeState} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
         ) : null;
       })()}
       {modal && modal.type === "treasury" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <TreasurySettingsModal colony={target} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+          <TreasurySettingsModal colony={target} busy={submitting} theme={themeState} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
         ) : null;
       })()}
       {modal && modal.type === "browse" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <AgentBrowserModal colony={target} agentPool={agentPool} busy={submitting} theme={theme} onClose={closeModal} onConfirm={(crew) => handleAddAgents(modal.id, crew)} />
+          <AgentBrowserModal colony={target} agentPool={agentPool} busy={submitting} theme={themeState} onClose={closeModal} onConfirm={(crew) => handleAddAgents(modal.id, crew)} />
         ) : null;
       })()}
       {modal && modal.type === "edit-agent" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <AgentMemberSettingsModal key={`${modal.id}:${modal.agentId}`} colony={target} agentId={modal.agentId} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+          <AgentMemberSettingsModal key={`${modal.id}:${modal.agentId}`} colony={target} agentId={modal.agentId} busy={submitting} theme={themeState} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
         ) : null;
       })()}
       {modal && modal.type === "task" && (() => {
@@ -318,7 +368,7 @@ export default function ZeroHumanCompanies({
             companyId={target!.id}
             apexGoal={apex?.title}
             metric={metricLine}
-            theme={theme}
+            theme={themeState}
             onClose={closeModal}
             onResolveIssue={(item) => onResolveIssue(target!.id, item)}
             onReviewPreview={onReviewPreview ? (item, decision, notes) => onReviewPreview(target!.id, item, decision, notes) : undefined}

@@ -22,9 +22,12 @@ function directiveSkillSlugs(directive: CompanyDirective) {
 export function CompanyKnowledgePanel({
   colony: c,
   openSkillAttachmentBrowser,
+  embedded = false,
 }: {
   colony: Colony;
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  /** When true, render without the outer Panel card (the host already provides one). */
+  embedded?: boolean;
 }) {
   // Show the company's directives from props until this panel makes an edit,
   // then show the server's authoritative response. (Avoids a set-state-in-effect.)
@@ -68,10 +71,10 @@ export function CompanyKnowledgePanel({
     }
   };
 
-  return (
-    <Panel style={{ gridColumn: "1 / -1" }}>
-      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>injected into every dispatch</span>}>
-        company knowledge · standing directives
+  const inner = (
+    <>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>read on every dispatch</span>}>
+        inject knowledge · standing directives
       </SectionLabel>
       <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", lineHeight: 1.55, marginBottom: 12 }}>
         Inject an instruction or fact the crew must follow — it&apos;s appended to every dispatched task&apos;s context on the next cycle, no charter edit needed. Point them at a skill or attach references when it helps.
@@ -83,15 +86,15 @@ export function CompanyKnowledgePanel({
         openSkillAttachmentBrowser={openSkillAttachmentBrowser}
         onSubmit={inject}
       />
-      {error && <div style={{ marginTop: 8, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger-2)" }}>{error}</div>}
+      {error && <div style={{ marginTop: 8, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger)" }}>{error}</div>}
 
       {directives.length > 0 ? (
         <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
           {directives.map((d) => {
             const skills = directiveSkillSlugs(d);
             return (
-              <div key={d.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)" }}>
-                <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.06, color: d.source === "reject" ? "var(--danger-2)" : "var(--cyan-2)", border: "1px solid var(--line-2)", borderRadius: 5, padding: "2px 6px", flexShrink: 0 }}>
+              <div key={d.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--panel-2)" }}>
+                <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.06, color: d.source === "reject" ? "var(--danger)" : "var(--live)", border: "1px solid var(--line-2)", borderRadius: 5, padding: "2px 6px", flexShrink: 0 }}>
                   {d.source === "reject" ? "redirect" : "inject"}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -110,6 +113,9 @@ export function CompanyKnowledgePanel({
       ) : (
         <div style={{ marginTop: 14, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>No standing directives yet — inject one above, or reject a deliverable to redirect the crew.</div>
       )}
-    </Panel>
+    </>
   );
+
+  if (embedded) return <div>{inner}</div>;
+  return <Panel style={{ gridColumn: "1 / -1" }}>{inner}</Panel>;
 }

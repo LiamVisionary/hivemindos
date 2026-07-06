@@ -76,6 +76,7 @@ type KanbanMutations = {
   block: (slug: string | null, taskId: string, reason: string, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown }>;
   reroute: (slug: string | null, taskId: string, input: QueenBeeAutonomousRerouteInput, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown }>;
   fail: (slug: string | null, taskId: string, input?: Record<string, unknown>, options?: KanbanStorageOptions) => Promise<{ task: KanbanTask; board: unknown; retried?: boolean; failureReason?: string }>;
+  heartbeat?: (slug: string | null, taskId: string, note?: string, claimLock?: string, options?: KanbanStorageOptions) => Promise<unknown>;
 };
 
 type QueenBeeAutonomousRerouteInput = {
@@ -94,6 +95,29 @@ export type QueenBeeAutonomousPickupDeps = {
   block?: KanbanMutations["block"];
   reroute?: KanbanMutations["reroute"];
   fail?: KanbanMutations["fail"];
+  heartbeat?: KanbanMutations["heartbeat"];
+};
+
+/**
+ * How long ONE delegate chat may run. Real company tasks legitimately take
+ * tens of minutes; the old fixed 240s default amputated them mid-work (live
+ * 2026-07-05: every WEBS chat aborted at exactly 240s under load, then the
+ * retries burned the attempt budget). The task's own maxRuntimeMs is the
+ * duration contract — honor it; QUEEN_BEE_AUTONOMOUS_CHAT_TIMEOUT_MS remains
+ * an absolute operator override, and the claim heartbeat (below) keeps a
+ * long-running chat visibly alive so the stale-claim reclaim never sweeps it.
+ */
+export function pickupChatTimeoutMs(task: Pick<KanbanTask, "maxRuntimeMs">): number {
+  const envOverride = Number(process.env.QUEEN_BEE_AUTONOMOUS_CHAT_TIMEOUT_MS);
+  if (Number.isFinite(envOverride) && envOverride > 0) return envOverride;
+  const runtime = Number(task.maxRuntimeMs);
+  if (Number.isFinite(runtime) && runtime > 0) return runtime;
+  return DEFAULT_PICKUP_TTL_MS;
+}
+
+const pickupHeartbeatMs = () => {
+  const parsed = Number(process.env.QUEEN_BEE_PICKUP_HEARTBEAT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 120_000;
 };
 
 const DEFAULT_PICKUP_TTL_MS = 30 * 60 * 1000;
@@ -302,6 +326,7 @@ export async function runQueenBeeAutonomousPickup(
 
     const claimLock = `queen-bee-autonomous:${input.task.id}:${Date.now().toString(36)}:${index + 1}`;
     lastClaimLock = claimLock;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
     try {
       const claimed = await claim(null, input.task.id, {
@@ -311,6 +336,17 @@ export async function runQueenBeeAutonomousPickup(
         ttlMs: currentTask.maxRuntimeMs || DEFAULT_PICKUP_TTL_MS,
       }, storageOptions);
       currentTask = claimed.task;
+
+      // Keep the claim visibly alive for the whole chat: heartbeats extend
+      // claimExpiresAt/lastHeartbeatAt so a legitimately long-running delegate
+      // (tens of minutes) is never swept by the stale-claim reclaim mid-work.
+      const heartbeat = mutations.heartbeat;
+      if (heartbeat) {
+        heartbeatTimer = setInterval(() => {
+          void Promise.resolve(heartbeat(null, input.task.id, `Autonomous pickup chat in flight (${agentName}).`, claimLock, storageOptions)).catch(() => {});
+        }, pickupHeartbeatMs());
+        heartbeatTimer.unref?.();
+      }
 
       const runWorkerChat = (message: string) => fetchJson(`${collectorUrl}/chat`, {
         method: "POST",
@@ -327,7 +363,7 @@ export async function runQueenBeeAutonomousPickup(
             marker: input.marker,
           },
         }),
-        signal: AbortSignal.timeout(Number(process.env.QUEEN_BEE_AUTONOMOUS_CHAT_TIMEOUT_MS || 240_000)),
+        signal: AbortSignal.timeout(pickupChatTimeoutMs(claimed.task)),
       });
 
       let text = chatText(await runWorkerChat(autonomousWorkerPrompt(claimed.task, input.marker)));
@@ -354,6 +390,17 @@ export async function runQueenBeeAutonomousPickup(
         throw new Error(
           `Agent "${agentName}" runtime failed instead of producing a result (${runtimeFailure}). Check the runner's model/provider connectivity, then re-route or retry.`,
         );
+      }
+
+      // An output that self-declares a human blocker must land as a needs-human
+      // card, not a completion. The worker contract asks for an `ACTION NEEDED:`
+      // section; agents also open with "Blocked …" prose (live 2026-07-06: a
+      // send batch blocked on a missing env token finished "done", so no card
+      // ever pinged the human and the blocker sat invisible in a done result).
+      if (/^ACTION NEEDED:/m.test(text) || /^Blocked\b/.test(text.trim())) {
+        await block(null, input.task.id, text, storageOptions);
+        await advanceFlowIfTagged(input.task, "failed", text, input.vaultPath);
+        return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: "Agent asked for human input." };
       }
 
       // Turn the worker output into concrete loop receipts so required eval gates can
@@ -403,7 +450,9 @@ export async function runQueenBeeAutonomousPickup(
       if (CLAIM_CONFLICT.test(message)) {
         return backOff(`Backed off: ${agentName} could not claim task ${input.task.id} — another dispatcher already holds it (${message})`);
       }
-      failures.push(`${agentName}: ${message}`);
+      // Name the machine in the failure record: "aborted due to timeout" alone
+      // hides WHERE the chat ran, which made the single-machine funnel invisible.
+      failures.push(`${agentName} [${machineKey}]: ${message}`);
       const next = nextPickupDelegation(chain, index + 1, currentTask);
       if (!next) {
         const finalMessage = exhaustedMessage(failures);
@@ -417,6 +466,7 @@ export async function runQueenBeeAutonomousPickup(
       if (!rerouted) return backOff(`Backed off: another worker claimed task ${input.task.id} while ${agentName}'s failure was being rerouted.`);
       currentTask = rerouted;
     } finally {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       releaseMachineChatSlot(machineKey);
     }
   }
@@ -446,7 +496,7 @@ export async function runQueenBeeAutonomousPickup(
 
 async function defaultKanbanMutations(deps: QueenBeeAutonomousPickupDeps): Promise<KanbanMutations> {
   if (deps.claim && deps.complete && deps.block && deps.reroute && deps.fail) {
-    return { claim: deps.claim, complete: deps.complete, block: deps.block, reroute: deps.reroute, fail: deps.fail };
+    return { claim: deps.claim, complete: deps.complete, block: deps.block, reroute: deps.reroute, fail: deps.fail, heartbeat: deps.heartbeat };
   }
   const kanban = await import("../kanban/local-kanban-store");
   return {
@@ -455,6 +505,7 @@ async function defaultKanbanMutations(deps: QueenBeeAutonomousPickupDeps): Promi
     block: deps.block ?? kanban.blockTask,
     reroute: deps.reroute ?? kanban.rerouteTaskForAutonomousPickup,
     fail: deps.fail ?? kanban.failTask,
+    heartbeat: deps.heartbeat ?? ((slug, taskId, note, claimLock, options) => kanban.heartbeatTask(slug, taskId, note, claimLock, options)),
   };
 }
 

@@ -14,6 +14,10 @@ import {
   createStreamOutputAnalyser,
   useQueenVoiceLevelPump,
 } from "@/lib/audio/queen-voice-amplitude";
+import {
+  voiceTaskApprovalPrompt,
+  voiceTaskSubmissionAuthorized,
+} from "@/lib/services/queen-bee/voice-task-approval";
 
 type RealtimeSessionInfo = {
   ok?: boolean;
@@ -170,9 +174,21 @@ async function rememberPreference(args: Record<string, unknown>) {
   }
 }
 
-async function createHiveTask(args: Record<string, unknown>) {
+async function createHiveTask(
+  args: Record<string, unknown>,
+  approval: { latestUserTranscript?: string; lastQueenUtterance?: string } = {},
+) {
   const message = typeof args.message === "string" ? args.message.trim() : "";
   if (!message) return "No task was created: the work request was empty.";
+  const history = approval.lastQueenUtterance
+    ? [{ who: "queen" as const, text: approval.lastQueenUtterance }]
+    : [];
+  if (!voiceTaskSubmissionAuthorized(approval.latestUserTranscript || "", history)) {
+    return voiceTaskApprovalPrompt({
+      title: typeof args.title === "string" ? args.title : "",
+      message,
+    });
+  }
   try {
     const response = await fetch("/api/queen-bee/voice", {
       method: "POST",
@@ -307,6 +323,7 @@ export function useQueenBeeRealtime(
     // instant her response ends).
     let lastQueenUtterance = "";
     let lastQueenEndedAt = 0;
+    let lastFinalUserTranscript = "";
     let liveUserTurnId = 0;
     let liveUserText = "";
     let speechActive = false;
@@ -347,7 +364,9 @@ export function useQueenBeeRealtime(
 
     async function startCaptionStream() {
       try {
-        const socket = await prepareRealtimeSttSession();
+        // Continuous mode: live pre-commit deltas are the whole point here —
+        // this stream captions the user WHILE they talk to the s2s session.
+        const { socket } = await prepareRealtimeSttSession("continuous");
         if (cancelled || !localStream) {
           closeRealtimeSttSocket(socket);
           return;
@@ -540,6 +559,7 @@ export function useQueenBeeRealtime(
         } else {
           addTurn("you", finalTranscript);
         }
+        lastFinalUserTranscript = finalTranscript;
         liveUserTurnId = 0;
         liveUserText = "";
         // With create_response:false the server no longer auto-replies, so the
@@ -586,7 +606,10 @@ export function useQueenBeeRealtime(
         setPhase("thinking");
         let output: string;
         if (call.name === "create_hive_task") {
-          output = await createHiveTask(call.args);
+          output = await createHiveTask(call.args, {
+            latestUserTranscript: lastFinalUserTranscript,
+            lastQueenUtterance,
+          });
         } else if (call.name === "ask_hivemind_agent") {
           const result = await askHivemindAgent(call.args);
           output = result.speech;

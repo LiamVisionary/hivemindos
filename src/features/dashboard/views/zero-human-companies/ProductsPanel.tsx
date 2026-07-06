@@ -70,7 +70,7 @@ const emptyDraft = (kind: DraftProduct["kind"]): DraftProduct => ({
 const CONTROL_HEIGHT = 38;
 
 const inputStyle: React.CSSProperties = {
-  background: "var(--bg-2)",
+  background: "var(--panel-hi)",
   border: "1px solid var(--line-2)",
   borderRadius: 8,
   color: "var(--fg)",
@@ -95,9 +95,9 @@ function ProductRow({
   onRemove: () => void;
 }) {
   return (
-    <div style={{ position: "relative", border: `1px solid ${draft.recommended ? "var(--honey)" : "var(--line)"}`, borderRadius: 13, padding: 16, display: "flex", flexDirection: "column", gap: 10, background: draft.recommended ? "color-mix(in srgb, var(--honey) 4%, var(--bg-1))" : "var(--bg-1)", boxShadow: draft.recommended ? "0 0 0 1px color-mix(in srgb, var(--honey) 25%, transparent)" : "none" }}>
+    <div style={{ position: "relative", border: `1px solid ${draft.recommended ? "var(--honey)" : "var(--line)"}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 10, background: draft.recommended ? "color-mix(in srgb, var(--honey) 6%, var(--panel-2))" : "var(--panel-2)", boxShadow: draft.recommended ? "0 0 0 1px color-mix(in srgb, var(--honey) 25%, transparent)" : "none" }}>
       {draft.recommended && (
-        <span style={{ position: "absolute", top: -9, left: 14, fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, letterSpacing: 0.08, textTransform: "uppercase", color: "var(--bg-0)", background: "var(--honey)", borderRadius: 5, padding: "2px 7px" }}>★ default pick</span>
+        <span style={{ position: "absolute", top: -9, left: 14, fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, letterSpacing: 0.08, textTransform: "uppercase", color: "var(--bg)", background: "var(--honey)", borderRadius: 5, padding: "2px 7px" }}>★ default pick</span>
       )}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input
@@ -268,7 +268,7 @@ export function ProductsPanel({
             type="button"
             onClick={() => void save()}
             disabled={saving || loading || !dirty}
-            style={{ padding: "7px 16px", borderRadius: 9, cursor: saving || loading || !dirty ? "default" : "pointer", fontFamily: "var(--f-mono)", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.05, border: "1px solid var(--line-2)", background: dirty ? "var(--honey)" : "transparent", color: dirty ? "var(--bg-0)" : "var(--fg-4)", fontWeight: 700, opacity: saving ? 0.6 : 1 }}
+            style={{ padding: "7px 16px", borderRadius: 9, cursor: saving || loading || !dirty ? "default" : "pointer", fontFamily: "var(--f-mono)", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.05, border: `1px solid ${dirty ? "var(--btn-line)" : "var(--line-2)"}`, background: dirty ? "var(--btn-bg)" : "transparent", color: dirty ? "var(--btn-fg)" : "var(--fg-4)", fontWeight: 700, opacity: saving ? 0.6 : 1 }}
           >
             {saving ? <><Spinner size={11} /> Saving</> : savedTick ? "Saved ✓" : "Save to shared brain"}
           </button>
@@ -286,10 +286,10 @@ export function ProductsPanel({
       </div>
 
       {pendingProposals.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", border: "1px solid color-mix(in srgb, var(--honey) 45%, transparent)", background: "color-mix(in srgb, var(--honey) 9%, transparent)", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", border: "1px solid var(--honey-line)", background: "var(--honey-soft)", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
           <span aria-hidden style={{ fontSize: 15 }}>⚖</span>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey-2)" }}>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey)" }}>
               The crew thinks pricing may be blocking sales — {pendingProposals.length === 1 ? "1 price-change request awaits" : `${pendingProposals.length} price-change requests await`} your decision
             </div>
             <div style={{ fontFamily: "var(--f-body)", fontSize: 12, color: "var(--fg-3)", marginTop: 3 }}>
@@ -300,7 +300,7 @@ export function ProductsPanel({
             <button
               type="button"
               onClick={onGoToApprovals}
-              style={{ padding: "8px 16px", borderRadius: 9, cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.05, fontWeight: 700, border: "1px solid transparent", background: "var(--honey)", color: "var(--bg-0)", whiteSpace: "nowrap" }}
+              style={{ padding: "8px 16px", borderRadius: 9, cursor: "pointer", fontFamily: "var(--f-mono)", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.05, fontWeight: 700, border: "1px solid var(--btn-line)", background: "var(--btn-bg)", color: "var(--btn-fg)", whiteSpace: "nowrap" }}
             >
               Review in Approvals →
             </button>

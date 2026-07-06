@@ -6,6 +6,11 @@ import path from "path";
 
 import { homedir } from "@/lib/home-dir";
 import { appendCompanyMemory } from "@/lib/services/company-memory";
+import {
+  createCompanyProposal,
+  finishCompanyRun,
+  startCompanyRun,
+} from "@/lib/services/company-runs";
 import { getCompany } from "@/lib/services/companies-store";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import {
@@ -149,6 +154,29 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
     };
   }
 
+  const companyRun = await startCompanyRun(normalized.companyId, {
+    kind: "revenue",
+    title: `Revenue event: ${formatUsd(normalized.amountUsd)}`,
+    actor: "human",
+    snapshot: {
+      companyName: company.name,
+      apexGoal: company.apexGoal?.title,
+      apexMetric: company.apexGoal?.metric,
+      apexTarget: company.apexGoal?.target,
+      productCount: company.products?.items.length ?? 0,
+      directiveCount: company.directives?.length ?? 0,
+      agentCount: company.agentIds?.length ?? 0,
+      autonomy: company.autonomy,
+      frozen: company.frozen,
+    },
+    input: {
+      source: normalized.source,
+      amountUsd: normalized.amountUsd,
+      externalId: normalized.externalId,
+      collectFee: normalized.collectFee,
+    },
+  });
+
   const fee = await quoteCompanyRevenueShare({ amountUsd: normalized.amountUsd, network: normalized.network });
   let record: CompanyRevenueRecord = {
     id: randomUUID(),
@@ -190,6 +218,39 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
       feeError ? `Fee error: ${feeError}` : null,
       record.description,
     ].filter(Boolean).join(" — "),
+  }).catch(() => undefined);
+  await createCompanyProposal(normalized.companyId, {
+    kind: "revenue-share",
+    status: "applied",
+    title: record.status === "fee-collected" ? `Revenue share collected: ${formatUsd(record.fee.amountUsd)}` : `Revenue recorded: ${formatUsd(record.amountUsd)}`,
+    summary: record.description,
+    runId: companyRun.id,
+    idempotencyKey: `revenue:${record.id}`,
+    risk: normalized.collectFee ? "medium" : "low",
+    proposedChange: {
+      revenueEventId: record.id,
+      amountUsd: record.amountUsd,
+      source: record.source,
+      feeAmountUsd: record.fee.amountUsd,
+      feeStatus: record.fee.status,
+    },
+    evidence: [
+      `Revenue source: ${record.source}`,
+      `HivemindOS share: ${formatUsd(record.fee.amountUsd)} ${record.fee.status}`,
+    ],
+    createdBy: "human",
+    decidedBy: "human",
+    decision: normalized.collectFee ? "Recorded revenue and attempted share collection." : "Recorded revenue without immediate share collection.",
+  }).catch(() => undefined);
+  await finishCompanyRun(normalized.companyId, companyRun.id, {
+    status: "completed",
+    output: {
+      revenueEventId: record.id,
+      amountUsd: record.amountUsd,
+      feeAmountUsd: record.fee.amountUsd,
+      feeStatus: record.fee.status,
+      duplicate: false,
+    },
   }).catch(() => undefined);
 
   return {

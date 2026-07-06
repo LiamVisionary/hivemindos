@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "@/lib/home-dir";
+import { runtimeCommandEnv, runtimeCommandPaths } from "@/lib/services/runtime-command-env";
 import { readSharedHiveEnvValues } from "@/lib/services/shared-hive-env";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeRun, RuntimeRunLog } from "./types";
@@ -39,22 +40,12 @@ function logPath(runtime: AgentRuntime, id: string) {
 
 async function executableExists(command: string) {
   if (command.includes("/")) return existsSync(command);
-  const pathParts = cliRuntimePath().split(":").filter(Boolean);
-  return pathParts.some((part) => existsSync(join(part, command)));
-}
-
-function cliRuntimePath() {
-  return [
-    join(homedir(), ".local", "bin"),
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    process.env.PATH || "",
-  ].filter(Boolean).join(":");
+  return runtimeCommandPaths().some((part) => existsSync(join(part, command)));
 }
 
 async function cliRuntimeEnv(runtime: AgentRuntime, profile?: AgentProfile) {
   const sharedEnv = await readSharedHiveEnvValues().catch(() => ({}));
-  const env: NodeJS.ProcessEnv = { ...sharedEnv, ...process.env, PATH: cliRuntimePath() };
+  const env: NodeJS.ProcessEnv = runtimeCommandEnv({ ...sharedEnv, ...process.env });
   if (runtime === "openhands") {
     env.OPENHANDS_SUPPRESS_BANNER = env.OPENHANDS_SUPPRESS_BANNER || "1";
     env.LLM_API_KEY = env.LLM_API_KEY || env.OPENAI_API_KEY || "";

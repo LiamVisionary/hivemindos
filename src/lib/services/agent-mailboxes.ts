@@ -1289,6 +1289,12 @@ async function readCloudflareInboxForCompany({ agentIds }: MailReaderContext): P
     }
   }
 
+  // If this company has no Cloudflare mailboxes, there is nothing provider-specific
+  // to read. Avoid the full Agentic Inbox deployment/status probe here; it shells
+  // out to Wrangler and does live Cloudflare checks, which made the Comms tab wait
+  // many seconds even when every visible email came from another provider.
+  if (cfMailboxes.length === 0) return { connected: false, mailboxes: [], threads: [] };
+
   const markIssue = (detail: string): CompanyMailbox[] => cfMailboxes.map((mb) => ({ ...mb, status: "issue", detail }));
 
   const status = await readAgenticInboxStatus();
@@ -1296,8 +1302,6 @@ async function readCloudflareInboxForCompany({ agentIds }: MailReaderContext): P
   if (!workerUrl) {
     return { connected: false, mailboxes: markIssue("Cloudflare Agentic Inbox isn't deployed yet."), threads: [], note: "Cloudflare Agentic Inbox isn't deployed yet." };
   }
-  if (cfMailboxes.length === 0) return { connected: true, mailboxes: [], threads: [] };
-
   const response = await fetch(`${workerUrl.replace(/\/+$/, "")}/api/inbox/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

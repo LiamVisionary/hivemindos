@@ -31,6 +31,23 @@ const web = outputSpecForCompany({
 assert.equal(web.primaryLabel, "Deliverables");
 assert.equal(web.comms, true, "an agency that emails outreach shows the Comms tab");
 assert.equal(classOf(web, { kind: "url", label: "live Ginza preview", url: "https://sarasota-demo-pipeline.hivemindos.workers.dev/preview/ginza" }), "primary");
+// The live send pipeline's real URL shapes (caught 2026-07-06: 3 sent pitches,
+// zero visible deliverables): preview-host previews and per-lead offer pages
+// are the product, not work log.
+assert.equal(classOf(web, { kind: "url", label: "preview", url: "https://preview.liamvisionary.com/p/3-car-garage-brewing" }), "primary", "a preview-host per-lead site is the product");
+assert.equal(classOf(web, { kind: "url", label: "offer", url: "https://liamvisionary.com/offer/sarasota-3-car-garage-brewing-20260706" }), "primary", "a per-lead offer page is the product");
+{
+  const previewClassified = classifyDeliverable(d({ kind: "url", url: "https://preview.liamvisionary.com/p/3-car-garage-brewing" }));
+  assert.equal(previewClassified.reviewable, true, "preview-host sites are reviewable");
+  assert.equal(previewClassified.title, "Preview — 3 car garage brewing", "preview title derives from the lead slug");
+  const offerClassified = classifyDeliverable(d({ kind: "url", url: "https://liamvisionary.com/offer/barefoot-bills" }));
+  assert.equal(offerClassified.title, "Offer — barefoot bills", "offer title derives from the slug");
+}
+// QA probes riding the same URL shapes are never the product (live junk 2026-07-06).
+assert.equal(classOf(web, { kind: "url", label: "qa", url: "https://liamvisionary.com/offer/__qa-missing-offer__" }), "worklog", "a __marker__ QA slug is not an offer page");
+assert.equal(classOf(web, { kind: "url", label: "qa", url: "https://liamvisionary.com/offer/qa-sarasota-book-pay-1783271807445" }), "worklog", "a qa- slug is not an offer page");
+assert.equal(classOf(web, { kind: "url", label: "bare", url: "https://liamvisionary.com/offer/" }), "worklog", "a slugless /offer/ root is not a per-lead offer page");
+assert.equal(classOf(web, { kind: "url", label: "qa", url: "https://preview.liamvisionary.com/p/qa-check-123" }), "worklog", "a qa- slug on the preview host is not a preview site");
 assert.equal(classOf(web, { kind: "url", label: "ops", url: "https://sarasota-demo-pipeline.hivemindos.workers.dev/ops" }), "worklog", "ops/status link is infra, not a deliverable");
 assert.equal(classOf(web, { kind: "url", label: "pay", url: "https://buy.stripe.com/test_abc" }), "worklog", "a payment link is sales infra for a website agency, not its product");
 assert.equal(classOf(web, { kind: "document", label: "RESULT.md", path: "/root/Documents/Obsidian/hivemindos-vault/Operations/Work Board/artifacts/t_x/RESULT.md" }), "worklog", "RESULT.md is the write-up, never a deliverable");

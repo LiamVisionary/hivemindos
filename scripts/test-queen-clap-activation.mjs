@@ -297,8 +297,43 @@ check("pipeline hook captures continuously with pre-roll flush", () => {
     pipelineHook,
     /pendingFlushSinceMs = performance\.now\(\) - BARGE_IN_FLUSH_LOOKBACK_MS/,
   );
-  // A stale prewarmed socket is replaced, never adopted dead.
-  assert.match(pipelineHook, /socket\.readyState !== WebSocket\.OPEN && !cancelled/);
+  // A stale prewarmed socket is replaced, never adopted dead — closed sockets
+  // AND ones that idled past the age cap (half-dead upstream reads OPEN).
+  assert.match(
+    pipelineHook,
+    /\(session\.socket\.readyState !== WebSocket\.OPEN \|\| prewarmTooOld\) &&\s*!cancelled/,
+  );
+  assert.match(pipelineHook, /STT_PREWARM_MAX_AGE_MS/);
+  // A stalled mint cannot strand a listening turn: arming is deadlined and
+  // falls back to the recorder path for that turn only.
+  assert.match(
+    pipelineHook,
+    /raceSttArmDeadline\(promise, listeningStartedAt, STT_ARM_TIMEOUT_MS\)/,
+  );
+  assert.match(pipelineHook, /armTimedOut\(sessionPromise\)/);
+  // Live words-while-speaking: server-VAD turns run a parallel caption
+  // stream (the turn model transcribes only after end-of-speech); the
+  // authoritative transcript wins, and a lost/empty one falls back to the
+  // caption so visible words never vanish. The stream comes from the
+  // caption-source capability matrix (free native/web speech before the
+  // paid OpenAI session), and the recorder fallback path uses free sources
+  // both for live captions and as the key-free transcript at commit.
+  assert.match(pipelineHook, /captionStream = startTurnCaptionStream\(\{/);
+  assert.match(pipelineHook, /captionStream\?\.push\(pcm\)/);
+  assert.match(
+    pipelineHook,
+    /finalText\.trim\(\) \|\| \(mutedRef\.current \? "" : captionStream\?\.text\(\) \|\| ""\)/,
+  );
+  assert.match(pipelineHook, /startLocalCaptionStream\(\{/);
+  assert.match(pipelineHook, /const captionTranscript = captions\.text\(\)/);
+  const captionSource = read("src/features/queen-voice/caption-source.ts");
+  // Preference order is load-bearing: free sources before the paid one.
+  const order = ["native-speech", "web-speech", "openai-realtime"].map((id) =>
+    captionSource.indexOf(`id: "${id}"`),
+  );
+  assert.ok(order.every((at) => at >= 0), "caption matrix lists all sources");
+  assert.deepStrictEqual([...order].sort((a, b) => a - b), order,
+    "caption matrix prefers free sources before openai-realtime");
 });
 
 check("clap hook stays local and tears down the microphone stream", () => {

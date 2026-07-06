@@ -88,7 +88,7 @@ export function CompanyDirectiveComposer({
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }}
         placeholder={placeholder}
         rows={3}
-        style={{ resize: "vertical", minHeight: 64, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line-2)", background: "var(--bg-1)", color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 13, lineHeight: 1.5 }}
+        style={{ resize: "vertical", minHeight: 64, width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line-2)", background: "var(--panel-2)", color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 13, lineHeight: 1.5, outline: "none" }}
       />
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         {openSkillAttachmentBrowser ? (
@@ -101,7 +101,7 @@ export function CompanyDirectiveComposer({
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
             placeholder="skill slug (optional), e.g. self-serve-payment-funnel"
-            style={{ flex: 1, minWidth: 220, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line-2)", background: "var(--bg-1)", color: "var(--fg)", fontFamily: "var(--f-mono)", fontSize: 11 }}
+            style={{ flex: 1, minWidth: 220, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line-2)", background: "var(--panel-2)", color: "var(--fg)", fontFamily: "var(--f-mono)", fontSize: 11, outline: "none" }}
           />
         )}
         <button type="button" onClick={() => fileRef.current?.click()} title="Attach reference files" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-3)", borderRadius: 8, padding: "8px 12px", fontFamily: "var(--f-mono)", fontSize: 11 }}>
@@ -109,7 +109,7 @@ export function CompanyDirectiveComposer({
           Attach refs
         </button>
         <input ref={fileRef} type="file" multiple onChange={onFiles} style={{ display: "none" }} />
-        <button type="button" onClick={submit} disabled={!canSubmit} style={{ cursor: canSubmit ? "pointer" : "not-allowed", border: "1px solid var(--honey)", background: canSubmit ? "var(--honey)" : "transparent", color: canSubmit ? "var(--bg-0)" : "var(--fg-4)", borderRadius: 8, padding: "8px 14px", fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 600, opacity: busy ? 0.6 : 1 }}>{busy ? <Spinner size={12} /> : submitLabel}</button>
+        <button type="button" onClick={submit} disabled={!canSubmit} style={{ cursor: canSubmit ? "pointer" : "not-allowed", border: "1px solid var(--btn-line)", background: canSubmit ? "var(--btn-bg)" : "transparent", color: canSubmit ? "var(--btn-fg)" : "var(--fg-4)", borderRadius: 8, padding: "8px 16px", fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 600, opacity: busy ? 0.6 : 1 }}>{busy ? <Spinner size={12} /> : submitLabel}</button>
       </div>
       {skillSlugs.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

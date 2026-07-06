@@ -10,6 +10,7 @@ const {
   scheduleQueenBeeAutonomousPickup,
   shouldAutonomouslyPickupQueenBeeTask,
   pickupMachineKey,
+  pickupChatTimeoutMs,
 } = await import(
   "../src/lib/services/queen-bee/autonomous-worker.ts"
 );
@@ -204,6 +205,29 @@ function loopDeps({ judgeAccepts, onComplete }) {
   assert.equal(result.status, "blocked");
   assert.match(blockReason, /no final response/i, "empty output should be reported as an unhealthy-runtime failure");
   assert.match(blockReason, /re-route/i, "block reason should hint to re-route to a healthy agent");
+}
+
+// --- Scenario 3b: an output that self-declares a human blocker lands as needs-human,
+//     never as a completion (live 2026-07-06: a send batch blocked on a missing env
+//     token finished "done", so no card ever pinged the human).
+for (const askText of [
+  "Reviewed prospects.\n\nACTION NEEDED: Set PORTFOLIO_OFFER_API_TOKEN in the shared env, then move this back to Ready.\nNEEDS: api-key PORTFOLIO_OFFER_API_TOKEN",
+  "Blocked before prospect outreach. The required offer links are not live (offer API returned 401).",
+]) {
+  let blockReason = null;
+  const result = await runQueenBeeAutonomousPickup({ task, delegation }, {
+    claim: async (slug, taskId, input) => ({ task: { ...task, status: "working", claimLock: input.claimer }, board: {} }),
+    fetchJson: async () => ({ ok: true, text: askText }),
+    complete: async () => {
+      throw new Error("complete must not run when the agent asked for human input");
+    },
+    block: async (slug, taskId, reason) => {
+      blockReason = reason;
+      return { task: { ...task, status: "needs-human", result: reason }, board: {} };
+    },
+  });
+  assert.equal(result.status, "blocked", "a self-declared human blocker must land needs-human");
+  assert.equal(blockReason, askText, "the agent's own ask text becomes the card");
 }
 
 // --- Scenario 4: first chat returns no final message; a retry recovers real output -> completes.
@@ -643,6 +667,44 @@ function loopDeps({ judgeAccepts, onComplete }) {
     assert.equal(legacyRerouted.status, "ready", "callers that pass no lock keep the old behavior");
   } finally {
     await rm(vaultPath, { recursive: true, force: true });
+  }
+}
+
+// --- Scenario 11: long-task duration contract — the chat timeout honors the task's
+//     own maxRuntimeMs (company tasks legitimately run 30+ minutes; the old fixed
+//     240s default amputated them mid-work, live 2026-07-05).
+{
+  assert.equal(pickupChatTimeoutMs({ maxRuntimeMs: 45 * 60_000 }), 45 * 60_000, "task maxRuntimeMs is the chat duration contract");
+  assert.equal(pickupChatTimeoutMs({}), 30 * 60_000, "no task contract → 30 min default, never a 240s amputation");
+  process.env.QUEEN_BEE_AUTONOMOUS_CHAT_TIMEOUT_MS = "5000";
+  try {
+    assert.equal(pickupChatTimeoutMs({ maxRuntimeMs: 999_999 }), 5000, "operator env override wins over everything");
+  } finally {
+    delete process.env.QUEEN_BEE_AUTONOMOUS_CHAT_TIMEOUT_MS;
+  }
+}
+
+// --- Scenario 12: a long-running chat heartbeats its claim so the stale-claim
+//     reclaim never sweeps an actively-working pickup (the reclaim-stall class).
+{
+  process.env.QUEEN_BEE_PICKUP_HEARTBEAT_MS = "20";
+  try {
+    const beats = [];
+    const result = await runQueenBeeAutonomousPickup({ task, delegation }, {
+      claim: async (slug, taskId, input) => ({ task: { ...task, status: "working", claimLock: input.claimer }, board: {} }),
+      heartbeat: async (slug, taskId, note, claimLock) => { beats.push(claimLock); },
+      fetchJson: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 130));
+        return { ok: true, text: "slow but real work" };
+      },
+      complete: async (slug, taskId, input) => ({ task: { ...task, status: "done", result: input.result }, board: {} }),
+      block: async () => { throw new Error("block should not be called for a slow-but-successful chat"); },
+    });
+    assert.equal(result.status, "completed");
+    assert(beats.length >= 2, `long chats must heartbeat the claim while in flight (got ${beats.length})`);
+    assert(beats.every((lock) => /^queen-bee-autonomous:/.test(lock)), "heartbeats carry the run's claim lock");
+  } finally {
+    delete process.env.QUEEN_BEE_PICKUP_HEARTBEAT_MS;
   }
 }
 

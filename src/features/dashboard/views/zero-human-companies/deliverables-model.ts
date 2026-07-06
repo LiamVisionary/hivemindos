@@ -103,7 +103,23 @@ function humanizeLabel(raw: string, fallback: string): string {
 
 function linkKind(url: string): { icon: DeliverableIcon; kindLabel: string; reviewable: boolean } {
   const u = url.toLowerCase();
-  if (/\/preview\//.test(u)) return { icon: "site", kindLabel: "Preview site", reviewable: true };
+  let host = "";
+  try { host = new URL(u).hostname; } catch { /* non-parseable → path rules only */ }
+  // QA probes ride the same URL shapes (`/offer/__qa-missing-offer__`,
+  // `/p/qa-sarasota-book-pay-<ts>`) — synthetic slugs are never the product.
+  const isQaSlug = (slug: string) => !slug || /^(?:qa|test)[-_]/.test(slug) || slug.includes("__");
+  const previewSlug = u.match(/\/(?:preview|p)\/([^/?#]+)/)?.[1] ?? "";
+  const offerSlug = u.match(/\/offers?\/([^/?#]+)/)?.[1] ?? "";
+  // Per-lead preview sites: a `/preview/<lead>` path, or a dedicated preview host
+  // (`preview.example.com/p/<lead>` — the shape the live send pipeline actually
+  // uses; these ARE the product a website company pitched, caught live 2026-07-06
+  // when 3 sent pitches produced zero visible deliverables).
+  if ((/\/preview\//.test(u) && !isQaSlug(previewSlug)) || (host.startsWith("preview.") && !(previewSlug && isQaSlug(previewSlug)))) {
+    return { icon: "site", kindLabel: "Preview site", reviewable: true };
+  }
+  // A per-lead offer page is the customer-facing sales page for the product —
+  // a headline output, not work log.
+  if (offerSlug && !isQaSlug(offerSlug)) return { icon: "site", kindLabel: "Offer page", reviewable: true };
   if (/\/(?:paid|checkout|pay)\b/.test(u) || /buy\.stripe\.com/.test(u)) return { icon: "payment", kindLabel: "Payment page", reviewable: false };
   if (/cal\.com/.test(u) || /\/book\b/.test(u)) return { icon: "booking", kindLabel: "Booking link", reviewable: false };
   if (/\/(?:ops|status|health|metrics)\b/.test(u)) return { icon: "status", kindLabel: "Ops status", reviewable: false };
@@ -138,8 +154,13 @@ export function classifyDeliverable(d: IssueDeliverable): ClassifiedDeliverable 
       return internal(d, "third-party reference doc");
     }
     const { icon, kindLabel, reviewable } = linkKind(url);
-    const leadMatch = url.match(/\/preview\/([^/?#]+)/i);
-    const title = leadMatch ? `Preview — ${leadMatch[1].replace(/[-_]+/g, " ")}` : humanizeLabel(label, kindLabel);
+    const previewMatch = url.match(/\/(?:preview|p)\/([^/?#]+)/i);
+    const offerMatch = url.match(/\/offers?\/([^/?#]+)/i);
+    const title = kindLabel === "Preview site" && previewMatch
+      ? `Preview — ${previewMatch[1].replace(/[-_]+/g, " ")}`
+      : kindLabel === "Offer page" && offerMatch
+        ? `Offer — ${offerMatch[1].replace(/[-_]+/g, " ")}`
+        : humanizeLabel(label, kindLabel);
     return { deliverable: d, category: "link", icon, kindLabel, title, action: "visit", url, reviewable };
   }
 

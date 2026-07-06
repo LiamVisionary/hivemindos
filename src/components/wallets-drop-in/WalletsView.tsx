@@ -165,9 +165,23 @@ function MoonIcon() {
 function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }: { placeholder?: string; offsetX?: number; onSubmitMessage?: (text: string) => unknown }) {
   const ref = React.useRef<HTMLInputElement | null>(null);
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const text = ref.current ? ref.current.value.trim() : ""; if (text) onSubmitMessage && onSubmitMessage(text); if (ref.current) ref.current.value = ""; };
+  const focusInput = () => {
+    const input = ref.current;
+    if (!input) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  };
+  const focusInputFromContainer = (event: React.PointerEvent<HTMLFormElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest("button, input, textarea, select, a, [role='button']")) return;
+    event.preventDefault();
+    focusInput();
+  };
   return (
     <div className="fr-chat-wrap" style={offsetX ? { left: `calc(50% - ${offsetX}px)` } : undefined}>
-      <form className="fr-chat" onSubmit={onSubmit}>
+      <form className="fr-chat" onPointerDown={focusInputFromContainer} onSubmit={onSubmit}>
         <span className="fr-chat-orb"><span className="ring" /><span className="core" /></span>
         <span className="fr-chat-label">Message the hive</span>
         <span className="fr-chat-field">

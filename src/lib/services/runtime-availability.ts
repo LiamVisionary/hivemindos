@@ -4,6 +4,7 @@ import { access } from "node:fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
 import type { AgentRuntime } from "@/lib/types/agent-runtime";
 import { HIVEMIND_OS_RUNTIME, RUNTIME_DEFAULTS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 
@@ -44,12 +45,23 @@ async function checkHermes() {
     "/usr/local/bin/hermes",
     "/usr/bin/hermes",
   ].filter(Boolean) as string[];
-  const bin = candidates.find((path) => existsSync(path)) || "hermes";
-  return checkCommand(bin, ["--version"], "Hermes is installed.", "Hermes is not installed.");
+  let foundExistingLauncher = false;
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    foundExistingLauncher = true;
+    const status = await checkCommand(candidate, ["--version"], "Hermes is installed.", "");
+    if (status.installed) return status;
+  }
+  if (foundExistingLauncher) return { installed: true, detail: "Hermes is installed." };
+  return checkCommand("hermes", ["--version"], "Hermes is installed.", "Hermes is not installed.");
 }
 
 async function checkCommand(command: string, args: string[], okDetail: string, failDetail: string) {
-  const result = await execFileAsync(command, args, { timeout: 3_000, maxBuffer: 200_000 }).catch(() => null);
+  const result = await execFileAsync(command, args, {
+    timeout: 3_000,
+    maxBuffer: 200_000,
+    env: runtimeCommandEnv(),
+  }).catch(() => null);
   const version = result?.stdout.trim().split(/\r?\n/)[0] || result?.stderr.trim().split(/\r?\n/)[0] || "";
   return {
     installed: Boolean(result),
@@ -86,9 +98,8 @@ async function checkOpenClaw() {
   ].filter(Boolean) as string[];
   const bin = candidates.find((path) => existsSync(path));
   if (bin) {
-    const result = await execFileAsync(bin, ["--version"], { timeout: 3_000, maxBuffer: 200_000 }).catch(() => null);
-    const version = result?.stdout.trim().split(/\r?\n/)[0] || result?.stderr.trim().split(/\r?\n/)[0] || "";
-    return { installed: true, detail: version ? `OpenClaw is installed. ${version}` : "OpenClaw is installed." };
+    const status = await checkCommand(bin, ["--version"], "OpenClaw is installed.", "");
+    return status.installed ? status : { installed: true, detail: "OpenClaw is installed." };
   }
   const configReadable = await access(join(homedir(), ".openclaw", "openclaw.json"), constants.R_OK).then(() => true).catch(() => false);
   if (configReadable) return { installed: true, detail: "OpenClaw config is present." };

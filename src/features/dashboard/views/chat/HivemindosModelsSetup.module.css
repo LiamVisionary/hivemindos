@@ -65,16 +65,13 @@
 
 .closeButton svg,
 .btn svg,
-.copy svg,
-.stat svg,
 .spin {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
 }
 
-.closeButton,
-.copy {
+.closeButton {
   display: grid;
   place-items: center;
   border: 1px solid var(--line-2);
@@ -90,15 +87,7 @@
   border-radius: 10px;
 }
 
-.copy {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  flex: 0 0 auto;
-}
-
-.closeButton:hover,
-.copy:hover {
+.closeButton:hover {
   color: var(--fg);
   border-color: var(--line-3);
   background: var(--panel-2);
@@ -129,67 +118,12 @@
   color: var(--fg-2);
 }
 
-.status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 2px 0 14px;
-}
-
-.stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 6px 10px;
-  color: var(--honey);
-  background: var(--honey-soft);
-  border: 1px solid var(--honey-line);
-  border-radius: 99px;
-  font-size: 11.5px;
-}
-
-.stat[data-tone="live"] {
-  color: var(--live);
-  background: var(--live-soft);
-  border-color: color-mix(in srgb, var(--live) 36%, transparent);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 12px 0;
-}
-
 .fieldLabel {
   color: var(--fg-4);
   font-family: var(--f-mono);
   font-size: 10.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.code {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 8px 8px 8px 11px;
-  color: var(--fg-2);
-  background: var(--panel-2);
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-sm);
-}
-
-.code code {
-  min-width: 0;
-  color: var(--honey);
-  font-family: var(--f-mono);
-  font-size: 11.5px;
-  line-height: 1.45;
-  word-break: break-all;
 }
 
 .fundingModes {
@@ -235,7 +169,10 @@
 
 .creditBox {
   display: grid;
+  box-sizing: border-box;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 14px;
   padding: 12px;
   background: color-mix(in srgb, var(--bg-soft) 76%, var(--honey-soft));
@@ -284,17 +221,101 @@
   line-height: 1.45;
 }
 
+.walletFundingBadge {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--live);
+  background: var(--live-soft);
+  border: 1px solid color-mix(in srgb, var(--live) 38%, transparent);
+  border-radius: 999px;
+}
+
+.walletFundingMain {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 8px 12px;
+}
+
+.walletFundingMain img {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--live) 28%, transparent);
+}
+
+.walletFundingMain span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.walletFundingMain b {
+  color: var(--live);
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+
+.walletFundingMain small {
+  color: color-mix(in srgb, var(--live) 76%, var(--fg-3));
+  font-size: 10.5px;
+  line-height: 1.2;
+}
+
+.walletSwitchButton {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  min-height: 100%;
+  flex: 0 0 auto;
+  color: var(--live);
+  background: color-mix(in srgb, var(--live) 10%, transparent);
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--live) 30%, transparent);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.walletSwitchButton:hover:not(:disabled) {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--live) 18%, transparent);
+}
+
+.walletSwitchButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.walletSwitchButton svg {
+  width: 16px;
+  height: 16px;
+}
+
 .creditActions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
+}
+
+.creditActions .primary {
+  flex: 1 1 190px;
+  max-width: 100%;
 }
 
 .cardAmounts {
   display: grid;
+  box-sizing: border-box;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 7px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .amountChoice {
@@ -573,6 +594,48 @@
   font-size: 11.5px;
 }
 
+/* Free daily-allowance meter: remaining requests vs the window's high-water. */
+.freeMeter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+  min-width: 0;
+}
+
+.freeMeterBar {
+  flex: 0 0 88px;
+  height: 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--fg-4) 22%, transparent);
+  overflow: hidden;
+}
+
+.freeMeterFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--live);
+  transition: width 0.3s ease;
+}
+
+.freeMeter[data-exhausted] .freeMeterFill {
+  background: var(--honey);
+}
+
+.freeMeterLabel {
+  min-width: 0;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.freeMeter[data-exhausted] .freeMeterLabel {
+  color: var(--honey);
+}
+
 .freeCheck {
   display: grid;
   place-items: center;
@@ -848,10 +911,12 @@
 
 .fundModal {
   display: grid;
+  box-sizing: border-box;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: 100%;
-  max-width: 480px;
+  max-width: 560px;
   max-height: calc(100vh - 48px);
+  min-width: 0;
   overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--line-2);
@@ -874,9 +939,12 @@
 
 .fundHead {
   display: flex;
+  box-sizing: border-box;
   align-items: center;
   gap: 12px;
-  padding: 17px 18px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -895,6 +963,11 @@
 .fundTile svg {
   width: 19px;
   height: 19px;
+}
+
+.fundHead .closeButton {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .fundHeadText {
@@ -919,9 +992,12 @@
 
 .fundBody {
   display: grid;
+  box-sizing: border-box;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
-  padding: 16px 18px;
+  padding: 18px 24px 20px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-2) transparent;
@@ -929,14 +1005,20 @@
 
 .fundBody .fundingModes,
 .fundBody .creditBox {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
   margin-top: 0;
   margin-bottom: 0;
 }
 
 .gateBanner {
   display: flex;
+  box-sizing: border-box;
   align-items: flex-start;
   gap: 11px;
+  min-width: 0;
+  max-width: 100%;
   padding: 12px 13px;
   background: linear-gradient(180deg, var(--honey-soft), transparent 80%);
   border: 1px solid var(--honey-line);
@@ -1009,10 +1091,13 @@
 
 .fundFoot {
   display: flex;
+  box-sizing: border-box;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 18px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 16px 24px;
   background: var(--panel-2);
   border-top: 1px solid var(--line);
 }
@@ -1020,12 +1105,15 @@
 .fundFootMsg {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
   color: var(--fg-4);
   font-family: var(--f-mono);
   font-size: 11px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fundFoot .btn {
+  flex: 0 0 auto;
 }
 
 .msg {
@@ -1055,8 +1143,27 @@
 }
 
 @media (max-width: 760px) {
+  .fundOverlay {
+    padding: 14px;
+  }
+
+  .fundHead,
+  .fundBody,
+  .fundFoot {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
   .cardAmounts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .creditActions {
+    justify-content: stretch;
+  }
+
+  .creditActions .btn:not(.iconOnly) {
+    flex-basis: 100%;
   }
 
   .customAmount {

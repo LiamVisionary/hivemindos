@@ -3,21 +3,13 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
+import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
 import type { AgentProfile, KnownAgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter } from "./types";
 import { listCliTaskRuns, readCliTaskRunLog, startCliTaskRun } from "./cli-task-runs";
 import { runtimeInstallSpec } from "@/lib/services/runtime-install-catalog";
 
 const execFileAsync = promisify(execFile);
-
-function cliRuntimePath() {
-  return [
-    join(homedir(), ".local", "bin"),
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    process.env.PATH || "",
-  ].filter(Boolean).join(":");
-}
 
 type CliRuntimeConfig = {
   runtime: Extract<KnownAgentRuntime, "opencode" | "codex" | "claude-code" | "openhands" | "aider">;
@@ -127,7 +119,7 @@ function modelSelection(profile: AgentProfile, config: CliRuntimeConfig) {
 }
 
 async function cliStatus(config: CliRuntimeConfig, profile: AgentProfile) {
-  const result = await execFileAsync(config.command, config.versionArgs, { timeout: 3_000, maxBuffer: 200_000, env: { ...process.env, PATH: cliRuntimePath() } }).catch(() => null);
+  const result = await execFileAsync(config.command, config.versionArgs, { timeout: 3_000, maxBuffer: 200_000, env: runtimeCommandEnv() }).catch(() => null);
   const version = result?.stdout.trim().split(/\r?\n/)[0] || result?.stderr.trim().split(/\r?\n/)[0] || "";
   return {
     ok: Boolean(result),
@@ -139,9 +131,9 @@ async function cliStatus(config: CliRuntimeConfig, profile: AgentProfile) {
 
 async function installCli(config: CliRuntimeConfig) {
   if (!config.installArgs) return { ok: false, error: `${config.label} does not expose an installer here yet.` };
-  const uv = await execFileAsync("uv", ["--version"], { timeout: 5_000, maxBuffer: 100_000, env: { ...process.env, PATH: cliRuntimePath() } }).catch(() => null);
+  const uv = await execFileAsync("uv", ["--version"], { timeout: 5_000, maxBuffer: 100_000, env: runtimeCommandEnv() }).catch(() => null);
   if (!uv) return { ok: false, error: `uv is required to install ${config.label} from HivemindOS.` };
-  const output = await execFileAsync("uv", config.installArgs, { timeout: 300_000, maxBuffer: 1_000_000, env: { ...process.env, PATH: cliRuntimePath() } }).catch((error: unknown) => {
+  const output = await execFileAsync("uv", config.installArgs, { timeout: 300_000, maxBuffer: 1_000_000, env: runtimeCommandEnv() }).catch((error: unknown) => {
     const maybe = error as { stdout?: string; stderr?: string; message?: string };
     throw new Error(maybe.stderr || maybe.stdout || maybe.message || `${config.label} install failed.`);
   });
@@ -156,7 +148,7 @@ async function installRuntimeBinary(config: CliRuntimeConfig) {
   if (!spec || !spec.inAppInstall) {
     return { ok: false, error: `${config.label} can't be installed from here yet. Run the install command on the machine, then re-check.` };
   }
-  const env = { ...process.env, PATH: cliRuntimePath() };
+  const env = runtimeCommandEnv();
   try {
     if (spec.installKind === "npm" && spec.npmPackage) {
       // npm ships as npm.cmd on Windows; execFile needs the exact name.

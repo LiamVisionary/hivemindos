@@ -10,6 +10,7 @@ import {
   hasWorkflowActionApproval,
   parseWorkflowActions,
 } from "@/lib/services/skills/skill-os";
+import { isAllowlistedCommand } from "@/lib/services/agent-shell/command-tool";
 import type { WorkflowAction } from "@/lib/types/skill-os";
 
 export const runtime = "nodejs";
@@ -31,10 +32,8 @@ function safeTimeout(timeoutMs?: number) {
   return Math.max(500, Math.min(30_000, Math.round(timeoutMs ?? 8_000)));
 }
 
-const SAFE_COMMANDS = new Set(["git", "gh", "pnpm", "npm", "node", "python3", "python", "osascript", "open", "rg", "grep", "evo", "uv"]);
-
 function isSafeCommand(command?: string) {
-  return Boolean(command && /^[a-zA-Z0-9._-]+$/.test(command) && SAFE_COMMANDS.has(command));
+  return isAllowlistedCommand(command);
 }
 
 async function logRouteTelemetry(request: Request, type: string, payload: Record<string, unknown>) {

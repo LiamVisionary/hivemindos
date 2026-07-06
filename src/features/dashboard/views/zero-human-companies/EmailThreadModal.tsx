@@ -1,6 +1,6 @@
 "use client";
 
-// Full-email detail for the Zero Human Companies Emails tab. Opens a thread's
+// Full-email detail for the Zero Human Companies Comms tab. Opens a thread's
 // message body, its embedded links (booking/preview CTAs), and any real file
 // attachments, plus a "Correct agent" action that reuses the reject → directive
 // → company-learning flow, seeded with this email so the crew fixes it next time.
@@ -11,6 +11,7 @@ import { RejectDeliverableModal } from "./RejectDeliverableModal";
 import { SkeletonText, Spinner } from "./primitives";
 import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import type { CompanyEmailThread } from "@/lib/services/agent-mailboxes";
+import type { Theme } from "./types";
 
 const DIRECTION_LABEL: Record<string, string> = {
   outbound: "Sent",
@@ -25,19 +26,19 @@ export function EmailThreadModal({
   companyName,
   onClose,
   onCorrected,
+  theme = "dark",
 }: {
   thread: CompanyEmailThread;
   companyId: string;
   companyName: string;
   onClose: () => void;
   onCorrected?: () => void;
+  theme?: Theme;
 }) {
   const [correcting, setCorrecting] = React.useState(false);
   const [detail, setDetail] = React.useState<{ body?: string; links?: { label: string; url: string }[]; attachments?: { name: string; url?: string }[]; note?: string } | null>(null);
   const [loadingDetail, setLoadingDetail] = React.useState(() => !thread.body);
-  // Which external URL is mid-open — drives a spinner on the clicked chip. In the
-  // Tauri shell the open shells out to the OS browser and can take a couple of
-  // seconds; without this the chip looked dead until the browser finally appeared.
+  // Which external URL is mid-open — drives a spinner on the clicked chip.
   const [openingUrl, setOpeningUrl] = React.useState<string | null>(null);
 
   const openLink = React.useCallback(async (url: string) => {
@@ -50,8 +51,6 @@ export function EmailThreadModal({
     }
   }, []);
 
-  // The maps-agency outbox ships its body in the list; other providers (AgentMail,
-  // Cloudflare) don't — fetch the full body + attachments lazily on open.
   React.useEffect(() => {
     if (thread.body) return;
     let alive = true;
@@ -83,14 +82,14 @@ export function EmailThreadModal({
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.55)", display: "grid", placeItems: "center", padding: 20 }}>
+    <div className="zhc-root" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 2147483004, background: "rgba(2,4,8,0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 20 }}>
       <div
         onClick={(event) => event.stopPropagation()}
-        style={{ width: "min(720px, 100%)", maxHeight: "86vh", display: "flex", flexDirection: "column", background: "var(--bg-0)", border: "1px solid var(--line-2)", borderRadius: 16, boxShadow: "0 24px 60px rgba(0,0,0,0.5)" }}
+        style={{ width: "min(720px, 100%)", maxHeight: "86vh", display: "flex", flexDirection: "column", background: "var(--bg-soft)", border: "1px solid var(--line-2)", borderRadius: 16, boxShadow: "0 30px 80px rgba(0,0,0,0.55)", overflow: "hidden" }}
       >
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "16px 18px 12px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "18px 20px", borderBottom: "1px solid var(--line)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: "var(--f-display)", fontSize: 16, fontWeight: 700, color: "var(--fg)", lineHeight: 1.3, overflowWrap: "anywhere" }}>{thread.subject}</div>
+            <div style={{ fontFamily: "var(--f-display)", fontSize: 18, fontWeight: 600, color: "var(--fg)", lineHeight: 1.3, letterSpacing: -0.3, overflowWrap: "anywhere" }}>{thread.subject}</div>
             <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 8, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>
               <span>{dirLabel}</span>
               <span>· {thread.providerLabel}</span>
@@ -99,10 +98,10 @@ export function EmailThreadModal({
               {when ? <span>· {when}</span> : null}
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" style={{ flexShrink: 0, cursor: "pointer", border: "none", background: "var(--bg-3)", color: "var(--fg-3)", borderRadius: 8, width: 26, height: 26, fontSize: 12 }}>✕</button>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ flexShrink: 0, cursor: "pointer", border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-3)", borderRadius: 8, width: 30, height: 30, fontSize: 14 }}>✕</button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 18px 8px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="frsc" style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
           {links.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, letterSpacing: 0.06, textTransform: "uppercase", color: "var(--fg-4)" }}>Links in this email</span>
@@ -110,7 +109,7 @@ export function EmailThreadModal({
                 {links.map((link, index) => {
                   const opening = openingUrl === link.url;
                   return (
-                    <a key={index} href={link.url} target="_blank" rel="noreferrer" title={link.url} aria-busy={opening} className="zhc-linkchip" onClick={(event) => { if (isExternalHttpUrl(link.url)) { event.preventDefault(); void openLink(link.url); } }} style={{ display: "inline-flex", alignItems: "center", gap: 6, maxWidth: 340, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--cyan-2)", textDecoration: "none", border: "1px solid color-mix(in srgb, var(--cyan) 35%, var(--line))", borderRadius: 8, padding: "5px 10px" }}>
+                    <a key={index} href={link.url} target="_blank" rel="noreferrer" title={link.url} aria-busy={opening} className="zhc-linkchip" onClick={(event) => { if (isExternalHttpUrl(link.url)) { event.preventDefault(); void openLink(link.url); } }} style={{ display: "inline-flex", alignItems: "center", gap: 6, maxWidth: 340, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--live)", textDecoration: "none", border: "1px solid color-mix(in srgb, var(--live) 35%, var(--line))", borderRadius: 8, padding: "5px 10px" }}>
                       {opening ? <Spinner size={13} style={{ flexShrink: 0 }} /> : <ExternalLink size={13} aria-hidden style={{ flexShrink: 0 }} />}
                       <span style={{ fontWeight: 600, flexShrink: 0 }}>{opening ? "Opening…" : link.label}</span>
                       {!opening && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--fg-4)" }}>{link.url.replace(/^https?:\/\//, "")}</span>}
@@ -140,19 +139,20 @@ export function EmailThreadModal({
             </div>
           ) : null}
 
-          <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--f-body)", fontSize: 13, lineHeight: 1.6, color: body ? "var(--fg-2)" : "var(--fg-4)", background: "var(--bg-1)", border: "1px solid var(--line)", borderRadius: 10, padding: "13px 15px" }}>
+          <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--f-body)", fontSize: 13, lineHeight: 1.6, color: body ? "var(--fg-2)" : "var(--fg-4)", background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 12, padding: "13px 15px" }}>
             {loadingDetail && !body ? (
               <div role="status" aria-label="Loading the full email"><SkeletonText lines={5} /></div>
             ) : body || detailNote || "(no body captured for this message)"}
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px 16px", borderTop: "1px solid var(--line)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 20px 16px", borderTop: "1px solid var(--line)" }}>
           <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", lineHeight: 1.45 }}>Something off? Tell the crew what to fix — it becomes a standing directive they read on every task.</span>
           <button
             type="button"
             onClick={() => setCorrecting(true)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, cursor: "pointer", borderRadius: 9, padding: "8px 14px", font: "inherit", fontFamily: "var(--f-display)", fontSize: 12.5, fontWeight: 700, border: "1px solid var(--honey)", background: "var(--honey)", color: "var(--bg-0)" }}
+            className="zhc-btn-ghost"
+            style={{ display: "inline-flex", alignItems: "center", gap: 7, flexShrink: 0, cursor: "pointer", borderRadius: 9, padding: "8px 15px", font: "inherit", fontFamily: "var(--f-display)", fontSize: 12.5, fontWeight: 600, border: "1px solid var(--honey-line)", background: "var(--honey-soft)", color: "var(--honey)" }}
           >
             <MessageSquare size={15} aria-hidden /> Correct agent
           </button>
@@ -163,12 +163,13 @@ export function EmailThreadModal({
         <RejectDeliverableModal
           companyId={companyId}
           deliverableRef={`Email — ${thread.subject}`}
+          theme={theme}
           icon="✉️"
           title="Correct the agent on this email"
           submitLabel="Send correction"
           placeholder="What's wrong with this email / what to do differently next time…"
           intro={(
-            <>Correcting how {companyName}&apos;s crew handled <b style={{ color: "var(--fg-3)" }}>{thread.subject}</b>. Your feedback becomes a standing directive in company knowledge — the crew reads it on every dispatch, so it fixes this next time. Optionally point them at a skill or attach references.</>
+            <>Correcting how {companyName}&apos;s crew handled <b style={{ color: "var(--fg-2)" }}>{thread.subject}</b>. Your feedback becomes a standing directive in company knowledge — the crew reads it on every dispatch, so it fixes this next time. Optionally point them at a skill or attach references.</>
           )}
           onClose={() => setCorrecting(false)}
           onDone={() => {

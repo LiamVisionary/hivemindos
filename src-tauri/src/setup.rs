@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{SocketAddr, TcpStream};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -114,17 +116,88 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 fn command_exists(name: &str) -> bool {
-    // hidden_command: native_setup_status calls this ~12x per poll (every 4s
-    // while setup finishes); a plain `where` spawn flashes a console window
-    // each time on Windows. See crate::hidden_command.
-    let status = if cfg!(target_os = "windows") {
-        crate::hidden_command("where").arg(name).output().map(|output| output.status)
+    let path = Path::new(name);
+    if path.components().count() > 1 {
+        return is_executable_file(path);
+    }
+    let candidate_names = command_candidate_names(name);
+    command_lookup_paths().iter().any(|directory| {
+        candidate_names
+            .iter()
+            .any(|candidate| is_executable_file(&directory.join(candidate)))
+    })
+}
+
+fn command_lookup_paths() -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    if cfg!(target_os = "windows") {
+        if let Some(system_root) = std::env::var_os("SystemRoot") {
+            paths.push(PathBuf::from(&system_root).join("System32"));
+            paths.push(PathBuf::from(&system_root));
+        }
     } else {
-        crate::hidden_command("sh")
-            .args(["-lc", &format!("command -v {name} >/dev/null 2>&1")])
-            .status()
+        if let Some(home) = home_dir() {
+            paths.push(home.join(".local").join("bin"));
+            paths.push(home.join(".nvm").join("current").join("bin"));
+            if let Ok(entries) = fs::read_dir(home.join(".nvm").join("versions").join("node")) {
+                paths.extend(
+                    entries
+                        .flatten()
+                        .map(|entry| entry.path().join("bin")),
+                );
+            }
+        }
+        paths.extend([
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/usr/local/bin"),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+            PathBuf::from("/usr/sbin"),
+            PathBuf::from("/sbin"),
+        ]);
+    }
+    let mut deduped = Vec::new();
+    for path in paths {
+        if !deduped.iter().any(|existing| existing == &path) {
+            deduped.push(path);
+        }
+    }
+    deduped
+}
+
+fn command_candidate_names(name: &str) -> Vec<String> {
+    if !cfg!(target_os = "windows") || Path::new(name).extension().is_some() {
+        return vec![name.to_string()];
+    }
+    let path_ext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string());
+    let mut candidates = vec![name.to_string()];
+    candidates.extend(
+        path_ext
+            .split(';')
+            .map(str::trim)
+            .filter(|extension| !extension.is_empty())
+            .map(|extension| format!("{name}{extension}")),
+    );
+    candidates
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
     };
-    status.map(|status| status.success()).unwrap_or(false)
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 fn mac_app_exists(name: &str) -> bool {
@@ -228,7 +301,7 @@ fn detect_agent_runtime(id: &'static str, label: &'static str, command: Option<&
 
 fn detected_agent_runtimes() -> Vec<DetectedAgentRuntime> {
     vec![
-        detect_agent_runtime("codex", "Codex", None),
+        detect_agent_runtime("codex", "Codex", Some("codex")),
         detect_agent_runtime("claude", "Claude", Some("claude")),
         detect_agent_runtime("hermes", "Hermes", Some("hermes")),
         detect_agent_runtime("gemini", "Gemini", Some("gemini")),

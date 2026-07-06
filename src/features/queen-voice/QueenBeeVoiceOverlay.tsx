@@ -3,6 +3,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import {
+  AlertTriangle,
   AudioLines,
   Check,
   Crown,
@@ -210,6 +211,18 @@ function TranscriptTurns({
                 </>
               )}
             </div>
+            {/* The configured brain was skipped this turn — say which one and
+                why, so a silent swap to a fallback model (or the on-device
+                planner) never reads as "your selected model answered". */}
+            {turn.who === "queen" && turn.brainFallback ? (
+              <div className={styles.brainFallbackNote} role="status">
+                <AlertTriangle size={12} aria-hidden="true" />
+                <span>
+                  {turn.brainFallback.label} didn’t answer — {turn.brainFallback.error}
+                  {turn.brain ? ` Replied with ${turn.brain}.` : ""}
+                </span>
+              </div>
+            ) : null}
             {turn.detail ? (
               <button
                 type="button"

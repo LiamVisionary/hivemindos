@@ -1405,7 +1405,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === "local-tts-stt-client-secret") {
-      return NextResponse.json(await createRealtimeTranscriptionClientSecret());
+      // "turns" (default): server-VAD session that auto-commits utterances.
+      // "continuous": streaming pre-commit deltas, caller ends turns itself.
+      return NextResponse.json(
+        await createRealtimeTranscriptionClientSecret(
+          body.mode === "continuous" ? "continuous" : "turns",
+        ),
+      );
     }
 
     if (body.action === "local-tts-speech-stream") {

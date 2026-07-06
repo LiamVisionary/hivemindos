@@ -628,6 +628,10 @@
   line-height: 1.2;
 }
 
+.root :global(.as-runtimes .as-choice .t) {
+  flex-wrap: nowrap;
+}
+
 .root :global(.as-choice .t > span:not(.as-icon-mark):not(.fb-badge)) {
   flex: 1 1 7ch;
   min-width: 0;
@@ -637,6 +641,11 @@
 .root :global(.as-choice .t > .fb-badge) {
   margin-left: auto;
   max-width: 100%;
+}
+
+.root :global(.as-runtimes .as-choice .t > .fb-badge) {
+  padding: 2px 7px;
+  line-height: 1.15;
 }
 
 .root :global(.as-choice[data-active] .t) {

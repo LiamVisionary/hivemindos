@@ -6,6 +6,11 @@ export const HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL = HIVEMINDOS_FREE_MODEL
 export const HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_ENV = "HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG";
 export const HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_PUBLIC_ENV = "NEXT_PUBLIC_HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG";
 export const HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_UPSTREAM_MODEL = "gpt-5.4-mini";
+// Hosted model credits are one pool per install, not per agent: every agent's
+// balance lookup, chat billing, and top-up resolves this shared account id.
+// Legacy per-agent tokens (agent:<id> / draft hmos-model-credits:<uuid>) are
+// adopted into the pool on first use by the vault's pooled resolver.
+export const HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID = "shared:hivemindos-models";
 // Custom gateway models picked from the dynamic list are stored as
 // "hivemindos/custom:<upstream-id>" so the profile stays a single string.
 export const HIVEMINDOS_CUSTOM_MODEL_PREFIX = "hivemindos/custom:";

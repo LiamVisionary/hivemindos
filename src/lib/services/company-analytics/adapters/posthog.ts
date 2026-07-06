@@ -12,14 +12,65 @@ function posthogHeaders(credential: string) {
 }
 
 // PostHog read adapter via HogQL.
-// Verified against current PostHog docs + a live probe (2026-07-04):
+// Verified against current PostHog docs + a live probe (2026-07-05, project 342777):
 //   POST {host}/api/projects/{id}/query/ — Bearer personal API key, scope `query:read`.
 //   Body { query: { kind: "HogQLQuery", query } } runs synchronously ("blocking" is
 //   the default; no async polling). Response is { results: any[][], columns, types }
-//   where `results` is an array of row-arrays, so results[0] = [events, visitors] for
-//   the SELECT below. `person_id` is the standard HogQL unique-users column on the
-//   events table. (Both /api/projects/{id}/ and /api/environments/{id}/ work; we use
-//   projects for compatibility with older self-hosted instances.)
+//   where `results` is an array of row-arrays. `person_id` is the standard HogQL
+//   unique-users column; `properties.$session_id` / `$pathname` / `$referring_domain`
+//   are the standard autocapture props. (Both /api/projects/{id}/ and
+//   /api/environments/{id}/ work; we use projects for older self-hosted instances.)
+async function runHogQL(
+  host: string,
+  projectId: string,
+  credential: string,
+  query: string,
+): Promise<unknown[][]> {
+  const json = await fetchJsonWithTimeout(
+    `${host}/api/projects/${encodeURIComponent(projectId)}/query/`,
+    {
+      method: "POST",
+      headers: posthogHeaders(credential),
+      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+    },
+    9000,
+  );
+  return (json as { results?: unknown[][] }).results ?? [];
+}
+
+/** $pathname can be null on non-navigation pageviews; keep the row but label it. */
+function pageLabel(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  return s === "" ? "(no path)" : s;
+}
+
+// Collapse a provider's link-shortener / alias domains to the brand everyone knows
+// (t.co is X's wrapper; no one recognizes it). Keyed lowercase.
+const SOURCE_ALIASES: Record<string, string> = {
+  "t.co": "x.com",
+  "twitter.com": "x.com",
+  "www.twitter.com": "x.com",
+  "lnkd.in": "linkedin.com",
+  "com.reddit.frontpage": "reddit.com",
+  "l.instagram.com": "instagram.com",
+  "l.facebook.com": "facebook.com",
+  "www.facebook.com": "facebook.com",
+  "lm.facebook.com": "facebook.com",
+};
+
+/** $referring_domain is "$direct" for direct traffic, null when unknown. */
+function sourceLabel(v: unknown): string {
+  const s = v == null ? "" : String(v);
+  if (s === "$direct") return "direct";
+  if (s === "") return "(unknown)";
+  return SOURCE_ALIASES[s.toLowerCase()] ?? s;
+}
+
+function rankList(rows: unknown[][], label: (v: unknown) => string) {
+  return rows
+    .map((r) => ({ name: label(r[0]), count: Number(r[1]) || 0 }))
+    .filter((e) => e.count > 0);
+}
 export const posthogAdapter: AnalyticsAdapter = {
   key: "posthog",
   label: "PostHog",
@@ -94,29 +145,47 @@ export const posthogAdapter: AnalyticsAdapter = {
     const projectId = (ctx.config.projectId || "").trim();
     if (!projectId) throw new Error("PostHog project ID is not set for this company.");
     const host = (ctx.config.host || "https://us.posthog.com").replace(/\/+$/, "");
-    const days = Math.max(1, Math.round(rangeDays));
-    const query = `SELECT count() AS events, count(DISTINCT person_id) AS visitors FROM events WHERE timestamp > now() - INTERVAL ${days} DAY`;
+    const days = Math.max(1, Math.min(365, Math.round(rangeDays)));
+    const since = `now() - INTERVAL ${days} DAY`;
+    const run = (q: string) => runHogQL(host, projectId, ctx.credential, q);
 
-    const json = await fetchJsonWithTimeout(
-      `${host}/api/projects/${encodeURIComponent(projectId)}/query/`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${ctx.credential}`,
-          "Content-Type": "application/json",
-          "User-Agent": "hivemindos-analytics",
-        },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-      },
-    );
+    // Unique visitors is the required signal — if this throws (bad key / project /
+    // region) the whole summary fails and the panel shows the error state. Everything
+    // else is a best-effort enrichment: a sub-query that fails degrades to empty so
+    // one missing property never blanks the panel.
+    const totals = await run(`SELECT count(DISTINCT person_id) AS visitors FROM events WHERE timestamp > ${since}`);
+    const visitors = Number((totals[0] ?? [])[0]) || 0;
 
-    const results = (json as { results?: unknown[][] }).results ?? [];
-    const row = results[0] ?? [];
-    const events = Number(row[0]) || 0;
-    const visitors = Number(row[1]) || 0;
+    const [pv, topEv, series, pages, sources] = await Promise.all([
+      run(`SELECT count() AS pv, count(DISTINCT properties.$session_id) AS sessions FROM events WHERE event = '$pageview' AND timestamp > ${since}`).catch(() => [] as unknown[][]),
+      run(`SELECT event, count() AS c FROM events WHERE timestamp > ${since} GROUP BY event ORDER BY c DESC LIMIT 8`).catch(() => [] as unknown[][]),
+      run(`SELECT toDate(timestamp) AS d, count(DISTINCT person_id) AS v FROM events WHERE timestamp > ${since} GROUP BY d ORDER BY d`).catch(() => [] as unknown[][]),
+      run(`SELECT properties.$pathname AS path, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY path ORDER BY c DESC LIMIT 6`).catch(() => [] as unknown[][]),
+      run(`SELECT properties.$referring_domain AS ref, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY ref ORDER BY c DESC LIMIT 6`).catch(() => [] as unknown[][]),
+    ]);
 
-    const summary: AnalyticsSummary = { rangeDays, visitors };
-    if (events) summary.topEvents = [{ name: "events", count: events }];
+    const summary: AnalyticsSummary = { rangeDays: days, visitors };
+
+    const pvRow = pv[0] ?? [];
+    const pageviews = Number(pvRow[0]) || 0;
+    const sessions = Number(pvRow[1]) || 0;
+    if (pageviews) summary.pageviews = pageviews;
+    if (sessions) summary.sessions = sessions;
+
+    const topEvents = rankList(topEv, (v) => String(v ?? "—"));
+    if (topEvents.length) summary.topEvents = topEvents;
+
+    const timeseries = series
+      .map((r) => ({ date: String(r[0] ?? ""), visitors: Number(r[1]) || 0 }))
+      .filter((p) => p.date);
+    if (timeseries.length > 1) summary.timeseries = timeseries;
+
+    const topPages = rankList(pages, pageLabel);
+    if (topPages.length) summary.topPages = topPages;
+
+    const topSources = rankList(sources, sourceLabel);
+    if (topSources.length) summary.topSources = topSources;
+
     return summary;
   },
 };

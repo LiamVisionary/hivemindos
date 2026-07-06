@@ -6,6 +6,11 @@ import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services
 import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
 import { appendCompanyGovernanceProof } from "@/lib/services/company-governance";
 import { appendCompanyMemory, companyMemoryDigest } from "@/lib/services/company-memory";
+import {
+  appendCompanyRunEvent,
+  finishCompanyRun,
+  startCompanyRun,
+} from "@/lib/services/company-runs";
 import { dedupeDrafts } from "@/lib/services/company-task-dedup";
 import type { KanbanLoopSpec } from "@/lib/types/kanban";
 import { buildOperatingUnitLearningLoop } from "@/lib/services/loops";
@@ -177,6 +182,7 @@ export function companyWorkerContext(company: Company, memoryDigest: string): st
   lines.push(
     "",
     "Do not repeat work listed as DONE above. Record a concrete, durable result on the Work Board — it becomes company memory for the next cycle.",
+    "When your work produces or updates anything CUSTOMER-FACING — a live site, per-lead preview, offer page, booking or payment link — list each full URL on its own line under a `Deliverables:` heading in your result. Those URLs are the company's product shelf: the human's Deliverables view is built from them, and work that only records internal files/write-ups shows the human an empty shelf even when the product exists (do still record internal artifacts, just never as the ONLY deliverables when a customer-facing URL exists).",
     "If you are blocked on human input, access, approval, or a decision, end your result with a section named exactly `ACTION NEEDED:` containing one or two imperative sentences telling the human precisely what to do or decide (include the options if there is a choice). This section becomes the card's headline on the Work Board.",
     "When it helps the human act faster, add extra lines directly under `ACTION NEEDED:` — `LINK: <url>` pointing where they get or do the thing, `OPTIONS: <choice A> | <choice B>` when you need a decision, and `NEEDS: api-key <ENV_VAR_NAME>` (or `NEEDS: file` / `NEEDS: text`) naming what you are waiting for. The Work Board renders these as one-click controls and the human's answer comes back to you on this task.",
   );
@@ -202,6 +208,8 @@ export type CompanyDispatchResult = {
   tasks: CompanyDispatchTask[];
   /** Set when the company ran as a flow (process: "sequential" | "graph"). */
   flowRunId?: string;
+  /** Durable company-run trace id for this dispatch attempt. */
+  companyRunId?: string;
   process?: CompanyProcess;
   /** How many planned drafts were dropped as duplicates of recent/in-flight work. */
   deduped?: number;
@@ -251,12 +259,50 @@ export async function dispatchCompanyFlow(
     spec = planCompanyFlowSpec(company, drafts);
   }
 
-  const run = await startFlowRun(spec, {
-    vaultPath: opts.vaultPath,
-    fleetSnapshot: scoped,
-    priority: "high",
-    state: { topic: goal, goal },
+  const companyRun = await startCompanyRun(company.id, {
+    kind: "flow",
+    title: `Flow dispatch: ${goal}`,
+    actor: "company-autonomy",
+    snapshot: {
+      companyName: company.name,
+      apexGoal: goal,
+      apexMetric: company.apexGoal?.metric,
+      apexTarget: company.apexGoal?.target,
+      productCount: company.products?.items.length ?? 0,
+      products: company.products?.items,
+      directiveCount: company.directives?.length ?? 0,
+      agentCount: company.agentIds.length,
+      autonomy: company.autonomy,
+      frozen: company.frozen,
+    },
+    input: {
+      process: company.process ?? "sequential",
+      dispatchableMembers,
+      stepCount: spec.nodes.filter((n) => n.kind === "task").length,
+    },
   });
+
+  let run: Awaited<ReturnType<typeof startFlowRun>>;
+  try {
+    run = await startFlowRun(spec, {
+      vaultPath: opts.vaultPath,
+      fleetSnapshot: scoped,
+      priority: "high",
+      state: { topic: goal, goal, companyRunId: companyRun.id },
+    });
+  } catch (error) {
+    await finishCompanyRun(company.id, companyRun.id, {
+      status: "failed",
+      summary: error instanceof Error ? error.message : "Flow dispatch failed.",
+    }).catch(() => undefined);
+    throw error;
+  }
+
+  await appendCompanyRunEvent(company.id, companyRun.id, {
+    kind: "flow-started",
+    title: `Flow run started: ${run.runId}`,
+    data: { flowRunId: run.runId },
+  }).catch(() => undefined);
 
   await appendCompanyMemory(company.id, {
     kind: "dispatch",
@@ -269,6 +315,14 @@ export async function dispatchCompanyFlow(
     event: "dispatch",
     payload: { goal, flowRunId: run.runId, process: company.process ?? "sequential", taskCount: spec.nodes.filter((n) => n.kind === "task").length },
   }).catch(() => undefined);
+  await finishCompanyRun(company.id, companyRun.id, {
+    status: "completed",
+    output: {
+      flowRunId: run.runId,
+      process: company.process ?? "sequential",
+      taskCount: spec.nodes.filter((n) => n.kind === "task").length,
+    },
+  }).catch(() => undefined);
 
   return {
     goal,
@@ -278,6 +332,7 @@ export async function dispatchCompanyFlow(
     dispatchableMembers,
     planner: "flow",
     flowRunId: run.runId,
+    companyRunId: companyRun.id,
     process: company.process,
     tasks: [],
   };
@@ -306,7 +361,7 @@ function buildCompanyLearningLoop(company: Company, draft: QueenBeePrdTaskDraft,
 export async function dispatchCompanyGoal(
   company: Company,
   fleetSnapshot: QueenBeeFleetMachine[],
-  opts: { maxTasks?: number; origin?: string; vaultPath?: string; recentCompanyTaskTitles?: string[] } = {},
+  opts: { maxTasks?: number; origin?: string; vaultPath?: string; recentCompanyTaskTitles?: string[]; completedCompanyTaskTitles?: string[] } = {},
 ): Promise<CompanyDispatchResult> {
   const goal = company.apexGoal?.title?.trim();
   if (!goal) throw new Error("Set an apex goal before launching work.");
@@ -331,7 +386,16 @@ export async function dispatchCompanyGoal(
   // per-role heuristic brief when no brain is reachable, so dispatch never blocks.
   let drafts: QueenBeePrdTaskDraft[];
   let planner: "llm" | "heuristic";
-  const llmDrafts = await llmDecomposeApexGoal(company, { origin: opts.origin, vaultPath: opts.vaultPath, maxTasks, history: plannerMemory }).catch(() => null);
+  const llmDrafts = await llmDecomposeApexGoal(company, {
+    origin: opts.origin,
+    vaultPath: opts.vaultPath,
+    maxTasks,
+    history: plannerMemory,
+    // Lifetime completed-work inventory: the memory digest above only reaches a
+    // few records back, so without this the planner re-creates assets built days
+    // earlier once they roll off the digest and the 24h dedupe window.
+    completedTitles: opts.completedCompanyTaskTitles,
+  }).catch(() => null);
   if (llmDrafts && llmDrafts.length > 0) {
     drafts = llmDrafts;
     planner = "llm";
@@ -361,10 +425,35 @@ export async function dispatchCompanyGoal(
     return { goal, taskCount: 0, delegatedCount: 0, pickupCount: 0, dispatchableMembers, planner, tasks: [], deduped };
   }
 
-  // A per-dispatch run id keeps each explicit "Launch / Re-launch" a fresh queen-bee
-  // intent (distinct fingerprint) so it actually creates tasks + schedules pickup,
-  // instead of de-duping against a prior identical dispatch.
-  const runId = `${Date.now().toString(36)}`;
+  const companyRun = await startCompanyRun(company.id, {
+    kind: "dispatch",
+    title: `Dispatch: ${goal}`,
+    actor: "company-autonomy",
+    snapshot: {
+      companyName: company.name,
+      apexGoal: goal,
+      apexMetric: company.apexGoal?.metric,
+      apexTarget: company.apexGoal?.target,
+      productCount: company.products?.items.length ?? 0,
+      products: company.products?.items,
+      directiveCount: company.directives?.length ?? 0,
+      agentCount: company.agentIds.length,
+      autonomy: company.autonomy,
+      frozen: company.frozen,
+    },
+    input: {
+      planner,
+      dispatchableMembers,
+      deduped,
+      draftTitles: drafts.map((draft) => draft.title),
+      recentTitleCount: opts.recentCompanyTaskTitles?.length ?? 0,
+    },
+  });
+
+  // The company-run id keeps each explicit "Launch / Re-launch" a fresh
+  // queen-bee intent (distinct fingerprint) while linking Work Board tasks back
+  // to the durable company trace.
+  const runId = companyRun.id;
 
   const workerContext = companyWorkerContext(company, workerMemory);
   const tasks: CompanyDispatchTask[] = [];
@@ -398,7 +487,13 @@ export async function dispatchCompanyGoal(
       if (!firstError) firstError = error instanceof Error ? error : new Error(String(error));
     }
   }
-  if (tasks.length === 0) throw firstError ?? new Error("No tasks could be dispatched.");
+  if (tasks.length === 0) {
+    await finishCompanyRun(company.id, companyRun.id, {
+      status: "failed",
+      summary: firstError?.message ?? "No tasks could be dispatched.",
+    }).catch(() => undefined);
+    throw firstError ?? new Error("No tasks could be dispatched.");
+  }
 
   await appendCompanyMemory(company.id, {
     kind: "dispatch",
@@ -411,6 +506,27 @@ export async function dispatchCompanyGoal(
     event: "dispatch",
     payload: { goal, runId, planner, taskIds: tasks.map((t) => t.taskId), taskCount: tasks.length },
   }).catch(() => undefined);
+  await appendCompanyRunEvent(company.id, companyRun.id, {
+    kind: "tasks-created",
+    title: `Created ${tasks.length} Work Board task(s)`,
+    detail: tasks.map((t) => t.title).join(" · "),
+    data: {
+      taskIds: tasks.map((t) => t.taskId),
+      delegatedCount: tasks.filter((t) => t.delegated).length,
+      pickupCount: tasks.filter((t) => t.pickupScheduled).length,
+    },
+  }).catch(() => undefined);
+  await finishCompanyRun(company.id, companyRun.id, {
+    status: "completed",
+    output: {
+      planner,
+      taskIds: tasks.map((t) => t.taskId),
+      taskCount: tasks.length,
+      delegatedCount: tasks.filter((t) => t.delegated).length,
+      pickupCount: tasks.filter((t) => t.pickupScheduled).length,
+      firstError: firstError?.message,
+    },
+  }).catch(() => undefined);
 
   return {
     goal,
@@ -419,6 +535,7 @@ export async function dispatchCompanyGoal(
     pickupCount: tasks.filter((t) => t.pickupScheduled).length,
     dispatchableMembers,
     planner,
+    companyRunId: companyRun.id,
     tasks,
     deduped,
   };

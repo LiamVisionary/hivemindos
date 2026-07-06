@@ -8,7 +8,8 @@ import {
   upstreamHivemindosWalletPaidModel,
 } from "@/lib/config/hivemindos-wallet-paid-models";
 import { freeTierDeviceId } from "@/lib/services/free-tier-identity";
-import { getHivemindosModelCreditToken } from "@/lib/services/hivemindos-model-credit-vault";
+import { recordFreeModelAllowance } from "@/lib/services/hivemindos-free-allowance";
+import { resolvePooledHivemindosModelCreditToken } from "@/lib/services/hivemindos-model-credit-vault";
 import { freeModelChatCompletionsUrl } from "@/lib/services/paid-agent-cloud-client";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
@@ -47,7 +48,9 @@ export async function POST(request: NextRequest) {
     return fetchFreeModelCompletion(body, upstreamModel, model);
   }
 
-  const creditToken = await getHivemindosModelCreditToken(agentId, slug).catch(() => "");
+  // Credits are one shared pool per install; the caller's agent/wallet id is
+  // only a legacy hint for adopting pre-pool tokens.
+  const creditToken = await resolvePooledHivemindosModelCreditToken(slug, [agentId]);
   const target = new URL(`/api/official-paid-agents/${slug}/chat/completions`, request.url);
   const paidBase = new URL(`/api/official-paid-agents/${slug}`, request.url).toString().replace(/\/+$/, "");
   if (creditToken) {
@@ -161,6 +164,14 @@ function applyFreeAllowanceHeaders(upstream: Response, next: NextResponse) {
     const value = upstream.headers.get(name);
     if (value) next.headers.set(name, value);
   }
+  // The hosted gateway reports allowance ONLY on completion responses (there is
+  // no query endpoint), so every real free call refreshes the local last-seen
+  // snapshot the Scout card's usage meter reads. Fire-and-forget by design.
+  void recordFreeModelAllowance({
+    remainingRequests: upstream.headers.get("x-hivemindos-free-remaining-requests"),
+    remainingTokens: upstream.headers.get("x-hivemindos-free-remaining-tokens"),
+    resetAt: upstream.headers.get("x-hivemindos-free-reset-at"),
+  });
 }
 
 async function fetchFreeModelCompletion(

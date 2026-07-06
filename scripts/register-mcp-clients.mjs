@@ -55,6 +55,14 @@ const SERVER_CATALOG = {
 };
 
 const KNOWN = ["claude", "codex", "gemini", "openclaw", "hermes", "aeon"];
+const RUNTIME_COMMANDS = {
+  claude: "claude",
+  codex: "codex",
+  gemini: "gemini",
+  openclaw: "openclaw",
+  hermes: "hermes",
+  aeon: "aeon",
+};
 
 const argv = process.argv.slice(2);
 const DRY = argv.includes("--dry-run");
@@ -85,6 +93,40 @@ function parseTargets() {
 }
 
 function present(...candidates) { return candidates.some((p) => fs.existsSync(p)); }
+function runtimeCommandPaths() {
+  const pathParts = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const fallbackParts = process.platform === "win32"
+    ? [path.dirname(process.execPath)]
+    : [
+      path.join(HOME, ".local", "bin"),
+      path.join(HOME, ".nvm", "versions", "node", process.version, "bin"),
+      path.dirname(process.execPath),
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      "/usr/sbin",
+      "/sbin",
+    ];
+  return [...new Set([...fallbackParts, ...pathParts])];
+}
+function runtimeCommandCandidateNames(command) {
+  if (process.platform !== "win32" || /\.[^\\/]+$/.test(command)) return [command];
+  const pathExt = String(process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+    .split(path.delimiter)
+    .map((extension) => extension.trim())
+    .filter(Boolean);
+  return [command, ...pathExt.map((extension) => `${command}${extension}`)];
+}
+function commandPresent(command) {
+  if (!command) return false;
+  if (/[\\/]/.test(command)) return fs.existsSync(command);
+  const candidates = runtimeCommandCandidateNames(command);
+  return runtimeCommandPaths().some((directory) => candidates.some((candidate) => fs.existsSync(path.join(directory, candidate))));
+}
+function runtimePresent(runtime, ...candidates) {
+  return present(...candidates) || commandPresent(RUNTIME_COMMANDS[runtime]);
+}
 function yamlStr(value) { return JSON.stringify(String(value)); } // JSON double-quote is valid YAML
 
 function writeFile(file, content) {
@@ -202,17 +244,17 @@ function mergeHermes(file) {
 
 // ---- registrar dispatch -----------------------------------------------------
 const REGISTRARS = {
-  claude: () => (!FORCE && !present(path.join(HOME, ".claude"), path.join(HOME, ".claude.json"))) ? { skipped: "not installed" } : mergeJson(path.join(HOME, ".claude.json")),
-  gemini: () => (!FORCE && !present(path.join(HOME, ".gemini"))) ? { skipped: "not installed" } : mergeJson(path.join(HOME, ".gemini", "settings.json")),
-  openclaw: () => (!FORCE && !present(path.join(HOME, ".openclaw"))) ? { skipped: "not installed" } : mergeJson(path.join(HOME, ".openclaw", "openclaw.json")),
-  codex: () => (!FORCE && !present(path.join(HOME, ".codex"))) ? { skipped: "not installed" } : mergeCodex(path.join(HOME, ".codex", "config.toml")),
-  hermes: () => (!FORCE && !present(path.join(HOME, ".hermes"))) ? { skipped: "not installed" } : mergeHermes(path.join(HOME, ".hermes", "config.yaml")),
+  claude: () => (!FORCE && !runtimePresent("claude", path.join(HOME, ".claude"), path.join(HOME, ".claude.json"))) ? { skipped: "not installed" } : mergeJson(path.join(HOME, ".claude.json")),
+  gemini: () => (!FORCE && !runtimePresent("gemini", path.join(HOME, ".gemini"))) ? { skipped: "not installed" } : mergeJson(path.join(HOME, ".gemini", "settings.json")),
+  openclaw: () => (!FORCE && !runtimePresent("openclaw", path.join(HOME, ".openclaw"))) ? { skipped: "not installed" } : mergeJson(path.join(HOME, ".openclaw", "openclaw.json")),
+  codex: () => (!FORCE && !runtimePresent("codex", path.join(HOME, ".codex"))) ? { skipped: "not installed" } : mergeCodex(path.join(HOME, ".codex", "config.toml")),
+  hermes: () => (!FORCE && !runtimePresent("hermes", path.join(HOME, ".hermes"))) ? { skipped: "not installed" } : mergeHermes(path.join(HOME, ".hermes", "config.yaml")),
   aeon: () => {
     // Aeon's MCP config is project-scoped (a committed <repo>/.mcp.json). With an
     // explicit --aeon-project, register there; otherwise fall back to ~/.aeon
     // (Aeon's local home on this machine). Top-level keys + type:stdio per its README.
     const file = AEON_PROJECT ? path.join(AEON_PROJECT, ".mcp.json") : path.join(HOME, ".aeon", ".mcp.json");
-    if (!FORCE && !AEON_PROJECT && !present(path.join(HOME, ".aeon"))) return { skipped: "not installed" };
+    if (!FORCE && !AEON_PROJECT && !runtimePresent("aeon", path.join(HOME, ".aeon"))) return { skipped: "not installed" };
     return mergeJson(file, { wrapperKey: null, includeType: true });
   },
 };

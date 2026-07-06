@@ -332,11 +332,18 @@ export interface VoiceChatBrainPreference {
   model?: string;
 }
 
+/** How the selected voice provider authenticates: "oauth" = a subscription
+ *  sign-in (OpenAI only today), "apikey" = the shared hive-env API key. The
+ *  Calls UI auto-picks oauth when connected, else apikey when a key is present. */
+export type VoiceProviderAuthMode = "oauth" | "apikey";
+
 export interface AgentCallPreferences {
   voiceRuntime: AgentVoiceRuntime;
   voiceProviderId?: string;
   voiceModelId?: string;
   voiceId?: string;
+  /** Credential mode for the selected voice provider (see VoiceProviderAuthMode). */
+  voiceAuthMode?: VoiceProviderAuthMode;
   voiceChatBrain?: VoiceChatBrainPreference;
   enabled: boolean;
   dailyEnabled: boolean;
@@ -370,6 +377,9 @@ export function buildAgentCallPreferences(
     voiceProviderId: input?.voiceProviderId,
     voiceModelId: input?.voiceModelId,
     voiceId: input?.voiceId,
+    voiceAuthMode: input?.voiceAuthMode === "oauth" || input?.voiceAuthMode === "apikey"
+      ? input.voiceAuthMode
+      : undefined,
     voiceChatBrain: input?.voiceChatBrain?.source
       ? {
           source: input.voiceChatBrain.source,

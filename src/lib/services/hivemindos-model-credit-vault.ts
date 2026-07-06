@@ -4,6 +4,7 @@ import { createCipheriv, createDecipheriv, createHash, createSecretKey, randomBy
 import { promises as fs } from "fs";
 import path from "path";
 
+import { HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID } from "@/lib/config/hivemindos-wallet-paid-models";
 import { homedir } from "@/lib/home-dir";
 
 type CreditTokenRecord = {
@@ -142,6 +143,35 @@ export async function getHivemindosModelCreditToken(walletAgentId: string, slug:
     toUint8Array(decipher.update(base64UrlDecode(record.encryptedToken))),
     toUint8Array(decipher.final()),
   ])).toString("utf8");
+}
+
+/**
+ * Hosted model credits are one pool per install. Resolution order: the shared
+ * pool account first, then any legacy per-agent/draft account ids the caller
+ * knows about — the first legacy token found is adopted into the pool
+ * (re-stored under the shared id; the legacy record is kept) so old funding
+ * keeps working without a manual migration. Note: adoption picks one account;
+ * balances across multiple funded legacy accounts are not merged server-side.
+ */
+export async function resolvePooledHivemindosModelCreditToken(
+  slug: string,
+  legacyAccountIds: Array<string | undefined | null> = [],
+): Promise<string> {
+  const shared = await getHivemindosModelCreditToken(HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID, slug).catch(() => "");
+  if (shared) return shared;
+  for (const legacyId of legacyAccountIds) {
+    const accountId = legacyId?.trim() || "";
+    if (!accountId || accountId === HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID) continue;
+    const token = await getHivemindosModelCreditToken(accountId, slug).catch(() => "");
+    if (!token) continue;
+    await storeHivemindosModelCreditToken({
+      walletAgentId: HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID,
+      slug,
+      token,
+    }).catch(() => undefined);
+    return token;
+  }
+  return "";
 }
 
 export async function listHivemindosModelCreditTokenSummaries(): Promise<HivemindosModelCreditTokenSummary[]> {

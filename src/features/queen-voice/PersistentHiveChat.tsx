@@ -12,6 +12,7 @@
 
 import { ChatPill } from "@/components/fleet-hive/ChatPill";
 import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
+import { CHAT_SLASH_COMMANDS } from "@/features/chat/hermes-slash-commands";
 import {
   mergeDashboardScreenContext,
   readOpenDialogContextFromDom,
@@ -93,6 +94,7 @@ export function PersistentHiveChat({
           pointerEvents: "auto",
         }}
         topSlot={historyTab}
+        slashCommands={CHAT_SLASH_COMMANDS}
         onSend={(text) => {
           const liveScreenContext = mergeDashboardScreenContext(screenContext, {
             openModals: readOpenDialogContextFromDom(),

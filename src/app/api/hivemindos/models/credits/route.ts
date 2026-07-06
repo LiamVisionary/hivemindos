@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { normalizeHivemindosWalletPaidSlug } from "@/lib/config/hivemindos-wallet-paid-models";
+import { HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID } from "@/lib/config/hivemindos-wallet-paid-models";
 import {
-  getHivemindosModelCreditToken,
+  resolvePooledHivemindosModelCreditToken,
   storeHivemindosModelCreditToken,
 } from "@/lib/services/hivemindos-model-credit-vault";
 import { officialPaidAgentCheckoutReturnUrl } from "@/lib/services/paid-agent-cloud-client";
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "creditAccountId or walletVaultId is required to check HivemindOS Models credits." }, { status: 400 });
   }
 
-  const token = await getHivemindosModelCreditToken(accountId, slug).catch(() => "");
+  const token = await resolvePooledHivemindosModelCreditToken(slug, [accountId]);
   if (!token) {
     return NextResponse.json({
       ok: true,
@@ -150,6 +151,9 @@ export async function POST(request: NextRequest) {
   };
 
   try {
+    // Top up the shared pool: pass the pool's existing token so the hosted
+    // gateway credits the same account instead of minting a new one per top-up.
+    const existingPoolToken = await resolvePooledHivemindosModelCreditToken(slug, [walletVaultId, accountId]);
     const result = await executeX402Fetch({
       agentId: walletVaultId,
       network: vault.info.network,
@@ -162,6 +166,7 @@ export async function POST(request: NextRequest) {
       headers: {
         Accept: "application/json",
         "Idempotency-Key": `hmos-model-credit-${randomUUID()}`,
+        ...(existingPoolToken ? { "X-HivemindOS-Credit-Token": existingPoolToken } : {}),
         ...internalApiAuthHeaders(),
       },
       body: {},
@@ -187,7 +192,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Hosted HivemindOS Models top-up did not return a credit token." }, { status: 502 });
     }
 
-    await storeHivemindosModelCreditToken({ walletAgentId: walletVaultId, slug, token: creditToken });
+    await storeHivemindosModelCreditToken({ walletAgentId: HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID, slug, token: creditToken });
     const balance = await readHostedBalance(request, slug, creditToken);
     return NextResponse.json({
       ok: true,
@@ -215,7 +220,7 @@ async function startCardCheckout(
   accountId: string,
 ) {
   const target = new URL(`/api/official-paid-agents/${slug}/credits/checkout`, request.url);
-  const existingToken = await getHivemindosModelCreditToken(accountId, slug).catch(() => "");
+  const existingToken = await resolvePooledHivemindosModelCreditToken(slug, [accountId]);
   const response = await fetch(target, {
     method: "POST",
     headers: {
@@ -245,7 +250,7 @@ async function startCardCheckout(
 
   const checkoutCreditToken = typeof checkout.creditToken === "string" ? checkout.creditToken.trim() : "";
   if (checkoutCreditToken) {
-    await storeHivemindosModelCreditToken({ walletAgentId: accountId, slug, token: checkoutCreditToken });
+    await storeHivemindosModelCreditToken({ walletAgentId: HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID, slug, token: checkoutCreditToken });
   }
   const balance = checkoutCreditToken ? await readHostedBalance(request, slug, checkoutCreditToken).catch(() => ({} as CreditTopUpResponse)) : {};
   return NextResponse.json({

@@ -218,6 +218,24 @@
   color: rgba(235, 239, 250, 0.42);
 }
 
+/* Per-turn "your model didn't answer" warning: quiet amber, sits under the
+   reply. Visible enough to catch, never as loud as the reply itself. */
+.brainFallbackNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(245, 197, 122, 0.92);
+}
+
+.brainFallbackNote svg {
+  flex: none;
+  margin-top: 1px;
+  color: rgba(245, 197, 122, 0.85);
+}
+
 .turnText {
   margin: 0;
   font-size: 14px;

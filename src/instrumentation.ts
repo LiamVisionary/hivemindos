@@ -101,28 +101,54 @@ export async function register() {
       const fromFile = envFile.match(new RegExp(`^\\s*(?:export\\s+)?${flag}\\s*=\\s*(.+)\\s*$`, "m"))?.[1]?.trim();
       const value = (fromProcess || fromFile || "").replace(/^["']|["']$/g, "").toLowerCase();
       if (value === "0" || value === "false") return; // default ON
-      const port = process.env.PORT?.trim();
-      if (!port) {
-        // Some launch paths (Tauri-spawned dev server) don't set PORT, so the
-        // self-POST is impossible from here. The driver still gets revived by
-        // the /api/companies and /api/company-autonomy-driver route hooks and
-        // the fleet-health-watchdog — log so a stopped driver is diagnosable.
-        console.warn("[company-autonomy-driver] autostart skipped: PORT env unset (route hooks / watchdog will start the driver on first contact)");
+      const envPort = process.env.PORT?.trim() ?? "";
+      // Launch paths that don't set PORT (Tauri-spawned/`next dev -p` servers)
+      // used to skip autostart entirely, so every dev-server recycle silently
+      // killed the machine's driver until something manually poked the route
+      // (live 2026-07-06: driver dead 64 min after an HMR recycle on 5121).
+      // The machine-wide lease file records the previous holder's port — on the
+      // same machine that is almost always this server (or another live one,
+      // where starting the driver is equally correct: the lease keeps it to one
+      // per machine either way).
+      const leasePort = (() => {
+        try {
+          const leasePath = process.env.HIVEMINDOS_COMPANY_DRIVER_LEASE_FILE?.trim()
+            || `${os?.homedir?.() ?? ""}/.hivemindos/company-autonomy-driver.lease.json`;
+          const parsed = JSON.parse(fs?.readFileSync?.(leasePath, "utf8") ?? "") as { port?: string | number };
+          const candidate = String(parsed?.port ?? "").trim();
+          return /^\d+$/.test(candidate) ? candidate : "";
+        } catch {
+          return "";
+        }
+      })();
+      const ports = [...new Set([envPort, leasePort].filter(Boolean))];
+      if (!ports.length) {
+        console.warn("[company-autonomy-driver] autostart skipped: no PORT env and no lease-file port (route hooks / watchdog will start the driver on first contact)");
         return;
       }
       // Never give up: a one-shot boot window used to strand launched companies
       // for hours when the server was slow to bind (the autostart burned its 5
       // attempts and the driver stayed stopped until a manual poke). Retry fast
-      // during boot, then keep trying every minute until it sticks.
+      // during boot, then keep trying every minute until it sticks. Try BOTH
+      // loopback families — Next/Tauri dev servers may bind only one of
+      // 127.0.0.1 / [::1], and a single-family fetch retried forever against
+      // the wrong one (live 2026-07-06: 5121 answers only on [::1]).
       for (let attempt = 0; ; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, attempt < 5 ? 4_000 : 60_000));
-        const started = await fetch(`http://127.0.0.1:${port}/api/company-autonomy-driver`, {
-          method: "POST",
-          headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
-          body: JSON.stringify({ action: "start" }),
-        })
-          .then((response) => response.ok)
-          .catch(() => false);
+        let started = false;
+        for (const port of ports) {
+          for (const host of ["127.0.0.1", "[::1]"]) {
+            started = await fetch(`http://${host}:${port}/api/company-autonomy-driver`, {
+              method: "POST",
+              headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
+              body: JSON.stringify({ action: "start" }),
+            })
+              .then((response) => response.ok)
+              .catch(() => false);
+            if (started) break;
+          }
+          if (started) break;
+        }
         if (started) {
           console.log("[company-autonomy-driver] auto-started");
           return;

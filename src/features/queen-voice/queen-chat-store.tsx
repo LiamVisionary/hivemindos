@@ -18,6 +18,7 @@ import {
   summarizeWorkBoardByStatus,
 } from "@/features/dashboard/work-board-lookup";
 import { fetchAgentStatusAnswer } from "@/features/dashboard/agent-status-fetch";
+import { userAuthorizedHiveTaskCreation } from "@/lib/services/queen-bee/queen-brain";
 
 export type QueenChatTurn = {
   id: string;
@@ -36,6 +37,12 @@ export type QueenChatTurn = {
    *  reported by the chat-turn response — per-turn truth, unlike the overlay's
    *  static voice-brain tag. */
   brain?: string;
+  /** Set when the Queen's CONFIGURED brain did NOT answer this turn and another
+   *  lane replied instead: `label` names the skipped brain, `error` says why
+   *  (e.g. "…free allowance is used up"). The typed chat has no degradation
+   *  alert like voice, so without this the swap to `brain` is invisible — the
+   *  user thinks their selected model answered when it didn't. */
+  brainFallback?: { label: string; error: string };
   source: "text" | "voice";
 };
 
@@ -211,14 +218,26 @@ export function QueenChatProvider({
     if (messages.length > 24) messages.splice(0, messages.length - 24);
     messages.push({ role: "user", content: trimmed });
 
-    const heuristicFallback = async () => {
+    const heuristicFallback = async (serverError?: string) => {
       const run = runRef.current;
       if (!run) {
         updateTurn(queenId, { text: "The Queen isn't reachable right now.", live: false, pending: false });
         return;
       }
       const reply = (await run(trimmed, { screenContext }))?.trim() || "Done.";
-      updateTurn(queenId, { text: reply, live: false, pending: false });
+      updateTurn(queenId, {
+        text: reply,
+        live: false,
+        pending: false,
+        // No chat model answered this turn — the configured brain failed AND
+        // there was no working fallback lane (e.g. no OpenAI key at all, so not
+        // even gpt-4o-mini is available). This reply is the built-in on-device
+        // planner, not the selected model; declare it rather than passing it off.
+        brainFallback: {
+          label: "Your selected model",
+          error: serverError?.trim() || "No chat model was reachable, so this reply came from the built-in planner.",
+        },
+      });
       messages.push({ role: "assistant", content: reply });
     };
 
@@ -233,21 +252,56 @@ export function QueenChatProvider({
       read_agent_status: "Checking agent status…",
     } as Record<string, string>)[name] ?? "Working on it…";
 
+    // Carry the server's "your configured brain was skipped, here's why" note
+    // onto the turn so the swap is never silent. `{}` when the configured brain
+    // answered normally (nothing to warn about).
+    const asBrainFallback = (bf?: { label?: string; error?: string }) =>
+      bf?.label ? { brainFallback: { label: bf.label, error: String(bf.error || "") } } : {};
+
+    // Displayed text ACCUMULATES across tool-loop iterations. Brains that talk
+    // and call tools in the same turn across several rounds (Scout does;
+    // gpt-4o-mini rarely) previously had their shown words REPLACED by each
+    // later round's — often empty — content: the reply flashed, vanished into
+    // the thinking bee, then a "different" reply appeared (or a blank one at
+    // the iteration cap). Nothing the user has read may disappear.
+    let shownText = "";
+    const appendShown = (next?: string) => {
+      const trimmed = next?.trim() || "";
+      if (trimmed) shownText = shownText ? `${shownText}\n\n${trimmed}` : trimmed;
+      return shownText;
+    };
+
+    // Scout re-calls the SAME tool with the SAME args round after round (three
+    // read_agent_status rounds on one "hi", 2026-07-06) — a repeat gets a
+    // synthetic tool result instead of re-executing, and the next round forces
+    // prose rather than burning the remaining budget on the spin.
+    const executedToolCalls = new Set<string>();
+    let answerNextRound = false;
+
     // One model turn over the streaming action: renders deltas into the live
     // turn as they arrive and resolves with the same shape the blocking
     // chat-turn returns. Resolves null when the server says to fall back.
-    const streamOneTurn = async (): Promise<{
+    const streamOneTurn = async (forceAnswer: boolean): Promise<{
       ok?: boolean;
       fallback?: boolean;
+      error?: string;
       content?: string;
       toolCalls?: Array<{ id: string; name: string; arguments: string }>;
       assistant?: Record<string, unknown>;
       brainLabel?: string;
+      brainFallback?: { label?: string; error?: string };
     } | null> => {
       const res = await fetch("/api/queen-bee/voice", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "chat-turn-stream", messages, screenContext }),
+        body: JSON.stringify({
+          action: "chat-turn-stream",
+          messages,
+          screenContext,
+          // Budget spent: the server omits the tools so the brain must answer
+          // in prose (tool-happy brains otherwise loop until the cap).
+          ...(forceAnswer ? { toolChoice: "none" } : {}),
+        }),
       });
       const type = res.headers.get("content-type") ?? "";
       if (!res.ok || !res.body || !type.includes("ndjson")) return null;
@@ -255,6 +309,8 @@ export function QueenChatProvider({
       const decoder = new TextDecoder();
       let buffer = "";
       let accumulated = "";
+      // Deltas render AFTER anything already shown from earlier tool rounds.
+      const shownPrefix = shownText ? `${shownText}\n\n` : "";
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -268,11 +324,11 @@ export function QueenChatProvider({
           if (typeof event.delta === "string" && event.delta) {
             accumulated += event.delta;
             // Real text is streaming again — drop any lingering tool-phase bee.
-            updateTurn(queenId, { text: accumulated, live: true, pending: false, working: undefined });
+            updateTurn(queenId, { text: shownPrefix + accumulated, live: true, pending: false, working: undefined });
             continue;
           }
           if (event.done) {
-            return event as { content?: string; toolCalls?: Array<{ id: string; name: string; arguments: string }>; assistant?: Record<string, unknown>; brainLabel?: string };
+            return event as { content?: string; toolCalls?: Array<{ id: string; name: string; arguments: string }>; assistant?: Record<string, unknown>; brainLabel?: string; brainFallback?: { label?: string; error?: string } };
           }
           if (event.ok === false || event.fallback) return null;
         }
@@ -280,33 +336,74 @@ export function QueenChatProvider({
       return null; // stream ended without a terminal frame — retry blocking
     };
 
-    const blockingTurn = async () => {
+    const blockingTurn = async (forceAnswer: boolean) => {
       const res = await fetch("/api/queen-bee/voice", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "chat-turn", messages, screenContext }),
+        body: JSON.stringify({
+          action: "chat-turn",
+          messages,
+          screenContext,
+          ...(forceAnswer ? { toolChoice: "none" } : {}),
+        }),
       });
       return (await res.json().catch(() => null)) as {
         ok?: boolean;
         fallback?: boolean;
+        error?: string;
         content?: string;
         toolCalls?: Array<{ id: string; name: string; arguments: string }>;
         assistant?: Record<string, unknown>;
         brainLabel?: string;
+        brainFallback?: { label?: string; error?: string };
       } | null;
     };
 
     try {
       for (let i = 0; i < 4; i += 1) {
-        const data = (await streamOneTurn().catch(() => null)) ?? (await blockingTurn());
+        // Last round: force a prose answer so the turn always ends with real
+        // text instead of hitting the cap mid-tool-loop. Repeated tool calls
+        // also trigger the forced answer early (see answerNextRound).
+        const forceAnswer = i === 3 || answerNextRound;
+        const data = (await streamOneTurn(forceAnswer).catch(() => null)) ?? (await blockingTurn(forceAnswer));
         if (!data || data.fallback || data.ok === false) {
-          await heuristicFallback();
+          await heuristicFallback(data && typeof data.error === "string" ? data.error : undefined);
           return;
         }
         const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
         if (toolCalls.length) {
           if (data.assistant) messages.push(data.assistant);
+          // Append this round's prose once (all this round's tool calls share
+          // it) — earlier rounds' words stay on screen through the tool phase.
+          const shown = appendShown(data.content);
           for (const tc of toolCalls) {
+            // Propose-then-confirm is enforced MECHANICALLY here: Scout
+            // ignored the instruction layer and queued a "Fix agent errors"
+            // task off a bare "hi" (2026-07-06). Unless the user's current
+            // message asks for work or affirms her pending offer, the call
+            // becomes a proposal she must put to the user in prose.
+            if (tc.name === "create_hive_task" && !userAuthorizedHiveTaskCreation(trimmed)) {
+              answerNextRound = true;
+              messages.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content:
+                  "NOT created — the user has not asked for this work. Tell them what you found and ASK whether to queue this task; create it only after they explicitly say yes.",
+              });
+              continue;
+            }
+            const callKey = `${tc.name}:${(tc.arguments || "{}").trim()}`;
+            if (executedToolCalls.has(callKey)) {
+              answerNextRound = true;
+              messages.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content:
+                  "This exact tool call already ran this turn — its result is above. Answer the user in plain language now.",
+              });
+              continue;
+            }
+            executedToolCalls.add(callKey);
             let parsed: Record<string, unknown> = {};
             try { parsed = JSON.parse(tc.arguments || "{}"); } catch { parsed = {}; }
             // Narrate the tool phase in the live turn instead of dead air: the
@@ -314,30 +411,43 @@ export function QueenChatProvider({
             // it must NOT be embedded in the markdown text — the chat renderer
             // has no underscore-italic rule and would print the `_` literally.
             updateTurn(queenId, {
-              text: data.content?.trim() || "",
+              text: shown,
               working: toolStatus(tc.name),
               live: true,
               pending: false,
               ...(data.brainLabel ? { brain: data.brainLabel } : {}),
+              ...asBrainFallback(data.brainFallback),
             });
             const result = await executeQueenTool(tc.name, parsed, screenContext);
             messages.push({ role: "tool", tool_call_id: tc.id, content: result });
           }
           continue; // loop back so she can read the tool results
         }
-        const reply = data.content?.trim() || "Done.";
+        const replyText = appendShown(data.content);
+        if (!replyText && !forceAnswer) {
+          // No tool calls AND nothing shown all turn — usually a scrubbed
+          // tool-call leak (server strips llama.cpp template markup). One
+          // forced-prose retry beats ending the turn on a bare "Done.".
+          answerNextRound = true;
+          continue;
+        }
+        const reply = replyText || "Done.";
         updateTurn(queenId, {
           text: reply,
           live: false,
           pending: false,
           working: undefined,
           ...(data.brainLabel ? { brain: data.brainLabel } : {}),
+          ...asBrainFallback(data.brainFallback),
         });
-        messages.push({ role: "assistant", content: reply });
+        // The conversation log keeps the model's OWN final words (not the
+        // accumulated display text) so the next turn's history stays faithful.
+        messages.push({ role: "assistant", content: data.content?.trim() || "Done." });
         return;
       }
-      // iteration cap reached — leave whatever she last said, stop the spinner
-      updateTurn(queenId, { live: false, pending: false, working: undefined });
+      // Iteration cap reached — stop the spinner but never leave a blank
+      // bubble: keep everything shown so far, or an honest minimal reply.
+      updateTurn(queenId, { text: shownText || "Done.", live: false, pending: false, working: undefined });
     } catch {
       await heuristicFallback().catch(() => {
         updateTurn(queenId, { text: "I couldn't reach the Queen just now.", live: false, pending: false });

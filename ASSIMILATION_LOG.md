@@ -6533,3 +6533,83 @@
 - Decision: verified
 - Reason: App reward engine test covers the split-wallet case and focused lint/type checks passed.
 - Verification: node scripts/test-hive-staking.mjs; pnpm exec eslint touched staking files; pnpm exec tsc --noEmit --pretty false --skipLibCheck; git diff --check; rg old staking bucket fields/copy returned no live matches
+## 2026-07-06T03:40:06.755685+00:00 - shared-brain
+
+- Request: Build Shepherd-inspired reversible company runs and proposals for Zero Human Companies
+- Source: hive-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Shared Brain Memory
+  - Decision: selected
+  - Reason: ZHC pricing/autonomy/revenue context recalled before implementation
+  - Path: `Memory/Distillations`
+## 2026-07-06T03:40:06.982263+00:00 - local-search
+
+- Request: Build Shepherd-inspired reversible company runs and proposals for Zero Human Companies
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/company-memory.ts
+  - Decision: selected
+  - Reason: append-only company ledger pattern for per-company durable events
+  - Path: `companyMemoryPath/read/write`
+- src/lib/services/company-governance.ts
+  - Decision: selected-donor
+  - Reason: hash-chained governance receipts and bounded JSONL ledger shape
+  - Path: `appendCompanyGovernanceProof`
+- src/lib/services/brain-review-queue.ts
+  - Decision: selected-donor
+  - Reason: approve/reject/apply proposal queue lifecycle
+  - Path: `createBrainReviewProposal/updateStatus`
+- src/features/dashboard/views/zero-human-companies/Cockpit.tsx
+  - Decision: selected
+  - Reason: existing approvals/products/issues cockpit UI extension point
+  - Path: `Approvals tab`
+## 2026-07-06T03:40:18.014115+00:00 - audit
+
+- Request: Build Shepherd-inspired reversible company runs and proposals for Zero Human Companies
+- Source: github:shepherd-agents/shepherd
+- Selected backbone: local-project:hivemind-os
+- Note: Pinned source inspected inertly in /tmp/hive-assimilate-shepherd; no code executed.
+
+### Candidates
+- shepherd-agents/shepherd
+  - Decision: rejected
+  - Reason: Python reversible coding-runtime kernel; useful concepts but no compatible TS/dashboard code to transplant
+  - Path: `README.md,vcs-core,packages`
+- shepherd-agents/shepherd README retained outputs
+  - Decision: selected-donor
+  - Reason: select/discard/release semantics translated into company proposal statuses
+  - Path: `README.md`
+## 2026-07-06T03:51:49.003339+00:00 - assimilation-manifest
+
+- Request: Build Shepherd-inspired reversible company runs and proposals for Zero Human Companies
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/services/company-memory.ts => src/lib/services/company-runs.ts, hivemind-os:src/lib/services/brain-review-queue.ts => src/lib/services/company-runs.ts, hivemind-os:src/lib/services/company-governance.ts => src/lib/services/company-runs.ts, hivemind-os:src/lib/services/companies-orchestration.ts => src/lib/services/company-runs.ts, hivemind-os:src/features/dashboard/views/zero-human-companies/Cockpit.tsx => src/features/dashboard/views/zero-human-companies/CompanyRunsPanel.tsx, shepherd-agents/shepherd:README.md => src/lib/types/company-runs.ts
+- Verification: Wrote ASSIMILATION.zhc-company-runs.json with 6 entries and custom_code_assessment=balanced.
+## 2026-07-06T03:51:55.967153+00:00 - verification
+
+- Request: Build Shepherd-inspired reversible company runs and proposals for Zero Human Companies
+- Source: local-tests
+- Decision: selected
+- Reason: company run/proposal behavior and touched code verified with focused suites, eslint, tsc, diff check; file-size full gate has unrelated/concurrent reds
+
+### Candidates
+- node scripts/test-company-runs.mjs
+  - Decision: selected
+  - Reason: new hermetic lifecycle suite passed
+- node scripts/test-company-vault-store.mjs
+  - Decision: selected
+  - Reason: existing company store/pricing suite passed
+- node scripts/test-company-revenue-share.mjs
+  - Decision: selected
+  - Reason: existing revenue suite passed
+## 2026-07-06T03:51:56.086065+00:00 - verification
+
+- Request: Build Shepherd-inspired reversible company runs and proposals for Zero Human Companies
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.zhc-company-runs.json: 6 concrete reuse entries, 6 substantive

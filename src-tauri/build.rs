@@ -99,6 +99,9 @@ fn main() {
                 "send_aeon_deliverable",
                 "open_route_window",
                 "wallet_secret_export_save",
+                "speech_recognition_available",
+                "speech_recognition_start",
+                "speech_recognition_stop",
             ]),
         ),
     )

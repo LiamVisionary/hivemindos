@@ -130,6 +130,7 @@ Agents are senior software engineers in this codebase and must follow these rule
 - The dashboard view registry is `DASHBOARD_ROUTE_CATALOG_BY_ID` in `src/features/dashboard/dashboard-navigation.ts`; route labels, nav shelf groups, active-slot mapping, and the More menu all derive from it. Never add a parallel view map.
 - Fleet machine visibility and OS predicates are single-sourced in `src/features/fleet/fleet-identity.ts`; routes and UI must call those predicates instead of re-implementing the regexes.
 - Crypto rail capability rows live in `CRYPTO_PROVIDER_MATRIX` (`src/lib/services/crypto-capability-router.ts`) and payment-provider features in `AGENT_PAYMENT_PROVIDER_FEATURES` (`src/lib/config/agent-payments.ts`); add provider behavior as matrix fields, not scattered conditionals.
+- Runtime and installer detection must be portable. Do not hardcode a developer's absolute home path, machine-specific install folder, or one runtime's private venv/internal layout to decide whether a runtime is installed. Prefer shared helpers or capability matrices, resolve paths from the current user's home/env/PATH, include standard per-platform command locations where appropriate, and update every detector together: dashboard runtime availability, runtime adapters/task runners, native setup/installer status, and MCP/runtime registrars. Verify with a sparse or GUI-like `PATH` so a terminal-working install is not reported as missing in the app.
 
 ### Readability And Style
 

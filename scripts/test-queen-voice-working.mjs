@@ -18,6 +18,11 @@ const {
   resetVoiceTurnProgressForTests,
 } = await import("../src/lib/services/queen-bee/voice-turn-progress.ts");
 const { buildRuntimeVoiceUserText } = await import("../src/lib/services/queen-bee/voice-turn.ts");
+const {
+  queenAskedForTaskApproval,
+  voiceTaskApprovalPrompt,
+  voiceTaskSubmissionAuthorized,
+} = await import("../src/lib/services/queen-bee/voice-task-approval.ts");
 const { toolActivityLabel } = await import("../src/lib/services/phone/runtime-voice-turn.ts");
 const {
   BARGE_IN_TUNING,
@@ -86,6 +91,7 @@ const {
   assert.ok(prompt.includes("sharp wit"), "default Queen personality present");
   assert.ok(prompt.includes('"speech"'), "JSON contract present");
   assert.ok(/never greet again/i.test(prompt), "anti-re-greeting instruction present");
+  assert.ok(/open-ended prompt/i.test(prompt), "voice prompt carries the task approval boundary");
   assert.ok(prompt.includes("Call the user boss."), "preference preamble spliced in");
   assert.ok(prompt.includes("Queen Bee: Hey Liam, I'm here."), "queen history line present");
   assert.ok(prompt.includes("User: What do you think?"), "user history line present");
@@ -109,6 +115,46 @@ const {
   assert.ok(!capped.includes("turn 11"), "history capped to the recent window");
   assert.ok(capped.includes("turn 19"), "most recent history retained");
   console.log("flattened runtime prompt ok");
+}
+
+// --- voice task approval boundary ----------------------------------------------
+{
+  const openingHistory = [
+    { who: "queen", text: "Hey Liam, I'm here. What should we work on first?" },
+  ];
+  assert.equal(
+    voiceTaskSubmissionAuthorized("You tell me.", openingHistory),
+    false,
+    "open-ended delegation is not consent to mutate the Work Board",
+  );
+  assert.equal(
+    voiceTaskSubmissionAuthorized("yes do it", openingHistory),
+    false,
+    "a bare yes only counts after Queen Bee has proposed a task",
+  );
+
+  const prompt = voiceTaskApprovalPrompt({
+    title: "Analyze WEBS Performance",
+    message: "Review recent outreach and email threads.",
+  });
+  assert.match(prompt, /Say yes to queue it/);
+  const proposalHistory = [{ who: "queen", text: prompt }];
+  assert.equal(
+    queenAskedForTaskApproval(proposalHistory),
+    true,
+    "the generated approval prompt is detectable on the next turn",
+  );
+  assert.equal(
+    voiceTaskSubmissionAuthorized("yes do it", proposalHistory),
+    true,
+    "confirmation after an explicit proposal authorizes queueing",
+  );
+  assert.equal(
+    voiceTaskSubmissionAuthorized("Review recent email threads for revenue gaps.", []),
+    true,
+    "a direct work request still authorizes the voice task path",
+  );
+  console.log("voice task approval boundary ok");
 }
 
 // --- rails unwrap contract ---------------------------------------------------------

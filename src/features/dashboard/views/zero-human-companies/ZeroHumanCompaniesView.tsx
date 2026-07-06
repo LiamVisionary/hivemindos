@@ -38,6 +38,14 @@ async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boole
   return res.json().catch(() => ({ ok: false, error: "Bad response" }));
 }
 
+async function postCompanyRunRecord(companyId: string, body: Record<string, unknown>): Promise<void> {
+  await fetch(`/api/companies/${encodeURIComponent(companyId)}/runs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => undefined);
+}
+
 function memberEditFromAgent(agent: Agent): CompanyMemberEdit {
   return {
     agentId: agent.id ?? agent.name,
@@ -303,7 +311,17 @@ function ZeroHumanCompaniesLiveView({
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      const companiesRes = await fetch("/api/companies", { cache: "no-store" });
+      // Fire the company list and the Work Board / approvals / agents fetches
+      // concurrently — they have no dependency, and running them in series
+      // (companies THEN kanban) doubled the load time, so the board sat empty
+      // for the sum of both round trips instead of the slower single one.
+      const companiesPromise = fetch("/api/companies", { cache: "no-store" });
+      const auxPromise = Promise.allSettled([
+        fetch("/api/wallet/approvals?status=pending", { cache: "no-store" }),
+        fetch("/api/obsidian/agents", { cache: "no-store" }),
+        fetch("/api/kanban?include_boards=false", { cache: "no-store" }),
+      ]);
+      const companiesRes = await companiesPromise;
       const companiesJson = await companiesRes.json().catch(() => ({}));
       if (companiesJson.ok) {
         setData(Array.isArray(companiesJson.companies) ? companiesJson.companies : []);
@@ -326,11 +344,7 @@ function ZeroHumanCompaniesLiveView({
       }
       setLoading(false);
 
-      const [approvalsResult, agentsResult, kanbanResult] = await Promise.allSettled([
-        fetch("/api/wallet/approvals?status=pending", { cache: "no-store" }),
-        fetch("/api/obsidian/agents", { cache: "no-store" }),
-        fetch("/api/kanban?include_boards=false", { cache: "no-store" }),
-      ]);
+      const [approvalsResult, agentsResult, kanbanResult] = await auxPromise;
 
       if (approvalsResult.status === "fulfilled") {
         const approvalsJson = await approvalsResult.value.json().catch(() => ({}));
@@ -374,6 +388,13 @@ function ZeroHumanCompaniesLiveView({
             updatedAt: typeof t.updatedAt === "number" ? t.updatedAt : undefined,
             completedAt: typeof t.completedAt === "number" ? t.completedAt : undefined,
           })));
+          // Tasks are only genuinely loaded on a SUCCESSFUL kanban fetch that
+          // returned a task array. This used to live in `finally`, which flipped
+          // it even when the kanban fetch rejected or returned a non-array — which
+          // happens under load (the very case that makes the load slow). That
+          // killed the board/issues loading skeletons and flashed "empty" until a
+          // later poll landed, so tasks appeared to "pop in" with no loading state.
+          setTasksLoaded(true);
         }
       }
     } catch {
@@ -381,7 +402,6 @@ function ZeroHumanCompaniesLiveView({
       setError("Could not reach the companies API.");
     } finally {
       setLoading(false);
-      setTasksLoaded(true);
       setRefreshing(false);
     }
   }, []);
@@ -716,6 +736,14 @@ function ZeroHumanCompaniesLiveView({
       if (!res.ok || !json.ok) {
         setError(json.error || "Could not mark this issue resolved.");
       } else {
+        void postCompanyRunRecord(companyId, {
+          action: "settle-proposal",
+          idempotencyKey: `task-human:${taskId}`,
+          status: "applied",
+          decision: "Human marked the blocker handled and resumed the task.",
+          decidedBy: "human",
+          evidence: [resolvedIssueAnswer(issue)],
+        });
         setError(null);
         setNotice(
           json.pickupScheduled
@@ -768,6 +796,22 @@ function ZeroHumanCompaniesLiveView({
       if (ok === 0) {
         setError("Could not re-queue these tasks — check the dashboard server logs.");
       } else {
+        for (const issue of issues) {
+          const taskId = issue.work?.taskId;
+          if (!taskId) continue;
+          void postCompanyRunRecord(companyId, {
+            action: "create-proposal",
+            kind: "human-input",
+            status: "applied",
+            title: `Retry requested: ${issue.title}`,
+            sourceTaskId: taskId,
+            idempotencyKey: `task-retry:${taskId}:${Date.now()}`,
+            risk: "low",
+            decision: "Human requested another autonomous attempt.",
+            decidedBy: "human",
+            evidence: [retryDelegationIssueAnswer(issue)],
+          });
+        }
         setError(null);
         const failNote = ok < taskIds.length ? ` (${taskIds.length - ok} failed to re-queue)` : "";
         setNotice(
@@ -821,6 +865,18 @@ function ZeroHumanCompaniesLiveView({
       if (ok === 0) {
         setError("Could not archive these issues off the board — they'll return on reload.");
       } else {
+        for (const issue of issues) {
+          const taskId = issue.work?.taskId;
+          if (!taskId) continue;
+          void postCompanyRunRecord(companyId, {
+            action: "settle-proposal",
+            idempotencyKey: `task-human:${taskId}`,
+            status: "rejected",
+            decision: "Human dismissed this issue from the company board.",
+            decidedBy: "human",
+            evidence: [issue.title],
+          });
+        }
         setError(null);
         const hidNote = taskless > 0 ? ` (${taskless} hidden locally)` : "";
         setNotice(`${companyName}: dismissed ${ok} issue${ok === 1 ? "" : "s"} — archived off the board.${hidNote}`);
@@ -858,6 +914,32 @@ function ZeroHumanCompaniesLiveView({
       if (!res.ok || !json.ok) {
         setError(json.error || "Could not send your preview review to the crew.");
       } else {
+        const previewUrl = issuePreviewUrl(issue);
+        void postCompanyRunRecord(companyId, {
+          action: "create-proposal",
+          kind: "preview-review",
+          status: decision === "approve" ? "applied" : "rejected",
+          title: decision === "approve" ? `Preview approved: ${issue.title}` : `Preview changes requested: ${issue.title}`,
+          sourceTaskId: taskId,
+          idempotencyKey: `preview-review:${taskId}:${decision}:${Date.now()}`,
+          risk: "medium",
+          proposedChange: {
+            decision,
+            previewUrl,
+            notes: notes.trim() || undefined,
+          },
+          links: previewUrl ? [{ label: "Preview", url: previewUrl }] : undefined,
+          decision: decision === "approve" ? "Human approved the customer-facing preview." : "Human requested changes before customer-facing use.",
+          decidedBy: "human",
+          evidence: [previewReviewAnswer(issue, decision, notes, previewUrl)],
+        });
+        void postCompanyRunRecord(companyId, {
+          action: "settle-proposal",
+          idempotencyKey: `task-human:${taskId}`,
+          status: "applied",
+          decision: decision === "approve" ? "Preview approved and task resumed." : "Change request sent and task resumed.",
+          decidedBy: "human",
+        });
         setError(null);
         const soon = json.pickupScheduled ? "now" : "on the next pickup";
         setNotice(

@@ -1,0 +1,52 @@
+# On-device speech recognition FFI (macOS SFSpeechRecognizer, Windows WinRT
+# SpeechRecognition), isolated in its own crate on purpose: the app crate
+# forbids `unsafe_code`, and every objc2 Speech/AVFAudio binding is an
+# `unsafe fn` (WinRT needs one RoInitialize call besides). This crate is the
+# audited unsafe boundary — it exposes a small safe API (available/start/
+# stop) and nothing else. The parent declares it under target-gated deps.
+[package]
+name = "hivemindos-speech-native"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "hivemindos_speech_native"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "NSString",
+  "NSError",
+] }
+objc2-speech = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-avf-audio",
+  "SFSpeechRecognizer",
+  "SFSpeechRecognitionRequest",
+  "SFSpeechRecognitionTask",
+  "SFSpeechRecognitionResult",
+  "SFTranscription",
+] }
+objc2-avf-audio = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "AVAudioEngine",
+  "AVAudioNode",
+  "AVAudioIONode",
+  "AVAudioBuffer",
+  "AVAudioFormat",
+  "AVAudioTime",
+  "AVAudioTypes",
+] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+  "Foundation",
+  "Foundation_Collections",
+  "Globalization",
+  "Media_SpeechRecognition",
+  "Win32_System_WinRT",
+] }

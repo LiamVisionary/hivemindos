@@ -67,6 +67,14 @@ The launch path connects these systems:
 
 The same Work Board card can therefore answer both "what is the task?" and "which company is learning from this work?"
 
+## Runs And Proposals
+
+The **Runs** tab records the company's consequential operating branches: dispatches, flow starts, task outcomes, preview reviews, deliverable redirects, revenue events, and replay requests. A run keeps the input snapshot, status, recent events, outputs, and related proposals so operators can inspect why a company moved a branch forward.
+
+Proposals are the human-settlement boundary. Pricing changes, human-input blockers, customer-preview decisions, deliverable rejection redirects, revenue-share records, and replay requests are recorded as pending, applied, rejected, or superseded decisions. That gives a company a durable record of what it proposed, what the operator selected or discarded, and what changed afterward.
+
+Replay requests do not silently redo customer-facing or money-facing work. They create a pending replay proposal linked to the prior run, so the operator can choose when to branch the company forward again.
+
 ## Autonomous Execution
 
 The Board tab has a single launch control for perpetual autonomy. **Launch autonomous work** decomposes the apex goal into Work Board tasks and dispatches them to the crew, then keeps the company running: whenever the board goes idle, the autonomy driver re-dispatches toward the same goal, on its own, until the operator stops it or the company is frozen. Spend stays inside the company budget the whole time.
@@ -178,11 +186,14 @@ This does not make the downloadable app the authority over official revenue. Ext
 - `src/features/dashboard/views/GovernancePanel.tsx`
 - `src/features/dashboard/views/zero-human-companies/`
 - `src/app/api/companies/route.ts`
+- `src/app/api/companies/[id]/runs/route.ts`
 - `src/app/api/companies/[id]/emails/route.ts`
 - `src/lib/services/agent-mailboxes.ts`
 - `src/lib/services/companies-store.ts`
 - `src/lib/services/companies-orchestration.ts`
+- `src/lib/services/company-runs.ts`
 - `src/lib/services/companies-goal-planner.ts`
 - `src/lib/types/company.ts`
+- `src/lib/types/company-runs.ts`
 - `src/lib/services/kanban/local-kanban-store.ts`
 - `src/app/api/kanban/route.ts`

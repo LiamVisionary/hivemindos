@@ -4,6 +4,11 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { homedir } from "@/lib/home-dir";
+import {
+  appendCompanyRunEvent,
+  createCompanyProposal,
+  settleCompanyProposalByIdempotencyKey,
+} from "@/lib/services/company-runs";
 import type { Company } from "@/lib/types/company";
 import type { KanbanTask } from "@/lib/types/kanban";
 
@@ -128,6 +133,11 @@ const KIND_LABEL: Record<CompanyMemoryKind, string> = {
   note: "NOTE",
 };
 
+function companyRunIdFromTaskSource(source?: string): string | undefined {
+  const match = /^company:[^:]+:(.+)$/.exec(source ?? "");
+  return match?.[1]?.trim() || undefined;
+}
+
 /**
  * Compact newest-first digest for prompts. Bounded by characters so callers can
  * budget context: planners get a longer digest, worker task bodies a shorter one.
@@ -188,6 +198,36 @@ export async function syncCompanyTaskOutcomes(companies: Company[], tasks: Kanba
           agent: task.assignee ?? undefined,
           at: task.completedAt ?? task.updatedAt ?? Date.now(),
         });
+        const companyRunId = companyRunIdFromTaskSource(task.source);
+        await appendCompanyRunEvent(companyId, companyRunId, {
+          kind,
+          title: task.status === "done" ? `Task completed: ${task.title}` : `Human input needed: ${task.title}`,
+          detail: (task.result ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_DETAIL_CHARS) || undefined,
+          taskId: task.id,
+          data: {
+            status: task.status,
+            assignee: task.assignee ?? undefined,
+          },
+        }).catch(() => undefined);
+        if (task.status === "needs-human") {
+          await createCompanyProposal(companyId, {
+            kind: "human-input",
+            title: `Human input needed: ${task.title}`,
+            summary: (task.result ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_DETAIL_CHARS) || undefined,
+            runId: companyRunId,
+            sourceTaskId: task.id,
+            idempotencyKey: `task-human:${task.id}`,
+            risk: "medium",
+            evidence: task.result ? [task.result.slice(0, MAX_DETAIL_CHARS)] : undefined,
+            createdBy: task.assignee ?? "company",
+          }).catch(() => undefined);
+        } else {
+          await settleCompanyProposalByIdempotencyKey(companyId, `task-human:${task.id}`, {
+            status: "applied",
+            decision: "Task completed; pending human-input proposal closed.",
+            decidedBy: task.assignee ?? "company",
+          }).catch(() => undefined);
+        }
         recorded += 1;
         // Same exactly-once window as the ledger write: a result carrying
         // `PRICING PROPOSAL:` markers files pending price-change requests for

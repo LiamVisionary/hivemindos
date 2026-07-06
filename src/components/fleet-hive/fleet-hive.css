@@ -610,6 +610,92 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 .fr-chat-tab-svg path { fill: color-mix(in srgb, var(--panel) 60%, transparent); stroke: var(--line-2); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; transition: stroke .18s ease; }
 .fr-chat-tab:hover .fr-chat-tab-svg path, .fr-chat-tab:focus-visible .fr-chat-tab-svg path { stroke: var(--honey-line); }
 .fr-chat-tab:focus-visible { outline: none; }
+.fr-chat-slash-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  z-index: 3;
+  width: min(680px, calc(100vw - 40px));
+  max-width: min(680px, calc(100vw - 40px));
+  overflow: hidden;
+  border: 1px solid var(--honey-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow: 0 28px 72px -28px rgba(0, 0, 0, .76), 0 1px 0 rgba(255, 255, 255, .04) inset;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  backdrop-filter: blur(18px) saturate(1.12);
+  -webkit-backdrop-filter: blur(18px) saturate(1.12);
+}
+.fr-chat-slash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-2);
+  padding: 10px 12px;
+}
+.fr-chat-slash-header strong { color: var(--fg); font-size: 12px; font-weight: 800; }
+.fr-chat-slash-header span { color: var(--fg-3); font-size: 11px; }
+.fr-chat-slash-list {
+  display: grid;
+  max-height: min(420px, 52vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  scrollbar-gutter: stable;
+}
+.fr-chat-slash-list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  min-height: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 9px 10px;
+  text-align: left;
+}
+.fr-chat-slash-list button:hover,
+.fr-chat-slash-list button.active,
+.fr-chat-slash-list button[aria-selected="true"] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+.fr-chat-slash-list button span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.fr-chat-slash-list button strong {
+  color: var(--fg);
+  font-family: var(--f-mono);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.fr-chat-slash-list button small {
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.fr-chat-slash-list button em {
+  align-self: start;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--fg-2);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 1;
+  padding: 5px 7px;
+  white-space: nowrap;
+}
 .fr-chat {
   display: flex; align-items: center; justify-content: center; gap: 11px;
   height: 52px; padding: 0 16px;

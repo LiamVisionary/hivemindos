@@ -9,6 +9,10 @@ import { randomUUID } from "crypto";
 import { homedir } from "@/lib/home-dir";
 import { sameMachineIdentity } from "@/features/fleet/fleet-identity";
 import { recordCompanyConfigChange, type CompanyConfigAction } from "@/lib/services/company-governance";
+import {
+  createCompanyProposal,
+  settleCompanyProposal,
+} from "@/lib/services/company-runs";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
@@ -533,6 +537,7 @@ export async function proposeCompanyPricingChange(
   if (product.amountUsd === proposedAmountUsd) return null;
 
   const before = companyDefinitionOf(company);
+  const superseded = (company.pricingProposals ?? []).find((pending) => pending.productKey === product.key);
   const proposal: CompanyPricingProposal = {
     id: `prc_${randomUUID()}`,
     productKey: product.key,
@@ -559,6 +564,31 @@ export async function proposeCompanyPricingChange(
     detail: proposal.why,
     taskId: proposal.sourceTaskId,
     agent: proposal.proposedBy,
+  }).catch(() => undefined);
+  if (superseded) {
+    await settleCompanyProposal(companyId, superseded.id, {
+      status: "superseded",
+      decision: "A newer pricing proposal for the same product replaced this one.",
+      decidedBy: proposal.proposedBy ?? "company",
+    }).catch(() => undefined);
+  }
+  await createCompanyProposal(companyId, {
+    id: proposal.id,
+    kind: "pricing-change",
+    status: "pending",
+    title: `Pricing change requested: ${proposal.productName}`,
+    summary: proposal.why,
+    sourceTaskId: proposal.sourceTaskId,
+    idempotencyKey: `pricing:${proposal.id}`,
+    risk: Math.abs(proposal.proposedAmountUsd - proposal.currentAmountUsd) >= proposal.currentAmountUsd * 0.25 ? "high" : "medium",
+    proposedChange: {
+      productKey: proposal.productKey,
+      productName: proposal.productName,
+      currentAmountUsd: proposal.currentAmountUsd,
+      proposedAmountUsd: proposal.proposedAmountUsd,
+    },
+    evidence: proposal.why ? [proposal.why] : undefined,
+    createdBy: proposal.proposedBy ?? "company",
   }).catch(() => undefined);
   return proposal;
 }
@@ -607,6 +637,15 @@ export async function resolveCompanyPricingProposal(
         : `Pricing change rejected by the human: ${priceMove} stays at $${proposal.currentAmountUsd.toLocaleString("en-US")} — do not re-propose without materially new evidence.`,
     detail: note?.trim() || proposal.why,
     taskId: proposal.sourceTaskId,
+  }).catch(() => undefined);
+  await settleCompanyProposal(companyId, proposal.id, {
+    status: decision === "approve" ? "applied" : "rejected",
+    decision:
+      decision === "approve"
+        ? "Human approved the pricing proposal and the official catalog was updated."
+        : "Human rejected the pricing proposal and the catalog stayed unchanged.",
+    decidedBy: "human",
+    summary: note?.trim() || proposal.why,
   }).catch(() => undefined);
   return company;
 }
@@ -832,6 +871,32 @@ export async function addCompanyDirective(
   const company: Company = { ...existing, directives: [...(existing.directives ?? []), entry], updatedAt: new Date().toISOString() };
   await writeRaw(records.map((record) => (record.id === companyId ? company : record)));
   await recordConfigChange("updated", existing, company, "companies-store:add-directive");
+  if (entry.source === "reject") {
+    const { appendCompanyMemory } = await import("@/lib/services/company-memory");
+    await appendCompanyMemory(companyId, {
+      kind: "note",
+      title: `Deliverable redirected: ${entry.deliverableRef ?? "output"}`,
+      detail: entry.text,
+      data: { directiveId: entry.id, skills: entry.skills ?? (entry.skill ? [entry.skill] : []) },
+    }).catch(() => undefined);
+    await createCompanyProposal(companyId, {
+      kind: "deliverable-redirect",
+      status: "applied",
+      title: `Deliverable redirected: ${entry.deliverableRef ?? "output"}`,
+      summary: entry.text,
+      idempotencyKey: `deliverable-redirect:${entry.id}`,
+      risk: "medium",
+      proposedChange: {
+        directiveId: entry.id,
+        deliverableRef: entry.deliverableRef,
+        skills: entry.skills ?? (entry.skill ? [entry.skill] : []),
+      },
+      evidence: [entry.text],
+      createdBy: "human",
+      decidedBy: "human",
+      decision: "Rejected the deliverable and added a standing directive for future dispatches.",
+    }).catch(() => undefined);
+  }
   return company;
 }
 

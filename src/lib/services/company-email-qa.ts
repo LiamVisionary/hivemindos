@@ -124,7 +124,9 @@ function businessLabel(thread: CompanyEmailThread): string {
  *  The outbox reader marks delivered threads `direction: "outbound"` + a "delivered"
  *  label; AgentMail-style providers use "sent". QA cares most about real sends. */
 function isSentThread(thread: CompanyEmailThread): boolean {
-  return (thread.labels ?? []).includes("delivered") || thread.direction === "outbound" || thread.direction === "sent";
+  // "sent" is provider vocabulary, not part of CompanyEmailDirection — keep the
+  // runtime check for AgentMail-shaped data without lying to the type system.
+  return (thread.labels ?? []).includes("delivered") || thread.direction === "outbound" || (thread.direction as string) === "sent";
 }
 
 function scannableThreads(result: { threads?: CompanyEmailThread[] }, limit: number): { threads: CompanyEmailThread[]; truncated: boolean } {

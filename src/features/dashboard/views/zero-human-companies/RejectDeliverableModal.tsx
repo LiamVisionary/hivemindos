@@ -5,6 +5,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { CompanyDirectiveComposer, type DirectiveDraft } from "./CompanyDirectiveComposer";
+import type { Theme } from "./types";
 
 export function RejectDeliverableModal({
   companyId,
@@ -16,6 +17,7 @@ export function RejectDeliverableModal({
   intro,
   placeholder = "What's wrong / what to do instead…",
   submitLabel = "Reject & redirect",
+  theme = "dark",
 }: {
   companyId: string;
   deliverableRef: string;
@@ -31,6 +33,7 @@ export function RejectDeliverableModal({
   placeholder?: string;
   /** Composer submit button label. */
   submitLabel?: string;
+  theme?: Theme;
 }) {
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -56,20 +59,20 @@ export function RejectDeliverableModal({
 
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.5)", display: "grid", placeItems: "center", padding: 20 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 100%)", background: "var(--bg-0)", border: "1px solid var(--line-2)", borderRadius: 16, padding: 20, boxShadow: "0 24px 60px rgba(0,0,0,0.5)" }}>
+    <div className="zhc-root" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 2147483005, background: "rgba(2,4,8,0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 100%)", background: "var(--bg-soft)", border: "1px solid var(--line-2)", borderRadius: 16, padding: 20, boxShadow: "0 30px 80px rgba(0,0,0,0.55)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <span aria-hidden style={{ fontSize: 18 }}>{icon}</span>
           <div style={{ flex: 1, fontFamily: "var(--f-display)", fontSize: 16, fontWeight: 600 }}>{title}</div>
-          <button type="button" onClick={onClose} aria-label="Close" style={{ cursor: "pointer", border: "none", background: "var(--bg-3)", color: "var(--fg-3)", borderRadius: 8, width: 26, height: 26, fontSize: 12 }}>✕</button>
+          <button type="button" onClick={onClose} aria-label="Close" style={{ cursor: "pointer", border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-3)", borderRadius: 8, width: 30, height: 30, fontSize: 14 }}>✕</button>
         </div>
-        <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", lineHeight: 1.5, marginBottom: 12 }}>
+        <div style={{ fontFamily: "var(--f-mono)", fontSize: 11.5, color: "var(--fg-3)", lineHeight: 1.6, marginBottom: 14 }}>
           {intro ?? (
-            <>Rejecting <b style={{ color: "var(--fg-3)" }}>{deliverableRef}</b>. Your feedback becomes a standing directive in company knowledge — the crew reads it on every dispatch, so it corrects course. Optionally point them at a skill or attach references.</>
+            <>Rejecting <b style={{ color: "var(--fg-2)" }}>{deliverableRef}</b>. Your feedback becomes a standing directive in company knowledge — the crew reads it on every dispatch, so it corrects course. Optionally point them at a skill or attach references.</>
           )}
         </div>
         <CompanyDirectiveComposer autoFocus placeholder={placeholder} submitLabel={submitLabel} busy={busy} onSubmit={submit} />
-        {error && <div style={{ marginTop: 8, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger-2)" }}>{error}</div>}
+        {error && <div style={{ marginTop: 8, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger)" }}>{error}</div>}
       </div>
     </div>,
     document.body,

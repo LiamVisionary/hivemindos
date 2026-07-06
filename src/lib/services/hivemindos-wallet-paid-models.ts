@@ -1,5 +1,6 @@
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import {
   HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_ENV,
   HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_PUBLIC_ENV,
@@ -63,6 +64,13 @@ export function resolveHivemindosWalletPaidModelRuntimeConfig(
     headers: {
       "X-HivemindOS-Wallet-Agent-Id": fundingAccountId || "free-tier",
       "X-HivemindOS-Wallet-Model-Slug": hivemindosWalletPaidModelAgentSlug(),
+      // baseUrl is this dashboard's own origin, so the chat fetch is a
+      // server->self /api call: without the device token it 401s at the
+      // src/proxy.ts gate ("Dashboard authentication is required.") and the
+      // agent-runtime lane surfaces that as the model's failure. The token
+      // never leaves the box — the completions route builds its upstream
+      // headers explicitly and forwards nothing from the incoming request.
+      ...internalApiAuthHeaders(),
     },
   };
 }

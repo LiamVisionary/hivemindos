@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "@/lib/home-dir";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { runtimeCommandExists } from "@/lib/services/runtime-command-env";
 import { hiveEnvPresence, type HiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { writeSharedHiveEnvValue } from "@/lib/services/hive-env-write";
 import { getManagedXGatewayStatus, type ManagedXGatewayStatus } from "@/lib/services/managed-x-api-client";
@@ -148,42 +149,48 @@ function sanitizeTargets(value: string) {
     .join(",") || "all";
 }
 
-function readRuntimeTargetDefinitions(): Array<Pick<XMcpRuntimeTargetStatus, "runtime" | "path"> & { installedPaths: string[]; detector: (text: string) => boolean }> {
+function readRuntimeTargetDefinitions(): Array<Pick<XMcpRuntimeTargetStatus, "runtime" | "path"> & { command?: string; installedPaths: string[]; detector: (text: string) => boolean }> {
   const home = homedir();
   return [
     {
       runtime: "claude",
       path: join(home, ".claude.json"),
+      command: "claude",
       installedPaths: [join(home, ".claude"), join(home, ".claude.json")],
       detector: (text) => jsonHasMcpServer(text, "mcpServers", "xapi"),
     },
     {
       runtime: "codex",
       path: join(home, ".codex", "config.toml"),
+      command: "codex",
       installedPaths: [join(home, ".codex")],
       detector: (text) => /^\[mcp_servers\.xapi\]\s*$/m.test(text),
     },
     {
       runtime: "gemini",
       path: join(home, ".gemini", "settings.json"),
+      command: "gemini",
       installedPaths: [join(home, ".gemini")],
       detector: (text) => jsonHasMcpServer(text, "mcpServers", "xapi"),
     },
     {
       runtime: "openclaw",
       path: join(home, ".openclaw", "openclaw.json"),
+      command: "openclaw",
       installedPaths: [join(home, ".openclaw")],
       detector: (text) => jsonHasMcpServer(text, "mcpServers", "xapi"),
     },
     {
       runtime: "hermes",
       path: join(home, ".hermes", "config.yaml"),
+      command: "hermes",
       installedPaths: [join(home, ".hermes")],
       detector: (text) => /^  xapi:\s*$/m.test(text),
     },
     {
       runtime: "aeon",
       path: join(home, ".aeon", ".mcp.json"),
+      command: "aeon",
       installedPaths: [join(home, ".aeon")],
       detector: (text) => jsonHasMcpServer(text, "", "xapi"),
     },
@@ -192,7 +199,8 @@ function readRuntimeTargetDefinitions(): Array<Pick<XMcpRuntimeTargetStatus, "ru
 
 function readRuntimeTargets(): XMcpRuntimeTargetStatus[] {
   return readRuntimeTargetDefinitions().map((target) => {
-    const installed = target.installedPaths.some((candidate) => existsSync(candidate));
+    const installed = target.installedPaths.some((candidate) => existsSync(candidate))
+      || Boolean(target.command && runtimeCommandExists(target.command));
     const text = existsSync(target.path) ? readFileSync(target.path, "utf8") : "";
     return {
       runtime: target.runtime,

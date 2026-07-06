@@ -19,7 +19,7 @@ const QUEEN_OPERATIONAL_INSTRUCTIONS = [
   "Answer general questions about what you can do from the capability list above, directly and confidently. Use ask_hivemind_agent to verify or perform a SPECIFIC capability (a particular wallet, app, note, or status). Never deny a capability or claim you lack access based on your own assumptions.",
   "When the user asks how an agent is doing, or whether one is offline, timing out, stuck, or erroring, call read_agent_status to check the live fleet before you answer - do NOT tell them to look on their own system, and NEVER claim an agent is down, timing out, or failing unless read_agent_status actually shows it. Pass the agent's name (e.g. 'HermesMain'); call it with no name for a fleet-wide health summary.",
   "When read_agent_status shows an agent offline, erroring, or timing out, don't stop at reporting it - OFFER to queue a diagnosis-and-fix job so the hive fixes it itself, and when the user agrees, call create_hive_task (e.g. title 'Diagnose & fix HermesMain timeout', with the status details in the message) so a fleet worker investigates and repairs it. Only create the task after they confirm; a fleet agent, not the user, does the fixing.",
-  "Use create_hive_task ONLY when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result. NEVER use create_hive_task for a money movement (swap, send, transfer, buy, sell, trade, pay, collect fees) or to confirm one - those are simple, direct actions that ask_hivemind_agent executes on the rails, not work to delegate.",
+  "Use create_hive_task ONLY when the user clearly asks for longer work to be delegated to the hive (a job, build, fix, research, automation, reminder). If YOU propose the next work after an open-ended prompt like 'you tell me' or 'what should we do', do not call create_hive_task in that same turn - ask whether to queue it, then call create_hive_task only after the user explicitly agrees. Pass a short imperative title and the full request as the message, then briefly confirm what you kicked off using the tool result. NEVER use create_hive_task for a money movement (swap, send, transfer, buy, sell, trade, pay, collect fees) or to confirm one - those are simple, direct actions that ask_hivemind_agent executes on the rails, not work to delegate.",
   "Use drive_dashboard for NAVIGATION and UI setup in the dashboard they are looking at: open or switch a screen (wallets, work board, agents/fleet, chat, schedules, brain), create an agent (optionally naming a runtime, provider, model, or machine), create a wallet for one of their agents, add a task to the board, or open an agent's settings or chat. Pass the user's request VERBATIM as the command; a visible bee flies the interface and clicks for them, and you confirm what happened from the tool result. Prefer drive_dashboard over ask_hivemind_agent for navigating to or opening parts of the app - but NEVER use drive_dashboard to move money: a swap, send, transfer, buy, sell, trade, or payment always goes to ask_hivemind_agent, never drive_dashboard, even when the user is already looking at the Trade or Wallets screen.",
   "When the user states a LASTING preference about how you should talk to or treat them - how to address them ('call me boss'), a language, a tone, or how long your replies should be - call remember_preference with that preference the moment they say it, then confirm naturally. This is what makes the preference stick across future chats; agreeing without calling the tool will not be remembered.",
   "Greetings and chit-chat are just conversation - no tools needed.",
@@ -64,7 +64,7 @@ export const QUEEN_TOOL_DEFS: QueenToolDef[] = [
   {
     name: "create_hive_task",
     description:
-      "Create and delegate a task on the HivemindOS work board. Use ONLY when the user clearly requests longer work (build, fix, research, automation, reminder, delegation).",
+      "Create and delegate a task on the HivemindOS work board. Use ONLY when the user clearly requests longer work (build, fix, research, automation, reminder, delegation) or explicitly confirms the task you just proposed. Never call this in the same turn where you invented or selected the task yourself.",
     parameters: {
       type: "object",
       properties: {
@@ -182,3 +182,31 @@ export function queenChatTools() {
 
 /** Tool names the dashboard CLIENT must execute (UI driving); the rest are server actions. */
 export const QUEEN_CLIENT_TOOLS = ["drive_dashboard"] as const;
+
+/** A near-whole-message affirmative — the user agreeing to the task the Queen
+ *  just offered ("yes", "queue it", "go ahead", optionally with a trailing
+ *  clause like "yes please do"). */
+const TASK_AFFIRMATIVE_RE =
+  /^(yes|yeah|yep|sure|ok(ay)?|do it|go ahead|go for it|please do|sounds good|confirm(ed)?|queue it|create it|make it|add it|ship it)\b[\s,!.]*(please|thanks|thank you)?[\s!.]*$/i;
+
+/** Work-request verbs/nouns that make task creation plausible anywhere in the
+ *  message ("fix the collector", "queue a research job", "remind me…"). */
+const TASK_WORK_INTENT_RE =
+  /\b(queue|task|job|delegate|assign|fix|repair|diagnose|build|create|add|make|write|generate|research|investigate|look into|automate|automation|remind(er)?|schedule|deploy|set ?up|work on|handle|take care|get .{0,40}(back )?(online|running|working))\b/i;
+
+/**
+ * Mechanical enforcement of the propose-then-confirm contract for
+ * create_hive_task. The instructions above already forbid the Queen from
+ * queueing Work Board tasks she invented herself ("Only create the task after
+ * they confirm"), but small brains ignore them: on 2026-07-06 Scout answered a
+ * bare "hi" by reading fleet status and unilaterally creating a "Fix agent
+ * errors" task. Executors call this with the user message that started the
+ * turn; when it returns false the tool call must NOT run — hand the model a
+ * result telling it to ask the user instead. Fails safe: the worst false
+ * negative costs one extra "yes" from the user.
+ */
+export function userAuthorizedHiveTaskCreation(userMessage: string): boolean {
+  const trimmed = userMessage.trim();
+  if (!trimmed) return false;
+  return TASK_AFFIRMATIVE_RE.test(trimmed) || TASK_WORK_INTENT_RE.test(trimmed);
+}

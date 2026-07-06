@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/utils/server-auth";
 import {
   getCompanyAutonomyDriverStatus,
   rememberCompanyDriverSelfBase,
+  runCompanyDriverTickNow,
   startCompanyAutonomyDriver,
   stopCompanyAutonomyDriver,
 } from "@/lib/services/company-autonomy-driver";
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
   const action = body.action ?? "status";
   rememberCompanyDriverSelfBase(request.headers.get("host"));
 
-  if (action === "start") {
+  if (action === "start" || action === "tick") {
     // The boot self-POST is direct loopback (no forwarded-for). If the request
     // arrived via a proxy from a non-loopback origin, require auth — don't let a
     // remote caller poke the driver even if the server is ever bound beyond localhost.
@@ -40,6 +41,13 @@ export async function POST(request: NextRequest) {
     if (external) {
       const unauthorized = await requireAuth(request);
       if (unauthorized) return unauthorized;
+    }
+    if (action === "tick") {
+      // Runs ONE tick through THIS request's freshly-compiled code (lease-gated).
+      // This is what lets driver fixes land with no server restart: the loop
+      // prefers this route, and any local caller can also drive a tick.
+      const result = await runCompanyDriverTickNow();
+      return NextResponse.json({ ok: true, ...getCompanyAutonomyDriverStatus(), ...result });
     }
     const status = await startCompanyAutonomyDriver();
     return NextResponse.json({ ok: true, ...status });
