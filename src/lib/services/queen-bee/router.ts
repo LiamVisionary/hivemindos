@@ -175,6 +175,32 @@ function loadPenalty(agent: QueenBeeAgent, options: QueenBeeRouterOptions, reaso
   return -Math.min(LOAD_PENALTY_MAX, inFlight * LOAD_PENALTY_PER_TASK);
 }
 
+// Load-aware cross-machine spreading. The per-agent loadPenalty above spreads a
+// burst across the least-busy AGENTS — but those can all sit on ONE saturated
+// machine. This adds a MACHINE-level penalty (total in-flight across a machine's
+// agents) so equally-capable work fans out across ALL online machines instead of
+// piling onto one box until it times out. Deliberately gentler than the class
+// match (+100): it breaks ties between equal agents, never sends specialized
+// work to a wrong-but-idle agent. Kill switch: QUEEN_BEE_MACHINE_LOAD_SPREADING=0.
+const MACHINE_LOAD_PENALTY_PER_TASK = 4;
+const MACHINE_LOAD_PENALTY_MAX = 30;
+
+function machineLoadSpreadingEnabled(): boolean {
+  const raw = (process.env.QUEEN_BEE_MACHINE_LOAD_SPREADING ?? "").trim().toLowerCase();
+  return raw !== "0" && raw !== "false" && raw !== "no";
+}
+
+function machineLoadKey(machine: QueenBeeMachine): string {
+  return normalizeMachineToken(machine.key) || normalizeMachineToken(machine.device?.machineId) || normalizeMachineToken(machine.device?.name);
+}
+
+/** Total in-flight (working/ready) tasks across ALL of a machine's agents. */
+function machineInFlightLoad(machine: QueenBeeMachine, options: QueenBeeRouterOptions): number {
+  let load = 0;
+  for (const agent of machine.agents ?? []) load += agentInFlight(agent, options.assignments);
+  return load;
+}
+
 function normalizeMachineToken(value?: string | null) {
   return String(value || "").trim().toLowerCase().replace(/\.$/, "");
 }
@@ -218,6 +244,20 @@ export function rankQueenBeeDelegates(task: QueenBeeTaskIntent, machines: QueenB
     ? machines.filter((machine) => machineMatchesTarget(machine, options.targetMachineKey))
     : machines;
   const candidates = scopedMachines.flatMap((machine) => candidateAgents(machine, workerClass, task, options));
+  // Spread across machines: penalize candidates on an overall-busier machine so a
+  // burst fans out across the fleet instead of saturating one box. Skipped when a
+  // machine is explicitly pinned (nothing to spread across) or via the kill switch.
+  if (!options.targetMachineKey && machineLoadSpreadingEnabled() && candidates.length > 1) {
+    const loadByMachine = new Map<string, number>();
+    for (const machine of scopedMachines) loadByMachine.set(machineLoadKey(machine), machineInFlightLoad(machine, options));
+    for (const candidate of candidates) {
+      const load = loadByMachine.get(machineLoadKey(candidate.machine)) ?? 0;
+      if (load > 0) {
+        candidate.score -= Math.min(MACHINE_LOAD_PENALTY_MAX, load * MACHINE_LOAD_PENALTY_PER_TASK);
+        candidate.reasons.push(`machine carrying ${load} in-flight task${load === 1 ? "" : "s"} — spreading to a freer machine`);
+      }
+    }
+  }
   const ranked = candidates.sort((left, right) => right.score - left.score || stableName(left).localeCompare(stableName(right)));
   return ranked.map((candidate, index) => {
     const machineName = candidate.machine.device?.name || candidate.machine.key || "unknown machine";

@@ -225,4 +225,56 @@ const urlBackedMachine = {
   assert.equal(delegate.agent?.name, "Proven Researcher", "name-keyed (cross-machine) outcomes should influence routing");
 }
 
+// Load-aware cross-machine spreading: two EQUALLY-capable code agents, one on a
+// saturated machine (This Mac carrying several in-flight tasks) and one on an idle
+// machine — the idle machine wins, so bursts fan out instead of piling onto one box.
+{
+  const busyMac = {
+    ...urlBackedMachine,
+    key: "this-mac",
+    device: { ...urlBackedMachine.device, name: "This Mac", self: true },
+    agents: [
+      { id: "mac-coder", name: "Mac Coder", runtime: "hermes", beeRole: "worker", workerClass: "code", runtimeCapabilities: { chat: true } },
+      { id: "mac-writer", name: "Mac Writer", runtime: "hermes", beeRole: "worker", workerClass: "writer", runtimeCapabilities: { chat: true } },
+    ],
+  };
+  const idleVps = {
+    key: "hel1-2",
+    collector: "http://100.0.0.1:8787",
+    device: { self: false, name: "hel1-2", os: "linux", online: true, collectorUrl: "http://100.0.0.1:8787" },
+    capabilities: { chat: true, runtimes: ["hermes"] },
+    agents: [
+      { id: "vps-coder", name: "VPS Coder", runtime: "hermes", beeRole: "worker", workerClass: "code", runtimeCapabilities: { chat: true } },
+    ],
+  };
+  const codeTask = { title: "Fix", body: "Fix the code bug.", skills: ["code"] };
+  // This Mac is carrying 4 in-flight tasks across its agents; hel1-2 is idle.
+  const busyAssignments = { "Mac Coder": 2, "Mac Writer": 2 };
+  const spread = chooseQueenBeeDelegate(codeTask, [busyMac, idleVps], { assignments: busyAssignments });
+  assert.equal(spread.machine?.key, "hel1-2", "an idle machine wins over a saturated one for equally-capable work");
+  assert.equal(spread.agent?.name, "VPS Coder", "the burst spreads to the freer machine's coder");
+
+  // Kill switch restores the old (machine-load-blind) behavior.
+  process.env.QUEEN_BEE_MACHINE_LOAD_SPREADING = "0";
+  try {
+    const noSpread = chooseQueenBeeDelegate(codeTask, [busyMac, idleVps], { assignments: busyAssignments });
+    // With spreading off, the This-Mac coder's only penalty is its own 2-task agent
+    // load; the self tie-break (+1) keeps a same-score local pick, so it need not flip.
+    assert.ok(noSpread.status === "delegated", "kill switch still yields a delegate");
+    assert.ok(noSpread.reason && !/spreading to a freer machine/.test(noSpread.reason), "kill switch removes the machine-load spreading signal");
+  } finally {
+    delete process.env.QUEEN_BEE_MACHINE_LOAD_SPREADING;
+  }
+
+  // An explicit machine pin is still honored — spreading never overrides it.
+  const pinned = chooseQueenBeeDelegate(codeTask, [busyMac, idleVps], { assignments: busyAssignments, targetMachineKey: "this-mac" });
+  assert.equal(pinned.machine?.key, "this-mac", "an explicit pin overrides load spreading");
+
+  // Spreading must NOT send specialized work to a wrong-but-idle agent: a code task
+  // still goes to a code agent on the busy machine over a non-code agent on the idle one.
+  const idleNonCoder = { ...idleVps, agents: [{ id: "vps-writer", name: "VPS Writer", runtime: "hermes", beeRole: "worker", workerClass: "writer", runtimeCapabilities: { chat: true } }] };
+  const stillMatches = chooseQueenBeeDelegate(codeTask, [busyMac, idleNonCoder], { assignments: busyAssignments });
+  assert.equal(stillMatches.agent?.name, "Mac Coder", "class match dominates: a code task stays with the coder even on the busier machine");
+}
+
 console.log("Queen Bee router delegation tests passed.");
