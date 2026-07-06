@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { constants } from "fs";
 import { access, mkdir, readFile, rm, writeFile } from "fs/promises";
+import { hostname } from "os";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { promisify } from "util";
@@ -302,9 +303,29 @@ async function savedUsePodHostBondSignature() {
   return candidates.find(Boolean) ?? "";
 }
 
+/** A stable, readable per-machine env suffix (the machine NAME, uppercased). The
+ *  UsePod host token/wallet/bond are this machine's OWN provider identity, so
+ *  they must not collide or strand across the fleet. hive-env-add treats the
+ *  whole `USEPOD_HOST_` prefix as local-only (never syncs), so this suffix is
+ *  self-documentation + defense-in-depth, not the sync boundary. */
+function machineEnvSuffix(): string {
+  const cleaned = (hostname() || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
+  return cleaned || "LOCAL";
+}
+
 async function saveUsePodHostEnvValues(values: Record<string, string>) {
-  await writeSharedHiveEnvValues(values);
-  for (const [key, value] of Object.entries(values)) process.env[key] = value;
+  // Persist each UsePod host credential BOTH bare (back-compat for existing
+  // readers) and machine-scoped (`USEPOD_HOST_TOKEN__<MACHINE>`), so a fleet
+  // that ever re-enables broad sync can never overwrite one host's identity
+  // with another's. Both live under the local-only `USEPOD_HOST_` prefix.
+  const suffix = machineEnvSuffix();
+  const expanded: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    expanded[key] = value;
+    if (/^USEPOD_HOST_/.test(key)) expanded[`${key}__${suffix}`] = value;
+  }
+  await writeSharedHiveEnvValues(expanded);
+  for (const [key, value] of Object.entries(expanded)) process.env[key] = value;
 }
 
 function isSolanaAddress(value: string) {
@@ -393,11 +414,17 @@ async function savedUsePodHostWalletAddress() {
   ];
   for (const path of [HIVE_ENV_FILE, HERMES_ENV_FILE]) {
     const raw = await readFile(path, "utf8").catch(() => "");
+    // Also accept the machine-scoped `USEPOD_HOST_WALLET_ADDRESS__<MACHINE>`
+    // form, so a machine whose bare key was pruned still finds its own wallet.
     candidates.push(...parseEnvFileValues(raw, (key) => (
-      key === "USEPOD_HOST_WALLET_ADDRESS" ||
+      /^USEPOD_HOST_WALLET_ADDRESS(?:_|$)/.test(key) ||
       key === "USEPOD_HOST_WALLET" ||
       key === "SOLANA_WALLET_ADDRESS"
     )));
+  }
+  // Machine-scoped keys already loaded into the process env (this run's writes).
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^USEPOD_HOST_WALLET_ADDRESS(?:_|$)/.test(key)) candidates.push(value?.trim() || "");
   }
   return candidates.find(isSolanaAddress) ?? "";
 }

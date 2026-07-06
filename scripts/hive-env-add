@@ -78,6 +78,19 @@ LOCAL_ONLY_KEYS = {
     "NEXT_PUBLIC_TAILNET_SYNC_ENABLED",
 }
 
+# Per-machine credential FAMILIES (prefix match) that must never sync fleet-wide.
+# The UsePod host credentials — token, wallet address, bond signature — are this
+# machine's OWN provider identity: a peer's copy would hijack this machine's host
+# wallet/payout. They are written machine-scoped (USEPOD_HOST_TOKEN__<MACHINE>)
+# AND kept as the bare key for compat, so the whole prefix is local-only.
+LOCAL_ONLY_PREFIXES = ("USEPOD_HOST_",)
+
+
+def is_local_only(key: str) -> bool:
+    """A key that must never sync (inbound or outbound): exact per-machine keys
+    plus per-machine credential families matched by prefix."""
+    return key in LOCAL_ONLY_KEYS or key.startswith(LOCAL_ONLY_PREFIXES)
+
 
 _DOUBLE_QUOTE_ESCAPES = {
     "\\": "\\", "'": "'", '"': '"', "a": "\a", "b": "\b",
@@ -684,7 +697,7 @@ def secret_fingerprint(value: str) -> str:
 
 
 def github_secret_skip_reason(key: str, value: str) -> str:
-    if key in LOCAL_ONLY_KEYS:
+    if is_local_only(key):
         return "local-only"
     if not KEY_RE.match(key):
         return "invalid-name"
@@ -1270,7 +1283,7 @@ def shared_env_values(args: argparse.Namespace, env_file: pathlib.Path) -> dict[
     return {
         key: value
         for key, value in values.items()
-        if KEY_RE.match(key) and key not in LOCAL_ONLY_KEYS
+        if KEY_RE.match(key) and not is_local_only(key)
     }
 
 
@@ -1324,7 +1337,7 @@ def record_pending_outcome(
     now = time.time()
     changed = False
     for key in updates:
-        if key in LOCAL_ONLY_KEYS or not KEY_RE.match(key):
+        if is_local_only(key) or not KEY_RE.match(key):
             continue
         if fully_delivered:
             if key in entries:
@@ -1559,7 +1572,7 @@ def pull_reconcile(
         for key, value in raw_values.items():
             if not isinstance(key, str) or not isinstance(value, str):
                 continue
-            if not KEY_RE.match(key) or key in LOCAL_ONLY_KEYS:
+            if not KEY_RE.match(key) or is_local_only(key):
                 continue
             remote_ts_raw = updated_at.get(key)
             remote_ts = float(remote_ts_raw) if isinstance(remote_ts_raw, (int, float)) else 0.0
@@ -1620,6 +1633,78 @@ def pull_reconcile(
             f"Hivemind Sync env pulled {len(to_apply)} key{'s' if len(to_apply) != 1 else ''} from {', '.join(sources)}: "
             + ", ".join(sorted(to_apply))
         )
+    return summary
+
+
+def push_missing_enabled() -> bool:
+    """Push-missing is on by default; HIVE_ENV_PUSH_MISSING=0 disables it."""
+    raw = os.environ.get("HIVE_ENV_PUSH_MISSING")
+    if raw is None:
+        raw = local_setting("HIVE_ENV_PUSH_MISSING")
+    if raw is None or str(raw).strip() == "":
+        return True
+    return truthy(raw)
+
+
+def push_missing_reconcile(
+    args: argparse.Namespace,
+    env_file: pathlib.Path,
+    dry_run: bool = False,
+    quiet: bool = False,
+    peers: tuple[list[dict[str, str]], list[str]] | None = None,
+) -> dict[str, object]:
+    """Push locally-held keys to any reachable peer that is entirely MISSING them.
+
+    pull_reconcile only PULLS newer keys from peers, so a key that lives only on
+    a machine its peers cannot reach inbound (e.g. a laptop the VPS can't dial,
+    but which can dial out) strands forever and silently: the holder reaches the
+    peer yet never pushes. This fills genuine gaps — and ONLY gaps: it never
+    pushes a key the peer already holds, so it cannot clobber a peer's newer
+    value or ping-pong (unlike a blind full-push, which the receiver stamps
+    newest-on-receipt). Run AFTER pull_reconcile so the local copy is already
+    up to date before it seeds peers. Kill switch: HIVE_ENV_PUSH_MISSING=0.
+
+    Known residual: a key deleted on a peer during a partition but still live
+    locally could be re-seeded once (the peer's /env GET can't expose its
+    tombstone). Rare and self-correcting; the complete fix is receiver-side
+    timestamp/tombstone honoring on the /env POST ingest.
+    """
+    if not push_missing_enabled() or not tailnet_sync_enabled(args):
+        return {"pushed": {}, "peers": [], "disabled": not push_missing_enabled()}
+    targets, unreachable = peers if peers is not None else tailnet_peer_status()
+    local_values = shared_env_values(args, env_file)
+    summary: dict[str, object] = {
+        "peers": [target["host"] for target in targets],
+        "unreachable": list(unreachable),
+        "pushed": {},
+        "dryRun": dry_run,
+    }
+    for target in targets:
+        data = fetch_peer_env(target, args)
+        if data is None:
+            summary["unreachable"] = sorted({*summary["unreachable"], target["host"]})
+            continue
+        peer_values = data.get("values") if isinstance(data.get("values"), dict) else {}
+        missing = {
+            key: value
+            for key, value in local_values.items()
+            if key not in peer_values
+            and value != ""
+            and KEY_RE.match(key)
+            and not is_local_only(key)
+        }
+        if not missing:
+            continue
+        summary["pushed"][target["host"]] = sorted(missing)
+        if dry_run:
+            continue
+        ok, detail = sync_target_over_collector(target, args, missing)
+        if not ok:
+            summary.setdefault("failed", {})[target["host"]] = detail
+    if not quiet:
+        seeded = sorted({key for keys in summary["pushed"].values() for key in keys})
+        if seeded:
+            print(f"Hivemind Sync env push-missing seeded {len(seeded)} key(s) to peers: " + ", ".join(seeded))
     return summary
 
 
@@ -1737,9 +1822,14 @@ def parse_args() -> argparse.Namespace:
         help="Pull shared env keys from every ready peer collector and merge newer keys into this machine (newest-wins by per-key updatedAt).",
     )
     parser.add_argument(
+        "--push-missing",
+        action="store_true",
+        help="Seed every ready peer collector with the keys it is entirely missing (fills strands a pull can't reach). Never overwrites a value a peer already holds.",
+    )
+    parser.add_argument(
         "--sync-maintenance",
         action="store_true",
-        help="Run the retry queue and pull-reconcile once, then print a JSON summary. Used by the telemetry collector's periodic loop.",
+        help="Run the retry queue, pull-reconcile, and push-missing once, then print a JSON summary. Used by the telemetry collector's periodic loop.",
     )
     parser.add_argument(
         "--dry-run",
@@ -1866,8 +1956,12 @@ def main() -> int:
     if args.sync_maintenance:
         peers = tailnet_peer_status()
         drain_summary = drain_pending(args, env_file, quiet=True, peers=peers)
+        # Pull first (adopt anything newer from peers), THEN seed peers with the
+        # keys they're missing — so a strand on a hard-to-reach holder heals
+        # automatically instead of waiting on a manual --reconcile.
         pull_summary = pull_reconcile(args, env_file, dry_run=args.dry_run, quiet=True, peers=peers)
-        print(json.dumps({"version": 1, "retry": drain_summary, "pull": pull_summary}, sort_keys=True))
+        push_summary = push_missing_reconcile(args, env_file, dry_run=args.dry_run, quiet=True, peers=peers)
+        print(json.dumps({"version": 1, "retry": drain_summary, "pull": pull_summary, "push": push_summary}, sort_keys=True))
         return 0
 
     if args.retry_pending:
@@ -1881,6 +1975,12 @@ def main() -> int:
 
     if args.pull_reconcile:
         pull_reconcile(args, env_file, dry_run=args.dry_run)
+        return 0
+
+    if args.push_missing:
+        summary = push_missing_reconcile(args, env_file, dry_run=args.dry_run)
+        if args.dry_run:
+            print(json.dumps(summary, sort_keys=True))
         return 0
 
     if args.reconcile:

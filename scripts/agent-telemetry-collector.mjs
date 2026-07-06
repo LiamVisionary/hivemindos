@@ -7278,7 +7278,7 @@ async function handleCollectorRequest(request, response) {
         "HIVEMINDOS_DASHBOARD_AUTH_SECRET",
       ]);
       const rejected = Object.keys(entries).filter((key) =>
-        REMOTE_REJECTED_KEYS.has(key),
+        REMOTE_REJECTED_KEYS.has(key) || key.startsWith("USEPOD_HOST_"),
       );
       for (const key of rejected) delete entries[key];
       if (!Object.keys(entries).length) {
