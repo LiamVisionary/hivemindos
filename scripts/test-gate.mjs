@@ -52,6 +52,7 @@ const TESTS = [
   "test:crypto-gaps",
   "test:crypto-practice-book",
   "test:dashboard-auth",
+  "test:deliverable-acceptance",
   "test:dashboard-nav",
   "test:dashboard-state-snapshot",
   "test:dev-warm-routes",

@@ -7,6 +7,7 @@ import {
   type LoopUrlProber,
   type LoopUrlProbeResult,
 } from "../loops/loop-runner";
+import { makeDeliverableContentFetcher } from "@/lib/services/deliverables/content-fetcher";
 import { classifyRuntimeFailureOutput } from "./worker-output-failure";
 
 // Advance an agent flow when one of its task nodes completes/fails. Dynamic, guarded import keeps
@@ -411,6 +412,7 @@ export async function runQueenBeeAutonomousPickup(
         output: text,
         judge: loopJudge,
         probeUrl: makeLiveUrlProber(),
+        fetchContent: makeDeliverableContentFetcher(),
       });
 
       const completion = await complete(null, input.task.id, {

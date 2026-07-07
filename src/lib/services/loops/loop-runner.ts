@@ -4,6 +4,14 @@ import type { LoopEvalGate, LoopReceipt, LoopSpec } from "@/lib/types/loops";
 // is the canonical (strictest) behavior; re-exported below so loops/index.ts keeps
 // surfacing `isReservedOrMockUrl` and stays client-safe (the helper is pure).
 import { isReservedOrMockUrl } from "@/lib/net/reserved-urls";
+// Deliverable content acceptance — the platform-wide "is this outward deliverable
+// actually good, or a placeholder skeleton?" gate. Pure + dependency-injected, so
+// importing it keeps this module client-safe.
+import {
+  evaluateDeliverableAcceptance,
+  summarizeAcceptanceViolations,
+  type DeliverableContentFetcher,
+} from "@/lib/services/deliverables/deliverable-acceptance";
 
 export { isReservedOrMockUrl };
 
@@ -79,6 +87,8 @@ export type RunLoopGatesInput = {
   runCommand?: LoopGateCommandRunner;
   /** Liveness prober for URLs the worker CLAIMS are live. Omit → reserved/mock domains are still rejected (pure). */
   probeUrl?: LoopUrlProber;
+  /** Content fetcher for the deliverable-acceptance gate. Omit → the gate is a no-op (kill-switch). */
+  fetchContent?: DeliverableContentFetcher;
   now?: number;
 };
 
@@ -98,6 +108,12 @@ const LIVE_URL_GATE_ID = "live-url-integrity";
 const LIVE_URL_VERIFIER = "integrity:live-url";
 /** Cap on how many claimed-live URLs one run will verify — bounds work + network. */
 const MAX_LIVE_URL_CHECKS = 6;
+
+// Stable identity for the deliverable-acceptance integrity receipt (same overwrite-on-retry
+// contract as the live-URL receipt). A failing one is a hard-fail → blocks completion.
+const ACCEPTANCE_RECEIPT_ID = "lr_deliverable-acceptance";
+const ACCEPTANCE_GATE_ID = "deliverable-acceptance";
+const ACCEPTANCE_VERIFIER = "integrity:deliverable-acceptance";
 
 export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGatesResult> {
   const gates = input.loop?.evalGates ?? [];
@@ -211,6 +227,35 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
       evidence: (failed ? liveUrl.violations.map((v) => `${v.url} — ${v.reason}`) : liveUrl.checked).filter(Boolean).slice(0, 8),
       verifier: LIVE_URL_VERIFIER,
       metadata: failed ? { source: "live-url", hardFail: true } : { source: "live-url" },
+      createdAt: now,
+    });
+  }
+
+  // ── Deliverable content acceptance (independent of the loop's own gates) ──────
+  // A claimed outward deliverable (preview site, landing/offer page) must not pass
+  // as a PLACEHOLDER/wireframe skeleton — a real bug (2026-07-07) shipped a
+  // restaurant preview to a live prospect with fake "menu" items and no prices.
+  // Runs on every loop (any company/template): fetches the customer-facing URL(s)
+  // and runs the typed acceptance contract for the kind. An affirmative rejection
+  // is a HARD fail that blocks completion → needs-human, exactly like a dead live
+  // URL. Unfetchable/ambiguous content never blocks, and a missing fetcher (the
+  // kill-switch) makes this a no-op.
+  const acceptance = await evaluateDeliverableAcceptance({ output, fetchContent: input.fetchContent });
+  if (acceptance.checked.length) {
+    const failed = acceptance.violations.length > 0;
+    receipts.push({
+      id: ACCEPTANCE_RECEIPT_ID,
+      gateId: ACCEPTANCE_GATE_ID,
+      status: failed ? "failed" : "passed",
+      summary: failed
+        ? `Deliverable failed acceptance: ${truncate(summarizeAcceptanceViolations(acceptance.violations), 300)}`
+        : `Verified ${acceptance.checked.length} deliverable(s) meet their acceptance contract.`,
+      evidence: (failed
+        ? acceptance.violations.map((v) => `${v.url} — ${v.verdict.violations.map((x) => x.code).join(", ")}`)
+        : acceptance.checked.map((c) => `${c.url} — ${c.verdict.signals.join(", ") || "acceptable"}`)
+      ).filter(Boolean).slice(0, 8),
+      verifier: ACCEPTANCE_VERIFIER,
+      metadata: failed ? { source: "deliverable-acceptance", hardFail: true } : { source: "deliverable-acceptance" },
       createdAt: now,
     });
   }

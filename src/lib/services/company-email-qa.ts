@@ -13,6 +13,8 @@
 import { readCompanyEmailThreads, type CompanyEmailThread } from "@/lib/services/agent-mailboxes";
 import { isReservedOrMockUrl } from "@/lib/net/reserved-urls";
 import { probeUrlLiveness } from "@/lib/net/probe-url";
+import { makeDeliverableContentFetcher } from "@/lib/services/deliverables/content-fetcher";
+import { contractsForArtifact, evaluateArtifactAcceptance, type AcceptanceVerdict } from "@/lib/services/deliverables/acceptance-contracts";
 import { reviewOutreachEmail, type EmailQaAiFinding } from "@/lib/services/queen-bee/email-qa-reviewer";
 
 export type EmailQaSeverity = "high" | "medium" | "low";
@@ -150,6 +152,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   placeholder: "Unfilled placeholder",
   "tracking-pixel": "Visible tracking-pixel line",
   "missing-attachment": "Missing attachment",
+  "placeholder-deliverable": "Placeholder / unfinished deliverable",
 };
 
 const CATEGORY_SUGGESTIONS: Record<string, string> = {
@@ -157,6 +160,7 @@ const CATEGORY_SUGGESTIONS: Record<string, string> = {
   placeholder: "Never send an email that still contains a template placeholder or merge field — render and verify every field first.",
   "tracking-pixel": "Do not put a visible \"tracking pixel\" line or open-pixel URL in the plaintext body; use a real HTML part where the pixel is invisible, or drop it.",
   "missing-attachment": "If an email says something is attached, verify the attachment is actually included before sending.",
+  "placeholder-deliverable": "Never link a prospect to a preview that still shows placeholder content — verify the page has a real menu/offer with prices and real imagery before sending.",
 };
 
 async function deterministicFindings(threads: CompanyEmailThread[]): Promise<EmailQaFinding[]> {
@@ -170,11 +174,29 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
   const probes = await mapPool(destList, PROBE_CONCURRENCY, (url) => probeUrlLiveness(url));
   const probeByUrl = new Map(destList.map((url, index) => [url, probes[index]]));
 
+  // Content acceptance: for LIVE customer-facing destinations a contract governs
+  // (preview/offer pages), fetch the page and check it isn't a placeholder/wireframe
+  // skeleton — a real preview shipped to a prospect with fake "menu" items and no
+  // prices (2026-07-07). Bounded + best-effort; an unreadable page abstains so this
+  // never fires a false finding. Dead/reserved links are handled above.
+  const fetchContent = makeDeliverableContentFetcher();
+  const acceptanceByUrl = new Map<string, AcceptanceVerdict>();
+  if (fetchContent) {
+    const governedLive = destList.filter((url) => probeByUrl.get(url)?.live && contractsForArtifact({ url }).length);
+    await mapPool(governedLive, PROBE_CONCURRENCY, async (url) => {
+      const content = await fetchContent({ url }).catch(() => null);
+      if (!content?.body) return;
+      const verdict = evaluateArtifactAcceptance({ url }, content);
+      if (verdict.status === "fail") acceptanceByUrl.set(url, verdict);
+    });
+  }
+
   const findings: EmailQaFinding[] = [];
   for (const thread of threads) {
     const business = businessLabel(thread);
     const body = thread.body ?? "";
     const seenDeadForThread = new Set<string>();
+    const seenPlaceholderDeliverableForThread = new Set<string>();
     for (const url of candidateUrls(thread)) {
       const dest = finalDestination(url);
       if (isReservedOrMockUrl(dest)) {
@@ -192,6 +214,16 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
           id: `${thread.id}:dead:${dest}`, threadId: thread.threadId, business, subject: thread.subject,
           severity: "high", category: "dead-link", categoryLabel: CATEGORY_LABELS["dead-link"], source: "deterministic",
           summary: `A link the recipient is asked to click is dead (${probe.reason}): ${dest}`, suggestion: CATEGORY_SUGGESTIONS["dead-link"], badUrl: dest,
+        });
+      }
+      const rejected = acceptanceByUrl.get(dest);
+      if (rejected && !seenPlaceholderDeliverableForThread.has(dest)) {
+        seenPlaceholderDeliverableForThread.add(dest);
+        findings.push({
+          id: `${thread.id}:placeholder-deliverable:${dest}`, threadId: thread.threadId, business, subject: thread.subject,
+          severity: "high", category: "placeholder-deliverable", categoryLabel: CATEGORY_LABELS["placeholder-deliverable"], source: "deterministic",
+          summary: `The linked deliverable looks unfinished/placeholder (${rejected.violations.map((v) => v.message).join(" ")}): ${dest}`,
+          suggestion: CATEGORY_SUGGESTIONS["placeholder-deliverable"], badUrl: dest,
         });
       }
     }
