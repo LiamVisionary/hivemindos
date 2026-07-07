@@ -1708,6 +1708,58 @@ def push_missing_reconcile(
     return summary
 
 
+def backfill_meta_enabled() -> bool:
+    """Meta backfill is on by default; HIVE_ENV_BACKFILL_META=0 disables it."""
+    raw = os.environ.get("HIVE_ENV_BACKFILL_META")
+    if raw is None:
+        raw = local_setting("HIVE_ENV_BACKFILL_META")
+    if raw is None or str(raw).strip() == "":
+        return True
+    return truthy(raw)
+
+
+def backfill_missing_meta(
+    args: argparse.Namespace,
+    env_file: pathlib.Path,
+    dry_run: bool = False,
+    quiet: bool = False,
+) -> dict[str, object]:
+    """Stamp any local env key that has no .env.meta.json timestamp.
+
+    A key lands in the shared env file with no per-key updatedAt entry whenever
+    something writes it outside the sanctioned apply_update path (a raw file
+    edit, an out-of-repo tool, an older writer). pull_reconcile then reads its
+    age as 0.0 and treats it as UnknownAge, refusing to overwrite it, while
+    export_json serves it as updatedAt=0 so peers won't adopt it either — the
+    key is frozen out of sync in BOTH directions and silently diverges the
+    moment anyone edits it on one machine. Stamping a real timestamp makes the
+    key sync-eligible again, so no key stays stranded regardless of how it was
+    written. Run FIRST in --sync-maintenance so the stamped keys take part in
+    the same cycle's pull/push. Kill switch: HIVE_ENV_BACKFILL_META=0.
+
+    Only stamps keys PRESENT in the env file but ABSENT from meta, so it never
+    disturbs an existing stamp and never resurrects a tombstone (a removed key
+    keeps its meta entry but is absent from the values, so it is not eligible).
+    """
+    store = env_store_file(args, env_file)
+    values = shared_env_values(args, env_file)
+    meta = read_env_meta(store)
+    missing = sorted(key for key in values if key not in meta)
+    summary: dict[str, object] = {
+        "stamped": missing,
+        "dryRun": dry_run,
+        "disabled": not backfill_meta_enabled(),
+    }
+    if not backfill_meta_enabled() or not missing or dry_run:
+        if not quiet and missing and dry_run:
+            print("Hivemind Sync env meta-backfill would stamp: " + ", ".join(missing))
+        return summary
+    touch_env_meta(store, missing)
+    if not quiet:
+        print(f"Hivemind Sync env meta-backfill stamped {len(missing)} unsynced key(s): " + ", ".join(missing))
+    return summary
+
+
 def export_json(args: argparse.Namespace, env_file: pathlib.Path) -> None:
     values = shared_env_values(args, env_file)
     updated_at = read_env_meta(env_store_file(args, env_file))
@@ -1827,9 +1879,14 @@ def parse_args() -> argparse.Namespace:
         help="Seed every ready peer collector with the keys it is entirely missing (fills strands a pull can't reach). Never overwrites a value a peer already holds.",
     )
     parser.add_argument(
+        "--backfill-meta",
+        action="store_true",
+        help="Stamp any local env key missing a .env.meta.json timestamp so it becomes sync-eligible (heals keys written outside the sanctioned path). Never touches existing stamps or tombstones.",
+    )
+    parser.add_argument(
         "--sync-maintenance",
         action="store_true",
-        help="Run the retry queue, pull-reconcile, and push-missing once, then print a JSON summary. Used by the telemetry collector's periodic loop.",
+        help="Run the meta backfill, retry queue, pull-reconcile, and push-missing once, then print a JSON summary. Used by the telemetry collector's periodic loop.",
     )
     parser.add_argument(
         "--dry-run",
@@ -1955,13 +2012,18 @@ def main() -> int:
 
     if args.sync_maintenance:
         peers = tailnet_peer_status()
+        # Stamp any locally-present key that has no meta timestamp FIRST, so a
+        # key written outside the sanctioned path (raw edit, out-of-repo tool)
+        # stops reading as UnknownAge and takes part in this same cycle's sync
+        # instead of silently freezing out of reconcile forever.
+        backfill_summary = backfill_missing_meta(args, env_file, dry_run=args.dry_run, quiet=True)
         drain_summary = drain_pending(args, env_file, quiet=True, peers=peers)
         # Pull first (adopt anything newer from peers), THEN seed peers with the
         # keys they're missing — so a strand on a hard-to-reach holder heals
         # automatically instead of waiting on a manual --reconcile.
         pull_summary = pull_reconcile(args, env_file, dry_run=args.dry_run, quiet=True, peers=peers)
         push_summary = push_missing_reconcile(args, env_file, dry_run=args.dry_run, quiet=True, peers=peers)
-        print(json.dumps({"version": 1, "retry": drain_summary, "pull": pull_summary, "push": push_summary}, sort_keys=True))
+        print(json.dumps({"version": 1, "backfill": backfill_summary, "retry": drain_summary, "pull": pull_summary, "push": push_summary}, sort_keys=True))
         return 0
 
     if args.retry_pending:
@@ -1979,6 +2041,12 @@ def main() -> int:
 
     if args.push_missing:
         summary = push_missing_reconcile(args, env_file, dry_run=args.dry_run)
+        if args.dry_run:
+            print(json.dumps(summary, sort_keys=True))
+        return 0
+
+    if args.backfill_meta:
+        summary = backfill_missing_meta(args, env_file, dry_run=args.dry_run)
         if args.dry_run:
             print(json.dumps(summary, sort_keys=True))
         return 0
