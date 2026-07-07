@@ -9,7 +9,7 @@ import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/servi
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
 import { getSurvivalSnapshot, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
-import { exportAgentWalletSecret } from "./wallet-secret-export-actions";
+import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
 import { fetchBankrWallet, type BankrWalletInfo } from "./trade/trade-api";
 import { WalletSelectModal, type PickableWallet } from "./trade/WalletSelectModal";
 import { agentPickable, groupedUserPickables, isLocalPaymentSigningWallet, resolvePickableAccount } from "./trade/wallet-pickables";
@@ -970,6 +970,11 @@ function WalletPanelComponent(props: any) {
       const agent = props.displayAgents?.find((item: any) => item.id === agentId);
       if (!agent) return { ok: false, error: "Could not find this agent wallet." };
       return exportAgentWalletSecret(agent, props.exportWalletSecrets, props.updateWalletAction, { confirmation });
+    },
+    onExportPersonalWallet: (walletId: string, confirmation?: string) => {
+      const group = buildGroupedPersonalWallets(mergedPersonalWallets).find((wallet) => wallet.id === walletId || wallet.spendId === walletId);
+      if (!group) return { ok: false, error: "Could not find this personal wallet." };
+      return exportPersonalWalletGroupSecret(group, props.exportWalletSecrets, props.updateWalletAction, { confirmation });
     },
     onSendAgentPayment: async (input: any) => {
       const wallet = effectiveWalletsByAgent?.[input.agentId] || {};

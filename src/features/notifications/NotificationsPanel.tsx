@@ -1,9 +1,10 @@
-import Image from "next/image";
-import { useCallback, useState } from "react";
-import { ArrowUpRight, Bell, Bot, Check, CheckCheck, ChevronLeft, ChevronRight, KanbanSquare, LoaderCircle, MessageSquare, RefreshCcw, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUpRight, Bell, Check, CheckCheck, ChevronRight, KanbanSquare, LoaderCircle, MessageSquare, RefreshCcw } from "lucide-react";
 
+import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
+import { useSpendApprovals } from "@/features/approvals/use-spend-approvals";
+import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import notificationStyles from "@/app/notifications.module.css";
-import { Button } from "@/components/ui/button";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
@@ -19,14 +20,12 @@ import {
 } from "@/features/notifications/notification-actions";
 import { clusterNotifications } from "@/features/notifications/notification-clustering";
 import {
+  groupNotifications,
   notificationActorMeta,
   notificationDisplayBody,
   notificationDisplayTitle,
   notificationIcon,
-  notificationKindLabel,
   notificationPriorityLabel,
-  notificationSourceLabel,
-  notificationTagLabel,
 } from "@/features/notifications/notification-display";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import type { AgentAutonomyReviewMode, AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
@@ -38,21 +37,18 @@ const AUTONOMY_REVIEW_OPTIONS: Array<{
   label: string;
   detail: string;
 }> = [
-  {
-    mode: "autonomous",
-    label: "Autonomous",
-    detail: "Agents keep moving unless they choose to escalate.",
-  },
-  {
-    mode: "review-high-risk",
-    label: "Review high risk",
-    detail: "Decisions, urgent items, spend, and external actions come here first.",
-  },
-  {
-    mode: "review-all",
-    label: "Review everything",
-    detail: "Every approval-style action waits for human review.",
-  },
+  { mode: "autonomous", label: "Autonomous", detail: "Agents keep going." },
+  { mode: "review-high-risk", label: "Review high-risk", detail: "Spend, decisions & urgent first." },
+  { mode: "review-all", label: "Review all", detail: "Everything waits for you." },
+];
+
+type NotificationFilter = "all" | "unread" | "attention" | "resolved";
+
+const FILTERS: Array<{ id: NotificationFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "unread", label: "Unread" },
+  { id: "attention", label: "Need attention" },
+  { id: "resolved", label: "Resolved" },
 ];
 
 export type NotificationGroup = {
@@ -77,15 +73,12 @@ export type NotificationsPanelProps = {
   onUpdateSettings: (settings: Partial<AgentNotificationSettings>) => void;
 };
 
-function formatNotificationDate(value?: string) {
-  if (!value) return "never";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+function isResolved(notification: AgentNotification) {
+  return notification.resolution?.status === "resolved";
 }
 
 function needsApprovalReview(notification: AgentNotification) {
-  if (notification.resolution?.status === "resolved") return false;
+  if (isResolved(notification)) return false;
   return !notification.read && (
     notification.kind === "decision"
     || notification.priority === "urgent"
@@ -93,17 +86,28 @@ function needsApprovalReview(notification: AgentNotification) {
   );
 }
 
-function reviewPrompt(notification: AgentNotification) {
-  return [
-    "Help me review this agent inbox item and recommend what I should do next.",
-    `Title: ${notificationDisplayTitle(notification)}`,
-    `Agent: ${notification.agentName}`,
-    `Priority: ${notification.priority}`,
-    `Kind: ${notification.kind}`,
-    notification.source ? `Source: ${notification.source}` : "",
-    "",
-    notificationDisplayBody(notification),
-  ].filter(Boolean).join("\n");
+/** Compact relative timestamp for the meta column ("2 min ago", "Yst 22:10"). */
+function formatRelativeStamp(value?: string) {
+  if (!value) return "";
+  const then = new Date(value);
+  const time = then.getTime();
+  if (Number.isNaN(time)) return value;
+  const diffMs = Date.now() - time;
+  const diffMin = Math.round(diffMs / 60_000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 12) return `${diffHr} hr ago`;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const day = new Date(then);
+  day.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((startOfToday.getTime() - day.getTime()) / 86_400_000);
+  const hhmm = then.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (diffDays === 0) return hhmm;
+  if (diffDays === 1) return `Yst ${hhmm}`;
+  if (diffDays < 7) return then.toLocaleDateString([], { weekday: "short" });
+  return then.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 export function NotificationsPanel({
@@ -113,7 +117,6 @@ export function NotificationsPanel({
   notificationCursor,
   notificationsLoading,
   notificationsStatus,
-  fallbackFolder,
   onRefresh,
   onMarkAllRead,
   onMarkRead,
@@ -127,13 +130,54 @@ export function NotificationsPanel({
   const [boardBusyId, setBoardBusyId] = useState<string | null>(null);
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   // Consolidated look-alike notifications page through one card at a time.
-  // Keyed by `${dayLabel}::${clusterKey}` so same-titled stacks in different
-  // day groups keep independent positions.
-  const [clusterCursor, setClusterCursor] = useState<Record<string, number>>({});
-  const autonomyReviewMode = notificationSummary?.settings.autonomyReviewMode ?? "autonomous";
-  const approvalItems = notifications.filter(needsApprovalReview).slice(0, 4);
-  const decisionCount = notifications.filter((notification) => !notification.read && notification.kind === "decision").length;
-  const highPriorityCount = (notificationSummary?.highUnread ?? 0) + (notificationSummary?.urgentUnread ?? 0);
+  // Which look-alike clusters are expanded (open to show every member).
+  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(() => new Set());
+  const [filter, setFilter] = useState<NotificationFilter>("all");
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollIdleRef = useRef<number | null>(null);
+  // The real human-in-the-loop spend-approval queue (shared with the Zero Human
+  // Companies approvals section). Powers the "Review first" rail + its modal.
+  const spendApprovals = useSpendApprovals();
+
+  // Auto-fill: the first page can collapse to a handful of rows (e.g. 38
+  // look-alike escalations cluster into one +N row), leaving the tall list
+  // underfilled — with nothing to scroll, the scroll-triggered load never
+  // fires. Pull the next page whenever the loaded rows don't fill the viewport
+  // (and there's more to load), so the list fills instead of stopping at the
+  // first cluster. Terminates when the list fills or the cursor runs out.
+  useEffect(() => {
+    if (notificationsLoading || notificationCursor === null) return;
+    const el = listScrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight <= el.clientHeight + 40) void onRefresh({ append: true });
+  }, [notifications, notificationsLoading, notificationCursor, filter, onRefresh]);
+
+  const settings = notificationSummary?.settings;
+  const autonomyReviewMode = settings?.autonomyReviewMode ?? "autonomous";
+
+  const filterCounts = useMemo(() => ({
+    all: notifications.length,
+    unread: notifications.filter((notification) => !notification.read).length,
+    attention: notifications.filter(needsApprovalReview).length,
+    resolved: notifications.filter(isResolved).length,
+  }), [notifications]);
+
+  const decisionsCount = useMemo(
+    () => notifications.filter((notification) => !notification.read && notification.kind === "decision").length,
+    [notifications],
+  );
+
+  const visibleGroups = useMemo(() => {
+    if (filter === "all") return notificationGroups;
+    const predicate = filter === "unread"
+      ? (notification: AgentNotification) => !notification.read
+      : filter === "attention"
+        ? needsApprovalReview
+        : isResolved;
+    return groupNotifications(notifications.filter(predicate));
+  }, [filter, notificationGroups, notifications]);
+
+  const total = notificationSummary?.total ?? notifications.length;
 
   const sendToBoard = useCallback(async (notification: AgentNotification) => {
     setBoardBusyId(notification.id);
@@ -163,9 +207,7 @@ export function NotificationsPanel({
 
   const discussWithQueen = useCallback(async (notification: AgentNotification, prompt: string) => {
     // Inline the referenced Work Board record so the Queen answers from facts
-    // instead of hunting for the task (her first real Discuss click went
-    // looking for a nonexistent "task directory"). Best-effort with a short
-    // timeout — the base prompt still works without it.
+    // instead of hunting for the task. Best-effort with a short timeout.
     let enriched = prompt;
     const taskId = notificationTaskId(notification);
     if (taskId) {
@@ -202,332 +244,357 @@ export function NotificationsPanel({
     void discussWithQueen(notification, action.prompt);
   }, [discussWithQueen, onNavigateTarget, sendToBoard]);
 
-  const renderNotificationCard = (notification: AgentNotification) => {
-    const actor = notificationActorMeta(notification);
-    const sourceLabel = notificationSourceLabel(notification);
+  const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
+
+  const toggleCluster = (key: string) => {
+    setExpandedClusters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const discussApproval = useCallback((approval: SpendApprovalView) => {
+    queenChat.setHistoryMinimized(false);
+    void queenChat.sendText([
+      "I'm reviewing a spend-approval request and want your take before I decide:",
+      "",
+      approval.title,
+      `Requested by ${approval.agent} · ${approval.kind}${approval.amountUsd != null ? ` · $${approval.amountUsd.toFixed(2)} ${approval.asset ?? "USDC"}` : ""}`,
+      approval.reason ? `Reason: ${approval.reason}` : "",
+      "",
+      "Should I approve or reject this? If reject, what change should I ask the agent for?",
+    ].filter(Boolean).join("\n"));
+    window.setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>("body > .fr-root .fr-chat-input")
+        ?? document.querySelector<HTMLInputElement>(".fr-chat-input");
+      input?.focus();
+    }, 250);
+  }, [queenChat]);
+
+  const renderActions = (notification: AgentNotification) => {
+    const derived = deriveNotificationActions(notification);
+    const createdTaskId = boardTasks[notification.id];
     return (
-      <article
-        key={notification.id}
-        className={notificationClass("notificationCard", notification.priority, !notification.read && "unread")}
-        role={onOpenNotification ? "button" : undefined}
-        tabIndex={onOpenNotification ? 0 : undefined}
-        onClick={() => onOpenNotification?.(notification)}
+      <div className={notificationClass("rowActions")} onClick={stop} role="group" aria-label="Alert actions">
+        {createdTaskId ? (
+          <button
+            type="button"
+            className={notificationClass("actionBtn", "primary")}
+            onClick={() => onNavigateTarget?.({ view: "kanban", taskId: createdTaskId, openTask: true })}
+          >
+            <KanbanSquare aria-hidden="true" />
+            On the board — open task
+          </button>
+        ) : null}
+        {derived.map((action) => {
+          if (action.type === "work-board" && createdTaskId) return null;
+          if (action.type === "navigate" && !onNavigateTarget) return null;
+          const busy = action.type === "work-board" && boardBusyId === notification.id;
+          return (
+            <button
+              key={`${notification.id}-action-${action.label}`}
+              type="button"
+              className={notificationClass("actionBtn")}
+              disabled={busy}
+              onClick={() => runAction(notification, action)}
+            >
+              {busy ? <LoaderCircle aria-hidden="true" className={notificationClass("spinIcon")} />
+                : action.type === "discuss" ? <MessageSquare aria-hidden="true" />
+                : action.type === "work-board" ? <KanbanSquare aria-hidden="true" />
+                : <ArrowUpRight aria-hidden="true" />}
+              {busy ? "Sending" : action.label}
+            </button>
+          );
+        })}
+        {!notification.read ? (
+          <button
+            type="button"
+            className={notificationClass("actionBtn", "readBtn")}
+            onClick={() => onMarkRead(notification.id)}
+          >
+            <Check aria-hidden="true" />
+            Read
+          </button>
+        ) : null}
+        {actionErrors[notification.id] ? (
+          <span className={notificationClass("actionError")}>{actionErrors[notification.id]}</span>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderRow = (
+    notification: AgentNotification,
+    key: string,
+    cluster: { total: number; unread: number; expanded: boolean; onToggle: () => void } | null,
+  ) => {
+    const actor = notificationActorMeta(notification);
+    const resolved = isResolved(notification);
+    const openable = Boolean(onOpenNotification);
+    const bodyText = notification.body
+      ? `**${actor.label}** · ${notificationDisplayBody(notification)}`
+      : `**${actor.label}**`;
+    return (
+      <div
+        key={key}
+        className={notificationClass("row", notification.priority, resolved && "resolved")}
+        tabIndex={0}
+        role={openable ? "button" : undefined}
+        onClick={openable ? () => onOpenNotification?.(notification) : undefined}
         onKeyDown={(event) => {
-          if (!onOpenNotification) return;
+          if (!openable) return;
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            onOpenNotification(notification);
+            onOpenNotification?.(notification);
           }
         }}
       >
-        <div className={notificationClass("notificationGlyph")}>
+        <span className={notificationClass("rowGlyph")}>
           {notificationIcon(notification.kind, notification.priority)}
-        </div>
-        <div className={notificationClass("notificationBody")}>
-          <div className={notificationClass("notificationMetaRow")}>
-            <div>
-              <h3>{notificationDisplayTitle(notification)}</h3>
-              <div className={notificationClass("notificationActorRow")}>
-                <span className={notificationClass("notificationActorBadge", actor.icon && "withIcon")}>
-                  {actor.icon ? <Image src={actor.icon} alt="" width={20} height={20} aria-hidden="true" unoptimized /> : null}
-                  <span>
-                    <b>{actor.label}</b>
-                    <small>{actor.role}</small>
-                  </span>
-                </span>
-                {sourceLabel ? (
-                  <span className={notificationClass("notificationSourcePill")}>
-                    {sourceLabel.startsWith("Task: ") ? (
-                      <>
-                        <small>Task</small>
-                        <b>{sourceLabel.slice("Task: ".length)}</b>
-                      </>
-                    ) : sourceLabel}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <time>{formatNotificationDate(notification.createdAt)}</time>
+        </span>
+        <div className={notificationClass("rowMain")}>
+          <div className={notificationClass("rowTitleLine")}>
+            <b className={notificationClass("rowTitle")}>{notificationDisplayTitle(notification)}</b>
+            {!notification.read ? <span className={notificationClass("unreadDot")} aria-label="Unread" /> : null}
+            {cluster ? (
+              <button
+                type="button"
+                className={notificationClass("clusterBadge", cluster.expanded && "expanded")}
+                aria-expanded={cluster.expanded}
+                title={`${cluster.total} similar${cluster.unread ? ` · ${cluster.unread} unread` : ""} — ${cluster.expanded ? "collapse" : "expand"}`}
+                onClick={(event) => { event.stopPropagation(); cluster.onToggle(); }}
+              >
+                <ChevronRight aria-hidden="true" className={notificationClass("clusterChevron")} />
+                {cluster.expanded ? `${cluster.total} similar` : `+${cluster.total - 1}`}
+              </button>
+            ) : null}
           </div>
-          {notification.body ? (
+          <div className={notificationClass("expandWrap")}>
             <ChatMarkdown
-              text={notificationDisplayBody(notification)}
-              className={notificationClass("notificationMarkdown")}
-              headingClassName={notificationClass("notificationMarkdownHeading")}
+              text={bodyText}
+              className={notificationClass("rowBody")}
             />
-          ) : null}
-          {notification.resolution ? (
-            <p className={notificationClass("resolutionNote", notification.resolution.status)}>
-              {notification.resolution.status === "resolved" ? "Resolved" : "Resolution in progress"}
-              {notification.resolution.note ? ` — ${notification.resolution.note}` : ""}
-              <time> ({formatNotificationDate(notification.resolution.updatedAt)})</time>
-            </p>
-          ) : null}
-          <div className={notificationClass("notificationFooter")}>
-            <div className={notificationClass("notificationTags")}>
-              {notification.resolution ? (
-                <span className={notificationClass("resolutionPill", notification.resolution.status)}>
-                  {notification.resolution.status === "resolved" ? "✓ resolved" : "resolution in progress…"}
-                </span>
-              ) : null}
-              <span className={notificationClass("priorityPill", notification.priority)}>{notificationPriorityLabel(notification.priority)}</span>
-              <span className={notificationClass("kindPill")}>{notificationKindLabel(notification.kind)}</span>
-              {notification.read ? <span className={notificationClass("readPill")}>read</span> : null}
-              {/* task:<id> tags are structured routing data for the action buttons, not labels */}
-              {notification.tags.filter((tag) => !tag.toLowerCase().startsWith("task:")).slice(0, 4).map((tag) => <span className={notificationClass("kindPill")} key={`${notification.id}-${tag}`}>{notificationTagLabel(tag)}</span>)}
-            </div>
-            {!notification.read ? (
-              <Button type="button" size="sm" variant="secondary" onClick={(event) => {
-                event.stopPropagation();
-                onMarkRead(notification.id);
-              }}>
-                <Check aria-hidden="true" />
-                Read
-              </Button>
+            {notification.resolution ? (
+              <p className={notificationClass("resolutionNote")}>
+                {resolved ? "Resolved" : "Resolution in progress"}
+                {notification.resolution.note ? ` — ${notification.resolution.note}` : ""}
+              </p>
             ) : null}
-          </div>
-          <div className={notificationClass("notificationActions")}>
-            {boardTasks[notification.id] ? (
-              <Button type="button" size="sm" onClick={(event) => {
-                event.stopPropagation();
-                onNavigateTarget?.({ view: "kanban", taskId: boardTasks[notification.id] });
-              }}>
-                <KanbanSquare aria-hidden="true" />
-                On the board — open task
-              </Button>
-            ) : null}
-            {deriveNotificationActions(notification).map((action) => {
-              if (action.type === "work-board" && boardTasks[notification.id]) return null;
-              if (action.type === "navigate" && !onNavigateTarget) return null;
-              const busy = action.type === "work-board" && boardBusyId === notification.id;
-              return (
-                <Button
-                  key={`${notification.id}-action-${action.label}`}
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    runAction(notification, action);
-                  }}
-                >
-                  {busy ? <LoaderCircle aria-hidden="true" className={notificationClass("spinIcon")} />
-                    : action.type === "discuss" ? <MessageSquare aria-hidden="true" />
-                    : action.type === "work-board" ? <KanbanSquare aria-hidden="true" />
-                    : <ArrowUpRight aria-hidden="true" />}
-                  {busy ? "Sending" : action.label}
-                </Button>
-              );
-            })}
-            {actionErrors[notification.id] ? (
-              <span className={notificationClass("notificationActionError")}>{actionErrors[notification.id]}</span>
-            ) : null}
+            {renderActions(notification)}
           </div>
         </div>
-      </article>
+        <div className={notificationClass("rowMeta")}>
+          {resolved ? (
+            <span className={notificationClass("resolvedPill")}>✓ resolved</span>
+          ) : (
+            <span className={notificationClass("priorityPill")}>{notificationPriorityLabel(notification.priority)}</span>
+          )}
+          <time className={notificationClass("rowTime")} dateTime={notification.createdAt}>
+            {formatRelativeStamp(notification.createdAt)}
+          </time>
+        </div>
+      </div>
     );
   };
 
   return (
-    <section className={notificationClass("notificationsPanel", "tabPanel")}>
-      <div className={notificationClass("notificationsHeader")}>
+    <section className={notificationClass("notificationsPanel", "tabPanel")} aria-label="Alerts">
+      <header className={notificationClass("alertsHeader")}>
         <div>
-          <p className="eyebrow">Hive Alerts</p>
-          <h2>Alerts, decisions, and approvals</h2>
-          <p>Agents can keep operating autonomously, escalate high-priority items, or route approval-style decisions here based on your review mode.</p>
+          <p className={notificationClass("alertsEyebrow")}>What needs attention</p>
+          <h1 className={notificationClass("alertsTitle")}>Alerts</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="secondary" onClick={() => void onRefresh()} disabled={notificationsLoading}>
+        <div className={notificationClass("headerActions")}>
+          <button
+            type="button"
+            className={notificationClass("headerBtn")}
+            onClick={() => void onRefresh()}
+            disabled={notificationsLoading}
+          >
             <RefreshCcw aria-hidden="true" className={notificationsLoading ? notificationClass("spinIcon") : undefined} />
             {notificationsLoading ? "Refreshing" : "Refresh"}
-          </Button>
-          <Button type="button" size="sm" onClick={onMarkAllRead} disabled={!notificationSummary?.unread}>
+          </button>
+          <button
+            type="button"
+            className={notificationClass("headerBtn", "headerBtnPrimary")}
+            onClick={onMarkAllRead}
+            disabled={!notificationSummary?.unread}
+          >
             <CheckCheck aria-hidden="true" />
-            Mark read
-          </Button>
+            Mark all read
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div className={notificationClass("inboxSummaryGrid")}>
-        <article>
-          <Bell aria-hidden="true" />
-          <span>Unread</span>
-          <strong>{notificationSummary?.unread ?? 0}</strong>
-        </article>
-        <article>
-          <SlidersHorizontal aria-hidden="true" />
-          <span>Decisions</span>
-          <strong>{decisionCount}</strong>
-        </article>
-        <article>
-          <ShieldCheck aria-hidden="true" />
-          <span>Priority</span>
-          <strong>{highPriorityCount}</strong>
-        </article>
-        <article>
-          <Bot aria-hidden="true" />
-          <span>Mode</span>
-          <strong>{AUTONOMY_REVIEW_OPTIONS.find((option) => option.mode === autonomyReviewMode)?.label ?? "Autonomous"}</strong>
-        </article>
-      </div>
-
-      <div className={notificationClass("notificationsControls")}>
-        <div className={notificationClass("notificationStats")}>
-          <span><strong>{notificationSummary?.total ?? 0}</strong> total</span>
-          <span><strong>{notificationSummary?.unread ?? 0}</strong> unread</span>
-          <span><strong>{(notificationSummary?.highUnread ?? 0) + (notificationSummary?.urgentUnread ?? 0)}</strong> high priority</span>
-          <span title={notificationSummary?.folder}>/{notificationSummary?.folder ?? fallbackFolder}</span>
-        </div>
-        <div className={notificationClass("inboxSettings")}>
-          <div className={notificationClass("autonomyReview")}>
-            <div>
-              <strong>Autonomy review mode</strong>
-              <span>Configurable, never mandatory. Fully autonomous remains the default.</span>
+      <div className={notificationClass("twoCol")}>
+        <main className={notificationClass("mainCol")}>
+          <div className={notificationClass("notificationsCard")}>
+            <div className={notificationClass("filterTabs")} role="tablist" aria-label="Filter alerts">
+              {FILTERS.map((entry) => (
+                <button
+                  key={entry.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === entry.id}
+                  className={notificationClass("filterTab", filter === entry.id && "active")}
+                  onClick={() => setFilter(entry.id)}
+                >
+                  {entry.label}
+                  {filterCounts[entry.id] ? <span className={notificationClass("filterTabCount")}>{filterCounts[entry.id]}</span> : null}
+                </button>
+              ))}
+              <span className={notificationClass("tabsTotal")}>{total} total</span>
             </div>
-            <div className={notificationClass("autonomySegments")} role="radiogroup" aria-label="Autonomy review mode">
+
+            <div
+              className={notificationClass("listScroll")}
+              ref={listScrollRef}
+              onScroll={(event) => {
+                const el = event.currentTarget;
+                // Suppress hover-expand jank while scrolling (ref-based, no re-render):
+                // ignore row hover until the scroll goes idle.
+                el.classList.add(notificationClass("scrolling"));
+                if (scrollIdleRef.current) window.clearTimeout(scrollIdleRef.current);
+                scrollIdleRef.current = window.setTimeout(() => el.classList.remove(notificationClass("scrolling")), 160);
+                // Infinite scroll — pull the next page as the reader nears the bottom.
+                if (notificationsLoading || notificationCursor === null) return;
+                if (el.scrollHeight - el.scrollTop - el.clientHeight < 320) void onRefresh({ append: true });
+              }}
+            >
+              {visibleGroups.length ? (
+                <div className={notificationClass("dayGroups")}>
+                  {visibleGroups.map((group) => (
+                    <section key={group.label} className={notificationClass("dayGroup")}>
+                      <p className={notificationClass("dayLabel")}>{group.label}</p>
+                      {clusterNotifications(group.items).map((cluster) => {
+                        const count = cluster.items.length;
+                        if (count === 1) return renderRow(cluster.items[0], cluster.items[0].id, null);
+                        // Key expansion on the stable anchor id so the open/closed
+                        // state survives a refresh.
+                        const anchorId = cluster.items[0].id;
+                        const stateKey = `${group.label}::${anchorId}`;
+                        const expanded = expandedClusters.has(stateKey);
+                        const unread = cluster.items.filter((item) => !item.read).length;
+                        const clusterMeta = { total: count, unread, expanded, onToggle: () => toggleCluster(stateKey) };
+                        // Collapsed: one representative row with the expand toggle.
+                        if (!expanded) return renderRow(cluster.items[0], anchorId, clusterMeta);
+                        // Expanded: the representative + every other member, grouped.
+                        return (
+                          <div key={stateKey} className={notificationClass("clusterGroup")}>
+                            {renderRow(cluster.items[0], anchorId, clusterMeta)}
+                            <div className={notificationClass("clusterMembers")}>
+                              {cluster.items.slice(1).map((item) => renderRow(item, item.id, null))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </section>
+                  ))}
+                  {notificationCursor !== null ? (
+                    <button
+                      type="button"
+                      className={notificationClass("actionBtn", "loadMore")}
+                      onClick={() => void onRefresh({ append: true })}
+                      disabled={notificationsLoading}
+                    >
+                      {notificationsLoading ? <LoaderCircle aria-hidden="true" className={notificationClass("spinIcon")} /> : null}
+                      {notificationsLoading ? "Loading more" : "Load more"}
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                <div className={notificationClass("emptyState")} role="status">
+                  <Bell aria-hidden="true" />
+                  <strong>{filter === "all" ? "No alerts yet" : "Nothing here"}</strong>
+                  <p>
+                    {filter === "all"
+                      ? "When an agent writes to the vault folder, this tab picks it up and the nav badge lights up."
+                      : "No alerts match this filter right now."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {notificationsStatus ? <p className={notificationClass("statusLine")}>{notificationsStatus}</p> : null}
+          </div>
+        </main>
+
+        <aside className={notificationClass("sideCol")} aria-label="Review and settings">
+          <div className={notificationClass("sidePanel")}>
+            <p className={notificationClass("sidePanelLabel")}>Overview</p>
+            <div className={notificationClass("overviewGrid")}>
+              <div className={notificationClass("overviewRow")}><span>Unread</span><b>{filterCounts.unread}</b></div>
+              <div className={notificationClass("overviewDivider")} />
+              <div className={notificationClass("overviewRow")}><span>Need attention</span><b>{filterCounts.attention}</b></div>
+              <div className={notificationClass("overviewDivider")} />
+              <div className={notificationClass("overviewRow")}><span>Decisions</span><b>{decisionsCount}</b></div>
+            </div>
+          </div>
+
+          {spendApprovals.approvals.length ? (
+            <div className={notificationClass("sidePanel")}>
+              <div className={notificationClass("sidePanelHead")}>
+                <p className={notificationClass("sidePanelLabel")}>Review first</p>
+                <span className={notificationClass("reviewCount")}>{spendApprovals.approvals.length}</span>
+              </div>
+              <div className={notificationClass("reviewList")}>
+                {spendApprovals.approvals.map((approval) => (
+                  <ApprovalReviewCard
+                    key={approval.id}
+                    approval={approval}
+                    busy={spendApprovals.busyId === approval.id}
+                    error={spendApprovals.error || undefined}
+                    onDecide={(decision, note) => spendApprovals.decide(approval.id, decision, note)}
+                    onDiscuss={() => discussApproval(approval)}
+                  />
+                ))}
+              </div>
+              {spendApprovals.error ? <p className={notificationClass("reviewError")}>{spendApprovals.error}</p> : null}
+            </div>
+          ) : null}
+
+          <div className={notificationClass("sidePanel")}>
+            <div>
+              <p className={notificationClass("sidePanelLabel")}>Autonomy</p>
+              <p className={notificationClass("autonomyIntro")}>Fully autonomous by default. Choose how much routes to you.</p>
+            </div>
+            <div className={notificationClass("modeStack")} role="radiogroup" aria-label="Autonomy review mode">
               {AUTONOMY_REVIEW_OPTIONS.map((option) => (
                 <button
                   key={option.mode}
                   type="button"
                   role="radio"
                   aria-checked={autonomyReviewMode === option.mode}
-                  className={notificationClass(autonomyReviewMode === option.mode && "active")}
+                  className={notificationClass("modeBtn", autonomyReviewMode === option.mode && "active")}
                   onClick={() => onUpdateSettings({ autonomyReviewMode: option.mode })}
                 >
-                  <strong>{option.label}</strong>
-                  <span>{option.detail}</span>
+                  <b className={notificationClass("modeBtnLabel")}>{option.label}</b>
+                  <span className={notificationClass("modeBtnDetail")}>{option.detail}</span>
                 </button>
               ))}
             </div>
-          </div>
-          <label className={notificationClass("notificationSetting")}>
-            <span>
-              <strong>Escalate high priority</strong>
-              <span>Off by default. If enabled, your agent can message you via the configured channel.</span>
-            </span>
-            <input
-              type="checkbox"
-              checked={Boolean(notificationSummary?.settings.highPriorityMessagingEnabled)}
-              onChange={(event) => onUpdateSettings({ highPriorityMessagingEnabled: event.target.checked })}
-            />
-          </label>
-        </div>
-      </div>
-
-      {approvalItems.length ? (
-        <section className={notificationClass("approvalLane")} aria-label="Approval review queue">
-          <div className={notificationClass("approvalLaneHeader")}>
-            <div>
-              <p className="eyebrow">Review queue</p>
-              <h3>Needs your eyes</h3>
+            <div className={notificationClass("escalateRow")}>
+              <span className={notificationClass("escalateText")}>
+                <b>Message me for urgent items</b>
+                <span>Off by default. Sends to your linked channel.</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(settings?.highPriorityMessagingEnabled)}
+                aria-label="Message me for urgent items"
+                className={notificationClass("escalateTrack", settings?.highPriorityMessagingEnabled && "on")}
+                onClick={() => onUpdateSettings({ highPriorityMessagingEnabled: !settings?.highPriorityMessagingEnabled })}
+              >
+                <span className={notificationClass("escalateKnob")} />
+              </button>
             </div>
-            <span>{approvalItems.length} visible</span>
           </div>
-          <div className={notificationClass("approvalCards")}>
-            {approvalItems.map((notification) => (
-              <article key={`approval-${notification.id}`} className={notificationClass("approvalCard", notification.priority)}>
-                <div>
-                  <span>{notificationKindLabel(notification.kind)} · {notificationPriorityLabel(notification.priority)}</span>
-                  <strong>{notificationDisplayTitle(notification)}</strong>
-                  <small>{notification.agentName} · {formatNotificationDate(notification.createdAt)}</small>
-                </div>
-                <div className={notificationClass("approvalActions")}>
-                  <Button type="button" size="sm" variant="secondary" onClick={() => void discussWithQueen(notification, reviewPrompt(notification))}>
-                    <MessageSquare aria-hidden="true" />
-                    Ask Queen
-                  </Button>
-                  {!notification.read ? (
-                    <Button type="button" size="sm" onClick={() => onMarkRead(notification.id)}>
-                      <Check aria-hidden="true" />
-                      Clear
-                    </Button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {notifications.length ? (
-        <div
-          className={notificationClass("notificationList")}
-          onScroll={(event) => {
-            const target = event.currentTarget;
-            if (notificationsLoading || notificationCursor === null) return;
-            if (target.scrollHeight - target.scrollTop - target.clientHeight < 220) void onRefresh({ append: true });
-          }}
-        >
-          {notificationGroups.map((group) => (
-            <section key={group.label} className={notificationClass("notificationDayGroup")}>
-              <h3>{group.label}</h3>
-              {clusterNotifications(group.items).map((cluster) => {
-                const total = cluster.items.length;
-                if (total === 1) return renderNotificationCard(cluster.items[0]);
-                const stateKey = `${group.label}::${cluster.key}`;
-                const activeIndex = Math.min(clusterCursor[stateKey] ?? 0, total - 1);
-                const unreadCount = cluster.items.filter((item) => !item.read).length;
-                const goTo = (index: number) =>
-                  setClusterCursor((prev) => ({ ...prev, [stateKey]: Math.max(0, Math.min(total - 1, index)) }));
-                return (
-                  <div key={cluster.key} className={notificationClass("notificationCluster")}>
-                    <div className={notificationClass("notificationPager")}>
-                      <div className={notificationClass("notificationPagerNav")}>
-                        <button
-                          type="button"
-                          className={notificationClass("notificationPagerArrow")}
-                          aria-label="Previous alert in this group"
-                          disabled={activeIndex === 0}
-                          onClick={() => goTo(activeIndex - 1)}
-                        >
-                          <ChevronLeft aria-hidden="true" />
-                        </button>
-                        <span className={notificationClass("notificationPagerCount")}>{activeIndex + 1}/{total}</span>
-                        <button
-                          type="button"
-                          className={notificationClass("notificationPagerArrow")}
-                          aria-label="Next alert in this group"
-                          disabled={activeIndex === total - 1}
-                          onClick={() => goTo(activeIndex + 1)}
-                        >
-                          <ChevronRight aria-hidden="true" />
-                        </button>
-                      </div>
-                      <span
-                        className={notificationClass("notificationPagerBadge", unreadCount > 0 && "unread")}
-                        title={`${total} similar notifications collapsed${unreadCount ? ` — ${unreadCount} unread` : ""}`}
-                      >
-                        +{total - 1} similar{unreadCount ? ` · ${unreadCount} unread` : ""}
-                      </span>
-                    </div>
-                    {renderNotificationCard(cluster.items[activeIndex])}
-                  </div>
-                );
-              })}
-            </section>
-          ))}
-          {notificationCursor !== null ? (
-            <Button type="button" variant="secondary" onClick={() => void onRefresh({ append: true })} disabled={notificationsLoading}>
-              {notificationsLoading ? (
-                <>
-                  <LoaderCircle aria-hidden="true" className={notificationClass("spinIcon")} />
-                  Loading more
-                </>
-              ) : "Load more"}
-            </Button>
-          ) : null}
-        </div>
-      ) : (
-        <div className={notificationClass("notificationsEmpty")}>
-          <div>
-            <Bell aria-hidden="true" />
-            <strong>No notifications yet</strong>
-            <p>When an agent writes to the vault folder, this tab will pick it up and the nav badge will light up.</p>
-          </div>
-        </div>
-      )}
-      <p className={notificationClass("notificationStatus")}>{notificationsStatus || "Notifications sync from Obsidian markdown."}</p>
+        </aside>
+      </div>
     </section>
   );
 }

@@ -51,6 +51,8 @@ assert.doesNotMatch(service, /readFileSync\(.*\.xurl.*utf8/s);
 
 const managedClient = readFileSync("src/lib/services/managed-x-api-client.ts", "utf8");
 assert.match(managedClient, /DEFAULT_MANAGED_X_API_BASE_URL = "https:\/\/hivemindos-x-api-gateway\.hivemindos\.workers\.dev"/);
+assert.match(managedClient, /DEFAULT_MANAGED_X_OAUTH_SCOPES = "tweet\.read users\.read tweet\.write offline\.access"/);
+assert.match(managedClient, /scopes: input\.scopes\?\.trim\(\) \|\| DEFAULT_MANAGED_X_OAUTH_SCOPES/);
 assert.match(managedClient, /startManagedXOAuth/);
 assert.match(managedClient, /proxyManagedXApiCall/);
 assert.match(managedClient, /proxyManagedXMcpRequest/);
@@ -68,8 +70,20 @@ assert.match(managedRoute, /requireAuth\(request\)/);
 assert.match(managedRoute, /getHivemindosModelCreditToken/);
 assert.match(managedRoute, /listHivemindosModelCreditTokenSummaries/);
 assert.match(managedRoute, /creditAccounts/);
+assert.match(managedRoute, /selectedCreditAccountId = creditAccountId \|\| creditAccounts\[0\]\?\.accountId/);
+assert.match(managedRoute, /selectedCreditAccountId/);
 assert.match(managedRoute, /oauth-start/);
 assert.match(managedRoute, /CONFIRM_X_API_CALL/);
+
+const managedDesktopReturnRoute = readFileSync("src/app/api/integrations/x-managed/desktop-return/route.ts", "utf8");
+assert.match(managedDesktopReturnRoute, /storeManagedXDesktopReturn/);
+assert.match(managedDesktopReturnRoute, /Return received/);
+assert.doesNotMatch(managedDesktopReturnRoute, /managedXDeepLinkFromSearchParams/);
+assert.doesNotMatch(managedDesktopReturnRoute, /hivemindos:\/\//);
+
+const managedDesktopReturnPendingRoute = readFileSync("src/app/api/integrations/x-managed/desktop-return-pending/route.ts", "utf8");
+assert.match(managedDesktopReturnPendingRoute, /latestManagedXDesktopReturn/);
+assert.match(managedDesktopReturnPendingRoute, /okJson\(\{ returned \}\)/);
 
 const managedMcpRoute = readFileSync("src/app/api/integrations/x-managed/mcp/route.ts", "utf8");
 assert.match(managedMcpRoute, /proxyManagedXMcpRequest/);
@@ -84,6 +98,11 @@ const ui = readFileSync("src/features/integrations/IntegrationsView.tsx", "utf8"
 assert.match(ui, /\/api\/integrations\/x-mcp/);
 assert.match(ui, /\/api\/integrations\/x-managed/);
 assert.match(ui, /managedXReturnUrl/);
+assert.match(ui, /openExternalUrl/);
+assert.match(ui, /await openExternalUrl\(data\.authorizationUrl\)/);
+assert.match(ui, /desktop-return-pending/);
+assert.match(ui, /HivemindOS will refresh automatically/);
+assert.doesNotMatch(ui, /window\.location\.assign\(data\.authorizationUrl\)/);
 assert.match(ui, /xapi: \{ transport: "stdio"/);
 assert.match(ui, /"x-docs": \{ transport: "http"/);
 
@@ -98,6 +117,11 @@ assert.match(xPanel, /Runtime reach/);
 assert.match(xPanel, /Connect managed X account/);
 assert.match(xPanel, /Credits to charge/);
 assert.match(xPanel, /managedGateway/);
+assert.match(xPanel, /uniqueManagedConnections/);
+assert.match(xPanel, /hasManagedConnections/);
+assert.match(xPanel, /!hasManagedConnections \?/);
+assert.match(xPanel, /changeManagedAccount/);
+assert.match(xPanel, /onRefreshManaged\(account\.accountId, account\.slug\)/);
 assert.match(xPanel, /X_MCP_CLIENT_ID/);
 assert.match(xPanel, /X_MCP_CLIENT_SECRET/);
 

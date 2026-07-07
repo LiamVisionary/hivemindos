@@ -1,9 +1,13 @@
 import { constants } from "fs";
 import { access, mkdir, readFile, rename, writeFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
+import { createHash } from "crypto";
+import { homedir } from "@/lib/home-dir";
 import { dirname, isAbsolute, join, sep } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import type { AgentRuntime } from "@/lib/types/agent-runtime";
+import { canonicalLocalCollectorUrl, isLocalCollectorUrl, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
@@ -23,15 +27,32 @@ const VALID_PROVIDERS = new Set<HiveMessagingProvider>(["telegram", "discord", "
 const VALID_CREDENTIAL_KINDS = new Set<HiveMessagingCredentialKind>(["env-bot-token", "env-webhook-url", "macos-messages"]);
 const SECRET_TEXT_RE = /\b([A-Za-z0-9_-]*(?:token|secret|key|signature|webhook)[A-Za-z0-9_-]*)=([^\s,;]+)/gi;
 const URL_SECRET_RE = /([?&](?:access_token|api[_-]?key|auth[_-]?token|token|signature|sig)=)([^&#\s]+)/gi;
+const RUNTIME_DISCOVERY_TIMEOUT_MS = 6_000;
+const RUNTIME_SEND_TIMEOUT_MS = 30_000;
 
 type MessagingStorageOptions = {
   vaultPath?: string | null;
   brainServicesFolder?: string | null;
+  includeRuntimeChannels?: boolean;
+  runtimeAgents?: MessagingRuntimeAgent[];
 };
 
 type SendOptions = MessagingStorageOptions & {
   channelId: string;
   message: string;
+};
+
+export type MessagingRuntimeAgent = {
+  id?: string;
+  name?: string;
+  runtime?: AgentRuntime | string;
+  agentId?: string;
+  localDataDir?: string;
+  machineName?: string;
+  telemetryUrl?: string;
+  collectorCapabilities?: {
+    runtimes?: string[];
+  };
 };
 
 export type MessagingChannelsResult = {
@@ -101,7 +122,11 @@ export async function listMessagingChannels(options: MessagingStorageOptions = {
   const storage = resolveMessagingStorage(options);
   await ensureMessagingRoot(storage);
   const settings = await readSettings(storage.settingsFile);
-  const channels = settings.channels.map(normalizeStoredChannel).filter(Boolean) as HiveMessagingChannel[];
+  const storedChannels = settings.channels.map(normalizeStoredChannel).filter(Boolean) as HiveMessagingChannel[];
+  const runtimeChannels = options.includeRuntimeChannels
+    ? await discoverRuntimeMessagingChannels(options.runtimeAgents ?? [])
+    : [];
+  const channels = mergeMessagingChannels(storedChannels, runtimeChannels);
   return {
     channels,
     directory: formatMessagingDirectory(channels),
@@ -145,6 +170,7 @@ export async function sendHiveMessage(options: SendOptions): Promise<HiveMessagi
   if (!channel.enabled) throw new Error(`${channel.label} is disabled.`);
   const limitedMessage = limitMessage(message, PROVIDER_COPY[channel.provider].messageLimit);
   const result = await sendToProvider(channel, limitedMessage);
+  if (channel.readOnly) return result;
   const storage = resolveMessagingStorage(options);
   const settings = await readSettings(storage.settingsFile);
   const nextChannels = settings.channels.map((item) => item.id === channel.id ? {
@@ -171,6 +197,219 @@ export function parseMessagingTarget(provider: HiveMessagingProvider, targetRef:
   }
   const [chatId, threadId] = trimmed.split(":", 2);
   return { chatId: chatId.trim(), threadId: threadId?.trim() || undefined };
+}
+
+type HermesSendTarget = {
+  provider: HiveMessagingProvider;
+  chatId: string;
+  threadId?: string;
+  name: string;
+  type: string;
+  targetRef: string;
+};
+
+function mergeMessagingChannels(storedChannels: HiveMessagingChannel[], runtimeChannels: HiveMessagingChannel[]) {
+  const channels = new Map<string, HiveMessagingChannel>();
+  for (const channel of storedChannels) channels.set(channel.id, withVaultSource(channel));
+  for (const channel of runtimeChannels) {
+    if (!channels.has(channel.id)) channels.set(channel.id, channel);
+  }
+  return [...channels.values()];
+}
+
+function withVaultSource(channel: HiveMessagingChannel): HiveMessagingChannel {
+  return {
+    ...channel,
+    source: channel.source ?? { kind: "vault", label: "Shared vault" },
+    delivery: channel.delivery ?? { kind: "provider" },
+  };
+}
+
+async function discoverRuntimeMessagingChannels(agents: MessagingRuntimeAgent[]) {
+  const representatives = hermesAgentRepresentatives(agents);
+  const discovered = await Promise.all(representatives.map(discoverHermesAgentChannels));
+  return discovered.flat();
+}
+
+function hermesAgentRepresentatives(agents: MessagingRuntimeAgent[]) {
+  const hermesAgents = agents.filter(isHermesMessagingAgent);
+  const candidates = hermesAgents.length
+    ? hermesAgents
+    : [{
+        id: "hermes-local",
+        name: "Hermes",
+        runtime: "hermes",
+        agentId: "local-hermes",
+        localDataDir: "~/.hermes",
+        machineName: "This Mac",
+      }];
+  const byCollector = new Map<string, MessagingRuntimeAgent[]>();
+  for (const agent of candidates) {
+    const key = normalizeCollectorUrl(agent.telemetryUrl) || "local";
+    byCollector.set(key, [...(byCollector.get(key) ?? []), agent]);
+  }
+  return [...byCollector.values()].map((group) =>
+    group.find((agent) => agent.agentId === "local-hermes")
+    ?? group.find((agent) => /^hermes$/i.test(agent.name ?? ""))
+    ?? group[0],
+  ).filter((agent): agent is MessagingRuntimeAgent => Boolean(agent));
+}
+
+function isHermesMessagingAgent(agent: MessagingRuntimeAgent) {
+  const runtime = String(agent.runtime ?? "").toLowerCase();
+  return runtime === "hermes" || (agent.collectorCapabilities?.runtimes ?? []).includes("hermes");
+}
+
+async function discoverHermesAgentChannels(agent: MessagingRuntimeAgent) {
+  const collectorUrl = await canonicalLocalCollectorUrl(agent);
+  if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) {
+    return discoverRemoteHermesChannels(agent, collectorUrl);
+  }
+  return discoverLocalHermesChannels(agent);
+}
+
+async function discoverRemoteHermesChannels(agent: MessagingRuntimeAgent, collectorUrl: string) {
+  try {
+    const response = await fetch(`${collectorUrl}/messaging-channels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list", agent: runtimeAgentPayload(agent) }),
+      signal: AbortSignal.timeout(RUNTIME_DISCOVERY_TIMEOUT_MS),
+      cache: "no-store",
+    });
+    if (!response.ok) return [];
+    const payload = await response.json().catch(() => null) as { channels?: HiveMessagingChannel[] } | null;
+    return (payload?.channels ?? []).map((channel) => runtimeChannelForAgent(channel, agent, collectorUrl));
+  } catch {
+    return [];
+  }
+}
+
+async function discoverLocalHermesChannels(agent: MessagingRuntimeAgent) {
+  try {
+    const { stdout } = await execFileAsync(await resolveHermesBin(), ["send", "-l", "--json"], {
+      timeout: RUNTIME_DISCOVERY_TIMEOUT_MS,
+      maxBuffer: 1_500_000,
+      env: hermesCommandEnv(agent),
+    });
+    return parseHermesSendTargets(stdout).map((target) => hermesTargetChannel(agent, target));
+  } catch {
+    return [];
+  }
+}
+
+function parseHermesSendTargets(raw: string): HermesSendTarget[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const platforms = (parsed as { platforms?: unknown }).platforms;
+  if (!platforms || typeof platforms !== "object" || Array.isArray(platforms)) return [];
+  const targets: HermesSendTarget[] = [];
+  for (const [providerText, entries] of Object.entries(platforms)) {
+    const provider = normalizeHermesProvider(providerText);
+    if (!provider || !Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      const chatId = String(record.id ?? record.chat_id ?? "").trim();
+      if (!chatId) continue;
+      const threadId = String(record.thread_id ?? record.threadId ?? "").trim() || undefined;
+      targets.push({
+        provider,
+        chatId,
+        threadId,
+        name: String(record.name ?? record.display_name ?? record.displayName ?? chatId).trim() || chatId,
+        type: String(record.type ?? "channel").trim() || "channel",
+        targetRef: `${provider}:${chatId}${threadId ? `:${threadId}` : ""}`,
+      });
+    }
+  }
+  return targets;
+}
+
+function normalizeHermesProvider(provider: string): HiveMessagingProvider | "" {
+  const normalized = provider.trim().toLowerCase();
+  if (normalized === "telegram" || normalized === "discord" || normalized === "slack") return normalized;
+  return "";
+}
+
+function runtimeChannelForAgent(channel: HiveMessagingChannel, agent: MessagingRuntimeAgent, collectorUrl: string): HiveMessagingChannel {
+  return {
+    ...channel,
+    id: channel.id || runtimeChannelId(agent, channel.provider, `${channel.target.chatId}:${channel.target.threadId ?? ""}`),
+    agentId: channel.agentId || agent.id || agent.agentId || "hermes",
+    agentName: channel.agentName || agent.name || "Hermes",
+    readOnly: true,
+    source: {
+      kind: "hermes",
+      label: "Hermes",
+      machineName: channel.source?.machineName || agent.machineName,
+      collectorUrl,
+      runtime: "hermes",
+    },
+    delivery: {
+      kind: "hermes-send",
+      targetRef: channel.delivery?.targetRef || hermesTargetRef(channel),
+      collectorUrl,
+      machineName: channel.delivery?.machineName || agent.machineName,
+      agentLocalDataDir: channel.delivery?.agentLocalDataDir || agent.localDataDir,
+    },
+  };
+}
+
+function hermesTargetChannel(agent: MessagingRuntimeAgent, target: HermesSendTarget): HiveMessagingChannel {
+  const now = new Date().toISOString();
+  const agentId = agent.id || agent.agentId || "hermes";
+  const agentName = agent.name || "Hermes";
+  const providerCopy = PROVIDER_COPY[target.provider];
+  return {
+    id: runtimeChannelId(agent, target.provider, target.targetRef),
+    provider: target.provider,
+    label: `${providerCopy.label} ${target.name}`,
+    agentId,
+    agentName,
+    enabled: true,
+    defaultForAgent: false,
+    credentialKind: providerCopy.credentialKind,
+    credentialEnvKey: undefined,
+    target: {
+      chatId: target.chatId,
+      threadId: target.threadId,
+      displayName: target.name,
+    },
+    createdAt: now,
+    updatedAt: now,
+    readOnly: true,
+    source: {
+      kind: "hermes",
+      label: "Hermes",
+      machineName: agent.machineName,
+      collectorUrl: normalizeCollectorUrl(agent.telemetryUrl) || undefined,
+      runtime: "hermes",
+    },
+    delivery: {
+      kind: "hermes-send",
+      targetRef: target.targetRef,
+      collectorUrl: normalizeCollectorUrl(agent.telemetryUrl) || undefined,
+      machineName: agent.machineName,
+      agentLocalDataDir: agent.localDataDir,
+    },
+  };
+}
+
+function hermesTargetRef(channel: HiveMessagingChannel) {
+  return `${channel.provider}:${channel.target.chatId}${channel.target.threadId ? `:${channel.target.threadId}` : ""}`;
+}
+
+function runtimeChannelId(agent: MessagingRuntimeAgent, provider: HiveMessagingProvider, targetRef: string) {
+  const machine = agent.machineName || agent.telemetryUrl || "local";
+  const owner = agent.id || agent.agentId || agent.name || "hermes";
+  const hash = createHash("sha256").update([machine, owner, provider, targetRef].join("\n")).digest("hex").slice(0, 16);
+  return `hermes-${hash}`;
 }
 
 function normalizeChannelDraft(input: HiveMessagingChannelDraft & { id?: string }, current?: HiveMessagingChannel): HiveMessagingChannel {
@@ -236,12 +475,48 @@ function formatMessagingDirectory(channels: HiveMessagingChannel[]): HiveMessagi
 }
 
 async function sendToProvider(channel: HiveMessagingChannel, message: string): Promise<HiveMessagingSendResult> {
+  if (channel.delivery?.kind === "hermes-send") return sendHermesChannel(channel, message);
   if (channel.provider === "telegram") return sendTelegram(channel, message);
   if (channel.provider === "discord") return sendDiscordWebhook(channel, message);
   if (channel.provider === "slack") return sendSlack(channel, message);
   if (channel.provider === "imessage") return sendIMessage(channel, message);
   if (channel.provider === "webhook") return sendGenericWebhook(channel, message);
   throw new Error(`Unsupported messaging provider: ${channel.provider}`);
+}
+
+async function sendHermesChannel(channel: HiveMessagingChannel, message: string) {
+  const targetRef = channel.delivery?.targetRef || hermesTargetRef(channel);
+  if (!targetRef) throw new Error("Hermes messaging target is missing.");
+  const collectorUrl = normalizeCollectorUrl(channel.delivery?.collectorUrl);
+  if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) {
+    const response = await fetch(`${collectorUrl}/messaging-channels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "send",
+        targetRef,
+        message,
+        agent: {
+          id: channel.agentId,
+          name: channel.agentName,
+          runtime: "hermes",
+          localDataDir: channel.delivery?.agentLocalDataDir,
+        },
+      }),
+      signal: AbortSignal.timeout(RUNTIME_SEND_TIMEOUT_MS),
+    });
+    const payload = await response.json().catch(() => null) as { ok?: boolean; error?: string; providerMessageId?: string } | null;
+    if (!response.ok || !payload?.ok) throw new Error(redactError(payload?.error || `Remote Hermes send failed: ${response.statusText}`));
+    return sent(channel, "Sent via Hermes.", payload.providerMessageId);
+  }
+  const { stdout } = await execFileAsync(await resolveHermesBin(), ["send", "--to", targetRef, "--json", message], {
+    timeout: RUNTIME_SEND_TIMEOUT_MS,
+    maxBuffer: 1_500_000,
+    env: hermesCommandEnv({ localDataDir: channel.delivery?.agentLocalDataDir }),
+  });
+  const payload = JSON.parse(stdout || "{}") as { ok?: boolean; id?: string; message_id?: string | number; error?: string };
+  if (payload.ok === false) throw new Error(redactError(payload.error || "Hermes send failed."));
+  return sent(channel, "Sent via Hermes.", payload.id ?? (payload.message_id ? String(payload.message_id) : undefined));
 }
 
 async function sendTelegram(channel: HiveMessagingChannel, message: string) {
@@ -348,6 +623,48 @@ function sent(channel: HiveMessagingChannel, message: string, providerMessageId?
 function limitMessage(message: string, maxLength: number) {
   if (message.length <= maxLength) return message;
   return `${message.slice(0, Math.max(0, maxLength - 80))}\n\n[truncated by HivemindOS messaging channel limit]`;
+}
+
+async function resolveHermesBin() {
+  if (process.env.HERMES_BIN) return process.env.HERMES_BIN;
+  const candidates = [
+    join(homedir(), ".local", "bin", "hermes"),
+    "/usr/local/bin/hermes",
+    "/opt/homebrew/bin/hermes",
+    "/usr/bin/hermes",
+  ];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // try the next standard install location
+    }
+  }
+  return "hermes";
+}
+
+function hermesCommandEnv(agent: Pick<MessagingRuntimeAgent, "localDataDir"> = {}) {
+  const home = expandHome(agent.localDataDir ?? "");
+  return {
+    ...process.env,
+    ...(home ? { HERMES_HOME: home } : {}),
+  };
+}
+
+function expandHome(path: string) {
+  return path.trim().replace(/^~(?=$|\/)/, homedir());
+}
+
+function runtimeAgentPayload(agent: MessagingRuntimeAgent) {
+  return {
+    id: agent.id,
+    name: agent.name,
+    runtime: agent.runtime,
+    agentId: agent.agentId,
+    localDataDir: agent.localDataDir,
+    machineName: agent.machineName,
+  };
 }
 
 async function ensureMessagingRoot(storage: ReturnType<typeof resolveMessagingStorage>) {

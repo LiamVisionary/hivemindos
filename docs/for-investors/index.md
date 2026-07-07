@@ -7,7 +7,7 @@ description: HivemindOS business model — revenue streams, trading and on-chain
 
 This is the business side of HivemindOS: how it makes money, where the free-vs-paid line sits, and how the Honey/HIVE economy, treasury, and buybacks fit together. For the product itself, see the [For Users](../for-users/) docs.
 
-Revenue comes from optional premium services, trading and on-chain fees, hosted agent/model messages, the Agent Marketplace, and Enterprise. The details live in the [Ecosystem Plan](ecosystem-plan.html) and [Paid Features](paid-features/), but the current numbers should be visible up front.
+Revenue comes from optional premium services, trading and on-chain fees, hosted agent/model messages, managed hosted integrations, the Agent Marketplace, and Enterprise. The details live in the [Ecosystem Plan](ecosystem-plan.html) and [Paid Features](paid-features/), but the current numbers should be visible up front.
 
 ## Current Revenue Snapshot
 
@@ -17,6 +17,7 @@ Revenue comes from optional premium services, trading and on-chain fees, hosted 
 | Zero Human Company revenue share | **2%**, with a **$0.01 minimum** | A company running in HivemindOS that records `$1,000` in revenue produces `$20.00` in HivemindOS revenue. |
 | Hyperliquid builder fee | **0.005%** of eligible filled notional | A `$10,000` fill produces `$0.50` in revenue. |
 | Hosted HivemindOS agent/model messages | **$0.001 per successful hosted chat completion** on the current default hosted paid agent | `1,000` messages produces `$1`. `100,000` messages produces `$100`. `1,000,000` messages produces `$1,000`. |
+| Managed X API and X MCP calls | Hosted policy retail debit: upstream X API unit cost plus **25% markup**, with a **$0.001 minimum** by default | The current default X MCP tool-call policy debits `$0.00625` from hosted credits for a `$0.005` upstream unit. HivemindOS collects the retail debit and keeps the markup after upstream X/API cost, infrastructure, and payment-processing costs. |
 | Future paid infrastructure | TBD by product | Hive Cloud, managed compute, marketplace fees, and enterprise contracts. |
 
 The app still shows fees before users confirm money movement. The point here is not mystery monetization. It is clear take rate, clear message pricing, and paid infrastructure where HivemindOS actually runs something.
@@ -171,6 +172,8 @@ The Agent Marketplace can support paid agents, swarms, workflows, and templates,
 Marketplace creators can choose pricing models such as free, pay-per-use, lifetime access, subscription access, bounty-funded creation, or commissions on revenue generated through a workflow.
 
 Enterprise covers SSO, teams, compliance, private deployments, and support contracts.
+
+Managed hosted integrations are also direct revenue. The managed X API and X MCP path lets users sign in with X through HivemindOS-controlled hosted infrastructure, then spend hosted HivemindOS credits on vetted X API or X MCP calls. The hosted gateway owns OAuth token custody, pricing policy, credit balances, and debits. The downloaded app only forwards the server-issued credit token. The current default policy charges retail at upstream X API unit cost plus **25% markup**, with a **$0.001 minimum debit**; the default X MCP tool call is `$0.005` upstream and `$0.00625` retail. Production pricing is served by the hosted pricing policy so it can track X Developer Console rates without making the local app authoritative.
 
 Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven **1% platform fee with a $0.01 minimum** on supported local-wallet actions: USDC sends, DEX swaps, xStocks trades, live Alpaca orders, public x402 payments, and Veil private transfers. Zero Human Companies running in HivemindOS use a **2% revenue share with a $0.01 minimum** on recorded company revenue. Official builds also collect a **0.005% Hyperliquid builder fee** on eligible local Hyperliquid fills. Paper trades and read-only checks are never charged. Recipient addresses and official wallet-fee policy stay in HivemindOS-managed infrastructure. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
 

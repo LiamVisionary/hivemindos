@@ -11,6 +11,7 @@ export function normalizeFailureReason(
   const normalized = value.trim().toLowerCase().replace(/_/g, "-");
   return [
     "agent-error",
+    "rate-limit",
     "timeout",
     "runtime-offline",
     "runtime-recovery",
@@ -23,6 +24,12 @@ export function normalizeFailureReason(
 
 export function classifyKanbanFailure(value?: string | null): KanbanFailureReason {
   const normalized = value?.toLowerCase() ?? "";
+  if (
+    /\b429\b|rate limit|rate-limit|usage limit|usage-limit|too many requests/.test(
+      normalized,
+    )
+  )
+    return "rate-limit";
   if (
     /local directory|workdir|workspace path|folder|enoent|permission denied/.test(
       normalized,
@@ -51,6 +58,7 @@ export function classifyKanbanFailure(value?: string | null): KanbanFailureReaso
 export function isRetryableFailureReason(reason: KanbanFailureReason) {
   return [
     "timeout",
+    "rate-limit",
     "runtime-offline",
     "runtime-recovery",
     "local-directory-error",

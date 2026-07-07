@@ -51,6 +51,8 @@ AgentMail's hosted MCP endpoint is included for runtimes that prefer MCP. Use OA
 
 X's official API MCP is included as `xapi`. The X API server is hosted at `https://api.x.com/mcp`, but user-account access runs through the local `xurl` bridge because X requires the user to provide their own OAuth 2.0 developer app. In Integrations → MCP Servers, users can save `X_MCP_CLIENT_ID` and `X_MCP_CLIENT_SECRET` into shared env, start the browser sign-in, and sync the `xapi` MCP entry into installed agent runtimes. Runtime configs launch HivemindOS's local bridge wrapper and do not contain X secrets or OAuth tokens.
 
+Users who do not want to bring their own X developer app can use the managed X API path instead. That path signs in through HivemindOS-hosted infrastructure, keeps X OAuth token custody server-side, and debits hosted HivemindOS credits for vetted X API and X MCP calls after they succeed. The hosted `/api/x/pricing` policy is authoritative; the current default policy uses upstream X API unit cost plus 25% markup with a `$0.001` minimum debit. A default X MCP tool call is `$0.005` upstream and `$0.00625` retail. The downloaded app cannot choose official X pricing, redirect revenue, or mint credits locally.
+
 The X sign-in cache is owned by `xurl` under the user's home directory. HivemindOS reports whether that cache exists, but it does not read or copy token bodies. Agents should treat X tools as acting with the signed-in account's scopes; write-capable tools such as bookmark changes and Article publishing need explicit user confirmation.
 
 The read-only X docs MCP is also included as `x-docs` for clients that can connect to Streamable HTTP servers at `https://docs.x.com/mcp`.

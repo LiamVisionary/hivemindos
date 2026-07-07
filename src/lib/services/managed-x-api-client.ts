@@ -6,6 +6,7 @@ export const MANAGED_X_API_BASE_URL_ENV = "HIVEMINDOS_X_API_GATEWAY_BASE_URL";
 export const MANAGED_X_API_PUBLIC_BASE_URL_ENV = "NEXT_PUBLIC_HIVEMINDOS_X_API_GATEWAY_BASE_URL";
 export const MANAGED_X_API_ALLOW_INSECURE_ENV = "HIVEMINDOS_X_API_GATEWAY_ALLOW_INSECURE";
 export const DEFAULT_MANAGED_X_API_BASE_URL = "https://hivemindos-x-api-gateway.hivemindos.workers.dev";
+export const DEFAULT_MANAGED_X_OAUTH_SCOPES = "tweet.read users.read tweet.write offline.access";
 
 const STATUS_TIMEOUT_MS = 8_000;
 const PROXY_TIMEOUT_MS = 120_000;
@@ -83,7 +84,7 @@ export async function startManagedXOAuth(input: {
     slug: input.slug,
     body: {
       returnUrl: input.returnUrl || defaultReturnUrl(input.request),
-      scopes: input.scopes,
+      scopes: input.scopes?.trim() || DEFAULT_MANAGED_X_OAUTH_SCOPES,
     },
   });
 }

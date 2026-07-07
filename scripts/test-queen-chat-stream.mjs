@@ -5,6 +5,7 @@
 // chat-turn contract. Plus the Work Board lookup helpers the read_work_board
 // tool and the Discuss enrichment share.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
@@ -44,6 +45,15 @@ const {
   isAgentUnhealthy,
   summarizeFleetByStatus,
 } = await import("../src/features/dashboard/agent-status-lookup.ts");
+
+// ── OpenAI Codex Queen models must not silently skip to gpt-4o-mini ──────────
+{
+  const source = readFileSync(new URL("../src/lib/services/queen-bee/typed-chat-turn.ts", import.meta.url), "utf8");
+  assert.match(source, /isRuntimeHeldQueenProvider\(provider\)/, "typed Queen chat should recognize runtime-held OAuth providers");
+  assert.match(source, /\/api\/chat\/agent-runtime/, "typed Queen chat should route OpenAI Codex through the Queen runtime");
+  assert.match(source, /readRuntimeResponseText/, "typed Queen chat should parse the runtime stream response");
+  assert.doesNotMatch(source, /provider !== "openai-oauth" && provider !== "openai-codex"/, "typed Queen chat must not skip OpenAI Codex to the built-in fallback");
+}
 
 // ── typed Queen chat uses the same default/custom personality layer ──────────
 {

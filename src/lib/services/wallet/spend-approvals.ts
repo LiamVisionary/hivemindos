@@ -35,6 +35,9 @@ export type SpendApprovalRequest = {
   expiresAtMs: number;
   decidedAt?: string;
   decidedBy?: string;
+  /** Optional human note attached at decision time — a change request when
+   *  denied, or a caveat/condition when approved. Surfaced back to the agent. */
+  decisionNote?: string;
 };
 
 export const SPEND_APPROVALS_PATH = path.join(homedir(), ".hivemindos", "spend-approvals.json");
@@ -191,6 +194,7 @@ export async function decideApproval(
   id: string,
   decision: "approved" | "denied",
   decidedBy?: string,
+  note?: string,
 ): Promise<SpendApprovalRequest | null> {
   const now = Date.now();
   const records = expireStale(await readRaw(), now);
@@ -204,6 +208,8 @@ export async function decideApproval(
   record.status = decision;
   record.decidedAt = new Date(now).toISOString();
   record.decidedBy = decidedBy;
+  const trimmedNote = note?.trim();
+  if (trimmedNote) record.decisionNote = trimmedNote;
   await writeRaw(records);
   return record;
 }

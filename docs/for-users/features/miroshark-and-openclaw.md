@@ -22,6 +22,7 @@ What MiroShark support can do:
 - List templates and run metadata.
 - Start scenario simulations.
 - Accept `/swarm-sim <scenario>` launches from dashboard chat through the same `/api/miroshark/swarm` route used by the Swarm view.
+- Run hosted x402 simulations from Swarm or native chat when a selected wallet can pay the expected **$1.20 USDC** HivemindOS proxy requirement. Official builds pay the HivemindOS-hosted proxy first; that backend pays MiroShark's upstream x402 requirement up to **$1.00** and keeps the expected **$0.20** HivemindOS cut only after the upstream run succeeds.
 - Fetch run status, summaries, reports, transcripts, exports, telemetry, market events, observability events, LLM calls, and intelligence where the companion exposes them.
 - Send simulation output back into agent or Kanban workflows.
 - Load archived runs from the shared vault.

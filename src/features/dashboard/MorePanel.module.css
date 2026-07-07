@@ -1,0 +1,637 @@
+/* MorePanel.module.css — the redesigned "More" launcher.
+   Geometry, static (non-tone) colors, hover/focus, and motion live here.
+   Dynamic tone colors (badges, status dots, pin buttons, the segmented
+   active state) are applied inline in MorePanel.tsx because `.commandMain`'s
+   hive-light overrides re-color `span`/`button` at a specificity a module
+   class can't beat — inline styles win the cascade there. */
+
+.root {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 30px 34px 48px;
+  color: var(--foreground);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--honey);
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+}
+
+/* ---- Search ---- */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  height: 52px;
+  margin-top: 18px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  transition: box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.search:focus-within {
+  border-color: var(--comb-line);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--honey) 18%, transparent);
+}
+
+.searchIcon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--foreground);
+  font-size: 15px;
+}
+
+.searchInput::placeholder {
+  color: var(--muted);
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+  color: var(--muted);
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ---- Pinned row ---- */
+.sectionLabelRow {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 24px 0 12px;
+}
+
+.sectionLabel {
+  margin: 0;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--honey);
+}
+
+.sectionHint {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.pinnedRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* The chip is a pill container; .chipActivate is the activator <button> and
+   .chipUnpin is its sibling — no nested interactive controls. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--foreground);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.chip:hover {
+  box-shadow: inset 0 0 0 1px var(--comb-line);
+  transform: translateY(-1px);
+}
+
+.chipActivate {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px 9px 15px;
+}
+
+.chipIcon {
+  display: inline-flex;
+  color: var(--honey);
+}
+
+.chipLabel {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.chipUnpin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.chipUnpin:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.pinnedEmpty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* ---- Browse header + segmented ---- */
+.browseHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.seg {
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+}
+
+.segBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.segBtn:hover {
+  color: var(--foreground);
+}
+
+.segBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---- Groups ---- */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.groupName {
+  margin: 0;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+/* The card is a plain container; .cardActivate is the real <button>, and the
+   pin button is an absolutely-positioned sibling — so no interactive control
+   nests inside another (valid ARIA, clean keyboard behavior). */
+.card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -32px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.14s ease, transform 0.14s ease, background 0.14s ease;
+}
+
+.card:hover {
+  border-color: var(--comb-line);
+  transform: translateY(-3px);
+  background: var(--panel-soft);
+}
+
+.cardActivate {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 18px;
+}
+
+.iconBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  flex: 0 0 auto;
+}
+
+.iconBox svg {
+  width: 20px;
+  height: 20px;
+}
+
+.pinBtn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.pinBtn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--honey) 18%, transparent);
+}
+
+.pinBtn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Grid: pin sits in the card's top-right corner (over the container). */
+.pinGrid {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+
+/* List/Board: pin is a flex sibling at the row's right edge. */
+.pinRow {
+  align-self: center;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cardEyebrow {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.cardText {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* ---- List view ---- */
+.list {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.listGroup {
+  margin-top: 22px;
+}
+
+/* Row container is a plain div; .listActivate is the <button>, pin + chevron
+   are siblings (no nested interactive controls). */
+.listRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 16px;
+  border-top: 1px solid var(--line);
+  transition: background 0.12s ease;
+}
+
+.listRow:first-child {
+  border-top: 0;
+}
+
+.listRow:hover {
+  background: var(--panel-soft);
+}
+
+.listActivate {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 14px 0 14px 16px;
+}
+
+.listMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.listTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.listIconBox {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.listIconBox svg {
+  width: 20px;
+  height: 20px;
+}
+
+.chev {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+/* ---- Board view ---- */
+.board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.boardCol {
+  padding: 6px 18px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.boardColName {
+  margin: 14px 0 2px;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Row container is a plain div; .boardActivate is the <button>, pin is a
+   sibling (no nested interactive controls). */
+.boardRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  margin: 0 -10px;
+  border-top: 1px solid var(--line);
+  border-radius: 9px;
+  transition: background 0.12s ease;
+}
+
+.boardRow:hover {
+  background: var(--panel-soft);
+}
+
+.boardActivate {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px 0 12px 10px;
+}
+
+.boardIconBox {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.boardIconBox svg {
+  width: 20px;
+  height: 20px;
+}
+
+.boardMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.boardTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.boardEyebrow {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.empty {
+  margin-top: 24px;
+  padding: 28px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Keyboard focus ring for the real <button> activators/controls. */
+.cardActivate:focus-visible,
+.listActivate:focus-visible,
+.boardActivate:focus-visible,
+.chipActivate:focus-visible,
+.segBtn:focus-visible,
+.pinBtn:focus-visible,
+.chipUnpin:focus-visible {
+  outline: 2px solid var(--honey);
+  outline-offset: -2px;
+  border-radius: 10px;
+}
+
+.pinBtn:focus-visible,
+.chipUnpin:focus-visible {
+  outline-offset: 2px;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1180px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .root {
+    padding: 22px 18px 40px;
+  }
+
+  .grid,
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .chip,
+  .pinBtn,
+  .listRow,
+  .boardRow,
+  .segBtn,
+  .search {
+    transition: none;
+  }
+
+  .card:hover,
+  .chip:hover {
+    transform: none;
+  }
+
+  .pinBtn:hover {
+    transform: none;
+  }
+}

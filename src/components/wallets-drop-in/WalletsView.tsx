@@ -42,6 +42,7 @@ export type WalletDropInActions = WalletRewardsActionsSlice & {
   onCopyAgentPrompt?: (agentId: string) => unknown;
   onOpenLlmFundingSource?: (agentId: string) => unknown;
   onExportAgentWallet?: (walletId: string, confirmation: string) => Promise<WalletSecretExportResultLike> | WalletSecretExportResultLike;
+  onExportPersonalWallet?: (walletId: string, confirmation: string) => Promise<WalletSecretExportResultLike> | WalletSecretExportResultLike;
   onSendAgentPayment?: (input: { agentId: string; asset: string; amount: string; amountUsd?: number; toAddress: string; recipientAgentId?: string; confirmation: string }) => Promise<WalletSendResult | null | undefined>;
   onSaveRailConfig?: (input: { rail: WalletRail; enabled: boolean; key: string; share: boolean }) => Promise<{ ok?: boolean; error?: string; rail?: Partial<WalletRail> } | null | undefined>;
   onRefreshUsePod?: (agentId?: string) => unknown;
@@ -1083,7 +1084,7 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
       setRenaming(false);
     }
   };
-  const [sheet, setSheet] = React.useState<string | null>(null); // send | receive
+  const [sheet, setSheet] = React.useState<string | null>(null); // send | receive | export
   const [fund, setFund] = React.useState(false);
   const [imp, setImport] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -1177,10 +1178,18 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
           <BBtn variant="ghost" sm onClick={copy}><BIcon name={copied ? "check" : "copy"} size={14} /> {copied ? "Copied" : "Copy address"}</BBtn>
         </div>
       ) : null}
-      <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+      {sheet === "export" ? (
+        <WalletSecretExportSheet
+          walletId={w.id}
+          exportAction={(confirmation) => actions?.onExportPersonalWallet?.(w.id, confirmation) ?? { ok: false, error: "Personal wallet export is not available in this build." }}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+      <div style={{ display: "flex", gap: 8, marginTop: "auto", flexWrap: "wrap" }}>
         <BBtn variant="primary" sm style={{ flex: 1 }} disabled={!canSpend} onClick={() => setFund(true)}><BIcon name="promote" size={14} /> Fund agent</BBtn>
         {expanded ? <BBtn variant="ghost" sm data-active={sheet === "send" ? "" : undefined} disabled={!canSpend} onClick={() => toggleSheet("send")}><BIcon name="branch" size={14} /> Send</BBtn> : null}
         <BBtn variant="ghost" sm onClick={() => toggleSheet("receive")}><BIcon name="download" size={14} /> Receive</BBtn>
+        <BBtn variant="ghost" sm data-active={sheet === "export" ? "" : undefined} onClick={() => toggleSheet("export")}><BIcon name="key" size={14} /> Export keys</BBtn>
       </div>
       {fund ? <FundAgentModal source={w} onClose={() => setFund(false)} actions={actions} /> : null}
       {imp ? <CreateImportWalletModal wallet={w} onClose={() => setImport(false)} actions={actions} /> : null}

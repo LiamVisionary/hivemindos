@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Base surfaces" subtitle="Warm graphite stack — background through panels" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); }
+  .row { display: flex; gap: 10px; padding: 18px; flex-wrap: wrap; }
+  .sw { flex: 1 1 0; min-width: 96px; }
+  .chip { height: 62px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); }
+  .name { color: var(--fg-2); font-size: 11px; font-weight: 600; margin-top: 8px; }
+  .val { color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--bg-0)"></div><div class="name">bg-0</div><div class="val">#090a0d</div></div>
+    <div class="sw"><div class="chip" style="background:var(--background)"></div><div class="name">background</div><div class="val">#0c0d11</div></div>
+    <div class="sw"><div class="chip" style="background:var(--panel)"></div><div class="name">panel</div><div class="val">#14161c</div></div>
+    <div class="sw"><div class="chip" style="background:var(--panel-soft)"></div><div class="name">panel-2</div><div class="val">#181b22</div></div>
+    <div class="sw"><div class="chip" style="background:var(--panel-hi)"></div><div class="name">panel-hi</div><div class="val">#1e222b</div></div>
+    <div class="sw"><div class="chip" style="background:var(--field)"></div><div class="name">field</div><div class="val">#181b22</div></div>
+  </div>
+</body>
+</html>

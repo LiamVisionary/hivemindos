@@ -136,7 +136,7 @@ function ZeroHumanCompaniesDemoView({
     });
   }, [replaceColony]);
 
-  const decideApproval = React.useCallback((companyId: string, approvalId: string, decision: "approved" | "denied") => {
+  const decideApproval = React.useCallback((companyId: string, approvalId: string, decision: "approved" | "denied", note?: string) => {
     setBusyId(approvalId);
     replaceColony(companyId, (colony) => {
       const approval = colony.approvals.find((item) => item.id === approvalId);
@@ -148,7 +148,7 @@ function ZeroHumanCompaniesDemoView({
         governance: [
           {
             kind: eventKind,
-            text: `${approval.agent}'s ${approval.kind} request was ${decision}: ${approval.title}.`,
+            text: `${approval.agent}'s ${approval.kind} request was ${decision}: ${approval.title}.${note?.trim() ? ` Note: ${note.trim()}` : ""}`,
             agent: "human",
             since: "now",
           },
@@ -298,8 +298,7 @@ function ZeroHumanCompaniesDemoView({
       onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
-      onApprove={(companyId, approvalId) => decideApproval(companyId, approvalId, "approved")}
-      onReject={(companyId, approvalId) => decideApproval(companyId, approvalId, "denied")}
+      onDecideApproval={(companyId, approvalId, decision, note) => decideApproval(companyId, approvalId, decision, note)}
       onResolvePricing={(companyId, proposalId) =>
         replaceColony(companyId, (colony) => ({
           ...colony,
@@ -652,6 +651,14 @@ function ZeroHumanCompaniesLiveView({
         up: form.revenueUp !== false,
         isApex: form.revenueIsApex === true,
       };
+      // null (not undefined) so clearing the threshold removes the config server-side.
+      const autonomyPause = form.autonomyPauseMax && form.autonomyPauseMax > 0
+        ? {
+            maxWaitingOnHuman: form.autonomyPauseMax,
+            countMode: form.autonomyPauseMode ?? "all",
+            deliverableKinds: form.autonomyPauseMode === "deliverable-kinds" ? form.autonomyPauseKinds : undefined,
+          }
+        : null;
       const result = await postCompanies({
         action: "upsert",
         id: companyId,
@@ -670,6 +677,7 @@ function ZeroHumanCompaniesLiveView({
         monthlyBudgetUsd: form.monthlyBudgetUsd && form.monthlyBudgetUsd > 0 ? form.monthlyBudgetUsd : 0,
         totalBudgetUsd: form.totalBudgetUsd && form.totalBudgetUsd > 0 ? form.totalBudgetUsd : 0,
         frozen: form.frozen === true,
+        autonomyPause,
         status: form.status ?? "",
         alignment: form.alignment ?? "",
         apexGoal,
@@ -699,13 +707,13 @@ function ZeroHumanCompaniesLiveView({
     }
   }, [membersFromCrew, refresh]);
 
-  const decideApproval = React.useCallback(async (approvalId: string, decision: "approved" | "denied") => {
+  const decideApproval = React.useCallback(async (approvalId: string, decision: "approved" | "denied", note?: string) => {
     setBusyId(approvalId);
     try {
       const res = await fetch("/api/wallet/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: approvalId, decision }),
+        body: JSON.stringify({ id: approvalId, decision, note: note?.trim() || undefined }),
       });
       const json = await res.json().catch(() => ({}));
       if (!json.ok && json.error) setError(json.error);
@@ -1116,8 +1124,7 @@ function ZeroHumanCompaniesLiveView({
       onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
-      onApprove={(_companyId, approvalId) => void decideApproval(approvalId, "approved")}
-      onReject={(_companyId, approvalId) => void decideApproval(approvalId, "denied")}
+      onDecideApproval={(_companyId, approvalId, decision, note) => void decideApproval(approvalId, decision, note)}
       onResolvePricing={(companyId, proposalId, decision) => void resolvePricing(companyId, proposalId, decision)}
       onSetApprovalPolicy={(companyId, policy) => void setApprovalPolicy(companyId, policy)}
       onFreeze={(companyId, frozen) => void handleFreeze(companyId, frozen)}

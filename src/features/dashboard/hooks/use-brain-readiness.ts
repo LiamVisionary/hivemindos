@@ -32,6 +32,40 @@ export type BrainReadiness = {
 
 const LOOPS_DISMISSED_STATE_KEY = "hivemindos.fleet.brainLoopsCardDismissed.v1";
 
+function isAgentScheduleList(value: unknown): value is AgentSchedule[] {
+  return Array.isArray(value) && value.every((item) => (
+    item
+    && typeof item === "object"
+    && typeof (item as AgentSchedule).id === "string"
+    && typeof (item as AgentSchedule).name === "string"
+  ));
+}
+
+function mergeScheduleCandidates(current: AgentSchedule[], incoming: AgentSchedule[]): AgentSchedule[] {
+  const byId = new Map(current.map((schedule) => [schedule.id, schedule]));
+  for (const schedule of incoming) {
+    const existing = byId.get(schedule.id);
+    byId.set(schedule.id, {
+      ...existing,
+      ...schedule,
+      lastRunAt: Math.max(existing?.lastRunAt ?? 0, schedule.lastRunAt ?? 0) || undefined,
+      lastStatus: schedule.lastStatus ?? existing?.lastStatus,
+      lastSummary: schedule.lastSummary ?? existing?.lastSummary,
+    });
+  }
+  return [...byId.values()].sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
+}
+
+function withSharedScheduleResult(schedule: AgentSchedule, result: unknown): AgentSchedule {
+  if (!result || typeof result !== "object") return schedule;
+  const record = result as { path?: unknown; folder?: unknown };
+  return {
+    ...schedule,
+    sharedSchedulePath: typeof record.path === "string" ? record.path : schedule.sharedSchedulePath,
+    sharedRunFolder: typeof record.folder === "string" ? record.folder : schedule.sharedRunFolder,
+  };
+}
+
 /**
  * Drives the fleet-view brain-readiness banner: surfaces a missing or
  * unfinished Queen Bee (which blocks the Daily Context / Weekly Synthesis
@@ -53,6 +87,7 @@ export function useBrainReadiness(input: {
   const { hydrated, agents, setAgents, schedules, setSchedules, refreshSharedSchedulesFromVault, upsertSharedSchedule, openQueenSettings, openQueenCreate } = input;
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [loopsSyncedKey, setLoopsSyncedKey] = useState("");
   const [loopsDismissed, rememberLoopsDismissed] = useRememberedDashboardValue(LOOPS_DISMISSED_STATE_KEY, "");
   const schedulesRef = useRef(schedules);
   useEffect(() => {
@@ -69,6 +104,28 @@ export function useBrainReadiness(input: {
     schedules.filter((schedule) => schedule.enabled).map((schedule) => schedule.id),
   ), [schedules]);
   const loopsAllEnabled = ONBOARDING_BRAIN_LOOPS.every((loop) => enabledLoopIds.has(loop.scheduleId));
+  const loopSyncKey = `${queen?.id ?? ""}:${ONBOARDING_BRAIN_LOOPS.map((loop) => loop.scheduleId).join("|")}`;
+  const shouldSyncLoopsBeforePrompt = Boolean(
+    hydrated
+    && agents.length > 0
+    && queens.length === 1
+    && !queenModelUnset
+    && !loopsAllEnabled
+    && loopsDismissed !== "1"
+  );
+  const loopsSyncPending = shouldSyncLoopsBeforePrompt && loopsSyncedKey !== loopSyncKey;
+
+  useEffect(() => {
+    if (!shouldSyncLoopsBeforePrompt || loopsSyncedKey === loopSyncKey) return;
+    let cancelled = false;
+    void refreshSharedSchedulesFromVault().finally(() => {
+      if (cancelled) return;
+      setLoopsSyncedKey(loopSyncKey);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loopSyncKey, loopsSyncedKey, refreshSharedSchedulesFromVault, shouldSyncLoopsBeforePrompt]);
 
   const status: BrainReadinessStatus = !hydrated || agents.length === 0
     ? "hidden"
@@ -78,7 +135,7 @@ export function useBrainReadiness(input: {
         ? "multiple-queens"
         : queenModelUnset
           ? "queen-model-unset"
-          : !loopsAllEnabled && loopsDismissed !== "1"
+          : !loopsAllEnabled && loopsDismissed !== "1" && !loopsSyncPending
             ? "loops-off"
             : "hidden";
 
@@ -114,20 +171,31 @@ export function useBrainReadiness(input: {
     void (async () => {
       try {
         const missing = ONBOARDING_BRAIN_LOOPS.some((loop) => !schedulesRef.current.some((schedule) => schedule.id === loop.scheduleId));
-        if (missing) await refreshSharedSchedulesFromVault();
+        let availableSchedules = schedulesRef.current;
+        if (missing) {
+          const refreshed = await refreshSharedSchedulesFromVault();
+          if (isAgentScheduleList(refreshed)) {
+            availableSchedules = mergeScheduleCandidates(availableSchedules, refreshed);
+          }
+        }
         const now = Date.now();
         const targets = ONBOARDING_BRAIN_LOOPS
-          .map((loop) => schedulesRef.current.find((schedule) => schedule.id === loop.scheduleId))
+          .map((loop) => availableSchedules.find((schedule) => schedule.id === loop.scheduleId))
           .filter((schedule): schedule is AgentSchedule => Boolean(schedule));
         if (targets.length === 0) {
           setNotice("Foundation loop templates were not found in the shared vault. Open Schedules to import them.");
           return;
         }
+        const updates: AgentSchedule[] = [];
         for (const schedule of targets) {
-          if (schedule.enabled && schedule.agentId === queen.id) continue;
-          const next = { ...schedule, enabled: true, agentId: queen.id, updatedAt: now };
-          setSchedules((current) => current.map((item) => (item.id === next.id ? { ...item, ...next } : item)));
-          await upsertSharedSchedule(next);
+          const alreadyEnabledForQueen = schedule.enabled && schedule.agentId === queen.id;
+          const next = alreadyEnabledForQueen ? schedule : { ...schedule, enabled: true, agentId: queen.id, updatedAt: now };
+          const result = alreadyEnabledForQueen ? null : await upsertSharedSchedule(next);
+          updates.push(withSharedScheduleResult(next, result));
+        }
+        if (updates.length) {
+          schedulesRef.current = mergeScheduleCandidates(schedulesRef.current, updates);
+          setSchedules((current) => mergeScheduleCandidates(current, updates));
         }
         const skipped = ONBOARDING_BRAIN_LOOPS.length - targets.length;
         setNotice(skipped > 0

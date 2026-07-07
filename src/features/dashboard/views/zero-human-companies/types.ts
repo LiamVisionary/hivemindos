@@ -3,9 +3,11 @@
 // PoolAgent so the live view can persist real agent membership.
 import type { CompanyRevenueEventSource, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
-import type { CompanyApprovalPolicy, CompanyDirective, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type { CompanyImportRequest, CompanyImportedOperations } from "@/lib/types/company-import";
 import type { WorkBoardPipelineImpact, WorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
+import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -94,13 +96,10 @@ export interface Revenue {
   isApex: boolean;
 }
 
-export interface Approval {
-  id: string;
-  title: string;
-  agent: string;
-  kind: string;
-  risk: Risk;
-}
+// The company approvals surface is the shared spend-approval view (see
+// src/features/approvals). Aliased here so existing ZHC imports keep working
+// while both surfaces render/decide through one shared module (DRY).
+export type Approval = SpendApprovalView;
 
 export interface GovEvent {
   kind: "patch" | "reflect" | "escalate" | "alert";
@@ -274,6 +273,12 @@ export interface CompanyEditForm extends CreateForm {
   apexCurrent?: string;
   apexProgress?: number;
   frozen?: boolean;
+  /** Auto-pause new-work dispatch once this many items are waiting on a human. 0/undefined = off. */
+  autonomyPauseMax?: number;
+  /** What the pause threshold counts: all waiting items, or only chosen deliverable kinds. */
+  autonomyPauseMode?: CompanyAutonomyPauseMode;
+  /** Deliverable kinds counted when autonomyPauseMode is "deliverable-kinds". */
+  autonomyPauseKinds?: KanbanDeliverableKind[];
   revenueKind?: "users" | "revenue" | "";
   revenueLabel?: string;
   revenueValue?: string;

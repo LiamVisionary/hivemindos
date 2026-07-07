@@ -7,6 +7,7 @@ import { Upload } from "lucide-react";
 import { Portfolio } from "./ColonyCards";
 import { Spinner } from "./primitives";
 import { Cockpit, type CockpitHandlers } from "./Cockpit";
+import type { ApprovalDecision } from "@/features/approvals/spend-approval-model";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { ImportCompanyModal } from "./ImportCompanyModal";
 import { TaskDetailModal } from "./TaskDetailModal";
@@ -158,8 +159,7 @@ export interface ZeroHumanCompaniesProps {
   onEditCompany: (companyId: string, form: CompanyEditForm) => Promise<void>;
   /** Add staged crew to an existing company. */
   onAddAgents: (companyId: string, crew: Agent[]) => Promise<void>;
-  onApprove: (companyId: string, approvalId: string) => void;
-  onReject: (companyId: string, approvalId: string) => void;
+  onDecideApproval: (companyId: string, approvalId: string, decision: ApprovalDecision, note: string) => void | Promise<void>;
   /** Decide a crew-raised pricing proposal (approve applies the catalog change). */
   onResolvePricing: (companyId: string, proposalId: string, decision: "approve" | "reject") => void;
   /** Save one company approval-policy row. */
@@ -191,7 +191,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, initialTasksLoading = false, error, notice, busyId, onRefresh,
-  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onApprove, onReject, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
+  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onDecideApproval, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
   openSkillAttachmentBrowser,
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
@@ -272,8 +272,7 @@ export default function ZeroHumanCompanies({
   };
 
   const cockpitHandlers: CockpitHandlers | null = colony && {
-    onApprove: (approvalId) => onApprove(colony.id, approvalId),
-    onReject: (approvalId) => onReject(colony.id, approvalId),
+    onDecideApproval: (approvalId, decision, note) => onDecideApproval(colony.id, approvalId, decision, note),
     onResolvePricing: (proposalId, decision) => onResolvePricing(colony.id, proposalId, decision),
     onSetApprovalPolicy: (policy) => onSetApprovalPolicy(colony.id, policy),
     onFreeze: (frozen) => onFreeze(colony.id, frozen),

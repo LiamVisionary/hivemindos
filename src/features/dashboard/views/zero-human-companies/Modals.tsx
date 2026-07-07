@@ -21,6 +21,8 @@ import type {
   Role,
   Theme,
 } from "./types";
+import type { CompanyAutonomyPauseMode } from "@/lib/types/company";
+import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
 import { ANALYTICS_ADAPTERS, analyticsAdapter } from "@/lib/services/company-analytics/registry-meta";
 
@@ -116,6 +118,12 @@ const STATUS_OPTIONS: { value: CompanyStatus | ""; label: string }[] = [
   { value: "setup", label: "Setup" },
   { value: "paused", label: "Paused" },
 ];
+
+const AUTONOMY_PAUSE_MODE_OPTIONS: { value: CompanyAutonomyPauseMode; label: string }[] = [
+  { value: "all", label: "All items waiting on you" },
+  { value: "deliverable-kinds", label: "Only certain deliverable types" },
+];
+const AUTONOMY_PAUSE_KIND_CHOICES: KanbanDeliverableKind[] = ["website", "document", "image", "video", "audio", "url", "file", "directory"];
 
 function optionalNumber(value: string): number | undefined {
   if (value.trim() === "") return undefined;
@@ -420,6 +428,9 @@ type EditFormState = FormState & {
   apexCurrent: string;
   apexProgress?: number;
   frozen: boolean;
+  autonomyPauseMax?: number;
+  autonomyPauseMode: CompanyAutonomyPauseMode;
+  autonomyPauseKinds: KanbanDeliverableKind[];
   revenueKind: "users" | "revenue" | "";
   revenueLabel: string;
   revenueValue: string;
@@ -466,6 +477,9 @@ function initialEditState(initial: CompanyEditForm): EditFormState {
     apexCurrent: initial.apexCurrent ?? "",
     apexProgress: initial.apexProgress,
     frozen: Boolean(initial.frozen),
+    autonomyPauseMax: initial.autonomyPauseMax,
+    autonomyPauseMode: initial.autonomyPauseMode ?? "all",
+    autonomyPauseKinds: initial.autonomyPauseKinds ?? [],
     revenueKind: initial.revenueKind ?? "",
     revenueLabel: initial.revenueLabel ?? "",
     revenueValue: initial.revenueValue ?? "",
@@ -510,6 +524,9 @@ function readEditForm(form: EditFormState): CompanyEditForm {
     apexCurrent: form.apexCurrent.trim(),
     apexProgress: form.apexProgress,
     frozen: form.frozen,
+    autonomyPauseMax: form.autonomyPauseMax,
+    autonomyPauseMode: form.autonomyPauseMode,
+    autonomyPauseKinds: form.autonomyPauseKinds,
     revenueKind: form.revenueKind,
     revenueLabel: form.revenueLabel.trim(),
     revenueValue: form.revenueValue.trim(),
@@ -826,6 +843,47 @@ export function EditCompanyModal({
               <ToggleRow label="Freeze company spend" checked={form.frozen} onChange={(checked) => setForm((current) => ({ ...current, frozen: checked }))} />
             </div>
           </div>
+          <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 12, marginTop: 16, alignItems: "end" }}>
+            <Field label="Auto-pause at" hint="0 = never">
+              <NumericInput value={form.autonomyPauseMax} step={1} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, autonomyPauseMax: value }))} />
+            </Field>
+            <Field label="Count which waiting items">
+              <Select value={form.autonomyPauseMode} onChange={(value) => setForm((current) => ({ ...current, autonomyPauseMode: value as CompanyAutonomyPauseMode }))} options={AUTONOMY_PAUSE_MODE_OPTIONS} />
+            </Field>
+          </div>
+          {form.autonomyPauseMode === "deliverable-kinds" && (form.autonomyPauseMax ?? 0) > 0 ? (
+            <div style={{ marginTop: 10 }}>
+              <SectionLabel>deliverable types that count</SectionLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                {AUTONOMY_PAUSE_KIND_CHOICES.map((kind) => {
+                  const on = form.autonomyPauseKinds.includes(kind);
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => setForm((current) => ({
+                        ...current,
+                        autonomyPauseKinds: current.autonomyPauseKinds.includes(kind)
+                          ? current.autonomyPauseKinds.filter((k) => k !== kind)
+                          : [...current.autonomyPauseKinds, kind],
+                      }))}
+                      style={{
+                        fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "5px 10px", borderRadius: 999, cursor: "pointer",
+                        border: `1px solid ${on ? "var(--honey-2)" : "var(--line-2)"}`,
+                        background: on ? "color-mix(in srgb, var(--honey-2) 16%, transparent)" : "transparent",
+                        color: on ? "var(--honey-2)" : "var(--fg-4)",
+                      }}
+                    >
+                      {kind}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          <p style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", marginTop: 10, lineHeight: 1.5 }}>
+            When this many items are waiting on you (the “Needs You” lane), the crew stops taking on new work and resumes on its own once you clear enough. In-flight work still finishes.
+          </p>
         </EditSection>
 
         <EditSection title="revenue · headline metric">

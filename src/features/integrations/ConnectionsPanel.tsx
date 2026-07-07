@@ -4,6 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayload } from "@/lib/types/integrations";
 import { CLAWBANK_OPEN_EVENT, CLAWBANK_UPDATED_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
+import { openExternalUrl } from "@/lib/native/open-external-url";
 import { BBtn, BIcon, ServiceGlyph } from "./integrations-primitives";
 import { readJson } from "./integrations-view-helpers";
 
@@ -73,10 +74,13 @@ export function ConnectionsPanel() {
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => void refresh(true), 0);
+    let returnMessageTimer: number | undefined;
     const params = new URLSearchParams(window.location.search);
     const returned = params.get("connections");
     if (returned === "github" || returned === "google") {
-      setMessage(`${returned === "github" ? "GitHub" : "Google"} connected.`);
+      returnMessageTimer = window.setTimeout(() => {
+        setMessage(`${returned === "github" ? "GitHub" : "Google"} connected.`);
+      }, 0);
       params.delete("connections");
       const search = params.toString();
       window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
@@ -90,6 +94,7 @@ export function ConnectionsPanel() {
     window.addEventListener(CLAWBANK_UPDATED_EVENT, onClawBankUpdated);
     return () => {
       window.clearTimeout(timer);
+      if (returnMessageTimer !== undefined) window.clearTimeout(returnMessageTimer);
       window.removeEventListener(CLAWBANK_UPDATED_EVENT, onClawBankUpdated);
     };
   }, [refresh]);
@@ -229,7 +234,28 @@ function ConnectModal({
     const data = await post({ action: "save-oauth-client", provider: "google", clientId, clientSecret }, "client");
     if (!data) return;
     onUpdated(data);
-    window.location.assign(OAUTH_START_URL.google as string);
+    await startGoogleOAuth();
+  }
+
+  async function startGoogleOAuth() {
+    setBusy("oauth");
+    setNote("");
+    try {
+      const response = await fetch(OAUTH_START_URL.google as string, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start" }),
+      });
+      const data = await readJson<{ ok?: boolean; authorizationUrl?: string } & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not start Google sign-in.");
+      if (!data.authorizationUrl) throw new Error("Google sign-in did not return an authorization URL.");
+      await openExternalUrl(data.authorizationUrl);
+      setNote("Opened Google sign-in in your browser. Finish there, then refresh this connection.");
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "Could not start Google sign-in.");
+    } finally {
+      setBusy("");
+    }
   }
 
   const googleNeedsClient = isGoogle && !provider.oauthReady;
@@ -264,8 +290,14 @@ function ConnectModal({
           ) : null}
 
           {oauthUrl && !googleNeedsClient ? (
-            <BBtn variant="primary" onClick={() => window.location.assign(oauthUrl)} style={{ justifySelf: "start", padding: "11px 18px", fontSize: 13.5 }}>
-              <BIcon name="key" size={15} /> {isGoogle ? "Sign in with Google" : `Connect with ${provider.label}`}
+            <BBtn
+              variant="primary"
+              onClick={() => isGoogle ? void startGoogleOAuth() : window.location.assign(oauthUrl)}
+              disabled={Boolean(busy)}
+              style={{ justifySelf: "start", padding: "11px 18px", fontSize: 13.5 }}
+            >
+              {busy === "oauth" ? <span className="ni-spin" /> : <BIcon name="key" size={15} />}
+              {busy === "oauth" && isGoogle ? "Opening Google..." : isGoogle ? "Sign in with Google" : `Connect with ${provider.label}`}
             </BBtn>
           ) : null}
 

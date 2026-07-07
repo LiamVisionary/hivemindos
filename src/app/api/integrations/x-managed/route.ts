@@ -48,14 +48,16 @@ export async function GET(request: NextRequest) {
   const slug = normalizeHivemindosWalletPaidSlug(url.searchParams.get("slug"));
   const status = await getManagedXGatewayStatus();
   const creditAccounts = await listManagedXCreditAccounts(slug);
-  if (!creditAccountId) return NextResponse.json({ ok: true, status, creditAccounts, connections: [] });
+  const selectedCreditAccountId = creditAccountId || creditAccounts[0]?.accountId || "";
+  if (!selectedCreditAccountId) return NextResponse.json({ ok: true, status, creditAccounts, connections: [] });
 
-  const token = await getHivemindosModelCreditToken(creditAccountId, slug).catch(() => "");
+  const token = await getHivemindosModelCreditToken(selectedCreditAccountId, slug).catch(() => "");
   if (!token) {
     return NextResponse.json({
       ok: true,
       status,
       creditAccounts,
+      selectedCreditAccountId,
       credits: { configured: false, balanceUsd: null },
       connections: [],
     });
@@ -69,6 +71,7 @@ export async function GET(request: NextRequest) {
     ok: true,
     status,
     creditAccounts,
+    selectedCreditAccountId,
     credits: balance,
     connections: Array.isArray(connections.connections) ? connections.connections : [],
   });

@@ -1,0 +1,27 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Accent — honey & mint" subtitle="Honey/amber = primary action · mint-teal = live signal only" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); }
+  .row { display: flex; gap: 10px; padding: 18px; flex-wrap: wrap; }
+  .sw { flex: 1 1 0; min-width: 92px; }
+  .chip { height: 56px; border-radius: var(--radius-sm); }
+  .name { color: var(--fg-2); font-size: 11px; font-weight: 600; margin-top: 8px; }
+  .val { color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; margin-top: 2px; }
+  .head { color: var(--fg-3); font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; padding: 0 18px; }
+</style>
+</head>
+<body>
+  <div class="head" style="padding-top:16px">Honey — primary action &amp; brand accent</div>
+  <div class="row" style="padding-bottom:6px">
+    <div class="sw"><div class="chip" style="background:var(--honey)"></div><div class="name">honey / accent</div><div class="val">#e7b45c</div></div>
+    <div class="sw"><div class="chip" style="background:var(--honey-2)"></div><div class="name">honey-2</div><div class="val">#f0c879</div></div>
+    <div class="sw"><div class="chip" style="background:var(--honey-soft);border:1px solid var(--honey-line)"></div><div class="name">honey-soft</div><div class="val">231,180,92/.13</div></div>
+    <div class="sw"><div class="chip" style="background:var(--live)"></div><div class="name">live (mint)</div><div class="val">#6fcdba</div></div>
+    <div class="sw"><div class="chip" style="background:var(--live-soft);border:1px solid color-mix(in srgb,var(--live) 35%,transparent)"></div><div class="name">live-soft</div><div class="val">111,205,186/.14</div></div>
+  </div>
+</body>
+</html>

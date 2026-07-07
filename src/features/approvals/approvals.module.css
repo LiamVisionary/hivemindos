@@ -1,0 +1,348 @@
+/* Shared spend-approval UI (card + approve/reject-with-note modal), reused by
+   the Zero Human Companies approvals section and the Alerts "Review first"
+   queue. Self-contained scoped tokens (dark) + a [data-theme="hive-light"]
+   mirror so it renders correctly in any host regardless of the host's own
+   scoped variables. */
+
+.approvalsRoot {
+  --ap-panel: #14161c;
+  --ap-panel-2: #181b22;
+  --ap-panel-hi: #1e222b;
+  --ap-line: rgba(238, 232, 220, 0.07);
+  --ap-line-2: rgba(238, 232, 220, 0.13);
+  --ap-fg: #f3f0e9;
+  --ap-fg-2: #a7a39a;
+  --ap-fg-3: #76726a;
+  --ap-fg-4: #545049;
+  --ap-honey: #e7b45c;
+  --ap-honey-ink: #1a1305;
+  --ap-honey-soft: rgba(231, 180, 92, 0.13);
+  --ap-honey-line: rgba(231, 180, 92, 0.32);
+  --ap-live: #6fcdba;
+  --ap-live-soft: rgba(111, 205, 186, 0.14);
+  --ap-danger: #e58e85;
+  --ap-danger-soft: rgba(229, 142, 133, 0.13);
+  --ap-danger-line: rgba(229, 142, 133, 0.4);
+  --ap-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ap-display: "Space Grotesk", system-ui, sans-serif;
+}
+
+:global(:root[data-theme="hive-light"]) .approvalsRoot {
+  --ap-panel: #fbf8f1;
+  --ap-panel-2: #f4efe4;
+  --ap-panel-hi: #ffffff;
+  --ap-line: rgba(54, 46, 30, 0.1);
+  --ap-line-2: rgba(54, 46, 30, 0.16);
+  --ap-fg: #221d14;
+  --ap-fg-2: #5e574b;
+  --ap-fg-3: #867d6e;
+  --ap-fg-4: #a59b89;
+  --ap-honey: #b07f1c;
+  --ap-honey-ink: #fdf7ea;
+  --ap-honey-soft: rgba(176, 127, 28, 0.12);
+  --ap-honey-line: rgba(176, 127, 28, 0.34);
+  --ap-live: #6f8f68;
+  --ap-live-soft: rgba(111, 143, 104, 0.14);
+  --ap-danger: #c0524d;
+  --ap-danger-soft: rgba(192, 82, 77, 0.12);
+  --ap-danger-line: rgba(192, 82, 77, 0.4);
+}
+
+/* — Approval card — */
+.card {
+  --rc: var(--ap-live);
+  --rc-soft: var(--ap-live-soft);
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--rc) 30%, var(--ap-line));
+  background: var(--ap-panel-2);
+  padding: 13px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  box-sizing: border-box;
+}
+
+.card.high {
+  --rc: var(--ap-danger);
+  --rc-soft: var(--ap-danger-soft);
+}
+
+.card.med {
+  --rc: var(--ap-honey);
+  --rc-soft: var(--ap-honey-soft);
+}
+
+.card.low {
+  --rc: var(--ap-live);
+  --rc-soft: var(--ap-live-soft);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.riskBadge {
+  font-family: var(--ap-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--rc);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid color-mix(in srgb, var(--rc) 40%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.reqBy {
+  margin-left: auto;
+  font-family: var(--ap-mono);
+  font-size: 10px;
+  color: var(--ap-fg-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+.cardTitle {
+  font-size: 13px;
+  color: var(--ap-fg);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.cardActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--ap-line-2);
+  background: transparent;
+  color: var(--ap-fg-2);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btnPrimary {
+  border-color: transparent;
+  background: var(--ap-honey);
+  color: var(--ap-honey-ink);
+}
+
+.btnDanger {
+  border-color: var(--ap-danger-line);
+  color: var(--ap-danger);
+}
+
+.iconBtn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--ap-line-2);
+  background: transparent;
+  color: var(--ap-fg-2);
+  cursor: pointer;
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: var(--ap-panel-hi);
+  color: var(--ap-fg);
+}
+
+.btn svg,
+.iconBtn svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+/* — Modal — */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(6, 8, 12, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  border-radius: 16px;
+  border: 1px solid var(--ap-line-2);
+  background: var(--ap-panel);
+  box-shadow: 0 24px 70px -30px rgba(0, 0, 0, 0.75);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-sizing: border-box;
+}
+
+.modalHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modalEyebrow {
+  margin: 0;
+  font-family: var(--ap-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ap-honey);
+}
+
+.closeBtn {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--ap-line-2);
+  background: transparent;
+  color: var(--ap-fg-3);
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  color: var(--ap-fg);
+  background: var(--ap-panel-hi);
+}
+
+.modalTitle {
+  margin: 0;
+  font-family: var(--ap-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--ap-fg);
+  line-height: 1.35;
+}
+
+.modalMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-family: var(--ap-mono);
+  font-size: 11px;
+  color: var(--ap-fg-3);
+}
+
+.modalMeta b {
+  color: var(--ap-fg-2);
+  font-weight: 600;
+}
+
+.modalReason {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ap-fg-2);
+  border-left: 2px solid var(--ap-line-2);
+  padding-left: 12px;
+}
+
+.noteLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ap-fg-2);
+  margin-bottom: 6px;
+}
+
+.noteInput {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+  border-radius: 10px;
+  border: 1px solid var(--ap-line-2);
+  background: var(--ap-panel-2);
+  color: var(--ap-fg);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+
+.noteInput:focus {
+  outline: 2px solid var(--ap-honey);
+  outline-offset: -1px;
+}
+
+.noteHint {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--ap-fg-4);
+}
+
+.modalActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.modalActions .btn {
+  padding: 11px 14px;
+  font-size: 13px;
+}
+
+.modalError {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ap-danger);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: apSpin 0.8s linear infinite;
+}
+
+@keyframes apSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 1.6s; }
+  .btn { transition: none; }
+}

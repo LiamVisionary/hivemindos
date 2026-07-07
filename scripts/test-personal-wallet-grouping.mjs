@@ -9,6 +9,9 @@ import { join } from "node:path";
 const { buildGroupedPersonalWallets: buildDropInPersonalWallets, mergePersonalWalletSources } = await import(
   new URL("../src/lib/utils/personal-wallet-grouping.ts", import.meta.url)
 );
+const { walletSecretExportLabel } = await import(
+  new URL("../src/lib/services/wallet/wallet-secret-export.ts", import.meta.url)
+);
 
 const root = process.cwd();
 
@@ -65,6 +68,9 @@ assert.equal(JSON.stringify(grouped.holdings), JSON.stringify([["USDC", 20]]));
 const separate = cards.find((wallet) => wallet.id === "user:private-key-wallet");
 assert.ok(separate, "Unrelated personal wallets should remain separate cards.");
 assert.equal(separate.addresses.length, 1);
+assert.equal(walletSecretExportLabel([{ kind: "private-key" }, { kind: "recovery-phrase" }]), "wallet secret");
+assert.equal(walletSecretExportLabel([{ kind: "private-key" }]), "private key");
+assert.equal(walletSecretExportLabel([{ kind: "recovery-phrase" }]), "recovery phrase");
 
 const staleSignerRows = [
   { id: "user:rich:eip155-8453", agentId: "user:rich:eip155-8453", name: "My wallet Base", address: "0xC42e000000000000000000000000000000007bE9", network: "eip155:8453", custodyMode: "local", importedFrom: "recovery-phrase", currentBalanceUsd: 0, nativeBalance: 0, tokens: [] },
@@ -86,5 +92,16 @@ assert.match(walletViewSource, /primaryHolding = sendHoldings\[0\] \|\| top\[0\]
 assert.match(walletViewSource, /frFmtAmount\(primaryHolding\.sym, primaryHolding\.amount\)/);
 assert.match(walletViewSource, /maxHeight: top\.length > 5 \? 245/);
 assert.match(walletViewSource, /overflowY: top\.length > 5 \? "auto"/);
+assert.match(walletViewSource, /onExportPersonalWallet\?: \(walletId: string, confirmation: string\)/);
+assert.match(walletViewSource, /WalletSecretExportSheet[\s\S]+onExportPersonalWallet\?\.\(w\.id, confirmation\)/);
+assert.match(walletViewSource, /<BIcon name="key" size=\{14\} \/> Export keys/);
+
+const walletPanelSource = readFileSync(join(root, "src/features/dashboard/views/WalletPanel.tsx"), "utf8");
+assert.match(walletPanelSource, /exportPersonalWalletGroupSecret/);
+assert.match(walletPanelSource, /buildGroupedPersonalWallets\(mergedPersonalWallets\)\.find\(\(wallet\) => wallet\.id === walletId \|\| wallet\.spendId === walletId\)/);
+
+const walletExportActionsSource = readFileSync(join(root, "src/features/dashboard/views/wallet-secret-export-actions.ts"), "utf8");
+assert.match(walletExportActionsSource, /const localWallets = group\.accounts\.filter\(\(wallet\) => wallet\.custodyMode === "local"\)/);
+assert.match(walletExportActionsSource, /confirmation: options\.confirmation/);
 
 console.log("Personal wallet grouping tests passed.");

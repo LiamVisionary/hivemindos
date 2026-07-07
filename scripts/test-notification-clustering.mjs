@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// Hermetic: look-alike notifications collapse into paged clusters so a batch of
-// identical escalations — the 18 "Work is blocked on you" cards one escalation
-// sweep mints — reads as ONE card the operator pages through, not a wall of
-// near-duplicates. Fixtures mirror the real 2026-07-04 escalation storm.
+// Hermetic: look-alike notifications collapse into one expandable cluster so a
+// batch of near-identical escalations reads as ONE row the operator can expand,
+// not a wall of near-duplicates. Fixtures mirror the real 2026-07-04 storm.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
@@ -29,14 +28,14 @@ const blocked = (id, task) => ({
   createdAt: "2026-07-04T20:30:00.000Z",
 });
 
-// ── 18 identical-title escalations collapse into ONE cluster ────────────────
+// ── 18 look-alike escalations collapse into ONE expandable cluster ──────────
 {
+  // Different tasks (bodies) but same title/source/priority/kind → one cluster
+  // the operator can expand to see all 18, instead of a wall of near-duplicates.
   const items = Array.from({ length: 18 }, (_, i) => blocked(`n-${i}`, `Loop Eval ${i}`));
   const clusters = clusterNotifications(items);
   assert.equal(clusters.length, 1, "same title+source+priority+kind → single cluster");
   assert.equal(clusters[0].items.length, 18, "the cluster carries every collapsed item");
-  // Pager math the panel renders: "activeIndex+1 / total" and "+{total-1} similar".
-  assert.equal(`${1}/${clusters[0].items.length}`, "1/18");
   assert.equal(`+${clusters[0].items.length - 1} similar`, "+17 similar");
 }
 

@@ -2,6 +2,14 @@
 
 import * as React from "react";
 import type { GitLawbStatus } from "@/lib/types/gitlawb";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { openExternalUrl } from "@/lib/native/open-external-url";
+import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
+import {
+  MANAGED_X_RETURN_EVENT,
+  managedXReturnMessage,
+  type ManagedXReturnPayload,
+} from "@/lib/services/managed-x-return";
 import {
   Badge,
   BBtn,
@@ -58,6 +66,13 @@ type McpCatalogCardItem = HiveMcpCatalogItem & McpTransportDefaults & {
 
 type FetchErrorPayload = { error?: string; message?: string };
 
+type ManagedXReturnPoll = {
+  creditAccountId: string;
+  slug: string;
+  since: number;
+  until: number;
+};
+
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "connections", label: "Connections" },
   { id: "mcp", label: "MCP Servers" },
@@ -93,6 +108,10 @@ const MCP_SIDE_EFFECTS = {
   payments: { label: "payments", tone: "danger" },
 } as const;
 
+const MANAGED_X_RETURN_POLL_INTERVAL_MS = 1500;
+const MANAGED_X_RETURN_POLL_WINDOW_MS = 5 * 60 * 1000;
+const MANAGED_X_RETURN_POLL_GRACE_MS = 5000;
+
 export type IntegrationsViewProps = {
   embedded?: boolean;
   defaultTab?: TabId;
@@ -100,6 +119,31 @@ export type IntegrationsViewProps = {
 
 export function IntegrationsView({ embedded = false, defaultTab = "connections" }: IntegrationsViewProps) {
   const [tab, setTab] = React.useState<TabId>(() => tabFromLocation(defaultTab, TABS));
+  const [managedXReturn, setManagedXReturn] = React.useState<ManagedXReturnPayload | null>(null);
+
+  React.useEffect(() => {
+    if (!isTauriDesktopRuntime()) return undefined;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<ManagedXReturnPayload>(MANAGED_X_RETURN_EVENT, (event) => {
+        setTab("mcp");
+        setManagedXReturn(event.payload ?? {});
+      }))
+      .then((unlisten) => {
+        const safeUnlisten = createSafeTauriUnlisten(unlisten);
+        if (cancelled) {
+          safeUnlisten();
+          return;
+        }
+        cleanup = safeUnlisten;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
 
   return (
     <div className={`fr-root ${embedded ? "ni-embedded" : ""}`} style={{ position: "relative", minHeight: embedded ? undefined : "100vh", background: embedded ? "transparent" : "var(--bg)" }}>
@@ -116,7 +160,7 @@ export function IntegrationsView({ embedded = false, defaultTab = "connections" 
         {tab === "mcp" ? (
           <>
             <TabHeader eyebrow="Model Context Protocol" title="MCP Servers" sub="Tool servers the hive connects to and calls natively." />
-            <McpManager />
+            <McpManager managedXReturn={managedXReturn} onManagedXReturn={setManagedXReturn} />
           </>
         ) : null}
         {tab === "codeproof" ? (
@@ -144,7 +188,13 @@ function TabHeader({ eyebrow, title, sub }: { eyebrow: string; title: string; su
   );
 }
 
-function McpManager() {
+function McpManager({
+  managedXReturn,
+  onManagedXReturn,
+}: {
+  managedXReturn?: ManagedXReturnPayload | null;
+  onManagedXReturn: (payload: ManagedXReturnPayload) => void;
+}) {
   const [enabled, setEnabled] = React.useState(true);
   const [connected, setConnected] = React.useState<McpServerStatus[]>([]);
   const [catalog, setCatalog] = React.useState<McpCatalogCardItem[]>([]);
@@ -157,17 +207,21 @@ function McpManager() {
   const [busy, setBusy] = React.useState("");
   const [xBusy, setXBusy] = React.useState("");
   const [xMessage, setXMessage] = React.useState("");
+  const [managedXReturnPoll, setManagedXReturnPoll] = React.useState<ManagedXReturnPoll | null>(null);
   const [message, setMessage] = React.useState("");
+  const handledManagedXReturn = React.useRef("");
+  const managedXStatusContext = React.useRef<{ creditAccountId?: string; slug?: string }>({});
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
+      const managedTarget = managedXStatusContext.current;
       const [statusResponse, catalogResponse, xResponse, managedResponse] = await Promise.all([
         fetch("/api/mcp/client", { cache: "no-store" }),
         fetch("/api/mcp/catalog?limit=100", { cache: "no-store" }),
         fetch("/api/integrations/x-mcp", { cache: "no-store" }),
-        fetch(managedXStatusUrl(), { cache: "no-store" }),
+        fetch(managedXStatusUrl(managedTarget.creditAccountId, managedTarget.slug), { cache: "no-store" }),
       ]);
       const status = await readJson<{ ok?: boolean; enabled?: boolean; servers?: McpServerStatus[] } & FetchErrorPayload>(statusResponse);
       const catalogData = await readJson<{ ok?: boolean; servers?: HiveMcpCatalogItem[] } & FetchErrorPayload>(catalogResponse);
@@ -292,11 +346,19 @@ function McpManager() {
     }
   }
 
-  async function refreshManagedX(creditAccountId?: string, slug?: string) {
+  const refreshManagedX = React.useCallback(async (creditAccountId?: string, slug?: string) => {
     setXBusy("managed-refresh");
     setXMessage("");
     try {
-      const response = await fetch(managedXStatusUrl(creditAccountId, slug), { cache: "no-store" });
+      const cleanCreditAccountId = creditAccountId?.trim() || "";
+      const cleanSlug = slug?.trim() || "";
+      if (cleanCreditAccountId || cleanSlug) {
+        managedXStatusContext.current = {
+          creditAccountId: cleanCreditAccountId || undefined,
+          slug: cleanSlug || undefined,
+        };
+      }
+      const response = await fetch(managedXStatusUrl(cleanCreditAccountId, cleanSlug), { cache: "no-store" });
       const data = await readJson<{ ok?: boolean } & ManagedXPanelStatus & FetchErrorPayload>(response);
       if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not read managed X status.");
       setManagedXStatus({
@@ -313,11 +375,69 @@ function McpManager() {
     } finally {
       setXBusy("");
     }
-  }
+  }, []);
+
+  React.useEffect(() => {
+    if (!managedXReturn) return;
+    const key = JSON.stringify(managedXReturn);
+    if (handledManagedXReturn.current === key) return;
+    handledManagedXReturn.current = key;
+    const timer = window.setTimeout(() => {
+      const messageText = managedXReturnMessage(managedXReturn);
+      if (messageText) setXMessage(messageText);
+      void refreshManagedX(managedXReturn.creditAccountId, managedXReturn.slug);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [managedXReturn, refreshManagedX]);
+
+  React.useEffect(() => {
+    if (!managedXReturnPoll) return undefined;
+    let cancelled = false;
+    let timeoutId: number | undefined;
+
+    const poll = async () => {
+      if (cancelled) return;
+      if (Date.now() > managedXReturnPoll.until) {
+        setManagedXReturnPoll(null);
+        setXMessage("X sign-in is still pending. Use Refresh after finishing in your browser.");
+        return;
+      }
+
+      const params = new URLSearchParams({
+        creditAccountId: managedXReturnPoll.creditAccountId,
+        slug: managedXReturnPoll.slug,
+        since: String(managedXReturnPoll.since),
+      });
+
+      try {
+        const response = await fetch(`/api/integrations/x-managed/desktop-return-pending?${params.toString()}`, { cache: "no-store" });
+        const data = await readJson<{ ok?: boolean; returned?: ManagedXReturnPayload | null } & FetchErrorPayload>(response);
+        if (response.ok && data.ok !== false && data.returned) {
+          setManagedXReturnPoll(null);
+          onManagedXReturn(data.returned);
+          return;
+        }
+      } catch {
+        // Keep polling while the external browser finishes the provider redirect.
+      }
+
+      if (!cancelled) {
+        timeoutId = window.setTimeout(() => void poll(), MANAGED_X_RETURN_POLL_INTERVAL_MS);
+      }
+    };
+
+    timeoutId = window.setTimeout(() => void poll(), MANAGED_X_RETURN_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [managedXReturnPoll, onManagedXReturn]);
 
   async function startManagedXOAuth(creditAccountId: string, slug: string) {
     setXBusy("managed-oauth");
     setXMessage("");
+    setManagedXReturnPoll(null);
+    managedXStatusContext.current = { creditAccountId, slug };
     try {
       const response = await fetch("/api/integrations/x-managed", {
         method: "POST",
@@ -332,9 +452,22 @@ function McpManager() {
       const data = await readJson<{ ok?: boolean; authorizationUrl?: string } & FetchErrorPayload>(response);
       if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not start managed X sign-in.");
       if (!data.authorizationUrl) throw new Error("Managed X sign-in did not return an authorization URL.");
-      window.location.assign(data.authorizationUrl);
+      await openExternalUrl(data.authorizationUrl);
+      if (isTauriDesktopRuntime()) {
+        const now = Date.now();
+        setManagedXReturnPoll({
+          creditAccountId,
+          slug,
+          since: now - MANAGED_X_RETURN_POLL_GRACE_MS,
+          until: now + MANAGED_X_RETURN_POLL_WINDOW_MS,
+        });
+        setXMessage("Opened X sign-in in your browser. Finish there; HivemindOS will refresh automatically.");
+      } else {
+        setXMessage("Opened X sign-in in your browser. Finish there, then refresh managed status.");
+      }
     } catch (error) {
       setXMessage(error instanceof Error ? error.message : "Could not start managed X sign-in.");
+    } finally {
       setXBusy("");
     }
   }

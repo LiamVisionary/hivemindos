@@ -18,6 +18,7 @@ const OPEN_PALETTE_EVENT: &str = "hivemindos:open-command-palette";
 const OPEN_POPOUT_EVENT: &str = "hivemindos:open-popout";
 const RERUN_SETUP_EVENT: &str = "hivemindos:rerun-setup";
 const MODELS_CREDITS_RETURN_EVENT: &str = "hivemindos:models-credits-return";
+const MANAGED_X_RETURN_EVENT: &str = "hivemindos:managed-x-return";
 const QUEEN_VOICE_EVENT: &str = "hivemindos:queen-bee-voice";
 const QUEEN_SETTINGS_EVENT: &str = "hivemindos:queen-bee-settings";
 
@@ -99,6 +100,18 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
                 "status": status,
                 "source": source,
                 "slug": slug,
+                "url": url.to_string(),
+            }));
+        } else if host == "integrations" && path == "x-managed" {
+            show_main_window(app);
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));
+            let _ = app.emit(MANAGED_X_RETURN_EVENT, serde_json::json!({
+                "status": query_value(&url, "x_status").unwrap_or_default(),
+                "connectionId": query_value(&url, "connectionId").unwrap_or_default(),
+                "username": query_value(&url, "username").unwrap_or_default(),
+                "error": query_value(&url, "error").unwrap_or_default(),
+                "creditAccountId": query_value(&url, "x_credit_account_id").unwrap_or_default(),
+                "slug": query_value(&url, "x_slug").unwrap_or_default(),
                 "url": url.to_string(),
             }));
         }

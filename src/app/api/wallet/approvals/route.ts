@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ ok: true, approvals });
 }
 
-type DecideBody = { id?: string; decision?: string; decidedBy?: string };
+type DecideBody = { id?: string; decision?: string; decidedBy?: string; note?: string };
 
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       : null;
   if (!id) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
   if (!decision) return NextResponse.json({ ok: false, error: "decision must be 'approved' or 'denied'" }, { status: 400 });
-  const approval = await decideApproval(id, decision, body.decidedBy?.trim() || "dashboard");
+  const approval = await decideApproval(id, decision, body.decidedBy?.trim() || "dashboard", body.note);
   if (!approval) return NextResponse.json({ ok: false, error: "Approval request not found." }, { status: 404 });
   return NextResponse.json({ ok: true, approval });
 }

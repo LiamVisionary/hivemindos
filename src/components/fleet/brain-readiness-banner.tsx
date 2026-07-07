@@ -1,6 +1,6 @@
 "use client";
 
-import { BrainCircuit, Crown } from "lucide-react";
+import { BrainCircuit, Crown, LoaderCircle } from "lucide-react";
 import type { BrainReadiness } from "@/features/dashboard/hooks/use-brain-readiness";
 import styles from "./brain-readiness-banner.module.css";
 
@@ -29,7 +29,7 @@ export function BrainReadinessBanner({ readiness }: { readiness: BrainReadiness 
         </div>
         <div className={styles.actions}>
           <button type="button" className={styles.action} disabled={readiness.busy} onClick={readiness.onEnableLoops}>
-            {readiness.busy ? "Enabling..." : `Enable ${loops}`}
+            {readiness.busy ? <><LoaderCircle aria-hidden="true" className={styles.spinIcon} /> Enabling</> : `Enable ${loops}`}
           </button>
           <button type="button" className={styles.dismiss} onClick={readiness.onDismissLoops}>
             Not now

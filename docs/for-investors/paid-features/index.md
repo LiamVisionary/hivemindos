@@ -23,6 +23,11 @@ The free product should let someone run HivemindOS, connect their own keys, talk
     <a href="hivemind-cloud-agent-calls.html">Open cloud calls</a>
   </section>
   <section class="docCard">
+    <h3>Managed X API Credits</h3>
+    <p>Hosted X API and X MCP access using HivemindOS credit billing, server-side OAuth custody, and policy-driven per-call debits.</p>
+    <a href="../ecosystem-plan.html#managed-x-api-and-x-mcp">Open revenue model</a>
+  </section>
+  <section class="docCard">
     <h3>Future Premium Services</h3>
     <p>Hive Cloud, managed compute, the Agent Marketplace, and Enterprise are planned as optional services around the free product.</p>
     <a href="../ecosystem-plan.html">Open ecosystem plan</a>
@@ -33,7 +38,7 @@ The free product should let someone run HivemindOS, connect their own keys, talk
 
 Do not make users pay just because the UI got nicer.
 
-Charge when HivemindOS is operating something on their behalf: cloud rooms, shared voice infrastructure, hosted reliability, premium orchestration, or future managed compute.
+Charge when HivemindOS is operating something on their behalf: cloud rooms, shared voice infrastructure, hosted reliability, managed API gateways, premium orchestration, or future managed compute.
 
 Paid features should support more than one checkout path when practical:
 
@@ -53,6 +58,7 @@ Eligible managed services can offer a small HIVE checkout discount, such as 3-5%
 | ----------------- | ------------------------------------------------------ |
 | Hive Cloud        | Deployment, hosted memory, team workspaces, monitoring |
 | Managed compute   | Agent and swarm runtime capacity                       |
+| Managed integrations | Hosted OAuth custody, managed API/MCP gateways, usage receipts, and credit billing |
 | Agent Marketplace | Paid agents, swarms, workflows, templates, and commissions on workflow earnings |
 | Enterprise        | SSO, compliance, private deployments, and support      |
 

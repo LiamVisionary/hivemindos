@@ -1,5 +1,6 @@
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { WalletActionState } from "@/features/dashboard/dashboard-types";
+import type { GroupedPersonalWallet } from "@/lib/utils/personal-wallet-grouping";
 
 type WalletSecretExportResult = {
   ok?: boolean;
@@ -16,30 +17,29 @@ type ExportWalletSecrets = (input: {
   confirmation?: string;
 }) => Promise<WalletSecretExportResult>;
 
-type ExportableWalletGroup = {
-  name: string;
-  primaryWallet: { id: string };
-  wallets: Array<{ id: string; custodyMode: "local" | "watch" }>;
-};
-
 type WalletActionUpdater = (walletId: string, patch: Partial<WalletActionState>) => void;
 
 export async function exportPersonalWalletGroupSecret(
-  group: ExportableWalletGroup,
+  group: GroupedPersonalWallet,
   exportWalletSecrets: ExportWalletSecrets,
-  updatePersonalAction: WalletActionUpdater,
+  updatePersonalAction?: WalletActionUpdater,
+  options: { confirmation?: string } = {},
 ) {
-  const localWallets = group.wallets.filter((wallet) => wallet.custodyMode === "local");
+  const localWallets = group.accounts.filter((wallet) => wallet.custodyMode === "local");
+  const statusWalletId = group.spendId || group.id;
   if (!localWallets.length) {
-    updatePersonalAction(group.primaryWallet.id, { error: "This wallet is view-only, so there is no local secret to export.", message: "" });
-    return;
+    const result = { ok: false, error: "This wallet is view-only, so there is no local secret to export." };
+    updatePersonalAction?.(statusWalletId, { error: result.error, message: "" });
+    return result;
   }
-  updatePersonalAction(group.primaryWallet.id, { busy: true, error: "", message: "Preparing wallet secret export..." });
+  updatePersonalAction?.(statusWalletId, { busy: true, error: "", message: "Preparing wallet secret export..." });
   const result = await exportWalletSecrets({
     agentIds: localWallets.map((wallet) => wallet.id),
     label: group.name,
+    confirmation: options.confirmation,
   });
-  updatePersonalAction(group.primaryWallet.id, exportResultAction(result, localWallets.length));
+  updatePersonalAction?.(statusWalletId, exportResultAction(result, localWallets.length));
+  return result;
 }
 
 export async function exportAgentWalletSecret(

@@ -1,0 +1,154 @@
+/* HivemindOS — Color tokens
+   Source of truth: the refined "hive" language now used across the Fleet Hive,
+   Wallets, Trade, and Brain views (src/components/fleet-hive/fleet-hive.css,
+   trade-desk.css, wallets.module.css).
+
+   Warm-neutral graphite base. HONEY/AMBER is the primary action + brand accent.
+   MINT-TEAL is reserved strictly for the "live / working" signal. Light theme =
+   warm paper ("hive-light"). */
+
+:root {
+  /* ---- Base surfaces (warm graphite) ---- */
+  --background: #0c0d11;
+  --bg-0: #090a0d;
+  --bg-1: #101116;   /* bg-soft */
+  --bg-2: #14161c;   /* panel */
+  --bg-3: #181b22;   /* panel-2 */
+  --bg-4: #1e222b;   /* panel-hi */
+  --panel: #14161c;
+  --panel-soft: #181b22;
+  --panel-hi: #1e222b;
+  --field: #181b22;
+
+  /* Cards are SOLID warm panels in the new language (not translucent). */
+  --surface: #14161c;
+  --surface-strong: #101116;
+  --surface-soft: #181b22;
+
+  /* ---- Foreground / text (warm grays) ---- */
+  --foreground: #f3f0e9;
+  --fg: #f3f0e9;
+  --fg-2: #a7a39a;
+  --fg-3: #76726a;
+  --fg-4: #545049;
+  --text-soft: #a7a39a;
+  --muted: #a7a39a;
+
+  /* ---- Lines / borders (warm off-white, low opacity) ---- */
+  --line: rgba(238, 232, 220, 0.07);
+  --line-2: rgba(238, 232, 220, 0.13);
+  --line-3: rgba(238, 232, 220, 0.20);
+  --hairline: rgba(238, 232, 220, 0.13);
+  --comb-line: var(--honey-line);
+
+  /* ---- Honey / amber — the primary action + brand accent ---- */
+  --bee: #e7b45c;
+  --honey: #e7b45c;
+  --honey-2: #f0c879;
+  --pollen: #fff6cf;
+  --honey-soft: rgba(231, 180, 92, 0.13);
+  --honey-line: rgba(231, 180, 92, 0.32);
+  --on-honey: #1a1305;   /* text on a honey fill */
+
+  /* ---- Interactive accent = honey (primary) ---- */
+  --accent: #e7b45c;
+  --accent-strong: #f0c879;
+
+  /* ---- Mint-teal — the "live / working" signal ONLY ---- */
+  --live: #6fcdba;
+  --live-2: #8fdcc9;
+  --live-soft: rgba(111, 205, 186, 0.14);
+  --cyan: #6fcdba;
+  --cyan-2: #8fdcc9;
+
+  /* ---- Status colors ---- */
+  --success: #6fcdba;   /* mint = healthy / up */
+  --warning: #e7b45c;   /* honey = attention */
+  --danger: #e58e85;
+  --success-soft: rgba(111, 205, 186, 0.14);
+  --warning-soft: rgba(231, 180, 92, 0.13);
+  --danger-soft: rgba(229, 142, 133, 0.13);
+
+  /* ---- Semantic button roles ---- */
+  --button-primary: #e7b45c;
+  --button-primary-foreground: #1a1305;
+  --button-secondary: rgba(238, 232, 220, 0.06);
+  --button-secondary-foreground: #f3f0e9;
+  --button-accent: var(--honey-soft);
+  --button-accent-foreground: #f3f0e9;
+  --button-muted-foreground: #a7a39a;
+  --button-destructive: #e58e85;
+  --button-border: rgba(238, 232, 220, 0.13);
+  --button-ring: rgba(231, 180, 92, 0.32);
+
+  color-scheme: dark;
+}
+
+/* ---- Warm-paper light theme ---- */
+:root[data-theme="hive-light"] {
+  --background: #f1ede3;
+  --bg-0: #f1ede3;
+  --bg-1: #f6f2e9;
+  --bg-2: #fbf8f1;
+  --bg-3: #f4efe4;
+  --bg-4: #ffffff;
+  --panel: #fbf8f1;
+  --panel-soft: #f4efe4;
+  --panel-hi: #ffffff;
+  --field: #fffdf8;
+
+  --surface: #fbf8f1;
+  --surface-strong: #f6f2e9;
+  --surface-soft: #f4efe4;
+
+  --foreground: #221d14;
+  --fg: #221d14;
+  --fg-2: #5e574b;
+  --fg-3: #867d6e;
+  --fg-4: #a59b89;
+  --text-soft: #5e574b;
+  --muted: #5e574b;
+
+  --line: rgba(54, 46, 30, 0.10);
+  --line-2: rgba(54, 46, 30, 0.16);
+  --line-3: rgba(54, 46, 30, 0.26);
+  --hairline: rgba(54, 46, 30, 0.16);
+
+  --bee: #b07f1c;
+  --honey: #b07f1c;
+  --honey-2: #936811;
+  --pollen: #efe2be;
+  --honey-soft: rgba(176, 127, 28, 0.12);
+  --honey-line: rgba(176, 127, 28, 0.34);
+  --on-honey: #fff7df;
+
+  --accent: #b07f1c;
+  --accent-strong: #7c550b;
+
+  /* muted warm olive for the live signal (not the dark-theme cool mint) */
+  --live: #88926e;
+  --live-2: #6f7a54;
+  --live-soft: rgba(136, 146, 110, 0.12);
+  --cyan: #88926e;
+  --cyan-2: #6f7a54;
+
+  --success: #4f7d4b;
+  --warning: #8a641f;
+  --danger: #c0524d;
+  --success-soft: rgba(79, 125, 75, 0.14);
+  --warning-soft: rgba(176, 127, 28, 0.12);
+  --danger-soft: rgba(192, 82, 77, 0.12);
+
+  --button-primary: #b07f1c;
+  --button-primary-foreground: #fff7df;
+  --button-secondary: rgba(54, 46, 30, 0.06);
+  --button-secondary-foreground: #221d14;
+  --button-accent: var(--honey-soft);
+  --button-accent-foreground: #221d14;
+  --button-muted-foreground: #867d6e;
+  --button-destructive: #c0524d;
+  --button-border: rgba(54, 46, 30, 0.16);
+  --button-ring: rgba(176, 127, 28, 0.34);
+
+  color-scheme: light;
+}

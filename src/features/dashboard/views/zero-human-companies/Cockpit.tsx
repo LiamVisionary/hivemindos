@@ -21,7 +21,9 @@ import { CompanyRunsPanel } from "./CompanyRunsPanel";
 import { ApprovalPoliciesPanel } from "./ApprovalPoliciesPanel";
 import { collectCompanyDeliverables, partitionByOutput, dispatchedAgo } from "./company-deliverables";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
-import type { Agent, Approval, Colony, CompanyRevenueShareInput, Issue } from "./types";
+import type { Agent, Colony, CompanyRevenueShareInput, Issue } from "./types";
+import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
+import type { ApprovalDecision } from "@/features/approvals/spend-approval-model";
 import type { CompanyApprovalPolicy, CompanyPricingProposal } from "@/lib/types/company";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
@@ -29,8 +31,9 @@ import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
 type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 
 export type CockpitHandlers = {
-  onApprove: (approvalId: string) => void;
-  onReject: (approvalId: string) => void;
+  /** Decide a pending spend approval with an optional note/change, via the
+   *  shared approve/reject modal (same surface as the Alerts review queue). */
+  onDecideApproval: (approvalId: string, decision: ApprovalDecision, note: string) => void | Promise<void>;
   /** Human decision on a crew-raised pricing proposal (approve applies the catalog change). */
   onResolvePricing: (proposalId: string, decision: "approve" | "reject") => void;
   /** Save one company approval-policy row. */
@@ -252,25 +255,6 @@ function Hero({ colony: c }: { colony: Colony }) {
 }
 
 // ── Approvals ──────────────────────────────────────────────────────────────
-function ApprovalCard({ ap, onApprove, onReject, busy }: { ap: Approval; onApprove: () => void; onReject: () => void; busy: boolean }) {
-  const riskColor: Record<string, string> = { high: "var(--danger)", med: "var(--honey)", low: "var(--live)" };
-  const rc = riskColor[ap.risk] ?? "var(--live)";
-  return (
-    <div style={{ borderRadius: 12, border: `1px solid color-mix(in srgb, ${rc} 32%, var(--line))`, background: "var(--panel-2)", padding: "14px 15px", display: "flex", flexDirection: "column", gap: 9 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: rc, textTransform: "uppercase", letterSpacing: 0.06, border: `1px solid color-mix(in srgb, ${rc} 40%, transparent)`, borderRadius: 4, padding: "1px 5px" }}>{ap.kind}</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>req. {ap.agent}</span>
-      </div>
-      <div style={{ fontSize: 13, color: "var(--fg)", fontWeight: 500, lineHeight: 1.4, textWrap: "pretty", flex: 1 }}>{ap.title}</div>
-      <div style={{ display: "flex", gap: 8, marginTop: 5 }}>
-        <button disabled={busy} onClick={onApprove} style={actBtn("primary", busy)}>{busy ? <Spinner size={11} /> : "approve"}</button>
-        <button disabled={busy} onClick={onReject} style={actBtn("ghost", busy)}>{busy ? <Spinner size={11} /> : "reject"}</button>
-      </div>
-    </div>
-  );
-}
-
 /** A crew-raised price-change request: approve applies it to the shared-brain catalog. */
 function PricingProposalCard({ proposal, onApprove, onReject, busy }: { proposal: CompanyPricingProposal; onApprove: () => void; onReject: () => void; busy: boolean }) {
   const up = proposal.proposedAmountUsd > proposal.currentAmountUsd;
@@ -1075,7 +1059,12 @@ export function Cockpit({
           ) : c.approvals.length === 0 ? null : (
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
               {c.approvals.map((ap) => (
-                <ApprovalCard key={ap.id} ap={ap} busy={handlers.busyId === ap.id} onApprove={() => handlers.onApprove(ap.id)} onReject={() => handlers.onReject(ap.id)} />
+                <ApprovalReviewCard
+                  key={ap.id}
+                  approval={ap}
+                  busy={handlers.busyId === ap.id}
+                  onDecide={async (decision, note) => { await handlers.onDecideApproval(ap.id, decision, note); return true; }}
+                />
               ))}
             </div>
           )}

@@ -5,10 +5,28 @@ export type HiveMessagingCredentialKind =
   | "env-webhook-url"
   | "macos-messages";
 
+export type HiveMessagingChannelSourceKind = "vault" | "hermes";
+
 export type HiveMessagingChannelTarget = {
   chatId: string;
   threadId?: string;
   displayName?: string;
+};
+
+export type HiveMessagingChannelSource = {
+  kind: HiveMessagingChannelSourceKind;
+  label: string;
+  machineName?: string;
+  collectorUrl?: string;
+  runtime?: string;
+};
+
+export type HiveMessagingChannelDelivery = {
+  kind: "provider" | "hermes-send";
+  targetRef?: string;
+  collectorUrl?: string;
+  machineName?: string;
+  agentLocalDataDir?: string;
 };
 
 export type HiveMessagingChannel = {
@@ -24,6 +42,9 @@ export type HiveMessagingChannel = {
   target: HiveMessagingChannelTarget;
   createdAt: string;
   updatedAt: string;
+  readOnly?: boolean;
+  source?: HiveMessagingChannelSource;
+  delivery?: HiveMessagingChannelDelivery;
   lastTestAt?: string;
   lastTestStatus?: "ok" | "error";
   lastTestMessage?: string;

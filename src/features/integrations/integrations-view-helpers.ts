@@ -1,3 +1,6 @@
+import { managedXReturnMessage, managedXReturnPayloadFromSearchParams } from "@/lib/services/managed-x-return";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+
 export function summarizeRegistrarOutput(output?: string) {
   if (!output) return "";
   const changedMatch = output.match(/Done\.\s+([^\n]+)/);
@@ -24,9 +27,13 @@ export function managedXStatusUrl(creditAccountId?: string, slug?: string) {
 }
 
 export function managedXReturnUrl(creditAccountId: string, slug: string) {
-  const url = new URL("/", window.location.origin);
-  url.searchParams.set("view", "integrations");
-  url.searchParams.set("tab", "mcp");
+  const url = isTauriDesktopRuntime()
+    ? new URL("/api/integrations/x-managed/desktop-return", window.location.origin)
+    : new URL("/", window.location.origin);
+  if (!isTauriDesktopRuntime()) {
+    url.searchParams.set("view", "integrations");
+    url.searchParams.set("tab", "mcp");
+  }
   url.searchParams.set("x_credit_account_id", creditAccountId);
   url.searchParams.set("x_slug", slug);
   return url.toString();
@@ -35,13 +42,8 @@ export function managedXReturnUrl(creditAccountId: string, slug: string) {
 export function showManagedXReturnMessage(setMessage: (message: string) => void) {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
-  const status = params.get("x_status");
-  if (status === "connected") {
-    const username = params.get("username")?.trim();
-    setMessage(username ? `Managed X account @${username} connected.` : "Managed X account connected.");
-  } else if (status === "error") {
-    setMessage(params.get("error") || "Managed X sign-in failed.");
-  }
+  const message = managedXReturnMessage(managedXReturnPayloadFromSearchParams(params, window.location.href));
+  if (message) setMessage(message);
 }
 
 export function splitArgs(value: string) {

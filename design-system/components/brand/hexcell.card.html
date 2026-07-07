@@ -1,0 +1,48 @@
+<!-- @dsCard group="Components" viewport="700x260" name="HexCell — honeycomb tiles" subtitle="Queen + worker agents in the signature hex motif" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); color: var(--foreground); padding: 26px; }
+  .row { display: flex; gap: 26px; align-items: center; }
+  .col { display: grid; justify-items: center; gap: 10px; }
+  .lab { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); }
+  .col img { width: 100%; height: 100%; object-fit: contain; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel" data-presets="react">
+    const { HexCell } = window.HivemindOSDesignSystem_65eabf;
+    function Demo() {
+      return (
+        <div className="row">
+          <div className="col">
+            <HexCell tone="honey" pulse size={116}><img src="../../assets/bees/queen-bee.png" alt="Queen" /></HexCell>
+            <div className="lab">Queen · honey</div>
+          </div>
+          <div className="col">
+            <HexCell tone="live" pulse size={92}><img src="../../assets/bees/worker-bee-code.png" alt="Coder" /></HexCell>
+            <div className="lab">Working · live</div>
+          </div>
+          <div className="col">
+            <HexCell tone="neutral" size={92}><img src="../../assets/bees/worker-bee-research.png" alt="Research" /></HexCell>
+            <div className="lab">Ready · neutral</div>
+          </div>
+          <div className="col">
+            <HexCell tone="danger" size={92}><img src="../../assets/bees/worker-bee-ops.png" alt="Ops" /></HexCell>
+            <div className="lab">Failed · danger</div>
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+  </script>
+</body>
+</html>

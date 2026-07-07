@@ -1,0 +1,107 @@
+<!-- @dsCard group="Components" viewport="700x740" name="Card shapes — rows & portraits" subtitle="Full-width list rows + tall agent portrait cards" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); color: var(--foreground); padding: 22px; }
+  .wrap { display: grid; gap: 22px; max-width: 660px; }
+  .lab { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 10px; }
+  .rows { display: grid; gap: 10px; }
+  .portraits { display: flex; gap: 14px; }
+  .name { font-family: var(--font-display); font-weight: 700; }
+  .sub { color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; }
+  .muted { color: var(--fg-3); font-size: 12px; }
+</style>
+</head>
+<body>
+  <div id="root" class="wrap"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel" data-presets="react">
+    const NS = window.HivemindOSDesignSystem_65eabf;
+    const { Card, CardContent, Badge, StatusDot, Button, HexCell } = NS;
+
+    // ── Row card: full-width horizontal list row ──
+    function RowCard({ bee, name, meta, task, badge, since, tone }) {
+      return (
+        <Card style={{ borderRadius: "var(--radius-md)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px" }}>
+            <HexCell tone={tone} pulse={tone === "live"} size={40}>
+              <img src={`../../assets/bees/${bee}.png`} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            </HexCell>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="name" style={{ fontSize: 14 }}>{name}</span>
+                <Badge variant={badge[0]}>{badge[1]}</Badge>
+              </div>
+              <div className="muted" style={{ marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task}</div>
+            </div>
+            <span className="sub" style={{ flex: "0 0 auto" }}>{meta}</span>
+            <span className="sub" style={{ flex: "0 0 auto", minWidth: 34, textAlign: "right" }}>{since}</span>
+            <Button size="xs" variant="ghost">Open</Button>
+          </div>
+        </Card>
+      );
+    }
+
+    // ── Portrait card: tall "playing card" aspect (~2:3) ──
+    function PortraitCard({ bee, name, role, tone, stats, badge }) {
+      return (
+        <Card style={{ width: 210, borderRadius: "var(--radius-lg)", overflow: "hidden", borderColor: tone === "honey" ? "var(--honey-line)" : "var(--line-2)" }}>
+          <div style={{ position: "relative", height: 172, display: "grid", placeItems: "center",
+            background: tone === "honey"
+              ? "radial-gradient(circle at 50% 35%, var(--honey-soft), transparent 70%), var(--panel-2)"
+              : "radial-gradient(circle at 50% 35%, var(--live-soft), transparent 70%), var(--panel-2)" }}>
+            <HexCell tone={tone} pulse size={108}>
+              <img src={`../../assets/bees/${bee}.png`} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+            </HexCell>
+            <div style={{ position: "absolute", top: 10, right: 10 }}><Badge variant={badge[0]} mono>{badge[1]}</Badge></div>
+          </div>
+          <CardContent style={{ display: "grid", gap: 10, padding: 14 }}>
+            <div>
+              <div className="name" style={{ fontSize: 15 }}>{name}</div>
+              <div className="sub" style={{ marginTop: 2 }}>{role}</div>
+            </div>
+            <div style={{ display: "grid", gap: 6, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+              {stats.map(([k, v]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                  <span style={{ color: "var(--fg-3)" }}>{k}</span>
+                  <span style={{ color: "var(--fg-2)" }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    function Demo() {
+      return (
+        <>
+          <div>
+            <div className="lab">Row cards — scannable list rows</div>
+            <div className="rows">
+              <RowCard bee="worker-bee-code" name="Hermes-α" tone="live" task="Refactoring the swarm agent bridge over Tailscale SSH" meta="atlas" since="2m" badge={["success", "Working"]} />
+              <RowCard bee="worker-bee-research" name="MiroShark-sim" tone="live" task="Running market-making sim · epoch 8410 / 12000" meta="nimbus" since="23m" badge={["success", "Working"]} />
+              <RowCard bee="worker-bee-security" name="OpenClaw-x" tone="danger" task="Auth handshake failed against X channel — needs re-login" meta="nimbus" since="1h" badge={["danger", "Failed"]} />
+            </div>
+          </div>
+          <div>
+            <div className="lab">Portrait cards — agent “playing cards”</div>
+            <div className="portraits">
+              <PortraitCard bee="queen-bee" name="Queen" role="Orchestrator" tone="honey" badge={["honey", "Lead"]} stats={[["Machines", "3"], ["Tasks", "12"], ["Uptime", "12d"]]} />
+              <PortraitCard bee="worker-bee-code" name="Hermes-α" role="Coder · Hermes" tone="live" badge={["success", "Working"]} stats={[["Wallet", "0.42Ξ"], ["Since", "2m"], ["Tasks", "3"]]} />
+              <PortraitCard bee="worker-bee-planner" name="Aeon-night" role="Background" tone="honey" badge={["honey", "Sched"]} stats={[["Next", "02:00"], ["Wallet", "—"], ["Runs", "41"]]} />
+            </div>
+          </div>
+        </>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+  </script>
+</body>
+</html>

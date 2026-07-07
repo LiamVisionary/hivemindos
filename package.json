@@ -38,6 +38,7 @@
     "test:kanban:concurrency": "node scripts/test-kanban-concurrent-mutations.mjs",
     "test:kanban:result-format": "node scripts/test-kanban-result-format.mjs",
     "test:kanban:shards": "node scripts/test-kanban-shards.mjs",
+    "test:outreach-runtime-safeguards": "node scripts/test-outreach-runtime-safeguards.mjs",
     "test:loops": "node scripts/test-loop-services.mjs",
     "test:loop-runner": "node scripts/test-loop-runner.mjs",
     "test:loop-blocking": "node scripts/test-loop-completion-blocking.mjs",

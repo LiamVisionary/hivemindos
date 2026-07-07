@@ -21,6 +21,7 @@ import {
   executeMiroSharkChatRun,
   extractMiroSharkRunId,
   findMiroSharkChatRunRequest,
+  MIROSHARK_X402_SIMULATION_PRICE_USD,
   validateMiroSharkChatRun,
   waitForMiroSharkCompletion,
   type MiroSharkChatRunDraft,
@@ -609,7 +610,7 @@ function miroSharkX402ExecutionSse(input: {
         await sendTool(
           RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
           "Paying MiroShark x402 endpoint",
-          `Cap ${formatMoney(Math.min(input.wallet.maxPaymentUsd, Math.max(1, input.draft.maxPaymentUsd)))} USDC · ${input.draft.seedKind}`,
+          `Cap ${formatMoney(Math.min(input.wallet.maxPaymentUsd, Math.max(MIROSHARK_X402_SIMULATION_PRICE_USD, input.draft.maxPaymentUsd)))} USDC · ${input.draft.seedKind}`,
         );
         const paidStartedAt = Date.now();
         const paidRun = await executeMiroSharkChatRun(input.profile.id, input.wallet, input.draft);

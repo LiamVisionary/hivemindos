@@ -27,6 +27,10 @@ import {
   isRetryableFailureReason,
   normalizeFailureReason,
 } from "@/lib/services/kanban/kanban-failure-classification";
+import {
+  formatOutreachCompletionBlock,
+  validateOutreachCompletion,
+} from "@/lib/services/kanban/outreach-safeguards";
 import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
 import {
   gitLawbProofForProject,
@@ -711,6 +715,13 @@ function applyPatchToBoard(
   // Patch-to-done is a completion too — same misattribution guard as completeTask.
   if (nextStatus === "done") {
     assertResultNotMisattributed(board, taskId, patch.result ?? task.result);
+    const outreachBlock = validateOutreachCompletion(
+      task,
+      patch.result ?? task.result,
+    );
+    if (outreachBlock) {
+      throw new Error(formatOutreachCompletionBlock(outreachBlock));
+    }
   }
   const retryingWorking =
     nextStatus === "working" && isRetryBlockerResult(task.result);
@@ -1163,6 +1174,44 @@ export async function completeTask(
   const result =
     coerceKanbanText(input.result ?? input.summary ?? task.result) || undefined;
   assertResultNotMisattributed(board, taskId, result);
+  const outreachBlock = validateOutreachCompletion(task, result);
+  if (outreachBlock) {
+    const blockNote = formatOutreachCompletionBlock(outreachBlock);
+    const preservedResult = result?.trim()
+      ? `${result.trim()}\n\n${blockNote}`
+      : blockNote;
+    finishActiveRun(board, taskId, "blocked", {
+      ...input,
+      summary: input.summary ?? result ?? outreachBlock.reason,
+      reason: blockNote,
+    });
+    const changed: KanbanTask = {
+      ...task,
+      status: "needs-human",
+      result: preservedResult,
+      claimLock: undefined,
+      claimExpiresAt: undefined,
+      currentRunId: undefined,
+      updatedAt: now,
+    };
+    board.tasks = board.tasks.map((item) =>
+      item.id === taskId ? changed : item,
+    );
+    board.events.unshift(
+      event(
+        "task.outreach-evidence-blocked",
+        `${task.title} needs outreach sent/blocked evidence before completion`,
+        task.id,
+        {
+          reason: outreachBlock.reason,
+          requiredFields: outreachBlock.requiredFields,
+        },
+        input.runId ?? task.currentRunId,
+      ),
+    );
+    await writeBoard(touch(board), options);
+    return { board, task: changed, blocked: true, outreachEvidenceBlocked: true };
+  }
   const loopReceipts = mergeLoopReceipts(task.loopReceipts, input.loopReceipts);
   const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
   if (gateBlock) {

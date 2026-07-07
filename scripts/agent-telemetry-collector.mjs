@@ -78,6 +78,7 @@ import {
   summarizeHermesProcessPayload,
 } from "./lib/hermes-api-proxy-telemetry.mjs";
 import { discoverLocalOpenAiServers } from "./lib/local-openai-server-discovery.mjs";
+import { createCollectorMessagingChannelBridge } from "./lib/collector-messaging-channels.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
 import { tailnetSelfNode } from "./lib/tailnet-self.mjs";
 import {
@@ -3432,17 +3433,26 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-async function runHermes(args, timeout = 10_000) {
+async function runHermes(args, timeout = 10_000, envExtra = {}) {
   const { stdout, stderr } = await execFileAsync(
     await resolveHermesBin(),
     args,
     {
       timeout,
       maxBuffer: 2_000_000,
-      env: { ...process.env },
+      env: { ...process.env, ...envExtra },
     },
   );
   return `${stdout}${stderr ? `\n${stderr}` : ""}`.trim();
+}
+
+async function runHermesStdout(args, timeout = 10_000, envExtra = {}) {
+  const { stdout } = await execFileAsync(await resolveHermesBin(), args, {
+    timeout,
+    maxBuffer: 2_000_000,
+    env: { ...process.env, ...envExtra },
+  });
+  return stdout.trim();
 }
 
 async function hermesIntegrationStatus(agent = {}) {
@@ -3571,6 +3581,15 @@ async function hermesIntegrationStatus(agent = {}) {
     diagnostics,
   };
 }
+
+const collectorMessagingChannels = createCollectorMessagingChannelBridge({
+  defaultHermesDir,
+  expandHome,
+  getHostname: hostname,
+  localAgents,
+  runHermesStdout,
+  sanitizeLocalDataDir,
+});
 
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -8652,6 +8671,36 @@ async function handleCollectorRequest(request, response) {
           error instanceof Error
             ? error.message
             : "Runtime integration check failed.",
+      });
+    }
+    return;
+  }
+  if (pathname === "/messaging-channels") {
+    try {
+      if (request.method === "GET") {
+        jsonResponse(response, 200, await collectorMessagingChannels.list());
+        return;
+      }
+      if (request.method === "POST") {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        if (body.action === "send" || body.action === "test") {
+          const result = await collectorMessagingChannels.send(body);
+          jsonResponse(response, result.ok ? 200 : 400, result);
+          return;
+        }
+        jsonResponse(
+          response,
+          200,
+          await collectorMessagingChannels.list(body.agent || {}),
+        );
+        return;
+      }
+      jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    } catch (error) {
+      jsonResponse(response, 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Messaging channel bridge failed.",
       });
     }
     return;

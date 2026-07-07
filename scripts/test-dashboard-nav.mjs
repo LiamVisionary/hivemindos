@@ -30,10 +30,10 @@ assert.deepEqual(
   navigation.APP_NAV_SHELF_GROUPS.map((group) => group.map((item) => item.id)),
   [
     ["kanban", "vault", "chat", "wallet", "trade"],
-    ["scheduler", "notifications", "swarm", "history"],
-    ["governance", "aeon", "integrations"],
+    ["scheduler", "swarm", "history"],
+    ["governance", "aeon", "integrations", "notifications"],
   ],
-  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade, Schedules/Alerts/Swarm/History, Companies/Aeon/Integrations",
+  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade, Schedules/Swarm/History, Companies/Aeon/Integrations/Alerts",
 );
 assert.equal(navigation.shelfSlotForView("agents"), "agents", "Fleet lights the brand slot");
 assert.equal(navigation.shelfSlotForView("my-apps"), "integrations", "Apps & Services lights the Integrations slot");
@@ -74,7 +74,7 @@ assert.match(
 );
 assert.match(
   morePanel,
-  /notifications:\s*\{[\s\S]*?badge:\s*notificationUnread\s*\|\|\s*undefined,[\s\S]*?badgeLabel:\s*notificationUnread\s*\?/,
+  /const notifBadge = notificationUnread > 0[\s\S]*?badge:\s*`\$\{notificationUnread\} unread`[\s\S]*?notifications:\s*\{[\s\S]*?\.\.\.notifBadge/,
   "The More launcher should still surface the unread count on the Alerts card",
 );
 

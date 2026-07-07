@@ -157,6 +157,12 @@
   transform: none;
 }
 
+.spinIcon {
+  width: 14px;
+  height: 14px;
+  animation: brbSpin 0.9s linear infinite;
+}
+
 .dismiss {
   appearance: none;
   border: 0;
@@ -174,4 +180,16 @@
 
 .dismiss:hover {
   color: var(--brb-fg);
+}
+
+@keyframes brbSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinIcon {
+    animation-duration: 1.8s;
+  }
 }

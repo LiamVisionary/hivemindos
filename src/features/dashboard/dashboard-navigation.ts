@@ -96,7 +96,7 @@ const DASHBOARD_ROUTE_CATALOG_BY_ID = {
   fusion: { label: "Hive Fusion", detail: "Skill and workflow fusion", group: "Utilities", keywords: ["fusion", "skill fusion", "workflow fusion", "skill builder"] },
   integrations: { label: "Integrations", detail: "App connections and external APIs", group: "Utilities", keywords: ["integrations", "connections", "api", "apps"], shelfGroup: 2 },
   "my-apps": { label: "Apps & Services", detail: "Running apps and providers", group: "Utilities", keywords: ["apps", "services", "providers"], shelfSlot: "integrations" },
-  notifications: { label: "Alerts", detail: "Agent notifications, approvals, decisions", group: "Utilities", keywords: ["alerts", "notifications", "approval", "approvals", "decisions"], shelfGroup: 1 },
+  notifications: { label: "Alerts", detail: "Agent notifications, approvals, decisions", group: "Utilities", keywords: ["alerts", "notifications", "approval", "approvals", "decisions"], shelfSlot: "notifications" },
   messaging: { label: "Messaging", detail: "Agent messaging channels", group: "Utilities", keywords: ["messaging", "telegram", "discord", "imessage", "channels", "alerts"] },
   env: { label: "Env", detail: "Shared runtime variables", group: "Utilities", keywords: ["env", "secrets", "variables", "config"] },
   files: { label: "Files", detail: "Scoped runtime files", group: "Utilities", keywords: ["files", "browser", "runtime files"] },
@@ -167,13 +167,114 @@ export const DASHBOARD_ROUTE_LABELS = Object.fromEntries(
 
 export type AppNavShelfItem = { id: DashboardView; label: string };
 
-/** The app nav shelf's pinned sections, derived from shelfGroup in catalog order. */
-export const APP_NAV_SHELF_GROUPS: AppNavShelfItem[][] = [0, 1, 2].map((groupIndex) =>
-  DASHBOARD_ROUTE_ORDER.filter((id) => (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).shelfGroup === groupIndex).map((id) => ({
-    id,
-    label: (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).label,
-  })),
+function shelfItemFor(id: DashboardView): AppNavShelfItem {
+  return { id, label: (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).label };
+}
+
+/** Alerts is fixed as the final main rail item (never pinnable). */
+const FIXED_FINAL_SHELF_VIEWS = ["notifications"] as const satisfies readonly DashboardView[];
+
+/** Primary/Work rail views the user can remove: pinned by default, but
+ * unpinnable in place from the More launcher (unlike Fleet/Work/Brain/Chat,
+ * Schedules, and History, which are always fixed). */
+const REMOVABLE_RAIL_VIEWS = ["wallet", "trade", "swarm"] as const satisfies readonly DashboardView[];
+const REMOVABLE_RAIL_SET = new Set<DashboardView>(REMOVABLE_RAIL_VIEWS);
+
+/**
+ * Views the user can pin to / unpin from the nav rail via the More launcher:
+ * every Utilities-group view (except Alerts, which is fixed) plus the removable
+ * Primary/Work views (Wallets, Trade, Swarm).
+ */
+export const PINNABLE_VIEWS: DashboardView[] = DASHBOARD_ROUTE_ORDER.filter(
+  (id) =>
+    REMOVABLE_RAIL_SET.has(id) ||
+    ((DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).group === "Utilities" && id !== "notifications"),
 );
+const PINNABLE_SET = new Set<DashboardView>(PINNABLE_VIEWS);
+
+/** Which rail section a view calls home: its shelfGroup, else the Utilities section. */
+function homeShelfSection(view: DashboardView): 0 | 1 | 2 | undefined {
+  const entry = DASHBOARD_ROUTE_CATALOG_BY_ID[view] as DashboardRouteCatalogEntry;
+  if (entry.shelfGroup !== undefined) return entry.shelfGroup;
+  if (entry.group === "Utilities") return 2;
+  return undefined;
+}
+
+/** Default pins = the shelfGroup-2 utilities plus the removable Primary/Work
+ * views, so the rail is identical to the old fixed layout on first run. */
+export const DEFAULT_PINNED_VIEWS: DashboardView[] = DASHBOARD_ROUTE_ORDER.filter(
+  (id) => REMOVABLE_RAIL_SET.has(id) || (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).shelfGroup === 2,
+);
+
+export function isPinnableView(view: DashboardView): boolean {
+  return PINNABLE_SET.has(view);
+}
+
+/**
+ * Sentinel for "the user explicitly pinned nothing". A cleared list must
+ * serialize to a non-empty, non-view token so it (a) is distinguishable from
+ * "never set" (which seeds the defaults) and (b) survives the dashboard-state
+ * client, which treats an empty string as absent and would otherwise re-seed
+ * the defaults. Not a valid DashboardView, so parse yields [] for it.
+ */
+export const PINNED_UTILITIES_NONE = "__none__";
+
+/** Parse the persisted pinned value (CSV) into a validated, de-duped view list. */
+export function parsePinnedUtilities(raw: string | null | undefined): DashboardView[] {
+  if (raw == null || raw === "") return [...DEFAULT_PINNED_VIEWS];
+  if (raw.trim() === PINNED_UTILITIES_NONE) return [];
+  const seen = new Set<DashboardView>();
+  const out: DashboardView[] = [];
+  for (const token of raw.split(",")) {
+    const id = token.trim();
+    if (isDashboardView(id) && PINNABLE_SET.has(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+/** Serialize a pinned list back to the persisted CSV form (empty -> sentinel). */
+export function serializePinnedUtilities(views: readonly DashboardView[]): string {
+  const filtered = views.filter((id) => PINNABLE_SET.has(id));
+  return filtered.length ? filtered.join(",") : PINNED_UTILITIES_NONE;
+}
+
+/** Toggle one view in a pinned list (add to the end, or remove). */
+export function togglePinnedUtility(views: readonly DashboardView[], id: DashboardView): DashboardView[] {
+  if (!PINNABLE_SET.has(id)) return [...views];
+  return views.includes(id) ? views.filter((view) => view !== id) : [...views, id];
+}
+
+/**
+ * The app nav shelf's three sections. Fixed items (Fleet/Work/Brain/Chat,
+ * Schedules, History, and the final Alerts) always appear; each pinned view
+ * renders in its home section in catalog order — so unpinning Wallets/Trade/
+ * Swarm (or any pinned utility) removes it in place without reordering the rail.
+ */
+export function buildAppNavShelfGroups(pinned?: readonly DashboardView[]): AppNavShelfItem[][] {
+  const pinnedSet = new Set((pinned ?? DEFAULT_PINNED_VIEWS).filter((id) => PINNABLE_SET.has(id)));
+  const finalSet = new Set<DashboardView>(FIXED_FINAL_SHELF_VIEWS);
+  const sections: DashboardView[][] = [[], [], []];
+  for (const id of DASHBOARD_ROUTE_ORDER) {
+    if (finalSet.has(id)) continue; // appended last, below
+    const section = homeShelfSection(id);
+    if (section === undefined) continue;
+    if (PINNABLE_SET.has(id)) {
+      if (pinnedSet.has(id)) sections[section].push(id);
+    } else {
+      sections[section].push(id); // always-fixed rail view
+    }
+  }
+  for (const id of FIXED_FINAL_SHELF_VIEWS) {
+    sections[homeShelfSection(id) ?? 2].push(id);
+  }
+  return sections.map((ids) => ids.map(shelfItemFor));
+}
+
+/** Default shelf layout (no user customization) — kept for callers that don't thread pins. */
+export const APP_NAV_SHELF_GROUPS: AppNavShelfItem[][] = buildAppNavShelfGroups();
 
 /** Which shelf slot lights up for the current dashboard view ("agents" = the brand button). */
 export function shelfSlotForView(view: DashboardView): DashboardView {
@@ -181,6 +282,19 @@ export function shelfSlotForView(view: DashboardView): DashboardView {
   if (entry.shelfSlot) return entry.shelfSlot;
   if (entry.shelfGroup !== undefined) return view;
   return "more";
+}
+
+/**
+ * Resolve the rail item to highlight for `view`, given the currently-rendered
+ * shelf items (fixed groups + pinned utilities). A pinned utility highlights
+ * itself; a view whose canonical shelf slot isn't currently on the rail falls
+ * back to the More button.
+ */
+export function resolveActiveShelfSlot(view: DashboardView, renderedIds: ReadonlySet<DashboardView>): DashboardView {
+  if (renderedIds.has(view)) return view;
+  const slot = shelfSlotForView(view);
+  if (slot === "agents" || slot === "more") return slot;
+  return renderedIds.has(slot) ? slot : "more";
 }
 
 /** Views that belong to the More menu's utility launcher, in catalog order. */

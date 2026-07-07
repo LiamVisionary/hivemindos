@@ -11,6 +11,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const { computeScheduleHealthWarnings, scheduleCadenceMs, normalizedLoopKey, scheduleLoopSignature, dedupeSchedulesByLoop, scheduleHealthWarningKey, visibleScheduleHealthWarnings, scheduleOwnerId, dropOrphanScheduleRows, collapseAllMachinesReplicas, reconcileReachedOwners } = await import(
   "../src/features/dashboard/schedule-health.ts"
 );
+const { compactSchedulesForPersist } = await import("../src/features/dashboard/dashboard-storage.ts");
 
 const NOW = 1_800_000_000_000;
 const DAY = 86_400_000;
@@ -32,6 +33,26 @@ function schedule(overrides) {
     ...overrides,
   };
 }
+
+// --- dashboard-state schedule compaction ----------------------------------
+// The dashboard state keeps a bounded schedule snapshot, but the onboarding
+// brain-loop rows must survive the cap or the fleet banner forgets they were
+// enabled until a slower vault sync rehydrates them.
+const crowdedSchedules = Array.from({ length: 125 }, (_, index) => schedule({
+  id: `ordinary-${index}`,
+  name: `Ordinary ${index}`,
+  updatedAt: NOW - index,
+}));
+const compactedSchedules = compactSchedulesForPersist([
+  ...crowdedSchedules,
+  schedule({ id: "foundation:daily-context-generator", name: "Daily Context Generator", enabled: true, updatedAt: NOW - 10 * DAY }),
+  schedule({ id: "foundation:weekly-synthesis", name: "Weekly Synthesis", enabled: true, updatedAt: NOW - 11 * DAY }),
+]);
+assert.equal(compactedSchedules.length, 120, "schedule snapshot remains capped");
+assert.ok(compactedSchedules.some((item) => item.id === "foundation:daily-context-generator"), "Daily Context survives the cap");
+assert.ok(compactedSchedules.some((item) => item.id === "foundation:weekly-synthesis"), "Weekly Synthesis survives the cap");
+assert.ok(!compactedSchedules.some((item) => item.id === "ordinary-124"), "low-priority ordinary rows are displaced first");
+console.log("PASS schedule persistence compaction");
 
 // --- cadence parsing -------------------------------------------------------
 assert.equal(scheduleCadenceMs("daily 06:00"), DAY);

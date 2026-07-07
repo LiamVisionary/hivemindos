@@ -24,6 +24,7 @@ export type KanbanPriority = "low" | "normal" | "high" | "urgent";
 
 export type KanbanFailureReason =
   | "agent-error"
+  | "rate-limit"
   | "timeout"
   | "runtime-offline"
   | "runtime-recovery"

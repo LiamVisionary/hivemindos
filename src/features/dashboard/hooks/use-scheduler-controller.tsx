@@ -550,9 +550,11 @@ export function useSchedulerController(props: any) {
           ? { ...item, sharedSchedulePath: data.result?.path, sharedRunFolder: data.result?.folder }
           : item
       )));
+      return data.result;
     } else if (data?.error) {
       setScheduleImportStatus(data.error);
     }
+    return null;
   }
 
   async function upsertSharedSchedules(nextSchedules: AgentSchedule[]) {
@@ -573,9 +575,11 @@ export function useSchedulerController(props: any) {
         const result = index >= 0 ? data.results?.[index] : null;
         return result ? { ...item, sharedSchedulePath: result.path, sharedRunFolder: result.folder } : item;
       }));
+      return data.results;
     } else if (data?.error) {
       setScheduleImportStatus(data.error);
     }
+    return [];
   }
 
   async function fetchPastRunContext(schedule: AgentSchedule) {
@@ -700,7 +704,7 @@ export function useSchedulerController(props: any) {
   }
 
   async function refreshSharedSchedulesFromVault() {
-    if (!sharedVault.enabled) return;
+    if (!sharedVault.enabled) return [];
     const nativeData = await readNativeSharedSchedules({
       vaultPath: sharedVault.vaultPath,
       scheduledFolder: sharedVault.scheduledFolder,
@@ -717,13 +721,14 @@ export function useSchedulerController(props: any) {
     const data = nativeData?.ok ? nativeData : await response?.json().catch(() => null) as { ok?: boolean; schedules?: Array<Record<string, unknown>>; error?: string } | null;
     if ((!nativeData?.ok && !response?.ok) || !data?.ok) {
       if (data?.error) setScheduleImportStatus(data.error);
-      return;
+      return [];
     }
     const sharedSchedules = (data.schedules ?? [])
       .map((snapshot) => scheduleFromSharedSnapshot(snapshot))
       .filter((schedule): schedule is AgentSchedule => Boolean(schedule));
-    if (!sharedSchedules.length) return;
+    if (!sharedSchedules.length) return [];
     setSchedules((current) => mergeSharedSchedules(current, sharedSchedules));
+    return sharedSchedules;
   }
 
   async function recordSharedScheduledRun(schedule: AgentSchedule, record: {

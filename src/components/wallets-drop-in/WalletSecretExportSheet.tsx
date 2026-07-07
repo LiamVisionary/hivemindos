@@ -13,16 +13,17 @@ type WalletSecretExportResult = {
 };
 
 type WalletSecretExportSheetProps = {
-  walletId: string;
+  walletId?: string;
   actionBusy?: boolean;
   actionStatus?: string;
+  exportAction?: (confirmation: string) => Promise<WalletSecretExportResult> | WalletSecretExportResult;
   actions?: {
     onExportAgentWallet?: (walletId: string, confirmation: string) => Promise<WalletSecretExportResult> | WalletSecretExportResult;
   };
   onClose: () => void;
 };
 
-export function WalletSecretExportSheet({ walletId, actionBusy, actionStatus, actions, onClose }: WalletSecretExportSheetProps) {
+export function WalletSecretExportSheet({ walletId, actionBusy, actionStatus, exportAction, actions, onClose }: WalletSecretExportSheetProps) {
   const [confirmation, setConfirmation] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -34,8 +35,13 @@ export function WalletSecretExportSheet({ walletId, actionBusy, actionStatus, ac
     setBusy(true);
     setMessage("Preparing wallet secret export...");
     try {
-      if (!actions?.onExportAgentWallet) throw new Error("Wallet secret export is not available in this build.");
-      const result = await actions.onExportAgentWallet(walletId, confirmation.trim());
+      const trimmedConfirmation = confirmation.trim();
+      const result = exportAction
+        ? await exportAction(trimmedConfirmation)
+        : walletId && actions?.onExportAgentWallet
+          ? await actions.onExportAgentWallet(walletId, trimmedConfirmation)
+          : null;
+      if (!result) throw new Error("Wallet secret export is not available in this build.");
       if (result?.ok === false) throw new Error(result.error || "Wallet secret export failed.");
       const exportedCount = result?.exportedCount ?? 1;
       const exportLabel = result?.label || "wallet secret";
@@ -55,7 +61,7 @@ export function WalletSecretExportSheet({ walletId, actionBusy, actionStatus, ac
       <div className="fw-sheet-title">Export keys
         <button type="button" className="fw-x" onClick={onClose} aria-label="Close"><X size={14} strokeWidth={2} /></button>
       </div>
-      <p className="fw-sheet-help">This saves the local wallet secret for offline backup. Anyone with the export can spend from this wallet.</p>
+      <p className="fw-sheet-help">This saves the local wallet secret for offline backup. Multi-chain wallets may export a recovery phrase plus per-chain secrets; single-chain wallets export a private key. Anyone with the export can spend from this wallet.</p>
       <label className="fb-label">Confirm export
         <input className="fb-field fb-mono" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={WALLET_SECRET_EXPORT_CONFIRMATION} />
       </label>

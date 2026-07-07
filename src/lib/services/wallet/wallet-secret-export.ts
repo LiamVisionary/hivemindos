@@ -25,7 +25,9 @@ export function dedupeWalletExportEntries(entries: WalletSecretExportEntry[]) {
 }
 
 export function walletSecretExportLabel(entries: WalletSecretExportEntry[]) {
-  return entries.some((entry) => entry.kind === "recovery-phrase") ? "recovery phrase" : "private key";
+  const kinds = new Set(entries.map((entry) => entry.kind));
+  if (kinds.size > 1) return "wallet secret";
+  return kinds.has("recovery-phrase") ? "recovery phrase" : "private key";
 }
 
 export function renderWalletSecretExport(label: string, entries: WalletSecretExportEntry[]) {

@@ -10,7 +10,7 @@
    The "New simulation" control is a split button with two launch modes:
      • Local MiroShark — the existing /api/miroshark/swarm path (your own or a
        connected fleet MiroShark). Gated on mirosharkStatus.ok.
-     • Paid run · x402 — the hosted MiroShark at x402.miroshark.xyz (~$1 USDC).
+     • Paid run · x402 — the hosted MiroShark at x402.miroshark.xyz (~$1.20 USDC).
        The user picks a funding wallet (their own or an agent's) and confirms the
        charge here in SwarmPanel; the drop-in just emits the mode. */
 
@@ -33,6 +33,10 @@ import {
 import tradeStyles from "@/features/dashboard/views/trade/trade.module.css";
 import { MiroSharkProcessCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
 import type { MiroSharkProcessSummary, MiroSharkSimulationCardData } from "@/features/dashboard/views/chat/miroshark-card-parser";
+import {
+  MIROSHARK_X402_SIMULATION_PRICE_LABEL,
+  MIROSHARK_X402_SIMULATION_PRICE_USD,
+} from "@/lib/config/miroshark-x402";
 
 type MiroSharkPlatform = MiroSharkRunResult["platform"];
 
@@ -323,8 +327,8 @@ export function SwarmPanel({
   }, [mirosharkStatus?.ok, mirosharkStatus?.phase, mirosharkStatus?.error]);
 
   const x402Status = React.useMemo<SimLaunchModeStatus>(() => {
-    if (x402Pickables.length > 0) return { ready: true, note: "~$1 USDC" };
-    if (personalLoading) return { ready: true, note: "~$1 USDC" }; // optimistic until wallets load
+    if (x402Pickables.length > 0) return { ready: true, note: `~${MIROSHARK_X402_SIMULATION_PRICE_LABEL}` };
+    if (personalLoading) return { ready: true, note: `~${MIROSHARK_X402_SIMULATION_PRICE_LABEL}` }; // optimistic until wallets load
     const reason = personalWallets.length > 0
       ? "Your wallets can't fund paid runs yet (watch-only or unsupported network). Open the Wallets tab to add a local Base/Solana key."
       : "No wallet set up for paid runs. Open the Wallets tab to create or import one.";
@@ -388,14 +392,14 @@ export function SwarmPanel({
           ...seed,
           deep_research: pendingX402.deepResearch || undefined,
           // Build the policy explicitly: this run IS an x402 payment, and the
-          // user has picked this wallet + confirmed the ~$1 charge, so we force
+          // user has picked this wallet + confirmed the expected charge, so we force
           // the x402 rail and pass the per-run confirmation token. We never
           // override a disabled wallet here — Pay is gated on the wallet being
           // spend-enabled (x402WalletBlockReason).
           policy: {
             enabled: true,
             provider: "x402",
-            maxPaymentUsd: Math.max(1, Number(chosen.wallet.maxPaymentUsd) || 0),
+            maxPaymentUsd: Math.max(MIROSHARK_X402_SIMULATION_PRICE_USD, Number(chosen.wallet.maxPaymentUsd) || 0),
             approvalRequiredOverUsd: 0,
             autoPayEnabled: true,
           },
@@ -417,7 +421,7 @@ export function SwarmPanel({
         title: (pendingX402.scenario || "Paid simulation").slice(0, 140),
         network: network || undefined,
         amountUsd: Number.isFinite(amountUsd) && amountUsd > 0 ? amountUsd : undefined,
-        paymentLabel: Number.isFinite(amountUsd) && amountUsd > 0 ? `$${amountUsd.toFixed(2)} USDC` : "$1.00 USDC",
+        paymentLabel: Number.isFinite(amountUsd) && amountUsd > 0 ? `$${amountUsd.toFixed(2)} USDC` : MIROSHARK_X402_SIMULATION_PRICE_LABEL,
         reportUrl: readUrl(data.miroshark, ["report_url", "reportUrl"]),
         statusUrl: readUrl(data.miroshark, ["status_url", "statusUrl"]),
         waitUrl: readUrl(data.miroshark, ["wait_url", "waitUrl"]),
@@ -458,7 +462,7 @@ export function SwarmPanel({
 
   const onLaunch = React.useCallback((payload: SimLaunchPayload) => {
     if (payload.mode === "x402") {
-      // Compose → pick a wallet → confirm the $1 charge → POST /api/miroshark/x402.
+      // Compose → pick a wallet → confirm the paid charge → POST /api/miroshark/x402.
       setRunPhase("confirm");
       setRunError(null);
       setConfirmWalletId(null);
@@ -531,7 +535,7 @@ export function SwarmPanel({
           getSurvivalSnapshot={getSurvivalSnapshot ?? (() => ({}) as AgentSurvivalSnapshot)}
           currentId={defaultWalletId}
           title="Select a wallet for this paid run"
-          subtitle="Pick which wallet pays the ~$1 USDC. Your own wallets come first, then configured agent wallets."
+          subtitle={`Pick which wallet pays the ~${MIROSHARK_X402_SIMULATION_PRICE_LABEL}. Your own wallets come first, then configured agent wallets.`}
           confirmLabel="Use this wallet"
           onConfirm={onWalletConfirm}
           onClose={() => {
@@ -554,7 +558,7 @@ export function SwarmPanel({
                 </h3>
                 <p className={tradeStyles.subtitle}>
                   {runPhase === "running" ? "Paying and starting the run on x402.miroshark.xyz…"
-                    : "Runs on the hosted MiroShark (x402.miroshark.xyz). You're charged per the server's payment requirement (~$1 USDC)."}
+                    : `Runs on the hosted MiroShark (x402.miroshark.xyz). You're charged per the server's payment requirement (~${MIROSHARK_X402_SIMULATION_PRICE_LABEL}).`}
                 </p>
               </div>
               <button type="button" className={tradeStyles.iconBtn} onClick={closeX402} aria-label="Close" disabled={runPhase === "running"}>×</button>
@@ -572,7 +576,7 @@ export function SwarmPanel({
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                   <span style={{ opacity: 0.7 }}>Charge</span>
-                  <span style={{ fontWeight: 600 }}>~$1.00 USDC{pendingX402.deepResearch ? " · deep research" : ""}</span>
+                  <span style={{ fontWeight: 600 }}>~{MIROSHARK_X402_SIMULATION_PRICE_LABEL}{pendingX402.deepResearch ? " · deep research" : ""}</span>
                 </div>
               </div>
 

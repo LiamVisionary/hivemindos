@@ -12,6 +12,7 @@ import { SlideOver, FLbl, FInput, FArea, FPills, XEditor } from "./SlideOver";
 import { SW_TEMPLATES, type TemplateId } from "./sim-data";
 import { useSimData } from "./sim-context";
 import type { SimLaunchMode, SimLaunchPayload } from "./sim-context";
+import { MIROSHARK_X402_SIMULATION_PRICE_LABEL } from "@/lib/config/miroshark-x402";
 
 // Default round count + downstream platform per template (matches the live
 // MiroShark surface mapping in swarm-transformers.swarmTemplateIdFromSurface).
@@ -251,7 +252,7 @@ export function Composer({ initialTemplate = "polymarket", initialMode = "local"
   const isPaid = mode === "x402";
   const modeStatus = launchModes[mode];
   const blocked = modeStatus.ready === false;
-  const launchLabel = isPaid ? "Pay $1 & run"
+  const launchLabel = isPaid ? "Pay $1.20 & run"
     : tpl === "x-thread" ? "Stage thread" : tpl === "ops" ? "Launch storm" : "Launch run";
 
   // Each form reports a human-readable scenario via its own effect on mount and
@@ -274,11 +275,11 @@ export function Composer({ initialTemplate = "polymarket", initialMode = "local"
     <SlideOver open onClose={onClose}
       title={isPaid ? "New paid simulation · x402" : "New simulation"}
       sub={isPaid
-        ? "Compose a scenario, then pick a wallet and confirm the ~$1 charge. Runs on the hosted MiroShark — no local install needed."
+        ? `Compose a scenario, then pick a wallet and confirm the ~${MIROSHARK_X402_SIMULATION_PRICE_LABEL} charge. Runs on the hosted MiroShark — no local install needed.`
         : "Pick a scenario template, configure it, and spin up a fresh swarm."}
       footer={<>
         <span className="sv-mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>
-          {isPaid ? `◇ pays ~$1 USDC · pick a wallet & confirm next` : `◇ ${meta?.agents} agents · runs on your MiroShark · ~10 min`}
+          {isPaid ? `◇ pays ~${MIROSHARK_X402_SIMULATION_PRICE_LABEL} · pick a wallet & confirm next` : `◇ ${meta?.agents} agents · runs on your MiroShark · ~10 min`}
         </span>
         <Button variant="primary" sm onClick={launch} disabled={blocked} title={blocked ? modeStatus.reason : undefined}>
           <Icon name={isPaid ? "trade" : "plus"} size={13} sw={2} /> {launchLabel}
@@ -287,7 +288,7 @@ export function Composer({ initialTemplate = "polymarket", initialMode = "local"
       {/* Run kind — the same Local vs paid x402 choice the split button offers. */}
       <div className="so-row"><FLbl>Run with</FLbl>
         <div className="so-seg">
-          {([["local", "Local MiroShark"], ["x402", "Paid · $1"]] as const).map(([m, l]) => (
+          {([["local", "Local MiroShark"], ["x402", "Paid · $1.20"]] as const).map(([m, l]) => (
             <button key={m} type="button" data-on={mode === m ? "" : undefined} onClick={() => setMode(m)}>{l}</button>
           ))}
         </div>

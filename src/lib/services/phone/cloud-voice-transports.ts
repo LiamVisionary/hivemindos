@@ -200,6 +200,13 @@ async function openaiApiKey(): Promise<string> {
   return key;
 }
 
+// Models the TTS-only /v1/audio/speech endpoint accepts. A realtime model id
+// (e.g. "gpt-realtime", which the OpenAI realtime-hybrid transport uses as its
+// default) is rejected here with a misleading "Invalid URL (POST /v1/audio/speech)"
+// error, so the preview coerces anything outside this set to the default TTS model.
+const OPENAI_SPEECH_MODELS = new Set(["gpt-4o-mini-tts", "tts-1", "tts-1-hd"]);
+const DEFAULT_OPENAI_SPEECH_MODEL = "gpt-4o-mini-tts";
+
 /**
  * Synthesize a short spoken preview of a provider's voice for the Calls panel.
  * Returns a raw-PCM Response (mono, 24 kHz s16le) the client plays through the
@@ -218,11 +225,13 @@ export async function synthesizeVoicePreview(
 
   if (providerId === "openai") {
     const key = await openaiApiKey();
+    const requestedModel = options.model?.trim() || "";
+    const model = OPENAI_SPEECH_MODELS.has(requestedModel) ? requestedModel : DEFAULT_OPENAI_SPEECH_MODEL;
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
       body: JSON.stringify({
-        model: options.model?.trim() || "gpt-4o-mini-tts",
+        model,
         voice: options.voice?.trim() || "alloy",
         input: text,
         response_format: "pcm", // 24 kHz mono s16le

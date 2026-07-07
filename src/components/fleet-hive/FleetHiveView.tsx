@@ -416,14 +416,16 @@ export function FleetHiveView({
         borderRadius: "inherit",
       }}
     >
-      <TopBar machines={displayMachines} eyebrow="one swarm, humming" />
+      {/* The list view renders its own full-width header + view-mode switcher, so
+          the thin TopBar and the floating toggles step aside in that mode. */}
+      {viewMode !== "list" ? <TopBar machines={displayMachines} eyebrow="one swarm, humming" /> : null}
       <div ref={wrapRef} style={{ flex: "1 1 auto", position: "relative", minHeight: 0, overflow: "hidden" }}>
         {/* layout (Hive/Classic) toggle floats over the hive canvas, top-left */}
-        {layoutToggle ? (
+        {layoutToggle && viewMode !== "list" ? (
           <div style={{ position: "absolute", top: 14, left: 14, zIndex: 30 }}>{layoutToggle}</div>
         ) : null}
         {/* view-mode (hive/graph/map/list) switcher — right-aligned with the hive canvas */}
-        {!initialLoading ? (
+        {!initialLoading && viewMode !== "list" ? (
           <div style={{ position: "absolute", top: 14, right: viewMode === "hive" ? PANEL_W + 16 : 18, zIndex: 30 }}>
             <ViewModeToggle mode={viewMode} onChoose={chooseViewMode} />
           </div>
@@ -553,7 +555,7 @@ export function FleetHiveView({
                 />
               </div>
             ) : (
-              <div style={{ position: "absolute", inset: 0, overflow: "auto" }}>
+              <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
                 <ListView
                   machines={machines}
                   selected={selectedMachineId}
@@ -568,6 +570,9 @@ export function FleetHiveView({
                   onEditSettings={onEditSettings}
                   onDuplicate={onDuplicate}
                   onRemove={onRemove ? removeAgentFleet : undefined}
+                  viewMode={viewMode}
+                  onSelectViewMode={chooseViewMode}
+                  headerAux={layoutToggle}
                 />
               </div>
             )}

@@ -11,7 +11,7 @@
 
 import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { BellRing, Brain, Building2 } from "lucide-react";
-import { APP_NAV_SHELF_GROUPS, shelfSlotForView } from "@/features/dashboard/dashboard-navigation";
+import { buildAppNavShelfGroups, resolveActiveShelfSlot } from "@/features/dashboard/dashboard-navigation";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { applyAppNavLiquidGlass } from "@/lib/native/liquid-glass";
@@ -59,6 +59,24 @@ function FrNavIcon({ id }: { id: string }) {
       return (<svg {...p}><path d="M14.5 9.5 19 5M16 3h5v5" /><path d="M9.5 14.5 5 19M8 21H3v-5" /><circle cx="12" cy="12" r="3" /></svg>);
     case "maintenance":
       return (<svg {...p}><path d="M3 12h4l2 6 4-13 2 7h6" /></svg>);
+    case "fusion":
+      return (<svg {...p}><path d="M9.9 15.5A2 2 0 0 0 8.5 14.1L2.4 12.5a.5.5 0 0 1 0-1L8.5 9.9A2 2 0 0 0 9.9 8.5l1.6-6.1a.5.5 0 0 1 1 0L14.1 8.5A2 2 0 0 0 15.5 9.9l6.1 1.6a.5.5 0 0 1 0 1L15.5 14.1a2 2 0 0 0-1.4 1.4l-1.6 6.1a.5.5 0 0 1-1 0z" /><path d="M20 3v4M22 5h-4" /></svg>);
+    case "tools":
+      return (<svg {...p}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.8 3.8z" /></svg>);
+    case "my-apps":
+      return (<svg {...p}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M10 4v4M2 8h20M6 4v4" /></svg>);
+    case "messaging":
+      return (<svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>);
+    case "phone":
+      return (<svg {...p}><path d="M14 2a9 9 0 0 1 8 8" /><path d="M14 6a5 5 0 0 1 4 4" /><path d="M13.8 16.6a1 1 0 0 0 1.2-.3l.4-.5A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.5.4a1 1 0 0 0-.3 1.2 14 14 0 0 0 6.4 6.4z" /></svg>);
+    case "memory":
+      return (<svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>);
+    case "sessions":
+      return (<svg {...p}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>);
+    case "env":
+      return (<svg {...p}><path d="M2.6 17.4A2 2 0 0 0 2 18.8V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 1-1v-1h1a1 1 0 0 0 .7-.3l.8-.8a6.5 6.5 0 1 0-4-4z" /><circle cx="16.5" cy="7.5" r="0.7" fill="currentColor" stroke="none" /></svg>);
+    case "files":
+      return (<svg {...p}><path d="m6 14 1.5-2.9A2 2 0 0 1 9.2 10H20a2 2 0 0 1 1.9 2.5l-1.5 6a2 2 0 0 1-2 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v2" /></svg>);
     case "more":
       return (<svg {...p}><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" /></svg>);
     default:
@@ -102,6 +120,7 @@ function AppNavShelfBase({
   brandSrc = "/icon-512.png",
   appVersion,
   navBadges = {},
+  pinnedUtilities,
 }: {
   activeView: DashboardView;
   onNavigate: (id: DashboardView) => void;
@@ -111,8 +130,14 @@ function AppNavShelfBase({
   brandSrc?: string;
   appVersion?: string | null;
   navBadges?: Partial<Record<DashboardView, number>>;
+  /** User-pinned utility views for the rail's third section (see MorePanel). */
+  pinnedUtilities?: DashboardView[];
 }) {
-  const active = shelfSlotForView(activeView);
+  // Empty groups (e.g. the user unpinned every utility) are dropped so no
+  // dangling divider is left behind the fixed sections.
+  const shelfGroups = buildAppNavShelfGroups(pinnedUtilities).filter((group) => group.length > 0);
+  const renderedShelfIds = new Set<DashboardView>(shelfGroups.flatMap((group) => group.map((item) => item.id)));
+  const active = resolveActiveShelfSlot(activeView, renderedShelfIds);
   const keyboardNavigationRef = useRef(false);
   const [shelfKeyboardFocus, setShelfKeyboardFocus] = useState(false);
 
@@ -206,12 +231,12 @@ function AppNavShelfBase({
           <img src={brandSrc} alt="HivemindOS" />
           <span className="fr-brand-name">HivemindOS</span>
         </button>
-        {APP_NAV_SHELF_GROUPS.map((g, i) => (
+        {shelfGroups.map((g, i) => (
           <Fragment key={i}>
             {g.map((it) => (
               <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} badge={navBadges[it.id]} />
             ))}
-            {i < APP_NAV_SHELF_GROUPS.length - 1 ? <div className="fr-nav-div" /> : null}
+            {i < shelfGroups.length - 1 ? <div className="fr-nav-div" /> : null}
           </Fragment>
         ))}
         <div className="fr-shelf-foot">

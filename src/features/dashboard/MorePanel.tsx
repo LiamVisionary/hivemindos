@@ -1,70 +1,101 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
-import { Activity, AppWindow, Bell, Bot, Coins, FolderOpen, KeyRound, Landmark, MessageSquare, PhoneCall, PlugZap, Search, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+"use client";
 
-import fleetStyles from "@/app/fleet.module.css";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Activity, AppWindow, Bell, Bot, ChevronRight, Coins, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
+
 import type { DashboardUtilityView } from "@/features/dashboard/dashboard-navigation";
-import { createStyleClass } from "@/features/dashboard/style-classes";
+import { isPinnableView } from "@/features/dashboard/dashboard-navigation";
+import type { DashboardView } from "@/features/dashboard/dashboard-types";
+import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
+import styles from "./MorePanel.module.css";
 
-const fleetClass = createStyleClass(fleetStyles);
-const moreCardClass = "relative grid gap-3 rounded-md border border-[var(--line)] bg-[var(--surface)] p-4 pr-12 text-left text-[var(--foreground)] transition hover:border-[var(--accent-strong)] hover:bg-[var(--surface-strong)]";
-const moreIconClass = "flex h-9 w-9 items-center justify-center rounded-md border border-[var(--comb-line)] bg-[var(--button-accent)] text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4";
-const moreBadgeClass = "absolute right-3 top-3 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--danger)] px-1.5 font-mono text-[10px] font-bold leading-none text-[#1a1305]";
+// The More menu's navigable set is the catalog's Utilities group plus the
+// removable Primary/Work rail views (Wallets, Trade, Swarm); "stake" is a
+// standalone route rather than a dashboard view.
+type MorePanelTarget = DashboardUtilityView | "wallet" | "trade" | "swarm";
+type MoreItemId = MorePanelTarget | "stake";
 
-// The More menu's reachable set is the catalog's Utilities group, so a new
-// utility view added to the dashboard registry is a compile error here until
-// it gets a card (this is how the previously-unreachable Env view surfaced).
-type MorePanelTarget = DashboardUtilityView;
-type MorePanelGridTarget = Exclude<MorePanelTarget, "fusion">;
+type BadgeTone = "honey" | "live" | "danger" | "neutral";
+type DotTone = "honey" | "live" | "danger";
 
-const MORE_PANEL_UTILITY_ORDER = [
-  "aeon",
-  "governance",
-  "integrations",
-  "maintenance",
-  "sessions",
-  "tools",
-  "my-apps",
-  "phone",
-  "memory",
-  "env",
-  "files",
-  "notifications",
-  "messaging",
-] as const satisfies readonly MorePanelGridTarget[];
-
-type UtilityMissingFromMorePanel = Exclude<MorePanelGridTarget, (typeof MORE_PANEL_UTILITY_ORDER)[number]>;
-// Compile-time proof the More grid shows every utility view (fusion has its own section).
-const _morePanelUtilitiesComplete: UtilityMissingFromMorePanel extends never ? true : UtilityMissingFromMorePanel = true;
-void _morePanelUtilitiesComplete;
-
-type MorePanelCard = {
+type MoreItem = {
+  id: MoreItemId;
   icon: ReactNode;
   eyebrow: string;
   title: string;
   body: string;
-  badge?: number;
-  badgeLabel?: string;
+  keywords: string;
+  badge?: string;
+  badgeTone?: BadgeTone;
+  dot?: DotTone;
+  /** Present for the standalone /stake route (not a dashboard view). */
+  href?: string;
 };
 
-type MorePanelNavigationItem = MorePanelCard & {
-  id: MorePanelTarget;
+// Five grouped sections shown under "Browse all". The compile-time guard below
+// proves every Utilities view AND every removable rail view has a card, so any
+// pinnable view always has a management tile here (add a view -> compile error
+// until it gets one; this is how a previously-unreachable view surfaces).
+const MORE_GROUP_DEFS = [
+  { name: "Build & automate", ids: ["fusion", "aeon", "swarm"] },
+  { name: "Money & governance", ids: ["wallet", "trade", "governance", "stake"] },
+  { name: "Fleet health", ids: ["maintenance", "memory", "sessions", "tools"] },
+  { name: "Connections", ids: ["integrations", "my-apps", "messaging", "phone"] },
+  { name: "Data & access", ids: ["env", "files", "notifications"] },
+] as const satisfies ReadonlyArray<{ name: string; ids: readonly MoreItemId[] }>;
+
+type GroupedItemId = (typeof MORE_GROUP_DEFS)[number]["ids"][number];
+type RequiredMoreItemId = DashboardUtilityView | "wallet" | "trade" | "swarm";
+type MissingFromMoreGroups = Exclude<RequiredMoreItemId, GroupedItemId>;
+// Compile-time proof the grouped cards cover every Utilities view + removable rail view.
+const _moreGroupsComplete: MissingFromMoreGroups extends never ? true : MissingFromMoreGroups = true;
+void _moreGroupsComplete;
+
+const VIEW_MODES = ["board", "grid", "list"] as const;
+type ViewMode = (typeof VIEW_MODES)[number];
+const VIEW_MODE_STATE_KEY = "hivemindos.more.viewMode";
+
+function toneStyle(tone: BadgeTone): CSSProperties {
+  switch (tone) {
+    case "danger":
+      return { background: "color-mix(in srgb, var(--danger) 16%, transparent)", color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 34%, transparent)" };
+    case "live":
+      return { background: "var(--live-soft)", color: "var(--live)", borderColor: "color-mix(in srgb, var(--live) 34%, transparent)" };
+    case "neutral":
+      return { background: "color-mix(in srgb, var(--muted) 12%, transparent)", color: "var(--muted)", borderColor: "var(--line)" };
+    default:
+      return { background: "color-mix(in srgb, var(--honey) 15%, transparent)", color: "var(--honey)", borderColor: "var(--comb-line)" };
+  }
+}
+
+function dotColor(tone: DotTone): string {
+  return tone === "danger" ? "var(--danger)" : tone === "honey" ? "var(--honey)" : "var(--live)";
+}
+
+// The honey icon tile shared by every view mode.
+const ICON_BOX_STYLE: CSSProperties = {
+  background: "color-mix(in srgb, var(--honey) 13%, transparent)",
+  border: "1px solid var(--comb-line)",
+  color: "var(--honey)",
 };
 
-type MorePanelRouteItem = MorePanelCard & {
-  id: "stake";
-  href: "/stake";
-};
+function pinButtonStyle(pinned: boolean): CSSProperties {
+  return pinned
+    ? { background: "color-mix(in srgb, var(--honey) 14%, transparent)", border: "1px solid var(--comb-line)", color: "var(--honey)" }
+    : { background: "transparent", border: "1px solid var(--line)", color: "var(--muted)" };
+}
 
 export type MorePanelProps = {
   sharedEnvCount?: number;
-  agentSpecificEnvCount?: number;
   maintenanceOk?: boolean;
   runtimeFileRootCount: number;
   notificationUnread: number;
   notificationTotal: number;
   memoryRssMb?: number;
-  memoryGrowthMb?: number;
+  /** Utility views currently pinned to the nav rail (see AppNavShelf). */
+  pinnedViews: DashboardView[];
+  onTogglePin: (id: DashboardView) => void;
   onNavigate: (target: MorePanelTarget) => void;
 };
 
@@ -75,179 +106,292 @@ export function MorePanel({
   notificationUnread,
   notificationTotal,
   memoryRssMb,
-  memoryGrowthMb,
+  pinnedViews,
+  onTogglePin,
   onNavigate,
 }: MorePanelProps) {
-  const fusionItems: MorePanelNavigationItem[] = [
-    {
-      id: "fusion" as const,
-      icon: <Sparkles aria-hidden="true" />,
-      eyebrow: "Skill builder",
-      title: "Hive Skill Fusion",
-      body: "Create reusable skills from selected skills, tools, apps, agents, and workflows.",
-    },
-  ];
-  const utilityCards: Record<MorePanelGridTarget, MorePanelCard> = {
-    aeon: {
-      icon: <Bot aria-hidden="true" />,
-      eyebrow: "Autopilot",
-      title: "Aeon",
-      body: "Manage unattended skills, schedules, workflow runs, and outputs.",
-    },
-    governance: {
-      icon: <Landmark aria-hidden="true" />,
-      eyebrow: "Companies & budgets",
-      title: "Zero Human Company",
-      body: "Group agents into companies, set shared budgets and kill switches, and clear spend approvals.",
-    },
-    integrations: {
-      icon: <PlugZap aria-hidden="true" />,
-      eyebrow: "App connections",
-      title: "Integrations",
-      body: "Connect GitHub, Linear, Slack, Notion, and Google for the whole hive.",
-    },
-    maintenance: {
-      icon: <ShieldCheck aria-hidden="true" />,
-      eyebrow: maintenanceOk === false ? "Needs attention" : "Fleet checks",
-      title: "Diagnostics",
-      body: "Run dashboard and runtime health checks.",
-    },
-    sessions: {
-      icon: <Search aria-hidden="true" />,
-      eyebrow: "Runtime memory",
-      title: "Sessions",
-      body: "Search readable Hermes and OpenClaw conversations from one place.",
-    },
-    tools: {
-      icon: <Wrench aria-hidden="true" />,
-      eyebrow: "Capabilities",
-      title: "Capability Store",
-      body: "Review built-in, runtime, app, and mini-app handles agents can invoke.",
-    },
-    "my-apps": {
-      icon: <AppWindow aria-hidden="true" />,
-      eyebrow: "Providers",
-      title: "Apps & Services",
-      body: "Open running apps and browse installable providers agents can also call.",
-    },
-    phone: {
-      icon: <PhoneCall aria-hidden="true" />,
-      eyebrow: "Call prompts",
-      title: "Phone",
-      body: "Manage the spoken prompts your iPhone calls you with.",
-    },
-    memory: {
-      icon: <Activity aria-hidden="true" />,
-      eyebrow: memoryRssMb ? `${Math.round(memoryRssMb)} MB RSS` : "Review queue",
-      title: "Memory & Review",
-      body: memoryGrowthMb && memoryGrowthMb > 0 ? `Growing ${memoryGrowthMb.toFixed(1)} MB in the sample window, with review and Context X-Ray tools below.` : "Review proposed brain writes, inspect Context X-Ray manifests, and track process RSS growth.",
-    },
-    env: {
-      icon: <KeyRound aria-hidden="true" />,
-      eyebrow: sharedEnvCount ? `${sharedEnvCount} shared keys` : "Shared credentials",
-      title: "Env",
-      body: "Manage shared and per-agent runtime variables synced across the hive.",
-    },
-    files: {
-      icon: <FolderOpen aria-hidden="true" />,
-      eyebrow: runtimeFileRootCount ? `${runtimeFileRootCount} roots` : "Scoped browser",
-      title: "Files",
-      body: "Inspect allowlisted runtime and brain files.",
-    },
-    notifications: {
-      icon: <Bell aria-hidden="true" />,
-      eyebrow: notificationUnread ? `${notificationUnread} unread` : `${notificationTotal} total`,
-      title: "Alerts",
-      body: "Review messages, decisions, and configurable approval requests from agents.",
-      badge: notificationUnread || undefined,
-      badgeLabel: notificationUnread ? `${notificationUnread} unread alerts` : undefined,
-    },
-    messaging: {
-      icon: <MessageSquare aria-hidden="true" />,
-      eyebrow: "Telegram, Discord, iMessage",
-      title: "Messaging",
-      body: "Set up outbound channels for Queen Bee and individual agents.",
-    },
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [pendingApprovals, setPendingApprovals] = useState<number | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
+  const [viewModeRaw, rememberViewMode] = useRememberedDashboardValue(VIEW_MODE_STATE_KEY, "board");
+  const viewMode: ViewMode = (VIEW_MODES as readonly string[]).includes(viewModeRaw) ? (viewModeRaw as ViewMode) : "board";
+
+  // Pending spend-approval count for the governance badge — fetched once when
+  // the More view mounts (same-origin, session-authed like the other panels).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/wallet/approvals?status=pending", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { approvals?: unknown[] } | null) => {
+        if (!cancelled && Array.isArray(data?.approvals)) setPendingApprovals(data.approvals.length);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Press "/" to focus the utility search (only while typing isn't already
+  // happening elsewhere). Scoped to this view since the panel only mounts here.
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      event.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const pinnedSet = useMemo(() => new Set(pinnedViews), [pinnedViews]);
+
+  const items = useMemo<Record<MoreItemId, MoreItem>>(() => {
+    const approvalBadge = pendingApprovals && pendingApprovals > 0
+      ? { badge: `${pendingApprovals} approval${pendingApprovals === 1 ? "" : "s"}`, badgeTone: "honey" as BadgeTone }
+      : {};
+    const rss = memoryRssMb ? Math.round(memoryRssMb) : 0;
+    const maintenanceBadge = maintenanceOk === true
+      ? { badge: "All clear", badgeTone: "live" as BadgeTone, dot: "live" as DotTone }
+      : maintenanceOk === false
+        ? { badge: "Needs checks", badgeTone: "danger" as BadgeTone, dot: "danger" as DotTone }
+        : {};
+    const notifBadge = notificationUnread > 0
+      ? { badge: `${notificationUnread} unread`, badgeTone: "danger" as BadgeTone, dot: "danger" as DotTone }
+      : {};
+
+    return {
+      fusion: { id: "fusion", icon: <Sparkles aria-hidden="true" />, eyebrow: "Skill builder", title: "Hive Skill Fusion", body: "Create reusable skills from skills, tools, apps, agents, and workflows.", keywords: "fusion skill workflow builder reusable" },
+      aeon: { id: "aeon", icon: <Bot aria-hidden="true" />, eyebrow: "Autopilot", title: "Aeon", body: "Manage unattended skills, schedules, workflow runs, and outputs.", keywords: "aeon autopilot unattended runs outputs", dot: "live" },
+      swarm: { id: "swarm", icon: <Network aria-hidden="true" />, eyebrow: "Simulations", title: "Swarm", body: "Run MiroShark agent simulations and rehearsals.", keywords: "swarm miroshark simulation rehearsal" },
+      wallet: { id: "wallet", icon: <Wallet aria-hidden="true" />, eyebrow: "Agent money rails", title: "Wallets", body: "Manage agent wallets, balances, budgets, and usage.", keywords: "wallet wallets honey spend usage tokens balance budget" },
+      trade: { id: "trade", icon: <TrendingUp aria-hidden="true" />, eyebrow: "Crypto & stocks", title: "Trade", body: "Buy, sell, and swap crypto and stocks with preview-and-confirm.", keywords: "trade trading buy sell swap crypto stocks perps polymarket" },
+      governance: { id: "governance", icon: <Landmark aria-hidden="true" />, eyebrow: "Companies & budgets", title: "Zero Human Company", body: "Group agents into companies, set budgets and kill switches, and clear spend approvals.", keywords: "governance company companies budget approvals kill switch zhc", ...approvalBadge },
+      stake: { id: "stake", icon: <Coins aria-hidden="true" />, eyebrow: "Community tiers", title: "Stake HIVE", body: "Lock HIVE for Holder–Visionary status, alpha rooms, governance, and curator rights.", keywords: "stake hive holder visionary alpha governance curator", href: "/stake" },
+      maintenance: { id: "maintenance", icon: <ShieldCheck aria-hidden="true" />, eyebrow: "Fleet checks", title: "Diagnostics", body: "Run dashboard and runtime health checks.", keywords: "diagnostics maintenance health checks repair", ...maintenanceBadge },
+      memory: { id: "memory", icon: <Activity aria-hidden="true" />, eyebrow: rss ? `${rss} MB RSS` : "Review queue", title: "Memory & Review", body: "Review proposed brain writes, inspect Context X-Ray, and track process RSS growth.", keywords: "memory review rss telemetry context x-ray brain writes", ...(rss ? { badge: `${rss} MB`, badgeTone: "honey" as BadgeTone } : {}) },
+      sessions: { id: "sessions", icon: <Search aria-hidden="true" />, eyebrow: "Runtime memory", title: "Sessions", body: "Search readable Hermes and OpenClaw conversations from one place.", keywords: "sessions search transcripts hermes openclaw conversations" },
+      tools: { id: "tools", icon: <Wrench aria-hidden="true" />, eyebrow: "Capabilities", title: "Capability Store", body: "Review built-in, runtime, app, and mini-app handles agents can invoke.", keywords: "tools capabilities handles capability store skills" },
+      integrations: { id: "integrations", icon: <PlugZap aria-hidden="true" />, eyebrow: "App connections", title: "Integrations", body: "Connect GitHub, Linear, Slack, Notion, and Google for the whole hive.", keywords: "integrations connections api apps github linear slack notion google" },
+      "my-apps": { id: "my-apps", icon: <AppWindow aria-hidden="true" />, eyebrow: "Providers", title: "Apps & Services", body: "Open running apps and browse installable providers agents can also call.", keywords: "apps services providers running installable" },
+      messaging: { id: "messaging", icon: <MessageSquare aria-hidden="true" />, eyebrow: "Telegram · Discord · iMessage", title: "Messaging", body: "Set up outbound channels for Queen Bee and individual agents.", keywords: "messaging telegram discord imessage channels outbound" },
+      phone: { id: "phone", icon: <PhoneCall aria-hidden="true" />, eyebrow: "Call prompts", title: "Phone", body: "Manage the spoken prompts your iPhone calls you with.", keywords: "phone calls prompts iphone spoken" },
+      env: { id: "env", icon: <KeyRound aria-hidden="true" />, eyebrow: sharedEnvCount ? `${sharedEnvCount} shared keys` : "Shared credentials", title: "Env", body: "Manage shared and per-agent runtime variables synced across the hive.", keywords: "env secrets variables config credentials keys", ...(sharedEnvCount ? { badge: `${sharedEnvCount} keys`, badgeTone: "neutral" as BadgeTone } : {}) },
+      files: { id: "files", icon: <FolderOpen aria-hidden="true" />, eyebrow: runtimeFileRootCount ? `${runtimeFileRootCount} roots` : "Scoped browser", title: "Files", body: "Inspect allowlisted runtime and brain files.", keywords: "files browser runtime brain roots scoped", ...(runtimeFileRootCount ? { badge: `${runtimeFileRootCount} roots`, badgeTone: "neutral" as BadgeTone } : {}) },
+      notifications: { id: "notifications", icon: <Bell aria-hidden="true" />, eyebrow: notificationUnread ? `${notificationUnread} unread` : `${notificationTotal} total`, title: "Alerts", body: "Review messages, decisions, and configurable approval requests from agents.", keywords: "alerts notifications approvals decisions messages", ...notifBadge },
+    };
+  }, [maintenanceOk, memoryRssMb, notificationTotal, notificationUnread, pendingApprovals, runtimeFileRootCount, sharedEnvCount]);
+
+  const activate = useCallback((item: MoreItem) => {
+    if (item.href) {
+      router.push(item.href);
+      return;
+    }
+    onNavigate(item.id as MorePanelTarget);
+  }, [onNavigate, router]);
+
+  const handleTogglePin = useCallback((id: MoreItemId) => {
+    if (id !== "stake" && isPinnableView(id)) onTogglePin(id);
+  }, [onTogglePin]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches = useCallback((item: MoreItem) => {
+    if (!normalizedQuery) return true;
+    return `${item.title} ${item.eyebrow} ${item.body} ${item.keywords}`.toLowerCase().includes(normalizedQuery);
+  }, [normalizedQuery]);
+
+  const groups = useMemo(() => (
+    MORE_GROUP_DEFS
+      .map((group) => ({ name: group.name, items: group.ids.map((id) => items[id]).filter(matches) }))
+      .filter((group) => group.items.length > 0)
+  ), [items, matches]);
+
+  const totalCount = MORE_GROUP_DEFS.reduce((sum, group) => sum + group.ids.length, 0);
+  const pinnedItems = pinnedViews.map((id) => (id in items ? items[id as MoreItemId] : null)).filter((item): item is MoreItem => Boolean(item));
+
+  // The pin/unpin control. Rendered as a SIBLING of the activator button (never
+  // nested inside it) so the tile stays a valid, keyboard-clean structure.
+  const renderPinButton = (item: MoreItem, className: string) => {
+    if (item.id === "stake" || !isPinnableView(item.id)) return null;
+    const pinned = pinnedSet.has(item.id);
+    return (
+      <button
+        type="button"
+        className={`${styles.pinBtn} ${className}`}
+        style={pinButtonStyle(pinned)}
+        title={pinned ? "Unpin from nav rail" : "Pin to nav rail"}
+        aria-pressed={pinned}
+        aria-label={pinned ? `Unpin ${item.title} from the nav rail` : `Pin ${item.title} to the nav rail`}
+        onClick={() => handleTogglePin(item.id)}
+      >
+        {pinned ? <Pin aria-hidden="true" fill="currentColor" /> : <PinOff aria-hidden="true" />}
+      </button>
+    );
   };
-  const stakeItem: MorePanelRouteItem = {
-    id: "stake",
-    icon: <Coins aria-hidden="true" />,
-    eyebrow: "Community tiers",
-    title: "Stake HIVE",
-    body: "Lock HIVE for Holder through Visionary status, alpha rooms, governance, and curator rights.",
-    href: "/stake",
-  };
-  const systemItems: Array<MorePanelNavigationItem | MorePanelRouteItem> = MORE_PANEL_UTILITY_ORDER.map((id) => ({ id, ...utilityCards[id] }));
-  systemItems.splice(2, 0, stakeItem);
-  const renderCardContent = (item: MorePanelNavigationItem | MorePanelRouteItem) => (
-    <>
-      {item.badge ? (
-        <span className={moreBadgeClass} aria-label={item.badgeLabel}>
-          {item.badge > 99 ? "99+" : item.badge}
-        </span>
-      ) : null}
-      <span className={moreIconClass}>
-        {item.icon}
-      </span>
-      <span className="grid gap-1">
-        <small className="font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{item.eyebrow}</small>
-        <strong>{item.title}</strong>
-        <span className="text-xs leading-5 text-[var(--muted)]">{item.body}</span>
-      </span>
-    </>
+
+  const renderBadge = (item: MoreItem) => (
+    item.badge ? <span className={styles.badge} style={toneStyle(item.badgeTone ?? "honey")}>{item.badge}</span> : null
   );
 
+  const renderGridCard = (item: MoreItem) => (
+    <div key={item.id} className={styles.card}>
+      <button type="button" className={styles.cardActivate} onClick={() => activate(item)}>
+        <span className={styles.iconBox} style={ICON_BOX_STYLE}>{item.icon}</span>
+        <span className={styles.cardBody}>
+          <small className={styles.cardEyebrow}>{item.eyebrow}</small>
+          <span className={styles.cardTitleRow}>
+            <strong className={styles.cardTitle}>{item.title}</strong>
+            {renderBadge(item)}
+          </span>
+          <span className={styles.cardText}>{item.body}</span>
+        </span>
+      </button>
+      {renderPinButton(item, styles.pinGrid)}
+    </div>
+  );
+
+  const renderListRow = (item: MoreItem) => (
+    <div key={item.id} className={styles.listRow}>
+      <button type="button" className={styles.listActivate} onClick={() => activate(item)}>
+        <span className={styles.listIconBox} style={ICON_BOX_STYLE}>{item.icon}</span>
+        <span className={styles.listMain}>
+          <span className={styles.listTitleRow}>
+            <strong className={styles.cardTitle}>{item.title}</strong>
+            {renderBadge(item)}
+          </span>
+          <span className={styles.cardText}>{item.body}</span>
+        </span>
+      </button>
+      {renderPinButton(item, styles.pinRow)}
+      <span className={styles.chev}><ChevronRight aria-hidden="true" width={18} height={18} /></span>
+    </div>
+  );
+
+  const renderBoardRow = (item: MoreItem) => (
+    <div key={item.id} className={styles.boardRow}>
+      <button type="button" className={styles.boardActivate} onClick={() => activate(item)}>
+        <span className={styles.boardIconBox} style={ICON_BOX_STYLE}>{item.icon}</span>
+        <span className={styles.boardMain}>
+          <span className={styles.boardTitle}>{item.title}</span>
+          <span className={styles.boardEyebrow}>{item.eyebrow}</span>
+        </span>
+        {renderBadge(item)}
+        {item.dot ? <span className={styles.dot} style={{ background: dotColor(item.dot), boxShadow: `0 0 8px ${dotColor(item.dot)}` }} aria-hidden="true" /> : null}
+      </button>
+      {renderPinButton(item, styles.pinRow)}
+    </div>
+  );
+
+  const viewOptions: Array<{ value: ViewMode; label: string; icon: ReactNode }> = [
+    { value: "grid", label: "Grid", icon: <LayoutGrid aria-hidden="true" /> },
+    { value: "list", label: "List", icon: <List aria-hidden="true" /> },
+    { value: "board", label: "Board", icon: <Kanban aria-hidden="true" /> },
+  ];
+
   return (
-    <section className={fleetClass("taskPanel", "tabPanel")}>
-      <div className={fleetClass("taskPanelHeader")}>
-        <div>
-          <p className="eyebrow">More</p>
-          <h2>System Menu</h2>
-          <p>Fusion, integrations, diagnostics, scoped files, capability search, and messaging live here so the main navigation stays focused.</p>
-        </div>
+    <div className={styles.root} role="region" aria-label="More">
+      <div className={styles.header}>
+        <p className={styles.eyebrow}>More</p>
+        <h2 className={styles.title}>Jump to anything</h2>
       </div>
-      <div className="mt-4 grid gap-3">
-        <div>
-          <p className="eyebrow">Fusion</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {fusionItems.map((item) => (
+
+      <div className={styles.search}>
+        <span className={styles.searchIcon}><Search aria-hidden="true" width={20} height={20} /></span>
+        <input
+          ref={searchRef}
+          type="text"
+          className={styles.searchInput}
+          placeholder="Search utilities, tools, and agents…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search utilities"
+        />
+        <kbd className={styles.kbd}>/</kbd>
+      </div>
+
+      <div className={styles.sectionLabelRow}>
+        <p className={styles.sectionLabel}>Pinned</p>
+        <span className={styles.sectionHint}>· tap the pin on any tile to add it to the rail</span>
+      </div>
+      {pinnedItems.length > 0 ? (
+        <div className={styles.pinnedRow}>
+          {pinnedItems.map((item) => (
+            <div key={item.id} className={styles.chip}>
+              <button type="button" className={styles.chipActivate} onClick={() => activate(item)}>
+                <span className={styles.chipIcon}>{item.icon}</span>
+                <span className={styles.chipLabel}>{item.title}</span>
+                {renderBadge(item)}
+              </button>
               <button
                 type="button"
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
-                className={moreCardClass}
+                className={styles.chipUnpin}
+                title="Unpin"
+                aria-label={`Unpin ${item.title} from the nav rail`}
+                onClick={() => handleTogglePin(item.id)}
               >
-                {renderCardContent(item)}
+                <X aria-hidden="true" width={12} height={12} />
               </button>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
-        <div>
-          <p className="eyebrow">Utilities</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {systemItems.map((item) => (
-              "href" in item ? (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={moreCardClass}
-                >
-                  {renderCardContent(item)}
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  key={item.id}
-                  onClick={() => onNavigate(item.id)}
-                  className={moreCardClass}
-                >
-                  {renderCardContent(item)}
-                </button>
-              )
-            ))}
-          </div>
+      ) : (
+        <div className={styles.pinnedEmpty}>Nothing pinned yet — tap the pin on any tile below to keep it on the nav rail.</div>
+      )}
+
+      <div className={styles.browseHead}>
+        <p className={styles.sectionLabel}>Browse all · {totalCount} utilities</p>
+        <div className={styles.seg} role="group" aria-label="View mode">
+          {viewOptions.map((option) => {
+            const active = viewMode === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={styles.segBtn}
+                aria-pressed={active}
+                onClick={() => rememberViewMode(option.value)}
+                style={active
+                  ? { background: "color-mix(in srgb, var(--honey) 14%, transparent)", color: "var(--honey)" }
+                  : { color: "var(--muted)" }}
+              >
+                {option.icon}
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       </div>
-    </section>
+
+      {groups.length === 0 ? (
+        <div className={styles.empty}>No utilities match “{query.trim()}”.</div>
+      ) : viewMode === "grid" ? (
+        groups.map((group) => (
+          <div key={group.name} className={styles.group}>
+            <p className={styles.groupName}>{group.name}</p>
+            <div className={styles.grid}>{group.items.map(renderGridCard)}</div>
+          </div>
+        ))
+      ) : viewMode === "list" ? (
+        groups.map((group) => (
+          <div key={group.name} className={styles.listGroup}>
+            <p className={styles.groupName}>{group.name}</p>
+            <div className={styles.list}>{group.items.map(renderListRow)}</div>
+          </div>
+        ))
+      ) : (
+        <div className={styles.board}>
+          {groups.map((group) => (
+            <div key={group.name} className={styles.boardCol}>
+              <p className={styles.boardColName}>{group.name}</p>
+              {group.items.map(renderBoardRow)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

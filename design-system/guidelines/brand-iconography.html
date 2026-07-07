@@ -1,0 +1,32 @@
+<!-- @dsCard group="Brand" viewport="700x180" name="Iconography — Lucide + runtimes" subtitle="1.7px stroke line icons + product runtime marks" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); padding: 22px; color: var(--fg-2); }
+  .row { display: flex; gap: 22px; align-items: center; }
+  .ico svg { width: 24px; height: 24px; }
+  .rt { display: flex; gap: 16px; align-items: center; padding-left: 22px; border-left: 1px solid var(--hairline); }
+  .rt img { width: 30px; height: 30px; object-fit: contain; }
+  .cap { color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; margin-top: 14px; }
+  svg { color: var(--accent-strong); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="5" height="16" rx="1.2"/><rect x="9.5" y="4" width="5" height="10" rx="1.2"/><rect x="16" y="4" width="5" height="13" rx="1.2"/></svg></span>
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-5.4A8 8 0 1 1 21 11.5z"/></svg></span>
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2.2"/><path d="M3 9.5h18"/><circle cx="16.5" cy="13.5" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+    <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><circle cx="5" cy="6.5" r="1.6"/><circle cx="19" cy="6.5" r="1.6"/><circle cx="5.5" cy="18" r="1.6"/><circle cx="18.5" cy="18" r="1.6"/><path d="M10.4 10.7 6.3 7.6M13.6 10.7l3.9-3M10.6 13.4 6.7 16.6M13.4 13.4l3.6 3"/></svg></span>
+    <div class="rt">
+      <img src="../assets/runtimes/hermes.svg" alt="Hermes" />
+      <img src="../assets/runtimes/openai.svg" alt="OpenAI" />
+      <img src="../assets/runtimes/openrouter.svg" alt="OpenRouter" />
+      <img src="../assets/runtimes/bankr.svg" alt="Bankr" />
+    </div>
+  </div>
+  <div class="cap">Lucide line icons · 1.7px stroke · round caps &nbsp;·&nbsp; runtime product marks (SVG)</div>
+</body>
+</html>

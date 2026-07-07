@@ -1,6 +1,6 @@
 import type { LoopCapabilityCapital } from "@/lib/types/loops";
 import type { AnalyticsProviderKey, CompanyAnalyticsConfig } from "@/lib/services/company-analytics/types";
-import type { KanbanTaskAttachment } from "@/lib/types/kanban";
+import type { KanbanDeliverableKind, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { CompanyImportedOperations } from "@/lib/types/company-import";
 
 /**
@@ -19,6 +19,29 @@ import type { CompanyImportedOperations } from "@/lib/types/company-import";
 
 /** A company's lifecycle posture, surfaced as a status pill in the portfolio. */
 export type CompanyStatus = "shipping" | "drift" | "review" | "setup" | "paused";
+
+/** What counts toward the autonomy-pause threshold (items "waiting on a human"). */
+export type CompanyAutonomyPauseMode = "all" | "deliverable-kinds";
+
+/**
+ * Approval backpressure: auto-pause the company's autonomy driver from planning
+ * NEW work once too many items are already waiting on a human. In-flight work
+ * still finishes; the driver resumes on its own once the count drops back below
+ * the threshold — no button, no permanent Stop. Absent/`maxWaitingOnHuman <= 0`
+ * means never auto-pause (today's behavior).
+ */
+export interface CompanyAutonomyPause {
+  /** Pause new-work dispatch once this many items are waiting on a human. 0/undefined = disabled. */
+  maxWaitingOnHuman?: number;
+  /**
+   * What counts toward the threshold. "all" (default) = every task of this company
+   * sitting in the needs-human lane. "deliverable-kinds" = only needs-human tasks
+   * carrying a deliverable whose kind is in `deliverableKinds` (e.g. just websites).
+   */
+  countMode?: CompanyAutonomyPauseMode;
+  /** When countMode is "deliverable-kinds", only these deliverable kinds count. Empty = falls back to counting all. */
+  deliverableKinds?: KanbanDeliverableKind[];
+}
 
 /** How an apex/metric value should be read and rendered. */
 export type CompanyMetricUnit = "number" | "percent" | "currency" | "users";
@@ -232,6 +255,12 @@ export interface Company {
    * company is frozen. Set on "Launch", cleared on "Stop".
    */
   autonomy?: boolean;
+  /**
+   * Approval backpressure: auto-pause new-work dispatch when too many items are
+   * already waiting on a human, so the Needs You lane can't silently pile up to
+   * hundreds. Reversible and self-resuming — see {@link CompanyAutonomyPause}.
+   */
+  autonomyPause?: CompanyAutonomyPause;
   /** How the crew executes the apex goal. Defaults to "hierarchical" (parallel fan-out). */
   process?: CompanyProcess;
   /** For process: "graph" — the saved FlowSpec id to run. */

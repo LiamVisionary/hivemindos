@@ -3,7 +3,9 @@
  * from src/app/api/queen-bee/voice/route.ts when the route crossed the
  * 1500-line ratchet (2026-07-06). Regular typed chat follows the queen
  * agent's OWN selected provider/model; the Calls-settings chat-brain override
- * applies only to voice/calls (resolveVoiceChatBrainPlan in the route).
+ * applies only to voice/calls (resolveVoiceChatBrainPlan in the route). OAuth-
+ * held selections such as OpenAI Codex route through the Queen agent runtime,
+ * because that is where the credential actually lives.
  * Serves both chat-turn (buffered) and chat-turn-stream (NDJSON) actions;
  * the client tool loop lives in src/features/queen-voice/queen-chat-store.tsx.
  */
@@ -14,8 +16,11 @@ import {
   isHivemindosWalletPaidModelProfile,
   selectedHivemindosWalletPaidModel,
 } from "@/lib/services/hivemindos-wallet-paid-models";
+import { readStoredAgentProfilesStrict } from "@/lib/services/agent-profile-store";
+import { readRuntimeResponseText } from "@/lib/services/phone/runtime-voice-turn";
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import type { AgentProfile } from "@/lib/types/agent-runtime";
 import {
   coerceDashboardScreenContext,
   formatDashboardScreenContextForPrompt,
@@ -36,11 +41,14 @@ const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
 
 /** One answering brain the typed lane can call directly. */
 type QueenTypedChatBrain = {
+  kind: "openai-compatible" | "agent-runtime";
   url: string;
   /** Bearer key; empty when the brain authenticates via custom headers. */
   key: string;
   /** Extra request headers (wallet-paid gateway auth, internal self-fetch auth). */
   headers?: Record<string, string>;
+  /** Full persisted Queen profile for runtime-held credentials such as OpenAI Codex. */
+  agent?: AgentProfile;
   model: string;
   providerSlug: string;
   /** Per-turn overlay tag, e.g. "gpt-5.5 · venice". */
@@ -55,8 +63,23 @@ type QueenTypedChatBrain = {
 
 function queenBrainProviderLabel(provider: string) {
   if (provider === "openai-oauth") return "ChatGPT";
+  if (provider === "openai-codex") return "OpenAI Codex";
   if (!provider || provider === "openai" || provider === "openai-api") return "OpenAI";
   return provider;
+}
+
+function isRuntimeHeldQueenProvider(provider: string) {
+  return provider === "openai-oauth" || provider === "openai-codex";
+}
+
+async function readQueenBeeAgentProfile(agentId?: string): Promise<AgentProfile | null> {
+  const profiles = await readStoredAgentProfilesStrict();
+  return (
+    (agentId ? profiles.find((profile) => profile.id === agentId) : undefined) ??
+    profiles.find((profile) => profile.beeRole === "queen") ??
+    profiles.find((profile) => /queen/i.test(profile.name ?? "")) ??
+    null
+  );
 }
 
 /**
@@ -64,10 +87,9 @@ function queenBrainProviderLabel(provider: string) {
  * follows the QUEEN AGENT'S OWN selected provider/model — the Calls-settings
  * chat-brain override applies only to voice/calls (resolveVoiceChatBrainPlan).
  * Serving classes: the HivemindOS-models gateway (custom wallet headers, the
- * upstream does native tool calls), then plain key-based OpenAI-compatible
- * providers. OAuth-held (openai-oauth/codex) and runtime-held selections
- * cannot run the typed client-side tool loop, so they fall to the built-in
- * OpenAI lane — declared by the per-turn brain tag, never silent.
+ * upstream does native tool calls), runtime-held OAuth selections via the
+ * Queen agent's own runtime, then plain key-based OpenAI-compatible providers.
+ * The built-in OpenAI lane remains only as the declared final fallback.
  */
 async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedChatBrain[]> {
   const brains: QueenTypedChatBrain[] = [];
@@ -76,6 +98,7 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
   if (defaults?.model && isHivemindosWalletPaidModelProfile({ provider })) {
     const model = selectedHivemindosWalletPaidModel({ model: defaults.model });
     brains.push({
+      kind: "openai-compatible",
       url: `${origin.replace(/\/+$/, "")}/api/hivemindos/models/chat/completions`,
       key: "",
       headers: {
@@ -93,10 +116,28 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
       streaming: false,
       timeoutMs: 120_000,
     });
-  } else if (defaults?.model && provider !== "openai-oauth" && provider !== "openai-codex") {
+  } else if (defaults?.model && isRuntimeHeldQueenProvider(provider)) {
+    const agent = await readQueenBeeAgentProfile(defaults.agentId).catch(() => null);
+    if (agent) {
+      brains.push({
+        kind: "agent-runtime",
+        url: `${origin.replace(/\/+$/, "")}/api/chat/agent-runtime`,
+        key: "",
+        headers: internalApiAuthHeaders(),
+        agent,
+        model: defaults.model,
+        providerSlug: provider,
+        label: `${defaults.model} · ${queenBrainProviderLabel(provider)}`,
+        configured: true,
+        streaming: false,
+        timeoutMs: 120_000,
+      });
+    }
+  } else if (defaults?.model) {
     const endpoint = await resolveProviderChatEndpoint(provider).catch(() => null);
     if (endpoint) {
       brains.push({
+        kind: "openai-compatible",
         url: endpoint.url,
         key: endpoint.key,
         model: defaults.model,
@@ -113,6 +154,7 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
   );
   if (apiKey && !duplicate) {
     brains.push({
+      kind: "openai-compatible",
       url: "https://api.openai.com/v1/chat/completions",
       key: apiKey,
       model: builtinModel,
@@ -129,6 +171,57 @@ function queenBrainRequestHeaders(brain: QueenTypedChatBrain): Record<string, st
     "content-type": "application/json",
     ...(brain.key ? { Authorization: `Bearer ${brain.key}` } : {}),
     ...(brain.headers ?? {}),
+  };
+}
+
+function runtimeMessagesFor(system: string, incoming: unknown[]) {
+  const messages = incoming
+    .filter((message): message is { role?: unknown; content?: unknown } => (
+      Boolean(message) && typeof message === "object"
+    ))
+    .map((message) => ({
+      role: typeof message.role === "string" && message.role.trim() ? message.role : "user",
+      content: typeof message.content === "string" || Array.isArray(message.content)
+        ? message.content
+        : String(message.content ?? ""),
+    }))
+    .filter((message) => (
+      typeof message.content === "string"
+        ? Boolean(message.content.trim())
+        : message.content.length > 0
+    ));
+  return [{ role: "system", content: system }, ...messages];
+}
+
+async function queenChatRuntimeRequest(
+  brain: QueenTypedChatBrain,
+  system: string,
+  incoming: unknown[],
+) {
+  if (!brain.agent) throw new Error(`${brain.label} has no Queen runtime profile.`);
+  const response = await fetch(brain.url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(brain.headers ?? {}),
+    },
+    body: JSON.stringify({
+      agent: brain.agent,
+      messages: runtimeMessagesFor(system, incoming),
+      runtimeSessionId: `queen-fab-${brain.agent.id || "runtime"}`,
+      chatStorageKey: `queen-fab-${brain.agent.id || "runtime"}`,
+      agentMode: "act",
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(brain.timeoutMs ?? 120_000),
+  });
+  const content = stripLeakedToolCallMarkup(await readRuntimeResponseText(response));
+  if (!content.trim()) throw new Error(`${brain.label} returned an empty reply.`);
+  return {
+    content,
+    toolCalls: [],
+    assistant: { role: "assistant", content },
+    brainLabel: brain.label,
   };
 }
 
@@ -165,6 +258,7 @@ async function queenChatBlockingRequest(
   incoming: unknown[],
   options?: { noTools?: boolean },
 ) {
+  if (brain.kind === "agent-runtime") return queenChatRuntimeRequest(brain, system, incoming);
   const response = await fetch(brain.url, {
     method: "POST",
     headers: queenBrainRequestHeaders(brain),

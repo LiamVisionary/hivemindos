@@ -26,6 +26,8 @@ const ignoredDirectories = new Set([
 
 const ignoredRelativeDirectories = new Set([
   "apps/zimage-mobile-tauri/src-tauri/gen",
+  "design-system",
+  "public/design-system",
   "src-tauri/gen",
   "src-tauri/static",
   "src-tauri/target",
@@ -88,7 +90,9 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-04: +57 for answerHumanTask — the needs-human answer mutation
   // (answer into body, comment, back to Ready with assignee preserved). It uses
   // the store's private withBoardMutation/event/touch internals, so it lives here.
-  ["src/lib/services/kanban/local-kanban-store.ts", 2490],
+  // 2026-07-07: +48 for outreach revenue completion fail-closed wiring; the
+  // reusable policy parser lives in kanban/outreach-safeguards.ts.
+  ["src/lib/services/kanban/local-kanban-store.ts", 2538],
   ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
   ["src/lib/services/obsidian/agent-memory/core.ts", 1850],

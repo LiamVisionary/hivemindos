@@ -14,6 +14,7 @@ import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
 import { computeLoopCapabilityCapital } from "@/lib/services/loops";
 import { extractWorkBoardPipelineImpact, extractWorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
+import { mapSpendApproval, type SpendApprovalRaw } from "@/features/approvals/spend-approval-model";
 import type {
   Agent,
   AgentState,
@@ -28,7 +29,6 @@ import type {
   PoolAgent,
   Priority,
   Role,
-  Risk,
 } from "./types";
 
 // ── lite shapes of the API payloads we consume ────────────────────────────
@@ -188,23 +188,12 @@ function defaultTask(state: AgentState, frozen?: boolean): string {
 }
 
 // ── approvals ──────────────────────────────────────────────────────────────
-function riskFor(amountUsd: number, dailyCap?: number): Risk {
-  if (amountUsd >= 50 || (dailyCap && dailyCap > 0 && amountUsd >= dailyCap * 0.5)) return "high";
-  if (amountUsd >= 10) return "med";
-  return "low";
-}
-
+// Delegates to the shared spend-approval mapper so the company approvals
+// section and the Alerts "Review first" queue map identically (DRY). ApprovalRow
+// is structurally the fetched row; the shared mapper ignores fields it doesn't
+// read (e.g. status), so the cast is safe.
 export function mapApproval(row: ApprovalRow, dailyCap?: number): Approval {
-  const amount = `$${(Number(row.amountUsd) || 0).toFixed(2)} ${row.asset || "USDC"}`;
-  const head = row.reason?.trim() || `${row.kind} spend`;
-  const title = `${head} — ${amount}${row.target ? ` → ${row.target}` : ""}`;
-  return {
-    id: row.id,
-    title,
-    agent: row.agentName || row.agentId,
-    kind: row.kind || "spend",
-    risk: riskFor(Number(row.amountUsd) || 0, dailyCap),
-  };
+  return mapSpendApproval(row as unknown as SpendApprovalRaw, dailyCap);
 }
 
 // ── kanban → issues / work block / velocity ─────────────────────────────────
@@ -549,6 +538,9 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
       apexProgress: company.apexGoal?.progress,
       metricUnit: (company.apexGoal?.unit as MetricUnit) || "number",
       frozen: company.frozen,
+      autonomyPauseMax: company.autonomyPause?.maxWaitingOnHuman,
+      autonomyPauseMode: company.autonomyPause?.countMode ?? "all",
+      autonomyPauseKinds: company.autonomyPause?.deliverableKinds ?? [],
       revenueKind: company.revenue?.kind ?? "",
       revenueLabel: company.revenue?.label || "",
       revenueValue: company.revenue?.value || "",

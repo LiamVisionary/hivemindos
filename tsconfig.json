@@ -59,6 +59,8 @@
   ],
   "exclude": [
     "node_modules",
+    "design-system",
+    "public/design-system",
     "src-tauri/resources",
     "src-tauri/target",
     "vendor",

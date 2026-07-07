@@ -109,10 +109,18 @@ export function XAccountMcpPanel({
   const managedAccounts = managedStatus?.creditAccounts ?? [];
   const selectedManagedAccount = managedAccounts.find((account) => managedAccountKey(account) === selectedManagedKey) ?? managedAccounts[0] ?? null;
   const selectedManagedAccountKey = selectedManagedAccount ? managedAccountKey(selectedManagedAccount) : "";
-  const managedConnectionCount = managedStatus?.connections.length ?? 0;
+  const managedConnections = uniqueManagedConnections(managedStatus?.connections ?? []);
+  const managedConnectionCount = managedConnections.length;
+  const hasManagedConnections = managedConnectionCount > 0;
   const managedReady = managedGatewayReady && managedAccounts.length > 0;
   const byoReady = credentialsReady && hasOAuthCache;
   const runtimeReady = configuredCount > 0;
+
+  function changeManagedAccount(accountKey: string) {
+    setSelectedManagedKey(accountKey);
+    const account = managedAccounts.find((item) => managedAccountKey(item) === accountKey);
+    if (account) onRefreshManaged(account.accountId, account.slug);
+  }
 
   return (
     <div className="ni-stage ni-pad">
@@ -173,9 +181,11 @@ export function XAccountMcpPanel({
           <div className="ni-connhead">
             <strong>Managed X account</strong>
             <NiBadge
-              good={managedReady || managedConnectionCount > 0}
+              good={managedReady || hasManagedConnections}
               warn={managedGatewayReady && !managedReady}
-              label={managedGatewayReady ? `${managedAccounts.length} credit account${managedAccounts.length === 1 ? "" : "s"}` : "gateway offline"}
+              label={hasManagedConnections
+                ? `${managedConnectionCount} connected`
+                : managedGatewayReady ? `${managedAccounts.length} credit account${managedAccounts.length === 1 ? "" : "s"}` : "gateway offline"}
             />
           </div>
           <p className="x-muted">Best for normal HivemindOS use. App-routed agents get the hosted `x_api` MCP tool after one X OAuth connection, and X API charges debit the selected credit account.</p>
@@ -186,7 +196,7 @@ export function XAccountMcpPanel({
                   <select
                     className="fb-field fb-mono"
                     value={selectedManagedAccountKey}
-                    onChange={(event) => setSelectedManagedKey(event.target.value)}
+                    onChange={(event) => changeManagedAccount(event.target.value)}
                   >
                     {managedAccounts.map((account) => (
                       <option key={managedAccountKey(account)} value={managedAccountKey(account)}>
@@ -206,21 +216,20 @@ export function XAccountMcpPanel({
                     <span className="ckey">{selectedManagedAccount.slug}</span>
                   </div>
                 ) : null}
-                <div className="x-actions">
-                  <BBtn
-                    variant="primary"
-                    disabled={working || !selectedManagedAccount}
-                    onClick={() => selectedManagedAccount ? onStartManagedOAuth(selectedManagedAccount.accountId, selectedManagedAccount.slug) : undefined}
-                  >
-                    {busy === "managed-oauth" ? <><span className="ni-spin" /> Opening X...</> : <><BIcon name="plug" size={14} /> Connect managed X account</>}
-                  </BBtn>
-                  <BBtn disabled={working} onClick={() => onRefreshManaged(selectedManagedAccount?.accountId, selectedManagedAccount?.slug)}>
-                    <BIcon name="refresh" size={14} /> Refresh managed status
-                  </BBtn>
-                </div>
-                {managedStatus?.connections.length ? (
+                {!hasManagedConnections ? (
+                  <div className="x-actions">
+                    <BBtn
+                      variant="primary"
+                      disabled={working || !selectedManagedAccount}
+                      onClick={() => selectedManagedAccount ? onStartManagedOAuth(selectedManagedAccount.accountId, selectedManagedAccount.slug) : undefined}
+                    >
+                      {busy === "managed-oauth" ? <><span className="ni-spin" /> Opening X...</> : <><BIcon name="plug" size={14} /> Connect managed X account</>}
+                    </BBtn>
+                  </div>
+                ) : null}
+                {hasManagedConnections ? (
                   <div className="x-connection-list">
-                    {managedStatus.connections.map((connection) => (
+                    {managedConnections.map((connection) => (
                       <div key={connection.id} className="ni-connrow">
                         <ServiceGlyph accent="var(--live)" mono="X" size={30} radius={9} />
                         <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -382,6 +391,24 @@ function managedAccountKey(account: ManagedXCreditAccountSummary) {
 function managedAccountLabel(account: ManagedXCreditAccountSummary) {
   const balance = account.balanceLabel || "Unknown balance";
   return `${balance} - ${account.accountId} (${account.slug})`;
+}
+
+function uniqueManagedConnections(connections: ManagedXConnectionSummary[]) {
+  const seen = new Set<string>();
+  return connections.filter((connection) => {
+    const key = managedConnectionKey(connection);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function managedConnectionKey(connection: ManagedXConnectionSummary) {
+  return (
+    connection.xUserId?.trim()
+    || connection.username?.trim().toLowerCase()
+    || connection.id
+  );
 }
 
 function runtimeLabel(runtime: XMcpStatus["runtimeTargets"][number]["runtime"]) {

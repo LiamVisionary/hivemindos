@@ -80,6 +80,31 @@ Business customers can pay for:
 - Private deployments.
 - Support contracts.
 
+### Managed X API And X MCP
+
+HivemindOS can operate hosted social/API integrations where the cost is not just UI polish. The managed X API and X MCP gateway handles:
+
+- Sign in with X through HivemindOS-controlled hosted infrastructure.
+- Server-side OAuth token custody.
+- Vetted X API and X MCP calls.
+- Hosted credit debit and receipts after successful calls.
+- Public pricing policy through hosted HivemindOS infrastructure.
+
+Users fund the same hosted HivemindOS credit balance used by managed models through card or x402 top-ups. X API and X MCP calls debit those credits only after the hosted gateway receives a successful upstream response.
+
+The current default pricing policy uses the upstream X API unit cost plus **25% markup**, with a **$0.001 minimum debit**. The hosted policy can be overridden by production rates from the X Developer Console, so the hosted endpoint is the authority rather than the downloaded app.
+
+Current default examples:
+
+| Managed X action | Upstream unit cost | HivemindOS retail debit | Gross platform margin before infrastructure and payment costs |
+| --- | ---: | ---: | ---: |
+| X MCP tool call | `$0.005` per request | `$0.00625` | `$0.00125` |
+| Post read | `$0.005` per resource | `$0.00625` | `$0.00125` |
+| User read | `$0.010` per resource | `$0.01250` | `$0.00250` |
+| Post create | `$0.015` per request | `$0.01875` | `$0.00375` |
+
+The revenue HivemindOS collects is the retail credit debit. The margin is the retail debit minus upstream X/API cost, before ordinary hosting, payment-processing, and operations costs.
+
 ### Trading & On-Chain Fees
 
 HivemindOS earns a usage fee on supported on-chain and trading actions taken from a user's acting wallet:

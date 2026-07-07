@@ -1,0 +1,6 @@
+/* HivemindOS — Webfonts.
+   The app loads these from Google Fonts (see src/app/layout.tsx):
+   Space Grotesk (display), Geist (body/UI), JetBrains Mono (mono).
+   Importing the Google stylesheet brings in the @font-face rules and binaries. */
+
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");

@@ -90,6 +90,18 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
     for (const agent of displayAgents) unique.set(agent.id, agent);
     return [...unique.values()];
   }, [displayAgents]);
+  const runtimeAgentPayloads = useMemo(() => displayAgents.map((agent) => ({
+    id: agent.id,
+    name: agent.name,
+    runtime: agent.runtime,
+    agentId: agent.agentId,
+    localDataDir: agent.localDataDir,
+    machineName: agent.machineName,
+    telemetryUrl: agent.telemetryUrl,
+    collectorCapabilities: agent.collectorCapabilities
+      ? { runtimes: agent.collectorCapabilities.runtimes }
+      : undefined,
+  })), [displayAgents]);
   const [selectedAgentId, setSelectedAgentId] = useState(QUEEN_BEE_AGENT.id);
   const selectedAgent = agentOptions.find((agent) => agent.id === selectedAgentId) ?? QUEEN_BEE_AGENT;
   const [draft, setDraft] = useState(defaultDraft(QUEEN_BEE_AGENT));
@@ -97,15 +109,19 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
   const requestBody = useCallback((extra: Record<string, unknown> = {}) => ({
     vaultPath: sharedVault.vaultPath,
     brainServicesFolder: sharedVault.brainServicesFolder,
+    includeRuntimeChannels: true,
+    agents: runtimeAgentPayloads,
     ...extra,
-  }), [sharedVault.brainServicesFolder, sharedVault.vaultPath]);
+  }), [runtimeAgentPayloads, sharedVault.brainServicesFolder, sharedVault.vaultPath]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (sharedVault.vaultPath) params.set("vaultPath", sharedVault.vaultPath);
-    if (sharedVault.brainServicesFolder) params.set("brainServicesFolder", sharedVault.brainServicesFolder);
-    const response = await fetch(`/api/messaging-channels?${params.toString()}`, { cache: "no-store" }).catch(() => null);
+    const response = await fetch("/api/messaging-channels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody({ action: "list" })),
+      cache: "no-store",
+    }).catch(() => null);
     const data = await response?.json().catch(() => null) as MessagingChannelsPayload | null;
     setLoading(false);
     if (!response?.ok || !data?.ok) {
@@ -115,8 +131,12 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
     setChannels(data.channels ?? []);
     setDirectory(data.directory ?? []);
     setSettingsFile(data.settingsFile ?? "");
-    setStatus((data.channels ?? []).length ? `${data.channels?.length ?? 0} messaging channel${data.channels?.length === 1 ? "" : "s"}` : "No messaging channels yet.");
-  }, [sharedVault.brainServicesFolder, sharedVault.vaultPath]);
+    const nextChannels = data.channels ?? [];
+    const runtimeCount = nextChannels.filter((channel) => channel.source?.kind === "hermes").length;
+    setStatus(nextChannels.length
+      ? `${nextChannels.length} messaging channel${nextChannels.length === 1 ? "" : "s"}${runtimeCount ? `, ${runtimeCount} bridged from Hermes` : ""}`
+      : "No messaging channels yet.");
+  }, [requestBody]);
 
   useEffect(() => {
     if (!active) return;
@@ -354,9 +374,14 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
                     <p className="m-0 mt-1 break-all font-mono text-xs text-[var(--muted)]">
                       {channel.provider}:{channel.target.chatId}{channel.target.threadId ? `:${channel.target.threadId}` : ""}
                     </p>
+                    {channel.source?.kind === "hermes" ? (
+                      <p className="m-0 mt-2 text-xs text-[var(--muted)]">
+                        Bridged from Hermes{channel.source.machineName ? ` on ${channel.source.machineName}` : ""}.
+                      </p>
+                    ) : null}
                   </div>
                   <span className={`rounded-full border px-3 py-1 text-xs font-bold ${channel.enabled ? "border-[rgba(94,234,212,0.22)] text-[var(--accent-strong)]" : "border-[rgba(148,163,184,0.18)] text-[var(--muted)]"}`}>
-                    {channel.enabled ? "enabled" : "paused"}
+                    {channel.readOnly ? "live" : channel.enabled ? "enabled" : "paused"}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -364,18 +389,22 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
                     {saving === `test:${channel.id}` ? <RefreshCcw aria-hidden="true" className="animate-spin" /> : <Send aria-hidden="true" />}
                     Test
                   </Button>
-                  <Button type="button" size="sm" variant="secondary" onClick={() => void patchChannel(channel, { enabled: !channel.enabled })} disabled={saving === channel.id}>
-                    <PlugZap aria-hidden="true" />
-                    {channel.enabled ? "Pause" : "Enable"}
-                  </Button>
-                  <Button type="button" size="sm" variant={channel.defaultForAgent ? "default" : "secondary"} onClick={() => void patchChannel(channel, { defaultForAgent: true })} disabled={saving === channel.id || channel.defaultForAgent}>
-                    <MessageSquare aria-hidden="true" />
-                    Default
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => void deleteChannel(channel)} disabled={saving === channel.id}>
-                    <Trash2 aria-hidden="true" />
-                    Delete
-                  </Button>
+                  {channel.readOnly ? null : (
+                    <>
+                      <Button type="button" size="sm" variant="secondary" onClick={() => void patchChannel(channel, { enabled: !channel.enabled })} disabled={saving === channel.id}>
+                        <PlugZap aria-hidden="true" />
+                        {channel.enabled ? "Pause" : "Enable"}
+                      </Button>
+                      <Button type="button" size="sm" variant={channel.defaultForAgent ? "default" : "secondary"} onClick={() => void patchChannel(channel, { defaultForAgent: true })} disabled={saving === channel.id || channel.defaultForAgent}>
+                        <MessageSquare aria-hidden="true" />
+                        Default
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => void deleteChannel(channel)} disabled={saving === channel.id}>
+                        <Trash2 aria-hidden="true" />
+                        Delete
+                      </Button>
+                    </>
+                  )}
                 </div>
                 {channel.lastTestAt ? (
                   <p className="m-0 text-xs text-[var(--muted)]">

@@ -1,12 +1,14 @@
 /* ──────────────────────────────────────────────────────────────────
-   Agent notifications — Hive dark-honey inbox
-   Palette + surface treatment lifted from the Fleet-Hive / Trade / Brain
-   views (src/components/fleet-hive/fleet-hive.css `.fr-root`): warm-neutral
-   dark panels, cream-tinted hairlines, warm text tiers, ONE honey accent
-   used sparingly, teal reserved for the live/normal signal, warm rose for
-   trouble. Tokens are scoped to `.notificationsPanel` (self-contained, no
-   dependency on `.fr-root`) and the whole view flips to the warm-paper
-   light theme by re-declaring the tokens once under [data-theme="hive-light"].
+   Agent notifications — "Alerts" compact list
+   A narrow, editorial inbox: one honey accent, teal for the live/normal
+   signal, warm rose for trouble. Rows collapse to a single title line and
+   expand on hover / keyboard focus to reveal the body + per-item actions
+   (no data is hidden without an expand affordance). Palette lifted from the
+   Fleet-Hive / Trade / Brain views (fleet-hive.css `.fr-root`): warm-neutral
+   dark panels, cream hairlines, warm text tiers. Tokens are scoped to
+   `.notificationsPanel` (self-contained) and the whole view flips to the
+   warm-paper light theme by re-declaring the tokens once under
+   [data-theme="hive-light"].
    ────────────────────────────────────────────────────────────────── */
 
 .notificationsPanel {
@@ -27,939 +29,985 @@
   --nf-honey-line: rgba(231, 180, 92, 0.32);
   --nf-live: #6fcdba;
   --nf-live-soft: rgba(111, 205, 186, 0.14);
+  --nf-live-line: rgba(111, 205, 186, 0.3);
   --nf-danger: #e58e85;
   --nf-danger-soft: rgba(229, 142, 133, 0.13);
-  --nf-radius: 14px;
+  --nf-danger-line: rgba(229, 142, 133, 0.33);
+  --nf-radius: 16px;
   --nf-radius-sm: 9px;
-  --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+  --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.6);
   --nf-display: "Space Grotesk", system-ui, sans-serif;
   --nf-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
+  width: 100%;
+  /* Left-hug the nav rail like the rest of the dashboard (.commandMain has
+     margin:0). Wide enough for the two-column layout (list + ~320px review
+     rail); collapses to one column under 1080px. */
+  max-width: 1180px;
+  margin: 0;
+  padding: 32px 24px 48px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
+  color: var(--nf-fg);
+  font-family: "Inter", system-ui, sans-serif;
+  box-sizing: border-box;
+  /* Fill the full content height so the list is a real scroll region
+     (.listScroll owns scrolling) instead of a short card in a tall area. */
+  height: 100%;
+  min-height: 0;
+}
+
+/* The panel also carries the global .tabPanel class (overflow:auto); override
+   it so the panel itself doesn't scroll — the inner .listScroll does. */
+.notificationsPanel:global(.tabPanel) {
+  overflow: hidden;
+}
+
+/* — Page header (title + top actions) — */
+.alertsHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex: 0 0 auto;
+}
+
+.alertsEyebrow {
+  margin: 0 0 5px;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nf-honey);
+}
+
+.alertsTitle {
+  margin: 0;
+  font-family: var(--nf-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--nf-fg);
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.headerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 9px;
+  background: var(--nf-panel-2);
+  color: var(--nf-fg-2);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.headerBtn:hover:not(:disabled) {
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg);
+}
+
+.headerBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.headerBtnPrimary {
+  border-color: transparent;
+  background: var(--nf-honey);
+  color: var(--nf-honey-ink, #1a1305);
+}
+
+.headerBtnPrimary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--nf-honey);
+  color: var(--nf-honey-ink, #1a1305);
+}
+
+.headerBtn svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+/* — Two-column body: list (left) + review rail (right) — */
+.twoCol {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  /* Bound the single row to the container height (not content) so the columns
+     get a definite height — otherwise .listScroll never gets a bounded height
+     and the list can't scroll past what fits. */
+  grid-template-rows: minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.mainCol {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sideCol {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.sideCol::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.sidePanel {
+  flex: 0 0 auto;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 14px;
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+  padding: 15px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.sidePanelHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidePanelLabel {
+  margin: 0;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nf-honey);
+}
+
+.reviewCount {
+  margin-left: auto;
+  font-family: var(--nf-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--nf-honey);
+  background: var(--nf-honey-soft);
+  border: 1px solid var(--nf-honey-line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.overviewGrid {
+  display: grid;
+  gap: 11px;
+}
+
+.overviewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.overviewRow span {
+  font-size: 13px;
+  color: var(--nf-fg-2);
+}
+
+.overviewRow b {
+  font-family: var(--nf-display);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--nf-fg);
+}
+
+.overviewDivider {
+  height: 1px;
+  background: var(--nf-line);
+}
+
+.reviewList {
+  display: grid;
+  gap: 9px;
+}
+
+.reviewError {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--nf-danger);
+}
+
+.autonomyIntro {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--nf-fg-3);
+}
+
+.modeStack {
+  display: grid;
+  gap: 7px;
+}
+
+.tabsTotal {
+  margin-left: auto;
+  font-family: var(--nf-mono);
+  font-size: 11px;
+  color: var(--nf-fg-4);
+  padding-bottom: 9px;
+}
+
+@media (max-width: 1080px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+
+  .sideCol {
+    width: auto;
+    overflow: visible;
+  }
+}
+
+.notificationsPanel *,
+.notificationsPanel *::before,
+.notificationsPanel *::after {
+  box-sizing: border-box;
+}
+
+/* — Card — */
+.notificationsCard {
+  flex: 1;
+  min-height: 0;
   border: 1px solid var(--nf-line-2);
   border-radius: var(--nf-radius);
   background: var(--nf-panel);
   box-shadow: var(--nf-shadow);
-  padding: 22px 24px;
-  color: var(--nf-fg);
-  font-family: "Geist", "Inter", system-ui, sans-serif;
-}
-
-/* — Header: one editorial block, honey eyebrow, actions trailing — */
-.notificationsHeader {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 28px;
-  align-items: flex-end;
-  justify-content: space-between;
-}
-
-.notificationsHeader > div {
-  min-width: 0;
-}
-
-.notificationsHeader :global(.eyebrow) {
-  color: var(--nf-honey);
-}
-
-.notificationsHeader h2 {
-  margin: 0;
-  color: var(--nf-fg);
-  font-family: var(--nf-display);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  line-height: 1.12;
-}
-
-.notificationsHeader p,
-.notificationsEmpty p,
-.notificationStatus {
-  margin: 0;
-  color: var(--nf-fg-2);
-  line-height: 1.5;
-}
-
-.notificationsHeader p {
-  max-width: 560px;
-  margin-top: 5px;
-  font-size: 13px;
-}
-
-.inboxSummaryGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.inboxSummaryGrid article {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 4px 10px;
-  align-items: center;
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel-2);
-  padding: 12px 13px;
-}
-
-.inboxSummaryGrid svg {
-  grid-row: span 2;
-  width: 18px;
-  height: 18px;
-  color: var(--nf-honey);
-}
-
-.inboxSummaryGrid span {
-  color: var(--nf-fg-3);
-  font-family: var(--nf-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.inboxSummaryGrid strong {
-  color: var(--nf-fg);
-  font-family: var(--nf-display);
-  font-size: 17px;
-  line-height: 1.1;
-  overflow-wrap: anywhere;
-}
-
-/* — Controls: hairline-divided strip, not a nested box — */
-.notificationsControls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px 28px;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--nf-line);
-  padding-top: 18px;
-}
-
-/* Inline stats — mono labels + big numbers, no boxes. */
-.notificationStats {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 24px;
-}
-
-.notificationStats span {
+  padding: 20px 20px 12px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  gap: 14px;
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summaryLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: var(--nf-mono);
+  font-size: 11.5px;
+  color: var(--nf-fg-3);
+}
+
+.summaryLine strong {
+  color: var(--nf-fg);
+  font-weight: 700;
+}
+
+.summaryAction {
+  margin-left: 4px;
   border: 0;
   background: transparent;
-  padding: 0;
-  color: var(--nf-fg-3);
-  font-family: var(--nf-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 1.1px;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.notificationStats strong {
-  color: var(--nf-fg);
-  font-family: var(--nf-display);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  line-height: 1;
-  text-transform: none;
-}
-
-/* The vault folder has no <strong> count — a quiet location chip, wraps. */
-.notificationStats span:not(:has(strong)) {
-  align-self: center;
-  gap: 0;
-  border: 1px solid var(--nf-line-2);
-  border-radius: 999px;
-  background: var(--nf-panel-hi);
-  color: var(--nf-fg-2);
-  padding: 6px 11px;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  overflow-wrap: anywhere;
-  text-transform: none;
-}
-
-.inboxSettings {
-  display: grid;
-  min-width: min(100%, 620px);
-  gap: 10px;
-}
-
-.autonomyReview {
-  display: grid;
-  gap: 10px;
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel-2);
-  padding: 12px;
-}
-
-.autonomyReview > div:first-child {
-  display: grid;
-  gap: 3px;
-}
-
-.autonomyReview strong,
-.autonomySegments strong {
-  color: var(--nf-fg);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.2;
-}
-
-.autonomyReview > div:first-child > span,
-.autonomySegments span {
-  color: var(--nf-fg-3);
+  color: var(--nf-honey);
+  font-family: "Inter", sans-serif;
   font-size: 11.5px;
-  line-height: 1.4;
-}
-
-.autonomySegments {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.autonomySegments button {
-  display: grid;
-  gap: 4px;
-  min-height: 82px;
-  border: 1px solid var(--nf-line);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  padding: 9px 10px;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
-}
-
-.autonomySegments button:hover,
-.autonomySegments button:focus-visible,
-.autonomySegments button.active {
-  border-color: var(--nf-honey-line);
-  background: var(--nf-honey-soft);
-  outline: none;
-}
-
-.autonomySegments button:hover {
-  transform: translateY(-1px);
-}
-
-.autonomySegments button.active span {
-  color: var(--nf-fg-2);
-}
-
-/* Escalation toggle — a quiet inset card. */
-.notificationSetting {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  justify-content: space-between;
-  min-width: min(100%, 400px);
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel-2);
-  padding: 11px 13px;
-}
-
-.notificationSetting > span {
-  display: grid;
-  gap: 3px;
-}
-
-.notificationSetting strong {
-  display: block;
-  color: var(--nf-fg);
-  font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background 0.15s;
 }
 
-.notificationSetting > span > span {
-  display: block;
-  color: var(--nf-fg-3);
-  font-size: 12px;
-  line-height: 1.45;
+.summaryAction:hover {
+  background: var(--nf-honey-soft);
 }
 
-.notificationSetting input {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  accent-color: var(--nf-honey);
-}
-
-.approvalLane {
-  display: grid;
-  gap: 10px;
-  border-top: 1px solid var(--nf-line);
-  padding-top: 18px;
-}
-
-.approvalLaneHeader {
+.cardHeadActions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.approvalLaneHeader h3 {
-  margin: 0;
-  color: var(--nf-fg);
-  font-family: var(--nf-display);
-  font-size: 16px;
-  line-height: 1.2;
-}
-
-.approvalLaneHeader > span {
-  color: var(--nf-fg-3);
-  font-family: var(--nf-mono);
-  font-size: 11px;
-}
-
-.approvalCards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.approvalCard {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel-2);
-  padding: 12px;
-}
-
-.approvalCard.high {
-  border-color: var(--nf-honey-line);
-}
-
-.approvalCard.urgent {
-  border-color: rgba(229, 142, 133, 0.38);
-}
-
-.approvalCard > div:first-child {
-  display: grid;
-  min-width: min(100%, 260px);
-  gap: 4px;
-}
-
-.approvalCard span,
-.approvalCard small {
-  color: var(--nf-fg-3);
-  font-family: var(--nf-mono);
-  font-size: 10.5px;
-  line-height: 1.3;
-}
-
-.approvalCard strong {
-  color: var(--nf-fg);
-  font-size: 13px;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-.approvalActions {
-  display: flex;
-  flex-wrap: wrap;
   gap: 8px;
 }
 
-/* — List — */
-.notificationList {
+.iconButton {
   display: grid;
-  max-height: min(720px, calc(100vh - 320px));
-  min-height: 420px;
-  gap: 12px;
-  overflow: auto;
-  padding-right: 4px;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 8px;
+  background: var(--nf-panel-2);
+  color: var(--nf-fg-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.notificationDayGroup {
-  display: grid;
-  gap: 12px;
+.iconButton:hover:not(:disabled) {
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg);
 }
 
-.notificationDayGroup h3 {
+.iconButton.active {
+  border-color: var(--nf-honey-line);
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
+}
+
+.iconButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* — Filter tabs + mode indicator — */
+.filterTabs {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--nf-line);
+  padding-bottom: 1px;
+}
+
+.filterTab {
+  border: 0;
+  background: transparent;
+  font-family: "Inter", sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--nf-fg-3);
+  padding: 0 0 9px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.filterTab:hover {
+  color: var(--nf-fg-2);
+}
+
+.filterTab.active {
+  color: var(--nf-fg);
+  font-weight: 600;
+  border-bottom-color: var(--nf-honey);
+}
+
+.filterTabCount {
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  color: var(--nf-fg-4);
+  margin-left: 5px;
+}
+
+.filterTab.active .filterTabCount {
+  color: var(--nf-honey);
+}
+
+.modeIndicator {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--nf-fg-3);
+  padding-bottom: 9px;
+}
+
+.modeIndicator svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* — Settings drawer — */
+.settingsDrawer {
+  display: grid;
+  gap: 13px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 12px;
+  background: var(--nf-panel-2);
+  padding: 15px;
+}
+
+.drawerEyebrow {
+  margin: 0;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nf-honey);
+}
+
+.drawerTitle {
+  margin: 5px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--nf-fg);
+}
+
+.modeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.modeBtn {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  text-align: left;
+  border: 1px solid var(--nf-line);
+  background: transparent;
+  border-radius: 9px;
+  padding: 9px 10px;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+  min-height: 78px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.modeBtn:hover {
+  border-color: var(--nf-line-2);
+}
+
+.modeBtn.active {
+  border-color: var(--nf-honey-line);
+  background: var(--nf-honey-soft);
+}
+
+.modeBtnLabel {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--nf-fg);
+}
+
+.modeBtn.active .modeBtnLabel {
+  color: var(--nf-honey);
+}
+
+.modeBtnDetail {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--nf-fg-3);
+}
+
+.escalateRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--nf-line);
+  padding-top: 13px;
+}
+
+.escalateText b {
+  display: block;
+  font-size: 13px;
+  color: var(--nf-fg);
+}
+
+.escalateText span {
+  font-size: 12px;
+  color: var(--nf-fg-3);
+}
+
+.escalateTrack {
+  width: 40px;
+  height: 23px;
+  border-radius: 999px;
+  background: var(--nf-line-3);
+  position: relative;
+  flex: 0 0 auto;
+  cursor: pointer;
+  border: 0;
+  transition: background 0.16s;
+}
+
+.escalateTrack.on {
+  background: var(--nf-honey);
+}
+
+.escalateKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.16s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.escalateTrack.on .escalateKnob {
+  left: 19px;
+}
+
+/* — Day groups + rows — */
+/* The scroll region: fills the remaining card height and scrolls the list
+   internally (fixed header/tabs above, footer below), with infinite-load. */
+.listScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Hide the scrollbar (still scrolls) — it was crowding the compact rows. */
+  scrollbar-width: none;
+}
+
+.listScroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* While the list is actively scrolling, ignore pointer hover on rows so they
+   don't expand/collapse under the cursor mid-scroll (janky). The class is
+   toggled on the scroll container by the panel and cleared shortly after the
+   scroll goes idle; keyboard focus-within expansion is unaffected. */
+.listScroll.scrolling .row {
+  pointer-events: none;
+}
+
+.dayGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dayGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.dayLabel {
   position: sticky;
   top: 0;
   z-index: 1;
   margin: 0;
-  border-bottom: 1px solid var(--nf-line);
-  background: linear-gradient(180deg, var(--nf-panel) 62%, rgba(20, 22, 28, 0));
-  color: var(--nf-fg-3);
+  background: var(--nf-panel);
   font-family: var(--nf-mono);
   font-size: 10px;
   font-weight: 500;
-  letter-spacing: 1.4px;
-  padding: 8px 2px 10px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--nf-fg-3);
+  padding: 8px 2px 7px;
 }
 
-/* — Consolidated cluster: a paged stack of look-alike notifications, so a
-   batch of identical escalations reads as one card you step through — */
-.notificationCluster {
+.row {
+  --acc: var(--nf-fg-3);
+  --acc-soft: var(--nf-line);
+  --acc-line: var(--nf-line-2);
+  position: relative;
   display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 13px;
+  align-items: start;
+  border-bottom: 1px solid var(--nf-line);
+  padding: 12px 8px;
+  background: transparent;
+  text-align: left;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  width: 100%;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.26s ease;
+}
+
+.row.urgent {
+  --acc: var(--nf-danger);
+  --acc-soft: var(--nf-danger-soft);
+  --acc-line: var(--nf-danger-line);
+}
+
+.row.high {
+  --acc: var(--nf-honey);
+  --acc-soft: var(--nf-honey-soft);
+  --acc-line: var(--nf-honey-line);
+}
+
+.row.normal {
+  --acc: var(--nf-live);
+  --acc-soft: var(--nf-live-soft);
+  --acc-line: var(--nf-live-line);
+}
+
+.row.low {
+  --acc: var(--nf-fg-3);
+  --acc-soft: var(--nf-line);
+  --acc-line: var(--nf-line-2);
+}
+
+.row.resolved {
+  --acc: var(--nf-live);
+  --acc-soft: var(--nf-live-soft);
+  --acc-line: var(--nf-live-line);
+}
+
+.row:hover,
+.row:focus-within,
+.row.open {
+  background: var(--nf-panel-2);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--nf-honey);
+  outline-offset: -2px;
+}
+
+.rowGlyph {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--acc-soft);
+  color: var(--acc);
+  border: 1px solid var(--acc-line);
+}
+
+.rowGlyph svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rowMain {
+  min-width: 0;
+}
+
+.rowTitleLine {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.notificationPager {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 12px;
-  align-items: center;
-  justify-content: space-between;
+.rowTitle {
+  font-family: var(--nf-display);
+  font-size: 13.5px;
+  color: var(--nf-fg);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
-.notificationPagerNav {
+/* Full title revealed on expand — no permanently truncated text. */
+.row:hover .rowTitle,
+.row:focus-within .rowTitle,
+.row.open .rowTitle {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.unreadDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nf-honey);
+  flex: 0 0 auto;
+}
+
+/* The cluster badge is a button that expands/collapses the look-alike group. */
+.clusterBadge {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  border: 1px solid var(--nf-line-2);
+  gap: 3px;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  color: var(--nf-honey);
+  background: transparent;
+  border: 1px solid var(--nf-honey-line);
   border-radius: 999px;
-  background: var(--nf-panel-2);
-  padding: 3px;
+  padding: 1px 7px 1px 4px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 
-.notificationPagerArrow {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 999px;
+.clusterBadge:hover {
+  background: var(--nf-honey-soft);
+}
+
+.clusterChevron {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  transition: transform 0.18s ease;
+}
+
+.clusterBadge.expanded .clusterChevron {
+  transform: rotate(90deg);
+}
+
+/* The expanded group: representative row + its members under a honey rail. */
+.clusterGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.clusterMembers {
+  margin: 0 0 2px 20px;
+  border-left: 2px solid var(--nf-honey-line);
+}
+
+.clusterMembers .row {
+  padding-left: 12px;
+}
+
+.expandWrap {
+  overflow: hidden;
+  padding-top: 3px;
+  max-height: 22px;
+  transition: max-height 0.34s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.row:hover .expandWrap,
+.row:focus-within .expandWrap,
+.row.open .expandWrap {
+  /* 460px matches the mockup and clears the tallest real card (a Hermes
+     sign-out alert with a code block + pager + full action row measures
+     ~268px), so expanded content never clips. */
+  max-height: 460px;
+}
+
+.rowBody {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nf-fg-3);
+}
+
+.rowBody :global(p) {
+  margin: 0 0 6px;
+}
+
+.rowBody :global(p:last-child) {
+  margin-bottom: 0;
+}
+
+.rowBody :global(pre) {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--nf-panel-hi);
+  border: 1px solid var(--nf-line-2);
+  overflow-x: auto;
+  font-family: var(--nf-mono);
+  font-size: 11.5px;
+  color: var(--nf-fg-2);
+}
+
+.rowBody :global(code) {
+  font-family: var(--nf-mono);
+  font-size: 11.5px;
+}
+
+.rowBodyActor {
+  color: var(--nf-fg-2);
+  font-weight: 500;
+}
+
+.resolutionNote {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--nf-live);
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  opacity: 0;
+  /* Hidden AND removed from the tab order while collapsed so keyboard users
+     never land on an invisible button; the row itself (tabIndex 0) reveals
+     them on focus, after which they enter the tab order. */
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.row:hover .rowActions,
+.row:focus-within .rowActions,
+.row.open .rowActions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.actionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 8px;
   background: transparent;
   color: var(--nf-fg-2);
+  padding: 6px 11px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: "Inter", sans-serif;
   cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.notificationPagerArrow:hover:not(:disabled) {
-  background: var(--nf-honey-soft);
-  color: var(--nf-honey);
+.actionBtn:hover:not(:disabled) {
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg);
+  border-color: var(--nf-line-3);
 }
 
-.notificationPagerArrow:disabled {
-  color: var(--nf-fg-4);
+.actionBtn:disabled {
+  opacity: 0.6;
   cursor: default;
 }
 
-.notificationPagerArrow svg {
-  width: 16px;
-  height: 16px;
-}
-
-.notificationPagerCount {
-  min-width: 46px;
-  text-align: center;
-  font-family: var(--nf-mono);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  color: var(--nf-fg);
-  font-variant-numeric: tabular-nums;
-}
-
-.notificationPagerBadge {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--nf-line-2);
-  border-radius: 999px;
-  background: var(--nf-panel-2);
-  padding: 4px 11px;
-  color: var(--nf-fg-2);
-  font-family: var(--nf-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-}
-
-.notificationPagerBadge.unread {
+.actionBtn.primary {
   border-color: var(--nf-honey-line);
   background: var(--nf-honey-soft);
   color: var(--nf-honey);
 }
 
-/* Stacked-card affordance: a hairline peeking below the paged card signals
-   there are more behind it. */
-.notificationCluster .notificationCard {
-  position: relative;
-}
-
-.notificationCluster .notificationCard::after {
-  content: "";
-  position: absolute;
-  inset: auto 7px -5px 7px;
-  height: 6px;
-  border: 1px solid var(--nf-line);
-  border-top: 0;
-  border-radius: 0 0 var(--nf-radius) var(--nf-radius);
-  background: var(--nf-panel-2);
-  z-index: -1;
-}
-
-/* — Card — */
-.notificationCard {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 14px;
-  border: 1px solid var(--nf-line);
-  border-radius: var(--nf-radius);
-  background: var(--nf-panel-2);
-  padding: 15px 16px;
-  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
-}
-
-.notificationCard[role="button"] {
-  cursor: pointer;
-}
-
-.notificationCard[role="button"]:hover,
-.notificationCard[role="button"]:focus-visible {
-  border-color: var(--nf-line-3);
-  transform: translateY(-1px);
-  outline: none;
-}
-
-/* Unread cards sit a step brighter than read ones (priority itself is shown
-   by the priority pill, not a card accent). */
-.notificationCard.unread {
-  background: var(--nf-panel-hi);
-}
-
-.notificationGlyph {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border: 1px solid var(--nf-honey-line);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-honey-soft);
-  color: var(--nf-honey);
-}
-
-.notificationGlyph svg {
-  width: 19px;
-  height: 19px;
-}
-
-.notificationBody {
-  min-width: 0;
-}
-
-.notificationMetaRow {
-  display: flex;
-  gap: 12px;
-  align-items: start;
-  justify-content: space-between;
-}
-
-.notificationMetaRow h3 {
-  overflow-wrap: anywhere;
-  margin: 0;
-  background: transparent;
-  color: var(--nf-fg);
-  font-family: var(--nf-display);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.1px;
-  line-height: 1.3;
-  text-transform: none;
-}
-
-.notificationMetaRow time {
+.actionBtn svg {
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
+}
+
+.readBtn {
   color: var(--nf-fg-3);
-  font-family: var(--nf-mono);
+}
+
+.actionError {
+  align-self: center;
   font-size: 11px;
+  color: var(--nf-danger);
 }
 
-.notificationActorRow {
+/* — Meta column (priority + time) — */
+.rowMeta {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.notificationActorBadge,
-.notificationSourcePill {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--nf-line-2);
-  border-radius: 999px;
-  background: var(--nf-panel-hi);
-  color: var(--nf-fg-2);
-  padding: 4px 11px;
-}
-
-.notificationActorBadge img {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-
-.notificationActorBadge span {
-  display: grid;
-  gap: 1px;
-}
-
-.notificationActorBadge b {
-  color: var(--nf-fg);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.1;
-}
-
-.notificationActorBadge small {
-  color: var(--nf-fg-3);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1;
-}
-
-/* Source / task pill — wraps rather than ellipsis-truncating. */
-.notificationSourcePill {
-  flex-wrap: wrap;
-  max-width: min(100%, 460px);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.notificationSourcePill small {
-  color: var(--nf-fg-3);
-  font-family: var(--nf-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.notificationSourcePill b {
-  overflow-wrap: anywhere;
-  min-width: 0;
-  color: var(--nf-fg);
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.notificationCard p {
-  margin: 0;
-  color: var(--nf-fg-2);
-  line-height: 1.45;
-  white-space: pre-line;
-}
-
-.notificationMarkdown {
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
-  color: var(--nf-fg-2);
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-
-.notificationMarkdown p {
-  margin: 0;
-  white-space: pre-wrap;
-}
-
-.notificationMarkdown ul,
-.notificationMarkdown ol {
-  margin: 0;
-  padding-left: 1.25rem;
-}
-
-.notificationMarkdown li + li {
-  margin-top: 4px;
-}
-
-.notificationMarkdown code {
-  border: 1px solid var(--nf-line-2);
-  border-radius: 5px;
-  background: var(--nf-panel-hi);
-  color: var(--nf-fg);
-  padding: 0.05rem 0.3rem;
-  font-family: var(--nf-mono);
-  font-size: 0.9em;
-}
-
-.notificationMarkdown pre {
-  max-width: 100%;
-  overflow: auto;
-  border: 1px solid var(--nf-line-2);
-  border-radius: var(--nf-radius-sm);
-  background: var(--nf-panel);
-  color: var(--nf-fg);
-  margin: 0;
-  padding: 12px;
-  white-space: pre;
-}
-
-.notificationMarkdown pre code {
-  border: 0;
-  background: transparent;
-  padding: 0;
-}
-
-.notificationMarkdown a {
-  color: var(--nf-honey);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.notificationMarkdownHeading {
-  display: block;
-  color: var(--nf-fg);
-  font-weight: 700;
-}
-
-.notificationFooter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 12px;
-}
-
-.notificationTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* — Pills: one flat idiom, tint carries meaning (matches Trade `.badge`) — */
-.priorityPill,
-.kindPill,
-.readPill,
-.resolutionPill {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  border: 1px solid var(--nf-line-2);
-  border-radius: 999px;
-  background: var(--nf-panel-hi);
-  color: var(--nf-fg-3);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  padding: 5px 10px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
 }
 
 .priorityPill {
-  border-color: transparent;
-  background: rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--acc-soft);
+  color: var(--acc);
+  border: 1px solid transparent;
 }
 
-.priorityPill.normal {
+.resolvedPill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
   background: var(--nf-live-soft);
   color: var(--nf-live);
 }
 
-.priorityPill.high {
-  background: var(--nf-honey-soft);
-  color: var(--nf-honey);
+.rowTime {
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  color: var(--nf-fg-4);
+  white-space: nowrap;
 }
 
-.priorityPill.urgent {
-  background: var(--nf-danger-soft);
-  color: var(--nf-danger);
+/* — Footer / status / load-more / empty — */
+.cardFooter {
+  margin: 4px 0 6px;
+  font-family: var(--nf-mono);
+  font-size: 10.5px;
+  color: var(--nf-fg-4);
 }
 
-.resolutionPill.resolved {
-  border-color: transparent;
-  background: var(--nf-live-soft);
-  color: var(--nf-live);
+.statusLine {
+  margin: 0 0 6px;
+  font-family: var(--nf-mono);
+  font-size: 10.5px;
+  color: var(--nf-fg-4);
 }
 
-.resolutionPill.in-progress {
-  border-color: transparent;
-  background: var(--nf-honey-soft);
-  color: var(--nf-honey);
+.loadMore {
+  align-self: flex-start;
+  margin: 2px 0 8px;
 }
 
-.readPill {
-  border-color: transparent;
-  background: rgba(255, 255, 255, 0.04);
+.emptyState {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 46px 20px;
+  text-align: center;
   color: var(--nf-fg-3);
 }
 
-.notificationActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+.emptyState svg {
+  width: 30px;
+  height: 30px;
+  color: var(--nf-fg-4);
 }
 
-.notificationActionError {
-  color: var(--nf-danger);
-  font-size: 0.8rem;
+.emptyState strong {
+  font-family: var(--nf-display);
+  font-size: 15px;
+  color: var(--nf-fg);
+}
+
+.emptyState p {
+  margin: 0;
+  max-width: 340px;
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .spinIcon {
   animation: notificationSpin 0.9s linear infinite;
 }
 
-/* Buttons — re-skin the shared <Button> inside this view to the warm dark-honey
-   palette: honey primary, transparent hairline secondaries that fill on hover.
-   WEIGHT is not set here — buttons inherit the app-wide font-normal (400) from
-   the shared Button component (src/components/ui/button.tsx). Scoped to this
-   panel via the <Button> data-attrs; CSS-module rules are unlayered so they win
-   over Tailwind's layered utilities. */
-.notificationsPanel button[data-slot="button"] {
-  border-radius: var(--nf-radius-sm);
-  box-shadow: none;
-  letter-spacing: 0;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
-}
-
-/* Secondary — transparent with a hairline, fills gently on hover. */
-.notificationsPanel button[data-variant="secondary"] {
-  border: 1px solid var(--nf-line-2);
-  background: transparent;
-  color: var(--nf-fg-2);
-}
-
-.notificationsPanel button[data-variant="secondary"]:hover {
-  border-color: var(--nf-line-3);
-  background: var(--nf-panel-hi);
-  color: var(--nf-fg);
-}
-
-/* Primary — a single honey fill. */
-.notificationsPanel button[data-slot="button"]:not([data-variant]) {
-  border: 1px solid transparent;
-  background: var(--nf-honey);
-  color: #1a1305;
-}
-
-.notificationsPanel button[data-slot="button"]:not([data-variant]):hover {
-  background: var(--nf-honey);
-  color: #1a1305;
-  filter: brightness(1.05);
-}
-
-.resolutionNote {
-  margin-top: 8px;
-  color: var(--nf-live);
-  font-size: 0.85rem;
-}
-
-.resolutionNote.in-progress {
-  color: var(--nf-honey);
-}
-
-/* — Empty + status — */
-.notificationsEmpty {
-  display: grid;
-  min-height: 360px;
-  place-items: center;
-  border: 1px dashed var(--nf-line-2);
-  border-radius: var(--nf-radius);
-  background: var(--nf-panel-2);
-  text-align: center;
-}
-
-.notificationsEmpty svg {
-  width: 34px;
-  height: 34px;
-  color: var(--nf-honey);
-}
-
-.notificationsEmpty strong {
-  display: block;
-  margin-top: 10px;
-  color: var(--nf-fg);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.notificationStatus {
-  color: var(--nf-fg-3);
-  font-family: var(--nf-mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  min-height: 16px;
-}
-
-/* navBadge renders in the nav shelf OUTSIDE this panel, so it must use the
-   global tokens (the scoped --nf-* tokens don't reach it). */
-.navBadge {
-  display: inline-grid;
-  min-width: 17px;
-  height: 17px;
-  margin-left: 4px;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--danger);
-  color: #1a1206;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1;
-  transform: none;
-}
-
-/* — Responsive — */
-@media (max-width: 760px) {
-  .notificationsPanel {
-    border-radius: 12px;
-    padding: 18px 16px;
-  }
-
-  .notificationsHeader,
-  .notificationsControls,
-  .notificationMetaRow,
-  .notificationFooter,
-  .notificationSetting {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .inboxSummaryGrid,
-  .autonomySegments,
-  .approvalCards {
-    grid-template-columns: 1fr;
-  }
-
-  .notificationList {
-    max-height: none;
-  }
-
-  .notificationCard {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* — Hive-light theme: re-declare the token block once, warm-paper values
-     lifted from fleet-hive.css `.fr-root[data-fr-theme="light"]`. Every rule
-     above reads the tokens, so the whole view flips with no per-element
-     overrides. — */
+/* — Light theme: re-declare tokens once; every rule reads them — */
 :global(:root[data-theme="hive-light"]) .notificationsPanel {
   --nf-panel: #fbf8f1;
   --nf-panel-2: #f4efe4;
@@ -977,18 +1025,11 @@
   --nf-honey-line: rgba(176, 127, 28, 0.34);
   --nf-live: #6f8f68;
   --nf-live-soft: rgba(111, 143, 104, 0.14);
+  --nf-live-line: rgba(111, 143, 104, 0.32);
   --nf-danger: #c0524d;
   --nf-danger-soft: rgba(192, 82, 77, 0.12);
+  --nf-danger-line: rgba(192, 82, 77, 0.34);
   --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
-}
-
-:global(:root[data-theme="hive-light"]) .notificationDayGroup h3 {
-  background: linear-gradient(180deg, var(--nf-panel) 62%, rgba(251, 248, 241, 0));
-}
-
-:global(:root[data-theme="hive-light"]) .priorityPill,
-:global(:root[data-theme="hive-light"]) .readPill {
-  background: rgba(54, 46, 30, 0.06);
 }
 
 @keyframes notificationSpin {
@@ -998,6 +1039,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .expandWrap,
+  .rowActions,
+  .row,
+  .escalateTrack,
+  .escalateKnob {
+    transition: none;
+  }
+
   .spinIcon {
     animation-duration: 1.8s;
   }

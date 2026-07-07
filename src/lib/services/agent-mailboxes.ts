@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -15,6 +15,7 @@ const STORE_VERSION = 1;
 const DEFAULT_CLOUDFLARE_WORKER_NAME = "hivemindos-agentic-inbox";
 const DEFAULT_AGENTMAIL_API_BASE_URL = "https://api.agentmail.to";
 const DEFAULT_AGENTMAIL_DOMAIN = "agentmail.to";
+const AGENTMAIL_CLIENT_ID_PREFIX = "hivemindos-agent-mailbox";
 const AGENTMAIL_PROVIDER_KEYS = [
   "AGENTMAIL_API_KEY",
   "AGENTMAIL_API_BASE_URL",
@@ -709,7 +710,19 @@ function normalizeAgentMailApiBaseUrl(value: string) {
 }
 
 function agentMailClientId(agentId: string) {
-  return `hivemindos-agent-mailbox:${agentId}`;
+  const slug = agentId
+    .trim()
+    .normalize("NFKD")
+    .replace(/[^A-Za-z0-9._~-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 96);
+  const digest = createHash("sha256").update(agentId).digest("hex").slice(0, 12);
+  return `${AGENTMAIL_CLIENT_ID_PREFIX}-${slug ? `${slug}-` : ""}${digest}`;
+}
+
+function legacyAgentMailClientId(agentId: string) {
+  return `${AGENTMAIL_CLIENT_ID_PREFIX}:${agentId}`;
 }
 
 function agentMailErrorMessage(payload: AgentMailErrorEnvelope, status: number) {
@@ -780,7 +793,7 @@ function compactRecord(values: Record<string, string | undefined>) {
 // MAIL_PROVIDER_READERS and normalizes into the shared CompanyEmailThread shape.
 // Adding a provider is one entry + one reader — the API route and UI are generic.
 //   - agentmail: threads API, inboxes resolved cross-machine by the client_id we
-//     stamp at provisioning (`hivemindos-agent-mailbox:<agentId>`) + metadata,
+//     stamp at provisioning (`hivemindos-agent-mailbox-...`) + metadata,
 //     with the per-machine local store as a fast-path supplement.
 //   - cloudflare-agentic-inbox: the deployed Worker's /api/inbox/messages store
 //     (inbound only), filtered to the company's Cloudflare mailbox addresses.
@@ -1059,7 +1072,10 @@ async function resolveAgentMailInboxes(input: {
   apiBaseUrl: string;
   token: string;
 }): Promise<ResolvedAgentMailInbox[]> {
-  const clientIdToAgent = new Map(input.agentIds.map((agentId) => [agentMailClientId(agentId), agentId] as const));
+  const clientIdToAgent = new Map(input.agentIds.flatMap((agentId) => [
+    [agentMailClientId(agentId), agentId] as const,
+    [legacyAgentMailClientId(agentId), agentId] as const,
+  ]));
   const wantedAgentIds = new Set(input.agentIds);
   const found = new Map<string, ResolvedAgentMailInbox>();
 

@@ -32,6 +32,7 @@ import type {
   Company,
   CompanyApexGoal,
   CompanyApprovalPolicy,
+  CompanyAutonomyPause,
   CompanyMember,
   CompanyRevenue,
 } from "@/lib/types/company";
@@ -103,6 +104,7 @@ type CompanyBody = {
   analyticsProvider?: Company["analyticsProvider"];
   analyticsConfig?: Company["analyticsConfig"];
   importedOperations?: CompanyImportedOperations;
+  autonomyPause?: CompanyAutonomyPause | null;
   // dispatch-goal
   fleetSnapshot?: QueenBeeFleetMachine[];
   maxTasks?: number;
@@ -255,6 +257,7 @@ export async function POST(request: NextRequest) {
       analyticsProvider: body.analyticsProvider,
       analyticsConfig: body.analyticsConfig,
       importedOperations: body.importedOperations,
+      autonomyPause: body.autonomyPause,
     });
     return NextResponse.json({ ok: true, company });
   } catch (error) {

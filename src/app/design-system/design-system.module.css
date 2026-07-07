@@ -1,0 +1,392 @@
+.page {
+  --background: #0c0d11;
+  --bg-0: #090a0d;
+  --bg-1: #101116;
+  --bg-2: #14161c;
+  --bg-3: #181b22;
+  --bg-4: #1e222b;
+  --panel: #14161c;
+  --panel-soft: #181b22;
+  --panel-hi: #1e222b;
+  --field: #181b22;
+  --surface: #14161c;
+  --surface-strong: #101116;
+  --surface-soft: #181b22;
+  --foreground: #f3f0e9;
+  --fg: #f3f0e9;
+  --fg-2: #a7a39a;
+  --fg-3: #76726a;
+  --fg-4: #545049;
+  --text-soft: #a7a39a;
+  --muted: #a7a39a;
+  --line: rgba(238, 232, 220, 0.07);
+  --line-2: rgba(238, 232, 220, 0.13);
+  --line-3: rgba(238, 232, 220, 0.2);
+  --hairline: rgba(238, 232, 220, 0.13);
+  --bee: #e7b45c;
+  --honey: #e7b45c;
+  --honey-2: #f0c879;
+  --pollen: #fff6cf;
+  --honey-soft: rgba(231, 180, 92, 0.13);
+  --honey-line: rgba(231, 180, 92, 0.32);
+  --on-honey: #1a1305;
+  --accent: #e7b45c;
+  --accent-strong: #f0c879;
+  --live: #6fcdba;
+  --live-2: #8fdcc9;
+  --live-soft: rgba(111, 205, 186, 0.14);
+  --success: #6fcdba;
+  --warning: #e7b45c;
+  --danger: #e58e85;
+  --success-soft: rgba(111, 205, 186, 0.14);
+  --warning-soft: rgba(231, 180, 92, 0.13);
+  --danger-soft: rgba(229, 142, 133, 0.13);
+  --button-primary: #e7b45c;
+  --button-primary-foreground: #1a1305;
+  --button-secondary: rgba(238, 232, 220, 0.06);
+  --button-secondary-foreground: #f3f0e9;
+  --button-accent: var(--honey-soft);
+  --button-accent-foreground: #f3f0e9;
+  --button-muted-foreground: #a7a39a;
+  --button-destructive: #e58e85;
+  --button-border: rgba(238, 232, 220, 0.13);
+  --button-input: rgba(238, 232, 220, 0.16);
+  --button-ring: rgba(231, 180, 92, 0.32);
+  --button-popover: #1e222b;
+  --button-popover-foreground: #f3f0e9;
+  --color-primary: var(--button-primary);
+  --color-primary-foreground: var(--button-primary-foreground);
+  --color-secondary: var(--button-secondary);
+  --color-secondary-foreground: var(--button-secondary-foreground);
+  --color-muted-foreground: var(--button-muted-foreground);
+  --color-accent: var(--button-accent);
+  --color-accent-foreground: var(--button-accent-foreground);
+  --color-destructive: var(--button-destructive);
+  --color-border: var(--button-border);
+  --color-input: var(--button-input);
+  --color-ring: var(--button-ring);
+  --color-popover: var(--button-popover);
+  --color-popover-foreground: var(--button-popover-foreground);
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Geist", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 14px;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+  min-height: 100vh;
+  padding: 32px clamp(16px, 4vw, 44px) 58px;
+  color: var(--foreground);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23e7b45c' stroke-opacity='.06' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(circle at 14% 12%, rgba(231, 180, 92, 0.13), transparent 30rem),
+    radial-gradient(circle at 82% 18%, rgba(111, 205, 186, 0.08), transparent 26rem),
+    linear-gradient(140deg, #090a0d 0%, #0c0d11 52%, #101116 100%);
+  background-attachment: fixed;
+  background-size: 72px 41.569px, auto, auto, auto;
+  font-family: var(--font-body);
+}
+
+.shell {
+  display: grid;
+  max-width: 1320px;
+  margin: 0 auto;
+  gap: 30px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  padding: 20px 0 4px;
+}
+
+.brandLockup {
+  display: flex;
+  min-width: 0;
+  gap: 18px;
+  align-items: center;
+}
+
+.appIcon {
+  width: 76px;
+  height: 76px;
+  border: 1px solid var(--honey-line);
+  border-radius: 20px;
+  box-shadow: 0 20px 58px -28px rgba(231, 180, 92, 0.58);
+}
+
+.eyebrow {
+  color: var(--honey);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 7px 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(32px, 5vw, 58px);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 0.98;
+}
+
+.lede {
+  max-width: 760px;
+  margin: 12px 0 0;
+  color: var(--fg-2);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.heroActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.section {
+  display: grid;
+  gap: 14px;
+}
+
+.sectionHeader {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.sectionCopy {
+  max-width: 660px;
+  margin: 4px 0 0;
+  color: var(--fg-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.twoColumnGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 14px;
+}
+
+.wideCard {
+  min-height: 100%;
+}
+
+.componentStack {
+  display: grid;
+  gap: 18px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.swatchGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.swatch {
+  display: grid;
+  gap: 9px;
+}
+
+.swatchColor {
+  min-height: 62px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+}
+
+.swatchName {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.swatchValue {
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.miniLabel {
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.specimenTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.monoLine {
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.agentGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+
+.hexWrap {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.hexImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.checkRow {
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+
+.staticLinks {
+  display: grid;
+  gap: 10px;
+}
+
+.staticLink {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
+}
+
+.staticLink:hover {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  transform: translateY(-1px);
+}
+
+.staticLink strong {
+  font-size: 13px;
+}
+
+.staticLink span {
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.assetStrip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.assetTile {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  padding: 18px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(231, 180, 92, 0.1), transparent 45%),
+    var(--surface-soft);
+}
+
+.assetTile img {
+  max-width: min(126px, 100%);
+  height: auto;
+}
+
+.footerNote {
+  color: var(--fg-4);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 980px) {
+  .hero,
+  .twoColumnGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .heroActions {
+    justify-content: flex-start;
+  }
+
+  .cardGrid,
+  .swatchGrid,
+  .assetStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 20px 14px 44px;
+  }
+
+  .brandLockup {
+    align-items: flex-start;
+  }
+
+  .appIcon {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+  }
+
+  .cardGrid,
+  .swatchGrid,
+  .assetStrip,
+  .agentGrid {
+    grid-template-columns: 1fr;
+  }
+}

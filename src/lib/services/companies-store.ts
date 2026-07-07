@@ -15,10 +15,13 @@ import {
 } from "@/lib/services/company-runs";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
+import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type {
   Company,
   CompanyApexGoal,
   CompanyApprovalPolicy,
+  CompanyAutonomyPause,
+  CompanyAutonomyPauseMode,
   CompanyDirective,
   CompanyMember,
   CompanyMemberSpend,
@@ -160,6 +163,7 @@ function companyDefinitionOf(record: Company): Company {
       : undefined,
     members: record.members,
     autonomy: record.autonomy,
+    autonomyPause: record.autonomyPause,
     process: record.process,
     flowTemplateId: record.flowTemplateId,
     homeMachineKey: record.homeMachineKey,
@@ -371,6 +375,44 @@ function normalizeStatus(value: unknown): CompanyStatus | undefined {
   return typeof value === "string" && (VALID_STATUSES as string[]).includes(value)
     ? (value as CompanyStatus)
     : undefined;
+}
+
+const VALID_DELIVERABLE_KINDS: KanbanDeliverableKind[] = [
+  "website",
+  "video",
+  "image",
+  "audio",
+  "document",
+  "directory",
+  "file",
+  "url",
+];
+
+/**
+ * Clean an autonomy-pause config. A non-positive threshold means "disabled" and
+ * is stored as `undefined` so a cleared setting drops out of the definition
+ * entirely (rather than persisting a dead `0`). Kinds are validated against the
+ * known deliverable kinds; an empty kind list leaves the driver to fall back to
+ * counting every waiting item.
+ */
+function normalizeAutonomyPause(value: unknown): CompanyAutonomyPause | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const input = value as CompanyAutonomyPause;
+  const rawMax = input.maxWaitingOnHuman;
+  const max = typeof rawMax === "number" && Number.isFinite(rawMax) ? Math.max(0, Math.floor(rawMax)) : 0;
+  if (max <= 0) return undefined;
+  const countMode: CompanyAutonomyPauseMode = input.countMode === "deliverable-kinds" ? "deliverable-kinds" : "all";
+  const kinds =
+    countMode === "deliverable-kinds"
+      ? (Array.isArray(input.deliverableKinds) ? input.deliverableKinds : []).filter(
+          (kind): kind is KanbanDeliverableKind => VALID_DELIVERABLE_KINDS.includes(kind as KanbanDeliverableKind),
+        )
+      : undefined;
+  return {
+    maxWaitingOnHuman: max,
+    countMode,
+    ...(kinds && kinds.length > 0 ? { deliverableKinds: kinds } : {}),
+  };
 }
 
 function trimmed(value: unknown): string | undefined {
@@ -894,6 +936,8 @@ export type UpsertCompanyInput = {
   products?: CompanyProductCatalog;
   /** Explicit company approval policy overrides. */
   approvalPolicies?: CompanyApprovalPolicy[];
+  /** Approval backpressure: auto-pause new-work dispatch when too many items wait on a human. */
+  autonomyPause?: CompanyAutonomyPause | null;
   /** Which analytics provider this company's numbers come from. */
   analyticsProvider?: Company["analyticsProvider"];
   /** Per-company analytics link (project/site id + optional self-host). */
@@ -943,6 +987,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     members: members ?? undefined,
     lastDispatchedAt: existing?.lastDispatchedAt,
     autonomy: existing?.autonomy,
+    autonomyPause: input.autonomyPause !== undefined ? normalizeAutonomyPause(input.autonomyPause) : existing?.autonomyPause,
     process: existing?.process,
     flowTemplateId: existing?.flowTemplateId,
     // New companies are claimed by the machine that created them so exactly one

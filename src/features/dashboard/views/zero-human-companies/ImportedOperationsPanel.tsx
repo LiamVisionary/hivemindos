@@ -55,6 +55,10 @@ type ScheduleTimelineEvent = ScheduleTimelineRow & {
   occurrenceIndex: number;
 };
 
+const TIMELINE_VISIBLE_EVENT_COUNT = 5;
+const TIMELINE_EVENT_MIN_HEIGHT = 116;
+const TIMELINE_VISIBLE_MAX_HEIGHT = TIMELINE_VISIBLE_EVENT_COUNT * TIMELINE_EVENT_MIN_HEIGHT;
+
 function providerLabel(schedule: ImportedSchedule) {
   return schedule.target || schedule.kind.split("-").map((part) => part ? part[0].toUpperCase() + part.slice(1) : "").filter(Boolean).join(" ");
 }
@@ -89,7 +93,7 @@ function ScheduleTimelineItem({ event, first, last }: { event: ScheduleTimelineE
   const { schedule, summary, occurrence, occurrenceIndex } = event;
   const source = providerLabel(schedule);
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "clamp(72px, 16vw, 94px) 18px minmax(0, 1fr)", gap: 12, alignItems: "stretch" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "clamp(72px, 16vw, 94px) 18px minmax(0, 1fr)", gap: 12, alignItems: "stretch", minHeight: TIMELINE_EVENT_MIN_HEIGHT }}>
       <time dateTime={occurrence.iso} style={{ display: "grid", alignContent: "start", gap: 4, paddingTop: 3, minWidth: 0 }}>
         <span style={{ fontFamily: "var(--f-display)", fontSize: 17, fontWeight: 760, color: "var(--fg)", lineHeight: 1.05 }}>{occurrence.clockLabel}</span>
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-3)", lineHeight: 1.35 }}>{occurrence.dateLabel}</span>
@@ -138,6 +142,7 @@ function ScheduleSection({ schedules }: { schedules: ImportedSchedule[] }) {
   const { rows, events } = React.useMemo(() => buildScheduleTimeline(schedules), [schedules]);
   const timezone = rows[0]?.summary.deviceTimezone ?? "";
   const unresolvedRows = rows.filter((row) => !row.summary.upcomingOccurrences.length);
+  const timelineScrollable = events.length > TIMELINE_VISIBLE_EVENT_COUNT;
   return (
     <Panel pad="16px">
       <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{events.length ? `${events.length} upcoming` : schedules.length}{timezone ? ` · ${timezone}` : ""}</span>}>Schedules And Crons</SectionLabel>
@@ -149,7 +154,7 @@ function ScheduleSection({ schedules }: { schedules: ImportedSchedule[] }) {
             {timezone ? <span>Device timezone: {timezone}</span> : null}
           </div>
           {events.length ? (
-            <div style={{ display: "grid", gap: 0 }}>
+            <div style={{ display: "grid", gap: 0, maxHeight: timelineScrollable ? TIMELINE_VISIBLE_MAX_HEIGHT : undefined, overflowY: timelineScrollable ? "auto" : undefined, overscrollBehavior: "contain", paddingRight: timelineScrollable ? 8 : 0, WebkitOverflowScrolling: "touch" }}>
               {events.map((event, index) => (
                 <ScheduleTimelineItem key={event.id} event={event} first={index === 0} last={index === events.length - 1} />
               ))}

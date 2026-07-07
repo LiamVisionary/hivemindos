@@ -15,6 +15,7 @@ import {
   frSimActive, frSimLive, frSimOthers,
   type Agent, type Decision, type Intel, type RedditPost, type Run, type TemplateId, type XThread,
 } from "./sim-data";
+import { MIROSHARK_X402_SIMULATION_PRICE_LABEL } from "@/lib/config/miroshark-x402";
 
 export type SimLaunchMode = "local" | "x402";
 /** Per-mode readiness for the split launch button — drives the menu + disabled reasons. */
@@ -25,7 +26,7 @@ export interface SimLaunchModeStatus {
   reason?: string;
   /** x402 only: no usable wallet exists at all → offer to open the Wallets tab. */
   needsWallet?: boolean;
-  /** Optional extra hint (e.g. "connected via <machine>" / "~$1 USDC"). */
+  /** Optional extra hint (e.g. "connected via <machine>" / "~$1.20 USDC"). */
   note?: string;
 }
 export interface SimLaunchPayload { template: TemplateId; scenario: string; rounds: number; platform: string; mode?: SimLaunchMode; deepResearch?: boolean }
@@ -131,7 +132,7 @@ export function mockDataset(): SimDataset {
     opsFor: () => mockOps(),
     intelFor: (run) => SW_INTEL[run.id] ?? null,
     // Standalone demo: both modes available so the split button is exercisable.
-    launchModes: { local: { ready: true }, x402: { ready: true, note: "~$1 USDC" } },
+    launchModes: { local: { ready: true }, x402: { ready: true, note: `~${MIROSHARK_X402_SIMULATION_PRICE_LABEL}` } },
   };
 }
 

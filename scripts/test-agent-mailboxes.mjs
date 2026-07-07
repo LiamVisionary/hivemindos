@@ -97,8 +97,42 @@ try {
   assert.equal(agentMailCreated.mailbox.providerId, "agentmail");
   assert.equal(agentMailCreated.mailbox.providerResourceIds.inboxId, "agent-beta-mail@agentmail.to");
 
+  const originalAgentMailApiKey = process.env.AGENTMAIL_API_KEY;
+  const originalFetchForProvision = globalThis.fetch;
+  let agentMailPostBody;
+  process.env.AGENTMAIL_API_KEY = "fixture-agentmail-token";
+  globalThis.fetch = async (url, init = {}) => {
+    assert.equal(String(url), "https://api.agentmail.to/v0/inboxes");
+    assert.equal(init.method, "POST");
+    agentMailPostBody = JSON.parse(String(init.body || "{}"));
+    assert.equal(agentMailPostBody.username, "agent-gamma-sales");
+    assert.match(agentMailPostBody.client_id, /^[A-Za-z0-9._~-]+$/);
+    assert.doesNotMatch(agentMailPostBody.client_id, /:/);
+    assert.match(agentMailPostBody.client_id, /^hivemindos-agent-mailbox-/);
+    return new Response(JSON.stringify({
+      inbox_id: "agent-gamma-sales@agentmail.to",
+      email: "agent-gamma-sales@agentmail.to",
+      client_id: agentMailPostBody.client_id,
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  try {
+    const safeClientIdCreated = await service.createAgentMailbox(
+      { agentId: "agent:gamma/sales team", agentName: "Gamma Sales" },
+      {
+        now: () => new Date("2026-07-07T14:44:00.000Z"),
+        providerStatus: agentMailProvider,
+      },
+    );
+    assert.equal(safeClientIdCreated.ok, true);
+    assert.equal(safeClientIdCreated.mailbox.providerResourceIds.clientId, agentMailPostBody.client_id);
+  } finally {
+    globalThis.fetch = originalFetchForProvision;
+    if (originalAgentMailApiKey === undefined) delete process.env.AGENTMAIL_API_KEY;
+    else process.env.AGENTMAIL_API_KEY = originalAgentMailApiKey;
+  }
+
   const persisted = JSON.parse(await readFile(process.env.HIVEMINDOS_AGENT_MAILBOX_STORE_PATH, "utf8"));
-  assert.equal(persisted.mailboxes.length, 2);
+  assert.equal(persisted.mailboxes.length, 3);
   assert.doesNotMatch(JSON.stringify(persisted), /password|secret|token/i, "mailbox store should not persist provider secrets");
 
   const routeSource = readFileSync("src/app/api/agents/mailbox/route.ts", "utf8");

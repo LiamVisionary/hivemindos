@@ -127,6 +127,9 @@ const stalledMinDone = () => envNum("HIVEMINDOS_COMPANY_STALL_MIN_DONE", 8);
 // HIVEMINDOS_COMPANY_REVENUE_NUDGE=0 to silence it entirely.
 const revenueNudgeTtlMs = () => envNum("HIVEMINDOS_COMPANY_REVENUE_NUDGE_TTL_MS", 7 * 86_400_000); // weekly
 const revenueNudgeMinAgeMs = () => envNum("HIVEMINDOS_COMPANY_REVENUE_NUDGE_MIN_AGE_MS", 7 * 86_400_000); // 7-day grace
+// Auto-pause "you have N approvals waiting" re-notify cadence — a paused company
+// is otherwise silent, so remind at most this often (deduped by company key).
+const autonomyPauseNudgeTtlMs = () => envNum("HIVEMINDOS_COMPANY_PAUSE_NUDGE_TTL_MS", 6 * 3_600_000); // 6h
 // Standby instances (lease held elsewhere) re-check the lease this often — a
 // tiny file read — so a killed holder is replaced within about a minute.
 const standbyPollMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_STANDBY_POLL_MS", 60_000);
@@ -328,6 +331,32 @@ export function companyHasActiveWork(
   });
 }
 
+/**
+ * Count this company's items currently "waiting on a human" — tasks it owns that
+ * sit in the needs-human lane — honoring the pause config's count mode. "all"
+ * (the default) counts every such task; "deliverable-kinds" counts only those
+ * carrying a deliverable of a configured kind (e.g. just website approvals). An
+ * absent/empty kind list falls back to counting all: a mode must never silently
+ * count zero and defeat the backpressure it exists to apply.
+ */
+export function countCompanyWaitingOnHuman(
+  tasks: Array<Pick<import("@/lib/types/kanban").KanbanTask, "status" | "source" | "deliverables">>,
+  companyId: string,
+  pause?: import("@/lib/types/company").CompanyAutonomyPause,
+): number {
+  const companyPrefix = `company:${companyId}:`;
+  const kinds =
+    pause?.countMode === "deliverable-kinds" && (pause.deliverableKinds?.length ?? 0) > 0
+      ? new Set(pause.deliverableKinds)
+      : null;
+  return tasks.filter((t) => {
+    if (t.status !== "needs-human") return false;
+    if (!(t.source ?? "").startsWith(companyPrefix)) return false;
+    if (!kinds) return true;
+    return (t.deliverables ?? []).some((d) => kinds.has(d.kind));
+  }).length;
+}
+
 async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof readCompanies>>, fleet: QueenBeeFleetMachine[]): Promise<void> {
   // If the board can't be read we can't tell whether the crew is idle — a throw
   // bubbles to the loop and we skip this pass rather than re-dispatch blind.
@@ -375,6 +404,29 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       // Crew already has live work → let it finish before re-dispatching.
       const idents = memberIdentities(scoped);
       if (companyHasActiveWork(tasks, idents, company.id)) continue;
+
+      // Approval backpressure: once too many items are already waiting on a human,
+      // stop planning NEW work so the Needs You lane can't silently balloon to
+      // hundreds. This only gates FRESH dispatch (in-flight work drained above) and
+      // auto-releases the moment the human clears enough to drop back under the
+      // threshold — no Stop button, no permanent halt. A low-severity, in-app-only
+      // nudge (deduped per company) tells the operator why the company went quiet.
+      const pauseThreshold = company.autonomyPause?.maxWaitingOnHuman ?? 0;
+      if (pauseThreshold > 0) {
+        const waiting = countCompanyWaitingOnHuman(tasks, company.id, company.autonomyPause);
+        if (waiting >= pauseThreshold) {
+          console.log(`[company-autonomy-driver] ${company.id}: paused — ${waiting} item(s) waiting on a human (threshold ${pauseThreshold}), skipping dispatch`);
+          await notifyEscalation({
+            key: `company-autonomy-paused:${company.id}`,
+            title: `${company.name}: paused — ${waiting} waiting on you`,
+            body: `Autonomy is paused: ${waiting} item(s) are waiting on your approval (threshold ${pauseThreshold}), so no new work will be planned until you clear some. Open the Needs You lane to review — it resumes on its own once the count drops below ${pauseThreshold}.`,
+            severity: "low",
+            ttlMs: autonomyPauseNudgeTtlMs(),
+            tags: ["company", "paused"],
+          }).catch(() => undefined);
+          continue;
+        }
+      }
 
       // Progress-gated cadence: if the LAST batch drained without completing any
       // work, the company is stuck — re-planning the same goal immediately just

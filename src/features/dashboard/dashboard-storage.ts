@@ -1,6 +1,7 @@
 import { DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_KINDS, buildAgentCallPreferences, normalizeAgentRuntime, type AgentProfile, type AgentRuntime, type AgentRuntimeKind, type CustomWorkerClassProfile, type RuntimeCapabilities, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
+import { ONBOARDING_BRAIN_LOOPS } from "@/lib/config/brain-loops";
 import { RESEARCH_STORM_SKILL_SLUG, normalizeResearchMethod } from "@/lib/config/research-methods";
 import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 import { normalizeAgentLocalDataDir } from "@/lib/utils/agent-local-data-dir";
@@ -349,6 +350,33 @@ export function parseStoredSchedules(snapshot: DashboardStateSnapshot = {}): Age
   } catch {
     return [];
   }
+}
+
+const MAX_PERSISTED_SCHEDULES = 120;
+const PINNED_SCHEDULE_IDS = new Set(ONBOARDING_BRAIN_LOOPS.map((loop) => loop.scheduleId));
+
+export function compactSchedulesForPersist(schedules: AgentSchedule[]): AgentSchedule[] {
+  if (schedules.length <= MAX_PERSISTED_SCHEDULES) return schedules;
+  const selected = schedules.slice(0, MAX_PERSISTED_SCHEDULES);
+  const selectedIds = new Set(selected.map((schedule) => schedule.id));
+  const scheduleOrder = new Map(schedules.map((schedule, index) => [schedule.id, index]));
+
+  for (const schedule of schedules.slice(MAX_PERSISTED_SCHEDULES)) {
+    if (!PINNED_SCHEDULE_IDS.has(schedule.id) || selectedIds.has(schedule.id)) continue;
+    let replaceIndex = -1;
+    for (let index = selected.length - 1; index >= 0; index -= 1) {
+      if (!PINNED_SCHEDULE_IDS.has(selected[index].id)) {
+        replaceIndex = index;
+        break;
+      }
+    }
+    if (replaceIndex < 0) break;
+    selectedIds.delete(selected[replaceIndex].id);
+    selected[replaceIndex] = schedule;
+    selectedIds.add(schedule.id);
+  }
+
+  return selected.sort((left, right) => (scheduleOrder.get(left.id) ?? 0) - (scheduleOrder.get(right.id) ?? 0));
 }
 
 export function parseStoredChatFolders(snapshot: DashboardStateSnapshot = {}): ChatCustomFolder[] {

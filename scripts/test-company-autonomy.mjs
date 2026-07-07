@@ -20,6 +20,7 @@ process.env.QUEEN_BEE_AUTONOMOUS_PICKUP = "0"; // routing must not fire network 
 
 const {
   companyHasActiveWork,
+  countCompanyWaitingOnHuman,
   rememberCompanyDriverSelfBase,
   rememberCompanyDriverSelfPort,
   resolveCompanyDriverSelfBases,
@@ -66,6 +67,49 @@ try {
     companyHasActiveWork([{ status: "done", assignee: "hermes-alpha", source: "company:co-one:r1" }], idents, companyId),
     false,
     "finished work does not count",
+  );
+
+  // ── countCompanyWaitingOnHuman: approval backpressure counting ────────────
+  const waitTasks = [
+    { status: "needs-human", source: "company:co-one:a", deliverables: [{ kind: "website" }] },
+    { status: "needs-human", source: "company:co-one:b", deliverables: [{ kind: "website" }] },
+    { status: "needs-human", source: "company:co-one:c", deliverables: [{ kind: "document" }] },
+    { status: "needs-human", source: "company:co-one:d" }, // waiting, but no deliverable attached yet
+    { status: "working", source: "company:co-one:e", deliverables: [{ kind: "website" }] }, // in flight, not waiting
+    { status: "needs-human", source: "company:co-two:f", deliverables: [{ kind: "website" }] }, // another company
+  ];
+  assert.equal(
+    countCompanyWaitingOnHuman(waitTasks, "co-one"),
+    4,
+    "all-mode (default) counts every needs-human task for the company, excluding other statuses + companies",
+  );
+  assert.equal(
+    countCompanyWaitingOnHuman(waitTasks, "co-one", { maxWaitingOnHuman: 5, countMode: "all" }),
+    4,
+    "explicit all-mode matches the default",
+  );
+  assert.equal(
+    countCompanyWaitingOnHuman(waitTasks, "co-one", {
+      maxWaitingOnHuman: 5,
+      countMode: "deliverable-kinds",
+      deliverableKinds: ["website"],
+    }),
+    2,
+    "deliverable-kinds mode counts only needs-human tasks carrying a website deliverable",
+  );
+  assert.equal(
+    countCompanyWaitingOnHuman(waitTasks, "co-one", {
+      maxWaitingOnHuman: 5,
+      countMode: "deliverable-kinds",
+      deliverableKinds: [],
+    }),
+    4,
+    "deliverable-kinds mode with no kinds falls back to counting all (never silently zero)",
+  );
+  assert.equal(
+    countCompanyWaitingOnHuman(waitTasks, "co-two"),
+    1,
+    "cross-company isolation: co-two sees only its own waiting item",
   );
 
   // ── pending predicate ─────────────────────────────────────────────────────

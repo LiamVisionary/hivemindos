@@ -24,6 +24,7 @@ import { Publish } from "./Publish";
 import { useSimData, type SimLaunchMode, type SimLaunchModeStatus } from "./sim-context";
 import { SimViewProvider } from "./sim-view-context";
 import type { Run, TemplateId } from "./sim-data";
+import { MIROSHARK_X402_SIMULATION_PRICE_LABEL } from "@/lib/config/miroshark-x402";
 
 const MODES = [
   { id: "kanban", label: "Workboard" },
@@ -146,7 +147,7 @@ function LaunchSplitButton({ modes, onPick, onOpenWallets }: {
               <>
                 <LaunchModeRow status={modes.local} label="Local MiroShark" sub="Runs on your own or a connected fleet MiroShark. Free." onClick={() => pickMode("local")} />
                 <div style={{ height: 1, background: "var(--line)", margin: "4px 8px" }} />
-                <LaunchModeRow status={modes.x402} label="Paid run · x402" sub="Runs on the hosted MiroShark. Pays ~$1 USDC from a wallet." onClick={() => pickMode("x402")} />
+                <LaunchModeRow status={modes.x402} label="Paid run · x402" sub={`Runs on the hosted MiroShark. Pays ~${MIROSHARK_X402_SIMULATION_PRICE_LABEL} from a wallet.`} onClick={() => pickMode("x402")} />
               </>
             ) : (
               <div style={{ padding: "12px 12px 10px" }}>
@@ -155,7 +156,7 @@ function LaunchSplitButton({ modes, onPick, onOpenWallets }: {
                   <span style={{ fontSize: 13, fontWeight: 600 }}>No wallet for paid runs</span>
                 </div>
                 <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>
-                  A paid x402 run charges ~$1 USDC, so it needs a wallet. Open the Wallets tab to create or import one first?
+                  A paid x402 run charges ~{MIROSHARK_X402_SIMULATION_PRICE_LABEL}, so it needs a wallet. Open the Wallets tab to create or import one first?
                 </p>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
                   <Button variant="ghost" sm onClick={() => setView("menu")}>Not now</Button>
