@@ -109,7 +109,7 @@ export function AdaptiveProviderSettings({
   };
   const providerRows = [
     { slug: "openrouter", name: "OpenRouter", ready: configuredProviderSlugs.has("openrouter"), detail: configuredProviderSlugs.has("openrouter") ? "Runtime provider configured" : "Uses OPENROUTER_API_KEY when present" },
-    { slug: "lm-studio", name: "Local OpenAI", ready: configuredProviderSlugs.has("lm-studio"), detail: configuredProviderSlugs.has("lm-studio") ? "Local provider discovered" : "Enable when local models are available" },
+    { slug: "lm-studio", name: "Local", ready: configuredProviderSlugs.has("lm-studio"), detail: configuredProviderSlugs.has("lm-studio") ? "Local provider discovered" : "Enable when local models are available" },
     { slug: "ollama", name: "Ollama", ready: configuredProviderSlugs.has("ollama"), detail: configuredProviderSlugs.has("ollama") ? "Local provider discovered" : "Enable when Ollama is configured" },
     { slug: "bankr", name: "Bankr LLM", ready: bankrLlmSelected || configuredProviderSlugs.has("bankr"), detail: bankrLlmSelected || configuredProviderSlugs.has("bankr") ? "Gateway selected or discovered" : "Uses BANKR_LLM_KEY when present" },
     { slug: "usepod", name: "UsePod", ready: usePodSetupComplete || configuredProviderSlugs.has("usepod"), detail: usePodSetupComplete ? "Marketplace balance ready" : "Requires UsePod setup" },

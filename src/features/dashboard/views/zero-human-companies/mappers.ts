@@ -13,6 +13,7 @@ import type {
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
 import { computeLoopCapabilityCapital } from "@/lib/services/loops";
+import { extractWorkBoardPipelineImpact, extractWorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
 import type {
   Agent,
   AgentState,
@@ -261,6 +262,7 @@ export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<str
     const usedCount = usedKeys.get(candidateKey) ?? 0;
     usedKeys.set(candidateKey, usedCount + 1);
     const key = usedCount === 0 ? candidateKey : `${candidateKey}-${usedCount + 1}`;
+    const pipelineImpact = t.status === "needs-human" ? extractWorkBoardPipelineImpact(t) ?? undefined : undefined;
 
     return {
       key,
@@ -269,6 +271,7 @@ export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<str
       agent: resolveAssigneeName(t.assignee, byId, names),
       pri: (t.priority && PRIORITY_TO_PRI[t.priority]) || "med",
       pts: Math.max(1, Math.min(8, t.skills?.length || 1)),
+      pipelineImpact,
       // Carry the real Work Board record so the cockpit can open the task's
       // actual output (result, deliverables, receipts) instead of a dead card.
       work: {
@@ -281,6 +284,7 @@ export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<str
         machineName: t.targetMachine?.name || undefined,
         updatedAt: t.updatedAt,
         completedAt: t.completedAt,
+        pipelineImpact,
       },
     };
   });
@@ -438,6 +442,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
   const status = deriveStatus(company, agents, approvals, alignment, hasWork);
   const burn = deriveBurn(company, rollup, agents);
   const capabilityCapital = deriveCapabilityCapital(company, rollup, liveTasks, agents);
+  const pipeline = extractWorkBoardPipelineSummary(liveTasks) ?? undefined;
 
   const unit = company.apexGoal?.unit;
   const apex = {
@@ -504,6 +509,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     capabilityCapital,
     revenue,
     revenueShare,
+    pipeline,
     velocity: deriveVelocity(liveTasks),
     approvals: approvals.map((a) => mapApproval(a, company.dailyBudgetUsd)),
     agents,
@@ -515,6 +521,8 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     hasApexGoal: Boolean(company.apexGoal?.title?.trim()),
     autonomy: Boolean(company.autonomy),
     directives: company.directives,
+    approvalPolicies: company.approvalPolicies,
+    importedOperations: company.importedOperations,
     products: company.products,
     pricingProposals: company.pricingProposals,
     // Raw values for the edit form — the user's own input, not the derived

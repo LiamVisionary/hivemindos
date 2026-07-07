@@ -33,13 +33,20 @@ async function attachQueenVoiceBrain(
 
 async function proxyCollectorIntegration(runtime: AgentRuntime, collectorUrl: string, body: { agent?: AgentProfile; action?: string; input?: Record<string, unknown> }) {
   const base = normalizeCollectorUrl(collectorUrl);
+  const timeoutMs = body.action === "install-runtime" || body.action === "install-local-runtime"
+    ? 900_000
+    : body.action === "load-model" || body.action === "start-local-runtime" || body.action === "smoke-test-local-model"
+      ? 240_000
+      : body.action === "hermes-update"
+        ? 330_000
+        : 30_000;
   const response = await fetch(`${base}/runtimes/${runtime}/integrations`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    // Runtime installs (npm/uv, plus a possible uv bootstrap; OpenHands pulls
-    // CPython + a large dep tree) can run many minutes; give them a 15-min budget.
-    signal: AbortSignal.timeout(body.action === "install-runtime" ? 900_000 : body.action === "hermes-update" ? 330_000 : 30_000),
+    // Runtime installs (npm/uv, possible uv bootstrap, OpenHands CPython deps,
+    // and Local model backend installers) can run many minutes.
+    signal: AbortSignal.timeout(timeoutMs),
     cache: "no-store",
   });
   const data = await response.json().catch(() => null) as Record<string, unknown> | null;

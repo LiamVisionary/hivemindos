@@ -42,7 +42,8 @@ export function PersistentHiveChat({
   // Only while there IS history AND it's hidden — once expanded, the bubble's
   // own down-tail is the collapse control (see TranscriptTurns), so the input
   // edge stays clean.
-  const showExpandTab = queenChat.turns.length > 0 && queenChat.historyMinimized;
+  const showExpandTab = queenChat.turns.length > 0 && !queenChat.transcriptExpanded;
+  const isBrainRoute = screenContext?.view === "vault";
   const historyTab = showExpandTab ? (
     <button
       type="button"
@@ -81,8 +82,9 @@ export function PersistentHiveChat({
       }}
     >
       <ChatPill
-        placeholder="Ask the hive to dispatch a task…"
+        placeholder={isBrainRoute ? "Ask Queen Bee about this brain..." : "Ask the hive to dispatch a task..."}
         tone={tone}
+        onComposerActiveChange={queenChat.setComposerActive}
         // The full-width fixed dock owns centering; the pill itself opts back
         // into pointer events and stays out of any dashboard layout math.
         wrapStyle={{

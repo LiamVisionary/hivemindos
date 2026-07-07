@@ -44,9 +44,9 @@ export function AgentToolsPanel({ activeView, displayAgents, fleetClass, setActi
     <section className={fleetClass("taskPanel", "tabPanel")}>
       <div className={fleetClass("taskPanelHeader")}>
         <div>
-          <p className="eyebrow">Tools</p>
-          <h2>Callable handles for agents</h2>
-          <p>Apps are providers; tools are the handles agents receive from built-ins, runtimes, and installed services.</p>
+          <p className="eyebrow">Capability Store</p>
+          <h2>What agents can invoke</h2>
+          <p>Capability search maps a user intent to built-ins, runtime skills, mini apps, installed services, credentials, and safe execution routes.</p>
         </div>
         <Button type="button" size="sm" variant="secondary" onClick={() => setActiveView("my-apps")}>
           <AppWindow aria-hidden="true" />
@@ -57,7 +57,7 @@ export function AgentToolsPanel({ activeView, displayAgents, fleetClass, setActi
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <MetricCard label="Built-ins" value={BUILT_IN_AGENT_TOOLS.length} detail="Native handles available without installing an app." />
         <MetricCard label="Runtime exposure" value={displayAgents.length} detail="Configured agents that can receive runtime-specific tools." />
-        <MetricCard label="App handles" value={appHandleCount} detail="Installable provider handles from the Apps catalog." />
+        <MetricCard label="App handles" value={appHandleCount} detail="Mini-app and installable provider handles from the Apps catalog." />
       </div>
 
       <section className="mt-6">

@@ -60,7 +60,6 @@ import { agentDid, signWorkReceipt } from "./agent-identity.mjs";
 import { createConfigureSyncthingFolder } from "./syncthing-configure.mjs";
 import { createSyncthingRepair } from "./syncthing-repair.mjs";
 import {
-  RUNTIME_PORTABLE_STATE,
   portableStateManifest,
   portableStateRuntimes,
   packPortableState,
@@ -72,6 +71,13 @@ import {
   unpackTarToDir,
 } from "./lib/runtime-portable-state.mjs";
 import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
+import {
+  recordCollectorTelemetry,
+  safeTelemetryText,
+  summarizeHermesDbSessionTimeline,
+  summarizeHermesProcessPayload,
+} from "./lib/hermes-api-proxy-telemetry.mjs";
+import { discoverLocalOpenAiServers } from "./lib/local-openai-server-discovery.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
 import { tailnetSelfNode } from "./lib/tailnet-self.mjs";
 import {
@@ -3798,7 +3804,7 @@ function localOpenAiBase(agent = {}) {
 
 function localOpenAiProviderName(agent = {}) {
   const provider = String(agent.provider || "openai-compatible").trim();
-  if (provider === "lm-studio") return "LM Studio";
+  if (provider === "lm-studio") return "Local";
   if (provider === "ollama") return "Ollama";
   if (provider === "vllm") return "vLLM";
   if (provider === "llamacpp") return "llama.cpp";
@@ -3808,6 +3814,173 @@ function localOpenAiProviderName(agent = {}) {
 function localOpenAiHeaders(agent = {}) {
   const token = String(agent.token || "").trim();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+const LOCAL_MODEL_INSTALL_CATALOG = [
+  {
+    id: "swarm-scout-12b-q4-k-m",
+    displayName: "Swarm Scout 12B",
+    provider: "huggingface",
+    hfRepo: "LiamVisionary/swarm-sovereign-scout-12b-GGUF",
+    sourceUrl: "https://huggingface.co/LiamVisionary/swarm-sovereign-scout-12b-GGUF",
+    quantization: "Q4_K_M",
+    filename: "swarm-sovereign-scout-Q4_K_M.gguf",
+    params: "12B",
+    sizeGb: 7.4,
+    minRamGb: 16,
+    description:
+      "Coding and agentic local model tuned for terminal workflows, reasoning, and autonomous task loops.",
+    roles: ["chat"],
+    capabilities: ["text-generation", "tool-use", "coding"],
+    tags: ["coding", "agentic", "reasoning", "GGUF"],
+    matchKeys: [
+      "swarm-scout-12b-q4-k-m",
+      "swarm-sovereign-scout-Q4_K_M.gguf",
+      "swarm-sovereign-scout-Q4_K_M",
+      "LiamVisionary/swarm-sovereign-scout-12b-GGUF",
+      "swarm-sovereign-scout-12b-GGUF:Q4_K_M",
+    ],
+  },
+];
+
+const activeLocalModelDownloadStates = new Set(["queued", "downloading"]);
+const localModelDownloadJobs = new Map();
+
+function localModelCatalogEntry(id) {
+  return LOCAL_MODEL_INSTALL_CATALOG.find((entry) => entry.id === id);
+}
+
+function lmStudioDownloadArgsForCatalogEntry(entry) {
+  return ["get", `${entry.sourceUrl}@${entry.quantization}`, "--gguf", "-y"];
+}
+
+function cloneLocalModelDownloadJob(job) {
+  return { ...job };
+}
+
+function patchLocalModelDownloadJob(jobId, patch = {}) {
+  const record = localModelDownloadJobs.get(jobId);
+  if (!record) return;
+  record.job = { ...record.job, ...patch, updatedAt: new Date().toISOString() };
+}
+
+function snapshotLocalModelDownloadJobs() {
+  return [...localModelDownloadJobs.values()]
+    .map((record) => cloneLocalModelDownloadJob(record.job))
+    .sort((left, right) =>
+      String(right.startedAt || "").localeCompare(String(left.startedAt || "")),
+    )
+    .slice(0, 12);
+}
+
+function activeLocalModelDownload(modelId) {
+  return [...localModelDownloadJobs.values()].find(
+    (record) =>
+      record.job.modelId === modelId &&
+      activeLocalModelDownloadStates.has(record.job.state),
+  );
+}
+
+function parseLocalModelDownloadProgress(message) {
+  const match = String(message || "").match(/(\d+(?:\.\d+)?)\s*%/);
+  if (!match) return undefined;
+  const progressPercent = Number(match[1]);
+  return Number.isFinite(progressPercent)
+    ? Math.max(0, Math.min(100, progressPercent))
+    : undefined;
+}
+
+function rememberLocalModelDownloadOutput(jobId, chunk) {
+  const record = localModelDownloadJobs.get(jobId);
+  if (!record) return;
+  const lines = String(chunk || "")
+    .split(/\r?\n|\r/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return;
+  record.log.push(...lines);
+  if (record.log.length > 20) record.log.splice(0, record.log.length - 20);
+  const message = lines.at(-1) || "";
+  patchLocalModelDownloadJob(jobId, {
+    message,
+    progressPercent:
+      parseLocalModelDownloadProgress(message) ?? record.job.progressPercent,
+  });
+}
+
+function latestLocalModelDownloadMessage(record) {
+  return record?.log?.at(-1) || record?.job?.message;
+}
+
+function localModelHardwareSnapshot() {
+  const bytesToGb = (value) => Math.round((value / 1_000_000_000) * 10) / 10;
+  const currentPlatform = platform();
+  const currentArch = arch();
+  return {
+    totalRamGb: bytesToGb(totalmem()),
+    freeRamGb: bytesToGb(freemem()),
+    platform: currentPlatform,
+    arch: currentArch,
+    appleSilicon: currentPlatform === "darwin" && currentArch === "arm64",
+  };
+}
+
+function normalizeCatalogMatch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function lmStudioModelMatchesCatalogEntry(model, entry) {
+  const rawHaystack = [
+    model.key,
+    model.displayName,
+    model.paramsString || "",
+    model.format || "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  const compactHaystack = normalizeCatalogMatch(rawHaystack);
+  return entry.matchKeys.some((matchKey) => {
+    const rawNeedle = String(matchKey || "").toLowerCase();
+    const compactNeedle = normalizeCatalogMatch(matchKey);
+    return (
+      rawHaystack.includes(rawNeedle) ||
+      Boolean(compactNeedle && compactHaystack.includes(compactNeedle))
+    );
+  });
+}
+
+function annotateLocalModelInstallCatalog(models = []) {
+  return LOCAL_MODEL_INSTALL_CATALOG.map((entry) => {
+    const installed = models.find(
+      (model) =>
+        model.source !== "openai-server" && !model.remote && lmStudioModelMatchesCatalogEntry(model, entry),
+    );
+    return {
+      ...entry,
+      installed: Boolean(installed),
+      loaded: Boolean(installed?.loaded),
+      installedModelKey: installed?.key,
+      loadedInstanceIds: installed?.loadedInstanceIds,
+    };
+  });
+}
+
+function localModelHubStatus(models = []) {
+  return {
+    catalog: annotateLocalModelInstallCatalog(models),
+    downloads: snapshotLocalModelDownloadJobs(),
+    hardware: localModelHardwareSnapshot(),
+  };
+}
+
+function localModelRuntimeEnv() {
+  return runtimeProcessEnv({
+    PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
+      .filter(Boolean)
+      .join(delimiter),
+  });
 }
 
 async function resolveLmsBin() {
@@ -3829,15 +4002,213 @@ async function resolveLmsBin() {
   return "lms";
 }
 
+async function execLocalRuntimeText(command, args = [], timeout = 8_000, env = runtimeProcessEnv()) {
+  const { stdout, stderr } = await execFileAsync(command, args, {
+    timeout,
+    maxBuffer: 4_000_000,
+    env,
+  });
+  return [stdout, stderr]
+    .map((chunk) => String(chunk || "").trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+async function runLmsText(args, timeout = 15_000) {
+  return execLocalRuntimeText(await resolveLmsBin(), args, timeout, localModelRuntimeEnv());
+}
+
+function compactLocalRuntimeOutput(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function compactLocalRuntimeError(error, fallback) {
+  return (error instanceof Error ? compactLocalRuntimeOutput(error.message) : fallback).slice(0, 280) || fallback;
+}
+
+function localRuntimeOutputSaysRunning(value) {
+  if (/\b(not running|not started|stopped|offline|down)\b/i.test(String(value || ""))) return false;
+  return /\b(running|started|listening|ready)\b/i.test(String(value || ""));
+}
+
+function lmStudioInstallCommandForPlatform(currentPlatform = platform()) {
+  if (currentPlatform === "win32") return "irm https://lmstudio.ai/install.ps1 | iex";
+  if (currentPlatform === "darwin" || currentPlatform === "linux") return "curl -fsSL https://lmstudio.ai/install.sh | bash";
+  return "";
+}
+
+function ollamaInstallCommandForPlatform(currentPlatform = platform()) {
+  return currentPlatform === "linux" ? "curl -fsSL https://ollama.com/install.sh | sh" : "";
+}
+
+function localOpenAiStatusUrl(agent = {}) {
+  const baseUrl = localOpenAiBase(agent);
+  const statusPath = String(agent.statusPath || "/v1/models");
+  return `${baseUrl}${statusPath.startsWith("/") ? statusPath : `/${statusPath}`}`;
+}
+
+function localOpenAiServerPort(agent = {}) {
+  try {
+    const parsed = new URL(localOpenAiBase(agent));
+    return parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+  } catch {
+    return "1234";
+  }
+}
+
+async function probeLocalOpenAiModels(agent = {}, timeoutMs = 4_000) {
+  try {
+    const payload = await fetchJsonWithTimeout(
+      localOpenAiStatusUrl(agent),
+      { headers: localOpenAiHeaders(agent) },
+      timeoutMs,
+    );
+    const models = Array.isArray(payload.data)
+      ? payload.data.map((model) => String(model?.id || "").trim()).filter(Boolean)
+      : [];
+    return { ok: true, modelCount: models.length, models };
+  } catch (error) {
+    return { ok: false, error: compactLocalRuntimeError(error, "OpenAI endpoint is not reachable.") };
+  }
+}
+
+async function waitForLocalOpenAiModels(agent = {}, timeoutMs = 30_000) {
+  const started = Date.now();
+  let lastProbe = { ok: false, error: "OpenAI endpoint is not reachable yet." };
+  while (Date.now() - started < timeoutMs) {
+    lastProbe = await probeLocalOpenAiModels(agent);
+    if (lastProbe.ok) return lastProbe;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 900));
+  }
+  return lastProbe;
+}
+
+async function localRuntimeSetupStatus(agent = {}) {
+  const hardware = localModelHardwareSnapshot();
+  const lmInstallCommand = lmStudioInstallCommandForPlatform(hardware.platform);
+  let lmsPresent = false;
+  let lmsVersion = "";
+  let lmsError = "";
+  try {
+    lmsVersion = compactLocalRuntimeOutput(await runLmsText(["--version"], 5_000));
+    lmsPresent = true;
+  } catch (error) {
+    lmsError = compactLocalRuntimeError(error, "LM Studio CLI is not installed.");
+  }
+  let daemonRunning = false;
+  let serverRunning = false;
+  if (lmsPresent) {
+    try {
+      daemonRunning = localRuntimeOutputSaysRunning(await runLmsText(["daemon", "status"], 5_000));
+    } catch {
+      daemonRunning = false;
+    }
+    try {
+      serverRunning = localRuntimeOutputSaysRunning(await runLmsText(["server", "status"], 5_000));
+    } catch {
+      serverRunning = false;
+    }
+  }
+  const lmProbe = await probeLocalOpenAiModels(agent);
+  const lmStudio = {
+    id: "lm-studio",
+    label: "LM Studio",
+    present: lmsPresent,
+    ready: lmProbe.ok,
+    running: lmProbe.ok || serverRunning,
+    version: lmsVersion || undefined,
+    detail: lmProbe.ok
+      ? `OpenAI endpoint is ready${typeof lmProbe.modelCount === "number" ? ` with ${lmProbe.modelCount} model${lmProbe.modelCount === 1 ? "" : "s"}` : ""}.`
+      : lmsPresent
+        ? daemonRunning
+          ? "LM Studio is installed and the daemon is running, but the local OpenAI server is stopped."
+          : "LM Studio is installed, but the daemon/server are not ready."
+        : "LM Studio is not installed yet.",
+    error: lmProbe.ok ? undefined : lmsPresent ? lmProbe.error : lmsError,
+    installable: Boolean(lmInstallCommand),
+    installCommand: lmInstallCommand || undefined,
+    manualInstallUrl: "https://lmstudio.ai/download",
+  };
+
+  let ollamaPresent = false;
+  let ollamaVersion = "";
+  let ollamaError = "";
+  try {
+    ollamaVersion = compactLocalRuntimeOutput(await execLocalRuntimeText("ollama", ["--version"], 5_000));
+    ollamaPresent = true;
+  } catch (error) {
+    ollamaError = compactLocalRuntimeError(error, "Ollama CLI is not installed.");
+  }
+  let ollamaReady = false;
+  try {
+    await fetchJsonWithTimeout("http://127.0.0.1:11434/api/tags", {}, 4_000);
+    ollamaReady = true;
+    ollamaPresent = true;
+  } catch (error) {
+    if (ollamaPresent) ollamaError = compactLocalRuntimeError(error, "Ollama API is not reachable.");
+  }
+  const ollamaInstallCommand = ollamaInstallCommandForPlatform(hardware.platform);
+  const ollama = {
+    id: "ollama",
+    label: "Ollama",
+    present: ollamaPresent,
+    ready: ollamaReady,
+    running: ollamaReady,
+    version: ollamaVersion || undefined,
+    detail: ollamaReady ? "Ollama API is reachable." : ollamaPresent ? "Ollama is installed, but its local API is not reachable." : "Ollama is not installed.",
+    error: ollamaReady ? undefined : ollamaError,
+    installable: Boolean(ollamaInstallCommand),
+    installCommand: ollamaInstallCommand || undefined,
+    manualInstallUrl: "https://ollama.com/download",
+  };
+
+  let llamaPresent = false;
+  let llamaVersion = "";
+  let llamaError = "";
+  try {
+    llamaVersion = compactLocalRuntimeOutput(await execLocalRuntimeText("llama-server", ["--version"], 5_000));
+    llamaPresent = true;
+  } catch (error) {
+    llamaError = compactLocalRuntimeError(error, "llama.cpp server CLI is not installed.");
+  }
+  const llamaCpp = {
+    id: "llama-cpp",
+    label: "llama.cpp",
+    present: llamaPresent,
+    ready: false,
+    running: false,
+    version: llamaVersion || undefined,
+    detail: llamaPresent ? "llama-server is installed; start an OpenAI-compatible server to use it as a custom Local endpoint." : "llama.cpp is not installed.",
+    error: llamaPresent ? undefined : llamaError,
+    installable: false,
+    manualInstallUrl: "https://github.com/ggml-org/llama.cpp",
+  };
+
+  return {
+    recommendedProvider: "lm-studio",
+    recommendedLabel: "LM Studio",
+    recommendationReason: "Best fit for this Local provider because HivemindOS can install GGUF models, load/unload them, start the OpenAI-compatible server, and control LM Link through lms.",
+    ready: lmStudio.ready,
+    installable: Boolean(lmStudio.installable),
+    installCommand: lmStudio.installCommand,
+    manualInstallUrl: lmStudio.manualInstallUrl,
+    serverUrl: localOpenAiBase(agent),
+    hardware,
+    providers: [lmStudio, ollama, llamaCpp],
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 async function runLmsJson(args, timeout = 15_000) {
   const { stdout } = await execFileAsync(await resolveLmsBin(), args, {
     timeout,
     maxBuffer: 8_000_000,
-    env: runtimeProcessEnv({
-      PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
-        .filter(Boolean)
-        .join(delimiter),
-    }),
+    env: localModelRuntimeEnv(),
   });
   const trimmed = stdout.trim();
   if (!trimmed) return [];
@@ -3901,6 +4272,11 @@ function normalizeLmStudioInventory(payload = {}) {
           ? Number(model.size_bytes ?? model.sizeBytes)
           : null,
         format: model.format ?? null,
+        remote: Boolean(model.deviceIdentifier),
+        source: model.deviceIdentifier ? "lm-link" : "lm-studio",
+        sourceLabel: model.deviceIdentifier ? "LM Link" : "LM Studio",
+        canLoad: true,
+        canUnload: true,
       };
     })
     .filter(Boolean);
@@ -3914,8 +4290,9 @@ function normalizeLmStudioInventory(payload = {}) {
 
 function markLoadedLmStudioModels(models, loadedModels = []) {
   const loadedRefs = new Set(
-    loadedModels.flatMap((model) =>
-      [
+    loadedModels.flatMap((model) => {
+      if (typeof model === "string") return [model.trim()].filter(Boolean);
+      return [
         model?.identifier,
         model?.modelKey,
         model?.key,
@@ -3923,8 +4300,8 @@ function markLoadedLmStudioModels(models, loadedModels = []) {
         model?.displayName,
       ]
         .map((value) => String(value || "").trim())
-        .filter(Boolean),
-    ),
+        .filter(Boolean);
+    }),
   );
   return models.map((model) =>
     loadedRefs.has(model.key) || loadedRefs.has(model.displayName)
@@ -3939,15 +4316,225 @@ function markLoadedLmStudioModels(models, loadedModels = []) {
   );
 }
 
+function loadedModelsFromLmLinkStatus(payload) {
+  return (Array.isArray(payload?.peers) ? payload.peers : []).flatMap((peer) =>
+    Array.isArray(peer?.loadedModels) ? peer.loadedModels : [],
+  );
+}
+
 async function readLmStudioCliInventory() {
-  const [models, loaded] = await Promise.all([
+  const [models, loaded, linkStatus] = await Promise.all([
     runLmsJson(["ls", "--json"]),
     runLmsJson(["ps", "--json"]).catch(() => []),
+    runLmsJson(["link", "status", "--json"]).catch(() => null),
   ]);
   return markLoadedLmStudioModels(
     normalizeLmStudioInventory(models),
-    Array.isArray(loaded) ? loaded : [],
+    [
+      ...(Array.isArray(loaded) ? loaded : []),
+      ...loadedModelsFromLmLinkStatus(linkStatus),
+    ],
   );
+}
+
+async function startLocalModelDownload(input = {}) {
+  const modelId = String(input.modelId || input.model || "").trim();
+  const entry = localModelCatalogEntry(modelId);
+  if (!entry)
+    return { ok: false, error: "Choose a model from the local install catalog." };
+  const active = activeLocalModelDownload(entry.id);
+  if (active) {
+    return {
+      ok: true,
+      message: `${entry.displayName} is already ${active.job.state}.`,
+      job: cloneLocalModelDownloadJob(active.job),
+    };
+  }
+  const now = new Date().toISOString();
+  const jobId = `${entry.id}-${Date.now()}`;
+  const job = {
+    jobId,
+    modelId: entry.id,
+    displayName: entry.displayName,
+    state: "queued",
+    message: "Queued in LM Studio",
+    startedAt: now,
+    updatedAt: now,
+  };
+  localModelDownloadJobs.set(jobId, { job, log: [] });
+  const child = spawn(await resolveLmsBin(), lmStudioDownloadArgsForCatalogEntry(entry), {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: localModelRuntimeEnv(),
+  });
+  const record = localModelDownloadJobs.get(jobId);
+  if (record) record.child = child;
+  patchLocalModelDownloadJob(jobId, {
+    state: "downloading",
+    message: "Downloading with LM Studio",
+  });
+  child.stdout?.on("data", (chunk) => rememberLocalModelDownloadOutput(jobId, chunk));
+  child.stderr?.on("data", (chunk) => rememberLocalModelDownloadOutput(jobId, chunk));
+  child.on("error", (error) => {
+    patchLocalModelDownloadJob(jobId, {
+      state: "failed",
+      error: error instanceof Error ? error.message : "LM Studio download failed.",
+      message: "Download failed",
+    });
+  });
+  child.on("close", (code, signal) => {
+    const current = localModelDownloadJobs.get(jobId);
+    if (current?.job?.state === "cancelled") return;
+    if (code === 0) {
+      patchLocalModelDownloadJob(jobId, {
+        state: "completed",
+        progressPercent: 100,
+        message: "Download complete",
+      });
+      return;
+    }
+    patchLocalModelDownloadJob(jobId, {
+      state: "failed",
+      error:
+        latestLocalModelDownloadMessage(current) ||
+        `LM Studio exited with ${code ?? signal ?? "an error"}.`,
+      message: "Download failed",
+    });
+  });
+  return {
+    ok: true,
+    message: `Started downloading ${entry.displayName} in LM Studio.`,
+    job: cloneLocalModelDownloadJob(localModelDownloadJobs.get(jobId)?.job || job),
+  };
+}
+
+async function cancelLocalModelDownload(input = {}) {
+  const jobId = String(input.jobId || "").trim();
+  const modelId = String(input.modelId || input.model || "").trim();
+  const record = jobId
+    ? localModelDownloadJobs.get(jobId)
+    : [...localModelDownloadJobs.values()].find(
+        (candidate) =>
+          candidate.job.modelId === modelId &&
+          activeLocalModelDownloadStates.has(candidate.job.state),
+      );
+  if (!record) return { ok: false, error: "No active local model download was found." };
+  record.child?.kill("SIGTERM");
+  patchLocalModelDownloadJob(record.job.jobId, {
+    state: "cancelled",
+    message: "Download cancelled",
+  });
+  return {
+    ok: true,
+    message: `Cancelled ${record.job.displayName || record.job.modelId}.`,
+    job: cloneLocalModelDownloadJob(record.job),
+  };
+}
+
+async function installLocalModelRuntime() {
+  const installCommand = lmStudioInstallCommandForPlatform();
+  if (!installCommand) {
+    return {
+      ok: false,
+      error: "This platform does not have an in-app LM Studio installer yet. Use https://lmstudio.ai/download, then refresh Local models.",
+    };
+  }
+  if (platform() === "win32") {
+    await execFileAsync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", installCommand], {
+      timeout: 900_000,
+      maxBuffer: 8_000_000,
+      env: runtimeProcessEnv(),
+    });
+  } else {
+    await execFileAsync("bash", ["-lc", installCommand], {
+      timeout: 900_000,
+      maxBuffer: 8_000_000,
+      env: runtimeProcessEnv(),
+    });
+  }
+  return { ok: true, message: "LM Studio installed. Start the Local server before loading a model." };
+}
+
+async function startLocalModelRuntime(agent = {}) {
+  const setup = await localRuntimeSetupStatus(agent);
+  const lmStudio = setup.providers.find((provider) => provider.id === "lm-studio");
+  if (!lmStudio?.present) return { ok: false, error: "Install LM Studio before starting the Local server." };
+  const lmsBin = await resolveLmsBin();
+  await execFileAsync(lmsBin, ["daemon", "up"], {
+    timeout: 120_000,
+    maxBuffer: 2_000_000,
+    env: localModelRuntimeEnv(),
+  }).catch(() => undefined);
+  let startError = "";
+  await execFileAsync(lmsBin, ["server", "start", "--port", localOpenAiServerPort(agent), "--bind", "127.0.0.1"], {
+    timeout: 120_000,
+    maxBuffer: 2_000_000,
+    env: localModelRuntimeEnv(),
+  }).catch((error) => {
+    startError = compactLocalRuntimeError(error, "LM Studio server start failed.");
+  });
+  const probe = await waitForLocalOpenAiModels(agent, 30_000);
+  if (probe.ok) {
+    return {
+      ok: true,
+      message: `Local server is ready at ${localOpenAiBase(agent)}${typeof probe.modelCount === "number" ? ` with ${probe.modelCount} model${probe.modelCount === 1 ? "" : "s"}` : ""}.`,
+    };
+  }
+  return {
+    ok: false,
+    error: `LM Studio server did not become ready at ${localOpenAiBase(agent)}. ${probe.error || startError || ""}`.trim(),
+  };
+}
+
+async function verifyLocalModelLoad(agent = {}, model = "", loadMessage = "Loaded model in LM Studio.") {
+  const started = await startLocalModelRuntime(agent);
+  if (started.ok === false) return started;
+  const probe = await waitForLocalOpenAiModels(agent, 20_000);
+  if (!probe.ok) {
+    return { ok: false, error: `Loaded ${model}, but the OpenAI endpoint could not be verified. ${probe.error || ""}`.trim() };
+  }
+  return { ok: true, message: `${loadMessage} ${started.message || "Local server verified."}` };
+}
+
+async function smokeTestLocalModel(agent = {}, input = {}) {
+  const baseUrl = typeof input.baseUrl === "string" ? input.baseUrl.trim().replace(/\/+$/, "") : "";
+  const testAgent = baseUrl
+    ? {
+        ...agent,
+        gatewayUrl: baseUrl,
+        chatPath: typeof input.chatPath === "string" && input.chatPath.trim() ? input.chatPath.trim() : "/v1/chat/completions",
+        statusPath: typeof input.statusPath === "string" && input.statusPath.trim() ? input.statusPath.trim() : "/v1/models",
+      }
+    : agent;
+  const model = String(input.model || agent.model || "").trim();
+  if (!model) return { ok: false, error: "Choose a loaded model before running a smoke test." };
+  if (input.startServer !== false) {
+    const server = await startLocalModelRuntime(agent);
+    if (server.ok === false) return server;
+  } else {
+    const probe = await probeLocalOpenAiModels(testAgent);
+    if (!probe.ok) return { ok: false, error: probe.error || "Local model server is not reachable." };
+  }
+  const chatPath = String(testAgent.chatPath || "/v1/chat/completions");
+  const response = await fetch(`${localOpenAiBase(testAgent)}${chatPath.startsWith("/") ? chatPath : `/${chatPath}`}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...localOpenAiHeaders(testAgent) },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: "Reply with OK." },
+        { role: "user", content: "ping" },
+      ],
+      max_tokens: 8,
+      temperature: 0,
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = typeof data?.error === "string" ? data.error : data?.error?.message || `Smoke test returned ${response.status}`;
+    return { ok: false, error };
+  }
+  return { ok: true, message: `${model} answered the Local smoke test.` };
 }
 
 async function localOpenAiIntegrationStatus(agent = {}) {
@@ -3957,6 +4544,7 @@ async function localOpenAiIntegrationStatus(agent = {}) {
   const baseUrl = localOpenAiBase(agent);
   const diagnostics = [];
   let lmStudioModels = [];
+  let localServers = [];
   let openAiModels = [];
   let inventoryError = "";
   let inventorySource = "";
@@ -3991,6 +4579,43 @@ async function localOpenAiIntegrationStatus(agent = {}) {
       }
     }
   }
+  try {
+    localServers = await discoverLocalOpenAiServers(agent, {
+      baseUrlForAgent: localOpenAiBase,
+      fetchJsonWithTimeout,
+    });
+    const known = new Set(lmStudioModels.map((model) => model.key));
+    for (const server of localServers) {
+      for (const serverModel of server.models || []) {
+        const id = String(serverModel.id || "").trim();
+        if (!id || known.has(id) || serverModel.type === "embedding") continue;
+        known.add(id);
+        lmStudioModels.push({
+          key: id,
+          displayName: serverModel.displayName || id,
+          type: serverModel.type || "llm",
+          loaded: true,
+          loadedInstanceIds: [id],
+          paramsString: server.label,
+          format: "OpenAI",
+          remote: false,
+          source: "openai-server",
+          sourceLabel: server.label,
+          serverId: server.id,
+          baseUrl: server.baseUrl,
+          chatPath: server.chatPath,
+          statusPath: server.statusPath,
+          canLoad: false,
+          canUnload: false,
+        });
+      }
+    }
+  } catch (error) {
+    if (!inventoryError)
+      diagnostics.push(
+        `Local server discovery unavailable: ${error instanceof Error ? error.message : "Server discovery failed."}`,
+      );
+  }
   if (!lmStudioModels.length) {
     try {
       const statusPath = String(agent.statusPath || "/v1/models");
@@ -4017,9 +4642,13 @@ async function localOpenAiIntegrationStatus(agent = {}) {
     ? llmModels.map((model) => ({
         id: model.key,
         name: model.displayName,
-        subtitle: model.loaded ? "Loaded" : "Downloaded",
+        subtitle: model.source === "openai-server"
+          ? "Serving"
+          : model.remote ? "Available" : model.loaded ? "Loaded" : "Downloaded",
         group: model.paramsString || undefined,
-        badge: model.loaded ? "Loaded" : undefined,
+        badge: model.source === "openai-server"
+          ? "Server"
+          : model.remote ? "LM Link" : model.loaded ? "Loaded" : undefined,
       }))
     : openAiModels.map((id) => ({ id }));
   const fallbackModel = String(agent.model || "").trim();
@@ -4057,6 +4686,9 @@ async function localOpenAiIntegrationStatus(agent = {}) {
             lmStudio: {
               baseUrl,
               models: lmStudioModels,
+              servers: localServers,
+              ...localModelHubStatus(lmStudioModels),
+              setup: await localRuntimeSetupStatus(agent).catch(() => undefined),
               error: inventoryError || undefined,
               checkedAt: new Date().toISOString(),
             },
@@ -4079,8 +4711,13 @@ async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
   if (String(agent.provider || "") !== "lm-studio")
     return {
       ok: false,
-      error: `${localOpenAiProviderName(agent)} does not expose load/unload controls here yet.`,
+      error: `${localOpenAiProviderName(agent)} does not expose local model controls here yet.`,
     };
+  if (action === "install-local-runtime") return installLocalModelRuntime();
+  if (action === "start-local-runtime") return startLocalModelRuntime(agent);
+  if (action === "smoke-test-local-model") return smokeTestLocalModel(agent, input);
+  if (action === "download-model") return startLocalModelDownload(input);
+  if (action === "cancel-download") return cancelLocalModelDownload(input);
   if (action === "load-model") {
     const model = String(input.model || "").trim();
     if (!model) return { ok: false, error: "Model is required." };
@@ -4092,13 +4729,9 @@ async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
     await execFileAsync(await resolveLmsBin(), args, {
       timeout: 180_000,
       maxBuffer: 2_000_000,
-      env: runtimeProcessEnv({
-        PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
-          .filter(Boolean)
-          .join(delimiter),
-      }),
+      env: localModelRuntimeEnv(),
     });
-    return { ok: true, message: `Loaded ${model} in LM Studio.` };
+    return verifyLocalModelLoad(agent, model, `Loaded ${model} in LM Studio.`);
   }
   if (action === "unload-model") {
     const instanceId = String(input.instanceId || input.model || "").trim();
@@ -4107,15 +4740,11 @@ async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
     await execFileAsync(await resolveLmsBin(), ["unload", instanceId], {
       timeout: 60_000,
       maxBuffer: 2_000_000,
-      env: runtimeProcessEnv({
-        PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
-          .filter(Boolean)
-          .join(delimiter),
-      }),
+      env: localModelRuntimeEnv(),
     });
     return { ok: true, message: `Unloaded ${instanceId} from LM Studio.` };
   }
-  return { ok: false, error: `Unsupported Local OpenAI action: ${action}` };
+  return { ok: false, error: `Unsupported Local action: ${action}` };
 }
 
 async function runOpenClawIntegrationAction(action, input = {}) {
@@ -5387,7 +6016,7 @@ async function processSeen(agent) {
 // Reads model.default / model.provider / model.base_url from a Hermes
 // config.yaml's top-level `model:` block (no YAML dependency). Lets the
 // collector report a Hermes agent's real provider/model instead of leaving the
-// dashboard to fall back to a default (which surfaced as a wrong "Local OpenAI"
+// dashboard to fall back to a default (which surfaced as a wrong "Local"
 // provider for codex agents).
 async function readHermesModelConfig(configDir) {
   const raw = await readFile(join(configDir, "config.yaml"), "utf8").catch(
@@ -6468,13 +7097,57 @@ async function waitForHermesApiSession(
 async function proxyHermesApiChat(body, response, text, hermesHome) {
   const requestStartedAt = Date.now();
   const requestMarker = `hivemindos-${requestStartedAt.toString(36)}-${randomBytes(4).toString("hex")}`;
-  if (!(await ensureHermesApiServer(hermesHome))) return false;
+  const runtimeSessionId = safeTelemetryText(
+    body.runtimeSessionId || body.hermesSessionId || "",
+    160,
+  );
+  const chatStorageKey = safeTelemetryText(
+    body.chatStorageKey || body.threadId || "",
+    160,
+  );
+  const agent =
+    body.agent && typeof body.agent === "object" && !Array.isArray(body.agent)
+      ? body.agent
+      : {};
+  const hasMultimodal = messagesHaveMultimodalContent(body.messages);
+  const telemetryBase = {
+    requestMarker,
+    runtimeSessionId: runtimeSessionId || null,
+    agentId: safeTelemetryText(agent.id || "", 120) || null,
+    agentName: safeTelemetryText(agent.name || "", 120) || null,
+    runtime: "hermes",
+    bridge: "api-server",
+    model: safeTelemetryText(agent.model || "hermes-agent", 160),
+    provider: safeTelemetryText(agent.provider || "", 120) || null,
+    messageLength: text.length,
+    bodyMessageCount: Array.isArray(body.messages) ? body.messages.length : 0,
+    hasMultimodal,
+    usesDefaultHermesHome:
+      resolve(hermesHome || defaultHermesDir) === resolve(defaultHermesDir),
+  };
+  const emitTelemetry = (type, payload = {}) =>
+    recordCollectorTelemetry(
+      `agent_runtime.hermes_api_proxy.${type}`,
+      {
+        ...telemetryBase,
+        ...payload,
+        elapsedMs: Date.now() - requestStartedAt,
+      },
+      { runId: runtimeSessionId || requestMarker, threadId: chatStorageKey },
+    );
+  void emitTelemetry("request.start");
+  if (!(await ensureHermesApiServer(hermesHome))) {
+    await emitTelemetry("server.unavailable");
+    return false;
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), chatTimeoutMs);
   let sessionTimer = null;
   let heartbeatTimer = null;
   let emittedSession = false;
   let sessionLookupInFlight = false;
+  let observedHermesSessionId = "";
+  let streamCompleted = false;
 
   const ensureHeaders = () => {
     if (response.headersSent || response.writableEnded) return;
@@ -6500,6 +7173,18 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
       );
       if (!session || emittedSession || response.writableEnded) return;
       emittedSession = true;
+      observedHermesSessionId = session.sessionId || observedHermesSessionId;
+      void emitTelemetry("session.detected", {
+        hermesSessionId: observedHermesSessionId,
+        sessionSource: safeTelemetryText(session.source || "hermes", 80),
+        sessionMessageCount: session.messages.length,
+        sessionStartedOffsetMs: session.startedAt
+          ? Math.round(session.startedAt - requestStartedAt)
+          : null,
+        sessionUpdatedOffsetMs: session.updatedAt
+          ? Math.round(session.updatedAt - requestStartedAt)
+          : null,
+      });
       ensureHeaders();
       response.write(
         ssePayload({
@@ -6519,7 +7204,13 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
   }
 
   try {
-    response.on("close", () => controller.abort());
+    response.on("close", () => {
+      controller.abort();
+      if (!streamCompleted)
+        void emitTelemetry("client.closed", {
+          hermesSessionId: observedHermesSessionId || null,
+        });
+    });
     ensureHeaders();
     response.write(": waiting for Hermes API stream\n\n");
     heartbeatTimer = setInterval(() => {
@@ -6530,22 +7221,41 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
       void emitSession().catch(() => undefined);
     }, 1_000);
 
+    const upstreamStartedAt = Date.now();
+    void emitTelemetry("model_request.start", {
+      endpoint: "/v1/chat/completions",
+    });
     const upstream = await fetch(`${hermesApiBaseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: hermesApiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
-        model: body.agent?.model || "hermes-agent",
-        provider: body.agent?.provider || undefined,
+        model: agent.model || "hermes-agent",
+        provider: agent.provider || undefined,
         stream: true,
         messages: apiServerMessages(body, text, requestMarker),
       }),
       signal: controller.signal,
     });
+    void emitTelemetry("model_request.response", {
+      status: upstream.status,
+      ok: upstream.ok,
+      responseMs: Date.now() - upstreamStartedAt,
+      contentType: safeTelemetryText(
+        upstream.headers.get("content-type") || "",
+        120,
+      ) || null,
+    });
     if (!upstream.ok || !upstream.body) {
       const errorText = await upstream.text().catch(() => "");
+      await emitTelemetry("model_request.error", {
+        status: upstream.status || 502,
+        responseMs: Date.now() - upstreamStartedAt,
+        errorLength: errorText.length,
+      });
       const fallbackMessage = messagesHaveMultimodalContent(body.messages)
         ? "Hermes rejected the attached media."
         : `Hermes API returned ${upstream.status || 502}.`;
+      streamCompleted = true;
       response.end(
         ssePayload({ error: errorText || fallbackMessage }) +
           "data: [DONE]\n\n",
@@ -6560,20 +7270,48 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
     let buffer = "";
     let wroteContent = false;
     let wroteDone = false;
-    const hasMultimodal = messagesHaveMultimodalContent(body.messages);
+    let upstreamChunkCount = 0;
+    let upstreamByteCount = 0;
+    let sseEventCount = 0;
+    let contentDeltaCount = 0;
+    let outputLength = 0;
+    let processPayloadCount = 0;
+    let processToolCallCount = 0;
+    let firstByteElapsedMs = null;
+    let firstContentElapsedMs = null;
+    let firstProcessElapsedMs = null;
+    let doneSignalElapsedMs = null;
+    const processToolNames = new Set();
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      upstreamChunkCount += 1;
+      upstreamByteCount += value?.byteLength ?? value?.length ?? 0;
+      if (firstByteElapsedMs === null) {
+        firstByteElapsedMs = Date.now() - requestStartedAt;
+        void emitTelemetry("model_stream.first_byte", {
+          responseMs: Date.now() - upstreamStartedAt,
+          upstreamChunkCount,
+          upstreamByteCount,
+        });
+      }
       buffer += decoder.decode(value, { stream: true });
       const events = buffer.split("\n\n");
       buffer = events.pop() ?? "";
       for (const eventText of events) {
+        sseEventCount += 1;
         const dataLine = eventText
           .split("\n")
           .find((line) => line.startsWith("data:"));
         if (!dataLine) continue;
         const raw = dataLine.replace(/^data:\s*/, "");
         if (raw === "[DONE]") {
+          doneSignalElapsedMs = Date.now() - requestStartedAt;
+          void emitTelemetry("model_stream.done_signal", {
+            upstreamChunkCount,
+            upstreamByteCount,
+            sseEventCount,
+          });
           if (hasMultimodal && !wroteContent) {
             ensureHeaders();
             response.write(
@@ -6595,18 +7333,57 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
                 ? parsed.error.message
                 : "";
           if (errorMessage.trim()) {
+            void emitTelemetry("model_stream.error_event", {
+              errorLength: errorMessage.length,
+              upstreamChunkCount,
+              sseEventCount,
+            });
             ensureHeaders();
             response.write(ssePayload({ error: errorMessage }));
             wroteDone = true;
             continue;
           }
           const content = streamingChatContent(parsed);
+          const processPayload = streamingChatProcessPayload(parsed);
+          const processSummary = summarizeHermesProcessPayload(
+            processPayload || parsed,
+          );
+          if (
+            processSummary &&
+            (processPayload ||
+              processSummary.toolCallCount ||
+              processSummary.statusType ||
+              processSummary.hasReasoning ||
+              processSummary.usage)
+          ) {
+            processPayloadCount += 1;
+            processToolCallCount += processSummary.toolCallCount || 0;
+            for (const toolName of processSummary.toolNames || []) {
+              processToolNames.add(toolName);
+            }
+            if (firstProcessElapsedMs === null)
+              firstProcessElapsedMs = Date.now() - requestStartedAt;
+            void emitTelemetry("process_event", {
+              processPayloadCount,
+              ...processSummary,
+            });
+          }
           if (content) {
             wroteContent = true;
+            contentDeltaCount += 1;
+            outputLength += content.length;
+            if (firstContentElapsedMs === null) {
+              firstContentElapsedMs = Date.now() - requestStartedAt;
+              void emitTelemetry("model_stream.first_content", {
+                contentLength: content.length,
+                responseMs: Date.now() - upstreamStartedAt,
+                upstreamChunkCount,
+                sseEventCount,
+              });
+            }
             ensureHeaders();
             response.write(ssePayload({ choices: [{ delta: { content } }] }));
           } else {
-            const processPayload = streamingChatProcessPayload(parsed);
             if (processPayload) {
               ensureHeaders();
               response.write(ssePayload(processPayload));
@@ -6637,12 +7414,54 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
       wroteDone = true;
     }
     await emitSession();
-    if (!wroteContent && !emittedSession && !response.headersSent) return false;
+    if (!wroteContent && !emittedSession && !response.headersSent) {
+      await emitTelemetry("model_stream.empty_fallback", {
+        upstreamChunkCount,
+        upstreamByteCount,
+        sseEventCount,
+        wroteDone,
+      });
+      return false;
+    }
     ensureHeaders();
+    streamCompleted = true;
     response.write("data: [DONE]\n\n");
     if (!response.writableEnded) response.end();
+    const sessionTimeline = observedHermesSessionId
+      ? await summarizeHermesDbSessionTimeline(
+          hermesHome,
+          observedHermesSessionId,
+          requestStartedAt,
+        )
+      : null;
+    await emitTelemetry("model_stream.completed", {
+      hermesSessionId: observedHermesSessionId || null,
+      firstByteElapsedMs,
+      firstContentElapsedMs,
+      firstProcessElapsedMs,
+      doneSignalElapsedMs,
+      responseMs: Date.now() - upstreamStartedAt,
+      upstreamChunkCount,
+      upstreamByteCount,
+      sseEventCount,
+      contentDeltaCount,
+      outputLength,
+      processPayloadCount,
+      processToolCallCount,
+      processToolNames: [...processToolNames].slice(0, 30),
+      wroteContent,
+      wroteDone,
+      sessionTimeline,
+    });
     return true;
-  } catch {
+  } catch (error) {
+    streamCompleted = true;
+    await emitTelemetry("model_stream.failed", {
+      hermesSessionId: observedHermesSessionId || null,
+      aborted: controller.signal.aborted,
+      errorName: safeTelemetryText(error?.name || "", 80) || null,
+      errorMessage: safeTelemetryText(error?.message || "", 180) || null,
+    });
     if (!response.writableEnded) {
       response.write(
         ssePayload({ error: "Hermes API streaming interrupted." }),

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { useCallback, useState } from "react";
-import { ArrowUpRight, Bell, Check, CheckCheck, ChevronLeft, ChevronRight, KanbanSquare, MessageSquare, RefreshCcw } from "lucide-react";
+import { ArrowUpRight, Bell, Bot, Check, CheckCheck, ChevronLeft, ChevronRight, KanbanSquare, LoaderCircle, MessageSquare, RefreshCcw, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import notificationStyles from "@/app/notifications.module.css";
 import { Button } from "@/components/ui/button";
@@ -29,9 +29,31 @@ import {
   notificationTagLabel,
 } from "@/features/notifications/notification-display";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
-import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
+import type { AgentAutonomyReviewMode, AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 
 const notificationClass = createStyleClass(notificationStyles);
+
+const AUTONOMY_REVIEW_OPTIONS: Array<{
+  mode: AgentAutonomyReviewMode;
+  label: string;
+  detail: string;
+}> = [
+  {
+    mode: "autonomous",
+    label: "Autonomous",
+    detail: "Agents keep moving unless they choose to escalate.",
+  },
+  {
+    mode: "review-high-risk",
+    label: "Review high risk",
+    detail: "Decisions, urgent items, spend, and external actions come here first.",
+  },
+  {
+    mode: "review-all",
+    label: "Review everything",
+    detail: "Every approval-style action waits for human review.",
+  },
+];
 
 export type NotificationGroup = {
   label: string;
@@ -62,6 +84,28 @@ function formatNotificationDate(value?: string) {
   return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+function needsApprovalReview(notification: AgentNotification) {
+  if (notification.resolution?.status === "resolved") return false;
+  return !notification.read && (
+    notification.kind === "decision"
+    || notification.priority === "urgent"
+    || notification.priority === "high"
+  );
+}
+
+function reviewPrompt(notification: AgentNotification) {
+  return [
+    "Help me review this agent inbox item and recommend what I should do next.",
+    `Title: ${notificationDisplayTitle(notification)}`,
+    `Agent: ${notification.agentName}`,
+    `Priority: ${notification.priority}`,
+    `Kind: ${notification.kind}`,
+    notification.source ? `Source: ${notification.source}` : "",
+    "",
+    notificationDisplayBody(notification),
+  ].filter(Boolean).join("\n");
+}
+
 export function NotificationsPanel({
   notifications,
   notificationGroups,
@@ -86,6 +130,10 @@ export function NotificationsPanel({
   // Keyed by `${dayLabel}::${clusterKey}` so same-titled stacks in different
   // day groups keep independent positions.
   const [clusterCursor, setClusterCursor] = useState<Record<string, number>>({});
+  const autonomyReviewMode = notificationSummary?.settings.autonomyReviewMode ?? "autonomous";
+  const approvalItems = notifications.filter(needsApprovalReview).slice(0, 4);
+  const decisionCount = notifications.filter((notification) => !notification.read && notification.kind === "decision").length;
+  const highPriorityCount = (notificationSummary?.highUnread ?? 0) + (notificationSummary?.urgentUnread ?? 0);
 
   const sendToBoard = useCallback(async (notification: AgentNotification) => {
     setBoardBusyId(notification.id);
@@ -264,10 +312,11 @@ export function NotificationsPanel({
                     runAction(notification, action);
                   }}
                 >
-                  {action.type === "discuss" ? <MessageSquare aria-hidden="true" />
+                  {busy ? <LoaderCircle aria-hidden="true" className={notificationClass("spinIcon")} />
+                    : action.type === "discuss" ? <MessageSquare aria-hidden="true" />
                     : action.type === "work-board" ? <KanbanSquare aria-hidden="true" />
                     : <ArrowUpRight aria-hidden="true" />}
-                  {busy ? "Sending…" : action.label}
+                  {busy ? "Sending" : action.label}
                 </Button>
               );
             })}
@@ -284,13 +333,13 @@ export function NotificationsPanel({
     <section className={notificationClass("notificationsPanel", "tabPanel")}>
       <div className={notificationClass("notificationsHeader")}>
         <div>
-          <p className="eyebrow">Agent notifications</p>
-          <h2>Inbox from the swarm</h2>
-          <p>Agents can write markdown notes into the shared Obsidian notification folder when they need your attention.</p>
+          <p className="eyebrow">Hive Alerts</p>
+          <h2>Alerts, decisions, and approvals</h2>
+          <p>Agents can keep operating autonomously, escalate high-priority items, or route approval-style decisions here based on your review mode.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="secondary" onClick={() => void onRefresh()} disabled={notificationsLoading}>
-            <RefreshCcw aria-hidden="true" />
+            <RefreshCcw aria-hidden="true" className={notificationsLoading ? notificationClass("spinIcon") : undefined} />
             {notificationsLoading ? "Refreshing" : "Refresh"}
           </Button>
           <Button type="button" size="sm" onClick={onMarkAllRead} disabled={!notificationSummary?.unread}>
@@ -300,6 +349,29 @@ export function NotificationsPanel({
         </div>
       </div>
 
+      <div className={notificationClass("inboxSummaryGrid")}>
+        <article>
+          <Bell aria-hidden="true" />
+          <span>Unread</span>
+          <strong>{notificationSummary?.unread ?? 0}</strong>
+        </article>
+        <article>
+          <SlidersHorizontal aria-hidden="true" />
+          <span>Decisions</span>
+          <strong>{decisionCount}</strong>
+        </article>
+        <article>
+          <ShieldCheck aria-hidden="true" />
+          <span>Priority</span>
+          <strong>{highPriorityCount}</strong>
+        </article>
+        <article>
+          <Bot aria-hidden="true" />
+          <span>Mode</span>
+          <strong>{AUTONOMY_REVIEW_OPTIONS.find((option) => option.mode === autonomyReviewMode)?.label ?? "Autonomous"}</strong>
+        </article>
+      </div>
+
       <div className={notificationClass("notificationsControls")}>
         <div className={notificationClass("notificationStats")}>
           <span><strong>{notificationSummary?.total ?? 0}</strong> total</span>
@@ -307,18 +379,76 @@ export function NotificationsPanel({
           <span><strong>{(notificationSummary?.highUnread ?? 0) + (notificationSummary?.urgentUnread ?? 0)}</strong> high priority</span>
           <span title={notificationSummary?.folder}>/{notificationSummary?.folder ?? fallbackFolder}</span>
         </div>
-        <label className={notificationClass("notificationSetting")}>
-          <span>
-            <strong>Escalate high priority</strong>
-            <span>Off by default. If enabled, your agent will send you a message via your preferred messaging channel (e.g. telegram, discord, etc.)</span>
-          </span>
-          <input
-            type="checkbox"
-            checked={Boolean(notificationSummary?.settings.highPriorityMessagingEnabled)}
-            onChange={(event) => onUpdateSettings({ highPriorityMessagingEnabled: event.target.checked })}
-          />
-        </label>
+        <div className={notificationClass("inboxSettings")}>
+          <div className={notificationClass("autonomyReview")}>
+            <div>
+              <strong>Autonomy review mode</strong>
+              <span>Configurable, never mandatory. Fully autonomous remains the default.</span>
+            </div>
+            <div className={notificationClass("autonomySegments")} role="radiogroup" aria-label="Autonomy review mode">
+              {AUTONOMY_REVIEW_OPTIONS.map((option) => (
+                <button
+                  key={option.mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={autonomyReviewMode === option.mode}
+                  className={notificationClass(autonomyReviewMode === option.mode && "active")}
+                  onClick={() => onUpdateSettings({ autonomyReviewMode: option.mode })}
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.detail}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className={notificationClass("notificationSetting")}>
+            <span>
+              <strong>Escalate high priority</strong>
+              <span>Off by default. If enabled, your agent can message you via the configured channel.</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={Boolean(notificationSummary?.settings.highPriorityMessagingEnabled)}
+              onChange={(event) => onUpdateSettings({ highPriorityMessagingEnabled: event.target.checked })}
+            />
+          </label>
+        </div>
       </div>
+
+      {approvalItems.length ? (
+        <section className={notificationClass("approvalLane")} aria-label="Approval review queue">
+          <div className={notificationClass("approvalLaneHeader")}>
+            <div>
+              <p className="eyebrow">Review queue</p>
+              <h3>Needs your eyes</h3>
+            </div>
+            <span>{approvalItems.length} visible</span>
+          </div>
+          <div className={notificationClass("approvalCards")}>
+            {approvalItems.map((notification) => (
+              <article key={`approval-${notification.id}`} className={notificationClass("approvalCard", notification.priority)}>
+                <div>
+                  <span>{notificationKindLabel(notification.kind)} · {notificationPriorityLabel(notification.priority)}</span>
+                  <strong>{notificationDisplayTitle(notification)}</strong>
+                  <small>{notification.agentName} · {formatNotificationDate(notification.createdAt)}</small>
+                </div>
+                <div className={notificationClass("approvalActions")}>
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void discussWithQueen(notification, reviewPrompt(notification))}>
+                    <MessageSquare aria-hidden="true" />
+                    Ask Queen
+                  </Button>
+                  {!notification.read ? (
+                    <Button type="button" size="sm" onClick={() => onMarkRead(notification.id)}>
+                      <Check aria-hidden="true" />
+                      Clear
+                    </Button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {notifications.length ? (
         <div
@@ -379,7 +509,12 @@ export function NotificationsPanel({
           ))}
           {notificationCursor !== null ? (
             <Button type="button" variant="secondary" onClick={() => void onRefresh({ append: true })} disabled={notificationsLoading}>
-              {notificationsLoading ? "Loading..." : "Load more"}
+              {notificationsLoading ? (
+                <>
+                  <LoaderCircle aria-hidden="true" className={notificationClass("spinIcon")} />
+                  Loading more
+                </>
+              ) : "Load more"}
             </Button>
           ) : null}
         </div>

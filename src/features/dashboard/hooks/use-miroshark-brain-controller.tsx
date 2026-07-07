@@ -1123,6 +1123,7 @@ export function useMirosharkBrainController(props: any) {
       settings: data.settings ?? {
         highPriorityMessagingEnabled: false,
         messagingHandledBy: "Configured messaging agent",
+        autonomyReviewMode: "autonomous",
         updatedAt: new Date().toISOString(),
       },
     });

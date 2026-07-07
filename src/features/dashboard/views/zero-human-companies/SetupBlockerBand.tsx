@@ -26,6 +26,7 @@ function SetupBlockerCard({ blocker, onResolved }: { blocker: SetupBlocker; onRe
   const [error, setError] = React.useState("");
   const [done, setDone] = React.useState(false); // saved → show the check
   const [leaving, setLeaving] = React.useState(false); // collapse animation
+  const [openingUrl, setOpeningUrl] = React.useState<string | null>(null);
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -102,10 +103,11 @@ function SetupBlockerCard({ blocker, onResolved }: { blocker: SetupBlocker; onRe
                 href={link.url}
                 target="_blank"
                 rel="noreferrer"
-                onClick={(event) => { if (isExternalHttpUrl(link.url)) { event.preventDefault(); void openExternalUrl(link.url); } }}
+                onClick={(event) => { if (isExternalHttpUrl(link.url)) { event.preventDefault(); setOpeningUrl(link.url); void openExternalUrl(link.url).finally(() => setOpeningUrl((current) => (current === link.url ? null : current))); } }}
+                aria-busy={openingUrl === link.url}
                 style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)", textDecoration: "none", border: "1px solid var(--line)", borderRadius: 999, padding: "3px 9px" }}
               >
-                <ExternalLink size={12} aria-hidden /> {link.label}
+                {openingUrl === link.url ? <Spinner size={12} /> : <ExternalLink size={12} aria-hidden />} {openingUrl === link.url ? "Opening…" : link.label}
               </a>
             ))}
           </div>

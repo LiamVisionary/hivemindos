@@ -2001,10 +2001,10 @@ export function useDashboardDerivedState(props: any) {
         title: "What the hive repairs",
       },
       sessions: { label: "Sessions", title: "What agents already said" },
-      tools: { label: "Tools", title: "What agents can invoke" },
+      tools: { label: "Capability Store", title: "What agents can invoke" },
       memory: { label: "Memory", title: "What memory grows" },
       files: { label: "Brain Files", title: "What agents inspect" },
-      notifications: { label: "Alerts", title: "What alerts need" },
+      notifications: { label: "Alerts", title: "What needs attention" },
       messaging: { label: "Messaging", title: "Where agents can message" },
       chat: {
         label: "Agent Chat",

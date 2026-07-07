@@ -9,7 +9,8 @@ import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { RUNTIME_CAPABILITIES } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
-import { discoverLmStudioProviderModels, localOpenAIProviderProfile, runLmStudioAction } from "@/lib/services/runtime-adapters/openai-compatible";
+import { discoverLmStudioProviderModels, localModelHubStatus, localOpenAIProviderProfile, localRuntimeSetupStatus, runLmStudioAction } from "@/lib/services/runtime-adapters/openai-compatible";
+import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
 import { bankrLlmAccessStatus, bankrLlmModelOptions, isBankrLlmLowCreditError, listBankrLlmModels } from "@/lib/services/bankr-llm";
 import {
   hivemindosWalletPaidModelOptions,
@@ -109,7 +110,21 @@ export type RuntimeIntegrationStatus = {
         paramsString?: string | null;
         sizeBytes?: number | null;
         format?: string | null;
+        remote?: boolean;
+        source?: "lm-studio" | "lm-link" | "openai-server";
+        sourceLabel?: string;
+        serverId?: string;
+        baseUrl?: string;
+        chatPath?: string;
+        statusPath?: string;
+        canLoad?: boolean;
+        canUnload?: boolean;
       }>;
+      servers?: LocalOpenAICompatibleServer[];
+      catalog?: LocalModelInstallCatalogStatus[];
+      downloads?: LocalModelDownloadJob[];
+      hardware?: LocalModelHardwareSnapshot;
+      setup?: LocalRuntimeSetupStatus;
       error?: string;
       checkedAt?: string;
     };
@@ -335,14 +350,16 @@ async function augmentGatewayModelProviders(
     ).catch((error) => ({
       runtimeProfile: lmStudioProfile,
       lmStudioModels: [],
-      modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
+      servers: [],
+      modelDiscoveryError: error instanceof Error ? error.message : "Local model discovery failed.",
       lmStudioModelSource: "",
       models: [],
     })),
   ]);
+  const lmStudioSetup = await localRuntimeSetupStatus(lmStudioProfile).catch(() => undefined);
   if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
   if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
-  if (lmStudio.modelDiscoveryError) diagnostics.push(`Local OpenAI model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
+  if (lmStudio.modelDiscoveryError) diagnostics.push(`Local model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
   const providers = [...(modelSelection?.providers ?? [])];
   const lmStudioModels = lmStudio.models.length
     ? lmStudio.models
@@ -358,9 +375,9 @@ async function augmentGatewayModelProviders(
         ? {
           id,
           name: model.displayName,
-          subtitle: model.loaded ? "Loaded" : model.remote ? "Available" : "Downloaded",
+          subtitle: model.source === "openai-server" ? "Serving" : model.loaded ? "Loaded" : model.remote ? "Available" : "Downloaded",
           group: model.paramsString || undefined,
-          badge: model.remote ? "LM Link" : "Local",
+          badge: model.source === "openai-server" ? "Server" : model.remote ? "LM Link" : "Local",
         }
         : { id };
     }),
@@ -412,6 +429,9 @@ async function augmentGatewayModelProviders(
     lmStudio: {
       baseUrl: lmStudio.runtimeProfile.gatewayUrl?.trim().replace(/\/+$/, ""),
       models: lmStudio.lmStudioModels,
+      servers: lmStudio.servers,
+      ...localModelHubStatus(lmStudio.lmStudioModels),
+      setup: lmStudioSetup,
       error: lmStudio.modelDiscoveryError || undefined,
       checkedAt: new Date().toISOString(),
     },
@@ -439,8 +459,10 @@ export async function searchRuntimeSessions(runtime: AgentRuntime, query: string
 }
 
 export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action: string, input: Record<string, unknown> = {}, agent?: AgentProfile) {
-  if ((action === "load-model" || action === "unload-model") && agent?.provider === "lm-studio") {
-    return runLmStudioAction(agent, action, input);
+  if ((action === "load-model" || action === "unload-model" || action === "download-model" || action === "cancel-download" || action === "install-local-runtime" || action === "start-local-runtime" || action === "smoke-test-local-model") && agent?.provider === "lm-studio") {
+    const result = await runLmStudioAction(agent, action, input);
+    catalogCache.clear();
+    return result;
   }
   if (runtime === "openclaw" && action === "set-model") {
     const provider = String(input.provider ?? "").trim();

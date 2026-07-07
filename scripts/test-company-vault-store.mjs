@@ -48,6 +48,7 @@ const {
   getCompany,
   markCompanyDispatched,
   readCompanies,
+  setCompanyApprovalPolicy,
   setCompanyProducts,
   updateCompanyMetric,
   upsertCompany,
@@ -131,6 +132,24 @@ try {
   assert.ok(
     directiveContext.includes("use skills: self-serve-payment-funnel, liam-writing-style, startup-customer-acquisition-sprint"),
     "worker context lists every directive skill",
+  );
+
+  const withApprovalPolicy = await setCompanyApprovalPolicy("co-legacy-1", {
+    id: "customer-email-send",
+    subject: "sending customer-facing emails",
+    mode: "ask",
+    source: "default",
+  });
+  assert.equal(withApprovalPolicy.approvalPolicies?.[0]?.mode, "ask", "approval policy is saved on the company");
+  const definitionWithPolicy = (await readJson(definitionsFile)).find((record) => record.id === "co-legacy-1");
+  assert.equal(
+    definitionWithPolicy.approvalPolicies?.[0]?.mode,
+    "ask",
+    "approval policies replicate in the cold company definitions file",
+  );
+  assert.ok(
+    companyWorkerContext(withApprovalPolicy, "").includes("Before sending customer-facing emails, ask the human first"),
+    "approval policies reach the worker context after persistence",
   );
 
   const history = await readCompanyConfigHistory({ companyId: "co-legacy-1" });

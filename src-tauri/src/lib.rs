@@ -1582,6 +1582,7 @@ pub fn run() {
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
             wallet_export::wallet_secret_export_save,
+            obsidian::obsidian_capture_note,
             obsidian::obsidian_agents,
             obsidian::obsidian_personal_wallets,
             dashboard_state::dashboard_state_read,

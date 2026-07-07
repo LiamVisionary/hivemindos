@@ -15,11 +15,13 @@ import {
 } from "lucide-react";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { AgentResponseLoader } from "@/features/chat/chat-composer";
+import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
 import { emitQueenVoiceState, listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
 import { VoiceWaveform } from "./VoiceWaveform";
 import { HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET } from "./hive-chat-layout";
 import { useQueenClapActivation } from "./use-queen-clap-activation";
+import { useQueenBeeGeminiLive } from "./use-queen-bee-gemini-live";
 import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
 import {
   useQueenBeeVoice,
@@ -362,14 +364,16 @@ export function QueenBeeVoiceOverlay({
   onClapWakeEnabledChange,
   onDriveDashboard,
   openSpaceRightInset = 0,
+  screenContext,
 }: {
   clapWakeEnabled?: boolean;
   onClapWakeEnabledChange?: (enabled: boolean) => void;
   onDriveDashboard?: (
     command: string,
-    opts?: { onModalOpen?: () => void },
+    opts?: { onModalOpen?: () => void; screenContext?: DashboardScreenContext },
   ) => Promise<string>;
   openSpaceRightInset?: number;
+  screenContext?: DashboardScreenContext;
 } = {}) {
   const [open, setOpen] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
@@ -378,18 +382,16 @@ export function QueenBeeVoiceOverlay({
   // history-collapsed flag lives in the store so the input's toggle tab and
   // this transcript overlay share one source of truth.
   const chat = useQueenChat();
-  const { historyMinimized, setHistoryMinimized } = chat;
+  const { setHistoryMinimized } = chat;
   // Bumping the nonce restarts the realtime session (e.g. new voice).
   const [sessionNonce, setSessionNonce] = React.useState(0);
   const [realtimeFailedNonce, setRealtimeFailedNonce] = React.useState(-1);
-  // The resolved voice engine for a given session nonce. A local-TTS Calls
-  // selection runs the non-realtime pipeline so the chosen TTS server actually
-  // voices replies; anything else uses OpenAI Realtime speech-to-speech (where
-  // local TTS cannot apply). Tagged with the nonce it was resolved for so a new
-  // open reads `null` until ITS fetch lands — which gates both voice hooks and
-  // keeps a local-TTS selection from briefly starting a Realtime session.
+  // The resolved voice engine for a given session nonce. Local/cloud TTS run the
+  // non-realtime pipeline, Gemini Live runs its bidi socket, and the default is
+  // OpenAI Realtime speech-to-speech. Tagged with the nonce it was resolved for
+  // so a new open reads `null` until ITS fetch lands, gating every voice hook.
   const [resolvedVoiceMode, setResolvedVoiceMode] = React.useState<
-    { nonce: number; mode: "realtime" | "pipeline" } | null
+    { nonce: number; mode: "realtime" | "pipeline" | "gemini-live" } | null
   >(null);
   const sessionNonceRef = React.useRef(sessionNonce);
   React.useEffect(() => {
@@ -405,14 +407,14 @@ export function QueenBeeVoiceOverlay({
     const nonce = sessionNonce;
     void fetch("/api/queen-bee/voice", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { localTtsSelected?: boolean; pipelineSelected?: boolean; brainLabel?: string | null } | null) => {
+      .then((data: { localTtsSelected?: boolean; pipelineSelected?: boolean; voiceMode?: "realtime" | "pipeline" | "gemini-live"; brainLabel?: string | null } | null) => {
         if (!cancelled) {
           setBrainLabel(typeof data?.brainLabel === "string" ? data.brainLabel : "");
           setResolvedVoiceMode({
             nonce,
-            // pipelineSelected covers BOTH local-TTS and cloud-TTS voice
-            // runtimes; older servers only send localTtsSelected.
-            mode: (data?.pipelineSelected ?? data?.localTtsSelected) ? "pipeline" : "realtime",
+            // voiceMode carries Gemini Live explicitly; pipelineSelected covers
+            // older servers that only knew local/cloud TTS pipeline routing.
+            mode: data?.voiceMode ?? ((data?.pipelineSelected ?? data?.localTtsSelected) ? "pipeline" : "realtime"),
           });
         }
       })
@@ -427,6 +429,7 @@ export function QueenBeeVoiceOverlay({
     resolvedVoiceMode?.nonce === sessionNonce ? resolvedVoiceMode.mode : null;
   const realtimeMode =
     voiceModeForOpen === "realtime" && realtimeFailedNonce !== sessionNonce;
+  const geminiLiveMode = voiceModeForOpen === "gemini-live";
 
   const resetVoiceSessionUi = React.useCallback(() => {
     setMuted(false);
@@ -472,9 +475,12 @@ export function QueenBeeVoiceOverlay({
   const driveDashboard = React.useCallback(
     async (command: string) => {
       if (!onDriveDashboard) return "The dashboard isn't available to drive right now.";
-      return onDriveDashboard(command, { onModalOpen: () => setHistoryMinimized(true) });
+      return onDriveDashboard(command, {
+        onModalOpen: () => setHistoryMinimized(true),
+        screenContext,
+      });
     },
-    [onDriveDashboard, setHistoryMinimized],
+    [onDriveDashboard, screenContext, setHistoryMinimized],
   );
   const realtime = useQueenBeeRealtime(
     open && realtimeMode,
@@ -482,14 +488,22 @@ export function QueenBeeVoiceOverlay({
     handleRealtimeFailed,
     onDriveDashboard ? driveDashboard : undefined,
     QUEEN_VOICE_OPENING_LINE,
+    screenContext,
+  );
+  const geminiLive = useQueenBeeGeminiLive(
+    open && geminiLiveMode,
+    muted,
+    QUEEN_VOICE_OPENING_LINE,
+    onDriveDashboard ? driveDashboard : undefined,
+    screenContext,
   );
   const pipeline = useQueenBeeVoice(
-    open && voiceModeForOpen !== null && !realtimeMode,
+    open && voiceModeForOpen !== null && !realtimeMode && !geminiLiveMode,
     muted,
     QUEEN_VOICE_OPENING_LINE,
     voiceModeForOpen === "pipeline",
   );
-  const voiceState = realtimeMode ? realtime : pipeline;
+  const voiceState = geminiLiveMode ? geminiLive : realtimeMode ? realtime : pipeline;
 
   const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;
 
@@ -505,7 +519,7 @@ export function QueenBeeVoiceOverlay({
   // others, scrambling who/text/order in the shared chat.
   const voiceSessionKeyRef = React.useRef("");
   const prevSessionNonceRef = React.useRef(sessionNonce);
-  const prevRealtimeModeRef = React.useRef(realtimeMode);
+  const prevVoiceModeRef = React.useRef(voiceModeForOpen);
   const prevVoiceSerialRef = React.useRef(-1);
   React.useEffect(() => {
     // A NEW namespace is minted only while a session is genuinely (re)starting
@@ -517,11 +531,11 @@ export function QueenBeeVoiceOverlay({
       voiceModeForOpen !== null &&
       (!voiceSessionKeyRef.current ||
         sessionNonce !== prevSessionNonceRef.current ||
-        realtimeMode !== prevRealtimeModeRef.current ||
+        voiceModeForOpen !== prevVoiceModeRef.current ||
         voiceState.sessionSerial !== prevVoiceSerialRef.current)
     ) {
       prevSessionNonceRef.current = sessionNonce;
-      prevRealtimeModeRef.current = realtimeMode;
+      prevVoiceModeRef.current = voiceModeForOpen;
       prevVoiceSerialRef.current = voiceState.sessionSerial;
       voiceSessionKeyRef.current = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       voiceSeenRef.current = new Set();
@@ -547,7 +561,7 @@ export function QueenBeeVoiceOverlay({
       if (!currentIds.has(prevId)) chatRemoveTurn(prevId);
     }
     voiceSeenRef.current = currentIds;
-  }, [voiceState.turns, voiceState.sessionSerial, sessionNonce, realtimeMode, open, voiceModeForOpen, chatUpsertTurn, chatRemoveTurn]);
+  }, [voiceState.turns, voiceState.sessionSerial, sessionNonce, open, voiceModeForOpen, chatUpsertTurn, chatRemoveTurn]);
 
   const [detailContent, setDetailContent] = React.useState<string | null>(null);
   // Auto-open the transaction modal when a card needing a decision arrives, then
@@ -655,12 +669,12 @@ export function QueenBeeVoiceOverlay({
       >
         <TranscriptTurns
           turns={chat.turns}
-          minimized={historyMinimized}
+          minimized={!chat.transcriptExpanded}
           thinking={open && voiceState.phase === "thinking"}
           brainLabel={brainLabel}
           // Live stages only exist on the pipeline hook; the realtime session
           // streams its own tool audio cues.
-          working={realtimeMode ? [] : pipeline.working}
+          working={voiceModeForOpen === "pipeline" ? pipeline.working : []}
           onShowDetail={setDetailContent}
           onCollapse={() => setHistoryMinimized(true)}
         />
@@ -716,7 +730,7 @@ export function QueenBeeVoiceOverlay({
             </div>
           </div>
         ) : null}
-        {voicePickerOpen ? (
+        {voicePickerOpen && voiceModeForOpen === "realtime" ? (
           <VoicePicker
             onVoiceChanged={() => {
               // Restart the session so the new voice takes effect now.
@@ -742,20 +756,22 @@ export function QueenBeeVoiceOverlay({
             {voiceState.phase === "error" && voiceState.error ? (
               <p className={styles.errorText}>{voiceState.error}</p>
             ) : null}
-            {!realtimeMode && pipeline.voiceNotice ? (
+            {voiceModeForOpen === "pipeline" && pipeline.voiceNotice ? (
               // Voice continuity: her selected local voice is down, replies
               // are text-only until it recovers - keep that visible.
               <p className={styles.voiceNotice}>{pipeline.voiceNotice}</p>
             ) : null}
-            <button
-              type="button"
-              className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}
-              onClick={() => setVoicePickerOpen((current) => !current)}
-              aria-label="Queen Bee voice settings"
-            >
-              <Settings2 size={14} aria-hidden="true" />
-              Voice
-            </button>
+            {voiceModeForOpen === "realtime" ? (
+              <button
+                type="button"
+                className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}
+                onClick={() => setVoicePickerOpen((current) => !current)}
+                aria-label="Queen Bee voice settings"
+              >
+                <Settings2 size={14} aria-hidden="true" />
+                Voice
+              </button>
+            ) : null}
             <button
               type="button"
               className={`${styles.controlButton} ${clapWakeEnabled ? styles.controlButtonWakeActive : ""}`}

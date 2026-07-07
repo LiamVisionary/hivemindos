@@ -4,7 +4,21 @@
 // null off the desktop runtime (web/phone) so callers fall back to HTTP.
 
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { nativeOrFetch } from "@/lib/native/bridge";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+
+export type CapturedObsidianNote = {
+  vaultPath: string;
+  notePath: string;
+  title: string;
+  createdAt: string;
+};
+
+export type CaptureObsidianNoteResponse = {
+  ok?: boolean;
+  note?: CapturedObsidianNote;
+  error?: string;
+};
 
 export async function getNativeObsidianAgents(
   vaultPath: string,
@@ -16,4 +30,30 @@ export async function getNativeObsidianAgents(
   } catch {
     return null;
   }
+}
+
+export async function captureObsidianNoteFromDashboard(input: {
+  vaultPath?: string;
+  inboxFolder?: string;
+  content: string;
+}): Promise<CaptureObsidianNoteResponse> {
+  const args = {
+    vaultPath: input.vaultPath?.trim() || undefined,
+    inboxFolder: input.inboxFolder?.trim() || undefined,
+    content: input.content,
+  };
+  return nativeOrFetch<CaptureObsidianNoteResponse>({
+    command: "obsidian_capture_note",
+    args,
+    fallback: async () => {
+      const response = await fetch("/api/obsidian/note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "capture", ...args }),
+      });
+      const data = await response.json().catch(() => null) as CaptureObsidianNoteResponse | null;
+      if (data) return data;
+      return { ok: false, error: `Note save failed with HTTP ${response.status}` };
+    },
+  });
 }

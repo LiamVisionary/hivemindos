@@ -112,7 +112,7 @@ export const PAID_AGENT_MODEL_PROVIDER_MATRIX = [
   {
     provider: "lm-studio",
     rail: "x402",
-    notes: "Local OpenAI-compatible models behind HivemindOS; charge externally per call.",
+    notes: "OpenAI-compatible local models behind HivemindOS; charge externally per call.",
   },
   {
     provider: "bankr",

@@ -3,7 +3,9 @@
 // PoolAgent so the live view can persist real agent membership.
 import type { CompanyRevenueEventSource, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
-import type { CompanyDirective, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyApprovalPolicy, CompanyDirective, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyImportRequest, CompanyImportedOperations } from "@/lib/types/company-import";
+import type { WorkBoardPipelineImpact, WorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -141,6 +143,8 @@ export interface IssueWork {
   machineName?: string;
   updatedAt?: number;
   completedAt?: number;
+  /** Labeled potential revenue this task can unblock; quoted, not booked. */
+  pipelineImpact?: WorkBoardPipelineImpact;
 }
 
 export interface Issue {
@@ -152,6 +156,8 @@ export interface Issue {
   pts: number;
   /** Live-data link to the underlying Work Board task and its outputs. */
   work?: IssueWork;
+  /** Labeled potential revenue this card can unblock; quoted, not booked. */
+  pipelineImpact?: WorkBoardPipelineImpact;
 }
 
 export interface Colony {
@@ -170,6 +176,8 @@ export interface Colony {
   capabilityCapital: CapabilityCapital;
   revenue?: Revenue;
   revenueShare?: CompanyRevenueRollup;
+  /** Latest labeled Work Board forecast for this company; quoted, not booked. */
+  pipeline?: WorkBoardPipelineSummary;
   velocity: number[];
   approvals: Approval[];
   agents: Agent[];
@@ -190,6 +198,10 @@ export interface Colony {
   products?: CompanyProductCatalog;
   /** Crew-raised price-change requests awaiting the human (shown under Approvals + a Products banner). */
   pricingProposals?: CompanyPricingProposal[];
+  /** Explicitly saved approval policies; learned/default rows are derived at render time. */
+  approvalPolicies?: CompanyApprovalPolicy[];
+  /** Imported legacy repo operations discovered from source. */
+  importedOperations?: CompanyImportedOperations;
   /**
    * Raw, unformatted company values used to seed the edit form. Distinct from
    * display fields above (`apex`, `ticker`, …), which carry derived fallbacks
@@ -204,6 +216,8 @@ export interface CompanyRevenueShareInput {
   collectFee: boolean;
   collectingAgentId?: string;
 }
+
+export type CompanyImportForm = CompanyImportRequest;
 
 /** A fully-configured agent from the org roster, available to assign. */
 export interface PoolAgent {

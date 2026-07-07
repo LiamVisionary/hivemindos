@@ -28,9 +28,23 @@ export type LoopReadinessTotals = {
   needsHuman: number;
   budgetedLoopTasks: number;
   worktreeLoopTasks: number;
+  contractLoopTasks: number;
+  rubricLoopTasks: number;
   queenBeeTasks: number;
   antiPatterns: number;
   experiments: number;
+};
+
+export type LoopContractSummary = {
+  taskId: string;
+  taskTitle: string;
+  contractTitle?: string;
+  plannerAssertions: string[];
+  evaluatorPushback: string[];
+  agreedDone: string[];
+  artifacts: string[];
+  rubricTitle?: string;
+  rubricAxes: string[];
 };
 
 export type LoopReadinessReport = {
@@ -44,6 +58,7 @@ export type LoopReadinessReport = {
     updatedAt: number;
   };
   totals: LoopReadinessTotals;
+  contracts: LoopContractSummary[];
   signals: LoopReadinessSignal[];
   findings: LoopReadinessFinding[];
   recommendations: string[];
@@ -54,6 +69,7 @@ export type LoopEngineeringArtifacts = {
   loopMd: string;
   stateMd: string;
   budgetMd: string;
+  contractMd: string;
   runLogMd: string;
   registryYaml: string;
 };
@@ -74,6 +90,9 @@ export function buildLoopReadinessReport(input: { board?: KanbanBoard | null; no
   const needsHuman = tasks.filter((task) => task.status === "needs-human").length;
   const budgetedLoopTasks = loopTasks.filter(taskHasBudgetOrLimit);
   const worktreeLoopTasks = loopTasks.filter(taskHasWorktreeIsolation);
+  const contractLoopTasks = loopTasks.filter((task) => task.loop?.contract);
+  const rubricLoopTasks = loopTasks.filter((task) => task.loop?.evaluationRubric);
+  const contracts = loopContractSummaries(loopTasks);
   const queenBeeTasks = tasks.filter((task) => /^queen-bee|^loop|^flow:/.test(task.source ?? "") || task.assignee === "queen-bee").length;
   const activeRuns = runs.filter((run) => run.status === "running").length;
   const recentRuns = runs.filter((run) => isRecent(run.startedAt, now) || isRecent(run.endedAt, now));
@@ -91,6 +110,8 @@ export function buildLoopReadinessReport(input: { board?: KanbanBoard | null; no
   addSignal(signals, "human-gates", "Human handoff gates exist", gates.some((gate) => gate.kind === "human") || needsHuman > 0 || loopTasks.some(taskMentionsHumanGate), 8, humanGateEvidence(gates, tasks));
   addSignal(signals, "queen-bee-coordination", "Queen Bee or flow coordination is active", queenBeeTasks > 0, 8, tasks.filter((task) => /^queen-bee|^loop|^flow:/.test(task.source ?? "") || task.assignee === "queen-bee").slice(0, 6).map((task) => `${task.id}: ${task.source || task.assignee}`));
   addSignal(signals, "worktree-isolation", "Code loops have isolation hints", worktreeLoopTasks.length > 0, 6, worktreeLoopTasks.slice(0, 6).map((task) => `${task.id}: ${task.workspace}`), proportionalScore(6, worktreeLoopTasks.length, loopTasks.length));
+  addSignal(signals, "negotiated-contracts", "Planner/evaluator contracts are written", contractLoopTasks.length > 0, 6, contracts.slice(0, 6).map((item) => `${item.taskId}: ${item.contractTitle ?? item.taskTitle}`), proportionalScore(6, contractLoopTasks.length, loopTasks.length));
+  addSignal(signals, "evaluator-rubrics", "Evaluator rubrics are attached", rubricLoopTasks.length > 0, 6, contracts.filter((item) => item.rubricTitle).slice(0, 6).map((item) => `${item.taskId}: ${item.rubricTitle}`), proportionalScore(6, rubricLoopTasks.length, loopTasks.length));
   addSignal(signals, "learning-memory", "Experiments and anti-patterns compound", experiments > 0 || antiPatterns > 0, 8, [`${experiments} experiment${plural(experiments)}`, `${antiPatterns} anti-pattern${plural(antiPatterns)}`]);
 
   const score = Math.min(100, signals.reduce((sum, signal) => sum + signal.score, 0));
@@ -128,10 +149,13 @@ export function buildLoopReadinessReport(input: { board?: KanbanBoard | null; no
       needsHuman,
       budgetedLoopTasks: budgetedLoopTasks.length,
       worktreeLoopTasks: worktreeLoopTasks.length,
+      contractLoopTasks: contractLoopTasks.length,
+      rubricLoopTasks: rubricLoopTasks.length,
       queenBeeTasks,
       antiPatterns,
       experiments,
     },
+    contracts,
     signals,
     findings,
     recommendations,
@@ -145,6 +169,7 @@ export function renderLoopEngineeringArtifacts(report: LoopReadinessReport, inpu
     loopMd: renderLoopMd(report, title),
     stateMd: renderStateMd(report, title),
     budgetMd: renderBudgetMd(report, title),
+    contractMd: renderContractMd(report, title),
     runLogMd: renderRunLogMd(report, title),
     registryYaml: renderRegistryYaml(report.patterns),
   };
@@ -206,6 +231,8 @@ function buildRecommendations(signals: LoopReadinessSignal[], level: LoopReadine
   if (missing.has("budget-limits") && loopTaskCount > 0) recommendations.push("Set maxAttempts plus token or cost caps on loop templates before raising autonomy.");
   if (missing.has("human-gates")) recommendations.push("Add human approval or explicit handoff rules for risky side effects, budget exceptions, and ambiguous decisions.");
   if (missing.has("worktree-isolation")) recommendations.push("Use workspace: worktree or an equivalent isolated checkout for autonomous code-changing loops.");
+  if (missing.has("negotiated-contracts")) recommendations.push("Attach a planner/evaluator contract snapshot before agents start long-running work.");
+  if (missing.has("evaluator-rubrics")) recommendations.push("Attach an evaluator rubric for subjective product, design, content, and customer-facing loops.");
   if (missing.has("run-history")) recommendations.push("Let workers claim/complete tasks through the Work Board so run history is append-only and inspectable.");
   if (level !== "L3") recommendations.push("Export LOOP.md, STATE.md, loop-budget.md, and loop-run-log.md snapshots for human and external-agent inspection.");
   return recommendations;
@@ -261,6 +288,23 @@ function humanGateEvidence(gates: LoopEvalGate[], tasks: KanbanTask[]): string[]
   const humanGates = gates.filter((gate) => gate.kind === "human").map((gate) => gate.title);
   const blocked = tasks.filter((task) => task.status === "needs-human").map((task) => `${task.id}: ${task.title}`);
   return [...humanGates, ...blocked].slice(0, 8);
+}
+
+function loopContractSummaries(tasks: KanbanTask[]): LoopContractSummary[] {
+  return tasks
+    .filter((task) => task.loop?.contract || task.loop?.evaluationRubric)
+    .slice(0, 24)
+    .map((task) => ({
+      taskId: task.id,
+      taskTitle: task.title,
+      contractTitle: task.loop?.contract?.title,
+      plannerAssertions: task.loop?.contract?.plannerAssertions ?? [],
+      evaluatorPushback: task.loop?.contract?.evaluatorPushback ?? [],
+      agreedDone: task.loop?.contract?.agreedDone ?? [],
+      artifacts: task.loop?.contract?.artifacts ?? [],
+      rubricTitle: task.loop?.evaluationRubric?.title,
+      rubricAxes: task.loop?.evaluationRubric?.axes.map((axis) => `${axis.title} (${Math.round(axis.weight * 100)}%): ${axis.description}`) ?? [],
+    }));
 }
 
 function proportionalScore(maxScore: number, count: number, total: number): number {
@@ -320,6 +364,8 @@ function renderStateMd(report: LoopReadinessReport, title: string): string {
     `- Receipts: ${report.totals.receipts}`,
     `- Runs: ${report.totals.runs} (${report.totals.activeRuns} active)`,
     `- Needs human: ${report.totals.needsHuman}`,
+    `- Written contracts: ${report.totals.contractLoopTasks}/${report.totals.loopTasks}`,
+    `- Evaluator rubrics: ${report.totals.rubricLoopTasks}/${report.totals.loopTasks}`,
     "",
     "## Findings",
     "",
@@ -329,6 +375,54 @@ function renderStateMd(report: LoopReadinessReport, title: string): string {
     "",
     ...(report.recommendations.length ? report.recommendations.map((item) => `- [ ] ${item}`) : ["- [x] No immediate loop-readiness recommendations."]),
     "",
+  ].join("\n");
+}
+
+function renderContractMd(report: LoopReadinessReport, title: string): string {
+  const sections = report.contracts.length
+    ? report.contracts.flatMap((item) => [
+      `## ${item.taskTitle}`,
+      "",
+      `- Task: ${item.taskId}`,
+      item.contractTitle ? `- Contract: ${item.contractTitle}` : "- Contract: not attached",
+      item.rubricTitle ? `- Rubric: ${item.rubricTitle}` : "- Rubric: not attached",
+      "",
+      "### Planner Assertions",
+      "",
+      ...(item.plannerAssertions.length ? item.plannerAssertions.map((line) => `- ${line}`) : ["- None recorded."]),
+      "",
+      "### Evaluator Pushback",
+      "",
+      ...(item.evaluatorPushback.length ? item.evaluatorPushback.map((line) => `- ${line}`) : ["- None recorded."]),
+      "",
+      "### Agreed Done",
+      "",
+      ...(item.agreedDone.length ? item.agreedDone.map((line) => `- ${line}`) : ["- None recorded."]),
+      "",
+      "### Expected Artifacts",
+      "",
+      ...(item.artifacts.length ? item.artifacts.map((line) => `- ${line}`) : ["- None recorded."]),
+      "",
+      "### Evaluator Rubric",
+      "",
+      ...(item.rubricAxes.length ? item.rubricAxes.map((line) => `- ${line}`) : ["- None recorded."]),
+      "",
+    ])
+    : [
+      "## No Contract Snapshots",
+      "",
+      "No loop tasks currently expose planner/evaluator contract snapshots or evaluator rubrics.",
+      "",
+    ];
+  return [
+    `# contract.md - ${title}`,
+    "",
+    "Generated from HivemindOS loop state. This file is a portable contract snapshot; the Work Board remains the live source of truth.",
+    "",
+    `- Written contracts: ${report.totals.contractLoopTasks}/${report.totals.loopTasks}`,
+    `- Evaluator rubrics: ${report.totals.rubricLoopTasks}/${report.totals.loopTasks}`,
+    "",
+    ...sections,
   ].join("\n");
 }
 

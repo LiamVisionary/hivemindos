@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, RefreshCcw } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, Puzzle, RefreshCcw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { useVoiceBands } from "@/lib/stores/voice-bands-store";
 
@@ -8,7 +8,7 @@ import { LottiePlayer } from "@/components/ui/lottie-player";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
-import { CHAT_SLASH_COMMANDS, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
+import { CHAT_SLASH_COMMANDS, filterChatSlashCommands, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
 import { listenForTauriComposerDragDrop, type TauriDragDropEvent, type TauriDropPosition, type TauriWebviewApi } from "@/features/chat/tauri-composer-drag-drop";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
@@ -490,6 +490,8 @@ export function AttachmentMenuContent({
   onAttachImages,
   onAttachFiles,
   onAttachDirectory,
+  onAttachSkill,
+  onAttachTemplate,
   directoryPickerDisabled = false,
   directoryPickerDisabledReason,
   recentDirectories = [],
@@ -502,6 +504,8 @@ export function AttachmentMenuContent({
   onAttachImages: () => void;
   onAttachFiles: () => void;
   onAttachDirectory?: () => void;
+  onAttachSkill?: () => void;
+  onAttachTemplate?: () => void;
   directoryPickerDisabled?: boolean;
   directoryPickerDisabledReason?: string;
   recentDirectories?: RecentDirectory[];
@@ -534,6 +538,18 @@ export function AttachmentMenuContent({
         >
           <FolderOpen aria-hidden="true" />
           Directories
+        </button>
+      ) : null}
+      {onAttachTemplate ? (
+        <button type="button" role="menuitem" onClick={(event) => run(event, onAttachTemplate)}>
+          <Sparkles aria-hidden="true" />
+          Template
+        </button>
+      ) : null}
+      {onAttachSkill ? (
+        <button type="button" role="menuitem" onClick={(event) => run(event, onAttachSkill)}>
+          <Puzzle aria-hidden="true" />
+          Skill
         </button>
       ) : null}
       {onAttachRecentDirectory && setRecentDirectoriesExpanded ? (
@@ -678,6 +694,8 @@ export function ComposerField({
   onDropFileReferences,
   onRemoveAttachment,
   onAttachDirectory,
+  onAttachSkill,
+  onAttachTemplate,
   directoryPickerDisabled = false,
   directoryPickerDisabledReason,
   recentDirectories = [],
@@ -726,6 +744,8 @@ export function ComposerField({
   onDropFileReferences?: (files: FileList | File[]) => void;
   onRemoveAttachment: (id: string) => void;
   onAttachDirectory?: () => void;
+  onAttachSkill?: () => void;
+  onAttachTemplate?: () => void;
   directoryPickerDisabled?: boolean;
   directoryPickerDisabledReason?: string;
   recentDirectories?: RecentDirectory[];
@@ -774,18 +794,7 @@ export function ComposerField({
   const slashCommandQuery = slashTokenMatch?.[1]?.toLowerCase() ?? "";
   const filteredSlashCommands = useMemo(() => {
     if (!hermesSlashCommands) return [];
-    const query = slashCommandQuery.trim();
-    const matching = CHAT_SLASH_COMMANDS.filter((command) => {
-      const haystack = [
-        command.name,
-        command.description,
-        command.category,
-        command.argsHint ?? "",
-        ...(command.aliases ?? []),
-      ].join(" ").toLowerCase();
-      return !query || haystack.includes(query);
-    });
-    return matching.length ? matching : CHAT_SLASH_COMMANDS;
+    return filterChatSlashCommands(CHAT_SLASH_COMMANDS, slashCommandQuery);
   }, [hermesSlashCommands, slashCommandQuery]);
   const slashCommandOpen = Boolean(hermesSlashCommands && slashTokenMatch && !disabled && filteredSlashCommands.length > 0);
 
@@ -1128,7 +1137,7 @@ export function ComposerField({
           <span>{voiceTranscript || "Listening..."}</span>
         </div>
       ) : null}
-      <div className={chatClass("composerTools")}>
+      <div className={chatClass("composerTools")} data-attachment-menu-open={attachmentMenuOpen ? "true" : undefined}>
         <div className={chatClass("attachmentMenuWrap")} ref={attachmentMenuRef}>
           <button
             type="button"
@@ -1351,6 +1360,8 @@ export function ComposerField({
               onAttachImages={() => imageInputRef.current?.click()}
               onAttachFiles={() => fileInputRef.current?.click()}
               onAttachDirectory={onAttachDirectory}
+              onAttachSkill={onAttachSkill}
+              onAttachTemplate={onAttachTemplate}
               directoryPickerDisabled={directoryPickerDisabled}
               directoryPickerDisabledReason={directoryPickerDisabledReason}
               recentDirectories={recentDirectories}

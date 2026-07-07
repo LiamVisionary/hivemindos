@@ -2,7 +2,18 @@
 
 import * as React from "react";
 import { fetchAgentStatusAnswer } from "@/features/dashboard/agent-status-fetch";
+import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
+import {
+  isHivemindFastContextCommand,
+  isWalletReadinessCommand,
+} from "@/lib/services/queen-bee/queen-brain";
 import { isLikelyEcho } from "./echo-detection";
+import {
+  actingWalletSourceFromContext,
+  fetchHivemindFastContext,
+  fetchWalletReadiness,
+  withScreenContext,
+} from "./queen-fast-context";
 import {
   closeRealtimeSttSocket,
   pcm16ToBase64,
@@ -92,8 +103,9 @@ function parseFunctionCall(
 
 // Returns the spoken summary fed back to the model, plus an optional richer
 // `detail` (markdown) the overlay can surface in a "what she found" modal.
-async function askHivemindAgent(
+export async function askHivemindAgent(
   args: Record<string, unknown>,
+  screenContext?: DashboardScreenContext,
 ): Promise<{ speech: string; detail: string }> {
   const message = typeof args.message === "string" ? args.message.trim() : "";
   if (!message)
@@ -101,11 +113,23 @@ async function askHivemindAgent(
       speech: "The relayed request was empty, so nothing was done.",
       detail: "",
     };
+  if (isWalletReadinessCommand(message)) {
+    const result = await fetchWalletReadiness(screenContext);
+    return { speech: result, detail: result };
+  }
+  if (isHivemindFastContextCommand(message)) {
+    const result = await fetchHivemindFastContext(message, screenContext);
+    return { speech: result, detail: result };
+  }
   try {
     const response = await fetch("/api/queen-bee/voice", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "agent-turn", message }),
+      body: JSON.stringify({
+        action: "agent-turn",
+        message: withScreenContext(message, screenContext),
+        actingWallet: actingWalletSourceFromContext(screenContext),
+      }),
       cache: "no-store",
       signal: AbortSignal.timeout(60_000),
     });
@@ -134,7 +158,7 @@ async function askHivemindAgent(
   }
 }
 
-async function driveDashboard(
+export async function driveDashboard(
   args: Record<string, unknown>,
   pilot: ((command: string) => Promise<string>) | undefined,
 ) {
@@ -149,7 +173,7 @@ async function driveDashboard(
   }
 }
 
-async function rememberPreference(args: Record<string, unknown>) {
+export async function rememberPreference(args: Record<string, unknown>) {
   const preference =
     typeof args.preference === "string" ? args.preference.trim() : "";
   if (!preference) return "Nothing was saved: the preference was empty.";
@@ -174,7 +198,7 @@ async function rememberPreference(args: Record<string, unknown>) {
   }
 }
 
-async function createHiveTask(
+export async function createHiveTask(
   args: Record<string, unknown>,
   approval: { latestUserTranscript?: string; lastQueenUtterance?: string } = {},
 ) {
@@ -215,7 +239,7 @@ async function createHiveTask(
   }
 }
 
-async function readAgentStatus(args: Record<string, unknown>) {
+export async function readAgentStatus(args: Record<string, unknown>) {
   // Shared with the typed chat executor: reads live fleet telemetry and, when a
   // matched agent is unhealthy, appends a nudge to OFFER a create_hive_task fix.
   // The Queen relays the result and only creates the task once the user agrees.
@@ -235,6 +259,7 @@ export function useQueenBeeRealtime(
   onFailed?: () => void,
   onDriveDashboard?: (command: string) => Promise<string>,
   openingLine = "",
+  screenContext?: DashboardScreenContext,
 ) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
@@ -256,6 +281,7 @@ export function useQueenBeeRealtime(
   const micAnalyserRef = React.useRef<AnalyserNode | null>(null);
   const onFailedRef = React.useRef(onFailed);
   const onDriveDashboardRef = React.useRef(onDriveDashboard);
+  const screenContextRef = React.useRef(screenContext);
 
   React.useEffect(() => {
     onFailedRef.current = onFailed;
@@ -264,6 +290,10 @@ export function useQueenBeeRealtime(
   React.useEffect(() => {
     onDriveDashboardRef.current = onDriveDashboard;
   }, [onDriveDashboard]);
+
+  React.useEffect(() => {
+    screenContextRef.current = screenContext;
+  }, [screenContext]);
 
   React.useEffect(() => {
     mutedRef.current = muted;
@@ -605,24 +635,37 @@ export function useQueenBeeRealtime(
         handledFunctionCalls.add(call.callId);
         setPhase("thinking");
         let output: string;
+        const addPendingDetail = (detail: string) => {
+          const trimmed = detail.trim();
+          if (!trimmed) return;
+          pendingQueenDetail = pendingQueenDetail
+            ? `${pendingQueenDetail}\n\n---\n\n${trimmed}`
+            : trimmed;
+        };
+        const liveScreenContext = screenContextRef.current;
         if (call.name === "create_hive_task") {
           output = await createHiveTask(call.args, {
             latestUserTranscript: lastFinalUserTranscript,
             lastQueenUtterance,
           });
         } else if (call.name === "ask_hivemind_agent") {
-          const result = await askHivemindAgent(call.args);
+          const result = await askHivemindAgent(call.args, liveScreenContext);
           output = result.speech;
           // Hold the findings for the spoken turn this tool call triggers.
-          if (result.detail.trim()) {
-            pendingQueenDetail = pendingQueenDetail
-              ? `${pendingQueenDetail}\n\n---\n\n${result.detail.trim()}`
-              : result.detail.trim();
-          }
+          addPendingDetail(result.detail);
         } else if (call.name === "drive_dashboard") {
           output = await driveDashboard(call.args, onDriveDashboardRef.current);
         } else if (call.name === "remember_preference") {
           output = await rememberPreference(call.args);
+        } else if (call.name === "read_wallet_readiness") {
+          output = await fetchWalletReadiness(liveScreenContext);
+          addPendingDetail(output);
+        } else if (call.name === "read_hivemind_context") {
+          output = await fetchHivemindFastContext(
+            String(call.args.query ?? ""),
+            liveScreenContext,
+          );
+          addPendingDetail(output);
         } else if (call.name === "read_agent_status") {
           output = await readAgentStatus(call.args);
         } else {

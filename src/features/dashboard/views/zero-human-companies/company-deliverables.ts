@@ -5,7 +5,7 @@ import { classifyDeliverable, deliverableHref, type ClassifiedDeliverable } from
 import type { OutputSpec } from "./company-output-spec";
 import type { Colony } from "./types";
 
-export type CardCtx = { classified: ClassifiedDeliverable; machineName?: string; key: string };
+export type CardCtx = { classified: ClassifiedDeliverable; machineName?: string; key: string; timestampMs?: number };
 
 /** Relative "…ago" for an epoch-ms timestamp (dispatch time, email updatedAt, …). */
 export function dispatchedAgo(ms?: number): string | null {
@@ -40,11 +40,12 @@ export function collectCompanyDeliverables(c: Colony): CardCtx[] {
   for (const issue of bySort) {
     const work = issue.work;
     if (!work) continue;
+    const timestampMs = work.completedAt ?? work.updatedAt;
     for (const d of work.deliverables) {
       // The dedupe key (resolved target) is also a stable, unique React key — the
       // extractor reuses one deliverable.id when two tasks reference the same file.
       const key = (deliverableHref(d) || d.path || d.label || d.id || "").replace(/\/+$/, "").toLowerCase();
-      const ctx: CardCtx = { classified: classifyDeliverable(d), machineName: work.machineName, key };
+      const ctx: CardCtx = { classified: classifyDeliverable(d), machineName: work.machineName, key, timestampMs };
       const existing = seen.get(key);
       if (!existing) seen.set(key, ctx);
       else if (existing.classified.category === "internal" && ctx.classified.category !== "internal") seen.set(key, ctx);

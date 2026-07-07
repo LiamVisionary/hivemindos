@@ -52,6 +52,160 @@
   animation: tmPulse 1.6s ease-in-out infinite;
   box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
 }
+.templatePicker {
+  display: grid;
+  gap: 10px;
+}
+.templateToolbar {
+  display: grid;
+  gap: 8px;
+}
+.templateSearch {
+  display: grid;
+  gap: 5px;
+}
+.templateSearch span {
+  color: var(--tm-fg-4);
+  font-family: var(--tm-f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.templateSearch input {
+  width: 100%;
+  border: 1px solid var(--tm-line-2);
+  border-radius: 7px;
+  background: var(--tm-panel-soft);
+  color: var(--tm-fg);
+  padding: 9px 11px;
+  font-family: var(--tm-f-display);
+  font-size: 13px;
+  outline: none;
+}
+.templateSearch input:focus-visible {
+  border-color: var(--tm-honey-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tm-honey) 16%, transparent);
+}
+.templateFilters,
+.templateBadgeRow,
+.templatePager,
+.templatePager div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.templateFilters button,
+.templatePager button {
+  border: 1px solid var(--tm-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tm-fg-3);
+  padding: 5px 9px;
+  font-family: var(--tm-f-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.templateFilters button[data-active="true"] {
+  border-color: var(--tm-honey-border);
+  background: rgba(255,212,90,0.12);
+  color: var(--tm-honey-2);
+}
+.templatePager button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.templateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.templateCard {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 138px;
+  border: 1px solid var(--tm-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tm-fg);
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.templateCard:hover,
+.templateCard:focus-visible,
+.templateCard[data-active="true"] {
+  border-color: var(--tm-honey-border);
+  background: rgba(255,212,90,0.10);
+  outline: none;
+}
+.templateCardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.templateCardTop strong {
+  color: var(--tm-fg);
+  font-family: var(--tm-f-display);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.templateCardTop span,
+.templateBadgeRow em,
+.templateBadgeRow b {
+  border: 1px solid var(--tm-line);
+  border-radius: 999px;
+  background: var(--tm-panel-soft);
+  color: var(--tm-fg-3);
+  padding: 2px 6px;
+  font-family: var(--tm-f-mono);
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.templateBadgeRow b {
+  border-color: var(--tm-honey-border);
+  background: rgba(255,212,90,0.10);
+  color: var(--tm-honey-2);
+}
+.templateCard small {
+  color: var(--tm-fg-4);
+  font-family: var(--tm-f-mono);
+  font-size: 10px;
+}
+.templateCard > span:not(.templateCardTop):not(.templateBadgeRow) {
+  color: var(--tm-fg-3);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.templateEmpty {
+  grid-column: 1 / -1;
+  border: 1px dashed var(--tm-line-2);
+  border-radius: 8px;
+  color: var(--tm-fg-4);
+  padding: 14px;
+  font-family: var(--tm-f-mono);
+  font-size: 11px;
+}
+.templatePager {
+  justify-content: space-between;
+  color: var(--tm-fg-4);
+  font-family: var(--tm-f-mono);
+  font-size: 10px;
+}
+@media (max-width: 720px) {
+  .templateGrid {
+    grid-template-columns: 1fr;
+  }
+}
 @keyframes tmPulse {
   0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
   50%      { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 6%, transparent); }

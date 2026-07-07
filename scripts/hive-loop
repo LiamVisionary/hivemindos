@@ -121,6 +121,7 @@ async function writeArtifacts(root, output) {
     writeFile(join(root, "LOOP.md"), output.loopMd, "utf8"),
     writeFile(join(root, "STATE.md"), output.stateMd, "utf8"),
     writeFile(join(root, "loop-budget.md"), output.budgetMd, "utf8"),
+    writeFile(join(root, "contract.md"), output.contractMd, "utf8"),
     writeFile(join(root, "loop-run-log.md"), output.runLogMd, "utf8"),
     writeFile(join(root, "patterns", "registry.yaml"), output.registryYaml, "utf8"),
   ]);
@@ -132,5 +133,5 @@ hive-loop export [--json] [--write <dir>] [--title <name>]
 hive-loop patterns [--json]
 
 Reads HivemindOS Work Board loop state and emits loop-engineering readiness or
-Cobus-compatible LOOP.md / STATE.md / budget / run-log snapshots.`);
+Cobus-compatible LOOP.md / STATE.md / contract / budget / run-log snapshots.`);
 }

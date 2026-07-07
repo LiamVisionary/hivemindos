@@ -32,6 +32,8 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
   fleetSnapshot?: QueenBeeFleetMachine[] | null;
   /** Explicit worker-class hints for routing (e.g. ["code"]); defaults to []. */
   skills?: string[] | null;
+  /** Workspace isolation requested for the Work Board task. */
+  workspace?: KanbanTask["workspace"] | null;
   /** Project-registry id to stamp on the created task (routing + proof badge). */
   projectId?: string | null;
 };
@@ -472,7 +474,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     assignee: selectedAgentName || "queen-bee",
     status: mode === "plan" ? "ideas" : "ready",
     priority: input.priority || "normal",
-    workspace: "scratch",
+    workspace: input.workspace ?? "scratch",
     skills: ["hivemindos-coordination", delegation.workerClass, ...(input.skills ?? [])],
     targetMachine: delegation.machine ? {
       key: delegation.machine.key || delegation.machine.device?.machineId || selectedMachineName || "unknown",
@@ -638,6 +640,8 @@ function loopSummary(loop?: KanbanLoopSpec | null) {
     "## Loop contract",
     `Mode: ${loop.mode}`,
     loop.goal ? `Goal: ${loop.goal}` : "",
+    loop.contract ? `Contract: ${loop.contract.title} - done means ${loop.contract.agreedDone.join("; ")}` : "",
+    loop.evaluationRubric ? `Evaluator rubric: ${loop.evaluationRubric.title} (${loop.evaluationRubric.axes.map((axis) => `${axis.title} ${Math.round(axis.weight * 100)}%`).join("; ")})` : "",
     loop.successCriteria?.length ? `Success criteria: ${loop.successCriteria.join("; ")}` : "",
     loop.evalGates?.length ? `Eval gates: ${loop.evalGates.map((gate) => `${gate.title} (${gate.phase})`).join("; ")}` : "",
   ].filter(Boolean).join("\n");

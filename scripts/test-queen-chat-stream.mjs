@@ -22,12 +22,19 @@ const {
   queenInstructionsForPersonality,
   queenRealtimeTools,
   userAuthorizedHiveTaskCreation,
+  isTrivialConversationalTurn,
+  isHivemindFastContextCommand,
+  isWalletReadinessCommand,
 } = await import("../src/lib/services/queen-bee/queen-brain.ts");
 const {
   findWorkBoardTasks,
   flattenKanbanColumns,
   formatWorkBoardTaskForPrompt,
+  isPlainWorkBoardNavigationCommand,
+  isWorkBoardPipelineQuestion,
   summarizeWorkBoardByStatus,
+  summarizeWorkBoardForNavigation,
+  summarizeWorkBoardPipeline,
 } = await import("../src/features/dashboard/work-board-lookup.ts");
 const {
   findFleetAgents,
@@ -108,23 +115,52 @@ const {
   // route 2026-07-04 — an earlier map-shaped assumption made the Queen read an
   // empty board).
   const columns = [
+    { id: "ideas", title: "Ideas", description: "", tasks: [{ id: "t_idea_1", title: "Draft partner landing page idea", status: "ideas" }] },
     { id: "ready", title: "Ready", description: "", tasks: [{ id: "t_aaa1_x", title: "Verify outreach email deliverability setup", status: "ready" }] },
+    { id: "working", title: "Working", description: "", tasks: [
+      { id: "t_working_1", title: "Build paid-demo workflow", status: "working" },
+      { id: "t_working_2", title: "Refresh demo follow-up copy", status: "working" },
+    ] },
     { id: "needs-human", title: "Needs You", description: "", tasks: [{ id: "t_bbb2_y", title: "Resolve email deliverability setup issues", status: "needs-human", assignee: "HermesMain", lastFailureReason: "agent-error", result: "Queen Bee autonomous pickup exhausted all eligible delegates" }] },
+    { id: "done", title: "Done", description: "", tasks: [
+      { id: "t_pipeline_total", title: "Audit active pipeline close probability", status: "done", updatedAt: 20, result: "Audited active pipeline close probability and updated the weekly revenue ledger: 36 rows, $73,500 quoted/open pipeline, $0 recognized Weekly Revenue." },
+      { id: "t_pipeline_blocked", title: "Audit approval bottleneck impact on revenue", status: "done", updatedAt: 30, result: "Result: - $61,500 / $73,500 = 83.7% is blocked by human approval. - $0 / $73,500 = 0.0% is currently blocked by technical readiness. - $12,000 / $73,500 = 16.3% is already in-market and waiting on prospect response. - Weekly Revenue remains $0 / $2,885." },
+    ] },
     { id: "junk", title: "Junk", description: "", tasks: "not-an-array" },
   ];
   const tasks = flattenKanbanColumns(columns);
-  assert.equal(tasks.length, 2);
+  assert.equal(tasks.length, 7);
   // legacy/map tolerance: lane→tasks map still flattens
   assert.equal(flattenKanbanColumns({ ready: [{ id: "t_map_1", title: "Map shape", status: "ready" }] }).length, 1);
   assert.equal(findWorkBoardTasks(tasks, { taskId: "t_bbb2_y" })[0]?.id, "t_bbb2_y");
   assert.equal(findWorkBoardTasks(tasks, { query: "resolve email deliverability" })[0]?.id, "t_bbb2_y");
   assert.equal(findWorkBoardTasks(tasks, { query: "deliverability setup issues resolve" })[0]?.id, "t_bbb2_y", "loose word match");
   assert.deepEqual(findWorkBoardTasks(tasks, { query: "zzz" }), []);
-  const block = formatWorkBoardTaskForPrompt(tasks[1]);
+  const blockedTask = tasks.find((task) => task.id === "t_bbb2_y");
+  assert.ok(blockedTask);
+  const block = formatWorkBoardTaskForPrompt(blockedTask);
   assert.match(block, /t_bbb2_y/);
   assert.match(block, /blocked on the user/);
   assert.match(block, /agent-error/);
   assert.match(summarizeWorkBoardByStatus(tasks), /ready: 1/);
+  assert.equal(isPlainWorkBoardNavigationCommand("open the work"), true);
+  assert.equal(isPlainWorkBoardNavigationCommand("show me my tasks"), true);
+  assert.equal(isPlainWorkBoardNavigationCommand("go to kanban board"), true);
+  assert.equal(isPlainWorkBoardNavigationCommand("open the work task about revenue"), false);
+  assert.equal(isPlainWorkBoardNavigationCommand("add a task to the work board"), false);
+  assert.equal(
+    summarizeWorkBoardForNavigation(tasks),
+    "Opened Work. You have 1 idea, 1 ready task, 2 tasks currently being worked on, and 1 that needs your attention.",
+  );
+  assert.equal(summarizeWorkBoardForNavigation([]), "Opened Work. The Work Board is empty.");
+  assert.equal(isWorkBoardPipelineQuestion("what is the quoted/open pipeline?"), true);
+  assert.equal(isWorkBoardPipelineQuestion("open the work"), false);
+  const pipeline = summarizeWorkBoardPipeline(tasks);
+  assert.match(pipeline, /Quoted\/open pipeline: \$73,500\./);
+  assert.match(pipeline, /Recognized weekly revenue: \$0 \/ \$2,885 target\./);
+  assert.match(pipeline, /Blocked by human approval: \$61,500\./);
+  assert.match(pipeline, /Already in market\/waiting on prospects: \$12,000\./);
+  assert.match(pipeline, /potential pipeline, not booked revenue/);
 }
 
 // ── fleet agent status: join agent→machine→snapshot, find, format ────────────
@@ -231,18 +267,77 @@ const {
   assert.match(multi, /Diagnose & fix HermesMain/);
 }
 
-// ── read_agent_status is offered to BOTH surfaces; read_work_board typed-only ──
+// ── direct read tools are offered to both Queen surfaces ──
 {
   const chatNames = queenChatTools().map((t) => t.function.name);
   const voiceNames = queenRealtimeTools().map((t) => t.name);
-  // typed chat: both read tools plus create_hive_task (the fix rail)
+  // typed chat: direct read tools plus create_hive_task (the fix rail)
   assert.ok(chatNames.includes("read_agent_status"), "typed chat offers read_agent_status");
+  assert.ok(chatNames.includes("read_hivemind_context"), "typed chat offers read_hivemind_context");
+  assert.ok(chatNames.includes("read_wallet_readiness"), "typed chat offers read_wallet_readiness");
   assert.ok(chatNames.includes("read_work_board"), "typed chat offers read_work_board");
   assert.ok(chatNames.includes("create_hive_task"), "typed chat can create the fix task");
-  // voice: read_agent_status + create_hive_task wired; read_work_board is NOT
+  // voice: the realtime executor is wired for the fast app/brain/wallet reads too
   assert.ok(voiceNames.includes("read_agent_status"), "voice offers read_agent_status");
+  assert.ok(voiceNames.includes("read_hivemind_context"), "voice offers read_hivemind_context");
+  assert.ok(voiceNames.includes("read_wallet_readiness"), "voice offers read_wallet_readiness");
   assert.ok(voiceNames.includes("create_hive_task"), "voice can create the fix task");
   assert.ok(!voiceNames.includes("read_work_board"), "voice does not offer read_work_board (no executor)");
+}
+
+// ── app/brain questions use direct fast context, not full runtime delegation ─
+{
+  const fastContext = [
+    "what does the shared brain know about Hermes?",
+    "which app capabilities do we have for image generation?",
+    "show me HivemindOS dashboard routes for wallets",
+    "what agents are in the fleet?",
+    "list schedules in the app data",
+    "what tools can Queen Bee use?",
+  ];
+  for (const msg of fastContext) {
+    assert.equal(isHivemindFastContextCommand(msg), true, `"${msg}" should use direct HivemindOS context`);
+  }
+
+  const needsAgentOrAction = [
+    "remember that I like short replies",
+    "create a Work Board task",
+    "open Obsidian",
+    "fix Hermes timeout",
+    "swap 1 usdc to eth",
+    "check wallet balances",
+    "open wallets",
+  ];
+  for (const msg of needsAgentOrAction) {
+    assert.equal(isHivemindFastContextCommand(msg), false, `"${msg}" must not use generic fast context`);
+  }
+}
+
+// ── wallet readiness requests use the direct app capability map ──────────────
+{
+  const readiness = [
+    "open wallets",
+    "which wallets are spend ready?",
+    "wallet rail status",
+    "show me Bankr and UsePod setup status",
+    "is Veil gated?",
+    "what payment rails are configured?",
+  ];
+  for (const msg of readiness) {
+    assert.equal(isWalletReadinessCommand(msg), true, `"${msg}" should be a direct wallet-readiness read`);
+  }
+
+  const needsRails = [
+    "check wallet balances",
+    "what's my Bankr portfolio?",
+    "swap 1 usdc to eth",
+    "send 10 usdc",
+    "give me my deposit address",
+    "confirm the payment",
+  ];
+  for (const msg of needsRails) {
+    assert.equal(isWalletReadinessCommand(msg), false, `"${msg}" must stay on the live wallet rails`);
+  }
 }
 
 // ── create_hive_task propose-then-confirm is enforced mechanically ──
@@ -256,6 +351,46 @@ const {
   // Explicit work requests and whole-message affirmatives authorize creation.
   for (const msg of ["fix the agent errors", "queue a task to research competitors", "remind me tomorrow", "yes", "queue it", "go ahead!", "sure, thanks"]) {
     assert.equal(userAuthorizedHiveTaskCreation(msg), true, `"${msg}" must authorize task creation`);
+  }
+}
+
+// ── isTrivialConversationalTurn: greetings skip tools; compound asks do not ──
+// Scout fired read_work_board on a bare "hi", rendering a greeting + tool-spin
+// + a second unsolicited paragraph (2026-07-06). The typed loop forces no-tools
+// on round 0 when this returns true. Over-suppression (swallowing a real ask
+// behind a greeting prefix) is the dangerous direction — assert against it.
+{
+  const trivial = [
+    "hi", "Hi", "HELLO", "hey queen", "hey queen bee", "yo", "sup", "gm",
+    "good morning", "morning", "howdy", "thanks", "thank you", "cheers",
+    "how are you", "how's it going", "how you doing", "thanks queen!",
+    "hi there queen bee", "hi how are you", "how are you doing today",
+  ];
+  for (const m of trivial) {
+    assert.equal(isTrivialConversationalTurn(m), true, `"${m}" should be a trivial (no-tools) turn`);
+  }
+  // A greeting that PREFIXES a real ask must still run tools — read_agent_status,
+  // ask_hivemind_agent, and drive_dashboard are mandatory for these.
+  const needsTools = [
+    "hey queen, is HermesMain down?",
+    "gm, swap 1 usdc to eth",
+    "thanks, now open my wallets",
+    "how are you doing on the collector fix?",
+    "yo, what's the balance on user:mq522kzb?",
+    "what's up with the fleet?",
+    "good morning, what's on the board?",
+    "how are the agents doing?",
+    "what's new?",
+    "open my wallets",
+    "fix the collector",
+    "help", "status", "today",
+  ];
+  for (const m of needsTools) {
+    assert.equal(isTrivialConversationalTurn(m), false, `"${m}" must NOT be treated as trivial (it needs tools)`);
+  }
+  // Must not collide with the affirmative path that authorizes task creation.
+  for (const m of ["yes", "ok", "sure", "queue it"]) {
+    assert.equal(isTrivialConversationalTurn(m), false, `"${m}" is an affirmative, not a greeting`);
   }
 }
 

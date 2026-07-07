@@ -185,7 +185,15 @@ function AgentHive({ agent, onOpen, style }: { agent: AeonAgent; onOpen: (a: Aeo
   );
 }
 
-export function AeonFleet({ agents, onOpen, onCreate }: { agents: AeonAgent[]; onOpen: (a: AeonAgent) => void; onCreate: () => void }) {
+export function AeonFleet({
+  agents,
+  onOpen,
+  onCreate,
+}: {
+  agents: AeonAgent[];
+  onOpen: (a: AeonAgent) => void;
+  onCreate: () => void;
+}) {
   const totalOnDuty = agents.reduce((n, a) => n + a.onDuty, 0);
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const cellCount = agents.length + 1;

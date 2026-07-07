@@ -363,8 +363,12 @@ export function CreateCompanyModal({
   const [step, setStep] = React.useState(0);
   const [form, setForm] = React.useState<FormState>({ name: "", ticker: "", sector: "", apexTitle: "", apexMetric: "", apexTarget: "", metricUnit: "number" });
   const [crew, setCrew] = React.useState<Agent[]>(() => (initialCrew ?? []).map((member) => ({ ...member })));
-  const canNext = form.name.trim().length > 0;
-  const create = () => onCreate(readForm(form), crew.map((a) => ({ ...a })));
+  const canNext = form.name.trim().length > 0 && form.apexTitle.trim().length > 0;
+  const create = () => {
+    const snapshot = readForm(form);
+    if (!snapshot.name || !snapshot.apexTitle) return;
+    onCreate(snapshot, crew.map((a) => ({ ...a })));
+  };
 
   const steps = ["Identity", "Founding crew"];
   return (
@@ -387,7 +391,7 @@ export function CreateCompanyModal({
           {step > 0 && <GhostBtn onClick={() => setStep(step - 1)}>Back</GhostBtn>}
           {step === 0
             ? <PrimaryBtn disabled={!canNext} onClick={() => setStep(1)}>Next · staff the crew</PrimaryBtn>
-            : <PrimaryBtn disabled={crew.length === 0 || busy} onClick={create}>{busy ? <><Spinner size={12} /> Founding</> : `Found ${form.name || "company"}`}</PrimaryBtn>}
+            : <PrimaryBtn disabled={crew.length === 0 || !canNext || busy} onClick={create}>{busy ? <><Spinner size={12} /> Founding</> : `Found ${form.name || "company"}`}</PrimaryBtn>}
         </>
       }
     >
@@ -605,6 +609,7 @@ export function EditCompanyModal({
   // never a free-text id). An id missing from the registry stays selectable so
   // opening + saving the modal can't silently unlink it.
   const [projects, setProjects] = React.useState<ProjectPickerEntry[]>([]);
+  const [projectsLoading, setProjectsLoading] = React.useState(true);
   const [projectLinkBusy, setProjectLinkBusy] = React.useState(false);
   const [projectLinkError, setProjectLinkError] = React.useState<string | null>(null);
   const [manualProjectOpen, setManualProjectOpen] = React.useState(false);
@@ -629,6 +634,8 @@ export function EditCompanyModal({
           })));
       } catch {
         // Registry unreachable — the picker still offers None + the current link.
+      } finally {
+        if (!cancelled) setProjectsLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -739,6 +746,11 @@ export function EditCompanyModal({
                 <Select value={form.projectId} onChange={(value) => setForm((current) => ({ ...current, projectId: value }))} options={projectOptions} />
                 <GhostBtn onClick={browseForProjectFolder}>{projectLinkBusy ? <><Spinner size={11} /> Linking</> : "Link a folder…"}</GhostBtn>
               </div>
+              {projectsLoading ? (
+                <div role="status" aria-label="Loading projects" style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>
+                  <Spinner size={11} /> Loading projects…
+                </div>
+              ) : null}
             </Field>
             {selectedProject ? (
               <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", wordBreak: "break-all" }}>

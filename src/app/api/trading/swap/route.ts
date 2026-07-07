@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
       slippageBps: Number(body.slippageBps) || undefined,
       confirmation: body.confirmation,
       approvalToken: body.approvalToken?.trim() || undefined,
+      approvalThresholdSatisfied: body.confirmation === SWAP_CONFIRMATION,
     };
 
     if (isExecute) {

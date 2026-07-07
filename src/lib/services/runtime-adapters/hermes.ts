@@ -11,6 +11,7 @@ type ParsedSchedule = {
   name: string;
   every: string;
   nextRunMs?: number;
+  lastRunMs?: number;
   message: string;
   enabled: boolean;
 };
@@ -44,7 +45,7 @@ async function listHermesSchedules(profile: AgentProfile): Promise<RuntimeSchedu
       enabled: parsed.enabled,
       nextRunMs: parsed.nextRunMs,
       source: `~/.hermes/cron/${entry.name}`,
-      lastRunMs: fileStat?.mtimeMs,
+      lastRunMs: parsed.lastRunMs ?? fileStat?.mtimeMs,
       metadata: { path },
     }));
   }
@@ -65,6 +66,7 @@ function parseScheduleContent(raw: string, filename: string): ParsedSchedule[] {
         name: stringFrom(job.name) || stringFrom(job.title) || filename.replace(/\.[^.]+$/, ""),
         every: scheduleText(job),
         nextRunMs: dateMsFrom(job.next_run_at) ?? dateMsFrom(job.nextRunAt),
+        lastRunMs: dateMsFrom(job.last_run_at) ?? dateMsFrom(job.lastRunAt),
         message: message || raw.slice(0, 1200),
         enabled: job.enabled !== false,
       };
@@ -76,6 +78,7 @@ function parseScheduleContent(raw: string, filename: string): ParsedSchedule[] {
     name: stringFrom(parsed.name) || stringFrom(parsed.title) || firstLine || filename.replace(/\.[^.]+$/, ""),
     every: scheduleText(parsed),
     nextRunMs: dateMsFrom(parsed.next_run_at) ?? dateMsFrom(parsed.nextRunAt),
+    lastRunMs: dateMsFrom(parsed.last_run_at) ?? dateMsFrom(parsed.lastRunAt),
     message: stringFrom(parsed.message) || stringFrom(parsed.prompt) || stringFrom(parsed.task) || raw.slice(0, 1200),
     enabled,
   }];

@@ -2,9 +2,12 @@ import { readFileSync } from "node:fs";
 import { strict as assert } from "node:assert";
 
 const derivedState = readFileSync(new URL("../src/features/dashboard/hooks/use-dashboard-derived-state.tsx", import.meta.url), "utf8");
+const dashboardApp = readFileSync(new URL("../src/features/dashboard/DashboardApp.tsx", import.meta.url), "utf8");
+const pollingEffects = readFileSync(new URL("../src/features/dashboard/hooks/use-dashboard-polling-effects.tsx", import.meta.url), "utf8");
 const dashboardHeader = readFileSync(new URL("../src/features/dashboard/views/DashboardHeader.tsx", import.meta.url), "utf8");
 const appNavShelf = readFileSync(new URL("../src/components/fleet-hive/AppNavShelf.tsx", import.meta.url), "utf8");
 const morePanel = readFileSync(new URL("../src/features/dashboard/MorePanel.tsx", import.meta.url), "utf8");
+const kanbanBoardUtils = readFileSync(new URL("../src/lib/utils/kanban-board.ts", import.meta.url), "utf8");
 
 assert.doesNotMatch(derivedState, /type DashboardView = [^;]*"new"/, "DashboardView should not include the removed test New tab id");
 assert.doesNotMatch(derivedState, /id: "new" as const,[\s\S]*?label: "New"/, "Dashboard nav items should not include the removed test New tab");
@@ -27,27 +30,52 @@ assert.deepEqual(
   navigation.APP_NAV_SHELF_GROUPS.map((group) => group.map((item) => item.id)),
   [
     ["kanban", "vault", "chat", "wallet", "trade"],
-    ["scheduler", "swarm", "history"],
-    ["aeon", "integrations", "maintenance"],
+    ["scheduler", "notifications", "swarm", "history"],
+    ["governance", "aeon", "integrations"],
   ],
-  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade, Schedules/Swarm/History, Aeon/Integrations/Diagnostics",
+  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade, Schedules/Alerts/Swarm/History, Companies/Aeon/Integrations",
 );
 assert.equal(navigation.shelfSlotForView("agents"), "agents", "Fleet lights the brand slot");
 assert.equal(navigation.shelfSlotForView("my-apps"), "integrations", "Apps & Services lights the Integrations slot");
-assert.equal(navigation.shelfSlotForView("memory"), "maintenance", "Memory lights the Diagnostics slot");
+assert.equal(navigation.shelfSlotForView("memory"), "more", "Memory lights the More slot");
 assert.equal(navigation.shelfSlotForView("env"), "more", "Unpinned utility views light the More slot");
 assert.equal(navigation.DASHBOARD_ROUTE_LABELS.history, "Work History", "Route labels derive from the catalog");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("env"), "Utilities set includes env (the More grid renders every utility view)");
 
 assert.match(
   appNavShelf,
-  /<NavShelfItem\s+id="more"[\s\S]*?badge=\{notificationUnread\}/,
-  "The More shelf item should receive the unread notification badge count",
+  /<NavShelfItem[\s\S]*?badge=\{navBadges\[it\.id\]\}/,
+  "Pinned shelf items should receive per-route badge counts",
+);
+assert.match(
+  kanbanBoardUtils,
+  /export function activeKanbanTaskCount\(tasks: KanbanTask\[\]\)/,
+  "Work nav badge counts should share the Kanban active-task helper",
+);
+assert.match(
+  dashboardApp,
+  /const \[kanbanNavBadgeCount, setKanbanNavBadgeCount\] = useState<number \| null>\(null\)/,
+  "DashboardApp should keep a Work nav badge count that is independent of the mounted Kanban board",
+);
+assert.match(
+  dashboardApp,
+  /kanban:\s*kanbanNavBadgeCount \?\? \(kanbanBoard \? activeKanbanTaskCount\(kanbanBoard\.tasks\) : 0\)/,
+  "Work nav badge should use the background badge count before the Kanban panel is opened",
+);
+assert.match(
+  pollingEffects,
+  /activeView === "kanban"[\s\S]*?window\.setInterval\(refreshVisibleKanbanNavBadge, 60_000\)/,
+  "Dashboard polling should keep the Work nav badge warm while the Work tab is not active",
+);
+assert.match(
+  pollingEffects,
+  /setKanbanNavBadgeCount\(activeKanbanTaskCount\(data\.board\.tasks\)\)/,
+  "Background Kanban polling should update only the nav badge count",
 );
 assert.match(
   morePanel,
   /notifications:\s*\{[\s\S]*?badge:\s*notificationUnread\s*\|\|\s*undefined,[\s\S]*?badgeLabel:\s*notificationUnread\s*\?/,
-  "The More launcher should surface that count on the Alerts card, not hide it on the parent nav item",
+  "The More launcher should still surface the unread count on the Alerts card",
 );
 
 console.log("Dashboard nav has the expected top-level buttons, derived shelf groups, and no duplicate ids.");

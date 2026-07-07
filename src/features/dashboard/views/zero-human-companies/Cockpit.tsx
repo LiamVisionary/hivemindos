@@ -14,14 +14,17 @@ import type { PreviewDecision } from "./preview-review";
 import { DeliverableCard } from "./DeliverableCard";
 import { AnalyticsPanel } from "./AnalyticsPanel";
 import { ProductsPanel } from "./ProductsPanel";
+import { ImportedOperationsPanel } from "./ImportedOperationsPanel";
 import { CompanyKnowledgePanel } from "./CompanyKnowledgePanel";
 import { CommsPanel } from "./CommsPanel";
 import { CompanyRunsPanel } from "./CompanyRunsPanel";
+import { ApprovalPoliciesPanel } from "./ApprovalPoliciesPanel";
 import { collectCompanyDeliverables, partitionByOutput, dispatchedAgo } from "./company-deliverables";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
 import type { Agent, Approval, Colony, CompanyRevenueShareInput, Issue } from "./types";
-import type { CompanyPricingProposal } from "@/lib/types/company";
+import type { CompanyApprovalPolicy, CompanyPricingProposal } from "@/lib/types/company";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
+import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
 
 type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 
@@ -30,6 +33,8 @@ export type CockpitHandlers = {
   onReject: (approvalId: string) => void;
   /** Human decision on a crew-raised pricing proposal (approve applies the catalog change). */
   onResolvePricing: (proposalId: string, decision: "approve" | "reject") => void;
+  /** Save one company approval-policy row. */
+  onSetApprovalPolicy: (policy: CompanyApprovalPolicy) => void;
   onFreeze: (frozen: boolean) => void;
   onDelete: () => void;
   /** Launch perpetual autonomy: decompose the apex goal + dispatch to the crew. */
@@ -153,11 +158,21 @@ function AgentNode({ agent: a, head, onEdit }: { agent: Agent; head?: boolean; f
 }
 
 // ── Hero: apex ring + money side by side ────────────────────────────────────
+function PipelineCell({ label, value, tone = "var(--fg)" }: { label: string; value: string; tone?: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontFamily: "var(--f-display)", fontSize: 15, fontWeight: 600, color: tone, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{value}</div>
+      <div className="mcap" style={{ color: "var(--fg-4)", marginTop: 4 }}>{label}</div>
+    </div>
+  );
+}
+
 function Hero({ colony: c }: { colony: Colony }) {
   const fresh = c.status === "setup";
   const ac = alignColor(c.alignment, fresh);
   const drifting = !fresh && c.alignment < 55;
   const r = c.revenue;
+  const pipeline = c.pipeline;
   const revColor = r && !r.up ? "var(--danger)" : "var(--live)";
   const burnPct = c.burn.cap > 0 ? Math.min(100, Math.round((c.burn.today / c.burn.cap) * 100)) : 0;
   const burnColor = burnPct >= 85 ? "var(--danger)" : burnPct >= 65 ? "var(--honey)" : "var(--fg-2)";
@@ -207,6 +222,15 @@ function Hero({ colony: c }: { colony: Colony }) {
               </span>
             )}
           </div>
+          {pipeline?.quotedOpenUsd !== undefined && (
+            <div style={{ marginTop: 13, paddingTop: 12, borderTop: "1px solid var(--line)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(98px, 1fr))", gap: 12 }}>
+              <PipelineCell label="open quoted pipeline" value={formatPipelineUsd(pipeline.quotedOpenUsd)} tone="var(--honey)" />
+              <PipelineCell label="recognized" value={formatPipelineUsd(pipeline.recognizedWeeklyRevenueUsd)} tone={pipeline.recognizedWeeklyRevenueUsd ? "var(--live)" : "var(--fg-2)"} />
+              {pipeline.approvalBlockedUsd !== undefined ? <PipelineCell label="approval-blocked" value={formatPipelineUsd(pipeline.approvalBlockedUsd)} tone="var(--danger-2)" /> : null}
+              {pipeline.inMarketUsd !== undefined ? <PipelineCell label="in market" value={formatPipelineUsd(pipeline.inMarketUsd)} tone="var(--live)" /> : null}
+              <div style={{ gridColumn: "1 / -1", fontFamily: "var(--f-mono)", fontSize: 9.8, color: "var(--fg-4)", lineHeight: 1.45 }}>Quoted pipeline is potential revenue, not booked cash.</div>
+            </div>
+          )}
         </div>
         <div style={{ height: 1, background: "var(--line)" }} />
         <div>
@@ -241,7 +265,7 @@ function ApprovalCard({ ap, onApprove, onReject, busy }: { ap: Approval; onAppro
       <div style={{ fontSize: 13, color: "var(--fg)", fontWeight: 500, lineHeight: 1.4, textWrap: "pretty", flex: 1 }}>{ap.title}</div>
       <div style={{ display: "flex", gap: 8, marginTop: 5 }}>
         <button disabled={busy} onClick={onApprove} style={actBtn("primary", busy)}>{busy ? <Spinner size={11} /> : "approve"}</button>
-        <button disabled={busy} onClick={onReject} style={actBtn("ghost", busy)}>reject</button>
+        <button disabled={busy} onClick={onReject} style={actBtn("ghost", busy)}>{busy ? <Spinner size={11} /> : "reject"}</button>
       </div>
     </div>
   );
@@ -330,6 +354,8 @@ function ActivityTicker({ colony }: { colony: Colony }) {
   );
 }
 
+const MAX_NEEDS_STRIP_ROWS = 3;
+
 /**
  * The honey "needs you" strip above the tabs. One row per thing that actually
  * wants a human: spend/contract approvals and work the crew blocked on. Each row
@@ -342,6 +368,14 @@ function NeedsStrip({ colony: c, onGoToApprovals, onGoToIssues }: {
   const blocked = React.useMemo(() => c.issues.filter(isCompanyReviewIssue), [c.issues]);
   const needs = approvals.length + blocked.length;
   if (needs === 0) return null;
+  const approvalBlockedPipeline = c.pipeline?.approvalBlockedUsd;
+  const visibleApprovals = approvals.slice(0, MAX_NEEDS_STRIP_ROWS);
+  const visibleBlocked = blocked.slice(0, Math.max(0, MAX_NEEDS_STRIP_ROWS - visibleApprovals.length));
+  const hiddenApprovalCount = approvals.length - visibleApprovals.length;
+  const hiddenIssueCount = blocked.length - visibleBlocked.length;
+  const hiddenCount = hiddenApprovalCount + hiddenIssueCount;
+  const showHiddenIssues = hiddenIssueCount > 0;
+  const handleSeeAll = showHiddenIssues ? onGoToIssues : onGoToApprovals;
   const rowTone: Record<string, { bg: string; bd: string; color: string }> = {
     high: { bg: "var(--row-blocked-bg)", bd: "var(--row-blocked-bd)", color: "var(--danger)" },
     med: { bg: "var(--row-access-bg)", bd: "var(--row-access-bd)", color: "var(--honey)" },
@@ -349,13 +383,16 @@ function NeedsStrip({ colony: c, onGoToApprovals, onGoToIssues }: {
   };
   return (
     <div style={{ borderRadius: 16, border: "1px solid var(--need-bd)", background: "var(--need-bg)", padding: "16px 18px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12, flexWrap: "wrap" }}>
         <span aria-hidden style={{ fontSize: 14, color: "var(--honey)" }}>⚑</span>
         <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey)" }}>{needs === 1 ? "1 thing needs you" : `${needs} things need you`}</span>
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>the crew handles the rest on its own</span>
+        {approvalBlockedPipeline !== undefined ? (
+          <span style={{ marginLeft: "auto", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)", fontVariantNumeric: "tabular-nums" }}>{formatPipelineUsd(approvalBlockedPipeline)} approval-blocked quoted pipeline</span>
+        ) : null}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {approvals.map((a) => {
+        {visibleApprovals.map((a) => {
           const t = rowTone[a.risk] ?? rowTone.low;
           return (
             <button key={a.id} type="button" onClick={onGoToApprovals} className="zhc-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", borderRadius: 12, padding: "12px 14px", font: "inherit", color: "inherit", border: `1px solid ${t.bd}`, background: t.bg }}>
@@ -368,16 +405,26 @@ function NeedsStrip({ colony: c, onGoToApprovals, onGoToIssues }: {
             </button>
           );
         })}
-        {blocked.map((b) => (
-          <button key={b.work?.taskId ?? b.key} type="button" onClick={onGoToIssues} className="zhc-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", borderRadius: 12, padding: "12px 14px", font: "inherit", color: "inherit", border: "1px solid var(--row-blocked-bd)", background: "var(--row-blocked-bg)" }}>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: "var(--danger)", textTransform: "uppercase", letterSpacing: 0.06, border: "1px solid var(--danger-soft)", borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>blocked</span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{b.title}</span>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>{b.agent ?? "the crew"} is blocked · needs your input to resume</span>
-            </span>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey)", flexShrink: 0 }}>View →</span>
+        {visibleBlocked.map((b) => {
+          const impact = b.pipelineImpact ?? b.work?.pipelineImpact;
+          return (
+            <button key={b.work?.taskId ?? b.key} type="button" onClick={onGoToIssues} className="zhc-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", borderRadius: 12, padding: "12px 14px", font: "inherit", color: "inherit", border: "1px solid var(--row-blocked-bd)", background: "var(--row-blocked-bg)" }}>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: "var(--danger)", textTransform: "uppercase", letterSpacing: 0.06, border: "1px solid var(--danger-soft)", borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>blocked</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{b.title}</span>
+                <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>{b.agent ?? "the crew"} is blocked · needs your input to resume</span>
+              </span>
+              {impact ? <span title={impact.label} style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--danger-2)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{formatPipelineUsd(impact.amountUsd)} quoted</span> : null}
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey)", flexShrink: 0 }}>View →</span>
+            </button>
+          );
+        })}
+        {hiddenCount > 0 ? (
+          <button type="button" onClick={handleSeeAll} className="zhc-btn-ghost" aria-label={`See all ${needs} items needing you`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", borderRadius: 12, padding: "10px 14px", font: "inherit", color: "inherit", border: "1px solid var(--line-2)", background: "color-mix(in srgb, var(--honey) 7%, transparent)" }}>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 700, color: "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>+ {hiddenCount} more</span>
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey)", flexShrink: 0 }}>See all →</span>
           </button>
-        ))}
+        ) : null}
       </div>
     </div>
   );
@@ -411,6 +458,7 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onRetryIssues, on
 }) {
   const reviewIssues = c.issues.filter(isCompanyReviewIssue);
   const activeIssues = c.issues.filter((issue) => issue.status !== "done");
+  const approvalBlocked = c.pipeline?.approvalBlockedUsd;
   return (
     <Panel>
       <SectionLabel right={loading ? (
@@ -418,7 +466,9 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onRetryIssues, on
           <Skeleton width={108} height={10} />
         </span>
       ) : (
-        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{reviewIssues.length} need{reviewIssues.length === 1 ? "s" : ""} you · {activeIssues.length} active</span>
+        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>
+          {approvalBlocked !== undefined ? `${formatPipelineUsd(approvalBlocked)} approval-blocked quoted pipeline · ` : ""}{reviewIssues.length} need{reviewIssues.length === 1 ? "s" : ""} you · {activeIssues.length} active
+        </span>
       )}>
         issues · needs you
       </SectionLabel>
@@ -513,7 +563,7 @@ function DeliverablesPanel({ colony: c, spec, theme = "dark", loading = false }:
       ) : (
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
           {primary.map((x) => (
-            <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="hero" />
+            <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} timestampMs={x.timestampMs} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="hero" />
           ))}
         </div>
       )}
@@ -526,7 +576,7 @@ function DeliverablesPanel({ colony: c, spec, theme = "dark", loading = false }:
           {showLog && (
             <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))", marginTop: 12 }}>
               {worklog.map((x) => (
-                <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="card" />
+                <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} timestampMs={x.timestampMs} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="card" />
               ))}
             </div>
           )}
@@ -596,9 +646,10 @@ function money(value?: number): string {
 
 function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: CockpitHandlers }) {
   const busy = handlers.busyId === c.id;
+  const imported = Boolean(c.importedOperations);
   const [amount, setAmount] = React.useState("");
   const [source, setSource] = React.useState<CompanyRevenueShareInput["source"]>("manual");
-  const [collectFee, setCollectFee] = React.useState(true);
+  const [collectFee, setCollectFee] = React.useState(!imported);
   const [collectingAgentId, setCollectingAgentId] = React.useState(c.agents[0]?.id ?? "");
   const amountUsd = Number(amount);
   const rollup = c.revenueShare;
@@ -649,6 +700,33 @@ function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: 
           {busy ? <Spinner size={12} /> : collectFee ? "Record + collect" : "Record"}
         </button>
       </form>
+      {imported ? (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", lineHeight: 1.55 }}>
+          Imported legacy revenue is tracked only when you record it here. The collect toggle starts off for this company, so old Ami-style revenue is not treated as HivemindOS-attributed by accident.
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
+function PipelineForecastPanel({ colony: c }: { colony: Colony }) {
+  const p = c.pipeline;
+  if (!p) return null;
+  return (
+    <Panel>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>quoted, not booked</span>}>revenue forecast</SectionLabel>
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))" }}>
+        <PipelineCell label="open quoted pipeline" value={formatPipelineUsd(p.quotedOpenUsd)} tone="var(--honey)" />
+        <PipelineCell label="recognized weekly" value={formatPipelineUsd(p.recognizedWeeklyRevenueUsd)} tone={p.recognizedWeeklyRevenueUsd ? "var(--live)" : "var(--fg-2)"} />
+        {p.weeklyRevenueTargetUsd !== undefined ? <PipelineCell label="weekly target" value={formatPipelineUsd(p.weeklyRevenueTargetUsd)} tone="var(--fg)" /> : null}
+        {p.approvalBlockedUsd !== undefined ? <PipelineCell label="needs approval" value={formatPipelineUsd(p.approvalBlockedUsd)} tone="var(--danger-2)" /> : null}
+        {p.inMarketUsd !== undefined ? <PipelineCell label="in market" value={formatPipelineUsd(p.inMarketUsd)} tone="var(--live)" /> : null}
+        {p.technicalBlockedUsd !== undefined ? <PipelineCell label="technical block" value={formatPipelineUsd(p.technicalBlockedUsd)} tone={p.technicalBlockedUsd ? "var(--danger)" : "var(--fg-4)"} /> : null}
+      </div>
+      <div style={{ marginTop: 13, paddingTop: 12, borderTop: "1px solid var(--line)", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", lineHeight: 1.55 }}>
+        Open quoted pipeline is a forecast from Work Board audits. It is not cash, not recognized revenue, and not collected platform share until a customer pays.
+        {p.sourceTitle ? <span> Source: {p.sourceTitle}{p.sourceTaskId ? ` (${p.sourceTaskId})` : ""}.</span> : null}
+      </div>
     </Panel>
   );
 }
@@ -698,7 +776,9 @@ function TreasuryColumn({ colony: c, handlers }: { colony: Colony; handlers: Coc
         )}
       </Panel>
 
-      <RevenueSharePanel colony={c} handlers={handlers} />
+      <PipelineForecastPanel colony={c} />
+
+      <RevenueSharePanel key={`${c.id}:${Boolean(c.importedOperations)}`} colony={c} handlers={handlers} />
 
       {/* kill switch + disband */}
       <Panel style={c.frozen ? { borderColor: "color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 7%, var(--panel))" } : undefined}>
@@ -786,6 +866,7 @@ export function Cockpit({
     { key: "comms", label: spec.commsLabel || "Comms" },
     // Only companies that sell fixed products carry a catalog.
     ...(c.products ? [{ key: "products", label: "Products", badge: c.products.items.length || null }] : []),
+    ...(c.importedOperations ? [{ key: "systems", label: "Systems", badge: (c.importedOperations.workflows.length + c.importedOperations.schedules.length) || null }] : []),
     { key: "team", label: "Team" },
     { key: "analytics", label: "Analytics" },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
@@ -828,6 +909,9 @@ export function Cockpit({
             <h1 style={{ margin: 0, fontFamily: "var(--f-display)", fontSize: 34, fontWeight: 600, letterSpacing: -1, lineHeight: 1 }}>{c.name}</h1>
             <span style={{ fontFamily: "var(--f-mono)", fontSize: 11.5, color: "var(--fg-4)", padding: "2px 7px", border: "1px solid var(--line)", borderRadius: 5 }}>{c.ticker}</span>
             <StatusPill status={c.status} />
+            {c.importedOperations ? (
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--honey)", padding: "3px 8px", border: "1px solid var(--honey-line)", borderRadius: 999, background: "var(--honey-soft)", textTransform: "uppercase", letterSpacing: 0.06 }}>imported</span>
+            ) : null}
             <button onClick={handlers.onEdit} title="Edit company details" className="zhc-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid var(--line-2)", borderRadius: 8, cursor: "pointer", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "4px 10px", textTransform: "uppercase", letterSpacing: 0.06 }}>
               ✎ edit
             </button>
@@ -951,6 +1035,8 @@ export function Cockpit({
         <ProductsPanel colony={c} pendingProposals={pricingProposals} onGoToApprovals={() => setTab("approvals")} />
       )}
 
+      {active === "systems" && <ImportedOperationsPanel colony={c} />}
+
       {active === "analytics" && <AnalyticsPanel colony={c} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />}
@@ -972,7 +1058,11 @@ export function Cockpit({
 
       {active === "approvals" && (
         <Panel>
-          <SectionLabel right={approveCount > 0 ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey)" }}>{approveCount} waiting</span> : null}>needs your approval · human-in-the-loop</SectionLabel>
+          <SectionLabel right={approveCount > 0 || c.pipeline?.approvalBlockedUsd !== undefined ? (
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey)" }}>
+              {c.pipeline?.approvalBlockedUsd !== undefined ? `${formatPipelineUsd(c.pipeline.approvalBlockedUsd)} quoted pipeline · ` : ""}{approveCount} waiting
+            </span>
+          ) : null}>needs your approval · human-in-the-loop</SectionLabel>
           {pricingProposals.length > 0 && (
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", marginBottom: c.approvals.length ? 16 : 0 }}>
               {pricingProposals.map((proposal) => (
@@ -989,6 +1079,7 @@ export function Cockpit({
               ))}
             </div>
           )}
+          <ApprovalPoliciesPanel colony={c} busyId={handlers.busyId} onSetPolicy={handlers.onSetApprovalPolicy} />
         </Panel>
       )}
 

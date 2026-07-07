@@ -4254,6 +4254,9 @@
   margin-top: -39px !important;
   padding: 0 7px 7px !important;
 }
+.workBoardPanel .kanbanInlineAdd :global([class*="composerTools"][data-attachment-menu-open="true"]) {
+  z-index: 8 !important;
+}
 .workBoardPanel .kanbanInlineAdd :global([class*="composerIconButton"]) {
   width: 28px !important;
   height: 28px !important;

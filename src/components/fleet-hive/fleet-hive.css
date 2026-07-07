@@ -706,7 +706,7 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
   box-shadow: 0 22px 50px -22px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255, 255, 255, 0.03) inset;
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   width: 232px;
-  transition: width .46s cubic-bezier(.2, .8, .2, 1), border-color .3s, box-shadow .3s;
+  transition: width .54s cubic-bezier(.18, .9, .22, 1.18), padding .54s cubic-bezier(.18, .9, .22, 1.18), border-color .3s, box-shadow .3s;
 }
 .fr-chat:hover, .fr-chat:focus-within { justify-content: flex-start; width: 540px; padding: 0 8px 0 16px; border-color: var(--honey-line); box-shadow: 0 26px 60px -22px rgba(0, 0, 0, 0.66), 0 0 0 4px var(--honey-soft); }
 .fr-chat:focus-within { outline: 2px solid color-mix(in srgb, var(--honey-line) 76%, transparent); outline-offset: 3px; }

@@ -192,8 +192,8 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
           <input
             ref={inputRef}
             value={query}
-            aria-label="Search routes, agents, tasks, alerts, and recents"
-            placeholder="Search routes, agents, tasks, alerts..."
+            aria-label="Search routes, agents, tasks, inbox items, and recents"
+            placeholder="Search routes, agents, tasks, inbox..."
             onChange={(event) => {
               setQuery(event.target.value);
               setActiveIndex(0);
@@ -248,7 +248,7 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
               </span>
             </button>
           )) : (
-            <p className="commandPaletteEmpty">No matching route, agent, task, or alert.</p>
+            <p className="commandPaletteEmpty">No matching route, agent, task, or inbox item.</p>
           )}
         </div>
         <div className="commandPaletteFooter">

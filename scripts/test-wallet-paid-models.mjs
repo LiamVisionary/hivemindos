@@ -30,6 +30,7 @@ const [
   modelsRoute,
   setupWalletRoute,
   setupComponent,
+  setupFundingWallets,
   setupStyles,
   walletSelectModal,
   walletPickables,
@@ -46,6 +47,8 @@ const [
   x402Executor,
   walletPaidModelsConfig,
   creditRoute,
+  dexSwapService,
+  dexSwapRoute,
   agentController,
   creditVault,
   paidAgentCloudClient,
@@ -72,6 +75,7 @@ const [
   source("src/app/api/hivemindos/models/models/route.ts"),
   source("src/app/api/hivemindos/models/wallet/route.ts"),
   source("src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx"),
+  source("src/features/dashboard/views/chat/hivemindos-model-funding-wallets.ts"),
   source("src/features/dashboard/views/chat/HivemindosModelsSetup.module.css"),
   source("src/features/dashboard/views/trade/WalletSelectModal.tsx"),
   source("src/features/dashboard/views/trade/wallet-pickables.ts"),
@@ -88,6 +92,8 @@ const [
   source("src/lib/services/wallet/x402-agent-fetch.ts"),
   source("src/lib/config/hivemindos-wallet-paid-models.ts"),
   source("src/app/api/hivemindos/models/credits/route.ts"),
+  source("src/lib/services/trading/dex-swap.ts"),
+  source("src/app/api/trading/swap/route.ts"),
   source("src/features/dashboard/hooks/use-agent-controller.tsx"),
   source("src/lib/services/hivemindos-model-credit-vault.ts"),
   source("src/lib/services/paid-agent-cloud-client.ts"),
@@ -175,25 +181,45 @@ assert.ok(!setupWalletRoute.includes("autoPayEnabled: true"), "setup wallet rout
 includes(setupComponent, "/api/hivemindos/models/wallet", "guided setup wallet route");
 includes(setupComponent, "fetchPersonalWalletRecords", "guided setup personal wallet source");
 includes(setupComponent, "fetchPersonalWalletBalance", "guided setup personal wallet live balances");
-includes(setupComponent, "getDisplayWalletBalanceUsd", "guided setup saved wallet balance display");
 includes(setupComponent, "groupedUserPickables", "guided setup user-wallet picker source");
 includes(setupComponent, "agentPickable", "guided setup agent-wallet picker source");
 includes(setupComponent, "resolvePickableAccount", "guided setup resolves grouped wallet accounts");
-includes(setupComponent, "walletBalanceLabel", "guided setup compact wallet balance badge copy");
-includes(setupComponent, "chainIconSrc(effectiveWalletNetwork)", "guided setup compact chain icon");
-includes(setupComponent, "styles.walletFundingBadge", "guided setup compact wallet funding badge");
-includes(setupComponent, "styles.walletSwitchButton", "guided setup embeds wallet switch in the compact badge");
+includes(setupComponent, "HIVEMINDOS_CREDIT_TOP_UP_NETWORK", "guided setup pins credit top-up wallets to the hosted Base USDC rail");
+includes(setupComponent, "walletUsdcBalanceUsdForPickable", "guided setup reads selected wallet USDC balance specifically");
+includes(setupComponent, "creditPaymentTokenOptionsForPickable", "guided setup builds payment-token choices from the selected wallet");
+includes(setupFundingWallets, "MIN_CREDIT_PAYMENT_TOKEN_VALUE_USD = 1", "guided setup hides spammy payment-token dust below one dollar");
+includes(setupFundingWallets, "valueUsd < MIN_CREDIT_PAYMENT_TOKEN_VALUE_USD", "guided setup filters payment-token rows by usable USD value");
+includes(setupComponent, "walletUsdcBalanceLabel", "guided setup wallet summary card shows USDC availability");
+includes(setupComponent, "cryptoTopUpBlockReason", "guided setup blocks crypto top-ups the wallet cannot cover");
+includes(setupComponent, "USDC available", "guided setup wallet summary labels the spendable credit asset");
+includes(setupComponent, "Pay with", "guided setup exposes a payment-token selector");
+includes(setupComponent, "paymentToken: selectedCreditPaymentToken?.id ?? \"USDC\"", "guided setup forwards the selected payment token");
+includes(setupComponent, "HivemindOS will swap enough", "guided setup explains non-USDC funding swaps");
+includes(setupComponent, "Swapping to USDC", "guided setup shows swap progress during non-USDC crypto top-ups");
+includes(setupComponent, "Purchasing credits", "guided setup shows purchase progress during crypto top-ups");
+includes(setupComponent, "setCreditFundingStageIndex((index) => Math.min(index + 1, creditFundingStages.length - 1))", "guided setup advances animated crypto funding status stages");
+includes(setupComponent, "styles.fundingProgress", "guided setup renders a live crypto funding progress row");
+includes(setupComponent, "chainIconSrc(effectiveWalletNetwork)", "guided setup wallet summary card chain icon");
+includes(setupComponent, "styles.creditBalanceRow", "guided setup lifts credit balance above funding methods");
+includes(setupComponent, "styles.walletSourceCard", "guided setup renders the funding wallet as one clickable card");
+assert.ok(!setupComponent.includes("styles.walletSwitchButton"), "guided setup should not keep the old icon-only wallet switch button");
+assert.ok(!setupComponent.includes("styles.walletChangeButton"), "guided setup should not keep a separate change-wallet button");
 assert.ok(!setupComponent.includes("Funding address"), "guided setup wallet-ready modal should not show the raw funding address block");
 assert.ok(!setupComponent.includes("Saved to Wallets"), "guided setup wallet-ready modal should not keep the old saved-wallet status chip");
 assert.ok(!/saved to Wallets/i.test(setupComponent), "guided setup wallet-ready flow should not reuse the old saved-wallet chip copy");
 assert.ok(!setupComponent.includes("savedFundingBalanceCopy"), "guided setup should not use the old separate wallet balance status chip");
 includes(setupComponent, "/api/hivemindos/models/credits", "guided setup model credits route");
-includes(setupComponent, "Card credits", "guided setup card credit mode");
+assert.ok(!setupComponent.includes("Card credits"), "guided setup card funding mode should say Card, not Card credits");
+includes(setupComponent, "data-mode={fundingMode}", "guided setup funding mode switch exposes the active mode to the segmented toggle");
+assert.match(setupComponent, />\s*Card\s*<\/button>/, "guided setup card funding mode should render the compact Card label");
+includes(setupComponent, "Card top-ups are stored", "guided setup card funding footer copy");
 includes(setupComponent, "Crypto wallet", "guided setup crypto wallet mode");
 includes(setupComponent, "CARD_CREDIT_AMOUNT_OPTIONS = [10, 25, 50, 100]", "guided setup card credit presets");
 includes(setupComponent, "CardCreditAmountOption", "guided setup card custom amount state");
-includes(setupComponent, "Custom amount", "guided setup custom card amount input");
-includes(setupComponent, "amountUsd: cardTopUpAmountUsd", "guided setup uses selected card amount for checkout");
+includes(setupComponent, "const topUpAmountSelector", "guided setup reuses one amount selector for card and crypto");
+includes(setupComponent, "Custom amount", "guided setup custom credit amount input");
+includes(setupComponent, "amountUsd: cardTopUpAmountUsd", "guided setup uses selected amount for checkout and crypto top-up");
+includes(setupComponent, "confirmation: HIVEMINDOS_MODEL_CREDIT_TOP_UP_CONFIRMATION", "guided setup marks explicit crypto top-ups as human driven");
 includes(setupComponent, "openCheckoutUrl", "guided setup opens Stripe checkout through the app browser bridge");
 includes(setupComponent, "/api/system/browsers/open", "guided setup opens Stripe checkout in the system browser for Tauri");
 includes(setupComponent, "window.open(trimmedUrl", "guided setup keeps web fallback for checkout links");
@@ -208,7 +234,7 @@ assert.ok(!setupComponent.includes("lastTestStatus: \"ready\",\n        lastStat
 assert.ok(!setupComponent.includes("successUrl: returnUrl"), "guided setup should not send the local dashboard as Stripe success URL");
 assert.ok(!setupComponent.includes("cancelUrl: returnUrl"), "guided setup should not send the local dashboard as Stripe cancel URL");
 includes(setupComponent, "Fund with crypto", "guided setup crypto top-up action");
-includes(setupComponent, "modelCreditLabel", "guided setup model credits balance label");
+includes(setupComponent, "creditBalanceSummaryLabel", "guided setup model credits balance label");
 includes(setupComponent, "const selectedModelIsFree = isFreeHivemindosWalletPaidModel(selectedModel)", "guided setup detects the free model");
 assert.ok(!setupComponent.includes("async function finishSetup"), "embedded panel has no Done handler of its own — every change persists immediately via onComplete");
 assert.ok(!setupComponent.includes("onCancel: () => void"), "embedded panel takes no onCancel prop (only the wallet browser's internal Back remains)");
@@ -242,15 +268,24 @@ assert.ok(!setupComponent.includes("Use my own API key"), "HivemindOS Models set
 
 includes(setupStyles, "--honey", "guided setup honey tokens");
 includes(setupStyles, "fundingModes", "guided setup funding mode switch styling");
-includes(setupStyles, "cardAmounts", "guided setup card amount presets styling");
-includes(setupStyles, "customAmount", "guided setup custom card amount styling");
+includes(setupStyles, "fundingModes::before", "guided setup funding modes render as one two-way segmented toggle");
+includes(setupStyles, "fundingModes[data-mode=\"wallet\"]::before", "guided setup segmented toggle moves to wallet mode");
+includes(setupStyles, "cardAmounts", "guided setup credit amount presets styling");
+includes(setupStyles, "customAmount", "guided setup custom credit amount styling");
 includes(setupStyles, "freeHero", "guided setup free hero card styling");
 includes(setupStyles, "balancePill", "guided setup balance pill styling");
 includes(setupStyles, "chipGrid", "guided setup model chip grid styling");
 includes(setupStyles, "fundOverlay", "guided setup funding modal overlay styling");
 includes(setupStyles, "gateBanner", "guided setup funding gate banner styling");
-includes(setupStyles, "walletFundingBadge", "guided setup compact wallet badge styling");
-includes(setupStyles, "walletSwitchButton", "guided setup compact wallet switch segment styling");
+includes(setupStyles, "creditBalanceRow", "guided setup standalone credit balance row styling");
+includes(setupStyles, "walletSourceCard", "guided setup clickable wallet source card styling");
+includes(setupStyles, "walletSourceMain .fieldLabel", "guided setup wallet source label is legible and locally positioned");
+includes(setupStyles, "walletFundingHint", "guided setup warning copy for blocked crypto top-ups");
+includes(setupStyles, "paymentTokenRow", "guided setup payment token selector styling");
+includes(setupStyles, "fundingProgress", "guided setup crypto top-up progress row styling");
+includes(setupStyles, "@keyframes fundingSlide", "guided setup crypto top-up progress bar is animated");
+includes(setupStyles, "prefers-reduced-motion", "guided setup crypto top-up progress respects reduced motion");
+assert.ok(!setupStyles.includes("walletSwitchButton"), "guided setup styles should not keep the old icon-only wallet switch button");
 includes(setupStyles, "walletSelectorEmbed", "guided setup embedded wallet picker styling");
 includes(setupStyles, "[data-theme=\"hive-light\"]", "guided setup light theme token bridge");
 assert.ok(!setupStyles.includes("browseActions"), "guided setup styles should not keep the hidden browse New wallet action");
@@ -316,8 +351,12 @@ assert.ok(!proxyRoute.includes("agentId.startsWith(\"user:\") ? false"), "wallet
 includes(x402Executor, "timeoutMs?: number", "x402 executor");
 includes(x402Executor, "skipPaymentDiscovery?: boolean", "x402 executor prepaid bypass");
 includes(x402Executor, "responseHeaders: Record<string, string>", "x402 executor exposes selected response headers");
+includes(x402Executor, "paymentAttempted?: boolean", "x402 executor distinguishes x402 retry attempts from settled payments");
+includes(x402Executor, "paymentSettled?: boolean", "x402 executor exposes settled x402 payment state");
 includes(x402Executor, "if (input.skipPaymentDiscovery)", "x402 executor avoids x402 wrapper for prepaid token calls");
 includes(x402Executor, "AbortSignal.timeout(input.timeoutMs ?? 60_000)", "x402 executor timeout override");
+includes(x402Executor, "const paymentSettled = paid && response.status !== 402 && Boolean(paymentResponse)", "x402 executor should not mark rejected 402 retries as paid");
+includes(x402Executor, "if (paymentSettled)", "x402 executor records spend only after payment settlement");
 
 includes(creditVault, "hivemindos-model-credit-vault.json", "credit token vault path");
 includes(creditVault, "aes-256-gcm", "credit token vault encryption");
@@ -330,10 +369,32 @@ includes(creditRoute, "method === \"card\"", "model credits route supports card 
 includes(creditRoute, "creditAccountId", "model credits route accepts hosted credit account ids");
 includes(creditRoute, "executeX402Fetch", "model credits route signs official top-up");
 includes(creditRoute, "MODEL_CREDIT_TOP_UP_CAP_USD", "model credits route uses explicit top-up cap");
-includes(creditRoute, "approvalRequiredOverUsd: 0", "model credits route treats top-up click as model-credit approval");
+includes(creditRoute, "const cryptoTopUpAmountUsd = normalizedCreditTopUpUsd(body.amountUsd)", "model credits route normalizes explicit crypto top-up amounts");
+includes(creditRoute, "HivemindOS credit top-ups require a Base wallet with USDC.", "model credits route rejects unsupported credit top-up networks before signing");
+includes(creditRoute, "paymentToken?: string", "model credits route accepts a selected payment token");
+includes(creditRoute, "paymentTokenForCreditTopUp", "model credits route resolves selected wallet payment tokens");
+includes(creditRoute, "swapPaymentTokenShortfallToUsdc", "model credits route swaps selected non-USDC tokens before x402 top-up");
+includes(creditRoute, "executeDexSwap", "model credits route uses the governed DEX swap rail for non-USDC funding");
+includes(creditRoute, "SWAP_CONFIRMATION", "model credits route uses the DEX swap confirmation internally after the explicit top-up click");
+includes(creditRoute, "requiredUsdcUsd", "model credits route accounts for required USDC before signing x402");
+includes(creditRoute, "stablecoinPaymentBalanceUsd", "model credits route preflights the selected wallet's stablecoin balance");
+includes(creditRoute, "stableBalanceUsd: stableBalance", "model credits route returns insufficient-USDC balance details");
+includes(creditRoute, "selected wallet has", "model credits route explains insufficient USDC before signing");
+includes(creditRoute, "body: { amountUsd: cryptoTopUpAmountUsd }", "model credits route forwards the selected crypto top-up amount");
+includes(creditRoute, "approvalThresholdSatisfied: body.confirmation === HIVEMINDOS_MODEL_CREDIT_TOP_UP_CONFIRMATION", "model credits route treats confirmed top-up clicks as manual approval-threshold satisfied");
+includes(creditRoute, "creditTopUpFailureMessage", "model credits route surfaces x402 top-up failures with context");
+includes(creditRoute, "x402RequirementDetail", "model credits route returns payment requirement context for 402 top-up failures");
+includes(creditRoute, "x402Error: x402Requirement?.error", "model credits route exposes the x402 payment-required error on failure");
+includes(creditRoute, "tokenLabelForPaymentRequirement", "model credits route labels the payment asset without confusing it for the payTo address");
+includes(creditRoute, "paymentAttempted: result.paymentAttempted", "model credits route exposes attempted x402 payment state on failure");
+includes(creditRoute, "paymentSettled: result.paymentSettled", "model credits route exposes settled x402 payment state on failure");
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/top-up", "model credits route calls official top-up endpoint");
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/checkout", "model credits route calls official card checkout endpoint");
 includes(creditRoute, "/api/official-paid-agents/${slug}/credits/balance", "model credits route calls official balance endpoint");
+includes(x402Executor, "approvalThresholdSatisfied: input.approvalThresholdSatisfied", "x402 executor can carry route-level manual approval into spend governance");
+includes(dexSwapService, "approvalThresholdSatisfied?: boolean", "dex swap service can accept route-level manual approval");
+includes(dexSwapService, "approvalThresholdSatisfied,", "dex swap service forwards manual approval into spend governance");
+includes(dexSwapRoute, "approvalThresholdSatisfied: body.confirmation === SWAP_CONFIRMATION", "dex swap API treats explicit swap confirmation as approval-threshold satisfied");
 
 // Hosted model credits are one shared pool per install. Every server-side
 // token read goes through the pooled resolver (shared account first, legacy

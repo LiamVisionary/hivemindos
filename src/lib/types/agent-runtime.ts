@@ -344,6 +344,9 @@ export interface AgentCallPreferences {
   voiceId?: string;
   /** Credential mode for the selected voice provider (see VoiceProviderAuthMode). */
   voiceAuthMode?: VoiceProviderAuthMode;
+  /** Which hive-env key name to use when several match the provider (e.g. Gemini
+   *  can read GEMINI_API_KEY / GOOGLE_AI_STUDIO_API_KEY / GOOGLE_API_KEY). */
+  voiceKeyEnv?: string;
   voiceChatBrain?: VoiceChatBrainPreference;
   enabled: boolean;
   dailyEnabled: boolean;
@@ -380,6 +383,7 @@ export function buildAgentCallPreferences(
     voiceAuthMode: input?.voiceAuthMode === "oauth" || input?.voiceAuthMode === "apikey"
       ? input.voiceAuthMode
       : undefined,
+    voiceKeyEnv: input?.voiceKeyEnv?.trim() || undefined,
     voiceChatBrain: input?.voiceChatBrain?.source
       ? {
           source: input.voiceChatBrain.source,

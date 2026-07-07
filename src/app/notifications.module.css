@@ -88,6 +88,48 @@
   font-size: 13px;
 }
 
+.inboxSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inboxSummaryGrid article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  align-items: center;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel-2);
+  padding: 12px 13px;
+}
+
+.inboxSummaryGrid svg {
+  grid-row: span 2;
+  width: 18px;
+  height: 18px;
+  color: var(--nf-honey);
+}
+
+.inboxSummaryGrid span {
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.inboxSummaryGrid strong {
+  color: var(--nf-fg);
+  font-family: var(--nf-display);
+  font-size: 17px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
 /* — Controls: hairline-divided strip, not a nested box — */
 .notificationsControls {
   display: flex;
@@ -149,6 +191,77 @@
   text-transform: none;
 }
 
+.inboxSettings {
+  display: grid;
+  min-width: min(100%, 620px);
+  gap: 10px;
+}
+
+.autonomyReview {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel-2);
+  padding: 12px;
+}
+
+.autonomyReview > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.autonomyReview strong,
+.autonomySegments strong {
+  color: var(--nf-fg);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.autonomyReview > div:first-child > span,
+.autonomySegments span {
+  color: var(--nf-fg-3);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.autonomySegments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.autonomySegments button {
+  display: grid;
+  gap: 4px;
+  min-height: 82px;
+  border: 1px solid var(--nf-line);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.autonomySegments button:hover,
+.autonomySegments button:focus-visible,
+.autonomySegments button.active {
+  border-color: var(--nf-honey-line);
+  background: var(--nf-honey-soft);
+  outline: none;
+}
+
+.autonomySegments button:hover {
+  transform: translateY(-1px);
+}
+
+.autonomySegments button.active span {
+  color: var(--nf-fg-2);
+}
+
 /* Escalation toggle — a quiet inset card. */
 .notificationSetting {
   display: flex;
@@ -186,6 +299,88 @@
   width: 18px;
   height: 18px;
   accent-color: var(--nf-honey);
+}
+
+.approvalLane {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--nf-line);
+  padding-top: 18px;
+}
+
+.approvalLaneHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.approvalLaneHeader h3 {
+  margin: 0;
+  color: var(--nf-fg);
+  font-family: var(--nf-display);
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.approvalLaneHeader > span {
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
+  font-size: 11px;
+}
+
+.approvalCards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.approvalCard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--nf-line);
+  border-radius: var(--nf-radius-sm);
+  background: var(--nf-panel-2);
+  padding: 12px;
+}
+
+.approvalCard.high {
+  border-color: var(--nf-honey-line);
+}
+
+.approvalCard.urgent {
+  border-color: rgba(229, 142, 133, 0.38);
+}
+
+.approvalCard > div:first-child {
+  display: grid;
+  min-width: min(100%, 260px);
+  gap: 4px;
+}
+
+.approvalCard span,
+.approvalCard small {
+  color: var(--nf-fg-3);
+  font-family: var(--nf-mono);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.approvalCard strong {
+  color: var(--nf-fg);
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.approvalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* — List — */
@@ -626,6 +821,10 @@
   font-size: 0.8rem;
 }
 
+.spinIcon {
+  animation: notificationSpin 0.9s linear infinite;
+}
+
 /* Buttons — re-skin the shared <Button> inside this view to the warm dark-honey
    palette: honey primary, transparent hairline secondaries that fill on hover.
    WEIGHT is not set here — buttons inherit the app-wide font-normal (400) from
@@ -742,6 +941,12 @@
     flex-direction: column;
   }
 
+  .inboxSummaryGrid,
+  .autonomySegments,
+  .approvalCards {
+    grid-template-columns: 1fr;
+  }
+
   .notificationList {
     max-height: none;
   }
@@ -784,4 +989,16 @@
 :global(:root[data-theme="hive-light"]) .priorityPill,
 :global(:root[data-theme="hive-light"]) .readPill {
   background: rgba(54, 46, 30, 0.06);
+}
+
+@keyframes notificationSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinIcon {
+    animation-duration: 1.8s;
+  }
 }

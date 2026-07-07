@@ -18,6 +18,7 @@ import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
   Company,
   CompanyApexGoal,
+  CompanyApprovalPolicy,
   CompanyDirective,
   CompanyMember,
   CompanyMemberSpend,
@@ -29,6 +30,14 @@ import type {
   CompanySpendRollup,
   CompanyStatus,
 } from "@/lib/types/company";
+import type {
+  CompanyImportedOperations,
+  ImportedSchedule,
+  ImportedScript,
+  ImportedService,
+  ImportedWorkflow,
+} from "@/lib/types/company-import";
+import { normalizeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 import {
   ROLLING_DAY_MS,
   ROLLING_MONTH_MS,
@@ -157,8 +166,10 @@ function companyDefinitionOf(record: Company): Company {
     projectId: record.projectId,
     products: record.products,
     pricingProposals: record.pricingProposals,
+    approvalPolicies: record.approvalPolicies,
     analyticsProvider: record.analyticsProvider,
     analyticsConfig: record.analyticsConfig,
+    importedOperations: record.importedOperations,
     directives: record.directives,
   };
 }
@@ -422,6 +433,102 @@ function normalizeRevenue(value: unknown): CompanyRevenue | undefined {
   };
 }
 
+function normalizeImportedOperations(value: unknown): CompanyImportedOperations | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Partial<CompanyImportedOperations>;
+  return {
+    source: "repo",
+    importedAt: normalizedIsoDate(raw.importedAt),
+    lastDiscoveredAt: normalizedIsoDate(raw.lastDiscoveredAt),
+    projectPath: trimmed(raw.projectPath),
+    packageName: trimmed(raw.packageName),
+    git: raw.git && typeof raw.git === "object"
+      ? {
+          remoteUrl: trimmed(raw.git.remoteUrl),
+          repoName: trimmed(raw.git.repoName),
+          branch: trimmed(raw.git.branch),
+          commit: trimmed(raw.git.commit),
+        }
+      : undefined,
+    workflows: Array.isArray(raw.workflows) ? raw.workflows.map(normalizeImportedWorkflow).filter((item): item is ImportedWorkflow => Boolean(item)) : [],
+    schedules: Array.isArray(raw.schedules) ? raw.schedules.map(normalizeImportedSchedule).filter((item): item is ImportedSchedule => Boolean(item)) : [],
+    services: Array.isArray(raw.services) ? raw.services.map(normalizeImportedService).filter((item): item is ImportedService => Boolean(item)) : [],
+    scripts: Array.isArray(raw.scripts) ? raw.scripts.map(normalizeImportedScript).filter((item): item is ImportedScript => Boolean(item)) : [],
+  };
+}
+
+function normalizeImportedWorkflow(value: unknown): ImportedWorkflow | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<ImportedWorkflow>;
+  const id = trimmed(raw.id);
+  const name = trimmed(raw.name);
+  const sourcePath = trimmed(raw.path);
+  if (!id || !name || !sourcePath) return null;
+  const triggers = Array.isArray(raw.triggers) ? raw.triggers.map(trimmed).filter((item): item is string => Boolean(item)) : [];
+  const schedules = Array.isArray(raw.schedules) ? raw.schedules.map(trimmed).filter((item): item is string => Boolean(item)) : undefined;
+  return { id, name, path: sourcePath, triggers, schedules };
+}
+
+function normalizeImportedSchedule(value: unknown): ImportedSchedule | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<ImportedSchedule>;
+  const id = trimmed(raw.id);
+  const name = trimmed(raw.name);
+  const sourcePath = trimmed(raw.path);
+  if (!id || !name || !sourcePath) return null;
+  return {
+    id,
+    kind: raw.kind ?? "other",
+    name,
+    path: sourcePath,
+    schedule: trimmed(raw.schedule),
+    command: trimmed(raw.command),
+    target: trimmed(raw.target),
+    detail: trimmed(raw.detail),
+  };
+}
+
+function normalizeImportedService(value: unknown): ImportedService | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<ImportedService>;
+  const id = trimmed(raw.id);
+  const name = trimmed(raw.name);
+  const sourcePath = trimmed(raw.path);
+  if (!id || !name || !sourcePath) return null;
+  return {
+    id,
+    kind: raw.kind ?? "other",
+    name,
+    path: sourcePath,
+    serviceType: trimmed(raw.serviceType),
+    schedule: trimmed(raw.schedule),
+    detail: trimmed(raw.detail),
+  };
+}
+
+function normalizeImportedScript(value: unknown): ImportedScript | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<ImportedScript>;
+  const id = trimmed(raw.id);
+  const name = trimmed(raw.name);
+  const command = trimmed(raw.command);
+  const sourcePath = trimmed(raw.path);
+  if (!id || !name || !command || !sourcePath) return null;
+  return {
+    id,
+    name,
+    command,
+    path: sourcePath,
+    category: raw.category ?? "other",
+  };
+}
+
+function normalizedIsoDate(value: unknown): string {
+  const text = typeof value === "string" ? value : "";
+  const time = Date.parse(text);
+  return Number.isFinite(time) ? new Date(time).toISOString() : new Date().toISOString();
+}
+
 /** Slug key for a product derived from its name when none is given. */
 function productKeyFrom(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "product";
@@ -500,6 +607,26 @@ export async function setCompanyProducts(
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
   await recordConfigChange("updated", before, company, source);
+  return company;
+}
+
+export async function setCompanyApprovalPolicy(
+  id: string,
+  input: CompanyApprovalPolicy,
+): Promise<Company | null> {
+  const [policy] = normalizeCompanyApprovalPolicies([{ ...input, updatedAt: new Date().toISOString() }]) ?? [];
+  if (!policy) throw new Error("Approval policy subject is required.");
+  const records = await readRaw();
+  const company = records.find((record) => record.id === id);
+  if (!company) return null;
+  const before = companyDefinitionOf(company);
+  const current = normalizeCompanyApprovalPolicies(company.approvalPolicies) ?? [];
+  const byId = new Map(current.map((entry) => [entry.id, entry]));
+  byId.set(policy.id, policy);
+  company.approvalPolicies = [...byId.values()];
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  await recordConfigChange("updated", before, company, "companies-store:set-approval-policy");
   return company;
 }
 
@@ -765,10 +892,14 @@ export type UpsertCompanyInput = {
   projectId?: string;
   /** Official product catalog (what the company sells, at what price). */
   products?: CompanyProductCatalog;
+  /** Explicit company approval policy overrides. */
+  approvalPolicies?: CompanyApprovalPolicy[];
   /** Which analytics provider this company's numbers come from. */
   analyticsProvider?: Company["analyticsProvider"];
   /** Per-company analytics link (project/site id + optional self-host). */
   analyticsConfig?: Company["analyticsConfig"];
+  /** Imported legacy operations discovered from an existing repo. */
+  importedOperations?: Company["importedOperations"];
   /** Standing directives (Learning-tab injections + deliverable-rejection feedback). */
   directives?: Company["directives"];
 };
@@ -821,11 +952,13 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     products: input.products !== undefined ? normalizeProductCatalog(input.products) : existing?.products,
     // Proposals are crew/human-resolved only — never writable through upsert.
     pricingProposals: existing?.pricingProposals,
+    approvalPolicies: input.approvalPolicies !== undefined ? normalizeCompanyApprovalPolicies(input.approvalPolicies) : existing?.approvalPolicies,
     analyticsProvider: input.analyticsProvider !== undefined ? input.analyticsProvider : existing?.analyticsProvider,
     analyticsConfig:
       input.analyticsConfig !== undefined
         ? { projectId: trimmed(input.analyticsConfig.projectId), host: trimmed(input.analyticsConfig.host) }
         : existing?.analyticsConfig,
+    importedOperations: input.importedOperations !== undefined ? normalizeImportedOperations(input.importedOperations) : existing?.importedOperations,
     directives: input.directives !== undefined ? input.directives : existing?.directives,
   };
 

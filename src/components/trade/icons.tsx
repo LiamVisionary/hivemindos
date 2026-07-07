@@ -5,7 +5,7 @@ import React from "react";
 export type IconName =
   | "brain" | "search" | "doc" | "trade" | "spark" | "activity" | "key" | "network"
   | "branch" | "sync" | "refresh" | "download" | "plug" | "check" | "plus" | "shield"
-  | "alert" | "repeat" | "sparkles" | "eye" | "copy" | "promote" | "bot" | "hex" | "wallet" | "spinner";
+  | "alert" | "repeat" | "sparkles" | "eye" | "copy" | "promote" | "bot" | "hex" | "wallet" | "spinner" | "chevron";
 
 export function BIcon({ name, color = "currentColor", size = 16, sw = 1.7, spin = false }: { name: IconName; color?: string; size?: number; sw?: number; spin?: boolean }) {
   const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, className: spin ? "tk-spin" : undefined };
@@ -37,6 +37,7 @@ export function BIcon({ name, color = "currentColor", size = 16, sw = 1.7, spin 
     case "wallet": return (<svg {...c}><rect x="3" y="6" width="18" height="13" rx="2.2" /><path d="M3 9.5h18" /><circle cx="16.5" cy="13.5" r="1.1" fill={color} stroke="none" /></svg>);
     // 3/4 arc — reads as a classic spinner when rotated via the `tk-spin` class.
     case "spinner": return (<svg {...c}><path d="M21 12a9 9 0 1 1-6.2-8.5" /></svg>);
+    case "chevron": return (<svg {...c}><path d="m6 9 6 6 6-6" /></svg>);
     default: return null;
   }
 }

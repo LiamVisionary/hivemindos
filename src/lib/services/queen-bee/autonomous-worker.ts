@@ -719,12 +719,21 @@ function makeLoopJudge(ctx: {
   marker?: string;
 }): LoopGateJudge | undefined {
   if (process.env.QUEEN_BEE_LOOP_JUDGE === "0") return undefined;
-  return async ({ gate, output, goal, successCriteria }) => {
+  return async ({ gate, output, goal, successCriteria, contract, evaluationRubric }) => {
     const prompt = [
       "You are an INDEPENDENT reviewer (not the worker that produced the output). Judge ONLY whether the worker output below satisfies the stated gate.",
       `Gate: ${gate.title}`,
       goal ? `Goal: ${goal}` : null,
       successCriteria.length ? `Success criteria:\n- ${successCriteria.join("\n- ")}` : null,
+      contract ? [
+        `Negotiated contract: ${contract.title}`,
+        contract.agreedDone.length ? `Agreed done:\n- ${contract.agreedDone.join("\n- ")}` : "",
+        contract.evaluatorPushback.length ? `Evaluator pushback:\n- ${contract.evaluatorPushback.join("\n- ")}` : "",
+      ].filter(Boolean).join("\n") : null,
+      evaluationRubric ? [
+        `Rubric: ${evaluationRubric.title}; pass >= ${evaluationRubric.passThreshold}`,
+        ...evaluationRubric.axes.map((axis) => `- ${axis.title} (${Math.round(axis.weight * 100)}%): ${axis.description}`),
+      ].join("\n") : null,
       "",
       "Worker output:",
       truncateForJudge(output),

@@ -19,6 +19,8 @@ export type WorkBoardTaskLite = {
   targetMachine?: { name?: string; key?: string } | null;
 };
 
+export { isWorkBoardPipelineQuestion, summarizeWorkBoardPipeline } from "./work-board-pipeline";
+
 /**
  * Flatten the /api/kanban GET `columns` payload. Live shape (confirmed against
  * the running route): an ARRAY of `{ id, title, description, tasks: [...] }`
@@ -100,4 +102,55 @@ export function summarizeWorkBoardByStatus(tasks: WorkBoardTaskLite[]): string {
   }
   const parts = [...counts.entries()].sort(([, a], [, b]) => b - a).map(([status, count]) => `${status}: ${count}`);
   return `Work Board totals — ${parts.join(", ") || "empty"} (${tasks.length} tasks).`;
+}
+
+const plainWorkBoardTargets = new Set([
+  "kanban",
+  "kanban board",
+  "task board",
+  "tasks",
+  "work",
+  "work board",
+]);
+
+const normalizeWorkBoardCommand = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * True only for bare navigation commands such as "open the work". Anything
+ * with extra task/search intent should keep going through the normal tool loop.
+ */
+export function isPlainWorkBoardNavigationCommand(command: string): boolean {
+  const text = normalizeWorkBoardCommand(command);
+  if (!text) return false;
+  const target = text
+    .replace(/^(?:please\s+)?(?:open|show\s+me|show|go\s+to|take\s+me\s+to|view|switch\s+to|bring\s+up)\s+/, "")
+    .replace(/^(?:the|my)\s+/, "")
+    .replace(/\s+(?:view|screen|page|panel|tab)$/, "")
+    .trim();
+  return plainWorkBoardTargets.has(target);
+}
+
+const countStatus = (tasks: WorkBoardTaskLite[], status: string) => tasks.filter((task) => task.status === status).length;
+
+const quantity = (count: number, singular: string, plural = `${singular}s`) => `${count} ${count === 1 ? singular : plural}`;
+
+/** Deterministic reply after plain Work navigation. */
+export function summarizeWorkBoardForNavigation(tasks: WorkBoardTaskLite[]): string {
+  if (!tasks.length) return "Opened Work. The Work Board is empty.";
+  const ideas = countStatus(tasks, "ideas");
+  const ready = countStatus(tasks, "ready");
+  const working = countStatus(tasks, "working");
+  const needsHuman = countStatus(tasks, "needs-human");
+  return [
+    "Opened Work. You have ",
+    quantity(ideas, "idea"),
+    ", ",
+    quantity(ready, "ready task"),
+    ", ",
+    quantity(working, "task", "tasks"),
+    " currently being worked on, and ",
+    needsHuman,
+    ` that ${needsHuman === 1 ? "needs" : "need"} your attention.`,
+  ].join("");
 }

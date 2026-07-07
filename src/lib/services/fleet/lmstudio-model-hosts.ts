@@ -2,22 +2,24 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 /**
- * Fleet-wide LM Studio model resolution. Every HivemindOS machine's collector
- * reverse-proxies its local LM Studio at /lmstudio/*, so a model hosted
- * anywhere in the fleet is reachable without any manual LM Studio network
- * setup. When an lm-studio agent's model is not served by its own machine,
- * this resolver finds a fleet machine that hosts it and returns that
- * collector's proxy base URL for a per-run override (Hermes LM_BASE_URL).
+ * Fleet-wide local model resolution. Every HivemindOS machine's collector
+ * reverse-proxies its local LM Studio at /lmstudio/* and arbitrary local app
+ * ports at /app-proxy/<port>/*, so a model hosted anywhere in the fleet is
+ * reachable without manual Tailnet URL setup. When an lm-studio/Local agent's
+ * model is served by another local OpenAI-compatible process (LM Studio,
+ * llama-server, vLLM, etc.), this resolver returns that collector proxy base
+ * URL for a per-run override (Hermes LM_BASE_URL).
  */
 
 type FleetLmStudioHost = {
   collectorUrl: string;
   machineName: string;
-  models: Array<{ key: string; loaded: boolean }>;
+  models: Array<{ key: string; loaded: boolean; baseUrl: string; source: string; port?: number }>;
 };
 
 const HOSTS_CACHE_MS = 20_000;
 const INVENTORY_TIMEOUT_MS = 3_000;
+const OPENAI_COMPATIBLE_PORTS = [1234, 1244, 8000, 8080, 11434];
 let hostsCache: { at: number; hosts: FleetLmStudioHost[] } | null = null;
 let hostsInFlight: Promise<FleetLmStudioHost[]> | null = null;
 
@@ -25,27 +27,75 @@ function modelMatches(key: string, model: string) {
   return key === model || key.endsWith(`/${model}`) || model.endsWith(`/${key}`);
 }
 
-async function fetchHostInventory(collectorUrl: string, machineName: string): Promise<FleetLmStudioHost | null> {
+function openAIServerLabel(port: number) {
+  if (port === 1234) return "LM Studio OpenAI server";
+  if (port === 1244) return "llama.cpp server";
+  if (port === 11434) return "Ollama server";
+  if (port === 8000 || port === 8080) return "vLLM/OpenAI server";
+  return `OpenAI server :${port}`;
+}
+
+async function fetchLmStudioInventory(collectorUrl: string) {
   try {
     const response = await fetch(`${collectorUrl}/lmstudio/api/v1/models`, {
       cache: "no-store",
       signal: AbortSignal.timeout(INVENTORY_TIMEOUT_MS),
     });
-    if (!response.ok) return null;
+    if (!response.ok) return [];
     const data = await response.json().catch(() => null) as {
       models?: Array<{ key?: string; type?: string; loaded_instances?: unknown[] }>;
     } | null;
-    const models = (data?.models ?? [])
+    return (data?.models ?? [])
       .filter((model) => model?.key && model.type !== "embedding")
       .map((model) => ({
         key: String(model.key).trim(),
         loaded: Array.isArray(model.loaded_instances) && model.loaded_instances.length > 0,
+        baseUrl: `${collectorUrl}/lmstudio/v1`,
+        source: "LM Studio",
       }))
       .filter((model) => model.key);
-    return { collectorUrl, machineName, models };
   } catch {
-    return null;
+    return [];
   }
+}
+
+async function fetchOpenAICompatibleInventory(collectorUrl: string, port: number) {
+  const baseUrl = `${collectorUrl}/app-proxy/${port}/v1`;
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(INVENTORY_TIMEOUT_MS),
+    });
+    if (!response.ok) return [];
+    const data = await response.json().catch(() => null) as {
+      data?: Array<{ id?: string }>;
+    } | null;
+    return (data?.data ?? [])
+      .map((model) => String(model?.id ?? "").trim())
+      .filter((key) => key && !/embed/i.test(key))
+      .map((key) => ({
+        key,
+        loaded: true,
+        baseUrl,
+        source: openAIServerLabel(port),
+        port,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchHostInventory(collectorUrl: string, machineName: string): Promise<FleetLmStudioHost | null> {
+  const groups = await Promise.all([
+    fetchLmStudioInventory(collectorUrl),
+    ...OPENAI_COMPATIBLE_PORTS.map((port) => fetchOpenAICompatibleInventory(collectorUrl, port)),
+  ]);
+  const byBaseAndKey = new Map<string, FleetLmStudioHost["models"][number]>();
+  for (const model of groups.flat()) {
+    byBaseAndKey.set(`${model.baseUrl}::${model.key}`, model);
+  }
+  const models = [...byBaseAndKey.values()];
+  return models.length ? { collectorUrl, machineName, models } : null;
 }
 
 async function fleetLmStudioHosts(requestUrl: string): Promise<FleetLmStudioHost[]> {
@@ -96,7 +146,12 @@ export async function resolveLmStudioFleetBaseUrl(
     const own = await fetchHostInventory(ownUrl, "this machine");
     // The agent's own machine hosts the model: keep the default local base so
     // load state and errors stay visible where the agent runs.
-    if (own?.models.some((entry) => modelMatches(entry.key, model))) return null;
+    const ownMatch = own?.models.find((entry) => modelMatches(entry.key, model));
+    if (ownMatch) {
+      return ownMatch.baseUrl.endsWith("/lmstudio/v1") || ownMatch.port === 1234
+        ? null
+        : { baseUrl: ownMatch.baseUrl, machineName: own?.machineName || "this machine" };
+    }
   }
   const hosts = await fleetLmStudioHosts(requestUrl).catch(() => []);
   const candidates = hosts
@@ -108,7 +163,7 @@ export async function resolveLmStudioFleetBaseUrl(
   const best = candidates.find((entry) => entry.match?.loaded) ?? candidates[0];
   if (!best) return null;
   return {
-    baseUrl: `${best.host.collectorUrl}/lmstudio/v1`,
+    baseUrl: best.match?.baseUrl || `${best.host.collectorUrl}/lmstudio/v1`,
     machineName: best.host.machineName,
   };
 }

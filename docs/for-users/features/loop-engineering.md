@@ -14,7 +14,7 @@ The live source of truth is still the Work Board. A loop can begin from chat, Sc
 - Loop contracts with success criteria, retry/runtime budgets, evidence requirements, and eval gates.
 - Receipts that prove why a gate or outcome passed.
 - Human gates for external actions, risky spend, sensitive decisions, repeated failed attempts, and ambiguous handoffs.
-- Exportable snapshots for humans and raw agents: `LOOP.md`, `STATE.md`, `loop-budget.md`, `loop-run-log.md`, and `patterns/registry.yaml`.
+- Exportable snapshots for humans and raw agents: `LOOP.md`, `STATE.md`, `contract.md`, `loop-budget.md`, `loop-run-log.md`, and `patterns/registry.yaml`.
 - A readiness score that says whether the current loop setup is report-only, assisted, or structurally ready for unattended work.
 
 ## Readiness Levels
@@ -56,6 +56,8 @@ node scripts/hive-loop patterns
 ```
 
 For API callers, `GET /api/loops` returns the registry, templates, and verifier definitions. Add `?readiness=true` to audit the current board, and add `&artifacts=true` to include the exported snapshot strings. `POST /api/loops` can return a readiness report, export artifacts, build a loop contract, or create a Work Board task with the generated contract attached.
+
+`contract.md` is the portable done-contract snapshot. It records the planner's assertions, evaluator pushback, agreed done criteria, expected artifacts, and any evaluator rubric attached to visible loop tasks. Product, design, content, and customer-facing loops can carry rubrics so subjective quality is graded against explicit axes instead of vibes.
 
 ## Operating Rule
 

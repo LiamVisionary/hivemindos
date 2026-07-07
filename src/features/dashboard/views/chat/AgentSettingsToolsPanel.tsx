@@ -67,7 +67,7 @@ export function AgentSettingsToolsPanel({
   const mailbox = agentMailboxOverview?.mailboxes?.[0];
   const mailboxProvider = agentMailboxOverview?.providerStatus;
   const mailboxReady = mailbox?.status === "ready";
-  const mailboxStatus = mailboxReady ? "Ready" : mailboxProvider?.ready ? "Ready to create" : "Provider needed";
+  const mailboxStatus = mailboxReady ? "Ready" : mailboxProvider?.ready ? null : "Provider needed";
   const mailboxBlockers = Array.isArray(mailboxProvider?.blockers) ? mailboxProvider.blockers.slice(0, 3) : [];
 
   return (
@@ -81,7 +81,7 @@ export function AgentSettingsToolsPanel({
       <article className="as-tool as-mailbox" data-ready={mailboxReady || undefined}>
         <span className="tile"><Mail size={18} aria-hidden="true" /></span>
         <div>
-          <div className="th"><span className="tn">Agent mailbox</span><Badge tone={mailboxReady ? "live" : "honey"}>{mailboxStatus}</Badge></div>
+          <div className="th"><span className="tn">Agent mailbox</span>{mailboxStatus ? <Badge tone={mailboxReady ? "live" : "honey"}>{mailboxStatus}</Badge> : null}</div>
           <p className="td">{mailboxReady ? mailbox.address : mailboxProvider?.detail || "Create a persistent mailbox for this agent."}</p>
           {mailboxBlockers.map((blocker) => <p key={blocker} className="td">{blocker}</p>)}
           {agentMailboxError ? <p className="as-error">{agentMailboxError}</p> : null}

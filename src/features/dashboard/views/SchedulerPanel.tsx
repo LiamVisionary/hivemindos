@@ -6,8 +6,15 @@
 import { useMemo, useState } from "react";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { computeScheduleHealthWarnings } from "../schedule-health";
+import { computeScheduleHealthWarnings, scheduleHealthWarningKey, visibleScheduleHealthWarnings } from "../schedule-health";
+import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
 import { WorkSectionHeader } from "./WorkSectionHeader";
+
+// Durable set of loop-health warnings the user has dismissed, keyed by
+// kind+scheduleIds so an acknowledged warning stays hidden but a genuinely new
+// one still surfaces. Persisted through the dashboard state service (never
+// localStorage) so it survives reloads and rides the native bridge.
+const SCHEDULE_HEALTH_DISMISSED_KEY = "hivemindos.scheduleHealthDismissed.v1";
 
 export function SchedulerPanel(props: any) {
   const { AlignLeft, Button, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Link, List, LoaderCircle, Paperclip, Pencil, Plus, Puzzle, RUNTIME_LABELS, Repeat2, SCHEDULER_MODEL_OPTIONS, SCHEDULE_PRESETS, SchedulerView, Search, Send, Sparkles, TaskModal, Trash2, activeView, addSchedulePath, addSchedulerStep, addSchedulerStepPath, browseSchedulerFolder, createSchedule, displayAgents, editSchedule, editingScheduleId, filteredSchedulerSkills, findScheduleForJob, fleetClass, importExistingSchedules, isSchedulerFilePath, machineGroups, openSkillBrowser, pickSchedulerFiles, pickSchedulerFolder, refreshSharedSchedulesFromVault, removeSchedule, removeSchedulePath, removeScheduleSkill, removeSchedulerStep, removeSchedulerStepPath, renderAgentKey, resetScheduleDraft, runScheduleNow, saveScheduleFromModal, scheduleDraft, scheduleImportStatus, scheduleImporting, schedulerAttachMenu, schedulerDraftOpen, schedulerJobs, schedulerModalInitial, schedulerPathDraft, schedulerPathKind, schedulerRunStates, schedulerSelectedStep, schedulerSkillSearch, schedules, selectedAgent, setActiveView, setScheduleDraft, setScheduleImportStatus, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerSelectedStep, setSchedulerSkillSearch, sharedSkillOptions, aeonSkillOptions, toggleSchedule, toggleScheduleSkill, toggleSchedulerStepMode, toggleSchedulerStepSkill, updateSchedulerStep, updateSchedulerStepModel, vaultClass } = props;
@@ -24,11 +31,33 @@ export function SchedulerPanel(props: any) {
     () => computeScheduleHealthWarnings(schedules ?? [], healthCheckedAt),
     [schedules, healthCheckedAt],
   );
+  const [dismissedHealthRaw, rememberDismissedHealth] = useRememberedDashboardValue(SCHEDULE_HEALTH_DISMISSED_KEY);
+  const dismissedHealthKeys = useMemo(() => {
+    try {
+      const parsed = JSON.parse(dismissedHealthRaw || "[]");
+      return new Set(Array.isArray(parsed) ? parsed.filter((key) => typeof key === "string") : []);
+    } catch {
+      return new Set();
+    }
+  }, [dismissedHealthRaw]);
+  const visibleHealthWarnings = useMemo(
+    () => visibleScheduleHealthWarnings(scheduleHealthWarnings, dismissedHealthKeys),
+    [scheduleHealthWarnings, dismissedHealthKeys],
+  );
+  const dismissHealthWarning = (warning) => {
+    const liveKeys = new Set(scheduleHealthWarnings.map(scheduleHealthWarningKey));
+    // Retain only dismissals that still match a live warning, plus the new one,
+    // so acknowledgements for long-gone loops don't accumulate forever.
+    const next = [...dismissedHealthKeys, scheduleHealthWarningKey(warning)].filter((key) => liveKeys.has(key));
+    rememberDismissedHealth(JSON.stringify([...new Set(next)]));
+  };
+  const restoreDismissedHealthWarnings = () => rememberDismissedHealth("[]");
+  const hiddenHealthWarningCount = scheduleHealthWarnings.length - visibleHealthWarnings.length;
   return (<>
       {activeView === "scheduler" ? (
       <section
         className="grid min-h-0 overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]"
-        style={{ height: "100%", gridTemplateRows: scheduleHealthWarnings.length ? "auto auto minmax(0, 1fr)" : "auto minmax(0, 1fr)" }}
+        style={{ height: "100%", gridTemplateRows: (visibleHealthWarnings.length || hiddenHealthWarningCount) ? "auto auto minmax(0, 1fr)" : "auto minmax(0, 1fr)" }}
       >
         <WorkSectionHeader
           activeView="scheduler"
@@ -42,14 +71,30 @@ export function SchedulerPanel(props: any) {
             { value: schedulerJobs.length, label: "total" },
           ]}
         />
-        {scheduleHealthWarnings.length ? (
+        {visibleHealthWarnings.length ? (
           <div className="flex max-h-36 flex-col gap-1.5 overflow-y-auto border-b border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] px-4 py-2.5" role="status" aria-live="polite">
-            {scheduleHealthWarnings.map((warning) => (
-              <div key={`${warning.kind}-${warning.scheduleIds.join("-")}`} className="text-xs leading-relaxed">
-                <strong className="text-[rgba(253,230,138,0.95)]">{warning.title}.</strong>{" "}
-                <span className="text-[var(--muted)]">{warning.detail}</span>
+            {visibleHealthWarnings.map((warning) => (
+              <div key={scheduleHealthWarningKey(warning)} className="flex items-start gap-2 text-xs leading-relaxed">
+                <div className="min-w-0 flex-1">
+                  <strong className="text-[rgba(253,230,138,0.95)]">{warning.title}.</strong>{" "}
+                  <span className="text-[var(--muted)]">{warning.detail}</span>
+                </div>
+                <CloseIconButton
+                  size="sm"
+                  aria-label={`Dismiss warning: ${warning.title}`}
+                  title="Dismiss this warning"
+                  className="-mr-1 shrink-0 text-[rgba(253,230,138,0.85)] hover:text-[rgba(253,230,138,1)]"
+                  onClick={() => dismissHealthWarning(warning)}
+                />
               </div>
             ))}
+          </div>
+        ) : hiddenHealthWarningCount ? (
+          <div className="flex items-center justify-end gap-2 border-b border-[rgba(148,163,184,0.14)] bg-[rgba(5,8,13,0.4)] px-4 py-1.5 text-[11px] text-[var(--muted)]" role="status">
+            <span>{hiddenHealthWarningCount} schedule health {hiddenHealthWarningCount === 1 ? "warning" : "warnings"} dismissed.</span>
+            <button type="button" className="font-medium text-[rgba(253,230,138,0.9)] underline-offset-2 hover:underline" onClick={restoreDismissedHealthWarnings}>
+              Show
+            </button>
           </div>
         ) : null}
         <div className="min-h-0 overflow-hidden">
@@ -181,6 +226,22 @@ export function SchedulerPanel(props: any) {
                 <select value={scheduleDraft.agentId} onChange={(event) => setScheduleDraft((current) => ({ ...current, agentId: event.target.value }))}>
                   {displayAgents.map((agent, agentIndex) => <option value={agent.id} key={renderAgentKey(agent, agentIndex)}>{agent.name} · {RUNTIME_LABELS[agent.runtime]}</option>)}
                 </select>
+              </label>
+              <label className="mt-1 flex items-start gap-2.5 text-xs">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={scheduleDraft.runOnAllMachines === true}
+                  onChange={(event) => setScheduleDraft((current) => ({ ...current, runOnAllMachines: event.target.checked }))}
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="font-medium">Run on all machines</span>
+                  <small className="text-[var(--muted)]">
+                    {scheduleDraft.runOnAllMachines
+                      ? "Replicated to every fleet machine; its copies count as one schedule, not duplicates."
+                      : `Pinned to ${displayAgents.find((agent) => agent.id === scheduleDraft.agentId)?.machineName || "the selected agent's machine"} only.`}
+                  </small>
+                </span>
               </label>
             </div>
 

@@ -3,6 +3,7 @@ export type AgentNotificationPriority = "low" | "normal" | "high" | "urgent";
 export type AgentNotificationKind = "message" | "decision" | "task" | "alert" | "system";
 
 export type AgentNotificationResolutionStatus = "in-progress" | "resolved";
+export type AgentAutonomyReviewMode = "autonomous" | "review-high-risk" | "review-all";
 
 /**
  * Lifecycle of the CONDITION a notification reported, stamped by whatever is
@@ -37,6 +38,7 @@ export type AgentNotification = {
 export type AgentNotificationSettings = {
   highPriorityMessagingEnabled: boolean;
   messagingHandledBy: string;
+  autonomyReviewMode: AgentAutonomyReviewMode;
   updatedAt: string;
 };
 

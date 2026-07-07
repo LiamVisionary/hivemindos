@@ -388,6 +388,7 @@ has("docs/for-users/packaged-skills/third-party-skills.md", "brand/hivemindos/br
 has("docs/for-users/packaged-skills/third-party-skills.md", "ops/hivemindos/work-board-airtable-bridge");
 has("docs/for-users/whole-brain/shared-skills.md", "packaged-skills/optional/design/<source>/<skill>/");
 has("docs/for-users/slash-commands.md", "/handoff-task");
+has("docs/for-users/slash-commands.md", "/note <note>");
 has("docs/for-users/slash-commands.md", "/swarm-goal");
 has("docs/for-users/slash-commands.md", "/reload-skills");
 has("docs/for-users/features/runtimes-and-chat.md", "/swarm-goal <build request>");

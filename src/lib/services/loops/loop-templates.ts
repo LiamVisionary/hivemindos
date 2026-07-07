@@ -82,6 +82,8 @@ export function buildLoopFromTemplate(input: BuildLoopTemplateInput): LoopSpec {
     mode: template.defaultMode,
     goal: input.goal.trim(),
     successCriteria: input.successCriteria?.filter(Boolean) ?? defaultSuccessCriteria(input.templateId),
+    contract: buildTemplateContract(input, template.title, now),
+    evaluationRubric: buildTemplateRubric(input.templateId, input.title ?? template.title, now),
     evalGates: gates,
     benchmark: input.benchmarkCommand || input.benchmarkMetricName || input.benchmarkTarget
       ? {
@@ -138,6 +140,10 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
       "The result includes reusable learning: artifact, workflow, decision, customer signal, or anti-pattern.",
       `Any spend or external action stays inside ${governanceLabel}.`,
     ],
+    contract: buildOperatingUnitContract(input, goal, metric, now),
+    evaluationRubric: shouldUseProductTasteRubric(input)
+      ? buildProductTasteRubric(`rubric_unit_${stableHash(`${input.unitId}:${input.workTitle}`)}`, "Product/design evaluator rubric")
+      : undefined,
     evalGates: [
       loopGateFromVerifier("receipt:evidence", { id: `${gatePrefix}-outcome`, title: `Outcome evidence for ${metric}`, required: false, now }),
       loopGateFromVerifier("receipt:evidence", { id: `${gatePrefix}-learning`, title: "Reviewed learning distillation candidate", required: false, now }),
@@ -170,6 +176,7 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
     handoffRules: [
       "Prefer recording evidence and reusable learning over only marking the task done.",
       "Escalate irreversible external actions or budget exceptions for human approval.",
+      "Use an isolated worktree or equivalent checkout for code-changing work tied to a repo.",
     ],
     evidenceRequired: [
       "Outcome evidence tied to the operating metric.",
@@ -196,6 +203,106 @@ function defaultEvidenceRequired(templateId: LoopTemplateId): string[] {
   if (templateId === "code-fix") return ["Test, lint, or typecheck output.", "Files changed."];
   if (templateId === "daily-brief") return ["Sources checked.", "Delivery receipt."];
   return ["Result summary.", "Verification evidence.", "Known gaps or next retry target."];
+}
+
+function buildTemplateContract(input: BuildLoopTemplateInput, templateTitle: string, now: number): LoopSpec["contract"] {
+  const title = input.title?.trim() || templateTitle;
+  const criteria = input.successCriteria?.filter(Boolean) ?? defaultSuccessCriteria(input.templateId);
+  return {
+    id: `contract_${input.templateId}_${stableHash(`${title}:${input.goal}`)}`,
+    title: `${title} done contract`,
+    plannerAssertions: [
+      `The loop goal is: ${input.goal.trim()}.`,
+      `The selected pattern is ${templateTitle}; work should follow its phases before completion.`,
+      "The worker may finish only with durable evidence, not a summary of intent.",
+    ],
+    evaluatorPushback: [
+      "What artifact, command output, receipt, or reviewer decision proves this is done?",
+      "What would make the result unsafe, fabricated, too shallow, or blocked on a human?",
+      "Which side effects need a human gate before the worker proceeds?",
+    ],
+    agreedDone: criteria,
+    artifacts: [
+      "Work Board task result",
+      "loop-receipts block",
+      "Any deliverable paths, URLs, screenshots, or command output referenced by the gates",
+    ],
+    createdAt: now,
+  };
+}
+
+function buildOperatingUnitContract(input: OperatingUnitLearningLoopInput, goal: string, metric: string, now: number): LoopSpec["contract"] {
+  return {
+    id: `contract_unit_${stableHash(`${input.unitId}:${input.runId}:${input.workTitle}`)}`,
+    title: `${input.unitName} - ${input.workTitle} contract`,
+    plannerAssertions: [
+      `This branch should advance the strategic goal: ${goal}.`,
+      `The branch should produce measurable evidence for ${metric}.`,
+      "The branch should avoid repeating recently completed company work.",
+    ],
+    evaluatorPushback: [
+      "Does the output prove an outcome, or only describe activity?",
+      "Are customer-facing URLs, files, receipts, or decisions explicitly named?",
+      "Did the worker respect spend, approval, and external-action policy?",
+    ],
+    agreedDone: [
+      input.metricTarget ? `${metric} has evidence of movement toward ${input.metricTarget}.` : `${metric} has a measurement or an honest next measurement.`,
+      "Reusable learning is captured as an artifact, workflow, decision, customer signal, or anti-pattern.",
+      "Human approval is requested instead of bypassed for policy exceptions or irreversible side effects.",
+    ],
+    artifacts: [
+      "Work Board result",
+      "Loop receipts",
+      "Company memory digest entry",
+      "Customer-facing deliverables when produced",
+    ],
+    createdAt: now,
+  };
+}
+
+function buildTemplateRubric(templateId: LoopTemplateId, title: string, now: number): LoopSpec["evaluationRubric"] {
+  if (templateId === "app-build-harness") return buildProductTasteRubric(`rubric_${templateId}_${stableHash(`${title}:${now}`)}`, "App/product evaluator rubric");
+  if (templateId === "content") {
+    return {
+      id: `rubric_${templateId}_${stableHash(`${title}:${now}`)}`,
+      title: "Content evaluator rubric",
+      scale: "0-1",
+      passThreshold: 0.78,
+      axes: [
+        { id: "clarity", title: "Clarity", weight: 0.3, description: "The piece is easy to understand, specific, and structured for the intended audience.", scoreFloor: 0.7 },
+        { id: "originality", title: "Originality", weight: 0.2, description: "The piece avoids generic phrasing and contains a distinctive angle or useful synthesis.", scoreFloor: 0.65 },
+        { id: "craft", title: "Craft", weight: 0.25, description: "The language, pacing, formatting, and proofing feel deliberate and polished.", scoreFloor: 0.7 },
+        { id: "fit", title: "Fit", weight: 0.25, description: "The result satisfies the brief, brand risk, evidence needs, and publication context.", scoreFloor: 0.7 },
+      ],
+      notes: ["A result below threshold should revise or request human direction before publication."],
+    };
+  }
+  return undefined;
+}
+
+function buildProductTasteRubric(id: string, title: string): LoopSpec["evaluationRubric"] {
+  return {
+    id,
+    title,
+    scale: "0-1",
+    passThreshold: 0.8,
+    axes: [
+      { id: "design", title: "Design", weight: 0.3, description: "The product is visually coherent, scan-friendly, accessible, and appropriate to the domain.", scoreFloor: 0.72 },
+      { id: "originality", title: "Originality", weight: 0.2, description: "The result has a clear point of view and avoids template-like or generic execution.", scoreFloor: 0.65 },
+      { id: "craft", title: "Craft", weight: 0.25, description: "Interactions, copy, motion, states, and edge cases feel finished rather than merely assembled.", scoreFloor: 0.72 },
+      { id: "functionality", title: "Functionality", weight: 0.25, description: "The core workflow works through the real user path and has evidence of verification.", scoreFloor: 0.72 },
+    ],
+    notes: [
+      "The evaluator should score each axis from 0 to 1 and reject if the weighted score is below threshold.",
+      "Design and functionality cannot be satisfied by screenshots or prose alone when a runnable surface exists.",
+    ],
+  };
+}
+
+function shouldUseProductTasteRubric(input: OperatingUnitLearningLoopInput): boolean {
+  return /app|brand|checkout|content|copy|customer|demo|design|email|landing|page|preview|product|site|store|ui|video|website/i.test(
+    [input.workTitle, input.strategicGoal, input.branchAgent].filter(Boolean).join(" "),
+  );
 }
 
 function stableHash(value: string) {

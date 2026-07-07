@@ -55,6 +55,7 @@
     "allow-native-setup-run",
     "allow-native-setup-status",
     "allow-scheduler-shared-schedules",
+    "allow-obsidian-capture-note",
     "allow-obsidian-agents",
     "allow-obsidian-personal-wallets",
     "allow-dashboard-state-read",

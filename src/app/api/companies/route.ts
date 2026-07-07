@@ -13,6 +13,7 @@ import {
   resolveCompanyPricingProposal,
   setCompanyAgents,
   setCompanyAnalytics,
+  setCompanyApprovalPolicy,
   setCompanyAutonomy,
   setCompanyFrozen,
   updateCompanyMetric,
@@ -30,9 +31,11 @@ import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plan
 import type {
   Company,
   CompanyApexGoal,
+  CompanyApprovalPolicy,
   CompanyMember,
   CompanyRevenue,
 } from "@/lib/types/company";
+import type { CompanyImportedOperations } from "@/lib/types/company-import";
 import type { KanbanTaskAttachment } from "@/lib/types/kanban";
 
 export const runtime = "nodejs";
@@ -99,6 +102,7 @@ type CompanyBody = {
   projectId?: string;
   analyticsProvider?: Company["analyticsProvider"];
   analyticsConfig?: Company["analyticsConfig"];
+  importedOperations?: CompanyImportedOperations;
   // dispatch-goal
   fleetSnapshot?: QueenBeeFleetMachine[];
   maxTasks?: number;
@@ -112,6 +116,8 @@ type CompanyBody = {
   // add-directive / remove-directive
   directive?: { text?: string; skill?: string; skills?: string[]; attachments?: KanbanTaskAttachment[]; source?: "inject" | "reject"; deliverableRef?: string };
   directiveId?: string;
+  // set-approval-policy
+  approvalPolicy?: CompanyApprovalPolicy;
   // resolve-pricing (human decision on a crew-raised price-change request)
   proposalId?: string;
   decision?: string;
@@ -193,6 +199,13 @@ export async function POST(request: NextRequest) {
       if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
       return NextResponse.json({ ok: true, company });
     }
+    if (action === "set-approval-policy") {
+      if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      if (!body.approvalPolicy) return NextResponse.json({ ok: false, error: "approvalPolicy is required" }, { status: 400 });
+      const company = await setCompanyApprovalPolicy(body.id.trim(), body.approvalPolicy);
+      if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
+      return NextResponse.json({ ok: true, company });
+    }
     if (action === "resolve-pricing") {
       if (!body.id?.trim() || !body.proposalId?.trim()) return NextResponse.json({ ok: false, error: "id and proposalId are required" }, { status: 400 });
       const decision = body.decision === "approve" ? "approve" : body.decision === "reject" ? "reject" : null;
@@ -241,6 +254,7 @@ export async function POST(request: NextRequest) {
       projectId: body.projectId,
       analyticsProvider: body.analyticsProvider,
       analyticsConfig: body.analyticsConfig,
+      importedOperations: body.importedOperations,
     });
     return NextResponse.json({ ok: true, company });
   } catch (error) {

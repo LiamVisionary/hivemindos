@@ -4,6 +4,8 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { TaskTemplatePicker } from "./TaskTemplatePicker";
+import { TASK_TEMPLATES, findTaskTemplate, type TaskTemplateDefinition } from "./task-templates";
 import styles from "./task-modal.module.css";
 
 export type CadenceKind =
@@ -58,15 +60,6 @@ interface TaskModalProps {
   aeon?: boolean;
 }
 
-const TEMPLATES = [
-  { id: "brain/index-vault",    label: "Index Obsidian vault",   desc: "Refresh embeddings + sync to peers" },
-  { id: "brain/pull-rss",       label: "Pull RSS digest",        desc: "Fetch + dedup hourly news" },
-  { id: "secops/rotate-tokens", label: "Rotate broker tokens",   desc: "Refresh Coinbase/Kraken JWTs" },
-  { id: "channels/x-publish",   label: "Publish staged X thread",desc: "Publish the staged draft" },
-  { id: "sim/run-mm",           label: "Run MM simulation",      desc: "Start a market-making swarm" },
-  { id: "ops/backup-env",       label: "Backup hive.env.gpg",    desc: "GPG-encrypt + push to vault" },
-];
-
 const CADENCE_PILLS: { id: CadenceKind; label: string }[] = [
   { id: "manual",  label: "Manual" },
   { id: "every15", label: "Every 15m" },
@@ -104,19 +97,20 @@ export function TaskModal({
       ? { slug: skill, name: skill, description: "" }
       : skill)
   ), [skillOptions]);
+  const initialTemplate = findTaskTemplate(initial?.templateId) ?? TASK_TEMPLATES[0] ?? null;
   const [tab, setTab] = React.useState<"template" | "custom">(aeon || initial?.templateId === null ? "custom" : "template");
-  const [skill, setSkill] = React.useState<string>(initial?.templateId ?? "brain/index-vault");
-  const [title, setTitle] = React.useState(initial?.title ?? "Index Obsidian vault");
-  const [mode, setMode] = React.useState<"steps" | "prompt">(initial?.mode ?? "steps");
-  const [steps, setSteps] = React.useState<string[]>(initial?.steps ?? DEFAULT_STEPS);
-  const [prompt, setPrompt] = React.useState<string>(initial?.prompt ??
+  const [templateId, setTemplateId] = React.useState<string | null>(initial?.templateId ?? initialTemplate?.id ?? null);
+  const [title, setTitle] = React.useState(initial?.title ?? initialTemplate?.defaultTitle ?? "Index Obsidian vault");
+  const [mode, setMode] = React.useState<"steps" | "prompt">(initial?.mode ?? initialTemplate?.defaultMode ?? "steps");
+  const [steps, setSteps] = React.useState<string[]>(initial?.steps?.length ? initial.steps : (initialTemplate?.defaultSteps ?? DEFAULT_STEPS));
+  const [prompt, setPrompt] = React.useState<string>(initial?.prompt ?? initialTemplate?.defaultPrompt ??
     "Read the Obsidian vault index manifest, refresh embeddings for any notes modified since the last run, then push the updated index to peer machines over Tailscale.");
-  const [attachments, setAttachments] = React.useState<NewTaskPayload["attachments"]>(initial?.attachments ?? [
+  const [attachments, setAttachments] = React.useState<NewTaskPayload["attachments"]>(initial?.attachments ?? initialTemplate?.defaultAttachments ?? [
     { kind: "skill", label: normalizedSkillOptions[0]?.slug ?? "index-vault" },
     { kind: "path",  label: "~/Obsidian/hive" },
   ]);
   const [attachOpen, setAttachOpen] = React.useState<"skill" | "path" | null>(null);
-  const [cadenceKind, setCadenceKind] = React.useState<CadenceKind>(initial?.cadence?.kind ?? "daily");
+  const [cadenceKind, setCadenceKind] = React.useState<CadenceKind>(initial?.cadence?.kind ?? initialTemplate?.defaultCadenceKind ?? "daily");
   const [cronExpr, setCronExpr] = React.useState(initial?.cadence?.kind === "cron" ? initial.cadence.expr : "0 2 * * *");
   const [target, setTarget] = React.useState(initial?.target ?? {
     machine: machineOptions[0] ?? "honeycomb",
@@ -154,6 +148,15 @@ export function TaskModal({
     setSteps((arr) => arr.length === 1 ? arr : arr.filter((_, j) => j !== i));
   const removeAttach = (i: number) =>
     setAttachments((arr) => arr.filter((_, j) => j !== i));
+  const applyTemplate = (template: TaskTemplateDefinition) => {
+    setTemplateId(template.id);
+    setTitle(template.defaultTitle);
+    setMode(template.defaultMode);
+    setSteps(template.defaultSteps.length ? template.defaultSteps : DEFAULT_STEPS);
+    setPrompt(template.defaultPrompt);
+    setAttachments(template.defaultAttachments ?? []);
+    if (template.defaultCadenceKind && template.defaultCadenceKind !== "cron") setCadenceKind(template.defaultCadenceKind);
+  };
 
   // An AEON automation is one skill armed on a schedule — block save until a skill is attached.
   const hasSkill = attachments.some((a) => a.kind === "skill");
@@ -167,7 +170,7 @@ export function TaskModal({
     try {
       const result = await onSave?.({
         title, mode, steps, prompt, attachments,
-        cadence, target, templateId: tab === "template" ? skill : null,
+        cadence, target, templateId: tab === "template" ? templateId : null,
         usePastRuns, pastRunLimit, aeon,
       });
       // A returned string is a save failure — surface it and keep the modal open.
@@ -258,31 +261,7 @@ export function TaskModal({
 
           {!aeon && tab === "template" && (
             <Section title="Pick a template">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-                {TEMPLATES.map((s) => {
-                  const a = skill === s.id;
-                  return (
-                    <button key={s.id} onClick={() => setSkill(s.id)} style={{
-                      display: "grid", gap: 4, padding: "10px 12px",
-                      borderRadius: 8, cursor: "pointer", textAlign: "left",
-                      border: `1px solid ${a ? "var(--tm-honey-border)" : "var(--tm-line)"}`,
-                      background: a ? "rgba(255,212,90,0.10)" : "transparent",
-                      color: "var(--tm-fg)",
-                    }}>
-                      <div style={{
-                        fontFamily: "var(--tm-f-display)", fontSize: 13, fontWeight: 600,
-                        color: a ? "var(--tm-honey-3)" : "var(--tm-fg)",
-                      }}>{s.label}</div>
-                      <div style={{ fontFamily: "var(--tm-f-mono)", fontSize: 10, color: "var(--tm-fg-4)" }}>
-                        {s.id}
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--tm-fg-3)", lineHeight: 1.4 }}>
-                        {s.desc}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <TaskTemplatePicker selectedId={templateId} onSelect={applyTemplate} />
             </Section>
           )}
 

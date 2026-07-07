@@ -54,7 +54,7 @@ export const TROUBLESHOOTING_COOKBOOK: TroubleshootingEntry[] = [
   },
   {
     id: "local-model-server-off",
-    title: "Local OpenAI-compatible model is selected but chat fails quickly",
+    title: "Local model is selected but chat fails quickly",
     area: "model",
     severity: "warning",
     symptoms: ["Fetch failed against localhost model endpoint", "LM Studio or Ollama shows a loaded model but /v1/models is unreachable"],

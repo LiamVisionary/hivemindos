@@ -73,6 +73,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
     colonyName,
   ].filter(Boolean);
   const buckets = bucketDeliverables(work.deliverables);
+  const workTimestampMs = work.completedAt ?? work.updatedAt;
   // This explainer is specifically for blocked / needs-human cards; shipped
   // work already has the result and receipts below.
   const isBlockedForHuman = issue.status === "board_review" || work.status === "needs-human";
@@ -145,7 +146,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
             <SectionLabel>deliverables · {buckets.visible.length}</SectionLabel>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {buckets.visible.map((c, i) => (
-                <DeliverableCard key={`v-${i}-${c.deliverable.id}`} item={c} machineName={work.machineName} theme={theme} layout="row" />
+                <DeliverableCard key={`v-${i}-${c.deliverable.id}`} item={c} machineName={work.machineName} timestampMs={workTimestampMs} theme={theme} layout="row" />
               ))}
             </div>
           </div>
@@ -198,7 +199,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
             {showInternal && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
                 {buckets.internal.map((c, i) => (
-                  <DeliverableCard key={`i-${i}-${c.deliverable.id}`} item={c} machineName={work.machineName} theme={theme} layout="row" />
+                  <DeliverableCard key={`i-${i}-${c.deliverable.id}`} item={c} machineName={work.machineName} timestampMs={workTimestampMs} theme={theme} layout="row" />
                 ))}
               </div>
             )}

@@ -1187,6 +1187,71 @@ export async function readCompanyEmailThreadDetail(input: { threadId: string }):
   return {};
 }
 
+export type CompanyEmailReplyResult = { messageId?: string; threadId?: string };
+
+/**
+ * Reply into an existing company email thread (used by the mobile inbox).
+ * Only AgentMail threads carry real inbound bodies + a reply path today, so
+ * Cloudflare inbox and Outreach-outbox threads throw a clear "not supported
+ * yet" error rather than silently dropping the reply. The provider is encoded
+ * in the thread id, exactly like readCompanyEmailThreadDetail.
+ */
+export async function replyToCompanyEmailThread(input: {
+  threadId: string;
+  text: string;
+  html?: string;
+}): Promise<CompanyEmailReplyResult> {
+  const threadId = (input.threadId || "").trim();
+  const text = (input.text || "").trim();
+  if (!text) throw new Error("Reply text is required.");
+  if (threadId.startsWith("agentmail:")) {
+    const rest = threadId.slice("agentmail:".length);
+    const split = rest.indexOf(":");
+    const inboxId = split >= 0 ? rest.slice(0, split) : "";
+    const providerThreadId = split >= 0 ? rest.slice(split + 1) : rest;
+    if (!inboxId || !providerThreadId) throw new Error("Malformed AgentMail thread id.");
+    return replyToAgentMailThread(inboxId, providerThreadId, text, input.html);
+  }
+  if (threadId.startsWith("cloudflare:")) {
+    throw new Error("Replies to Cloudflare inbox threads aren't supported yet.");
+  }
+  throw new Error("This thread can't be replied to.");
+}
+
+async function replyToAgentMailThread(
+  inboxId: string,
+  threadId: string,
+  text: string,
+  html?: string,
+): Promise<CompanyEmailReplyResult> {
+  const token = await hiveEnvValue("AGENTMAIL_API_KEY");
+  if (!token) throw new Error("AgentMail isn't connected (set AGENTMAIL_API_KEY).");
+  const apiBaseUrl = normalizeAgentMailApiBaseUrl(
+    (await hiveEnvValue("AGENTMAIL_API_BASE_URL")) || (await hiveEnvValue("AGENTMAIL_API_URL")) || DEFAULT_AGENTMAIL_API_BASE_URL,
+  );
+  // The reply endpoint is keyed by message id, so resolve the thread's latest
+  // message first (the same lookup the detail view uses).
+  const thread = await agentMailRequest<AgentMailThreadDetail>(
+    apiBaseUrl,
+    `/v0/inboxes/${encodeURIComponent(inboxId)}/threads/${encodeURIComponent(threadId)}`,
+    token,
+  );
+  if (!thread.ok) throw new Error(thread.error);
+  const messages = Array.isArray(thread.result?.messages) ? thread.result!.messages! : [];
+  const latest = messages[messages.length - 1];
+  if (!latest?.message_id) throw new Error("This thread has no message to reply to.");
+  // Omit `to`/`reply_all` so AgentMail addresses the reply to the original
+  // sender by default.
+  const reply = await agentMailRequest<{ message_id?: string; thread_id?: string }>(
+    apiBaseUrl,
+    `/v0/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(latest.message_id)}/reply`,
+    token,
+    { method: "POST", body: { text, ...(html ? { html } : {}) } },
+  );
+  if (!reply.ok) throw new Error(reply.error);
+  return { messageId: reply.result?.message_id, threadId: reply.result?.thread_id };
+}
+
 async function readAgentMailThreadDetail(inboxId: string, threadId: string): Promise<CompanyEmailThreadDetail> {
   const token = await hiveEnvValue("AGENTMAIL_API_KEY");
   if (!token) return { note: "AgentMail isn't connected (set AGENTMAIL_API_KEY)." };

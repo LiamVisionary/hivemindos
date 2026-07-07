@@ -14,7 +14,7 @@
 // the sent corpus is clean.
 import React from "react";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, GraduationCap, Loader2, MailWarning, Sparkles, X } from "lucide-react";
-import { Spinner } from "./primitives";
+import { Skeleton, Spinner } from "./primitives";
 
 type Severity = "high" | "medium" | "low";
 
@@ -198,6 +198,29 @@ function GroupCard({ companyId, group, onHandled }: { companyId: string; group: 
   );
 }
 
+/** Shape-matched shimmer for an incoming email-QA finding card. The scan lands in
+ *  two waves — a fast deterministic pass, then a slow (5-10s) AI content review —
+ *  and this holds the space for that second wave so its findings don't silently
+ *  pop in after the first. Presentational; the surrounding band carries the
+ *  role="status"/live-region so screen readers aren't double-announced. */
+function EmailQaLoadingCard() {
+  return (
+    <div aria-hidden style={{ borderRadius: 11, padding: "11px 12px", border: "1px solid var(--line)", background: "var(--bg-2)", display: "flex", flexDirection: "column", gap: 9 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+        <Skeleton width={16} height={16} radius={5} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+          <Skeleton width="44%" height={12} />
+          <Skeleton width="82%" height={10} />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, paddingLeft: 26 }}>
+        <Skeleton width={104} height={26} radius={8} />
+        <Skeleton width={88} height={26} radius={8} />
+      </div>
+    </div>
+  );
+}
+
 export function EmailQaBand({ companyId }: { companyId: string }) {
   const [report, setReport] = React.useState<Report | null>(null);
   const [deepLoading, setDeepLoading] = React.useState(true);
@@ -234,14 +257,28 @@ export function EmailQaBand({ companyId }: { companyId: string }) {
 
   const groups = React.useMemo(() => (report ? groupFindings(report.findings) : []), [report]);
   const visible = groups.filter((group) => !handled.has(group.category));
+  // The scan lands in two waves: a fast deterministic pass, then a slow (5-10s) AI
+  // content review. Only signpost the second wave once we KNOW this company has
+  // sent mail to review (report back with emailCount > 0) and the AI pass is still
+  // running — so companies with no email crew never flash an email-QA skeleton,
+  // and the AI findings never silently pop in after the deterministic ones.
+  const mayYieldMore = deepLoading && report !== null && report.emailCount > 0;
 
   if (visible.length === 0) {
-    // Only take vertical space while the AI review is still landing on a company
-    // whose deterministic pass was clean — otherwise render nothing.
-    if (deepLoading && report && report.findings.length === 0) {
+    // Nothing to show yet. If the AI review is still landing on a company with
+    // sent mail, hold a shape-matched skeleton so its findings don't appear out of
+    // nowhere; otherwise (clean + done, or no mail at all) render nothing.
+    if (mayYieldMore) {
       return (
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>
-          <Loader2 size={12} aria-hidden className="animate-spin" /> Reviewing sent emails for quality…
+        <div role="status" aria-label="Reviewing sent emails for quality" style={{ display: "flex", flexDirection: "column", marginBottom: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+            <MailWarning size={13} aria-hidden style={{ color: "var(--fg-4)" }} />
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, letterSpacing: 0.05, textTransform: "uppercase", color: "var(--fg-4)" }}>
+              Reviewing sent emails for quality…
+            </span>
+            <Loader2 size={11} aria-hidden className="animate-spin" style={{ color: "var(--fg-4)" }} />
+          </div>
+          <EmailQaLoadingCard />
         </div>
       );
     }
@@ -261,6 +298,9 @@ export function EmailQaBand({ companyId }: { companyId: string }) {
       {visible.map((group) => (
         <GroupCard key={group.category} companyId={companyId} group={group} onHandled={(category) => setHandled((current) => new Set(current).add(category))} />
       ))}
+      {/* Second-wave placeholder: the deterministic findings are up, the AI review
+          is still running — hold a skeleton so its extra findings don't pop in. */}
+      {mayYieldMore ? <EmailQaLoadingCard /> : null}
     </div>
   );
 }

@@ -10,7 +10,7 @@ export type BuiltInAgentTool = {
 export type AgentAppCatalogItem = {
   id: string;
   name: string;
-  category: "AI-native" | "Anti-detection" | "Production scale" | "Specialist";
+  category: "AI-native" | "Anti-detection" | "Production scale" | "Specialist" | "Mini app";
   description: string;
   sourceUrl: string;
   badges: string[];
@@ -67,9 +67,20 @@ export const BUILT_IN_AGENT_TOOLS: BuiltInAgentTool[] = [
     scope: "Runtime",
     badges: ["Utility", "Memory"],
   },
+  {
+    id: "capability-search",
+    name: "Capability search",
+    handle: "hive-capability-search",
+    description: "Map natural-language intents to installed skills, tools, apps, credentials, and safe execution routes.",
+    scope: "Native",
+    badges: ["Discovery", "Router"],
+  },
 ];
 
 export const AGENT_APP_CATALOG: AgentAppCatalogItem[] = [
+  { id: "hive-browser", name: "Hive Browser", category: "Mini app", description: "Embedded browser workspace for page inspection, guided control, and agent handoff.", sourceUrl: "https://github.com/LiamVisionary/hivemindos", badges: ["Mini app", "Browser", "Guided control"], handles: ["Open browser", "Inspect page", "Hand to agent"] },
+  { id: "hive-files", name: "Hive Files", category: "Mini app", description: "Scoped file browser for shared-brain, project, and runtime files agents are allowed to inspect.", sourceUrl: "https://github.com/LiamVisionary/hivemindos", badges: ["Mini app", "Files", "Scoped"], handles: ["Browse files", "Attach files", "Open runtime file"] },
+  { id: "hive-calendar", name: "Hive Calendar", category: "Mini app", description: "Calendar surface for availability, scheduling, and agent-readable event context.", sourceUrl: "https://github.com/LiamVisionary/hivemindos", badges: ["Mini app", "Calendar", "Scheduling"], handles: ["Read calendar", "Schedule event", "Check availability"] },
   { id: "firecrawl", name: "Firecrawl", category: "AI-native", description: "Turn URLs into clean markdown or structured JSON for agents.", sourceUrl: "https://github.com/mendableai/firecrawl", badges: ["Agent API", "MCP", "Web data"], handles: ["Scrape URL", "Crawl site", "Extract JSON"] },
   { id: "crawl4ai", name: "Crawl4AI", category: "AI-native", description: "Crawl pages into LLM-ready structured data pipelines.", sourceUrl: "https://github.com/unclecode/crawl4ai", badges: ["Python", "LLM pipeline"], handles: ["Crawl site", "Extract schema"] },
   { id: "browser-use", name: "Browser Use", category: "AI-native", description: "Let agents navigate, click, fill forms, and extract web data.", sourceUrl: "https://github.com/browser-use/browser-use", badges: ["Installable", "Browser", "Agent control"], handles: ["Navigate", "Click", "Fill forms"], installableServiceId: "browser-use" },

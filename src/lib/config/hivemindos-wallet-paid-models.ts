@@ -1,11 +1,12 @@
 export const HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER = "hivemindos-models";
-export const HIVEMINDOS_WALLET_PAID_MODELS_NAME = "HivemindOS Models";
+export const HIVEMINDOS_WALLET_PAID_MODELS_NAME = "HivemindOS";
 export const HIVEMINDOS_FREE_MODEL_ID = "hivemindos/swarm-sovereign-scout";
 export const HIVEMINDOS_FREE_MODEL_UPSTREAM = "swarm-sovereign-scout-12b";
 export const HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL = HIVEMINDOS_FREE_MODEL_ID;
 export const HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_ENV = "HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG";
 export const HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_PUBLIC_ENV = "NEXT_PUBLIC_HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG";
 export const HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_UPSTREAM_MODEL = "gpt-5.4-mini";
+export const HIVEMINDOS_MODEL_CREDIT_TOP_UP_CONFIRMATION = "FUND_HIVEMINDOS_CREDITS";
 // Hosted model credits are one pool per install, not per agent: every agent's
 // balance lookup, chat billing, and top-up resolves this shared account id.
 // Legacy per-agent tokens (agent:<id> / draft hmos-model-credits:<uuid>) are
@@ -30,7 +31,7 @@ export const HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS: HivemindosWalletPaidModelOpti
   {
     id: HIVEMINDOS_FREE_MODEL_ID,
     name: "Swarm Sovereign Scout",
-    subtitle: "Free daily allowance · no wallet needed",
+    subtitle: "Free daily allowance · Scout 12B",
     group: "HivemindOS",
     badge: "Free",
     upstreamModel: HIVEMINDOS_FREE_MODEL_UPSTREAM,

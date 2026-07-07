@@ -3,6 +3,7 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import type { DashboardSlashCommandAction } from "@/features/chat/dashboard-slash-commands";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { handleDashboardHandoffTaskCommand } from "./dashboard-handoff-command";
+import { handleDashboardNoteCommand } from "./dashboard-note-command";
 import { handleDashboardSwarmCommand, handleDashboardSwarmSimCommand } from "./dashboard-swarm-command";
 import { handleDashboardSwarmGoalCommand } from "./dashboard-swarm-goal-command";
 
@@ -55,6 +56,10 @@ export async function handleStatusChatDashboardCommand(input: StatusChatDashboar
   };
   if (dashboardCommand.name === "handoff-task") {
     await handleDashboardHandoffTaskCommand(base);
+    return true;
+  }
+  if (dashboardCommand.name === "note") {
+    await handleDashboardNoteCommand({ ...base, sharedVault: input.sharedVault });
     return true;
   }
   if (dashboardCommand.name === "swarm") {

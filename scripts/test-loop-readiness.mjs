@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,6 +85,8 @@ try {
   assert(artifacts.loopMd.includes("Fixture Project"));
   assert(artifacts.stateMd.includes("Readiness: L3"));
   assert(artifacts.budgetMd.includes("Pattern Caps"));
+  assert(artifacts.contractMd.includes("Evaluator Pushback"));
+  assert(artifacts.contractMd.includes("Design"));
   assert(artifacts.runLogMd.includes("Signal Log"));
   assert(artifacts.registryYaml.includes("app-build-harness"));
 
@@ -117,6 +119,25 @@ try {
   const reorderedParsed = JSON.parse(reorderedCli.stdout);
   assert.equal(reorderedParsed.ok, true);
   assert.equal(reorderedParsed.readiness.level, "L3");
+
+  const exportDir = await mkdtemp(join(tmpdir(), "hivemind-loop-export-"));
+  await execFileAsync(process.execPath, [
+    "scripts/hive-loop",
+    "export",
+    "--write",
+    exportDir,
+    "--title",
+    "Fixture Project",
+    "--board",
+    boardSlug,
+    "--vaultPath",
+    vaultPath,
+    "--kanbanFolder",
+    "Operations/Work Board",
+  ], { cwd: repoRoot, timeout: 30_000 });
+  const contractMd = await readFile(join(exportDir, "contract.md"), "utf8");
+  assert(contractMd.includes("Fixture Project"), "hive-loop export should write contract.md");
+  await rm(exportDir, { recursive: true, force: true });
 
   console.log("loop readiness tests passed");
 } finally {

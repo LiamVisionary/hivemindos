@@ -1,13 +1,90 @@
 // Zero Human Companies — Linear-style issue board for a single colony.
 import React from "react";
+import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
+import { extractHumanAsk } from "@/features/dashboard/kanban-result-format";
 import { CompanyIssueActionButtons } from "./CompanyIssueActions";
 import { ConsolidatedIssueCard } from "./ConsolidatedIssueCard";
 import { ISSUE_LANES } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import { groupIssuesByReason, issueBlockReason } from "./issue-reason";
 import type { PreviewDecision } from "./preview-review";
-import { PriTag, RoleGlyph, Skeleton } from "./primitives";
+import { PriTag, RoleGlyph, Skeleton, Spinner } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
+
+/** One-click unblock controls derived from an agent's structured `NEEDS:` ask.
+ *  For a credential (`NEEDS: api-key <ENV_VAR>`) the common real cause is that
+ *  the key IS set on this hub but hasn't propagated to the crew's machine (live
+ *  2026-07-06), so the primary action repairs fleet sync via the tested
+ *  /api/env syncMachines rail rather than asking for a key that already exists. */
+function HumanAskControls({ result }: { result?: string }) {
+  const ask = React.useMemo(() => extractHumanAsk(result), [result]);
+  const [state, setState] = React.useState<"idle" | "busy" | "done" | "error">("idle");
+  const [detail, setDetail] = React.useState("");
+  if (!ask?.input && !ask?.links.length) return null;
+  const cred = ask.input?.kind === "api-key" ? ask.input.envKey : undefined;
+
+  const repairSync = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setState("busy");
+    setDetail("");
+    try {
+      const res = await fetch("/api/env", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "syncMachines" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) throw new Error(json?.error || "Sync failed");
+      setState("done");
+      setDetail("Pushed your shared env to the fleet — use “Handled — retry” to re-run.");
+    } catch (error) {
+      setState("error");
+      setDetail(error instanceof Error ? error.message : "Could not repair fleet sync.");
+    }
+  };
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {cred && (
+        <div style={{ fontSize: 10.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)", overflowWrap: "anywhere" }}>
+          needs credential: <strong style={{ color: "var(--fg-2)" }}>{cred}</strong>
+        </div>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {cred && (
+          <button
+            type="button"
+            className="zhc-btn-ghost"
+            onClick={repairSync}
+            disabled={state === "busy"}
+            title={`If ${cred} is set on this hub but the crew's machine reports it missing, this pushes your shared env to every fleet machine.`}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 9px", borderRadius: 7 }}
+          >
+            {state === "busy" ? <Spinner size={13} /> : null}
+            {state === "busy" ? "Repairing sync" : state === "done" ? "Sync repaired" : "Repair fleet sync"}
+          </button>
+        )}
+        {ask.links.slice(0, 2).map((link) => (
+          <a
+            key={link.url}
+            href={link.url}
+            target="_blank"
+            rel="noreferrer"
+            className="zhc-btn-ghost"
+            onClick={(e) => e.stopPropagation()}
+            style={{ fontSize: 11, padding: "4px 9px", borderRadius: 7, textDecoration: "none" }}
+          >
+            {link.label} ↗
+          </a>
+        ))}
+      </div>
+      {detail && (
+        <div style={{ fontSize: 10.5, color: state === "error" ? "var(--danger-2)" : "var(--fg-3)", overflowWrap: "anywhere" }}>{detail}</div>
+      )}
+    </div>
+  );
+}
 
 /** Shape-matched shimmer cards for a lane whose tasks haven't loaded yet — beats
  *  flashing "empty" in every column until the Work Board fetch lands. */
@@ -55,6 +132,7 @@ function IssueCard({
   // demo cards have no backing task and stay inert.
   const openable = Boolean(issue.work && onOpen);
   const deliverables = issue.work?.deliverables.length ?? 0;
+  const pipelineImpact = issue.pipelineImpact ?? issue.work?.pipelineImpact;
   // "Needs you" cards surface WHY they're blocked inline, so the human sees the
   // reason (e.g. an API limit) without opening the task.
   const blockReason = issue.status === "board_review" ? issueBlockReason(issue) : "";
@@ -79,8 +157,14 @@ function IssueCard({
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{issue.pts} pt</span>
       </div>
       <div style={{ fontSize: 12.5, lineHeight: 1.35, color: "var(--fg)", fontWeight: 500, textWrap: "pretty" }}>{issue.title}</div>
+      {pipelineImpact ? (
+        <div title={pipelineImpact.label} style={{ alignSelf: "flex-start", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)", border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", borderRadius: 6, padding: "3px 6px", fontVariantNumeric: "tabular-nums" }}>
+          {formatPipelineUsd(pipelineImpact.amountUsd)} quoted pipeline
+        </div>
+      ) : null}
       {blockReason && (
         <div
+          className="zhc-issue-reason"
           title={blockReason}
           style={{
             fontSize: 11, lineHeight: 1.35, color: "var(--danger-2)",
@@ -90,9 +174,10 @@ function IssueCard({
             overflowWrap: "anywhere",
           }}
         >
-          {blockReason}
+          <ChatInlineMarkdown text={blockReason} />
         </div>
       )}
+      {issue.status === "board_review" && <HumanAskControls result={issue.work?.result} />}
       {blockReason && (
         <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpen} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} onDismiss={onDismiss} busy={busy} />
       )}

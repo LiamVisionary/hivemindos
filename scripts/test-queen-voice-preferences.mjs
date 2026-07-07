@@ -103,6 +103,11 @@ const ROOT = new URL("../", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
 const route = read("src/app/api/queen-bee/voice/route.ts");
 const hook = read("src/features/queen-voice/use-queen-bee-realtime.ts");
+const geminiHook = read("src/features/queen-voice/use-queen-bee-gemini-live.ts");
+const overlay = read("src/features/queen-voice/QueenBeeVoiceOverlay.tsx");
+const cloudVoiceTransports = read("src/lib/services/phone/cloud-voice-transports.ts");
+const callProviderMatrix = read("src/lib/config/voice-call-providers.ts");
+const callGateway = read("src/lib/services/phone/call-gateway.ts");
 const turn = read("src/lib/services/queen-bee/voice-turn.ts");
 // The realtime tool declaration moved out of the route into the shared voice
 // tool bundle (also used by phone calls) — pin it there instead.
@@ -133,6 +138,28 @@ check("INJECT: the fallback + relay paths thread the preamble into the prompt", 
     /conversationMessages\(transcript, history, systemPreamble, personality\)/,
     "system preamble not threaded into conversationMessages",
   );
+});
+
+check("GEMINI: Queen Calls prefs route Gemini Live to the Gemini hook", () => {
+  assert.match(route, /const GEMINI_LIVE_RUNTIME = "gemini-live"/, "Gemini runtime constant missing");
+  assert.match(route, /body\.action === "gemini-live-session"/, "Gemini session action missing");
+  assert.match(route, /mintGeminiLiveToken\(/, "Gemini session does not mint a Gemini token");
+  assert.match(route, /calls\?\.voiceRuntime === GEMINI_LIVE_RUNTIME/, "GET route does not detect saved Gemini Live prefs");
+  assert.match(route, /voiceMode:\s*geminiLiveSelected[\s\S]*\? "gemini-live"/, "GET route does not return gemini-live voiceMode");
+  assert.match(overlay, /useQueenBeeGeminiLive\(/, "overlay does not start the Gemini hook");
+  assert.match(overlay, /voiceModeForOpen === "gemini-live"/, "overlay does not branch on gemini-live mode");
+  assert.match(geminiHook, /action:\s*"gemini-live-session"/, "Gemini hook does not request the Queen Gemini session");
+  assert.match(geminiHook, /voiceName: session\.voice/, "Gemini hook does not pass the saved Gemini voice to speechConfig");
+});
+
+check("GEMINI: stale Live models normalize to the current supported default", () => {
+  assert.match(cloudVoiceTransports, /export const GEMINI_LIVE_MODEL = "gemini-3\.1-flash-live-preview"/, "Gemini Live default is not the current 3.1 model");
+  assert.match(cloudVoiceTransports, /"gemini-2\.0-flash-live-001"/, "stale Gemini 2.0 Live id is not listed for normalization");
+  assert.match(cloudVoiceTransports, /normalizeGeminiLiveModel\(options\.model\)/, "token mint does not normalize the requested model");
+  assert.match(route, /normalizeGeminiLiveModel\(calls\.voiceModelId\)/, "Queen Gemini session does not normalize saved Calls model");
+  assert.match(callProviderMatrix, /defaultModel:\s*"gemini-3\.1-flash-live-preview"/, "Calls picker default is not Gemini 3.1 Live");
+  assert.doesNotMatch(callProviderMatrix, /defaultModel:\s*"gemini-2\.5-flash-native-audio-preview-12-2025"/, "Calls picker still defaults to the old Gemini 2.5 Live preview");
+  assert.match(callGateway, /normalizeGeminiLiveModel\(payload\.voiceModelId\)/, "dashboard call gateway does not normalize Gemini Live model");
 });
 
 console.log(`\nqueen-voice preferences: ${passed} checks passed.`);

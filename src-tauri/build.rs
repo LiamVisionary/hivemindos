@@ -91,6 +91,7 @@ fn main() {
                 "native_setup_run",
                 "native_setup_status",
                 "scheduler_shared_schedules",
+                "obsidian_capture_note",
                 "obsidian_agents",
                 "obsidian_personal_wallets",
                 "dashboard_state_read",

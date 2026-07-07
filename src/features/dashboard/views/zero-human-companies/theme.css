@@ -353,6 +353,22 @@
   padding: 0;
 }
 
+.zhc-root .zhc-issue-reason :where(code) {
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+  color: var(--fg);
+  font-family: var(--f-mono);
+  font-size: 0.9em;
+  padding: 0.04em 0.28em;
+  overflow-wrap: anywhere;
+}
+
+.zhc-root .zhc-issue-reason :where(strong) {
+  color: var(--fg);
+  font-weight: 650;
+}
+
 @keyframes zhc-pulse-dot {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent); }
   50% { box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent); }

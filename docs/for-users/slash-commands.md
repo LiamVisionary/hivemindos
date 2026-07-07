@@ -25,6 +25,7 @@ When a dashboard command and runtime command share the same name, the dashboard 
 | `/usage` |  | Open Wallets and refresh runtime usage. |
 | `/alerts` | `/notifications` | Open the shared alert inbox. |
 | `/brain` | `/vault` | Open the shared brain. |
+| `/note <note>` |  | Save a note to the shared brain intake folder. |
 | `/work` | `/kanban` | Open the work board. |
 | `/handoff-task <machine> <task>` |  | Send a task to the best agent on a target machine. |
 | `/swarm [number] <task>` |  | Spawn a best-suited team of configured chat-capable agents to work on the task in parallel and return a combined swarm packet. Omit the number for automatic sizing. |

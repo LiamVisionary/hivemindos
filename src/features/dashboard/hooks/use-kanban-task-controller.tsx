@@ -5,11 +5,12 @@
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { findTaskTemplate, taskTemplateBody } from "@/components/task-modal";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 export function useKanbanTaskController(props: any) {
-  const { AbortController, Archive, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent } = props;
+  const { AbortController, Archive, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, quickAddSkills, quickAddTemplateIds, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddSkills, setQuickAddStatus, setQuickAddTemplateIds, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent } = props;
   // Records the user's latest manual move per task so in-flight Queen pickup
   // (which waits through a preview delay before claiming) can tell the user
   // moved the card away and must not overwrite that move.
@@ -45,9 +46,13 @@ export function useKanbanTaskController(props: any) {
     const title = quickAddDrafts[status]?.trim();
     const attachments = quickAddAttachments[status] ?? [];
     const directories = quickAddDirectories[status] ?? [];
+    const skills = [...new Set(quickAddSkills?.[status] ?? [])];
+    const template = findTaskTemplate(quickAddTemplateIds?.[status]);
     const targetMachine = quickAddMachineTarget(status);
-    if (!title && attachments.length === 0 && directories.length === 0) return;
+    if (!title && attachments.length === 0 && directories.length === 0 && skills.length === 0 && !template) return;
     const body = [
+      taskTemplateBody(template),
+      skills.length ? ["Attached skills:", ...skills.map((skill) => `- ${skill}`)].join("\n") : "",
       directories.length ? ["Linked directories:", ...directories.map((directory) => `- ${linkedDirectoryLabel(directory)}`)].join("\n") : "",
       attachments.length ? [
         "Attached context:",
@@ -65,6 +70,7 @@ export function useKanbanTaskController(props: any) {
         tenant: "",
         priority: "normal",
         status,
+        skills,
         attachments,
         linkedDirectories: directories,
         targetMachine,
@@ -86,6 +92,12 @@ export function useKanbanTaskController(props: any) {
     setQuickAddDrafts((current) => ({ ...current, [status]: "" }));
     setQuickAddAttachments((current) => ({ ...current, [status]: [] }));
     setQuickAddDirectories((current) => ({ ...current, [status]: [] }));
+    setQuickAddSkills?.((current) => ({ ...current, [status]: [] }));
+    setQuickAddTemplateIds?.((current) => {
+      const next = { ...current };
+      delete next[status];
+      return next;
+    });
     setQuickAddMachineTargets((current) => ({ ...current, [status]: null }));
     setQuickAddMachineMenuOpen((current) => ({ ...current, [status]: false }));
     setQuickAddAttachmentError("");

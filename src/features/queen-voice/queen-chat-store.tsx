@@ -7,18 +7,31 @@
    the same Cmd+B dashboard actions AND returns the Queen's spoken/text reply. */
 
 import * as React from "react";
-import {
-  formatDashboardScreenContextForPrompt,
-  type DashboardScreenContext,
-} from "@/features/dashboard/screen-context";
+import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
 import {
   findWorkBoardTasks,
   flattenKanbanColumns,
   formatWorkBoardTaskForPrompt,
+  isPlainWorkBoardNavigationCommand,
+  isWorkBoardPipelineQuestion,
   summarizeWorkBoardByStatus,
+  summarizeWorkBoardForNavigation,
+  summarizeWorkBoardPipeline,
 } from "@/features/dashboard/work-board-lookup";
 import { fetchAgentStatusAnswer } from "@/features/dashboard/agent-status-fetch";
-import { userAuthorizedHiveTaskCreation } from "@/lib/services/queen-bee/queen-brain";
+import {
+  isHivemindFastContextCommand,
+  isWalletReadinessCommand,
+  isTrivialConversationalTurn,
+  userAuthorizedHiveTaskCreation,
+} from "@/lib/services/queen-bee/queen-brain";
+import { logClientTelemetry } from "@/lib/utils/client-telemetry";
+import {
+  actingWalletSourceFromContext,
+  fetchHivemindFastContext,
+  fetchWalletReadiness,
+  withScreenContext,
+} from "./queen-fast-context";
 
 export type QueenChatTurn = {
   id: string;
@@ -55,9 +68,15 @@ type QueenChatContextValue = {
   turns: QueenChatTurn[];
   /** True when the chat history above the input is collapsed. Lifted here so
    *  the input's toggle tab and the transcript overlay share one source of
-   *  truth — a typed send re-opens it; the tab and the bee's modals flip it. */
+   *  truth for manual pin/collapse. Hover/focus/recent activity can still
+   *  temporarily expand the transcript through transcriptExpanded. */
   historyMinimized: boolean;
-  setHistoryMinimized: React.Dispatch<React.SetStateAction<boolean>>;
+  setHistoryMinimized: (minimized: boolean) => void;
+  /** True while the app-wide chat pill is hovered or its input is focused. */
+  composerActive: boolean;
+  setComposerActive: (active: boolean) => void;
+  /** Effective visibility: manual pin OR hover/focus OR recent message hold. */
+  transcriptExpanded: boolean;
   /** Append a turn; returns its id. Pass an explicit id for the voice bridge. */
   appendTurn: (turn: Omit<QueenChatTurn, "id"> & { id?: string }) => string;
   updateTurn: (id: string, patch: Partial<QueenChatTurn>) => void;
@@ -70,6 +89,7 @@ type QueenChatContextValue = {
 };
 
 const QueenChatContext = React.createContext<QueenChatContextValue | null>(null);
+const QUEEN_CHAT_RECENT_MESSAGE_HOLD_MS = 7000;
 
 export function QueenChatProvider({
   runQueenCommand,
@@ -79,10 +99,19 @@ export function QueenChatProvider({
   children: React.ReactNode;
 }) {
   const [turns, setTurns] = React.useState<QueenChatTurn[]>([]);
-  // Whether the transcript history above the input is collapsed. Toggled by the
-  // tab on the input pill; forced open on a typed send; forced closed when the
-  // bee opens a modal (the overlay would otherwise cover it).
-  const [historyMinimized, setHistoryMinimized] = React.useState(false);
+  const turnsRef = React.useRef<QueenChatTurn[]>([]);
+  React.useEffect(() => {
+    turnsRef.current = turns;
+  }, [turns]);
+  // Whether the transcript history above the input is manually collapsed. It
+  // starts collapsed; hover/focus/recent turns can expand it without pinning it.
+  const [historyMinimized, setHistoryMinimizedState] = React.useState(true);
+  const [composerActive, setComposerActive] = React.useState(false);
+  const [recentMessageOpen, setRecentMessageOpen] = React.useState(false);
+  const dismissedAutoOpenTurnIdRef = React.useRef<string | null>(null);
+  const lastActivitySignatureRef = React.useRef("");
+  const recentOpenTimerRef = React.useRef<number | null>(null);
+  const recentCloseTimerRef = React.useRef<number | null>(null);
   const counterRef = React.useRef(0);
   // Held in a ref so sendText's identity stays stable even though
   // beePilot.runVoiceCommand is recreated each render.
@@ -96,6 +125,32 @@ export function QueenChatProvider({
   const messagesRef = React.useRef<Array<Record<string, unknown>>>([]);
   // Serialise sends so concurrent tool loops never interleave the message log.
   const sendChainRef = React.useRef<Promise<void>>(Promise.resolve());
+
+  const clearRecentMessageTimers = React.useCallback(() => {
+    if (recentOpenTimerRef.current !== null) {
+      window.clearTimeout(recentOpenTimerRef.current);
+      recentOpenTimerRef.current = null;
+    }
+    if (recentCloseTimerRef.current !== null) {
+      window.clearTimeout(recentCloseTimerRef.current);
+      recentCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const clearRecentMessageHold = React.useCallback(() => {
+    clearRecentMessageTimers();
+    setRecentMessageOpen(false);
+  }, [clearRecentMessageTimers]);
+
+  const setHistoryMinimized = React.useCallback((minimized: boolean) => {
+    if (minimized) {
+      dismissedAutoOpenTurnIdRef.current = turnsRef.current.at(-1)?.id ?? null;
+      clearRecentMessageHold();
+    } else {
+      dismissedAutoOpenTurnIdRef.current = null;
+    }
+    setHistoryMinimizedState(minimized);
+  }, [clearRecentMessageHold]);
 
   const appendTurn = React.useCallback(
     (turn: Omit<QueenChatTurn, "id"> & { id?: string }) => {
@@ -128,7 +183,61 @@ export function QueenChatProvider({
     setTurns((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const clear = React.useCallback(() => setTurns([]), []);
+  const clear = React.useCallback(() => {
+    setTurns([]);
+    clearRecentMessageHold();
+  }, [clearRecentMessageHold]);
+
+  const latestTurn = turns.at(-1);
+  const recentActivitySignature = latestTurn
+    ? [
+        turns.length,
+        latestTurn.id,
+        latestTurn.who,
+        latestTurn.text,
+        latestTurn.live ? "live" : "",
+        latestTurn.pending ? "pending" : "",
+        latestTurn.working ?? "",
+        latestTurn.detail ?? "",
+      ].join("\u001f")
+    : "";
+
+  React.useEffect(() => {
+    if (!latestTurn || !recentActivitySignature) {
+      lastActivitySignatureRef.current = "";
+      dismissedAutoOpenTurnIdRef.current = null;
+      clearRecentMessageTimers();
+      return undefined;
+    }
+    if (lastActivitySignatureRef.current === recentActivitySignature) return undefined;
+    lastActivitySignatureRef.current = recentActivitySignature;
+    if (dismissedAutoOpenTurnIdRef.current && dismissedAutoOpenTurnIdRef.current !== latestTurn.id) {
+      dismissedAutoOpenTurnIdRef.current = null;
+    }
+    if (dismissedAutoOpenTurnIdRef.current === latestTurn.id) return undefined;
+
+    clearRecentMessageTimers();
+    const openTimer = window.setTimeout(() => {
+      recentOpenTimerRef.current = null;
+      setRecentMessageOpen(true);
+    }, 0);
+    const closeTimer = window.setTimeout(() => {
+      recentCloseTimerRef.current = null;
+      setRecentMessageOpen(false);
+    }, QUEEN_CHAT_RECENT_MESSAGE_HOLD_MS);
+    recentOpenTimerRef.current = openTimer;
+    recentCloseTimerRef.current = closeTimer;
+    return () => {
+      if (recentOpenTimerRef.current === openTimer) {
+        window.clearTimeout(openTimer);
+        recentOpenTimerRef.current = null;
+      }
+      if (recentCloseTimerRef.current === closeTimer) {
+        window.clearTimeout(closeTimer);
+        recentCloseTimerRef.current = null;
+      }
+    };
+  }, [latestTurn, recentActivitySignature, clearRecentMessageTimers]);
 
   // Execute one tool the Queen decided to call. drive_dashboard runs the
   // client-side Bee Pilot planner; the rest hit the existing voice-route actions.
@@ -137,6 +246,26 @@ export function QueenChatProvider({
     args: Record<string, unknown>,
     screenContext?: DashboardScreenContext,
   ) => {
+    const toolStartedAt = Date.now();
+    const finishTool = (result: string, extra: Record<string, unknown> = {}) => {
+      logClientTelemetry("queen_chat.tool", {
+        toolName: name,
+        ok: true,
+        elapsedMs: Date.now() - toolStartedAt,
+        resultChars: result.length,
+        ...extra,
+      });
+      return result;
+    };
+    const failTool = (error: unknown) => {
+      logClientTelemetry("queen_chat.tool", {
+        toolName: name,
+        ok: false,
+        elapsedMs: Date.now() - toolStartedAt,
+        error: error instanceof Error ? error.message : String(error || "unknown error"),
+      });
+      return "That tool call didn't complete.";
+    };
     const post = async (payload: Record<string, unknown>) => {
       const res = await fetch("/api/queen-bee/voice", {
         method: "POST",
@@ -145,17 +274,45 @@ export function QueenChatProvider({
       });
       return (await res.json().catch(() => null)) as Record<string, unknown> | null;
     };
+    const readWorkBoardTasks = async () => {
+      const res = await fetch("/api/kanban", { cache: "no-store" });
+      const data = (await res.json().catch(() => null)) as { columns?: unknown } | null;
+      if (!res.ok || !data) return null;
+      return flattenKanbanColumns(data.columns);
+    };
     try {
       if (name === "drive_dashboard") {
         const run = runRef.current;
         const command = String(args.command ?? "").trim();
-        if (!run || !command) return "The dashboard isn't available to drive right now.";
-        return (await run(command, { screenContext }))?.trim() || "Done.";
+        if (!run || !command) return finishTool("The dashboard isn't available to drive right now.");
+        const reply = (await run(command, { screenContext }))?.trim() || "Done.";
+        if (isPlainWorkBoardNavigationCommand(command)) {
+          const tasks = await readWorkBoardTasks();
+          return finishTool(tasks ? summarizeWorkBoardForNavigation(tasks) : reply || "Opened Work.");
+        }
+        return finishTool(reply);
+      }
+      if (name === "read_hivemind_context") {
+        const result = await fetchHivemindFastContext(String(args.query ?? ""), screenContext);
+        return finishTool(result, { directRoute: "hivemind-fast-context" });
+      }
+      if (name === "read_wallet_readiness") {
+        const result = await fetchWalletReadiness(screenContext);
+        return finishTool(result, { directRoute: "wallet-readiness" });
       }
       if (name === "ask_hivemind_agent") {
+        const message = String(args.message ?? "");
+        if (isWalletReadinessCommand(message)) {
+          const result = await fetchWalletReadiness(screenContext);
+          return finishTool(result, { directRoute: "wallet-readiness" });
+        }
+        if (isHivemindFastContextCommand(message)) {
+          const result = await fetchHivemindFastContext(message, screenContext);
+          return finishTool(result, { directRoute: "hivemind-fast-context" });
+        }
         const data = await post({
           action: "agent-turn",
-          message: withScreenContext(String(args.message ?? ""), screenContext),
+          message: withScreenContext(message, screenContext),
           // Structured acting-wallet source so the executing agent defaults
           // sends/swaps/trades to the user's selected wallet (the prose context
           // only truncates the address; this carries the full identity).
@@ -164,7 +321,7 @@ export function QueenChatProvider({
         // Prefer detail: for money-action cards the route now puts a short line in
         // `text` (read aloud in voice) and the full transaction card in `detail`,
         // which is what the typed brain needs to show the user what they're confirming.
-        return String(data?.detail || data?.text || "Done.");
+        return finishTool(String(data?.detail || data?.text || "Done."));
       }
       if (name === "create_hive_task") {
         const data = await post({
@@ -172,37 +329,36 @@ export function QueenChatProvider({
           title: args.title,
           message: withScreenContext(String(args.message ?? ""), screenContext),
         });
-        return String(data?.summary || (data?.created ? `Created task "${String(data?.taskTitle ?? "")}".` : "Added it to the work board."));
+        return finishTool(String(data?.summary || (data?.created ? `Created task "${String(data?.taskTitle ?? "")}".` : "Added it to the work board.")));
       }
       if (name === "remember_preference") {
         await post({ action: "remember-preference", preference: String(args.preference ?? "") });
-        return "Saved that preference.";
+        return finishTool("Saved that preference.");
       }
       if (name === "read_work_board") {
         // Direct board read — the Queen answers task questions from the actual
         // record instead of delegating a lookup to a fleet agent.
-        const res = await fetch("/api/kanban", { cache: "no-store" });
-        const data = (await res.json().catch(() => null)) as { columns?: unknown } | null;
-        if (!res.ok || !data) return "The Work Board isn't reachable right now.";
-        const tasks = flattenKanbanColumns(data.columns);
+        const tasks = await readWorkBoardTasks();
+        if (!tasks) return finishTool("The Work Board isn't reachable right now.");
         const taskId = String(args.taskId ?? "").trim();
         const query = String(args.query ?? "").trim();
-        if (!taskId && !query) return summarizeWorkBoardByStatus(tasks);
+        if (!taskId && !query) return finishTool(summarizeWorkBoardByStatus(tasks));
+        if (!taskId && isWorkBoardPipelineQuestion(query)) return finishTool(summarizeWorkBoardPipeline(tasks));
         const hits = findWorkBoardTasks(tasks, { taskId, query });
         if (!hits.length) {
-          return `No Work Board task matched ${taskId || `"${query}"`}. ${summarizeWorkBoardByStatus(tasks)}`;
+          return finishTool(`No Work Board task matched ${taskId || `"${query}"`}. ${summarizeWorkBoardByStatus(tasks)}`);
         }
-        return hits.slice(0, 3).map(formatWorkBoardTaskForPrompt).join("\n\n");
+        return finishTool(hits.slice(0, 3).map(formatWorkBoardTaskForPrompt).join("\n\n"));
       }
       if (name === "read_agent_status") {
         // Direct fleet read — the Queen answers "is HermesMain down / timing
         // out?" from live telemetry (and offers a fix when it's unhealthy)
         // instead of deflecting. Shared with the voice executor so both match.
-        return fetchAgentStatusAnswer(String(args.agentName ?? ""));
+        return finishTool(await fetchAgentStatusAnswer(String(args.agentName ?? "")));
       }
-      return "Unknown tool.";
-    } catch {
-      return "That tool call didn't complete.";
+      return finishTool("Unknown tool.");
+    } catch (error) {
+      return failTool(error);
     }
   }, []);
 
@@ -217,6 +373,14 @@ export function QueenChatProvider({
     const messages = messagesRef.current;
     if (messages.length > 24) messages.splice(0, messages.length - 24);
     messages.push({ role: "user", content: trimmed });
+
+    // A bare greeting / chit-chat ("hi", "thanks", "how are you") needs no
+    // tools. Scout ignores that instruction and fires read_work_board on a
+    // plain "hi", producing a greeting → tool-spin → second unsolicited
+    // paragraph (2026-07-06). Force the FIRST round to answer without tools so
+    // a greeting is one clean reply. Compound messages ("hey queen, is X
+    // down?") are NOT trivial and still run tools normally.
+    const trivialTurn = isTrivialConversationalTurn(trimmed);
 
     const heuristicFallback = async (serverError?: string) => {
       const run = runRef.current;
@@ -248,6 +412,8 @@ export function QueenChatProvider({
       ask_hivemind_agent: "Asking a hive agent…",
       create_hive_task: "Creating the Work Board task…",
       remember_preference: "Saving that preference…",
+      read_hivemind_context: "Reading app and brain context…",
+      read_wallet_readiness: "Checking wallet readiness…",
       read_work_board: "Checking the Work Board…",
       read_agent_status: "Checking agent status…",
     } as Record<string, string>)[name] ?? "Working on it…";
@@ -363,8 +529,9 @@ export function QueenChatProvider({
       for (let i = 0; i < 4; i += 1) {
         // Last round: force a prose answer so the turn always ends with real
         // text instead of hitting the cap mid-tool-loop. Repeated tool calls
-        // also trigger the forced answer early (see answerNextRound).
-        const forceAnswer = i === 3 || answerNextRound;
+        // also trigger the forced answer early (see answerNextRound). A bare
+        // greeting forces prose on the FIRST round — no tools at all.
+        const forceAnswer = i === 3 || answerNextRound || (i === 0 && trivialTurn);
         const data = (await streamOneTurn(forceAnswer).catch(() => null)) ?? (await blockingTurn(forceAnswer));
         if (!data || data.fallback || data.ok === false) {
           await heuristicFallback(data && typeof data.error === "string" ? data.error : undefined);
@@ -420,6 +587,19 @@ export function QueenChatProvider({
             });
             const result = await executeQueenTool(tc.name, parsed, screenContext);
             messages.push({ role: "tool", tool_call_id: tc.id, content: result });
+            if (tc.name === "drive_dashboard" && isPlainWorkBoardNavigationCommand(String(parsed.command ?? trimmed))) {
+              const reply = String(result || "").trim() || "Opened Work.";
+              updateTurn(queenId, {
+                text: reply,
+                live: false,
+                pending: false,
+                working: undefined,
+                ...(data.brainLabel ? { brain: data.brainLabel } : {}),
+                ...asBrainFallback(data.brainFallback),
+              });
+              messages.push({ role: "assistant", content: reply });
+              return;
+            }
           }
           continue; // loop back so she can read the tool results
         }
@@ -459,8 +639,6 @@ export function QueenChatProvider({
     async (text: string, opts?: { screenContext?: DashboardScreenContext }) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      // A fresh typed send always re-opens the history above the input.
-      setHistoryMinimized(false);
       appendTurn({ who: "you", text: trimmed, source: "text" });
       const queenId = appendTurn({ who: "queen", text: "", live: true, pending: true, source: "text" });
       // Chain so overlapping sends don't interleave the OpenAI message log.
@@ -473,9 +651,36 @@ export function QueenChatProvider({
     [appendTurn, runQueenTurn],
   );
 
+  const transcriptExpanded = !historyMinimized || composerActive || recentMessageOpen;
+
   const value = React.useMemo<QueenChatContextValue>(
-    () => ({ turns, historyMinimized, setHistoryMinimized, appendTurn, updateTurn, upsertTurn, removeTurn, clear, sendText }),
-    [turns, historyMinimized, appendTurn, updateTurn, upsertTurn, removeTurn, clear, sendText],
+    () => ({
+      turns,
+      historyMinimized,
+      setHistoryMinimized,
+      composerActive,
+      setComposerActive,
+      transcriptExpanded,
+      appendTurn,
+      updateTurn,
+      upsertTurn,
+      removeTurn,
+      clear,
+      sendText,
+    }),
+    [
+      turns,
+      historyMinimized,
+      setHistoryMinimized,
+      composerActive,
+      transcriptExpanded,
+      appendTurn,
+      updateTurn,
+      upsertTurn,
+      removeTurn,
+      clear,
+      sendText,
+    ],
   );
 
   return <QueenChatContext.Provider value={value}>{children}</QueenChatContext.Provider>;
@@ -485,24 +690,4 @@ export function useQueenChat(): QueenChatContextValue {
   const ctx = React.useContext(QueenChatContext);
   if (!ctx) throw new Error("useQueenChat must be used within a QueenChatProvider");
   return ctx;
-}
-
-function withScreenContext(message: string, screenContext?: DashboardScreenContext) {
-  const context = formatDashboardScreenContextForPrompt(screenContext);
-  const trimmed = message.trim();
-  if (!context) return trimmed;
-  return `${context}\n\nUser request: ${trimmed}`;
-}
-
-/** The acting wallet as a structured source hint for the executing agent's
- *  send/swap resolver — full address included (it is not regex-parsed here). */
-function actingWalletSourceFromContext(screenContext?: DashboardScreenContext) {
-  const wallet = screenContext?.actingWallet;
-  if (!wallet?.id) return undefined;
-  return {
-    agentId: wallet.id,
-    address: wallet.address || "",
-    network: wallet.network || "",
-    kind: wallet.kind || "",
-  };
 }

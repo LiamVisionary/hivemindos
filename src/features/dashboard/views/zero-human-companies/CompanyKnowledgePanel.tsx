@@ -4,7 +4,7 @@
 // dispatch context (companyWorkerContext) on the next cycle. Also renders
 // reject-sourced directives so the redirect trail is visible.
 import React from "react";
-import { Panel, SectionLabel } from "./primitives";
+import { Panel, SectionLabel, Spinner } from "./primitives";
 import type { Colony } from "./types";
 import type { CompanyDirective } from "@/lib/types/company";
 import { CompanyDirectiveComposer, type DirectiveDraft } from "./CompanyDirectiveComposer";
@@ -34,6 +34,7 @@ export function CompanyKnowledgePanel({
   const [localDirectives, setLocalDirectives] = React.useState<CompanyDirective[] | null>(null);
   const directives = localDirectives ?? c.directives ?? [];
   const [busy, setBusy] = React.useState(false);
+  const [removingId, setRemovingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState("");
 
   const post = async (payload: Record<string, unknown>): Promise<CompanyDirective[]> => {
@@ -61,6 +62,7 @@ export function CompanyKnowledgePanel({
 
   const remove = async (id: string) => {
     setBusy(true);
+    setRemovingId(id);
     setError("");
     try {
       setLocalDirectives(await post({ action: "remove-directive", id: c.id, directiveId: id }));
@@ -68,6 +70,7 @@ export function CompanyKnowledgePanel({
       setError(err instanceof Error ? err.message : "Could not remove the directive.");
     } finally {
       setBusy(false);
+      setRemovingId(null);
     }
   };
 
@@ -105,7 +108,7 @@ export function CompanyKnowledgePanel({
                     {d.attachments?.length ? <span>{d.attachments.length} attachment{d.attachments.length === 1 ? "" : "s"}</span> : null}
                   </div>
                 </div>
-                <button type="button" onClick={() => remove(d.id)} disabled={busy} aria-label="Remove directive" title="Remove" style={{ cursor: "pointer", border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-4)", borderRadius: 7, width: 24, height: 24, fontSize: 11, flexShrink: 0 }}>✕</button>
+                <button type="button" onClick={() => remove(d.id)} disabled={busy} aria-label="Remove directive" title="Remove" style={{ cursor: busy ? "default" : "pointer", border: "1px solid var(--line-2)", background: "transparent", color: "var(--fg-4)", borderRadius: 7, width: 24, height: 24, fontSize: 11, flexShrink: 0, display: "grid", placeItems: "center" }}>{removingId === d.id ? <Spinner size={11} /> : "✕"}</button>
               </div>
             );
           })}

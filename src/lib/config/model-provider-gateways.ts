@@ -23,14 +23,14 @@ export type ModelProviderGateway = {
 export const MODEL_PROVIDER_GATEWAYS: Record<string, ModelProviderGateway> = {
   "lm-studio": {
     slug: "lm-studio",
-    name: "Local OpenAI",
-    detail: "Local OpenAI-compatible models",
+    name: "Local",
+    detail: "OpenAI-compatible local models",
     iconPath: "/icons/runtimes/openai.svg",
     iconMode: "mask",
     fallback: "AI",
     defaultModel: process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL ?? "",
     hermes: {
-      name: "Local OpenAI",
+      name: "Local",
       baseUrl: process.env.NEXT_PUBLIC_LOCAL_OPENAI_BASE_URL
         ? `${process.env.NEXT_PUBLIC_LOCAL_OPENAI_BASE_URL.replace(/\/+$/, "")}/v1`
         : "http://127.0.0.1:1234/v1",

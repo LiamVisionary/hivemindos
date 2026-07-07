@@ -10,6 +10,8 @@ import { openNativeDirectory } from "@/lib/native/filesystem";
 import { readNativeSharedSchedules } from "@/lib/native/scheduler";
 import { runtimeSchedulerFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
+import { dedupeSchedulesByLoop, cleanImportedSchedules } from "@/features/dashboard/schedule-health";
+import { buildReplicationTargets, triggerScheduleReplication } from "@/features/dashboard/schedule-replication";
 
 export function useSchedulerController(props: any) {
   const { RUNTIME_LABELS, SCHEDULER_DYNAMIC_SKILL_ACTIONS_ENABLED, SCHEDULER_HERMES_SKILL_CONTEXT_ENABLED, SCHEDULER_MODEL_OPTIONS, SCHEDULER_RUN_STALE_MS, agents, appVersion, appendMessage, chatSetupIssue, createDefaultAgentWallet, displayAgents, displayMachineName, editingScheduleId, formatRelativeTime, honeyLedgerEnabled, logClientTelemetry, machineGroups, refreshHoneyLedger, scheduleDraft, schedules, selectedAgent, setEditingScheduleId, setMessagesByAgent, setScheduleDraft, setScheduleImportStatus, setScheduleImporting, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerRunStates, setSchedulerSelectedStep, setSchedulerSkillSearch, setSchedules, sharedVault, updateTask, upsertTask, walletsByAgent } = props;
@@ -265,6 +267,7 @@ export function useSchedulerController(props: any) {
       steps: [{ id: `draft-step-${Date.now()}-0`, text: "", skills: [], paths: [], model: "" }],
       usePastRuns: false,
       pastRunLimit: 3,
+      runOnAllMachines: false,
     });
     setSchedulerSelectedStep(0);
     setSchedulerAttachMenu(null);
@@ -295,6 +298,7 @@ export function useSchedulerController(props: any) {
       steps,
       usePastRuns: schedule.usePastRuns === true,
       pastRunLimit: Math.max(1, Math.min(12, Number(schedule.pastRunLimit) || 3)),
+      runOnAllMachines: schedule.runOnAllMachines === true,
     });
     setSchedulerSelectedStep(0);
     setSchedulerAttachMenu(null);
@@ -346,6 +350,7 @@ export function useSchedulerController(props: any) {
       pastRunLimit: Math.max(1, Math.min(12, Number(scheduleDraft.pastRunLimit) || 3)),
       sharedSchedulePath: editedSchedule?.sharedSchedulePath,
       sharedRunFolder: editedSchedule?.sharedRunFolder,
+      runOnAllMachines: scheduleDraft.runOnAllMachines === true,
     };
     if (externalRuntime === "aeon") {
       const configured = await configureAeonSchedule(agent, next);
@@ -359,6 +364,7 @@ export function useSchedulerController(props: any) {
       ? current.map((schedule) => schedule.id === editedSchedule.id ? next : schedule)
       : [next, ...current]);
     void upsertSharedSchedule(next);
+    if (next.runOnAllMachines || editedSchedule?.runOnAllMachines) void triggerScheduleReplication(next, buildReplicationTargets(machineGroups), schedulerMachineIdForAgent(agent));
     resetScheduleDraft(agent.id);
     setSchedulerDraftOpen(false);
   }
@@ -420,10 +426,19 @@ export function useSchedulerController(props: any) {
           pastRunLimit: existing?.pastRunLimit ?? 3,
           sharedSchedulePath: existing?.sharedSchedulePath,
           sharedRunFolder: existing?.sharedRunFolder,
+          runOnAllMachines: existing?.runOnAllMachines === true,
         };
         byExternalId.set(key, imported);
       }
-      const importedSchedules = [...byExternalId.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+      // Every live/known owner identity, plus the owners just imported — used to
+      // prune rows whose owning machine is gone (dead hostname forks, deleted
+      // crons). Kept wide so an offline-but-known machine's rows survive.
+      // Dedupe hostname forks, drop dead-owner rows, and reconcile away deleted
+      // crons on the machines we reached (logic + tests live in schedule-health).
+      const importedSchedules = cleanImportedSchedules(
+        [...byExternalId.values()].sort((a, b) => b.updatedAt - a.updatedAt),
+        { agentIds: [...displayAgents, ...agents].flatMap((agent) => [agent?.id, agent?.agentId]), jobs },
+      );
       void upsertSharedSchedules(importedSchedules);
       return importedSchedules;
     });
@@ -508,6 +523,10 @@ export function useSchedulerController(props: any) {
       externalJobId: schedule.externalJobId ?? null,
       updatedAt: schedule.updatedAt,
       nextRunAt: schedule.nextRunAt ?? null,
+      lastRunAt: schedule.lastRunAt ?? null,
+      lastStatus: schedule.lastStatus ?? null,
+      lastSummary: schedule.lastSummary ?? null,
+      runOnAllMachines: schedule.runOnAllMachines === true,
       usePastRuns: schedule.usePastRuns === true,
       pastRunLimit: Math.max(1, Math.min(12, Number(schedule.pastRunLimit) || 3)),
     };
@@ -642,6 +661,10 @@ export function useSchedulerController(props: any) {
       createdAt: typeof snapshot.updatedAt === "number" ? snapshot.updatedAt : Date.now(),
       updatedAt: typeof snapshot.updatedAt === "number" ? snapshot.updatedAt : Date.now(),
       nextRunAt: typeof snapshot.nextRunAt === "number" ? snapshot.nextRunAt : undefined,
+      lastRunAt: typeof snapshot.lastRunAt === "number" ? snapshot.lastRunAt : undefined,
+      lastStatus: typeof snapshot.lastStatus === "string" ? snapshot.lastStatus : undefined,
+      lastSummary: typeof snapshot.lastSummary === "string" ? snapshot.lastSummary : undefined,
+      runOnAllMachines: snapshot.runOnAllMachines === true,
       externalSource,
       externalJobId: externalJobId || undefined,
       usePastRuns: snapshot.usePastRuns === true,
@@ -659,9 +682,9 @@ export function useSchedulerController(props: any) {
         byId.set(sharedSchedule.id, {
           ...existing,
           ...sharedSchedule,
-          lastRunAt: existing?.lastRunAt,
-          lastStatus: existing?.lastStatus,
-          lastSummary: existing?.lastSummary,
+          lastRunAt: Math.max(existing?.lastRunAt ?? 0, sharedSchedule.lastRunAt ?? 0) || undefined,
+          lastStatus: sharedSchedule.lastStatus ?? existing?.lastStatus,
+          lastSummary: sharedSchedule.lastSummary ?? existing?.lastSummary,
         });
       } else if (sharedSchedule.sharedRunFolder || sharedSchedule.sharedSchedulePath) {
         byId.set(existing.id, {
@@ -671,7 +694,9 @@ export function useSchedulerController(props: any) {
         });
       }
     }
-    return [...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+    // Collapse per-machine-identity forks of the same cron (hostname churn
+    // mints a new row for the same job) so they stop reading as duplicates.
+    return dedupeSchedulesByLoop([...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt));
   }
 
   async function refreshSharedSchedulesFromVault() {
@@ -1444,6 +1469,7 @@ export function useSchedulerController(props: any) {
       ? current.map((schedule) => schedule.id === editedSchedule.id ? next : schedule)
       : [next, ...current]);
     void upsertSharedSchedule(next);
+    if (next.runOnAllMachines || editedSchedule?.runOnAllMachines) void triggerScheduleReplication(next, buildReplicationTargets(machineGroups), schedulerMachineIdForAgent(agent));
     resetScheduleDraft(agent.id);
     setSchedulerDraftOpen(false);
   }

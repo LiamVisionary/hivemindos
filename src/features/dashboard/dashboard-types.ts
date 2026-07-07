@@ -8,6 +8,7 @@ import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
 import type { ChatApplicationGenerationCard, ChatImageGeneration } from "@/features/dashboard/chat-application-generation";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
 
 export type GatewayStatus = {
   ok?: boolean;
@@ -124,7 +125,20 @@ export type RuntimeIntegrationStatus = {
         sizeBytes?: number | null;
         format?: string | null;
         remote?: boolean;
+        source?: "lm-studio" | "lm-link" | "openai-server";
+        sourceLabel?: string;
+        serverId?: string;
+        baseUrl?: string;
+        chatPath?: string;
+        statusPath?: string;
+        canLoad?: boolean;
+        canUnload?: boolean;
       }>;
+      servers?: LocalOpenAICompatibleServer[];
+      catalog?: LocalModelInstallCatalogStatus[];
+      downloads?: LocalModelDownloadJob[];
+      hardware?: LocalModelHardwareSnapshot;
+      setup?: LocalRuntimeSetupStatus;
       error?: string;
       checkedAt?: string;
     };
@@ -376,6 +390,13 @@ export type AgentSchedule = {
   pastRunLimit?: number;
   sharedSchedulePath?: string;
   sharedRunFolder?: string;
+  /**
+   * When true, this loop is meant to run on every fleet machine (fan-out): the
+   * replication engine keeps a copy of its cron on each machine, and its
+   * per-machine copies count as one intended schedule, not duplicates.
+   * Default/absent = pinned to its designated machine only.
+   */
+  runOnAllMachines?: boolean;
 };
 
 export type ScheduleDraft = {
@@ -390,6 +411,7 @@ export type ScheduleDraft = {
   steps: SchedulerStep[];
   usePastRuns: boolean;
   pastRunLimit: number;
+  runOnAllMachines: boolean;
 };
 
 export type SkillBrowserSkill = {

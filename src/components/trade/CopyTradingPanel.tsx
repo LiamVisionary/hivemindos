@@ -18,6 +18,7 @@ import {
   copyTradeNetworkLabel,
   defaultCopyTradingConfig,
   isCopyTradeNetwork,
+  type CopyTradeEvent,
   type CopyTradeEngineStatus,
   type CopyTradeNetwork,
   type CopyTradeRuntimeState,
@@ -350,6 +351,8 @@ function ConfigCard(props: {
   foreign?: boolean;
 }) {
   const { config, state, online } = props;
+  const [expanded, setExpanded] = React.useState(false);
+  const detailsId = React.useId();
   const pill = !config.enabled
     ? { cls: styles.pillStop, text: "Stopped" }
     : !online
@@ -358,6 +361,7 @@ function ConfigCard(props: {
     ? { cls: styles.pillDry, text: "Dry-run" }
     : { cls: styles.pillRun, text: "Live" };
   const recent = (state?.events ?? []).slice(-3).reverse();
+  const summary = state ? summarizeState(state) : null;
 
   return (
     <div className={`${styles.card}${props.foreign ? ` ${styles.foreign}` : ""}`}>
@@ -373,14 +377,19 @@ function ConfigCard(props: {
 
       {state ? (
         <div className={styles.meta}>
+          <span>signals <b>{summary?.signalCount ?? 0}</b></span>
           <span>mirrored <b>{state.stats.mirrored}</b></span>
           <span>skipped <b>{state.stats.skipped}</b></span>
           <span>errors <b>{state.stats.errors}</b></span>
           <span>open <b>{Object.keys(state.openPositions).length}</b></span>
         </div>
+      ) : config.enabled ? (
+        <div className={styles.meta}>
+          <span>{online ? "waiting for first poll" : "daemon offline"}</span>
+        </div>
       ) : null}
 
-      {recent.length ? (
+      {!expanded && recent.length ? (
         <div className={styles.events}>
           {recent.map((ev, i) => (
             <div key={i} className={styles.ev}>
@@ -393,6 +402,8 @@ function ConfigCard(props: {
         </div>
       ) : null}
 
+      {expanded ? <ConfigPerformance id={detailsId} config={config} state={state} online={online} /> : null}
+
       <div className={styles.actions}>
         {config.enabled ? (
           <BBtn variant="ghost" sm disabled={props.busy != null} onClick={() => props.onAct("stop", config.id)}>Stop</BBtn>
@@ -400,10 +411,109 @@ function ConfigCard(props: {
           <BBtn variant="primary" sm disabled={props.busy != null} onClick={() => props.onAct("start", config.id)}>Start</BBtn>
         )}
         {props.onEdit ? <BBtn variant="ghost" sm disabled={props.busy != null} onClick={() => props.onEdit!(config)}>Edit</BBtn> : null}
+        <BBtn variant="ghost" sm aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded((open) => !open)}>
+          <span className={styles.chev} data-open={expanded ? "true" : undefined}><BIcon name="chevron" size={12} /></span>
+          {expanded ? "Hide data" : "Show data"}
+        </BBtn>
         <span className={styles.spacer} />
         <BBtn variant="ghost" sm disabled={props.busy != null} onClick={() => props.onAct("delete", config.id)}>Remove</BBtn>
       </div>
     </div>
+  );
+}
+
+function ConfigPerformance(props: { id: string; config: CopyTradingConfig; state?: CopyTradeRuntimeState; online: boolean }) {
+  const { config, state, online } = props;
+  const waiting = config.enabled && online && !state;
+  const summary = state ? summarizeState(state) : null;
+  const openPositions = Object.values(state?.openPositions ?? {});
+  const events = (state?.events ?? []).slice(-8).reverse();
+  const loopStatus = !config.enabled ? "Stopped" : !online ? "Offline" : state?.running ? "Running" : "Waiting";
+  const lastEvent = summary?.lastEventAt ? fmtAgo(summary.lastEventAt) : "none";
+
+  return (
+    <div id={props.id} className={styles.details} role="region" aria-live="polite" aria-label={`Copy-trading performance for ${config.label?.trim() || shortAddr(config.targetAddress)}`}>
+      {!state ? (
+        <div className={styles.detailsEmpty}>
+          {waiting ? <BIcon name="spinner" size={13} spin /> : null}
+          {waiting ? "Waiting for the first daemon poll." : "No runtime data has been recorded for this config yet."}
+        </div>
+      ) : (
+        <>
+          <div className={styles.healthRow}>
+            <span className={styles.healthItem}><span className={`${styles.healthDot} ${state.running && online ? styles.healthLive : ""}`} />{loopStatus}</span>
+            <span className={styles.healthItem}>Last poll <b>{fmtAgo(state.lastPollAt)}</b></span>
+            <span className={styles.healthItem}>Last event <b>{lastEvent}</b></span>
+            {state.lastError ? <span className={`${styles.healthItem} ${styles.healthErr}`}>Last error <b>{state.lastError}</b></span> : null}
+          </div>
+
+          <div className={styles.detailStats}>
+            <DetailMetric label="Polls" value={fmtInt(state.stats.polls)} />
+            <DetailMetric label="Signals" value={fmtInt(summary?.signalCount ?? 0)} />
+            <DetailMetric label="Dry-run" value={fmtInt(summary?.dryRunActionCount ?? 0)} />
+            <DetailMetric label="Mirrored" value={fmtInt(state.stats.mirrored)} />
+            <DetailMetric label="Skipped" value={fmtInt(state.stats.skipped)} />
+            <DetailMetric label="Errors" value={fmtInt(state.stats.errors)} danger={state.stats.errors > 0} />
+            <DetailMetric label="Open" value={fmtInt(openPositions.length)} />
+            <DetailMetric label="Logged USD" value={fmtUsd(summary?.loggedUsd ?? 0)} />
+          </div>
+
+          <div className={styles.detailBlock}>
+            <div className={styles.detailTitle}>Open positions</div>
+            {openPositions.length ? (
+              <div className={styles.positions}>
+                {openPositions.map((position) => (
+                  <div key={position.token} className={styles.positionRow}>
+                    <span>
+                      <b>{position.symbol || shortAddr(position.token)}</b>
+                      <small>{shortAddr(position.token)}</small>
+                    </span>
+                    <span className={styles.num}>{fmtUsd(position.spentUsd)}</span>
+                    <span className={styles.num}>{fmtAmount(position.amount)}</span>
+                    <span className={styles.num}>{fmtAgo(position.lastActionAt)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className={styles.detailMuted}>No open copied positions right now.</p>
+            )}
+          </div>
+
+          <div className={styles.detailBlock}>
+            <div className={styles.detailTitle}>Recent events</div>
+            {events.length ? (
+              <div className={styles.detailEvents}>
+                {events.map((ev, i) => (
+                  <div key={`${ev.at}:${i}`} className={styles.detailEvent}>
+                    <span className={`${styles.kind} ${eventTone(ev.kind)}`}>{eventLabel(ev.kind)}</span>
+                    <span className={styles.detailEventBody}>
+                      <span>{ev.detail}</span>
+                      <small>
+                        <time dateTime={new Date(ev.at).toISOString()} title={fmtDate(ev.at)}>{fmtAgo(ev.at)}</time>
+                        {" · "}
+                        {eventMode(ev)}
+                        {ev.usd != null ? ` · ${fmtUsd(ev.usd)}` : ""}
+                      </small>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className={styles.detailMuted}>No events yet. Dry-run detections and live swaps will appear here.</p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DetailMetric(props: { label: string; value: string; danger?: boolean }) {
+  return (
+    <span className={styles.detailMetric}>
+      <b className={props.danger ? styles.metricDanger : undefined}>{props.value}</b>
+      <small>{props.label}</small>
+    </span>
   );
 }
 
@@ -531,14 +641,90 @@ function ConfigForm(props: {
   );
 }
 
+const ACTION_EVENT_KINDS: CopyTradeEvent["kind"][] = ["buy", "sell", "take-profit", "stop-loss"];
+
+function summarizeState(state: CopyTradeRuntimeState) {
+  let signalCount = 0;
+  let dryRunActionCount = 0;
+  let loggedUsd = 0;
+  for (const event of state.events ?? []) {
+    if (ACTION_EVENT_KINDS.includes(event.kind)) {
+      signalCount += 1;
+      if (isDryRunEvent(event)) dryRunActionCount += 1;
+    }
+    if (typeof event.usd === "number" && Number.isFinite(event.usd)) loggedUsd += Math.abs(event.usd);
+  }
+  const last = state.events?.[state.events.length - 1];
+  return { signalCount, dryRunActionCount, loggedUsd, lastEventAt: last?.at ?? null };
+}
+
+function eventLabel(kind: CopyTradeEvent["kind"]): string {
+  return kind.replace("-", " ");
+}
+
+function eventMode(event: CopyTradeEvent): string {
+  if (isDryRunEvent(event)) return "dry-run";
+  if (event.txRef) return "live";
+  if (event.kind === "needs-approval") return "approval";
+  return "logged";
+}
+
+function isDryRunEvent(event: CopyTradeEvent): boolean {
+  return event.dryRun === true || event.detail.toLowerCase().startsWith("[dry-run]");
+}
+
+function eventTone(kind: CopyTradeEvent["kind"]): string {
+  if (kind === "buy") return styles.kindBuy;
+  if (kind === "sell" || kind === "take-profit") return styles.kindSell;
+  if (kind === "error" || kind === "needs-approval" || kind === "stop-loss") return styles.kindErr;
+  return styles.kindMuted;
+}
+
 function shortAddr(address: string): string {
   if (!address) return "—";
   return address.length <= 12 ? address : `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+function fmtInt(value: number): string {
+  return Number.isFinite(value) ? Math.round(value).toLocaleString() : "0";
+}
+
+function fmtUsd(value: number): string {
+  if (!Number.isFinite(value)) return "$0";
+  const abs = Math.abs(value);
+  const digits = abs > 0 && abs < 100 ? 2 : 0;
+  return `$${value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
+}
+
+function fmtAmount(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  if (value === 0) return "0";
+  return value.toLocaleString(undefined, { maximumSignificantDigits: 6 });
+}
+
 function fmtTime(ms: number): string {
   try {
     return new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function fmtAgo(ms: number | null | undefined): string {
+  if (!ms || !Number.isFinite(ms)) return "not yet";
+  const seconds = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function fmtDate(ms: number): string {
+  try {
+    return new Date(ms).toLocaleString();
   } catch {
     return "";
   }

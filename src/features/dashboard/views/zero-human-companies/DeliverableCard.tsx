@@ -10,6 +10,8 @@ import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-u
 import { FileViewerModal } from "./FileViewer";
 import { RejectDeliverableModal } from "./RejectDeliverableModal";
 import { Snackbar } from "./Snackbar";
+import { Spinner } from "./primitives";
+import { dispatchedAgo } from "./company-deliverables";
 import { deliverableHref } from "./deliverables-model";
 import type { ClassifiedDeliverable, DeliverableIcon } from "./deliverables-model";
 import type { Theme } from "./types";
@@ -82,18 +84,34 @@ function HeroChrome({ isLink, text }: { isLink: boolean; text: string }) {
   );
 }
 
-export function DeliverableCard({ item, machineName, theme = "dark", layout = "card", companyId, initiallyRejected = false }: {
-  item: ClassifiedDeliverable; machineName?: string; theme?: Theme; layout?: "card" | "row" | "hero"; companyId?: string; initiallyRejected?: boolean;
+export function DeliverableCard({ item, machineName, timestampMs, theme = "dark", layout = "card", companyId, initiallyRejected = false }: {
+  item: ClassifiedDeliverable; machineName?: string; timestampMs?: number; theme?: Theme; layout?: "card" | "row" | "hero"; companyId?: string; initiallyRejected?: boolean;
 }) {
   const [viewing, setViewing] = React.useState(false);
   const [rejecting, setRejecting] = React.useState(false);
   const [rejected, setRejected] = React.useState(false);
   const [toast, setToast] = React.useState(false);
   const [hover, setHover] = React.useState(false);
+  // Opening an external link routes through the OS opener (a server round trip in
+  // the Tauri shell — a couple of seconds); without this the card looked dead on
+  // press. Mirrors the email-modal link chips.
+  const [opening, setOpening] = React.useState(false);
   const { deliverable, icon, title, kindLabel, action, url } = item;
+
+  const openLink = React.useCallback(async (href: string) => {
+    if (!isExternalHttpUrl(href)) return;
+    setOpening(true);
+    try {
+      await openExternalUrl(href);
+    } finally {
+      setOpening(false);
+    }
+  }, []);
   const isLink = action === "visit" && !!url;
   const hero = layout === "hero";
   const actionText = (hero ? HERO_ACTION_LABEL : ACTION_LABEL)[action] ?? "";
+  const timeAgo = dispatchedAgo(timestampMs);
+  const timeTitle = timestampMs && Number.isFinite(timestampMs) ? new Date(timestampMs).toLocaleString() : undefined;
 
   const surface: React.CSSProperties = {
     display: "flex",
@@ -125,13 +143,14 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
           <span style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
             <span className="mono-cap" style={{ color: "var(--cyan-2)" }}>{kindLabel}</span>
             {machineName ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)", opacity: 0.7 }}>· {machineName}</span> : null}
+            {timeAgo ? <span title={timeTitle} style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)", opacity: 0.7 }}>· {timeAgo}</span> : null}
           </span>
         </span>
       </span>
       {chromeText ? <HeroChrome isLink={isLink} text={chromeText} /> : null}
       {actionText ? (
         <span style={{ display: "flex", justifyContent: "flex-end" }}>
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 11.5, fontWeight: 600, color: hover ? "var(--cyan-2)" : "var(--cyan)", borderRadius: 8, padding: "5px 11px", border: "1px solid color-mix(in srgb, var(--cyan) 32%, var(--line))", background: "color-mix(in srgb, var(--cyan) 8%, transparent)" }}>{actionText}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 11.5, fontWeight: 600, color: hover ? "var(--cyan-2)" : "var(--cyan)", borderRadius: 8, padding: "5px 11px", border: "1px solid color-mix(in srgb, var(--cyan) 32%, var(--line))", background: "color-mix(in srgb, var(--cyan) 8%, transparent)" }}>{opening ? <><Spinner size={12} /> Opening…</> : actionText}</span>
         </span>
       ) : null}
     </>
@@ -143,10 +162,11 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
         <span style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
           <span className="mono-cap" style={{ color: "var(--fg-4)" }}>{kindLabel}</span>
           {machineName ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)", opacity: 0.7 }}>· {machineName}</span> : null}
+          {timeAgo ? <span title={timeTitle} style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)", opacity: 0.7 }}>· {timeAgo}</span> : null}
         </span>
       </span>
       {actionText ? (
-        <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: hover ? "var(--cyan-2)" : "var(--cyan)", flexShrink: 0, alignSelf: layout === "row" ? "center" : "flex-start", marginTop: layout === "row" ? 0 : 2 }}>{actionText}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontFamily: "var(--f-mono)", fontSize: 11, color: hover ? "var(--cyan-2)" : "var(--cyan)", flexShrink: 0, alignSelf: layout === "row" ? "center" : "flex-start", marginTop: layout === "row" ? 0 : 2 }}>{opening ? <><Spinner size={11} /> Opening…</> : actionText}</span>
       ) : null}
     </>
   );
@@ -160,7 +180,7 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
       rel="noreferrer"
       style={surface}
       {...hoverProps}
-      onClick={(event) => { if (url && isExternalHttpUrl(url)) { event.preventDefault(); void openExternalUrl(url); } }}
+      onClick={(event) => { if (url && isExternalHttpUrl(url)) { event.preventDefault(); void openLink(url); } }}
     >{body}</a>
   ) : action === "none" ? (
     <div style={{ ...surface, opacity: 0.75 }} title={item.internalReason ? `${deliverable.path || deliverableHref(deliverable) || ""} — ${item.internalReason}` : undefined}>{body}</div>
@@ -181,7 +201,7 @@ export function DeliverableCard({ item, machineName, theme = "dark", layout = "c
         <div title="Rejected — the crew was redirected via a standing directive" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 14, border: "1px dashed var(--line-2)", background: "var(--bg-2)", opacity: 0.62 }}>
           <span aria-hidden style={{ fontSize: 15 }}>🚫</span>
           <span style={{ flex: 1, minWidth: 0, fontFamily: "var(--f-display)", fontSize: 13, color: "var(--fg-3)", textDecoration: "line-through", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
-          <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)" }}>rejected · crew redirected</span>
+          <span style={{ flexShrink: 0, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)" }}>rejected · crew redirected{timeAgo ? ` · ${timeAgo}` : ""}</span>
         </div>
         {toast && <Snackbar message="Rejected deliverable" sub="Feedback directed to company" theme={theme} onClose={() => setToast(false)} />}
       </>

@@ -49,6 +49,8 @@ export type X402FetchInput = {
   confirmation?: string;
   /** Granted approval id, supplied when retrying an escalated x402 payment. */
   approvalToken?: string;
+  /** True when the caller already completed a concrete server-side user approval for this exact spend. */
+  approvalThresholdSatisfied?: boolean;
   /** Use plain fetch without x402 discovery/wrapping when an upstream bearer/prepaid token should decide access. */
   skipPaymentDiscovery?: boolean;
   timeoutMs?: number;
@@ -79,6 +81,8 @@ export type X402FetchResult = {
   network: string;
   amountUsd: number;
   paid: boolean;
+  paymentAttempted?: boolean;
+  paymentSettled?: boolean;
   builderCode?: string;
   platformFee?: PlatformFeeCollection;
   paymentResponse?: string;
@@ -301,6 +305,8 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       network: x402Network(input.network),
       amountUsd: 0,
       paid: false,
+      paymentAttempted: false,
+      paymentSettled: false,
       paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
       responseHeaders: responseHeaderRecord(response.headers),
       ...preview,
@@ -343,6 +349,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       amountUsd: preflightAmountUsd != null && preflightAmountUsd > 0 ? preflightAmountUsd : 0,
       target: input.url,
       approvalToken: input.approvalToken,
+      approvalThresholdSatisfied: input.approvalThresholdSatisfied,
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
     approvalGrantId = decision.grant?.id;
@@ -383,7 +390,9 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     signal: AbortSignal.timeout(input.timeoutMs ?? 60_000),
   });
   const preview = await responsePreview(response);
-  const platformFee = paid && selectedAmountUsd > 0
+  const paymentResponse = response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined;
+  const paymentSettled = paid && response.status !== 402 && Boolean(paymentResponse);
+  const platformFee = paymentSettled && selectedAmountUsd > 0
     ? await collectTradingPlatformFee({
       agentId: input.agentId,
       network: input.network,
@@ -401,14 +410,16 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     method,
     network,
     amountUsd: selectedAmountUsd,
-    paid,
+    paid: paymentSettled,
+    paymentAttempted: paid,
+    paymentSettled,
     builderCode,
     platformFee,
-    paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
+    paymentResponse,
     responseHeaders: responseHeaderRecord(response.headers),
     ...preview,
   };
-  if (paid) {
+  if (paymentSettled) {
     await appendSpendRecord({
       agentId: input.agentId,
       url: input.url,
@@ -416,7 +427,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       method,
       amountUsd: selectedAmountUsd,
       status: response.status,
-      paid,
+      paid: paymentSettled,
       builderCode,
       createdAt: new Date().toISOString(),
     });

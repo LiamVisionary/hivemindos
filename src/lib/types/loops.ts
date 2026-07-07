@@ -96,10 +96,39 @@ export type LoopObservation = {
   updatedAt: number;
 };
 
+export type LoopContractSnapshot = {
+  id: string;
+  title: string;
+  plannerAssertions: string[];
+  evaluatorPushback: string[];
+  agreedDone: string[];
+  artifacts: string[];
+  createdAt: number;
+};
+
+export type LoopRubricAxis = {
+  id: string;
+  title: string;
+  weight: number;
+  description: string;
+  scoreFloor?: number;
+};
+
+export type LoopEvaluationRubric = {
+  id: string;
+  title: string;
+  scale: "0-1";
+  passThreshold: number;
+  axes: LoopRubricAxis[];
+  notes?: string[];
+};
+
 export type LoopSpec = {
   mode: LoopMode;
   goal: string;
   successCriteria: string[];
+  contract?: LoopContractSnapshot;
+  evaluationRubric?: LoopEvaluationRubric;
   evalGates: LoopEvalGate[];
   benchmark?: LoopBenchmark;
   frontierStrategy?: LoopFrontierStrategy;

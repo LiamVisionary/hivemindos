@@ -10,6 +10,7 @@ import {
   getQueenVoiceOpen,
   listenForQueenVoiceState,
 } from "@/lib/native/queen-voice-events";
+import { filterChatSlashCommands } from "@/features/chat/hermes-slash-commands";
 
 type ChatPillSlashCommand = {
   name: string;
@@ -25,6 +26,7 @@ export function ChatPill({
   placeholder,
   offsetX = 0,
   onSend,
+  onComposerActiveChange,
   tone = "hive",
   wrapStyle,
   topSlot,
@@ -34,6 +36,7 @@ export function ChatPill({
   /** px to nudge left of centre so the pill centres over the canvas, not under the panel */
   offsetX?: number;
   onSend?: (text: string) => void;
+  onComposerActiveChange?: (active: boolean) => void;
   /** "hive" = honey palette; "legacy" = blue palette to match the graph/map/list views */
   tone?: "hive" | "legacy";
   /** override the wrap positioning (e.g. anchor to a corner in legacy views) */
@@ -49,24 +52,19 @@ export function ChatPill({
   const [voiceActive, setVoiceActive] = useState(getQueenVoiceOpen);
   const [value, setValue] = useState("");
   const [inputFocused, setInputFocused] = useState(false);
+  const [inputHovered, setInputHovered] = useState(false);
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
   useEffect(() => listenForQueenVoiceState(setVoiceActive), []);
+  useEffect(() => {
+    onComposerActiveChange?.(inputFocused || inputHovered);
+  }, [inputFocused, inputHovered, onComposerActiveChange]);
+  useEffect(() => {
+    return () => onComposerActiveChange?.(false);
+  }, [onComposerActiveChange]);
   const slashTokenMatch = slashCommands.length ? value.match(/^\/([^\s/]*)$/) : null;
   const slashCommandQuery = slashTokenMatch?.[1]?.toLowerCase() ?? "";
   const filteredSlashCommands = useMemo(() => {
-    if (!slashCommands.length) return [];
-    const query = slashCommandQuery.trim();
-    const matching = slashCommands.filter((command) => {
-      const haystack = [
-        command.name,
-        command.description,
-        command.category,
-        command.argsHint ?? "",
-        ...(command.aliases ?? []),
-      ].join(" ").toLowerCase();
-      return !query || haystack.includes(query);
-    });
-    return matching.length ? matching : slashCommands;
+    return filterChatSlashCommands(slashCommands, slashCommandQuery);
   }, [slashCommands, slashCommandQuery]);
   const slashCommandOpen = Boolean(inputFocused && slashTokenMatch && filteredSlashCommands.length > 0);
 
@@ -121,6 +119,10 @@ export function ChatPill({
     const end = input.value.length;
     input.setSelectionRange(end, end);
   };
+  const blurInput = () => {
+    setInputFocused(false);
+    setInputHovered(false);
+  };
   const focusInputFromContainer = (event: PointerEvent<HTMLFormElement>) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -170,7 +172,13 @@ export function ChatPill({
           </div>
         </div>
       ) : null}
-      <form className={`fr-chat${tone === "legacy" ? " fr-chat--legacy" : ""}`} onPointerDown={focusInputFromContainer} onSubmit={onSubmit}>
+      <form
+        className={`fr-chat${tone === "legacy" ? " fr-chat--legacy" : ""}`}
+        onPointerEnter={() => setInputHovered(true)}
+        onPointerLeave={() => setInputHovered(false)}
+        onPointerDown={focusInputFromContainer}
+        onSubmit={onSubmit}
+      >
         <span className="fr-chat-orb">
           <span className="ring" />
           <span className="core" />
@@ -189,7 +197,7 @@ export function ChatPill({
               setSelectedSlashCommandIndex(0);
             }}
             onFocus={() => setInputFocused(true)}
-            onBlur={() => setInputFocused(false)}
+            onBlur={blurInput}
             onKeyDown={onInputKeyDown}
           />
           <button

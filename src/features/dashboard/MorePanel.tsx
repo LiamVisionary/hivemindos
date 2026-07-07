@@ -120,9 +120,9 @@ export function MorePanel({
     },
     tools: {
       icon: <Wrench aria-hidden="true" />,
-      eyebrow: "Callable handles",
-      title: "Tools",
-      body: "Review built-in, runtime, and app-provided handles agents can invoke.",
+      eyebrow: "Capabilities",
+      title: "Capability Store",
+      body: "Review built-in, runtime, app, and mini-app handles agents can invoke.",
     },
     "my-apps": {
       icon: <AppWindow aria-hidden="true" />,
@@ -158,7 +158,7 @@ export function MorePanel({
       icon: <Bell aria-hidden="true" />,
       eyebrow: notificationUnread ? `${notificationUnread} unread` : `${notificationTotal} total`,
       title: "Alerts",
-      body: "Review messages agents write into the shared inbox.",
+      body: "Review messages, decisions, and configurable approval requests from agents.",
       badge: notificationUnread || undefined,
       badgeLabel: notificationUnread ? `${notificationUnread} unread alerts` : undefined,
     },
@@ -203,7 +203,7 @@ export function MorePanel({
         <div>
           <p className="eyebrow">More</p>
           <h2>System Menu</h2>
-          <p>Fusion, integrations, diagnostics, scoped files, and agent notifications live here so the main navigation stays focused.</p>
+          <p>Fusion, integrations, diagnostics, scoped files, capability search, and messaging live here so the main navigation stays focused.</p>
         </div>
       </div>
       <div className="mt-4 grid gap-3">

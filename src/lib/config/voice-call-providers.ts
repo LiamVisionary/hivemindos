@@ -125,15 +125,20 @@ export const CALL_VOICE_PROVIDER_MATRIX: VoiceProviderCapability[] = [
     id: "gemini",
     name: "Gemini",
     fallback: "GM",
-    apiKeyEnvVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+    // Any of these hive-env names can hold a Gemini key; the panel lets the user
+    // pick when more than one is set. GOOGLE_API_KEY is last (often a generic
+    // Google key). Kept in sync with GEMINI_KEY_ENV_CANDIDATES server-side.
+    apiKeyEnvVars: ["GEMINI_API_KEY", "GOOGLE_AI_STUDIO_API_KEY", "GOOGLE_API_KEY"],
     apiKeyPlaceholder: "Google AI Studio API key",
     brainProviderSlug: "gemini",
     brainSubtitle: "Gemini models via API key",
     realtime: {
+      // Live-verified 2026-07-07: token mint + bidi WS setup complete against a
+      // real key for the current Gemini 3.1 Live model.
       runtimeId: "gemini-live",
-      status: "preview",
-      subtitle: "Gemini Live · multimodal",
-      defaultModel: "gemini-2.0-flash-live-001",
+      status: "available",
+      subtitle: "Gemini Live · 3.1 Flash",
+      defaultModel: "gemini-3.1-flash-live-preview",
       voices: GEMINI_VOICES,
     },
     cloudTts: {

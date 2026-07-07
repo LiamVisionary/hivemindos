@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
       mode: body.mode,
       priority: body.priority,
       loop: body.loop,
+      workspace: normalizeWorkspace(body.workspace),
       taskTitle: body.taskTitle,
       agentId: body.agentId,
       machineId: body.machineId,
@@ -154,6 +155,12 @@ function publicState(result: Awaited<ReturnType<typeof readQueenBeeState>>) {
       receipts: result.paths.receipts,
     },
   };
+}
+
+function normalizeWorkspace(value: unknown) {
+  if (value === "scratch" || value === "worktree") return value;
+  if (typeof value === "string" && value.startsWith("dir:")) return value as `dir:${string}`;
+  return undefined;
 }
 
 function errorResponse(error: unknown) {

@@ -13,6 +13,9 @@ import type {
   LoopObservation,
   LoopReceipt,
   LoopSpec,
+  LoopContractSnapshot,
+  LoopEvaluationRubric,
+  LoopRubricAxis,
 } from "@/lib/types/loops";
 
 const DEFAULT_FRONTIER_STRATEGY: LoopFrontierStrategy = {
@@ -27,6 +30,8 @@ export type LoopExperimentInput = Partial<LoopExperiment> & {
 export type LoopDiscoveryInput = Partial<LoopBenchmark> & {
   goal?: string;
   successCriteria?: string[];
+  contract?: unknown;
+  evaluationRubric?: unknown;
   evalGates?: unknown[];
   frontierStrategy?: LoopFrontierStrategy;
 };
@@ -52,6 +57,8 @@ export function normalizeLoopSpec(value: unknown, maxAttempts?: number, maxRunti
     mode: normalizeLoopMode(input.mode),
     goal: goal ?? "",
     successCriteria: cleanStringArray(input.successCriteria),
+    contract: normalizeLoopContract(input.contract),
+    evaluationRubric: normalizeLoopEvaluationRubric(input.evaluationRubric),
     evalGates,
     benchmark,
     frontierStrategy: normalizeFrontierStrategy(input.frontierStrategy),
@@ -134,6 +141,8 @@ export function discoverLoop(loop: LoopSpec | undefined, input: LoopDiscoveryInp
     mode: loop?.mode ?? "optimizer",
     goal: cleanOptional(input.goal) ?? loop?.goal ?? "",
     successCriteria: cleanStringArray(input.successCriteria).length ? cleanStringArray(input.successCriteria) : loop?.successCriteria ?? [],
+    contract: normalizeLoopContract(input.contract) ?? loop?.contract,
+    evaluationRubric: normalizeLoopEvaluationRubric(input.evaluationRubric) ?? loop?.evaluationRubric,
     evalGates: input.evalGates ? input.evalGates.map(normalizeEvalGate).filter(Boolean) as LoopEvalGate[] : loop?.evalGates ?? [],
     benchmark: normalizeBenchmark({ ...loop?.benchmark, ...input }) ?? loop?.benchmark,
     frontierStrategy: normalizeFrontierStrategy(input.frontierStrategy ?? loop?.frontierStrategy),
@@ -185,6 +194,8 @@ export function recordLoopAntiPatterns(loop: LoopSpec | undefined, values: unkno
 export function withObservation(loop: LoopSpec): LoopSpec {
   return {
     ...loop,
+    contract: normalizeLoopContract(loop.contract),
+    evaluationRubric: normalizeLoopEvaluationRubric(loop.evaluationRubric),
     frontierStrategy: normalizeFrontierStrategy(loop.frontierStrategy),
     experiments: normalizeExperiments(loop.experiments),
     antiPatterns: normalizeAntiPatterns(loop.antiPatterns),
@@ -326,6 +337,61 @@ function normalizeBenchmark(value: unknown): LoopBenchmark | undefined {
     instrumentation: input.instrumentation === "sdk" || input.instrumentation === "inline" ? input.instrumentation : input.instrumentation === "manual" ? "manual" : undefined,
     discoveredAt: positiveNumber(input.discoveredAt) ?? Date.now(),
     notes: cleanStringArray(input.notes),
+  };
+}
+
+function normalizeLoopContract(value: unknown): LoopContractSnapshot | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const input = value as Partial<LoopContractSnapshot>;
+  const plannerAssertions = cleanStringArray(input.plannerAssertions);
+  const evaluatorPushback = cleanStringArray(input.evaluatorPushback);
+  const agreedDone = cleanStringArray(input.agreedDone);
+  const artifacts = cleanStringArray(input.artifacts);
+  if (!plannerAssertions.length && !evaluatorPushback.length && !agreedDone.length && !artifacts.length) return undefined;
+  const title = cleanOptional(input.title) ?? "Loop done contract";
+  return {
+    id: cleanOptional(input.id) ?? `contract_${stableHash(`${title}:${agreedDone.join("|")}`)}`,
+    title,
+    plannerAssertions,
+    evaluatorPushback,
+    agreedDone,
+    artifacts,
+    createdAt: positiveNumber(input.createdAt) ?? Date.now(),
+  };
+}
+
+function normalizeLoopEvaluationRubric(value: unknown): LoopEvaluationRubric | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const input = value as Partial<LoopEvaluationRubric>;
+  const axes = Array.isArray(input.axes)
+    ? input.axes.map(normalizeRubricAxis).filter(Boolean) as LoopRubricAxis[]
+    : [];
+  if (!axes.length) return undefined;
+  const title = cleanOptional(input.title) ?? "Loop evaluator rubric";
+  return {
+    id: cleanOptional(input.id) ?? `rubric_${stableHash(`${title}:${axes.map((axis) => axis.id).join("|")}`)}`,
+    title,
+    scale: "0-1",
+    passThreshold: clamp(Number(input.passThreshold ?? 0.75), 0, 1),
+    axes: axes.slice(0, 8),
+    notes: cleanStringArray(input.notes),
+  };
+}
+
+function normalizeRubricAxis(value: unknown): LoopRubricAxis | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as Partial<LoopRubricAxis>;
+  const title = cleanOptional(input.title);
+  const description = cleanOptional(input.description);
+  if (!title || !description) return null;
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const id = cleanOptional(input.id) ?? (slug || `axis_${stableHash(title)}`);
+  return {
+    id,
+    title,
+    weight: clamp(Number(input.weight ?? 0), 0, 1),
+    description,
+    scoreFloor: typeof input.scoreFloor === "number" ? clamp(input.scoreFloor, 0, 1) : undefined,
   };
 }
 

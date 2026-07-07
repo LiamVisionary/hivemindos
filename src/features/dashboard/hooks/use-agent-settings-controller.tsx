@@ -34,7 +34,7 @@ function runtimeIntegrationTargetKey(agent?: AgentProfile | null) {
 }
 
 function localOpenAiProviderName(slug: string) {
-  if (slug === "lm-studio") return "Local OpenAI";
+  if (slug === "lm-studio") return "Local";
   if (slug === "ollama") return "Ollama";
   if (slug === "vllm") return "vLLM";
   if (slug === "llamacpp") return "llama.cpp";
@@ -171,7 +171,7 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
           totalModels: models.length,
           isCurrent: true,
           isUserDefined: true,
-          source: "Configured Local OpenAI provider",
+          source: "Configured Local provider",
         });
       }
     }

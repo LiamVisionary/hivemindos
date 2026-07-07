@@ -5,6 +5,7 @@ import { dirname, isAbsolute, join, relative, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type {
+  AgentAutonomyReviewMode,
   AgentNotification,
   AgentNotificationKind,
   AgentNotificationPriority,
@@ -18,6 +19,7 @@ const SETTINGS_FILE = "settings.json";
 const READ_STATE_FILE = "read-state.json";
 const RESOLUTION_STATE_FILE = "resolution-state.json";
 const VALID_RESOLUTION_STATUSES = new Set(["in-progress", "resolved"]);
+const VALID_AUTONOMY_REVIEW_MODES = new Set<AgentAutonomyReviewMode>(["autonomous", "review-high-risk", "review-all"]);
 const README_FILE = "README.md";
 const VALID_PRIORITIES = new Set<AgentNotificationPriority>(["low", "normal", "high", "urgent"]);
 const VALID_KINDS = new Set<AgentNotificationKind>(["message", "decision", "task", "alert", "system"]);
@@ -138,6 +140,7 @@ export async function updateAgentNotificationSettings(patch: Partial<AgentNotifi
     ...current,
     highPriorityMessagingEnabled: patch.highPriorityMessagingEnabled ?? current.highPriorityMessagingEnabled,
     messagingHandledBy: patch.messagingHandledBy?.trim() || current.messagingHandledBy,
+    autonomyReviewMode: normalizeAutonomyReviewMode(patch.autonomyReviewMode ?? current.autonomyReviewMode),
     updatedAt: new Date().toISOString(),
   };
   await writeJsonAtomic(storage.settingsFile, next);
@@ -294,7 +297,16 @@ export async function setAgentNotificationResolution(
 }
 
 async function readSettings(path: string): Promise<AgentNotificationSettings> {
-  return { ...defaultSettings(), ...(await readJson<Partial<AgentNotificationSettings>>(path, {})) };
+  const parsed = await readJson<Partial<AgentNotificationSettings>>(path, {});
+  const defaults = defaultSettings();
+  return {
+    ...defaults,
+    ...parsed,
+    highPriorityMessagingEnabled: parsed.highPriorityMessagingEnabled ?? defaults.highPriorityMessagingEnabled,
+    messagingHandledBy: parsed.messagingHandledBy?.trim() || defaults.messagingHandledBy,
+    autonomyReviewMode: normalizeAutonomyReviewMode(parsed.autonomyReviewMode),
+    updatedAt: parsed.updatedAt || defaults.updatedAt,
+  };
 }
 
 async function readJson<T>(path: string, fallback: T): Promise<T> {
@@ -328,6 +340,7 @@ function defaultSettings(): AgentNotificationSettings {
   return {
     highPriorityMessagingEnabled: false,
     messagingHandledBy: "Configured messaging agent",
+    autonomyReviewMode: "autonomous",
     updatedAt: new Date().toISOString(),
   };
 }
@@ -375,6 +388,8 @@ Kinds: \`message\`, \`decision\`, \`task\`, \`alert\`, \`system\`.
 
 High-priority messaging escalation is only a preference flag. Delivery to Telegram, iMessage, Discord, or other channels should be handled by a configured messaging agent, not the dashboard.
 
+Autonomy review mode defaults to \`autonomous\`, so agents can continue operating without mandatory approval. Operators may opt into \`review-high-risk\` or \`review-all\` from the dashboard Alerts view when they want more human review.
+
 Vault-relative folder: \`${folder}\`
 `;
 }
@@ -391,6 +406,11 @@ function normalizePriority(value?: string): AgentNotificationPriority {
 function normalizeKind(value?: string): AgentNotificationKind {
   const candidate = value?.trim().toLowerCase() as AgentNotificationKind | undefined;
   return candidate && VALID_KINDS.has(candidate) ? candidate : "message";
+}
+
+function normalizeAutonomyReviewMode(value?: string): AgentAutonomyReviewMode {
+  const candidate = value?.trim().toLowerCase() as AgentAutonomyReviewMode | undefined;
+  return candidate && VALID_AUTONOMY_REVIEW_MODES.has(candidate) ? candidate : "autonomous";
 }
 
 function parseDate(value?: string) {

@@ -127,13 +127,40 @@
 }
 
 .fundingModes {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 0;
   margin: 12px 0 14px;
+  padding: 4px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+}
+
+.fundingModes::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 2);
+  border: 1px solid var(--honey-line);
+  border-radius: 999px;
+  background: var(--honey-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--honey) 10%, transparent);
+  pointer-events: none;
+  transition: transform 0.18s ease;
+}
+
+.fundingModes[data-mode="wallet"]::before {
+  transform: translateX(100%);
 }
 
 .fundingMode {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -141,9 +168,9 @@
   min-height: 40px;
   padding: 9px 12px;
   color: var(--fg-2);
-  background: var(--panel-2);
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
   font: inherit;
   font-size: 12.5px;
   font-weight: 650;
@@ -158,13 +185,10 @@
 
 .fundingMode:hover {
   color: var(--fg);
-  border-color: var(--line-3);
 }
 
 .fundingMode[data-active] {
   color: var(--honey);
-  background: var(--honey-soft);
-  border-color: var(--honey-line);
 }
 
 .creditBox {
@@ -221,79 +245,300 @@
   line-height: 1.45;
 }
 
-.walletFundingBadge {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--live);
-  background: var(--live-soft);
-  border: 1px solid color-mix(in srgb, var(--live) 38%, transparent);
-  border-radius: 999px;
-}
-
-.walletFundingMain {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  padding: 8px 12px;
-}
-
-.walletFundingMain img {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--live) 28%, transparent);
-}
-
-.walletFundingMain span {
+.walletFundingLayout {
   display: grid;
-  gap: 1px;
+  gap: 12px;
   min-width: 0;
+  margin-top: 14px;
 }
 
-.walletFundingMain b {
-  color: var(--live);
-  font-size: 12.5px;
-  line-height: 1.2;
+.creditBalanceRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 2px 4px;
 }
 
-.walletFundingMain small {
-  color: color-mix(in srgb, var(--live) 76%, var(--fg-3));
-  font-size: 10.5px;
-  line-height: 1.2;
-}
-
-.walletSwitchButton {
+.creditBalanceIcon {
   display: grid;
   place-items: center;
-  width: 42px;
-  min-height: 100%;
-  flex: 0 0 auto;
-  color: var(--live);
-  background: color-mix(in srgb, var(--live) 10%, transparent);
-  border: 0;
-  border-left: 1px solid color-mix(in srgb, var(--live) 30%, transparent);
+  width: 28px;
+  height: 28px;
+  color: var(--honey);
+}
+
+.creditBalanceIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.creditBalanceRefresh {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--fg-3);
+  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 
-.walletSwitchButton:hover:not(:disabled) {
-  color: var(--fg);
-  background: color-mix(in srgb, var(--live) 18%, transparent);
+.creditBalanceRefresh:hover:not(:disabled) {
+  color: var(--honey);
+  background: var(--honey-soft);
+  border-color: var(--honey-line);
 }
 
-.walletSwitchButton:disabled {
+.creditBalanceRefresh:disabled {
   cursor: default;
   opacity: 0.55;
 }
 
-.walletSwitchButton svg {
-  width: 16px;
-  height: 16px;
+.creditBalanceRefresh svg {
+  width: 15px;
+  height: 15px;
+}
+
+.fundingDivider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.fundingDivider::before,
+.fundingDivider::after {
+  content: "";
+  min-width: 0;
+  height: 1px;
+  background: var(--line-2);
+}
+
+.fundingDivider span {
+  min-width: 0;
+  color: var(--fg-3);
+}
+
+.walletSourceCard {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  color: inherit;
+  text-align: left;
+  background: color-mix(in srgb, var(--panel) 94%, var(--fg) 2%);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 8%, transparent);
+  font: inherit;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.walletSourceCard:hover:not(:disabled) {
+  background: var(--panel-2);
+  border-color: var(--line-3);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 10%, transparent), 0 8px 18px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.walletSourceCard:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 56%, transparent);
+  outline-offset: 3px;
+}
+
+.walletSourceCard:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.walletSourceIcon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.walletSourceIcon img {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+
+.walletSourceMain {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.walletSourceMain strong {
+  color: var(--fg);
+  font-family: var(--f-display);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.walletSourceMain .fieldLabel {
+  color: var(--fg-3);
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.walletSourceMain span:last-child {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.walletSourceBalance {
+  display: grid;
+  gap: 3px;
+  min-width: 92px;
+  text-align: right;
+}
+
+.walletSourceBalance span {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.walletSourceBalance strong {
+  color: var(--fg);
+  font-family: var(--f-display);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.walletFundingHint {
+  min-width: 0;
+  margin: -2px 0 0;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.walletFundingHint[data-tone="warn"] {
+  color: var(--honey);
+}
+
+.paymentTokenRow {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.paymentTokenRow > span {
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.paymentTokenRow select {
+  min-width: 0;
+  width: 100%;
+  color: var(--fg);
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 8px 10px;
+}
+
+.paymentTokenRow select:disabled {
+  opacity: 0.62;
+}
+
+.paymentTokenRow small {
+  grid-column: 2;
+  min-width: 0;
+  color: var(--fg-4);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.fundingProgress {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--honey-soft) 48%, transparent);
+  border: 1px solid var(--honey-line);
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.fundingProgressDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--honey);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--honey) 30%, transparent);
+  animation: fundingPulse 1.25s ease-in-out infinite;
+}
+
+.fundingProgressBar {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--honey) 18%, transparent);
+  border-radius: 999px;
+}
+
+.fundingProgressBar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, var(--honey), transparent);
+  animation: fundingSlide 1.35s ease-in-out infinite;
 }
 
 .creditActions {
@@ -1004,7 +1249,8 @@
 }
 
 .fundBody .fundingModes,
-.fundBody .creditBox {
+.fundBody .creditBox,
+.fundBody .walletFundingLayout {
   box-sizing: border-box;
   min-width: 0;
   max-width: 100%;
@@ -1132,13 +1378,47 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes fundingPulse {
+  0%,
+  100% {
+    transform: scale(0.82);
+    opacity: 0.55;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--honey) 28%, transparent);
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+
+@keyframes fundingSlide {
+  from {
+    transform: translateX(-110%);
+  }
+
+  to {
+    transform: translateX(260%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spin {
     animation: none;
   }
 
+  .fundingProgressDot,
+  .fundingProgressBar::after {
+    animation: none;
+  }
+
   .fundModal {
     animation: none;
+  }
+
+  .fundingModes::before {
+    transition: none;
   }
 }
 
@@ -1156,6 +1436,24 @@
 
   .cardAmounts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .walletSourceCard {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .walletSourceBalance {
+    grid-column: 2;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .paymentTokenRow {
+    grid-template-columns: 1fr;
+  }
+
+  .paymentTokenRow small {
+    grid-column: 1;
   }
 
   .creditActions {

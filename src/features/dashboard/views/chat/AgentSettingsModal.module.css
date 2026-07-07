@@ -38,7 +38,7 @@
   z-index: 200;
   display: grid;
   place-items: center;
-  padding: 28px;
+  padding: 16px 28px;
   background: color-mix(in srgb, #05060a 62%, transparent);
   backdrop-filter: blur(6px);
   color: var(--fg);
@@ -325,7 +325,7 @@
 .root :global(.as-modal) {
   width: 100%;
   max-width: 1000px;
-  height: min(700px, calc(100vh - 56px));
+  height: min(760px, calc(100dvh - 32px));
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
@@ -376,7 +376,7 @@
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: color-mix(in srgb, var(--panel-2) 60%, transparent);
-  padding: 24px 16px 16px;
+  padding: 18px 16px 12px;
 }
 
 .root :global(.as-id) {
@@ -1355,11 +1355,11 @@
 
 @media (max-width: 760px) {
   .root {
-    padding: 12px;
+    padding: 8px 12px;
   }
 
   .root :global(.as-modal) {
-    height: calc(100vh - 24px);
+    height: calc(100dvh - 16px);
   }
 
   .root :global(.as-body) {
@@ -1370,7 +1370,7 @@
     grid-template-rows: auto auto;
     border-right: 0;
     border-bottom: 1px solid var(--line);
-    padding: 16px;
+    padding: 12px 16px 10px;
   }
 
   .root :global(.as-nav) {

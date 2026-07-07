@@ -4,16 +4,21 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Puzzle, Sparkles } from "lucide-react";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { extractHumanAsk } from "@/features/dashboard/kanban-result-format";
+import { TaskTemplateSelectModal, findTaskTemplate, taskTemplateSkillSlugs } from "@/components/task-modal";
+import type { TaskTemplateDefinition } from "@/components/task-modal";
 import { KanbanNeedsHumanPanel } from "./KanbanNeedsHumanPanel";
 import convoStyles from "@/app/kanban-conversation.module.css";
+import panelStyles from "./KanbanPanel.module.css";
 import type { WorkHistoryPayload } from "@/lib/types/work-history";
 import { KanbanTaskModal } from "./KanbanTaskModal";
 import { WorkSectionHeader } from "./WorkSectionHeader";
 
 const convoClass = createStyleClass(convoStyles);
+const panelClass = createStyleClass(panelStyles);
 
 const EMPTY_WORK_HISTORY: WorkHistoryPayload = { projects: [], entries: [] };
 const WORK_HISTORY_PAGE_SIZE = 10;
@@ -43,7 +48,7 @@ function compactWorkHistoryTimestamp(timestamp?: string) {
 }
 
 function KanbanPanelBase(props: any) {
-  const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, answerKanbanNeedsHuman, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, clearKanbanColumnTasks, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanClearingColumnId, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanNotice, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddStatus, recentDirectories, recentDirectoriesExpanded, recording, refreshKanbanOnce, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, saveKanbanNeedsHumanApiKey, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanError, setKanbanIncludeArchived, setKanbanLoading, setKanbanNotice, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setRecentDirectoriesExpanded, setSelectedKanbanTaskIds, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
+  const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, answerKanbanNeedsHuman, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, clearKanbanColumnTasks, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanClearingColumnId, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanNotice, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, openSkillAttachmentBrowser, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddSkills, quickAddStatus, quickAddTemplateIds, recentDirectories, recentDirectoriesExpanded, recording, refreshKanbanOnce, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, saveKanbanNeedsHumanApiKey, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanError, setKanbanIncludeArchived, setKanbanLoading, setKanbanNotice, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddSkills, setQuickAddStatus, setQuickAddTemplateIds, setRecentDirectoriesExpanded, setSelectedKanbanTaskIds, sharedSkillOptions, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
   // TEMP perf instrumentation (remove after profiler verification): a running
   // count that increments only when this memo()-wrapped panel actually
   // re-renders. A background poll that changes no kanban data should NOT
@@ -60,6 +65,7 @@ function KanbanPanelBase(props: any) {
   const [codeProjects, setCodeProjects] = useState<any[]>([]);
   const [selectedCodeProjectId, setSelectedCodeProjectId] = useState("");
   const [gitlawbStatus, setGitlawbStatus] = useState<any>(null);
+  const [quickAddTemplatePickerStatus, setQuickAddTemplatePickerStatus] = useState("");
   const workHistorySkipInitialFetchRef = useRef(Boolean(initialWorkHistory?.generatedAt));
   const workHistoryEntryCountRef = useRef(workHistory.entries.length);
   const kanbanFallbackRefreshKeyRef = useRef("");
@@ -71,6 +77,50 @@ function KanbanPanelBase(props: any) {
     () => workHistory.entries.filter((entry) => entry.status === "Uncommitted").length,
     [workHistory.entries],
   );
+  const skillNameBySlug = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const skill of sharedSkillOptions ?? []) map.set(skill.slug, skill.name || skill.slug);
+    return map;
+  }, [sharedSkillOptions]);
+  const applyQuickAddTemplate = (status: string, template: TaskTemplateDefinition) => {
+    setQuickAddTemplateIds((current: Record<string, string>) => ({ ...current, [status]: template.id }));
+    setQuickAddDrafts((current: Record<string, string>) => ({
+      ...current,
+      [status]: current[status]?.trim() ? current[status] : template.defaultTitle,
+    }));
+    const templateSkills = taskTemplateSkillSlugs(template);
+    if (templateSkills.length) {
+      setQuickAddSkills((current: Record<string, string[]>) => ({
+        ...current,
+        [status]: [...new Set([...(current[status] ?? []), ...templateSkills])],
+      }));
+    }
+    setQuickAddAttachmentMenuOpen(false);
+  };
+  const removeQuickAddSkill = (status: string, slug: string) => {
+    setQuickAddSkills((current: Record<string, string[]>) => ({
+      ...current,
+      [status]: (current[status] ?? []).filter((item) => item !== slug),
+    }));
+  };
+  const clearQuickAddTemplate = (status: string) => {
+    setQuickAddTemplateIds((current: Record<string, string>) => {
+      const next = { ...current };
+      delete next[status];
+      return next;
+    });
+  };
+  const openQuickAddSkillBrowser = (status: string, columnTitle: string) => {
+    setQuickAddAttachmentMenuOpen(false);
+    void openSkillAttachmentBrowser?.({
+      selectedSlugs: quickAddSkills?.[status] ?? [],
+      onChange: (slugs: string[]) => setQuickAddSkills((current: Record<string, string[]>) => ({ ...current, [status]: slugs })),
+      eyebrow: "Work Board",
+      title: `Attach skills to ${columnTitle}`,
+      description: "Choose any number of shared-brain skills to attach to this new task.",
+      statusLabel: "skills attached",
+    });
+  };
   const kanbanActiveFilterCount = [
     kanbanTenantFilter,
     kanbanAssigneeFilter,
@@ -557,7 +607,10 @@ function KanbanPanelBase(props: any) {
               </button>
               ) : null}
               <div ref={kanbanBoardScrollRef} className={kanbanClass("kanbanBoard")} aria-label="Multi-agent Kanban board" aria-busy={kanbanLoading || undefined}>
-              {projectScopedColumns.map((column) => (
+              {projectScopedColumns.map((column) => {
+                const selectedQuickAddSkills = quickAddSkills?.[column.id] ?? [];
+                const selectedQuickAddTemplate = findTaskTemplate(quickAddTemplateIds?.[column.id]);
+                return (
                 <section
                   className={`${kanbanClass("kanbanColumn", column.id)}${kanbanDragOverColumn === column.id ? ` ${convoClass("laneDropTarget")}` : ""}`}
                   key={column.id}
@@ -682,6 +735,11 @@ function KanbanPanelBase(props: any) {
                           onImageChange={(event) => handleQuickAddImageChange(column.id, event)}
                           onRemoveAttachment={(id) => removeQuickAddAttachment(column.id, id)}
                           onAttachDirectory={() => void attachQuickAddDirectory(column.id)}
+                          onAttachTemplate={() => {
+                            setQuickAddAttachmentMenuOpen(false);
+                            setQuickAddTemplatePickerStatus(column.id);
+                          }}
+                          onAttachSkill={() => openQuickAddSkillBrowser(column.id, column.title)}
                           directoryPickerDisabled={!quickAddMachineTarget(column.id)}
                           directoryPickerDisabledReason="Choose a specific machine before selecting a directory."
                           recentDirectories={recentDirectories}
@@ -693,14 +751,34 @@ function KanbanPanelBase(props: any) {
                           voiceBands={voiceBands}
                           voiceTranscript={voiceTranscript}
                           onToggleRecording={recording ? stopAudioRecording : () => void startAudioRecording(column.id)}
-                          canSend={Boolean((quickAddDrafts[column.id] ?? "").trim() || (quickAddAttachments[column.id] ?? []).length || (quickAddDirectories[column.id] ?? []).length)}
+                          canSend={Boolean((quickAddDrafts[column.id] ?? "").trim() || (quickAddAttachments[column.id] ?? []).length || (quickAddDirectories[column.id] ?? []).length || selectedQuickAddSkills.length || selectedQuickAddTemplate)}
                           onCancel={() => {
                             setQuickAddStatus("");
                             setQuickAddAttachmentError("");
                             setQuickAddAttachmentMenuOpen(false);
                             setQuickAddMachineMenuOpen((current) => ({ ...current, [column.id]: false }));
+                            setQuickAddSkills((current: Record<string, string[]>) => ({ ...current, [column.id]: [] }));
+                            clearQuickAddTemplate(column.id);
                           }}
                         />
+                        {selectedQuickAddTemplate || selectedQuickAddSkills.length ? (
+                          <div className={panelClass("quickAddChips")} aria-label="Task draft template and skills">
+                            {selectedQuickAddTemplate ? (
+                              <span className={panelClass("quickAddChip", "template")}>
+                                <Sparkles aria-hidden="true" />
+                                {selectedQuickAddTemplate.label}
+                                <button type="button" onClick={() => clearQuickAddTemplate(column.id)} aria-label={`Remove ${selectedQuickAddTemplate.label}`}>x</button>
+                              </span>
+                            ) : null}
+                            {selectedQuickAddSkills.map((slug) => (
+                              <span className={panelClass("quickAddChip", "skill")} key={slug}>
+                                <Puzzle aria-hidden="true" />
+                                {skillNameBySlug.get(slug) ?? slug}
+                                <button type="button" onClick={() => removeQuickAddSkill(column.id, slug)} aria-label={`Remove ${skillNameBySlug.get(slug) ?? slug}`}>x</button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </form>
                     ) : null}
                     {!kanbanShowingInitialLoading && !kanbanInitialLoading && column.tasks.map((task) => {
@@ -1122,7 +1200,8 @@ function KanbanPanelBase(props: any) {
                     ) : null}
                   </div>
                 </section>
-              ))}
+                );
+              })}
               </div>
               {kanbanBoardScrollState.canScrollRight ? (
               <button
@@ -1275,6 +1354,17 @@ function KanbanPanelBase(props: any) {
         </div>
       </section>
       ) : null}
+
+      <TaskTemplateSelectModal
+        open={Boolean(quickAddTemplatePickerStatus)}
+        selectedId={quickAddTemplateIds?.[quickAddTemplatePickerStatus] ?? null}
+        title="Attach template to task"
+        onClose={() => setQuickAddTemplatePickerStatus("")}
+        onSelect={(template) => {
+          if (!quickAddTemplatePickerStatus) return;
+          applyQuickAddTemplate(quickAddTemplatePickerStatus, template);
+        }}
+      />
 
       <KanbanTaskModal
         {...{

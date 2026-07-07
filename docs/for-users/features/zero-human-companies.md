@@ -23,6 +23,14 @@ Zero Human Companies are for repeatable work that should behave more like an ope
 
 The feature is local-first. It can run with local agents, user-configured runtimes, user-owned wallets, and the shared Obsidian vault. Managed cloud, official monetization, marketplace listing, hosted capacity, or paid-agent access must be verified by HivemindOS-controlled infrastructure or by a verifiable payment rail before it grants official value.
 
+## Imported Companies
+
+Existing projects can be imported as companies without being re-founded from scratch. The import flow starts from a repository folder, previews what HivemindOS can see, then creates or updates a company linked to that source project.
+
+The importer records the repository, Git remote, GitHub Actions workflows, scheduled workflow crons, Supabase `pg_cron` schedules, Render services, Vercel crons, cron-like files, and package scripts when those signals are present. The company cockpit then shows those systems in a **Systems** tab so operators can inspect the code and operating schedules that already keep the product running.
+
+Importing a legacy project does not automatically make historical or off-platform revenue subject to HivemindOS revenue share. Imported companies still show the Treasury revenue recorder, but fee collection remains tied to explicit revenue events recorded through the trusted revenue route or another verified settlement path.
+
 ## Cockpit
 
 The Zero Human Company cockpit is the operator surface for one company.
@@ -62,6 +70,7 @@ The launch path connects these systems:
 - Work Board task creation
 - agent dispatch and autonomous pickup
 - loop contracts and eval gates
+- planner/evaluator contract snapshots and evaluator rubrics
 - deliverables and run receipts
 - Shared Brain review queues for durable memory
 
@@ -122,6 +131,10 @@ The tab never pretends. If no mail provider is connected, it says so and points 
 Zero Human Companies use the generic HivemindOS loop contract as their private learning layer. Work Board is one place those loops are visible, but the loop contract itself is shared by chat-started work, Scheduler, Queen Bee flows, company dispatch, and Evo-compatible optimization. Each launched task can carry an optimizer loop with success criteria, evidence requirements, eval gates, experiment candidates, and Pareto frontier metadata.
 
 The default company loop is non-blocking at creation time. Agents can finish useful work while HivemindOS preserves the eval structure and evidence trail for later review.
+
+Each dispatched company task includes a written done contract: planner assertions, evaluator pushback, agreed done criteria, and expected artifacts. Product, design, content, and customer-facing work also carries a default evaluator rubric for design, originality, craft, and functionality, so subjective quality can be reviewed consistently across models and workers.
+
+When a company is linked to a code project, implementation-shaped work asks for an isolated worktree workspace. Research, planning, and other non-code work stays in the normal scratch workspace.
 
 That creates a model-independent company veteran layer made of:
 

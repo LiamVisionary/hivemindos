@@ -1,6 +1,7 @@
 // Zero Human Companies — derive a one-line, human-readable block reason for a
 // "Needs you" (board_review) issue from the underlying Work Board record, so the
 // cockpit/board can show WHY a company is waiting on a human without a click.
+import { extractActionNeeded } from "@/features/dashboard/kanban-result-format";
 import type { Issue } from "./types";
 
 const MAX = 160;
@@ -158,8 +159,12 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
     };
   }
 
-  // A genuine, distinct human ask — its own card, never merged.
-  const reason = firstMeaningfulLine(result) || lastSectionLine(body);
+  // A genuine, distinct human ask — its own card, never merged. Prefer the
+  // explicit `ACTION NEEDED:` ask (what's blocking + how to unblock) over the
+  // generic first line, so a real credential/decision blocker is visible on the
+  // card itself (live 2026-07-06: "Blocked before send…" hid the real ask).
+  const asked = extractActionNeeded(result);
+  const reason = (asked && truncate(asked)) || firstMeaningfulLine(result) || lastSectionLine(body);
   return {
     category: "needs-input",
     label: "Needs your input",
@@ -176,7 +181,15 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
 export function issueBlockReason(issue: Pick<Issue, "work">): string {
   const work = issue.work;
   if (!work) return "";
-  return classifyIssueReason(issue).reason || firstMeaningfulLine(work.result) || lastSectionLine(work.body);
+  // Prefer the agent's explicit `ACTION NEEDED:` ask — it says WHAT is blocking
+  // and HOW to unblock (e.g. "Add PORTFOLIO_OFFER_API_TOKEN to the shared env").
+  // A systemic delegation reason (offline/capacity) still wins, but a plain
+  // "Blocked before send…" first line must never mask a real, actionable ask
+  // (live 2026-07-06: the human couldn't tell a credential was the blocker).
+  const systemic = classifyIssueReason(issue).reason;
+  if (systemic) return systemic;
+  const asked = extractActionNeeded(work.result);
+  return (asked && truncate(asked)) || firstMeaningfulLine(work.result) || lastSectionLine(work.body);
 }
 
 export type IssueGroup = {

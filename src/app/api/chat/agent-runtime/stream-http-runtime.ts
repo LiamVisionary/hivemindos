@@ -152,9 +152,9 @@ export async function streamHttpRuntime(
   const hermesSlashCommand = profile.runtime === "hermes" && /^\/[^\s/]*(?:\s|$)/.test(inputCheck.text.trim());
   const runtimeMessages = hermesSlashCommand ? messages : prependHivemindSystemMessage(messages, promptEnvelope);
   const runtimeMessage = inputCheck.text;
-  // lm-studio models hosted on another fleet machine resolve automatically:
-  // the hosting machine's collector proxies its LM Studio, and the agent's
-  // hermes run gets that base URL for this turn only.
+  // Local models hosted on a fleet machine resolve automatically: the hosting
+  // collector proxies LM Studio and OpenAI-compatible server ports, and the
+  // agent's Hermes run gets that base URL for this turn only.
   const lmStudioFleetHost = profile.runtime === "hermes" && telemetry?.request
     ? await resolveLmStudioFleetBaseUrl(runtimeProfile, profile.gatewayUrl || "", telemetry.request.url).catch(() => null)
     : null;
@@ -162,7 +162,7 @@ export async function streamHttpRuntime(
     await appendRuntimeChatSessionEvent(
       runtimeSessionId,
       "Fleet model routing",
-      `${runtimeProfile.model} is hosted on ${lmStudioFleetHost.machineName}; routing this run there.`,
+      `${runtimeProfile.model} is hosted on ${lmStudioFleetHost.machineName}; routing this run to that local model server.`,
     ).catch(() => undefined);
   }
   const workspaceBefore = await readWorkspaceSnapshot(workingDirectory);

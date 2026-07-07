@@ -60,6 +60,10 @@ import {
   runQueenChatTurn,
   runQueenChatTurnStream,
 } from "@/lib/services/queen-bee/typed-chat-turn";
+import {
+  mintGeminiLiveToken,
+  normalizeGeminiLiveModel,
+} from "@/lib/services/phone/cloud-voice-transports";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,6 +85,7 @@ const TTS_TIMEOUT_MS = 30_000;
 const STREAM_SPEAK_TIMEOUT_MS = 90_000;
 const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
 const DEFAULT_REALTIME_MODEL = "gpt-realtime";
+const GEMINI_LIVE_RUNTIME = "gemini-live";
 
 // Voice modality = the one shared Queen brain + a spoken-style addendum.
 function queenRealtimeInstructionsForPersonality(personality?: string | null) {
@@ -135,6 +140,9 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "realtime-session") {
       return await mintRealtimeSession();
+    }
+    if (body.action === "gemini-live-session") {
+      return await mintQueenGeminiLiveSession();
     }
     if (body.action === "submit-task") {
       return await submitRealtimeTask(request, body);
@@ -292,7 +300,10 @@ export async function GET() {
       );
       return null;
     });
-    const brainLabel = !plan
+    const geminiLiveSelected = calls?.voiceRuntime === GEMINI_LIVE_RUNTIME;
+    const brainLabel = geminiLiveSelected
+      ? `Gemini Live · ${calls?.voiceId || "default"}`
+      : !plan
       ? null
       : plan.kind === "direct"
         ? `${plan.model} · ${
@@ -310,7 +321,15 @@ export async function GET() {
       voice: await readQueenBeeVoice(),
       voices: QUEEN_BEE_REALTIME_VOICES,
       callVoiceRuntime: calls?.voiceRuntime ?? null,
+      callVoiceProviderId: calls?.voiceProviderId ?? null,
+      callVoiceModelId: calls?.voiceModelId ?? null,
+      callVoiceId: calls?.voiceId ?? null,
       localTtsSelected,
+      voiceMode: geminiLiveSelected
+        ? "gemini-live"
+        : localTtsSelected || calls?.voiceRuntime === OPENAI_TTS_RUNTIME
+          ? "pipeline"
+          : "realtime",
       pipelineSelected:
         localTtsSelected || calls?.voiceRuntime === OPENAI_TTS_RUNTIME,
       brainLabel,
@@ -409,6 +428,54 @@ async function mintRealtimeSession() {
     clientSecret,
     model,
     voice,
+    instructions,
+    tools: QUEEN_REALTIME_TOOLS,
+  });
+}
+
+// Gemini Live sibling of `mintRealtimeSession`: when Calls settings select
+// Gemini/Puck, the overlay must use the Gemini Live token + bidi WebSocket path
+// instead of silently starting the OpenAI Realtime WebRTC path.
+async function mintQueenGeminiLiveSession() {
+  const calls = await readQueenBeeCallPreferences();
+  if (calls?.voiceRuntime !== GEMINI_LIVE_RUNTIME) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Queen Bee is not configured for Gemini Live.",
+      },
+      { status: 409 },
+    );
+  }
+  const model = normalizeGeminiLiveModel(calls.voiceModelId);
+  const voice = calls.voiceId?.trim() || undefined;
+  const defaults = await readQueenBeeBrainDefaults().catch(() => null);
+  const preferencePreamble = await queenVoicePreferencePreamble();
+  const instructions = [
+    queenRealtimeInstructionsForPersonality(defaults?.soulPrompt),
+    queenModelTransparencyNote(model, "Gemini Live (Queen Bee's voice brain)", {
+      relayTool: true,
+    }),
+    preferencePreamble,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const minted = await mintGeminiLiveToken({
+    model,
+    voice,
+    instructions,
+    keyEnv: calls.voiceKeyEnv,
+  });
+  await appendVoiceTurnTelemetry({
+    ok: true,
+    stage: "gemini-live-session",
+    engine: "gemini-live",
+    model: minted.model,
+    voice: minted.voice ?? voice ?? null,
+  });
+  return NextResponse.json({
+    ok: true,
+    ...minted,
     instructions,
     tools: QUEEN_REALTIME_TOOLS,
   });

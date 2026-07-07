@@ -588,3 +588,536 @@
     display: none;
   }
 }
+
+/* ---- Section toggle (Phone calls / Voice) ---------------------------- */
+.sectionTabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.sectionTab,
+.segTab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px 15px;
+  background: transparent;
+  color: var(--fg-2);
+  font-family: var(--f-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sectionTab[data-on],
+.segTab[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+/* ---- Voice section header ------------------------------------------- */
+.voiceHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voiceChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--honey-line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--honey-soft);
+  color: var(--honey);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+/* ---- Runtime + provider pickers ------------------------------------- */
+.pickerGroup {
+  display: grid;
+  gap: 7px;
+}
+
+.pickerLabel {
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+.pickerHint {
+  color: var(--fg-4);
+  font-size: 11px;
+}
+
+.segmented {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.providerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.providerCard {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 62px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  cursor: pointer;
+  padding: 11px 12px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.providerCard[data-selected] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.providerCardHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.providerCardHead strong {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.providerCard[data-selected] .providerCardHead strong {
+  color: var(--honey);
+}
+
+.providerCardSub {
+  color: var(--fg-4);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* ---- Provider auth block (OAuth / API key) -------------------------- */
+.authBlock {
+  display: grid;
+  gap: 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 13px;
+}
+
+.authHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.authTabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.authTab {
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--fg-3);
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.authTab[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+.authLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.authLine[data-tone="live"] {
+  color: var(--live);
+}
+
+.authSignin {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.authSignin p {
+  margin: 0;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.authSignin a {
+  color: var(--honey);
+}
+
+.voiceRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voiceRow select {
+  flex: 1;
+  min-width: 0;
+}
+
+.authKeyChoice {
+  display: grid;
+  gap: 9px;
+}
+
+.authKeyInput {
+  display: grid;
+  gap: 7px;
+}
+
+.authKeyInput > span {
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+.authKeyRow {
+  display: flex;
+  gap: 8px;
+}
+
+.authKeyRow input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Local TTS compact host list ------------------------------------ */
+.localTtsHosts {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 11px 12px;
+}
+
+.localTtsHostsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.localTtsHostRow {
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 9px 11px;
+}
+
+.localTtsHostRow[data-selected] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.localTtsHostRow[data-off] {
+  opacity: 0.62;
+}
+
+.localTtsHostPick {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.localTtsHostPick:disabled {
+  cursor: default;
+}
+
+.localTtsHostIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--fg-4);
+}
+
+.localTtsHostRow[data-selected] .localTtsHostIcon {
+  color: var(--honey);
+}
+
+.localTtsHostMeta {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.localTtsHostMeta strong {
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.localTtsHostMeta small {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+}
+
+.localTtsCheck {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--honey);
+  color: #1a1305;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.localTtsHostControls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+  align-items: end;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.localTtsHostState {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.localTtsHostState span {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.localTtsLaunchRows {
+  display: grid;
+  gap: 8px;
+}
+
+.localTtsLaunchRows .localTtsHostRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* ---- Advanced brain disclosure -------------------------------------- */
+.advanced {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.advancedToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.advancedChevron {
+  transition: transform 0.18s;
+  transform: rotate(-90deg);
+}
+
+.advancedChevron[data-open] {
+  transform: rotate(0deg);
+}
+
+.advancedSummary {
+  margin-left: auto;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+}
+
+/* ---- Daily-briefing time popover ------------------------------------ */
+.timePickerWrap {
+  position: relative;
+  width: max-content;
+}
+
+.time {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.time:hover {
+  color: var(--honey);
+}
+
+.timeScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.timePop {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--honey-line);
+  border-radius: 10px;
+  background: var(--panel-hi);
+  box-shadow: 0 20px 46px -18px rgba(0, 0, 0, 0.72);
+}
+
+.timeSteppers {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.timeStepCol {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.timeStepCol button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 26px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s;
+}
+
+.timeStepCol button:hover {
+  border-color: var(--honey-line);
+  color: var(--honey);
+}
+
+.timeStepCol span {
+  min-width: 50px;
+  text-align: center;
+  color: var(--fg);
+  font-family: var(--f-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.timeColon {
+  color: var(--fg-3);
+  font-family: var(--f-display);
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.timeAmpm {
+  display: grid;
+  gap: 5px;
+  margin-left: 5px;
+}
+
+.ampmBtn {
+  min-width: 46px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.ampmBtn[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}

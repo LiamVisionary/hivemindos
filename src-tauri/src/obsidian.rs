@@ -8,6 +8,7 @@ use serde_json::Map;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const DEFAULT_VAULT: &str = "~/Documents/Obsidian/hivemindos-vault";
@@ -39,6 +40,170 @@ fn default_vault_path(vault_path: Option<String>) -> PathBuf {
         .filter(|value| !value.is_empty())
         .unwrap_or(DEFAULT_VAULT);
     expand_home(raw)
+}
+
+fn safe_vault_folder(folder: Option<String>) -> Result<PathBuf, String> {
+    let raw = folder
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("Intake");
+    if Path::new(raw).is_absolute() {
+        return Err("Note folder must be a relative path inside the shared vault.".to_string());
+    }
+    let parts = raw
+        .split(['/', '\\'])
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if parts.iter().any(|part| *part == "..") {
+        return Err("Note folder must be a relative path inside the shared vault.".to_string());
+    }
+    let mut path = PathBuf::new();
+    for part in parts {
+        path.push(part);
+    }
+    Ok(path)
+}
+
+fn path_inside(root: &Path, path: &Path) -> bool {
+    path.strip_prefix(root).is_ok()
+}
+
+fn vault_relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn note_title(content: &str) -> String {
+    let title = content
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| line.trim_start_matches('#').trim())
+        .filter(|line| !line.is_empty())
+        .unwrap_or("Quick note")
+        .chars()
+        .take(80)
+        .collect::<String>();
+    if title.is_empty() {
+        "Quick note".to_string()
+    } else {
+        title
+    }
+}
+
+fn filename_slug(title: &str) -> String {
+    let mut slug = String::new();
+    let mut last_dash = false;
+    for ch in title.to_lowercase().chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch);
+            last_dash = false;
+        } else if !last_dash && !slug.is_empty() {
+            slug.push('-');
+            last_dash = true;
+        }
+        if slug.len() >= 72 {
+            break;
+        }
+    }
+    let slug = slug.trim_matches('-').to_string();
+    if slug.is_empty() {
+        "note".to_string()
+    } else {
+        slug
+    }
+}
+
+fn yaml_scalar(value: &str) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
+}
+
+fn capture_note_impl(
+    vault_path: Option<String>,
+    inbox_folder: Option<String>,
+    content: String,
+) -> Result<Value, String> {
+    let content = content.replace("\r\n", "\n").replace('\r', "\n").trim().to_string();
+    if content.is_empty() {
+        return Err("Add note text after /note.".to_string());
+    }
+    if content.chars().count() > 100_000 {
+        return Err("Note is too large to save from chat.".to_string());
+    }
+
+    let root = default_vault_path(vault_path);
+    if !root.is_dir() {
+        return Err("Vault path is not a directory.".to_string());
+    }
+
+    let now = Utc::now();
+    let created_at = now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let date_folder = now.format("%Y-%m-%d").to_string();
+    let time_stamp = now.format("%Y-%m-%d-%H%M%S").to_string();
+    let title = note_title(&content);
+    let dir = root.join(safe_vault_folder(inbox_folder)?).join(date_folder);
+    if !path_inside(&root, &dir) {
+        return Err("Note path escaped the selected vault.".to_string());
+    }
+    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+
+    let markdown = format!(
+        "---\ntype: {}\ncreated: {}\nsource: {}\ntags: [{}]\n---\n\n# {}\n\n{}\n",
+        yaml_scalar("note"),
+        yaml_scalar(&created_at),
+        yaml_scalar("dashboard-slash-command"),
+        yaml_scalar("hivemindos-note"),
+        title,
+        content,
+    );
+    let base_name = format!("{time_stamp}-{}", filename_slug(&title));
+
+    for index in 0..50 {
+        let suffix = if index == 0 {
+            String::new()
+        } else {
+            format!("-{}", index + 1)
+        };
+        let file = dir.join(format!("{base_name}{suffix}.md"));
+        if !path_inside(&root, &file) {
+            return Err("Note path escaped the selected vault.".to_string());
+        }
+        match fs::OpenOptions::new().write(true).create_new(true).open(&file) {
+            Ok(mut handle) => {
+                handle
+                    .write_all(markdown.as_bytes())
+                    .map_err(|error| error.to_string())?;
+                return Ok(json!({
+                    "vaultPath": root.to_string_lossy(),
+                    "notePath": vault_relative_path(&root, &file),
+                    "title": title,
+                    "createdAt": created_at,
+                }));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+
+    Err("Could not find an unused filename for the note.".to_string())
+}
+
+#[tauri::command]
+pub fn obsidian_capture_note(
+    vault_path: Option<String>,
+    inbox_folder: Option<String>,
+    content: String,
+) -> Value {
+    match capture_note_impl(vault_path, inbox_folder, content) {
+        Ok(note) => json!({ "ok": true, "note": note }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
 }
 
 // Exact-named (case-sensitive) child folder, mirroring exactRootFolder.

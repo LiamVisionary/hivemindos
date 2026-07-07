@@ -189,13 +189,29 @@ try {
 
   // ── worker context: customer-facing URLs must be listed as deliverables ────
   {
-    const { companyWorkerContext } = await import("../src/lib/services/companies-orchestration.ts");
+    const { companyTaskWorkspace, companyWorkerContext } = await import("../src/lib/services/companies-orchestration.ts");
     const ctx = companyWorkerContext(
       { id: "x", name: "Co", agentIds: [], frozen: false, createdAt: "", createdAtMs: 0, updatedAt: "", apexGoal: { title: "Goal" } },
       "",
     );
     assert.match(ctx, /CUSTOMER-FACING/, "worker contract requires customer-facing URLs under Deliverables:");
     assert.match(ctx, /`Deliverables:` heading/, "worker contract names the exact heading the extractor reads");
+    const linkedCompany = { id: "x", name: "Co", agentIds: [], frozen: false, createdAt: "", createdAtMs: 0, updatedAt: "", projectId: "proj-1" };
+    assert.equal(
+      companyTaskWorkspace(linkedCompany, { title: "Build website checkout", body: "Implement the landing page", skills: ["engineer"] }),
+      "worktree",
+      "project-backed implementation tasks request worktree isolation",
+    );
+    assert.equal(
+      companyTaskWorkspace(linkedCompany, { title: "Research lead niches", body: "Find buyer segments", skills: ["research"] }),
+      "scratch",
+      "non-code company work stays scratch",
+    );
+    assert.equal(
+      companyTaskWorkspace({ ...linkedCompany, projectId: undefined }, { title: "Build website checkout", body: "Implement the landing page", skills: ["engineer"] }),
+      "scratch",
+      "companies without a linked project do not claim worktree isolation",
+    );
   }
 
   // ── planner prompt: lifetime completed-work inventory (anti-remint) ────────

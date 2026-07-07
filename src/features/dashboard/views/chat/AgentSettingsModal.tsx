@@ -6,25 +6,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
-  BrainCircuit,
   Check,
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Download,
-  FolderOpen,
   Minus,
-  Pencil,
-  PlugZap,
   Plus,
   Search,
-  Settings2,
-  ShieldCheck,
   Sparkles,
   Upload,
 } from "lucide-react";
 import { AgentBrowserModal } from "./AgentBrowserModal";
 import { AgentSettingsCallsPanel } from "./AgentSettingsCallsPanel";
+import {
+  AgentSettingsAeonConnectionPanel,
+  AgentSettingsMemoryPanel,
+  AgentSettingsSecurityPanel,
+} from "./AgentSettingsConnectionPanels";
 import { AgentSettingsModalFrame } from "./AgentSettingsModalFrame";
 import { AgentSettingsQueenPersonalityPanel } from "./AgentSettingsQueenPersonalityPanel";
 // AgentSettingsToolsPanel owns the Agent mailbox "Create mailbox" action.
@@ -35,7 +33,7 @@ import { GuidedProviderSetup } from "./GuidedProviderSetup";
 import { GuidedHivemindosModelsSetup } from "./GuidedHivemindosModelsSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
 import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
-import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
+import { LmStudioModelManager } from "./LmStudioModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
 import { ResearchMethodSettingsPanel } from "./ResearchMethodSettingsPanel";
@@ -60,7 +58,6 @@ import {
   PanelHead,
   TextArea,
   TextInput,
-  Toggle,
   hasUsePodSetup,
   hasVeniceSetup,
   iconMark,
@@ -233,7 +230,7 @@ export function AgentSettingsModal(props: any) {
     hivemindosModelsConfig,
     agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model,
   );
-  // The HivemindOS Models panel IS the model selector for this provider — it
+  // The HivemindOS panel IS the model selector for this provider — it
   // always renders inline while the provider is selected (no separate setup
   // screen; funding lives in the panel's own modal).
   const shouldShowHivemindosModelsSetup = hivemindosModelsSelected;
@@ -250,6 +247,7 @@ export function AgentSettingsModal(props: any) {
   const bankrCreditStatus = runtimeIntegrationStatus?.providerStatus?.bankr;
   const bankrInitialCredits = bankrCreditStatus ? { ok: true, balanceUsd: bankrCreditStatus.creditsBalanceUsd, balanceLabel: bankrCreditStatus.balanceLabel ?? (bankrCreditStatus.creditsBalanceUsd === null ? "Unknown" : undefined), error: bankrCreditStatus.error } : undefined;
   const lmStudioStatus = runtimeIntegrationStatus?.providerStatus?.lmStudio;
+  const lmStudioActiveDownloadCount = (lmStudioStatus?.downloads ?? []).filter((download) => download.state === "queued" || download.state === "downloading").length;
   // Queen voice brain degradation: voice turns are silently bypassing this
   // agent's configured model and falling back to the OpenAI fallback model.
   const queenVoiceBrainAlert = runtimeIntegrationStatus?.queenVoiceBrain?.degraded
@@ -269,9 +267,8 @@ export function AgentSettingsModal(props: any) {
   const lmStudioSelectedModelLoaded = Boolean(selectedLmStudioInventoryModel?.loaded || selectedRuntimeModelOption?.subtitle === "Loaded" || selectedRuntimeModelOption?.badge === "Loaded");
   const lmStudioSelectedModelLoading = Boolean(lmStudioSelected && selectedRuntimeModelId && lmStudioPendingLoadModelKeys.includes(selectedRuntimeModelId) && !lmStudioSelectedModelLoaded);
   const lmStudioSelectedModelNeedsLoad = Boolean(lmStudioSelected && selectedRuntimeModelId && selectedRuntimeModelId !== "adaptive" && (
-    selectedLmStudioInventoryModel ? !selectedLmStudioInventoryModel.loaded && !selectedLmStudioInventoryModel.remote : selectedRuntimeModelOption?.subtitle === "Downloaded" || selectedRuntimeModelOption?.subtitle === "Available"
+    selectedLmStudioInventoryModel ? !selectedLmStudioInventoryModel.loaded : selectedRuntimeModelOption?.subtitle === "Downloaded" || selectedRuntimeModelOption?.subtitle === "Available"
   ));
-  const selectedLmStudioModelLabel = selectedLmStudioInventoryModel?.displayName || selectedRuntimeModelOption?.name || selectedRuntimeModelId;
   const modelSelectableRuntime = Boolean(runtimeCapabilities(agentSettingsIntegrationTarget ?? roleModalAgent)?.modelSelection);
   const runtimeModelPanelAvailable = runtimeSettings.modelSource === "runtime" && (
     runtimeModelProviders.length > 0
@@ -473,6 +470,14 @@ export function AgentSettingsModal(props: any) {
   }, [agentSettingsIntegrationTarget, lmStudioPendingLoadModelKeys, lmStudioSelected, modalOpen, refreshRuntimeIntegrations, runtimeIntegrationBusy]);
 
   useEffect(() => {
+    if (!modalOpen || !lmStudioSelected || !lmStudioActiveDownloadCount || !agentSettingsIntegrationTarget) return;
+    const refresh = () => { if (runtimeIntegrationBusy !== "status") void refreshRuntimeIntegrations(agentSettingsIntegrationTarget); };
+    const initial = window.setTimeout(refresh, 900);
+    const interval = window.setInterval(refresh, 2500);
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); };
+  }, [agentSettingsIntegrationTarget, lmStudioActiveDownloadCount, lmStudioSelected, modalOpen, refreshRuntimeIntegrations, runtimeIntegrationBusy]);
+
+  useEffect(() => {
     if (!lmStudioPendingPrimaryAction || !selectedRuntimeModelId || !lmStudioSelectedModelLoaded || lmStudioSelectedModelLoading) return;
     const action = lmStudioPendingPrimaryAction;
     const continueAfterLoad = window.setTimeout(() => {
@@ -570,12 +575,10 @@ export function AgentSettingsModal(props: any) {
 
   async function loadLmStudioModel(modelKey: string, modelType?: string, pendingPrimaryAction: "save" | "create" | null = null) {
     if (!agentSettingsIntegrationTarget || !modelKey) return false;
-    const contextLength = runtimeModelDraft.contextLength.trim();
     setLmStudioPendingLoadModelKeys((current) => current.includes(modelKey) ? current : [...current, modelKey]);
     setLmStudioPendingPrimaryAction(pendingPrimaryAction);
     const result = await runRuntimeIntegrationAction("load-model", {
       model: modelKey,
-      contextLength: modelType === "embedding" || !contextLength ? undefined : Number(contextLength),
     }, {
       ...agentSettingsIntegrationTarget,
       provider: selectedProviderSlug,
@@ -586,6 +589,23 @@ export function AgentSettingsModal(props: any) {
       setLmStudioPendingPrimaryAction((current) => current === pendingPrimaryAction ? null : current);
     }
     return result?.ok !== false;
+  }
+
+  function selectLocalModel(modelKey: string, model?: { source?: string; baseUrl?: string; chatPath?: string; statusPath?: string }) {
+    const baseUrl = model?.source === "openai-server" ? model.baseUrl?.trim().replace(/\/+$/, "") : "";
+    if (activeRuntime === HIVEMIND_OS_RUNTIME && baseUrl) {
+      const patch = {
+        provider: selectedProviderSlug,
+        model: modelKey,
+        gatewayUrl: baseUrl,
+        chatPath: model?.chatPath || "/v1/chat/completions",
+        statusPath: model?.statusPath || "/v1/models",
+      };
+      if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+      else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+      return;
+    }
+    updateAgentRuntimeModel(selectedProviderSlug, modelKey);
   }
 
   async function runPrimarySettingsAction() {
@@ -1036,7 +1056,6 @@ export function AgentSettingsModal(props: any) {
               existingWallets={completedUsePodWallets}
               fleetClass={fleetClass}
               requireCurrentSetup={usePodRequiresCurrentSetup}
-              onCancel={() => setRuntimeModelSetupMode(null)}
               onComplete={applyUsePodSetupProfile}
             />
           </div>
@@ -1075,19 +1094,23 @@ export function AgentSettingsModal(props: any) {
           />
         ) : !adaptiveProviderSelected ? (
           <div>
-            <GroupLabel>Model</GroupLabel>
-            {bankrLlmSelected && bankrLowCredits && selectedRuntimeModels.length ? (
-              <BankrLowCreditSetup diagnostic={bankrSetupDetail} variant="compact" initialCredits={bankrInitialCredits} onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)} />
+            {!lmStudioSelected ? (
+              <>
+                <GroupLabel>Model</GroupLabel>
+                {bankrLlmSelected && bankrLowCredits && selectedRuntimeModels.length ? (
+                  <BankrLowCreditSetup diagnostic={bankrSetupDetail} variant="compact" initialCredits={bankrInitialCredits} onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)} />
+                ) : null}
+                <ModelPillSelector
+                  models={runtimeModelOptions}
+                  selectedModelId={selectedRuntimeModelId}
+                  addModelDisabled={Boolean(runtimeIntegrationBusy)}
+                  canAddModel={runtimeCanAddCustomModel}
+                  emptyLabel={runtimeModelProviders.length ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
+                  onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && selectedProviderSlug === "openrouter" ? "openrouter" : selectedProviderSlug, modelId)}
+                  onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
+                />
+              </>
             ) : null}
-            <ModelPillSelector
-              models={runtimeModelOptions}
-              selectedModelId={selectedRuntimeModelId}
-              addModelDisabled={Boolean(runtimeIntegrationBusy)}
-              canAddModel={runtimeCanAddCustomModel}
-              emptyLabel={lmStudioDiscoveryPending ? "Loading LM Studio models..." : runtimeModelProviders.length ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
-              onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && selectedProviderSlug === "openrouter" ? "openrouter" : selectedProviderSlug, modelId)}
-              onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
-            />
             {queenVoiceBrainAlert ? (
               <div className="as-info">
                 <span className="ic"><AlertTriangle size={15} aria-hidden="true" /></span>
@@ -1099,16 +1122,6 @@ export function AgentSettingsModal(props: any) {
                 </p>
               </div>
             ) : null}
-            {lmStudioSelectedModelNeedsLoad ? (
-              <div className="as-info">
-                <span className="ic"><Download size={15} aria-hidden="true" /></span>
-                <p><strong>{selectedLmStudioModelLabel}</strong> {lmStudioSelectedModelLoading ? "is loading on the target machine." : "is downloaded. It will load before saving."}</p>
-                {lmStudioSelectedModelLoading ? <LmStudioLoadProgress label="Loading in LM Studio" /> : null}
-                <Btn sm disabled={runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading} onClick={() => selectedRuntimeModelId && void loadLmStudioModel(selectedRuntimeModelId, selectedLmStudioInventoryModel?.type)}>
-                  {runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading ? "Loading..." : "Load now"}
-                </Btn>
-              </div>
-            ) : null}
             {lmStudioSelected ? (
               <LmStudioModelManager
                 agent={agentSettingsIntegrationTarget}
@@ -1117,11 +1130,11 @@ export function AgentSettingsModal(props: any) {
                 lmStudioStatus={lmStudioStatus}
                 modelOptions={selectedRuntimeModels}
                 onLoadModel={loadLmStudioModel}
+                onSelectModel={selectLocalModel}
                 pendingLoadModelKeys={lmStudioPendingLoadModelKeys}
                 refreshRuntimeIntegrations={refreshRuntimeIntegrations}
                 runRuntimeIntegrationAction={runRuntimeIntegrationAction}
-                runtimeModelDraft={runtimeModelDraft}
-                setRuntimeModelDraft={setRuntimeModelDraft}
+                selectedModelId={selectedRuntimeModelId}
               />
             ) : null}
           </div>
@@ -1327,64 +1340,13 @@ export function AgentSettingsModal(props: any) {
 
   function renderAeonConnection() {
     return (
-      <div className="as-panel-section">
-        <div>
-          <GroupLabel>Connection mode</GroupLabel>
-          <div className="as-mode-seg" role="tablist" aria-label="Connection mode">
-            {[
-              { id: "local", label: "Local repo", sub: "Use files on this Mac", Icon: FolderOpen },
-              { id: "github", label: "GitHub", sub: "Use repo and branch", Icon: Upload },
-              { id: "a2a", label: "A2A", sub: "Use gateway URL", Icon: PlugZap },
-            ].map((mode) => {
-              const active = aeonSettings.mode === mode.id;
-              return (
-                <button key={mode.id} type="button" data-active={active || undefined} onClick={() => updateAeonSettings({ aeonMode: mode.id })}>
-                  <mode.Icon size={15} aria-hidden="true" />
-                  <span>{mode.label}</span>
-                  <small>{mode.sub}</small>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {aeonSettings.mode === "github" ? (
-          <div className="as-block accent">
-            <div className="as-github-connect">
-              <Upload size={17} aria-hidden="true" />
-              <div>
-                <strong>Connect with GitHub OAuth</strong>
-                <p>Saves GH_GLOBAL with repo, workflow, hook, org, and email access.</p>
-              </div>
-              <Btn variant="primary" sm disabled={aeonOauthConnecting} onClick={openAeonGithubOauth}>{aeonOauthConnecting ? "Opening..." : "Connect GitHub"}</Btn>
-            </div>
-            <details className="fb-disc" open={Boolean(aeonSettings.repo)}>
-              <summary>Advanced repo values</summary>
-              <div className="as-2col">
-                <Field label="GitHub repo"><TextInput className="fb-mono" value={aeonSettings.repo} onChange={(event) => updateAeonSettings({ aeonRepo: event.target.value })} placeholder="owner/repo" /></Field>
-                <Field label="Branch"><TextInput className="fb-mono" value={aeonSettings.branch} onChange={(event) => updateAeonSettings({ aeonBranch: event.target.value })} placeholder="main" /></Field>
-              </div>
-            </details>
-          </div>
-        ) : null}
-        {aeonSettings.mode === "a2a" ? (
-          <details className="fb-disc" open>
-            <summary>Advanced gateway URL</summary>
-            <Field label="A2A gateway URL"><TextInput className="fb-mono" value={aeonSettings.a2aUrl} onChange={(event) => updateAeonSettings({ a2aUrl: event.target.value, gatewayUrl: event.target.value })} placeholder="http://127.0.0.1:41241" /></Field>
-          </details>
-        ) : null}
-        {aeonSettings.mode === "local" ? (
-          <div className="as-block">
-            <div className="as-folder">
-              <span className="tile"><FolderOpen size={19} aria-hidden="true" /></span>
-              <div className="grow">
-                <span className="fb-eyebrow">AEON repo folder</span>
-                <code className="path">{aeonSettings.path || "Choose a folder"}</code>
-              </div>
-              <Btn sm onClick={() => void browseAgentRuntimeFolder?.()}><FolderOpen size={14} aria-hidden="true" />Browse</Btn>
-            </div>
-          </div>
-        ) : null}
-      </div>
+      <AgentSettingsAeonConnectionPanel
+        aeonOauthConnecting={aeonOauthConnecting}
+        aeonSettings={aeonSettings}
+        browseAgentRuntimeFolder={browseAgentRuntimeFolder}
+        openAeonGithubOauth={openAeonGithubOauth}
+        updateAeonSettings={updateAeonSettings}
+      />
     );
   }
 
@@ -1442,87 +1404,28 @@ export function AgentSettingsModal(props: any) {
   }
 
   function renderMemory() {
-    const shared = agentCreateMachine ? agentCreateDraft.useSharedVault : roleModalAgent?.useSharedVault !== false;
     return (
-      <div className="as-panel">
-        <PanelHead eyebrow="Memory" title="Brain and workspace" sub="Where this agent remembers, and the local folder it reads and writes." />
-        <div className="as-mem-card" data-on={shared || undefined}>
-          <div className="as-mem-head">
-            <span className="tile"><BrainCircuit size={19} aria-hidden="true" /></span>
-            <div className="grow">
-              <div className="t">Shared Obsidian brain</div>
-              <div className="s">{shared ? "One vault backs this agent's memory, tasks, and context." : "Off - this agent keeps its own isolated memory."}</div>
-            </div>
-            <Toggle on={shared} onChange={() => {
-              if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, useSharedVault: !shared }));
-              else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { useSharedVault: !shared });
-            }} />
-          </div>
-          {shared ? (
-            <div className="as-mem-detail">
-              <div className="as-mem-path">
-                <FolderOpen size={15} aria-hidden="true" />
-                <code>{sharedVault?.enabled ? sharedVault.vaultPath || "Auto-detected vault" : "Shared brain is off in Vault settings"}</code>
-              </div>
-              <div className="as-mem-chips">
-                {["Memory", "Kanban", "Notifications", "Context"].map((label) => <span key={label} className="as-mem-chip"><Check size={11} aria-hidden="true" />{label}</span>)}
-              </div>
-            </div>
-          ) : null}
-        </div>
-        {!agentCreateMachine && roleModalAgent ? (
-          <div className="as-folder">
-            <span className="tile"><FolderOpen size={19} aria-hidden="true" /></span>
-            <div className="grow">
-              <span className="fb-eyebrow">{isAutopilotSettings ? "AEON repo folder" : "Runtime folder"}</span>
-              <code className="path">{runtimeFolderValue.trim() || "Managed by runtime"}</code>
-              <div className="desc">{isAutopilotSettings ? "The local AEON repo the dashboard reads and mirrors into Obsidian." : "Used as this agent's local memory and workspace folder."}</div>
-            </div>
-            <div className="acts">
-              <button type="button" className="fb-iconbtn" disabled={agentRuntimeFolderBrowsing} onClick={() => void browseAgentRuntimeFolder()} aria-label="Browse runtime folder"><FolderOpen size={15} aria-hidden="true" /></button>
-              <button type="button" className="fb-iconbtn" onClick={() => setAgentRuntimeFolderEditing((current) => !current)} aria-label="Edit runtime folder path"><Pencil size={15} aria-hidden="true" /></button>
-            </div>
-          </div>
-        ) : null}
-        {agentRuntimeFolderEditing && roleModalAgent ? (
-          <details className="fb-disc" open>
-            <summary>Advanced folder path</summary>
-            <div className="as-row">
-              <TextInput
-                className="fb-mono"
-                value={runtimeFolderValue}
-                onChange={(event) => {
-                  updateAgentProfile(roleModalAgent.id, isAutopilotSettings ? { aeonLocalPath: event.target.value, localDataDir: event.target.value } : { localDataDir: event.target.value });
-                  setAgentRuntimeFolderStatus("");
-                }}
-                placeholder={isAutopilotSettings ? "~/.aeon or ~/my-aeon-repo" : "Leave blank to use the runtime default"}
-              />
-              <Btn variant="primary" sm onClick={() => setAgentRuntimeFolderEditing(false)}><Check size={13} aria-hidden="true" />Done</Btn>
-            </div>
-          </details>
-        ) : null}
-        {agentRuntimeFolderStatus ? <p className="as-status">{agentRuntimeFolderStatus}</p> : null}
-      </div>
+      <AgentSettingsMemoryPanel
+        agentCreateDraft={agentCreateDraft}
+        agentCreateMachine={agentCreateMachine}
+        agentRuntimeFolderBrowsing={agentRuntimeFolderBrowsing}
+        agentRuntimeFolderEditing={agentRuntimeFolderEditing}
+        agentRuntimeFolderStatus={agentRuntimeFolderStatus}
+        browseAgentRuntimeFolder={browseAgentRuntimeFolder}
+        isAutopilotSettings={isAutopilotSettings}
+        roleModalAgent={roleModalAgent}
+        runtimeFolderValue={runtimeFolderValue}
+        setAgentCreateDraft={setAgentCreateDraft}
+        setAgentRuntimeFolderEditing={setAgentRuntimeFolderEditing}
+        setAgentRuntimeFolderStatus={setAgentRuntimeFolderStatus}
+        sharedVault={sharedVault}
+        updateAgentProfile={updateAgentProfile}
+      />
     );
   }
 
   function renderSecurity() {
-    return (
-      <div className="as-panel">
-        <PanelHead eyebrow="Security" title="Guards and redaction" sub="Always-on protections that run locally before anything reaches a runtime." />
-        {[
-          ["Secret redaction", "Sensitive env values stay masked in runtime-facing prompts.", ShieldCheck],
-          ["Local-first paths", "Machine and directory access keeps collector boundaries intact.", FolderOpen],
-          ["Scoped tools", "Runtime actions appear only for capabilities the current adapter exposes.", Settings2],
-        ].map(([title, body, SecurityIcon]) => (
-          <article key={title} className="as-sec">
-            <span className="tile"><SecurityIcon size={19} aria-hidden="true" /></span>
-            <div><h5>{title}</h5><p>{body}</p></div>
-            <Badge tone="live"><Check size={11} aria-hidden="true" />Active</Badge>
-          </article>
-        ))}
-      </div>
-    );
+    return <AgentSettingsSecurityPanel />;
   }
 
   const panelContent = activePanel === "role"
@@ -1539,10 +1442,10 @@ export function AgentSettingsModal(props: any) {
 
   const primaryActionBusy = runtimeIntegrationBusy === "create-agent" || runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading;
   const primaryActionLabel = (runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading) && lmStudioSelectedModelNeedsLoad
-    ? "Loading..."
+    ? "Loading model"
     : agentCreateMachine
       ? runtimeIntegrationBusy === "create-agent"
-        ? "Creating..."
+        ? "Creating agent"
         : lmStudioSelectedModelNeedsLoad
           ? "Load & Add Agent"
           : runtimeSettingsFeature(agentCreateDraft.runtime).createActionLabel || "Add agent"

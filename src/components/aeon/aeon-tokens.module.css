@@ -252,6 +252,7 @@
 @keyframes aeonBar { 0% { transform: scaleY(.35); } 50% { transform: scaleY(1); } 100% { transform: scaleY(.35); } }
 @keyframes aeonSheen { 0% { background-position: -160% 0; } 100% { background-position: 260% 0; } }
 @keyframes aeonRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes aeonSpin { to { transform: rotate(360deg); } }
 .rise { animation: aeonRise .42s cubic-bezier(.16,.84,.44,1) both; }
 
 :global([data-aeon-motion="off"]) .pulse,

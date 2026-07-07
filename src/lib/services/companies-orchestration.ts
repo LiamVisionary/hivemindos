@@ -12,11 +12,12 @@ import {
   startCompanyRun,
 } from "@/lib/services/company-runs";
 import { dedupeDrafts } from "@/lib/services/company-task-dedup";
-import type { KanbanLoopSpec } from "@/lib/types/kanban";
+import type { KanbanLoopSpec, KanbanTask } from "@/lib/types/kanban";
 import { buildOperatingUnitLearningLoop } from "@/lib/services/loops";
 import type { FlowSpec } from "@/lib/types/agent-flow";
 import { flowFromSequence, getFlowTemplate } from "@/lib/services/queen-bee/flow-templates";
 import { startFlowRun } from "@/lib/services/queen-bee/flow-runner";
+import { activeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 
 /**
  * Company orchestration bridge: turn a company's apex goal into a per-role work
@@ -162,6 +163,17 @@ export function companyWorkerContext(company: Company, memoryDigest: string): st
     lines.push("", "Pricing proposals already awaiting the human's decision (do NOT re-propose these; keep selling at current catalog prices meanwhile):");
     for (const proposal of pendingProposals) {
       lines.push(`- ${proposal.productName}: $${proposal.currentAmountUsd.toLocaleString("en-US")} → $${proposal.proposedAmountUsd.toLocaleString("en-US")}${proposal.why ? ` (${proposal.why})` : ""}`);
+    }
+  }
+  const approvalPolicies = activeCompanyApprovalPolicies(company);
+  if (approvalPolicies.length) {
+    lines.push("", "Human approval policies - mandatory before acting:");
+    for (const policy of approvalPolicies) {
+      if (policy.mode === "never") {
+        lines.push(`- Never proceed with ${policy.subject}. If a task appears to require it, stop and end your result with ACTION NEEDED: asking the human to change the policy or choose another path.`);
+      } else {
+        lines.push(`- Before ${policy.subject}, ask the human first: park the work in Needs You by ending your result with ACTION NEEDED:, include the concrete preview/draft/link/options they must approve, and wait for the human's answer before proceeding.`);
+      }
     }
   }
   const directives = company.directives ?? [];
@@ -358,6 +370,14 @@ function buildCompanyLearningLoop(company: Company, draft: QueenBeePrdTaskDraft,
   });
 }
 
+export function companyTaskWorkspace(company: Company, draft: Pick<QueenBeePrdTaskDraft, "title" | "body" | "skills">): KanbanTask["workspace"] {
+  if (!company.projectId) return "scratch";
+  const text = [draft.title, draft.body, ...(draft.skills ?? [])].filter(Boolean).join(" ");
+  return /api|app|backend|build|checkout|code|deploy|devops|engineer|frontend|implementation|landing|lint|repo|site|test|typecheck|ui|worker|website/i.test(text)
+    ? "worktree"
+    : "scratch";
+}
+
 export async function dispatchCompanyGoal(
   company: Company,
   fleetSnapshot: QueenBeeFleetMachine[],
@@ -471,6 +491,7 @@ export async function dispatchCompanyGoal(
         fleetSnapshot: scoped,
         skills: draft.skills,
         loop: buildCompanyLearningLoop(company, draft, runId),
+        workspace: companyTaskWorkspace(company, draft),
         // The company's domain repo: routes code work toward machines with the
         // checkout and gives the task the project's GitLawb proof badge.
         projectId: company.projectId,

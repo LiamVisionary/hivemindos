@@ -206,7 +206,7 @@ async function mapAgentToSkillSpectorEnv(
     const key = (keyEnvName ? await loadSharedEnvValue(keyEnvName) : undefined) || agent.token;
     env.SKILLSPECTOR_PROVIDER = "openai";
     env.OPENAI_BASE_URL = baseUrl;
-    // Local OpenAI gateways (lm-studio) accept any non-empty key.
+    // Local gateways (lm-studio) accept any non-empty key.
     env.OPENAI_API_KEY = key || (keyEnvName ? "" : "local");
     if (!model && MODEL_PROVIDER_GATEWAYS[provider]?.defaultModel) {
       env.SKILLSPECTOR_MODEL = MODEL_PROVIDER_GATEWAYS[provider]!.defaultModel;

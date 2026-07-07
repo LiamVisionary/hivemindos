@@ -330,7 +330,7 @@ export function CommsPanel({ colony: c, spec, theme = "dark" }: { colony: Colony
           <div style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", marginBottom: 12 }}>Also referenced on the board</div>
           <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
             {commsDeliverables.map((x) => (
-              <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="card" />
+              <DeliverableCard key={x.key} item={x.classified} machineName={x.machineName} timestampMs={x.timestampMs} theme={theme} companyId={c.id} initiallyRejected={rejectedRefs.has(x.classified.title)} layout="card" />
             ))}
           </div>
         </div>

@@ -71,6 +71,8 @@ export type DexSwapInput = {
   slippageBps?: number;
   confirmation?: string;
   approvalToken?: string;
+  /** True when the caller already completed a concrete server-side user approval for this exact swap. */
+  approvalThresholdSatisfied?: boolean;
 };
 
 export type DexSwapQuote = {
@@ -110,7 +112,13 @@ function slippageFor(input: DexSwapInput) {
 }
 
 /** Governance chokepoint shared by both chains (kill switch, budgets, approval). */
-async function swapGovernance(agentId: string, valueUsd: number, target: string, approvalToken?: string): Promise<{ companyId?: string }> {
+async function swapGovernance(
+  agentId: string,
+  valueUsd: number,
+  target: string,
+  approvalToken?: string,
+  approvalThresholdSatisfied?: boolean,
+): Promise<{ companyId?: string }> {
   const governance = await resolveSpendGovernance(agentId);
   if (governance && (await shouldEvaluateSpend(governance.wallet, MAX_SWAP_USD))) {
     const decision = await evaluateSpend({
@@ -121,6 +129,7 @@ async function swapGovernance(agentId: string, valueUsd: number, target: string,
       amountUsd: valueUsd,
       target,
       approvalToken,
+      approvalThresholdSatisfied,
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
     return { companyId: decision.companyId };
@@ -206,7 +215,7 @@ async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
   if (!input.secret) throw new Error("No local wallet key is available to sign the swap.");
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareBaseLeg(input);
   const label = `dex:${sell.symbol}->${buy.symbol}`;
-  const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken);
+  const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied);
   await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
   const quote = await zeroExFetch(`/swap/permit2/quote?chainId=${BASE_CHAIN_ID}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}&taker=${input.fromAddress}`);
@@ -312,7 +321,7 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
   if (!input.secret) throw new Error("No local Solana wallet key is available to sign the swap.");
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareSolanaLeg(input);
   const label = `dex:${sell.symbol}->${buy.symbol}`;
-  const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken);
+  const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied);
   await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
   const quote = await jupiterQuote(sell.mint, buy.mint, sellAtomic.toString(), slippageBps);

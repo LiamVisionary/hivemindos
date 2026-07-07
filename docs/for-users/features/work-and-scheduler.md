@@ -48,6 +48,7 @@ What the Work board can do:
 - Optionally attach a Hivemind project to a task with `projectId`.
 - Preserve sanitized GitLawb proof records on cards through optional `proofs`.
 - Attach closed/open/optimizer loop contracts with success criteria, budgets, pre/post eval gates, and receipts.
+- Preserve planner/evaluator contract snapshots with agreed done criteria, evaluator pushback, expected artifacts, and optional evaluator rubrics.
 - Fail loop-gated tasks closed to Needs You when required eval gates do not have passing receipts.
 - Record optimizer loop experiments with parent lineage, hypotheses, scores, gate receipts, selected agents, and outcomes.
 - Rank loop frontier candidates with Evo-style strategies such as `argmax`, `top_k`, seeded `epsilon_greedy`, `softmax`, and `pareto_per_task`.
@@ -93,7 +94,7 @@ The `queen_bee` MCP tool exposes the same coordinator path for non-dashboard age
 
 ### Loop Contracts And Eval Gates
 
-Loop contracts are a generic HivemindOS primitive. Work Board tasks can carry one, but the same contract can be started from chat, Scheduler, Queen Bee flows, company dispatch, or Evo-backed optimization. The shared `LoopSpec` records the mode (`closed`, `open`, or `optimizer`), goal, success criteria, retry/runtime budget, handoff rules, required evidence, and named eval gates. Work Board stores it on the task as `loop` for backward compatibility.
+Loop contracts are a generic HivemindOS primitive. Work Board tasks can carry one, but the same contract can be started from chat, Scheduler, Queen Bee flows, company dispatch, or Evo-backed optimization. The shared `LoopSpec` records the mode (`closed`, `open`, or `optimizer`), goal, negotiated done contract, evaluator rubric, success criteria, retry/runtime budget, handoff rules, required evidence, and named eval gates. Work Board stores it on the task as `loop` for backward compatibility.
 
 Eval gates follow the Evo-style split between `pre` gates and `post` gates. A `pre` gate is intended for checks that can fail early before spend or external work. A `post` gate is intended for checks that need the worker result, benchmark output, artifact, or human review. Required gates must be satisfied by passing `loopReceipts` before `/api/kanban` will complete the task; missing gate receipts move the card to Needs You and leave a `loop.eval-blocked` event instead of silently marking work done.
 
@@ -105,7 +106,7 @@ Optimizer loops add five Evo-derived surfaces on top of the same task record:
 - Benchmark discovery: `loop.benchmark` records the target, command, metric direction, score floor, resource profile, instrumentation choice, and discovery notes.
 - Observability: `loop.observation` summarizes best score, running-best experiment ids, frontier candidates, pending gates, experiment totals, and anti-pattern count for dashboard cards and agents.
 
-The generic `/api/loops` facade lists the machine-readable pattern registry, reusable templates, and verifier definitions, builds loop contracts from a natural goal, and can create a normal task with the generated loop attached. It can also audit the current board's loop-readiness level and export `LOOP.md`, `STATE.md`, `loop-budget.md`, `loop-run-log.md`, and `patterns/registry.yaml` snapshots for humans or raw agents. The `hive-loop` CLI exposes the same audit and export path outside the dashboard. It does not store a second loop record. Work Board-specific loop updates still flow through `/api/kanban` actions:
+The generic `/api/loops` facade lists the machine-readable pattern registry, reusable templates, and verifier definitions, builds loop contracts from a natural goal, and can create a normal task with the generated loop attached. It can also audit the current board's loop-readiness level and export `LOOP.md`, `STATE.md`, `contract.md`, `loop-budget.md`, `loop-run-log.md`, and `patterns/registry.yaml` snapshots for humans or raw agents. The `hive-loop` CLI exposes the same audit and export path outside the dashboard. It does not store a second loop record. Work Board-specific loop updates still flow through `/api/kanban` actions:
 
 - `loop-discover`: attach or update benchmark discovery, gates, success criteria, and frontier strategy.
 - `loop-record`: append/update one experiment and optional anti-pattern records, then refresh the observation summary.
@@ -116,7 +117,7 @@ Built-in patterns include code-fix, app-build harness, research, content, daily 
 
 For the full company cockpit and launch flow, see [Zero Human Companies](zero-human-companies.html).
 
-Zero-human companies use the same generic loop contract as their private learning layer. When a company launches its apex goal, HivemindOS decomposes the goal into Work Board tasks and attaches an operating-unit learning loop to each dispatched task.
+Zero-human companies use the same generic loop contract as their private learning layer. When a company launches its apex goal, HivemindOS decomposes the goal into Work Board tasks and attaches an operating-unit learning loop to each dispatched task. Each company task carries a planner/evaluator contract snapshot; customer-facing product, design, content, and site work also carries a four-axis evaluator rubric for design, originality, craft, and functionality.
 
 The default company loop is non-blocking at creation time: agents can finish useful work, while eval gates, evidence requirements, experiment candidates, and Pareto frontier metadata are preserved for later review. This gives the company a model-independent "company veteran" layer made of outcomes, artifacts, workflows, receipts, avoided failure modes, and private eval structure.
 

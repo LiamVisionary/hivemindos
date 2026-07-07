@@ -140,8 +140,13 @@ function queenBrainRequestHeaders(brain: QueenTypedChatBrain): Record<string, st
  *  from the first tool-call marker onward is machine markup, never prose —
  *  cut it, then sweep stray template specials out of what remains. Callers
  *  fall back to previously-shown text / "Done." when nothing survives. */
+/** Cheap gate: does this content contain a leaked tool-call marker at all? */
+function contentHasLeakMarker(content: string): boolean {
+  return content.includes("<|") || /<tool[_\s-]?call/i.test(content);
+}
+
 function stripLeakedToolCallMarkup(content: string): string {
-  if (!content.includes("<|") && !/<tool[_\s-]?call/i.test(content)) return content;
+  if (!contentHasLeakMarker(content)) return content;
   const marker = content.search(/<\|?tool[_\s-]?call/i);
   const kept = marker >= 0 ? content.slice(0, marker) : content;
   return kept
@@ -231,8 +236,12 @@ function queenChatRequestBody(
       ...(options?.noTools
         ? [{
             role: "system",
+            // Neutral wording so it reads correctly BOTH when the tool budget
+            // was spent (summarize findings) AND on a bare greeting where
+            // nothing was done yet (just reply). "summarizing what you did"
+            // made greetings fabricate work.
             content:
-              "Tool calling is now disabled for this reply. Answer the user in plain language, summarizing what you already did or found. Do not emit tool-call syntax.",
+              "Tool calling is disabled for this reply. Answer the user directly in plain language, using only what you already know from this conversation. Do not emit any tool-call syntax.",
           }]
         : []),
     ],
@@ -443,11 +452,28 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
           const { done: sseDone, chunks } = feed(decoder.decode(value, { stream: true }));
           for (const chunk of chunks) {
             const delta = applyOpenAiChatChunk(state, chunk);
-            if (delta) controller.enqueue(encoder.encode(line({ delta })));
+            // Stop forwarding live deltas the moment leaked tool-call markup
+            // appears in the accumulated content — the clean prose before it is
+            // already on screen, and the scrubbed final frame (below) replaces
+            // it. Without this, a streaming brain that leaks would flash raw
+            // <|tool_call|> tokens in the bubble mid-stream. (Scout uses the
+            // buffered/blocking path, but catalog/OpenAI lanes stream.)
+            if (delta && !contentHasLeakMarker(state.content)) {
+              controller.enqueue(encoder.encode(line({ delta })));
+            }
           }
           if (sseDone) break;
         }
         const finalized = finalizeQueenChatStream(state);
+        // The streaming finalize returns RAW state.content — mirror the
+        // blocking path's scrub so a leaked marker never reaches the client.
+        const scrubbedContent = stripLeakedToolCallMarkup(
+          typeof finalized.content === "string" ? finalized.content : "",
+        );
+        finalized.content = scrubbedContent;
+        if (finalized.assistant && typeof finalized.assistant === "object") {
+          finalized.assistant.content = scrubbedContent || null;
+        }
         recordQueenChatTelemetry({
           action: "chat-turn-stream",
           ok: true,

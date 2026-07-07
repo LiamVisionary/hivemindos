@@ -46,6 +46,10 @@ try {
     assert.equal(created.task.loop.mode, spec.mode);
     assert(created.task.loop.evalGates.length > 0, `${spec.title} should have eval gates`);
     assert(created.task.loop.budget?.maxAttempts, `${spec.title} should have an attempt budget`);
+    assert(created.task.loop.contract?.evaluatorPushback?.length > 0, `${spec.title} should carry a planner/evaluator contract`);
+    if (spec.templateId === "app-build-harness") {
+      assert(created.task.loop.evaluationRubric?.axes.some((axis) => axis.id === "design"), "app-build loops should carry the product/design rubric");
+    }
 
     const patched = await kanbanPatch(created.task.id, {
       source: `queen-bee:test:${spec.templateId}`,
@@ -161,7 +165,9 @@ try {
   assert.equal(readiness.readiness.level, "L3", "realistic loop task board should audit as L3 after receipts");
   assert.equal(readiness.readiness.totals.loopTasks, 3);
   assert(readiness.readiness.totals.receipts >= 6, "readiness should count loop receipts");
+  assert(readiness.readiness.totals.contractLoopTasks >= 3, "readiness should count written loop contracts");
   assert(readiness.artifacts.loopMd.includes("Realistic Loop Task Fixture"));
+  assert(readiness.artifacts.contractMd.includes("Evaluator Pushback"));
   assert(readiness.artifacts.registryYaml.includes("app-build-harness"));
 
   console.log("realistic loop Kanban task tests passed");
@@ -172,7 +178,7 @@ try {
 function realisticLoopTasks() {
   return [
     {
-      templateId: "code-fix",
+      templateId: "app-build-harness",
       mode: "closed",
       title: "Fix flaky auth refresh retry",
       goal: "Repair the flaky auth refresh retry path until lint, typecheck, and the focused auth test are clean.",

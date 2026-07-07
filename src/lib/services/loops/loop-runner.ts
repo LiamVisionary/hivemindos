@@ -1,4 +1,4 @@
-import type { LoopEvalGate, LoopReceipt, LoopSpec } from "@/lib/types/loops";
+import type { LoopContractSnapshot, LoopEvaluationRubric, LoopEvalGate, LoopReceipt, LoopSpec } from "@/lib/types/loops";
 // Reserved/mock/non-routable URL detection is shared with the deliverable UI and
 // the kanban extractor via ONE pure module (single source of truth). This module
 // is the canonical (strictest) behavior; re-exported below so loops/index.ts keeps
@@ -46,6 +46,8 @@ export type LoopGateJudge = (input: {
   output: string;
   goal: string;
   successCriteria: string[];
+  contract?: LoopContractSnapshot;
+  evaluationRubric?: LoopEvaluationRubric;
 }) => Promise<LoopJudgeVerdict>;
 
 export type LoopGateCommandResult = {
@@ -179,7 +181,7 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
 
     if (gate.kind === "agent") {
       if (input.judge) {
-        const verdict = await input.judge({ gate, output, goal, successCriteria }).catch((error) => ({
+        const verdict = await input.judge({ gate, output, goal, successCriteria, contract: input.loop?.contract, evaluationRubric: input.loop?.evaluationRubric }).catch((error) => ({
           accepted: false,
           summary: error instanceof Error ? error.message : String(error),
         }) as LoopJudgeVerdict);
@@ -276,9 +278,39 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
 export function loopContractForPrompt(loop?: LoopSpec): string {
   if (!loop) return "";
   const gates = (loop.evalGates ?? []).filter((gate) => gate.kind !== "human");
-  if (!gates.length && !(loop.evidenceRequired?.length)) return "";
+  if (!gates.length && !(loop.evidenceRequired?.length) && !loop.contract && !loop.evaluationRubric) return "";
   const lines: string[] = [];
-  lines.push("This task is governed by a loop contract. To COMPLETE it (not just describe it), you must satisfy these eval gates:");
+  lines.push("This task is governed by a loop contract. To COMPLETE it (not just describe it), satisfy the negotiated done contract and provide evidence.");
+  if (loop.contract) {
+    lines.push("", `Negotiated contract: ${loop.contract.title}`);
+    if (loop.contract.plannerAssertions.length) {
+      lines.push("Planner assertions:");
+      for (const item of loop.contract.plannerAssertions) lines.push(`- ${item}`);
+    }
+    if (loop.contract.evaluatorPushback.length) {
+      lines.push("Evaluator pushback:");
+      for (const item of loop.contract.evaluatorPushback) lines.push(`- ${item}`);
+    }
+    if (loop.contract.agreedDone.length) {
+      lines.push("Agreed done means:");
+      for (const item of loop.contract.agreedDone) lines.push(`- ${item}`);
+    }
+    if (loop.contract.artifacts.length) {
+      lines.push("Expected artifacts:");
+      for (const item of loop.contract.artifacts) lines.push(`- ${item}`);
+    }
+  }
+  if (loop.evaluationRubric) {
+    lines.push("", `Evaluator rubric: ${loop.evaluationRubric.title} (scale ${loop.evaluationRubric.scale}, pass >= ${loop.evaluationRubric.passThreshold})`);
+    for (const axis of loop.evaluationRubric.axes) {
+      lines.push(`- ${axis.title} (${Math.round(axis.weight * 100)}%${axis.scoreFloor !== undefined ? `, floor ${axis.scoreFloor}` : ""}): ${axis.description}`);
+    }
+    if (loop.evaluationRubric.notes?.length) {
+      lines.push("Rubric notes:");
+      for (const note of loop.evaluationRubric.notes) lines.push(`- ${note}`);
+    }
+  }
+  if (gates.length) lines.push("", "Eval gates:");
   for (const gate of gates) {
     lines.push(`- [${gate.id}] ${gate.title}${gate.required ? " (required)" : " (optional)"} — ${gateEvidenceHint(gate)}`);
   }

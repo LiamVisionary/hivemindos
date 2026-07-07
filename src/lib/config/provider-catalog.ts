@@ -20,7 +20,7 @@ export type ProviderCatalogEntry = {
   iconPath?: string;
   iconMode?: "image" | "mask";
   fallback: string;
-  /** Local OpenAI-compatible servers need no key. */
+  /** OpenAI-compatible local servers need no key. */
   keyless?: boolean;
   /** Routing-only providers with no single API key (e.g. Hive Fusion). */
   virtual?: boolean;

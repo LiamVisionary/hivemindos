@@ -137,9 +137,11 @@ try {
   }
 
   const modalSource = readFileSync("src/features/dashboard/views/chat/AgentSettingsModal.tsx", "utf8");
+  const toolsPanelSource = readFileSync("src/features/dashboard/views/chat/AgentSettingsToolsPanel.tsx", "utf8");
   assert.match(modalSource, /\/api\/agents\/mailbox/);
-  assert.match(modalSource, /Create mailbox/);
-  assert.match(modalSource, /Agent mailbox/);
+  assert.match(toolsPanelSource, /Create mailbox/);
+  assert.match(toolsPanelSource, /Agent mailbox/);
+  assert.doesNotMatch(toolsPanelSource, /Ready to create/);
   assert.doesNotMatch(modalSource, /MCP_EMAIL|IMAP|SMTP|PASSWORD|HOST/, "agent settings mailbox UI should not expose raw mail-server setup");
 
   console.log("Agent mailbox provisioning UX checks passed.");

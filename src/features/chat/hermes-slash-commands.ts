@@ -87,3 +87,28 @@ export const CHAT_SLASH_COMMANDS: HermesSlashCommand[] = [
   ...DASHBOARD_SLASH_COMMANDS,
   ...HERMES_SLASH_COMMANDS,
 ];
+
+export function filterChatSlashCommands(
+  commands: readonly HermesSlashCommand[],
+  query: string,
+): readonly HermesSlashCommand[] {
+  if (!commands.length) return [];
+  const cleanQuery = query.trim().toLowerCase();
+  if (!cleanQuery) return commands;
+  const directMatches = commands.filter((command) => (
+    command.name.toLowerCase().startsWith(cleanQuery)
+    || command.aliases?.some((alias) => alias.toLowerCase().startsWith(cleanQuery))
+  ));
+  if (directMatches.length) return directMatches;
+  const fuzzyMatches = commands.filter((command) => {
+    const haystack = [
+      command.name,
+      command.description,
+      command.category,
+      command.argsHint ?? "",
+      ...(command.aliases ?? []),
+    ].join(" ").toLowerCase();
+    return haystack.includes(cleanQuery);
+  });
+  return fuzzyMatches.length ? fuzzyMatches : commands;
+}

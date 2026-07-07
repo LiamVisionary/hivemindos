@@ -1,6 +1,7 @@
 import type { LoopCapabilityCapital } from "@/lib/types/loops";
 import type { AnalyticsProviderKey, CompanyAnalyticsConfig } from "@/lib/services/company-analytics/types";
 import type { KanbanTaskAttachment } from "@/lib/types/kanban";
+import type { CompanyImportedOperations } from "@/lib/types/company-import";
 
 /**
  * A Company groups agents into an accountable business unit: a shared charter, a
@@ -145,6 +146,25 @@ export interface CompanyPricingProposal {
   createdAt: string;
 }
 
+/** Human-governed company action policy: off, ask first, or never allow. */
+export type CompanyApprovalPolicyMode = "off" | "ask" | "never";
+
+export type CompanyApprovalPolicySource = "default" | "learning" | "manual";
+
+export interface CompanyApprovalPolicy {
+  /** Stable policy key. Built-ins use fixed ids; learned subjects use a subject slug. */
+  id: string;
+  /** Gerund/action phrase, e.g. "sending customer-facing emails". */
+  subject: string;
+  mode: CompanyApprovalPolicyMode;
+  /** Where this row came from. Explicit saves may preserve default/learning provenance. */
+  source?: CompanyApprovalPolicySource;
+  /** For policies inferred from a standing directive, the source directive id. */
+  directiveId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /**
  * A standing directive / knowledge entry injected into a company by a human
  * (Learning tab) or captured from rejecting a deliverable. Directives are
@@ -239,10 +259,14 @@ export interface Company {
   products?: CompanyProductCatalog;
   /** Pending crew-raised price-change requests (resolved ones are removed; outcomes live in company memory). */
   pricingProposals?: CompanyPricingProposal[];
+  /** Human approval policy for company actions such as sends, publishing, and learned permission subjects. */
+  approvalPolicies?: CompanyApprovalPolicy[];
   /** Which analytics provider this company's numbers come from. Unset = not configured (guided setup shown). */
   analyticsProvider?: AnalyticsProviderKey;
   /** Per-company analytics link (project/site id + optional self-host). Credentials live in shared hive env, not here. */
   analyticsConfig?: CompanyAnalyticsConfig;
+  /** Imported legacy project wiring: repo, GitHub Actions, cron jobs, hosting services, and scripts discovered from source. */
+  importedOperations?: CompanyImportedOperations;
   /**
    * Standing directives injected by a human (Learning tab) or captured from a
    * rejected deliverable. Appended to every dispatched task's context so the

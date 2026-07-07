@@ -40,6 +40,7 @@ import {
 import { runChatImageGeneration } from "@/lib/services/chat/image-generation";
 import { cacheGeneratedImageForPhone } from "@/lib/services/chat/generated-media-cache";
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
+import { registerPushDevice } from "@/lib/services/push/mobile-push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -1368,6 +1369,15 @@ export async function POST(request: NextRequest) {
         callMode,
       );
       return NextResponse.json(result, { status: result.ok ? 200 : 502 });
+    }
+
+    // Register this phone's Expo push token so the hub can alert it about new
+    // spend approvals (device-token gated by the /api proxy, like every action).
+    if (body.action === "register-push") {
+      const token = typeof body.token === "string" ? body.token : "";
+      const platform = typeof body.platform === "string" ? body.platform : "ios";
+      await registerPushDevice(token, platform);
+      return NextResponse.json({ ok: true });
     }
 
     // Phone-hosted mobile agents: the phone app heartbeats/claims queued chat

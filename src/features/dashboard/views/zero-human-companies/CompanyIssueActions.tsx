@@ -3,6 +3,7 @@
 import React from "react";
 import { AlertTriangle, Archive, Check, CheckCircle2, ClipboardList, ExternalLink, MessageSquare, PenLine } from "lucide-react";
 import { dashboardUrlForTarget } from "@/features/dashboard/dashboard-navigation";
+import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import { getIssueIdentity } from "./issue-identity";
@@ -62,6 +63,7 @@ export function CompanyIssueActionButtons({
   const queenChat = useQueenChat();
   const [changeMode, setChangeMode] = React.useState(false);
   const [notes, setNotes] = React.useState("");
+  const [openingPreview, setOpeningPreview] = React.useState(false);
   const taskId = issue.work?.taskId;
   // A reviewable customer-facing preview (e.g. a `/preview/<lead>` mockup) parked
   // for the operator's sign-off gets its own Approve / Request changes pair, which
@@ -131,10 +133,11 @@ export function CompanyIssueActionButtons({
             target="_blank"
             rel="noreferrer"
             className="zhc-linkchip"
-            onClick={(event) => { stop(event); if (previewUrl && isExternalHttpUrl(previewUrl)) { event.preventDefault(); void openExternalUrl(previewUrl); } }}
+            onClick={(event) => { stop(event); if (previewUrl && isExternalHttpUrl(previewUrl)) { event.preventDefault(); setOpeningPreview(true); void openExternalUrl(previewUrl).finally(() => setOpeningPreview(false)); } }}
+            aria-busy={openingPreview}
             style={{ ...buttonBase, textDecoration: "none" }}
           >
-            <ExternalLink size={14} aria-hidden /> Open preview
+            {openingPreview ? <Spinner size={14} /> : <ExternalLink size={14} aria-hidden />} {openingPreview ? "Opening…" : "Open preview"}
           </a>
         ) : null}
         <button type="button" className="zhc-btn-ghost" onClick={discussIssue} style={buttonBase}>
@@ -273,6 +276,7 @@ export function CompanyIssueSummaryCard({
   const reason = issueBlockReason(issue);
   const status = issue.work?.status || issue.status;
   const age = issueAgeLabel(issue);
+  const pipelineImpact = issue.pipelineImpact ?? issue.work?.pipelineImpact;
   return (
     <div
       key={getIssueIdentity(issue)}
@@ -305,6 +309,7 @@ export function CompanyIssueSummaryCard({
             <span>{status}</span>
             {issue.agent ? <span>{issue.agent}</span> : null}
             {age ? <span>{age}</span> : null}
+            {pipelineImpact ? <span title={pipelineImpact.label} style={{ color: "var(--danger-2)", fontVariantNumeric: "tabular-nums" }}>{formatPipelineUsd(pipelineImpact.amountUsd)} quoted pipeline</span> : null}
           </span>
         </span>
       </div>

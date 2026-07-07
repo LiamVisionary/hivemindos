@@ -47,7 +47,7 @@ const TOUR_STOPS: TourStop[] = [
     anchor: "more",
     view: "more",
     title: "Everything else",
-    body: "Extra tools — phone, messaging, alerts — live in here. Nothing you need today.",
+    body: "Extra tools, capability search, phone, messaging, and deeper settings live in here. Nothing you need today.",
   },
   {
     id: "chat",

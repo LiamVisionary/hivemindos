@@ -10,7 +10,7 @@
    receives a DashboardView id; wire it to the dashboard view switch. */
 
 import { Fragment, memo, useEffect, useRef, useState } from "react";
-import { Brain, Building2 } from "lucide-react";
+import { BellRing, Brain, Building2 } from "lucide-react";
 import { APP_NAV_SHELF_GROUPS, shelfSlotForView } from "@/features/dashboard/dashboard-navigation";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
@@ -47,6 +47,8 @@ function FrNavIcon({ id }: { id: string }) {
       return <Building2 aria-hidden="true" width={20} height={20} strokeWidth={1.7} />;
     case "scheduler":
       return (<svg {...p}><rect x="3.5" y="4.5" width="17" height="16" rx="2.2" /><path d="M3.5 9h17M8 3v3M16 3v3" /><path d="M12 12v2.5l1.6 1" /></svg>);
+    case "notifications":
+      return <BellRing aria-hidden="true" width={20} height={20} strokeWidth={1.7} />;
     case "swarm":
       return (<svg {...p}><circle cx="12" cy="12" r="2" /><circle cx="5" cy="6.5" r="1.6" /><circle cx="19" cy="6.5" r="1.6" /><circle cx="5.5" cy="18" r="1.6" /><circle cx="18.5" cy="18" r="1.6" /><path d="M10.4 10.7 6.3 7.6M13.6 10.7l3.9-3M10.6 13.4 6.7 16.6M13.4 13.4l3.6 3" /></svg>);
     case "history":
@@ -86,7 +88,7 @@ function NavShelfItem({ id, label, active, onNavigate, onPrefetch, badge }: {
     >
       <span className="fr-nav-ico"><FrNavIcon id={id} /></span>
       <span className="fr-nav-label">{label}</span>
-      {badge ? <span className="fr-nav-badge" aria-label={`${badge} unread`}>{badge > 99 ? "99+" : badge}</span> : null}
+      {badge ? <span className="fr-nav-badge" aria-label={`${badge} ${label}`}>{badge > 99 ? "99+" : badge}</span> : null}
     </button>
   );
 }
@@ -99,7 +101,7 @@ function AppNavShelfBase({
   onToggleTheme,
   brandSrc = "/icon-512.png",
   appVersion,
-  notificationUnread = 0,
+  navBadges = {},
 }: {
   activeView: DashboardView;
   onNavigate: (id: DashboardView) => void;
@@ -108,7 +110,7 @@ function AppNavShelfBase({
   onToggleTheme: () => void;
   brandSrc?: string;
   appVersion?: string | null;
-  notificationUnread?: number;
+  navBadges?: Partial<Record<DashboardView, number>>;
 }) {
   const active = shelfSlotForView(activeView);
   const keyboardNavigationRef = useRef(false);
@@ -207,7 +209,7 @@ function AppNavShelfBase({
         {APP_NAV_SHELF_GROUPS.map((g, i) => (
           <Fragment key={i}>
             {g.map((it) => (
-              <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} />
+              <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} badge={navBadges[it.id]} />
             ))}
             {i < APP_NAV_SHELF_GROUPS.length - 1 ? <div className="fr-nav-div" /> : null}
           </Fragment>
@@ -228,7 +230,7 @@ function AppNavShelfBase({
               <span className="fr-nav-label">{updateLabel}</span>
             </button>
           ) : null}
-          <NavShelfItem id="more" label="More" active={active === "more"} onNavigate={onNavigate} onPrefetch={onPrefetch} badge={notificationUnread} />
+          <NavShelfItem id="more" label="More" active={active === "more"} onNavigate={onNavigate} onPrefetch={onPrefetch} />
           <button type="button" className="fr-nav" onClick={onToggleTheme} title="Toggle light and dark">
             <span className="fr-nav-ico">{theme === "light" ? <MoonIcon /> : <SunIcon />}</span>
             <span className="fr-nav-label">{theme === "light" ? "Dark mode" : "Light mode"}</span>

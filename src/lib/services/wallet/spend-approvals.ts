@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { homedir } from "@/lib/home-dir";
 import type { AgentSpendCapAsset } from "@/lib/types/agent-wallet";
 import type { SpendKind } from "@/lib/services/wallet/spend-ledger";
+import { sendApprovalPush } from "@/lib/services/push/mobile-push";
 
 /**
  * Human-in-the-loop escalation queue. When a spend exceeds an agent's approval
@@ -152,6 +153,23 @@ export async function enqueueApproval(input: EnqueueApprovalInput): Promise<Spen
   };
   records.push(record);
   await writeRaw(records);
+  // Fire a background push to the phone for this NEW gate (the reuse path
+  // above returns early, so a duplicate retry never re-notifies). Best-effort:
+  // never let a push failure block the approval it was announcing.
+  const pendingCount = records.filter((r) => r.status === "pending").length;
+  void sendApprovalPush(
+    {
+      id: record.id,
+      agentName: record.agentName,
+      kind: record.kind,
+      asset: record.asset,
+      amountUsd: record.amountUsd,
+      target: record.target,
+      reason: record.reason,
+      companyId: record.companyId,
+    },
+    pendingCount,
+  ).catch(() => {});
   return record;
 }
 

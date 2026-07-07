@@ -3,18 +3,23 @@
 // cockpit routing. Fully controlled: real colonies, agent roster and mutation
 // handlers are supplied by ZeroHumanCompaniesView (which talks to the app APIs).
 import React from "react";
+import { Upload } from "lucide-react";
 import { Portfolio } from "./ColonyCards";
 import { Spinner } from "./primitives";
 import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
+import { ImportCompanyModal } from "./ImportCompanyModal";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { agentsAtWork } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import type { PreviewDecision } from "./preview-review";
-import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyRevenueShareInput, CreateForm, Density, Issue, PoolAgent, Theme } from "./types";
+import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyImportForm, CompanyRevenueShareInput, CreateForm, Density, Issue, PoolAgent, Theme } from "./types";
+import type { CompanyApprovalPolicy } from "@/lib/types/company";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
+import type { KanbanLinkedDirectory, KanbanMachineTarget } from "@/lib/types/kanban";
 
 type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
+type DirectoryPicker = (machine: KanbanMachineTarget | null, onChoose: (directory: KanbanLinkedDirectory) => void) => void | Promise<void>;
 
 function HiveLogo({ size = 40 }: { size?: number }) {
   const W = size, H = size;
@@ -72,8 +77,8 @@ export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () =>
 }
 
 function Masthead({
-  companies, loading, initialLoading, onRefresh, theme, onToggleTheme,
-}: { companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void; theme: Theme; onToggleTheme: () => void }) {
+  companies, loading, initialLoading, onRefresh, onImport, theme, onToggleTheme,
+}: { companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void; onImport: () => void; theme: Theme; onToggleTheme: () => void }) {
   const pendingFirstSync = initialLoading && companies.length === 0;
   const s = {
     colonies: companies.length,
@@ -103,6 +108,9 @@ function Masthead({
         </div>
         <div style={{ justifySelf: "end", display: "flex", alignItems: "center", gap: 8 }}>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          <PillButton onClick={onImport} title="Import an existing project as a company">
+            <Upload size={13} strokeWidth={1.8} /> Import
+          </PillButton>
           <PillButton onClick={onRefresh} disabled={loading} title="Refresh company registry">
             {loading ? <><Spinner size={11} /> syncing</> : "↻ refresh"}
           </PillButton>
@@ -144,6 +152,8 @@ export interface ZeroHumanCompaniesProps {
   onRefresh: () => void;
   /** Found a company. Returns the new company id (to auto-open it) or null. */
   onCreateCompany: (form: CreateForm, crew: Agent[]) => Promise<string | null>;
+  /** Import an existing repository as a company. Returns the company id to open it. */
+  onImportCompany: (form: CompanyImportForm) => Promise<string | null>;
   /** Edit an existing company's metadata, budgets, revenue, and member fields. */
   onEditCompany: (companyId: string, form: CompanyEditForm) => Promise<void>;
   /** Add staged crew to an existing company. */
@@ -152,6 +162,8 @@ export interface ZeroHumanCompaniesProps {
   onReject: (companyId: string, approvalId: string) => void;
   /** Decide a crew-raised pricing proposal (approve applies the catalog change). */
   onResolvePricing: (companyId: string, proposalId: string, decision: "approve" | "reject") => void;
+  /** Save one company approval-policy row. */
+  onSetApprovalPolicy: (companyId: string, policy: CompanyApprovalPolicy) => void;
   onFreeze: (companyId: string, frozen: boolean) => void;
   onDelete: (companyId: string) => void;
   /** Launch perpetual autonomy: decompose the apex goal + dispatch to the crew. */
@@ -169,6 +181,8 @@ export interface ZeroHumanCompaniesProps {
   /** Record external revenue and optionally collect the HivemindOS share. */
   onRecordRevenue: (companyId: string, input: CompanyRevenueShareInput) => Promise<void>;
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  chooseDirectoryForMachine?: DirectoryPicker;
+  defaultDirectoryMachine?: KanbanMachineTarget | null;
   theme?: Theme;
   cardStyle?: CardStyle;
   density?: Density;
@@ -177,13 +191,16 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, initialTasksLoading = false, error, notice, busyId, onRefresh,
-  onCreateCompany, onEditCompany, onAddAgents, onApprove, onReject, onResolvePricing, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
+  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onApprove, onReject, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
   openSkillAttachmentBrowser,
+  chooseDirectoryForMachine,
+  defaultDirectoryMachine,
   theme = "dark", cardStyle = "detailed", density = "comfortable", showBudget = true,
 }: ZeroHumanCompaniesProps) {
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [modal, setModal] = React.useState<
     | { type: "create" }
+    | { type: "import" }
     | { type: "edit"; id: string }
     | { type: "treasury"; id: string }
     | { type: "browse"; id: string }
@@ -224,6 +241,17 @@ export default function ZeroHumanCompanies({
       setSubmitting(false);
     }
   };
+  const handleImport = async (form: CompanyImportForm) => {
+    setSubmitting(true);
+    try {
+      const importedId = await onImportCompany(form);
+      setModal(null);
+      if (importedId) setOpenId(importedId);
+      return importedId;
+    } finally {
+      setSubmitting(false);
+    }
+  };
   const handleEdit = async (id: string, form: CompanyEditForm) => {
     setSubmitting(true);
     try {
@@ -247,6 +275,7 @@ export default function ZeroHumanCompanies({
     onApprove: (approvalId) => onApprove(colony.id, approvalId),
     onReject: (approvalId) => onReject(colony.id, approvalId),
     onResolvePricing: (proposalId, decision) => onResolvePricing(colony.id, proposalId, decision),
+    onSetApprovalPolicy: (policy) => onSetApprovalPolicy(colony.id, policy),
     onFreeze: (frozen) => onFreeze(colony.id, frozen),
     onDelete: () => onDelete(colony.id),
     onDispatch: () => onDispatch(colony.id),
@@ -278,7 +307,7 @@ export default function ZeroHumanCompanies({
 
       <div style={{ position: "relative", zIndex: 1 }}>
         {view === "portfolio" && (
-          <Masthead companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} theme={themeState} onToggleTheme={toggleTheme} />
+          <Masthead companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} onImport={() => setModal({ type: "import" })} theme={themeState} onToggleTheme={toggleTheme} />
         )}
         {error ? (
           <div style={{ margin: "12px 40px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
@@ -303,7 +332,7 @@ export default function ZeroHumanCompanies({
             onCreate={() => setModal({ type: "create" })}
             emptyHint={!loading && colonies.length === 0 ? (
               <div style={{ marginBottom: 18, fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-3)", lineHeight: 1.6 }}>
-                No companies yet. Found one to group agents under a shared budget, kill switch, and apex goal.
+                No companies yet. Found one to group agents under a shared budget, kill switch, and apex goal, or import an existing project to track its systems.
               </div>
             ) : null}
           />
@@ -328,6 +357,16 @@ export default function ZeroHumanCompanies({
 
       {modal && modal.type === "create" && (
         <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={themeState} onClose={closeModal} onCreate={handleCreate} />
+      )}
+      {modal && modal.type === "import" && (
+        <ImportCompanyModal
+          busy={submitting}
+          theme={themeState}
+          chooseDirectoryForMachine={chooseDirectoryForMachine}
+          defaultDirectoryMachine={defaultDirectoryMachine}
+          onClose={closeModal}
+          onImport={handleImport}
+        />
       )}
       {modal && modal.type === "edit" && (() => {
         const target = colonies.find((c) => c.id === modal.id);

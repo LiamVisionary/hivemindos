@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
-import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallGeminiLive, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
 import { FleetHiveView } from "@/components/fleet-hive";
 import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
@@ -117,9 +117,10 @@ type AgentPhoneCallResult = {
       callerName?: string;
       dashboardToken?: string;
       livekitUrl?: string;
-      mode?: "byok" | "cloud" | "local-tts";
+      mode?: "byok" | "cloud" | "local-tts" | "gemini-live";
       localTts?: AgentCallLocalTts;
       realtime?: AgentCallRealtime;
+      geminiLive?: AgentCallGeminiLive;
       runtimeAgent?: AgentCallRuntimeAgent;
       room?: string;
       voiceReady?: boolean;
@@ -233,6 +234,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     livekit?: AgentCallLiveKit;
     realtime?: AgentCallRealtime;
     localTts?: AgentCallLocalTts;
+    geminiLive?: AgentCallGeminiLive;
     runtimeAgent?: AgentCallRuntimeAgent;
     voiceRun?: AgentCallVoiceRun;
   } | null>(null);
@@ -302,6 +304,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           voiceProviderId: profile?.calls?.voiceProviderId,
           voiceModelId: profile?.calls?.voiceModelId,
           voiceId: profile?.calls?.voiceId,
+          voiceKeyEnv: profile?.calls?.voiceKeyEnv,
           skillProfilePrompt: profile?.skillProfilePrompt,
           preferredSkillSlugs: profile?.preferredSkillSlugs,
           aeonRepo: profile?.aeonRepo,
@@ -351,6 +354,16 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           ...current,
           phase: "ringing",
           localTts: call.localTts,
+          runtimeAgent: call.runtimeAgent,
+          voiceRun: call.voiceRun,
+        } : current);
+        return;
+      }
+      if (call?.mode === "gemini-live" && call.geminiLive) {
+        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? {
+          ...current,
+          phase: "ringing",
+          geminiLive: call.geminiLive,
           runtimeAgent: call.runtimeAgent,
           voiceRun: call.voiceRun,
         } : current);
@@ -610,6 +623,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
               livekit={agentCallSession.livekit}
               realtime={agentCallSession.realtime}
               localTts={agentCallSession.localTts}
+              geminiLive={agentCallSession.geminiLive}
               runtimeAgent={agentCallSession.runtimeAgent}
               voiceRun={agentCallSession.voiceRun}
               onVoiceConnected={() => {

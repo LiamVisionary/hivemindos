@@ -7,7 +7,7 @@
 import "./theme.css";
 
 import React from "react";
-import type { Company, CompanyMember, CompanyRevenue, CompanySpendRollup } from "@/lib/types/company";
+import type { Company, CompanyApprovalPolicy, CompanyMember, CompanyRevenue, CompanySpendRollup } from "@/lib/types/company";
 import ZeroHumanCompanies from "./ZeroHumanCompanies";
 import {
   applyDemoEdit,
@@ -19,14 +19,18 @@ import {
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
 import { resolvedIssueAnswer, retryDelegationIssueAnswer } from "./issue-resume";
 import { issuePreviewUrl, previewReviewAnswer, type PreviewDecision } from "./preview-review";
-import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
+import type { Agent, Colony, CompanyEditForm, CompanyImportForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
+import type { KanbanLinkedDirectory, KanbanMachineTarget } from "@/lib/types/kanban";
 
 type CompanyEntry = { company: Company; rollup: CompanySpendRollup; revenueShare?: CompanyRevenueRollup };
 type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
+type DirectoryPicker = (machine: KanbanMachineTarget | null, onChoose: (directory: KanbanLinkedDirectory) => void) => void | Promise<void>;
+type ImportCompanyResponse = { ok?: boolean; error?: string; company?: Company; updatedExisting?: boolean };
 
 const POLL_MS = 15_000;
+const NOTICE_AUTO_DISMISS_MS = 5_000;
 const USE_ZHC_DEMO_DATA = false;
 
 async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boolean; company?: Company; error?: string }> {
@@ -63,9 +67,13 @@ function memberEditFromAgent(agent: Agent): CompanyMemberEdit {
 function ZeroHumanCompaniesDemoView({
   theme = "dark",
   openSkillAttachmentBrowser,
+  chooseDirectoryForMachine,
+  defaultDirectoryMachine,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  chooseDirectoryForMachine?: DirectoryPicker;
+  defaultDirectoryMachine?: KanbanMachineTarget | null;
 } = {}) {
   const [colonies, setColonies] = React.useState<Colony[]>(DEMO_COLONIES);
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -77,6 +85,30 @@ function ZeroHumanCompaniesDemoView({
 
   const handleCreateCompany = React.useCallback(async (form: CreateForm, crew: Agent[]): Promise<string | null> => {
     const next = createDemoColony(form, crew);
+    setColonies((current) => [next, ...current]);
+    return next.id;
+  }, []);
+
+  const handleImportCompany = React.useCallback(async (form: CompanyImportForm): Promise<string | null> => {
+    const name = form.companyName?.trim() || "Imported Company";
+    const next: Colony = {
+      ...createDemoColony({
+        name,
+        ticker: form.ticker,
+        sector: form.sector || "Imported Product",
+        apexTitle: form.apexGoalTitle || `Keep ${name}'s existing product operations visible and healthy`,
+      }, []),
+      importedOperations: {
+        source: "repo",
+        importedAt: new Date().toISOString(),
+        lastDiscoveredAt: new Date().toISOString(),
+        projectPath: form.repoPath,
+        workflows: [],
+        schedules: [],
+        services: [],
+        scripts: [],
+      },
+    };
     setColonies((current) => [next, ...current]);
     return next.id;
   }, []);
@@ -123,6 +155,17 @@ function ZeroHumanCompaniesDemoView({
           ...colony.governance,
         ].slice(0, 5),
       };
+    });
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const setDemoApprovalPolicy = React.useCallback((companyId: string, policy: CompanyApprovalPolicy) => {
+    setBusyId(`approval-policy:${policy.id}`);
+    replaceColony(companyId, (colony) => {
+      const current = colony.approvalPolicies ?? [];
+      const byId = new Map(current.map((entry) => [entry.id, entry]));
+      byId.set(policy.id, policy);
+      return { ...colony, approvalPolicies: [...byId.values()] };
     });
     setBusyId(null);
   }, [replaceColony]);
@@ -252,6 +295,7 @@ function ZeroHumanCompaniesDemoView({
       busyId={busyId}
       onRefresh={() => setColonies(DEMO_COLONIES)}
       onCreateCompany={handleCreateCompany}
+      onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
       onApprove={(companyId, approvalId) => decideApproval(companyId, approvalId, "approved")}
@@ -262,6 +306,7 @@ function ZeroHumanCompaniesDemoView({
           pricingProposals: (colony.pricingProposals ?? []).filter((proposal) => proposal.id !== proposalId),
         }))
       }
+      onSetApprovalPolicy={setDemoApprovalPolicy}
       onFreeze={handleFreeze}
       onDelete={(companyId) => setColonies((current) => current.filter((colony) => colony.id !== companyId))}
       onDispatch={handleDispatch}
@@ -271,6 +316,8 @@ function ZeroHumanCompaniesDemoView({
       onDismissIssues={(companyId, issues) => handleDismissIssues(companyId, issues)}
       onRecordRevenue={handleRecordRevenue}
       openSkillAttachmentBrowser={openSkillAttachmentBrowser}
+      chooseDirectoryForMachine={chooseDirectoryForMachine}
+      defaultDirectoryMachine={defaultDirectoryMachine}
       theme={theme}
     />
   );
@@ -279,9 +326,13 @@ function ZeroHumanCompaniesDemoView({
 function ZeroHumanCompaniesLiveView({
   theme = "dark",
   openSkillAttachmentBrowser,
+  chooseDirectoryForMachine,
+  defaultDirectoryMachine,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  chooseDirectoryForMachine?: DirectoryPicker;
+  defaultDirectoryMachine?: KanbanMachineTarget | null;
 } = {}) {
   const [data, setData] = React.useState<CompanyEntry[]>([]);
   const [agents, setAgents] = React.useState<AgentLite[]>([]);
@@ -296,6 +347,7 @@ function ZeroHumanCompaniesLiveView({
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [noticeRevision, setNoticeRevision] = React.useState(0);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   // "Hide locally" fallback for dismissed issues that have NO backing Work Board
   // task to archive — keyed by issue.key. Task-backed dismisses archive for real;
@@ -307,6 +359,19 @@ function ZeroHumanCompaniesLiveView({
   // surface it loudly. (The same GET also self-heals: the route restarts the
   // driver, so a persistent warning means restarting is genuinely failing.)
   const [driverWarning, setDriverWarning] = React.useState<string | null>(null);
+
+  const showNotice = React.useCallback((message: string) => {
+    setNotice(message);
+    setNoticeRevision((revision) => revision + 1);
+  }, []);
+
+  React.useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => {
+      setNotice((current) => (current === notice ? null : current));
+    }, NOTICE_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice, noticeRevision]);
 
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -534,6 +599,37 @@ function ZeroHumanCompaniesLiveView({
     return result.company?.id ?? null;
   }, [membersFromCrew, refresh]);
 
+  const handleImportCompany = React.useCallback(async (form: CompanyImportForm): Promise<string | null> => {
+    setBusyId("import-company");
+    setNotice(null);
+    try {
+      const res = await fetch("/api/companies/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "import",
+          repoPath: form.repoPath,
+          companyName: form.companyName,
+          ticker: form.ticker,
+          sector: form.sector,
+          apexGoalTitle: form.apexGoalTitle,
+          companyId: form.companyId,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as ImportCompanyResponse;
+      if (!res.ok || json.ok === false || !json.company?.id) {
+        setError(json.error || "Could not import company.");
+        return null;
+      }
+      setError(null);
+      showNotice(json.updatedExisting ? `${json.company.name} systems refreshed.` : `${json.company.name} imported with repository systems attached.`);
+      await refresh();
+      return json.company.id;
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh, showNotice]);
+
   const handleEditCompany = React.useCallback(async (companyId: string, form: CompanyEditForm): Promise<void> => {
     setBusyId(companyId);
     try {
@@ -626,7 +722,7 @@ function ZeroHumanCompaniesLiveView({
       if (!result.ok) {
         setError(result.error || "Could not resolve the pricing request.");
       } else {
-        setNotice(
+        showNotice(
           decision === "approve"
             ? "New price applied to the catalog — the crew quotes it from the next dispatch."
             : "Pricing request rejected — the crew keeps the current price and learns the decision.",
@@ -636,7 +732,23 @@ function ZeroHumanCompaniesLiveView({
     } finally {
       setBusyId(null);
     }
-  }, [refresh]);
+  }, [refresh, showNotice]);
+
+  const setApprovalPolicy = React.useCallback(async (companyId: string, policy: CompanyApprovalPolicy) => {
+    setBusyId(`approval-policy:${policy.id}`);
+    try {
+      const result = await postCompanies({ action: "set-approval-policy", id: companyId, approvalPolicy: policy });
+      if (!result.ok) {
+        setError(result.error || "Could not save the approval policy.");
+      } else {
+        setError(null);
+        showNotice("Approval policy saved - the crew reads it on the next dispatch.");
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh, showNotice]);
 
   const handleFreeze = React.useCallback(async (companyId: string, frozen: boolean) => {
     setBusyId(companyId);
@@ -687,7 +799,7 @@ function ZeroHumanCompaniesLiveView({
         const n = d.taskCount ?? 0;
         const live = d.dispatchableMembers ?? 0;
         const plan = d.planner === "llm" ? "AI-planned" : "auto-planned";
-        setNotice(
+        showNotice(
           live > 0
             ? `Launched ${n} ${plan} task${n === 1 ? "" : "s"} to ${live} online agent${live === 1 ? "" : "s"} — autonomy is running; it keeps working until you stop it.`
             : `Queued ${n} ${plan} task${n === 1 ? "" : "s"}. Autonomy is on — work starts as soon as a member agent comes online.`,
@@ -697,7 +809,7 @@ function ZeroHumanCompaniesLiveView({
     } finally {
       setBusyId(null);
     }
-  }, [refresh]);
+  }, [refresh, showNotice]);
 
   const handleStopAutonomy = React.useCallback(async (companyId: string) => {
     setBusyId(companyId);
@@ -705,12 +817,12 @@ function ZeroHumanCompaniesLiveView({
     try {
       const result = await postCompanies({ action: "stop-autonomy", id: companyId });
       if (!result.ok) setError(result.error || "Could not stop autonomy.");
-      else { setError(null); setNotice("Autonomy stopped — in-flight tasks finish, no new work will be dispatched."); }
+      else { setError(null); showNotice("Autonomy stopped — in-flight tasks finish, no new work will be dispatched."); }
       await refresh();
     } finally {
       setBusyId(null);
     }
-  }, [refresh]);
+  }, [refresh, showNotice]);
 
   const handleResolveIssue = React.useCallback(async (companyId: string, issue: Issue) => {
     const taskId = issue.work?.taskId;
@@ -745,7 +857,7 @@ function ZeroHumanCompaniesLiveView({
           evidence: [resolvedIssueAnswer(issue)],
         });
         setError(null);
-        setNotice(
+        showNotice(
           json.pickupScheduled
             ? `${companyName}: marked resolved. ${issue.agent || "The agent"} is picking the task back up now.`
             : `${companyName}: marked resolved. The task is back in the Work Board queue.`,
@@ -755,7 +867,7 @@ function ZeroHumanCompaniesLiveView({
     } finally {
       setBusyId(null);
     }
-  }, [data, refresh]);
+  }, [data, refresh, showNotice]);
 
   const handleRetryIssues = React.useCallback(async (companyId: string, issues: Issue[]) => {
     const taskIds = issues.map((issue) => issue.work?.taskId).filter((id): id is string => Boolean(id));
@@ -814,7 +926,7 @@ function ZeroHumanCompaniesLiveView({
         }
         setError(null);
         const failNote = ok < taskIds.length ? ` (${taskIds.length - ok} failed to re-queue)` : "";
-        setNotice(
+        showNotice(
           pickingUp > 0
             ? `${companyName}: re-queued ${ok} task${ok === 1 ? "" : "s"} — ${pickingUp === ok ? "the crew is picking them back up now" : `${pickingUp} picking up now, the rest on the next sweep`}.${failNote}`
             : `${companyName}: re-queued ${ok} task${ok === 1 ? "" : "s"} for the next dispatch sweep.${failNote}`,
@@ -824,7 +936,7 @@ function ZeroHumanCompaniesLiveView({
     } finally {
       setBusyId(null);
     }
-  }, [data, refresh]);
+  }, [data, refresh, showNotice]);
 
   const handleDismissIssues = React.useCallback(async (companyId: string, issues: Issue[]) => {
     if (issues.length === 0) return;
@@ -843,7 +955,7 @@ function ZeroHumanCompaniesLiveView({
     const taskIds = issues.map((issue) => issue.work?.taskId).filter((id): id is string => Boolean(id));
     if (taskIds.length === 0) {
       setError(null);
-      setNotice(`${companyName}: hid ${issues.length} issue${issues.length === 1 ? "" : "s"} from this view.`);
+      showNotice(`${companyName}: hid ${issues.length} issue${issues.length === 1 ? "" : "s"} from this view.`);
       return;
     }
     setBusyId(taskIds[0]);
@@ -879,13 +991,13 @@ function ZeroHumanCompaniesLiveView({
         }
         setError(null);
         const hidNote = taskless > 0 ? ` (${taskless} hidden locally)` : "";
-        setNotice(`${companyName}: dismissed ${ok} issue${ok === 1 ? "" : "s"} — archived off the board.${hidNote}`);
+        showNotice(`${companyName}: dismissed ${ok} issue${ok === 1 ? "" : "s"} — archived off the board.${hidNote}`);
       }
       await refresh();
     } finally {
       setBusyId(null);
     }
-  }, [data, refresh]);
+  }, [data, refresh, showNotice]);
 
   const handleReviewPreview = React.useCallback(async (companyId: string, issue: Issue, decision: PreviewDecision, notes: string) => {
     const taskId = issue.work?.taskId;
@@ -942,7 +1054,7 @@ function ZeroHumanCompaniesLiveView({
         });
         setError(null);
         const soon = json.pickupScheduled ? "now" : "on the next pickup";
-        setNotice(
+        showNotice(
           decision === "approve"
             ? `${companyName}: preview approved. ${who} is taking the next step ${soon}.`
             : `${companyName}: change request sent. ${who} is revising the preview ${soon}.`,
@@ -952,7 +1064,7 @@ function ZeroHumanCompaniesLiveView({
     } finally {
       setBusyId(null);
     }
-  }, [data, refresh]);
+  }, [data, refresh, showNotice]);
 
   const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
     setBusyId(companyId);
@@ -979,7 +1091,7 @@ function ZeroHumanCompaniesLiveView({
         const record = json.record as { amountUsd?: number; fee?: { amountUsd?: number; status?: string } } | undefined;
         const amount = typeof record?.amountUsd === "number" ? `$${record.amountUsd.toFixed(2)}` : "Revenue";
         const fee = typeof record?.fee?.amountUsd === "number" ? `$${record.fee.amountUsd.toFixed(2)}` : "share";
-        setNotice(record?.fee?.status === "collected"
+        showNotice(record?.fee?.status === "collected"
           ? `${amount} recorded. HivemindOS share collected: ${fee}.`
           : `${amount} recorded. HivemindOS share pending: ${fee}.`);
       }
@@ -987,7 +1099,7 @@ function ZeroHumanCompaniesLiveView({
     } finally {
       setBusyId(null);
     }
-  }, [refresh]);
+  }, [refresh, showNotice]);
 
   return (
     <ZeroHumanCompanies
@@ -1001,11 +1113,13 @@ function ZeroHumanCompaniesLiveView({
       busyId={busyId}
       onRefresh={() => void refresh()}
       onCreateCompany={handleCreateCompany}
+      onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
       onApprove={(_companyId, approvalId) => void decideApproval(approvalId, "approved")}
       onReject={(_companyId, approvalId) => void decideApproval(approvalId, "denied")}
       onResolvePricing={(companyId, proposalId, decision) => void resolvePricing(companyId, proposalId, decision)}
+      onSetApprovalPolicy={(companyId, policy) => void setApprovalPolicy(companyId, policy)}
       onFreeze={(companyId, frozen) => void handleFreeze(companyId, frozen)}
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
@@ -1016,6 +1130,8 @@ function ZeroHumanCompaniesLiveView({
       onReviewPreview={(companyId, issue, decision, notes) => void handleReviewPreview(companyId, issue, decision, notes)}
       onRecordRevenue={handleRecordRevenue}
       openSkillAttachmentBrowser={openSkillAttachmentBrowser}
+      chooseDirectoryForMachine={chooseDirectoryForMachine}
+      defaultDirectoryMachine={defaultDirectoryMachine}
       theme={theme}
     />
   );
@@ -1024,11 +1140,15 @@ function ZeroHumanCompaniesLiveView({
 export function ZeroHumanCompaniesView({
   theme = "dark",
   openSkillAttachmentBrowser,
+  chooseDirectoryForMachine,
+  defaultDirectoryMachine,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  chooseDirectoryForMachine?: DirectoryPicker;
+  defaultDirectoryMachine?: KanbanMachineTarget | null;
 } = {}) {
   return USE_ZHC_DEMO_DATA
-    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />
-    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />;
+    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} />
+    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} />;
 }
