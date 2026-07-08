@@ -5,6 +5,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-09 01:12:23 PST+0800 - HivemindOS v0.4 release train
+  - Status: Pushed
+  - Areas changed: `package.json`, `src-tauri/{tauri.conf.json,Cargo.toml,Cargo.lock}`, `.github/workflows/tauri-cross-platform-release.yml`, `CHANGELOG.md`
+  - Summary: HivemindOS desktop metadata now stamps the v0.4 release as `0.4.0`, and the cross-platform release workflow defaults to `0.4.0` for the Apple Silicon macOS, Windows x64, and Linux x64 release matrix. Intel Mac remains excluded from the release matrix and updater manifest.
+  - Verification: Focused version/workflow assertions passed; dummy updater manifest generation produced exactly `darwin-aarch64`, `windows-x86_64`, and `linux-x86_64`; `git diff --check` passed; `node scripts/check-tauri-command-acl.mjs` passed; `node scripts/test-tauri-release-mode.mjs` passed; `node scripts/check-file-sizes.mjs` remains red on existing oversized files outside this release diff.
+  - Intended commit message: `release: prepare v0.4 desktop builds`
+
 - 2026-07-08 23:53:01 PST+0800 - Queen Bee pipeline voice keeps Queen's real prompt
   - Status: Uncommitted
   - Areas changed: `src/lib/services/queen-bee/voice-turn.ts`, `scripts/test-queen-voice-working.mjs`, `CHANGELOG.md`
