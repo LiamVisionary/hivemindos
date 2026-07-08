@@ -171,7 +171,7 @@ export type KanbanStorageInfo = {
   fallbackReason?: string;
 };
 
-function withBoardMutation<T>(
+export function withBoardMutation<T>(
   slugInput: string | null | undefined,
   options: KanbanStorageOptions,
   operation: () => Promise<T>,
@@ -1923,7 +1923,7 @@ function trimBoardHistoryForWrite(board: KanbanBoard): KanbanBoard {
   };
 }
 
-async function writeBoard(
+export async function writeBoard(
   board: KanbanBoard,
   options: KanbanStorageOptions = {},
 ) {
@@ -1955,7 +1955,7 @@ function emptyBoard(slug: string): KanbanBoard {
   };
 }
 
-function event(
+export function event(
   kind: string,
   message: string,
   taskId?: string,
@@ -1973,7 +1973,7 @@ function event(
   };
 }
 
-function touch(board: KanbanBoard) {
+export function touch(board: KanbanBoard) {
   return { ...board, meta: { ...board.meta, updatedAt: Date.now() } };
 }
 

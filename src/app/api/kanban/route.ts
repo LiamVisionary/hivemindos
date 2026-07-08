@@ -27,6 +27,7 @@ import {
   unblockTask,
   type KanbanStorageOptions,
 } from "@/lib/services/kanban/local-kanban-store";
+import { holdTask, clearHold } from "@/lib/services/kanban/task-hold";
 import { filterKanbanTasks, groupKanbanTasks } from "@/lib/utils/kanban-board";
 
 export const runtime = "nodejs";
@@ -133,6 +134,9 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "answer") {
       const result = await answerHumanTask(boardSlug, body.taskId, { answer: body.answer, author: body.author }, storageOptions);
+      // A real answer supersedes any prior "parked" state so it doesn't stay
+      // filtered after the task flows on (or if it later re-blocks).
+      await clearHold(boardSlug, body.taskId, storageOptions).catch(() => undefined);
       // Resume with the SAME agent that asked: when the card still carries a
       // delegated target, schedule an immediate autonomous pickup instead of
       // waiting for the next re-dispatch sweep (same delegation shape as
@@ -155,6 +159,10 @@ export async function POST(request: NextRequest) {
         });
       }
       return NextResponse.json({ ok: true, ...result, pickupScheduled, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
+    if (body.action === "hold") {
+      const result = await holdTask(boardSlug, body.taskId, { by: body.author, note: body.note ?? body.reason }, storageOptions);
+      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "promote") {
       const result = await promoteTask(boardSlug, body.taskId, body, storageOptions);

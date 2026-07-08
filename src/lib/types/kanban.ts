@@ -180,6 +180,15 @@ export type KanbanTask = {
   reviewedBy?: string;
   undoRequestedAt?: number;
   undoRequestedBy?: string;
+  /**
+   * Human "parked this" acknowledgement. Set on a needs-human task the operator
+   * has SEEN and chosen to defer without deciding: the task keeps status
+   * needs-human (so nothing re-routes it) but held tasks are filtered out of
+   * re-asking — they leave the approval grid, stop pinging external channels,
+   * and stop counting toward the autonomy-pause threshold (so a deferred pile
+   * can't wedge the company at paused). Cleared when the task is answered.
+   */
+  held?: { at: number; by: string; note?: string };
   createdAt: number;
   updatedAt: number;
   completedAt?: number;

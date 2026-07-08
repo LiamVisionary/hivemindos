@@ -331,6 +331,9 @@ export function companyHasActiveWork(
   });
 }
 
+/** Sticky-hold guards are on unless HIVEMINDOS_APPROVAL_HOLD=0. */
+const approvalHoldEnabled = () => process.env.HIVEMINDOS_APPROVAL_HOLD !== "0";
+
 /**
  * Count this company's items currently "waiting on a human" — tasks it owns that
  * sit in the needs-human lane — honoring the pause config's count mode. "all"
@@ -338,19 +341,26 @@ export function companyHasActiveWork(
  * carrying a deliverable of a configured kind (e.g. just website approvals). An
  * absent/empty kind list falls back to counting all: a mode must never silently
  * count zero and defeat the backpressure it exists to apply.
+ *
+ * Held ("parked") tasks are EXCLUDED: the operator has already seen and deferred
+ * them, so they must not count toward the pause threshold — otherwise a deferred
+ * pile would wedge the company at paused forever, unable to drop back under the
+ * threshold. Kill switch HIVEMINDOS_APPROVAL_HOLD=0 restores counting held items.
  */
 export function countCompanyWaitingOnHuman(
-  tasks: Array<Pick<import("@/lib/types/kanban").KanbanTask, "status" | "source" | "deliverables">>,
+  tasks: Array<Pick<import("@/lib/types/kanban").KanbanTask, "status" | "source" | "deliverables" | "held">>,
   companyId: string,
   pause?: import("@/lib/types/company").CompanyAutonomyPause,
 ): number {
   const companyPrefix = `company:${companyId}:`;
+  const holdOn = approvalHoldEnabled();
   const kinds =
     pause?.countMode === "deliverable-kinds" && (pause.deliverableKinds?.length ?? 0) > 0
       ? new Set(pause.deliverableKinds)
       : null;
   return tasks.filter((t) => {
     if (t.status !== "needs-human") return false;
+    if (holdOn && t.held) return false;
     if (!(t.source ?? "").startsWith(companyPrefix)) return false;
     if (!kinds) return true;
     return (t.deliverables ?? []).some((d) => kinds.has(d.kind));

@@ -38,6 +38,7 @@ const TESTS = [
   "test:clawbank",
   "test:code-intelligence",
   "test:collector-chat-abort",
+  "test:approval-hold",
   "test:company-autonomy",
   "test:company-deliverables",
   "test:company-issues",
