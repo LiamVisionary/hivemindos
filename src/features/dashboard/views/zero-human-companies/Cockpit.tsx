@@ -341,16 +341,13 @@ function ActivityTicker({ colony }: { colony: Colony }) {
   );
 }
 
-const MAX_NEEDS_STRIP_ROWS = 3;
-
 type ApprovalReviewItem =
   | { source: "spend"; approval: SpendApprovalView }
   | { source: "work"; approval: SpendApprovalView; issue: Issue };
 
 /**
- * The honey "needs you" strip above the tabs. One row per thing that actually
- * wants a human: spend/contract approvals and work the crew blocked on. Each row
- * jumps to its tab. Renders nothing when there's nothing to act on.
+ * The honey "needs you" strip above the tabs. It stays compact: one summary row
+ * for anything that actually wants a human, with a single jump into the queue.
  */
 function NeedsStrip({ colony: c, onGoToApprovals, onGoToIssues }: {
   colony: Colony; onGoToApprovals: () => void; onGoToIssues: () => void;
@@ -367,62 +364,23 @@ function NeedsStrip({ colony: c, onGoToApprovals, onGoToIssues }: {
   const needs = approvals.length + blocked.length;
   if (needs === 0) return null;
   const approvalBlockedPipeline = c.pipeline?.approvalBlockedUsd;
-  const visibleApprovals = approvals.slice(0, MAX_NEEDS_STRIP_ROWS);
-  const visibleBlocked = blocked.slice(0, Math.max(0, MAX_NEEDS_STRIP_ROWS - visibleApprovals.length));
-  const hiddenApprovalCount = approvals.length - visibleApprovals.length;
-  const hiddenIssueCount = blocked.length - visibleBlocked.length;
-  const hiddenCount = hiddenApprovalCount + hiddenIssueCount;
-  const showHiddenIssues = hiddenIssueCount > 0;
-  const handleSeeAll = showHiddenIssues ? onGoToIssues : onGoToApprovals;
-  const rowTone: Record<string, { bg: string; bd: string; color: string }> = {
-    high: { bg: "var(--row-blocked-bg)", bd: "var(--row-blocked-bd)", color: "var(--danger)" },
-    med: { bg: "var(--row-access-bg)", bd: "var(--row-access-bd)", color: "var(--honey)" },
-    low: { bg: "var(--row-live-bg)", bd: "var(--row-live-bd)", color: "var(--live)" },
-  };
+  const handleSeeAll = blocked.length > 0 ? onGoToIssues : onGoToApprovals;
   return (
     <div style={{ borderRadius: 16, border: "1px solid var(--need-bd)", background: "var(--need-bg)", padding: "16px 18px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12, flexWrap: "wrap" }}>
-        <span aria-hidden style={{ fontSize: 14, color: "var(--honey)" }}>⚑</span>
-        <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey)" }}>{needs === 1 ? "1 thing needs you" : `${needs} things need you`}</span>
-        <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>the crew handles the rest on its own</span>
-        {approvalBlockedPipeline !== undefined ? (
-          <span style={{ marginLeft: "auto", fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)", fontVariantNumeric: "tabular-nums" }}>{formatPipelineUsd(approvalBlockedPipeline)} approval-blocked quoted pipeline</span>
-        ) : null}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {visibleApprovals.map((a) => {
-          const t = rowTone[a.risk] ?? rowTone.low;
-          return (
-            <button key={a.id} type="button" onClick={onGoToApprovals} className="zhc-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", borderRadius: 12, padding: "12px 14px", font: "inherit", color: "inherit", border: `1px solid ${t.bd}`, background: t.bg }}>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: t.color, textTransform: "uppercase", letterSpacing: 0.06, border: `1px solid ${t.bd}`, borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>{a.kind}</span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{a.title}</span>
-                <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>requested by {a.agent} · awaiting your decision</span>
-              </span>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey)", flexShrink: 0 }}>Review →</span>
-            </button>
-          );
-        })}
-        {visibleBlocked.map((b) => {
-          const impact = b.pipelineImpact ?? b.work?.pipelineImpact;
-          return (
-            <button key={b.work?.taskId ?? b.key} type="button" onClick={onGoToIssues} className="zhc-btn-ghost" style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", borderRadius: 12, padding: "12px 14px", font: "inherit", color: "inherit", border: "1px solid var(--row-blocked-bd)", background: "var(--row-blocked-bg)" }}>
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, fontWeight: 700, color: "var(--danger)", textTransform: "uppercase", letterSpacing: 0.06, border: "1px solid var(--danger-soft)", borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>blocked</span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>{b.title}</span>
-                <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)" }}>{b.agent ?? "the crew"} is blocked · needs your input to resume</span>
-              </span>
-              {impact ? <span title={impact.label} style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--danger-2)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{formatPipelineUsd(impact.amountUsd)} quoted</span> : null}
-              <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey)", flexShrink: 0 }}>View →</span>
-            </button>
-          );
-        })}
-        {hiddenCount > 0 ? (
-          <button type="button" onClick={handleSeeAll} className="zhc-btn-ghost" aria-label={`See all ${needs} items needing you`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", borderRadius: 12, padding: "10px 14px", font: "inherit", color: "inherit", border: "1px solid var(--line-2)", background: "color-mix(in srgb, var(--honey) 7%, transparent)" }}>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 700, color: "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>+ {hiddenCount} more</span>
-            <span style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--honey)", flexShrink: 0 }}>See all →</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flex: "1 1 320px", minWidth: 0, flexWrap: "wrap" }}>
+          <span aria-hidden style={{ fontSize: 14, color: "var(--honey)" }}>⚑</span>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey)" }}>{needs === 1 ? "1 thing needs you" : `${needs} things need you`}</span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>the crew handles the rest on its own</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, marginLeft: "auto", flexWrap: "wrap" }}>
+          {approvalBlockedPipeline !== undefined ? (
+            <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--danger-2)", fontVariantNumeric: "tabular-nums" }}>{formatPipelineUsd(approvalBlockedPipeline)} approval-blocked quoted pipeline</span>
+          ) : null}
+          <button type="button" onClick={handleSeeAll} className="zhc-btn-ghost" aria-label={`See all ${needs} items needing you`} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", borderRadius: 8, padding: "5px 11px", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 700, color: "var(--honey)", border: "1px solid var(--honey-line)", background: "var(--honey-soft)" }}>
+            See all →
           </button>
-        ) : null}
+        </div>
       </div>
     </div>
   );

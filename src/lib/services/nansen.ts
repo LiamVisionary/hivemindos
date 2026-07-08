@@ -998,6 +998,9 @@ function tokenTopHoldersPlan(input: NansenSimpleTemplateInput) {
   const tokenAddress = cleanText(input.tokenAddress);
   if (!tokenAddress) return { error: "tokenAddress is required for token-top-holders." };
   const labelType = cleanText(input.labelType) || "all_holders";
+  const defaultOrderBy = labelType === "all_holders"
+    ? [{ field: "token_amount", direction: "DESC" as const }]
+    : [{ field: "value_usd", direction: "DESC" as const }];
   const calls: PlannedNansenCall[] = [
     {
       key: "tokenHolders",
@@ -1006,10 +1009,10 @@ function tokenTopHoldersPlan(input: NansenSimpleTemplateInput) {
         token_address: tokenAddress,
         aggregate_by_entity: input.aggregateByEntity === true,
         label_type: labelType,
-        premium_labels: input.premiumLabels !== false,
+        premium_labels: input.premiumLabels === true,
         filters: input.filters ?? {},
         pagination: { page: 1, per_page: 25 },
-        order_by: input.orderBy?.length ? input.orderBy : [{ field: "value_usd", direction: "DESC" }],
+        order_by: input.orderBy?.length ? input.orderBy : defaultOrderBy,
       },
     },
   ];

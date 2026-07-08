@@ -147,8 +147,8 @@ const NANSEN_TRADE_ACTIONS = {
   "nansen-top-wallets": {
     kind: "complex",
     template: "top-wallet-copytrade-research",
-    runLabel: "Run top-wallet brief",
-    hint: "watch-only token wallet research",
+    runLabel: "Find top wallets",
+    hint: "top wallets for a token",
   },
   "nansen-cex-health": {
     kind: "complex",
@@ -449,6 +449,13 @@ type NansenDraftValues = {
   labelType: string;
 };
 
+type NansenTokenOption = {
+  symbol: string;
+  name: string;
+  address: string;
+  source?: string;
+};
+
 const NANSEN_CHAIN_OPTIONS = [
   { value: "base", label: "Base" },
   { value: "ethereum", label: "Ethereum" },
@@ -467,6 +474,42 @@ const NANSEN_HOLDER_LABEL_OPTIONS = [
 ];
 const STABLE_SYMBOLS = new Set(["USDC", "USDT", "USDG", "DAI", "PYUSD"]);
 
+const NANSEN_TOP_WALLET_TOKEN_OPTIONS: Record<string, NansenTokenOption[]> = {
+  base: [
+    { symbol: "WETH", name: "Wrapped Ether", address: "0x4200000000000000000000000000000000000006" },
+    { symbol: "USDC", name: "USD Coin", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+    { symbol: "cbBTC", name: "Coinbase Wrapped BTC", address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf" },
+    { symbol: "AERO", name: "Aerodrome", address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
+  ],
+  ethereum: [
+    { symbol: "WETH", name: "Wrapped Ether", address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" },
+    { symbol: "USDC", name: "USD Coin", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+    { symbol: "USDT", name: "Tether USD", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" },
+    { symbol: "LINK", name: "Chainlink", address: "0x514910771AF9Ca656af840dff83E8264EcF986CA" },
+    { symbol: "UNI", name: "Uniswap", address: "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984" },
+  ],
+  arbitrum: [
+    { symbol: "WETH", name: "Wrapped Ether", address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" },
+    { symbol: "USDC", name: "USD Coin", address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" },
+    { symbol: "ARB", name: "Arbitrum", address: "0x912CE59144191C1204E64559FE8253a0e49E6548" },
+  ],
+  polygon: [
+    { symbol: "WPOL", name: "Wrapped POL", address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270" },
+    { symbol: "USDC", name: "USD Coin", address: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359" },
+    { symbol: "WETH", name: "Wrapped Ether", address: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619" },
+  ],
+  bnb: [
+    { symbol: "WBNB", name: "Wrapped BNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" },
+    { symbol: "USDT", name: "Tether USD", address: "0x55d398326f99059fF775485246999027B3197955" },
+  ],
+  solana: [
+    { symbol: "SOL", name: "Wrapped SOL", address: "So11111111111111111111111111111111111111112" },
+    { symbol: "USDC", name: "USD Coin", address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
+    { symbol: "JUP", name: "Jupiter", address: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN" },
+    { symbol: "BONK", name: "Bonk", address: "DezXAZ8z7PnrnRJjz3HWqWTWwJpHTB1pPB263uLb263" },
+  ],
+};
+
 function NansenCapabilityPanel({ intentId }: { intentId: NansenTradeIntentId }) {
   const desk = useTradeDesk();
   const action = NANSEN_TRADE_ACTIONS[intentId];
@@ -475,6 +518,10 @@ function NansenCapabilityPanel({ intentId }: { intentId: NansenTradeIntentId }) 
   const [brief, setBrief] = React.useState<TradeNansenInsightBrief | null>(null);
   const [error, setError] = React.useState("");
   const validation = validateNansenDraft(intentId, values);
+  const topWalletTokenOptions = React.useMemo(
+    () => nansenTopWalletTokenOptions(values.chain, desk.cryptoPortfolio.rows),
+    [desk.cryptoPortfolio.rows, values.chain],
+  );
 
   const setField = (key: keyof NansenDraftValues, value: string) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -506,7 +553,7 @@ function NansenCapabilityPanel({ intentId }: { intentId: NansenTradeIntentId }) 
   return (
     <div className="tk-nansen">
       <div className="tk-form tk-nansen-form">
-        {renderNansenFields(intentId, values, setField)}
+        {renderNansenFields(intentId, values, setField, topWalletTokenOptions)}
       </div>
       <p className="tk-nansen-note">
         These actions return derived HivemindOS research only. They do not place trades, copy wallets, or expose raw Nansen feeds.
@@ -529,6 +576,7 @@ function renderNansenFields(
   intentId: NansenTradeIntentId,
   values: NansenDraftValues,
   setField: (key: keyof NansenDraftValues, value: string) => void,
+  topWalletTokenOptions: NansenTokenOption[],
 ) {
   const chainField = (
     <label className="fb-label">
@@ -560,8 +608,23 @@ function renderNansenFields(
           </select>
         </label>
         <label className="fb-label tk-nansen-full">
-          Token address
-          <input className="fb-field fb-mono" placeholder="0x..." value={values.tokenAddress} onChange={(event) => setField("tokenAddress", event.target.value.trim())} />
+          Token
+          <input
+            className="fb-field fb-mono"
+            list="nansen-top-wallet-token-options"
+            placeholder={values.chain === "solana" ? "Search token or paste mint..." : "Search token or paste contract..."}
+            value={values.tokenAddress}
+            onChange={(event) => setField("tokenAddress", event.target.value.trim())}
+          />
+          <datalist id="nansen-top-wallet-token-options">
+            {topWalletTokenOptions.map((option) => (
+              <option
+                key={`${option.address}:${option.symbol}`}
+                value={option.address}
+                label={`${option.symbol} · ${option.name}${option.source ? ` · ${option.source}` : ""}`}
+              />
+            ))}
+          </datalist>
         </label>
       </>
     );
@@ -627,10 +690,6 @@ function renderNansenFields(
           Token address
           <input className="fb-field fb-mono" placeholder="0x..." value={values.tokenAddress} onChange={(event) => setField("tokenAddress", event.target.value.trim())} />
         </label>
-        <label className="fb-label tk-nansen-full">
-          Compare wallet (optional)
-          <input className="fb-field fb-mono" placeholder="0x..." value={values.address} onChange={(event) => setField("address", event.target.value.trim())} />
-        </label>
       </>
     );
   }
@@ -672,7 +731,7 @@ function validateNansenDraft(intentId: NansenTradeIntentId, values: NansenDraftV
   if (intentId === "nansen-defi-positions" && !values.address.trim()) return "Enter a wallet address for DeFi positions.";
   if (intentId === "nansen-token-holders" && !values.tokenAddress.trim()) return "Enter a token contract address.";
   if (intentId === "nansen-related-wallets" && !values.address.trim()) return "Enter a wallet address to cluster.";
-  if (intentId === "nansen-top-wallets" && !values.tokenAddress.trim()) return "Enter a token contract address.";
+  if (intentId === "nansen-top-wallets" && !values.tokenAddress.trim()) return "Enter a token contract address to find top wallets.";
   if (intentId === "nansen-cex-health" && !values.entityName.trim()) return "Enter an exchange/entity name.";
   return "";
 }
@@ -704,7 +763,7 @@ function buildNansenTemplateParams(intentId: NansenTradeIntentId, values: Nansen
           tokenAddress,
           labelType: values.labelType || "all_holders",
           aggregateByEntity: false,
-          premiumLabels: true,
+          premiumLabels: false,
         },
       };
     }
@@ -747,11 +806,42 @@ function buildNansenTemplateParams(intentId: NansenTradeIntentId, values: Nansen
       chain,
       chains: chain ? [chain] : undefined,
       tokenAddress,
-      address: address || undefined,
       timeframe: values.timeframe || "7d",
     } };
   }
   return { kind: "complex", params: { template: action.template, chain, entityName: entityName || "Coinbase" } };
+}
+
+function nansenTopWalletTokenOptions(
+  chain: string,
+  portfolioRows: Array<{ id: string; sym: string; name: string; usd: number }>,
+): NansenTokenOption[] {
+  const seen = new Set<string>();
+  const add = (options: NansenTokenOption[], option: NansenTokenOption) => {
+    const address = option.address.trim();
+    if (!address || !looksLikeNansenTokenAddress(chain, address)) return;
+    const key = address.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    options.push(option);
+  };
+  const options: NansenTokenOption[] = [];
+  for (const row of portfolioRows) {
+    add(options, {
+      symbol: row.sym,
+      name: row.name || row.sym,
+      address: row.id,
+      source: row.usd > 0 ? "Held" : undefined,
+    });
+  }
+  for (const option of NANSEN_TOP_WALLET_TOKEN_OPTIONS[chain] ?? []) add(options, option);
+  return options;
+}
+
+function looksLikeNansenTokenAddress(chain: string, value: string) {
+  const trimmed = value.trim();
+  if (chain === "solana") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed);
+  return /^0x[a-fA-F0-9]{40}$/.test(trimmed);
 }
 
 function nansenChainForNetwork(network: string): string {

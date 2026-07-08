@@ -38,7 +38,7 @@ function schedule(overrides) {
 // The dashboard state keeps a bounded schedule snapshot, but the onboarding
 // brain-loop rows must survive the cap or the fleet banner forgets they were
 // enabled until a slower vault sync rehydrates them.
-const crowdedSchedules = Array.from({ length: 125 }, (_, index) => schedule({
+const crowdedSchedules = Array.from({ length: 1005 }, (_, index) => schedule({
   id: `ordinary-${index}`,
   name: `Ordinary ${index}`,
   updatedAt: NOW - index,
@@ -48,10 +48,10 @@ const compactedSchedules = compactSchedulesForPersist([
   schedule({ id: "foundation:daily-context-generator", name: "Daily Context Generator", enabled: true, updatedAt: NOW - 10 * DAY }),
   schedule({ id: "foundation:weekly-synthesis", name: "Weekly Synthesis", enabled: true, updatedAt: NOW - 11 * DAY }),
 ]);
-assert.equal(compactedSchedules.length, 120, "schedule snapshot remains capped");
+assert.equal(compactedSchedules.length, 1000, "schedule snapshot remains capped");
 assert.ok(compactedSchedules.some((item) => item.id === "foundation:daily-context-generator"), "Daily Context survives the cap");
 assert.ok(compactedSchedules.some((item) => item.id === "foundation:weekly-synthesis"), "Weekly Synthesis survives the cap");
-assert.ok(!compactedSchedules.some((item) => item.id === "ordinary-124"), "low-priority ordinary rows are displaced first");
+assert.ok(!compactedSchedules.some((item) => item.id === "ordinary-1004"), "low-priority ordinary rows are displaced first");
 console.log("PASS schedule persistence compaction");
 
 // --- cadence parsing -------------------------------------------------------
@@ -160,6 +160,19 @@ const cleaned = dedupeSchedulesByLoop([
 ]);
 assert.equal(cleaned.length, 1, "2 forked pulse rows collapse to 1");
 assert.equal(cleaned[0].id, "p1", "fresher pulse row kept");
+
+// Agent-aware: the SAME underlying job armed on DIFFERENT agents (e.g. an Aeon
+// skill seeded onto two agents) is two distinct automations, not a duplicate.
+assert.notEqual(
+  scheduleLoopSignature(schedule({ agentId: "aeon-9", name: "Evening Recap", externalSource: "aeon", externalJobId: "evening-recap" })),
+  scheduleLoopSignature(schedule({ agentId: "aeon-10", name: "Evening Recap", externalSource: "aeon", externalJobId: "evening-recap" })),
+  "same job on different agents keeps distinct signatures",
+);
+const perAgent = dedupeSchedulesByLoop([
+  schedule({ id: "e9", agentId: "aeon-9", name: "Evening Recap", externalSource: "aeon", externalJobId: "evening-recap" }),
+  schedule({ id: "e10", agentId: "aeon-10", name: "Evening Recap", externalSource: "aeon", externalJobId: "evening-recap" }),
+]);
+assert.equal(perAgent.length, 2, "same job on two agents stays as two rows");
 console.log("PASS dedupe by loop");
 
 // --- dismiss (banner) ------------------------------------------------------

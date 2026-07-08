@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { HONEY_BEE_LOTTIE_SRC } from "@/components/ui/lottie-asset-cache";
 import { LottieAssetPreloader } from "@/components/ui/lottie-asset-preloader";
+import { QUEEN_VOICE_ACTIVATION_SOUND_SRC } from "@/features/queen-voice/activation-sound";
 import { BEE_ROLE_ICON_PATHS } from "@/lib/config/bee-role-icons";
 import "./globals.css";
 
@@ -46,6 +47,7 @@ export default function RootLayout({
           <link key={href} rel="preload" as="image" href={href} />
         ))}
         <link rel="preload" as="fetch" href={HONEY_BEE_LOTTIE_SRC} type="application/octet-stream" crossOrigin="anonymous" />
+        <link rel="preload" as="audio" href={QUEEN_VOICE_ACTIVATION_SOUND_SRC} type="audio/wav" />
       </head>
       <body>
         <LottieAssetPreloader src={HONEY_BEE_LOTTIE_SRC} />

@@ -24,6 +24,12 @@ export interface NewTaskPayload {
   pastRunLimit: number;
   /** True when saved from AEON mode — the target is the AEON workspace, not the bee picker. */
   aeon: boolean;
+  /** Fan-out: mirror this automation's cron onto every fleet machine. Optional so
+   *  the shared Kanban/TaskModal consumers that never set it are unaffected. */
+  runOnAllMachines?: boolean;
+  /** Per-step attachments aligned by index with `steps` (steps mode). Optional so
+   *  the shared Kanban TaskModal, which has no per-step attachments, is unaffected. */
+  stepAttachments?: Array<{ skills: string[]; paths: string[] }>;
 }
 
 export type TaskModalSkillOption = {

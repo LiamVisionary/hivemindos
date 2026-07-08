@@ -352,7 +352,12 @@ export function parseStoredSchedules(snapshot: DashboardStateSnapshot = {}): Age
   }
 }
 
-const MAX_PERSISTED_SCHEDULES = 120;
+// Bounds the persisted schedule snapshot so the dashboard-state blob stays
+// small, but must comfortably exceed a real fleet's automation count — 120 was
+// clipping users with hundreds of (mostly inactive, Aeon-seeded) schedules to
+// 120 rows in the list. A schedule row is ~1KB, so 1000 caps the snapshot near
+// ~1MB while showing every automation a normal fleet has.
+const MAX_PERSISTED_SCHEDULES = 1000;
 const PINNED_SCHEDULE_IDS = new Set(ONBOARDING_BRAIN_LOOPS.map((loop) => loop.scheduleId));
 
 export function compactSchedulesForPersist(schedules: AgentSchedule[]): AgentSchedule[] {

@@ -13,7 +13,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 | --- | --- |
 | `hive-assimilate` | Mandatory pre-build search across shared brain, user projects, local/private indexes, and public GitHub before software creation. |
 | `hive-pulse` | Built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources, powered by a pinned MIT licensed `last30days` engine. |
-| `hive-capability-search` | Discovers available tools, skills, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |
+| `hive-capability-search` | Discovers available tools, shared skills, optional packaged workflow playbooks, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |
 | `hive-remote-capability-use` | Executes remote connected apps and fleet capabilities selected by capability search, including fresh discovery, Hivemind Link app-proxy routing, private file transfer, artifact verification, and side-effect gates. |
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
 | `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |

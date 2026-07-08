@@ -22,6 +22,7 @@ import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/servic
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
 import { dashboardSwarmGoalContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem } from "@/lib/services/context-index/static-tool-items";
+import { packagedSkillFileStats, packagedSkillItem } from "@/lib/services/context-index/packaged-skills";
 import { hiveActionContextIndexItems, hiveActionMcpName, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
 import {
@@ -137,7 +138,6 @@ const DOC_ROOTS = ["docs"];
 const WORKSPACE_ROOTS = ["src/lib", "src/features/dashboard", "src/components", "scripts", "workers", "cmd", "src-tauri/src"];
 const TOP_LEVEL_FILES = ["AGENTS.md", "README.md", "ROADMAP.md", "CHANGELOG.md", "package.json", "setup.sh", "setup.ps1", "uninstall.sh", "uninstall.ps1"];
 const TOOL_SCHEMA_FILES = ["src/lib/search-tool.ts", "src/app/api/orchestrator/route.ts", "src/app/api/scheduler/skill-action/route.ts"];
-const PACKAGED_AUTO_INSTALL_SKILLS_ROOT = "packaged-skills/auto-install";
 const CONNECTED_APPS_NOTE = "Connected Apps Context Index.md";
 
 function workspaceRoot() {
@@ -384,37 +384,6 @@ async function skillItems(options: ContextIndexOptions): Promise<ContextIndexIte
   })));
 
   return [...shared, ...providerSkills];
-}
-
-async function packagedSkillFileStats(): Promise<FileStatEntry[]> {
-  const root = absolutePath(PACKAGED_AUTO_INSTALL_SKILLS_ROOT);
-  if (!(await canRead(root))) return [];
-  const files = (await walkFiles(root, [], 200)).filter((file) => basename(file) === "SKILL.md");
-  return statPaths(files);
-}
-
-async function packagedSkillItem(file: FileStatEntry): Promise<ContextIndexItem> {
-  const markdown = await readFile(file.path, "utf8").catch(() => "");
-  const frontmatter = parseSimpleFrontmatter(markdown);
-  const relativePath = toPosix(relative(workspaceRoot(), file.path));
-  const slug = basename(dirname(file.path));
-  const description = frontmatter.get("description") || firstUsefulParagraph(markdown) || `Packaged skill ${slug}.`;
-  return {
-    id: `skill:packaged:auto-install:${slug}`,
-    kind: "skill",
-    title: frontmatter.get("name") || slug,
-    summary: description,
-    tags: tagParts(slug, "packaged", "auto-install", "installable", "one-click", "skill"),
-    path: file.path,
-    retrievalText: retrievalText([description, relativePath, "packaged skill auto-install catalog"]),
-    load: {
-      type: "file",
-      target: file.path,
-      note: "Packaged auto-install skill metadata is indexed for setup discovery. Optional packaged skills are excluded until the user installs them into the shared brain.",
-    },
-    updatedAt: file.mtimeMs,
-    sizeBytes: file.size,
-  };
 }
 
 async function apiRouteFileStats(): Promise<FileStatEntry[]> {
@@ -710,8 +679,8 @@ function localCliToolItems(): ContextIndexItem[] {
       id: "tool-schema:nansen-onchain-intelligence",
       kind: "tool-schema",
       title: "Nansen onchain intelligence",
-      summary: "Nansen token, wallet, Hyperliquid, market-scout, complex-template, CEX-health, and research-agent briefings for HivemindOS trade and portfolio due diligence.",
-      tags: ["nansen", "crypto", "wallet", "portfolio", "token", "market-scout", "hyperliquid", "complex-template", "cex-health", "related-wallets", "onchain", "due-diligence", "hosted-credits", "capability", "tool"],
+      summary: "Nansen token, wallet, Hyperliquid, market-scout, simple-template, complex-template, CEX-health, and research-agent briefings for HivemindOS trade and portfolio due diligence.",
+      tags: ["nansen", "crypto", "wallet", "portfolio", "token", "market-scout", "hyperliquid", "simple-template", "complex-template", "smart-money-holdings", "token-holders", "token-screener", "cex-health", "related-wallets", "onchain", "due-diligence", "hosted-credits", "capability", "tool"],
       aliases: [
         "nansen",
         "token due diligence",
@@ -720,7 +689,11 @@ function localCliToolItems(): ContextIndexItem[] {
         "token brief",
         "market scout",
         "hyperliquid intelligence",
+        "simple nansen template",
         "complex nansen template",
+        "smart money holdings",
+        "top token holders",
+        "token screener discovery",
         "smart money token tracking",
         "related wallet clustering",
         "cex health monitor",
@@ -733,7 +706,7 @@ function localCliToolItems(): ContextIndexItem[] {
       load: {
         type: "api",
         target: "/api/nansen/status",
-        note: "Use /api/nansen/status for readiness, then POST /api/nansen/token-brief, /wallet-brief, /hyperliquid-brief, /market-scout, /complex-template, or /agent. Complex template ids: token-tracking-smart-money, hyperliquid-wallet-discovery, related-wallets-scale, top-wallet-copytrade-research, cex-health-monitor. Hosted credits use the managed broker; direct Nansen x402 is not the official cloud path.",
+        note: "Use /api/nansen/status for readiness, then POST /api/nansen/token-brief, /wallet-brief, /hyperliquid-brief, /market-scout, /simple-template, /complex-template, or /agent. Simple template ids: defi-positions, smart-money-holdings, token-top-holders, token-screener-discovery. Complex template ids: token-tracking-smart-money, hyperliquid-wallet-discovery, related-wallets-scale, top-wallet-copytrade-research, cex-health-monitor. Hosted credits use the managed broker; direct Nansen x402 is not the official cloud path.",
       },
     },
     {

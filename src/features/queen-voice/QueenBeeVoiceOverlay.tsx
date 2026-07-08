@@ -28,22 +28,20 @@ import {
   type QueenVoicePhase,
   type QueenVoiceWorkingStage,
 } from "./use-queen-bee-voice";
+import {
+  playQueenVoiceActivationSound,
+  primeQueenVoiceActivationSound,
+  QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS,
+  preloadQueenVoiceActivationSound,
+} from "./activation-sound";
 import { useQueenChat, type QueenChatTurn } from "./queen-chat-store";
 import styles from "./queen-voice.module.css";
 
-const QUEEN_VOICE_ACTIVATION_SOUND_SRC = "/audio/sfx/scifi-ping.wav";
 const QUEEN_VOICE_OPENING_LINE =
   "Hey Liam, I'm here. What should we work on first?";
 
 // Thinking pauses render the chat route's animated loader (bee + rotating
 // phrases — AgentResponseLoader) instead of a held filler line.
-
-function playQueenVoiceActivationSound() {
-  if (typeof Audio === "undefined") return;
-  const audio = new Audio(QUEEN_VOICE_ACTIVATION_SOUND_SRC);
-  audio.volume = 0.72;
-  void audio.play().catch(() => undefined);
-}
 
 function statusLabel(
   phase: QueenVoicePhase,
@@ -451,11 +449,12 @@ export function QueenBeeVoiceOverlay({
   const [open, setOpen] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
   const [voicePickerOpen, setVoicePickerOpen] = React.useState(false);
+  const [armedVoiceSessionNonce, setArmedVoiceSessionNonce] = React.useState(-1);
   // The shared Queen conversation (typed + voice live here together). The
   // history-collapsed flag lives in the store so the input's toggle tab and
   // this transcript overlay share one source of truth.
   const chat = useQueenChat();
-  const { setHistoryMinimized, setTranscriptInteractionActive } = chat;
+  const { setHistoryMinimized, setTranscriptInteractionActive, setVoiceChatActive } = chat;
   // Bumping the nonce restarts the realtime session (e.g. new voice).
   const [sessionNonce, setSessionNonce] = React.useState(0);
   const [realtimeFailedNonce, setRealtimeFailedNonce] = React.useState(-1);
@@ -470,12 +469,25 @@ export function QueenBeeVoiceOverlay({
   React.useEffect(() => {
     sessionNonceRef.current = sessionNonce;
   }, [sessionNonce]);
+  const voiceSessionArmed = open && armedVoiceSessionNonce === sessionNonce;
   // Which brain answers spoken turns — shown as a subtle tag by her name.
   const [brainLabel, setBrainLabel] = React.useState("");
+  React.useEffect(() => {
+    setVoiceChatActive(open);
+  }, [open, setVoiceChatActive]);
+  React.useEffect(() => () => setVoiceChatActive(false), [setVoiceChatActive]);
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const nonce = sessionNonce;
+    const timer = window.setTimeout(() => {
+      setArmedVoiceSessionNonce(nonce);
+    }, QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, sessionNonce]);
   // Re-resolved on each open and session restart so a freshly-changed Calls
   // setting takes effect without restarting the app.
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || !voiceSessionArmed) return;
     let cancelled = false;
     const nonce = sessionNonce;
     void fetch("/api/queen-bee/voice", { cache: "no-store" })
@@ -497,9 +509,10 @@ export function QueenBeeVoiceOverlay({
     return () => {
       cancelled = true;
     };
-  }, [open, sessionNonce]);
+  }, [open, sessionNonce, voiceSessionArmed]);
   const voiceModeForOpen =
     resolvedVoiceMode?.nonce === sessionNonce ? resolvedVoiceMode.mode : null;
+  const voiceSessionOpen = open && voiceSessionArmed;
   const realtimeMode =
     voiceModeForOpen === "realtime" && realtimeFailedNonce !== sessionNonce;
   const geminiLiveMode = voiceModeForOpen === "gemini-live";
@@ -510,6 +523,23 @@ export function QueenBeeVoiceOverlay({
     setHistoryMinimized(false);
     setSessionNonce((current) => current + 1);
   }, [setHistoryMinimized]);
+
+  React.useEffect(() => {
+    preloadQueenVoiceActivationSound();
+    const primeActivationSound = () => primeQueenVoiceActivationSound();
+    window.addEventListener("pointerdown", primeActivationSound, {
+      capture: true,
+      once: true,
+    });
+    window.addEventListener("keydown", primeActivationSound, {
+      capture: true,
+      once: true,
+    });
+    return () => {
+      window.removeEventListener("pointerdown", primeActivationSound, true);
+      window.removeEventListener("keydown", primeActivationSound, true);
+    };
+  }, []);
 
   const openQueenVoiceChat = React.useCallback(() => {
     setOpen((current) => {
@@ -556,7 +586,7 @@ export function QueenBeeVoiceOverlay({
     [onDriveDashboard, screenContext, setHistoryMinimized],
   );
   const realtime = useQueenBeeRealtime(
-    open && realtimeMode,
+    voiceSessionOpen && realtimeMode,
     muted,
     handleRealtimeFailed,
     onDriveDashboard ? driveDashboard : undefined,
@@ -564,14 +594,14 @@ export function QueenBeeVoiceOverlay({
     screenContext,
   );
   const geminiLive = useQueenBeeGeminiLive(
-    open && geminiLiveMode,
+    voiceSessionOpen && geminiLiveMode,
     muted,
     QUEEN_VOICE_OPENING_LINE,
     onDriveDashboard ? driveDashboard : undefined,
     screenContext,
   );
   const pipeline = useQueenBeeVoice(
-    open && voiceModeForOpen !== null && !realtimeMode && !geminiLiveMode,
+    voiceSessionOpen && voiceModeForOpen !== null && !realtimeMode && !geminiLiveMode,
     muted,
     QUEEN_VOICE_OPENING_LINE,
     voiceModeForOpen === "pipeline",

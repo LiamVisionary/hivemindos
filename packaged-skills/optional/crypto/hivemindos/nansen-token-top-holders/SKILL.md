@@ -40,7 +40,7 @@ POST /api/nansen/simple-template
   "template": "token-top-holders",
   "chain": "ethereum",
   "tokenAddress": "<token-contract-address>",
-  "premiumLabels": true
+  "premiumLabels": false
 }
 ```
 

@@ -1,26 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { FileUp, LoaderCircle, Repeat2 } from "lucide-react";
-import { CloseIconButton } from "@/components/ui/close-icon-button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SchedulerView } from "@/components/scheduler";
-import type { SchedulerJob, SchedulerRunHistoryEntry, SchedulerRunState } from "@/components/scheduler";
-import { TaskModal } from "@/components/task-modal";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SchedulerView, AutomationComposerModal } from "@/components/scheduler";
+import type { SchedulerJob, SchedulerRunHistoryEntry, SchedulerRunState, AutomationAgentOption } from "@/components/scheduler";
 import type { NewTaskPayload } from "@/components/task-modal";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { runtimeDisplayLabel } from "@/lib/types/agent-runtime";
 import type { AgentSchedule, MachineGroup, WorkView } from "@/features/dashboard/dashboard-types";
-import { computeScheduleHealthWarnings, scheduleHealthWarningKey, visibleScheduleHealthWarnings } from "../schedule-health";
-import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
-import { WorkSectionHeader } from "./WorkSectionHeader";
+import styles from "@/components/scheduler/scheduler-tokens.module.css";
 
-// Durable set of loop-health warnings the user has dismissed, keyed by
-// kind+scheduleIds so an acknowledged warning stays hidden but a genuinely new
-// one still surfaces. Persisted through the dashboard state service (never
-// localStorage) so it survives reloads and rides the native bridge.
-const SCHEDULE_HEALTH_DISMISSED_KEY = "hivemindos.scheduleHealthDismissed.v1";
+// Automation-health warnings (duplicate/dead loops) now surface in the Alerts
+// route (NotificationsPanel) instead of a banner here, so the scheduler view
+// stays a clean flight plan. The durable dismiss state moved there too.
 
 type SkillOption = { slug: string; name: string; description?: string };
+
+const WORK_TABS: Array<{ id: WorkView; label: string }> = [
+  { id: "kanban", label: "Workboard" },
+  { id: "scheduler", label: "Automations" },
+  { id: "swarm", label: "Simulation" },
+  { id: "history", label: "History" },
+];
+
+function titleCase(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
 
 export interface SchedulerPanelProps {
   activeView: string;
@@ -56,7 +62,7 @@ export interface SchedulerPanelProps {
 
 export function SchedulerPanel(props: SchedulerPanelProps) {
   const {
-    activeView, setActiveView, schedulerJobs, schedulerRunStates, schedules,
+    activeView, setActiveView, schedulerJobs, schedulerRunStates,
     scheduleImporting, scheduleImportStatus, schedulerDraftOpen, editingScheduleId,
     displayAgents, selectedAgent, machineGroups, sharedSkillOptions, aeonSkillOptions,
     schedulerModalInitial, refreshSharedSchedulesFromVault, importExistingSchedules,
@@ -70,34 +76,33 @@ export function SchedulerPanel(props: SchedulerPanelProps) {
   // wrong source there and is usually empty).
   const modalSkillOptions = activeView === "aeon" ? (aeonSkillOptions ?? []) : sharedSkillOptions;
 
-  // Loop-health guard: duplicate enabled loops and enabled-but-dead loops surface
-  // here so silent double-fires/rot get seen. Mount-time clock keeps render pure;
-  // staleness thresholds are days-scale, so hours of drift is immaterial.
-  const [healthCheckedAt] = useState(() => Date.now());
-  const scheduleHealthWarnings = useMemo(
-    () => computeScheduleHealthWarnings(schedules ?? [], healthCheckedAt),
-    [schedules, healthCheckedAt],
-  );
-  const [dismissedHealthRaw, rememberDismissedHealth] = useRememberedDashboardValue(SCHEDULE_HEALTH_DISMISSED_KEY);
-  const dismissedHealthKeys = useMemo(() => {
-    try {
-      const parsed = JSON.parse(dismissedHealthRaw || "[]");
-      return new Set<string>(Array.isArray(parsed) ? parsed.filter((key): key is string => typeof key === "string") : []);
-    } catch {
-      return new Set<string>();
-    }
-  }, [dismissedHealthRaw]);
-  const visibleHealthWarnings = useMemo(
-    () => visibleScheduleHealthWarnings(scheduleHealthWarnings, dismissedHealthKeys),
-    [scheduleHealthWarnings, dismissedHealthKeys],
-  );
-  const dismissHealthWarning = (warning: (typeof scheduleHealthWarnings)[number]) => {
-    const liveKeys = new Set(scheduleHealthWarnings.map(scheduleHealthWarningKey));
-    const next = [...dismissedHealthKeys, scheduleHealthWarningKey(warning)].filter((key) => liveKeys.has(key));
-    rememberDismissedHealth(JSON.stringify([...new Set(next)]));
-  };
-  const restoreDismissedHealthWarnings = () => rememberDismissedHealth("[]");
-  const hiddenHealthWarningCount = scheduleHealthWarnings.length - visibleHealthWarnings.length;
+  // Real agent roster for the create wizard: name + bee identity (for the icon)
+  // + resolved machine/runtime labels + a class label. Machine is resolved from
+  // the machine groups the agent actually belongs to (rename-proof), falling back
+  // to the agent's own machineName / "dashboard".
+  const automationAgents = useMemo<AutomationAgentOption[]>(() => displayAgents.map((agent) => {
+    const group = machineGroups.find((machine) => machine.agents?.some((member) => member.id === agent.id));
+    const machineLabel = group?.name ?? agent.machineName ?? "dashboard";
+    const cls = agent.beeRole === "queen" ? "Queen" : titleCase(agent.workerClass ?? "general");
+    return {
+      id: agent.id,
+      name: agent.name,
+      beeRole: agent.beeRole,
+      workerClass: agent.workerClass,
+      cls,
+      machineLabel,
+      runtimeLabel: agent.runtime ? runtimeDisplayLabel(agent.runtime) : "dashboard",
+    };
+  }), [displayAgents, machineGroups]);
+
+  const machineOptions = useMemo<string[]>(() => Array.from(new Set([
+    ...machineGroups.map((machine) => machine.name),
+    "dashboard",
+  ])), [machineGroups]);
+
+  const activeCount = schedulerJobs.filter((job) => job.enabled).length;
+  const pausedCount = schedulerJobs.filter((job) => !job.enabled).length;
+  const attentionCount = schedulerJobs.filter((job) => job.enabled && (job.lastRun.status === "failed" || job.lastRun.status === "warn")).length;
 
   const runJob = (job: SchedulerJob) => {
     const schedule = findScheduleForJob(job);
@@ -124,90 +129,80 @@ export function SchedulerPanel(props: SchedulerPanelProps) {
     setScheduleImportStatus("");
   };
 
+  const headerActions = (
+    <TooltipProvider delayDuration={120}>
+    <div className={styles.autoTopActions}>
+      {scheduleImportStatus ? (
+        <span className="max-w-[200px] truncate text-[11px] text-[var(--muted)]" title={scheduleImportStatus}>{scheduleImportStatus}</span>
+      ) : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="Sync vault schedules"
+            className={styles.toolBtn}
+            onClick={() => void refreshSharedSchedulesFromVault()}
+          >
+            <Repeat2 aria-hidden size={15} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Sync vault schedules</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={scheduleImporting ? "Importing existing runtime schedules" : "Import existing runtime schedules"}
+            className={styles.toolBtn}
+            onClick={() => void importExistingSchedules()}
+            disabled={scheduleImporting}
+          >
+            {scheduleImporting ? <LoaderCircle aria-hidden size={15} className="animate-spin" /> : <FileUp aria-hidden size={15} />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{scheduleImporting ? "Importing existing schedules" : "Import existing schedules"}</TooltipContent>
+      </Tooltip>
+    </div>
+    </TooltipProvider>
+  );
+
   return (
     <>
       {activeView === "scheduler" ? (
         <section
-          className="grid min-h-0 overflow-hidden rounded-[18px] border border-[rgba(148,163,184,0.16)] bg-[rgba(5,8,13,0.72)]"
-          style={{ height: "100%", gridTemplateRows: (visibleHealthWarnings.length || hiddenHealthWarningCount) ? "auto auto minmax(0, 1fr)" : "auto minmax(0, 1fr)" }}
+          className={`${styles.root} ${styles.autoTheme} grid min-h-0 overflow-hidden`}
+          style={{ height: "100%", background: "var(--background)", gridTemplateRows: "auto minmax(0, 1fr)" }}
         >
-          <WorkSectionHeader
-            activeView="scheduler"
-            onSelect={setActiveView}
-            title="Automations"
-            subtitle="Recurring work for your agents"
-            stats={[
-              { value: schedulerJobs.filter((job) => job.enabled).length, label: "active", tone: "cyan" },
-              { value: schedulerJobs.filter((job) => !job.enabled).length, label: "paused", tone: "honey" },
-              { value: schedulerJobs.filter((job) => job.lastRun?.status === "failed").length, label: "failed", tone: "danger" },
-              { value: schedulerJobs.length, label: "total" },
-            ]}
-          />
-          {visibleHealthWarnings.length ? (
-            <div className="flex max-h-36 flex-col gap-1.5 overflow-y-auto border-b border-[rgba(245,158,11,0.28)] bg-[rgba(245,158,11,0.08)] px-4 py-2.5" role="status" aria-live="polite">
-              {visibleHealthWarnings.map((warning) => (
-                <div key={scheduleHealthWarningKey(warning)} className="flex items-start gap-2 text-xs leading-relaxed">
-                  <div className="min-w-0 flex-1">
-                    <strong className="text-[rgba(253,230,138,0.95)]">{warning.title}.</strong>{" "}
-                    <span className="text-[var(--muted)]">{warning.detail}</span>
-                  </div>
-                  <CloseIconButton
-                    size="sm"
-                    aria-label={`Dismiss warning: ${warning.title}`}
-                    title="Dismiss this warning"
-                    className="-mr-1 shrink-0 text-[rgba(253,230,138,0.85)] hover:text-[rgba(253,230,138,1)]"
-                    onClick={() => dismissHealthWarning(warning)}
-                  />
-                </div>
+          {/* Sub-tab + stats bar */}
+          <div className={styles.autoTopBar}>
+            <div className={styles.autoTabGroup} role="tablist" aria-label="Work view">
+              {WORK_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab.id === "scheduler"}
+                  className={`${styles.autoTab} ${tab.id === "scheduler" ? styles.autoTabActive : ""}`}
+                  onClick={() => setActiveView(tab.id)}
+                >
+                  {tab.label}
+                </button>
               ))}
             </div>
-          ) : hiddenHealthWarningCount ? (
-            <div className="flex items-center justify-end gap-2 border-b border-[rgba(148,163,184,0.14)] bg-[rgba(5,8,13,0.4)] px-4 py-1.5 text-[11px] text-[var(--muted)]" role="status">
-              <span>{hiddenHealthWarningCount} automation health {hiddenHealthWarningCount === 1 ? "warning" : "warnings"} dismissed.</span>
-              <button type="button" className="font-medium text-[rgba(253,230,138,0.9)] underline-offset-2 hover:underline" onClick={restoreDismissedHealthWarnings}>
-                Show
-              </button>
+            <div className={styles.autoStats} aria-label="Automations summary">
+              <span><strong className={styles.autoStat} style={{ color: "var(--status-ok)" }}>{activeCount}</strong>active</span>
+              <span><strong className={styles.autoStat} style={{ color: "var(--hex-honey-border)" }}>{pausedCount}</strong>paused</span>
+              <span><strong className={styles.autoStat} style={{ color: "var(--status-failed)" }}>{attentionCount}</strong>attention</span>
+              <span><strong className={styles.autoStat}>{schedulerJobs.length}</strong>total</span>
             </div>
-          ) : null}
+            {headerActions}
+          </div>
+
           <div className="min-h-0 overflow-hidden">
             <SchedulerView
               jobs={schedulerJobs}
               runStates={schedulerRunStates}
               fetchHistory={historyForJob}
-              toolbar={
-                <div className="flex w-full flex-wrap items-center justify-center gap-2">
-                  {scheduleImportStatus ? (
-                    <span className="max-w-[220px] truncate text-[11px] text-[var(--muted)]" title={scheduleImportStatus}>{scheduleImportStatus}</span>
-                  ) : null}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Sync vault schedules"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(148,163,184,0.20)] bg-[rgba(15,23,42,0.60)] text-[var(--muted)] transition hover:border-[rgba(94,234,212,0.38)] hover:bg-[rgba(20,184,166,0.10)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(94,234,212,0.34)] [&_svg]:h-4 [&_svg]:w-4"
-                        onClick={() => void refreshSharedSchedulesFromVault()}
-                      >
-                        <Repeat2 aria-hidden />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Sync vault schedules</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label={scheduleImporting ? "Importing existing runtime schedules" : "Import existing runtime schedules"}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(148,163,184,0.20)] bg-[rgba(15,23,42,0.60)] text-[var(--muted)] transition hover:border-[rgba(94,234,212,0.38)] hover:bg-[rgba(20,184,166,0.10)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(94,234,212,0.34)] disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:h-4 [&_svg]:w-4"
-                        onClick={() => void importExistingSchedules()}
-                        disabled={scheduleImporting}
-                      >
-                        {scheduleImporting ? <LoaderCircle aria-hidden className="animate-spin" /> : <FileUp aria-hidden />}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{scheduleImporting ? "Importing existing schedules" : "Import existing schedules"}</TooltipContent>
-                  </Tooltip>
-                </div>
-              }
               onToggleJob={(job) => toggleSchedule(job.id)}
               onRunNow={runJob}
               onEditJob={editJob}
@@ -220,21 +215,15 @@ export function SchedulerPanel(props: SchedulerPanelProps) {
       ) : null}
 
       {(activeView === "scheduler" || activeView === "aeon") && schedulerDraftOpen ? (
-        <TaskModal
+        <AutomationComposerModal
           key={editingScheduleId || "new-scheduler-task"}
           open
+          editing={Boolean(editingScheduleId)}
           aeon={activeView === "aeon"}
           initial={schedulerModalInitial}
-          skillOptions={modalSkillOptions.map((skill) => ({
-            slug: skill.slug,
-            name: skill.name,
-            description: skill.description,
-          }))}
-          machineOptions={Array.from(new Set([
-            ...machineGroups.map((machine) => machine.name),
-            "dashboard",
-          ]))}
-          beeOptions={Array.from(new Set(displayAgents.map((agent) => agent.name)))}
+          agents={automationAgents}
+          machines={machineOptions}
+          skillOptions={modalSkillOptions.map((skill) => ({ slug: skill.slug, name: skill.name, description: skill.description }))}
           onBrowseFolder={browseSchedulerFolder}
           onClose={() => {
             setSchedulerDraftOpen(false);

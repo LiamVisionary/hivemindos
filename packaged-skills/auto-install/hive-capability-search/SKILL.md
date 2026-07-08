@@ -14,7 +14,7 @@ Return a capability map. Do not execute side effects unless a calling skill expl
 Search only surfaces available to the current agent/runtime:
 
 - Shared brain skill index: read `Skills/README.md` at most once, then load only directly relevant `Skills/<slug>/SKILL.md` files.
-- Packaged auto-install skills and installed optional skills exposed through the context index or shared skill shelf.
+- Packaged auto-install skills, installed optional skills, and optional packaged catalog metadata exposed through the context index as installable workflow playbooks. Optional catalog hits are not active runtime skills until the user installs them into the shared brain.
 - Runtime/provider skills, tool schemas, slash commands, app schemas, API routes, and local CLI capabilities exposed to the agent.
 - Connected apps/endpoints through the app discovery/catalog surfaces and app request proxy. Do not hard-code Tailnet endpoints, private IPs, local machine names, or transient URLs.
 - Existing specialty agents and agent subclasses when the runtime exposes them.

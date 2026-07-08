@@ -30,6 +30,8 @@ Optional skills live in:
 packaged-skills/optional/
 ```
 
+Capability search can surface optional packages as installable workflow playbooks. Those results are catalog metadata until the user installs the package into the shared brain.
+
 Current optional catalog:
 
 | Skill | Purpose |
@@ -37,7 +39,7 @@ Current optional catalog:
 | `brand/hivemindos/brand-book-concept-page` | HivemindOS-authored optional brand skill for generating multiple brand directions and compact concept artifacts with trademark, originality, and private-asset safety gates. |
 | `brand/hivemindos/out-of-home-subway-campaign` | HivemindOS-authored optional brand skill for transit/out-of-home campaign mockups, using generated or rights-cleared assets and avoiding false placement or endorsement claims. |
 | `crypto/hivemindos/b20-issuer-proof` | HivemindOS-authored optional crypto skill for creating Base B20 token issuer proof cards, defaulting live tests to Base Sepolia, requiring explicit confirmation, and executing only through the encrypted local wallet route. |
-| `crypto/hivemindos/nansen-*` | HivemindOS-authored optional crypto skills for Nansen simple and complex research: DeFi positions, Smart Money holdings, token top holders, token screener discovery, token tracking and Smart Money netflow, Hyperliquid wallet discovery, related-wallet clustering, top-wallet token research, and CEX-health monitoring. They route through HivemindOS Nansen intelligence and keep copytrade-named workflows read-only. |
+| `crypto/hivemindos/nansen-*` | HivemindOS-authored optional crypto skills for Nansen simple and complex research: DeFi positions, Smart Money holdings, token top holders, token screener discovery, token tracking and Smart Money netflow, Hyperliquid wallet discovery, related-wallet clustering, top-wallet token research, and CEX-health monitoring. They route through HivemindOS Nansen intelligence, keep copytrade-named workflows read-only, and are not required for Nansen access through the built-in `nansen_intelligence` action or `/api/nansen` routes. |
 | `design/` UI Skills pack | 109 optional UI and design-engineering skills from the UI Skills directory, grouped as `design/<source>/<skill>/` so duplicate upstream names remain distinct, and installable together through the `Design Optional Skills Directory` pack. |
 | `design/mengto/` MengTo Skills pack | 73 optional MIT-licensed skills from `MengTo/Skills`, grouped as `design/mengto/<skill>/`, covering Codex design workflows, asset sourcing, design-first UI prompting, landing/pricing pages, motion systems, WebGL/canvas/3D patterns, and visual style recipes. |
 | `design/hivemindos/newsroom-data-visualization` | HivemindOS-authored optional design skill for publication-grade chart choice, annotation, source/caveat handling, and responsive data-story graphics. |

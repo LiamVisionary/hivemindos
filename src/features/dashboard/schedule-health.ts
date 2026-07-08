@@ -78,7 +78,11 @@ export function scheduleLoopSignature(schedule: AgentSchedule): string {
   if (!schedule.externalJobId) return `id::${schedule.id}`;
   const source = schedule.externalSource ?? "dashboard";
   const jobId = schedule.externalJobId.split(":").pop() || schedule.externalJobId;
-  return `${source}::${jobId}::${normalizedLoopKey(schedule.name)}`;
+  // Agent-aware: the SAME underlying job armed on DIFFERENT agents (e.g. an Aeon
+  // skill seeded onto aeon-9 and aeon-10) is TWO automations and must not merge.
+  // Hostname-rename forks of one agent keep the same agentId, so they still
+  // collapse (the machine segment of externalJobId churns, agentId does not).
+  return `${source}::${jobId}::${normalizedLoopKey(schedule.name)}::${schedule.agentId || ""}`;
 }
 
 /**

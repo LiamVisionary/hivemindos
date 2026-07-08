@@ -33,6 +33,19 @@ import {
   fetchWalletReadiness,
   withScreenContext,
 } from "./queen-fast-context";
+import {
+  QUEEN_TEXT_CHAT_API_PATH,
+  QUEEN_VOICE_CHAT_API_PATH,
+  queenChatRouteForSend,
+  queenVoiceHistoryBeforeTurn,
+  type QueenChatRoute,
+  type QueenVoiceHistoryTurn,
+} from "./queen-chat-routing";
+import {
+  createNdjsonEventReader,
+  type ConverseStreamEvent,
+} from "./converse-stream";
+import { playSpokenReply } from "./spoken-reply-playback";
 
 export type QueenChatTurn = {
   id: string;
@@ -84,6 +97,9 @@ type QueenChatContextValue = {
   /** True while the transcript bubble itself is hovered or text is being selected. */
   transcriptInteractionActive: boolean;
   setTranscriptInteractionActive: (active: boolean) => void;
+  /** True while the Queen Bee voice chat overlay is open. */
+  voiceChatActive: boolean;
+  setVoiceChatActive: (active: boolean) => void;
   /** Effective visibility: manual pin, user interaction, active thinking, or recent message hold. */
   transcriptExpanded: boolean;
   /** Append a turn; returns its id. Pass an explicit id for the voice bridge. */
@@ -98,7 +114,6 @@ type QueenChatContextValue = {
 };
 
 const QueenChatContext = React.createContext<QueenChatContextValue | null>(null);
-const QUEEN_TEXT_CHAT_API_PATH = "/api/queen-bee/chat";
 const QUEEN_CHAT_RECENT_MESSAGE_HOLD_MS = 7000;
 
 function isAutoOpenAgentTurn(turn: QueenChatTurn): boolean {
@@ -130,18 +145,52 @@ export function QueenChatProvider({
   const [historyMinimized, setHistoryMinimizedState] = React.useState(true);
   const [composerActive, setComposerActive] = React.useState(false);
   const [transcriptInteractionActive, setTranscriptInteractionActive] = React.useState(false);
+  const [voiceChatActive, setVoiceChatActiveState] = React.useState(false);
   const [recentMessageOpen, setRecentMessageOpen] = React.useState(false);
   const [dismissedAutoOpenTurnId, setDismissedAutoOpenTurnId] = React.useState<string | null>(null);
   const lastActivitySignatureRef = React.useRef("");
   const recentOpenTimerRef = React.useRef<number | null>(null);
   const recentCloseTimerRef = React.useRef<number | null>(null);
   const counterRef = React.useRef(0);
+  const voiceChatActiveRef = React.useRef(false);
+  const voiceTextAudioContextRef = React.useRef<AudioContext | null>(null);
   // Held in a ref so sendText's identity stays stable even though
   // beePilot.runVoiceCommand is recreated each render.
   const runRef = React.useRef<RunQueenCommand | undefined>(runQueenCommand);
   React.useEffect(() => {
     runRef.current = runQueenCommand;
   }, [runQueenCommand]);
+
+  const setVoiceChatActive = React.useCallback((active: boolean) => {
+    voiceChatActiveRef.current = active;
+    setVoiceChatActiveState(active);
+  }, []);
+
+  const ensureVoiceTextAudioContext = React.useCallback(() => {
+    if (typeof window === "undefined") return null;
+    if (voiceTextAudioContextRef.current) {
+      void voiceTextAudioContextRef.current.resume().catch(() => undefined);
+      return voiceTextAudioContextRef.current;
+    }
+    const audioWindow = window as Window &
+      typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+    const AudioContextClass = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    try {
+      const context = new AudioContextClass({ latencyHint: "interactive" });
+      voiceTextAudioContextRef.current = context;
+      void context.resume().catch(() => undefined);
+      return context;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  React.useEffect(() => () => {
+    const context = voiceTextAudioContextRef.current;
+    voiceTextAudioContextRef.current = null;
+    void context?.close().catch(() => undefined);
+  }, []);
 
   // OpenAI-format running history for the typed agentic loop (the system prompt
   // is added server-side). Kept in a ref so it persists without re-renders.
@@ -660,20 +709,133 @@ export function QueenChatProvider({
     }
   }, [updateTurn, executeQueenTool]);
 
+  const runQueenVoiceTextTurn = React.useCallback(async (
+    trimmed: string,
+    queenId: string,
+    history: QueenVoiceHistoryTurn[],
+    audioContext: AudioContext | null,
+  ) => {
+    const speakReply = async (reply: string) => {
+      const text = reply.trim();
+      if (!text) return;
+      const abort = new AbortController();
+      await playSpokenReply(text, abort.signal, audioContext, false).catch(() => "none");
+    };
+    const turnId = `text-voice-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const response = await fetch(QUEEN_VOICE_CHAT_API_PATH, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "converse-stream",
+        transcript: trimmed,
+        turnId,
+        history,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(75_000),
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !response.body || !contentType.includes("ndjson")) {
+      const data = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        reply?: string;
+        error?: string;
+      } | null;
+      if (!response.ok || !data?.ok || !data.reply) {
+        throw new Error(data?.error || `Queen Bee voice route returned HTTP ${response.status}.`);
+      }
+      updateTurn(queenId, {
+        text: data.reply,
+        live: false,
+        pending: false,
+        working: undefined,
+      });
+      await speakReply(data.reply);
+      return;
+    }
+
+    const stream = createNdjsonEventReader<ConverseStreamEvent>(response.body);
+    let liveSpeech = "";
+    let finalReply = "";
+    let error = "";
+    const handleEvent = (event: ConverseStreamEvent) => {
+      if (event.type === "speech" && event.text) {
+        liveSpeech += event.text;
+        updateTurn(queenId, {
+          text: liveSpeech.trim(),
+          live: true,
+          pending: false,
+          working: undefined,
+        });
+        return;
+      }
+      if (event.type === "reset") {
+        liveSpeech = "";
+        updateTurn(queenId, { text: "", live: true, pending: true, working: undefined });
+        return;
+      }
+      if (event.type === "done") {
+        finalReply = event.ok && event.reply ? event.reply : liveSpeech.trim();
+        return;
+      }
+      if (event.type === "error") {
+        error = event.error || "Queen Bee voice route failed.";
+      }
+    };
+    while (await stream.pump()) {
+      for (const event of stream.take()) handleEvent(event);
+    }
+    for (const event of stream.take()) handleEvent(event);
+    if (error) throw new Error(error);
+    const reply = finalReply || liveSpeech.trim();
+    if (!reply) throw new Error("Queen Bee voice route returned no reply.");
+    updateTurn(queenId, {
+      text: reply,
+      live: false,
+      pending: false,
+      working: undefined,
+    });
+    await speakReply(reply);
+  }, [updateTurn]);
+
   const sendText = React.useCallback(
     async (text: string, opts?: QueenChatSendOptions) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      appendTurn({ who: "you", text: trimmed, source: "text" });
-      const queenId = appendTurn({ who: "queen", text: "", live: true, pending: true, source: "text" });
+      const route: QueenChatRoute = queenChatRouteForSend(voiceChatActiveRef.current);
+      const voiceTextAudioContext = route === "voice" ? ensureVoiceTextAudioContext() : null;
+      const userId = appendTurn({ who: "you", text: trimmed, source: "text" });
+      const queenId = appendTurn({
+        who: "queen",
+        text: "",
+        live: true,
+        pending: true,
+        source: route === "voice" ? "voice" : "text",
+      });
       // Chain so overlapping sends don't interleave the OpenAI message log.
       const task = sendChainRef.current
         .catch(() => {})
-        .then(() => runQueenTurn(trimmed, queenId, opts?.screenContext, opts?.suppressWalletIntents === true));
+        .then(() => {
+          if (route === "voice") {
+            const history = queenVoiceHistoryBeforeTurn(turnsRef.current, userId);
+            return runQueenVoiceTextTurn(trimmed, queenId, history, voiceTextAudioContext);
+          }
+          return runQueenTurn(trimmed, queenId, opts?.screenContext, opts?.suppressWalletIntents === true);
+        })
+        .catch(() => {
+          updateTurn(queenId, {
+            text: route === "voice"
+              ? "I couldn't reach the Queen Bee voice route just now."
+              : "I couldn't reach the Queen just now.",
+            live: false,
+            pending: false,
+            working: undefined,
+          });
+        });
       sendChainRef.current = task;
       return task;
     },
-    [appendTurn, runQueenTurn],
+    [appendTurn, ensureVoiceTextAudioContext, runQueenTurn, runQueenVoiceTextTurn, updateTurn],
   );
 
   const activeAgentTurn = React.useMemo(() => {
@@ -700,6 +862,8 @@ export function QueenChatProvider({
       setComposerActive,
       transcriptInteractionActive,
       setTranscriptInteractionActive,
+      voiceChatActive,
+      setVoiceChatActive,
       transcriptExpanded,
       appendTurn,
       updateTurn,
@@ -714,6 +878,8 @@ export function QueenChatProvider({
       setHistoryMinimized,
       composerActive,
       transcriptInteractionActive,
+      voiceChatActive,
+      setVoiceChatActive,
       transcriptExpanded,
       appendTurn,
       updateTurn,

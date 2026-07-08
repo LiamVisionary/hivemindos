@@ -20,7 +20,10 @@ import {
 } from "@/lib/services/queen-bee/control-plane";
 import { formatQueenBeePersonalityInstruction } from "@/lib/config/queen-bee-personality";
 import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
-import { queenVoicePreferencePreamble } from "@/lib/services/queen-bee/voice-preferences";
+import {
+  addQueenBeeVoicePreference,
+  queenVoicePreferencePreamble,
+} from "@/lib/services/queen-bee/voice-preferences";
 import { readQueenBeeBrainDefaults } from "@/lib/services/queen-bee/voice-settings";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
 import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
@@ -125,6 +128,38 @@ function queenVoiceSystemPrompt(personality?: string | null) {
   ].join(" ");
 }
 
+export function spokenVoicePreferenceFromTranscript(transcript: string) {
+  const trimmed = transcript.replace(/\s+/g, " ").trim();
+  if (!trimmed || /\?\s*$/.test(trimmed)) return "";
+  const addressMatch = trimmed.match(
+    /^(?:please\s+)?(?:remember\s+(?:to|that\s+you\s+should)\s+)?(?:always\s+)?(?:call|address)\s+me\s+(?:as\s+)?["“”']?([a-z][a-z0-9 _.-]{0,40}?)(?:["“”']?\s*(?:from now on|going forward|please)?[.!]?)?$/i,
+  );
+  if (!addressMatch) return "";
+  const name = addressMatch[1]?.trim().replace(/[.!?]+$/, "");
+  if (!name || /\b(?:that|when|if|because|why|what|where|who|how)\b/i.test(name)) return "";
+  return `Address the user as "${name}".`;
+}
+
+async function captureSpokenVoicePreference(transcript: string) {
+  const preference = spokenVoicePreferenceFromTranscript(transcript);
+  if (!preference) return "";
+  await addQueenBeeVoicePreference(preference);
+  return preference;
+}
+
+export function buildRuntimeVoiceSystemText(
+  systemPreamble?: string,
+  personality?: string | null,
+) {
+  return [
+    "Queen Bee live voice override: for this voice turn, answer as Queen Bee. These instructions override the selected runtime profile's agent identity, soul, addressing, and speech format.",
+    queenVoiceSystemPrompt(personality),
+    systemPreamble?.trim() || "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /**
  * One self-contained prompt for runtime (CLI/gateway) agents. The agent-runtime
  * route reduces a messages[] array to the LATEST user message for most
@@ -150,8 +185,9 @@ export function buildRuntimeVoiceUserText(
       ].join("\n")
     : "";
   return [
-    queenVoiceSystemPrompt(personality),
-    systemPreamble?.trim() || "",
+    // Keep the full voice contract in the latest user message too: several
+    // runtime adapters only read `message`/latest-user and ignore messages[].
+    buildRuntimeVoiceSystemText(systemPreamble, personality),
     "",
     transcriptBlock,
     `User's latest spoken message: ${transcript}`,
@@ -160,6 +196,29 @@ export function buildRuntimeVoiceUserText(
   ]
     .filter((part) => part !== "")
     .join("\n");
+}
+
+export function buildRuntimeVoiceMessages(
+  transcript: string,
+  history: QueenVoiceHistoryTurn[],
+  systemPreamble?: string,
+  personality?: string | null,
+) {
+  return [
+    {
+      role: "system" as const,
+      content: buildRuntimeVoiceSystemText(systemPreamble, personality),
+    },
+    {
+      role: "user" as const,
+      content: buildRuntimeVoiceUserText(
+        transcript,
+        history,
+        systemPreamble,
+        personality,
+      ),
+    },
+  ];
 }
 
 /**
@@ -299,10 +358,11 @@ async function conversationTurnText(options: {
   onAttemptStart?: () => void;
   voiceBrain?: VoiceChatBrainPlan;
 }) {
+  await captureSpokenVoicePreference(options.transcript).catch(() => "");
   // Standing preferences ("call me boss") splice onto the system prompt so
   // both the runtime brain and the OpenAI fallback honor them every turn. Note
-  // this fallback path can only HONOR stored preferences, not capture new ones
-  // (it has no tool to call); capture happens in the default realtime session.
+  // the pipeline also captures simple spoken preference utterances itself,
+  // because it does not run the realtime session's remember_preference tool.
   const preferencePreamble = await queenVoicePreferencePreamble();
   const queenDefaults = await readQueenBeeBrainDefaults().catch(() => null);
   const queenPersonality = queenDefaults?.soulPrompt;
@@ -964,14 +1024,16 @@ async function runRuntimeConversationTurn(
 ) {
   // One flattened user message (persona + history + latest): most runtime
   // adapters only see the latest user message, so a messages[] history array
-  // never reached them - see buildRuntimeVoiceUserText.
-  const userText = buildRuntimeVoiceUserText(transcript, history, systemPreamble, personality);
+  // never reached them - see buildRuntimeVoiceUserText. Also send the same
+  // Queen contract as an actual system message for adapters that do honor
+  // messages[], so the runtime profile's own soul does not outrank Queen.
+  const messages = buildRuntimeVoiceMessages(transcript, history, systemPreamble, personality);
   const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
     method: "POST",
     headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
     body: JSON.stringify({
       agent: voiceOptimizedAgent(agent),
-      messages: [{ role: "user", content: userText }],
+      messages,
       runtimeSessionId: "queen-bee-voice",
       agentMode: "act",
       latencyMode: "voice",

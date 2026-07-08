@@ -40,7 +40,10 @@ export const HIVE_COMPUTE_MODEL_OPTIONS: HiveComputeModelOption[] = [
 ];
 
 export function normalizeHiveComputeModel(model?: string | null) {
-  return hiveComputeHostedRouteModel(model) || HIVE_COMPUTE_DEFAULT_MODEL;
+  const routed = hiveComputeHostedRouteModel(model);
+  if (routed) return routed;
+  const trimmed = model?.trim() || "";
+  return HIVE_COMPUTE_MODEL_ID_RE.test(trimmed) ? trimmed : HIVE_COMPUTE_DEFAULT_MODEL;
 }
 
 export function hiveComputeHostedModelId(model: string) {

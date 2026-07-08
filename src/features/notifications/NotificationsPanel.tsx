@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Bell, Check, CheckCheck, ChevronRight, KanbanSquare, LoaderCircle, MessageSquare, RefreshCcw, X } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Bell, CalendarClock, Check, CheckCheck, ChevronRight, KanbanSquare, LoaderCircle, MessageSquare, RefreshCcw, X } from "lucide-react";
 
 import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
 import { useSpendApprovals } from "@/features/approvals/use-spend-approvals";
@@ -30,8 +30,17 @@ import {
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import type { AgentAutonomyReviewMode, AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import { formatReasoningTrailForPlainText } from "@/lib/types/reasoning-trail";
+import { computeScheduleHealthWarnings, scheduleHealthWarningKey, visibleScheduleHealthWarnings } from "@/features/dashboard/schedule-health";
+import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
+import type { AgentSchedule } from "@/features/dashboard/dashboard-types";
 
 const notificationClass = createStyleClass(notificationStyles);
+
+// Durable set of automation-health warnings the user has dismissed, keyed by
+// kind+scheduleIds so an acknowledged warning stays hidden but a genuinely new
+// one still surfaces. Shares the exact key the scheduler banner used, so
+// dismissals persist across the move to the Alerts route.
+const SCHEDULE_HEALTH_DISMISSED_KEY = "hivemindos.scheduleHealthDismissed.v1";
 
 const AUTONOMY_REVIEW_OPTIONS: Array<{
   mode: AgentAutonomyReviewMode;
@@ -73,6 +82,10 @@ export type NotificationsPanelProps = {
   /** Deep-link navigation for per-notification action buttons (route + section). */
   onNavigateTarget?: (target: DashboardRouteTarget) => void;
   onUpdateSettings: (settings: Partial<AgentNotificationSettings>) => void;
+  /** All known schedules — powers the automation-health warnings surfaced here
+   *  (moved out of the scheduler route's top banner). Optional so other callers
+   *  that don't have schedules simply show no health warnings. */
+  schedules?: AgentSchedule[];
 };
 
 function isResolved(notification: AgentNotification) {
@@ -134,6 +147,7 @@ export function NotificationsPanel({
   onMarkRead,
   onNavigateTarget,
   onUpdateSettings,
+  schedules,
 }: NotificationsPanelProps) {
   const queenChat = useQueenChat();
   // notification id → created board task id (flips "Send to board" into "Open task").
@@ -150,6 +164,33 @@ export function NotificationsPanel({
   // The real human-in-the-loop spend-approval queue (shared with the Zero Human
   // Companies approvals section). Powers the "Review first" rail + its modal.
   const spendApprovals = useSpendApprovals();
+
+  // Automation-health warnings (duplicate loops, enabled-but-dead schedules) —
+  // moved here from the scheduler route's top banner. Mount-time clock keeps
+  // render pure; staleness thresholds are days-scale so hours of drift is fine.
+  const [healthCheckedAt] = useState(() => Date.now());
+  const scheduleHealthWarnings = useMemo(
+    () => computeScheduleHealthWarnings(schedules ?? [], healthCheckedAt),
+    [schedules, healthCheckedAt],
+  );
+  const [dismissedHealthRaw, rememberDismissedHealth] = useRememberedDashboardValue(SCHEDULE_HEALTH_DISMISSED_KEY);
+  const dismissedHealthKeys = useMemo(() => {
+    try {
+      const parsed = JSON.parse(dismissedHealthRaw || "[]");
+      return new Set<string>(Array.isArray(parsed) ? parsed.filter((key): key is string => typeof key === "string") : []);
+    } catch {
+      return new Set<string>();
+    }
+  }, [dismissedHealthRaw]);
+  const visibleHealthWarnings = useMemo(
+    () => visibleScheduleHealthWarnings(scheduleHealthWarnings, dismissedHealthKeys),
+    [scheduleHealthWarnings, dismissedHealthKeys],
+  );
+  const dismissHealthWarning = useCallback((warning: (typeof scheduleHealthWarnings)[number]) => {
+    const liveKeys = new Set(scheduleHealthWarnings.map(scheduleHealthWarningKey));
+    const next = [...dismissedHealthKeys, scheduleHealthWarningKey(warning)].filter((key) => liveKeys.has(key));
+    rememberDismissedHealth(JSON.stringify([...new Set(next)]));
+  }, [dismissedHealthKeys, rememberDismissedHealth, scheduleHealthWarnings]);
 
   // Auto-fill: the first page can collapse to a handful of rows (e.g. 38
   // look-alike escalations cluster into one +N row), leaving the tall list
@@ -194,6 +235,10 @@ export function NotificationsPanel({
   }, [activeNotifications, filter, notifications]);
 
   const total = notificationSummary?.total ?? notifications.length;
+  // Health warnings show above the vault notifications, but never in the
+  // "Resolved" filter (they aren't resolvable vault items — they clear when the
+  // schedule is fixed or the warning is dismissed).
+  const healthShown = filter !== "resolved" && visibleHealthWarnings.length > 0;
 
   const sendToBoard = useCallback(async (notification: AgentNotification) => {
     setBoardBusyId(notification.id);
@@ -523,6 +568,46 @@ export function NotificationsPanel({
                 if (el.scrollHeight - el.scrollTop - el.clientHeight < 320) void onRefresh({ append: true });
               }}
             >
+              {healthShown ? (
+                <section className={notificationClass("dayGroup")} aria-label="Automation health">
+                  <p className={notificationClass("dayLabel")}>Automation health</p>
+                  {visibleHealthWarnings.map((warning) => (
+                    <div key={scheduleHealthWarningKey(warning)} className={notificationClass("row", "high", "open")}>
+                      <span className={notificationClass("rowGlyph")}><AlertTriangle aria-hidden="true" /></span>
+                      <div className={notificationClass("rowMain")}>
+                        <div className={notificationClass("rowTitleLine")}>
+                          <b className={notificationClass("rowTitle")}>{warning.title}</b>
+                        </div>
+                        <div className={notificationClass("expandWrap")}>
+                          <ChatMarkdown text={warning.detail} className={notificationClass("rowBody")} />
+                          <div className={notificationClass("rowActions")} role="group" aria-label="Automation health actions">
+                            <button
+                              type="button"
+                              className={notificationClass("actionBtn", "primary")}
+                              onClick={() => onNavigateTarget?.({ view: "scheduler" })}
+                            >
+                              <CalendarClock aria-hidden="true" />
+                              Open scheduler
+                            </button>
+                            <button
+                              type="button"
+                              className={notificationClass("actionBtn", "dismissBtn")}
+                              onClick={() => dismissHealthWarning(warning)}
+                            >
+                              <X aria-hidden="true" />
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className={notificationClass("rowMeta")}>
+                        <span className={notificationClass("priorityPill")}>Schedules</span>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+
               {visibleGroups.length ? (
                 <div className={notificationClass("dayGroups")}>
                   {visibleGroups.map((group) => (
@@ -564,7 +649,7 @@ export function NotificationsPanel({
                     </button>
                   ) : null}
                 </div>
-              ) : (
+              ) : healthShown ? null : (
                 <div className={notificationClass("emptyState")} role="status">
                   <Bell aria-hidden="true" />
                   <strong>{filter === "all" ? "No alerts yet" : "Nothing here"}</strong>

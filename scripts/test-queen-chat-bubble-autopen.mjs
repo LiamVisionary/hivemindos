@@ -46,6 +46,7 @@ includes(persistent, "const showExpandTab = queenChat.turns.length > 0 && !queen
 includes(persistent, "onComposerActiveChange={queenChat.setComposerActive}", "persistent pill wires composer activity into store");
 includes(overlay, "onInteractionActiveChange: (active: boolean) => void;", "transcript reports interaction hold");
 includes(overlay, "const voiceThinking = open && voiceState.phase === \"thinking\";", "voice thinking is a keep-open reason");
+includes(overlay, "setVoiceChatActive(open);", "voice overlay publishes active voice-chat routing state");
 includes(overlay, "minimized={!(chat.transcriptExpanded || voiceThinking)}", "overlay uses effective expansion plus voice thinking");
 includes(overlay, "onInteractionActiveChange={setTranscriptInteractionActive}", "overlay wires interaction hold into store");
 includes(overlay, "onPointerDown={handlePointerDown}", "pointer down keeps bubble open while selecting text");

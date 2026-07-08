@@ -48,6 +48,12 @@ const {
   isAgentUnhealthy,
   summarizeFleetByStatus,
 } = await import("../src/features/dashboard/agent-status-lookup.ts");
+const {
+  QUEEN_TEXT_CHAT_API_PATH,
+  QUEEN_VOICE_CHAT_API_PATH,
+  queenChatRouteForSend,
+  queenVoiceHistoryBeforeTurn,
+} = await import("../src/features/queen-voice/queen-chat-routing.ts");
 
 // ── OpenAI Codex Queen models must not silently skip to gpt-4o-mini ──────────
 {
@@ -83,11 +89,39 @@ const {
 {
   const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/queen-bee/chat/route.ts", import.meta.url), "utf8");
-  assert.match(source, /const QUEEN_TEXT_CHAT_API_PATH = "\/api\/queen-bee\/chat";/, "typed Queen chat should use the text-chat route");
+  assert.equal(QUEEN_TEXT_CHAT_API_PATH, "/api/queen-bee/chat", "typed Queen chat should use the text-chat route");
   assert.equal(source.match(/fetch\(QUEEN_TEXT_CHAT_API_PATH,/g)?.length, 2, "both typed Queen chat fetches should go through the text-chat route constant");
   assert.doesNotMatch(source, /action: "chat-turn(?:-stream)?"[\s\S]{0,220}fetch\("\/api\/queen-bee\/voice"/, "typed Queen chat actions must not fetch the legacy voice route");
   assert.match(route, /runQueenChatTurnStream/, "Queen text-chat route should serve the streaming typed chat action");
   assert.match(route, /runQueenChatTurn/, "Queen text-chat route should serve the blocking typed chat action");
+}
+
+// ── text typed while the voice overlay is open uses the voice route ──────────
+{
+  const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
+  const overlay = readFileSync(new URL("../src/features/queen-voice/QueenBeeVoiceOverlay.tsx", import.meta.url), "utf8");
+  assert.equal(QUEEN_VOICE_CHAT_API_PATH, "/api/queen-bee/voice", "voice-active typed messages should use the voice route");
+  assert.equal(queenChatRouteForSend(false), "text", "closed voice chat keeps the typed route");
+  assert.equal(queenChatRouteForSend(true), "voice", "open voice chat selects the voice route");
+  assert.match(source, /queenChatRouteForSend\(voiceChatActiveRef\.current\)/, "sendText should route from the active voice-chat flag");
+  assert.match(source, /fetch\(QUEEN_VOICE_CHAT_API_PATH,[\s\S]{0,520}action: "converse-stream"/, "voice-active text sends should hit the voice converse-stream action");
+  assert.match(source, /ensureVoiceTextAudioContext\(\)/, "voice-active text sends should prime an audio context on the send gesture");
+  assert.match(source, /playSpokenReply\(text, abort\.signal, audioContext, false\)/, "voice-active text replies should be spoken through the shared playback ladder");
+  assert.match(overlay, /setVoiceChatActive\(open\)/, "the overlay should publish its open state to the shared chat store");
+  assert.deepEqual(
+    queenVoiceHistoryBeforeTurn([
+      { id: "q1", who: "queen", text: "Opening line." },
+      { id: "u1", who: "you", text: "  previous spoken turn  " },
+      { id: "q2", who: "queen", text: "Pending words", live: true },
+      { id: "u2", who: "you", text: "current typed text" },
+      { id: "q3", who: "queen", text: "", pending: true },
+    ], "u2"),
+    [
+      { who: "queen", text: "Opening line." },
+      { who: "you", text: "previous spoken turn" },
+    ],
+    "voice-route text history should include only completed turns before the current typed message",
+  );
 }
 
 // ── typed Queen chat uses the same default/custom personality layer ──────────

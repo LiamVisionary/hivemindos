@@ -22,6 +22,13 @@ const {
   measureTimeDomainClapFrame,
   nextQueenClapDetectorState,
 } = await import("../src/features/queen-voice/clap-activation.ts");
+const {
+  QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS,
+  QUEEN_VOICE_ACTIVATION_SOUND_SRC,
+  playQueenVoiceActivationSound,
+  primeQueenVoiceActivationSound,
+  preloadQueenVoiceActivationSound,
+} = await import("../src/features/queen-voice/activation-sound.ts");
 
 let passed = 0;
 function check(label, fn) {
@@ -240,6 +247,8 @@ const ROOT = new URL("../", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
 const dashboard = read("src/features/dashboard/DashboardApp.tsx");
 const overlay = read("src/features/queen-voice/QueenBeeVoiceOverlay.tsx");
+const activationSound = read("src/features/queen-voice/activation-sound.ts");
+const layout = read("src/app/layout.tsx");
 const hook = read("src/features/queen-voice/use-queen-clap-activation.ts");
 const realtimeHook = read("src/features/queen-voice/use-queen-bee-realtime.ts");
 const pipelineHook = read("src/features/queen-voice/use-queen-bee-voice.ts");
@@ -261,6 +270,31 @@ check("clap activation opens the existing Queen voice overlay path", () => {
   assert.match(overlay, /useQueenClapActivation/);
   assert.match(overlay, /onActivation:\s*openQueenVoiceChat/);
   assert.match(overlay, /paused:\s*open/);
+});
+
+check("Queen Bee voice activation sound is preloaded and reused", () => {
+  assert.equal(QUEEN_VOICE_ACTIVATION_SOUND_SRC, "/audio/sfx/scifi-ping.wav");
+  assert.equal(QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS, 2700);
+  assert.match(layout, /rel="preload" as="audio" href=\{QUEEN_VOICE_ACTIVATION_SOUND_SRC\} type="audio\/wav"/);
+  assert.match(overlay, /QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS/);
+  assert.match(overlay, /voiceSessionArmed/);
+  assert.match(overlay, /armedVoiceSessionNonce === sessionNonce/);
+  assert.match(overlay, /setArmedVoiceSessionNonce\(nonce\)/);
+  assert.match(overlay, /if \(!open \|\| !voiceSessionArmed\) return/);
+  assert.match(overlay, /const voiceSessionOpen = open && voiceSessionArmed/);
+  assert.match(overlay, /preloadQueenVoiceActivationSound\(\)/);
+  assert.match(overlay, /primeQueenVoiceActivationSound\(\)/);
+  assert.match(overlay, /playQueenVoiceActivationSound\(\)/);
+  assert.match(activationSound, /activationBuffer/);
+  assert.match(activationSound, /decodeAudioData\(encoded\)/);
+  assert.match(activationSound, /latencyHint: "interactive"/);
+  assert.match(activationSound, /audio\.preload = "auto"/);
+  assert.match(activationSound, /fallbackAudio\(\)\?\.load\(\)/);
+  assert.match(activationSound, /source\.start\(context\.currentTime \+ QUEEN_VOICE_ACTIVATION_START_DELAY_SECONDS\)/);
+  assert.doesNotMatch(overlay, /new Audio\(QUEEN_VOICE_ACTIVATION_SOUND_SRC\)/);
+  assert.doesNotThrow(preloadQueenVoiceActivationSound);
+  assert.doesNotThrow(primeQueenVoiceActivationSound);
+  assert.doesNotThrow(playQueenVoiceActivationSound);
 });
 
 check("Queen Bee Calls settings expose the same Clap wake toggle", () => {

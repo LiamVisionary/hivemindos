@@ -17,7 +17,11 @@ const {
   readVoiceTurnProgress,
   resetVoiceTurnProgressForTests,
 } = await import("../src/lib/services/queen-bee/voice-turn-progress.ts");
-const { buildRuntimeVoiceUserText } = await import("../src/lib/services/queen-bee/voice-turn.ts");
+const {
+  buildRuntimeVoiceMessages,
+  buildRuntimeVoiceUserText,
+  spokenVoicePreferenceFromTranscript,
+} = await import("../src/lib/services/queen-bee/voice-turn.ts");
 const {
   queenAskedForTaskApproval,
   voiceTaskApprovalPrompt,
@@ -114,7 +118,38 @@ const {
   const capped = buildRuntimeVoiceUserText("latest", long, "");
   assert.ok(!capped.includes("turn 11"), "history capped to the recent window");
   assert.ok(capped.includes("turn 19"), "most recent history retained");
+  const messages = buildRuntimeVoiceMessages("Sure", history, "Call the user boss.");
+  assert.equal(messages[0].role, "system", "runtime voice turn sends a real system message");
+  assert.match(messages[0].content, /Queen Bee live voice override/i, "system message overrides runtime profile identity");
+  assert.match(messages[0].content, /Call the user boss/i, "system message carries stored preferences");
+  assert.equal(messages[1].role, "user", "runtime voice turn still sends latest user prompt");
+  assert.match(messages[1].content, /User's latest spoken message: Sure/, "user message keeps the unwrap marker");
   console.log("flattened runtime prompt ok");
+}
+
+// --- spoken preference capture -------------------------------------------------
+{
+  assert.equal(
+    spokenVoicePreferenceFromTranscript("call me boss"),
+    'Address the user as "boss".',
+    "direct address preference is captured",
+  );
+  assert.equal(
+    spokenVoicePreferenceFromTranscript("Please remember to call me Boss from now on."),
+    'Address the user as "Boss".',
+    "remember/address phrasing is captured",
+  );
+  assert.equal(
+    spokenVoicePreferenceFromTranscript("why didn't you call me boss?"),
+    "",
+    "questions are not captured as new preferences",
+  );
+  assert.equal(
+    spokenVoicePreferenceFromTranscript("call me when the build is done"),
+    "",
+    "task requests are not captured as address preferences",
+  );
+  console.log("spoken preference capture ok");
 }
 
 // --- voice task approval boundary ----------------------------------------------

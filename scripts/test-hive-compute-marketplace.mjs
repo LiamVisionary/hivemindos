@@ -39,6 +39,7 @@ const workersReadme = read("workers/README.md");
 const contextIndex = read("src/lib/services/context-index.ts");
 
 assert(config.includes('HIVE_COMPUTE_PROVIDER_SLUG = "hive-compute"'), "Provider slug constant must be hive-compute.");
+assert(config.includes("HIVE_COMPUTE_MODEL_ID_RE.test(trimmed) ? trimmed : HIVE_COMPUTE_DEFAULT_MODEL"), "Direct Hive Compute model ids must not silently normalize back to Auto.");
 assert(!gatewayCatalog.includes("[HIVE_COMPUTE_PROVIDER_SLUG]"), "Hive Compute should not appear as a separate model-provider picker.");
 assert(runtimeIntegrations.includes("readHiveComputeMarketplaceStatus"), "Runtime integration status must expose Hive Compute readiness.");
 assert(runtimeIntegrations.includes("capacityLabel"), "Runtime integration status must expose Hive Compute capacity labels.");

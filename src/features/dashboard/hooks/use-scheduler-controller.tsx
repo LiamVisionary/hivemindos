@@ -1210,6 +1210,10 @@ export function useSchedulerController(props: any) {
       runtime: RUNTIME_LABELS[runtime as AgentRuntime] ?? runtime,
       machine: agent?.machineName ? displayMachineName(agent.machineName) : schedule.externalSource ?? "dashboard",
       bee: agent?.name ?? "Unassigned",
+      // Real assigned-agent bee identity so the Automations UI can show a
+      // role-accurate bee icon (queen vs the worker's actual class).
+      beeRole: agent?.beeRole ?? "worker",
+      workerClass: agent?.workerClass ?? "general",
       enabled: schedule.enabled,
       nextRun: schedule.enabled && remaining ? formatSchedulerDuration(remaining) : schedule.enabled ? "scheduled" : "paused",
       nextRunISO: remaining ? new Date(Date.now() + remaining).toISOString() : new Date(schedule.updatedAt).toISOString(),
@@ -1265,10 +1269,17 @@ export function useSchedulerController(props: any) {
 
   const schedulerModalInitial = useMemo<Partial<NewTaskPayload>>(() => {
     const selectedAgentForDraft = displayAgents.find((agent) => agent.id === scheduleDraft.agentId) ?? selectedAgent ?? displayAgents[0];
+    // Keep step text + per-step attachments index-aligned through the empty-step
+    // filter, so the composer re-renders each step's skills/paths under it.
+    const nonEmptySteps = scheduleDraft.steps.filter((step) => step.text.trim());
     return {
       title: scheduleDraft.name || (editingScheduleId ? "Edit scheduled task" : "New scheduled task"),
       mode: scheduleDraft.mode,
-      steps: scheduleDraft.steps.map((step) => step.text).filter(Boolean),
+      steps: nonEmptySteps.map((step) => step.text),
+      stepAttachments: nonEmptySteps.map((step) => ({
+        skills: Array.isArray(step.skills) ? [...step.skills] : [],
+        paths: Array.isArray(step.paths) ? [...step.paths] : [],
+      })),
       prompt: scheduleDraft.prompt,
       attachments: [
         ...scheduleDraft.skills.map((skill) => ({ kind: "skill" as const, label: skill })),
@@ -1282,6 +1293,7 @@ export function useSchedulerController(props: any) {
       templateId: null,
       usePastRuns: scheduleDraft.usePastRuns,
       pastRunLimit: scheduleDraft.pastRunLimit,
+      runOnAllMachines: scheduleDraft.runOnAllMachines === true,
     };
   }, [displayAgents, editingScheduleId, scheduleDraft, selectedAgent]);
 
@@ -1304,12 +1316,14 @@ export function useSchedulerController(props: any) {
     const externalRuntime = schedulerFeature.kind === "external-runtime" ? schedulerFeature.externalSource : undefined;
     const skills = [...new Set(task.attachments.filter((item) => item.kind === "skill").map((item) => item.label))];
     const paths = [...new Set(task.attachments.filter((item) => item.kind === "path").map((item) => item.label))];
+    // task.steps and task.stepAttachments arrive already filtered + index-aligned
+    // from the composer, so per-step skills/paths land on the right step.
     const steps = task.mode === "steps"
       ? task.steps.filter((step) => step.trim()).map((step, index) => ({
         id: `step-${now}-${index}`,
         text: step.trim(),
-        skills: [],
-        paths: [],
+        skills: [...new Set(task.stepAttachments?.[index]?.skills ?? [])],
+        paths: [...new Set(task.stepAttachments?.[index]?.paths ?? [])],
         model: "",
       }))
       : [];
@@ -1338,6 +1352,9 @@ export function useSchedulerController(props: any) {
       lastSummary: editedSchedule?.lastSummary,
       usePastRuns: task.usePastRuns,
       pastRunLimit: Math.max(1, Math.min(12, Number(task.pastRunLimit) || 3)),
+      // Fan-out: when the composer asks for "every machine", carry the flag so the
+      // replication engine below mirrors this cron onto each fleet machine.
+      runOnAllMachines: task.runOnAllMachines === true || editedSchedule?.runOnAllMachines === true,
       sharedSchedulePath: editedSchedule?.sharedSchedulePath,
       sharedRunFolder: editedSchedule?.sharedRunFolder,
     };

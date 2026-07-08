@@ -56,7 +56,7 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "nansen-token-tracking", label: "Nansen token tracking", desc: "Smart Money token brief", group: "Read", input: "nansen", mutating: false },
   { id: "nansen-hyperliquid-wallets", label: "Nansen Hyperliquid wallets", desc: "Leaderboard + wallet context", group: "Read", input: "nansen", mutating: false },
   { id: "nansen-related-wallets", label: "Nansen related wallets", desc: "Cluster wallet relationships", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-top-wallets", label: "Nansen top wallets", desc: "Token wallet research", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-top-wallets", label: "Nansen top wallets", desc: "Find top wallets for a token", group: "Read", input: "nansen", mutating: false },
   { id: "nansen-cex-health", label: "Nansen CEX health", desc: "Exchange balance/flow brief", group: "Read", input: "nansen", mutating: false },
 ];
 
