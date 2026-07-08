@@ -39,6 +39,7 @@ const TESTS = [
   "test:code-intelligence",
   "test:collector-chat-abort",
   "test:approval-hold",
+  "test:approval-consolidation",
   "test:company-autonomy",
   "test:company-deliverables",
   "test:company-issues",

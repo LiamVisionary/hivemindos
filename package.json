@@ -82,6 +82,7 @@
     "test:code-intelligence": "node scripts/test-code-intelligence-contract.mjs",
     "test:collector-chat-abort": "node scripts/test-collector-chat-abort.mjs",
     "test:approval-hold": "node scripts/test-approval-hold.mjs",
+    "test:approval-consolidation": "node scripts/test-approval-consolidation.mjs",
     "test:company-autonomy": "node scripts/test-company-autonomy.mjs",
     "test:company-deliverables": "node scripts/test-company-deliverables.mjs",
     "test:deliverable-acceptance": "node scripts/test-deliverable-acceptance.mjs",
