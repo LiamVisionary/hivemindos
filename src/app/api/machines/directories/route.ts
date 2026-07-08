@@ -4,6 +4,7 @@ import { access, readdir, stat } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, normalize, resolve, sep } from "path";
 import { promisify } from "util";
+import { isFleetCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -150,6 +151,12 @@ export async function GET(request: Request) {
     const collectorUrl = normalizeCollectorUrl(url.searchParams.get("collectorUrl"));
     const path = url.searchParams.get("path") || "~";
     if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) {
+      // SSRF guard: only browse a client-supplied collector when it resolves to
+      // a fleet host — this gates both the HTTP fetch and the Tailscale SSH
+      // fallback below against arbitrary internal hosts.
+      if (!isFleetCollectorUrl(collectorUrl)) {
+        throw new Error("Refusing to browse a machine outside the fleet host set.");
+      }
       const remoteUrl = new URL(`${collectorUrl}/directories`);
       remoteUrl.searchParams.set("path", path);
       let collectorError = "";

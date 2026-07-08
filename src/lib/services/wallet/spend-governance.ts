@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AgentSpendCapAsset, AgentWalletConfig } from "@/lib/types/agent-wallet";
+import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
 import { getCompanyForAgent } from "@/lib/services/companies-store";
 import { readWalletLedger } from "@/lib/services/obsidian/wallet-ledger";
 import {
@@ -16,6 +17,7 @@ import {
   enqueueApproval,
   type SpendApprovalRequest,
 } from "@/lib/services/wallet/spend-approvals";
+import { buildSpendApprovalReasoning } from "@/lib/utils/spend-approval-reasoning";
 
 /**
  * Single governance chokepoint for every spend rail. It layers three NEW
@@ -44,6 +46,8 @@ export type SpendGovernanceInput = {
   approvalToken?: string;
   /** True when the caller already completed a concrete server-side user approval for this exact spend. */
   approvalThresholdSatisfied?: boolean;
+  /** Human-facing context to attach when this spend becomes an approval request. */
+  explanation?: Partial<ReasoningTrail>;
   now?: number;
 };
 
@@ -66,6 +70,7 @@ export type SpendDecision = {
   /** Present when decision === "allow" via a consumed grant. */
   grant?: SpendApprovalRequest;
   budget: SpendBudgetSnapshot;
+  explanation?: ReasoningTrail;
 };
 
 /**
@@ -175,7 +180,36 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
     companyFrozen: Boolean(company?.frozen),
   };
 
-  const block = (reason: string): SpendDecision => ({ decision: "block", reason, companyId, budget });
+  const decisionExplanation = (reason: string, overrides?: Partial<ReasoningTrail>) => buildSpendApprovalReasoning({
+    agentId: wallet.agentId,
+    agentName: input.agentName,
+    companyId,
+    companyName: company?.name,
+    kind: input.kind,
+    asset: input.asset,
+    amountUsd: amount,
+    assetAmount: input.assetAmount,
+    target: input.target,
+    reason,
+    explanation: {
+      ...input.explanation,
+      ...overrides,
+    },
+  });
+
+  const block = (reason: string): SpendDecision => ({
+    decision: "block",
+    reason,
+    companyId,
+    budget,
+    explanation: decisionExplanation(reason, {
+      summary: "This spend was blocked before execution.",
+      whyNow: reason,
+      impact: "No payment was sent. The agent must change the request or the governing policy before retrying.",
+      requestedAction: "Review the blocker and change the budget, company state, or task plan only if that is intended.",
+      source: "Spend governance block",
+    }),
+  });
 
   // 1. Kill switch.
   if (company?.frozen) {
@@ -193,12 +227,34 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
   const threshold = Number(wallet.approvalRequiredOverUsd) || 0;
   if (threshold > 0 && amount > threshold) {
     if (input.approvalThresholdSatisfied) {
-      return { decision: "allow", reason: "Approval threshold satisfied by the direct send action.", companyId, budget };
+      const reason = "Approval threshold satisfied by the direct user action.";
+      return {
+        decision: "allow",
+        reason,
+        companyId,
+        budget,
+        explanation: decisionExplanation(reason, {
+          summary: "The spend crossed the approval threshold, but this request already carried a direct user confirmation.",
+          whyNow: "The caller provided a confirmation for this exact spend.",
+          impact: "The payment can execute without creating another approval card.",
+          requestedAction: "No separate approval is needed for this attempt.",
+          source: "Spend governance direct approval",
+        }),
+      };
     }
     const grant = await consumeApproval({ agentId: wallet.agentId, asset: input.asset, amountUsd: amount, token: input.approvalToken });
     if (grant) {
-      return { decision: "allow", reason: `Authorised by approval ${grant.id}.`, companyId, grant, budget };
+      const reason = `Authorized by approval ${grant.id}.`;
+      return {
+        decision: "allow",
+        reason,
+        companyId,
+        grant,
+        budget,
+        explanation: grant.explanation,
+      };
     }
+    const approvalReason = `Exceeds approval threshold ($${threshold.toFixed(2)}).`;
     const approval = await enqueueApproval({
       agentId: wallet.agentId,
       agentName: input.agentName,
@@ -208,7 +264,9 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
       amountUsd: amount,
       assetAmount: input.assetAmount,
       target: input.target,
-      reason: `Exceeds approval threshold ($${threshold.toFixed(2)}).`,
+      reason: approvalReason,
+      thresholdUsd: threshold,
+      explanation: input.explanation,
     });
     return {
       decision: "approve",
@@ -216,8 +274,23 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
       companyId,
       approval,
       budget,
+      explanation: approval.explanation,
     };
   }
 
-  return { decision: "allow", reason: "Within budget and approval limits.", companyId, budget };
+  const reason = "Within budget and approval limits.";
+  return {
+    decision: "allow",
+    reason,
+    companyId,
+    budget,
+    explanation: decisionExplanation(reason, {
+      summary: "The spend is inside the configured limits.",
+      whyNow: "No company freeze, budget cap, or approval threshold blocked it.",
+      impact: "The payment can proceed.",
+      requestedAction: "No human decision is needed.",
+      source: "Spend governance allow",
+      missingContext: [],
+    }),
+  };
 }

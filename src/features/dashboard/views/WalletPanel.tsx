@@ -315,6 +315,46 @@ function chainToNetwork(chain: string): string {
   return "eip155:8453";
 }
 
+function stableSendAssetForNetwork(network: string): "USDC" | "USDG" {
+  return String(network || "").toLowerCase() === "eip155:4663" ? "USDG" : "USDC";
+}
+
+function isStableSendAsset(asset: string): asset is "USDC" | "USDG" {
+  return asset === "USDC" || asset === "USDG";
+}
+
+function tokenBalanceForAsset(wallet: any, asset: string): number {
+  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
+  const match = tokens.find((token: any) => tokenSymbol(token) === asset);
+  return Number(match?.balance ?? 0) || 0;
+}
+
+function personalWalletSupportsAsset(wallet: any, asset: string): boolean {
+  if (tokenBalanceForAsset(wallet, asset) > 0) return true;
+  return stableSendAssetForNetwork(String(wallet?.network || "")) === asset;
+}
+
+function resolvePersonalWalletAgentIdForAsset(source: any, asset: string, wallets: any[]): string {
+  const ids = new Set<string>([
+    String(source?.spendId || ""),
+    String(source?.id || ""),
+    ...(Array.isArray(source?.accounts) ? source.accounts.map((account: any) => String(account?.id || "")) : []),
+  ].filter(Boolean));
+  const addresses = new Set<string>([
+    String(source?.addr || "").toLowerCase(),
+    ...(Array.isArray(source?.addresses) ? source.addresses.map((row: any) => String(row?.[1] || "").toLowerCase()) : []),
+  ].filter(Boolean));
+  const candidates = wallets.filter((wallet: any) => {
+    const id = String(wallet?.id || wallet?.agentId || "");
+    const address = String(wallet?.address || "").toLowerCase();
+    return (id && ids.has(id)) || (address && addresses.has(address));
+  });
+  const localCandidates = candidates.filter((wallet: any) => wallet?.custodyMode === "local");
+  const funded = localCandidates.find((wallet: any) => tokenBalanceForAsset(wallet, asset) > 0);
+  const supported = localCandidates.find((wallet: any) => personalWalletSupportsAsset(wallet, asset));
+  return String((funded ?? supported)?.id || (funded ?? supported)?.agentId || source?.spendId || source?.id || "");
+}
+
 function tokenSymbol(token: any): string {
   return String(token?.symbol || "").trim().toUpperCase();
 }
@@ -759,9 +799,22 @@ function WalletPanelComponent(props: any) {
   }, [vaultPath]);
   const loadPersonalWallets = useCallback(async () => setPersonalWallets(await fetchPersonalWallets()), [fetchPersonalWallets]);
   const refreshPersonalWalletSourceBalance = useCallback(async (source: any) => {
-    const sourceId = String(source?.spendId || source?.id || "").trim();
-    if (!sourceId) { await loadPersonalWallets(); return; }
-    const matchesSource = (wallet: any) => wallet?.id === sourceId || wallet?.agentId === sourceId;
+    const ids = new Set<string>([
+      String(source?.spendId || ""),
+      String(source?.id || ""),
+      ...(Array.isArray(source?.accounts) ? source.accounts.map((account: any) => String(account?.id || "")) : []),
+    ].map((value) => value.trim()).filter(Boolean));
+    const addresses = new Set<string>([
+      String(source?.addr || ""),
+      ...(Array.isArray(source?.addresses) ? source.addresses.map((row: any) => String(row?.[1] || "")) : []),
+      ...(Array.isArray(source?.accounts) ? source.accounts.map((account: any) => String(account?.address || "")) : []),
+    ].map((value) => value.trim().toLowerCase()).filter(Boolean));
+    if (!ids.size && !addresses.size) { await loadPersonalWallets(); return; }
+    const matchesSource = (wallet: any) => {
+      const id = String(wallet?.id || wallet?.agentId || "").trim();
+      const address = String(wallet?.address || "").trim().toLowerCase();
+      return (id && ids.has(id)) || (address && addresses.has(address));
+    };
     let targets = mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent).filter(matchesSource);
     if (!targets.length) {
       const latest = await fetchPersonalWallets();
@@ -772,6 +825,11 @@ function WalletPanelComponent(props: any) {
   }, [effectiveWalletsByAgent, fetchPersonalWallets, loadPersonalWallets, personalWallets, refreshPersonalWalletBalances]);
   const loadWalletActivity = useCallback(async () => setWalletActivity(await fetchWalletActivityRecords()), []);
   const loadHoneyLedger = useCallback(async () => setHoneyLedger(await fetchHoneyLedger()), []);
+  const loadBankrWallet = useCallback(async () => {
+    const info = await fetchBankrWallet();
+    setBankrWallet(info);
+    return info;
+  }, []);
   useEffect(() => {
     let ignore = false;
     void fetchPersonalWallets().then((wallets) => { if (!ignore) setPersonalWallets(wallets); });
@@ -986,10 +1044,11 @@ function WalletPanelComponent(props: any) {
       const amountUsd = Number(input.amountUsd);
       const directEnabled = wallet.enabled !== false && !wallet.disabled, autoPayEnabled = Boolean(wallet.autoPayEnabled ?? wallet.autoUse ?? wallet.allowAutoUse);
       const veilAutoSendEnabled = wallet.veilAutoSendEnabled === true;
+      const walletStableAsset = stableSendAssetForNetwork(String(wallet.network || ""));
       if (!recipient) throw new Error("Recipient address is required.");
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
-      if (provider !== "veil" && asset !== "USDC") throw new Error("This rail sends USDC only.");
-      props.updateWalletAction?.(input.agentId, { busy: true, error: "", message: provider === "veil" ? "Submitting Veil private transfer..." : "Sending USDC..." });
+      if (provider !== "veil" && asset !== walletStableAsset) throw new Error(`This wallet sends ${walletStableAsset} on ${fundingNetworkLabel(String(wallet.network || ""))}.`);
+      props.updateWalletAction?.(input.agentId, { busy: true, error: "", message: provider === "veil" ? "Submitting Veil private transfer..." : `Sending ${asset}...` });
       const endpoint = provider === "veil" ? "/api/wallet/veil/transfer" : "/api/wallet/send";
       const maxAssetAmount = Number(wallet.assetSpendCaps?.[asset] ?? (asset === "ETH" ? 0.01 : wallet.maxPaymentUsd) ?? amount);
       const body = endpoint === "/api/wallet/veil/transfer"
@@ -1043,12 +1102,17 @@ function WalletPanelComponent(props: any) {
       return { ok: true };
     },
     onFundAgent: async (input: any) => {
-      if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Agent funding is wired for USDC transfers only.");
+      const asset = String(input.asset || "USDC").toUpperCase();
+      if (!isStableSendAsset(asset)) throw new Error("Agent funding is wired for USDC or USDG transfers only.");
       if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before funding agents.");
       const wallet = effectiveWalletsByAgent?.[input.agentId] || {};
       const toAddress = wallet.walletAddress || wallet.vaultAddress || wallet.address || "";
       if (!toAddress) throw new Error("That agent does not have a deposit address yet.");
-      const data = await sendApprovedWalletUsdc({ agentId: input.source?.spendId || input.source?.id, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
+      const recipientAsset = stableSendAssetForNetwork(String(wallet.network || ""));
+      if (asset !== recipientAsset) throw new Error(`That agent wallet receives ${recipientAsset} on ${fundingNetworkLabel(String(wallet.network || ""))}.`);
+      const sourceAgentId = resolvePersonalWalletAgentIdForAsset(input.source, asset, mergedPersonalWallets);
+      if (!sourceAgentId) throw new Error(`No local ${asset} wallet is available to fund this agent.`);
+      const data = await sendApprovedWalletUsdc({ agentId: sourceAgentId, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
       if (!data?.ok) throw new Error(data?.error || "Could not fund agent.");
       const [recipientWallet] = await Promise.all([refreshWalletBalance?.(input.agentId), refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
       if (recipientWallet) {
@@ -1061,13 +1125,22 @@ function WalletPanelComponent(props: any) {
       };
     },
     onSendPersonalWallet: async (input: any) => {
-      if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Personal wallet send is wired for USDC transfers only.");
+      const asset = String(input.asset || "USDC").toUpperCase();
+      if (!isStableSendAsset(asset)) throw new Error("Personal wallet send is wired for USDC or USDG transfers only.");
       if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before sending.");
-      const data = await sendApprovedWalletUsdc({ agentId: input.source?.spendId || input.source?.id, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
-      if (!data?.ok) throw new Error(data?.error || "Could not send USDC.");
-      await Promise.all([refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
+      const sourceAgentId = resolvePersonalWalletAgentIdForAsset(input.source, asset, mergedPersonalWallets);
+      if (!sourceAgentId) throw new Error(`No local ${asset} wallet is available to send from.`);
+      const data = await sendApprovedWalletUsdc({ agentId: sourceAgentId, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
+      if (!data?.ok) throw new Error(data?.error || `Could not send ${asset}.`);
+      await Promise.all([
+        refreshPersonalWalletSourceBalance(input.source),
+        input.recipient ? refreshPersonalWalletSourceBalance(input.recipient) : undefined,
+        loadWalletActivity(),
+      ]);
       return data;
     },
+    onRefreshPersonalWallet: async (source: any) => refreshPersonalWalletSourceBalance(source),
+    onRefreshBankrWallet: loadBankrWallet,
     onRenamePersonalWallet: async (input: any) => {
       const name = String(input?.name || "").trim();
       if (!name) throw new Error("Enter a name for this wallet.");
@@ -1103,8 +1176,9 @@ function WalletPanelComponent(props: any) {
       return { ok: true, name };
     },
     onCreateWallet: async (input: any) => {
-      const chain = String(input.chain || "Base + Solana");
-      const multiChain = chain.toLowerCase().includes("base + solana");
+      const chain = String(input.chain || "Base + Robinhood Chain + Solana");
+      const normalizedChain = chain.toLowerCase();
+      const multiChain = normalizedChain.includes("base") && normalizedChain.includes("solana") && normalizedChain.includes("robinhood");
       const response = await fetch("/api/wallet/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, createKind: multiChain ? "multi-chain" : "single-network", network: multiChain ? undefined : chainToNetwork(chain), name: input.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
       const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not create wallet.");
@@ -1132,7 +1206,7 @@ function WalletPanelComponent(props: any) {
       nextUrl.searchParams.set("view", "chat");
       window.location.assign(nextUrl.toString());
     },
-  }), [bankrRecipientAddress, effectiveWalletsByAgent, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, mergedPersonalWallets, props, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, vaultPath]);
+  }), [bankrRecipientAddress, effectiveWalletsByAgent, loadBankrWallet, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, mergedPersonalWallets, props, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, vaultPath]);
   const navigateFromDropInShelf = useCallback((id: string) => {
     if (typeof window === "undefined") return;
     const nextView = walletViewForShelf(id);

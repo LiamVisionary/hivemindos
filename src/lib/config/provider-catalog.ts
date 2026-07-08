@@ -38,7 +38,10 @@ export type ProviderCatalogEntry = {
 const GATEWAY_KEY_ENV: Record<string, string> = { openrouter: "OPENROUTER_API_KEY" };
 // Gateways that support a live `/models` fetch (UsePod resolves a tokenized
 // proxy URL at request time, so it is handled in the route, not here).
-const GATEWAY_BASE_URL: Record<string, string> = { venice: "https://api.venice.ai/api/v1" };
+const GATEWAY_BASE_URL: Record<string, string> = {
+  openrouter: "https://openrouter.ai/api/v1",
+  venice: "https://api.venice.ai/api/v1",
+};
 const VIRTUAL_SLUGS = new Set(["hive-fusion"]);
 const GUIDED_SETUP: Record<string, "venice" | "usepod"> = { venice: "venice", usepod: "usepod" };
 

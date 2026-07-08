@@ -26,7 +26,7 @@ type VaultSyncResult =
   | { ok: false; error: string };
 
 const DEFAULT_NETWORK: SupportedWalletNetwork = "eip155:8453";
-const SUPPORTED_NETWORKS = new Set(["eip155:8453", "eip155:84532", "solana:mainnet", "solana:devnet"]);
+const SUPPORTED_NETWORKS = new Set(["eip155:8453", "eip155:84532", "eip155:4663", "solana:mainnet", "solana:devnet"]);
 const SETUP_WALLET_PREFIX = "hivemindos-models";
 
 export async function POST(request: NextRequest) {
@@ -155,13 +155,17 @@ function hivemindosModelsFundingWallet(input: {
     walletAddress: input.address,
     vaultAddress: input.address,
     network: input.network,
-    tokenSymbol: base.tokenSymbol || "USDC",
+    tokenSymbol: base.tokenSymbol || stableTokenSymbol(input.network),
     maxPaymentUsd: Number(base.maxPaymentUsd) > 0 ? Number(base.maxPaymentUsd) : 0.5,
     approvalRequiredOverUsd: Number.isFinite(base.approvalRequiredOverUsd) ? Number(base.approvalRequiredOverUsd) : 2,
     custodyMode: "local",
     updatedAt: input.now,
     notes: fundingWalletNotes(base.notes),
   };
+}
+
+function stableTokenSymbol(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
 }
 
 function fundingWalletNotes(notes?: string) {

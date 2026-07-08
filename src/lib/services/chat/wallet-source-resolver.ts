@@ -48,10 +48,14 @@ export async function resolveWalletSource(
 
   if (hint.personal || hint.chain) {
     const candidates = hint.chain
-      ? personal.filter((info) => (hint.chain === "base" ? info.network.startsWith("eip155:") : info.network.startsWith("solana:")))
+      ? personal.filter((info) => {
+        if (hint.chain === "base") return info.network === "eip155:8453" || info.network === "eip155:84532";
+        if (hint.chain === "robinhood") return info.network === "eip155:4663";
+        return info.network.startsWith("solana:");
+      })
       : personal;
     if (candidates.length === 1) return personalRef(candidates[0]);
-    if (candidates.length === 0) return { error: `No personal ${requiredFamily === "evm" ? "EVM/Base" : "Solana"} wallet is configured. Import one in the Wallets tab first.` };
+    if (candidates.length === 0) return { error: `No personal ${hint.chain ? networkChainLabel(hint.chain === "base" ? "eip155:8453" : hint.chain === "robinhood" ? "eip155:4663" : "solana:mainnet") : requiredFamily === "evm" ? "EVM/Base" : "Solana"} wallet is configured. Import one in the Wallets tab first.` };
     return { error: `You have multiple personal wallets — tell me which address to send from (e.g. "from my wallet 0x…").` };
   }
 

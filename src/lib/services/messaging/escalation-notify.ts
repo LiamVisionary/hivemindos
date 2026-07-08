@@ -7,6 +7,7 @@ import { homedir } from "@/lib/home-dir";
 import { listMessagingChannels, sendHiveMessage } from "@/lib/services/messaging/channels";
 import {
   createAgentNotification,
+  markAgentNotificationRead,
   readAgentNotificationSettings,
   setAgentNotificationResolution,
 } from "@/lib/services/obsidian/agent-notifications";
@@ -15,6 +16,7 @@ import { readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { companySpendRollup, readCompanies } from "@/lib/services/companies-store";
 import type { Company } from "@/lib/types/company";
 import type { KanbanTask } from "@/lib/types/kanban";
+import { formatReasoningTrailForPlainText } from "@/lib/types/reasoning-trail";
 
 /**
  * Escalation bridge: routes the events an unattended operator must hear about —
@@ -69,7 +71,7 @@ type EscalationState = {
   notes: Record<string, string>;
 };
 
-type EscalationOptions = { vaultPath?: string | null };
+type EscalationOptions = { vaultPath?: string | null; markReadWhenResolved?: boolean };
 
 async function readState(): Promise<EscalationState> {
   try {
@@ -221,14 +223,40 @@ export async function resolveEscalationNotification(
     const state = await readState();
     const id = state.notes[key];
     if (!id) return false;
-    return await setAgentNotificationResolution(
+    const changed = await setAgentNotificationResolution(
       id,
       resolution ? { ...resolution, by: "escalation-bridge" } : null,
       { vaultPath: options.vaultPath ?? undefined },
     );
+    let markedRead = false;
+    if (resolution?.status === "resolved" && options.markReadWhenResolved) {
+      markedRead = await markAgentNotificationRead(id, { vaultPath: options.vaultPath ?? undefined })
+        .then(() => true)
+        .catch(() => false);
+    }
+    return changed || markedRead;
   } catch {
     return false;
   }
+}
+
+export async function resolveSpendApprovalEscalationNotifications(
+  approvalId: string,
+  decision: "approved" | "denied",
+  options: EscalationOptions = {},
+): Promise<boolean> {
+  const note = `Spend approval ${decision}.`;
+  const normal = await resolveEscalationNotification(
+    `approval:${approvalId}`,
+    { status: "resolved", note },
+    { ...options, markReadWhenResolved: true },
+  );
+  const expiring = await resolveEscalationNotification(
+    `approval-expiring:${approvalId}`,
+    { status: "resolved", note },
+    { ...options, markReadWhenResolved: true },
+  );
+  return normal || expiring;
 }
 
 /**
@@ -259,6 +287,45 @@ function snippet(text: string | undefined, max = 220): string {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
+function approvalNotificationBody(input: {
+  approval: Awaited<ReturnType<typeof listApprovals>>[number];
+  company?: Company;
+  expiresIn: string;
+}): string {
+  const { approval, company, expiresIn } = input;
+  const fallback = [
+    `${approval.agentName || approval.agentId} wants to ${approval.kind} ~$${approval.amountUsd.toFixed(2)}${approval.target ? ` -> ${approval.target}` : ""}.`,
+    company ? `Company: ${company.name}` : null,
+    `Reason: ${approval.reason}`,
+  ].filter(Boolean).join("\n");
+  return [
+    approval.explanation ? formatReasoningTrailForPlainText(approval.explanation) : fallback,
+    `Expires in ${expiresIn}. Approve or deny in the dashboard (Companies -> approvals, or Wallet).`,
+  ].join("\n");
+}
+
+function blockedTaskNotificationBody(input: {
+  task: KanbanTask;
+  company: Company | null;
+  waitingTotal: number;
+}): string {
+  const { task, company, waitingTotal } = input;
+  const evidence = [
+    task.lastFailureReason ? `Failure: ${task.lastFailureReason}` : null,
+    snippet(task.result) ? `Latest result: ${snippet(task.result)}` : null,
+  ].filter(Boolean);
+  return [
+    "This Work Board task is blocked and waiting for a human decision or missing input.",
+    "Why now: the task is in Needs You.",
+    `Task: ${task.title}`,
+    company ? `Company: ${company.name}` : null,
+    task.assignee ? `Agent: ${task.assignee}` : null,
+    evidence.length ? "Evidence:" : null,
+    ...evidence.map((line) => `- ${line}`),
+    `Decision needed: open the Work Board -> Needs You to unblock it (${waitingTotal} waiting total).`,
+  ].filter((line): line is string => Boolean(line)).join("\n");
+}
+
 /**
  * Sweep the board, approvals, and company budgets for escalation-worthy state.
  * Called from the autonomy driver's tick so it runs headless. Returns how many
@@ -269,23 +336,20 @@ export async function runEscalationSweep(options: EscalationOptions = {}): Promi
   const companies = await readCompanies().catch(() => [] as Company[]);
 
   // 1. Blocked work: every "needs-human" task pings once per day until handled.
+  //    A task the operator has parked (held) is intentionally deferred — it must
+  //    not keep pinging. Kill switch HIVEMINDOS_APPROVAL_HOLD=0 restores pinging.
+  const holdOn = process.env.HIVEMINDOS_APPROVAL_HOLD !== "0";
   try {
     const board = await readBoard(null, { vaultPath: options.vaultPath ?? undefined });
-    const blocked = (board.tasks ?? []).filter((task) => task.status === "needs-human");
+    const blocked = (board.tasks ?? []).filter(
+      (task) => task.status === "needs-human" && !(holdOn && task.held),
+    );
     for (const task of blocked) {
       const company = companyForTask(task, companies);
-      const lines = [
-        `Task: ${task.title}`,
-        company ? `Company: ${company.name}` : null,
-        task.assignee ? `Agent: ${task.assignee}` : null,
-        task.lastFailureReason ? `Failure: ${task.lastFailureReason}` : null,
-        snippet(task.result) ? `Latest: ${snippet(task.result)}` : null,
-        `Open the Work Board → "Needs You" to unblock (${blocked.length} waiting total).`,
-      ].filter(Boolean);
       const ok = await notifyEscalation({
         key: `task-needs-human:${task.id}`,
         title: "Work is blocked on you",
-        body: lines.join("\n"),
+        body: blockedTaskNotificationBody({ task, company, waitingTotal: blocked.length }),
         severity: "high",
         // task:<id> is structured routing data — the notification panel's
         // action buttons deep-link straight to this task on the Work Board.
@@ -321,12 +385,7 @@ export async function runEscalationSweep(options: EscalationOptions = {}): Promi
       const company = companies.find((item) => item.id === approval.companyId);
       const expiresInMs = approval.expiresAtMs - now;
       const expiresIn = expiresInMs > 0 ? `${Math.max(1, Math.round(expiresInMs / 3_600_000))}h` : "soon";
-      const body = [
-        `${approval.agentName || approval.agentId} wants to ${approval.kind} ~$${approval.amountUsd.toFixed(2)}${approval.target ? ` → ${approval.target}` : ""}.`,
-        company ? `Company: ${company.name}` : null,
-        `Reason: ${approval.reason}`,
-        `Expires in ${expiresIn}. Approve or deny in the dashboard (Companies → approvals, or Wallet).`,
-      ].filter(Boolean).join("\n");
+      const body = approvalNotificationBody({ approval, company, expiresIn });
       const nearExpiry = expiresInMs > 0 && expiresInMs < APPROVAL_EXPIRY_WARNING_MS;
       const ok = await notifyEscalation({
         key: nearExpiry ? `approval-expiring:${approval.id}` : `approval:${approval.id}`,

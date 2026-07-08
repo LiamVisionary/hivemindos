@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
         request.nextUrl.origin,
         String(body.message ?? ""),
         coerceActingWalletSource(body.actingWallet),
+        { suppressWalletIntents: body.suppressWalletIntents === true },
       );
       return NextResponse.json({
         ok: true,

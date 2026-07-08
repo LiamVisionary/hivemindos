@@ -330,6 +330,14 @@ export function importRecoveryPhraseWallets(secretInput: string): RecoveryPhrase
       derivationPath: EVM_RECOVERY_PATH,
     },
     {
+      label: "Robinhood Chain",
+      network: "eip155:4663",
+      address: evmAccount.address,
+      secret: mnemonic,
+      importKind: "recovery-phrase",
+      derivationPath: EVM_RECOVERY_PATH,
+    },
+    {
       label: "Solana",
       network: "solana:mainnet",
       address: solanaKeypair.publicKey.toBase58(),
@@ -870,7 +878,7 @@ function tokenRow(input: {
   tokenAddress?: string;
   iconUrl?: string | null;
 }): AgentWalletTokenBalance {
-  const priceUsd = typeof input.price?.usd === "number" ? input.price.usd : input.symbol === "USDC" ? 1 : null;
+  const priceUsd = typeof input.price?.usd === "number" ? input.price.usd : input.symbol === "USDC" || input.symbol === "USDG" ? 1 : null;
   return {
     symbol: input.symbol,
     name: input.name,

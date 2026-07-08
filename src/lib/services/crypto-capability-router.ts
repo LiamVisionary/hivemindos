@@ -443,7 +443,7 @@ async function x402Capability(input: CryptoCapabilityRouterInput): Promise<Crypt
     ],
     endpoints: [
       { intent: "paid-api", method: "POST", route: "/api/wallet/x402", note: "Public x402 paid fetch using the encrypted local wallet." },
-      { intent: "send", method: "POST", route: "/api/wallet/send", note: "USDC send with SEND_USDC confirmation unless auto-use is enabled." },
+      { intent: "send", method: "POST", route: "/api/wallet/send", note: "Stablecoin send (USDC, or USDG on Robinhood Chain) with SEND_USDC confirmation unless auto-use is enabled." },
       { intent: "portfolio", method: "POST", route: "/api/wallet/balance", note: "Read-only portfolio/balance check." },
     ],
   });

@@ -1,0 +1,21 @@
+{
+  "upstreamName": "Nansen Token Screener Discovery",
+  "upstreamSlug": "nansen-token-screener-discovery",
+  "hiveSlug": "nansen-token-screener-discovery",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/crypto/hivemindos/nansen-token-screener-discovery",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-08T12:30:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional crypto skills",
+  "sourcePath": "packaged-skills/optional/crypto/hivemindos/nansen-token-screener-discovery",
+  "status": "optional",
+  "references": [
+    "https://docs.nansen.ai/guides/templates/simple-use-cases"
+  ],
+  "hivemindAdaptations": [
+    "Routes through HivemindOS Nansen intelligence instead of exposing provider keys.",
+    "Returns derived token-discovery briefs rather than raw screener feeds or realtime alerts.",
+    "Preserves HivemindOS trade confirmation boundaries; the skill never executes trades."
+  ]
+}

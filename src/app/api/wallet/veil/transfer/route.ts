@@ -89,6 +89,19 @@ export async function POST(request: NextRequest) {
         assetAmount: Number(amount),
         target: recipient,
         approvalToken: body.approvalToken,
+        explanation: {
+          summary: "This is a private transfer through Veil. The app paused before submitting it.",
+          whyNow: "The transfer crossed a wallet governance rule and needs a human decision before execution.",
+          impact: `Approving lets the agent send ${amount} ${asset} to the private recipient. Rejecting keeps the transfer blocked.`,
+          requestedAction: "Approve only if the recipient, asset, and amount are expected. Reject if the agent should revise the transfer.",
+          evidence: [
+            `Recipient: ${recipient}`,
+            `Asset: ${asset}`,
+            `Amount: ${amount}`,
+          ],
+          missingContext: [],
+          source: "Veil private transfer",
+        },
       });
       if (decision.decision === "block") {
         return NextResponse.json({ ok: false, status: "blocked", error: decision.reason }, { status: 403 });

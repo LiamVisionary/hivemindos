@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Check, ChevronRight, Coins, CreditCard, LoaderCircle, Network, Plus, RefreshCcw, Search, Sparkles, Wallet, X, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { AgentProfile, HivemindosModelsAgentConfig } from "@/lib/types/agent-runtime";
+import { isHiveComputeHostedModelId } from "@/lib/config/hive-compute-marketplace";
 import {
   HIVEMINDOS_MODEL_CREDIT_TOP_UP_CONFIRMATION,
   HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID,
   HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL,
   HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
   HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS,
+  isComputeFirstHivemindosModel,
   isCustomHivemindosWalletPaidModel,
   isFreeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidModel,
@@ -69,6 +71,8 @@ type GatewayModelOption = {
   promptUsdPerToken?: number;
   completionUsdPerToken?: number;
 };
+
+type PaidModelChipOption = GatewayModelOption & { upstreamModel?: string };
 
 /** Client mirror of FreeModelAllowanceSnapshot (the service module is
  *  server-only — it reads the snapshot file). */
@@ -160,6 +164,7 @@ function sortGatewayModels(options: GatewayModelOption[], sort: GatewayModelSort
 const TIER_CHIP_ICONS: Record<string, LucideIcon> = {
   "hivemindos/auto": Network,
   "hivemindos/fast": Zap,
+  "hivemindos/deep": Search,
   "hivemindos/frontier": Sparkles,
   "hivemindos/research": Search,
 };
@@ -637,8 +642,8 @@ export function GuidedHivemindosModelsSetup({
     };
   }, []);
 
-  // Live model list from the local gateway route (static routes plus any
-  // models the hosted gateway advertises), free Swarm Sovereign Scout first.
+  // Live model catalog from the local gateway route: static routes plus any
+  // models the hosted gateway advertises.
   useEffect(() => {
     let ignore = false;
     void fetch("/api/hivemindos/models/models", { cache: "no-store" })
@@ -667,26 +672,47 @@ export function GuidedHivemindosModelsSetup({
     return () => { ignore = true; };
   }, []);
 
-  // Three-row layout data: free hero card, auto-router tiers, dynamic gateway list.
   const freeModelOption = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((option) => option.tier === "free");
-  const tierOptions = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.filter((option) => option.tier !== "free");
+  const staticCatalogModels = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS
+    .filter((option) => option.tier !== "free")
+    .sort((a, b) => Number(isComputeFirstHivemindosModel(b.id)) - Number(isComputeFirstHivemindosModel(a.id)));
+  const hiveComputeMarketplaceModels = gatewayModelOptions.filter((option) => isHiveComputeHostedModelId(option.id));
   const gatewayCustomModels = gatewayModelOptions.filter((option) => isCustomHivemindosWalletPaidModel(option.id));
   const trimmedModelQuery = modelQuery.trim().toLowerCase();
-  const matchingGatewayModels = sortGatewayModels(
-    trimmedModelQuery
-      ? gatewayCustomModels.filter((option) => (
-        `${option.name} ${option.subtitle ?? ""} ${upstreamHivemindosWalletPaidModel(option.id)}`.toLowerCase().includes(trimmedModelQuery)
-      ))
-      : gatewayCustomModels,
-    modelSort,
+  const matchesModelQuery = (option: PaidModelChipOption) => (
+    !trimmedModelQuery
+    || `${option.name} ${option.subtitle ?? ""} ${option.upstreamModel ?? upstreamHivemindosWalletPaidModel(option.id)}`.toLowerCase().includes(trimmedModelQuery)
   );
-  const gatewayPageCount = Math.max(1, Math.ceil(matchingGatewayModels.length / GATEWAY_MODELS_PAGE_SIZE));
-  const gatewayPage = Math.min(modelPage, gatewayPageCount - 1);
-  const visibleGatewayModels = matchingGatewayModels.slice(
-    gatewayPage * GATEWAY_MODELS_PAGE_SIZE,
-    gatewayPage * GATEWAY_MODELS_PAGE_SIZE + GATEWAY_MODELS_PAGE_SIZE,
-  );
-
+  const matchingRouteModels = staticCatalogModels.filter((option) => isComputeFirstHivemindosModel(option.id)).filter(matchesModelQuery);
+  const matchingComputeMarketplaceModels = hiveComputeMarketplaceModels.filter(matchesModelQuery);
+  const matchingFallbackStaticModels = staticCatalogModels.filter((option) => !isComputeFirstHivemindosModel(option.id)).filter(matchesModelQuery);
+  const matchingGatewayModels = sortGatewayModels(gatewayCustomModels.filter(matchesModelQuery), modelSort);
+  const matchingAllModels = [...matchingRouteModels, ...matchingComputeMarketplaceModels, ...matchingFallbackStaticModels, ...matchingGatewayModels];
+  const allModelCount = staticCatalogModels.length + hiveComputeMarketplaceModels.length + gatewayCustomModels.length;
+  const allPageCount = Math.max(1, Math.ceil(matchingAllModels.length / GATEWAY_MODELS_PAGE_SIZE));
+  const allModelPage = Math.min(modelPage, allPageCount - 1);
+  const visibleAllModels = matchingAllModels.slice(allModelPage * GATEWAY_MODELS_PAGE_SIZE, allModelPage * GATEWAY_MODELS_PAGE_SIZE + GATEWAY_MODELS_PAGE_SIZE);
+  const renderPaidModelChip = (
+    option: PaidModelChipOption,
+    options: { fallbackIcon?: LucideIcon; sale?: boolean; showUpstream?: boolean; needTitle?: string } = {},
+  ) => {
+    const { fallbackIcon, sale, showUpstream, needTitle = "Requires credits" } = options;
+    const TierIcon = fallbackIcon ? (TIER_CHIP_ICONS[option.id] ?? fallbackIcon) : null;
+    const subtitle = showUpstream && option.upstreamModel
+      ? <>{option.subtitle} · <span className={styles.mono}>{option.upstreamModel}</span></>
+      : option.subtitle || upstreamHivemindosWalletPaidModel(option.id);
+    return (
+      <button
+        key={option.id} type="button" className={styles.chip}
+        data-active={selectedModel === option.id || undefined} data-sale={sale || undefined}
+        aria-pressed={selectedModel === option.id} onClick={() => pickModel(option.id, "paid")}
+      >
+        <span className={styles.chipName}>{TierIcon ? <TierIcon aria-hidden="true" /> : null}{option.name}{sale && option.badge ? <span className={styles.chipBadge}>{option.badge}</span> : null}</span>
+        <span className={styles.chipSub}>{subtitle}</span>
+        {!fundingConfigured ? <span className={styles.chipNeed} title={needTitle}><Coins aria-hidden="true" /></span> : null}
+      </button>
+    );
+  };
   useEffect(() => {
     if (!creditFunding || fundingMode !== "wallet") return undefined;
     const intervalId = window.setInterval(() => {
@@ -694,7 +720,6 @@ export function GuidedHivemindosModelsSetup({
     }, 2600);
     return () => window.clearInterval(intervalId);
   }, [creditFunding, creditFundingStages.length, fundingMode]);
-
   const modelDisplayName = useCallback((modelId: string): string => {
     const staticOption = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((option) => option.id === modelId);
     if (staticOption) return staticOption.name;
@@ -1149,32 +1174,12 @@ export function GuidedHivemindosModelsSetup({
               <span className={styles.freeCheck}><Check aria-hidden="true" /></span>
             </button>
           ) : null}
-          <div className={styles.subhead}>Routing tiers<span className={styles.subheadTag}>· auto-router picks the model</span><span className={styles.subheadSpacer} /></div>
-          <div className={styles.chipGrid}>
-            {tierOptions.map((option) => {
-              const TierIcon = TIER_CHIP_ICONS[option.id] ?? Network;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={styles.chip}
-                  data-active={selectedModel === option.id || undefined}
-                  aria-pressed={selectedModel === option.id}
-                  onClick={() => pickModel(option.id, "paid")}
-                >
-                  <span className={styles.chipName}><TierIcon aria-hidden="true" />{option.name}</span>
-                  <span className={styles.chipSub}>{option.subtitle} · <span className={styles.mono}>{option.upstreamModel}</span></span>
-                  {!fundingConfigured ? <span className={styles.chipNeed} title="Requires credits"><Coins aria-hidden="true" /></span> : null}
-                </button>
-              );
-            })}
-          </div>
 
           <div className={styles.subhead}>
-            All models{gatewayCustomModels.length ? <span className={styles.subheadTag}>· {gatewayCustomModels.length} on the gateway</span> : null}
+            All models{allModelCount ? <span className={styles.subheadTag}>· {allModelCount} available</span> : null}
             <span className={styles.subheadSpacer} />
             {gatewayCustomModels.length ? (
-              <span className={styles.sortRow} role="group" aria-label="Sort gateway models">
+              <span className={styles.sortRow} role="group" aria-label="Sort models">
                 {GATEWAY_MODEL_SORTS.map((sort) => (
                   <button
                     key={sort.id}
@@ -1201,61 +1206,54 @@ export function GuidedHivemindosModelsSetup({
                 setModelQuery(event.target.value);
                 setModelPage(0);
               }}
-              placeholder="Search gateway models"
-              aria-label="Search gateway models"
+              placeholder="Search models"
+              aria-label="Search models"
             />
           </div>
-          {gatewayModelsLoading && !gatewayCustomModels.length ? (
-            <p className={styles.loadingLine} role="status" aria-label="Loading gateway models">
-              <LoaderCircle className={styles.spin} aria-hidden="true" />
-              Loading gateway models
-            </p>
-          ) : (
-            <div className={styles.chipGrid}>
-              {visibleGatewayModels.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={styles.chip}
-                  data-active={selectedModel === option.id || undefined}
-                  aria-pressed={selectedModel === option.id}
-                  onClick={() => pickModel(option.id, "paid")}
-                >
-                  <span className={styles.chipName}>{option.name}</span>
-                  <span className={styles.chipSub}>{option.subtitle || upstreamHivemindosWalletPaidModel(option.id)}</span>
-                  {!fundingConfigured ? <span className={styles.chipNeed} title="Requires credits"><Coins aria-hidden="true" /></span> : null}
-                </button>
-              ))}
-              {!matchingGatewayModels.length ? (
-                <p className={styles.muted} style={{ gridColumn: "1 / -1" }}>
-                  {trimmedModelQuery
-                    ? `No gateway models match “${modelQuery.trim()}”.`
-                    : "No gateway models are available yet. Routing tiers still work."}
-                </p>
-              ) : null}
-            </div>
-          )}
+          <div className={styles.chipGrid}>
+            {visibleAllModels.map((option) => {
+              const computeFirst = isComputeFirstHivemindosModel(option.id);
+              const computeHosted = isHiveComputeHostedModelId(option.id);
+              const customGatewayModel = isCustomHivemindosWalletPaidModel(option.id);
+              return renderPaidModelChip(option, {
+                fallbackIcon: customGatewayModel ? undefined : computeFirst || computeHosted ? Zap : Network,
+                sale: computeFirst || computeHosted,
+                showUpstream: !customGatewayModel && !computeHosted,
+                needTitle: computeHosted ? "Requires credits for Hive Compute" : computeFirst ? "Requires credits for fallback" : "Requires credits",
+              });
+            })}
+            {gatewayModelsLoading ? (
+              <p className={styles.loadingLine} role="status" aria-label="Loading gateway models">
+                <LoaderCircle className={styles.spin} aria-hidden="true" />Loading gateway models
+              </p>
+            ) : null}
+            {!matchingAllModels.length && !gatewayModelsLoading ? (
+              <p className={styles.muted} style={{ gridColumn: "1 / -1" }}>
+                {trimmedModelQuery ? `No models match “${modelQuery.trim()}”.` : "No models are available yet."}
+              </p>
+            ) : null}
+          </div>
 
-          {matchingGatewayModels.length > GATEWAY_MODELS_PAGE_SIZE ? (
+          {matchingAllModels.length > GATEWAY_MODELS_PAGE_SIZE ? (
             <div className={styles.pagerRow}>
               <button
                 type="button"
                 className={styles.pagerBtn}
-                disabled={gatewayPage === 0}
+                disabled={allModelPage === 0}
                 aria-label="Previous models page"
-                onClick={() => setModelPage(Math.max(0, gatewayPage - 1))}
+                onClick={() => setModelPage(Math.max(0, allModelPage - 1))}
               >
                 <ChevronRight aria-hidden="true" style={{ transform: "rotate(180deg)" }} />
               </button>
               <span className={styles.pagerLabel}>
-                {gatewayPage * GATEWAY_MODELS_PAGE_SIZE + 1}–{Math.min((gatewayPage + 1) * GATEWAY_MODELS_PAGE_SIZE, matchingGatewayModels.length)} of {matchingGatewayModels.length}
+                {allModelPage * GATEWAY_MODELS_PAGE_SIZE + 1}–{Math.min((allModelPage + 1) * GATEWAY_MODELS_PAGE_SIZE, matchingAllModels.length)} of {matchingAllModels.length}
               </span>
               <button
                 type="button"
                 className={styles.pagerBtn}
-                disabled={gatewayPage >= gatewayPageCount - 1}
+                disabled={allModelPage >= allPageCount - 1}
                 aria-label="Next models page"
-                onClick={() => setModelPage(Math.min(gatewayPageCount - 1, gatewayPage + 1))}
+                onClick={() => setModelPage(Math.min(allPageCount - 1, allModelPage + 1))}
               >
                 <ChevronRight aria-hidden="true" />
               </button>
@@ -1263,7 +1261,7 @@ export function GuidedHivemindosModelsSetup({
           ) : null}
 
           {!fundingConfigured ? (
-            <div className={styles.note}><Coins aria-hidden="true" />Scout stays free. Routing tiers and paid models unlock once you add credits.</div>
+            <div className={styles.note}><Coins aria-hidden="true" />Scout stays free. Paid models unlock once you add credits.</div>
           ) : null}
 
           {message ? <div className={styles.msg}>{message}</div> : null}

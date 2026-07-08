@@ -236,6 +236,22 @@ export async function POST(request: NextRequest) {
       policy,
       confirmation: "PAY_X402",
       approvalThresholdSatisfied: body.confirmation === HIVEMINDOS_MODEL_CREDIT_TOP_UP_CONFIRMATION,
+      approvalContext: {
+        headline: `Add $${cryptoTopUpAmountUsd.toFixed(2)} of HivemindOS Models credits to the shared model balance.`,
+        summary: "This buys prepaid hosted model credits. Future paid HivemindOS Models calls use this shared balance before asking for another wallet payment.",
+        whyNow: `The selected top-up is $${cryptoTopUpAmountUsd.toFixed(2)}. The wallet policy requires a human decision before this payment can settle.`,
+        impact: `Approving spends $${cryptoTopUpAmountUsd.toFixed(2)} from the selected local wallet over x402 and credits the hosted model pool. Rejecting leaves the model balance unchanged.`,
+        requestedAction: "Approve only if you want this install to add hosted model credits now. Reject if the balance is already funded or paid model use should wait.",
+        evidence: [
+          `Credit pool: ${slug}`,
+          `Funding wallet: ${walletVaultId}`,
+          `Network: ${wallet.network}`,
+          `Endpoint: ${target.toString()}`,
+          `Existing pool token: ${existingPoolToken ? "present" : "not found"}`,
+        ],
+        missingContext: [],
+        source: "HivemindOS Models credit top-up",
+      },
       timeoutMs: 120_000,
     });
 

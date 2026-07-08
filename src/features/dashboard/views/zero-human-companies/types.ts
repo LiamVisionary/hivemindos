@@ -8,6 +8,7 @@ import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type { CompanyImportRequest, CompanyImportedOperations } from "@/lib/types/company-import";
 import type { WorkBoardPipelineImpact, WorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
 import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
+import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -157,6 +158,8 @@ export interface Issue {
   work?: IssueWork;
   /** Labeled potential revenue this card can unblock; quoted, not booked. */
   pipelineImpact?: WorkBoardPipelineImpact;
+  /** Human-facing explanation of why this issue exists and what decision/action it needs. */
+  reasoning?: ReasoningTrail;
 }
 
 export interface Colony {

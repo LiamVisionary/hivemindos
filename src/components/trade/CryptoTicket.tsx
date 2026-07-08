@@ -2,8 +2,9 @@
 
 /* CryptoTicket — the redesigned Buy / Sell / Swap order ticket, wired to the
    REAL rails:
-     • user / agent wallets → the local DEX swap rail (0x on Base / Jupiter on
-       Solana) with a live quote, the hard $10 per-swap cap, and CONFIRM_SWAP.
+     • user / agent wallets → the local DEX swap rail (0x on Base/Robinhood
+       Chain, Jupiter on Solana) with a live quote, the hard $10 per-swap cap,
+       and CONFIRM_SWAP.
      • the Bankr-managed wallet → the Bankr natural-language rail (prepare→
        confirm→execute), since it signs on Bankr's own wallet, not a local key.
    No demo numbers: the receive estimate + rate come from a live swap quote. */
@@ -35,7 +36,9 @@ export function CryptoTicket() {
   );
   const useBankr = walletKind === "bankr";
   const tokens = swapTokens.length >= 2 ? swapTokens : ["USDC", "ETH"];
-  const nonUsdc = tokens.filter((t) => t !== "USDC");
+  const stable = tokens.includes("USDG") ? "USDG" : "USDC";
+  const nonStable = tokens.filter((t) => t !== stable);
+  const firstNonStable = nonStable[0] ?? stable;
   // Every asset the ACTING wallet actually holds (positive balance), so you can
   // pay with what you own — not just the curated swap list. Pay menu = held
   // first, then the curated tradable set as a fallback; receive menu = the
@@ -45,24 +48,30 @@ export function CryptoTicket() {
   const recvOptions = Array.from(new Set([...tokens, ...heldTokens]));
 
   const [side, setSide] = React.useState<Side>("buy");
-  const [pay, setPay] = React.useState("USDC");
-  const [recv, setRecv] = React.useState(nonUsdc[0] ?? "ETH");
+  const [paySelection, setPaySelection] = React.useState(stable);
+  const [recvSelection, setRecvSelection] = React.useState(firstNonStable);
   const [amt, setAmt] = React.useState("");
-  const [quote, setQuote] = React.useState<DexSwapQuote | null>(null);
+  const [quoteState, setQuoteState] = React.useState<{ key: string; quote: DexSwapQuote } | null>(null);
   const [quoting, setQuoting] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "signing" | "done" | "error">("idle");
   const [result, setResult] = React.useState<RailResult | null>(null);
 
-  // Preset pay/recv for the buy/sell legs (buy = USDC→token, sell = token→USDC).
+  const pay = payOptions.includes(paySelection) ? paySelection : stable;
+  const recvFallback = recvOptions.find((token) => token !== pay) ?? firstNonStable;
+  const recv = recvOptions.includes(recvSelection) && recvSelection !== pay ? recvSelection : recvFallback;
+  const amtNum = Number(amt) || 0;
+  const quoteKey = `${agentId}|${network}|${pay}|${recv}|${amtNum}`;
+  const quote = quoteState?.key === quoteKey ? quoteState.quote : null;
+
+  // Preset pay/recv for the buy/sell legs (buy = stable→token, sell = token→stable).
   // These are overridable defaults, not locks — the asset menus still offer every
   // held token. Done on the side click — no effect needed (derive-on-event).
   const changeSide = (s: Side) => {
-    setSide(s); setState("idle"); setResult(null); setQuote(null);
-    if (s === "buy") { setPay("USDC"); if (recv === "USDC") setRecv(nonUsdc[0] ?? "ETH"); }
-    if (s === "sell") { setRecv("USDC"); if (pay === "USDC") setPay(nonUsdc[0] ?? "ETH"); }
+    setSide(s); setState("idle"); setResult(null); setQuoteState(null);
+    if (s === "buy") { setPaySelection(stable); if (recv === stable) setRecvSelection(firstNonStable); }
+    if (s === "sell") { setRecvSelection(stable); if (pay === stable) setPaySelection(firstNonStable); }
   };
 
-  const amtNum = Number(amt) || 0;
   const bal = cryptoBalances[pay] || 0;
 
   // Live swap quote (price is wallet-agnostic, so we quote for Bankr too). The
@@ -74,16 +83,17 @@ export function CryptoTicket() {
   React.useEffect(() => {
     if (!amtNum || pay === recv) return;
     const seq = ++quoteSeq.current;
+    const key = quoteKey;
     let active = true;
     const timer = window.setTimeout(async () => {
       setQuoting(true);
       const response = await quoteDex({ agentId, sellToken: pay, buyToken: recv, amountHuman: amtNum, network });
       if (!active || seq !== quoteSeq.current) return;
       setQuoting(false);
-      setQuote(response.ok && response.quote ? response.quote : null);
+      setQuoteState(response.ok && response.quote ? { key, quote: response.quote } : null);
     }, 450);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [agentId, pay, recv, amtNum, network]);
+  }, [agentId, pay, recv, amtNum, network, quoteKey]);
 
   const payUsd = quote ? quote.valueUsd : 0;
   const recvAmt = quote ? quote.buyAmount : 0;
@@ -103,8 +113,8 @@ export function CryptoTicket() {
   const overCap = !useBankr && payUsdEstimate > swapMaxUsd;
   const overWalletCap = useBankr && wallet.cap != null && payUsdEstimate > wallet.cap;
 
-  const setPct = (p: number) => { setAmt(String(+(bal * p).toFixed(pay === "ETH" || pay === "cbBTC" || pay === "BTC" ? 6 : 2))); setState("idle"); setQuote(null); };
-  const flip = () => { setSide("swap"); setPay(recv); setRecv(pay); setAmt(""); setQuote(null); setState("idle"); };
+  const setPct = (p: number) => { setAmt(String(+(bal * p).toFixed(pay === "ETH" || pay === "cbBTC" || pay === "BTC" ? 6 : 2))); setState("idle"); setQuoteState(null); };
+  const flip = () => { setSide("swap"); setPaySelection(recv); setRecvSelection(pay); setAmt(""); setQuoteState(null); setState("idle"); };
 
   const place = async () => {
     if (!amtNum || state === "signing") return;
@@ -124,11 +134,11 @@ export function CryptoTicket() {
         ? await executeCapability(prepared.prepared, { intentId: "trade", amountUsd: payUsd })
         : { ok: false, error: prepared.error || "Could not prepare this Bankr order." };
     } else {
-      outcome = await runDexSwap({ agentId, sellToken: pay, buyToken: recv, amountHuman: amtNum });
+      outcome = await runDexSwap({ agentId, sellToken: pay, buyToken: recv, amountHuman: amtNum, network });
     }
     setResult(outcome);
     setState(outcome.ok ? "done" : "error");
-    if (outcome.ok) { playTradeSuccessSound(); setAmt(""); setQuote(null); desk.refresh(); }
+    if (outcome.ok) { playTradeSuccessSound(); setAmt(""); setQuoteState(null); desk.refresh(); }
   };
 
   React.useEffect(() => {
@@ -162,9 +172,9 @@ export function CryptoTicket() {
         <div className="lhead"><span>{sell ? "You sell" : "You pay"}</span><span className="bal">Balance {trAmt(pay, bal)} {pay}</span></div>
         <div className="tk-legrow">
           <input className="tk-input" inputMode="decimal" placeholder="0" value={amt}
-            onChange={(e) => { setAmt(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); setResult(null); setQuote(null); }} aria-label="Amount to pay" />
+            onChange={(e) => { setAmt(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); setResult(null); setQuoteState(null); }} aria-label="Amount to pay" />
           <AssetMenu value={pay} options={payOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol}
-            onPick={(s) => { if (s !== recv) { setPay(s); setState("idle"); setQuote(null); } }} />
+            onPick={(s) => { if (s !== recv) { setPaySelection(s); setState("idle"); setQuoteState(null); } }} />
         </div>
         <div className="tk-usd">{payUsdEstimate > 0 ? `≈ ${trUsd2(payUsdEstimate)}` : quoting ? "pricing…" : "≈ —"}</div>
         <div className="tk-chips">
@@ -185,13 +195,13 @@ export function CryptoTicket() {
         <div className="lhead"><span>You receive</span><span className="bal">≈ market</span></div>
         <div className="tk-legrow">
           <input className="tk-input" readOnly value={recvAmt ? trAmt(recv, recvAmt) : ""} placeholder="0" aria-label="Estimated received" />
-          <AssetMenu value={recv} options={recvOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol} onPick={(s) => { if (s !== pay) { setRecv(s); setState("idle"); setQuote(null); } }} />
+          <AssetMenu value={recv} options={recvOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol} onPick={(s) => { if (s !== pay) { setRecvSelection(s); setState("idle"); setQuoteState(null); } }} />
         </div>
         <div className="tk-usd">{quote ? `≈ ${trUsd2(payUsd)}` : "≈ —"}</div>
       </div>
 
       <div className="tk-review">
-        <ReviewLine k="Route" v={useBankr ? "Bankr" : network.includes("solana") ? "Jupiter · Solana" : "0x · Base"} icon="repeat" />
+        <ReviewLine k="Route" v={routeLabel(useBankr, network)} icon="repeat" />
         <ReviewLine k="Price impact" v={quote && quote.detail ? quote.detail : "—"} />
         {!useBankr ? <ReviewLine k="Per-swap cap" v={trUsd(swapMaxUsd)} /> : null}
         <ReviewLine k="Settles to" v={wallet.name} icon="wallet" live />
@@ -226,4 +236,11 @@ export function CryptoTicket() {
       ) : null}
     </div>
   );
+}
+
+function routeLabel(useBankr: boolean, network: string): string {
+  if (useBankr) return "Bankr";
+  if (network.includes("solana")) return "Jupiter · Solana";
+  if (network === "eip155:4663") return "0x · Robinhood Chain";
+  return "0x · Base";
 }

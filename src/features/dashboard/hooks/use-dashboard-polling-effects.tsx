@@ -42,7 +42,7 @@ type UseDashboardPollingEffectsProps = {
   hiveEnvLoading: boolean;
   refreshHiveEnv: () => void | Promise<void>;
   agentWorkerClassView: AgentWorkerClassView;
-  vaultPanelMode: "hive-vault" | "shared-skills" | "brain-services" | "env" | "config";
+  vaultPanelMode: "atlas" | "dream-inbox" | "skill-roi" | "hive-vault" | "shared-skills" | "brain-services" | "env" | "config";
   refreshNotifications: (options?: { append?: boolean }) => void | Promise<void>;
   mirosharkRun: MiroSharkRunResult | null;
   mirosharkPosts: { count: number };

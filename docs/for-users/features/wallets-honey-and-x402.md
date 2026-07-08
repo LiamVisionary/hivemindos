@@ -25,7 +25,7 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Clear-signing reviews are exposed through `/api/crypto/clear-signing`.
 - Local agent identity/listing records are exposed through `/api/crypto/agent-identity`.
 - Crypto control reviews are exposed through `/api/crypto/risk-monitor`.
-- Base and Solana wallet creation and balance reads are exposed through `/api/wallet/create`, `/api/wallet/balance`, and `/api/wallet/send`.
+- Base, Robinhood Chain, and Solana wallet creation and balance reads are exposed through `/api/wallet/create`, `/api/wallet/balance`, and `/api/wallet/send`.
 - Local Honey ledger/cache is in `src/lib/services/wallet/honey-ledger.ts`.
 - Wallet-vault backup and restore logic is in `src/lib/services/wallet/wallet-vault-backup.ts`.
 - MoneyClaw account checks live in `src/lib/services/wallet/moneyclaw-client.ts`.
@@ -35,14 +35,16 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 
 ## What Wallets Can Do
 
-- Create Base and Solana wallet secrets for agent-scoped token rails.
+- Create Base, Robinhood Chain, and Solana wallet secrets for agent-scoped token rails.
 - Read native/token balances.
-- Send USDC where configured, capped, and approved.
+- Send the wallet's dollar stablecoin where configured, capped, and approved: USDC on Base/Solana, or USDG on Robinhood Chain.
 - Store, recover, and explicitly export local wallet secrets.
 - Validate MoneyClaw keys.
 - Track UsePod prepaid token deposit details and runtime balance/route metadata when UsePod returns it.
+- Spend hosted HivemindOS credits on managed UsePod inference when an official hosted gateway is configured. The gateway holds the UsePod payer token server-side, preserves streaming responses, charges upstream UsePod spend plus the configured HivemindOS platform fee, and refunds any unused per-request reservation.
+- Spend hosted HivemindOS credits on managed Nansen research when no `NANSEN_API_KEY` is configured. The official gateway holds the Nansen key server-side, charges the user's hosted credits, records a receipt, and returns a derived brief.
 - Execute x402 paid requests through policy-aware helpers.
-- Buy stocks from a prompt through Alpaca (a real brokerage, paper by default) or on-chain tokenized xStocks (a USDC to xStock swap via Jupiter).
+- Buy stocks from a prompt through Alpaca (a real brokerage, paper by default), on-chain tokenized xStocks (a USDC to xStock swap via Jupiter), or eligible Robinhood Chain Stock Tokens (a USDG swap through 0x on Robinhood Chain).
 - Select and prepare the best available crypto rail for agent intents such as paid API calls, private transfers, Bankr trading, and LLM credit funding.
 - Prepare crosschain swap, bridge, and payment intents through the same router, with Bankr as the active provider path and direct LI.FI/Open Intents adapters reserved as explicit future provider slots.
 - Generate clear-signing reviews that show the action kind, endpoint, recipient, network, amount, cap, confirmation phrase, and blocking risks before execution.
@@ -151,7 +153,7 @@ Optional staging, enterprise, or self-hosted official-compatible deployments can
 
 This is still a server-authoritative commercial flow. The downloaded app loads the user's encrypted local wallet only to sign the x402 payment under that wallet's policy. Official price, recipient, payment requirements, settlement, receipts, quotas, provider keys, and upstream model access stay in HivemindOS-controlled hosted infrastructure. A local app setting or request body cannot redirect official HivemindOS model revenue.
 
-For one-click calls, the agent needs a local custody Base/Base Sepolia/Solana wallet with Spend enabled, provider `x402`, enough USDC and native gas, and Allow auto-use enabled under the wallet's cap. Personal user wallets do not auto-spend; they still require explicit payment confirmation.
+For one-click calls, the agent needs a local custody Base/Base Sepolia/Robinhood Chain/Solana wallet with Spend enabled, provider `x402`, enough accepted stablecoin and native gas, and Allow auto-use enabled under the wallet's cap. Personal user wallets do not auto-spend; they still require explicit payment confirmation. Robinhood Chain x402 payments only work when the paid endpoint explicitly accepts `eip155:4663`; otherwise HivemindOS reports that no matching payment option was available.
 
 ## Trading Platform Fees
 
@@ -159,7 +161,7 @@ The downloadable app cannot be the authority for official HivemindOS revenue: us
 
 - `HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config`
 
-That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official local-wallet platform fee is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate USDC transfer after the main action succeeds. Today that includes local USDC sends, local DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, Veil private transfers, and Veil private x402 payments. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. The fee transfer is recorded in wallet activity as a platform-fee item so it remains visible to the user.
+That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official local-wallet platform fee is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate stablecoin transfer after the main action succeeds. Today that includes local stablecoin sends, local DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca stock orders, ordinary public x402 payments, Veil private transfers, and Veil private x402 payments. Fees use USDC on Base/Solana and USDG on Robinhood Chain. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. HivemindOS-hosted MiroShark proxy runs are also excluded from the separate local platform-fee transfer because their **$1.20 USDC** x402 price already includes the expected **$0.20** HivemindOS cut. The fee transfer, when one applies, is recorded in wallet activity as a platform-fee item so it remains visible to the user.
 
 Zero Human Company revenue-share events are recorded through `/api/company-revenue` and shown in the company Treasury tab. They use the same visible collection rail, but the default company revenue share is **2% with a $0.01 minimum**. Recording revenue alone updates the company revenue ledger; collecting the HivemindOS share requires explicit confirmation and a selected company agent wallet. External revenue that never reports into HivemindOS, a hosted HivemindOS billing service, or a verifiable settlement rail is not automatically charged by the local app.
 
@@ -169,6 +171,7 @@ Simple examples:
 | --- | ---: | ---: |
 | Wallet send, swap, stock, x402, or private payment | `$0.25` | `$0.01` minimum |
 | Wallet send, swap, stock, x402, or private payment | `$100` | `$1.00` |
+| HivemindOS-hosted MiroShark x402 simulation | `$1.20` | No extra local platform fee; `$0.20` proxy spread is included |
 | Recorded Zero Human Company revenue | `$100` | `$2.00` |
 | Recorded Zero Human Company revenue | `$1,000` | `$20.00` |
 
@@ -179,7 +182,7 @@ Self-hosted operators can override the hosted policy for their own install by se
 - `HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=200` for a 2% Zero Human Company revenue share
 - `HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD=0.01` for a minimum fee
 - Optional: `HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD=<max-fee>`
-- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<base-or-evm-address>` for Base wallet sends, Base DEX swaps, live Alpaca fee collection, public x402, and Veil-backed private payments
+- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<evm-address>` for Base and Robinhood Chain wallet sends, EVM DEX swaps, Robinhood Chain Stock Token swaps, live Alpaca fee collection, public x402, and Veil-backed private payments
 - `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>` for Solana DEX, xStocks swaps, and Solana x402 payments
 
 Some Trading tab capabilities are not safely fee-able from the local app alone. Bankr actions and MoneyClaw card payments need a hosted/proxy fee path, provider-native partner fee support, or a contract-based settlement layer because the local app does not own a deterministic local-wallet settlement for those rails. Do not present local fee settings as official HivemindOS-wide revenue enforcement: a downloaded app is user-controlled and can be modified. Strong official enforcement must happen in hosted HivemindOS infrastructure or in a verifiable third-party settlement flow that checks recipient, network, amount, resource, and receipt server-side.
@@ -267,8 +270,8 @@ Credential readiness is reported by key name and status only. The router must no
 
 The Wallets tab treats each agent wallet as a set of payment rails:
 
-- Local Base or Solana wallets hold capped test funds for direct sends and x402 requests.
-- USDC sends enforce each agent's max-payment policy before signing.
+- Local Base, Robinhood Chain, or Solana wallets hold capped funds for direct sends, swaps, trades, and x402 requests.
+- Stablecoin sends enforce each agent's max-payment policy before signing: USDC on Base/Solana, USDG on Robinhood Chain.
 - MoneyClaw keys can be saved per agent or shared across agents after the API key is validated.
 - UsePod agents show a prepaid rail with deposit address, last balance, last route, model count, and test status from the runtime metadata.
 - x402 requests use the local wallet policy, max-payment cap, and explicit confirmation text for risky sends.
@@ -276,7 +279,8 @@ The Wallets tab treats each agent wallet as a set of payment rails:
 
 Token-facing surfaces:
 
-- Base and Solana addresses are treated as operational agent wallets, not user custody wallets.
+- Base, Robinhood Chain, and Solana addresses are treated as operational agent wallets, not user custody wallets.
+- Robinhood Chain wallets can hold USDG, WETH, and official Stock Token contracts. Stock Token trades may still be blocked by upstream liquidity, eligibility, or legal restrictions; HivemindOS surfaces that block instead of routing around it.
 - UsePod deposit addresses are shown as prepaid inference token rails when the selected agent uses the UsePod provider.
 - Honey is tracked as usage-earned accounting. HIVE can be a ledger-only legacy balance or an actual Bankr transfer when the claim path is configured.
 - x402 uses token/payment policy around requests instead of giving runtimes unrestricted wallet access.

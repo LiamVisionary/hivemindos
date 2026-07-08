@@ -9,6 +9,7 @@ export type CryptoIntentInputKind =
   | "amount" // USD amount only (fund credits)
   | "address" // read-only receive address
   | "info" // informational / hand-off (e.g. cards)
+  | "nansen" // read-only Nansen research templates
   | "none"; // read-only action with no inputs
 
 export type CryptoIntentDef = {
@@ -37,7 +38,7 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "automation", label: "Automations", desc: "DCA, TWAP, limit, stop", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "DCA $25 into ETH every day" },
   { id: "copy-trading", label: "Copy trading", desc: "Auto-mirror a wallet's trades", group: "Trade & markets", input: "info", mutating: true },
 
-  { id: "send", label: "Send USDC", desc: "On-chain USDC transfer", group: "Move money", input: "recipient-amount", mutating: true },
+  { id: "send", label: "Send stablecoin", desc: "USDC or Robinhood Chain USDG transfer", group: "Move money", input: "recipient-amount", mutating: true },
   { id: "private-transfer", label: "Private transfer", desc: "Shielded USDC / ETH via Veil", group: "Move money", input: "recipient-amount", mutating: true, withAsset: true },
   { id: "crosschain-payment", label: "Cross-chain pay", desc: "Pay an address on another chain", group: "Move money", input: "prompt", mutating: true, promptPlaceholder: "pay 50 USDC on Base to 0x… as a recipient on Polygon" },
   { id: "receive", label: "Receive", desc: "Show a deposit address", group: "Move money", input: "address", mutating: false },
@@ -48,6 +49,15 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "card-payment", label: "Card payment", desc: "Virtual-card checkout (MoneyClaw)", group: "Pay & fund", input: "info", mutating: true },
 
   { id: "portfolio", label: "Portfolio", desc: "Read balances, PnL, positions", group: "Read", input: "none", mutating: false },
+  { id: "nansen-defi-positions", label: "Nansen DeFi positions", desc: "Wallet DeFi holdings", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-smart-money-holdings", label: "Nansen Smart Money holdings", desc: "Top Smart Money tokens", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-holders", label: "Nansen token holders", desc: "Top holder context", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-screener", label: "Nansen token screener", desc: "New-token discovery", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-tracking", label: "Nansen token tracking", desc: "Smart Money token brief", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-hyperliquid-wallets", label: "Nansen Hyperliquid wallets", desc: "Leaderboard + wallet context", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-related-wallets", label: "Nansen related wallets", desc: "Cluster wallet relationships", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-top-wallets", label: "Nansen top wallets", desc: "Token wallet research", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-cex-health", label: "Nansen CEX health", desc: "Exchange balance/flow brief", group: "Read", input: "nansen", mutating: false },
 ];
 
 export const STOCK_SIDES = ["buy", "sell"] as const;

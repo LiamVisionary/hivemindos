@@ -9,10 +9,10 @@ import { Fragment, forwardRef, useMemo, useRef } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQueenVoicePulse } from "@/lib/audio/queen-voice-amplitude";
 import type { AgentState, HiveMachine, HiveMachineKind, HiveSelection } from "./fleet-hive-types";
-import { frMachineState } from "./fleet-hive-types";
+import { frMachineState, hivePhoneStatus } from "./fleet-hive-types";
 import {
   AGENT_SIZE, FR_HEX_CLIP, HIVE_H, HIVE_W, MACHINE_SIZE, QX, QY,
-  frAddMachinePos, frAgentNameSegments, frBuildLayout, type Pt,
+  frAddMachinePos, frAgentNameSegments, frBuildLayout, frPhonePlaceholderPos, type Pt,
 } from "./hive-geometry";
 
 interface Tone {
@@ -71,7 +71,7 @@ const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
           style={{
             position: "absolute", inset: 0, clipPath: FR_HEX_CLIP,
             background: tone.fill, border: "0",
-            boxShadow: `inset 0 0 0 1.4px ${tone.border}, inset 0 ${size * 0.5}px ${size * 0.6}px -${size * 0.4}px rgba(255,255,255,0.06)`,
+            boxShadow: `inset 0 0 0 1.4px ${tone.border}, inset 0 ${size * 0.5}px ${size * 0.6}px -${size * 0.4}px var(--fr-cell-sheen)`,
             // NB: no backdrop-filter here. The fill is fully opaque, so a blur shows
             // nothing through it — but Chromium/WebView2 paints backdrop-filter to the
             // element's RECTANGLE, ignoring clip-path, which drew a visible box around
@@ -90,22 +90,22 @@ const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
 function frMachineTone(state: AgentState, selected: boolean): Tone {
   const base: Tone =
     ({
-      working: { fill: "color-mix(in srgb, var(--live) 13%, var(--panel))", border: "color-mix(in srgb, var(--live) 60%, var(--line-3))", glow: "var(--live-soft)" },
-      setup: { fill: "color-mix(in srgb, var(--honey) 12%, var(--panel))", border: "var(--honey-line)", glow: "var(--honey-soft)" },
-      failed: { fill: "color-mix(in srgb, var(--danger) 13%, var(--panel))", border: "color-mix(in srgb, var(--danger) 58%, var(--line-3))", glow: "var(--danger-soft)" },
-      ready: { fill: "var(--panel)", border: "var(--line-3)", glow: null },
-    } as Record<string, Tone>)[state] || { fill: "var(--panel)", border: "var(--line-3)", glow: null };
+      working: { fill: "var(--fr-machine-working-fill)", border: "var(--fr-machine-working-border)", glow: "var(--fr-working-glow)" },
+      setup: { fill: "var(--fr-machine-setup-fill)", border: "var(--fr-machine-setup-border)", glow: "var(--honey-soft)" },
+      failed: { fill: "var(--fr-machine-failed-fill)", border: "var(--fr-machine-failed-border)", glow: "var(--danger-soft)" },
+      ready: { fill: "var(--fr-machine-ready-fill)", border: "var(--fr-machine-ready-border)", glow: null },
+    } as Record<string, Tone>)[state] || { fill: "var(--fr-machine-ready-fill)", border: "var(--fr-machine-ready-border)", glow: null };
   if (selected) return { ...base, border: "var(--honey)", glow: base.glow || "var(--honey-soft)" };
   return base;
 }
 
 function frAgentTone(state: AgentState, selected: boolean): Tone {
   const tints: Record<string, Tone> = {
-    working: { fill: "color-mix(in srgb, var(--live) 18%, var(--panel-2))", border: "color-mix(in srgb, var(--live) 70%, transparent)", glow: "var(--live-soft)" },
-    scheduled: { fill: "color-mix(in srgb, var(--honey) 15%, var(--panel-2))", border: "var(--honey-line)", glow: null },
-    setup: { fill: "color-mix(in srgb, var(--honey) 10%, var(--panel-2))", border: "var(--honey-line)", glow: null },
-    failed: { fill: "color-mix(in srgb, var(--danger) 16%, var(--panel-2))", border: "color-mix(in srgb, var(--danger) 64%, transparent)", glow: "var(--danger-soft)" },
-    ready: { fill: "var(--panel-2)", border: "var(--line-2)", glow: null },
+    working: { fill: "var(--fr-agent-working-fill)", border: "var(--fr-agent-working-border)", glow: "var(--fr-working-glow)" },
+    scheduled: { fill: "var(--fr-agent-scheduled-fill)", border: "var(--fr-agent-scheduled-border)", glow: null },
+    setup: { fill: "var(--fr-agent-setup-fill)", border: "var(--fr-agent-setup-border)", glow: null },
+    failed: { fill: "var(--fr-agent-failed-fill)", border: "var(--fr-agent-failed-border)", glow: "var(--danger-soft)" },
+    ready: { fill: "var(--fr-agent-ready-fill)", border: "var(--fr-agent-ready-border)", glow: null },
   };
   const t = tints[state] || tints.ready;
   return selected ? { ...t, border: "var(--honey)", glow: t.glow || "var(--honey-soft)" } : t;
@@ -138,7 +138,7 @@ function MachineKindIcon({ kind, color, size = 22 }: { kind: HiveMachineKind; co
 function AgentEdgeName({ name, selected }: { name: string; selected: boolean }) {
   const segs = frAgentNameSegments(name);
   if (!segs.length) return null;
-  const color = selected ? "var(--honey-2)" : "var(--fg)";
+  const color = selected ? "var(--fr-label-fill-selected)" : "var(--fr-label-fill)";
   const len = segs.reduce((n, s) => n + s.length, 0);
   const fs = len > 14 ? 8.4 : len > 10 ? 9.2 : 10;
   // Each lower hex edge is ~42 units long. Rather than squeezing a long segment
@@ -153,7 +153,7 @@ function AgentEdgeName({ name, selected }: { name: string; selected: boolean }) 
   const right = segs.length > 1 ? clamp(segs[1]) : null;
   return (
     <svg viewBox="0 0 100 100" aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
-      <g fill={color} stroke="var(--bg)" strokeWidth="2.6" strokeLinejoin="round" paintOrder="stroke" style={{ fontFamily: "var(--f-body)", fontWeight: 700 }}>
+      <g fill={color} stroke="var(--fr-label-halo)" strokeWidth="var(--fr-label-halo-width)" strokeLinejoin="round" paintOrder="stroke" style={{ fontFamily: "var(--f-body)", fontWeight: "var(--fr-label-weight)" }}>
         {/* a lone word hugs the bottom-left edge, just like the first segment of
             a two-part name; a second segment hugs the bottom-right edge. */}
         <text x="47" y="91" fontSize={fs} textAnchor="end" dominantBaseline="middle" transform="rotate(30 47 91)">{left}</text>
@@ -208,13 +208,13 @@ const AddAgentCell = forwardRef<HTMLDivElement, AddAgentCellProps>(function AddA
 
 // ---- pheromone thread + travelling light ----------------------------------
 function Thread({ a, b, lit, flow, delay = 0, dur = 2.6 }: { a: Pt; b: Pt; lit?: boolean; flow?: boolean; delay?: number; dur?: number }) {
-  const stroke = lit ? "var(--honey-line)" : "var(--line-2)";
+  const stroke = lit ? "var(--fr-thread-lit)" : "var(--fr-thread-idle)";
   const path = `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
   return (
     <g>
       <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={lit ? 1.5 : 1} strokeLinecap="round" />
       {flow ? (
-        <circle r="2.6" fill="var(--honey-2)" opacity="0.95">
+        <circle r="2.6" fill="var(--fr-thread-flow)" opacity="0.95">
           <animateMotion path={path} dur={`${dur}s`} begin={`${delay}s`} repeatCount="indefinite" />
           <animate attributeName="opacity" values="0;1;1;0" dur={`${dur}s`} begin={`${delay}s`} repeatCount="indefinite" />
         </circle>
@@ -232,6 +232,7 @@ export function HiveStage({
   onAddMachine,
   onOpenQueenSettings,
   newAgentId,
+  tailnetLabel = "",
   workerBeeSrc = "/icons/worker-bee-general-v5.png",
   queenBeeSrc = "/icons/queen-bee-v2.png",
 }: {
@@ -243,11 +244,22 @@ export function HiveStage({
   onAddMachine?: () => void;
   onOpenQueenSettings?: () => void;
   newAgentId?: string | null;
+  tailnetLabel?: string;
   workerBeeSrc?: string;
   queenBeeSrc?: string;
 }) {
   const layout = useMemo(() => frBuildLayout(machines), [machines]);
+  const phone = useMemo(() => hivePhoneStatus(machines, tailnetLabel), [machines, tailnetLabel]);
+  const mobileMachineIds = useMemo(() => new Set(phone.mobileMachines.map((machine) => machine.id)), [phone.mobileMachines]);
+  const onlineMobileMachineIds = useMemo(() => new Set(phone.onlineMobileMachines.map((machine) => machine.id)), [phone.onlineMobileMachines]);
+  const primaryPhoneMachineId = phone.mobileMachines[0]?.id ?? "";
+  const phonePlaceholder = useMemo(
+    () => (phone.mobileMachines.length ? null : frPhonePlaceholderPos(machines, layout)),
+    [layout, machines, phone.mobileMachines.length],
+  );
   const activeMachineId = sel.type === "machine" ? sel.id : sel.type === "agent" ? sel.machineId : null;
+  const phoneToneState: AgentState =
+    phone.state === "connected" ? "working" : phone.state === "tailnet-issue" ? "setup" : "ready";
   // The Queen cell breathes to her voice while she speaks in voice chat: the
   // pulse hook writes `--queen-amp` (0..1) on this node every frame (imperative,
   // so HiveStage's fleet-poll re-renders never touch the 60fps path).
@@ -256,7 +268,8 @@ export function HiveStage({
 
   const threads = machines.map((m, i) => {
     const L = layout[m.id];
-    const hasWorking = m.agents.some((a) => a.state === "working");
+    const isOnlineMobile = onlineMobileMachineIds.has(m.id);
+    const hasWorking = isOnlineMobile || m.agents.some((a) => a.state === "working");
     const lit = activeMachineId === m.id || sel.type === "queen";
     return <Thread key={"q" + m.id} a={{ x: QX, y: QY }} b={L.pos} lit={lit} flow={hasWorking} delay={i * 0.5} dur={2.8} />;
   });
@@ -269,6 +282,16 @@ export function HiveStage({
       {/* threads */}
       <svg width={HIVE_W} height={HIVE_H} viewBox={`0 0 ${HIVE_W} ${HIVE_H}`} style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {threads}
+        {phonePlaceholder ? (
+          <Thread
+            a={{ x: QX, y: QY }}
+            b={phonePlaceholder}
+            lit={sel.type === "queen" || sel.type === "phone"}
+            flow={false}
+            delay={0.2}
+            dur={2.3}
+          />
+        ) : null}
       </svg>
 
       {/* agent cells */}
@@ -300,7 +323,7 @@ export function HiveStage({
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={agent.iconSrc || workerBeeSrc} alt="" width={81} height={81}
-                      style={{ transform: "translateY(-4%)", opacity: agent.state === "ready" && !selected ? 0.78 : 1, filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.4))" }}
+                      style={{ transform: "translateY(-4%)", opacity: agent.state === "ready" && !selected ? 0.78 : 1, filter: "var(--fr-image-shadow)" }}
                     />
                   </span>
                   <AgentEdgeName name={agent.name} selected={selected} />
@@ -334,7 +357,9 @@ export function HiveStage({
       {/* machine cells */}
       {machines.map((m) => {
         const L = layout[m.id];
-        const st = frMachineState(m);
+        const isMobile = mobileMachineIds.has(m.id);
+        const isOnlineMobile = onlineMobileMachineIds.has(m.id);
+        const st = isMobile ? (isOnlineMobile ? "working" : "setup") : frMachineState(m);
         const selected = sel.type === "machine" && sel.id === m.id;
         const dim = !!activeMachineId && activeMachineId !== m.id && sel.type !== "queen";
         const tone = frMachineTone(st, selected);
@@ -345,6 +370,8 @@ export function HiveStage({
                 <HiveCell
                   x={L.pos.x} y={L.pos.y} size={MACHINE_SIZE} tone={tone}
                   selected={selected} dim={dim} pulse={st === "working"}
+                  data-bee={m.id === primaryPhoneMachineId ? "fleet-hive-phone" : undefined}
+                  aria-label={isMobile ? "Open phone connection" : undefined}
                   onClick={() => onSelect({ type: "machine", id: m.id })}
                   z={selected ? 8 : 5}
                 >
@@ -361,6 +388,33 @@ export function HiveStage({
           </Fragment>
         );
       })}
+
+      {phonePlaceholder ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <HiveCell
+              x={phonePlaceholder.x}
+              y={phonePlaceholder.y}
+              size={MACHINE_SIZE}
+              tone={frMachineTone(phoneToneState, sel.type === "phone")}
+              selected={sel.type === "phone"}
+              dim={!!activeMachineId && sel.type !== "phone"}
+              pulse={false}
+              data-bee="fleet-hive-phone"
+              aria-label="Open phone connection"
+              role="button"
+              onClick={() => onSelect({ type: "phone" })}
+              z={sel.type === "phone" ? 8 : 6}
+            >
+              <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
+                <MachineKindIcon kind="Mobile" size={39} color={sel.type === "phone" ? "var(--honey)" : "var(--fg-2)"} />
+              </span>
+              <AgentEdgeName name="Phone" selected={sel.type === "phone"} />
+            </HiveCell>
+          </TooltipTrigger>
+          <TooltipContent>{phone.phoneStatus}</TooltipContent>
+        </Tooltip>
+      ) : null}
 
       {/* dashed "add machine" cell — sits just outside the ring in the widest
           gap between machines (sliding further out when agent petals crowd that
@@ -403,13 +457,13 @@ export function HiveStage({
               <div className="fr-queen-glow" />
               {/* opaque fill — no backdrop-filter (it was clipped to the hex on WebKit
                   but drew a rectangular box around it on Chromium/WebView2; see HiveCell). */}
-              <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "color-mix(in srgb, var(--honey) 16%, var(--panel))" }} />
+              <div style={{ position: "absolute", inset: 0, clipPath: FR_HEX_CLIP, background: "var(--fr-queen-fill)" }} />
               <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
                 <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={sel.type === "queen" ? "var(--honey)" : "var(--honey-line)"} strokeWidth={sel.type === "queen" ? 2.2 : 1.6} strokeLinejoin="round" />
               </svg>
               <div className="fr-queen-core" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.45))" }} />
+                <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "var(--fr-queen-image-shadow)" }} />
               </div>
               <div style={{ position: "absolute", left: "50%", top: "calc(100% + 6px)", transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none" }}>
                 <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 13, color: "var(--honey)" }}>Queen</div>

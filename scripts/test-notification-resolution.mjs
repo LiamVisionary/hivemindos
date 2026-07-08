@@ -26,6 +26,7 @@ const {
   needsHumanResolutionFor,
   notifyEscalation,
   resolveEscalationNotification,
+  resolveSpendApprovalEscalationNotifications,
   runEscalationSweep,
 } = await import("../src/lib/services/messaging/escalation-notify.ts");
 const { createTask, moveTask } = await import("../src/lib/services/kanban/local-kanban-store.ts");
@@ -79,6 +80,22 @@ try {
   const otherCard = (await listAgentNotifications(options)).notifications.find((n) => n.body === "different incident");
   assert.equal(otherCard?.resolution, undefined, "resolving one key never touches another key's card");
   assert.equal(await resolveEscalationNotification("demo:never-sent", { status: "resolved" }, options), false);
+
+  // ── spend approvals: decision resolves both normal + expiry alert cards ────
+  await notifyEscalation({ key: "approval:approval-123", title: "Spend approval needed", body: "normal approval card", severity: "high", tags: ["wallet", "approval"] }, options);
+  await notifyEscalation({ key: "approval-expiring:approval-123", title: "Spend approval about to expire", body: "expiry approval card", severity: "urgent", tags: ["wallet", "approval"] }, options);
+  assert.equal(
+    await resolveSpendApprovalEscalationNotifications("approval-123", "denied", options),
+    true,
+    "decision resolves at least one spend-approval notification",
+  );
+  list = await listAgentNotifications(options);
+  const normalApproval = list.notifications.find((n) => n.body === "normal approval card");
+  const expiringApproval = list.notifications.find((n) => n.body === "expiry approval card");
+  assert.equal(normalApproval?.resolution?.status, "resolved");
+  assert.equal(expiringApproval?.resolution?.status, "resolved");
+  assert.equal(normalApproval?.read, true, "resolved approval card is marked read");
+  assert.equal(expiringApproval?.read, true, "resolved expiry card is marked read");
 
   // ── needs-human sweep against a real temp board ────────────────────────────
   const { task } = await createTask(null, { title: "Blocked deliverable", body: "needs a decision" }, options);

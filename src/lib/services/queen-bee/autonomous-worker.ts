@@ -8,6 +8,7 @@ import {
   type LoopUrlProbeResult,
 } from "../loops/loop-runner";
 import { makeDeliverableContentFetcher } from "@/lib/services/deliverables/content-fetcher";
+import { classifyKanbanFailure } from "../kanban/kanban-failure-classification";
 import { classifyRuntimeFailureOutput } from "./worker-output-failure";
 
 // Advance an agent flow when one of its task nodes completes/fails. Dynamic, guarded import keeps
@@ -615,9 +616,11 @@ function exhaustedMessage(failures: string[]) {
 // (client abort at the chat timeout) or its collector gateway briefly died (502/503/
 // 504). These are self-healing — the SAME agent completes the work once the machine
 // drains — so a whole chain that failed ONLY this way should retry on a later sweep,
-// not strand the company task on a human. Content failures ("produced no output",
-// a rejected eval gate, a runtime/model error) are deliberately excluded: those need
-// a human, so a chain with any of them still escalates.
+// not strand the company task on a human. Provider 429/usage-limit failures are also
+// retryable, but they keep their typed `rate-limit` reason so Work Board attempts and
+// infra-rescue receipts distinguish capacity from model quota. Content failures
+// ("produced no output", a rejected eval gate, a non-429 runtime/model error) are
+// deliberately excluded: those need a human, so a chain with any of them still escalates.
 const TRANSIENT_PICKUP_FAILURE =
   /(timed?\s*out|timeout|aborted|abort(?:ed)? due to|bad gateway|gateway timeout|\b50[234]\b|service unavailable|temporarily unavailable|econnreset|econnrefused|socket hang ?up|connection (?:error|reset|refused)|network error|fetch failed)/i;
 
@@ -650,6 +653,7 @@ export function isInfrastructurePickupFailure(line: string): boolean {
  */
 function pickupExhaustionRetryReason(failures: string[]): KanbanFailureReason | undefined {
   if (failures.length === 0) return undefined;
+  if (failures.every((failure) => classifyKanbanFailure(failure) === "rate-limit")) return "rate-limit";
   if (!failures.every((failure) => isInfrastructurePickupFailure(failure))) return undefined;
   return "timeout";
 }

@@ -14,6 +14,13 @@
   --panel-bg-soft: rgba(8,12,19,0.55);
   --panel-grad: linear-gradient(180deg, rgba(16,20,29,0.78), rgba(6,8,13,0.60));
   --panel-card-grad: linear-gradient(180deg, rgba(22,28,42,0.72), rgba(16,21,31,0.62));
+  /* Run-status tones — theme-aware so failed/stale recolor in hive-light instead
+     of the previous hardcoded #8e3328/#a23a35 literals that broke on light. */
+  --status-ok: rgba(94,234,212,0.90);
+  --status-warn: rgba(255,212,90,0.92);
+  --status-failed: #fb7185;
+  --status-stale: rgba(255,212,90,0.80);
+  --status-idle: var(--muted);
 }
 :global([data-theme="hive-light"]) .root {
   --hex-default-bg: linear-gradient(180deg, rgba(255,252,246,0.86), rgba(244,239,228,0.70));
@@ -27,6 +34,11 @@
   --panel-bg-soft: rgba(244,239,228,0.82);
   --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
   --panel-card-grad: linear-gradient(180deg, rgba(255,252,246,0.88), rgba(244,239,228,0.76));
+  --status-ok: #0d8e7e;
+  --status-warn: #a9781b;
+  --status-failed: #c2410c;
+  --status-stale: #a9781b;
+  --status-idle: var(--muted);
 }
 .dot {
   display: inline-block; width: 6px; height: 6px; border-radius: 9999px;
@@ -255,4 +267,204 @@
     overflow-x: auto;
     overflow-y: hidden;
   }
+}
+
+/* ── Redesigned Automations layout: main list/timeline + detail drawer ── */
+.schedLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 27cqi, 400px);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.schedLayoutSolo { grid-template-columns: minmax(0, 1fr); }
+.schedMain {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.schedToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(148,163,184,0.14);
+}
+.schedSearch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 200px;
+  min-width: 160px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(148,163,184,0.20);
+  background: var(--panel-bg-soft);
+  color: var(--foreground);
+}
+.schedSearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--f-display);
+  font-size: 13px;
+}
+.schedChipRow { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.schedChip {
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(148,163,184,0.16);
+  background: rgba(148,163,184,0.04);
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+.schedChip:hover { border-color: rgba(94,234,212,0.4); color: var(--foreground); }
+.schedChipActive {
+  border-color: var(--hex-honey-border);
+  background: color-mix(in srgb, var(--hex-honey-border) 16%, transparent);
+  color: var(--foreground);
+}
+.schedSegment {
+  display: inline-flex;
+  border-radius: 9px;
+  border: 1px solid rgba(148,163,184,0.18);
+  overflow: hidden;
+}
+.schedSegment button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 11px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.schedSegment button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--hex-active-border) 16%, transparent);
+  color: var(--foreground);
+}
+.schedListScroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px 20px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.schedRow {
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,0.14);
+  background: var(--panel-card-grad);
+  color: var(--foreground);
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.schedRow:hover { border-color: rgba(94,234,212,0.34); }
+.schedRowSelected {
+  border-color: var(--hex-honey-border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--hex-honey-border) 12%, transparent), var(--panel-card-grad));
+}
+.schedRowPaused { opacity: 0.66; }
+.schedRowActions { display: inline-flex; align-items: center; gap: 4px; }
+.schedIconBtn {
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(148,163,184,0.2);
+  background: var(--panel-bg-soft);
+  color: var(--muted);
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+.schedIconBtn:hover { border-color: rgba(94,234,212,0.45); color: var(--foreground); }
+.schedIconBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.schedMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  display: grid;
+  min-width: 168px;
+  padding: 6px;
+  gap: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(148,163,184,0.22);
+  background: var(--panel-bg);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.4);
+}
+.schedMenu button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--foreground);
+  font-family: var(--f-display);
+  font-size: 12.5px;
+  text-align: left;
+}
+.schedMenu button:hover { background: rgba(148,163,184,0.12); }
+.schedMenuDanger { color: var(--status-failed) !important; }
+.schedDrawer {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-left: 1px solid rgba(148,163,184,0.16);
+  background: var(--panel-bg-soft);
+}
+.schedSkel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(148,163,184,0.12);
+}
+.schedSkel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--hex-active-border) 16%, transparent), transparent);
+  animation: sch-shimmer 1.25s ease-in-out infinite;
+}
+@keyframes sch-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .schedSkel::after { animation: none; }
+  .dotLive { animation: none; }
+}
+@container (max-width: 860px) {
+  .schedLayout { grid-template-columns: minmax(0, 1fr); }
+  .schedDrawer { display: none; }
 }

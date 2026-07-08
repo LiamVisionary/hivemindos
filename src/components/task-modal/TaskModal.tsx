@@ -32,12 +32,6 @@ export type TaskModalSkillOption = {
   description?: string;
 };
 
-const DEFAULT_STEPS = [
-  "Read the Obsidian vault index manifest",
-  "Refresh embeddings for any notes modified since last run",
-  "Push the updated index to peer machines over Tailscale",
-];
-
 interface TaskModalProps {
   open: boolean;
   onClose: () => void;
@@ -80,9 +74,11 @@ const cadenceSummary = (kind: CadenceKind, cron: string) => ({
   cron:    `cron · ${cron}`,
 })[kind];
 
-const DEFAULT_SKILLS = ["index-vault", "rotate-tokens", "x-publish", "pull-rss"];
-const DEFAULT_MACHINES = ["atlas", "nimbus", "honeycomb", "lattice", "drone-01"];
-const DEFAULT_BEES = ["Aeon-night", "Aeon-jobs", "Hermes-α", "OpenClaw-eng", "Codex-skill"];
+// Empty fallbacks — the only caller (the Automations panel) always passes real
+// skills/machines/bees. No fabricated demo values leak into the picker.
+const DEFAULT_SKILLS: string[] = [];
+const DEFAULT_MACHINES: string[] = [];
+const DEFAULT_BEES: string[] = [];
 
 export function TaskModal({
   open, onClose, onSave, initial,
@@ -97,24 +93,25 @@ export function TaskModal({
       ? { slug: skill, name: skill, description: "" }
       : skill)
   ), [skillOptions]);
-  const initialTemplate = findTaskTemplate(initial?.templateId) ?? TASK_TEMPLATES[0] ?? null;
+  // A caller that passes templateId === null (the dashboard/custom path) wants a
+  // blank draft — do NOT inherit the first template's demo defaults ("Index
+  // Obsidian vault" title/steps). Only fall back to a template when none was set.
+  const initialTemplate = initial?.templateId === null
+    ? null
+    : (findTaskTemplate(initial?.templateId) ?? TASK_TEMPLATES[0] ?? null);
   const [tab, setTab] = React.useState<"template" | "custom">(aeon || initial?.templateId === null ? "custom" : "template");
   const [templateId, setTemplateId] = React.useState<string | null>(initial?.templateId ?? initialTemplate?.id ?? null);
-  const [title, setTitle] = React.useState(initial?.title ?? initialTemplate?.defaultTitle ?? "Index Obsidian vault");
-  const [mode, setMode] = React.useState<"steps" | "prompt">(initial?.mode ?? initialTemplate?.defaultMode ?? "steps");
-  const [steps, setSteps] = React.useState<string[]>(initial?.steps?.length ? initial.steps : (initialTemplate?.defaultSteps ?? DEFAULT_STEPS));
-  const [prompt, setPrompt] = React.useState<string>(initial?.prompt ?? initialTemplate?.defaultPrompt ??
-    "Read the Obsidian vault index manifest, refresh embeddings for any notes modified since the last run, then push the updated index to peer machines over Tailscale.");
-  const [attachments, setAttachments] = React.useState<NewTaskPayload["attachments"]>(initial?.attachments ?? initialTemplate?.defaultAttachments ?? [
-    { kind: "skill", label: normalizedSkillOptions[0]?.slug ?? "index-vault" },
-    { kind: "path",  label: "~/Obsidian/hive" },
-  ]);
+  const [title, setTitle] = React.useState(initial?.title ?? initialTemplate?.defaultTitle ?? "");
+  const [mode, setMode] = React.useState<"steps" | "prompt">(initial?.mode ?? initialTemplate?.defaultMode ?? "prompt");
+  const [steps, setSteps] = React.useState<string[]>(initial?.steps?.length ? initial.steps : (initialTemplate?.defaultSteps?.length ? initialTemplate.defaultSteps : [""]));
+  const [prompt, setPrompt] = React.useState<string>(initial?.prompt ?? initialTemplate?.defaultPrompt ?? "");
+  const [attachments, setAttachments] = React.useState<NewTaskPayload["attachments"]>(initial?.attachments ?? initialTemplate?.defaultAttachments ?? []);
   const [attachOpen, setAttachOpen] = React.useState<"skill" | "path" | null>(null);
-  const [cadenceKind, setCadenceKind] = React.useState<CadenceKind>(initial?.cadence?.kind ?? initialTemplate?.defaultCadenceKind ?? "daily");
-  const [cronExpr, setCronExpr] = React.useState(initial?.cadence?.kind === "cron" ? initial.cadence.expr : "0 2 * * *");
+  const [cadenceKind, setCadenceKind] = React.useState<CadenceKind>(initial?.cadence?.kind ?? initialTemplate?.defaultCadenceKind ?? "hourly");
+  const [cronExpr, setCronExpr] = React.useState(initial?.cadence?.kind === "cron" ? initial.cadence.expr : "0 9 * * *");
   const [target, setTarget] = React.useState(initial?.target ?? {
-    machine: machineOptions[0] ?? "honeycomb",
-    bee: beeOptions[0] ?? "Aeon-night",
+    machine: machineOptions[0] ?? "",
+    bee: beeOptions[0] ?? "",
   });
   const [usePastRuns, setUsePastRuns] = React.useState(initial?.usePastRuns ?? false);
   const [pastRunLimit, setPastRunLimit] = React.useState(initial?.pastRunLimit ?? 3);
@@ -152,7 +149,7 @@ export function TaskModal({
     setTemplateId(template.id);
     setTitle(template.defaultTitle);
     setMode(template.defaultMode);
-    setSteps(template.defaultSteps.length ? template.defaultSteps : DEFAULT_STEPS);
+    setSteps(template.defaultSteps.length ? template.defaultSteps : [""]);
     setPrompt(template.defaultPrompt);
     setAttachments(template.defaultAttachments ?? []);
     if (template.defaultCadenceKind && template.defaultCadenceKind !== "cron") setCadenceKind(template.defaultCadenceKind);

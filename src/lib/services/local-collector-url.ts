@@ -81,6 +81,76 @@ export function isLoopbackServiceUrl(url?: string | null) {
   }
 }
 
+// Tailscale reserves the 100.64.0.0/10 CGNAT block for node IPv4 addresses.
+function isTailscaleIpv4Host(host: string) {
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!match) return false;
+  const octets = match.slice(1, 5).map(Number);
+  if (octets.some((value) => value > 255)) return false;
+  return octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127;
+}
+
+// Tailscale reserves the fd7a:115c:a1e0::/48 ULA prefix for node IPv6 addresses.
+function isTailscaleIpv6Host(host: string) {
+  return host.replace(/^\[|\]$/g, "").startsWith("fd7a:115c:a1e0:");
+}
+
+/**
+ * Defense-in-depth SSRF guard for client-supplied collector/telemetry URLs.
+ * Returns true only when `url` targets a host on the trusted fleet surface —
+ * loopback, one of THIS machine's own interfaces, a Tailscale node (a
+ * `100.64.0.0/10` IPv4, a `fd7a:115c:a1e0::/48` IPv6, or a `*.ts.net` MagicDNS
+ * name), or an mDNS `*.local` LAN host. Those are the ONLY host shapes a real
+ * fleet collector is ever reached by (peer collector URLs are built from
+ * Tailscale IPs in fleet/connected-apps.ts, and the local/self path resolves to
+ * loopback via canonicalLocalCollectorUrl). Every other host — public IPs,
+ * RFC-1918 LAN addresses, 169.254 link-local/metadata endpoints, or arbitrary
+ * DNS names — is rejected before any server-side fetch treats the URL as
+ * remote-fetchable. Empty or unparseable URLs are NOT fleet URLs.
+ *
+ * This is belt-and-suspenders: these routes are already dashboard-auth-gated,
+ * and Hivemind Link peer hops (`/peer/<host>` against the loopback control) are
+ * additionally gated by linkd's owner/tailnet ACL — this guard just refuses to
+ * let an authenticated caller aim a raw server-side fetch at an arbitrary host.
+ */
+export function isFleetCollectorUrl(url?: string | null) {
+  const normalized = normalizeCollectorUrl(url);
+  if (!normalized) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  const host = parsed.hostname.toLowerCase();
+  if (localInterfaceHosts().has(host)) return true;
+  if (host.endsWith(".ts.net")) return true;
+  if (host.endsWith(".local")) return true;
+  if (isTailscaleIpv4Host(host)) return true;
+  if (isTailscaleIpv6Host(host)) return true;
+  return false;
+}
+
+/**
+ * Throwing companion to {@link isFleetCollectorUrl} for call sites that already
+ * surface errors via try/catch. Returns the normalized URL when it is a
+ * fleet-fetchable collector target, otherwise throws.
+ */
+export function assertFleetCollectorUrl(url?: string | null) {
+  const normalized = normalizeCollectorUrl(url);
+  if (!isFleetCollectorUrl(normalized)) {
+    let host = "";
+    try {
+      host = new URL(normalized).hostname;
+    } catch {
+      host = normalized || "(empty)";
+    }
+    throw new Error(`Refusing to fetch a collector URL outside the fleet host set: ${host}`);
+  }
+  return normalized;
+}
+
 export function remoteCollectorLocalServiceUrl(profile: LocalServiceProfile, targetUrl: string) {
   const collectorUrl = normalizeCollectorUrl(profile.telemetryUrl);
   if (!collectorUrl || isLocalCollectorUrl(collectorUrl) || !isLoopbackServiceUrl(targetUrl)) return targetUrl;

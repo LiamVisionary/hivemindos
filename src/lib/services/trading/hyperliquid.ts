@@ -33,6 +33,7 @@ import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import { evaluateSpend, resolveSpendGovernance, shouldEvaluateSpend } from "@/lib/services/wallet/spend-governance";
+import { hyperliquidOrderReasoning, hyperliquidValueTransferReasoning } from "@/lib/services/trading/hyperliquid-reasoning";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 
 // Match the wider connection window used by the local swap rail. Hyperliquid's
@@ -994,8 +995,8 @@ async function hyperliquidGovernance(input: HyperliquidOrderInput, order: Hyperl
     kind: "trade",
     asset: "USDC",
     amountUsd: spendForGovernance,
-    target: `hyperliquid:${order.coin} ${order.side}`,
-    approvalToken: input.approvalToken,
+    target: `hyperliquid:${order.coin} ${order.side}`, approvalToken: input.approvalToken,
+    explanation: hyperliquidOrderReasoning(order),
   });
   if (decision.decision !== "allow") throw new Error(decision.reason);
   return { companyId: decision.companyId, approvalGrantId: decision.grant?.id };
@@ -1020,8 +1021,8 @@ async function hyperliquidAmountGovernance(
     kind: "trade",
     asset: "USDC",
     amountUsd,
-    target,
-    approvalToken: input.approvalToken,
+    target, approvalToken: input.approvalToken,
+    explanation: hyperliquidValueTransferReasoning(amountUsd, target),
   });
   if (decision.decision !== "allow") throw new Error(decision.reason);
   return { companyId: decision.companyId, approvalGrantId: decision.grant?.id };

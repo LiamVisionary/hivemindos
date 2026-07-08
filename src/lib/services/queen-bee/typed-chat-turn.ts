@@ -61,6 +61,9 @@ type QueenTypedChatBrain = {
   timeoutMs?: number;
 };
 
+const RUNTIME_COMMAND_GATE_FALLBACK =
+  "The selected Queen runtime hit its command-safety timeout before it produced a chat answer. I did not run any command.";
+
 function queenBrainProviderLabel(provider: string) {
   if (provider === "openai-oauth") return "ChatGPT";
   if (provider === "openai-codex") return "OpenAI Codex";
@@ -129,7 +132,6 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
         providerSlug: provider,
         label: `${defaults.model} · ${queenBrainProviderLabel(provider)}`,
         configured: true,
-        streaming: false,
         timeoutMs: 120_000,
       });
     }
@@ -199,23 +201,8 @@ async function queenChatRuntimeRequest(
   incoming: unknown[],
 ) {
   if (!brain.agent) throw new Error(`${brain.label} has no Queen runtime profile.`);
-  const response = await fetch(brain.url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(brain.headers ?? {}),
-    },
-    body: JSON.stringify({
-      agent: brain.agent,
-      messages: runtimeMessagesFor(system, incoming),
-      runtimeSessionId: `queen-fab-${brain.agent.id || "runtime"}`,
-      chatStorageKey: `queen-fab-${brain.agent.id || "runtime"}`,
-      agentMode: "act",
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(brain.timeoutMs ?? 120_000),
-  });
-  const content = stripLeakedToolCallMarkup(await readRuntimeResponseText(response));
+  const response = await fetchQueenChatRuntimeResponse(brain, system, incoming);
+  const content = normalizeQueenRuntimeChatContent(await readRuntimeResponseText(response));
   if (!content.trim()) throw new Error(`${brain.label} returned an empty reply.`);
   return {
     content,
@@ -223,6 +210,41 @@ async function queenChatRuntimeRequest(
     assistant: { role: "assistant", content },
     brainLabel: brain.label,
   };
+}
+
+function queenChatRuntimeRequestBody(
+  brain: QueenTypedChatBrain,
+  system: string,
+  incoming: unknown[],
+) {
+  if (!brain.agent) throw new Error(`${brain.label} has no Queen runtime profile.`);
+  return {
+    agent: brain.agent,
+    messages: runtimeMessagesFor(system, incoming),
+    runtimeSessionId: `queen-fab-${brain.agent.id || "runtime"}`,
+    chatStorageKey: `queen-fab-${brain.agent.id || "runtime"}`,
+    // Queen's typed client owns the allowed tool loop. Runtime-held OAuth
+    // brains should answer/read, not enter command execution or money rails.
+    agentMode: "plan",
+    suppressWalletIntents: true,
+  };
+}
+
+async function fetchQueenChatRuntimeResponse(
+  brain: QueenTypedChatBrain,
+  system: string,
+  incoming: unknown[],
+) {
+  return fetch(brain.url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(brain.headers ?? {}),
+    },
+    body: JSON.stringify(queenChatRuntimeRequestBody(brain, system, incoming)),
+    cache: "no-store",
+    signal: AbortSignal.timeout(brain.timeoutMs ?? 120_000),
+  });
 }
 
 /** Scout (llama.cpp) leaks its chat-template tool-call tokens into plain
@@ -250,13 +272,31 @@ function stripLeakedToolCallMarkup(content: string): string {
     .trim();
 }
 
+function isRuntimeCommandGateReply(content: string): boolean {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  return /\btimeout\b.{0,48}\bdenying command\b/i.test(normalized);
+}
+
+function isRuntimeCommandGatePrefix(content: string): boolean {
+  const normalized = content.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!normalized) return false;
+  const plain = normalized.replace(/^⏱\s*/, "");
+  if (!normalized.startsWith("⏱") && plain.length < 4) return false;
+  return "timeout - denying command".startsWith(plain.replace(/[—–]/g, "-"));
+}
+
+function normalizeQueenRuntimeChatContent(content: string): string {
+  const scrubbed = stripLeakedToolCallMarkup(content);
+  return isRuntimeCommandGateReply(scrubbed) ? RUNTIME_COMMAND_GATE_FALLBACK : scrubbed;
+}
+
 /** One buffered chat-completions call against one brain. Returns the terminal
  *  payload shape both chat-turn actions hand to the client, or throws. */
 async function queenChatBlockingRequest(
   brain: QueenTypedChatBrain,
   system: string,
   incoming: unknown[],
-  options?: { noTools?: boolean },
+  options?: { noTools?: boolean; suppressWalletIntents?: boolean },
 ) {
   if (brain.kind === "agent-runtime") return queenChatRuntimeRequest(brain, system, incoming);
   const response = await fetch(brain.url, {
@@ -299,6 +339,135 @@ async function queenChatBlockingRequest(
     assistant: { ...message, content },
     brainLabel: brain.label,
   };
+}
+
+function queenChatRuntimeStreamResponse(input: {
+  response: Response;
+  brain: QueenTypedChatBrain;
+  brainFallback?: { label: string; error: string };
+  incoming: unknown[];
+  startedAt: number;
+  line: (value: unknown) => string;
+  ndjson: HeadersInit;
+}) {
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      let liveContent = "";
+      let sawRuntimeCommandGate = false;
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
+      const send = (value: unknown) => {
+        controller.enqueue(encoder.encode(input.line(value)));
+      };
+      const sendRuntimeCommandGateFallback = () => {
+        recordQueenChatTelemetry({
+          action: "chat-turn-stream",
+          ok: true,
+          buffered: false,
+          runtimeStream: true,
+          runtimeCommandGate: true,
+          brainLabel: input.brain.label,
+          configuredBrain: input.brain.configured,
+          toolCallCount: 0,
+          contentChars: RUNTIME_COMMAND_GATE_FALLBACK.length,
+          skippedBrain: input.brainFallback?.label ?? null,
+          skippedError: input.brainFallback?.error ?? null,
+          messageCount: input.incoming.length,
+          elapsedMs: Date.now() - input.startedAt,
+        });
+        send({
+          done: true,
+          ok: true,
+          content: RUNTIME_COMMAND_GATE_FALLBACK,
+          toolCalls: [],
+          assistant: { role: "assistant", content: RUNTIME_COMMAND_GATE_FALLBACK },
+          brainLabel: input.brain.label,
+          ...(input.brainFallback ? { brainFallback: input.brainFallback } : {}),
+        });
+      };
+      try {
+        send({
+          status: "runtime-stream-started",
+          brainLabel: input.brain.label,
+        });
+        heartbeat = setInterval(() => {
+          try {
+            send({ status: "runtime-stream-heartbeat", brainLabel: input.brain.label });
+          } catch {
+            if (heartbeat) clearInterval(heartbeat);
+          }
+        }, 15_000);
+        const rawContent = await readRuntimeResponseText(
+          input.response,
+          undefined,
+          (delta) => {
+            if (!delta) return;
+            liveContent += delta;
+            if (isRuntimeCommandGateReply(liveContent)) {
+              sawRuntimeCommandGate = true;
+              return;
+            }
+            if (isRuntimeCommandGatePrefix(liveContent)) return;
+            if (!contentHasLeakMarker(liveContent)) {
+              send({ delta });
+            }
+          },
+        );
+        if (isRuntimeCommandGateReply(rawContent)) {
+          sendRuntimeCommandGateFallback();
+          return;
+        }
+        const content = normalizeQueenRuntimeChatContent(rawContent);
+        if (!content.trim()) throw new Error(`${input.brain.label} returned an empty reply.`);
+        recordQueenChatTelemetry({
+          action: "chat-turn-stream",
+          ok: true,
+          buffered: false,
+          runtimeStream: true,
+          brainLabel: input.brain.label,
+          configuredBrain: input.brain.configured,
+          toolCallCount: 0,
+          contentChars: content.length,
+          skippedBrain: input.brainFallback?.label ?? null,
+          skippedError: input.brainFallback?.error ?? null,
+          messageCount: input.incoming.length,
+          elapsedMs: Date.now() - input.startedAt,
+        });
+        send({
+          done: true,
+          ok: true,
+          content,
+          toolCalls: [],
+          assistant: { role: "assistant", content },
+          brainLabel: input.brain.label,
+          ...(input.brainFallback ? { brainFallback: input.brainFallback } : {}),
+        });
+      } catch (error) {
+        if (sawRuntimeCommandGate) {
+          sendRuntimeCommandGateFallback();
+          return;
+        }
+        recordQueenChatTelemetry({
+          action: "chat-turn-stream",
+          ok: false,
+          runtimeStream: true,
+          error: error instanceof Error ? error.message : "chat stream failed",
+          brainLabel: input.brain.label,
+          messageCount: input.incoming.length,
+          elapsedMs: Date.now() - input.startedAt,
+        });
+        send({
+          ok: false,
+          fallback: true,
+          error: error instanceof Error ? error.message : "chat stream failed",
+        });
+      } finally {
+        if (heartbeat) clearInterval(heartbeat);
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, { headers: input.ndjson });
 }
 
 /** Typed-lane telemetry (~/.hivemindos/telemetry/events.jsonl). The typed chat
@@ -355,6 +524,7 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
   const brains = await resolveQueenTypedChatBrains(origin);
   if (!brains.length) return null;
   const incoming = Array.isArray(body.messages) ? body.messages : [];
+  const suppressWalletIntents = body.suppressWalletIntents === true;
   const defaults = await readQueenBeeBrainDefaults().catch(() => null);
   const preamble = await queenVoicePreferencePreamble();
   const screenContext = formatDashboardScreenContextForPrompt(
@@ -383,7 +553,7 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
     ]
       .filter(Boolean)
       .join(" ");
-  return { brains, incoming, systemFor };
+  return { brains, incoming, systemFor, suppressWalletIntents };
 }
 
 export async function runQueenChatTurn(body: Record<string, unknown>, origin: string) {
@@ -391,7 +561,7 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
   if (!prepared) {
     return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
   }
-  const { brains, incoming, systemFor } = prepared;
+  const { brains, incoming, systemFor, suppressWalletIntents } = prepared;
   // toolChoice:"none" = the client tool loop's budget is spent; force prose.
   const noTools = body.toolChoice === "none";
   // The agent's own brain first, built-in OpenAI lane last — a failing
@@ -403,7 +573,7 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
   const skipped: Array<{ label: string; error: string }> = [];
   for (const brain of brains) {
     try {
-      const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools });
+      const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools, suppressWalletIntents });
       recordQueenChatTelemetry({
         action: "chat-turn",
         ok: true,
@@ -451,7 +621,7 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
   if (!prepared) {
     return new Response(line({ ok: false, fallback: true, error: "no-openai-key" }), { headers: ndjson });
   }
-  const { brains, incoming, systemFor } = prepared;
+  const { brains, incoming, systemFor, suppressWalletIntents } = prepared;
   // Try brains in order for the INITIAL connection (the agent's own brain,
   // then the built-in OpenAI lane). Buffered-only brains (the HivemindOS
   // models gateway) answer as one terminal frame — the client tool loop is
@@ -466,9 +636,39 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
   const startedAt = Date.now();
   const skipped: Array<{ label: string; error: string }> = [];
   for (const brain of brains) {
+    if (brain.kind === "agent-runtime") {
+      const runtimeResponse = await fetchQueenChatRuntimeResponse(
+        brain,
+        systemFor(brain),
+        incoming,
+      ).catch((error: unknown) => error as Error);
+      if (!(runtimeResponse instanceof Error) && runtimeResponse.ok && runtimeResponse.body) {
+        return queenChatRuntimeStreamResponse({
+          response: runtimeResponse,
+          brain,
+          brainFallback: skipped[0],
+          incoming,
+          startedAt,
+          line,
+          ndjson,
+        });
+      }
+      if (runtimeResponse instanceof Error) {
+        lastError = runtimeResponse.message;
+      } else {
+        try {
+          const text = await readRuntimeResponseText(runtimeResponse);
+          lastError = text.trim() || `chat turn HTTP ${runtimeResponse.status}`;
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : `chat turn HTTP ${runtimeResponse.status}`;
+        }
+      }
+      skipped.push({ label: brain.label, error: lastError || "chat turn failed" });
+      continue;
+    }
     if (brain.streaming === false) {
       try {
-        const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools });
+        const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools, suppressWalletIntents });
         recordQueenChatTelemetry({
           action: "chat-turn-stream",
           ok: true,

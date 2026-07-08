@@ -31,6 +31,7 @@ const CRYPTO_PROVIDER_META: Record<string, { label: string; icon?: string; text?
   usepod: { label: "UsePod", icon: "/icons/runtimes/usepod.webp" },
   veil: { label: "Veil", icon: "/icons/runtimes/veil.svg" },
   x402: { label: "x402", text: "x402" },
+  nansen: { label: "Nansen", text: "Nansen" },
 };
 
 export function ProviderBadge({ provider, label }: { provider?: string; label?: string }) {

@@ -33,7 +33,9 @@ function isGenericPersonalWalletName(name: unknown): boolean {
     || normalized === "my wallet base"
     || normalized === "my wallet solana"
     || normalized === "my base wallet"
-    || normalized === "my solana wallet";
+    || normalized === "my solana wallet"
+    || /^my (?:base(?: mainnet)?|base sepolia|solana(?: mainnet)?|solana devnet|robinhood chain(?: testnet)?|evm \d+) wallet$/.test(normalized)
+    || /^my wallet (?:base(?: mainnet)?|base sepolia|solana(?: mainnet)?|solana devnet|robinhood chain(?: testnet)?|evm \d+)$/.test(normalized);
 }
 
 function personalWalletRecordTime(wallet: Record<string, unknown>): number {

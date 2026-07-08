@@ -4,18 +4,27 @@
 // so junk (command strings, fabricated URLs, scratch files) collapses instead of
 // cluttering the view. Its own file to keep the Modals ↔ FileViewer graph acyclic.
 import React from "react";
+import { ReasoningTrailView } from "@/features/reasoning/ReasoningTrailView";
 import { Modal } from "./Modals";
 import { SectionLabel, Spinner } from "./primitives";
 import { DeliverableCard } from "./DeliverableCard";
 import { CompanyIssueActionButtons, isCompanyReviewIssue } from "./CompanyIssueActions";
 import { bucketDeliverables } from "./deliverables-model";
+import { issueReasoningTrail } from "./issue-reason";
 import type { PreviewDecision } from "./preview-review";
 import type { Issue, Theme } from "./types";
 
 const RECEIPT_TONE: Record<string, string> = { passed: "var(--cyan-2)", failed: "var(--danger-2)", skipped: "var(--fg-4)" };
 
 /** Plain-language, actionable explanation of a blocked task (from the Queen). */
-type Explanation = { headline: string; steps: string[]; detail: string };
+type Explanation = {
+  headline: string;
+  whyNow?: string;
+  steps: string[];
+  detail: string;
+  evidence?: string[];
+  missingContext?: string[];
+};
 
 // Explanations are on-demand and read-only, so cache them across modal re-opens
 // (the modal remounts on every open) keyed by task + its last-updated stamp, so a
@@ -23,7 +32,7 @@ type Explanation = { headline: string; steps: string[]; detail: string };
 const explanationCache = new Map<string, Explanation>();
 
 export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric, theme = "dark", onClose, onResolveIssue, onReviewPreview, busy }: {
-  issue: Issue; colonyName: string; companyId?: string; apexGoal?: string; metric?: string; theme?: Theme; onClose: () => void; onResolveIssue?: (issue: Issue) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; busy?: boolean;
+  issue: Issue; colonyName: string; companyId?: string; apexGoal?: string; metric?: string; theme?: Theme; onClose: () => void; onResolveIssue?: (issue: Issue, answer?: string) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; busy?: boolean;
 }) {
   const work = issue.work;
   const [showInternal, setShowInternal] = React.useState(false);
@@ -78,6 +87,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
   // work already has the result and receipts below.
   const isBlockedForHuman = issue.status === "board_review" || work.status === "needs-human";
   const canExplain = isBlockedForHuman && Boolean(companyId) && Boolean(work.result?.trim() || work.receipts.length);
+  const deterministicReasoning = isBlockedForHuman ? issueReasoningTrail(issue) : undefined;
 
   return (
     <Modal title={issue.title} subtitle={subtitleParts.join(" · ")} onClose={onClose} width={780} theme={theme}>
@@ -88,6 +98,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
             <CompanyIssueActionButtons companyName={colonyName} issue={issue} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} busy={busy} />
           </div>
         )}
+        <ReasoningTrailView trail={deterministicReasoning} tone="issue" />
         {canExplain && (
           <div style={{ borderRadius: 12, border: "1px solid var(--honey-2)", background: "var(--bg-2)", padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -121,6 +132,12 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
             {explanation ? (
               <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--fg)", fontWeight: 500, textWrap: "pretty" }}>{explanation.headline}</div>
+                {explanation.whyNow ? (
+                  <div>
+                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: 0.04, textTransform: "uppercase", color: "var(--fg-4)", marginBottom: 5 }}>Why now</div>
+                    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--fg-2)" }}>{explanation.whyNow}</div>
+                  </div>
+                ) : null}
                 {explanation.steps.length > 0 && (
                   <div>
                     <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: 0.04, textTransform: "uppercase", color: "var(--fg-4)", marginBottom: 5 }}>What to do</div>
@@ -133,6 +150,26 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
                 )}
                 {explanation.detail ? (
                   <div style={{ fontSize: 12, lineHeight: 1.5, color: "var(--fg-3)" }}>{explanation.detail}</div>
+                ) : null}
+                {explanation.evidence?.length ? (
+                  <div>
+                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: 0.04, textTransform: "uppercase", color: "var(--fg-4)", marginBottom: 5 }}>Evidence</div>
+                    <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                      {explanation.evidence.map((item, i) => (
+                        <li key={i} style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, lineHeight: 1.5, color: "var(--fg-3)", overflowWrap: "anywhere" }}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {explanation.missingContext?.length ? (
+                  <div>
+                    <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: 0.04, textTransform: "uppercase", color: "var(--fg-4)", marginBottom: 5 }}>Missing context</div>
+                    <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+                      {explanation.missingContext.map((item, i) => (
+                        <li key={i} style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, lineHeight: 1.5, color: "var(--danger-2)", overflowWrap: "anywhere" }}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
                 ) : null}
                 <div style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)" }}>
                   Queen Bee, from this task&apos;s evidence · re-check the specifics before acting

@@ -58,3 +58,46 @@
   border-color: currentColor;
   outline: none;
 }
+
+.workBoardColumnHeader {
+  grid-template-columns: auto minmax(7ch, 1fr) auto !important;
+  align-items: start !important;
+}
+
+.workBoardColumnTitle {
+  min-width: 0;
+}
+
+.workBoardColumnTitle h3 {
+  overflow-wrap: break-word !important;
+  word-break: normal;
+}
+
+.workBoardColumnHeader .workBoardColumnTitle h3 {
+  letter-spacing: 0 !important;
+}
+
+.workBoardColumnTitle p {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.workBoardColumnActions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 132px;
+  min-width: 0;
+}
+
+.workBoardColumnActions > * {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .workBoardColumnActions {
+    max-width: 118px;
+  }
+}

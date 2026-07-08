@@ -4,6 +4,7 @@ import { Check, X } from "lucide-react";
 import approvalStyles from "@/features/approvals/approvals.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { APPROVAL_RISK_LABEL, type ApprovalDecision, type SpendApprovalView } from "@/features/approvals/spend-approval-model";
+import { ReasoningTrailView } from "@/features/reasoning/ReasoningTrailView";
 
 const cls = createStyleClass(approvalStyles);
 
@@ -11,6 +12,8 @@ export type ApproveRejectModalProps = {
   approval: SpendApprovalView;
   /** Which action the human reached for; sets the note framing. */
   initialDecision?: ApprovalDecision;
+  /** Pre-fill the note (e.g. a spending-cap template from the caret menu). */
+  initialNote?: string;
   busy?: boolean;
   error?: string;
   onConfirm: (decision: ApprovalDecision, note: string) => void;
@@ -23,8 +26,8 @@ export type ApproveRejectModalProps = {
  * gets the same human-in-the-loop decision surface — with an optional note that
  * rides along (a change request on reject, a caveat/condition on approve).
  */
-export function ApproveRejectModal({ approval, initialDecision = "approved", busy = false, error, onConfirm, onClose }: ApproveRejectModalProps) {
-  const [note, setNote] = useState("");
+export function ApproveRejectModal({ approval, initialDecision = "approved", initialNote = "", busy = false, error, onConfirm, onClose }: ApproveRejectModalProps) {
+  const [note, setNote] = useState(initialNote);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -59,6 +62,7 @@ export function ApproveRejectModal({ approval, initialDecision = "approved", bus
           {approval.amountUsd != null ? <span>· <b>${approval.amountUsd.toFixed(2)}</b> {approval.asset ?? "USDC"}</span> : null}
         </div>
         {approval.reason ? <p className={cls("modalReason")}>{approval.reason}</p> : null}
+        <ReasoningTrailView trail={approval.explanation} tone="approval" />
 
         <div>
           <label className={cls("noteLabel")} htmlFor="approval-note">

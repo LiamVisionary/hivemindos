@@ -498,6 +498,11 @@
 
 .needsYouKeyForm {
   display: grid;
+  gap: 6px;
+}
+
+.needsYouKeyItem {
+  display: grid;
   gap: 4px;
 }
 
@@ -521,8 +526,16 @@
   outline: none;
 }
 
+.needsYouKeyNameWrap {
+  position: relative;
+  display: flex;
+  flex: 0 1 248px;
+  min-width: 160px;
+  gap: 5px;
+}
+
 .needsYouKeyName {
-  flex: 0 1 180px;
+  flex: 1 1 auto;
   min-width: 120px;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 10.5px;
@@ -535,6 +548,10 @@
 }
 
 .needsYouKeyRow button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid rgba(111, 205, 186, 0.4);
   border-radius: 7px;
   background: rgba(111, 205, 186, 0.15);
@@ -555,6 +572,165 @@
 .needsYouKeyRow button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.needsYouIconButton,
+.needsYouClearSelected {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+.needsYouIconButton svg,
+.needsYouClearSelected svg {
+  width: 15px;
+  height: 15px;
+}
+
+.needsYouSelectedKey {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid rgba(111, 205, 186, 0.42);
+  border-radius: 7px;
+  background: rgba(111, 205, 186, 0.13);
+  color: #b7eee4;
+  padding: 3px 4px 3px 9px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+.needsYouSelectedKey span {
+  min-width: 0;
+  flex: 1 1 auto;
+  color: inherit;
+  font: inherit;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.needsYouClearSelected {
+  flex-basis: 24px;
+  width: 24px;
+  min-height: 24px;
+  border-color: rgba(238, 232, 220, 0.16);
+  background: rgba(9, 13, 20, 0.32);
+}
+
+.needsYouKeyMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: min(320px, calc(100vw - 32px));
+  border: 1px solid rgba(111, 205, 186, 0.34);
+  border-radius: 8px;
+  background: rgba(13, 16, 25, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+  padding: 7px;
+}
+
+.needsYouKeySearch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(238, 232, 220, 0.16);
+  border-radius: 7px;
+  background: rgba(9, 13, 20, 0.5);
+  padding: 5px 7px;
+}
+
+.needsYouKeySearch svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: #9fe0d3;
+}
+
+.needsYouKeyRow .needsYouKeySearch input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.needsYouKeyOptions {
+  display: grid;
+  gap: 3px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-top: 6px;
+}
+
+.needsYouKeyOptions button {
+  justify-content: flex-start;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #e8f6f2;
+  padding: 6px 7px;
+  text-align: left;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.needsYouKeyOptions button:hover,
+.needsYouKeyOptions button:focus-visible,
+.needsYouKeyOptions button[aria-selected="true"] {
+  background: rgba(111, 205, 186, 0.16);
+  color: #9fe0d3;
+}
+
+.needsYouKeyLoading,
+.needsYouKeyEmpty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  color: rgba(241, 231, 227, 0.72);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.needsYouMapping {
+  margin: 0;
+  color: rgba(241, 231, 227, 0.74);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.needsYouMapping code {
+  color: #9fe0d3;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.needsYouSpin {
+  animation: needs-you-spin 0.9s linear infinite;
+}
+
+@keyframes needs-you-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .needsYouSpin {
+    animation: none;
+  }
 }
 
 .needsYouHint {
@@ -657,6 +833,50 @@
   border-color: rgba(13, 142, 126, 0.35);
   background: rgba(13, 142, 126, 0.08);
   color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouSelectedKey {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouClearSelected {
+  border-color: var(--comb-line);
+  background: rgba(255, 255, 255, 0.48);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyMenu {
+  border-color: rgba(13, 142, 126, 0.28);
+  background: var(--surface-strong);
+  box-shadow: 0 18px 38px rgba(78, 61, 35, 0.2);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeySearch {
+  border-color: var(--comb-line);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeySearch svg,
+:global(:root[data-theme="hive-light"]) .needsYouMapping code {
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button:hover,
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button:focus-visible,
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button[aria-selected="true"] {
+  background: rgba(13, 142, 126, 0.1);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyLoading,
+:global(:root[data-theme="hive-light"]) .needsYouKeyEmpty,
+:global(:root[data-theme="hive-light"]) .needsYouMapping {
+  color: var(--muted-foreground, rgba(60, 50, 40, 0.7));
 }
 
 :global(:root[data-theme="hive-light"]) .needsYouHint {

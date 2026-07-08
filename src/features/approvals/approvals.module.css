@@ -52,6 +52,8 @@
 .card {
   --rc: var(--ap-live);
   --rc-soft: var(--ap-live-soft);
+  min-width: 0;
+  max-width: 100%;
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--rc) 30%, var(--ap-line));
   background: var(--ap-panel-2);
@@ -81,6 +83,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .riskBadge {
@@ -100,10 +103,9 @@
   font-family: var(--ap-mono);
   font-size: 10px;
   color: var(--ap-fg-4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 45%;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .cardTitle {
@@ -111,12 +113,90 @@
   color: var(--ap-fg);
   font-weight: 500;
   line-height: 1.4;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cardReason {
+  margin: 0;
+  border-left: 2px solid color-mix(in srgb, var(--rc) 36%, var(--ap-line-2));
+  padding-left: 10px;
+  color: var(--ap-fg-2);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cardContext {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.contextPill,
+.targetLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--ap-line-2);
+  background: color-mix(in srgb, var(--ap-fg) 3%, transparent);
+  color: var(--ap-fg-3);
+  font-family: var(--ap-mono);
+  font-size: 10px;
+  line-height: 1.25;
+  padding: 3px 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.targetLink {
+  color: var(--ap-honey);
+  text-decoration: none;
+  border-color: var(--ap-honey-line);
+  background: var(--ap-honey-soft);
+}
+
+.targetLink:hover {
+  filter: brightness(1.08);
+}
+
+.detailsButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ap-line-2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ap-fg-2);
+  font-family: var(--ap-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.detailsButton:hover:not(:disabled) {
+  background: var(--ap-panel-hi);
+  color: var(--ap-fg);
+}
+
+.detailsButton:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .cardActions {
   display: flex;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   align-items: center;
+  min-width: 0;
+  width: 100%;
 }
 
 .btn {
@@ -124,15 +204,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   border-radius: 8px;
   border: 1px solid var(--ap-line-2);
   background: transparent;
   color: var(--ap-fg-2);
   font-family: "Inter", system-ui, sans-serif;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
-  padding: 8px 10px;
+  min-height: 34px;
+  padding: 7px;
   cursor: pointer;
   white-space: nowrap;
   transition: filter 0.15s, background 0.15s, border-color 0.15s;
@@ -159,10 +240,10 @@
 }
 
 .iconBtn {
-  flex: 0 0 auto;
+  flex: 0 0 32px;
   display: grid;
   place-items: center;
-  width: 34px;
+  width: 32px;
   height: 34px;
   border-radius: 8px;
   border: 1px solid var(--ap-line-2);
@@ -177,10 +258,132 @@
 }
 
 .btn svg,
-.iconBtn svg {
+.iconBtn svg,
+.detailsButton svg {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
+}
+
+/* — Segmented approve/reject split-button + its "but…/and…" menu — */
+.split {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 34px;
+}
+
+.splitMain {
+  flex: 1;
+  min-width: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.splitCaret {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.splitCaret:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.splitCaret:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.splitCaret svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Honey (approve): filled, with a hairline divider between main and caret. */
+.btnPrimary.splitMain {
+  border-right: 1px solid rgba(0, 0, 0, 0.22);
+}
+
+.btnPrimary.splitCaret {
+  border: 1px solid transparent;
+  background: var(--ap-honey);
+  color: var(--ap-honey-ink);
+}
+
+/* Danger (reject): outlined; drop the main's right edge so it meets the caret. */
+.btnDanger.splitMain {
+  border-right: 0;
+}
+
+.btnDanger.splitCaret {
+  border: 1px solid var(--ap-danger-line);
+  background: transparent;
+  color: var(--ap-danger);
+}
+
+.menu {
+  margin-top: 8px;
+  border: 1px solid var(--ap-line-2);
+  border-radius: 10px;
+  background: var(--ap-panel-hi);
+  box-shadow: 0 14px 30px -16px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: apMenuIn 0.14s ease;
+}
+
+.menuLabel {
+  margin: 0;
+  font-family: var(--ap-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ap-fg-3);
+  padding: 5px 8px 3px;
+}
+
+.menuItem {
+  text-align: left;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ap-fg-2);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.menuItem:hover {
+  background: var(--ap-honey-soft);
+  color: var(--ap-fg);
+}
+
+.menuDanger .menuItem:hover {
+  background: var(--ap-danger-soft);
+}
+
+@keyframes apMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* — Modal — */
@@ -197,7 +400,7 @@
 
 .modal {
   width: 100%;
-  max-width: 460px;
+  max-width: 560px;
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
   border-radius: 16px;
@@ -276,6 +479,8 @@
   color: var(--ap-fg-2);
   border-left: 2px solid var(--ap-line-2);
   padding-left: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .noteLabel {
@@ -345,4 +550,35 @@
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 1.6s; }
   .btn { transition: none; }
+  .menu { animation: none; }
+  .menuItem,
+  .splitCaret { transition: none; }
+}
+
+@media (max-width: 380px) {
+  .cardActions {
+    gap: 3px;
+  }
+
+  .btn {
+    gap: 3px;
+    font-size: 10.5px;
+    padding-inline: 4px;
+  }
+
+  .iconBtn {
+    flex-basis: 28px;
+    width: 28px;
+  }
+
+  .btn svg,
+  .iconBtn svg,
+  .detailsButton svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .splitCaret {
+    width: 22px;
+  }
 }

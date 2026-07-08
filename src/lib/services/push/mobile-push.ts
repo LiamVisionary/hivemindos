@@ -81,6 +81,7 @@ export type ApprovalPushInput = {
   amountUsd: number;
   target?: string;
   reason?: string;
+  summary?: string;
   companyId?: string;
 };
 
@@ -96,7 +97,8 @@ export function approvalPushBody(approval: ApprovalPushInput): string {
           : "Send";
   const who = approval.agentName || "An agent";
   const amount = `$${approval.amountUsd.toFixed(2)}${approval.asset && approval.asset !== "USDC" ? ` ${approval.asset}` : ""}`;
-  const reason = approval.reason ? ` — ${approval.reason}` : "";
+  if (approval.summary?.trim()) return approval.summary.trim().slice(0, 178);
+  const reason = approval.reason ? ` - ${approval.reason}` : "";
   return `${who}: ${verb} ${amount}${reason}`.slice(0, 178);
 }
 

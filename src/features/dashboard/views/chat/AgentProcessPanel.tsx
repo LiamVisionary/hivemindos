@@ -83,7 +83,7 @@ export function processEventsAreActive(events: ProcessEvent[] = []) {
   const lastEvent = visibleEvents[visibleEvents.length - 1];
   const lastStatus = String(lastEvent?.status ?? "").trim().toLowerCase();
   const lastText = `${String(lastEvent?.label ?? "").trim()} ${String(lastEvent?.detail ?? "").trim()}`.toLowerCase();
-  if (/\b(done|complete|completed|failed|failure|finished|settled|succeeded|cancelled|canceled)\b/.test(lastText)) return false;
+  if (/\b(done|complete|completed|failed|failure|finished|settled|succeeded|cancelled|canceled|error)\b/.test(lastText)) return false;
   return lastStatus !== "completed" && lastStatus !== "failed";
 }
 

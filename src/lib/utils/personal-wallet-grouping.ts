@@ -103,7 +103,9 @@ export function isGenericPersonalWalletName(name: unknown): boolean {
     || normalized === "my wallet base"
     || normalized === "my wallet solana"
     || normalized === "my base wallet"
-    || normalized === "my solana wallet";
+    || normalized === "my solana wallet"
+    || /^my (?:base(?: mainnet)?|base sepolia|solana(?: mainnet)?|solana devnet|robinhood chain(?: testnet)?|evm \d+) wallet$/.test(normalized)
+    || /^my wallet (?:base(?: mainnet)?|base sepolia|solana(?: mainnet)?|solana devnet|robinhood chain(?: testnet)?|evm \d+)$/.test(normalized);
 }
 
 export function personalWalletNetworkLabel(network: string): string {
@@ -159,7 +161,7 @@ export function personalWalletChainRank(wallet: any): number {
   return 2;
 }
 
-/** Group raw personal wallet records into one card per seed (Base + Solana from
+/** Group raw personal wallet records into one card per seed (Base + Robinhood Chain + Solana from
  *  the same recovery phrase collapse into a single multi-chain wallet). */
 export function buildGroupedPersonalWallets(wallets: any[] | null): GroupedPersonalWallet[] {
   if (!Array.isArray(wallets)) return [];

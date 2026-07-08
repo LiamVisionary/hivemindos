@@ -24,7 +24,17 @@ import {
   initFormValues, buildPrepareParams, isFormValid, recipientError,
 } from "./intent-forms";
 import { CRYPTO_INTENTS, CRYPTO_INTENT_GROUPS, type CryptoIntentDef } from "@/features/dashboard/views/trade/trade-intents";
-import type { CryptoCapabilityMap, CryptoPreparedAction } from "@/features/dashboard/views/trade/trade-api";
+import {
+  runNansenComplexTemplate,
+  runNansenSimpleTemplate,
+  type CryptoCapabilityMap,
+  type CryptoPreparedAction,
+  type TradeNansenComplexTemplateId,
+  type TradeNansenComplexTemplateParams,
+  type TradeNansenInsightBrief,
+  type TradeNansenSimpleTemplateId,
+  type TradeNansenSimpleTemplateParams,
+} from "@/features/dashboard/views/trade/trade-api";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { HyperliquidTradeForm } from "@/features/dashboard/views/trade/HyperliquidTradeForm";
 import { CopyTradingPanel } from "./CopyTradingPanel";
@@ -35,6 +45,10 @@ const INTENT_ICON: Record<string, IconName> = {
   "private-transfer": "shield", "crosschain-payment": "network", receive: "download",
   "paid-api": "plug", "private-paid-api": "key", "fund-llm-credits": "bot", "card-payment": "doc",
   "copy-trading": "copy",
+  "nansen-defi-positions": "wallet", "nansen-smart-money-holdings": "spark",
+  "nansen-token-holders": "eye", "nansen-token-screener": "search",
+  "nansen-token-tracking": "search", "nansen-hyperliquid-wallets": "activity", "nansen-related-wallets": "network",
+  "nansen-top-wallets": "eye", "nansen-cex-health": "doc",
 };
 
 type Readiness = { ready: boolean; configured: boolean; missing: string[]; providerLabel?: string; provider?: string };
@@ -70,9 +84,85 @@ function badgeProviderForIntent(caps: CryptoCapabilityMap | null, intentId: stri
   return pick?.provider;
 }
 
+function walletNetworkLabel(network: string): string {
+  if (network.includes("solana")) return "Solana";
+  if (network === "eip155:4663") return "Robinhood Chain";
+  if (network === "eip155:46630") return "Robinhood Chain Testnet";
+  if (network === "eip155:84532") return "Base Sepolia";
+  if (network === "eip155:8453") return "Base";
+  return network || "wallet";
+}
+
 // Catalog shown in the rail: the real crypto intents, minus the spot swap (now
 // the order ticket) and the read-only portfolio (the desk already shows it).
 const RAIL_INTENTS = CRYPTO_INTENTS.filter((intent) => intent.id !== "trade" && intent.id !== "portfolio");
+
+type NansenTradeAction =
+  | { kind: "simple"; template: TradeNansenSimpleTemplateId; runLabel: string; hint: string }
+  | { kind: "complex"; template: TradeNansenComplexTemplateId; runLabel: string; hint: string };
+
+const NANSEN_TRADE_ACTIONS = {
+  "nansen-defi-positions": {
+    kind: "simple",
+    template: "defi-positions",
+    runLabel: "Run DeFi positions",
+    hint: "wallet DeFi positions",
+  },
+  "nansen-smart-money-holdings": {
+    kind: "simple",
+    template: "smart-money-holdings",
+    runLabel: "Run holdings brief",
+    hint: "aggregated Smart Money holdings",
+  },
+  "nansen-token-holders": {
+    kind: "simple",
+    template: "token-top-holders",
+    runLabel: "Run holder brief",
+    hint: "top holder context",
+  },
+  "nansen-token-screener": {
+    kind: "simple",
+    template: "token-screener-discovery",
+    runLabel: "Run token screener",
+    hint: "new-token discovery context",
+  },
+  "nansen-token-tracking": {
+    kind: "complex",
+    template: "token-tracking-smart-money",
+    runLabel: "Run token brief",
+    hint: "derived token and Smart Money context",
+  },
+  "nansen-hyperliquid-wallets": {
+    kind: "complex",
+    template: "hyperliquid-wallet-discovery",
+    runLabel: "Run wallet discovery",
+    hint: "read-only Hyperliquid wallet context",
+  },
+  "nansen-related-wallets": {
+    kind: "complex",
+    template: "related-wallets-scale",
+    runLabel: "Run wallet cluster",
+    hint: "probabilistic related-wallet context",
+  },
+  "nansen-top-wallets": {
+    kind: "complex",
+    template: "top-wallet-copytrade-research",
+    runLabel: "Run top-wallet brief",
+    hint: "watch-only token wallet research",
+  },
+  "nansen-cex-health": {
+    kind: "complex",
+    template: "cex-health-monitor",
+    runLabel: "Run CEX health",
+    hint: "exchange balance and flow context",
+  },
+} as const satisfies Record<string, NansenTradeAction>;
+
+type NansenTradeIntentId = keyof typeof NANSEN_TRADE_ACTIONS;
+
+function isNansenTradeIntent(intentId: string): intentId is NansenTradeIntentId {
+  return intentId in NANSEN_TRADE_ACTIONS;
+}
 
 export function CapabilityRail() {
   const desk = useTradeDesk();
@@ -104,7 +194,7 @@ export function CapabilityRail() {
           <div className="tk-tiles">
             {g.items.map((it) => (
               <button key={it.id} type="button" className="tk-tile" onClick={() => setActive(it.id)}>
-                <ProviderBadge provider={badgeProviderForIntent(cryptoCaps, it.id, actingProvider)} />
+                <ProviderBadge provider={isNansenTradeIntent(it.id) ? "nansen" : badgeProviderForIntent(cryptoCaps, it.id, actingProvider)} />
                 <span className="ti"><BIcon name={INTENT_ICON[it.id] ?? "spark"} size={16} /></span>
                 <b>{it.label}</b>
                 <span>{it.desc}</span>
@@ -238,12 +328,20 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
     );
   }
 
+  if (isNansenTradeIntent(intent.id)) {
+    return (
+      <DetailShell intent={intent} walletShort="Nansen" onBack={onBack}>
+        <NansenCapabilityPanel intentId={intent.id} />
+      </DetailShell>
+    );
+  }
+
   if (intent.input === "address") {
     return (
       <DetailShell intent={intent} walletShort={wallet.short} onBack={onBack}>
         {wallet.fullAddress ? (
           <>
-            <span className="lbl">Deposit address · {wallet.network.includes("solana") ? "Solana" : "Base"}</span>
+            <span className="lbl">Deposit address · {walletNetworkLabel(wallet.network)}</span>
             <div className="fw-addr">{wallet.fullAddress}</div>
             <div className="sf">
               <span className="hint">share to receive funds into {wallet.short}</span>
@@ -338,6 +436,393 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
         </div>
       ) : null}
     </DetailShell>
+  );
+}
+
+type NansenDraftValues = {
+  chain: string;
+  tokenSymbol: string;
+  tokenAddress: string;
+  address: string;
+  entityName: string;
+  timeframe: string;
+  labelType: string;
+};
+
+const NANSEN_CHAIN_OPTIONS = [
+  { value: "base", label: "Base" },
+  { value: "ethereum", label: "Ethereum" },
+  { value: "solana", label: "Solana" },
+  { value: "arbitrum", label: "Arbitrum" },
+  { value: "polygon", label: "Polygon" },
+  { value: "bnb", label: "BNB Chain" },
+];
+
+const NANSEN_TIMEFRAME_OPTIONS = ["24h", "7d", "30d"] as const;
+const NANSEN_HOLDER_LABEL_OPTIONS = [
+  { value: "all_holders", label: "All holders" },
+  { value: "smart_money", label: "Smart Money" },
+  { value: "whale", label: "Whales" },
+  { value: "exchange", label: "Exchanges" },
+];
+const STABLE_SYMBOLS = new Set(["USDC", "USDT", "USDG", "DAI", "PYUSD"]);
+
+function NansenCapabilityPanel({ intentId }: { intentId: NansenTradeIntentId }) {
+  const desk = useTradeDesk();
+  const action = NANSEN_TRADE_ACTIONS[intentId];
+  const [values, setValues] = React.useState<NansenDraftValues>(() => initialNansenDraft(intentId, desk));
+  const [busy, setBusy] = React.useState(false);
+  const [brief, setBrief] = React.useState<TradeNansenInsightBrief | null>(null);
+  const [error, setError] = React.useState("");
+  const validation = validateNansenDraft(intentId, values);
+
+  const setField = (key: keyof NansenDraftValues, value: string) => {
+    setValues((current) => ({ ...current, [key]: value }));
+    setBrief(null);
+    setError("");
+  };
+
+  const run = async () => {
+    const invalid = validateNansenDraft(intentId, values);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setBrief(null);
+    const request = buildNansenTemplateParams(intentId, values);
+    const response = request.kind === "simple"
+      ? await runNansenSimpleTemplate(request.params)
+      : await runNansenComplexTemplate(request.params);
+    setBusy(false);
+    if (!response.ok || !response.brief) {
+      setError(response.error || "Nansen did not return a brief.");
+      return;
+    }
+    setBrief(response.brief);
+  };
+
+  return (
+    <div className="tk-nansen">
+      <div className="tk-form tk-nansen-form">
+        {renderNansenFields(intentId, values, setField)}
+      </div>
+      <p className="tk-nansen-note">
+        These actions return derived HivemindOS research only. They do not place trades, copy wallets, or expose raw Nansen feeds.
+      </p>
+      <div className="sf">
+        <span className="hint" style={brief ? { color: "var(--live)" } : validation ? { color: "var(--honey)" } : undefined}>
+          {brief ? "Nansen brief ready" : validation || action.hint}
+        </span>
+        <BBtn variant="primary" sm disabled={busy || Boolean(validation)} onClick={run}>
+          <BIcon name={busy ? "spinner" : "search"} size={14} spin={busy} /> {busy ? "Running research" : action.runLabel}
+        </BBtn>
+      </div>
+      {error ? <p className="tk-error">{error}</p> : null}
+      {brief ? <NansenBriefResult brief={brief} /> : null}
+    </div>
+  );
+}
+
+function renderNansenFields(
+  intentId: NansenTradeIntentId,
+  values: NansenDraftValues,
+  setField: (key: keyof NansenDraftValues, value: string) => void,
+) {
+  const chainField = (
+    <label className="fb-label">
+      Chain
+      <select className="fb-select" value={values.chain} onChange={(event) => setField("chain", event.target.value)}>
+        {NANSEN_CHAIN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
+  if (intentId === "nansen-defi-positions") {
+    return (
+      <label className="fb-label tk-nansen-full">
+        Wallet address
+        <input className="fb-field fb-mono" placeholder="0x..." value={values.address} onChange={(event) => setField("address", event.target.value.trim())} />
+      </label>
+    );
+  }
+  if (intentId === "nansen-smart-money-holdings") {
+    return chainField;
+  }
+  if (intentId === "nansen-token-holders") {
+    return (
+      <>
+        {chainField}
+        <label className="fb-label">
+          Holder lens
+          <select className="fb-select" value={values.labelType} onChange={(event) => setField("labelType", event.target.value)}>
+            {NANSEN_HOLDER_LABEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <label className="fb-label tk-nansen-full">
+          Token address
+          <input className="fb-field fb-mono" placeholder="0x..." value={values.tokenAddress} onChange={(event) => setField("tokenAddress", event.target.value.trim())} />
+        </label>
+      </>
+    );
+  }
+  if (intentId === "nansen-token-screener") {
+    return (
+      <>
+        {chainField}
+        <label className="fb-label">
+          Timeframe
+          <select className="fb-select" value={values.timeframe} onChange={(event) => setField("timeframe", event.target.value)}>
+            {NANSEN_TIMEFRAME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </label>
+      </>
+    );
+  }
+  if (intentId === "nansen-token-tracking") {
+    return (
+      <>
+        {chainField}
+        <label className="fb-label">
+          Token symbol
+          <input className="fb-field fb-mono" placeholder="HYPE" value={values.tokenSymbol} onChange={(event) => setField("tokenSymbol", event.target.value.toUpperCase())} />
+        </label>
+        <label className="fb-label tk-nansen-full">
+          Token address (optional)
+          <input className="fb-field fb-mono" placeholder="0x..." value={values.tokenAddress} onChange={(event) => setField("tokenAddress", event.target.value.trim())} />
+        </label>
+      </>
+    );
+  }
+  if (intentId === "nansen-hyperliquid-wallets") {
+    return (
+      <label className="fb-label tk-nansen-full">
+        Wallet address (optional)
+        <input className="fb-field fb-mono" placeholder="0x..." value={values.address} onChange={(event) => setField("address", event.target.value.trim())} />
+      </label>
+    );
+  }
+  if (intentId === "nansen-related-wallets") {
+    return (
+      <>
+        {chainField}
+        <label className="fb-label tk-nansen-full">
+          Wallet address
+          <input className="fb-field fb-mono" placeholder="0x..." value={values.address} onChange={(event) => setField("address", event.target.value.trim())} />
+        </label>
+      </>
+    );
+  }
+  if (intentId === "nansen-top-wallets") {
+    return (
+      <>
+        {chainField}
+        <label className="fb-label">
+          Timeframe
+          <select className="fb-select" value={values.timeframe} onChange={(event) => setField("timeframe", event.target.value)}>
+            {NANSEN_TIMEFRAME_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </label>
+        <label className="fb-label tk-nansen-full">
+          Token address
+          <input className="fb-field fb-mono" placeholder="0x..." value={values.tokenAddress} onChange={(event) => setField("tokenAddress", event.target.value.trim())} />
+        </label>
+        <label className="fb-label tk-nansen-full">
+          Compare wallet (optional)
+          <input className="fb-field fb-mono" placeholder="0x..." value={values.address} onChange={(event) => setField("address", event.target.value.trim())} />
+        </label>
+      </>
+    );
+  }
+  return (
+    <>
+      {chainField}
+      <label className="fb-label">
+        Entity
+        <input className="fb-field" placeholder="Coinbase" value={values.entityName} onChange={(event) => setField("entityName", event.target.value)} />
+      </label>
+    </>
+  );
+}
+
+function initialNansenDraft(intentId: NansenTradeIntentId, desk: ReturnType<typeof useTradeDesk>): NansenDraftValues {
+  const chain = nansenChainForNetwork(desk.network);
+  const preferredSymbol = desk.cryptoPortfolio.rows
+    .map((row) => row.sym.toUpperCase())
+    .find((symbol) => symbol && !STABLE_SYMBOLS.has(symbol)) ?? "";
+  const walletAddress = desk.wallet.fullAddress || "";
+  return {
+    chain,
+    tokenSymbol: intentId === "nansen-token-tracking" ? preferredSymbol : "",
+    tokenAddress: "",
+    address: intentId === "nansen-defi-positions"
+      ? walletAddress
+      : intentId === "nansen-related-wallets"
+      ? walletAddress
+      : intentId === "nansen-hyperliquid-wallets" && desk.isEvmWallet
+        ? walletAddress
+        : "",
+    entityName: "Coinbase",
+    timeframe: intentId === "nansen-token-screener" ? "24h" : "7d",
+    labelType: "all_holders",
+  };
+}
+
+function validateNansenDraft(intentId: NansenTradeIntentId, values: NansenDraftValues): string {
+  if (intentId === "nansen-defi-positions" && !values.address.trim()) return "Enter a wallet address for DeFi positions.";
+  if (intentId === "nansen-token-holders" && !values.tokenAddress.trim()) return "Enter a token contract address.";
+  if (intentId === "nansen-related-wallets" && !values.address.trim()) return "Enter a wallet address to cluster.";
+  if (intentId === "nansen-top-wallets" && !values.tokenAddress.trim()) return "Enter a token contract address.";
+  if (intentId === "nansen-cex-health" && !values.entityName.trim()) return "Enter an exchange/entity name.";
+  return "";
+}
+
+type BuiltNansenTemplateParams =
+  | { kind: "simple"; params: TradeNansenSimpleTemplateParams }
+  | { kind: "complex"; params: TradeNansenComplexTemplateParams };
+
+function buildNansenTemplateParams(intentId: NansenTradeIntentId, values: NansenDraftValues): BuiltNansenTemplateParams {
+  const action = NANSEN_TRADE_ACTIONS[intentId];
+  const chain = values.chain.trim();
+  const tokenSymbol = values.tokenSymbol.trim();
+  const tokenAddress = values.tokenAddress.trim();
+  const address = values.address.trim();
+  const entityName = values.entityName.trim();
+  if (action.kind === "simple") {
+    if (intentId === "nansen-defi-positions") {
+      return { kind: "simple", params: { template: action.template, address } };
+    }
+    if (intentId === "nansen-smart-money-holdings") {
+      return { kind: "simple", params: { template: action.template, chain, chains: chain ? [chain] : undefined } };
+    }
+    if (intentId === "nansen-token-holders") {
+      return {
+        kind: "simple",
+        params: {
+          template: action.template,
+          chain,
+          tokenAddress,
+          labelType: values.labelType || "all_holders",
+          aggregateByEntity: false,
+          premiumLabels: true,
+        },
+      };
+    }
+    return {
+      kind: "simple",
+      params: {
+        template: action.template,
+        chain,
+        chains: chain ? [chain] : undefined,
+        timeframe: values.timeframe || "24h",
+        filters: { token_age_days: { max: 7 } },
+      },
+    };
+  }
+  if (intentId === "nansen-token-tracking") {
+    return { kind: "complex", params: {
+      template: action.template,
+      chain,
+      chains: chain ? [chain] : undefined,
+      tokenSymbol: tokenSymbol || undefined,
+      tokenAddress: tokenAddress || undefined,
+    } };
+  }
+  if (intentId === "nansen-hyperliquid-wallets") {
+    return { kind: "complex", params: { template: action.template, address: address || undefined } };
+  }
+  if (intentId === "nansen-related-wallets") {
+    return { kind: "complex", params: {
+      template: action.template,
+      chain,
+      address,
+      includeLabels: true,
+      includeHistoricalBalances: true,
+      includeTransactions: true,
+    } };
+  }
+  if (intentId === "nansen-top-wallets") {
+    return { kind: "complex", params: {
+      template: action.template,
+      chain,
+      chains: chain ? [chain] : undefined,
+      tokenAddress,
+      address: address || undefined,
+      timeframe: values.timeframe || "7d",
+    } };
+  }
+  return { kind: "complex", params: { template: action.template, chain, entityName: entityName || "Coinbase" } };
+}
+
+function nansenChainForNetwork(network: string): string {
+  if (network.includes("solana")) return "solana";
+  if (network === "eip155:1") return "ethereum";
+  if (network === "eip155:8453" || network === "eip155:84532") return "base";
+  if (network === "eip155:42161") return "arbitrum";
+  if (network === "eip155:137") return "polygon";
+  return "base";
+}
+
+function NansenBriefResult({ brief }: { brief: TradeNansenInsightBrief }) {
+  const tone = brief.status === "ok" ? "live" : brief.status === "blocked" ? "danger" : "honey";
+  return (
+    <div className="tk-nansen-result">
+      <div className="tk-nansen-head">
+        <Badge tone={tone}>{brief.status}</Badge>
+        <span>{brief.subject}</span>
+      </div>
+      <p className="tk-nansen-summary">{brief.summary}</p>
+
+      {brief.cards.length ? (
+        <div className="tk-nansen-cards">
+          {brief.cards.map((card) => (
+            <article key={`${card.endpoint}:${card.title}`} className="tk-nansen-card">
+              <b>{card.title}</b>
+              {card.summary ? <p>{card.summary}</p> : null}
+              {card.metrics.length ? (
+                <div className="tk-nansen-metrics">
+                  {card.metrics.map((metric) => (
+                    <span key={`${card.endpoint}:${metric.label}`}>
+                      <small>{metric.label}</small>
+                      <strong>{metric.value}</strong>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {card.observations.length ? (
+                <ul>
+                  {card.observations.map((observation, index) => <li key={`${card.endpoint}:obs:${index}`}>{observation}</li>)}
+                </ul>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {brief.riskFlags.length ? (
+        <div className="tk-nansen-callout" data-tone="risk">
+          {brief.riskFlags.map((risk) => <span key={risk}>{risk}</span>)}
+        </div>
+      ) : null}
+
+      {brief.nextQuestions.length ? (
+        <div className="tk-nansen-next">
+          <div className="tk-grouplbl">Next checks</div>
+          {brief.nextQuestions.map((question) => <span key={question}>{question}</span>)}
+        </div>
+      ) : null}
+
+      <details className="tk-nansen-sources">
+        <summary>{brief.attribution.text}</summary>
+        <div>
+          {brief.sources.map((source) => (
+            <span key={`${source.endpoint}:${source.label}`}>
+              {source.label} · {source.endpoint} · {source.credits} credits
+            </span>
+          ))}
+        </div>
+      </details>
+    </div>
   );
 }
 

@@ -209,6 +209,25 @@ async function readEnvPayload() {
   };
 }
 
+type EnvPayload = Awaited<ReturnType<typeof readEnvPayload>>;
+type EnvSourcePayload = Awaited<ReturnType<typeof readHiveEnvSource>>;
+
+function envSourceKeysOnly(source: EnvSourcePayload) {
+  const { values, ...rest } = source;
+  return {
+    ...rest,
+    keys: Object.keys(values),
+  };
+}
+
+function envPayloadKeysOnly(payload: EnvPayload) {
+  return {
+    ...payload,
+    sharedSource: envSourceKeysOnly(payload.sharedSource),
+    runtimeSources: payload.runtimeSources.map(envSourceKeysOnly),
+  };
+}
+
 function readCachedEnvPayload() {
   return cachedCall(ENV_PAYLOAD_CACHE_KEY, ENV_PAYLOAD_CACHE_MS, readEnvPayload);
 }
@@ -288,7 +307,9 @@ function syncSharedEnvMachines() {
 export async function GET(request: Request) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
-  return Response.json(await readCachedEnvPayload());
+  const payload = await readCachedEnvPayload();
+  const keysOnly = new URL(request.url).searchParams.get("keysOnly") === "1";
+  return Response.json(keysOnly ? envPayloadKeysOnly(payload) : payload);
 }
 
 export async function POST(request: Request) {

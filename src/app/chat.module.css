@@ -2079,6 +2079,20 @@ details[open] > summary .treeDisclosure::before {
   max-width: none;
 }
 
+.composerPermissionButton,
+.chat button.composerPermissionButton {
+  border-color: rgba(212, 180, 111, 0.2);
+  background: rgba(212, 180, 111, 0.09);
+  color: #f4d083;
+}
+
+.composerPermissionButton.bypass,
+.chat button.composerPermissionButton.bypass {
+  border-color: rgba(244, 208, 131, 0.26);
+  background: rgba(244, 208, 131, 0.16);
+  color: #ffd98a;
+}
+
 .workingDirectoryTooltip {
   width: min(280px, calc(100vw - 32px));
   max-width: min(280px, calc(100vw - 32px));
@@ -2192,6 +2206,40 @@ details[open] > summary .treeDisclosure::before {
   width: 15px;
   height: 15px;
   color: rgba(94, 234, 212, 0.9);
+}
+
+.permissionModeTooltip {
+  width: min(390px, calc(100vw - 28px));
+  max-width: min(390px, calc(100vw - 28px));
+  border-color: rgba(212, 180, 111, 0.24);
+}
+
+.permissionModeEyebrow {
+  color: #8ea0b8;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 6px 8px 3px;
+}
+
+.permissionModeList button {
+  grid-template-columns: minmax(0, 1fr) 20px 16px;
+  min-height: 44px;
+}
+
+.permissionModeList kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.72);
+  color: rgba(203, 213, 225, 0.78);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .composerModelButton span,
@@ -3640,6 +3688,23 @@ details[open] > summary .treeDisclosure::before {
   border-color: var(--line);
   background: var(--surface-soft);
   color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .composerPermissionButton,
+:global(:root[data-theme="hive-light"]) .composerPermissionButton.bypass {
+  border-color: rgba(176, 127, 28, 0.28);
+  background: rgba(176, 127, 28, 0.14);
+  color: #9a6a15;
+}
+
+:global(:root[data-theme="hive-light"]) .permissionModeList kbd {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
+:global(:root[data-theme="hive-light"]) .permissionModeEyebrow {
+  color: var(--text-soft);
 }
 
 :global(:root[data-theme="hive-light"]) .composerModeButton:hover,

@@ -4,6 +4,7 @@ export function startChatStreamState(input: {
   recordActiveChatRun?: (run: any) => void;
   requestLabel?: string;
   runId?: string;
+  sessionId?: string;
   setChatProcessByKey?: (updater: (current: any) => any) => void;
   setChatStreamingByKey: (updater: (current: any) => any) => void;
   startedAt: number;
@@ -28,6 +29,7 @@ export function startChatStreamState(input: {
     updatedAt: input.startedAt,
     requestLabel: input.requestLabel,
     runId: input.runId,
+    sessionId: input.sessionId,
     status: "active",
   });
 }

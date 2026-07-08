@@ -12,14 +12,18 @@ import {
   AlertTriangle,
   ChevronLeft,
   Copy,
+  Download,
+  ExternalLink,
   FileUp,
   GitBranch,
   MessageSquare,
+  Network,
   Pencil,
   PhoneCall,
   Plus,
   RefreshCcw,
   Settings,
+  Smartphone,
   SquareTerminal,
   Trash2,
   Wallet,
@@ -28,7 +32,7 @@ import {
 } from "lucide-react";
 import { AgentHoldings } from "./AgentHoldings";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
-import { frFleetSummary, frMachineState, frStateMeta } from "./fleet-hive-types";
+import { frFleetSummary, frMachineState, frStateMeta, hivePhoneStatus, isHiveMobileMachine } from "./fleet-hive-types";
 import { Dot, HiveMark, Meter, Summary } from "./primitives";
 
 const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
@@ -48,6 +52,18 @@ function UsePodActionIcon() {
       unoptimized
     />
   );
+}
+
+function firstQueenChatTarget(machines: HiveMachine[]) {
+  let fallback: { m: HiveMachine; a: HiveAgent } | null = null;
+  for (const m of machines) {
+    for (const a of m.agents) {
+      if (!fleetAgentCanChat(a.source)) continue;
+      if (a.state === "working") return { m, a };
+      fallback ??= { m, a };
+    }
+  }
+  return fallback;
 }
 
 export interface HivePanelHandlers {
@@ -73,6 +89,7 @@ export interface HivePanelHandlers {
   onEditSettings?: (m: HiveMachine, a: HiveAgent) => void;
   onDuplicate?: (m: HiveMachine, a: HiveAgent) => void;
   onRemove?: (m: HiveMachine, a: HiveAgent) => void;
+  onOpenPhonePairing?: () => void;
   /** Resolves the per-machine update action label/state from the live status maps. */
   getMachineUpdate?: (m: HiveMachine) => { label: string; busy: boolean; canUpdate: boolean } | null;
 }
@@ -108,25 +125,114 @@ function FrMiniMeters({ m }: { m: HiveMachine }) {
   );
 }
 
+function FrPhoneStatusRow({ label, value, tone = "var(--fg-2)" }: { label: string; value: string; tone?: string }) {
+  return (
+    <div style={{ display: "grid", gap: 4, padding: "11px 0", borderTop: "1px solid var(--line)" }}>
+      <span className="fr-eyebrow">{label}</span>
+      <span style={{ color: tone, fontSize: 12.5, lineHeight: 1.45 }}>{value}</span>
+    </div>
+  );
+}
+
 export function HivePanel({
   machines,
   sel,
   onSelect,
   handlers = {},
   walletsByAgent = {},
+  tailnetLabel = "",
 }: {
   machines: HiveMachine[];
   sel: HiveSelection;
   onSelect: (s: HiveSelection) => void;
   handlers?: HivePanelHandlers;
   walletsByAgent?: Record<string, AgentWalletConfig>;
+  tailnetLabel?: string;
 }) {
   const s = frFleetSummary(machines);
   let body: React.ReactNode;
+  const renderPhoneBody = (selectedMobileMachine?: HiveMachine) => {
+    const phone = hivePhoneStatus(machines, tailnetLabel);
+    const phoneTone =
+      phone.state === "connected" ? "var(--live)" : phone.state === "tailnet-issue" ? "var(--honey)" : "var(--fg-3)";
+    const pairingStatus = phone.dashboardTailnetReady
+      ? "Ready after your phone joins the same Tailnet."
+      : "Waiting for this dashboard to have a reachable Tailscale address.";
+    return (
+      <div key={selectedMobileMachine ? `phone-${selectedMobileMachine.id}` : "phone"} style={{ animation: "fr-fade-up .3s ease" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ display: "inline-grid", placeItems: "center", width: 24, height: 24, color: phoneTone }}>
+            <Smartphone size={19} aria-hidden="true" />
+          </span>
+          <span className="fr-eyebrow">Phone · HivemindOS Mobile</span>
+        </div>
+        <h2 style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.02em", margin: "10px 0 0" }}>
+          {selectedMobileMachine?.name ?? "Your phone"}
+        </h2>
+        <p style={{ fontSize: 13, color: "var(--fg-3)", lineHeight: 1.55, margin: "10px 0 0" }}>
+          Pair a phone so mobile agents, approvals, and calls can reach this HivemindOS hub over your private Tailnet.
+        </p>
+
+        <div style={{ marginTop: 20 }}>
+          <FrPhoneStatusRow label="Phone Tailnet" value={phone.phoneStatus} tone={phoneTone} />
+          <FrPhoneStatusRow label="Dashboard Tailnet" value={phone.dashboardStatus} />
+          <FrPhoneStatusRow label="Pairing" value={pairingStatus} />
+        </div>
+
+        {phone.mobileMachines.length ? (
+          <div style={{ marginTop: 18 }}>
+            <div className="fr-eyebrow" style={{ marginBottom: 6 }}>Detected mobile peers</div>
+            {phone.mobileMachines.map((machine) => (
+              <button
+                key={machine.id}
+                type="button"
+                onClick={() => onSelect({ type: "machine", id: machine.id })}
+                style={{ display: "grid", gap: 3, width: "100%", textAlign: "left", background: "transparent", border: 0, borderTop: "1px solid var(--line)", padding: "10px 0", cursor: "pointer", color: "inherit" }}
+              >
+                <span style={{ color: "var(--fg)", fontSize: 13, fontWeight: 500 }}>{machine.name}</span>
+                <span style={{ color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 11, lineHeight: 1.35 }}>{[machine.os, machine.uptime, machine.ip].filter(Boolean).join(" · ")}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div style={{ marginTop: 22, padding: "14px 16px", borderRadius: "var(--radius-sm)", background: "var(--panel)", border: "1px solid var(--line)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--fg)", fontSize: 13, fontWeight: 600 }}>
+            <Download size={15} aria-hidden="true" />
+            Download and connect
+          </div>
+          <ol style={{ display: "grid", gap: 10, margin: "12px 0 0", paddingLeft: 18, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.5 }}>
+            <li>
+              Install Tailscale on iOS or Android from{" "}
+              <a href="https://tailscale.com/download" target="_blank" rel="noreferrer" style={{ color: "var(--honey)", textDecoration: "none" }}>
+                tailscale.com/download <ExternalLink size={11} aria-hidden="true" style={{ verticalAlign: "-1px" }} />
+              </a>.
+            </li>
+            <li>Sign in to the same Tailnet this dashboard uses, then leave Tailscale connected.</li>
+            <li>Install or open HivemindOS Mobile and go to Settings, then Connection.</li>
+          </ol>
+        </div>
+
+        <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+          <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: "var(--radius-sm)", background: "var(--honey-soft)", border: "1px solid var(--honey-line)" }}>
+            <Network size={15} aria-hidden="true" style={{ flex: "0 0 auto", marginTop: 2, color: "var(--honey)" }} />
+            <span style={{ fontSize: 12.5, color: "var(--fg-2)", lineHeight: 1.45 }}>
+              Once connected to Tailscale, you can pair your phone below.
+            </span>
+          </div>
+          <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onOpenPhonePairing?.()}>
+            <ActionIcon icon={Smartphone} size={14} />
+            Open phone pairing
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   if (sel.type === "queen") {
     const workingList: { a: HiveAgent; m: HiveMachine }[] = [];
     machines.forEach((m) => m.agents.forEach((a) => { if (a.state === "working") workingList.push({ a, m }); }));
+    const queenChatTarget = handlers.onOpenChat ? firstQueenChatTarget(machines) : null;
     const attention = (() => {
       for (const m of machines) {
         const a = m.agents.find((x) => x.state === "failed") ?? m.agents.find((x) => x.state === "setup");
@@ -151,10 +257,16 @@ export function HivePanel({
           <Summary n={s.attention} label="to tend" tone={s.attention ? "var(--honey)" : undefined} />
         </div>
 
-        {(handlers.onCallQueen || handlers.onOpenQueenSettings || handlers.onAddMachine) ? (
+        {(queenChatTarget || handlers.onCallQueen || handlers.onOpenQueenSettings || handlers.onAddMachine) ? (
           <div className="fr-queen-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
+            {queenChatTarget ? (
+              <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onOpenChat?.(queenChatTarget.m, queenChatTarget.a)}>
+                <ActionIcon icon={MessageSquare} size={14} />
+                Chat
+              </button>
+            ) : null}
             {handlers.onCallQueen ? (
-              <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onCallQueen?.()}>
+              <button type="button" className="fr-act" onClick={() => handlers.onCallQueen?.()}>
                 <ActionIcon icon={PhoneCall} size={14} />
                 Call
               </button>
@@ -226,9 +338,12 @@ export function HivePanel({
         <DeepProbesToggle variant="hive" />
       </div>
     );
+  } else if (sel.type === "phone") {
+    body = renderPhoneBody();
   } else if (sel.type === "machine") {
     const m = machines.find((x) => x.id === sel.id);
     if (!m) { body = null; }
+    else if (isHiveMobileMachine(m)) { body = renderPhoneBody(m); }
     else {
       const working = m.agents.filter((a) => a.state === "working").length;
       const update = handlers.getMachineUpdate?.(m) ?? null;
@@ -394,16 +509,16 @@ export function HivePanel({
 
           {(handlers.onCallAgent || (canChat && handlers.onOpenChat)) ? (
             <div style={{ display: "flex", gap: 8, marginTop: 22 }}>
-              {handlers.onCallAgent ? (
-                <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onCallAgent?.(m, a)}>
-                  <ActionIcon icon={PhoneCall} />
-                  Call agent
+              {canChat && handlers.onOpenChat ? (
+                <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onOpenChat?.(m, a)}>
+                  <ActionIcon icon={MessageSquare} />
+                  Chat
                 </button>
               ) : null}
-              {canChat && handlers.onOpenChat ? (
-                <button type="button" className="fr-act" onClick={() => handlers.onOpenChat?.(m, a)}>
-                  <ActionIcon icon={MessageSquare} />
-                  Open chat
+              {handlers.onCallAgent ? (
+                <button type="button" className="fr-act" onClick={() => handlers.onCallAgent?.(m, a)}>
+                  <ActionIcon icon={PhoneCall} />
+                  Call agent
                 </button>
               ) : null}
             </div>

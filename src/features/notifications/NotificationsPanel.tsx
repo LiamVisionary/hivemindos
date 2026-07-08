@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUpRight, Bell, Check, CheckCheck, ChevronRight, KanbanSquare, LoaderCircle, MessageSquare, RefreshCcw } from "lucide-react";
+import { ArrowUpRight, Bell, Check, CheckCheck, ChevronRight, KanbanSquare, LoaderCircle, MessageSquare, RefreshCcw, X } from "lucide-react";
 
 import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
 import { useSpendApprovals } from "@/features/approvals/use-spend-approvals";
@@ -29,6 +29,7 @@ import {
 } from "@/features/notifications/notification-display";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import type { AgentAutonomyReviewMode, AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
+import { formatReasoningTrailForPlainText } from "@/lib/types/reasoning-trail";
 
 const notificationClass = createStyleClass(notificationStyles);
 
@@ -64,6 +65,7 @@ export type NotificationsPanelProps = {
   notificationsLoading: boolean;
   notificationsStatus: string;
   fallbackFolder: string;
+  vaultPath?: string;
   onRefresh: (options?: { append?: boolean }) => void | Promise<void>;
   onMarkAllRead: () => void;
   onMarkRead: (id: string) => void;
@@ -84,6 +86,15 @@ function needsApprovalReview(notification: AgentNotification) {
     || notification.priority === "urgent"
     || notification.priority === "high"
   );
+}
+
+function isNotificationForSpendApproval(notification: AgentNotification, approval: SpendApprovalView) {
+  const id = approval.id.trim().toLowerCase();
+  if (!id) return false;
+  const tags = notification.tags.map((tag) => tag.toLowerCase());
+  return tags.includes("wallet")
+    && tags.includes("approval")
+    && notification.id.toLowerCase().includes(id);
 }
 
 /** Compact relative timestamp for the meta column ("2 min ago", "Yst 22:10"). */
@@ -112,15 +123,15 @@ function formatRelativeStamp(value?: string) {
 
 export function NotificationsPanel({
   notifications,
-  notificationGroups,
   notificationSummary,
   notificationCursor,
   notificationsLoading,
   notificationsStatus,
+  fallbackFolder,
+  vaultPath,
   onRefresh,
   onMarkAllRead,
   onMarkRead,
-  onOpenNotification,
   onNavigateTarget,
   onUpdateSettings,
 }: NotificationsPanelProps) {
@@ -128,13 +139,14 @@ export function NotificationsPanel({
   // notification id → created board task id (flips "Send to board" into "Open task").
   const [boardTasks, setBoardTasks] = useState<Record<string, string>>({});
   const [boardBusyId, setBoardBusyId] = useState<string | null>(null);
+  const [dismissBusyId, setDismissBusyId] = useState<string | null>(null);
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   // Consolidated look-alike notifications page through one card at a time.
   // Which look-alike clusters are expanded (open to show every member).
   const [expandedClusters, setExpandedClusters] = useState<Set<string>>(() => new Set());
+  const [expandedNotificationId, setExpandedNotificationId] = useState<string | null>(null);
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const listScrollRef = useRef<HTMLDivElement | null>(null);
-  const scrollIdleRef = useRef<number | null>(null);
   // The real human-in-the-loop spend-approval queue (shared with the Zero Human
   // Companies approvals section). Powers the "Review first" rail + its modal.
   const spendApprovals = useSpendApprovals();
@@ -154,28 +166,32 @@ export function NotificationsPanel({
 
   const settings = notificationSummary?.settings;
   const autonomyReviewMode = settings?.autonomyReviewMode ?? "autonomous";
-
-  const filterCounts = useMemo(() => ({
-    all: notifications.length,
-    unread: notifications.filter((notification) => !notification.read).length,
-    attention: notifications.filter(needsApprovalReview).length,
-    resolved: notifications.filter(isResolved).length,
-  }), [notifications]);
-
-  const decisionsCount = useMemo(
-    () => notifications.filter((notification) => !notification.read && notification.kind === "decision").length,
+  const activeNotifications = useMemo(
+    () => notifications.filter((notification) => !isResolved(notification)),
     [notifications],
   );
 
+  const filterCounts = useMemo(() => ({
+    all: activeNotifications.length,
+    unread: activeNotifications.filter((notification) => !notification.read).length,
+    attention: activeNotifications.filter(needsApprovalReview).length,
+    resolved: notifications.filter(isResolved).length,
+  }), [activeNotifications, notifications]);
+
+  const decisionsCount = useMemo(
+    () => activeNotifications.filter((notification) => !notification.read && notification.kind === "decision").length,
+    [activeNotifications],
+  );
+
   const visibleGroups = useMemo(() => {
-    if (filter === "all") return notificationGroups;
-    const predicate = filter === "unread"
-      ? (notification: AgentNotification) => !notification.read
+    if (filter === "resolved") return groupNotifications(notifications.filter(isResolved));
+    const active = filter === "unread"
+      ? activeNotifications.filter((notification) => !notification.read)
       : filter === "attention"
-        ? needsApprovalReview
-        : isResolved;
-    return groupNotifications(notifications.filter(predicate));
-  }, [filter, notificationGroups, notifications]);
+        ? activeNotifications.filter(needsApprovalReview)
+        : activeNotifications;
+    return groupNotifications(active);
+  }, [activeNotifications, filter, notifications]);
 
   const total = notificationSummary?.total ?? notifications.length;
 
@@ -223,7 +239,7 @@ export function NotificationsPanel({
     // Expand the persistent chat bubble, send the context turn, and put the
     // cursor in the input so the follow-up question is one keystroke away.
     queenChat.setHistoryMinimized(false);
-    void queenChat.sendText(enriched);
+    void queenChat.sendText(enriched, { suppressWalletIntents: true });
     onMarkRead(notification.id);
     window.setTimeout(() => {
       const input = document.querySelector<HTMLInputElement>("body > .fr-root .fr-chat-input")
@@ -244,6 +260,33 @@ export function NotificationsPanel({
     void discussWithQueen(notification, action.prompt);
   }, [discussWithQueen, onNavigateTarget, sendToBoard]);
 
+  const dismissNotification = useCallback(async (notification: AgentNotification) => {
+    setDismissBusyId(notification.id);
+    setActionErrors((prev) => ({ ...prev, [notification.id]: "" }));
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "dismiss",
+          id: notification.id,
+          vaultPath: vaultPath || undefined,
+          notificationsFolder: fallbackFolder || undefined,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not dismiss this alert.");
+      await onRefresh();
+    } catch (error) {
+      setActionErrors((prev) => ({
+        ...prev,
+        [notification.id]: error instanceof Error ? error.message : "Could not dismiss this alert.",
+      }));
+    } finally {
+      setDismissBusyId(null);
+    }
+  }, [fallbackFolder, onRefresh, vaultPath]);
+
   const stop = (event: { stopPropagation: () => void }) => event.stopPropagation();
 
   const toggleCluster = (key: string) => {
@@ -255,6 +298,10 @@ export function NotificationsPanel({
     });
   };
 
+  const toggleNotificationExpansion = useCallback((notificationId: string) => {
+    setExpandedNotificationId((current) => current === notificationId ? null : notificationId);
+  }, []);
+
   const discussApproval = useCallback((approval: SpendApprovalView) => {
     queenChat.setHistoryMinimized(false);
     void queenChat.sendText([
@@ -263,9 +310,10 @@ export function NotificationsPanel({
       approval.title,
       `Requested by ${approval.agent} · ${approval.kind}${approval.amountUsd != null ? ` · $${approval.amountUsd.toFixed(2)} ${approval.asset ?? "USDC"}` : ""}`,
       approval.reason ? `Reason: ${approval.reason}` : "",
+      approval.explanation ? `Reasoning trail:\n${formatReasoningTrailForPlainText(approval.explanation)}` : "",
       "",
       "Should I approve or reject this? If reject, what change should I ask the agent for?",
-    ].filter(Boolean).join("\n"));
+    ].filter(Boolean).join("\n"), { suppressWalletIntents: true });
     window.setTimeout(() => {
       const input = document.querySelector<HTMLInputElement>("body > .fr-root .fr-chat-input")
         ?? document.querySelector<HTMLInputElement>(".fr-chat-input");
@@ -318,6 +366,21 @@ export function NotificationsPanel({
             Read
           </button>
         ) : null}
+        {!isResolved(notification) ? (
+          <button
+            type="button"
+            className={notificationClass("actionBtn", "dismissBtn")}
+            disabled={dismissBusyId === notification.id}
+            onClick={() => void dismissNotification(notification)}
+          >
+            {dismissBusyId === notification.id ? (
+              <LoaderCircle aria-hidden="true" className={notificationClass("spinIcon")} />
+            ) : (
+              <X aria-hidden="true" />
+            )}
+            {dismissBusyId === notification.id ? "Dismissing" : "Dismiss"}
+          </button>
+        ) : null}
         {actionErrors[notification.id] ? (
           <span className={notificationClass("actionError")}>{actionErrors[notification.id]}</span>
         ) : null}
@@ -332,23 +395,24 @@ export function NotificationsPanel({
   ) => {
     const actor = notificationActorMeta(notification);
     const resolved = isResolved(notification);
-    const openable = Boolean(onOpenNotification);
+    const expanded = expandedNotificationId === notification.id;
     const bodyText = notification.body
       ? `**${actor.label}** · ${notificationDisplayBody(notification)}`
       : `**${actor.label}**`;
     return (
       <div
         key={key}
-        className={notificationClass("row", notification.priority, resolved && "resolved")}
+        className={notificationClass("row", notification.priority, resolved && "resolved", expanded && "open")}
         tabIndex={0}
-        role={openable ? "button" : undefined}
-        onClick={openable ? () => onOpenNotification?.(notification) : undefined}
+        role="button"
+        aria-expanded={expanded}
+        aria-label={`${expanded ? "Collapse" : "Expand"} alert: ${notificationDisplayTitle(notification)}`}
+        onClick={() => toggleNotificationExpansion(notification.id)}
         onKeyDown={(event) => {
-          if (!openable) return;
           if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            onOpenNotification?.(notification);
+            toggleNotificationExpansion(notification.id);
           }
         }}
       >
@@ -454,11 +518,6 @@ export function NotificationsPanel({
               ref={listScrollRef}
               onScroll={(event) => {
                 const el = event.currentTarget;
-                // Suppress hover-expand jank while scrolling (ref-based, no re-render):
-                // ignore row hover until the scroll goes idle.
-                el.classList.add(notificationClass("scrolling"));
-                if (scrollIdleRef.current) window.clearTimeout(scrollIdleRef.current);
-                scrollIdleRef.current = window.setTimeout(() => el.classList.remove(notificationClass("scrolling")), 160);
                 // Infinite scroll — pull the next page as the reader nears the bottom.
                 if (notificationsLoading || notificationCursor === null) return;
                 if (el.scrollHeight - el.scrollTop - el.clientHeight < 320) void onRefresh({ append: true });
@@ -547,7 +606,17 @@ export function NotificationsPanel({
                     approval={approval}
                     busy={spendApprovals.busyId === approval.id}
                     error={spendApprovals.error || undefined}
-                    onDecide={(decision, note) => spendApprovals.decide(approval.id, decision, note)}
+                    onDecide={async (decision, note) => {
+                      const ok = await spendApprovals.decide(approval.id, decision, note);
+                      if (ok) {
+                        const matchingIds = notifications
+                          .filter((notification) => isNotificationForSpendApproval(notification, approval))
+                          .map((notification) => notification.id);
+                        await Promise.all(matchingIds.map((id) => onMarkRead(id)));
+                        void onRefresh();
+                      }
+                      return ok;
+                    }}
                     onDiscuss={() => discussApproval(approval)}
                   />
                 ))}

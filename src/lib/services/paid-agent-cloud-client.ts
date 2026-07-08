@@ -187,6 +187,26 @@ export function freeModelChatCompletionsUrl(upstreamModel: string): string {
   return target.toString();
 }
 
+export function managedUsePodOpenAiBaseUrl(): string {
+  const resolution = resolveOfficialPaidAgentBaseUrl();
+  if (!resolution.url) return "";
+  const target = new URL(resolution.url);
+  target.pathname = joinUrlPath(target.pathname, "api", "usepod", "managed", "v1");
+  target.search = "";
+  target.hash = "";
+  return target.toString().replace(/\/+$/, "");
+}
+
+export function managedNansenBaseUrl(): string {
+  const resolution = resolveOfficialPaidAgentBaseUrl();
+  if (!resolution.url) return "";
+  const target = new URL(resolution.url);
+  target.pathname = joinUrlPath(target.pathname, "api", "nansen", "managed");
+  target.search = "";
+  target.hash = "";
+  return target.toString().replace(/\/+$/, "");
+}
+
 export function officialPaidAgentCheckoutReturnUrl(status: OfficialPaidAgentCheckoutReturnStatus, slug?: string): string {
   const resolution = resolveOfficialPaidAgentBaseUrl();
   const target = new URL(resolution.url ?? DEFAULT_OFFICIAL_PAID_AGENT_BASE_URL);

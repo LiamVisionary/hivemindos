@@ -18,6 +18,9 @@ const {
   finalizeQueenChatStream,
 } = await import("../src/lib/services/queen-bee/chat-stream.ts");
 const {
+  readRuntimeResponseText,
+} = await import("../src/lib/services/phone/runtime-voice-turn.ts");
+const {
   QUEEN_INSTRUCTIONS,
   queenChatTools,
   queenInstructionsForPersonality,
@@ -49,10 +52,42 @@ const {
 // ── OpenAI Codex Queen models must not silently skip to gpt-4o-mini ──────────
 {
   const source = readFileSync(new URL("../src/lib/services/queen-bee/typed-chat-turn.ts", import.meta.url), "utf8");
+  const chatStoreSource = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
+  const agentRuntimeRoute = readFileSync(new URL("../src/app/api/chat/agent-runtime/route.ts", import.meta.url), "utf8");
+  const notificationsSource = readFileSync(new URL("../src/features/notifications/NotificationsPanel.tsx", import.meta.url), "utf8");
+  const queenVoiceRoute = readFileSync(new URL("../src/app/api/queen-bee/voice/route.ts", import.meta.url), "utf8");
+  const queenVoiceTurn = readFileSync(new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url), "utf8");
   assert.match(source, /isRuntimeHeldQueenProvider\(provider\)/, "typed Queen chat should recognize runtime-held OAuth providers");
   assert.match(source, /\/api\/chat\/agent-runtime/, "typed Queen chat should route OpenAI Codex through the Queen runtime");
   assert.match(source, /readRuntimeResponseText/, "typed Queen chat should parse the runtime stream response");
+  assert.match(source, /queenChatRuntimeStreamResponse/, "typed Queen chat should bridge runtime streams into Queen chat streams");
+  assert.match(source, /brain\.kind === "agent-runtime"[\s\S]*queenChatRuntimeStreamResponse/, "runtime-held Queen brains should stream through the runtime bridge before buffered fallbacks");
+  assert.match(source, /runtimeStream: true/, "typed Queen chat telemetry should mark runtime-streamed turns");
+  assert.match(source, /runtime-stream-heartbeat/, "runtime-held Queen chat streams should emit heartbeat frames while waiting for model text");
+  assert.match(source, /agentMode: "plan"/, "runtime-held Queen text chat should use read-only/planning mode instead of command execution mode");
+  assert.match(source, /suppressWalletIntents: true/, "runtime-held Queen text chat should always suppress deterministic wallet/payment rails");
+  assert.match(source, /RUNTIME_COMMAND_GATE_FALLBACK/, "runtime-held Queen chat should sanitize command-gate timeout replies");
+  assert.match(source, /runtimeCommandGate: true/, "Queen chat telemetry should mark sanitized runtime command-gate replies");
   assert.doesNotMatch(source, /provider !== "openai-oauth" && provider !== "openai-codex"/, "typed Queen chat must not skip OpenAI Codex to the built-in fallback");
+  assert.match(chatStoreSource, /suppressWalletIntents\?: boolean/, "Queen chat sendText should expose an advice-only wallet-intent suppression option");
+  assert.match(chatStoreSource, /runQueenTurn\(trimmed, queenId, opts\?\.screenContext, opts\?\.suppressWalletIntents === true\)/, "Queen chat should pass the suppression flag to the text-chat route");
+  assert.match(chatStoreSource, /action: "agent-turn"[\s\S]{0,160}suppressWalletIntents/, "Queen tool relays should keep advice-only turns out of wallet rails");
+  assert.match(agentRuntimeRoute, /suppressWalletIntents = body\.suppressWalletIntents === true/, "agent runtime should parse the wallet-intent suppression flag");
+  assert.match(agentRuntimeRoute, /if \(!suppressWalletIntents\) \{[\s\S]{0,500}dispatchWalletAndTradeIntents/, "agent runtime should skip deterministic wallet rails when suppression is active");
+  assert.match(queenVoiceRoute, /suppressWalletIntents: body\.suppressWalletIntents === true/, "Queen agent-turn route should pass advice-only suppression to relayed agents");
+  assert.match(queenVoiceTurn, /suppressWalletIntents: options\?\.suppressWalletIntents === true/, "relayed Queen agent turns should suppress wallet rails when requested");
+  assert.equal((notificationsSource.match(/suppressWalletIntents: true/g) ?? []).length, 2, "both alert Discuss paths should mark Queen turns as advice-only");
+}
+
+// ── typed Queen chat must not expose the legacy voice route in UI errors ─────
+{
+  const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
+  const route = readFileSync(new URL("../src/app/api/queen-bee/chat/route.ts", import.meta.url), "utf8");
+  assert.match(source, /const QUEEN_TEXT_CHAT_API_PATH = "\/api\/queen-bee\/chat";/, "typed Queen chat should use the text-chat route");
+  assert.equal(source.match(/fetch\(QUEEN_TEXT_CHAT_API_PATH,/g)?.length, 2, "both typed Queen chat fetches should go through the text-chat route constant");
+  assert.doesNotMatch(source, /action: "chat-turn(?:-stream)?"[\s\S]{0,220}fetch\("\/api\/queen-bee\/voice"/, "typed Queen chat actions must not fetch the legacy voice route");
+  assert.match(route, /runQueenChatTurnStream/, "Queen text-chat route should serve the streaming typed chat action");
+  assert.match(route, /runQueenChatTurn/, "Queen text-chat route should serve the blocking typed chat action");
 }
 
 // ── typed Queen chat uses the same default/custom personality layer ──────────
@@ -108,6 +143,23 @@ const {
   }
   assert.equal(state.content, "ab");
   assert.equal(sawDone, true);
+}
+
+// ── runtime agent streams expose text deltas before the final text ───────────
+{
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  const deltas = [];
+  const text = await readRuntimeResponseText(new Response(body), undefined, (delta) => deltas.push(delta));
+  assert.deepEqual(deltas, ["Hel", "lo"]);
+  assert.equal(text, "Hello");
 }
 
 // ── garbled frames are skipped, not fatal ────────────────────────────────────

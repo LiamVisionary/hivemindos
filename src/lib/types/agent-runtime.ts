@@ -255,6 +255,8 @@ export interface AdaptiveRoutingConfig {
 }
 
 export interface UsePodAgentConfig {
+  billingMode?: "direct" | "hivemindos-managed";
+  managedMaxDebitUsd?: string;
   tokenEnvName?: string;
   depositAddress?: string;
   depositCode?: string;
@@ -337,6 +339,26 @@ export interface VoiceChatBrainPreference {
  *  Calls UI auto-picks oauth when connected, else apikey when a key is present. */
 export type VoiceProviderAuthMode = "oauth" | "apikey";
 
+export const AGENT_MINISTRY_EXPERT_SLOT_COUNT = 3;
+export const AGENT_MINISTRY_EFFORTS = ["fast", "balanced", "deep", "council"] as const;
+
+export type AgentMinistryEffort = (typeof AGENT_MINISTRY_EFFORTS)[number];
+export type AgentMinistrySlotKind = "model" | "agent";
+
+export interface AgentMinistrySlotConfig {
+  kind?: AgentMinistrySlotKind;
+  provider?: string;
+  model?: string;
+  agentId?: string;
+}
+
+export interface AgentMinistryPreferences {
+  enabled: boolean;
+  effort: AgentMinistryEffort;
+  orchestrator: AgentMinistrySlotConfig;
+  experts: AgentMinistrySlotConfig[];
+}
+
 export interface AgentCallPreferences {
   voiceRuntime: AgentVoiceRuntime;
   voiceProviderId?: string;
@@ -348,6 +370,7 @@ export interface AgentCallPreferences {
    *  can read GEMINI_API_KEY / GOOGLE_AI_STUDIO_API_KEY / GOOGLE_API_KEY). */
   voiceKeyEnv?: string;
   voiceChatBrain?: VoiceChatBrainPreference;
+  ministry: AgentMinistryPreferences;
   enabled: boolean;
   dailyEnabled: boolean;
   dailyCallTime: string;
@@ -372,6 +395,41 @@ function detectAgentCallTimezone(): string {
   }
 }
 
+function normalizeAgentMinistrySlot(
+  input?: Partial<AgentMinistrySlotConfig> | null,
+): AgentMinistrySlotConfig {
+  if (!input) return {};
+  if (input.kind === "agent") {
+    const agentId = input.agentId?.trim();
+    return agentId ? { kind: "agent", agentId } : {};
+  }
+  const provider = input.provider?.trim();
+  const model = input.model?.trim();
+  if (!provider && !model) return {};
+  return {
+    kind: "model",
+    provider: provider || undefined,
+    model: model || undefined,
+  };
+}
+
+function normalizeAgentMinistry(
+  input?: Partial<AgentMinistryPreferences> | null,
+): AgentMinistryPreferences {
+  const effort = AGENT_MINISTRY_EFFORTS.includes(input?.effort as AgentMinistryEffort)
+    ? input?.effort as AgentMinistryEffort
+    : "balanced";
+  const rawExperts = Array.isArray(input?.experts) ? input.experts : [];
+  return {
+    enabled: input?.enabled ?? false,
+    effort,
+    orchestrator: normalizeAgentMinistrySlot(input?.orchestrator),
+    experts: Array.from({ length: AGENT_MINISTRY_EXPERT_SLOT_COUNT }, (_, index) => (
+      normalizeAgentMinistrySlot(rawExperts[index])
+    )),
+  };
+}
+
 export function buildAgentCallPreferences(
   input?: Partial<AgentCallPreferences> | null,
 ): AgentCallPreferences {
@@ -391,6 +449,7 @@ export function buildAgentCallPreferences(
           model: input.voiceChatBrain.model?.trim() || undefined,
         }
       : undefined,
+    ministry: normalizeAgentMinistry(input?.ministry),
     enabled: input?.enabled ?? false,
     dailyEnabled: input?.dailyEnabled ?? false,
     dailyCallTime: input?.dailyCallTime || "09:00",

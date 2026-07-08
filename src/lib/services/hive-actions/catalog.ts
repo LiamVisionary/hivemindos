@@ -43,6 +43,34 @@ const cryptoIntentSchema = z
   ])
   .optional();
 
+const nansenActionSchema = z.enum([
+  "status",
+  "token-brief",
+  "wallet-brief",
+  "hyperliquid-brief",
+  "market-scout",
+  "simple-template",
+  "complex-template",
+  "agent",
+]);
+
+const nansenSimpleTemplateSchema = z.enum([
+  "defi-positions",
+  "smart-money-holdings",
+  "token-top-holders",
+  "token-screener-discovery",
+]);
+
+const nansenComplexTemplateSchema = z.enum([
+  "token-tracking-smart-money",
+  "hyperliquid-wallet-discovery",
+  "related-wallets-scale",
+  "top-wallet-copytrade-research",
+  "cex-health-monitor",
+]);
+
+const nansenTemplateSchema = z.union([nansenSimpleTemplateSchema, nansenComplexTemplateSchema]);
+
 export const listHivemindMachinesAction = defineHiveAction({
   id: "fleet.list-machines",
   title: "List HivemindOS machines",
@@ -487,11 +515,60 @@ export const prepareCryptoAction = defineHiveAction({
   },
 });
 
+export const nansenIntelligenceAction = defineHiveAction({
+  id: "nansen.intelligence",
+  title: "Nansen onchain intelligence",
+  description:
+    "Read Nansen-powered token, wallet, Hyperliquid, market-scout, simple-template, complex-template, and research-agent briefings for HivemindOS due diligence.",
+  schema: z.object({
+    action: nansenActionSchema.describe("Which Nansen intelligence route to use."),
+    template: nansenTemplateSchema.optional().describe("Nansen template to run when action is simple-template or complex-template."),
+    chain: z.string().optional(),
+    chains: z.array(z.string()).optional(),
+    tokenAddress: z.string().optional(),
+    tokenSymbol: z.string().optional(),
+    address: z.string().optional(),
+    entityName: z.string().optional(),
+    date: z.object({ from: z.string().optional(), to: z.string().optional() }).optional(),
+    timeframe: z.string().optional(),
+    filters: jsonObjectSchema.optional(),
+    includeLabels: z.boolean().optional(),
+    includeTransactions: z.boolean().optional(),
+    includeHistoricalBalances: z.boolean().optional(),
+    includePnlSummary: z.boolean().optional(),
+    aggregateByEntity: z.boolean().optional(),
+    labelType: z.string().optional(),
+    premiumLabels: z.boolean().optional(),
+    includeTrades: z.boolean().optional(),
+    includeIndicators: z.boolean().optional(),
+    includeLeaderboard: z.boolean().optional(),
+    text: z.string().optional(),
+    mode: z.enum(["fast", "expert"]).optional(),
+    conversationId: z.string().optional(),
+    creditSlug: z.string().optional(),
+    idempotencyKey: z.string().optional(),
+  }),
+  sideEffects: ["read", "network"],
+  risk: "low",
+  readOnly: true,
+  tags: ["nansen", "crypto", "wallet", "portfolio", "token", "hyperliquid", "market-scout", "simple-template", "complex-template", "smart-money-holdings", "token-holders", "token-screener", "cex-health", "onchain", "due-diligence"],
+  aliases: ["nansen", "token brief", "wallet brief", "market scout", "hyperliquid brief", "simple nansen template", "complex nansen template", "smart money holdings", "top holders", "token screener", "cex health", "onchain intelligence"],
+  mcp: { expose: true, compact: true, toolName: "nansen_intelligence" },
+  contextIndex: {
+    summary:
+      "Nansen-powered onchain intelligence routes for trade, wallet, simple-template, CEX-health, and complex-template due diligence.",
+    retrievalText:
+      "Use nansen_intelligence for read-only Nansen context: GET /api/nansen/status, POST /api/nansen/token-brief, /api/nansen/wallet-brief, /api/nansen/hyperliquid-brief, /api/nansen/market-scout, /api/nansen/simple-template, /api/nansen/complex-template, or /api/nansen/agent. Simple template ids are defi-positions, smart-money-holdings, token-top-holders, and token-screener-discovery. Complex template ids are token-tracking-smart-money, hyperliquid-wallet-discovery, related-wallets-scale, top-wallet-copytrade-research, and cex-health-monitor. Prefer BYOK NANSEN_API_KEY; otherwise use HivemindOS hosted credits through the managed Nansen broker. Direct Nansen x402 is not the official cloud product path. Return derived briefs, not raw Smart Money feeds, public rankings, real-time alerts, or copy-trading signals.",
+    route: "/api/nansen/status",
+    methods: ["GET"],
+  },
+});
+
 export const sendUsdcAction = defineHiveAction({
   id: "wallet.send-usdc",
-  title: "Send USDC",
+  title: "Send stablecoin",
   description:
-    "Execute a governed USDC send through the wallet route after explicit confirmation.",
+    "Execute a governed stablecoin send through the wallet route after explicit confirmation: USDC on Base/Solana, USDG on Robinhood Chain.",
   schema: z.object({
     agentId: z.string().optional(),
     wallet: z.record(z.string(), z.unknown()).optional(),
@@ -507,20 +584,20 @@ export const sendUsdcAction = defineHiveAction({
   }),
   sideEffects: ["wallet", "payment", "network"],
   risk: "critical",
-  tags: ["wallet", "payment", "usdc", "send", "execution"],
-  aliases: ["send_usdc", "wallet send", "send payment"],
+  tags: ["wallet", "payment", "usdc", "usdg", "robinhood-chain", "send", "execution"],
+  aliases: ["send_usdc", "send_usdg", "wallet send", "send payment"],
   mcp: { expose: true, compact: true, toolName: "send_usdc" },
   confirmation: {
     token: "SEND_USDC",
     reason:
-      "USDC sends move funds and must pass the wallet route's spend policy and explicit confirmation gate.",
+      "Stablecoin sends move funds and must pass the wallet route's spend policy and explicit confirmation gate.",
     when: "always",
   },
   contextIndex: {
     summary:
-      "Critical governed USDC send execution route.",
+      "Critical governed stablecoin send execution route.",
     retrievalText:
-      "Use send_usdc only after a read-only prepare/review path and explicit SEND_USDC confirmation. The server route remains authoritative for spend policy, wallet selection, caps, recipient, amount, and execution.",
+      "Use send_usdc only after a read-only prepare/review path and explicit SEND_USDC confirmation. It sends USDC on Base/Solana and USDG on Robinhood Chain. The server route remains authoritative for spend policy, wallet selection, caps, recipient, amount, asset, network, and execution.",
     route: "/api/wallet/send",
     methods: ["POST"],
   },
@@ -830,7 +907,7 @@ export const hivemindosModelsWalletAction = defineHiveAction({
     summary:
       "Create or link the encrypted local wallet that funds wallet-paid HivemindOS Models usage.",
     retrievalText:
-      "Use POST /api/hivemindos/models/wallet during HivemindOS Models (wallet-paid LLM) setup. action create generates a wallet (default Base eip155:8453; also eip155:84532, solana:mainnet, solana:devnet), stores its secret in the encrypted local wallet vault, and records it in the wallet ledger as a Models funding source with conservative default caps (max $0.50 per payment, approval required over $2). action link designates an existing vault wallet by walletVaultId instead. It never sends funds or spends credits — spending stays behind the governed wallet execution routes.",
+      "Use POST /api/hivemindos/models/wallet during HivemindOS Models (wallet-paid LLM) setup. action create generates a wallet (default Base eip155:8453; also eip155:84532, eip155:4663 Robinhood Chain, solana:mainnet, solana:devnet), stores its secret in the encrypted local wallet vault, and records it in the wallet ledger as a Models funding source with conservative default caps (max $0.50 per payment, approval required over $2). action link designates an existing vault wallet by walletVaultId instead. It never sends funds or spends credits — spending stays behind the governed wallet execution routes.",
     route: "/api/hivemindos/models/wallet",
     methods: ["POST"],
   },
@@ -1592,6 +1669,7 @@ export const HIVE_ACTIONS = [
   cryptoCapabilitiesAction,
   reviewCryptoAction,
   prepareCryptoAction,
+  nansenIntelligenceAction,
   sendUsdcAction,
   b20IssuerProofAction,
   dexSwapAction,

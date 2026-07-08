@@ -135,6 +135,7 @@ export async function readMapsAgencyOutboxForCompany(ctx: MailReaderContext): Pr
     const latest = sorted[0];
     const sentRow = sorted.find((row) => row.external_send === true && row.status === "delivered");
     const isDelivered = Boolean(sentRow);
+    const sentAt = sentRow ? outboxRowTime(sentRow) : 0;
     if (isDelivered) delivered += 1;
     else queued += 1;
     const blocker = isDelivered ? "" : summarizeBlocker(latest.send_blockers);
@@ -159,6 +160,7 @@ export async function readMapsAgencyOutboxForCompany(ctx: MailReaderContext): Pr
       links: extractOutboxLinks(latest),
       attachments: [],
       updatedAt: outboxRowTime(latest),
+      ...(sentAt ? { sentAt } : {}),
       labels: isDelivered ? ["delivered"] : blocker ? ["queued", blocker] : ["queued"],
     });
   }

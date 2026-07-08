@@ -3,7 +3,7 @@
    paid-run (x402) flow so both build the SAME pickable list (the user's own
    wallets + configured agent wallets) from one source of truth.
 
-   Personal wallets are GROUPED by recovery-phrase seed (Base + Solana from one
+   Personal wallets are GROUPED by recovery-phrase seed (Base + Robinhood Chain + Solana from one
    seed → one card) via the shared grouping module, matching the Wallets screen.
    A grouped card carries its per-chain `accounts`; since a trade runs on one
    chain, selection resolves to a specific account id via resolvePickableAccount. */
@@ -149,7 +149,7 @@ export function agentPickable(agent: PickableAgent, walletsByAgent?: Record<stri
 // Networks executeX402Fetch will sign on (mirror of x402-agent-fetch.ts
 // supportedEvmNetworks + supportedSvmNetworks). A wallet on any other network
 // can't fund an x402 run.
-export const X402_SUPPORTED_NETWORKS = new Set(["eip155:8453", "eip155:84532", "solana:mainnet", "solana:devnet"]);
+export const X402_SUPPORTED_NETWORKS = new Set(["eip155:8453", "eip155:84532", "eip155:4663", "solana:mainnet", "solana:devnet"]);
 
 /**
  * Whether a wallet can FUND a paid x402 run: it must have an address, hold a
@@ -175,7 +175,7 @@ export function isX402CapableWallet(wallet: AgentWalletConfig): boolean {
 export function x402WalletBlockReason(wallet: AgentWalletConfig): string {
   if (!wallet.walletAddress?.trim?.()) return "This wallet has no address yet.";
   if (wallet.custodyMode !== "local") return "This is a watch-only wallet — it can't sign payments. Create or import a local wallet in the Wallets tab.";
-  if (!X402_SUPPORTED_NETWORKS.has(wallet.network)) return `x402 runs aren't supported on ${wallet.network}. Use a Base or Solana wallet.`;
+  if (!X402_SUPPORTED_NETWORKS.has(wallet.network)) return `x402 runs aren't supported on ${wallet.network}. Use a Base, Robinhood Chain, or Solana wallet.`;
   if (!wallet.enabled) return "Spending is turned off for this wallet. Enable Spend in the Wallets tab to use it for paid runs.";
   return "";
 }

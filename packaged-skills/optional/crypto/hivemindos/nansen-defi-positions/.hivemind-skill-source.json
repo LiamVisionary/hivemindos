@@ -1,0 +1,21 @@
+{
+  "upstreamName": "Nansen DeFi Positions",
+  "upstreamSlug": "nansen-defi-positions",
+  "hiveSlug": "nansen-defi-positions",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/crypto/hivemindos/nansen-defi-positions",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-08T12:30:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional crypto skills",
+  "sourcePath": "packaged-skills/optional/crypto/hivemindos/nansen-defi-positions",
+  "status": "optional",
+  "references": [
+    "https://docs.nansen.ai/guides/templates/simple-use-cases"
+  ],
+  "hivemindAdaptations": [
+    "Routes through HivemindOS Nansen intelligence instead of exposing provider keys.",
+    "Returns derived DeFi-position briefs rather than raw Nansen tables.",
+    "Preserves HivemindOS trade confirmation boundaries; the skill never executes trades."
+  ]
+}

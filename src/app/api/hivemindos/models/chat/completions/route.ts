@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   HIVEMINDOS_WALLET_PAID_MODELS_NAME,
+  hiveComputeRouteForHivemindosModel,
   isFreeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidModel,
   normalizeHivemindosWalletPaidSlug,
+  preferredHiveComputeModelForHivemindosModel,
   upstreamHivemindosWalletPaidModel,
 } from "@/lib/config/hivemindos-wallet-paid-models";
+import { proxyHiveComputeChatCompletion } from "@/lib/services/hive-compute-marketplace";
 import { freeTierDeviceId } from "@/lib/services/free-tier-identity";
 import { recordFreeModelAllowance } from "@/lib/services/hivemindos-free-allowance";
 import { resolvePooledHivemindosModelCreditToken } from "@/lib/services/hivemindos-model-credit-vault";
@@ -17,6 +20,7 @@ import { executeX402Fetch, type X402FetchPolicy } from "@/lib/services/wallet/x4
 import { loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
 
 const MODEL_CALL_TIMEOUT_MS = 600_000;
+const MODEL_STATUS_TIMEOUT_MS = 8_000;
 
 type OpenAIChatCompletionBody = {
   model?: string;
@@ -24,6 +28,45 @@ type OpenAIChatCompletionBody = {
   stream?: boolean;
   [key: string]: unknown;
 };
+
+export async function GET(request: NextRequest) {
+  const requestedModel = request.nextUrl.searchParams.get("model")
+    || request.headers.get("x-hivemindos-wallet-model")
+    || "";
+  const model = normalizeHivemindosWalletPaidModel(requestedModel);
+  if (!isFreeHivemindosWalletPaidModel(model)) {
+    return jsonError("Free model status is only available for Swarm Sovereign Scout.", 400);
+  }
+  const upstreamModel = upstreamHivemindosWalletPaidModel(model);
+  const target = freeModelChatCompletionsUrl(upstreamModel);
+  if (!target) {
+    return jsonError("The free HivemindOS model endpoint is not configured.", 424);
+  }
+  const deviceId = await freeTierDeviceId();
+  try {
+    const response = await fetch(target, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-HivemindOS-Free-Device": deviceId,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(MODEL_STATUS_TIMEOUT_MS),
+    });
+    const bodyPreview = await response.text();
+    const bodyJson = jsonFromText(bodyPreview);
+    const next = NextResponse.json(bodyJson ?? {
+      ok: response.ok,
+      model: { id: upstreamModel },
+      bodyPreview,
+    }, { status: response.status >= 400 && response.status < 600 ? response.status : 200 });
+    applyFreeModelHeaders(response, next);
+    return next;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The free HivemindOS model status check failed.";
+    return jsonError(message, 502);
+  }
+}
 
 export async function POST(request: NextRequest) {
   const agentId = request.headers.get("x-hivemindos-wallet-agent-id")?.trim() || "";
@@ -46,6 +89,19 @@ export async function POST(request: NextRequest) {
   // free-models surface, which is the authority on the daily allowance.
   if (isFreeHivemindosWalletPaidModel(model)) {
     return fetchFreeModelCompletion(body, upstreamModel, model);
+  }
+
+  const directHiveComputeModel = hiveComputeRouteForHivemindosModel(model);
+  if (directHiveComputeModel) {
+    const computeResponse = await fetchPreferredHiveComputeCompletion(body, directHiveComputeModel, model, request.signal);
+    if (computeResponse) return computeResponse;
+    return jsonError("Hive Compute is not available for that marketplace model right now.", 503);
+  }
+
+  const preferredHiveComputeModel = preferredHiveComputeModelForHivemindosModel(model);
+  if (preferredHiveComputeModel) {
+    const computeResponse = await fetchPreferredHiveComputeCompletion(body, preferredHiveComputeModel, model, request.signal);
+    if (computeResponse) return computeResponse;
   }
 
   // Credits are one shared pool per install; the caller's agent/wallet id is
@@ -117,6 +173,22 @@ export async function POST(request: NextRequest) {
       policy,
       confirmation: request.headers.get("x-hivemindos-wallet-confirmation")?.trim() || undefined,
       approvalToken: request.headers.get("x-hivemindos-wallet-approval-token")?.trim() || undefined,
+      approvalContext: {
+        headline: `Pay for one ${HIVEMINDOS_WALLET_PAID_MODELS_NAME} model call.`,
+        summary: "This pays the hosted HivemindOS Models endpoint for a single chat completion because no prepaid shared credit token is available.",
+        whyNow: "The request reached the wallet-paid path and the wallet governance policy requires review before spending.",
+        impact: "Approving lets this model call retry with x402 payment. Rejecting stops this paid completion and leaves the chat request unpaid.",
+        requestedAction: "Approve only if this specific model call should be paid from the local funding wallet.",
+        evidence: [
+          `Requested model: ${model}`,
+          `Upstream model: ${upstreamModel}`,
+          `Funding wallet: ${agentId}`,
+          `Endpoint: ${target.toString()}`,
+          `Prepaid credit token: not found`,
+        ],
+        missingContext: [],
+        source: "HivemindOS Models chat completion",
+      },
       timeoutMs: MODEL_CALL_TIMEOUT_MS,
     });
 
@@ -159,8 +231,19 @@ const FREE_ALLOWANCE_HEADERS = [
   "retry-after",
 ];
 
-function applyFreeAllowanceHeaders(upstream: Response, next: NextResponse) {
+const FREE_MODEL_CONTAINER_HEADERS = [
+  "x-hivemindos-free-model-container-state",
+  "x-hivemindos-free-model-warm-window-seconds",
+  "x-hivemindos-free-model-last-success-at",
+  "x-hivemindos-free-model-state-source",
+];
+
+function applyFreeModelHeaders(upstream: Response, next: NextResponse) {
   for (const name of FREE_ALLOWANCE_HEADERS) {
+    const value = upstream.headers.get(name);
+    if (value) next.headers.set(name, value);
+  }
+  for (const name of FREE_MODEL_CONTAINER_HEADERS) {
     const value = upstream.headers.get(name);
     if (value) next.headers.set(name, value);
   }
@@ -213,7 +296,7 @@ async function fetchFreeModelCompletion(
         paid: "free",
         amountUsd: 0,
       }, { status: response.status >= 400 && response.status < 600 ? response.status : 502 });
-      applyFreeAllowanceHeaders(response, next);
+      applyFreeModelHeaders(response, next);
       return next;
     }
 
@@ -226,7 +309,7 @@ async function fetchFreeModelCompletion(
         "X-HivemindOS-Wallet-Paid-Amount-Usd": "0",
       },
     });
-    applyFreeAllowanceHeaders(response, next);
+    applyFreeModelHeaders(response, next);
     return next;
   } catch (error) {
     const message = error instanceof Error ? error.message : "The free HivemindOS model request failed.";
@@ -287,6 +370,47 @@ async function fetchWithHostedCredits(
   } catch (error) {
     const message = error instanceof Error ? error.message : "HivemindOS Models hosted-credit request failed.";
     return jsonError(message, errorStatusFor(message));
+  }
+}
+
+async function fetchPreferredHiveComputeCompletion(
+  body: OpenAIChatCompletionBody,
+  hiveComputeModel: string,
+  publicModel: string,
+  signal: AbortSignal,
+) {
+  try {
+    const response = await proxyHiveComputeChatCompletion({
+      ...body,
+      model: hiveComputeModel,
+      stream: false,
+    }, signal);
+    if (!response.ok) return null;
+    const bodyPreview = await response.text();
+    const bodyJson = jsonFromText(bodyPreview);
+    const payload = openAiCompletionPayload(bodyJson, bodyPreview, publicModel);
+    const amountUsd = response.headers.get("x-hivemindos-compute-price-usd") || "0";
+    const next = NextResponse.json(payload, {
+      status: 200,
+      headers: {
+        "X-HivemindOS-Wallet-Paid": "hive-compute",
+        "X-HivemindOS-Wallet-Paid-Network": "hosted",
+        "X-HivemindOS-Wallet-Paid-Amount-Usd": amountUsd,
+        "X-HivemindOS-Model-Route": "hive-compute",
+      },
+    });
+    for (const name of [
+      "x-request-id",
+      "x-hivemindos-compute-job-id",
+      "x-hivemindos-compute-worker",
+      "x-hivemindos-compute-price-usd",
+    ]) {
+      const value = response.headers.get(name);
+      if (value) next.headers.set(name, value);
+    }
+    return next;
+  } catch {
+    return null;
   }
 }
 

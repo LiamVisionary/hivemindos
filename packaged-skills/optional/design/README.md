@@ -1,12 +1,14 @@
 # Design Optional Skills
 
-Optional UI and design-engineering skills imported from the UI Skills directory.
+Optional UI and design-engineering skills imported from curated external design-skill sources.
 
 - Source directory: https://www.ui-skills.com/skills/
+- Additional source: https://github.com/MengTo/Skills
 - Install behavior: optional packaged skills only; setup must not auto-install this folder.
 - Layout: `design/<source>/<skill>/SKILL.md` preserves upstream source namespaces and avoids duplicate slug collisions.
 
-Imported skills: 109
+UI Skills directory import: 109 skills.
+MengTo/Skills import: 73 MIT-licensed skills under `design/mengto/`, covering Codex workflows, asset sourcing, design-first UI prompting, page conversion patterns, motion systems, WebGL/canvas/3D effects, CSS treatments, layout systems, and visual style recipes.
 
 | Skill | Source | HivemindOS slug |
 | --- | --- | --- |

@@ -15,200 +15,6 @@ import { buildReplicationTargets, triggerScheduleReplication } from "@/features/
 
 export function useSchedulerController(props: any) {
   const { RUNTIME_LABELS, SCHEDULER_DYNAMIC_SKILL_ACTIONS_ENABLED, SCHEDULER_HERMES_SKILL_CONTEXT_ENABLED, SCHEDULER_MODEL_OPTIONS, SCHEDULER_RUN_STALE_MS, agents, appVersion, appendMessage, chatSetupIssue, createDefaultAgentWallet, displayAgents, displayMachineName, editingScheduleId, formatRelativeTime, honeyLedgerEnabled, logClientTelemetry, machineGroups, refreshHoneyLedger, scheduleDraft, schedules, selectedAgent, setEditingScheduleId, setMessagesByAgent, setScheduleDraft, setScheduleImportStatus, setScheduleImporting, setSchedulerAttachMenu, setSchedulerDraftOpen, setSchedulerPathDraft, setSchedulerPathKind, setSchedulerRunStates, setSchedulerSelectedStep, setSchedulerSkillSearch, setSchedules, sharedVault, updateTask, upsertTask, walletsByAgent } = props;
-  function toggleScheduleSkill(slug: string) {
-    setScheduleDraft((current) => ({
-      ...current,
-      skills: current.skills.includes(slug)
-        ? current.skills.filter((item) => item !== slug)
-        : [...current.skills, slug],
-    }));
-  }
-
-  function toggleSchedulerStepMode(mode: "prompt" | "steps") {
-    setSchedulerAttachMenu(null);
-    setScheduleDraft((current) => {
-      if (current.mode === mode) return current;
-      if (mode === "steps") {
-        const stepLines = current.prompt.split("\n").map((line) => line.replace(/^\d+\.\s*/, "").trim()).filter(Boolean);
-        return {
-          ...current,
-          mode,
-          steps: stepLines.length
-            ? stepLines.map((text, index) => ({
-              id: `draft-step-${Date.now()}-${index}`,
-              text,
-              skills: [],
-              paths: [],
-              model: "",
-            }))
-            : current.steps.length ? current.steps : [{ id: `draft-step-${Date.now()}-0`, text: "", skills: [], paths: [], model: "" }],
-        };
-      }
-      const prompt = current.steps
-        .filter((step) => step.text.trim())
-        .map((step, index) => `${index + 1}. ${step.text.trim()}`)
-        .join("\n");
-      return { ...current, mode, prompt: prompt || current.prompt };
-    });
-    setSchedulerSelectedStep(0);
-  }
-
-  function updateSchedulerStep(index: number, patch: Partial<SchedulerStep>) {
-    setScheduleDraft((current) => ({
-      ...current,
-      steps: current.steps.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step),
-    }));
-  }
-
-  function addSchedulerStep() {
-    setScheduleDraft((current) => {
-      const nextIndex = current.steps.length;
-      setSchedulerSelectedStep(nextIndex);
-      setSchedulerAttachMenu(null);
-      return {
-        ...current,
-        steps: [...current.steps, { id: `draft-step-${Date.now()}-${nextIndex}`, text: "", skills: [], paths: [], model: "" }],
-      };
-    });
-  }
-
-  function removeSchedulerStep(index: number) {
-    setScheduleDraft((current) => {
-      const steps = current.steps.length <= 1
-        ? [{ id: `draft-step-${Date.now()}-0`, text: "", skills: [], paths: [], model: "" }]
-        : current.steps.filter((_, stepIndex) => stepIndex !== index);
-      setSchedulerSelectedStep((selected) => Math.max(0, Math.min(steps.length - 1, selected > index ? selected - 1 : selected)));
-      setSchedulerAttachMenu(null);
-      return { ...current, steps };
-    });
-  }
-
-  function addSchedulerStepPath(index: number, path: string) {
-    const cleaned = path.trim().replace(/\/+$/, "");
-    if (!cleaned) return;
-    setScheduleDraft((current) => ({
-      ...current,
-      steps: current.steps.map((step, stepIndex) => (
-        stepIndex === index && !step.paths.includes(cleaned)
-          ? { ...step, paths: [...step.paths, cleaned] }
-          : step
-      )),
-    }));
-  }
-
-  function removeSchedulerStepPath(index: number, path: string) {
-    setScheduleDraft((current) => ({
-      ...current,
-      steps: current.steps.map((step, stepIndex) => (
-        stepIndex === index ? { ...step, paths: step.paths.filter((item) => item !== path) } : step
-      )),
-    }));
-  }
-
-  function toggleSchedulerStepSkill(index: number, slug: string) {
-    setScheduleDraft((current) => ({
-      ...current,
-      steps: current.steps.map((step, stepIndex) => (
-        stepIndex === index
-          ? {
-            ...step,
-            skills: step.skills.includes(slug)
-              ? step.skills.filter((item) => item !== slug)
-              : [...step.skills, slug],
-          }
-          : step
-      )),
-    }));
-  }
-
-  function updateSchedulerStepModel(index: number, model: string) {
-    updateSchedulerStep(index, { model });
-  }
-
-  function isSchedulerFilePath(path: string) {
-    return /\.[a-zA-Z0-9]+$/.test(path.split("/").pop() ?? "");
-  }
-
-  async function pickSchedulerFolder(stepIndex?: number) {
-    type PickerWindow = Window & typeof globalThis & {
-      showDirectoryPicker?: () => Promise<{ name?: string }>;
-    };
-    const picker = (window as PickerWindow).showDirectoryPicker;
-    if (!picker) {
-      setSchedulerPathKind("folder");
-      setSchedulerPathDraft("");
-      setSchedulerAttachMenu("path");
-      return;
-    }
-    try {
-      const handle = await picker();
-      const name = handle.name?.trim();
-      if (!name) return;
-      if (typeof stepIndex === "number") addSchedulerStepPath(stepIndex, name);
-      else addSchedulePath(name);
-      setSchedulerAttachMenu(null);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      setSchedulerPathKind("folder");
-      setSchedulerPathDraft("");
-      setSchedulerAttachMenu("path");
-    }
-  }
-
-  async function pickSchedulerFiles(stepIndex?: number) {
-    type FileHandle = { name?: string; getFile?: () => Promise<File> };
-    type PickerWindow = Window & typeof globalThis & {
-      showOpenFilePicker?: (options?: { multiple?: boolean }) => Promise<FileHandle[]>;
-    };
-    const picker = (window as PickerWindow).showOpenFilePicker;
-    if (!picker) {
-      setSchedulerPathKind("file");
-      setSchedulerPathDraft("");
-      setSchedulerAttachMenu("path");
-      return;
-    }
-    try {
-      const handles = await picker({ multiple: true });
-      const names = await Promise.all(handles.map(async (handle) => {
-        if (handle.name?.trim()) return handle.name.trim();
-        const file = await handle.getFile?.();
-        return file?.name?.trim() ?? "";
-      }));
-      for (const name of names.filter(Boolean)) {
-        if (typeof stepIndex === "number") addSchedulerStepPath(stepIndex, name);
-        else addSchedulePath(name);
-      }
-      setSchedulerAttachMenu(null);
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      setSchedulerPathKind("file");
-      setSchedulerPathDraft("");
-      setSchedulerAttachMenu("path");
-    }
-  }
-
-  function addSchedulePath(path: string) {
-    const cleaned = path.trim();
-    if (!cleaned) return;
-    setScheduleDraft((current) => ({
-      ...current,
-      paths: current.paths.includes(cleaned) ? current.paths : [...current.paths, cleaned],
-    }));
-  }
-
-  function removeSchedulePath(path: string) {
-    setScheduleDraft((current) => ({
-      ...current,
-      paths: current.paths.filter((item) => item !== path),
-    }));
-  }
-
-  function removeScheduleSkill(slug: string) {
-    setScheduleDraft((current) => ({
-      ...current,
-      skills: current.skills.filter((item) => item !== slug),
-    }));
-  }
 
   function aeonCronFromEvery(every: string) {
     const cleaned = every.trim();
@@ -258,7 +64,9 @@ export function useSchedulerController(props: any) {
     setScheduleDraft({
       name: "",
       agentId,
-      every: "360m",
+      // A clean interval preset — NOT "360m", which fell through modalCadenceFromEvery
+      // to a raw "Custom cron" pill pre-filled with an invalid 5-field expression.
+      every: "1h",
       mode: "prompt",
       prompt: "",
       model: "",
@@ -308,69 +116,76 @@ export function useSchedulerController(props: any) {
     setSchedulerDraftOpen(true);
   }
 
-  async function createSchedule(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const agent = displayAgents.find((item) => item.id === scheduleDraft.agentId) ?? selectedAgent;
-    if (!agent) return;
-    const now = Date.now();
-    const schedulerFeature = runtimeSchedulerFeature(agent.runtime);
-    const externalRuntime = schedulerFeature.kind === "external-runtime" ? schedulerFeature.externalSource : undefined;
-    const steps = scheduleDraft.mode === "steps"
-      ? scheduleDraft.steps.filter((step) => step.text.trim())
-      : [];
-    const prompt = scheduleDraft.mode === "steps"
-      ? steps.map((step, index) => `${index + 1}. ${step.text.trim()}`).join("\n")
-      : scheduleDraft.prompt.trim();
-    const editedSchedule = editingScheduleId ? schedules.find((schedule) => schedule.id === editingScheduleId) : null;
-    const next: AgentSchedule = {
-      id: editedSchedule?.id ?? `schedule-${now}-${Math.random().toString(36).slice(2, 7)}`,
-      name: scheduleDraft.name.trim() || `Run ${agent.name}`,
-      agentId: agent.id,
-      enabled: editedSchedule?.enabled ?? true,
-      every: scheduleDraft.every.trim() || "360m",
-      mode: scheduleDraft.mode,
-      prompt,
-      model: scheduleDraft.model,
-      skills: scheduleDraft.skills,
-      paths: scheduleDraft.paths,
-      steps: steps.map((step, index) => ({
-        ...step,
-        id: `step-${now}-${index}`,
-        text: step.text.trim(),
-      })),
-      createdAt: editedSchedule?.createdAt ?? now,
-      updatedAt: now,
-      lastRunAt: editedSchedule?.lastRunAt,
-      nextRunAt: editedSchedule?.nextRunAt,
-      externalSource: externalRuntime ?? editedSchedule?.externalSource,
-      externalJobId: externalRuntime ? (scheduleDraft.skills[0] || editedSchedule?.externalJobId) : editedSchedule?.externalJobId,
-      lastStatus: editedSchedule?.lastStatus,
-      lastSummary: editedSchedule?.lastSummary,
-      usePastRuns: scheduleDraft.usePastRuns,
-      pastRunLimit: Math.max(1, Math.min(12, Number(scheduleDraft.pastRunLimit) || 3)),
-      sharedSchedulePath: editedSchedule?.sharedSchedulePath,
-      sharedRunFolder: editedSchedule?.sharedRunFolder,
-      runOnAllMachines: scheduleDraft.runOnAllMachines === true,
-    };
-    if (externalRuntime === "aeon") {
-      const configured = await configureAeonSchedule(agent, next);
-      if (!configured) return;
-      next.externalSource = "aeon";
-      next.externalJobId = configured.skill;
-      next.every = configured.cron;
-      next.lastSummary = `Configured AEON automation for ${configured.skill}.`;
+  async function removeSchedule(id: string) {
+    const index = schedules.findIndex((item) => item.id === id);
+    if (index === -1) return;
+    const schedule = schedules[index];
+    // Optimistically drop it locally so the UI feels instant.
+    setSchedules((current) => current.filter((item) => item.id !== id));
+    // External-runtime schedules keep firing on their own runtime, so best-effort
+    // disable the cron before we forget about it (there is no runtime "delete").
+    if (schedule.externalSource && schedule.externalJobId) {
+      void fetch("/api/scheduler/runtime-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          runtime: schedule.externalSource,
+          action: "disable",
+          jobId: schedule.externalJobId,
+          agent: displayAgents.find((item) => item.id === schedule.agentId),
+        }),
+      }).catch(() => null);
     }
-    setSchedules((current) => editedSchedule
-      ? current.map((schedule) => schedule.id === editedSchedule.id ? next : schedule)
-      : [next, ...current]);
-    void upsertSharedSchedule(next);
-    if (next.runOnAllMachines || editedSchedule?.runOnAllMachines) void triggerScheduleReplication(next, buildReplicationTargets(machineGroups), schedulerMachineIdForAgent(agent));
-    resetScheduleDraft(agent.id);
-    setSchedulerDraftOpen(false);
+    // Delete the shared-vault mirror so it does NOT resurrect on the next sync
+    // (the previous local-only delete was undone by refreshSharedSchedulesFromVault).
+    // Await it: on a failed/`ok:false` delete the vault file survives and would
+    // re-add the schedule on the next refresh, so roll the row back and report.
+    if (sharedVault.enabled) {
+      const response = await fetch("/api/scheduler/shared", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete-schedule",
+          vaultPath: sharedVault.vaultPath,
+          scheduledFolder: sharedVault.scheduledFolder,
+          schedule: schedulerSharedSnapshot(schedule),
+        }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) {
+        setSchedules((current) => current.some((item) => item.id === id)
+          ? current
+          : [...current.slice(0, index), schedule, ...current.slice(index)]);
+        setScheduleImportStatus(data?.error ?? "Could not delete that automation from the shared vault. It was restored.");
+      }
+    }
   }
 
-  function removeSchedule(id: string) {
-    setSchedules((current) => current.filter((schedule) => schedule.id !== id));
+  // Clone an existing automation as a paused starting point ("… (copy)"). A fresh
+  // id keeps it a distinct vault entry, and it is never external (a copy shouldn't
+  // hijack the original's runtime cron job).
+  function duplicateSchedule(id: string) {
+    const source = schedules.find((item) => item.id === id);
+    if (!source) return;
+    const now = Date.now();
+    const copy: AgentSchedule = {
+      ...source,
+      id: `schedule-${now}-${Math.random().toString(36).slice(2, 7)}`,
+      name: `${source.name} (copy)`,
+      enabled: false,
+      externalSource: undefined,
+      externalJobId: undefined,
+      createdAt: now,
+      updatedAt: now,
+      lastRunAt: undefined,
+      lastStatus: undefined,
+      lastSummary: undefined,
+      nextRunAt: undefined,
+      sharedSchedulePath: undefined,
+      sharedRunFolder: undefined,
+    };
+    setSchedules((current) => [copy, ...current]);
+    void upsertSharedSchedule(copy);
   }
 
   async function importExistingSchedules(options: { quiet?: boolean } = {}) {
@@ -529,6 +344,11 @@ export function useSchedulerController(props: any) {
       runOnAllMachines: schedule.runOnAllMachines === true,
       usePastRuns: schedule.usePastRuns === true,
       pastRunLimit: Math.max(1, Math.min(12, Number(schedule.pastRunLimit) || 3)),
+      // Carry the real stored vault path so delete-schedule can target the exact
+      // directory even for cross-machine/offline-owner schedules whose machine
+      // segment can't be re-derived from displayAgents.
+      sharedSchedulePath: schedule.sharedSchedulePath ?? null,
+      sharedRunFolder: schedule.sharedRunFolder ?? null,
     };
   }
 
@@ -606,6 +426,52 @@ export function useSchedulerController(props: any) {
         run.content.slice(0, 6000),
       ].join("\n")),
     ].join("\n\n");
+  }
+
+  // Real, structured run history for the detail drawer — the actual archived runs
+  // from the shared vault, not the single synthetic entry schedulerJobs fabricates.
+  // Unlike fetchPastRunContext (which gates on usePastRuns and returns prompt text),
+  // this always reads and parses the run frontmatter for status/time/summary.
+  async function fetchScheduleHistory(schedule: AgentSchedule, limit = 8): Promise<SchedulerRunHistoryEntry[]> {
+    if (!sharedVault.enabled) return [];
+    const response = await fetch("/api/scheduler/shared", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "past-runs",
+        vaultPath: sharedVault.vaultPath,
+        scheduledFolder: sharedVault.scheduledFolder,
+        schedule: schedulerSharedSnapshot(schedule),
+        limit: Math.max(1, Math.min(12, Number(limit) || 8)),
+      }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null) as { ok?: boolean; runs?: Array<{ path: string; name: string; content: string }> } | null;
+    if (!response?.ok || !data?.ok || !data.runs?.length) return [];
+    const frontmatterValue = (content: string, key: string) =>
+      content.match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
+    // Run notes are written as a "## Output" heading on its own line, then a
+    // fenced block (recordScheduledRun -> fenced()). Anchor on the heading —
+    // matching the bare fence line for "Output" fails (the word is never on the
+    // fence line) and used to capture the literal "## Output" marker text.
+    const fencedOutput = (content: string) =>
+      content.match(/##\s*Output\s+```[^\n]*\n([\s\S]*?)```/i)?.[1]?.trim() ?? "";
+    return data.runs.map((run) => {
+      const rawStatus = frontmatterValue(run.content, "status").toLowerCase();
+      const status: RunStatus = rawStatus === "ok" || rawStatus === "warn" || rawStatus === "failed" || rawStatus === "stale"
+        ? (rawStatus as RunStatus)
+        : "idle";
+      const completedAt = frontmatterValue(run.content, "completedAt") || frontmatterValue(run.content, "startedAt");
+      const runNumber = Number(frontmatterValue(run.content, "runNumber")) || undefined;
+      const summarySource = fencedOutput(run.content) || frontmatterValue(run.content, "scheduleName");
+      return {
+        id: run.path,
+        runNumber,
+        status,
+        at: completedAt || null,
+        atLabel: completedAt ? formatRelativeTime(Date.parse(completedAt)) : "unknown time",
+        summary: summarySource ? summarySource.replace(/\s+/g, " ").slice(0, 200) : "",
+      };
+    });
   }
 
   function scheduleFromSharedSnapshot(snapshot: Record<string, unknown>): AgentSchedule | null {
@@ -1356,6 +1222,21 @@ export function useSchedulerController(props: any) {
         ...(schedule.skills.slice(0, 2)),
         ...(schedule.paths.length ? ["paths"] : []),
       ],
+      // External runtimes (Hermes/Aeon) own a real cron; dashboard-only schedules
+      // don't, so the UI labels them honestly instead of implying autonomy.
+      external: Boolean(schedule.externalSource),
+      externalRuntimeLabel: schedule.externalSource
+        ? RUNTIME_LABELS[schedule.externalSource as AgentRuntime] ?? String(schedule.externalSource)
+        : undefined,
+      // Only a runtime-provided nextRunAt is an authoritative countdown. The
+      // interval-from-anchor fallback above is phase-guessed and won't match a
+      // wall-clock cron, so the UI must not present it as "next in X".
+      nextRunKnown: Boolean(schedule.nextRunAt && schedule.nextRunAt > Date.now()),
+      // Sort key: ms until next run, but ONLY for schedules that actually have an
+      // upcoming run to order by — i.e. an external runtime owns the cron. This
+      // matches the row's "next in X" / "scheduled" display; dashboard-only ("on
+      // demand") and paused rows get null and sink to the bottom of the sort.
+      nextRunMs: schedule.enabled && schedule.externalSource ? (remaining ?? null) : null,
     };
   }), [displayAgents, scheduleIntervalMs, schedules, schedulerCadenceLabel, schedulerStatusFromSchedule]);
 
@@ -1496,5 +1377,5 @@ export function useSchedulerController(props: any) {
     return response?.ok && data?.path ? data.path : null;
   }, [scheduleDraft.paths, sharedVault.vaultPath]);
 
-  return { toggleScheduleSkill, toggleSchedulerStepMode, updateSchedulerStep, addSchedulerStep, removeSchedulerStep, addSchedulerStepPath, removeSchedulerStepPath, toggleSchedulerStepSkill, updateSchedulerStepModel, isSchedulerFilePath, pickSchedulerFolder, pickSchedulerFiles, addSchedulePath, removeSchedulePath, removeScheduleSkill, resetScheduleDraft, editSchedule, createSchedule, removeSchedule, importExistingSchedules, normalizeImportedScheduleEvery, toggleSchedule, schedulerPlainPrompt, schedulerSharedSnapshot, upsertSharedSchedule, upsertSharedSchedules, fetchPastRunContext, scheduleFromSharedSnapshot, mergeSharedSchedules, refreshSharedSchedulesFromVault, recordSharedScheduledRun, runScheduleNow, schedulerStatusFromSchedule, scheduleIntervalMs, formatSchedulerDuration, schedulerCadenceLabel, schedulerJobs, findScheduleForJob, modalCadenceFromEvery, everyFromModalCadence, schedulerModalInitial, saveScheduleFromModal, browseSchedulerFolder };
+  return { resetScheduleDraft, editSchedule, removeSchedule, duplicateSchedule, importExistingSchedules, normalizeImportedScheduleEvery, toggleSchedule, schedulerPlainPrompt, schedulerSharedSnapshot, upsertSharedSchedule, upsertSharedSchedules, fetchPastRunContext, fetchScheduleHistory, scheduleFromSharedSnapshot, mergeSharedSchedules, refreshSharedSchedulesFromVault, recordSharedScheduledRun, runScheduleNow, schedulerStatusFromSchedule, scheduleIntervalMs, formatSchedulerDuration, schedulerCadenceLabel, schedulerJobs, findScheduleForJob, modalCadenceFromEvery, everyFromModalCadence, schedulerModalInitial, saveScheduleFromModal, browseSchedulerFolder };
 }

@@ -17,6 +17,11 @@ The public app may call official HivemindOS endpoints for:
   a global daily budget — and reports remaining allowance via
   `X-HivemindOS-Free-Remaining-Requests` / `-Tokens` / `-Reset-At` headers and
   `429` + `Retry-After` when exhausted.
+- Hive Compute marketplace routing and worker enrollment through a hosted or
+  self-hosted compatible gateway. The public app may install a local worker
+  module and forward OpenAI-compatible chat bodies, but official matching,
+  payout, receipt, quota, entitlement, fraud-control, and platform-fee
+  authority stays hosted.
 - Official platform-fee and Hyperliquid builder-code policy.
 - Production health-report collection for official builds.
 

@@ -22,6 +22,7 @@ function functionBody(content, name) {
 
 const tauriDev = source("scripts/tauri-next-dev.mjs");
 const devExitBody = functionBody(tauriDev, "handleDevServerExit");
+const proxyTimeoutBody = functionBody(tauriDev, "proxyTimeoutForRequest");
 const stopBody = functionBody(tauriDev, "stopChildren");
 const brainGraphRefresh = source("src/features/dashboard/hooks/brain-graph-refresh.ts");
 
@@ -53,6 +54,12 @@ assert.match(
   tauriDev,
   /var routeLoadingTimeoutMs = 30000;/,
   "Tauri dev route loading recovery should not hard-reload during ordinary cold route compilation.",
+);
+
+assert.match(
+  proxyTimeoutBody,
+  /clientRequest\.url\?\.startsWith\("\/api\/queen-bee\/chat"\)[\s\S]*return 130_000;/,
+  "Queen Bee text chat should use a route name and timeout budget distinct from the legacy voice endpoint.",
 );
 
 const nativeInvoke = source("src/lib/native/invoke.ts");

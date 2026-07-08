@@ -114,6 +114,7 @@ export type KanbanTaskAttachment = {
   size: number;
   dataUrl: string;
   referencePath?: string;
+  referenceKind?: "file" | "directory";
   referenceOnly?: boolean;
   lastModified?: number;
 };

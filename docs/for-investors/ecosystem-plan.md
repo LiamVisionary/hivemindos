@@ -105,11 +105,17 @@ Current default examples:
 
 The revenue HivemindOS collects is the retail credit debit. The margin is the retail debit minus upstream X/API cost, before ordinary hosting, payment-processing, and operations costs.
 
+### Managed UsePod Inference Brokerage
+
+HivemindOS can broker UsePod demand through hosted infrastructure when users want UsePod routing without managing a UsePod payer token locally. The hosted gateway holds the UsePod token server-side, reserves the user's hosted HivemindOS credits before each request, forwards the original streaming request to UsePod, and reconciles the charge after the upstream stream finishes.
+
+The current default policy debits upstream UsePod spend plus a **5% HivemindOS platform fee**, then refunds any unused reservation. This fee is buyer-side managed-service margin. It does not change UsePod's own hoster earnings model or pretend the downloadable app can enforce official platform revenue locally.
+
 ### Trading & On-Chain Fees
 
 HivemindOS earns a usage fee on supported on-chain and trading actions taken from a user's acting wallet:
 
-- A platform fee of **1% with a $0.01 minimum** on local USDC sends, DEX swaps, xStocks trades, live Alpaca stock orders, public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC transfer after the action succeeds.
+- A platform fee of **1% with a $0.01 minimum** on local stablecoin sends, DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca stock orders, ordinary public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC or USDG transfer after the action succeeds. HivemindOS-hosted MiroShark proxy runs are excluded because their **$1.20 USDC** retail price already includes the intended **$0.20** HivemindOS cut.
 - A Hyperliquid builder fee of 0.5 bps (0.005%) on eligible filled local Hyperliquid orders, approved separately by the user.
 - A Zero Human Company revenue share of **2% with a $0.01 minimum** on recorded company revenue events, net of refunds and chargebacks when the settlement route knows them. The local app can record the event and collect the share from a selected company agent wallet, while official marketplace or hosted-company revenue should be enforced by HivemindOS-controlled billing infrastructure or a verifiable payment rail.
 
@@ -119,8 +125,10 @@ Current examples:
 
 | Activity | User volume | HivemindOS revenue |
 | --- | ---: | ---: |
-| Wallet send, swap, live stock, xStock, paid API, or private payment | `$100` | `$1.00` |
-| Wallet send, swap, live stock, xStock, paid API, or private payment | `$0.25` | `$0.01` minimum |
+| Wallet send, swap, live stock, tokenized stock, paid API, or private payment | `$100` | `$1.00` |
+| Wallet send, swap, live stock, tokenized stock, paid API, or private payment | `$0.25` | `$0.01` minimum |
+| MiroShark hosted x402 simulation | `$1.20` | `$0.20` gross proxy spread |
+| Managed UsePod inference | `$1.00` upstream UsePod spend | `$0.05` gross hosted platform fee |
 | Recorded Zero Human Company revenue | `$500` | `$10.00` |
 | Hyperliquid eligible fill | `$10,000` | `$0.50` |
 

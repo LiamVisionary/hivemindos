@@ -277,7 +277,7 @@ function chatMessagesForB20(messages: IncomingMessage[]) {
   return messages.map((message) => ({ role: message.role, content: messageText(message) }));
 }
 
-// ---- Plain USDC send rail (/api/wallet/send, incl. personal wallets) --------
+// ---- Plain stablecoin send rail (/api/wallet/send, incl. personal wallets) --
 
 function agentWalletFallback(profile: AgentProfile, wallet?: AgentWalletConfig) {
   return wallet?.walletAddress
@@ -340,8 +340,8 @@ export async function maybePrepareNaturalSend(input: {
   const explicitSource = Boolean(parsed.source.address || parsed.source.personal || parsed.source.chain);
   if (input.actingWalletSource?.kind === "bankr" && !explicitSource) return null;
 
-  // USDC to a 0x recipient must come from an EVM wallet. With no explicit "from",
-  // default to the user's acting wallet, else this agent's own wallet.
+  // Stablecoin sends to a 0x recipient must come from an EVM wallet. With no
+  // explicit "from", default to the user's acting wallet, else this agent's own wallet.
   const fallback = actingWalletFallback(input.actingWalletSource) ?? agentWalletFallback(input.profile, input.wallet);
   const resolved = await resolveWalletSource(parsed.source, fallback, "evm");
   const error = "error" in resolved ? resolved.error : "";
@@ -391,7 +391,7 @@ export async function maybeExecuteConfirmedSend(input: {
     ? [
         "**Send complete**",
         "",
-        `Sent **$${draft.amountUsd.toFixed(2)} USDC** on **${networkChainLabel(resolved.network)}**`,
+        `Sent **$${draft.amountUsd.toFixed(2)} ${result.assetSymbol}** on **${networkChainLabel(resolved.network)}**`,
         `To \`${draft.recipient}\``,
         `From \`${resolved.address}\`${resolved.isPersonal ? " (personal)" : ""}`,
         `Tx \`${result.signature}\``,
@@ -411,7 +411,7 @@ export async function maybeExecuteConfirmedSend(input: {
   return privateTransferSse(message);
 }
 
-// ---- Local DEX swap rail (0x on Base / Jupiter on Solana) -------------------
+// ---- Local DEX swap rail (0x on Base/Robinhood Chain, Jupiter on Solana) ----
 
 function findSwapDraft(messages: IncomingMessage[]) {
   for (let index = messages.length - 2; index >= 0; index -= 1) {
@@ -526,7 +526,7 @@ export async function maybeExecuteConfirmedSwap(input: {
     ok = true;
     const fee = result.platformFee;
     const feeLine = fee && fee.amountUsd > 0
-      ? `**Fee** ${fee.amountUsd.toFixed(2)} USDC${fee.signature ? ` · [receipt](${txExplorerUrl(result.network, fee.signature)})` : ""}`
+      ? `**Fee** ${fee.amountUsd.toFixed(2)} ${fee.assetSymbol}${fee.signature ? ` · [receipt](${txExplorerUrl(result.network, fee.signature)})` : ""}`
       : "";
     message = [
       "**Swap complete**",
@@ -845,7 +845,9 @@ function shortHex(value: string, head = 6, tail = 6) {
 
 // Block explorer for a tx, by network family (Solana vs EVM/Base default).
 function txExplorerUrl(network: string, hash: string) {
-  return /sol/i.test(network) ? `https://solscan.io/tx/${hash}` : baseScanTxUrl(hash);
+  if (/sol/i.test(network)) return `https://solscan.io/tx/${hash}`;
+  if (network === "eip155:4663") return `https://robinhoodchain.blockscout.com/tx/${hash}`;
+  return baseScanTxUrl(hash);
 }
 
 // Trim trailing-zero noise from a fixed-precision amount: 0.000635500 -> 0.0006355.

@@ -1,4 +1,4 @@
-import { localCollectorPort, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
+import { isFleetCollectorUrl, localCollectorPort, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +17,14 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as StateSyncBody;
   const targetRaw = body.collectorUrl?.trim() || `http://127.0.0.1:${await localCollectorPort()}`;
   const base = normalizeCollectorUrl(targetRaw);
+  // SSRF guard: the sync loop may only be toggled on a fleet collector (the
+  // local one, or a same-owner Tailscale peer), never an arbitrary host.
+  if (!isFleetCollectorUrl(base)) {
+    return Response.json(
+      { ok: false, error: "Refusing to configure runtime sync on a collector outside the fleet host set.", target: base },
+      { status: 400 },
+    );
+  }
   try {
     const res = await fetch(`${base}/runtimes/state-sync`, {
       method: "POST",

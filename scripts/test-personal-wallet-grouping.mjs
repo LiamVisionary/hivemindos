@@ -84,6 +84,42 @@ const mergedRich = mergedCards.find((wallet) => wallet.id === "user:rich");
 assert.ok(mergedRich, "Dashboard wallet state should enrich stale signer-only personal rows.");
 assert.equal(JSON.stringify(mergedRich.holdings), JSON.stringify([["ETH", 0.1979414256200372], ["SOL", 0.445883515]]));
 
+const namedAfterReloadCards = buildDropInPersonalWallets(mergePersonalWalletSources([{
+  id: "user:miro:eip155-8453",
+  agentId: "user:miro:eip155-8453",
+  name: "MiroShark payment Base",
+  address: "0x4444000000000000000000000000000000004444",
+  network: "eip155:8453",
+  custodyMode: "local",
+  importedFrom: "recovery-phrase",
+  updatedAt: 100,
+}, {
+  id: "user:miro:solana-mainnet",
+  agentId: "user:miro:solana-mainnet",
+  name: "MiroShark payment Solana",
+  address: "936oBc444444444444444444444444444444444ZSFu",
+  network: "solana:mainnet",
+  custodyMode: "local",
+  importedFrom: "recovery-phrase",
+  updatedAt: 100,
+}], {
+  "user:miro:eip155-8453": {
+    walletAddress: "0x4444000000000000000000000000000000004444",
+    network: "eip155:8453",
+    custodyMode: "local",
+    name: "My Base mainnet wallet",
+    updatedAt: 200,
+  },
+  "user:miro:solana-mainnet": {
+    walletAddress: "936oBc444444444444444444444444444444444ZSFu",
+    network: "solana:mainnet",
+    custodyMode: "local",
+    name: "My Solana mainnet wallet",
+    updatedAt: 200,
+  },
+}));
+assert.equal(namedAfterReloadCards[0]?.name, "MiroShark payment", "Generated reload names such as My Base mainnet wallet must not overwrite a custom wallet name.");
+
 const walletViewSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletsView.tsx"), "utf8");
 assert.match(walletViewSource, /setTimeout\(\(\) => setOpen\(true\), 200\)/);
 assert.match(walletViewSource, /title=\{multi \? "Hover for all chain addresses" : undefined\}/);
@@ -95,13 +131,34 @@ assert.match(walletViewSource, /overflowY: top\.length > 5 \? "auto"/);
 assert.match(walletViewSource, /onExportPersonalWallet\?: \(walletId: string, confirmation: string\)/);
 assert.match(walletViewSource, /WalletSecretExportSheet[\s\S]+onExportPersonalWallet\?\.\(w\.id, confirmation\)/);
 assert.match(walletViewSource, /<BIcon name="key" size=\{14\} \/> Export keys/);
+assert.match(walletViewSource, /onRefreshPersonalWallet\?: \(source: GroupedPersonalWallet\)/);
+assert.match(walletViewSource, /function SendToMyWalletModal/);
+assert.match(walletViewSource, /Send to my wallet/);
+assert.match(walletViewSource, /personalWalletTransferTargets\(w, sendSym\)\.targets/);
+assert.match(walletViewSource, /className="fw-split-menu"/);
+assert.match(walletViewSource, /actions\.onRefreshPersonalWallet\(w\)/);
 
 const walletPanelSource = readFileSync(join(root, "src/features/dashboard/views/WalletPanel.tsx"), "utf8");
 assert.match(walletPanelSource, /exportPersonalWalletGroupSecret/);
 assert.match(walletPanelSource, /buildGroupedPersonalWallets\(mergedPersonalWallets\)\.find\(\(wallet\) => wallet\.id === walletId \|\| wallet\.spendId === walletId\)/);
+assert.match(walletPanelSource, /onRefreshPersonalWallet: async \(source: any\) => refreshPersonalWalletSourceBalance\(source\)/);
+assert.match(walletPanelSource, /input\.recipient \? refreshPersonalWalletSourceBalance\(input\.recipient\) : undefined/);
+assert.match(walletPanelSource, /onRefreshBankrWallet: loadBankrWallet/);
 
 const walletExportActionsSource = readFileSync(join(root, "src/features/dashboard/views/wallet-secret-export-actions.ts"), "utf8");
 assert.match(walletExportActionsSource, /const localWallets = group\.accounts\.filter\(\(wallet\) => wallet\.custodyMode === "local"\)/);
 assert.match(walletExportActionsSource, /confirmation: options\.confirmation/);
+
+const walletNativeExportSource = readFileSync(join(root, "src-tauri/src/wallet_export.rs"), "utf8");
+assert.match(walletNativeExportSource, /async fn wallet_secret_export_save/);
+assert.match(walletNativeExportSource, /\.save_file\(move \|file_path\|/);
+assert.doesNotMatch(walletNativeExportSource, /blocking_save_file/);
+
+const nativePersonalWalletSource = readFileSync(join(root, "src/lib/native/personal-wallets.ts"), "utf8");
+const apiPersonalWalletSource = readFileSync(join(root, "src/app/api/wallet/personal/route.ts"), "utf8");
+const tauriObsidianSource = readFileSync(join(root, "src-tauri/src/obsidian.rs"), "utf8");
+assert.match(nativePersonalWalletSource, /base sepolia/);
+assert.match(apiPersonalWalletSource, /base sepolia/);
+assert.match(tauriObsidianSource, /base sepolia/);
 
 console.log("Personal wallet grouping tests passed.");

@@ -9,6 +9,7 @@ import hiveChatStyles from "@/features/dashboard/views/chat/HiveChatView.module.
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { collapseSameTurnGenerationMessages } from "@/features/dashboard/chat-generation-message-dedupe";
 import { createStyleClass } from "@/features/dashboard/style-classes";
+import { agentWakeStatusText, isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
 import {
   MODEL_SWITCHABLE_RUNTIMES,
   agentInitials,
@@ -26,6 +27,8 @@ import {
   titleCaseLabel,
 } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { mergeProcessEvents, normalizeProcessEvents, processEventsAreActive } from "@/features/dashboard/views/chat/AgentProcessPanel";
+import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { ConversationNav } from "./ConversationNav";
 import { ContextPanel } from "./ContextPanel";
 import { MessageThread } from "./MessageThread";
@@ -57,6 +60,12 @@ function makeMetricRows(selectedAgent: { name?: string } | null | undefined, run
 
 function asChatRows(rows?: any[]) {
   return Array.isArray(rows) ? rows : [];
+}
+
+function coldStartStatusText(events: any[], selectedAgent: any) {
+  return events.some((event) => isAgentColdStartProcessEvent(event))
+    ? agentWakeStatusText(selectedAgent)
+    : undefined;
 }
 
 export function ChatExchangePanel(props: any) {
@@ -158,6 +167,7 @@ export function ChatExchangePanel(props: any) {
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
+  const [permissionMode, setPermissionMode] = useState<ChatPermissionMode>("manual");
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const [agentMenuSearchQuery, setAgentMenuSearchQuery] = useState("");
   const [statusChecking, setStatusChecking] = useState(false);
@@ -208,6 +218,7 @@ export function ChatExchangePanel(props: any) {
       `${chatProcessScopeKey}\u001fassistant\u001f${key}`,
     ];
   })), [chatProcessScopeKey, renderMessages]);
+  const stickyProcessBelongsToCurrentThread = Boolean(stickyChatProcessTargetKey && processTargetKeys.has(stickyChatProcessTargetKey));
   const currentProcessEvents = mergeProcessEvents(activeTurnMessageProcessEvents, liveProcessEvents);
   const currentProcessSignature = currentProcessEvents
     .map((event: any) => [event?.at, event?.label, event?.detail, event?.status, event?.runId].join("\u001f"))
@@ -316,6 +327,9 @@ export function ChatExchangePanel(props: any) {
       if (selectedAgent) void refreshRuntimeIntegrations?.(selectedAgent);
     },
   } : undefined;
+  const pendingAssistantStatusText = busy && !hasStreamingChunk
+    ? coldStartStatusText(currentProcessEvents, selectedAgent)
+    : undefined;
 
   useEffect(() => {
     if (!selectedAgent || selectedAgent.provider?.trim() || selectedAgent.model?.trim() || selectedRuntimeModelSelection) return;
@@ -422,10 +436,14 @@ export function ChatExchangePanel(props: any) {
   const activeThreadLabel = selectedChatLeafKey || selectedChatStorageKey || "agent chat";
   const displayThreadLabel = friendlyThreadLabel(activeThreadLabel, selectedChatDirectory);
   const hasQueued = queuedChatMessages.length > 0;
-  const processEventsForDisplay = currentProcessEvents.length ? currentProcessEvents : stickyChatProcess;
+  const processEventsForDisplay = currentProcessEvents.length
+    ? currentProcessEvents
+    : stickyProcessBelongsToCurrentThread
+      ? stickyChatProcess
+      : [];
   const processEventsTargetKey = currentProcessEvents.length
     ? activeTurnProcessTargetKey
-    : processTargetKeys.has(stickyChatProcessTargetKey)
+    : stickyProcessBelongsToCurrentThread
       ? stickyChatProcessTargetKey
       : activeTurnProcessTargetKey;
   const activeChatTaskRunning = busy || processEventsAreActive(processEventsForDisplay);
@@ -506,6 +524,12 @@ export function ChatExchangePanel(props: any) {
       newChatFeedbackTimerRef.current = null;
     }, 900);
     newChatTarget.onStartChat?.();
+  }
+
+  function choosePermissionMode(mode: ChatPermissionMode) {
+    const normalized = normalizeChatPermissionMode(mode);
+    setPermissionMode(normalized);
+    setAgentMode(normalized === "plan" ? "plan" : "act");
   }
 
   function chatRowStorageKey(chat: any) {
@@ -759,6 +783,7 @@ export function ChatExchangePanel(props: any) {
                     iconProps={iconProps}
                     messages={renderMessages}
                     openKanbanTaskMenuKey={openKanbanTaskMenuKey}
+                    pendingAssistantStatusText={pendingAssistantStatusText}
                     processEventsForDisplay={processEventsForDisplay}
                     processEventsTargetKey={processEventsTargetKey}
                     selectedAgent={selectedAgent}
@@ -839,6 +864,8 @@ export function ChatExchangePanel(props: any) {
                       hermesSlashCommands
                       agentMode={agentMode}
                       onAgentModeChange={setAgentMode}
+                      permissionMode={permissionMode}
+                      onPermissionModeChange={choosePermissionMode}
                       modelPicker={modelPicker}
                     />
                   ) : null}

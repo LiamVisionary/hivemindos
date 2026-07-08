@@ -24,7 +24,8 @@ const RUNTIME_FAILURE_PATTERNS: RegExp[] = [
   // Node/undici/OS-level network errors surfaced verbatim
   /^(?:[a-z]*error:\s*)?(?:fetch failed|econnrefused|econnreset|etimedout|enotfound|eai_again|socket hang ?up|network ?error)\b/i,
   // Provider-side rejections that mean "the runtime could not do the work at all"
-  /^(?:\d{3}\s*)?(?:unauthorized|forbidden|invalid api key|authentication|rate.?limit(?:ed)?|too many requests|overloaded|insufficient[_ ]quota|quota exceeded)\b/i,
+  /^(?:http\s*)?429\b.*(?:rate.?limit(?:ed)?|usage.?limit|too many requests|quota)?/i,
+  /^(?:\d{3}\s*)?(?:unauthorized|forbidden|invalid api key|authentication|rate.?limit(?:ed)?|too many requests|usage.?limit|overloaded|insufficient[_ ]quota|quota exceeded)\b/i,
   /^(?:the )?model (?:api|endpoint|provider)?\s*(?:is )?(?:unreachable|unavailable|not configured|not found)\b/i,
   // Generic "request failed" prefixes some runtimes emit as their only message
   /^request (?:to .{0,120} )?failed\b/i,

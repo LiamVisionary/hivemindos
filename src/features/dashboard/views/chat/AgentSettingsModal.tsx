@@ -4,20 +4,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  AlertTriangle,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Minus,
-  Plus,
-  Search,
-  Sparkles,
-  Upload,
-} from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, ChevronUp, Minus, Plus, Search, Sparkles, Upload } from "lucide-react";
 import { AgentBrowserModal } from "./AgentBrowserModal";
 import { AgentSettingsCallsPanel } from "./AgentSettingsCallsPanel";
+import { AgentSettingsMinistryPanel } from "./AgentSettingsMinistryPanel";
 import {
   AgentSettingsAeonConnectionPanel,
   AgentSettingsMemoryPanel,
@@ -46,26 +36,10 @@ import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
 import { HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL, HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
-import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, buildAgentCallPreferences, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
 import { gateBankrModelsForCredits, selectBestRuntimeModel } from "./runtime-model-registry";
-import {
-  AsOrb,
-  Badge,
-  Btn,
-  Field,
-  GroupLabel,
-  PanelHead,
-  TextArea,
-  TextInput,
-  hasUsePodSetup,
-  hasVeniceSetup,
-  iconMark,
-  isHivemindosModelsSetupReady,
-  isUsePodSetupReady,
-  isVeniceSetupReady,
-  titleCaseId,
-} from "./AgentSettingsModalPrimitives";
+import { AsOrb, Badge, Btn, Field, GroupLabel, PanelHead, TextArea, TextInput, hasUsePodSetup, hasVeniceSetup, iconMark, isHivemindosModelsSetupReady, isUsePodSetupReady, isVeniceSetupReady, titleCaseId } from "./AgentSettingsModalPrimitives";
 
 const USEPOD_PROVIDER = MODEL_PROVIDER_GATEWAYS.usepod;
 const VENICE_PROVIDER = MODEL_PROVIDER_GATEWAYS.venice;
@@ -177,7 +151,11 @@ export function AgentSettingsModal(props: any) {
   const modalOpen = Boolean(portalTarget && (roleModalAgent || agentCreateMachine));
   const activeRuntime = (agentSettingsRuntime || "hermes") as AgentRuntime;
   const runtimeSettings = runtimeSettingsFeature(activeRuntime);
-  const activePanels = agentCreateMachine ? runtimeSettings.createPanels : runtimeSettings.editPanels;
+  const runtimeActivePanels = agentCreateMachine ? runtimeSettings.createPanels : runtimeSettings.editPanels;
+  const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
+  const activePanels = isQueenSettings && runtimeActivePanels.includes("calls") && !runtimeActivePanels.includes("ministry")
+    ? runtimeActivePanels.flatMap((panel) => (panel === "calls" ? [panel, "ministry"] : [panel]))
+    : runtimeActivePanels;
   const activePanel = activePanels.includes(agentSettingsPanel) ? agentSettingsPanel : activePanels[0];
   const isAutopilotSettings = runtimeSettings.kind === "autopilot";
   const runtimeLabel = RUNTIME_LABELS[activeRuntime] ?? activeRuntime;
@@ -280,7 +258,6 @@ export function AgentSettingsModal(props: any) {
   const runtimeCanAddCustomModel = runtimeCanAddModels && runtimeModelProviders.length > 0;
   const hideRuntimeSection = !agentCreateMachine && Boolean(runtimeSettings.hidesRuntimeSelectorWhenEditing);
   const runtimeSelectorEntries = Object.entries(RUNTIME_LABELS).filter(([runtime]) => runtime !== HIVEMIND_OS_RUNTIME || activeRuntime === HIVEMIND_OS_RUNTIME);
-  const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
   const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !(veniceSelected && !veniceSetupComplete) && !(hivemindosModelsSelected && !hivemindosModelsSetupComplete) && !isQueenSettings;
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "").replace(/\s+bee$/i, "").trim();
@@ -417,7 +394,7 @@ export function AgentSettingsModal(props: any) {
     if (!modalOpen || !envLoaded) return;
     const liveCapable = (slug) => {
       const entry = providerCatalogEntry(slug);
-      if (!entry?.keyEnv || entry.virtual || slug === "openrouter") return false;
+      if (!entry?.keyEnv || entry.virtual) return false;
       return Boolean(entry.baseUrl) || slug === "usepod";
     };
     const targets = [...new Set(runtimeModelProviders.map((provider) => provider.slug))].filter((slug) => {
@@ -1424,6 +1401,13 @@ export function AgentSettingsModal(props: any) {
     );
   }
 
+  const agentCallSettings = buildAgentCallPreferences(agentCreateMachine ? agentCreateDraft.calls : roleModalAgent?.calls);
+  const updateAgentCalls = (patch) => {
+    const next = buildAgentCallPreferences({ ...agentCallSettings, ...patch });
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, calls: next }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { calls: next });
+  };
+
   function renderSecurity() {
     return <AgentSettingsSecurityPanel />;
   }
@@ -1438,7 +1422,9 @@ export function AgentSettingsModal(props: any) {
           ? <AgentSettingsToolsPanel {...{ HERMES_UPDATE_INTEGRATION_KEYS, agentMailboxBusy, agentMailboxError, agentMailboxOverview, createMailboxForCurrentAgent, hermesUpdateRequired, refreshRuntimeIntegrations, roleModalAgent, runtimeCapabilities, runtimeIntegrationBusy, runtimeIntegrationStatus, runtimeSessionQuery, runtimeSessionResults, searchRuntimeSessionsForAgent, setRuntimeSessionQuery }} />
           : activePanel === "calls"
             ? <AgentSettingsCallsPanel {...{ agentCreateDraft, agentCreateMachine, onQueenClapWakeEnabledChange, queenClapWakeEnabled, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} />
-            : renderSecurity();
+            : activePanel === "ministry"
+              ? <AgentSettingsMinistryPanel {...{ agentCallSettings, displayAgents, roleModalAgent, updateAgentCalls }} />
+              : renderSecurity();
 
   const primaryActionBusy = runtimeIntegrationBusy === "create-agent" || runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading;
   const primaryActionLabel = (runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading) && lmStudioSelectedModelNeedsLoad

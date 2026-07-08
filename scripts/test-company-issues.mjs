@@ -8,9 +8,13 @@ import { register } from "node:module";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
-const { resolvedIssueAnswer } = await import("../src/features/dashboard/views/zero-human-companies/issue-resume.ts");
+const { resolvedIssueAnswer, resolvedIssueEnvAnswer } = await import("../src/features/dashboard/views/zero-human-companies/issue-resume.ts");
 const { agentsAtWork } = await import("../src/features/dashboard/views/zero-human-companies/data.ts");
 const { buildColony } = await import("../src/features/dashboard/views/zero-human-companies/mappers.ts");
+const { emailQaDeliverableRef, emailQaHandledIssueLabels, isEmailQaFindingHandled, isEmailQaIssueHandled } = await import("../src/features/dashboard/views/zero-human-companies/email-qa-directives.ts");
+const { issueGroupReasoningTrail, issueReasoningTrail } = await import("../src/features/dashboard/views/zero-human-companies/issue-reason.ts");
+const { isGenuineHumanAsk } = await import("../src/features/dashboard/kanban-result-format.ts");
+const { isWorkApprovalIssue, workApprovalIssueToView, workApprovalLink } = await import("../src/features/dashboard/views/zero-human-companies/work-approval-issues.ts");
 
 const issue = {
   title: "Resolve email deliverability setup issues",
@@ -27,6 +31,55 @@ assert.match(answer, /t_agentmail_domain_gate/, "answer includes the task id for
 assert.match(answer, /Domain limit exceeded/, "answer preserves the prior blocker");
 assert.match(answer, /re-check the external\/provider state/i, "answer tells the agent to verify, not blindly proceed");
 assert.match(answer, /only proceed to sends, DNS changes, spend, or completion after the real checks pass/i, "answer preserves governance gates");
+const envAnswer = resolvedIssueEnvAnswer(issue, "OUTREACH_PHYSICAL_ADDRESS", "OUTREACH_PHYSICAL_ADDRESS_SARASOTA", "selected");
+assert.match(envAnswer, /selected existing shared hive env variable OUTREACH_PHYSICAL_ADDRESS_SARASOTA/, "env answer records the selected shared env name");
+assert.match(envAnswer, /requested OUTREACH_PHYSICAL_ADDRESS/, "env answer preserves the agent-requested env name");
+assert.doesNotMatch(envAnswer, /123 Main|secret|token/i, "env answer never includes a secret or address value");
+
+const issueTrail = issueReasoningTrail({
+  key: "WEBS-001",
+  title: issue.title,
+  status: "board_review",
+  agent: "HermesMain",
+  pri: "high",
+  pts: 2,
+  work: { ...issue.work, deliverables: [], receipts: [] },
+});
+assert.match(issueTrail.headline, /Domain limit exceeded|Custom SPF\/DKIM/i, "issue reasoning states the concrete blocker");
+assert.match(issueTrail.whyNow, /Needs You/i, "issue reasoning explains why it surfaced now");
+assert.match(issueTrail.requestedAction ?? "", /Domain limit exceeded|Custom SPF\/DKIM/i, "issue reasoning decision text names the concrete blocker");
+assert.doesNotMatch(issueTrail.requestedAction ?? "", /Open the task details/i, "issue reasoning decision text is not a generic board-navigation instruction");
+assert.ok(issueTrail.evidence.some((line) => line.includes("Work Board task: t_agentmail_domain_gate")), "issue reasoning includes task provenance evidence");
+const channelDecisionTrail = issueReasoningTrail({
+  key: "WEBS-237",
+  title: "Send approved close replies to warm prospects",
+  status: "board_review",
+  agent: "Ida B. Wells",
+  pri: "high",
+  pts: 2,
+  work: {
+    taskId: "t_mraokjcc_83w7l",
+    status: "needs-human",
+    result: [
+      "Blocked before send and recorded on the Work Board as needs-human.",
+      "ACTION NEEDED: Provide a verified direct written channel or approve a human/operator phone call path for Ginza, Abel's Ice Cream, and Aloha Hair and Nail Spa; also set or verify the channel consent before any close reply is sent.",
+    ].join("\n"),
+    deliverables: [],
+    receipts: [],
+  },
+});
+assert.match(channelDecisionTrail.requestedAction ?? "", /verified direct written channel/i, "decision-needed text surfaces the specific channel decision");
+assert.match(channelDecisionTrail.requestedAction ?? "", /human\/operator phone call path/i, "decision-needed text keeps the alternate approval path");
+assert.doesNotMatch(channelDecisionTrail.requestedAction ?? "", /Open the task details/i, "decision-needed text does not bounce the user to another board");
+const groupedTrail = issueGroupReasoningTrail(
+  { category: "delegates-offline", label: "Delegates offline", reason: "No agent machine is reachable.", signature: "delegation:offline", consolidatable: true },
+  [
+    { key: "A", title: "Task A", status: "board_review", agent: "HermesMain", pri: "high", pts: 1, work: { taskId: "t_a", status: "needs-human", deliverables: [], receipts: [] } },
+    { key: "B", title: "Task B", status: "board_review", agent: "HermesMain", pri: "high", pts: 1, work: { taskId: "t_b", status: "needs-human", deliverables: [], receipts: [] } },
+  ],
+);
+assert.match(groupedTrail.summary, /2 Work Board tasks/, "consolidated issue reasoning names the group size");
+assert.match(groupedTrail.requestedAction ?? "", /re-run all/i, "consolidated issue reasoning names the group action");
 
 assert.equal(
   agentsAtWork({
@@ -53,7 +106,9 @@ assert.equal(
 );
 
 const actionsSource = readFileSync("src/features/dashboard/views/zero-human-companies/CompanyIssueActions.tsx", "utf8");
-assert.match(actionsSource, /Mark Resolved/, "issue action card exposes Mark Resolved");
+assert.match(actionsSource, /Handled — retry/, "issue action card exposes the retry/resume action");
+assert.match(actionsSource, /SharedHiveEnvKeyRow/, "issue action card reuses the shared hive env picker row");
+assert.match(actionsSource, /loadSharedHiveEnvKeys/, "issue action card loads shared hive env names without values");
 assert.match(actionsSource, /openIssueOnWorkBoard/, "issue actions keep Work Board navigation");
 assert.match(actionsSource, /companyIssueDiscussPrompt/, "issue actions keep Discuss");
 
@@ -74,6 +129,106 @@ assert.match(
   "create-company final submit stays disabled without a real apex goal",
 );
 
+assert.equal(emailQaDeliverableRef("Dead / broken link"), "Email QA \u2014 Dead / broken link", "Email QA issue teachings use the durable directive ref");
+const emailQaDirectiveFixtures = [
+  { deliverableRef: "Email QA \u2014 Dead / broken link", createdAt: "2026-07-05T11:09:52.509Z" },
+  { deliverableRef: "Preview \u2014 ginza" },
+  { deliverableRef: "Email QA - Visible tracking-pixel line", createdAt: "2026-07-06T00:00:00.000Z" },
+];
+assert.equal(isEmailQaIssueHandled("Dead / broken link", emailQaDirectiveFixtures), true, "approved Email QA teachings suppress that issue on reload");
+assert.equal(isEmailQaIssueHandled("dead   /   broken link", emailQaDirectiveFixtures), true, "Email QA handled matching is whitespace/case stable");
+assert.equal(isEmailQaIssueHandled("Placeholder / unfinished deliverable", emailQaDirectiveFixtures), false, "unhandled Email QA issue labels still surface");
+assert.equal(
+  isEmailQaFindingHandled({ categoryLabel: "Dead / broken link", threadUpdatedAt: Date.parse("2026-07-05T11:00:00.000Z") }, emailQaDirectiveFixtures),
+  true,
+  "Email QA teachings clear findings from already-reviewed sent mail",
+);
+assert.equal(
+  isEmailQaFindingHandled({ categoryLabel: "Dead / broken link", threadUpdatedAt: Date.parse("2026-07-05T12:00:00.000Z") }, emailQaDirectiveFixtures),
+  false,
+  "newer recurrences after the teaching still surface",
+);
+assert.deepEqual(
+  [...emailQaHandledIssueLabels(emailQaDirectiveFixtures)].sort(),
+  ["dead / broken link", "visible tracking-pixel line"],
+  "only Email QA directive refs become handled issue labels",
+);
+const emailQaAliasDirectiveFixtures = [
+  {
+    deliverableRef: "Email QA \u2014 Visible tracking-pixel line",
+    text: "Do not put a visible tracking pixel line or open-pixel URL in the plaintext body.",
+    createdAt: "2026-07-07T17:55:44.951Z",
+  },
+  {
+    deliverableRef: "Email QA \u2014 off-strategy content",
+    text: "Use a softer CTA that invites the prospect to learn more or express interest before booking a consultation.",
+    createdAt: "2026-07-07T17:58:03.385Z",
+  },
+  {
+    deliverableRef: "Email QA \u2014 tone",
+    text: "Use a softer call-to-action that aligns with the company's strategy of a gentle approach.",
+    createdAt: "2026-07-07T17:58:45.033Z",
+  },
+];
+assert.equal(isEmailQaIssueHandled("off-strategy", emailQaAliasDirectiveFixtures), true, "off-strategy AI wording matches the previously taught off-strategy content family");
+assert.equal(isEmailQaIssueHandled("call-to-action", emailQaAliasDirectiveFixtures), true, "call-to-action AI wording matches the previously taught softer-CTA strategy family");
+assert.equal(
+  isEmailQaFindingHandled({
+    categoryLabel: "branding",
+    summary: "Ensure tracking pixels are hidden in the email body.",
+    suggestion: "Ensure tracking pixels are hidden and not visible in the email body.",
+    threadUpdatedAt: Date.parse("2026-07-07T17:00:00.000Z"),
+  }, emailQaAliasDirectiveFixtures),
+  true,
+  "branding AI duplicates about visible tracking pixels stay cleared after reload",
+);
+assert.equal(
+  isEmailQaFindingHandled({
+    categoryLabel: "call-to-action",
+    summary: "The email pushes a consultation before relationship-building.",
+    suggestion: "Use a softer call-to-action that invites the recipient to explore the preview first.",
+    threadUpdatedAt: Date.parse("2026-07-07T18:00:00.000Z"),
+  }, emailQaAliasDirectiveFixtures),
+  false,
+  "newer softer-CTA recurrences after the latest teaching still surface",
+);
+
+const workApprovalIssue = {
+  key: "WEBS-724",
+  title: "Find usable contacts for 360 Custom Renovations",
+  agent: "HermesMain",
+  status: "board_review",
+  work: {
+    taskId: "t_mraokkiq_9reqn",
+    status: "needs-human",
+    result: "ACTION NEEDED:\nApprove or reject sending the drafted Facebook DM to 360 Custom Renovations addressed to Cristian Profera.\nLINK: https://www.facebook.com/100088584159731/\nOPTIONS: Approve Facebook DM | Approve LinkedIn DM | Reject / revise copy",
+    deliverables: [],
+    receipts: [],
+    updatedAt: Date.parse("2026-07-08T02:30:00+08:00"),
+  },
+};
+assert.equal(isWorkApprovalIssue(workApprovalIssue), true, "approve/reject Work Board asks are treated as approvals");
+const workApprovalView = workApprovalIssueToView(workApprovalIssue);
+assert.equal(workApprovalView.id, "t_mraokkiq_9reqn", "Work Board approval card uses the task id as the approval id");
+assert.equal(workApprovalView.title, "Find usable contacts for 360 Custom Renovations", "Work Board approval card keeps the task title");
+assert.equal(workApprovalView.agent, "HermesMain", "Work Board approval card keeps the assigned agent");
+assert.equal(workApprovalView.kind, "approval", "Work Board approval cards are labeled as approvals");
+assert.equal(workApprovalView.target, "https://www.facebook.com/100088584159731/", "Work Board approval cards expose the target link");
+assert.match(workApprovalView.explanation?.headline ?? "", /needs a human decision/, "Work Board approval cards carry a human-readable reasoning headline");
+assert.match(workApprovalView.explanation?.whyNow ?? "", /Needs You/, "Work Board approval reasoning explains why it surfaced now");
+assert.ok(workApprovalView.explanation?.evidence.some((line) => line.includes("Request:")), "Work Board approval reasoning preserves the concrete ask as evidence");
+assert.equal(workApprovalLink(workApprovalIssue), "https://www.facebook.com/100088584159731/", "Work Board approval link extraction keeps the concrete target");
+assert.equal(isWorkApprovalIssue(issue), false, "ordinary needs-human blockers remain issues");
+
+const emailQaServiceSource = readFileSync("src/lib/services/company-email-qa.ts", "utf8");
+assert.match(emailQaServiceSource, /threadFindingTimestamp\(thread\)/, "Email QA findings prefer stable sent timestamps for reload suppression");
+const agentMailboxesSource = readFileSync("src/lib/services/agent-mailboxes.ts", "utf8");
+const outreachOutboxSource = readFileSync("src/lib/services/company-outreach-outbox.ts", "utf8");
+assert.match(agentMailboxesSource, /sentAt = parseTimestampMs\(thread\.sent_timestamp\)/, "AgentMail threads expose stable sent timestamps");
+assert.match(outreachOutboxSource, /\.\.\.\(sentAt \? \{ sentAt \} : \{\}\)/, "outreach outbox threads expose stable sent timestamps");
+const emailQaBandSource = readFileSync("src/features/dashboard/views/zero-human-companies/EmailQaBand.tsx", "utf8");
+assert.match(emailQaBandSource, /deliverableRef:\s*emailQaDeliverableRef\(group\.label\)/, "one-click Email QA teaching uses the canonical durable directive ref");
+
 const cockpitSource = readFileSync("src/features/dashboard/views/zero-human-companies/Cockpit.tsx", "utf8");
 assert.match(cockpitSource, /key: "issues"/, "cockpit tab row includes Issues");
 assert.match(cockpitSource, /IssuesPanel/, "cockpit has a dedicated issues panel");
@@ -81,17 +236,35 @@ assert.match(cockpitSource, /onResolveIssue/, "cockpit passes issue resolution h
 assert.match(cockpitSource, /function IssuesLoadingSkeleton/, "issues panel has a skeleton pending state");
 assert.match(cockpitSource, /aria-label="Loading company issues"/, "issues pending state is animated and accessible");
 assert.match(cockpitSource, /loading=\{initialTasksLoading\}/, "issues panel receives the initial task-loading state");
-assert.match(cockpitSource, /const activeIssueCount = c\.issues\.filter\(\(issue\) => issue\.status !== "done"\)\.length/, "Issues tab badge counts all active issues");
+assert.match(cockpitSource, /const activeIssueCount = c\.issues\.filter\(\(issue\) => issue\.status !== "done" && !isWorkApprovalIssue\(issue\)\)\.length/, "Issues tab badge counts active non-approval issues");
 assert.match(cockpitSource, /badge: activeIssueCount \|\| null/, "Issues tab badge is wired to the active issue count");
 assert.match(cockpitSource, /badgeLoading: initialTasksLoading && activeIssueCount === 0/, "Issues tab shows a skeleton badge while issue counts hydrate");
 assert.match(cockpitSource, /function PipelineForecastPanel/, "cockpit has a revenue forecast detail panel");
 assert.match(cockpitSource, /approval-blocked quoted pipeline/, "cockpit names approval-blocked quoted pipeline where decisions happen");
 assert.match(cockpitSource, /potential revenue, not booked cash/, "cockpit distinguishes quoted pipeline from booked revenue");
+assert.match(cockpitSource, /directives=\{c\.directives\}/, "Email QA issue band receives durable company directives");
+assert.match(cockpitSource, /isWorkApprovalIssue/, "cockpit routes approve/reject Work Board tasks through Approvals");
+assert.match(cockpitSource, /workApprovalIssueToView/, "cockpit maps Work Board approval tasks into the shared approval card shape");
+assert.match(cockpitSource, /onDecideIssueApproval/, "Work Board approvals answer the underlying task when decided");
+assert.match(cockpitSource, /onOpenDetails=\{item\.source === "work" \? \(\) => handlers\.onOpenIssue\(item\.issue\) : undefined\}/, "Work Board approval cards open the underlying task details");
 assert.match(cockpitSource, /const MAX_NEEDS_STRIP_ROWS = 3/, "needs-you strip caps visible rows at three");
 assert.match(cockpitSource, /const visibleApprovals = approvals\.slice\(0, MAX_NEEDS_STRIP_ROWS\)/, "needs-you strip counts visible approvals against the row cap");
 assert.match(cockpitSource, /const visibleBlocked = blocked\.slice\(0, Math\.max\(0, MAX_NEEDS_STRIP_ROWS - visibleApprovals\.length\)\)/, "needs-you strip fills remaining slots with blocked issues");
 assert.match(cockpitSource, /\+ \{hiddenCount\} more/, "needs-you strip shows the overflow count");
 assert.match(cockpitSource, /See all →/, "needs-you strip exposes a See all action for hidden rows");
+
+const approvalCardSource = readFileSync("src/features/approvals/ApprovalCard.tsx", "utf8");
+const approvalCssSource = readFileSync("src/features/approvals/approvals.module.css", "utf8");
+assert.match(approvalCardSource, /cardReason/, "approval cards show the approval reason on the card, not only inside the modal");
+assert.match(approvalCardSource, /ReasoningTrailView/, "approval cards show the shared reasoning trail before action buttons");
+assert.match(approvalCardSource, /onOpenDetails/, "approval cards support a details affordance for task-backed approvals");
+assert.match(approvalCssSource, /\.cardReason/, "approval reason has dedicated card styling");
+assert.match(approvalCssSource, /white-space:\s*pre-wrap/, "approval reason preserves structured ask/options/link lines");
+const reasoningViewSource = readFileSync("src/features/reasoning/ReasoningTrailView.tsx", "utf8");
+const reasoningTypesSource = readFileSync("src/lib/types/reasoning-trail.ts", "utf8");
+assert.match(reasoningViewSource, /tone\?: ReasoningTrailTone/, "approvals and issues share one reasoning trail renderer");
+assert.match(reasoningViewSource, /REASONING_TRAIL_FIELD_LABELS/, "shared reasoning trail renderer uses the common field labels");
+assert.match(reasoningTypesSource, /What this is/, "reasoning trail labels have one shared source of truth");
 
 const liveSource = readFileSync("src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx", "utf8");
 assert.match(liveSource, /action: "answer"/, "live resolver uses the Work Board answer action");
@@ -102,12 +275,25 @@ const boardSource = readFileSync("src/features/dashboard/views/zero-human-compan
 assert.doesNotMatch(boardSource, /WebkitLineClamp|textOverflow:\s*"ellipsis"/, "issue blockers are not silently truncated");
 assert.match(boardSource, /ChatInlineMarkdown/, "issue blocker text renders markdown inline instead of raw backticks");
 assert.match(boardSource, /<ChatInlineMarkdown text=\{blockReason\} \/>/, "issue blockers pass the extracted ask through markdown formatting");
+assert.match(boardSource, /issueReasoningTrail/, "issue board cards build a structured reasoning trail");
+assert.match(boardSource, /ReasoningTrailView/, "issue board cards render the shared reasoning trail");
 assert.match(boardSource, /formatPipelineUsd\(pipelineImpact\.amountUsd\)/, "issue board cards display per-card quoted pipeline impact");
+const issueSummarySource = readFileSync("src/features/dashboard/views/zero-human-companies/CompanyIssueActions.tsx", "utf8");
+assert.match(issueSummarySource, /issueReasoningTrail/, "cockpit issue summary cards build a structured reasoning trail");
+assert.match(issueSummarySource, /ReasoningTrailView/, "cockpit issue summary cards render the shared reasoning trail");
+const consolidatedIssueSource = readFileSync("src/features/dashboard/views/zero-human-companies/ConsolidatedIssueCard.tsx", "utf8");
+assert.match(consolidatedIssueSource, /issueGroupReasoningTrail/, "consolidated issue groups build a group reasoning trail");
+assert.match(consolidatedIssueSource, /ReasoningTrailView/, "consolidated issue groups render the shared reasoning trail");
 const zhcThemeSource = readFileSync("src/features/dashboard/views/zero-human-companies/theme.css", "utf8");
 assert.match(zhcThemeSource, /\.zhc-root \.zhc-issue-reason :where\(code\)/, "issue blocker markdown code spans have scoped ZHC styling");
 const taskModalSource = readFileSync("src/features/dashboard/views/zero-human-companies/TaskDetailModal.tsx", "utf8");
 assert.match(taskModalSource, /issue\.status === "board_review" \|\| work\.status === "needs-human"/, "blocked-task explainer is gated to needs-human cards");
 assert.match(taskModalSource, /const canExplain = isBlockedForHuman && Boolean\(companyId\)/, "completed shipped cards do not show the blocked-task explainer");
+assert.match(taskModalSource, /deterministicReasoning/, "task detail modal shows a deterministic issue reasoning trail before the on-demand explainer");
+assert.match(taskModalSource, /Missing context/, "blocked-task explanations surface missing context when the explainer has it");
+const issueExplainerSource = readFileSync("src/lib/services/queen-bee/issue-explainer.ts", "utf8");
+assert.match(issueExplainerSource, /reasoningTrailPromptRules/, "issue explainer uses shared direct explanation style rules");
+assert.match(issueExplainerSource, /missingContext/, "issue explainer returns missing context as structured data");
 
 // ── quoted/open pipeline: company-level forecast and issue-level impact ─────
 const pipelineColony = buildColony({
@@ -245,12 +431,12 @@ const credBlocked = issueBlockReason({
 assert.match(credBlocked, /PORTFOLIO_OFFER_API_TOKEN/, "the card names the actual credential blocker, not the generic first line");
 assert.doesNotMatch(credBlocked, /^Blocked before send/, "the generic 'Blocked before send' line must not be the shown reason");
 
-// The structured one-click control (Repair fleet sync + credential name) is wired.
+// The structured env control is shared with the Work Board Needs-You card.
 const issueBoardSource = readFileSync("src/features/dashboard/views/zero-human-companies/IssueBoard.tsx", "utf8");
-assert.match(issueBoardSource, /HumanAskControls/, "the card renders the structured human-ask control");
-assert.match(issueBoardSource, /action: "syncMachines"/, "the credential control repairs fleet sync via the tested rail");
-assert.match(issueBoardSource, /needs credential:/, "the control names the required credential");
-assert.match(issueBoardSource, /state === "busy" \? <Spinner/, "the repair-sync button shows an animated spinner (no static loading state)");
+assert.doesNotMatch(issueBoardSource, /HumanAskControls/, "the board no longer keeps a one-off human-ask control");
+assert.match(actionsSource, /SharedHiveEnvKeyRow/, "company issue actions render the shared env picker");
+assert.match(actionsSource, /resolvedIssueEnvAnswer/, "company issue env selections resume with an env-specific answer");
+assert.match(actionsSource, /loadSharedHiveEnvKeys/, "company issue env picker reads key names through the shared helper");
 
 // ── Re-run: zero-human boards can't be hand-moved, so consolidated infra
 // blockers need an in-UI re-queue that rides the same answer rail as Mark
@@ -277,5 +463,34 @@ const retryStart = viewSource.indexOf("const handleRetryIssues = React.useCallba
 const retryEnd = viewSource.indexOf("const handleDismissIssues = React.useCallback(async");
 assert(retryStart >= 0 && retryEnd > retryStart, "live view keeps a bulk retry handler beside the dismiss handler");
 assert.doesNotMatch(viewSource.slice(retryStart, retryEnd), /archived/, "re-run must never archive — that is Dismiss's job");
+
+// System-generated blocks (a gate or the runtime) must be translated into a plain,
+// human-framed ask — never shown to the owner as raw "attach passing eval receipts"
+// or "Failure reason: … Attempts: 3/3." text.
+{
+  const evalIssue = { work: { taskId: "t_eval", status: "needs-human", result: "Prepared the bundle.\nArtifacts: /root/x/REPORT.md\n\n⚠ Loop gate block — missing passing eval receipts: live-url.\nACTION NEEDED: attach passing eval receipts for live-url or move the card forward manually.", deliverables: [], receipts: [] } };
+  const evalInfo = classifyIssueReason(evalIssue);
+  assert.equal(evalInfo.category, "eval-gate", "loop eval-gate block is classified as eval-gate");
+  assert.equal(evalInfo.systemGenerated, true, "eval-gate is a system-generated block");
+  const evalAsk = issueReasoningTrail(evalIssue).requestedAction ?? "";
+  assert.ok(isGenuineHumanAsk(evalAsk), "eval-gate card ask reads as a genuine human ask");
+  assert.doesNotMatch(evalAsk, /attach passing eval receipts/i, "eval-gate ask drops the 'attach passing eval receipts' jargon");
+  assert.match(issueBlockReason(evalIssue), /automated (quality )?checks/i, "eval-gate reason is plain language");
+
+  const runtimeIssue = { work: { taskId: "t_rt", status: "needs-human", result: "No final response from the agent. Failure reason: no-final-response. Attempts: 3/3.", deliverables: [], receipts: [] } };
+  const runtimeInfo = classifyIssueReason(runtimeIssue);
+  assert.equal(runtimeInfo.category, "runtime-blocked", "failTask runtime escalation is classified as runtime-blocked");
+  assert.equal(runtimeInfo.systemGenerated, true, "runtime-blocked is a system-generated block");
+  const runtimeAsk = issueReasoningTrail(runtimeIssue).requestedAction ?? "";
+  assert.ok(isGenuineHumanAsk(runtimeAsk), "runtime-blocked card ask reads as a genuine human ask");
+  assert.doesNotMatch(runtimeAsk, /Failure reason:|Attempts: \d/i, "runtime-blocked ask drops the raw failure-reason/attempts text");
+
+  // A genuine agent ACTION NEEDED is untouched — still shown verbatim, not overridden.
+  const agentIssue = { work: { taskId: "t_ask", status: "needs-human", result: "Did the research.\nACTION NEEDED: Add PORTFOLIO_OFFER_API_TOKEN to the shared env so the crew can post offers.", deliverables: [], receipts: [] } };
+  const agentInfo = classifyIssueReason(agentIssue);
+  assert.equal(agentInfo.category, "needs-input", "a genuine agent ask stays needs-input");
+  assert.ok(!agentInfo.systemGenerated, "a genuine agent ask is not system-generated");
+  assert.match(issueReasoningTrail(agentIssue).requestedAction ?? "", /PORTFOLIO_OFFER_API_TOKEN/, "the agent's real ACTION NEEDED is preserved verbatim");
+}
 
 console.log("company-issues: all assertions passed");

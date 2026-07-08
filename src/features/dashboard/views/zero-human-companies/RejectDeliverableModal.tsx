@@ -16,6 +16,7 @@ export function RejectDeliverableModal({
   title = "Reject & redirect the crew",
   intro,
   placeholder = "What's wrong / what to do instead…",
+  initialText,
   submitLabel = "Reject & redirect",
   theme = "dark",
 }: {
@@ -31,6 +32,8 @@ export function RejectDeliverableModal({
   intro?: React.ReactNode;
   /** Composer textarea placeholder. */
   placeholder?: string;
+  /** Optional prefilled directive text for guided correction flows. */
+  initialText?: string;
   /** Composer submit button label. */
   submitLabel?: string;
   theme?: Theme;
@@ -71,7 +74,7 @@ export function RejectDeliverableModal({
             <>Rejecting <b style={{ color: "var(--fg-2)" }}>{deliverableRef}</b>. Your feedback becomes a standing directive in company knowledge — the crew reads it on every dispatch, so it corrects course. Optionally point them at a skill or attach references.</>
           )}
         </div>
-        <CompanyDirectiveComposer autoFocus placeholder={placeholder} submitLabel={submitLabel} busy={busy} onSubmit={submit} />
+        <CompanyDirectiveComposer autoFocus placeholder={placeholder} initialText={initialText} submitLabel={submitLabel} busy={busy} onSubmit={submit} />
         {error && <div style={{ marginTop: 8, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger)" }}>{error}</div>}
       </div>
     </div>,

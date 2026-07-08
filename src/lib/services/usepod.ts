@@ -5,6 +5,10 @@ import { readFile } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import { USEPOD_API_BASE, type UsePodApiCompatibility, type UsePodRoutingMode } from "@/lib/config/usepod-features";
+import { booleanEnv, optionalEnv } from "@/lib/config/env";
+import { normalizeHivemindosWalletPaidSlug } from "@/lib/config/hivemindos-wallet-paid-models";
+import { resolvePooledHivemindosModelCreditToken } from "@/lib/services/hivemindos-model-credit-vault";
+import { managedUsePodOpenAiBaseUrl } from "@/lib/services/paid-agent-cloud-client";
 import { resolveUsePodUsdcRecipientAddress } from "@/lib/services/usepod/deposit-recipient";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
@@ -35,7 +39,7 @@ export type UsePodModel = {
 };
 
 export type UsePodCheckStatus = "ready" | "missing-token" | "needs-funding" | "cap-too-low" | "provider-unavailable" | "error";
-export type UsePodTokenSource = "profile" | "dashboard-url" | "hivemindos-env" | "legacy-hermes-env" | "process-env" | "missing";
+export type UsePodTokenSource = "profile" | "dashboard-url" | "hivemindos-env" | "legacy-hermes-env" | "process-env" | "hivemindos-managed" | "missing";
 
 export type UsePodCheckResult = {
   ok: boolean;
@@ -61,6 +65,9 @@ const USEPOD_DEFAULT_TOKEN_ENV = "USEPOD_TOKEN";
 const USEPOD_DEPOSIT_ENV = "USEPOD_DEPOSIT_ADDRESS";
 const USEPOD_DEPOSIT_CODE_ENV = "USEPOD_DEPOSIT_CODE";
 const USEPOD_DASHBOARD_URL_ENV = "USEPOD_DASHBOARD_URL";
+const USEPOD_MANAGED_PROXY_ENABLED_ENV = "HIVEMINDOS_USEPOD_MANAGED_PROXY_ENABLED";
+const USEPOD_MANAGED_MAX_DEBIT_USD_ENV = "HIVEMINDOS_USEPOD_MANAGED_MAX_DEBIT_USD";
+const USEPOD_MANAGED_CREDIT_SLUG_ENV = "HIVEMINDOS_USEPOD_MANAGED_CREDIT_SLUG";
 
 function parseEnvFileValue(raw: string, key: string) {
   const pattern = new RegExp(`^\\s*(?:export\\s+)?${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=\\s*(.*)\\s*$`, "m");
@@ -348,6 +355,40 @@ export async function readUsePodSavedSetup(profile?: Pick<AgentProfile, "usePod"
 
 export async function resolveUsePodRuntimeConfig(profile: AgentProfile): Promise<UsePodRuntimeConfig | null> {
   if (!isUsePodProfile(profile)) return null;
+  const inputCeiling = cleanMicrounits(profile.usePod?.maxPriceInputMicrounits ?? await readUsePodEnvValue("USEPOD_MAX_PRICE_INPUT_MICRO_USDC"));
+  const outputCeiling = cleanMicrounits(profile.usePod?.maxPriceOutputMicrounits ?? await readUsePodEnvValue("USEPOD_MAX_PRICE_OUTPUT_MICRO_USDC"));
+  const routingMode = profile.usePod?.routingMode === "marketplace-only" ? "marketplace-only" : "auto";
+  const managedBilling = isUsePodManagedBillingEnabled(profile);
+  if (managedBilling) {
+    const baseUrl = managedUsePodOpenAiBaseUrl();
+    if (!baseUrl) {
+      throw new Error("The HivemindOS managed UsePod proxy is not configured.");
+    }
+    const creditSlug = normalizeHivemindosWalletPaidSlug(optionalEnv(USEPOD_MANAGED_CREDIT_SLUG_ENV) || "default");
+    const creditToken = await resolvePooledHivemindosModelCreditToken(creditSlug, [profile.id, profile.agentId]);
+    if (!creditToken) {
+      throw new Error("Add HivemindOS Models credits before using managed UsePod billing.");
+    }
+    const maxDebitUsd = profile.usePod?.managedMaxDebitUsd?.trim()
+      || optionalEnv(USEPOD_MANAGED_MAX_DEBIT_USD_ENV)
+      || "0.50";
+    return {
+      token: "",
+      tokenEnvName: "HIVEMINDOS_CREDIT_TOKEN",
+      tokenSource: "hivemindos-managed",
+      baseUrl,
+      apiCompatibility: "openai",
+      routingMode,
+      chatPath: "/chat/completions",
+      statusPath: "/models",
+      headers: {
+        "X-HivemindOS-Credit-Token": creditToken,
+        "X-HivemindOS-UsePod-Max-Debit-Usd": maxDebitUsd,
+        ...(inputCeiling ? { "X-Pod-Max-Price-Input": inputCeiling } : {}),
+        ...(outputCeiling ? { "X-Pod-Max-Price-Output": outputCeiling } : {}),
+      },
+    };
+  }
   const tokenEnvName = profile.usePod?.tokenEnvName?.trim() || USEPOD_DEFAULT_TOKEN_ENV;
   const profileToken = profile.token?.trim() || "";
   const envToken = profileToken ? { value: "", source: "missing" as UsePodTokenSource } : await readUsePodEnvValueWithSource(tokenEnvName);
@@ -357,10 +398,7 @@ export async function resolveUsePodRuntimeConfig(profile: AgentProfile): Promise
   if (!token) {
     throw new Error(`${tokenEnvName} is required before this UsePod agent can run inference. Use the UsePod setup action or save a funded token in shared env.`);
   }
-  const inputCeiling = cleanMicrounits(profile.usePod?.maxPriceInputMicrounits ?? await readUsePodEnvValue("USEPOD_MAX_PRICE_INPUT_MICRO_USDC"));
-  const outputCeiling = cleanMicrounits(profile.usePod?.maxPriceOutputMicrounits ?? await readUsePodEnvValue("USEPOD_MAX_PRICE_OUTPUT_MICRO_USDC"));
   const apiCompatibility = profile.usePod?.apiCompatibility === "anthropic" ? "anthropic" : "openai";
-  const routingMode = profile.usePod?.routingMode === "marketplace-only" ? "marketplace-only" : "auto";
   return {
     token,
     tokenEnvName,
@@ -375,6 +413,12 @@ export async function resolveUsePodRuntimeConfig(profile: AgentProfile): Promise
       ...(outputCeiling ? { "X-Pod-Max-Price-Output": outputCeiling } : {}),
     },
   };
+}
+
+function isUsePodManagedBillingEnabled(profile: Pick<AgentProfile, "usePod">) {
+  if (profile.usePod?.billingMode === "direct") return false;
+  if (profile.usePod?.billingMode === "hivemindos-managed") return true;
+  return booleanEnv(USEPOD_MANAGED_PROXY_ENABLED_ENV, false);
 }
 
 export function summarizeUsePodResponseHeaders(headers: Headers) {
@@ -530,12 +574,13 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
   const bodyBalance = extractUsePodBalanceRemaining(data);
   let balanceRemaining = headers?.balanceRemaining || bodyBalance;
   let route = headers?.route ?? "";
-  if (response.ok && !balanceRemaining) {
+  const managedBilling = config.tokenSource === "hivemindos-managed";
+  if (response.ok && !managedBilling && !balanceRemaining) {
     balanceRemaining = await fetchUsePodTokenBalance(config).catch(() => "");
   }
   const balanceUsd = parseUsePodUsd(balanceRemaining);
   let fundingProbeSucceeded = false;
-  if (response.ok && models[0]?.id && (balanceUsd === null || balanceUsd <= 0)) {
+  if (!managedBilling && response.ok && models[0]?.id && (balanceUsd === null || balanceUsd <= 0)) {
     const probe = await probeUsePodBalance(config, models[0].id).catch(() => null);
     balanceRemaining = probe?.balanceRemaining || balanceRemaining;
     route = probe?.route || route;
@@ -579,7 +624,7 @@ async function requestUsePodModels(profile: AgentProfile): Promise<UsePodCheckRe
     }
     if (probe?.ok) fundingProbeSucceeded = true;
   }
-  if (response.ok && models.length && !fundingProbeSucceeded && !balanceRemaining && parseUsePodUsd(balanceRemaining) === null) {
+  if (!managedBilling && response.ok && models.length && !fundingProbeSucceeded && !balanceRemaining && parseUsePodUsd(balanceRemaining) === null) {
     return {
       ok: false,
       status: "provider-unavailable",

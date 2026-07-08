@@ -8,9 +8,16 @@ import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { chatTelemetrySession, chatTelemetryValue } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { isFusionProfile, streamFusionResponse } from "@/lib/services/fusion/route-stream";
 import { isBankrLlmProfile } from "@/lib/services/bankr-llm";
+import {
+  HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+  isFreeHivemindosWalletPaidModel,
+} from "@/lib/config/hivemindos-wallet-paid-models";
+import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { activeSharedVault } from "@/lib/services/chat/shared-vault-context";
 import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capability-context";
 import { buildClawbankCapabilityContext } from "@/lib/services/chat/clawbank-capability-context";
+import { buildNansenCapabilityContext } from "@/lib/services/chat/nansen-capability-context";
 import { buildXMcpCapabilityContext } from "@/lib/services/chat/x-mcp-capability-context";
 import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
 import {
@@ -71,6 +78,28 @@ const CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = 900;
 const CHAT_PREFLIGHT_CAPABILITY_ROUTING_TIMEOUT_MS = 2_500;
 const CHAT_PREFLIGHT_MEMORY_TIMEOUT_MS = 650;
 
+const FULL_CONTEXT_FREE_SCOUT_PATTERNS = [
+  /\b(?:capabilit(?:y|ies)|connected app|tool|api|workflow|skill|what\b[\s\S]{0,40}\bcan you do|can you do with)\b/i,
+  /\b(?:wallet|payment|pay|paid|spend|crypto|usdc|x402|usepod|moneyclaw|bankr|clawbank|trade|trading|fund|funding|token|swap|portfolio|polymarket|hyperliquid)\b/i,
+  /\b(?:x|twitter|tweet|tweets|post|social|miroshark|simulation|simulate|rehearsal|prediction market)\b/i,
+  /\b(?:generate|create|make|draw|render|produce|imagine)\b[\s\S]{0,80}\b(?:image|picture|photo|visual|art|illustration)\b/i,
+  /\b(?:image|picture|photo|visual|art|illustration)\b[\s\S]{0,80}\b(?:generate|generation|create|make|draw|render|produce|imagine)\b/i,
+  /\b(?:txt2img|text\s*to\s*image|image[-\s]?gen|image generation)\b/i,
+];
+
+function isFreeHivemindosScoutProfile(profile: AgentProfile) {
+  return profile.provider?.trim().toLowerCase() === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER
+    && isFreeHivemindosWalletPaidModel(profile.model);
+}
+
+function shouldUseCompactFreeScoutContext(profile: AgentProfile, userPrompt: string) {
+  if (!isFreeHivemindosScoutProfile(profile)) return false;
+  const trimmed = userPrompt.trim();
+  if (!trimmed) return false;
+  if (requiresCapabilityRouting(trimmed)) return false;
+  return !FULL_CONTEXT_FREE_SCOUT_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
 export async function POST(request: NextRequest) {
   const routeStartedAt = Date.now();
   let profile: AgentProfile;
@@ -85,6 +114,8 @@ export async function POST(request: NextRequest) {
   let agentMode: AgentMode = "act";
   let latencyMode = "";
   let actingWalletSource: ActingWalletSourceHint | undefined;
+  let suppressWalletIntents = false;
+  let permissionMode: ChatPermissionMode = "manual";
   try {
     const body = (await request.json()) as {
       agent?: AgentProfile;
@@ -100,6 +131,8 @@ export async function POST(request: NextRequest) {
       clientRunId?: string;
       latencyMode?: string;
       actingWalletSource?: unknown;
+      suppressWalletIntents?: boolean;
+      permissionMode?: unknown;
     };
     if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
     profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
@@ -118,6 +151,8 @@ export async function POST(request: NextRequest) {
     clientRunId = typeof body.clientRunId === "string" ? body.clientRunId : "";
     latencyMode = typeof body.latencyMode === "string" ? body.latencyMode : "";
     actingWalletSource = coerceActingWalletSourceHint(body.actingWalletSource);
+    suppressWalletIntents = body.suppressWalletIntents === true;
+    permissionMode = normalizeChatPermissionMode(body.permissionMode);
   } catch {
     await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
     return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
@@ -132,6 +167,8 @@ export async function POST(request: NextRequest) {
     clientRunId: clientRunId || null,
     agentMode,
     latencyMode: latencyMode || null,
+    suppressWalletIntents,
+    permissionMode,
     sharedVaultEnabled: Boolean(sharedVault?.enabled),
     honeyLedgerEnabled,
     elapsedMs: Date.now() - routeStartedAt,
@@ -199,16 +236,18 @@ export async function POST(request: NextRequest) {
   // path below - that path streams the raw agent, which has no deterministic money
   // path, so without this a spoken/typed "swap / send / buy ..." returns nothing.
   // Conversational turns fall through (handlers parse + return null synchronously).
-  const walletIntentResponse = await dispatchWalletAndTradeIntents({
-    request,
-    routeStartedAt,
-    profile,
-    messages,
-    wallet,
-    actingWalletSource,
-    runtimeSessionId,
-  });
-  if (walletIntentResponse) return walletIntentResponse;
+  if (!suppressWalletIntents) {
+    const walletIntentResponse = await dispatchWalletAndTradeIntents({
+      request,
+      routeStartedAt,
+      profile,
+      messages,
+      wallet,
+      actingWalletSource,
+      runtimeSessionId,
+    });
+    if (walletIntentResponse) return walletIntentResponse;
+  }
   const lowLatencyVoiceTurn = latencyMode === "voice";
   if (lowLatencyVoiceTurn) {
     const effectiveProfile = isBankrLlmProfile(profile) ? profile : await collectorChatProfile(profile) ?? profile;
@@ -234,7 +273,7 @@ export async function POST(request: NextRequest) {
       routeStartedAt,
       runtimeSessionId,
       chatStorageKey,
-    }, "", "", "");
+    }, "", "", "", permissionMode);
   }
   const fallbackRuntimeCapabilityContext: Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> = {
     runtime: profile.runtime,
@@ -242,11 +281,12 @@ export async function POST(request: NextRequest) {
     runtimeImageGenerationSource: undefined,
   };
   const emptyTaskRetrievalResult = { context: "", telemetry: null as TaskRetrievalTelemetry | null };
-  const capabilitySearchTimeoutMs = !lowLatencyVoiceTurn && requiresCapabilityRouting(userPrompt)
+  const compactFreeScoutContext = shouldUseCompactFreeScoutContext(profile, userPrompt);
+  const capabilitySearchTimeoutMs = !lowLatencyVoiceTurn && !compactFreeScoutContext && requiresCapabilityRouting(userPrompt)
     ? CHAT_PREFLIGHT_CAPABILITY_ROUTING_TIMEOUT_MS
     : CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS;
-  const runtimeCapabilityPreflight = lowLatencyVoiceTurn
-    ? { value: undefined as Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> | undefined, timedOut: false, failed: false }
+  const runtimeCapabilityPreflight = lowLatencyVoiceTurn || compactFreeScoutContext
+    ? { value: fallbackRuntimeCapabilityContext, timedOut: false, failed: false }
     : await bestEffortPreflight(
       runtimeImageGenerationCapabilityContext(profile),
       CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS,
@@ -254,26 +294,28 @@ export async function POST(request: NextRequest) {
     );
   const runtimeCapabilityContext = runtimeCapabilityPreflight.value;
   const [taskRetrievalPreflight, sharedBrainMemoryPreflight] = await Promise.all([
-    bestEffortPreflight(
-      buildTaskRetrievalContextResult({
-        origin: request.url,
-        query: userPrompt,
-        sharedVault: vault,
-        runtime: runtimeCapabilityContext,
-        agent: {
-          workerClass: profile.workerClass,
-          preferredSkillSlugs: profile.preferredSkillSlugs,
-          taskPreferences: profile.taskPreferences,
-        },
-        recordContextXray: true,
-        runId: runtimeSessionId,
-        threadId: chatStorageKey,
-        model: [profile.runtime, profile.model].filter(Boolean).join(":"),
-      }),
-      capabilitySearchTimeoutMs,
-      emptyTaskRetrievalResult,
-    ),
-    lowLatencyVoiceTurn
+    compactFreeScoutContext
+      ? Promise.resolve({ value: emptyTaskRetrievalResult, timedOut: false, failed: false })
+      : bestEffortPreflight(
+        buildTaskRetrievalContextResult({
+          origin: request.url,
+          query: userPrompt,
+          sharedVault: vault,
+          runtime: runtimeCapabilityContext,
+          agent: {
+            workerClass: profile.workerClass,
+            preferredSkillSlugs: profile.preferredSkillSlugs,
+            taskPreferences: profile.taskPreferences,
+          },
+          recordContextXray: true,
+          runId: runtimeSessionId,
+          threadId: chatStorageKey,
+          model: [profile.runtime, profile.model].filter(Boolean).join(":"),
+        }),
+        capabilitySearchTimeoutMs,
+        emptyTaskRetrievalResult,
+      ),
+    lowLatencyVoiceTurn || compactFreeScoutContext
       ? Promise.resolve({ value: "", timedOut: false, failed: false })
       : bestEffortPreflight(
         buildSharedBrainMemoryContext(vault, userPrompt),
@@ -294,11 +336,14 @@ export async function POST(request: NextRequest) {
   // runtime can use the shared X MCP credentials or the managed X gateway, and
   // the briefing must survive a timed-out capability search. Presence check is
   // cached; never the value.
-  const [bankrCapabilityContext, clawbankCapabilityContext, xMcpCapabilityContext] = await Promise.all([
-    buildBankrCapabilityContext().catch(() => ""),
-    buildClawbankCapabilityContext().catch(() => ""),
-    buildXMcpCapabilityContext().catch(() => ""),
-  ]);
+  const [bankrCapabilityContext, clawbankCapabilityContext, xMcpCapabilityContext, nansenCapabilityContext] = compactFreeScoutContext
+    ? ["", "", "", ""]
+    : await Promise.all([
+      buildBankrCapabilityContext().catch(() => ""),
+      buildClawbankCapabilityContext().catch(() => ""),
+      buildXMcpCapabilityContext().catch(() => ""),
+      buildNansenCapabilityContext().catch(() => ""),
+    ]);
   const taskRetrievalContext = [
     taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
       query: userPrompt,
@@ -310,13 +355,15 @@ export async function POST(request: NextRequest) {
     bankrCapabilityContext,
     clawbankCapabilityContext,
     xMcpCapabilityContext,
+    nansenCapabilityContext,
   ].filter(Boolean).join("\n\n");
   await recordRouteTelemetry(request, "agent_runtime.capability_search.completed", {
     ...telemetryPayloadForProfile(profile),
     runtimeSessionId,
     chatStorageKey: chatStorageKey || null,
-    skipped: false,
+    skipped: compactFreeScoutContext,
     lowLatencyVoiceTurn,
+    compactFreeScoutContext,
     runtimeCapabilityTimedOut: runtimeCapabilityPreflight.timedOut,
     runtimeCapabilityFailed: runtimeCapabilityPreflight.failed,
     capabilitySearchTimedOut: taskRetrievalPreflight.timedOut,
@@ -355,7 +402,8 @@ export async function POST(request: NextRequest) {
   // Wallet / trade intents already ran via dispatchWalletAndTradeIntents() before the
   // voice fast path above (so voice + typed chat share one money path); nothing to
   // re-dispatch here. Continue to the conversational agent stream.
-  const vaultPromptContext = buildChatVaultContext(vault, userPrompt);
+  const vaultPromptContext = compactFreeScoutContext ? "" : buildChatVaultContext(vault, userPrompt);
+  const promptWallet = compactFreeScoutContext ? undefined : wallet;
   const promptEnvelope = buildHivemindPromptEnvelope({
     profile,
     agentMode,
@@ -363,7 +411,7 @@ export async function POST(request: NextRequest) {
     vaultContext: vaultPromptContext,
     sharedBrainMemoryContext,
     taskRetrievalContext,
-    wallet,
+    wallet: promptWallet,
     runtimeSessionId,
     chatStorageKey,
   });
@@ -418,12 +466,12 @@ export async function POST(request: NextRequest) {
       agentMode,
       elapsedMs: Date.now() - routeStartedAt,
     });
-    return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, vault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, {
+    return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, vault, agentMode, workingDirectory, promptWallet, honeyLedgerEnabled, runtimeSessionId, {
       request,
       routeStartedAt,
       runtimeSessionId,
       chatStorageKey,
-    }, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext);
+    }, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext, permissionMode);
   }
 
   const token = await getGatewayAuthToken(profile.token);

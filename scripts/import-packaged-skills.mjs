@@ -70,6 +70,21 @@ const SOURCES = {
     },
   },
 
+  mengto: {
+    category: "design",
+    sourceLabel: "mengto",
+    repo: "MengTo/Skills",
+    repoUrl: "https://github.com/MengTo/Skills",
+    license: "MIT",
+    // MengTo/Skills stores portable design, media, and Codex workflow skills as
+    // `agent-skills/<category>/<skill>/SKILL.md`, often with local references.
+    skillsRoot: "agent-skills",
+    layout: "nested-dir",
+    validated: true,
+    copySkillDirectory: true,
+    licenseFile: "LICENSE",
+  },
+
   // --- Configured but NOT yet validated by a clone. Run with --dry-run first to confirm
   //     skillsRoot/layout before trusting the output. ---
   gtm: {
@@ -214,7 +229,7 @@ async function collectUpstream(source, rootDir) {
       const base = basename(e.name, ".md");
       if (exclude.has(base.toLowerCase())) continue;
       const markdown = await readFile(join(skillsDir, e.name), "utf8");
-      units.push({ slug: slugify(base), file: e.name, markdown });
+      units.push({ slug: slugify(base), file: e.name, sourceFolder: ".", markdown });
     }
   } else if (source.layout === "dir") {
     const entries = await readdir(skillsDir, { withFileTypes: true });
@@ -223,7 +238,28 @@ async function collectUpstream(source, rootDir) {
       const skillFile = join(skillsDir, e.name, "SKILL.md");
       if (!existsSync(skillFile)) continue;
       const markdown = await readFile(skillFile, "utf8");
-      units.push({ slug: slugify(e.name), file: `${e.name}/SKILL.md`, markdown });
+      units.push({ slug: slugify(e.name), file: `${e.name}/SKILL.md`, sourceFolder: e.name, markdown });
+    }
+  } else if (source.layout === "nested-dir") {
+    const categoryEntries = await readdir(skillsDir, { withFileTypes: true });
+    for (const category of categoryEntries) {
+      if (!category.isDirectory() || category.name.startsWith(".")) continue;
+      const categoryDir = join(skillsDir, category.name);
+      const entries = await readdir(categoryDir, { withFileTypes: true });
+      for (const e of entries) {
+        if (!e.isDirectory() || e.name.startsWith(".")) continue;
+        const sourceFolder = `${category.name}/${e.name}`;
+        const skillFile = join(skillsDir, sourceFolder, "SKILL.md");
+        if (!existsSync(skillFile)) continue;
+        const markdown = await readFile(skillFile, "utf8");
+        units.push({
+          slug: slugify(e.name),
+          file: `${sourceFolder}/SKILL.md`,
+          sourceFolder,
+          upstreamCategory: slugify(category.name),
+          markdown,
+        });
+      }
     }
   } else {
     throw new Error(`Layout "${source.layout}" not yet implemented for this importer.`);
@@ -285,7 +321,6 @@ async function importSource(id, { ref, dryRun }, lock) {
       }
 
       if (!dryRun) {
-        await mkdir(packageDir, { recursive: true });
         // Preserve original importedAt if the manifest already exists.
         let importedAt = stamp;
         const manifestPath = join(packageDir, ".hivemind-skill-source.json");
@@ -294,12 +329,25 @@ async function importSource(id, { ref, dryRun }, lock) {
             importedAt = JSON.parse(await readFile(manifestPath, "utf8")).importedAt ?? stamp;
           } catch {}
         }
+        if (source.copySkillDirectory && unit.sourceFolder) {
+          await rm(packageDir, { recursive: true, force: true });
+          await mkdir(packageDir, { recursive: true });
+          await cp(join(dir, source.skillsRoot, unit.sourceFolder), packageDir, { recursive: true, force: true });
+        } else {
+          await mkdir(packageDir, { recursive: true });
+        }
         await writeFile(skillPath, normalized.markdown);
+        if (source.licenseFile) {
+          const licensePath = join(dir, source.licenseFile);
+          if (existsSync(licensePath)) {
+            await cp(licensePath, join(packageDir, basename(source.licenseFile)), { force: true });
+          }
+        }
         const sourceFileUrl = source.sourceUrlTemplate
           ? source.sourceUrlTemplate.replace("{file}", unit.file)
           : `${source.repoUrl}/blob/${commit}/${source.skillsRoot}/${unit.file}`;
         const manifest = {
-          upstreamName: basename(unit.file, ".md"),
+          upstreamName: normalized.name,
           upstreamSlug: unit.slug,
           hiveSlug: unit.slug,
           sourceLabel: source.sourceLabel,
@@ -312,6 +360,7 @@ async function importSource(id, { ref, dryRun }, lock) {
           providerLabel: "HivemindOS optional packaged skills",
           sourcePath: relative(REPO_ROOT, packageDir).replace(/\\/g, "/"),
           packageGroup: source.category,
+          ...(unit.upstreamCategory ? { upstreamCategory: unit.upstreamCategory } : {}),
           status: "optional",
           license: source.license,
           commit,

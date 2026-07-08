@@ -550,6 +550,336 @@
   color: var(--danger);
 }
 
+/* ---- Queen Bee Ministry --------------------------------------------- */
+.ministryPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.ministryHero,
+.ministryTopologyHead,
+.ministryBenchTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ministryHero {
+  border: 1px solid var(--honey-line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 80% 12%, color-mix(in srgb, var(--honey) 18%, transparent), transparent 28%),
+    linear-gradient(180deg, var(--honey-soft), transparent 82%);
+  padding: 15px;
+}
+
+.ministryHero :global(.as-phead) {
+  margin: 0;
+}
+
+.ministryEnable {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.ministryDial {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ministryDialButton {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 7px;
+  align-content: start;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--fg-3);
+  cursor: pointer;
+  padding: 9px;
+  text-align: left;
+}
+
+.ministryDialButton[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+.ministryDialButton span,
+.ministryBenchCard strong,
+.ministryTopologyHead strong,
+.ministryDragCard strong,
+.ministrySlot strong {
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ministryDialButton small,
+.ministryBenchTop small,
+.ministryTopologyHead small,
+.ministryDragCard span,
+.ministrySlot small {
+  color: var(--fg-4);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ministryDialButton small {
+  grid-column: 2;
+}
+
+.ministryGrid {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.84fr) minmax(300px, 1.16fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.ministryBench,
+.ministryTopology {
+  display: grid;
+  gap: 10px;
+}
+
+.ministryBenchCard,
+.ministryTopology {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 12px;
+}
+
+.ministryBenchCard {
+  display: grid;
+  gap: 10px;
+}
+
+.ministryBenchTop {
+  align-items: center;
+}
+
+.ministryBenchTop > div,
+.ministryTopologyHead > div,
+.ministrySlot > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ministryMark,
+.ministrySlotOrb {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--honey);
+}
+
+.ministryMark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ministryProviderIcon {
+  display: block;
+  width: 19px;
+  height: 19px;
+  background-color: currentColor;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.ministryProviderIcon[data-mode="image"] {
+  background-color: transparent;
+}
+
+.ministryPickerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ministryDragCard {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  border: 1px dashed var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--fg-3);
+  cursor: grab;
+  font: inherit;
+  padding: 9px 10px;
+  text-align: left;
+  touch-action: none;
+  user-select: none;
+}
+
+.ministryDragCard:active {
+  cursor: grabbing;
+}
+
+.ministryDragCard:not([data-disabled]):hover,
+.ministryDragCard:not([data-disabled]):focus-visible,
+.ministryDragCard[data-dragging] {
+  border-color: var(--honey-line);
+  color: var(--honey);
+}
+
+.ministryDragCard[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.ministryTopology {
+  min-height: 390px;
+}
+
+.ministryMap {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.ministryCoreSlot {
+  display: grid;
+  justify-items: center;
+}
+
+.ministryCoreSlot .ministrySlot {
+  width: min(280px, 100%);
+  min-height: 110px;
+  text-align: center;
+}
+
+.ministryConnectors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 9%;
+}
+
+.ministryConnectors span {
+  position: relative;
+  min-height: 34px;
+}
+
+.ministryConnectors span::before {
+  content: "";
+  position: absolute;
+  inset: 0 50% auto auto;
+  width: 1px;
+  height: 100%;
+  border-left: 1px dashed var(--line-2);
+}
+
+.ministryConnectors span::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 42%;
+  border-top: 1px dashed var(--line-2);
+  transform-origin: left center;
+}
+
+.ministryConnectors span:first-child::after {
+  transform: rotate(-20deg);
+}
+
+.ministryConnectors span:nth-child(2)::after {
+  width: 0;
+}
+
+.ministryConnectors span:last-child::after {
+  transform: rotate(20deg);
+}
+
+.ministryExperts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ministrySlot {
+  appearance: none;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  width: 100%;
+  min-height: 128px;
+  border: 1px solid var(--honey-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 86%, var(--honey-soft));
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.ministrySlot[data-empty] {
+  border-color: var(--line-2);
+  background: var(--panel);
+}
+
+.ministrySlot[data-kind="agent"] {
+  border-color: color-mix(in srgb, var(--live) 46%, var(--line-2));
+}
+
+.ministrySlot:hover,
+.ministrySlot:focus-visible,
+.ministrySlot[data-selected],
+.ministrySlot[data-drag-over] {
+  border-color: var(--honey);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--honey) 36%, transparent), 0 0 0 5px color-mix(in srgb, var(--honey) 14%, transparent);
+}
+
+.ministrySlot[data-drag-over] {
+  background: color-mix(in srgb, var(--panel) 74%, var(--honey-soft));
+}
+
+.ministrySlotOrb {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+}
+
+.ministrySlotLabel {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ministryDragPreview { position: fixed; left: 0; top: 0; z-index: 10000; pointer-events: none; border: 1px solid var(--honey-line); border-radius: 999px; background: var(--panel-2); color: var(--honey); font-family: var(--f-mono); font-size: 11px; font-weight: 750; padding: 8px 10px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32); }
+
 /* ChatGPT OAuth connect block: .as-info is a horizontal flex row, so the
    text, button, and fallback link stack inside their own column. */
 .oauthConnect {
@@ -582,6 +912,31 @@
   .ttsMachineTop,
   .resourceStrip {
     grid-template-columns: 1fr;
+  }
+
+  .ministryDial,
+  .ministryGrid,
+  .ministryPickerGrid,
+  .ministryExperts {
+    grid-template-columns: 1fr;
+  }
+
+  .ministryHero,
+  .ministryTopologyHead,
+  .ministryBenchTop {
+    align-items: flex-start;
+  }
+
+  .ministryTopology {
+    min-height: 0;
+  }
+
+  .ministryConnectors {
+    display: none;
+  }
+
+  .ministryCoreSlot .ministrySlot {
+    width: 100%;
   }
 
   .ttsMachineIcon {

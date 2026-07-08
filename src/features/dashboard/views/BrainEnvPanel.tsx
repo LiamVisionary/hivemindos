@@ -373,6 +373,8 @@ export function BrainEnvPanel(props: BrainEnvPanelProps) {
     runtimeEnvFeature,
     renderAgentKey,
   } = props;
+  const sharedEnvDraftKey = sharedEnvDraft.key.trim();
+  const sharedEnvDraftSaving = Boolean(sharedEnvDraftKey && hiveEnvSavingKey === `shared:${sharedEnvSource?.id ?? "shared"}:${sharedEnvDraftKey}`);
 
   return (
     <section className={`${fleetClass("taskPanel", "tabPanel")} ${envClass("envPanel")}`}>
@@ -427,9 +429,12 @@ export function BrainEnvPanel(props: BrainEnvPanelProps) {
           <p className="eyebrow">Add shared variable</p>
           <div className={envClass("envEditGrid")}>
             <input className={envClass("envField")} value={sharedEnvDraft.key} onChange={(event) => setSharedEnvDraft((current) => ({ ...current, key: event.target.value.toUpperCase() }))} placeholder="KEY" />
-            <input className={`${envClass("envField")} ${maskedSecretValueClass}`} {...secretInputProps} value={sharedEnvDraft.value} onChange={(event) => setSharedEnvDraft((current) => ({ ...current, value: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter") void addSharedEnvValue(); }} placeholder="value" />
+            <input className={`${envClass("envField")} ${maskedSecretValueClass}`} {...secretInputProps} value={sharedEnvDraft.value} onChange={(event) => setSharedEnvDraft((current) => ({ ...current, value: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !sharedEnvDraftSaving) void addSharedEnvValue(); }} placeholder="value" />
             <button type="button" className={envClass("envActionButton")} onClick={generateSharedEnvSecret}><Sparkles aria-hidden="true" />Secret</button>
-            <button type="button" className={envClass("envActionButton", "envActionPrimary")} onClick={() => void addSharedEnvValue()}><Plus aria-hidden="true" />Add</button>
+            <button type="button" className={envClass("envActionButton", "envActionPrimary")} onClick={() => void addSharedEnvValue()} disabled={sharedEnvDraftSaving} aria-label="Save shared env variable">
+              {sharedEnvDraftSaving ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Check aria-hidden="true" />}
+              SAVE
+            </button>
           </div>
         </div>
       ) : null}

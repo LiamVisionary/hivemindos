@@ -4083,7 +4083,15 @@
 
 /* board + columns */
 .workBoardPanel .kanbanBoard {
-  grid-template-columns: repeat(auto-fit, minmax(252px, 1fr)) !important;
+  /* Uniform, horizontally-scrolling lanes sized to match the work-route card
+     source: a 400px lane renders the standalone card at 374px (its source
+     width). Must NOT use auto-fit template-columns (that made the first N lanes
+     252px while later lanes fell to grid-auto-columns, so "Needs You" squished
+     and "Done" ballooned). A fixed track (no 1fr) keeps every lane identical and
+     never stretches wider than the source on large monitors; 90vw is the
+     narrow-screen floor. */
+  grid-template-columns: none !important;
+  grid-auto-columns: min(400px, 90vw) !important;
   gap: 12px !important;
 }
 .workBoardPanel .kanbanColumn {
@@ -4115,19 +4123,21 @@
   gap: 6px 10px !important;
   align-items: center !important;
 }
-.workBoardPanel .kanbanColumnHeader h3 {
-  font-family: "Space Grotesk", system-ui, sans-serif !important;
-  font-size: 13.5px !important;
+/* Calm mono column label, matching the Work Route source. The extra
+   `.kanbanColumn` ancestor lifts specificity above the header-title override
+   so the letter-spacing lands. */
+.workBoardPanel .kanbanColumn .kanbanColumnHeader h3 {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  font-size: 10.5px !important;
   font-weight: 600 !important;
-  letter-spacing: -0.01em !important;
-  line-height: 1.2 !important;
-  color: var(--fc-fg) !important;
+  letter-spacing: 1.3px !important;
+  line-height: 1.35 !important;
+  text-transform: uppercase !important;
+  color: var(--fc-fg-2) !important;
 }
+/* Single-row header like the Work Route source — drop the lane description. */
 .workBoardPanel .kanbanColumnHeader p {
-  margin-top: 5px !important;
-  color: var(--fc-fg-3) !important;
-  font-size: 11px !important;
-  line-height: 1.4 !important;
+  display: none !important;
 }
 .workBoardPanel .kanbanColumnDot {
   width: 8px !important;
@@ -4138,20 +4148,20 @@
 .workBoardPanel .kanbanColumnDot.ideas { background: #76726a !important; }
 .workBoardPanel .kanbanColumnDot.ready { background: #a7a39a !important; }
 .workBoardPanel .kanbanColumnDot.working { background: var(--fc-live) !important; }
-.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-danger) !important; }
+.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-honey) !important; }
 .workBoardPanel .kanbanColumnDot.done { background: var(--fc-honey) !important; }
 .workBoardPanel .kanbanColumnDot.archived { background: #545049 !important; }
 .workBoardPanel .kanbanColumnCount {
   min-width: auto !important;
   height: auto !important;
-  border: 1px solid var(--fc-line-2) !important;
-  border-radius: 999px !important;
-  background: var(--fc-panel-2) !important;
-  color: var(--fc-fg-3) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--fc-fg-4) !important;
   font-family: "JetBrains Mono", ui-monospace, monospace !important;
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   font-weight: 500 !important;
-  padding: 1px 8px !important;
+  padding: 0 !important;
 }
 .workBoardPanel .kanbanAddColumnTask {
   width: 26px !important;
@@ -4349,6 +4359,20 @@
   background: var(--fc-panel) !important;
   box-shadow: none !important;
   padding: 12px 13px 11px !important;
+}
+/* A Needs-You card renders the standalone Work Route card as its whole body —
+   drop the generic card chrome so the honey card is the card. */
+.workBoardPanel .kanbanCard.workRoute {
+  gap: 0 !important;
+  padding: 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.workBoardPanel .kanbanCard.workRoute .kanbanCardHeader,
+.workBoardPanel .kanbanCard.workRoute .kanbanCardMeta,
+.workBoardPanel .kanbanCard.workRoute .kanbanCardFooter {
+  display: none !important;
 }
 .workBoardPanel .kanbanCard:hover,
 .workBoardPanel .kanbanCard:focus-visible {

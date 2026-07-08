@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, Puzzle, RefreshCcw, Sparkles } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, Puzzle, RefreshCcw, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { useVoiceBands } from "@/lib/stores/voice-bands-store";
 
@@ -7,11 +7,14 @@ import kanbanStyles from "@/app/kanban-board.module.css";
 import { LottiePlayer } from "@/components/ui/lottie-player";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { filesFromDataTransfer, filesFromReferencePaths } from "@/features/chat/chat-drop-references";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { CHAT_SLASH_COMMANDS, filterChatSlashCommands, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
 import { listenForTauriComposerDragDrop, type TauriDragDropEvent, type TauriDropPosition, type TauriWebviewApi } from "@/features/chat/tauri-composer-drag-drop";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
+import { CHAT_PERMISSION_MODE_OPTIONS, chatPermissionModeLabel } from "@/lib/types/chat-permissions";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { RecentDirectory } from "@/lib/types/recent-directories";
 
@@ -58,56 +61,6 @@ function shouldKeepEnterAsNewline() {
 type TauriRuntimeWindow = Window & {
   __TAURI_INTERNALS__?: unknown;
 };
-
-function basenameFromPath(path: string) {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) || "Dropped file";
-}
-
-function fileReferenceFromPath(path: string) {
-  const cleanPath = path.trim();
-  if (!cleanPath) return null;
-  const file = new File([], basenameFromPath(cleanPath), { type: "application/octet-stream" }) as File & { path?: string };
-  Object.defineProperty(file, "path", { value: cleanPath, configurable: true });
-  return file;
-}
-
-function fileFromReferenceText(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.startsWith("#")) return null;
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== "file:") return null;
-    return fileReferenceFromPath(decodeURIComponent(parsed.pathname));
-  } catch {
-    return trimmed.startsWith("/") || trimmed.startsWith("~/")
-      ? fileReferenceFromPath(trimmed)
-      : null;
-  }
-}
-
-function filesFromDataTransfer(dataTransfer: DataTransfer) {
-  const directFiles = Array.from(dataTransfer.files ?? []);
-  if (directFiles.length) return directFiles;
-  const itemFiles = Array.from(dataTransfer.items ?? [])
-    .filter((item) => item.kind === "file")
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file));
-  if (itemFiles.length) return itemFiles;
-  const textReferences = [
-    dataTransfer.getData("text/uri-list"),
-    dataTransfer.getData("text/plain"),
-  ].filter(Boolean).join("\n");
-  return textReferences
-    .split(/\r?\n/)
-    .map(fileFromReferenceText)
-    .filter((file): file is File => Boolean(file));
-}
-
-function filesFromReferencePaths(paths: string[]) {
-  return Array.from(new Set(paths))
-    .map(fileReferenceFromPath)
-    .filter((file): file is File => Boolean(file));
-}
 
 type ChatAttachment = KanbanTaskAttachment;
 type LinkedDirectory = KanbanLinkedDirectory;
@@ -307,12 +260,25 @@ export function attachmentSummary(attachments: ChatAttachment[]) {
   if (attachments.length === 0) return "";
   const images = attachments.filter((attachment) => attachment.kind === "image").length;
   const audio = attachments.filter((attachment) => attachment.kind === "audio").length;
-  const files = attachments.filter((attachment) => attachment.kind === "file").length;
+  const folders = attachments.filter((attachment) => attachment.referenceKind === "directory").length;
+  const files = attachments.filter((attachment) => attachment.kind === "file" && attachment.referenceKind !== "directory").length;
   return [
     images ? `${images} image${images === 1 ? "" : "s"}` : "",
     audio ? `${audio} audio clip${audio === 1 ? "" : "s"}` : "",
+    folders ? `${folders} folder${folders === 1 ? "" : "s"}` : "",
     files ? `${files} file${files === 1 ? "" : "s"}` : "",
   ].filter(Boolean).join(", ");
+}
+
+function attachmentKindLabel(attachment: ChatAttachment) {
+  if (attachment.referenceKind === "directory") return "Folder";
+  if (attachment.kind === "image") return "Image";
+  if (attachment.kind === "audio") return "Audio";
+  return "File";
+}
+
+function attachmentDetailLabel(attachment: ChatAttachment) {
+  return attachment.referenceOnly ? "reference" : attachmentSizeLabel(attachment.size);
 }
 
 function attachmentReferenceTarget(attachment: ChatAttachment) {
@@ -320,14 +286,16 @@ function attachmentReferenceTarget(attachment: ChatAttachment) {
 }
 
 function attachmentReferenceText(attachments: ChatAttachment[]) {
+  const hasDirectoryReferences = attachments.some((attachment) => attachment.referenceKind === "directory");
   return [
-    "Attached file references:",
+    hasDirectoryReferences ? "Attached file and folder references:" : "Attached file references:",
     ...attachments.map((attachment) => {
       const target = attachmentReferenceTarget(attachment);
       const details = [
+        attachment.referenceKind ? `kind: ${attachment.referenceKind === "directory" ? "folder" : "file"}` : "",
         target && target !== attachment.name ? `path: ${target}` : "",
         attachment.mimeType ? `type: ${attachment.mimeType}` : "",
-        Number.isFinite(attachment.size) ? `size: ${attachmentSizeLabel(attachment.size)}` : "",
+        Number.isFinite(attachment.size) && attachment.size > 0 ? `size: ${attachmentSizeLabel(attachment.size)}` : "",
       ].filter(Boolean);
       return `- ${attachment.name}${details.length ? ` (${details.join("; ")})` : ""}`;
     }),
@@ -404,16 +372,18 @@ export async function readComposerFiles(files: FileList | File[], kind: "image" 
   return Promise.all(incoming.map((file) => readAttachmentFile(file, kind)));
 }
 
-export function AgentResponseLoader() {
+export function AgentResponseLoader({ phrase: phraseOverride }: { phrase?: string } = {}) {
   const [phraseIndex, setPhraseIndex] = useState(0);
-  const phrase = RESPONSE_LOADING_PHRASES[phraseIndex] ?? RESPONSE_LOADING_PHRASES[0];
+  const customPhrase = phraseOverride?.trim();
+  const phrase = customPhrase || RESPONSE_LOADING_PHRASES[phraseIndex] || RESPONSE_LOADING_PHRASES[0];
 
   useEffect(() => {
+    if (customPhrase) return undefined;
     const timer = window.setInterval(() => {
       setPhraseIndex((index) => (index + 1) % RESPONSE_LOADING_PHRASES.length);
     }, 2800);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [customPhrase]);
 
   return (
     <div className={chatClass("responseLoader")} role="status" aria-live="polite" aria-label={`${phrase}...`}>
@@ -630,10 +600,10 @@ export function AttachmentListMenuContent({
           ))}
           {attachments.map((attachment) => (
             <div className={kanbanClass("kanbanAttachmentListItem")} key={attachment.id}>
-              <Paperclip aria-hidden="true" />
+              {attachment.referenceKind === "directory" ? <FolderOpen aria-hidden="true" /> : <Paperclip aria-hidden="true" />}
               <span>
                 <strong>{attachment.name}</strong>
-                <small>{attachment.kind === "image" ? "Image" : "File"} · {attachmentSizeLabel(attachment.size)}</small>
+                <small>{attachmentKindLabel(attachment)} · {attachmentDetailLabel(attachment)}</small>
               </span>
               <button
                 type="button"
@@ -717,6 +687,8 @@ export function ComposerField({
   hermesSlashCommands = false,
   agentMode,
   onAgentModeChange,
+  permissionMode,
+  onPermissionModeChange,
   modelPicker,
 }: {
   value: string;
@@ -769,6 +741,8 @@ export function ComposerField({
   hermesSlashCommands?: boolean;
   agentMode?: "plan" | "act";
   onAgentModeChange?: (mode: "plan" | "act") => void;
+  permissionMode?: ChatPermissionMode;
+  onPermissionModeChange?: (mode: ChatPermissionMode) => void;
   modelPicker?: ComposerModelPicker;
 }) {
   const composerFieldRef = useRef<HTMLDivElement | null>(null);
@@ -779,6 +753,7 @@ export function ComposerField({
   const [composerDropActive, setComposerDropActive] = useState(false);
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
   const [agentModeMenuOpen, setAgentModeMenuOpen] = useState(false);
+  const [permissionModeMenuOpen, setPermissionModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [workingDirectoryMenuOpen, setWorkingDirectoryMenuOpen] = useState(false);
   const [workingDirectoryOpening, setWorkingDirectoryOpening] = useState(false);
@@ -955,7 +930,9 @@ export function ComposerField({
       if (payload.type === "drop") {
         composerDragDepthRef.current = 0;
         setComposerDropActiveValue(false);
-        onDropFileReferences?.(filesFromReferencePaths(payload.paths));
+        void filesFromReferencePaths(payload.paths).then((files) => {
+          if (!disposed) onDropFileReferences?.(files);
+        });
         return;
       }
       setComposerDropActiveValue(true);
@@ -1027,6 +1004,7 @@ export function ComposerField({
       onDrop={handleComposerDrop}
     >
       {agentMode ? <input type="hidden" name="agentMode" value={agentMode} /> : null}
+      {permissionMode ? <input type="hidden" name="permissionMode" value={permissionMode} /> : null}
       <input
         ref={fileInputRef}
         type="file"
@@ -1066,9 +1044,9 @@ export function ComposerField({
           ))}
           {attachments.map((attachment) => (
             <div className={chatClass("attachmentPill")} key={attachment.id}>
-              <span>{attachment.kind === "image" ? "Image" : attachment.kind === "audio" ? "Audio" : "File"}</span>
+              <span>{attachmentKindLabel(attachment)}</span>
               <strong>{attachment.name}</strong>
-              <small>{attachment.referenceOnly ? "reference" : attachmentSizeLabel(attachment.size)}</small>
+              <small>{attachmentDetailLabel(attachment)}</small>
               <CloseIconButton size="sm" aria-label={`Remove ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)} disabled={disabled} />
             </div>
           ))}
@@ -1149,7 +1127,63 @@ export function ComposerField({
           >
             <Plus aria-hidden="true" />
           </button>
-          {agentMode && onAgentModeChange ? (
+          {permissionMode && onPermissionModeChange ? (
+            <TooltipProvider>
+              <Tooltip open={permissionModeMenuOpen}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={chatClass("composerModeButton", "composerPermissionButton", permissionMode === "bypass" && "bypass")}
+                    onClick={() => setPermissionModeMenuOpen((open) => !open)}
+                    onBlur={(event) => {
+                      if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) {
+                        setPermissionModeMenuOpen(false);
+                      }
+                    }}
+                    disabled={disabled}
+                    aria-label="Choose command permissions"
+                    aria-expanded={permissionModeMenuOpen}
+                  >
+                    <ShieldCheck aria-hidden="true" />
+                    <span>{chatPermissionModeLabel(permissionMode)}</span>
+                    <ChevronDown aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  className={chatClass("agentModeTooltip", "permissionModeTooltip")}
+                  onPointerDown={(event) => event.preventDefault()}
+                >
+                  <div className={chatClass("agentModeList", "permissionModeList")} role="listbox" aria-label="Command permissions">
+                    <span className={chatClass("permissionModeEyebrow")}>Mode</span>
+                    {CHAT_PERMISSION_MODE_OPTIONS.map((option) => (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={permissionMode === option.mode}
+                        key={option.mode}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          onPermissionModeChange(option.mode);
+                          setPermissionModeMenuOpen(false);
+                          window.requestAnimationFrame(() => textareaRef.current?.focus());
+                        }}
+                      >
+                        <span>
+                          <strong>{option.label}</strong>
+                          <small>{option.detail}</small>
+                        </span>
+                        <kbd>{option.shortcut}</kbd>
+                        {permissionMode === option.mode ? <Check aria-hidden="true" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : agentMode && onAgentModeChange ? (
             <TooltipProvider>
               <Tooltip open={agentModeMenuOpen}>
                 <TooltipTrigger asChild>

@@ -23,6 +23,7 @@ function normalizedSkillSlugs(slugs: string[]) {
 export function CompanyDirectiveComposer({
   placeholder = "Tell the crew what to do differently…",
   submitLabel = "Inject knowledge",
+  initialText = "",
   busy = false,
   autoFocus = false,
   openSkillAttachmentBrowser,
@@ -30,12 +31,13 @@ export function CompanyDirectiveComposer({
 }: {
   placeholder?: string;
   submitLabel?: string;
+  initialText?: string;
   busy?: boolean;
   autoFocus?: boolean;
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   onSubmit: (draft: DirectiveDraft) => void | Promise<void>;
 }) {
-  const [text, setText] = React.useState("");
+  const [text, setText] = React.useState(() => initialText);
   const [skill, setSkill] = React.useState("");
   const [skillSlugs, setSkillSlugs] = React.useState<string[]>([]);
   const [attachments, setAttachments] = React.useState<KanbanTaskAttachment[]>([]);

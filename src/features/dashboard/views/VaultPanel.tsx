@@ -10,6 +10,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { BrainGraphExplorer } from "./BrainGraphExplorer";
 import { BrainConfigPanel } from "./BrainConfigPanel";
 import { BrainSkillsPanel } from "./BrainSkillsPanel";
+import { BrainAtlasPanel, BrainDreamInboxPanel, BrainSkillRoiPanel } from "./BrainAugmentationPanels";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
 import { AgentMemoryHealthCard } from "./AgentMemoryHealthCard";
 import { SkillSecurityCard } from "./SkillSecurityCard";
@@ -1166,8 +1167,14 @@ function VaultPanelComponent(props: any) {
     { id: "brain-services", label: "Brain Services" },
     { id: "env", label: "Env" },
     { id: "config", label: "Config" },
+    { id: "atlas", label: "Brain Atlas" },
+    { id: "dream-inbox", label: "Dream Inbox" },
+    { id: "skill-roi", label: "Skill ROI" },
   ];
   const vaultPanelCopy = {
+    atlas: { title: "Brain Atlas", subtitle: "Clusters and leverage map" },
+    "dream-inbox": { title: "Dream Inbox", subtitle: "Opt-in GBrain ideas" },
+    "skill-roi": { title: "Skill ROI", subtitle: "Highest-leverage recipes" },
     "hive-vault": { title: "Shared Brain", subtitle: "Obsidian memory graph" },
     "shared-skills": { title: "Shared Skills", subtitle: "Skill shelf and imports" },
     "brain-services": { title: "Brain Services", subtitle: "Retrieval and synthesis" },
@@ -1194,6 +1201,18 @@ function VaultPanelComponent(props: any) {
         />
 
         <div className={vaultClass("vaultPanelBody", vaultPanelMode === "hive-vault" && "brainMapBody")}>
+        {vaultPanelMode === "atlas" ? (
+          <BrainAtlasPanel {...{ BrainCircuit, Button, FileText, GitBranch, LoaderCircle, Network, RefreshCcw, Search, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, formatBrainDate, inspectBrainNode, refreshBrainGraph, selectedAgent, setActiveView, setText, startAgentChat, vaultClass }} />
+        ) : null}
+
+        {vaultPanelMode === "dream-inbox" ? (
+          <BrainDreamInboxPanel {...{ Button, LoaderCircle, RefreshCcw, Sparkles, gbrainActionStatus, gbrainBusy, gbrainStatus, runGbrainAction, vaultClass }} />
+        ) : null}
+
+        {vaultPanelMode === "skill-roi" ? (
+          <BrainSkillRoiPanel {...{ Button, Check, Download, LoaderCircle, RefreshCcw, Sparkles, brainSkillImportProvider, brainSkills, brainSkillsLoading, importBrainSkills, openSkillBrowser, providerSkillInventories, refreshBrainSkills, setSkillBrowserSearch, sharedBrainSkills, sharedVault, vaultClass }} />
+        ) : null}
+
         {vaultPanelMode === "hive-vault" ? (
         <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startAgentChat, startBrainPan, vaultClass }} />
         ) : null}

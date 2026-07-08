@@ -60,7 +60,9 @@ Current optional catalog:
 - `brand/hivemindos/brand-book-concept-page`: optional HivemindOS brand skill for creating multiple brand directions and compact brand-book concept artifacts with trademark and private-asset safety gates.
 - `brand/hivemindos/out-of-home-subway-campaign`: optional HivemindOS brand skill for transit/out-of-home campaign mockups, with placement, endorsement, and transit-authority caveats.
 - `crypto/hivemindos/b20-issuer-proof`: optional HivemindOS crypto skill for preparing deterministic Base B20 issuer proof cards, requiring confirmation, and creating B20 tokens through the encrypted local wallet route on Base Sepolia.
-- `design/`: 109 optional UI and design-engineering skills imported from the UI Skills directory, preserving upstream source namespaces as `design/<source>/<skill>/` and available as the `Design Optional Skills Directory` pack.
+- `crypto/hivemindos/nansen-*`: optional HivemindOS crypto skills for Nansen simple and complex research — DeFi positions, Smart Money holdings, token top holders, token screener discovery, token tracking and Smart Money netflow, Hyperliquid wallet discovery, related-wallet clustering, top-wallet token research, and CEX-health monitoring — all routed through the HivemindOS Nansen intelligence path with read-only/copytrade guardrails.
+- `design/`: optional UI and design-engineering skills, including 109 skills imported from the UI Skills directory and 73 MIT-licensed skills from `MengTo/Skills`, preserving upstream source namespaces as `design/<source>/<skill>/` and available as the `Design Optional Skills Directory` pack.
+- `design/mengto/`: optional MIT skills from `MengTo/Skills` for Codex design workflows, asset sourcing, design-first UI prompting, landing/pricing pages, motion systems, WebGL/canvas/3D patterns, and visual style recipes.
 - `design/diffusionstudio/text-to-lottie`: optional MIT skill (vendored verbatim from `diffusionstudio/lottie` with its full `references/` library, `evals/`, and upstream LICENSE) for authoring/editing/fixing production-ready Lottie/Bodymovin JSON animations — logos, type, loaders/icons, UI microinteractions, lower thirds, diagrams, data/stat animations, product promos, and visual effects. Its in-player render/verify loop expects the upstream Skia Skottie player project (`npx skills add diffusionstudio/lottie`).
 - `design/hivemindos/newsroom-data-visualization`: optional HivemindOS design skill for publication-grade chart choice, annotation, source/caveat handling, and responsive data-story graphics.
 - `design/hivemindos/swiss-grid-editorial-page`: optional HivemindOS design skill for disciplined Swiss-grid editorial pages, reports, posters, and webpages.
@@ -94,6 +96,7 @@ Current optional catalog:
 
 - `node scripts/import-packaged-skills.mjs --list` — show configured sources.
 - `node scripts/import-packaged-skills.mjs n8n` — import a source (use `--dry-run` first for unvalidated sources).
+- `node scripts/import-packaged-skills.mjs mengto` — refresh the optional `design/mengto/` catalog from the pinned MIT upstream shape `agent-skills/<category>/<skill>/`.
 - `node scripts/import-packaged-skills.mjs --verify` — re-hash every vendored skill against `skills-lock.json` and fail on drift.
 
 Keep packaged skills self-contained, user-safe, and installable without relying on Liam's local agent runtime paths.

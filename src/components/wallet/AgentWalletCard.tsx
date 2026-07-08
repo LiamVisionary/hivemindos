@@ -662,7 +662,7 @@ export function AgentWalletCard({
             <WalletCards aria-hidden="true" />
             <div>
               <strong>Crypto</strong>
-              <span>{wallet.walletAddress ? shortenAddress(wallet.walletAddress) : "Local USDC wallet"}</span>
+              <span>{wallet.walletAddress ? shortenAddress(wallet.walletAddress) : "Local stablecoin wallet"}</span>
             </div>
             <small>{railText(cryptoRailState)}</small>
           </div>
@@ -1378,6 +1378,7 @@ export function AgentWalletCard({
                         >
                           <option value="eip155:8453">Base mainnet</option>
                           <option value="eip155:84532">Base Sepolia</option>
+                          <option value="eip155:4663">Robinhood Chain</option>
                           <option value="solana:mainnet">Solana mainnet</option>
                           <option value="solana:devnet">Solana devnet</option>
                         </select>

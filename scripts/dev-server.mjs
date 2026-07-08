@@ -186,6 +186,7 @@ if (!warmRoutes.length && warmRoutesRaw !== "0") {
     "/stake",
     "/api/chat/agent-runtime",
     "/api/chat/image-generation",
+    "/api/queen-bee/chat",
     "/api/queen-bee/voice",
   );
 }

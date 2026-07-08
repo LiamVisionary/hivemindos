@@ -65,12 +65,12 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Wallets And Tokens</h3>
-    <p>Follow agent wallets, Base/Solana token handling, UsePod prepaid deposits, MoneyClaw keys, Honey rewards, Bankr HIVE claims, and x402 payments.</p>
+    <p>Follow agent wallets, Base/Robinhood Chain/Solana token handling, UsePod prepaid deposits, MoneyClaw keys, Honey rewards, Bankr HIVE claims, and x402 payments.</p>
     <a href="./for-users/features/wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">
     <h3>Trading</h3>
-    <p>Every trading capability in one place — crypto swaps, sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca or on-chain xStocks, with governance and agent access.</p>
+    <p>Every trading capability in one place — crypto swaps, sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca, xStocks, or Robinhood Chain Stock Tokens, with governance and agent access.</p>
     <a href="./for-users/trading/">Open trading docs</a>
   </section>
   <section class="docCard">
@@ -138,7 +138,7 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 - AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
 - Swarm: chat-launched `/swarm [number]` agent-team passes, `/swarm-goal` Queen Bee build orchestration, `/swarm-sim` MiroShark simulation launches, MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
 - Brain Services: Obsidian graph, shared skills, Agent Memory entity/usage indexes, QMD, Neo4j, GBrain, Syntho, trading brain install/status, service notes, Synthesis folder configuration, source access policy controls, vault doctor, and whole brain architecture docs.
-- Wallets, Tokens, and Usage: per-agent wallets, Base/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
+- Wallets, Tokens, and Usage: per-agent wallets, Base/Robinhood Chain/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.
 - GitLawb Code Proof: lightweight CLI/DID setup, project registry, task proof badges, Fleet Code Node status, and lazy local repo node hosting.
 - Work History and Maintenance: dynamic changelog history, note-to-Kanban intake, bulk task triage, process/heap memory telemetry, and conservative local repair actions.
 - Native Desktop: a Tauri shell that can read desktop status directly and use native local folder browsing/creation while preserving the browser API fallbacks.

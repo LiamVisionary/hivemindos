@@ -1,4 +1,6 @@
 import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
+import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 
 type ChatAgentLike = {
   id?: string;
@@ -198,12 +200,27 @@ function promptOptionButtonLabel(value: string) {
 export function promptUiFromMessage(message: ChatMessageLike, content: string) {
   const structuredPrompt = message?.agentPrompt;
   const structuredChoices = Array.isArray(structuredPrompt?.choices)
-    ? structuredPrompt.choices.map((choice) => plainPromptOptionText(String(choice))).filter(Boolean)
+    ? structuredPrompt.choices.map((choice) => {
+      if (typeof choice === "string") {
+        const value = plainPromptOptionText(choice);
+        return value ? { label: promptOptionButtonLabel(value), value } : null;
+      }
+      if (!choice || typeof choice !== "object") return null;
+      const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown };
+      const value = plainPromptOptionText(String(record.value ?? record.label ?? ""));
+      if (!value) return null;
+      const label = promptOptionButtonLabel(String(record.label ?? value));
+      return {
+        label,
+        value,
+        permissionMode: normalizeChatPermissionMode(record.permissionMode),
+      };
+    }).filter((choice): choice is { label: string; value: string; permissionMode?: ChatPermissionMode } => Boolean(choice))
     : [];
   if (structuredPrompt?.question && structuredChoices.length) {
     return {
       displayText: String(structuredPrompt.question).trim() || content,
-      options: structuredChoices.map((choice) => ({ label: promptOptionButtonLabel(choice), value: choice })),
+      options: structuredChoices,
     };
   }
 

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
             provider: "manual",
             walletAddress: wallet.address,
             network: wallet.network,
-            tokenSymbol: wallet.network.startsWith("solana:") ? "SOL" : "ETH",
+            tokenSymbol: primaryTokenSymbol(wallet.network),
             custodyMode: wallet.custodyMode,
             updatedAt: now,
           },

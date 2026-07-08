@@ -1,3 +1,9 @@
+import {
+  hiveComputeHostedRouteModel,
+  isHiveComputeHostedModelId,
+  normalizeHiveComputeModel,
+} from "@/lib/config/hive-compute-marketplace";
+
 export const HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER = "hivemindos-models";
 export const HIVEMINDOS_WALLET_PAID_MODELS_NAME = "HivemindOS";
 export const HIVEMINDOS_FREE_MODEL_ID = "hivemindos/swarm-sovereign-scout";
@@ -16,6 +22,11 @@ export const HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID = "shared:hivemindos-mode
 // "hivemindos/custom:<upstream-id>" so the profile stays a single string.
 export const HIVEMINDOS_CUSTOM_MODEL_PREFIX = "hivemindos/custom:";
 const CUSTOM_UPSTREAM_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+const HIVEMINDOS_COMPUTE_FIRST_MODEL_BY_ID: Record<string, string> = {
+  "hivemindos/auto": "hive-compute/auto",
+  "hivemindos/fast": "hive-compute/fast",
+  "hivemindos/deep": "hive-compute/deep",
+};
 
 export type HivemindosWalletPaidModelOption = {
   id: string;
@@ -25,6 +36,8 @@ export type HivemindosWalletPaidModelOption = {
   badge: string;
   upstreamModel: string;
   tier: "free" | "paid";
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 export const HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS: HivemindosWalletPaidModelOption[] = [
@@ -40,19 +53,28 @@ export const HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS: HivemindosWalletPaidModelOpti
   {
     id: "hivemindos/auto",
     name: "Auto",
-    subtitle: "Best wallet-paid route",
+    subtitle: "Best available GPU first · OpenRouter fallback",
     group: "HivemindOS",
-    badge: "Wallet",
+    badge: "SALE",
     upstreamModel: HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_UPSTREAM_MODEL,
     tier: "paid",
   },
   {
     id: "hivemindos/fast",
     name: "Fast",
-    subtitle: "Low-latency wallet-paid route",
+    subtitle: "Low-latency GPU first · OpenRouter fast fallback",
     group: "HivemindOS",
-    badge: "Wallet",
+    badge: "SALE",
     upstreamModel: "gpt-5.4-nano",
+    tier: "paid",
+  },
+  {
+    id: "hivemindos/deep",
+    name: "Deep",
+    subtitle: "Large-context GPU first · OpenRouter deep fallback",
+    group: "HivemindOS",
+    badge: "SALE",
+    upstreamModel: "claude-opus-4.8",
     tier: "paid",
   },
   {
@@ -91,6 +113,7 @@ export function customHivemindosWalletPaidModelId(upstreamModel: string) {
 
 export function normalizeHivemindosWalletPaidModel(model: string | undefined | null) {
   const trimmed = model?.trim() || "";
+  if (isHiveComputeHostedModelId(trimmed)) return trimmed;
   if (HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.some((option) => option.id === trimmed)) return trimmed;
   if (isCustomHivemindosWalletPaidModel(trimmed)) return trimmed;
   return HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL;
@@ -98,6 +121,7 @@ export function normalizeHivemindosWalletPaidModel(model: string | undefined | n
 
 export function upstreamHivemindosWalletPaidModel(model: string | undefined | null) {
   const normalized = normalizeHivemindosWalletPaidModel(model);
+  if (isHiveComputeHostedModelId(normalized)) return normalizeHiveComputeModel(normalized);
   if (isCustomHivemindosWalletPaidModel(normalized)) {
     return normalized.slice(HIVEMINDOS_CUSTOM_MODEL_PREFIX.length);
   }
@@ -110,6 +134,19 @@ export function upstreamHivemindosWalletPaidModel(model: string | undefined | nu
 // on free-tier allowances either way.
 export function isFreeHivemindosWalletPaidModel(model: string | undefined | null) {
   return normalizeHivemindosWalletPaidModel(model) === HIVEMINDOS_FREE_MODEL_ID;
+}
+
+export function hiveComputeRouteForHivemindosModel(model: string | undefined | null) {
+  return hiveComputeHostedRouteModel(normalizeHivemindosWalletPaidModel(model));
+}
+
+export function preferredHiveComputeModelForHivemindosModel(model: string | undefined | null) {
+  const normalized = normalizeHivemindosWalletPaidModel(model);
+  return HIVEMINDOS_COMPUTE_FIRST_MODEL_BY_ID[normalized] || "";
+}
+
+export function isComputeFirstHivemindosModel(model: string | undefined | null) {
+  return Boolean(preferredHiveComputeModelForHivemindosModel(model));
 }
 
 export function normalizeHivemindosWalletPaidSlug(slug: string | undefined | null) {

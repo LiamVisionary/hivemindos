@@ -1,8 +1,14 @@
+import { register } from "node:module";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listMessagingChannels, sendHiveMessage } from "../src/lib/services/messaging/channels.ts";
+
+// Native TS type-stripping + `@/` alias + `server-only` stub via the shared
+// loader, then dynamic-import the module under test (the repo's standard
+// hermetic-suite pattern). Run with: node scripts/test-messaging-channels-bridge.mjs
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+const { listMessagingChannels, sendHiveMessage } = await import("../src/lib/services/messaging/channels.ts");
 
 const tmp = await mkdtemp(join(tmpdir(), "hive-messaging-bridge-"));
 const priorHermesBin = process.env.HERMES_BIN;

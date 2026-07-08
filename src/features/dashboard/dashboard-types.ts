@@ -1,4 +1,5 @@
 import type { AgentProfile, AgentRuntime, RuntimeCapabilities, SharedVaultConfig } from "@/lib/types/agent-runtime";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { AgentNotification, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { GBrainStatus } from "@/lib/services/brain/gbrain";
@@ -141,6 +142,15 @@ export type RuntimeIntegrationStatus = {
       setup?: LocalRuntimeSetupStatus;
       error?: string;
       checkedAt?: string;
+    };
+    hiveCompute?: {
+      status?: string;
+      message?: string;
+      modelCount?: number;
+      checkedAt?: string;
+      gatewayConfigured?: boolean;
+      workerInstalled?: boolean;
+      workerReady?: boolean;
     };
   };
 };
@@ -316,7 +326,7 @@ export type ChatMessage = {
     id: string;
     type: "clarify" | "approval" | "sudo" | "secret" | "prompt";
     question: string;
-    choices?: string[];
+    choices?: Array<string | { label: string; value: string; permissionMode?: ChatPermissionMode }>;
     allowFreeText?: boolean;
   };
 };
@@ -1055,7 +1065,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance" | "compute";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

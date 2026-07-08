@@ -412,3 +412,5 @@ assets, and make the fork or service relationship clear. See
 HivemindOS packages agent-control patterns, runtime adapter code, HivemindOS workflow templates, MiroShark companion integration, and local-first fleet telemetry into a standalone open-source dashboard. The AI SDK route and chat UI patterns were adapted from public Next.js agent examples. Some workflow templates were inspired by `shannhk/hermes-agent-control-room`.
 
 Thanks to [AgentRQ](https://github.com/agentrq/agentrq) for the Apache-2.0 task-orchestration ideas behind HivemindOS' MCP-native Work Board additions: claimable tasks, status updates, task comments, human approval requests, and event-driven agent coordination.
+
+Thanks to [mr-gigabee/gigabee](https://github.com/mr-gigabee/gigabee) for the MIT-licensed decentralized inference-marketplace reference that informed Hive Compute's worker registration, queued job dispatch, token streaming, earnings-accounting shape, and local Ollama worker setup.

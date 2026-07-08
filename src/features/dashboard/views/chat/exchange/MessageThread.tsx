@@ -13,11 +13,13 @@ import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type
 import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
 import { extractMiroSharkSimulationCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatAttachment, ChatMessage } from "@/features/dashboard/dashboard-types";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 import { Dot, Glyph, ICON } from "./primitives";
 
 type IconComponent = ElementType<{ "aria-hidden"?: boolean | "true" | "false"; className?: string }>;
+type AgentResponseLoaderComponent = ElementType<{ phrase?: string }>;
 type ChatMarkdownComponent = ComponentType<{ text: string; className?: string; headingClassName?: string }>;
 
 // events/label are read defensively; the canonical ChatMessage/attachment types do not define them.
@@ -81,13 +83,20 @@ function renderInline(text: string) {
 
 function InteractivePromptControls({ disabled, options, sendPromptMessage, Send }: {
   disabled?: boolean;
-  options: Array<{ label: string; value: string }>;
-  sendPromptMessage?: (prompt: string) => void | Promise<void>;
+  options: Array<{ label: string; value: string; permissionMode?: ChatPermissionMode }>;
+  sendPromptMessage?: (prompt: string, options?: { permissionMode?: ChatPermissionMode }) => void | Promise<void>;
   Send?: IconComponent;
 }) {
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState("");
   if (!sendPromptMessage || !options.length) return null;
+  const submitOption = (option: { value: string; permissionMode?: ChatPermissionMode }) => {
+    const prompt = option.value.trim();
+    if (!prompt) return;
+    void sendPromptMessage(prompt, option.permissionMode ? { permissionMode: option.permissionMode } : undefined);
+    setOtherText("");
+    setOtherOpen(false);
+  };
   const submitValue = (value: string) => {
     const prompt = value.trim();
     if (!prompt) return;
@@ -99,7 +108,7 @@ function InteractivePromptControls({ disabled, options, sendPromptMessage, Send 
     <div style={{ display: "grid", gap: 8, marginTop: 10 }} aria-label="Prompt response options">
       <div style={{ display: "grid", gap: 7, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
         {options.map((option, index) => (
-          <button key={`${option.value}-${index}`} type="button" className="fr-chat-mini-button" onClick={() => submitValue(option.value)} disabled={disabled}>
+          <button key={`${option.value}-${index}`} type="button" className="fr-chat-mini-button" onClick={() => submitOption(option)} disabled={disabled}>
             <span>{index + 1}</span>
             <strong>{option.label}</strong>
           </button>
@@ -135,11 +144,13 @@ function InteractivePromptControls({ disabled, options, sendPromptMessage, Send 
   );
 }
 
-function ThinkingLoader({ AgentResponseLoader }: { AgentResponseLoader?: ElementType }) {
+function ThinkingLoader({ AgentResponseLoader, phrase }: { AgentResponseLoader?: AgentResponseLoaderComponent; phrase?: string }) {
+  const cleanPhrase = phrase?.trim();
   return AgentResponseLoader ? (
-    <AgentResponseLoader />
+    <AgentResponseLoader phrase={cleanPhrase || undefined} />
   ) : (
-    <span style={{ display: "flex", gap: 5 }} aria-label="Agent is thinking">
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }} aria-label={cleanPhrase ? `${cleanPhrase}...` : "Agent is thinking"}>
+      {cleanPhrase ? <span style={{ color: "var(--fg-3)", fontSize: 13, fontWeight: 600 }}>{cleanPhrase}</span> : null}
       {[0, 1, 2].map((index) => <span key={index} style={{ width: 6, height: 6, borderRadius: 999, background: "var(--fg-3)", animation: `fr-td 1.1s ease-in-out ${index * 0.18}s infinite` }} />)}
     </span>
   );
@@ -352,6 +363,7 @@ function MessageThreadBase({
   iconProps,
   messages,
   openKanbanTaskMenuKey,
+  pendingAssistantStatusText,
   processEventsForDisplay,
   processEventsTargetKey,
   selectedAgent,
@@ -361,7 +373,7 @@ function MessageThreadBase({
   chatKanbanGeneration,
   dismissChatKanbanGeneration,
 }: {
-  AgentResponseLoader?: ElementType;
+  AgentResponseLoader?: AgentResponseLoaderComponent;
   ChatMarkdown?: ChatMarkdownComponent;
   FileText?: IconComponent;
   Send?: IconComponent;
@@ -376,10 +388,11 @@ function MessageThreadBase({
   iconProps: ThreadIconProps;
   messages: ThreadMessage[];
   openKanbanTaskMenuKey: string;
+  pendingAssistantStatusText?: string;
   processEventsForDisplay: ProcessEvent[];
   processEventsTargetKey: string;
   selectedAgent?: AgentProfile | null;
-  sendPromptMessage?: (prompt: string) => void | Promise<void>;
+  sendPromptMessage?: (prompt: string, options?: { permissionMode?: ChatPermissionMode }) => void | Promise<void>;
   setCopiedMessageKey: Dispatch<SetStateAction<string>>;
   setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
   chatKanbanGeneration?: ChatKanbanGeneration | null;
@@ -435,6 +448,7 @@ function MessageThreadBase({
         const messageEvents = normalizeProcessEvents(message.processEvents ?? message.events);
         const responseBilling = !isUser ? responseBillingText(message.billing) : "";
         const isPendingAssistant = !isUser && !content && busy && index === messages.length - 1;
+        const pendingAssistantLabel = isPendingAssistant ? pendingAssistantStatusText : undefined;
         const renderKey = messageKey(message, index);
         const userProcessRenderKey = `${chatProcessScopeKey}\u001fuser\u001f${renderKey}`;
         const assistantProcessRenderKey = `${chatProcessScopeKey}\u001fassistant\u001f${renderKey}`;
@@ -496,9 +510,9 @@ function MessageThreadBase({
               />
             ) : null}
             {isPendingAssistant && !hasAssistantBody ? (
-              <article aria-label="Agent is thinking" style={{ display: "grid", gap: 6 }}>
+              <article aria-label={pendingAssistantLabel ? `${pendingAssistantLabel}...` : "Agent is thinking"} style={{ display: "grid", gap: 6 }}>
                 <div style={{ color: "var(--fg-2)", fontSize: 14.5, lineHeight: 1.7, paddingLeft: 13 }}>
-                  <ThinkingLoader AgentResponseLoader={AgentResponseLoader} />
+                  <ThinkingLoader AgentResponseLoader={AgentResponseLoader} phrase={pendingAssistantLabel} />
                 </div>
               </article>
             ) : hasAssistantBody ? (
@@ -541,7 +555,7 @@ function MessageThreadBase({
       {busy && !hasStreamingChunk && !pendingAssistantBubbleVisible ? (
         <div className="fr-chat-enter" style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 1 }}>
           <span className="fr-dot live" style={{ color: "var(--live)" }} />
-          <ThinkingLoader AgentResponseLoader={AgentResponseLoader} />
+          <ThinkingLoader AgentResponseLoader={AgentResponseLoader} phrase={pendingAssistantStatusText} />
         </div>
       ) : null}
     </>

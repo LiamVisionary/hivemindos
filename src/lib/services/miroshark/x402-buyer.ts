@@ -157,6 +157,20 @@ export async function runMiroSharkX402(input: MiroSharkX402RunRequest): Promise<
     body: payload,
     policy: normalizePolicy(input.policy, stored.info.network),
     confirmation: optionalString(input.confirmation),
+    skipPlatformFee: true,
+    approvalContext: {
+      summary: "This pays the hosted MiroShark x402 run endpoint for one simulation run.",
+      whyNow: "The simulation request reached a paid x402 endpoint and the wallet governance policy requires review before spending.",
+      impact: "Approving lets the run submit with x402 payment. Rejecting stops this paid simulation request.",
+      requestedAction: "Approve only if this MiroShark simulation should be paid from the selected local wallet.",
+      evidence: [
+        `Endpoint: ${MIROSHARK_X402_RUN_BASE_URL}/run`,
+        `Wallet: ${agentId}`,
+        `Network: ${stored.info.network}`,
+      ],
+      missingContext: [],
+      source: "MiroShark x402 simulation",
+    },
   });
   return { result, miroshark: result.bodyJson };
 }

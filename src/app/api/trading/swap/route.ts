@@ -12,7 +12,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Local DEX swap from the user's own wallet (0x on Base). The wallet — its
+ * Local DEX swap from the user's own wallet (0x on Base/Robinhood Chain,
+ * Jupiter on Solana). The wallet — its
  * network, address, and signing key — is resolved server-side from the local
  * vault by agentId; a client request never supplies the key or address. The
  * hard $10 cap, spend governance, and the CONFIRM_SWAP gate are enforced in

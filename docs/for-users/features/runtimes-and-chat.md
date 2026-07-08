@@ -123,10 +123,29 @@ Customising the panel: set `agent.fusion` (`FusionAgentConfig`) to override `par
 
 Streaming: the synthesizer answer streams as the assistant message, while each panel member and the judge surface as tool/reasoning process events (the panel plan and judge analysis appear as reasoning chips). The orchestrator is dependency-injectable and covered by `scripts/test-fusion.mjs` (`pnpm test:fusion`).
 
+## Hive Compute (Marketplace GPU Inference)
+
+Hive Compute supplies GPU-first routes inside the **HivemindOS** model provider's
+unified **All models** catalog. Auto, Fast, and Deep appear before the other
+OpenRouter-backed HivemindOS models with **SALE** badges, try eligible
+marketplace workers first, and fall back to the matching hosted model tier when
+marketplace capacity is unavailable.
+
+The dashboard also has a **Hive Compute** setup view for operators who want to
+earn on spare GPU capacity. It installs a small worker module under
+`~/.hivemindos/modules/hive-compute-worker`; the worker connects to a compatible
+gateway, advertises Ollama or LM Studio/OpenAI-compatible model routes, accepts
+assigned jobs, streams tokens, and reports completion. Official matching,
+payout, receipt, quota, and fraud-control authority still belongs in hosted
+HivemindOS infrastructure or a self-hosted operator's own gateway, not in the
+downloadable app.
+
 ## What Agents And Chat Can Do
 
 - Runtime/provider/model selection where supported.
 - Adaptive OpenRouter free-model routing with learned reliability, capacity failover, and quality grading.
+- HivemindOS Models GPU-first routing through Hive Compute, with hosted
+  OpenRouter fallback when marketplace capacity is unavailable.
 - Streaming runtime responses where available.
 - `/swarm [number]` role-specific parallel passes across the best-suited configured chat-capable agents.
 - `/swarm-goal <build request>` prompt expansion plus Queen Bee Work Board delegation for parallel build tasks.

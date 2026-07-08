@@ -22,12 +22,12 @@ import {
 
 export type RailResult = { ok: boolean; message?: string; reference?: string; error?: string };
 
-// ── local DEX swap rail (0x on Base / Jupiter on Solana) ─────────────────────
+// ── local DEX swap rail (0x on Base/Robinhood Chain, Jupiter on Solana) ──────
 export async function quoteDex(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; network?: string }): Promise<{ ok: boolean; quote?: DexSwapQuote; error?: string }> {
   return quoteSwap(params);
 }
 
-export async function runDexSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number }): Promise<RailResult> {
+export async function runDexSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; network?: string }): Promise<RailResult> {
   const response = await executeSwap({ ...params, confirmation: SWAP_CONFIRMATION });
   if (!response.ok || !response.result) return { ok: false, error: response.error || "Swap failed." };
   return { ok: true, message: response.result.detail, reference: response.result.reference };

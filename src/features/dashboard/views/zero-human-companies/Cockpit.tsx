@@ -21,9 +21,10 @@ import { CompanyRunsPanel } from "./CompanyRunsPanel";
 import { ApprovalPoliciesPanel } from "./ApprovalPoliciesPanel";
 import { collectCompanyDeliverables, partitionByOutput, dispatchedAgo } from "./company-deliverables";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
-import type { Agent, Colony, CompanyRevenueShareInput, Issue } from "./types";
+import { isWorkApprovalIssue, workApprovalIssueToView } from "./work-approval-issues";
+import type { Agent, Colony, CompanyRevenueShareInput, Issue, Theme } from "./types";
 import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
-import type { ApprovalDecision } from "@/features/approvals/spend-approval-model";
+import type { ApprovalDecision, SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import type { CompanyApprovalPolicy, CompanyPricingProposal } from "@/lib/types/company";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
@@ -34,6 +35,8 @@ export type CockpitHandlers = {
   /** Decide a pending spend approval with an optional note/change, via the
    *  shared approve/reject modal (same surface as the Alerts review queue). */
   onDecideApproval: (approvalId: string, decision: ApprovalDecision, note: string) => void | Promise<void>;
+  /** Decide an approval-like Work Board task and resume it through the answer rail. */
+  onDecideIssueApproval: (issue: Issue, decision: ApprovalDecision, note: string) => void | Promise<void>;
   /** Human decision on a crew-raised pricing proposal (approve applies the catalog change). */
   onResolvePricing: (proposalId: string, decision: "approve" | "reject") => void;
   /** Save one company approval-policy row. */
@@ -53,7 +56,7 @@ export type CockpitHandlers = {
   /** Open a board card's underlying Work Board task (result + deliverables). */
   onOpenIssue: (issue: Issue) => void;
   /** Human fixed the blocker; answer the Needs-You task so it resumes. */
-  onResolveIssue: (issue: Issue) => void;
+  onResolveIssue: (issue: Issue, answer?: string) => void;
   /** Re-queue a group of infra-blocked tasks for autonomous pickup (answer rail). */
   onRetryIssues?: (issues: Issue[]) => void;
   /** Set aside issues: archive their tasks off the board (persistent, reversible).
@@ -340,6 +343,10 @@ function ActivityTicker({ colony }: { colony: Colony }) {
 
 const MAX_NEEDS_STRIP_ROWS = 3;
 
+type ApprovalReviewItem =
+  | { source: "spend"; approval: SpendApprovalView }
+  | { source: "work"; approval: SpendApprovalView; issue: Issue };
+
 /**
  * The honey "needs you" strip above the tabs. One row per thing that actually
  * wants a human: spend/contract approvals and work the crew blocked on. Each row
@@ -348,8 +355,15 @@ const MAX_NEEDS_STRIP_ROWS = 3;
 function NeedsStrip({ colony: c, onGoToApprovals, onGoToIssues }: {
   colony: Colony; onGoToApprovals: () => void; onGoToIssues: () => void;
 }) {
-  const approvals = c.approvals;
-  const blocked = React.useMemo(() => c.issues.filter(isCompanyReviewIssue), [c.issues]);
+  const workApprovalIssues = React.useMemo(() => c.issues.filter(isWorkApprovalIssue), [c.issues]);
+  const approvals = React.useMemo(
+    () => [...c.approvals, ...workApprovalIssues.map(workApprovalIssueToView)],
+    [c.approvals, workApprovalIssues],
+  );
+  const blocked = React.useMemo(
+    () => c.issues.filter((issue) => isCompanyReviewIssue(issue) && !isWorkApprovalIssue(issue)),
+    [c.issues],
+  );
   const needs = approvals.length + blocked.length;
   if (needs === 0) return null;
   const approvalBlockedPipeline = c.pipeline?.approvalBlockedUsd;
@@ -437,11 +451,11 @@ function IssuesLoadingSkeleton() {
   );
 }
 
-function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onRetryIssues, onReviewPreview, onDismissIssues, busyId, loading = false }: {
-  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue) => void; onRetryIssues?: (issues: Issue[]) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; onDismissIssues: (issues: Issue[]) => void; busyId: string | null; loading?: boolean;
+function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onRetryIssues, onReviewPreview, onDismissIssues, busyId, theme = "dark", loading = false }: {
+  colony: Colony; onOpenIssue: (issue: Issue) => void; onResolveIssue: (issue: Issue, answer?: string) => void; onRetryIssues?: (issues: Issue[]) => void; onReviewPreview?: (issue: Issue, decision: PreviewDecision, notes: string) => void; onDismissIssues: (issues: Issue[]) => void; busyId: string | null; theme?: Theme; loading?: boolean;
 }) {
-  const reviewIssues = c.issues.filter(isCompanyReviewIssue);
-  const activeIssues = c.issues.filter((issue) => issue.status !== "done");
+  const reviewIssues = c.issues.filter((issue) => isCompanyReviewIssue(issue) && !isWorkApprovalIssue(issue));
+  const activeIssues = c.issues.filter((issue) => issue.status !== "done" && !isWorkApprovalIssue(issue));
   const approvalBlocked = c.pipeline?.approvalBlockedUsd;
   return (
     <Panel>
@@ -457,7 +471,7 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onRetryIssues, on
         issues · needs you
       </SectionLabel>
       <SetupBlockerBand companyId={c.id} />
-      <EmailQaBand key={c.id} companyId={c.id} />
+      <EmailQaBand key={c.id} companyId={c.id} companyName={c.name} directives={c.directives} theme={theme} />
       {loading ? (
         <IssuesLoadingSkeleton />
       ) : reviewIssues.length === 0 ? (
@@ -478,6 +492,7 @@ function IssuesPanel({ colony: c, onOpenIssue, onResolveIssue, onRetryIssues, on
                   onReviewPreview={onReviewPreview}
                   onDismiss={onDismissIssues}
                   busy={busyId === issue.work?.taskId}
+                  theme={theme}
                 />
               ))
             ),
@@ -838,10 +853,18 @@ export function Cockpit({
     () => collectCompanyDeliverables(c).filter((x) => spec.classOf(x.classified) === "primary" && !rejectedDeliverableTitles.has(x.classified.title)).length,
     [c, spec, rejectedDeliverableTitles],
   );
-  const needsYouIssueCount = c.issues.filter(isCompanyReviewIssue).length;
-  const activeIssueCount = c.issues.filter((issue) => issue.status !== "done").length;
   const pricingProposals = c.pricingProposals ?? [];
-  const approveCount = c.approvals.length + pricingProposals.length;
+  const workApprovalIssues = React.useMemo(() => c.issues.filter(isWorkApprovalIssue), [c.issues]);
+  const approvalReviewItems = React.useMemo<ApprovalReviewItem[]>(
+    () => [
+      ...c.approvals.map((approval) => ({ source: "spend" as const, approval })),
+      ...workApprovalIssues.map((issue) => ({ source: "work" as const, issue, approval: workApprovalIssueToView(issue) })),
+    ],
+    [c.approvals, workApprovalIssues],
+  );
+  const needsYouIssueCount = c.issues.filter((issue) => isCompanyReviewIssue(issue) && !isWorkApprovalIssue(issue)).length;
+  const activeIssueCount = c.issues.filter((issue) => issue.status !== "done" && !isWorkApprovalIssue(issue)).length;
+  const approveCount = approvalReviewItems.length + pricingProposals.length;
 
   const tabs: { key: string; label: string; badge?: number | null; badgeLoading?: boolean; tone?: "danger" }[] = [
     { key: "board", label: "Board" },
@@ -1009,7 +1032,7 @@ export function Cockpit({
         </Panel>
       )}
 
-      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onRetryIssues={handlers.onRetryIssues} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} loading={initialTasksLoading} />}
+      {active === "issues" && <IssuesPanel colony={c} onOpenIssue={handlers.onOpenIssue} onResolveIssue={handlers.onResolveIssue} onRetryIssues={handlers.onRetryIssues} onReviewPreview={handlers.onReviewPreview} onDismissIssues={handlers.onDismissIssues} busyId={handlers.busyId} theme={theme} loading={initialTasksLoading} />}
 
       {active === "deliverables" && <DeliverablesPanel colony={c} spec={spec} theme={theme} loading={initialTasksLoading} />}
 
@@ -1048,7 +1071,7 @@ export function Cockpit({
             </span>
           ) : null}>needs your approval · human-in-the-loop</SectionLabel>
           {pricingProposals.length > 0 && (
-            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", marginBottom: c.approvals.length ? 16 : 0 }}>
+            <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", marginBottom: approvalReviewItems.length ? 16 : 0 }}>
               {pricingProposals.map((proposal) => (
                 <PricingProposalCard key={proposal.id} proposal={proposal} busy={handlers.busyId === proposal.id} onApprove={() => handlers.onResolvePricing(proposal.id, "approve")} onReject={() => handlers.onResolvePricing(proposal.id, "reject")} />
               ))}
@@ -1056,14 +1079,19 @@ export function Cockpit({
           )}
           {approveCount === 0 ? (
             <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "20px 0" }}>✓ nothing pending — the colony is self-governing within policy.</div>
-          ) : c.approvals.length === 0 ? null : (
+          ) : approvalReviewItems.length === 0 ? null : (
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
-              {c.approvals.map((ap) => (
+              {approvalReviewItems.map((item) => (
                 <ApprovalReviewCard
-                  key={ap.id}
-                  approval={ap}
-                  busy={handlers.busyId === ap.id}
-                  onDecide={async (decision, note) => { await handlers.onDecideApproval(ap.id, decision, note); return true; }}
+                  key={`${item.source}:${item.approval.id}`}
+                  approval={item.approval}
+                  busy={handlers.busyId === item.approval.id}
+                  onDecide={async (decision, note) => {
+                    if (item.source === "work") await handlers.onDecideIssueApproval(item.issue, decision, note);
+                    else await handlers.onDecideApproval(item.approval.id, decision, note);
+                    return true;
+                  }}
+                  onOpenDetails={item.source === "work" ? () => handlers.onOpenIssue(item.issue) : undefined}
                 />
               ))}
             </div>

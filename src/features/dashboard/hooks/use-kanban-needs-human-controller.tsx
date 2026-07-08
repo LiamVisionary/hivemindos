@@ -5,6 +5,8 @@
 // Resolving Needs-You cards from the Work Board UI: one-click decision
 // answers, typed replies, and agent-requested API keys. Split from the
 // dispatch controller so each stays under the file-size gate.
+import { isValidHiveEnvKey, loadSharedHiveEnvKeys, saveSharedHiveEnvValue } from "@/features/dashboard/shared-hive-env-client";
+
 export function useKanbanNeedsHumanController(props: any) {
   const {
     chatSetupIssue,
@@ -75,23 +77,37 @@ export function useKanbanNeedsHumanController(props: any) {
   // the secret value into the task body, comments, or chat.
   async function saveKanbanNeedsHumanApiKey(task: any, envKey: string, value: string): Promise<string> {
     const key = String(envKey ?? "").trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return "Use a valid env name like OPENAI_API_KEY.";
-    if (!String(value ?? "").trim()) return "Paste the key value first.";
-    const response = await fetch("/api/env", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sourceId: "shared", key, value }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null);
-    if (!response?.ok || data?.ok === false) {
-      return data?.error ?? "Could not save the key to the shared hive env.";
-    }
+    const failure = await saveSharedHiveEnvValue(key, value);
+    if (failure) return failure;
     await answerKanbanNeedsHuman(
       task,
-      `The requested credential ${key} is now saved in the shared hive env (via hive-env-add). Load it from the shared env — the value is intentionally not included in this message. Continue the task.`,
+      `The requested env variable ${key} is now saved in the shared hive env (via hive-env-add). Load it from the shared env — the value is intentionally not included in this message. Continue the task.`,
     );
     return "";
   }
 
-  return { answerKanbanNeedsHuman, saveKanbanNeedsHumanApiKey };
+  async function loadKanbanNeedsHumanEnvKeys(): Promise<{ keys: string[]; error?: string }> {
+    return loadSharedHiveEnvKeys();
+  }
+
+  async function selectKanbanNeedsHumanEnvKey(task: any, requestedEnvKey: string, selectedEnvKey: string): Promise<string> {
+    const requested = String(requestedEnvKey ?? "").trim();
+    const selected = String(selectedEnvKey ?? "").trim();
+    if (!isValidHiveEnvKey(selected)) return "Choose a valid shared env name.";
+    if (requested && !isValidHiveEnvKey(requested)) return "Use a valid requested env name.";
+    await answerKanbanNeedsHuman(
+      task,
+      requested && requested !== selected
+        ? `Use the existing shared hive env variable ${selected} for the requested ${requested}. The selected value is intentionally not included in this message. Continue the task.`
+        : `The requested env variable ${selected} is already present in the shared hive env. Load it from the shared env — the value is intentionally not included in this message. Continue the task.`,
+    );
+    return "";
+  }
+
+  return {
+    answerKanbanNeedsHuman,
+    loadKanbanNeedsHumanEnvKeys,
+    saveKanbanNeedsHumanApiKey,
+    selectKanbanNeedsHumanEnvKey,
+  };
 }

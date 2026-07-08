@@ -41,6 +41,19 @@ export async function POST(request: NextRequest) {
       body: body.body,
       policy,
       confirmation: body.confirmation,
+      approvalContext: {
+        summary: "This is a generic x402 paid HTTP request from the wallet API.",
+        whyNow: "The endpoint requested payment and the wallet governance policy requires review before spending.",
+        impact: "Approving lets the request retry with an x402 payment. Rejecting keeps the paid HTTP call blocked.",
+        requestedAction: "Approve only if this URL, method, and amount are expected.",
+        evidence: [
+          `URL: ${url}`,
+          `Method: ${body.method || "GET"}`,
+          `Wallet: ${agentId}`,
+          `Network: ${stored.info.network}`,
+        ],
+        source: "Wallet x402 API",
+      },
     });
     return NextResponse.json({ ok: true, result });
   } catch (error) {

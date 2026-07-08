@@ -10,6 +10,7 @@ import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValu
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { BrainReadinessBanner } from "@/components/fleet/brain-readiness-banner";
+import { fleetAgentNeedsModelSetup } from "@/features/dashboard/agent-chat-readiness";
 import type { BrainReadiness } from "@/features/dashboard/hooks/use-brain-readiness";
 import type { DashboardView, HivemindLinkClientStatus, MachineGroup } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
@@ -103,6 +104,7 @@ type AgentsPanelProps = {
   showHivemindLinkSignInBanner: boolean;
   startAgentChat: (agentId: string, options?: { fresh?: boolean }) => void;
   startAgentWorkChat: (agentId: string, task?: string) => void;
+  tailscaleStatus: string;
   walletsByAgent: Record<string, AgentWalletConfig>;
 };
 
@@ -223,6 +225,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     showHivemindLinkSignInBanner,
     startAgentChat,
     startAgentWorkChat,
+    tailscaleStatus,
     walletsByAgent,
   } = props;
   const [agentCallSession, setAgentCallSession] = useState<{
@@ -394,6 +397,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     edges: fleetViewData.edges,
     hostedApps: fleetHostedApps,
     loading: fleetDiscoveryLoading,
+    tailnetLabel: tailscaleStatus,
     mastheadMode: "mobile",
     recentAgentArrival,
     onRecentAgentArrivalSeen,
@@ -420,13 +424,9 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     onOpenCodeProof: () => setActiveView("integrations"),
     onFixSyncIssue,
     onOpenChat: (_, agent) => {
-      // An agent can't actually answer if it has no model, or if it's on the
-      // wallet-paid "HivemindOS models" gateway with no funded wallet (balance is
-      // "off" when the wallet isn't enabled, "dead" when it's out of funds). Gate
-      // chat behind setup instead of opening a chat that will fail.
-      const walletPaidProvider = !!agent.provider && /hivemindos.?models/i.test(agent.provider);
-      const notReady = !agent.model || (walletPaidProvider && (agent.balance === "off" || agent.balance === "dead"));
-      if (notReady) { setChatBlockedAgent({ id: agent.id, name: agent.name }); return; }
+      // Paid HivemindOS model routes still need funding, but the bundled free
+      // Scout model is intentionally chat-ready without an agent wallet.
+      if (fleetAgentNeedsModelSetup(agent)) { setChatBlockedAgent({ id: agent.id, name: agent.name }); return; }
       startAgentChat(agent.id, { fresh: true });
     },
     onOpenTaskChat: (_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task),

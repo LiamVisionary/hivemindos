@@ -25,6 +25,7 @@ export const DASHBOARD_VIEWS = [
   "aeon",
   "fusion",
   "governance",
+  "compute",
 ] as const satisfies readonly DashboardView[];
 
 const DASHBOARD_VIEW_SET = new Set<string>(DASHBOARD_VIEWS);
@@ -89,11 +90,12 @@ const DASHBOARD_ROUTE_CATALOG_BY_ID = {
   trade: { label: "Trade", detail: "Buy, sell, and swap crypto & stocks", group: "Primary", keywords: ["trade", "trading", "buy", "sell", "swap", "stock", "stocks", "shares", "crypto", "perps", "options", "polymarket", "bridge", "xstocks", "alpaca", "robinhood"], shelfGroup: 0 },
   governance: { label: "Companies", routeLabel: "Zero Human Company", detail: "Companies, budgets, spend approvals", group: "Utilities", keywords: ["zero human company", "zhc", "governance", "company", "companies", "budget", "approval", "approvals", "kill switch", "spend"], shelfGroup: 2 },
   more: { label: "More", detail: "Utility launcher", group: "Primary", shortcut: "Cmd+6", keywords: ["more", "utilities", "launcher"] },
-  scheduler: { label: "Schedules", routeLabel: "Scheduler", detail: "Shared schedules and jobs", group: "Work", keywords: ["schedule", "scheduler", "jobs", "recurring"], shelfGroup: 1 },
-  swarm: { label: "Swarm", detail: "MiroShark simulations", group: "Work", keywords: ["swarm", "miroshark", "simulation", "rehearsal"], shelfGroup: 1 },
+  scheduler: { label: "Automations", routeLabel: "Scheduler", detail: "Recurring automations for your agents", group: "Work", keywords: ["schedule", "scheduler", "jobs", "recurring", "automation", "automations"], shelfGroup: 1 },
+  swarm: { label: "Simulations", detail: "MiroShark simulations", group: "Work", keywords: ["swarm", "miroshark", "simulation", "rehearsal"], shelfGroup: 1 },
   history: { label: "History", routeLabel: "Work History", detail: "Completed work log", group: "Work", keywords: ["history", "done", "completed", "changelog"], shelfGroup: 1 },
   aeon: { label: "Aeon", detail: "Autopilot runs and outputs", group: "Utilities", keywords: ["aeon", "autopilot", "unattended", "runs"], shelfGroup: 2 },
   fusion: { label: "Hive Fusion", detail: "Skill and workflow fusion", group: "Utilities", keywords: ["fusion", "skill fusion", "workflow fusion", "skill builder"] },
+  compute: { label: "Hive Compute", detail: "Marketplace GPU inference and spare-GPU earning", group: "Utilities", keywords: ["compute", "gpu", "marketplace", "inference", "worker", "ollama", "earn", "rent", "models"] },
   integrations: { label: "Integrations", detail: "App connections and external APIs", group: "Utilities", keywords: ["integrations", "connections", "api", "apps"], shelfGroup: 2 },
   "my-apps": { label: "Apps & Services", detail: "Running apps and providers", group: "Utilities", keywords: ["apps", "services", "providers"], shelfSlot: "integrations" },
   notifications: { label: "Alerts", detail: "Agent notifications, approvals, decisions", group: "Utilities", keywords: ["alerts", "notifications", "approval", "approvals", "decisions"], shelfSlot: "notifications" },
@@ -123,6 +125,7 @@ const DASHBOARD_ROUTE_ORDER = [
   "history",
   "aeon",
   "fusion",
+  "compute",
   "integrations",
   "my-apps",
   "messaging",
@@ -174,23 +177,33 @@ function shelfItemFor(id: DashboardView): AppNavShelfItem {
 /** Alerts is fixed as the final main rail item (never pinnable). */
 const FIXED_FINAL_SHELF_VIEWS = ["notifications"] as const satisfies readonly DashboardView[];
 
-/** Primary/Work rail views the user can remove: pinned by default, but
- * unpinnable in place from the More launcher (unlike Fleet/Work/Brain/Chat,
- * Schedules, and History, which are always fixed). */
+/**
+ * Primary/Work rail views the user can remove (Wallets, Trade, Swarm). Unlike
+ * opt-in utility pins, these were always on the rail, so they are OPT-OUT:
+ * shown by default and only hidden once the user explicitly removes one
+ * (tracked in a separate "removed" set). This keeps them on the rail even when
+ * an older persisted pinned-utility list — written before they were removable —
+ * doesn't mention them.
+ */
 const REMOVABLE_RAIL_VIEWS = ["wallet", "trade", "swarm"] as const satisfies readonly DashboardView[];
 const REMOVABLE_RAIL_SET = new Set<DashboardView>(REMOVABLE_RAIL_VIEWS);
 
-/**
- * Views the user can pin to / unpin from the nav rail via the More launcher:
- * every Utilities-group view (except Alerts, which is fixed) plus the removable
- * Primary/Work views (Wallets, Trade, Swarm).
- */
-export const PINNABLE_VIEWS: DashboardView[] = DASHBOARD_ROUTE_ORDER.filter(
-  (id) =>
-    REMOVABLE_RAIL_SET.has(id) ||
-    ((DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).group === "Utilities" && id !== "notifications"),
+export function isRemovableRailView(view: DashboardView): boolean {
+  return REMOVABLE_RAIL_SET.has(view);
+}
+
+/** Utilities the user can pin to the rail (opt-in); Alerts is fixed, not pinnable. */
+const PINNABLE_UTILITY_VIEWS: DashboardView[] = DASHBOARD_ROUTE_ORDER.filter(
+  (id) => (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).group === "Utilities" && id !== "notifications",
 );
-const PINNABLE_SET = new Set<DashboardView>(PINNABLE_VIEWS);
+const PINNABLE_UTILITY_SET = new Set<DashboardView>(PINNABLE_UTILITY_VIEWS);
+
+/** Every view that shows a pin control in the More launcher (opt-in utilities + opt-out rail views). */
+const PINNABLE_SET = new Set<DashboardView>([...PINNABLE_UTILITY_VIEWS, ...REMOVABLE_RAIL_VIEWS]);
+
+export function isPinnableView(view: DashboardView): boolean {
+  return PINNABLE_SET.has(view);
+}
 
 /** Which rail section a view calls home: its shelfGroup, else the Utilities section. */
 function homeShelfSection(view: DashboardView): 0 | 1 | 2 | undefined {
@@ -200,34 +213,26 @@ function homeShelfSection(view: DashboardView): 0 | 1 | 2 | undefined {
   return undefined;
 }
 
-/** Default pins = the shelfGroup-2 utilities plus the removable Primary/Work
- * views, so the rail is identical to the old fixed layout on first run. */
+/** Default pinned utilities = the catalog's shelfGroup-2 set (governance/aeon/integrations). */
 export const DEFAULT_PINNED_VIEWS: DashboardView[] = DASHBOARD_ROUTE_ORDER.filter(
-  (id) => REMOVABLE_RAIL_SET.has(id) || (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).shelfGroup === 2,
+  (id) => (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).shelfGroup === 2,
 );
 
-export function isPinnableView(view: DashboardView): boolean {
-  return PINNABLE_SET.has(view);
-}
-
 /**
- * Sentinel for "the user explicitly pinned nothing". A cleared list must
- * serialize to a non-empty, non-view token so it (a) is distinguishable from
- * "never set" (which seeds the defaults) and (b) survives the dashboard-state
- * client, which treats an empty string as absent and would otherwise re-seed
- * the defaults. Not a valid DashboardView, so parse yields [] for it.
+ * Sentinel for "the user explicitly pinned no utilities". A cleared utilities
+ * list must serialize to a non-empty, non-view token so it (a) is
+ * distinguishable from "never set" (which seeds the defaults) and (b) survives
+ * the dashboard-state client, which treats an empty string as absent and would
+ * otherwise re-seed the defaults. Not a valid DashboardView, so parse yields [].
  */
 export const PINNED_UTILITIES_NONE = "__none__";
 
-/** Parse the persisted pinned value (CSV) into a validated, de-duped view list. */
-export function parsePinnedUtilities(raw: string | null | undefined): DashboardView[] {
-  if (raw == null || raw === "") return [...DEFAULT_PINNED_VIEWS];
-  if (raw.trim() === PINNED_UTILITIES_NONE) return [];
+function dedupeViews(raw: string, allowed: ReadonlySet<DashboardView>): DashboardView[] {
   const seen = new Set<DashboardView>();
   const out: DashboardView[] = [];
   for (const token of raw.split(",")) {
     const id = token.trim();
-    if (isDashboardView(id) && PINNABLE_SET.has(id) && !seen.has(id)) {
+    if (isDashboardView(id) && allowed.has(id) && !seen.has(id)) {
       seen.add(id);
       out.push(id);
     }
@@ -235,17 +240,54 @@ export function parsePinnedUtilities(raw: string | null | undefined): DashboardV
   return out;
 }
 
-/** Serialize a pinned list back to the persisted CSV form (empty -> sentinel). */
+/** Parse the persisted pinned-UTILITIES value (opt-in): unset -> defaults, sentinel -> []. */
+export function parsePinnedUtilities(raw: string | null | undefined): DashboardView[] {
+  if (raw == null || raw === "") return [...DEFAULT_PINNED_VIEWS];
+  if (raw.trim() === PINNED_UTILITIES_NONE) return [];
+  return dedupeViews(raw, PINNABLE_UTILITY_SET);
+}
+
+/** Serialize a pinned-utilities list (empty -> sentinel so "cleared" survives reload). */
 export function serializePinnedUtilities(views: readonly DashboardView[]): string {
-  const filtered = views.filter((id) => PINNABLE_SET.has(id));
+  const filtered = views.filter((id) => PINNABLE_UTILITY_SET.has(id));
   return filtered.length ? filtered.join(",") : PINNED_UTILITIES_NONE;
 }
 
-/** Toggle one view in a pinned list (add to the end, or remove). */
+/** Parse the persisted REMOVED-rail-views value (opt-out): unset/empty -> nothing removed. */
+export function parseRemovedRailViews(raw: string | null | undefined): DashboardView[] {
+  if (!raw) return [];
+  return dedupeViews(raw, REMOVABLE_RAIL_SET);
+}
+
+/** Serialize the removed-rail-views set (empty -> "" = nothing removed = default). */
+export function serializeRemovedRailViews(views: readonly DashboardView[]): string {
+  return views.filter((id) => REMOVABLE_RAIL_SET.has(id)).join(",");
+}
+
+/** Toggle one view in a list (add to the end, or remove). */
 export function togglePinnedUtility(views: readonly DashboardView[], id: DashboardView): DashboardView[] {
-  if (!PINNABLE_SET.has(id)) return [...views];
   return views.includes(id) ? views.filter((view) => view !== id) : [...views, id];
 }
+
+/**
+ * The unified set of views pinned to the rail's customizable slots: the user's
+ * opt-in utilities plus the removable rail views they haven't removed, in
+ * catalog order. The rail and the More launcher's Pinned row consume this; the
+ * two persisted CSVs behind it are managed by the usePinnedUtilities hook.
+ */
+export function computeRailPinnedViews(
+  pinnedUtilitiesCsv: string | null | undefined,
+  removedRailCsv: string | null | undefined,
+): DashboardView[] {
+  const pinnedUtil = new Set(parsePinnedUtilities(pinnedUtilitiesCsv));
+  const removed = new Set(parseRemovedRailViews(removedRailCsv));
+  return DASHBOARD_ROUTE_ORDER.filter(
+    (id) => (PINNABLE_UTILITY_SET.has(id) && pinnedUtil.has(id)) || (REMOVABLE_RAIL_SET.has(id) && !removed.has(id)),
+  );
+}
+
+/** Default rail-pinned views (no customization): default utilities + all removable rail views. */
+const DEFAULT_RAIL_PINNED_VIEWS = computeRailPinnedViews(null, null);
 
 /**
  * The app nav shelf's three sections. Fixed items (Fleet/Work/Brain/Chat,
@@ -254,7 +296,7 @@ export function togglePinnedUtility(views: readonly DashboardView[], id: Dashboa
  * Swarm (or any pinned utility) removes it in place without reordering the rail.
  */
 export function buildAppNavShelfGroups(pinned?: readonly DashboardView[]): AppNavShelfItem[][] {
-  const pinnedSet = new Set((pinned ?? DEFAULT_PINNED_VIEWS).filter((id) => PINNABLE_SET.has(id)));
+  const pinnedSet = new Set((pinned ?? DEFAULT_RAIL_PINNED_VIEWS).filter((id) => PINNABLE_SET.has(id)));
   const finalSet = new Set<DashboardView>(FIXED_FINAL_SHELF_VIEWS);
   const sections: DashboardView[][] = [[], [], []];
   for (const id of DASHBOARD_ROUTE_ORDER) {

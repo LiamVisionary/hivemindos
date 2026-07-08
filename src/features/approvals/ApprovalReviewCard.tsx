@@ -10,6 +10,8 @@ export type ApprovalReviewCardProps = {
   onDecide: (decision: ApprovalDecision, note: string) => boolean | Promise<boolean>;
   /** Optional "talk it over with the Queen" affordance. */
   onDiscuss?: () => void;
+  /** Optional deep context affordance, e.g. open the backing Work Board task. */
+  onOpenDetails?: () => void;
   busy?: boolean;
   error?: string;
 };
@@ -21,28 +23,30 @@ export type ApprovalReviewCardProps = {
  * approvals section and the Alerts "Review first" queue both use this, so the
  * card, the modal, and the note flow stay identical (DRY).
  */
-export function ApprovalReviewCard({ approval, onDecide, onDiscuss, busy = false, error }: ApprovalReviewCardProps) {
-  const [decision, setDecision] = useState<ApprovalDecision | null>(null);
+export function ApprovalReviewCard({ approval, onDecide, onDiscuss, onOpenDetails, busy = false, error }: ApprovalReviewCardProps) {
+  const [review, setReview] = useState<{ decision: ApprovalDecision; seed: string } | null>(null);
   return (
     <>
       <ApprovalCard
         approval={approval}
         busy={busy}
-        onApprove={() => setDecision("approved")}
-        onReject={() => setDecision("denied")}
+        onDecide={(decision) => { void onDecide(decision, ""); }}
+        onReview={(decision, seed) => setReview({ decision, seed: seed ?? "" })}
         onDiscuss={onDiscuss}
+        onOpenDetails={onOpenDetails}
       />
-      {decision ? (
+      {review ? (
         <ApproveRejectModal
           approval={approval}
-          initialDecision={decision}
+          initialDecision={review.decision}
+          initialNote={review.seed}
           busy={busy}
           error={error}
           onConfirm={async (nextDecision, note) => {
             const ok = await onDecide(nextDecision, note);
-            if (ok) setDecision(null);
+            if (ok) setReview(null);
           }}
-          onClose={() => setDecision(null)}
+          onClose={() => setReview(null)}
         />
       ) : null}
     </>

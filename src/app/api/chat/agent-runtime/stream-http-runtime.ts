@@ -8,12 +8,19 @@ import {
   resolveAdaptiveBankrLlmModels,
 } from "@/lib/services/bankr-llm";
 import { isHivemindosWalletPaidModelProfile } from "@/lib/services/hivemindos-wallet-paid-models";
+import { isHiveComputeProfile } from "@/lib/services/hive-compute-marketplace";
 import {
   buildHivemindPromptEnvelope,
   prependHivemindSystemMessage,
 } from "@/lib/services/chat/hivemind-system-prompt";
+import {
+  AGENT_COLD_START_EVENT_TYPE,
+  inferredModalColdStartProcessEvent,
+  recordAgentRuntimeWarm,
+} from "@/lib/services/chat/agent-cold-start";
 import { resolveAdaptiveOpenRouterModel } from "@/lib/services/chat/adaptive-openrouter-models";
 import { flushChannelMarkup } from "@/lib/services/chat/channel-markup";
+import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import { isAdaptiveProviderProfile, resolveAdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
 import {
   appendRuntimeChatSessionEvent,
@@ -69,7 +76,9 @@ export async function streamHttpRuntime(
   taskRetrievalContext = "",
   sharedBrainMemoryContext = "",
   vaultPromptContext = "",
+  permissionMode = "manual",
 ) {
+  const normalizedPermissionMode = normalizeChatPermissionMode(permissionMode);
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
@@ -78,7 +87,7 @@ export async function streamHttpRuntime(
     try {
       const adaptiveRoutePlan = await resolveAdaptiveRoutePlan(profile, messages);
       if (adaptiveRoutePlan.profile.runtime === HIVEMIND_OS_RUNTIME) {
-        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext);
+        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext, normalizedPermissionMode);
       }
       // A Hermes-selected plan is always OpenRouter-backed. Re-shape to the
       // adaptive-OpenRouter profile instead of pinning the single selected
@@ -91,18 +100,21 @@ export async function streamHttpRuntime(
     }
   }
   if (isBankrLlmProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
   }
   if (isHivemindosWalletPaidModelProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
+  }
+  if (isHiveComputeProfile(profile)) {
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
   }
   if (isOpenAICompatibleRuntime(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
   }
   if (isOpenRouterProvider(profile) && !isAdaptiveOpenRouterProfile(profile)) {
     try {
       const openRouterProfile = await openRouterCompatibleProfile(profile);
-      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext);
+      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "OpenRouter model selection failed." }, { status: 502 });
     }
@@ -188,6 +200,21 @@ export async function streamHttpRuntime(
       messageCount: runtimeMessages.length,
       runtimeMessageLength: runtimeMessage.length,
     });
+    const coldStartEvent = inferredModalColdStartProcessEvent(runtimeProfile);
+    if (coldStartEvent) {
+      recordRuntimeTelemetry(telemetry, "agent_runtime.http.cold_start", {
+        ...telemetryPayloadForProfile(runtimeProfile),
+        url,
+        model: runtimeProfile.model || null,
+        source: "local-success-window",
+      });
+      await appendRuntimeChatSessionEvent(
+        runtimeSessionId,
+        coldStartEvent.label,
+        coldStartEvent.detail,
+        { type: AGENT_COLD_START_EVENT_TYPE },
+      ).catch(() => undefined);
+    }
     upstream = await fetch(url, {
       method: "POST",
       headers: {
@@ -230,6 +257,7 @@ export async function streamHttpRuntime(
       contentType: upstream.headers.get("content-type") ?? null,
       fetchElapsedMs: Date.now() - fetchStartedAt,
     });
+    if (upstream.ok) recordAgentRuntimeWarm(runtimeProfile);
   } catch (error) {
     releaseInteractiveRuntime(lockKey);
     recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.failed", {

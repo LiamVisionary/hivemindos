@@ -39,6 +39,48 @@
   --danger: #e58e85;
   --danger-soft: rgba(229, 142, 133, 0.13);
 
+  /* hive-stage paint tokens */
+  --fr-cell-sheen: rgba(255, 255, 255, 0.06);
+  --fr-label-fill: var(--fg);
+  --fr-label-fill-selected: var(--honey-2);
+  --fr-label-halo: var(--bg);
+  --fr-label-halo-width: 2.6;
+  --fr-label-weight: 700;
+  --fr-working-glow: var(--live-soft);
+  --fr-image-shadow: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+  --fr-queen-image-shadow: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.45));
+  --fr-thread-lit: var(--honey-line);
+  --fr-thread-idle: var(--line-2);
+  --fr-thread-flow: var(--honey-2);
+  --fr-machine-ready-fill: var(--panel);
+  --fr-machine-ready-border: var(--line-3);
+  --fr-machine-working-fill: color-mix(in srgb, var(--live) 13%, var(--panel));
+  --fr-machine-working-border: color-mix(in srgb, var(--live) 60%, var(--line-3));
+  --fr-machine-setup-fill: color-mix(in srgb, var(--honey) 12%, var(--panel));
+  --fr-machine-setup-border: var(--honey-line);
+  --fr-machine-failed-fill: color-mix(in srgb, var(--danger) 13%, var(--panel));
+  --fr-machine-failed-border: color-mix(in srgb, var(--danger) 58%, var(--line-3));
+  --fr-agent-ready-fill: var(--panel-2);
+  --fr-agent-ready-border: var(--line-2);
+  --fr-agent-working-fill: color-mix(in srgb, var(--live) 18%, var(--panel-2));
+  --fr-agent-working-border: color-mix(in srgb, var(--live) 70%, transparent);
+  --fr-agent-scheduled-fill: color-mix(in srgb, var(--honey) 15%, var(--panel-2));
+  --fr-agent-scheduled-border: var(--honey-line);
+  --fr-agent-setup-fill: color-mix(in srgb, var(--honey) 10%, var(--panel-2));
+  --fr-agent-setup-border: var(--honey-line);
+  --fr-agent-failed-fill: color-mix(in srgb, var(--danger) 16%, var(--panel-2));
+  --fr-agent-failed-border: color-mix(in srgb, var(--danger) 64%, transparent);
+  --fr-queen-fill: color-mix(in srgb, var(--honey) 16%, var(--panel));
+
+  --nav-badge-bg: var(--danger);
+  --nav-badge-fg: #1a1305;
+  --nav-badge-shadow: none;
+  --act-primary-bg: var(--honey);
+  --act-primary-hover-bg: var(--honey);
+  --act-primary-border: transparent;
+  --act-primary-fg: #04121a;
+  --act-primary-shadow: none;
+
   --radius: 14px;
   --radius-sm: 9px;
   --radius-lg: 20px;
@@ -51,36 +93,75 @@
 }
 
 .fr-root[data-fr-theme="light"] {
-  --bg: #f1ede3;
-  --bg-soft: #f6f2e9;
-  --panel: #fbf8f1;
-  --panel-2: #f4efe4;
+  --bg: #f4f6ee;
+  --bg-soft: #eef3e8;
+  --panel: #fffdf8;
+  --panel-2: #f8fbf5;
   --panel-hi: #ffffff;
-  --line: rgba(54, 46, 30, 0.10);
-  --line-2: rgba(54, 46, 30, 0.16);
-  --line-3: rgba(54, 46, 30, 0.26);
+  --line: rgba(44, 58, 47, 0.10);
+  --line-2: rgba(44, 58, 47, 0.16);
+  --line-3: rgba(44, 58, 47, 0.28);
 
-  --fg: #221d14;
-  --fg-2: #5e574b;
-  --fg-3: #867d6e;
-  --fg-4: #a59b89;
+  --fg: #1f241e;
+  --fg-2: #4e5a4e;
+  --fg-3: #74806e;
+  --fg-4: #99a08f;
 
-  --honey: #b07f1c;
-  --honey-2: #936811;
-  --honey-soft: rgba(176, 127, 28, 0.12);
-  --honey-line: rgba(176, 127, 28, 0.34);
+  --honey: #a97209;
+  --honey-2: #7d5404;
+  --honey-soft: rgba(169, 114, 9, 0.10);
+  --honey-line: rgba(169, 114, 9, 0.26);
 
-  /* muted warm olive (not the dark-theme cool teal) for the "live/working"
-     signal — the agent cell border is color-mix(--live 70%), so a saturated
-     green reads as a vivid outline that fights the cream/honey. A desaturated
-     olive sits with the warm palette while staying distinct from honey. */
-  --live: #88926e;
-  --live-soft: rgba(136, 146, 110, 0.12);
+  /* cool mineral teal keeps "working" distinct from honey without the old
+     olive wash that muddied the light hive. */
+  --live: #207f78;
+  --live-soft: rgba(32, 127, 120, 0.12);
 
-  --danger: #c0524d;
-  --danger-soft: rgba(192, 82, 77, 0.12);
+  --danger: #b84b45;
+  --danger-soft: rgba(184, 75, 69, 0.11);
 
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
+  --fr-cell-sheen: rgba(255, 255, 255, 0.72);
+  --fr-label-fill: #435145;
+  --fr-label-fill-selected: #805806;
+  --fr-label-halo: rgba(255, 253, 248, 0.74);
+  --fr-label-halo-width: 1.55;
+  --fr-label-weight: 650;
+  --fr-working-glow: rgba(255, 253, 248, 0.64);
+  --fr-image-shadow: drop-shadow(0 4px 7px rgba(33, 44, 36, 0.25));
+  --fr-queen-image-shadow: drop-shadow(0 7px 16px rgba(77, 55, 13, 0.28));
+  --fr-thread-lit: rgba(169, 114, 9, 0.32);
+  --fr-thread-idle: rgba(44, 58, 47, 0.16);
+  --fr-thread-flow: #956300;
+  --fr-machine-ready-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
+  --fr-machine-ready-border: rgba(58, 70, 58, 0.26);
+  --fr-machine-working-fill: linear-gradient(180deg, #ffffff 0%, #edf5f1 100%);
+  --fr-machine-working-border: rgba(32, 127, 120, 0.38);
+  --fr-machine-setup-fill: linear-gradient(180deg, #fffdf8 0%, #f7ecd8 100%);
+  --fr-machine-setup-border: rgba(169, 114, 9, 0.31);
+  --fr-machine-failed-fill: linear-gradient(180deg, #fffaf8 0%, #f7e2de 100%);
+  --fr-machine-failed-border: rgba(184, 75, 69, 0.42);
+  --fr-agent-ready-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
+  --fr-agent-ready-border: rgba(63, 82, 68, 0.24);
+  --fr-agent-working-fill: linear-gradient(180deg, #ffffff 0%, #eef6f2 100%);
+  --fr-agent-working-border: rgba(32, 127, 120, 0.40);
+  --fr-agent-scheduled-fill: linear-gradient(180deg, #fffef8 0%, #f7ead2 100%);
+  --fr-agent-scheduled-border: rgba(169, 114, 9, 0.30);
+  --fr-agent-setup-fill: linear-gradient(180deg, #fffdfa 0%, #f6efe1 100%);
+  --fr-agent-setup-border: rgba(169, 114, 9, 0.26);
+  --fr-agent-failed-fill: linear-gradient(180deg, #fffafa 0%, #f7e0dc 100%);
+  --fr-agent-failed-border: rgba(184, 75, 69, 0.45);
+  --fr-queen-fill: linear-gradient(180deg, #fff8df 0%, #f2c66c 100%);
+
+  --nav-badge-bg: #d8a33c;
+  --nav-badge-fg: #1a1305;
+  --nav-badge-shadow: inset 0 0 0 1px rgba(106, 69, 5, 0.22), 0 1px 3px rgba(80, 60, 20, 0.16);
+  --act-primary-bg: linear-gradient(180deg, #e2f3ef 0%, #cfe9e2 100%);
+  --act-primary-hover-bg: linear-gradient(180deg, #d7eee8 0%, #bddfd6 100%);
+  --act-primary-border: rgba(32, 127, 120, 0.24);
+  --act-primary-fg: #0d5a4e;
+  --act-primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 24px -22px rgba(32, 127, 120, 0.44);
+
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.58) inset, 0 18px 50px -30px rgba(49, 64, 43, 0.28);
 }
 
 .fr-root * { box-sizing: border-box; }
@@ -432,6 +513,12 @@
     radial-gradient(680px 680px at 50% 50%, color-mix(in srgb, var(--honey) 18%, transparent), transparent 70%),
     radial-gradient(1200px 900px at 50% 46%, color-mix(in srgb, var(--honey) 6%, transparent), transparent 72%);
 }
+.fr-root[data-fr-theme="light"] .fr-hive-backdrop {
+  background:
+    radial-gradient(620px 620px at 48% 42%, rgba(255, 253, 248, 0.72), transparent 64%),
+    radial-gradient(900px 740px at 52% 58%, rgba(169, 114, 9, 0.055), transparent 76%),
+    linear-gradient(180deg, #fbfcf6 0%, #f0f3ea 100%);
+}
 .fr-hive-backdrop::before {
   content: "";
   position: absolute;
@@ -444,7 +531,10 @@
 }
 .fr-root[data-fr-theme="light"] .fr-hive-backdrop::before,
 .fr-root[data-fr-theme="light"] .fr-comb-texture {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23b07f1c%27 stroke-opacity=%27.1%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%2376836f%27 stroke-opacity=%27.085%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
+}
+.fr-root[data-fr-theme="light"] .fr-hive-backdrop::before {
+  opacity: 0.44;
 }
 
 .fr-graph-clock {
@@ -533,7 +623,8 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-nav[data-active]
   position: absolute; top: 6px; right: 8px;
   min-width: 16px; height: 16px; padding: 0 4px;
   display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 99px; background: var(--danger); color: #1a1305;
+  border-radius: 99px; background: var(--nav-badge-bg); color: var(--nav-badge-fg);
+  box-shadow: var(--nav-badge-shadow);
   font-family: var(--f-mono); font-size: 9.5px; font-weight: 700; line-height: 1;
 }
 /* build version readout in the foot — revealed with the labels on expand */
@@ -581,7 +672,7 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.10' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
     radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.16), transparent 26rem),
-    radial-gradient(circle at 84% 18%, rgba(95, 143, 90, 0.10), transparent 28rem),
+    radial-gradient(circle at 84% 18%, rgba(169, 114, 9, 0.055), transparent 28rem),
     linear-gradient(140deg, #fbf8f1 0%, #f1ede3 52%, #f4efe4 100%);
   background-clip: content-box;
   background-size: 72px 41.569px, auto, auto, auto;
@@ -757,10 +848,22 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 }
 .fr-act:hover { background: var(--panel-2); color: var(--fg); }
 .fr-act:active { transform: translateY(1px); }
-.fr-act-primary { background: var(--honey); color: #1a1305; border-color: transparent; font-weight: 500; }
-.fr-act-primary:hover { filter: brightness(1.05); background: var(--honey); color: #1a1305; }
+.fr-act-primary { background: var(--act-primary-bg); color: var(--act-primary-fg); border-color: var(--act-primary-border); box-shadow: var(--act-primary-shadow); font-weight: 500; }
+.fr-act-primary:hover { filter: brightness(1.05); background: var(--act-primary-hover-bg); color: var(--act-primary-fg); border-color: var(--act-primary-border); }
 .fr-act-danger { color: var(--danger); border-color: var(--danger-soft); }
 .fr-act-danger:hover { background: var(--danger-soft); color: var(--danger); }
+.fr-root[data-fr-theme="light"] .fr-act-primary,
+:root[data-theme="hive-light"] .commandMain .fr-root[data-fr-theme="light"] .fr-act-primary {
+  background: var(--act-primary-bg);
+  border-color: var(--act-primary-border);
+  color: var(--act-primary-fg);
+}
+.fr-root[data-fr-theme="light"] .fr-act-primary:hover,
+:root[data-theme="hive-light"] .commandMain .fr-root[data-fr-theme="light"] .fr-act-primary:hover {
+  background: var(--act-primary-hover-bg);
+  border-color: var(--act-primary-border);
+  color: var(--act-primary-fg);
+}
 .fr-act svg,
 .fr-chip svg,
 .fr-chip img {

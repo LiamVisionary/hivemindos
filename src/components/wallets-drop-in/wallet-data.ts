@@ -394,7 +394,7 @@ export const FR_PROVIDER: Record<string, { label: string; rail: string }> = {
   veil:   { label: "Veil smart wallet", rail: "Base mainnet · private self-custody" },
   venice: { label: "Venice private inference", rail: "Private inference · token spend" },
   x402:   { label: "x402 local wallet", rail: "HTTP 402 · pay-per-call" },
-  crypto: { label: "Local USDC wallet", rail: "Base mainnet · self-custody" },
+  crypto: { label: "Local stablecoin wallet", rail: "Base / Robinhood / Solana · self-custody" },
   manual: { label: "Manual ledger", rail: "Tracked manually · no direct send" },
   cards:  { label: "MoneyClaw card", rail: "Virtual card · USD" },
 };

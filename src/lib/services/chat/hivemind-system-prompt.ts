@@ -223,8 +223,8 @@ export function buildWalletToolContext(wallet?: AgentWalletConfig): string {
       : "- Allow auto-use is off: present a concise payment draft and ask for a plain confirmation such as \"confirm\" before running x402_fetch.",
     "- Read-only balance check: POST /api/wallet/balance with public address and network.",
     wallet.autoPayEnabled
-      ? "- USDC sends follow the same auto-use rule: POST /api/wallet/send may send without another prompt while staying under the hard per-payment cap, but always state the exact send (source wallet address, destination address, network/chain, asset, amount) in your reply."
-      : "- USDC sends follow the same auto-use rule: first show a clear send preview — source wallet address, destination address, network/chain, asset, and amount — then do not call POST /api/wallet/send until the user explicitly supplies SEND_USDC for that exact recipient and amount. Personal (user:) wallets always require this explicit confirmation and never auto-send.",
+      ? "- Stablecoin sends follow the same auto-use rule: POST /api/wallet/send may send USDC on Base/Solana or USDG on Robinhood Chain without another prompt while staying under the hard per-payment cap, but always state the exact send (source wallet address, destination address, network/chain, asset, amount) in your reply."
+      : "- Stablecoin sends follow the same auto-use rule: first show a clear send preview — source wallet address, destination address, network/chain, asset, and amount — then do not call POST /api/wallet/send until the user explicitly supplies SEND_USDC for that exact recipient and amount. Personal (user:) wallets always require this explicit confirmation and never auto-send.",
     duplicatePaymentGuardEnabled(wallet)
       ? `- Duplicate payment guard is on: recently completed matching private sends are replay-protected for ${Math.max(1, Math.round(duplicatePaymentGuardSeconds(wallet) / 60))} minutes.`
       : "- Duplicate payment guard is off: the same private send may be intentionally submitted again after the previous transfer finishes.",

@@ -1,5 +1,5 @@
-// Turns a blocked Zero-Human-Company task — its own result and eval-gate
-// receipts (with the concrete command/probe evidence) — into a plain-language
+// Turns a blocked Zero-Human-Company task, its own result, and eval-gate
+// receipts (with the concrete command/probe evidence) into a plain-language
 // explanation the human owner can act on: what is blocking it, what that means,
 // and the concrete next step(s) to unblock it.
 //
@@ -7,9 +7,10 @@
 // READ-ONLY: one tool-less chat completion over context the caller already has,
 // no fleet tools, no mutation, no spend. It rides the same OpenAI key/model the
 // Queen chat overlay uses (transcriptionApiKey + OPENAI_VOICE_CHAT_MODEL), so a
-// good answer needs no extra configuration — the evidence is already in-context,
+// good answer needs no extra configuration. The evidence is already in-context,
 // which is why the model does not need live tools to reach it.
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { reasoningTrailPromptRules } from "@/lib/types/reasoning-trail";
 
 export type IssueExplainerReceipt = {
   status?: string;
@@ -30,16 +31,22 @@ export type IssueExplainerInput = {
 export type IssueExplanation = {
   /** One plain-language sentence: what is actually blocking this. */
   headline: string;
+  /** Why this issue surfaced for human attention now. */
+  whyNow?: string;
   /** 1–4 concrete next actions the human owner can take to unblock it. */
   steps: string[];
   /** Optional short extra context; empty string when nothing to add. */
   detail: string;
+  /** Concrete facts from the task result or receipts that support the explanation. */
+  evidence?: string[];
+  /** Important context that was not present in the task result or receipts. */
+  missingContext?: string[];
 };
 
 const EXPLAIN_FALLBACK_MODEL = "gpt-4o-mini";
 const EXPLAIN_TIMEOUT_MS = 30_000;
 // Keep the prompt bounded so a verbose result/evidence trail can't blow the
-// context or the token bill — the tail of a result is rarely the load-bearing part.
+// context or the token bill. The tail of a result is rarely the load-bearing part.
 const MAX_RESULT_CHARS = 4_000;
 const MAX_EVIDENCE_ITEMS = 8;
 const MAX_EVIDENCE_CHARS = 400;
@@ -50,7 +57,7 @@ function explainModel(): string {
 
 function clamp(value: string, max: number): string {
   const trimmed = value.trim();
-  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}...` : trimmed;
 }
 
 function formatContext(input: IssueExplainerInput): string {
@@ -70,7 +77,7 @@ function formatContext(input: IssueExplainerInput): string {
       const evidence = (receipt.evidence ?? []).slice(0, MAX_EVIDENCE_ITEMS);
       for (const item of evidence) {
         const text = clamp(String(item ?? ""), MAX_EVIDENCE_CHARS);
-        if (text) lines.push(`    · ${text}`);
+        if (text) lines.push(`    - ${text}`);
       }
     }
   }
@@ -81,23 +88,41 @@ const SYSTEM_PROMPT =
   "You are Queen Bee, explaining a blocked task from one of the owner's autonomous companies to the non-technical human who owns it. " +
   "You are given the task, its latest result, and its eval-gate receipts including the exact commands/probes that ran (the evidence). " +
   "Explain in plain language: what is actually blocking this task right now, what that means, and the concrete next step(s) the owner should take to unblock it. " +
-  "Ground every claim in the evidence provided — name the exact provider, setting, quota, credential, or action involved. Never invent facts, URLs, or steps that the evidence does not support; if the evidence is thin, say what is unknown. " +
+  "Ground every claim in the evidence provided. Name the exact provider, setting, quota, credential, or action involved. Never invent facts, URLs, or steps that the evidence does not support. If the evidence is thin, say what is unknown. " +
   "Do not tell them to write code or read files unless the evidence shows that is the actual fix. Prefer the smallest real action that unblocks it. " +
-  'Respond with STRICT JSON only, no markdown fences, matching exactly: {"headline": string, "steps": string[], "detail": string}. ' +
+  `Style rules:\n${reasoningTrailPromptRules()}\n` +
+  'Respond with STRICT JSON only, no markdown fences, matching exactly: {"headline": string, "whyNow": string, "steps": string[], "detail": string, "evidence": string[], "missingContext": string[]}. ' +
   "headline: one plain sentence stating what is blocking it (no jargon, no gate IDs). " +
-  "steps: 1 to 4 short imperative actions the human can take, most important first; empty array only if truly nothing is actionable. " +
-  "detail: one or two extra sentences of context, or an empty string when the headline and steps already say it all.";
+  "whyNow: one plain sentence explaining why this card needs human attention now. " +
+  "steps: 1 to 4 short imperative actions the human can take, most important first. Use an empty array only if truly nothing is actionable. " +
+  "detail: one or two extra sentences of context, or an empty string when the headline and steps already say it all. " +
+  "evidence: 1 to 5 short facts copied or summarized from the provided task result or receipts. " +
+  "missingContext: 0 to 4 short facts that would help but are not present in the provided evidence.";
 
 function coerceExplanation(raw: unknown): IssueExplanation | null {
   if (!raw || typeof raw !== "object") return null;
   const record = raw as Record<string, unknown>;
   const headline = typeof record.headline === "string" ? record.headline.trim() : "";
+  const whyNow = typeof record.whyNow === "string" ? record.whyNow.trim() : "";
   const detail = typeof record.detail === "string" ? record.detail.trim() : "";
   const steps = Array.isArray(record.steps)
     ? record.steps.map((step) => (typeof step === "string" ? step.trim() : "")).filter(Boolean).slice(0, 4)
     : [];
+  const evidence = Array.isArray(record.evidence)
+    ? record.evidence.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean).slice(0, 5)
+    : [];
+  const missingContext = Array.isArray(record.missingContext)
+    ? record.missingContext.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean).slice(0, 4)
+    : [];
   if (!headline && !steps.length && !detail) return null;
-  return { headline: headline || "Here's what's going on with this task.", steps, detail };
+  return {
+    headline: headline || "Here's what's going on with this task.",
+    ...(whyNow ? { whyNow } : {}),
+    steps,
+    detail,
+    ...(evidence.length ? { evidence } : {}),
+    ...(missingContext.length ? { missingContext } : {}),
+  };
 }
 
 /**
@@ -123,7 +148,7 @@ export async function explainBlockedIssue(input: IssueExplainerInput): Promise<I
       ],
       response_format: { type: "json_object" },
       temperature: 0.3,
-      max_tokens: 600,
+      max_tokens: 800,
     }),
     cache: "no-store",
     signal: AbortSignal.timeout(EXPLAIN_TIMEOUT_MS),
@@ -150,7 +175,14 @@ export async function explainBlockedIssue(input: IssueExplainerInput): Promise<I
   } catch {
     // response_format should guarantee JSON, but fall back to treating the raw
     // text as the detail rather than dead-ending on a stray non-JSON reply.
-    return { headline: "Here's what's going on with this task.", steps: [], detail: content.trim() };
+    return {
+      headline: "Here's what's going on with this task.",
+      whyNow: "The task asked for a human-readable explanation, but the model returned plain text instead of the expected JSON.",
+      steps: [],
+      detail: content.trim(),
+      evidence: [],
+      missingContext: ["Structured evidence fields were not returned by the explanation model."],
+    };
   }
 
   const explanation = coerceExplanation(parsed);

@@ -8,13 +8,17 @@ Buy and sell stocks right from HivemindOS, in the **Trade tab → Stocks** or by
 an agent ("buy $25 of AAPL", "sell my AAPL"). There are two ways to trade, and you can
 practice for free before risking real money.
 
-## Two ways to trade
+## Three ways to trade
 
 - **Alpaca** — a real, regulated US stock brokerage. Place market buy and sell orders
   on normal stocks. Starts in **paper** (practice) mode; you opt in to live trading.
 - **xStocks** — tokenized versions of stocks that trade on-chain (on Solana). Buying
   uses your USDC; selling turns the position back into USDC. Good if you'd rather keep
   everything crypto-native. (Needs a Solana wallet with a little SOL for fees.)
+- **Robinhood Chain Stock Tokens** — eligible stock and ETF tokens that trade on
+  Robinhood Chain. Buying uses USDG; selling turns the position back into USDG.
+  Good if you want tokenized equity exposure on an EVM chain. (Needs a Robinhood
+  Chain wallet with USDG plus ETH gas.)
 
 You choose the venue per agent in the **Wallets** screen, along with how much it's
 allowed to trade at once.
@@ -42,8 +46,8 @@ Alpaca gives you **separate logins for practice and live**, so you add separate 
 - **Live (real money):** add `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY`. Generate
   these with the account on "Live."
 
-Only the key **names** are stored — never the values themselves. xStocks needs no keys
-(it signs from your own Solana wallet).
+Only the key **names** are stored — never the values themselves. xStocks and
+Robinhood Chain Stock Tokens need no brokerage keys; they sign from your own wallet.
 
 ## Confirmations & limits
 
@@ -53,11 +57,14 @@ Only the key **names** are stored — never the values themselves. xStocks needs
 - A buy spends money, so it counts toward your spending limits. A sell brings money in,
   and a paper trade isn't real money — neither counts against your budgets. If you've
   frozen a company, even practice trades are blocked.
-- Official builds use the HivemindOS platform fee on xStocks and live Alpaca orders:
-  **1% with a $0.01 minimum**. A `$100` live stock or xStock order produces a `$1.00`
-  platform fee. The preview shows it before you confirm, and the fee is collected as
-  its own USDC transaction after the order is accepted or the swap completes. Paper
-  trading does not charge this fee.
+- Official builds use the HivemindOS platform fee on xStocks, Robinhood Chain Stock
+  Tokens, and live Alpaca orders: **1% with a $0.01 minimum**. A `$100` live stock,
+  xStock, or Robinhood Chain order produces a `$1.00` platform fee. The preview shows
+  it before you confirm, and the fee is collected as its own USDC or USDG transaction
+  after the order is accepted or the swap completes. Paper trading does not charge this fee.
+- Robinhood Chain Stock Tokens can be blocked by upstream liquidity, legal, or
+  eligibility rules. When that happens, HivemindOS shows the block instead of trying
+  to route around it.
 
 ## A note on market hours
 

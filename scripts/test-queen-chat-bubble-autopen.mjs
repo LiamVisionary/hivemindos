@@ -22,9 +22,13 @@ const css = read("src/components/fleet-hive/fleet-hive.css");
 includes(store, "const QUEEN_CHAT_RECENT_MESSAGE_HOLD_MS = 7000;", "recent hold duration");
 includes(store, "React.useState(true)", "history starts collapsed for auto-open behavior");
 includes(store, "const [composerActive, setComposerActive] = React.useState(false);", "composer activity state");
+includes(store, "const [transcriptInteractionActive, setTranscriptInteractionActive] = React.useState(false);", "transcript interaction state");
 includes(store, "const [recentMessageOpen, setRecentMessageOpen] = React.useState(false);", "recent activity state");
-includes(store, "const transcriptExpanded = !historyMinimized || composerActive || recentMessageOpen;", "effective transcript expansion");
-includes(store, "dismissedAutoOpenTurnIdRef.current = turnsRef.current.at(-1)?.id ?? null;", "manual collapse suppresses current auto-open turn");
+includes(store, "function isAutoOpenAgentTurn(turn: QueenChatTurn): boolean", "active agent turn helper");
+includes(store, "const agentActivityOpen = Boolean(activeAgentTurn && dismissedAutoOpenTurnId !== activeAgentTurn.id);", "agent thinking keeps transcript open unless manually dismissed");
+includes(store, "|| transcriptInteractionActive", "transcript interaction keeps bubble open");
+includes(store, "|| agentActivityOpen", "active agent work keeps bubble open");
+includes(store, "setDismissedAutoOpenTurnId(findAutoOpenDismissalTurnId(turnsRef.current));", "manual collapse suppresses current auto-open turn");
 includes(store, "const closeTimer = window.setTimeout(() => {", "seven-second timeout is scheduled");
 includes(store, "}, QUEEN_CHAT_RECENT_MESSAGE_HOLD_MS);", "seven-second timeout duration");
 includes(store, "clearRecentMessageHold();", "manual close clears recent hold");
@@ -40,7 +44,14 @@ includes(pill, "onComposerActiveChange?.(inputFocused || inputHovered);", "focus
 
 includes(persistent, "const showExpandTab = queenChat.turns.length > 0 && !queenChat.transcriptExpanded;", "tab only shows when transcript actually collapsed");
 includes(persistent, "onComposerActiveChange={queenChat.setComposerActive}", "persistent pill wires composer activity into store");
-includes(overlay, "minimized={!chat.transcriptExpanded}", "overlay uses effective expansion");
+includes(overlay, "onInteractionActiveChange: (active: boolean) => void;", "transcript reports interaction hold");
+includes(overlay, "const voiceThinking = open && voiceState.phase === \"thinking\";", "voice thinking is a keep-open reason");
+includes(overlay, "minimized={!(chat.transcriptExpanded || voiceThinking)}", "overlay uses effective expansion plus voice thinking");
+includes(overlay, "onInteractionActiveChange={setTranscriptInteractionActive}", "overlay wires interaction hold into store");
+includes(overlay, "onPointerDown={handlePointerDown}", "pointer down keeps bubble open while selecting text");
+includes(overlay, "window.addEventListener(\"pointerup\", finishSelection);", "selection hold releases after pointerup");
+includes(overlay, "const hasSelectionInsideTranscript = React.useCallback(() => {", "transcript detects selected text");
+includes(overlay, "document.addEventListener(\"selectionchange\", refreshTextSelection);", "selected text keeps bubble open after drag release");
 includes(css, "cubic-bezier(.18, .9, .22, 1.18)", "pill width uses spring-like easing");
 
 console.log("queen chat bubble auto-open contract ok");

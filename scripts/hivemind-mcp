@@ -95,13 +95,13 @@ const MANUAL_TOOLS = [
   },
   {
     name: "send_usdc",
-    description: "EXECUTE an on-chain USDC transfer from a HivemindOS wallet (governed /api/wallet/send). Moves REAL funds. Requires confirmation \"SEND_USDC\". Personal (user:) wallets always require explicit confirmation and never auto-send; agent wallets honor their Spend policy/caps. Get the human's go-ahead before calling. Consider prepare_crypto_action first to preview.",
+    description: "EXECUTE an on-chain stablecoin transfer from a HivemindOS wallet (governed /api/wallet/send): USDC on Base/Solana, USDG on Robinhood Chain. Moves REAL funds. Requires confirmation \"SEND_USDC\". Personal (user:) wallets always require explicit confirmation and never auto-send; agent wallets honor their Spend policy/caps. Get the human's go-ahead before calling. Consider prepare_crypto_action first to preview.",
     inputSchema: sendUsdcSchema(),
     annotations: criticalExecutionAnnotations("send_usdc"),
   },
   {
     name: "dex_swap",
-    description: "EXECUTE a token swap on the local DEX rail (0x on Base / Jupiter on Solana) from a HivemindOS wallet (governed /api/trading/swap). Moves REAL funds, hard-capped at $10 per swap. Requires confirmation \"CONFIRM_SWAP\". Get the human's go-ahead before calling.",
+    description: "EXECUTE a token swap on the local DEX rail (0x on Base or Robinhood Chain, Jupiter on Solana) from a HivemindOS wallet (governed /api/trading/swap). Moves REAL funds, hard-capped at $10 per swap. Requires confirmation \"CONFIRM_SWAP\". Get the human's go-ahead before calling.",
     inputSchema: dexSwapSchema(),
     annotations: criticalExecutionAnnotations("dex_swap"),
   },
@@ -506,8 +506,8 @@ function sendUsdcSchema() {
     required: ["agentId", "toAddress", "amountUsd", "confirmation"],
     properties: {
       agentId: { type: "string", description: "Wallet/profile id to send FROM. A personal wallet id (user:…) sends from the user's own wallet; an agent id sends from that agent's wallet." },
-      toAddress: { type: "string", description: "Recipient address (0x… on Base/EVM)." },
-      amountUsd: { type: "number", description: "USD amount to send (USDC is 1:1 with USD)." },
+      toAddress: { type: "string", description: "Recipient address (0x… on Base/Robinhood Chain, or a Solana address when using a Solana wallet)." },
+      amountUsd: { type: "number", description: "USD amount to send (USDC/USDG is treated as 1:1 with USD)." },
       confirmation: { type: "string", description: "Must be \"SEND_USDC\". Only supply with explicit human authorization; personal wallets never auto-send." },
       approvalToken: { type: "string", description: "Governance approval token, only if a prior call returned pending_approval." },
     },
@@ -1064,6 +1064,65 @@ function definedArgs(args, keys) {
   return output;
 }
 
+const NANSEN_ROUTE_BY_ACTION = {
+  "token-brief": "/api/nansen/token-brief",
+  "wallet-brief": "/api/nansen/wallet-brief",
+  "hyperliquid-brief": "/api/nansen/hyperliquid-brief",
+  "market-scout": "/api/nansen/market-scout",
+  "simple-template": "/api/nansen/simple-template",
+  "complex-template": "/api/nansen/complex-template",
+  agent: "/api/nansen/agent",
+};
+
+const NANSEN_BODY_KEYS = [
+  "template",
+  "chain",
+  "chains",
+  "tokenAddress",
+  "tokenSymbol",
+  "address",
+  "entityName",
+  "date",
+  "timeframe",
+  "filters",
+  "includeLabels",
+  "includeTransactions",
+  "includeHistoricalBalances",
+  "includePnlSummary",
+  "aggregateByEntity",
+  "labelType",
+  "premiumLabels",
+  "includeTrades",
+  "includeIndicators",
+  "includeLeaderboard",
+  "text",
+  "mode",
+  "conversationId",
+];
+
+async function callNansenIntelligence(args = {}) {
+  const action = String(args.action || "status");
+  if (action === "status") return callDashboard("/api/nansen/status", "GET");
+  const route = NANSEN_ROUTE_BY_ACTION[action];
+  if (!route) throw new Error(`Unknown nansen_intelligence action: ${action}`);
+  const body = definedArgs(args, NANSEN_BODY_KEYS);
+  const billing = nansenBillingContext(args);
+  if (billing) body.billing = billing;
+  return callDashboard(route, "POST", body);
+}
+
+function nansenBillingContext(args = {}) {
+  const billing = isObject(args.billing) ? { ...args.billing } : {};
+  for (const key of ["creditSlug", "idempotencyKey", "legacyAccountIds"]) {
+    if (args[key] !== undefined && billing[key] === undefined) billing[key] = args[key];
+  }
+  return Object.keys(billing).length ? billing : null;
+}
+
+function isObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function formatApprovalRequest(args = {}) {
   const lines = [
     args.request || "An agent requested human approval.",
@@ -1133,6 +1192,9 @@ async function callTool(name, args = {}) {
       action: "prepare",
       ...cryptoArgs(args),
     });
+  }
+  if (name === "nansen_intelligence") {
+    return callNansenIntelligence(args);
   }
   if (name === "review_crypto_action") {
     return callDashboard("/api/crypto/clear-signing", "POST", clearSigningArgs(args));

@@ -660,6 +660,10 @@ export type QueenAgentTurnResult = {
   detail: string;
 };
 
+type QueenAgentTurnOptions = {
+  suppressWalletIntents?: boolean;
+};
+
 /** The user's selected acting wallet, relayed so the executing agent defaults
  *  wallet/trade actions to it. `agentId` is its resolution id (agentId, a
  *  `user:` personal id, or "bankr"); `kind` lets the local rails bow out for
@@ -758,6 +762,7 @@ export async function runQueenBeeAgentTurn(
   origin: string,
   message: string,
   actingWallet?: ActingWalletSource,
+  options?: QueenAgentTurnOptions,
 ): Promise<QueenAgentTurnResult> {
   const request = message.trim();
   if (!request) return { speech: "The request was empty, so nothing was done.", detail: "" };
@@ -820,6 +825,7 @@ export async function runQueenBeeAgentTurn(
           agentMode: "act",
           latencyMode: "voice",
           actingWalletSource: actingWallet,
+          suppressWalletIntents: options?.suppressWalletIntents === true,
         }),
         cache: "no-store",
         signal: AbortSignal.timeout(45_000),

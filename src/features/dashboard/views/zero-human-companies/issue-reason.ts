@@ -2,6 +2,7 @@
 // "Needs you" (board_review) issue from the underlying Work Board record, so the
 // cockpit/board can show WHY a company is waiting on a human without a click.
 import { extractActionNeeded } from "@/features/dashboard/kanban-result-format";
+import { normalizeReasoningTrail, type ReasoningTrail } from "@/lib/types/reasoning-trail";
 import type { Issue } from "./types";
 
 const MAX = 160;
@@ -46,6 +47,8 @@ export type IssueReasonCategory =
   | "delegates-busy"
   | "delegates-unreachable"
   | "no-delegates"
+  | "eval-gate"
+  | "runtime-blocked"
   | "needs-input"
   | "other";
 
@@ -59,6 +62,13 @@ export type IssueReasonInfo = {
   signature: string;
   /** True when this class is safe to consolidate (a shared systemic blocker, not a distinct ask). */
   consolidatable: boolean;
+  /**
+   * True when the block was written by the system (a gate or the runtime), not by
+   * an agent leaving a genuine ACTION NEEDED. The card uses `reason` (a plain,
+   * human-framed line) as the ask for these, instead of the raw technical text the
+   * producer stored (e.g. "attach passing eval receipts", "Failure reason: … Attempts: 3/3").
+   */
+  systemGenerated?: boolean;
 };
 
 const DELEGATE_EXHAUSTED = /exhausted all eligible delegates/i;
@@ -71,6 +81,11 @@ const AT_CAPACITY = /at its autonomous chat capacity/i;
 const UNREACHABLE = /(timed?\s*out|timeout|bad gateway|gateway timeout|\b50[234]\b|service unavailable|temporarily unavailable|connection (?:error|reset|refused)|connect: connection refused|econnreset|econnrefused|socket hang ?up|network error|fetch failed|proxy error)/i;
 // Collateral of two dispatch sweeps racing one task — not a distinct cause.
 const CLAIM_RACE = /not ready to claim|claimed by another worker/i;
+// A loop eval-gate parked the task ("attach passing eval receipts …").
+const EVAL_GATE_BLOCK = /missing passing eval receipts|loop gate block/i;
+// The runtime parked the task: a failTask escalation ("Failure reason: <x>.
+// Attempts: n/m.") or an agent with no runnable session.
+const RUNTIME_BLOCK = /\bfailure reason:\s*[\w -]+\.\s*attempts:\s*\d+\s*\/\s*\d+|did not attach a pollable session|has no active session|agent runtime\/auth/i;
 
 /** Pull the "- <agent>: <reason>" lines under a "Failures:" section of a result. */
 function extractFailureLines(result: string): string[] {
@@ -109,7 +124,7 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
       return {
         category: "delegates-offline",
         label: "Delegates offline",
-        reason: `No agent's machine is reachable — ${offline} delegate${offline === 1 ? "" : "s"} have no live collector, so nothing can pick this up.`,
+        reason: `No agent's machine is reachable. ${offline} delegate${offline === 1 ? "" : "s"} have no live collector, so nothing can pick this up.`,
         signature: "delegation:offline",
         consolidatable: true,
       };
@@ -118,7 +133,7 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
       return {
         category: "delegates-busy",
         label: "Delegates at capacity",
-        reason: "Every eligible delegate machine is at its autonomous capacity — the work is queued behind other runs.",
+        reason: "Every eligible delegate machine is at its autonomous capacity. The work is queued behind other runs.",
         signature: "delegation:busy",
         consolidatable: true,
       };
@@ -127,7 +142,7 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
       return {
         category: "delegates-unreachable",
         label: "Machine unreachable",
-        reason: `Delegate chats failed on transport (timeouts / refused connections) — the target machine's collector was likely down or restarting. Usually self-heals; re-run once the machine is back.`,
+        reason: "Delegate chats failed on transport (timeouts / refused connections). The target machine's collector was likely down or restarting. It usually self-heals. Re-run once the machine is back.",
         signature: "delegation:unreachable",
         consolidatable: true,
       };
@@ -145,7 +160,7 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
       return {
         category: "delegates-busy",
         label: "Dispatch race",
-        reason: "Two dispatch sweeps raced for this task and the loser escalated it — the work was actually claimed. Safe to re-run.",
+        reason: "Two dispatch sweeps raced for this task and the loser escalated it. The work was actually claimed. Safe to re-run.",
         signature: "delegation:race",
         consolidatable: true,
       };
@@ -153,9 +168,38 @@ export function classifyIssueReason(issue: Pick<Issue, "work">): IssueReasonInfo
     return {
       category: "no-delegates",
       label: "No delegates available",
-      reason: "No eligible autonomous delegate could pick this up — check the crew's machines and worker classes.",
+      reason: "No eligible autonomous delegate could pick this up. Check the crew's machines and worker classes.",
       signature: "delegation:none",
       consolidatable: true,
+    };
+  }
+
+  // System-generated blocks: a gate or the runtime parked the task with technical
+  // text, not a human decision. Translate each into a plain, human-framed ask so
+  // the owner isn't shown "attach passing eval receipts" or "Failure reason:
+  // no-final-response. Attempts: 3/3." (mirrors how delegate exhaustion above is
+  // turned into a readable reason). The card renders `reason` as the ask for these.
+  const taskId = issue.work?.taskId;
+  if (EVAL_GATE_BLOCK.test(result)) {
+    return {
+      category: "eval-gate",
+      label: "Automated checks didn't pass",
+      reason:
+        "The crew finished the work, but its automated quality checks haven't passed yet. Open what it produced below to review it. If it looks right you can move it forward with Handled, or use Discuss to have the crew fix the checks.",
+      signature: `task:eval:${taskId ?? "x"}`,
+      consolidatable: false,
+      systemGenerated: true,
+    };
+  }
+  if (RUNTIME_BLOCK.test(result)) {
+    return {
+      category: "runtime-blocked",
+      label: "The crew hit a technical error",
+      reason:
+        "The crew couldn't finish this because of a technical error — its runtime, login, or a provider limit. Nothing here needs a decision from you. Re-run it with Handled once things look healthy, or use Discuss to dig into what failed.",
+      signature: `task:runtime:${taskId ?? "x"}`,
+      consolidatable: false,
+      systemGenerated: true,
     };
   }
 
@@ -190,6 +234,83 @@ export function issueBlockReason(issue: Pick<Issue, "work">): string {
   if (systemic) return systemic;
   const asked = extractActionNeeded(work.result);
   return (asked && truncate(asked)) || firstMeaningfulLine(work.result) || lastSectionLine(work.body);
+}
+
+function issueEvidence(issue: Pick<Issue, "title" | "agent" | "work" | "pipelineImpact">, info: IssueReasonInfo): string[] {
+  const work = issue.work;
+  return [
+    `Issue: ${issue.title}`,
+    work?.taskId ? `Work Board task: ${work.taskId}` : null,
+    work?.status ? `Work status: ${work.status}` : null,
+    issue.agent ? `Assigned agent: ${issue.agent}` : null,
+    `Reason category: ${info.label}`,
+    issue.pipelineImpact?.amountUsd != null ? `Quoted pipeline at risk: $${issue.pipelineImpact.amountUsd.toFixed(2)}` : null,
+    info.reason ? `Blocker: ${info.reason}` : null,
+  ].filter((line): line is string => Boolean(line));
+}
+
+function issueRequestedAction(issue: Pick<Issue, "work">, info: IssueReasonInfo): string {
+  if (info.consolidatable) {
+    return "Fix the shared blocker, then re-run the affected tasks. Dismiss only if the work is no longer needed.";
+  }
+  // System-generated blocks (a gate or the runtime) stored technical text, not a
+  // human ACTION NEEDED — use the classifier's plain, human-framed line instead so
+  // the card never shows the owner "attach passing eval receipts" or a raw failure
+  // reason as their decision.
+  if (info.systemGenerated) return info.reason;
+  // Extract from the RESULT only — the body is the control-plane task brief, never
+  // a human ask, and joining it let the extractor bleed into "Created by the Queen
+  // Bee control plane." (real leak 2026-07-08). Callers decide whether the ask is
+  // genuine via isGenuineHumanAsk before showing it.
+  const explicitAsk = extractActionNeeded(issue.work?.result);
+  return explicitAsk || info.reason || "Answer the task's human ask or resolve the blocker, then send the task back to the crew.";
+}
+
+export function issueReasoningTrail(issue: Pick<Issue, "title" | "status" | "agent" | "work" | "pipelineImpact" | "reasoning">): ReasoningTrail {
+  if (issue.reasoning) return issue.reasoning;
+  const info = classifyIssueReason(issue);
+  const isSystemic = info.consolidatable;
+  const workStatus = issue.work?.status || issue.status;
+  return normalizeReasoningTrail({
+    headline: info.reason || `${issue.title} needs attention.`,
+    summary: isSystemic
+      ? `This is a systemic ${info.label.toLowerCase()} blocker. Several tasks can share this same root cause.`
+      : "This is a Work Board issue that needs human input before the crew can continue.",
+    whyNow: workStatus === "needs-human" || issue.status === "board_review"
+      ? "The task is in Needs You, so the autonomous run paused instead of guessing or taking the next action."
+      : `The task is currently marked ${workStatus}.`,
+    impact: isSystemic
+      ? "Until this clears, affected tasks will keep waiting instead of being picked up by autonomous delegates."
+      : "Until this is answered or fixed, the company cannot safely continue this task.",
+    requestedAction: issueRequestedAction(issue, info),
+    evidence: issueEvidence(issue, info),
+    missingContext: issue.work?.result || issue.work?.receipts.length
+      ? []
+      : ["This issue does not include a detailed task result or receipt trail yet."],
+    source: "Zero Human Company issue",
+  })!;
+}
+
+export function issueGroupReasoningTrail(info: IssueReasonInfo, issues: Issue[]): ReasoningTrail {
+  const first = issues[0];
+  return normalizeReasoningTrail({
+    headline: info.reason,
+    summary: `This is a consolidated ${info.label.toLowerCase()} issue across ${issues.length} Work Board task${issues.length === 1 ? "" : "s"}.`,
+    whyNow: "Multiple tasks reached Needs You with the same blocker, so the cockpit collapsed them into one shared issue.",
+    impact: "Fixing the shared cause can unblock the whole group. Handling only one task may leave the rest stuck.",
+    requestedAction: info.consolidatable
+      ? "Fix the shared blocker, then re-run all affected tasks."
+      : "Review each task before deciding.",
+    evidence: [
+      `Grouped tasks: ${issues.length}`,
+      `Reason category: ${info.label}`,
+      first?.work?.taskId ? `Example task: ${first.work.taskId}` : null,
+      first?.title ? `Example issue: ${first.title}` : null,
+      `Blocker: ${info.reason}`,
+    ].filter((line): line is string => Boolean(line)),
+    missingContext: [],
+    source: "Zero Human Company issue group",
+  })!;
 }
 
 export type IssueGroup = {

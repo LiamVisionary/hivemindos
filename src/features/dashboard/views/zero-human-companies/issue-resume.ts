@@ -22,15 +22,34 @@ export function retryDelegationIssueAnswer(issue: Pick<Issue, "title" | "work">)
     .join("\n");
 }
 
-export function resolvedIssueAnswer(issue: Pick<Issue, "title" | "work">): string {
+export function resolvedIssueAnswer(issue: Pick<Issue, "title" | "work">, resolutionNote?: string): string {
   const blocker = issueBlockReason(issue).trim();
+  const note = resolutionNote?.trim();
   return [
     "Human marked this company blocker resolved from the Company Cockpit.",
     `Resolved issue: ${issue.title}`,
     issue.work?.taskId ? `Work Board task: ${issue.work.taskId}` : null,
     blocker ? `Prior blocker: ${blocker}` : null,
+    note ? `Resolution note: ${note}` : null,
     "Resume this task now. First re-check the external/provider state and verify the fix through the normal gates. Do not treat the human mark as proof; only proceed to sends, DNS changes, spend, or completion after the real checks pass.",
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
+}
+
+export function resolvedIssueEnvAnswer(
+  issue: Pick<Issue, "title" | "work">,
+  requestedEnvKey: string,
+  selectedEnvKey: string = requestedEnvKey,
+  mode: "saved" | "selected" = "selected",
+): string {
+  const requested = requestedEnvKey.trim();
+  const selected = selectedEnvKey.trim();
+  const label = selected || requested;
+  const note = selected && requested && selected !== requested
+    ? `Human selected existing shared hive env variable ${selected} for requested ${requested}. The value is intentionally not included in this message.`
+    : mode === "saved"
+      ? `Human saved or verified ${label} in the shared hive env. The value is intentionally not included in this message.`
+      : `Human selected existing shared hive env variable ${label}. The value is intentionally not included in this message.`;
+  return resolvedIssueAnswer(issue, note);
 }

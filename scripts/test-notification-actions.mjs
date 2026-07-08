@@ -79,6 +79,8 @@ const types = (actions) => actions.map((a) => a.type);
   });
   assert.ok(labels(actions).includes("Open Wallet"));
   assert.ok(labels(actions).includes("Open Companies"));
+  assert.ok(!types(actions).includes("work-board"), "approval alerts are direct human decisions, not Work Board tasks");
+  assert.ok(types(actions).includes("discuss"));
 }
 
 // ── env / credential problems open the env setup panel ──────────────────────

@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useState, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
+import { startTransition, useCallback, useEffect, useState, type CSSProperties, type Dispatch, type ElementType, type ReactNode, type SetStateAction } from "react";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { useNativeUpdate } from "@/lib/native/use-native-update";
 import type { AgentNotificationSummary } from "@/lib/types/agent-notifications";
@@ -266,14 +266,78 @@ export function DashboardHeader(props: DashboardHeaderProps) {
   );
 }
 
-export function DashboardAppCompletionToast({ notification }: { notification: DashboardAppCompletionNotification }) {
+export function DashboardAppCompletionToast({
+  notification,
+  durationMs = 6_000,
+  onDismiss,
+}: {
+  notification: DashboardAppCompletionNotification;
+  durationMs?: number;
+  onDismiss?: (id: string) => void;
+}) {
   const [brokenIcon, setBrokenIcon] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [copied, setCopied] = useState(false);
+  // Bumped every time the pointer leaves so the auto-dismiss countdown and the
+  // CSS entry/exit animation both restart from zero (hover pauses AND resets).
+  const [lifeId, setLifeId] = useState(0);
   const iconUrl = notification.app?.iconUrl;
   const initials = notification.app?.initials ?? notification.initials ?? "HM";
   const title = notification.app?.name ?? notification.title ?? "HivemindOS";
 
+  // Auto-dismiss countdown. Cleared while hovered; a fresh full-duration timer
+  // starts each time the pointer leaves (lifeId change), so hovering pauses the
+  // timer and resets it back to the full duration on leave.
+  useEffect(() => {
+    if (paused || !onDismiss) return;
+    const timer = window.setTimeout(() => onDismiss(notification.id), durationMs);
+    return () => window.clearTimeout(timer);
+  }, [paused, lifeId, durationMs, onDismiss, notification.id]);
+
+  // Revert the "Copied" affordance shortly after a click-to-copy.
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1_400);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copyMessage = useCallback(() => {
+    const text = notification.message ?? "";
+    if (!text) return;
+    void navigator.clipboard?.writeText(text).then(() => setCopied(true)).catch(() => undefined);
+  }, [notification.message]);
+
+  // While paused we freeze the toast fully visible (no animation) so it never
+  // fades out from under the pointer; pointer events are enabled so it can be
+  // hovered and clicked (the base rule sets pointer-events: none).
+  const baseStyle: CSSProperties = { pointerEvents: "auto", cursor: "pointer" };
+  const style: CSSProperties = paused
+    ? { ...baseStyle, animation: "none", opacity: 1, transform: "translate(-50%, 0) scale(1)", filter: "none" }
+    : baseStyle;
+
   return (
-    <div className="dashboardAppNotification" role="status" aria-live="polite">
+    <div
+      // A new key on each life remounts the node so the CSS animation replays.
+      key={`${notification.id}:${lifeId}`}
+      className="dashboardAppNotification"
+      role="status"
+      aria-live="polite"
+      tabIndex={0}
+      title={copied ? "Copied to clipboard" : "Click to copy message"}
+      style={style}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => {
+        setPaused(false);
+        setLifeId((value) => value + 1);
+      }}
+      onClick={copyMessage}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          copyMessage();
+        }
+      }}
+    >
       <span className="dashboardAppNotificationIcon" aria-hidden="true">
         {iconUrl && !brokenIcon ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -284,7 +348,7 @@ export function DashboardAppCompletionToast({ notification }: { notification: Da
       </span>
       <span className="dashboardAppNotificationText">
         <strong>{title}</strong>
-        <span>{notification.message}</span>
+        <span>{copied ? "Copied to clipboard" : notification.message}</span>
       </span>
     </div>
   );

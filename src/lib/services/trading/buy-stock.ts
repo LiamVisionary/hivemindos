@@ -772,6 +772,26 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
       amountUsd: spendForGovernance,
       target: `${venue}:${input.ticker} ${side}${isPaperTrade ? " (paper)" : ""}`,
       approvalToken: input.approvalToken,
+      explanation: {
+        summary: isPaperTrade
+          ? "This is a paper stock trade. It is checked against the company kill switch, but it does not spend real funds."
+          : `This is a ${venue} stock trade request.`,
+        whyNow: nonSpending
+          ? "The company governance check still runs even though this action is not a live spend."
+          : "The trade notional crossed a wallet governance rule and was paused before execution.",
+        impact: nonSpending
+          ? "Approving lets the simulated or reducing trade continue. Rejecting stops this trade attempt."
+          : `Approving lets the agent place the ${side} order for about $${notionalUsd.toFixed(2)}. Rejecting keeps the trade blocked.`,
+        requestedAction: "Approve only if the ticker, side, venue, and notional amount match the intended trading plan.",
+        evidence: [
+          `Ticker: ${input.ticker}`,
+          `Side: ${side}`,
+          `Venue: ${venue}`,
+          `Notional: $${notionalUsd.toFixed(2)}`,
+        ],
+        missingContext: [],
+        source: "Stock trade governance",
+      },
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
     approvalGrantId = decision.grant?.id;

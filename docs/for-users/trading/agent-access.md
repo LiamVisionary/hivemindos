@@ -26,6 +26,7 @@ Talk to an agent in plain English and it sets up the trade for you:
 
 - *"swap $50 USDC to ETH"*
 - *"send 1 USDC to 0x7F31…"*
+- *"send 1 USDG from my Robinhood wallet to 0x7F31…"*
 - *"quote a $25 ETH long on Hyperliquid"*
 - *"buy $25 of HYPE spot on Hyperliquid"*
 - *"cancel my open BTC order on Hyperliquid"*
@@ -42,7 +43,7 @@ to confirm first and never moves money on its own.
 ## 3. From your coding tools
 
 If you use agents in tools like **Claude Code, Codex, Gemini, OpenClaw, Hermes, or
-Aeon**, HivemindOS gives those agents the same trading abilities — sending USDC,
+Aeon**, HivemindOS gives those agents the same trading abilities — sending stablecoins,
 swapping, quoting and placing Hyperliquid spot/perp orders, managing Hyperliquid
 orders, transfers, withdrawals, margin, and leverage, and buying/selling stocks — through
 your connected wallets. They run under the exact same limits and confirmations, so an

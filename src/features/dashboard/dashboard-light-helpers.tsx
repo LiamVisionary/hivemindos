@@ -3,12 +3,12 @@ import { Activity, AppWindow, Bell, Bot, Brain, CandlestickChart, Cpu, FolderOpe
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { RUNTIME_LABELS, type AgentProfile, type BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { KANBAN_COLUMNS, type KanbanTask } from "@/lib/types/kanban";
-import { beeRoleLabel, beeWorkerClassLabel, chooseBeeAssignment } from "@/lib/services/orchestration/bee-roles";
+import { beeWorkerClassLabel, chooseBeeAssignment } from "@/lib/services/orchestration/bee-roles";
 import { agentAliasMap, agentWorkspaceKey } from "@/features/fleet/fleet-identity";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { runtimeCan } from "@/features/dashboard/dashboard-storage";
 import { parseTaskBrief, taskBriefHeadline } from "@/features/dashboard/kanban-result-format";
-import type { AgentTask, ChatMessage, ChatTreeItem, DashboardView, MachineGroup, WorkView } from "@/features/dashboard/dashboard-types";
+import type { AgentTask, ChatMessage, ChatTreeItem, DashboardView, MachineGroup } from "@/features/dashboard/dashboard-types";
 
 const STARTER_AGENT_IDS = new Set([
   "openclaw-main",
@@ -349,6 +349,7 @@ export function viewIcon(view: DashboardView) {
   if (view === "aeon") return <Bot aria-hidden="true" />;
   if (view === "fusion") return <Sparkles aria-hidden="true" />;
   if (view === "governance") return <Landmark aria-hidden="true" />;
+  if (view === "compute") return <Cpu aria-hidden="true" />;
   return <MessageSquare aria-hidden="true" />;
 }
 

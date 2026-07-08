@@ -1,17 +1,43 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
-import { Bot, Check, MessageSquare, PlugZap, RefreshCcw, Send, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
+import {
+  Lock,
+  Plus,
+  RefreshCcw,
+  Search,
+  Send,
+  Star,
+  Trash2,
+  Zap,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type {
   HiveMessagingChannel,
-  HiveMessagingChannelDraft,
   HiveMessagingDirectoryEntry,
-  HiveMessagingProvider,
+  HiveMessagingProviderMeta,
 } from "@/lib/types/messaging-channels";
+import {
+  BeeHex,
+  capabilityLabels,
+  channelEndpoint,
+  channelRunState,
+  deliveryStatusLine,
+  Endpoint,
+  HiveButton,
+  type MessagingAgentOption,
+  ProviderTile,
+  QUEEN_BEE_AGENT_ID,
+  RUN_STATE_META,
+  StatusDot,
+  toAgentOption,
+} from "@/features/dashboard/views/messaging-shared";
+import {
+  MessagingChannelModal,
+  type MessagingChannelDraftPayload,
+} from "@/features/dashboard/views/MessagingChannelModal";
+import styles from "@/features/dashboard/views/messaging-channels.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 
@@ -20,11 +46,10 @@ type MessagingChannelsPayload = {
   error?: string;
   channels?: HiveMessagingChannel[];
   directory?: HiveMessagingDirectoryEntry[];
+  providers?: HiveMessagingProviderMeta[];
   settingsFile?: string;
   updatedAt?: string;
 };
-
-type AgentOption = Pick<AgentProfile, "id" | "name" | "runtime" | "beeRole">;
 
 type MessagingChannelsPanelProps = {
   active: boolean;
@@ -33,63 +58,41 @@ type MessagingChannelsPanelProps = {
   sharedVault: SharedVaultConfig;
 };
 
-const PROVIDERS: Array<{
-  id: HiveMessagingProvider;
-  label: string;
-  credentialKind: HiveMessagingChannel["credentialKind"];
-  envHint: string;
-  targetPlaceholder: string;
-}> = [
-  { id: "telegram", label: "Telegram", credentialKind: "env-bot-token", envHint: "TELEGRAM_BOT_TOKEN", targetPlaceholder: "123456789 or -1001234567890:42" },
-  { id: "discord", label: "Discord", credentialKind: "env-webhook-url", envHint: "DISCORD_WEBHOOK_URL", targetPlaceholder: "optional thread id" },
-  { id: "imessage", label: "iMessage", credentialKind: "macos-messages", envHint: "", targetPlaceholder: "+15551234567 or name@example.com" },
-  { id: "slack", label: "Slack", credentialKind: "env-bot-token", envHint: "SLACK_BOT_TOKEN", targetPlaceholder: "C0123456789" },
-  { id: "webhook", label: "Webhook", credentialKind: "env-webhook-url", envHint: "HIVE_MESSAGE_WEBHOOK_URL", targetPlaceholder: "alerts or optional route" },
+type ViewMode = "triage" | "agents";
+
+const BUCKETS: Array<{ title: string; state: HiveMessagingChannel["runState"] }> = [
+  { title: "Needs attention", state: "attention" },
+  { title: "Live", state: "live" },
+  { title: "Active", state: "enabled" },
+  { title: "Paused", state: "paused" },
 ];
-
-const QUEEN_BEE_AGENT: AgentOption = {
-  id: "queen-bee",
-  name: "Queen Bee",
-  runtime: "hermes",
-  beeRole: "queen",
-};
-
-function defaultDraft(agent: AgentOption = QUEEN_BEE_AGENT): Required<Pick<HiveMessagingChannelDraft, "provider" | "label" | "agentId" | "agentName" | "enabled" | "defaultForAgent" | "credentialKind" | "credentialEnvKey">> & { target: { chatId: string; threadId: string; displayName: string } } {
-  const provider = PROVIDERS[0];
-  return {
-    provider: provider.id,
-    label: `${provider.label} for ${agent.name}`,
-    agentId: agent.id,
-    agentName: agent.name,
-    enabled: true,
-    defaultForAgent: true,
-    credentialKind: provider.credentialKind,
-    credentialEnvKey: provider.envHint,
-    target: { chatId: "", threadId: "", displayName: "" },
-  };
-}
-
-function providerCopy(providerId: HiveMessagingProvider) {
-  return PROVIDERS.find((provider) => provider.id === providerId) ?? PROVIDERS[0];
-}
-
-function providerLabel(providerId: HiveMessagingProvider) {
-  return providerCopy(providerId).label;
-}
 
 export function MessagingChannelsPanel({ active, displayAgents, fleetClass, sharedVault }: MessagingChannelsPanelProps) {
   const [channels, setChannels] = useState<HiveMessagingChannel[]>([]);
-  const [directory, setDirectory] = useState<HiveMessagingDirectoryEntry[]>([]);
+  const [providers, setProviders] = useState<HiveMessagingProviderMeta[]>([]);
   const [settingsFile, setSettingsFile] = useState("");
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState("");
-  const [status, setStatus] = useState("");
-  const agentOptions = useMemo(() => {
-    const unique = new Map<string, AgentOption>();
-    unique.set(QUEEN_BEE_AGENT.id, QUEEN_BEE_AGENT);
-    for (const agent of displayAgents) unique.set(agent.id, agent);
-    return [...unique.values()];
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [status, setStatus] = useState<{ text: string; tone: "info" | "error" } | null>(null);
+  const [view, setView] = useState<ViewMode>("triage");
+  const [selectedId, setSelectedId] = useState("");
+  const [laneQuery, setLaneQuery] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalAgentId, setModalAgentId] = useState(QUEEN_BEE_AGENT_ID);
+
+  const agentOptions = useMemo<MessagingAgentOption[]>(() => {
+    const map = new Map<string, MessagingAgentOption>();
+    map.set(QUEEN_BEE_AGENT_ID, toAgentOption({ id: QUEEN_BEE_AGENT_ID, name: "Queen Bee", runtime: "hermes", beeRole: "queen" }));
+    for (const agent of displayAgents) if (!map.has(agent.id)) map.set(agent.id, toAgentOption(agent));
+    return [...map.values()];
   }, [displayAgents]);
+  const providersById = useMemo(() => new Map(providers.map((p) => [p.id, p])), [providers]);
+  const agentsWithDefault = useMemo(
+    () => [...new Set(channels.filter((c) => c.defaultForAgent).map((c) => c.agentId))],
+    [channels],
+  );
+
   const runtimeAgentPayloads = useMemo(() => displayAgents.map((agent) => ({
     id: agent.id,
     name: agent.name,
@@ -98,13 +101,8 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
     localDataDir: agent.localDataDir,
     machineName: agent.machineName,
     telemetryUrl: agent.telemetryUrl,
-    collectorCapabilities: agent.collectorCapabilities
-      ? { runtimes: agent.collectorCapabilities.runtimes }
-      : undefined,
+    collectorCapabilities: agent.collectorCapabilities ? { runtimes: agent.collectorCapabilities.runtimes } : undefined,
   })), [displayAgents]);
-  const [selectedAgentId, setSelectedAgentId] = useState(QUEEN_BEE_AGENT.id);
-  const selectedAgent = agentOptions.find((agent) => agent.id === selectedAgentId) ?? QUEEN_BEE_AGENT;
-  const [draft, setDraft] = useState(defaultDraft(QUEEN_BEE_AGENT));
 
   const requestBody = useCallback((extra: Record<string, unknown> = {}) => ({
     vaultPath: sharedVault.vaultPath,
@@ -113,6 +111,12 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
     agents: runtimeAgentPayloads,
     ...extra,
   }), [runtimeAgentPayloads, sharedVault.brainServicesFolder, sharedVault.vaultPath]);
+
+  const applyPayload = useCallback((data: MessagingChannelsPayload) => {
+    setChannels(data.channels ?? []);
+    if (data.providers?.length) setProviders(data.providers);
+    setSettingsFile(data.settingsFile ?? "");
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -124,19 +128,14 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as MessagingChannelsPayload | null;
     setLoading(false);
+    setLoadedOnce(true);
     if (!response?.ok || !data?.ok) {
-      setStatus(data?.error ?? "Could not load messaging channels.");
+      setStatus({ text: data?.error ?? "Could not load messaging channels.", tone: "error" });
       return;
     }
-    setChannels(data.channels ?? []);
-    setDirectory(data.directory ?? []);
-    setSettingsFile(data.settingsFile ?? "");
-    const nextChannels = data.channels ?? [];
-    const runtimeCount = nextChannels.filter((channel) => channel.source?.kind === "hermes").length;
-    setStatus(nextChannels.length
-      ? `${nextChannels.length} messaging channel${nextChannels.length === 1 ? "" : "s"}${runtimeCount ? `, ${runtimeCount} bridged from Hermes` : ""}`
-      : "No messaging channels yet.");
-  }, [requestBody]);
+    applyPayload(data);
+    setStatus(null);
+  }, [requestBody, applyPayload]);
 
   useEffect(() => {
     if (!active) return;
@@ -144,294 +143,464 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
     return () => window.clearTimeout(timer);
   }, [active, refresh]);
 
-  function selectAgent(agent: AgentOption) {
-    setSelectedAgentId(agent.id);
-    setDraft((current) => ({
-      ...current,
-      agentId: agent.id,
-      agentName: agent.name,
-      label: current.label === `${providerLabel(current.provider)} for ${current.agentName}` ? `${providerLabel(current.provider)} for ${agent.name}` : current.label,
-    }));
-  }
-
-  function updateProvider(providerId: HiveMessagingProvider) {
-    const provider = providerCopy(providerId);
-    setDraft((current) => ({
-      ...current,
-      provider: provider.id,
-      label: current.label === `${providerLabel(current.provider)} for ${current.agentName}` ? `${provider.label} for ${current.agentName}` : current.label,
-      credentialKind: provider.credentialKind,
-      credentialEnvKey: provider.envHint,
-    }));
-  }
-
-  async function saveDraft() {
-    setSaving("save");
+  async function saveDraft(payload: MessagingChannelDraftPayload) {
+    setBusy("save");
     const response = await fetch("/api/messaging-channels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody({ channel: draft })),
+      body: JSON.stringify(requestBody({
+        channel: {
+          provider: payload.provider,
+          label: payload.label,
+          agentId: payload.agentId,
+          agentName: payload.agentName,
+          enabled: true,
+          defaultForAgent: payload.defaultForAgent,
+          credentialEnvKey: payload.credentialEnvKey,
+          target: { chatId: payload.target },
+        },
+      })),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as MessagingChannelsPayload | null;
-    setSaving("");
+    setBusy("");
     if (!response?.ok || !data?.ok) {
-      setStatus(data?.error ?? "Could not save messaging channel.");
+      setStatus({ text: data?.error ?? "Could not save messaging channel.", tone: "error" });
       return;
     }
-    setChannels(data.channels ?? []);
-    setDirectory(data.directory ?? []);
-    setStatus("Messaging channel saved.");
-    setDraft(defaultDraft(selectedAgent));
+    applyPayload(data);
+    setModalOpen(false);
+    const created = (data.channels ?? []).find(
+      (channel) => channel.agentId === payload.agentId && channel.provider === payload.provider && channel.label === payload.label,
+    );
+    if (created) {
+      setSelectedId(created.id);
+      setView("triage");
+    }
+    setStatus({ text: `${payload.label} saved.`, tone: "info" });
   }
 
-  async function patchChannel(channel: HiveMessagingChannel, patch: Partial<HiveMessagingChannel>) {
-    setSaving(channel.id);
+  async function patchChannel(channel: HiveMessagingChannel, patch: Partial<HiveMessagingChannel>, key: string) {
+    setBusy(key);
     const response = await fetch("/api/messaging-channels", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody({ channel: { ...channel, ...patch } })),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as MessagingChannelsPayload | null;
-    setSaving("");
+    setBusy("");
     if (!response?.ok || !data?.ok) {
-      setStatus(data?.error ?? "Could not update messaging channel.");
+      setStatus({ text: data?.error ?? "Could not update messaging channel.", tone: "error" });
       return;
     }
-    setChannels(data.channels ?? []);
-    setDirectory(data.directory ?? []);
-    setStatus("Messaging channel updated.");
+    applyPayload(data);
+    setStatus({ text: `${channel.label} updated.`, tone: "info" });
   }
 
   async function deleteChannel(channel: HiveMessagingChannel) {
-    setSaving(channel.id);
+    if (typeof window !== "undefined" && !window.confirm(`Remove “${channel.label}”? You can add it again later.`)) return;
+    setBusy(`del:${channel.id}`);
     const response = await fetch("/api/messaging-channels", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody({ id: channel.id })),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as MessagingChannelsPayload | null;
-    setSaving("");
+    setBusy("");
     if (!response?.ok || !data?.ok) {
-      setStatus(data?.error ?? "Could not delete messaging channel.");
+      setStatus({ text: data?.error ?? "Could not delete messaging channel.", tone: "error" });
       return;
     }
-    setChannels(data.channels ?? []);
-    setDirectory(data.directory ?? []);
-    setStatus("Messaging channel removed.");
+    applyPayload(data);
+    setStatus({ text: `${channel.label} removed.`, tone: "info" });
   }
 
   async function testChannel(channel: HiveMessagingChannel) {
-    setSaving(`test:${channel.id}`);
+    setBusy(`test:${channel.id}`);
     const response = await fetch("/api/messaging-channels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody({
         action: "test",
         channelId: channel.id,
-        message: `HivemindOS test from ${channel.agentName} via ${channel.label}.`,
+        message: `HivemindOS delivery test from ${channel.agentName} via ${channel.label}.`,
       })),
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string; result?: { message?: string } } | null;
-    setSaving("");
+    setBusy("");
     if (!response?.ok || !data?.ok) {
-      setStatus(data?.error ?? "Could not send test message.");
+      setStatus({ text: data?.error ?? "Could not send test message.", tone: "error" });
       void refresh();
       return;
     }
-    setStatus(data.result?.message ?? "Test message sent.");
+    setStatus({ text: data.result?.message ?? "Test message sent.", tone: "info" });
     void refresh();
+  }
+
+  function openAdd(agentId: string) {
+    setModalAgentId(agentId);
+    setModalOpen(true);
   }
 
   if (!active) return null;
 
-  const activeProvider = providerCopy(draft.provider);
-  const channelsByAgent = new Map(agentOptions.map((agent) => [agent.id, channels.filter((channel) => channel.agentId === agent.id)]));
+  // Derived effective selection: keep the user's pick while it exists, else fall
+  // back to the first channel that needs attention, else the first channel.
+  const effectiveSelectedId = channels.some((channel) => channel.id === selectedId)
+    ? selectedId
+    : (channels.find((channel) => channelRunState(channel) === "attention") ?? channels[0])?.id ?? "";
+  const selected = channels.find((channel) => channel.id === effectiveSelectedId) ?? null;
+  const stats = {
+    active: channels.filter((c) => { const s = channelRunState(c); return s === "live" || s === "enabled"; }).length,
+    paused: channels.filter((c) => channelRunState(c) === "paused").length,
+    attention: channels.filter((c) => channelRunState(c) === "attention").length,
+  };
+  const groups = BUCKETS
+    .map((bucket) => ({ ...bucket, items: channels.filter((c) => channelRunState(c) === bucket.state) }))
+    .filter((group) => group.items.length > 0);
+
+  const laneQ = laneQuery.trim().toLowerCase();
+  const laneAgents = laneQ
+    ? agentOptions.filter((agent) => agent.name.toLowerCase().includes(laneQ))
+    : agentOptions.filter((agent) => agent.isQueen || channels.some((c) => c.agentId === agent.id));
+  const withChannels = agentOptions.filter((agent) => channels.some((c) => c.agentId === agent.id)).length;
+  const laneHint = laneQ
+    ? `${laneAgents.length} match${laneAgents.length === 1 ? "" : "es"} of ${agentOptions.length} agents`
+    : `${withChannels} of ${agentOptions.length} agents have a direct channel · search to reach the rest`;
+
+  const showSkeleton = loading && !loadedOnce;
 
   return (
-    <section className={fleetClass("taskPanel", "tabPanel")}>
-      <div className={fleetClass("taskPanelHeader")}>
+    <section className={`${fleetClass("tabPanel")} ${styles.root}`}>
+      <div className={styles.header}>
         <div>
-          <p className="eyebrow">Hive messaging</p>
-          <h2>Messaging Channels</h2>
-          <p>Queen Bee is the default handoff point. Add direct channels for worker agents when a channel should bypass orchestration.</p>
+          <p className={styles.eyebrow}>Hive messaging</p>
+          <h2 className={styles.title}>Messaging channels</h2>
+          <p className={styles.subtitle}>Queen Bee is the default handoff. Give worker agents their own channel when it should bypass orchestration.</p>
         </div>
-        <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
-          {loading ? <RefreshCcw aria-hidden="true" className="animate-spin" /> : <RefreshCcw aria-hidden="true" />}
-          Refresh
-        </Button>
+        <div className={styles.headerActions}>
+          <HiveButton type="button" variant="ghost" size="iconSm" onClick={() => void refresh()} disabled={loading} aria-label="Refresh channels" title="Refresh">
+            <RefreshCcw aria-hidden="true" className={loading ? "animate-spin" : undefined} />
+          </HiveButton>
+          <div className={styles.segmented} role="tablist" aria-label="Messaging view">
+            <button type="button" role="tab" aria-selected={view === "triage"} className={cn(styles.segItem, view === "triage" && styles.segItemActive)} onClick={() => setView("triage")}>Triage</button>
+            <button type="button" role="tab" aria-selected={view === "agents"} className={cn(styles.segItem, view === "agents" && styles.segItemActive)} onClick={() => setView("agents")}>By agent</button>
+          </div>
+          <HiveButton type="button" onClick={() => openAdd(view === "agents" ? QUEEN_BEE_AGENT_ID : (selected?.agentId ?? QUEEN_BEE_AGENT_ID))} disabled={providers.length === 0}>
+            <Plus aria-hidden="true" />
+            New channel
+          </HiveButton>
+        </div>
       </div>
 
-      {status ? <p className="mt-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2 text-xs text-[var(--foreground)]">{status}</p> : null}
+      {channels.length ? (
+        <div className={styles.statsRow}>
+          <span className={styles.stat} data-tone="live"><span className={styles.statDot} />{stats.active} active</span>
+          <span className={styles.stat} data-tone="paused"><span className={styles.statDot} />{stats.paused} paused</span>
+          <span className={styles.stat} data-tone="attention"><span className={styles.statDot} />{stats.attention} needs a key</span>
+        </div>
+      ) : null}
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)]">
-        <section className="grid content-start gap-4 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
-          <div className="grid gap-3">
-            <div>
-              <p className="eyebrow">Agent</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {agentOptions.map((agent) => {
-                  const count = channelsByAgent.get(agent.id)?.length ?? 0;
-                  const selected = selectedAgentId === agent.id;
-                  return (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      onClick={() => selectAgent(agent)}
-                      className={`flex min-h-20 items-center gap-3 rounded-md border p-3 text-left transition ${selected ? "border-[rgba(94,234,212,0.42)] bg-[rgba(20,184,166,0.12)]" : "border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.28)] hover:border-[rgba(94,234,212,0.28)]"}`}
-                    >
-                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)]">
-                        {agent.beeRole === "queen" ? <Image src={beeRoleIconPath("queen")} alt="" width={26} height={26} unoptimized /> : <Bot aria-hidden="true" className="h-5 w-5 text-[var(--accent-strong)]" />}
-                      </span>
-                      <span className="min-w-0">
-                        <strong className="block text-sm text-[var(--foreground)]">{agent.name}</strong>
-                        <span className="block text-xs text-[var(--muted)]">{agent.id === "queen-bee" ? "orchestrator" : agent.runtime}</span>
-                        <span className="mt-1 block text-xs text-[var(--accent-strong)]">{count} channel{count === 1 ? "" : "s"}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+      {status ? <p className={styles.statusBanner} data-tone={status.tone} role="status">{status.text}</p> : null}
 
-            <div className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.16)] bg-[rgba(20,184,166,0.06)] p-3">
-              <p className="eyebrow">New channel</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <label className="grid gap-1 text-xs text-[var(--muted)]">
-                  Provider
-                  <select
-                    value={draft.provider}
-                    onChange={(event) => updateProvider(event.target.value as HiveMessagingProvider)}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.78)] px-2 py-2 text-sm text-[var(--foreground)]"
-                  >
-                    {PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
-                  </select>
-                </label>
-                <label className="grid gap-1 text-xs text-[var(--muted)]">
-                  Label
-                  <input
-                    value={draft.label}
-                    onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.78)] px-2 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
-                  />
-                </label>
-                {draft.credentialKind !== "macos-messages" ? (
-                  <label className="grid gap-1 text-xs text-[var(--muted)]">
-                    Credential env key
-                    <input
-                      value={draft.credentialEnvKey}
-                      onChange={(event) => setDraft((current) => ({ ...current, credentialEnvKey: event.target.value }))}
-                      placeholder={activeProvider.envHint}
-                      className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.78)] px-2 py-2 font-mono text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
-                    />
-                  </label>
-                ) : null}
-                <label className="grid gap-1 text-xs text-[var(--muted)]">
-                  Target
-                  <input
-                    value={draft.target.chatId}
-                    onChange={(event) => setDraft((current) => ({ ...current, target: { ...current.target, chatId: event.target.value } }))}
-                    placeholder={activeProvider.targetPlaceholder}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.78)] px-2 py-2 font-mono text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
-                  />
-                </label>
-                <label className="grid gap-1 text-xs text-[var(--muted)]">
-                  Display name
-                  <input
-                    value={draft.target.displayName}
-                    onChange={(event) => setDraft((current) => ({ ...current, target: { ...current.target, displayName: event.target.value } }))}
-                    placeholder={`${activeProvider.label} home`}
-                    className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.78)] px-2 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)]"
-                  />
-                </label>
-                <label className="flex min-h-10 items-center gap-2 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.32)] px-3 text-sm text-[var(--foreground)]">
-                  <input type="checkbox" checked={draft.defaultForAgent} onChange={(event) => setDraft((current) => ({ ...current, defaultForAgent: event.target.checked }))} />
-                  Default for {selectedAgent.name}
-                </label>
-              </div>
-              <Button type="button" size="sm" className="w-fit" onClick={() => void saveDraft()} disabled={saving === "save"}>
-                {saving === "save" ? <RefreshCcw aria-hidden="true" className="animate-spin" /> : <Check aria-hidden="true" />}
-                Save channel
-              </Button>
-            </div>
-          </div>
-        </section>
+      <div className={styles.divider} />
 
-        <section className="grid content-start gap-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="eyebrow">Directory</p>
-              <h3 className="m-0 text-base font-bold">Configured targets</h3>
-            </div>
-            {settingsFile ? <code className="max-w-full break-all text-xs text-[var(--muted)]">{settingsFile}</code> : null}
-          </div>
-          <div className="grid gap-3">
-            {channels.map((channel) => (
-              <article key={channel.id} className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="eyebrow">{providerLabel(channel.provider)} · {channel.agentName}</p>
-                    <h4 className="m-0 break-words text-base font-bold text-[var(--foreground)]">{channel.label}</h4>
-                    <p className="m-0 mt-1 break-all font-mono text-xs text-[var(--muted)]">
-                      {channel.provider}:{channel.target.chatId}{channel.target.threadId ? `:${channel.target.threadId}` : ""}
-                    </p>
-                    {channel.source?.kind === "hermes" ? (
-                      <p className="m-0 mt-2 text-xs text-[var(--muted)]">
-                        Bridged from Hermes{channel.source.machineName ? ` on ${channel.source.machineName}` : ""}.
-                      </p>
-                    ) : null}
-                  </div>
-                  <span className={`rounded-full border px-3 py-1 text-xs font-bold ${channel.enabled ? "border-[rgba(94,234,212,0.22)] text-[var(--accent-strong)]" : "border-[rgba(148,163,184,0.18)] text-[var(--muted)]"}`}>
-                    {channel.readOnly ? "live" : channel.enabled ? "enabled" : "paused"}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="secondary" onClick={() => void testChannel(channel)} disabled={Boolean(saving)}>
-                    {saving === `test:${channel.id}` ? <RefreshCcw aria-hidden="true" className="animate-spin" /> : <Send aria-hidden="true" />}
-                    Test
-                  </Button>
-                  {channel.readOnly ? null : (
-                    <>
-                      <Button type="button" size="sm" variant="secondary" onClick={() => void patchChannel(channel, { enabled: !channel.enabled })} disabled={saving === channel.id}>
-                        <PlugZap aria-hidden="true" />
-                        {channel.enabled ? "Pause" : "Enable"}
-                      </Button>
-                      <Button type="button" size="sm" variant={channel.defaultForAgent ? "default" : "secondary"} onClick={() => void patchChannel(channel, { defaultForAgent: true })} disabled={saving === channel.id || channel.defaultForAgent}>
-                        <MessageSquare aria-hidden="true" />
-                        Default
-                      </Button>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => void deleteChannel(channel)} disabled={saving === channel.id}>
-                        <Trash2 aria-hidden="true" />
-                        Delete
-                      </Button>
-                    </>
-                  )}
-                </div>
-                {channel.lastTestAt ? (
-                  <p className="m-0 text-xs text-[var(--muted)]">
-                    Last test: {new Date(channel.lastTestAt).toLocaleString()} · {channel.lastTestStatus === "ok" ? "ok" : channel.lastTestMessage || "error"}
-                  </p>
-                ) : null}
-              </article>
-            ))}
-            {channels.length ? null : (
-              <div className="rounded-md border border-dashed border-[rgba(148,163,184,0.22)] p-6 text-center text-sm text-[var(--muted)]">
-                No messaging channels configured.
-              </div>
-            )}
-          </div>
+      {view === "triage" ? (
+        <TriageView
+          showSkeleton={showSkeleton}
+          groups={groups}
+          channels={channels}
+          selected={selected}
+          selectedId={effectiveSelectedId}
+          providersById={providersById}
+          settingsFile={settingsFile}
+          busy={busy}
+          onSelect={setSelectedId}
+          onTest={testChannel}
+          onToggle={(channel) => void patchChannel(channel, { enabled: !channel.enabled }, channel.id)}
+          onSetDefault={(channel) => void patchChannel(channel, { defaultForAgent: true }, channel.id)}
+          onDelete={deleteChannel}
+          onOpenAdd={() => openAdd(QUEEN_BEE_AGENT_ID)}
+        />
+      ) : (
+        <AgentsView
+          laneQuery={laneQuery}
+          onLaneQuery={setLaneQuery}
+          laneHint={laneHint}
+          laneAgents={laneAgents}
+          channels={channels}
+          providersById={providersById}
+          onOpenAdd={openAdd}
+        />
+      )}
 
-          {directory.length ? (
-            <div className="grid gap-2 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.32)] p-3">
-              <p className="eyebrow">Hermes-style targets</p>
-              {directory.map((entry) => (
-                <code key={entry.id} className="break-all rounded-sm bg-[rgba(10,14,21,0.55)] px-2 py-1 text-xs text-[var(--foreground)]">
-                  {entry.provider}:{entry.name}
-                </code>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      </div>
+      <p className={styles.footNote}>
+        <Lock size={13} aria-hidden="true" />
+        Tailnet-only · credentials stored locally · nothing exposed on a public port
+      </p>
+
+      <MessagingChannelModal
+        open={modalOpen}
+        providers={providers}
+        agents={agentOptions}
+        initialAgentId={modalAgentId}
+        agentsWithDefault={agentsWithDefault}
+        saving={busy === "save"}
+        onClose={() => setModalOpen(false)}
+        onSubmit={(payload) => void saveDraft(payload)}
+      />
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Triage view
+// ---------------------------------------------------------------------------
+
+type TriageProps = {
+  showSkeleton: boolean;
+  groups: Array<{ title: string; items: HiveMessagingChannel[] }>;
+  channels: HiveMessagingChannel[];
+  selected: HiveMessagingChannel | null;
+  selectedId: string;
+  providersById: Map<string, HiveMessagingProviderMeta>;
+  settingsFile: string;
+  busy: string;
+  onSelect: (id: string) => void;
+  onTest: (channel: HiveMessagingChannel) => void;
+  onToggle: (channel: HiveMessagingChannel) => void;
+  onSetDefault: (channel: HiveMessagingChannel) => void;
+  onDelete: (channel: HiveMessagingChannel) => void;
+  onOpenAdd: () => void;
+};
+
+function TriageView(props: TriageProps) {
+  const { showSkeleton, groups, channels, selected, selectedId, providersById, settingsFile, busy } = props;
+
+  return (
+    <div className={styles.triage}>
+      <div className={styles.directory}>
+        {showSkeleton ? (
+          <div className={styles.rows} role="status" aria-label="Loading messaging channels">
+            {Array.from({ length: 5 }).map((_, i) => <div key={i} className={styles.skelRow} />)}
+          </div>
+        ) : channels.length === 0 ? (
+          <button type="button" className={styles.addTile} onClick={props.onOpenAdd} style={{ minHeight: 160 }}>
+            <span className={styles.addTileIcon}><Plus aria-hidden="true" /></span>
+            <span className={styles.addTileTitle}>New channel</span>
+            <span className={styles.addTileHint}>Telegram, Discord, Slack, Matrix, a webhook, and more</span>
+          </button>
+        ) : (
+          <>
+            {groups.map((group) => (
+              <div className={styles.group} key={group.title}>
+                <div className={styles.groupHead}>
+                  <span className={styles.groupTitle}>{group.title}</span>
+                  <span className={styles.groupCount}>{group.items.length}</span>
+                  <span className={styles.groupRule} />
+                </div>
+                <div className={styles.rows}>
+                  {group.items.map((channel) => {
+                    const meta = providersById.get(channel.provider);
+                    const runState = channelRunState(channel);
+                    return (
+                      <button type="button" key={channel.id} className={cn(styles.row, channel.id === selectedId && styles.rowActive)} onClick={() => props.onSelect(channel.id)}>
+                        <StatusDot tone={runState} />
+                        {meta ? <ProviderTile meta={meta} size="sm" /> : null}
+                        <span className={styles.rowMain}>
+                          <span className={styles.rowLabel} title={channel.label}>{channel.label}</span>
+                          <span className={styles.rowSub}>{channel.agentName}</span>
+                        </span>
+                        {channel.defaultForAgent ? <Star size={12} className={styles.star} fill="currentColor" aria-label="Default" /> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {settingsFile ? <p className={styles.pathNote}>{settingsFile}</p> : null}
+          </>
+        )}
+      </div>
+
+      {showSkeleton ? (
+        <div className={styles.skelInspector} aria-hidden="true" />
+      ) : selected ? (
+        <Inspector
+          channel={selected}
+          meta={providersById.get(selected.provider)}
+          busy={busy}
+          onTest={props.onTest}
+          onToggle={props.onToggle}
+          onSetDefault={props.onSetDefault}
+          onDelete={props.onDelete}
+        />
+      ) : (
+        <div className={styles.emptyInspector}>Add a channel to start routing agent messages.</div>
+      )}
+    </div>
+  );
+}
+
+type InspectorProps = {
+  channel: HiveMessagingChannel;
+  meta?: HiveMessagingProviderMeta;
+  busy: string;
+  onTest: (channel: HiveMessagingChannel) => void;
+  onToggle: (channel: HiveMessagingChannel) => void;
+  onSetDefault: (channel: HiveMessagingChannel) => void;
+  onDelete: (channel: HiveMessagingChannel) => void;
+};
+
+function Inspector({ channel, meta, busy, onTest, onToggle, onSetDefault, onDelete }: InspectorProps) {
+  const runState = channelRunState(channel);
+  const runMeta = RUN_STATE_META[runState];
+  const caps = capabilityLabels(meta);
+  const delivery = deliveryStatusLine(channel);
+  const sourceText = channel.readOnly
+    ? `Bridged from Hermes${channel.source?.machineName ? ` · ${channel.source.machineName}` : ""}`
+    : "Configured here";
+  const testing = busy === `test:${channel.id}`;
+  const rowBusy = busy === channel.id;
+
+  return (
+    <div className={styles.inspector}>
+      <div className={styles.inspectorHead}>
+        <div className={styles.inspectorId}>
+          {meta ? <ProviderTile meta={meta} size="lg" /> : null}
+          <div style={{ minWidth: 0 }}>
+            <p className={styles.inspectorKicker}>{meta?.label ?? channel.provider} · {channel.agentName}</p>
+            <h3 className={styles.inspectorTitle}>{channel.label}</h3>
+          </div>
+        </div>
+        <span className={styles.badge} data-tone={runMeta.tone}>{runMeta.text}</span>
+      </div>
+
+      <Endpoint value={channelEndpoint(channel)} />
+
+      <div className={styles.metaGrid}>
+        <div className={styles.metaCell}>
+          <p className={styles.metaLabel}>Owner</p>
+          <p className={styles.metaValue}>{channel.agentName}</p>
+        </div>
+        <div className={styles.metaCell}>
+          <p className={styles.metaLabel}>Default for agent</p>
+          <p className={styles.metaValue}>{channel.defaultForAgent ? "Yes" : "No"}</p>
+        </div>
+        <div className={styles.metaCell}>
+          <p className={styles.metaLabel}>Credential</p>
+          <p className={styles.metaValueMono}>{channel.credentialLabel ?? meta?.credentialEnvHint ?? "—"}</p>
+        </div>
+        <div className={styles.metaCell}>
+          <p className={styles.metaLabel}>Source</p>
+          <p className={styles.metaValue}>{sourceText}</p>
+        </div>
+      </div>
+
+      <div className={styles.capsBlock}>
+        <p className={styles.metaLabel}>Platform capabilities</p>
+        <div className={styles.caps}>
+          {caps.length ? caps.map((cap) => <span key={cap} className={styles.capChip}>{cap}</span>) : <span className={cn(styles.capChip, styles.capChipMuted)}>Text only</span>}
+        </div>
+      </div>
+
+      <div className={styles.testCard}>
+        <div style={{ minWidth: 0 }}>
+          <p className={styles.metaLabel}>Delivery test</p>
+          <span className={styles.statusLine}><StatusDot tone={delivery.tone} /><span>{delivery.text}</span></span>
+        </div>
+        <HiveButton type="button" variant="secondary" size="sm" onClick={() => onTest(channel)} disabled={Boolean(busy)}>
+          {testing ? <RefreshCcw aria-hidden="true" className="animate-spin" /> : <Send aria-hidden="true" />}
+          Send test
+        </HiveButton>
+      </div>
+
+      {channel.readOnly ? (
+        <p className={styles.credNote}>Bridged from the Hermes runtime — pause, default, and removal are managed in Hermes.</p>
+      ) : (
+        <div className={styles.actions}>
+          <HiveButton type="button" variant="secondary" size="sm" onClick={() => onToggle(channel)} disabled={rowBusy}>
+            <Zap aria-hidden="true" />
+            {channel.enabled ? "Pause" : "Enable"}
+          </HiveButton>
+          <HiveButton type="button" variant="outline" size="sm" onClick={() => onSetDefault(channel)} disabled={rowBusy || channel.defaultForAgent}>
+            <Star aria-hidden="true" />
+            Set default
+          </HiveButton>
+          <span className={styles.spacer} />
+          <HiveButton type="button" variant="ghost" size="iconSm" onClick={() => onDelete(channel)} disabled={busy === `del:${channel.id}`} aria-label="Delete channel" title="Delete channel">
+            <Trash2 aria-hidden="true" style={{ color: "var(--hm-danger)" }} />
+          </HiveButton>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// By-agent view
+// ---------------------------------------------------------------------------
+
+type AgentsProps = {
+  laneQuery: string;
+  onLaneQuery: (value: string) => void;
+  laneHint: string;
+  laneAgents: MessagingAgentOption[];
+  channels: HiveMessagingChannel[];
+  providersById: Map<string, HiveMessagingProviderMeta>;
+  onOpenAdd: (agentId: string) => void;
+};
+
+function AgentsView({ laneQuery, onLaneQuery, laneHint, laneAgents, channels, providersById, onOpenAdd }: AgentsProps) {
+  return (
+    <div className={styles.lanesWrap}>
+      <div className={styles.laneSearch}>
+        <div className={styles.searchBox}>
+          <Search size={15} className={styles.searchIcon} aria-hidden="true" />
+          <input className={styles.searchInput} value={laneQuery} onChange={(e) => onLaneQuery(e.target.value)} placeholder="Search agents…" />
+        </div>
+        <span className={styles.laneHint}>{laneHint}</span>
+      </div>
+      {laneAgents.map((agent) => {
+        const laneChannels = channels.filter((channel) => channel.agentId === agent.id);
+        return (
+          <div key={agent.id} className={cn(styles.lane, agent.isQueen && styles.laneQueen)}>
+            <div className={styles.laneAgent}>
+              <div className={styles.laneAgentTop}>
+                <BeeHex avatar={agent.avatar} />
+                <div style={{ minWidth: 0 }}>
+                  <p className={styles.laneName}>{agent.name}</p>
+                  <p className={styles.laneSub}>{agent.sub}</p>
+                </div>
+              </div>
+              {agent.isQueen ? <span className={styles.badge} data-tone="enabled">Default handoff</span> : null}
+            </div>
+            <div className={styles.laneChannels}>
+              {laneChannels.map((channel) => {
+                const meta = providersById.get(channel.provider);
+                const runState = channelRunState(channel);
+                return (
+                  <div key={channel.id} className={styles.chip} data-tone={runState}>
+                    {meta ? <span className={styles.chipRail} style={{ ["--tile" as string]: meta.color }} /> : null}
+                    {meta ? <ProviderTile meta={meta} size="sm" /> : null}
+                    <div className={styles.chipMain}>
+                      <div className={styles.chipLabelRow}>
+                        <span className={styles.chipLabel} title={channel.label}>{channel.label}</span>
+                        {channel.defaultForAgent ? <Star size={11} className={styles.star} fill="currentColor" aria-label="Default" /> : null}
+                      </div>
+                      <span className={styles.chipAddr} title={channelEndpoint(channel)}>{channelEndpoint(channel)}</span>
+                    </div>
+                    <StatusDot tone={runState} />
+                  </div>
+                );
+              })}
+              <button type="button" className={styles.addChip} onClick={() => onOpenAdd(agent.id)}>
+                <Plus size={15} aria-hidden="true" />
+                Add channel
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

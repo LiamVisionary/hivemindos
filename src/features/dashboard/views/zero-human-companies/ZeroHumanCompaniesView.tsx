@@ -19,7 +19,9 @@ import {
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
 import { resolvedIssueAnswer, retryDelegationIssueAnswer } from "./issue-resume";
 import { issuePreviewUrl, previewReviewAnswer, type PreviewDecision } from "./preview-review";
+import { workApprovalDecisionAnswer } from "./work-approval-issues";
 import type { Agent, Colony, CompanyEditForm, CompanyImportForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
+import type { ApprovalDecision } from "@/features/approvals/spend-approval-model";
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 import type { KanbanLinkedDirectory, KanbanMachineTarget } from "@/lib/types/kanban";
@@ -159,6 +161,30 @@ function ZeroHumanCompaniesDemoView({
     setBusyId(null);
   }, [replaceColony]);
 
+  const handleDecideIssueApproval = React.useCallback((companyId: string, issue: Issue, decision: ApprovalDecision, note: string) => {
+    const taskId = issue.work?.taskId;
+    setBusyId(taskId ?? issue.key);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.map((item) => {
+        const same = (taskId && item.work?.taskId === taskId) || item.key === issue.key;
+        return same
+          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${workApprovalDecisionAnswer(item, decision, note)}`.trim() } : item.work }
+          : item;
+      }),
+      governance: [
+        {
+          kind: decision === "approved" ? "patch" as const : "alert" as const,
+          text: `Human ${decision === "approved" ? "approved" : "rejected"} the work approval on ${issue.title}.`,
+          agent: "human",
+          since: "now",
+        },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
   const setDemoApprovalPolicy = React.useCallback((companyId: string, policy: CompanyApprovalPolicy) => {
     setBusyId(`approval-policy:${policy.id}`);
     replaceColony(companyId, (colony) => {
@@ -203,15 +229,16 @@ function ZeroHumanCompaniesDemoView({
     setBusyId(null);
   }, [replaceColony]);
 
-  const handleResolveIssue = React.useCallback((companyId: string, issue: Issue) => {
+  const handleResolveIssue = React.useCallback((companyId: string, issue: Issue, answer?: string) => {
     const taskId = issue.work?.taskId;
+    const providedAnswer = answer?.trim();
     setBusyId(taskId ?? issue.key);
     replaceColony(companyId, (colony) => ({
       ...colony,
       issues: colony.issues.map((item) => {
         const same = (taskId && item.work?.taskId === taskId) || item.key === issue.key;
         return same
-          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${resolvedIssueAnswer(item)}`.trim() } : item.work }
+          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${providedAnswer || resolvedIssueAnswer(item)}`.trim() } : item.work }
           : item;
       }),
       governance: [
@@ -299,6 +326,7 @@ function ZeroHumanCompaniesDemoView({
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
       onDecideApproval={(companyId, approvalId, decision, note) => decideApproval(companyId, approvalId, decision, note)}
+      onDecideIssueApproval={(companyId, issue, decision, note) => handleDecideIssueApproval(companyId, issue, decision, note)}
       onResolvePricing={(companyId, proposalId) =>
         replaceColony(companyId, (colony) => ({
           ...colony,
@@ -310,7 +338,7 @@ function ZeroHumanCompaniesDemoView({
       onDelete={(companyId) => setColonies((current) => current.filter((colony) => colony.id !== companyId))}
       onDispatch={handleDispatch}
       onStopAutonomy={handleStopAutonomy}
-      onResolveIssue={(companyId, issue) => handleResolveIssue(companyId, issue)}
+      onResolveIssue={(companyId, issue, answer) => handleResolveIssue(companyId, issue, answer)}
       onRetryIssues={(companyId, issues) => handleRetryIssues(companyId, issues)}
       onDismissIssues={(companyId, issues) => handleDismissIssues(companyId, issues)}
       onRecordRevenue={handleRecordRevenue}
@@ -832,13 +860,14 @@ function ZeroHumanCompaniesLiveView({
     }
   }, [refresh, showNotice]);
 
-  const handleResolveIssue = React.useCallback(async (companyId: string, issue: Issue) => {
+  const handleResolveIssue = React.useCallback(async (companyId: string, issue: Issue, answer?: string) => {
     const taskId = issue.work?.taskId;
     if (!taskId) {
       setError("This issue does not have a Work Board task to resume.");
       return;
     }
     const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    const resumeAnswer = answer?.trim() || resolvedIssueAnswer(issue);
     setBusyId(taskId);
     setNotice(null);
     try {
@@ -848,7 +877,7 @@ function ZeroHumanCompaniesLiveView({
         body: JSON.stringify({
           action: "answer",
           taskId,
-          answer: resolvedIssueAnswer(issue),
+          answer: resumeAnswer,
           author: "dashboard",
         }),
       });
@@ -862,13 +891,65 @@ function ZeroHumanCompaniesLiveView({
           status: "applied",
           decision: "Human marked the blocker handled and resumed the task.",
           decidedBy: "human",
-          evidence: [resolvedIssueAnswer(issue)],
+          evidence: [resumeAnswer],
         });
         setError(null);
         showNotice(
           json.pickupScheduled
             ? `${companyName}: marked resolved. ${issue.agent || "The agent"} is picking the task back up now.`
             : `${companyName}: marked resolved. The task is back in the Work Board queue.`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh, showNotice]);
+
+  const handleDecideIssueApproval = React.useCallback(async (companyId: string, issue: Issue, decision: ApprovalDecision, note: string) => {
+    const taskId = issue.work?.taskId;
+    if (!taskId) {
+      setError("This approval does not have a Work Board task to resume.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    const answer = workApprovalDecisionAnswer(issue, decision, note);
+    setBusyId(taskId);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/kanban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "answer",
+          taskId,
+          answer,
+          author: "dashboard",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Could not send this approval decision to the crew.");
+      } else {
+        const approved = decision === "approved";
+        void postCompanyRunRecord(companyId, {
+          action: "create-proposal",
+          kind: "human-input",
+          status: approved ? "applied" : "rejected",
+          title: approved ? `Work approval approved: ${issue.title}` : `Work approval rejected: ${issue.title}`,
+          sourceTaskId: taskId,
+          idempotencyKey: `work-approval:${taskId}:${decision}:${Date.now()}`,
+          risk: "high",
+          decision: approved ? "Human approved the Work Board approval request." : "Human rejected the Work Board approval request.",
+          decidedBy: "human",
+          evidence: [answer],
+        });
+        setError(null);
+        const soon = json.pickupScheduled ? "now" : "on the next pickup";
+        showNotice(
+          approved
+            ? `${companyName}: approval sent. ${issue.agent || "The crew"} is resuming ${soon}.`
+            : `${companyName}: rejection sent. ${issue.agent || "The crew"} is revising ${soon}.`,
         );
       }
       await refresh();
@@ -1125,13 +1206,14 @@ function ZeroHumanCompaniesLiveView({
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
       onDecideApproval={(_companyId, approvalId, decision, note) => void decideApproval(approvalId, decision, note)}
+      onDecideIssueApproval={(companyId, issue, decision, note) => void handleDecideIssueApproval(companyId, issue, decision, note)}
       onResolvePricing={(companyId, proposalId, decision) => void resolvePricing(companyId, proposalId, decision)}
       onSetApprovalPolicy={(companyId, policy) => void setApprovalPolicy(companyId, policy)}
       onFreeze={(companyId, frozen) => void handleFreeze(companyId, frozen)}
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
-      onResolveIssue={(companyId, issue) => void handleResolveIssue(companyId, issue)}
+      onResolveIssue={(companyId, issue, answer) => void handleResolveIssue(companyId, issue, answer)}
       onRetryIssues={(companyId, issues) => void handleRetryIssues(companyId, issues)}
       onDismissIssues={(companyId, issues) => void handleDismissIssues(companyId, issues)}
       onReviewPreview={(companyId, issue, decision, notes) => void handleReviewPreview(companyId, issue, decision, notes)}

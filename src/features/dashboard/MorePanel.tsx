@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AppWindow, Bell, Bot, ChevronRight, Coins, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, ChevronRight, Coins, Cpu, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
 
 import type { DashboardUtilityView } from "@/features/dashboard/dashboard-navigation";
 import { isPinnableView } from "@/features/dashboard/dashboard-navigation";
@@ -39,7 +39,7 @@ type MoreItem = {
 // until it gets one; this is how a previously-unreachable view surfaces).
 const MORE_GROUP_DEFS = [
   { name: "Build & automate", ids: ["fusion", "aeon", "swarm"] },
-  { name: "Money & governance", ids: ["wallet", "trade", "governance", "stake"] },
+  { name: "Money & governance", ids: ["wallet", "trade", "governance", "compute", "stake"] },
   { name: "Fleet health", ids: ["maintenance", "memory", "sessions", "tools"] },
   { name: "Connections", ids: ["integrations", "my-apps", "messaging", "phone"] },
   { name: "Data & access", ids: ["env", "files", "notifications"] },
@@ -63,7 +63,7 @@ function toneStyle(tone: BadgeTone): CSSProperties {
     case "live":
       return { background: "var(--live-soft)", color: "var(--live)", borderColor: "color-mix(in srgb, var(--live) 34%, transparent)" };
     case "neutral":
-      return { background: "color-mix(in srgb, var(--muted) 12%, transparent)", color: "var(--muted)", borderColor: "var(--line)" };
+      return { background: "color-mix(in srgb, var(--m-muted) 12%, transparent)", color: "var(--m-muted)", borderColor: "var(--m-line)" };
     default:
       return { background: "color-mix(in srgb, var(--honey) 15%, transparent)", color: "var(--honey)", borderColor: "var(--comb-line)" };
   }
@@ -73,17 +73,22 @@ function dotColor(tone: DotTone): string {
   return tone === "danger" ? "var(--danger)" : tone === "honey" ? "var(--honey)" : "var(--live)";
 }
 
-// The honey icon tile shared by every view mode.
+// The icon tile shared by every view mode. Tokens (--m-*) are theme-aware and
+// defined on `.root`: in dark, a warm-neutral cell (like the Fleet Hive view's
+// resting cells) with a teal glyph; in hive-light, the warm-honey tile. Applied
+// inline so they win over `.commandMain`'s hive-light element overrides.
 const ICON_BOX_STYLE: CSSProperties = {
-  background: "color-mix(in srgb, var(--honey) 13%, transparent)",
-  border: "1px solid var(--comb-line)",
-  color: "var(--honey)",
+  background: "var(--m-tile-fill)",
+  border: "1px solid var(--m-tile-border)",
+  color: "var(--m-tile-ink)",
 };
 
+// Active/pinned controls carry the accent (teal in dark, honey in light); the
+// resting pin is a quiet neutral outline.
 function pinButtonStyle(pinned: boolean): CSSProperties {
   return pinned
-    ? { background: "color-mix(in srgb, var(--honey) 14%, transparent)", border: "1px solid var(--comb-line)", color: "var(--honey)" }
-    : { background: "transparent", border: "1px solid var(--line)", color: "var(--muted)" };
+    ? { background: "var(--m-active-bg)", border: "1px solid var(--m-active-border)", color: "var(--m-active-ink)" }
+    : { background: "transparent", border: "1px solid var(--m-line)", color: "var(--m-muted)" };
 }
 
 export type MorePanelProps = {
@@ -167,10 +172,11 @@ export function MorePanel({
     return {
       fusion: { id: "fusion", icon: <Sparkles aria-hidden="true" />, eyebrow: "Skill builder", title: "Hive Skill Fusion", body: "Create reusable skills from skills, tools, apps, agents, and workflows.", keywords: "fusion skill workflow builder reusable" },
       aeon: { id: "aeon", icon: <Bot aria-hidden="true" />, eyebrow: "Autopilot", title: "Aeon", body: "Manage unattended skills, schedules, workflow runs, and outputs.", keywords: "aeon autopilot unattended runs outputs", dot: "live" },
-      swarm: { id: "swarm", icon: <Network aria-hidden="true" />, eyebrow: "Simulations", title: "Swarm", body: "Run MiroShark agent simulations and rehearsals.", keywords: "swarm miroshark simulation rehearsal" },
+      swarm: { id: "swarm", icon: <Network aria-hidden="true" />, eyebrow: "Simulations", title: "Simulations", body: "Run MiroShark agent simulations and rehearsals.", keywords: "swarm miroshark simulation rehearsal" },
       wallet: { id: "wallet", icon: <Wallet aria-hidden="true" />, eyebrow: "Agent money rails", title: "Wallets", body: "Manage agent wallets, balances, budgets, and usage.", keywords: "wallet wallets honey spend usage tokens balance budget" },
       trade: { id: "trade", icon: <TrendingUp aria-hidden="true" />, eyebrow: "Crypto & stocks", title: "Trade", body: "Buy, sell, and swap crypto and stocks with preview-and-confirm.", keywords: "trade trading buy sell swap crypto stocks perps polymarket" },
       governance: { id: "governance", icon: <Landmark aria-hidden="true" />, eyebrow: "Companies & budgets", title: "Zero Human Company", body: "Group agents into companies, set budgets and kill switches, and clear spend approvals.", keywords: "governance company companies budget approvals kill switch zhc", ...approvalBadge },
+      compute: { id: "compute", icon: <Cpu aria-hidden="true" />, eyebrow: "GPU marketplace", title: "Hive Compute", body: "Route model calls through marketplace GPUs or install a worker to earn from spare local GPU capacity.", keywords: "compute gpu marketplace inference worker ollama earn rent models" },
       stake: { id: "stake", icon: <Coins aria-hidden="true" />, eyebrow: "Community tiers", title: "Stake HIVE", body: "Lock HIVE for Holder–Visionary status, alpha rooms, governance, and curator rights.", keywords: "stake hive holder visionary alpha governance curator", href: "/stake" },
       maintenance: { id: "maintenance", icon: <ShieldCheck aria-hidden="true" />, eyebrow: "Fleet checks", title: "Diagnostics", body: "Run dashboard and runtime health checks.", keywords: "diagnostics maintenance health checks repair", ...maintenanceBadge },
       memory: { id: "memory", icon: <Activity aria-hidden="true" />, eyebrow: rss ? `${rss} MB RSS` : "Review queue", title: "Memory & Review", body: "Review proposed brain writes, inspect Context X-Ray, and track process RSS growth.", keywords: "memory review rss telemetry context x-ray brain writes", ...(rss ? { badge: `${rss} MB`, badgeTone: "honey" as BadgeTone } : {}) },
@@ -299,7 +305,9 @@ export function MorePanel({
         <h2 className={styles.title}>Jump to anything</h2>
       </div>
 
-      <div className={styles.search}>
+      {/* A <label> makes the whole field focus the input on click — no dead
+          zones around the icon/padding/kbd, no JS handler needed. */}
+      <label className={styles.search}>
         <span className={styles.searchIcon}><Search aria-hidden="true" width={20} height={20} /></span>
         <input
           ref={searchRef}
@@ -311,7 +319,7 @@ export function MorePanel({
           aria-label="Search utilities"
         />
         <kbd className={styles.kbd}>/</kbd>
-      </div>
+      </label>
 
       <div className={styles.sectionLabelRow}>
         <p className={styles.sectionLabel}>Pinned</p>
@@ -355,8 +363,8 @@ export function MorePanel({
                 aria-pressed={active}
                 onClick={() => rememberViewMode(option.value)}
                 style={active
-                  ? { background: "color-mix(in srgb, var(--honey) 14%, transparent)", color: "var(--honey)" }
-                  : { color: "var(--muted)" }}
+                  ? { background: "var(--m-active-bg)", color: "var(--m-active-ink)" }
+                  : { color: "var(--m-muted)" }}
               >
                 {option.icon}
                 {option.label}

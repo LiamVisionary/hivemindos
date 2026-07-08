@@ -7,7 +7,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { ExternalLink, MessageSquare, Paperclip } from "lucide-react";
-import { RejectDeliverableModal } from "./RejectDeliverableModal";
+import { CompanyCorrectionModal } from "./CompanyCorrectionModal";
 import { SkeletonText, Spinner } from "./primitives";
 import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import type { CompanyEmailThread } from "@/lib/services/agent-mailboxes";
@@ -160,17 +160,13 @@ export function EmailThreadModal({
       </div>
 
       {correcting ? (
-        <RejectDeliverableModal
+        <CompanyCorrectionModal
+          kind="email"
           companyId={companyId}
           deliverableRef={`Email — ${thread.subject}`}
           theme={theme}
-          icon="✉️"
-          title="Correct the agent on this email"
-          submitLabel="Send correction"
-          placeholder="What's wrong with this email / what to do differently next time…"
-          intro={(
-            <>Correcting how {companyName}&apos;s crew handled <b style={{ color: "var(--fg-2)" }}>{thread.subject}</b>. Your feedback becomes a standing directive in company knowledge — the crew reads it on every dispatch, so it fixes this next time. Optionally point them at a skill or attach references.</>
-          )}
+          companyName={companyName}
+          subject={thread.subject}
           onClose={() => setCorrecting(false)}
           onDone={() => {
             setCorrecting(false);

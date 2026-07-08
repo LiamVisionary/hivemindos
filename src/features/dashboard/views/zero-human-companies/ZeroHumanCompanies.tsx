@@ -14,6 +14,7 @@ import { TaskDetailModal } from "./TaskDetailModal";
 import { agentsAtWork } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import type { PreviewDecision } from "./preview-review";
+import { isWorkApprovalIssue } from "./work-approval-issues";
 import type { Agent, CardStyle, Colony, CompanyEditForm, CompanyImportForm, CompanyRevenueShareInput, CreateForm, Density, Issue, PoolAgent, Theme } from "./types";
 import type { CompanyApprovalPolicy } from "@/lib/types/company";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
@@ -86,7 +87,7 @@ function Masthead({
     agents: companies.reduce((n, c) => n + c.agents.length, 0),
     working: companies.reduce((n, c) => n + agentsAtWork(c), 0),
     shipped: companies.reduce((n, c) => n + c.issues.filter((i) => i.status === "done").length, 0),
-    approvals: companies.reduce((n, c) => n + c.approvals.length, 0),
+    approvals: companies.reduce((n, c) => n + c.approvals.length + (c.pricingProposals?.length ?? 0) + c.issues.filter(isWorkApprovalIssue).length, 0),
     avgAlign: companies.length ? Math.round(companies.reduce((n, c) => n + c.alignment, 0) / companies.length) : 0,
   };
   const metric = (value: React.ReactNode) => pendingFirstSync ? "—" : value;
@@ -160,6 +161,8 @@ export interface ZeroHumanCompaniesProps {
   /** Add staged crew to an existing company. */
   onAddAgents: (companyId: string, crew: Agent[]) => Promise<void>;
   onDecideApproval: (companyId: string, approvalId: string, decision: ApprovalDecision, note: string) => void | Promise<void>;
+  /** Decide an approval-like Work Board issue from the shared approval surface. */
+  onDecideIssueApproval: (companyId: string, issue: Issue, decision: ApprovalDecision, note: string) => void | Promise<void>;
   /** Decide a crew-raised pricing proposal (approve applies the catalog change). */
   onResolvePricing: (companyId: string, proposalId: string, decision: "approve" | "reject") => void;
   /** Save one company approval-policy row. */
@@ -171,7 +174,7 @@ export interface ZeroHumanCompaniesProps {
   /** Stop perpetual autonomy (no new dispatches; in-flight work finishes). */
   onStopAutonomy: (companyId: string) => void;
   /** Mark a Needs-You issue fixed and resume its Work Board task. */
-  onResolveIssue: (companyId: string, issue: Issue) => void;
+  onResolveIssue: (companyId: string, issue: Issue, answer?: string) => void;
   /** Re-queue a group of infra-blocked tasks for autonomous pickup (answer rail). */
   onRetryIssues?: (companyId: string, issues: Issue[]) => void;
   /** Set aside issues: archive their tasks off the board (one, or a whole group). */
@@ -191,7 +194,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, initialTasksLoading = false, error, notice, busyId, onRefresh,
-  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onDecideApproval, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
+  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onDecideApproval, onDecideIssueApproval, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
   openSkillAttachmentBrowser,
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
@@ -273,6 +276,7 @@ export default function ZeroHumanCompanies({
 
   const cockpitHandlers: CockpitHandlers | null = colony && {
     onDecideApproval: (approvalId, decision, note) => onDecideApproval(colony.id, approvalId, decision, note),
+    onDecideIssueApproval: (issue, decision, note) => onDecideIssueApproval(colony.id, issue, decision, note),
     onResolvePricing: (proposalId, decision) => onResolvePricing(colony.id, proposalId, decision),
     onSetApprovalPolicy: (policy) => onSetApprovalPolicy(colony.id, policy),
     onFreeze: (frozen) => onFreeze(colony.id, frozen),
@@ -283,7 +287,7 @@ export default function ZeroHumanCompanies({
     onEditTreasury: () => setModal({ type: "treasury", id: colony.id }),
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
     onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueId: getIssueIdentity(issue) }),
-    onResolveIssue: (issue) => onResolveIssue(colony.id, issue),
+    onResolveIssue: (issue, answer) => onResolveIssue(colony.id, issue, answer),
     onRetryIssues: onRetryIssues ? (issues) => onRetryIssues(colony.id, issues) : undefined,
     onDismissIssues: (issues) => onDismissIssues(colony.id, issues),
     onReviewPreview: onReviewPreview ? (issue, decision, notes) => onReviewPreview(colony.id, issue, decision, notes) : undefined,
@@ -408,7 +412,7 @@ export default function ZeroHumanCompanies({
             metric={metricLine}
             theme={themeState}
             onClose={closeModal}
-            onResolveIssue={(item) => onResolveIssue(target!.id, item)}
+            onResolveIssue={(item, answer) => onResolveIssue(target!.id, item, answer)}
             onReviewPreview={onReviewPreview ? (item, decision, notes) => onReviewPreview(target!.id, item, decision, notes) : undefined}
             busy={busyId === issue.work?.taskId}
           />

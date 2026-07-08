@@ -218,6 +218,141 @@
 /* embedded real-rail form (Hyperliquid / DEX swap) inside a capability detail */
 .tk-railform { margin-top: 4px; }
 
+/* Nansen read-only research actions */
+.tk-nansen { display: flex; flex-direction: column; }
+.tk-nansen-form { margin-top: 2px; }
+.tk-nansen-full { grid-column: 1 / -1; }
+.tk-nansen-note {
+  margin: 10px 0 0;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.tk-nansen-result {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+.tk-nansen-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+}
+.tk-nansen-summary {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.tk-nansen-cards {
+  display: grid;
+  gap: 9px;
+}
+.tk-nansen-card {
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  padding: 11px 12px;
+  display: grid;
+  gap: 8px;
+}
+.tk-nansen-card b {
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.tk-nansen-card p {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tk-nansen-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 7px;
+}
+.tk-nansen-metrics span {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 7px 8px;
+  display: grid;
+  gap: 2px;
+}
+.tk-nansen-metrics small {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10px;
+}
+.tk-nansen-metrics strong {
+  color: var(--fg);
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  word-break: break-word;
+}
+.tk-nansen-card ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--fg-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.tk-nansen-card li { margin-top: 4px; word-break: break-word; }
+.tk-nansen-callout {
+  border: 1px solid var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  display: grid;
+  gap: 5px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.tk-nansen-next {
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 11px;
+  display: grid;
+  gap: 6px;
+}
+.tk-nansen-next span {
+  color: var(--fg-2);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.tk-nansen-sources {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+.tk-nansen-sources summary {
+  cursor: pointer;
+  color: var(--fg-2);
+  font-family: var(--f-mono);
+}
+.tk-nansen-sources div {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+.tk-nansen-sources span {
+  word-break: break-word;
+  line-height: 1.45;
+}
+@media (max-width: 560px) {
+  .tk-nansen-form { grid-template-columns: 1fr; }
+}
+
 /* ── desk: header, hero, positions, activity, skeletons ── */
 .dk-wrap { max-width: 1240px; margin: 0 auto; padding: 24px 34px 60px; }
 .dk-wrap[data-density="compact"] { max-width: 1160px; padding: 18px 28px 48px; }

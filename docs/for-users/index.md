@@ -15,12 +15,12 @@ Everything you need to run HivemindOS as a local-first agent fleet control room.
   </section>
   <section class="docCard">
     <h3>Trading</h3>
-    <p>Crypto swaps, sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca or on-chain xStocks, with governance and agent access.</p>
+    <p>Crypto swaps, stablecoin sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca, xStocks, or Robinhood Chain Stock Tokens, with governance and agent access.</p>
     <a href="trading/">Open trading docs</a>
   </section>
   <section class="docCard">
     <h3>Wallets And Tokens</h3>
-    <p>Agent wallets, Base/Solana token handling, UsePod prepaid deposits, MoneyClaw keys, Honey rewards, Bankr HIVE claims, the HivemindOS platform fee, and x402 payments.</p>
+    <p>Agent wallets, Base/Robinhood Chain/Solana token handling, UsePod prepaid deposits, MoneyClaw keys, Honey rewards, Bankr HIVE claims, the HivemindOS platform fee, and x402 payments.</p>
     <a href="features/wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">

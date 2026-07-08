@@ -783,8 +783,9 @@
   border-radius: var(--radius);
   font: inherit;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
 }
+.freeHero:hover { border-color: var(--honey-line); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 8%, transparent), 0 8px 18px rgba(0, 0, 0, 0.1), 0 0 0 3px var(--honey-soft); transform: translateY(-1px); }
 
 .freeHero[data-active] {
   background: linear-gradient(180deg, var(--honey-soft), transparent 78%);
@@ -949,20 +950,25 @@
   border-radius: var(--radius-sm);
   font: inherit;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 5%, transparent);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
 }
 
 .chip:hover {
-  border-color: var(--line-2);
+  background: color-mix(in srgb, var(--panel-2) 86%, var(--fg) 4%); border-color: var(--line-3); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 8%, transparent), 0 8px 18px rgba(0, 0, 0, 0.1); transform: translateY(-1px);
 }
 
 .chip[data-active] {
-  background: var(--honey-soft);
-  border-color: var(--honey-line);
+  background: var(--honey-soft); border-color: var(--honey-line);
 }
 
+.chip[data-sale] { background: color-mix(in srgb, var(--panel-2) 80%, var(--live-soft)); border-color: color-mix(in srgb, var(--live) 28%, var(--line)); }
+.chip[data-sale]:hover { background: color-mix(in srgb, var(--live-soft) 58%, var(--panel-2)); border-color: color-mix(in srgb, var(--honey) 55%, var(--live)); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--live) 16%, transparent), 0 8px 18px rgba(0, 0, 0, 0.1), 0 0 0 3px color-mix(in srgb, var(--honey) 18%, transparent); }
+
+.chip[data-sale][data-active] { background: var(--honey-soft); border-color: var(--honey-line); }
+
 .chipName {
-  display: flex;
+  display: flex; flex-wrap: wrap;
   align-items: flex-start;
   gap: 7px;
   padding-right: 20px;
@@ -979,6 +985,23 @@
   height: 13px;
   flex: 0 0 auto;
   margin-top: 2px;
+}
+
+.chipBadge {
+  display: inline-flex; align-items: center; justify-content: center; align-self: flex-start; flex: 0 0 auto; white-space: nowrap;
+  margin-left: 2px;
+  padding: 2px 6px;
+  color: var(--live);
+  background: var(--live-soft);
+  border: 1px solid color-mix(in srgb, var(--live) 34%, transparent);
+  border-radius: 999px;
+  font-family: var(--f-mono);
+  font-size: 9px; line-height: 1; letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.chip[data-active] .chipBadge {
+  color: var(--honey); background: var(--honey-soft); border-color: var(--honey-line);
 }
 
 .pagerRow {
@@ -1420,6 +1443,9 @@
   .fundingModes::before {
     transition: none;
   }
+
+  .chip, .freeHero { transition: border-color 0.15s, background 0.15s, box-shadow 0.15s; }
+  .chip:hover, .freeHero:hover { transform: none; }
 }
 
 @media (max-width: 760px) {

@@ -31,13 +31,15 @@ export function validateOutreachCompletion(
       requiredFields: ["Status: sent|blocked", "Receipt: <provider/form/message receipt> OR Blocker:/ACTION NEEDED:", "Evidence: <verification performed>"],
     };
   }
-  if (FINAL_FAILURE_TERMS.test(text) && !BLOCKED_STATUS.test(text)) {
+  const hasSentStatus = SENT_STATUS.test(text);
+  const hasBlockedStatus = BLOCKED_STATUS.test(text);
+  if (FINAL_FAILURE_TERMS.test(text) && !hasSentStatus && !hasBlockedStatus) {
     return {
       reason: "Outreach/revenue task completion blocked: runtime failure text must be recorded as Status: blocked with an explicit blocker instead of closing as done.",
       requiredFields: ["Status: blocked", "Blocker: <429/no-final-response/fetch failure detail>", "ACTION NEEDED: <human or retry decision when applicable>"],
     };
   }
-  if (SENT_STATUS.test(text)) {
+  if (hasSentStatus) {
     const missing: string[] = [];
     if (!RECIPIENT_FIELD.test(text)) missing.push("Recipient:/Prospect:/Lead:");
     if (!RECEIPT_FIELD.test(text)) missing.push("Receipt:/Message-ID:/Confirmation:/Provider response:");
@@ -71,5 +73,21 @@ export function formatOutreachCompletionBlock(block: OutreachCompletionBlock) {
     `⚠ ${block.reason}`,
     `Required Work Board evidence fields: ${block.requiredFields.join("; ")}.`,
     "ACTION NEEDED: Re-run or revise the worker result with Status: sent plus a receipt, or Status: blocked plus the exact blocker and evidence.",
+  ].join("\n");
+}
+
+// The human owner cannot act on "re-run or revise the worker result" — that is a
+// directive for the worker, not a decision for a person. When an outreach/revenue
+// completion is parked for the OWNER (needs-human) rather than bounced back to the
+// worker, store a plain-language ask instead. The required-fields line is kept for
+// the record and for a worker that later re-runs.
+const OUTREACH_HUMAN_ASK =
+  "The crew finished this but couldn't confirm the outreach was actually sent, and nothing goes to a customer without your approval. Nothing was sent and no money was spent. Review what it produced, then use Discuss to tell the crew to send it, hold it as a draft, or fix what's missing.";
+
+export function formatOutreachCompletionHumanBlock(block: OutreachCompletionBlock) {
+  return [
+    `⚠ ${block.reason}`,
+    `Required Work Board evidence fields: ${block.requiredFields.join("; ")}.`,
+    `ACTION NEEDED: ${OUTREACH_HUMAN_ASK}`,
   ].join("\n");
 }

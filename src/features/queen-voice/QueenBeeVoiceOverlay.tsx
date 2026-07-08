@@ -105,6 +105,7 @@ function TranscriptTurns({
   working,
   onShowDetail,
   onCollapse,
+  onInteractionActiveChange,
 }: {
   turns: QueenChatTurn[];
   minimized: boolean;
@@ -115,8 +116,47 @@ function TranscriptTurns({
   working: QueenVoiceWorkingStage[];
   onShowDetail: (detail: string) => void;
   onCollapse: () => void;
+  onInteractionActiveChange: (active: boolean) => void;
 }) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const pointerInsideRef = React.useRef(false);
+  const pointerSelectingTextRef = React.useRef(false);
+  const textSelectionInsideRef = React.useRef(false);
+
+  const hasSelectionInsideTranscript = React.useCallback(() => {
+    const panel = panelRef.current;
+    const selection = window.getSelection?.();
+    if (!panel || !selection || selection.isCollapsed) return false;
+    const { anchorNode, focusNode } = selection;
+    return Boolean(
+      (anchorNode && panel.contains(anchorNode))
+      || (focusNode && panel.contains(focusNode)),
+    );
+  }, []);
+
+  const syncInteractionActive = React.useCallback(() => {
+    onInteractionActiveChange(
+      pointerInsideRef.current
+      || pointerSelectingTextRef.current
+      || textSelectionInsideRef.current,
+    );
+  }, [onInteractionActiveChange]);
+
+  const handlePointerEnter = React.useCallback(() => {
+    pointerInsideRef.current = true;
+    syncInteractionActive();
+  }, [syncInteractionActive]);
+
+  const handlePointerLeave = React.useCallback(() => {
+    pointerInsideRef.current = false;
+    syncInteractionActive();
+  }, [syncInteractionActive]);
+
+  const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    pointerSelectingTextRef.current = true;
+    syncInteractionActive();
+  }, [syncInteractionActive]);
 
   // Spring open/close: keep the bubble mounted through its exit animation.
   // `wantOpen` is the desired state; `closing` holds the bubble one beat longer
@@ -149,12 +189,45 @@ function TranscriptTurns({
     if (panel) panel.scrollTop = panel.scrollHeight;
   }, [turns, thinking, working, closing, rendered]);
 
+  React.useEffect(() => {
+    if (!rendered) {
+      pointerInsideRef.current = false;
+      pointerSelectingTextRef.current = false;
+      textSelectionInsideRef.current = false;
+      onInteractionActiveChange(false);
+      return undefined;
+    }
+    const refreshTextSelection = () => {
+      textSelectionInsideRef.current = hasSelectionInsideTranscript();
+      syncInteractionActive();
+    };
+    const finishSelection = () => {
+      pointerSelectingTextRef.current = false;
+      refreshTextSelection();
+    };
+    window.addEventListener("pointerup", finishSelection);
+    window.addEventListener("pointercancel", finishSelection);
+    document.addEventListener("selectionchange", refreshTextSelection);
+    return () => {
+      window.removeEventListener("pointerup", finishSelection);
+      window.removeEventListener("pointercancel", finishSelection);
+      document.removeEventListener("selectionchange", refreshTextSelection);
+      pointerInsideRef.current = false;
+      pointerSelectingTextRef.current = false;
+      textSelectionInsideRef.current = false;
+      onInteractionActiveChange(false);
+    };
+  }, [rendered, hasSelectionInsideTranscript, onInteractionActiveChange, syncInteractionActive]);
+
   // Collapsed (and exit finished): the history is gone; the triangle tab on the
   // input pill is the only control (see the .fr-chat-tab in PersistentHiveChat).
   if (!rendered) return null;
   return (
     <div
       className={`${styles.transcriptPanel} ${closing ? styles.transcriptPanelClosing : styles.transcriptPanelOpen}`}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
     >
       <div ref={panelRef} className={styles.transcriptScroll} aria-live="polite">
         {turns.slice(-3).map((turn) => (
@@ -382,7 +455,7 @@ export function QueenBeeVoiceOverlay({
   // history-collapsed flag lives in the store so the input's toggle tab and
   // this transcript overlay share one source of truth.
   const chat = useQueenChat();
-  const { setHistoryMinimized } = chat;
+  const { setHistoryMinimized, setTranscriptInteractionActive } = chat;
   // Bumping the nonce restarts the realtime session (e.g. new voice).
   const [sessionNonce, setSessionNonce] = React.useState(0);
   const [realtimeFailedNonce, setRealtimeFailedNonce] = React.useState(-1);
@@ -504,6 +577,7 @@ export function QueenBeeVoiceOverlay({
     voiceModeForOpen === "pipeline",
   );
   const voiceState = geminiLiveMode ? geminiLive : realtimeMode ? realtime : pipeline;
+  const voiceThinking = open && voiceState.phase === "thinking";
 
   const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;
 
@@ -669,14 +743,15 @@ export function QueenBeeVoiceOverlay({
       >
         <TranscriptTurns
           turns={chat.turns}
-          minimized={!chat.transcriptExpanded}
-          thinking={open && voiceState.phase === "thinking"}
+          minimized={!(chat.transcriptExpanded || voiceThinking)}
+          thinking={voiceThinking}
           brainLabel={brainLabel}
           // Live stages only exist on the pipeline hook; the realtime session
           // streams its own tool audio cues.
           working={voiceModeForOpen === "pipeline" ? pipeline.working : []}
           onShowDetail={setDetailContent}
           onCollapse={() => setHistoryMinimized(true)}
+          onInteractionActiveChange={setTranscriptInteractionActive}
         />
         {detailContent !== null ? (
           <div

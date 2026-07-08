@@ -27,7 +27,7 @@ type WalletLike = {
   addresses?: unknown;
 };
 
-const MULTI_CHAIN_CREATE = "Base + Solana";
+const MULTI_CHAIN_CREATE = "Base + Robinhood Chain + Solana";
 const SUPPORTED_CHAINS = ["Base", "Solana", "Base Sepolia", "Robinhood Chain"];
 const CREATE_CHAINS = [MULTI_CHAIN_CREATE, "Base", "Solana", "Robinhood Chain"];
 
@@ -106,8 +106,8 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
   const help = reimport
     ? "Re-derive this wallet's addresses from its seed or key. Balances and holdings refresh on import."
     : isCreate
-      ? "Generate a fresh wallet. Multi-chain creates Base and Solana from one recovery phrase; single-chain creates a local key for the selected network."
-      : "Import an existing wallet by seed phrase or private key. Recovery phrases create supported Base and Solana wallets; private keys use the selected chain.";
+      ? "Generate a fresh wallet. Multi-chain creates Base, Robinhood Chain, and Solana from one recovery phrase; single-chain creates a local key for the selected network."
+      : "Import an existing wallet by seed phrase or private key. Recovery phrases create supported Base, Robinhood Chain, and Solana wallets; private keys use the selected chain.";
   const busy = state === "checking";
   const saved = state === "saved";
   const blocked = busy || (!isCreate && !secret.trim());

@@ -6,6 +6,9 @@
 // Zero Human Companies approvals section and the Alerts "Review first" queue
 // render and decide approvals through one code path (DRY). The mapping is lifted
 // from the old company-only `mapApproval` in the ZHC mappers.
+import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
+import { normalizeReasoningTrail } from "@/lib/types/reasoning-trail";
+import { fallbackSpendApprovalReasoning } from "@/lib/utils/spend-approval-reasoning";
 
 export type SpendApprovalStatus = "pending" | "approved" | "denied" | "expired" | "consumed";
 
@@ -21,6 +24,7 @@ export type SpendApprovalRaw = {
   assetAmount?: number;
   target?: string;
   reason: string;
+  explanation?: ReasoningTrail;
   status: SpendApprovalStatus;
   createdAt?: string;
   createdAtMs: number;
@@ -55,6 +59,7 @@ export type SpendApprovalView = {
   reason?: string;
   target?: string;
   createdAtMs?: number;
+  explanation?: ReasoningTrail;
 };
 
 /** Risk tier by dollar amount (and optional daily cap) — from the ZHC mapper. */
@@ -69,6 +74,17 @@ export function mapSpendApproval(row: SpendApprovalRaw, dailyCap?: number): Spen
   const asset = row.asset || "USDC";
   const amount = `$${amountUsd.toFixed(2)} ${asset}`;
   const head = row.reason?.trim() || `${row.kind} spend`;
+  const explanation = normalizeReasoningTrail(row.explanation) ?? fallbackSpendApprovalReasoning({
+    agentId: row.agentId,
+    agentName: row.agentName,
+    companyId: row.companyId,
+    kind: row.kind || "spend",
+    asset,
+    amountUsd,
+    assetAmount: row.assetAmount,
+    target: row.target,
+    reason: head,
+  });
   return {
     id: row.id,
     title: `${head} — ${amount}${row.target ? ` → ${row.target}` : ""}`,
@@ -82,6 +98,7 @@ export function mapSpendApproval(row: SpendApprovalRaw, dailyCap?: number): Spen
     reason: head,
     target: row.target,
     createdAtMs: Number(row.createdAtMs) || 0,
+    explanation,
   };
 }
 

@@ -1,7 +1,9 @@
 import { HIVEMIND_OS_RUNTIME, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
-import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import { normalizeChatResponseBilling, type ChatResponseBilling } from "@/lib/types/chat-billing";
+import { chatPermissionModeAllowsUnlistedCommands, normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { proxyInput, proxyOutput } from "@/lib/services/agent-security-proxy";
 import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
 import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
@@ -17,6 +19,10 @@ import {
   resolveHivemindosWalletPaidModelRuntimeConfig,
 } from "@/lib/services/hivemindos-wallet-paid-models";
 import {
+  isHiveComputeProfile,
+  resolveHiveComputeRuntimeConfig,
+} from "@/lib/services/hive-compute-marketplace";
+import {
   bankrActionToolDefinition,
   BANKR_ACTION_TOOL_NAME,
   runBankrActionTool,
@@ -26,11 +32,22 @@ import {
   buildHivemindPromptEnvelope,
   prependHivemindSystemMessage,
 } from "@/lib/services/chat/hivemind-system-prompt";
+import {
+  AGENT_COLD_START_EVENT_TYPE,
+  inferredModalColdStartProcessEvent,
+  recordAgentRuntimeWarm,
+} from "@/lib/services/chat/agent-cold-start";
 import { resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
 import {
   flushChannelMarkup,
   routeChannelMarkupText,
 } from "@/lib/services/chat/channel-markup";
+import {
+  contentHasLeakedToolCallMarker,
+  extractLeakedToolCalls,
+  firstLeakedToolCallMarkerIndex,
+  stripLeakedToolCallMarkup,
+} from "@/lib/services/chat/leaked-tool-call-markup";
 import { type AdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
 import { adaptiveReliabilityKey, assessAdaptiveResponseQuality, classifyAdaptiveModelFailure, recordAdaptiveModelOutcome } from "@/lib/services/chat/adaptive-model-reliability";
 import {
@@ -101,13 +118,14 @@ function hivemindosModelsBillingFromHeaders(headers: Headers): ChatResponseBilli
   const paidHeader = stringHeader(headers, "X-HivemindOS-Wallet-Paid");
   const costUsd = creditDebitUsd ?? walletDebitUsd;
   if (costUsd === undefined && creditBalanceUsd === undefined && !paidHeader) return null;
+  const hiveComputeRoute = paidHeader === "hive-compute";
   return {
-    provider: "hivemindos-models",
-    label: "HivemindOS Models",
-    source: creditDebitUsd !== undefined ? "prepaid-credit" : paidHeader === "x402" ? "x402" : undefined,
+    provider: hiveComputeRoute ? "hive-compute" : "hivemindos-models",
+    label: hiveComputeRoute ? "Hive Compute" : "HivemindOS Models",
+    source: hiveComputeRoute ? "marketplace" : creditDebitUsd !== undefined ? "prepaid-credit" : paidHeader === "x402" ? "x402" : undefined,
     costUsd,
     balanceUsd: creditBalanceUsd,
-    paid: creditDebitUsd !== undefined || walletDebitUsd !== undefined || paidHeader === "x402",
+    paid: creditDebitUsd !== undefined || walletDebitUsd !== undefined || paidHeader === "x402" || hiveComputeRoute,
     network: stringHeader(headers, "X-HivemindOS-Wallet-Paid-Network"),
   };
 }
@@ -137,7 +155,15 @@ function imageGenerationToolDefinition() {
 }
 
 type AccumulatedToolCall = { id: string; name: string; arguments: string };
-type ToolCallOutcome = { toolResultContent: string; fallbackText: string; finalText?: string };
+type ToolCallOutcome = { toolResultContent: string; fallbackText: string; finalText?: string; prompted?: boolean };
+type NonStreamToolRun = {
+  events: string[];
+  assistantToolCalls: Array<Record<string, unknown>>;
+  toolResultMessages: Array<Record<string, unknown>>;
+  fallbacks: string[];
+  finalTexts: string[];
+  prompted: boolean;
+};
 
 function firstCommandFailureLine(result: { error?: string; stderr?: string }) {
   const text = (result.error || result.stderr || "unknown error").trim();
@@ -244,7 +270,10 @@ export async function streamOpenAICompatibleRuntime(
   sharedBrainMemoryContext = "",
   adaptiveRoutePlan?: AdaptiveRoutePlan,
   vaultPromptContext = "",
+  permissionMode: ChatPermissionMode = "manual",
 ) {
+  const normalizedPermissionMode = normalizeChatPermissionMode(permissionMode);
+  const allowUnlistedCommands = chatPermissionModeAllowsUnlistedCommands(normalizedPermissionMode);
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
@@ -254,6 +283,7 @@ export async function streamOpenAICompatibleRuntime(
   let providerHeaders: Record<string, string> = {};
   const usePodEnabled = isUsePodProfile(profile);
   const walletPaidModelsEnabled = isHivemindosWalletPaidModelProfile(profile);
+  const hiveComputeEnabled = isHiveComputeProfile(profile);
   const requestOrigin = (() => {
     try {
       return new URL(telemetry?.request?.url ?? "").origin;
@@ -322,6 +352,26 @@ export async function streamOpenAICompatibleRuntime(
       return Response.json({ error: error instanceof Error ? error.message : "HivemindOS Models setup is incomplete." }, { status: 400 });
     }
   }
+  if (hiveComputeEnabled) {
+    try {
+      const hiveComputeConfig = resolveHiveComputeRuntimeConfig(profile, requestOrigin);
+      runtimeProfile = {
+        ...profile,
+        gatewayUrl: hiveComputeConfig.baseUrl,
+        chatPath: hiveComputeConfig.chatPath,
+        statusPath: hiveComputeConfig.statusPath,
+        model: hiveComputeConfig.model,
+        token: "",
+        telemetryUrl: "",
+      };
+      providerHeaders = {
+        ...providerHeaders,
+        ...hiveComputeConfig.headers,
+      };
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Hive Compute setup is incomplete." }, { status: 400 });
+    }
+  }
   const url = buildOpenAICompatibleUrl(runtimeProfile);
   const lockKey = interactiveRuntimeLockKey(runtimeProfile, url);
   if (!reserveInteractiveRuntime(lockKey)) {
@@ -378,7 +428,7 @@ export async function streamOpenAICompatibleRuntime(
   // skillActions runtime capability. This gives a hivemind-os chat agent an
   // actual local-execution loop (allowlisted commands) instead of letting it
   // role-play "I ran osascript…". Agents without the capability are unchanged.
-  const offerCommandTool = profile.runtimeCapabilities?.skillActions === true;
+  const offerCommandTool = profile.runtimeCapabilities?.skillActions === true && normalizedPermissionMode !== "plan";
   const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(intentText);
   // Tool definitions advertised on every request attempt. Empty → no tools
   // field is sent and the chat path is byte-for-byte unchanged.
@@ -396,10 +446,55 @@ export async function streamOpenAICompatibleRuntime(
     if (cleanLabel && !/^run\b/i.test(cleanLabel)) return cleanLabel.endsWith(".") ? cleanLabel : `${cleanLabel}.`;
     return `Ran \`${commandLine}\`.`;
   };
-  const runNonStreamToolCalls = async (toolCalls: AccumulatedToolCall[]) => {
+  const commandApprovalQuestion = (commandLine: string) => [
+    "Approve this local command?",
+    "",
+    commandLine ? `\`${commandLine}\`` : "`(empty command)`",
+    "",
+    "This executable is outside the current chat permission mode's allowlist.",
+  ].join("\n");
+  const commandApprovalEvent = (input: { command: string; args: string[]; commandLine: string; label: string; error?: string }) => ({
+    type: RUNTIME_STREAM_EVENT_TYPES.APPROVAL,
+    id: `command-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    approvalKind: "local_command",
+    message: "Command permission required",
+    question: commandApprovalQuestion(input.commandLine),
+    command: input.command,
+    args: input.args,
+    commandLine: input.commandLine,
+    reason: input.label,
+    detail: input.error,
+    status: "running",
+    allowFreeText: false,
+    choices: [
+      {
+        label: "Approve once",
+        value: [
+          "Approved: run this pending local command now.",
+          `Command: ${input.commandLine || input.command || "(empty command)"}`,
+        ].join("\n"),
+        permissionMode: "bypass",
+      },
+      {
+        label: "Reject",
+        value: [
+          "Rejected: do not run that local command.",
+          "Choose another allowlisted approach or ask me for the correct path.",
+        ].join("\n"),
+        permissionMode: "manual",
+      },
+    ],
+  });
+  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean } | null = null;
+  const runNonStreamToolCalls = async (toolCalls: AccumulatedToolCall[]): Promise<NonStreamToolRun> => {
     const events: string[] = [];
+    const assistantToolCalls: Array<Record<string, unknown>> = [];
+    const toolResultMessages: Array<Record<string, unknown>> = [];
+    const fallbacks: string[] = [];
     const finalTexts: string[] = [];
     for (const call of toolCalls) {
+      const callId = call.id || `call_${call.name}`;
+      assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
       if (call.name !== RUN_COMMAND_TOOL_NAME) {
         const message = `Tool ${call.name} is not available for this non-streamed HivemindOS Models response.`;
         events.push(ssePayload({
@@ -411,7 +506,8 @@ export async function streamOpenAICompatibleRuntime(
           status: "failed",
         }));
         await appendRuntimeChatSessionEvent(runtimeSessionId, "Tool unavailable", message).catch(() => undefined);
-        finalTexts.push(message);
+        toolResultMessages.push({ role: "tool", tool_call_id: callId, content: JSON.stringify({ ok: false, error: message }) });
+        fallbacks.push(message);
         continue;
       }
       const args = parseToolCallArguments(call.arguments);
@@ -441,7 +537,8 @@ export async function streamOpenAICompatibleRuntime(
           status: "failed",
         }));
         await appendRuntimeChatSessionEvent(runtimeSessionId, "Command failed", message).catch(() => undefined);
-        finalTexts.push("I couldn't run that command because the tool call did not include a command.");
+        toolResultMessages.push({ role: "tool", tool_call_id: callId, content: JSON.stringify({ ok: false, error: message }) });
+        fallbacks.push("I couldn't run that command because the tool call did not include a command.");
         continue;
       }
       recordRuntimeTelemetry(telemetry, "agent_runtime.command_tool.dispatch", {
@@ -454,8 +551,35 @@ export async function streamOpenAICompatibleRuntime(
         command,
         args: commandArgs,
         cwd: workingDirectory,
+        permissionMode: normalizedPermissionMode,
         signal: telemetry?.request?.signal,
       });
+      if (result.blockedByPolicy && !allowUnlistedCommands) {
+        const approvalEvent = commandApprovalEvent({
+          command,
+          args: commandArgs,
+          commandLine,
+          label,
+          error: result.error,
+        });
+        events.push(ssePayload(approvalEvent));
+        await appendRuntimeChatSessionEvent(runtimeSessionId, "Command permission required", commandLine, approvalEvent).catch(() => undefined);
+        recordRuntimeTelemetry(telemetry, "agent_runtime.command_tool.permission_required", {
+          ...telemetryPayloadForProfile(profile),
+          command,
+          argCount: commandArgs.length,
+          permissionMode: normalizedPermissionMode,
+          nonStream: true,
+        });
+        return {
+          events,
+          assistantToolCalls,
+          toolResultMessages,
+          fallbacks,
+          finalTexts,
+          prompted: true,
+        };
+      }
       const detail = result.ok
         ? (result.stdout?.split("\n").find(Boolean)?.slice(0, 200) || "Done")
         : (result.error || result.stderr || "Failed");
@@ -479,13 +603,74 @@ export async function streamOpenAICompatibleRuntime(
         elapsedMs: result.elapsedMs,
         nonStream: true,
       });
-      finalTexts.push(result.ok
+      toolResultMessages.push({
+        role: "tool",
+        tool_call_id: callId,
+        content: JSON.stringify({
+          ok: result.ok,
+          command: result.command,
+          args: result.args,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          error: result.error,
+        }),
+      });
+      fallbacks.push(result.ok
         ? commandSuccessText(label, commandLine)
         : commandFailureFallbackText(commandLine, result));
     }
-    return { events, text: finalTexts.filter(Boolean).join("\n\n") || "Done." };
+    return { events, assistantToolCalls, toolResultMessages, fallbacks, finalTexts, prompted: false };
   };
-  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean } | null = null;
+  const runNonStreamToolConversation = async (initialToolCalls: AccumulatedToolCall[]) => {
+    const events: string[] = [];
+    const conversation: Array<Record<string, unknown>> = winningRequest
+      ? [...(winningRequest.messages as unknown as Array<Record<string, unknown>>)]
+      : [];
+    let toolCalls = initialToolCalls;
+    let toolRoundsLeft = winningRequest?.sentTools ? (offerCommandTool ? 6 : 1) : 0;
+    let fallbackText = "The tool finished.";
+    let raw: unknown = null;
+    while (toolCalls.length && toolRoundsLeft > 0 && winningRequest) {
+      toolRoundsLeft -= 1;
+      const toolRun = await runNonStreamToolCalls(toolCalls);
+      events.push(...toolRun.events);
+      if (toolRun.prompted) return { events, text: "", raw, prompted: true };
+      if (toolRun.fallbacks.length) fallbackText = toolRun.fallbacks.join(" ");
+      if (toolRun.finalTexts.length) {
+        return { events, text: toolRun.finalTexts.join("\n\n"), raw, prompted: false };
+      }
+      conversation.push({ role: "assistant", content: "", tool_calls: toolRun.assistantToolCalls });
+      conversation.push(...toolRun.toolResultMessages);
+      const continuationBody: Record<string, unknown> = {
+        model: winningRequest.model,
+        messages: conversation,
+        stream: false,
+        ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
+      };
+      let continuation: Response | null = null;
+      try {
+        continuation = await fetch(winningRequest.url, {
+          method: "POST",
+          headers: winningRequest.headers,
+          body: JSON.stringify(continuationBody),
+          signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
+        });
+      } catch {
+        continuation = null;
+      }
+      if (!continuation || !continuation.ok || !continuation.body) {
+        return { events, text: fallbackText, raw, prompted: false };
+      }
+      const continuationJson = await continuation.json().catch(async () => ({ text: await continuation.text().catch(() => "") }));
+      raw = continuationJson;
+      toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? extractOpenAIToolCalls(continuationJson) : [];
+      if (!toolCalls.length) {
+        return { events, text: extractChunk(continuationJson) || JSON.stringify(continuationJson), raw: continuationJson, prompted: false };
+      }
+    }
+    return { events, text: fallbackText, raw, prompted: false };
+  };
   const fetchStartedAt = Date.now();
   let upstream: Response | null = null;
   let model = candidateModels[0] ?? openAICompatibleModel(profile);
@@ -612,6 +797,21 @@ export async function streamOpenAICompatibleRuntime(
         ).catch(() => undefined);
       }
     }
+    const coldStartEvent = inferredModalColdStartProcessEvent(candidateProfile);
+    if (coldStartEvent) {
+      recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.cold_start", {
+        ...telemetryPayloadForProfile(candidateProfile),
+        url: candidateUrl,
+        model,
+        source: "local-success-window",
+      });
+      await appendRuntimeChatSessionEvent(
+        runtimeSessionId,
+        coldStartEvent.label,
+        coldStartEvent.detail,
+        { type: AGENT_COLD_START_EVENT_TYPE },
+      ).catch(() => undefined);
+    }
     let upstreamErrorText: string | null = null;
     try {
       upstream = await fetch(candidateUrl, {
@@ -702,6 +902,7 @@ export async function streamOpenAICompatibleRuntime(
       return Response.json({ error: runtimeFetchError(candidateProfile, candidateUrl, error) }, { status: 502 });
     }
     if (upstream.ok) {
+      recordAgentRuntimeWarm(candidateProfile);
       winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools };
       break;
     }
@@ -782,7 +983,7 @@ export async function streamOpenAICompatibleRuntime(
   // prepaid balance right after the chat instead of waiting for a settings
   // refresh.
   const providerBalanceHeader = veniceResponse?.balanceRemaining || usePodResponse?.balanceRemaining || "";
-  const responseBilling = walletPaidModelsEnabled ? hivemindosModelsBillingFromHeaders(upstream.headers) : null;
+  let responseBilling = walletPaidModelsEnabled ? hivemindosModelsBillingFromHeaders(upstream.headers) : null;
   if (veniceResponse?.balanceRemaining) {
     recordRuntimeTelemetry(telemetry, "agent_runtime.venice.response", {
       ...telemetryPayloadForProfile(runtimeProfile),
@@ -810,9 +1011,28 @@ export async function streamOpenAICompatibleRuntime(
   const contentType = upstream.headers.get("content-type") ?? "";
   if (!contentType.includes("text/event-stream")) {
     const json = await upstream.json().catch(async () => ({ text: await upstream.text().catch(() => "") }));
-    const toolCalls = winningRequest?.sentTools ? extractOpenAIToolCalls(json) : [];
+    const rawChunk = extractChunk(json);
+    const leakedToolCalls = winningRequest?.sentTools ? extractLeakedToolCalls(rawChunk) : [];
+    const toolCalls = winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [];
     if (toolCalls.length) {
-      const toolRun = await runNonStreamToolCalls(toolCalls);
+      const toolRun = await runNonStreamToolConversation(toolCalls);
+      if (toolRun.prompted) {
+        await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
+        releaseInteractiveRuntime(lockKey);
+        return new Response(
+          toolRun.events.join("")
+          + (responseBilling ? ssePayload({ billing: responseBilling }) : "")
+          + "data: [DONE]\n\n",
+          {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+              ...(providerBalanceHeader ? { "X-Provider-Balance-Remaining": providerBalanceHeader } : {}),
+            },
+          },
+        );
+      }
       const outputCheck = proxyOutput(toolRun.text);
       const routed = outputCheck.verdict === "block"
         ? { content: "", thinking: "" }
@@ -823,7 +1043,7 @@ export async function streamOpenAICompatibleRuntime(
         await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response blocked", outputCheck.reason ?? "Response blocked by security policy").catch(() => undefined);
         await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
       } else {
-        await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
+        await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, toolRun.raw ?? json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
         await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
       }
       releaseInteractiveRuntime(lockKey);
@@ -843,10 +1063,11 @@ export async function streamOpenAICompatibleRuntime(
         } },
       );
     }
-    const outputCheck = proxyOutput(extractChunk(json));
+    const visibleRawChunk = stripLeakedToolCallMarkup(rawChunk);
+    const outputCheck = proxyOutput(visibleRawChunk);
     const routed = outputCheck.verdict === "block"
       ? { content: "", thinking: "" }
-      : routeChannelMarkupText(outputCheck.text || JSON.stringify(json));
+      : routeChannelMarkupText(outputCheck.text || (contentHasLeakedToolCallMarker(rawChunk) ? "" : JSON.stringify(json)));
     const chunk = routed.content;
     const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled);
     if (outputCheck.verdict === "block") {
@@ -896,8 +1117,26 @@ export async function streamOpenAICompatibleRuntime(
         const streamReader = stream.body?.getReader();
         if (!streamReader) return { toolCalls: [] };
         let buffer = "";
+        let leakedToolCallBuffer = "";
         const channelMarkupState = createChannelMarkupState();
         const toolAcc = new Map<number, AccumulatedToolCall>();
+        const appendVisibleContent = (content: string, parsed?: unknown) => {
+          if (!content) return;
+          if (leakedToolCallBuffer) {
+            leakedToolCallBuffer += content;
+            return;
+          }
+          const marker = firstLeakedToolCallMarkerIndex(content);
+          if (marker >= 0) {
+            const visible = content.slice(0, marker);
+            leakedToolCallBuffer = content.slice(marker);
+            if (!visible) return;
+            content = visible;
+          }
+          fullText += content;
+          if (runtimeSessionId) queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", content, parsed));
+          controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content } }] })));
+        };
         while (true) {
           const { value, done } = await streamReader.read();
           if (done) break;
@@ -911,6 +1150,11 @@ export async function streamOpenAICompatibleRuntime(
             if (raw === "[DONE]") continue;
             try {
               const parsed = JSON.parse(raw);
+              const managedBilling = normalizeChatResponseBilling(parsed?.hivemindos_billing);
+              if (managedBilling) {
+                responseBilling = managedBilling;
+                continue;
+              }
               const toolDeltas = parsed?.choices?.[0]?.delta?.tool_calls;
               if (Array.isArray(toolDeltas) && toolDeltas.length) {
                 if (allowTools) {
@@ -941,14 +1185,12 @@ export async function streamOpenAICompatibleRuntime(
                 queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Thinking", thinking, parsed));
                 controller.enqueue(encoder.encode(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: thinking })));
               }
-              if (routed.content) fullText += routed.content;
-              if (routed.content) queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content, parsed));
               if (!routed.content && !thinking && isTerminalOpenAiStreamMetadata(parsed)) continue;
               if (!routed.content && !thinking) queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime event", String(parsed?.type ?? parsed?.event?.type ?? "").trim(), parsed));
-              if (routed.content || (!thinking && !outputCheck.text)) {
-                controller.enqueue(encoder.encode(routed.content
-                  ? ssePayload({ choices: [{ delta: { content: routed.content } }] })
-                  : ssePayload(parsed)));
+              if (routed.content) {
+                appendVisibleContent(routed.content, parsed);
+              } else if (!thinking && !outputCheck.text) {
+                controller.enqueue(encoder.encode(ssePayload(parsed)));
               }
             } catch {
               const outputCheck = proxyOutput(raw);
@@ -963,9 +1205,7 @@ export async function streamOpenAICompatibleRuntime(
                 controller.enqueue(encoder.encode(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking })));
               }
               if (routed.content) {
-                controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: routed.content } }] })));
-                fullText += routed.content;
-                queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content));
+                appendVisibleContent(routed.content);
               }
             }
           }
@@ -976,9 +1216,13 @@ export async function streamOpenAICompatibleRuntime(
           controller.enqueue(encoder.encode(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: flushedTail.thinking })));
         }
         if (flushedTail.content) {
-          fullText += flushedTail.content;
-          queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", flushedTail.content));
-          controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: flushedTail.content } }] })));
+          appendVisibleContent(flushedTail.content);
+        }
+        if (allowTools && leakedToolCallBuffer) {
+          for (const call of extractLeakedToolCalls(leakedToolCallBuffer)) {
+            const index = toolAcc.size;
+            toolAcc.set(index, call);
+          }
         }
         return { toolCalls: [...toolAcc.values()].filter((call) => call.name) };
       };
@@ -1079,8 +1323,41 @@ export async function streamOpenAICompatibleRuntime(
           command: args.command,
           args: args.args,
           cwd: workingDirectory,
+          permissionMode: normalizedPermissionMode,
           signal: telemetry?.request?.signal,
         });
+        if (result.blockedByPolicy && !allowUnlistedCommands) {
+          const command = typeof args.command === "string" ? args.command.trim() : "";
+          const commandArgs = Array.isArray(args.args) ? args.args.filter((a): a is string => typeof a === "string") : [];
+          const approvalEvent = commandApprovalEvent({
+            command,
+            args: commandArgs,
+            commandLine,
+            label,
+            error: result.error,
+          });
+          controller.enqueue(encoder.encode(ssePayload({
+            type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
+            toolName: RUN_COMMAND_TOOL_NAME,
+            name: RUN_COMMAND_TOOL_NAME,
+            message: "Command needs permission",
+            detail: commandLine || result.error || "Command blocked by permissions",
+            status: "running",
+          })));
+          controller.enqueue(encoder.encode(ssePayload(approvalEvent)));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Command permission required", commandLine || result.error, approvalEvent));
+          recordRuntimeTelemetry(telemetry, "agent_runtime.command_tool.permission_required", {
+            ...telemetryPayloadForProfile(profile),
+            command,
+            argCount: commandArgs.length,
+            permissionMode: normalizedPermissionMode,
+          });
+          return {
+            toolResultContent: JSON.stringify({ ok: false, approvalRequired: true, error: result.error }),
+            fallbackText: "",
+            prompted: true,
+          };
+        }
         controller.enqueue(encoder.encode(ssePayload({
           type: RUNTIME_STREAM_EVENT_TYPES.TOOL_DONE,
           toolName: RUN_COMMAND_TOOL_NAME,
@@ -1217,14 +1494,20 @@ export async function streamOpenAICompatibleRuntime(
           const toolResultMessages: Array<Record<string, unknown>> = [];
           const fallbacks: string[] = [];
           const finalTexts: string[] = [];
+          let toolPrompted = false;
           for (const call of toolCalls) {
             const callId = call.id || `call_${call.name}`;
             const outcome = await runToolCall(call);
+            if (outcome.prompted) {
+              toolPrompted = true;
+              break;
+            }
             assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
             toolResultMessages.push({ role: "tool", tool_call_id: callId, content: outcome.toolResultContent });
             if (outcome.fallbackText) fallbacks.push(outcome.fallbackText);
             if (outcome.finalText) finalTexts.push(outcome.finalText);
           }
+          if (toolPrompted) break;
           if (finalTexts.length) {
             const finalText = finalTexts.join("\n\n");
             controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: finalText } }] })));
@@ -1276,8 +1559,9 @@ export async function streamOpenAICompatibleRuntime(
         const event = await recordChatHoney(profile, userText, fullText, honeyLedgerEnabled);
         if (event) controller.enqueue(encoder.encode(ssePayload({ honey: event })));
         if (responseBilling) {
-          queueSessionWrite(() => updateRuntimeChatSessionLastAssistantBilling(runtimeSessionId, responseBilling));
-          controller.enqueue(encoder.encode(ssePayload({ billing: responseBilling })));
+          const billing = responseBilling;
+          queueSessionWrite(() => updateRuntimeChatSessionLastAssistantBilling(runtimeSessionId, billing));
+          controller.enqueue(encoder.encode(ssePayload({ billing })));
         }
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.stream.done", {

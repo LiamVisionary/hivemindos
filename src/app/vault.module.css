@@ -1460,8 +1460,9 @@
 .vaultPanel > [data-work-section-header="true"] > div:first-child { min-width: 0; }
 .vaultPanel > [data-work-section-header="true"] > div:first-child div { color: var(--brain-fg); font-size: 18px; font-weight: 600; letter-spacing: 0; line-height: 1.12; }
 .vaultPanel > [data-work-section-header="true"] > div:first-child span { color: var(--brain-fg-3); font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif); font-size: 12.5px; }
-.vaultPanel > [data-work-section-header="true"] nav { display: inline-flex; flex-wrap: wrap; gap: 3px; align-self: center; border: 1px solid var(--brain-line-2); border-radius: 999px; background: color-mix(in srgb, var(--brain-panel) 70%, transparent); padding: 4px; }
-.vaultPanel > [data-work-section-header="true"] nav button { min-height: 34px; border: 0; border-radius: 999px; background: transparent; color: var(--brain-fg-3); font-size: 12.5px; font-weight: 500; padding: 8px 16px; }
+.vaultPanel > [data-work-section-header="true"] nav { display: inline-flex; flex-wrap: nowrap; gap: 3px; align-self: center; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; border: 1px solid var(--brain-line-2); border-radius: 999px; background: color-mix(in srgb, var(--brain-panel) 70%, transparent); padding: 4px; scrollbar-width: none; }
+.vaultPanel > [data-work-section-header="true"] nav::-webkit-scrollbar { display: none; }
+.vaultPanel > [data-work-section-header="true"] nav button { flex: 0 0 auto; min-height: 34px; border: 0; border-radius: 999px; background: transparent; color: var(--brain-fg-3); font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif); font-size: 13px; font-weight: 600; letter-spacing: 0; line-height: 1.1; padding: 8px 16px; white-space: nowrap; }
 .vaultPanel > [data-work-section-header="true"] nav button:hover,
 .vaultPanel > [data-work-section-header="true"] nav button:focus-visible { color: var(--brain-fg); }
 .vaultPanel > [data-work-section-header="true"] nav button[aria-selected="true"] { background: var(--brain-honey); color: #1a1305; }

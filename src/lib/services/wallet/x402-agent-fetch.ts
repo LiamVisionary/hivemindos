@@ -12,6 +12,7 @@ import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import { base58 } from "@scure/base";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
 import { homedir } from "@/lib/home-dir";
 import {
   evaluateSpend,
@@ -51,8 +52,12 @@ export type X402FetchInput = {
   approvalToken?: string;
   /** True when the caller already completed a concrete server-side user approval for this exact spend. */
   approvalThresholdSatisfied?: boolean;
+  /** Human-facing context to attach if this paid request needs approval. */
+  approvalContext?: Partial<ReasoningTrail>;
   /** Use plain fetch without x402 discovery/wrapping when an upstream bearer/prepaid token should decide access. */
   skipPaymentDiscovery?: boolean;
+  /** True when the endpoint price already includes HivemindOS revenue, so the generic local platform fee should not be collected. */
+  skipPlatformFee?: boolean;
   timeoutMs?: number;
 };
 
@@ -105,7 +110,7 @@ type X402SpendRecord = {
 };
 
 const spendLogPath = path.join(homedir(), ".hivemindos", "x402-spend-log.json");
-const supportedEvmNetworks = new Set(["eip155:8453", "eip155:84532"]);
+const supportedEvmNetworks = new Set(["eip155:8453", "eip155:84532", "eip155:4663"]);
 const supportedSvmNetworks = new Set(["solana:mainnet", "solana:devnet"]);
 const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
 
@@ -172,7 +177,7 @@ function evmAccountFromLocalSecret(secret: string) {
 
   const mnemonic = compact.toLowerCase().replace(/\s+/g, " ");
   if (!validateMnemonic(mnemonic, englishWordlist)) {
-    throw new Error("Stored Base signer must be an EVM private key or recovery phrase.");
+    throw new Error("Stored EVM signer must be an EVM private key or recovery phrase.");
   }
   return mnemonicToAccount(mnemonic, { path: EVM_RECOVERY_PATH });
 }
@@ -280,7 +285,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   if (!input.policy.enabled) throw new Error("This agent's wallet is not enabled.");
   if (input.policy.provider !== "x402") throw new Error("Set this agent's payment provider to x402 before paid HTTP calls.");
   if (!supportedEvmNetworks.has(input.network) && !supportedSvmNetworks.has(input.network)) {
-    throw new Error("x402 execution currently supports local Base, Base Sepolia, Solana mainnet, and Solana devnet wallets.");
+    throw new Error("x402 execution currently supports local Base, Base Sepolia, Robinhood Chain, Solana mainnet, and Solana devnet wallets.");
   }
   if (input.policy.network !== input.network) throw new Error("Stored wallet network does not match the x402 policy network.");
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
@@ -321,7 +326,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     return discoveredAmountUsd;
   };
   const feePreflightAmountUsd = await discoverAmount();
-  if (feePreflightAmountUsd != null && feePreflightAmountUsd > 0) {
+  if (!input.skipPlatformFee && feePreflightAmountUsd != null && feePreflightAmountUsd > 0) {
     await assertTradingPlatformFeeReady({
       source: "x402-paid-api",
       network: input.network,
@@ -345,11 +350,12 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       wallet: governance.wallet,
       agentName: governance.agentName,
       kind: "x402",
-      asset: "USDC",
+      asset: stableAssetSymbol(input.network),
       amountUsd: preflightAmountUsd != null && preflightAmountUsd > 0 ? preflightAmountUsd : 0,
       target: input.url,
       approvalToken: input.approvalToken,
       approvalThresholdSatisfied: input.approvalThresholdSatisfied,
+      explanation: input.approvalContext,
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
     approvalGrantId = decision.grant?.id;
@@ -392,7 +398,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   const preview = await responsePreview(response);
   const paymentResponse = response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined;
   const paymentSettled = paid && response.status !== 402 && Boolean(paymentResponse);
-  const platformFee = paymentSettled && selectedAmountUsd > 0
+  const platformFee = !input.skipPlatformFee && paymentSettled && selectedAmountUsd > 0
     ? await collectTradingPlatformFee({
       agentId: input.agentId,
       network: input.network,
@@ -435,7 +441,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       agentId: input.agentId,
       companyId: spendCompanyId,
       kind: "x402",
-      asset: "USDC",
+      asset: stableAssetSymbol(input.network),
       amountUsd: selectedAmountUsd,
       target: shortTarget(input.url),
       status: "executed",
@@ -448,7 +454,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
 export async function discoverX402Payment(input: X402PaymentDiscoveryInput): Promise<X402PaymentDiscovery> {
   if (!input.policy.enabled) throw new Error("This agent's wallet is not enabled.");
   if (!supportedEvmNetworks.has(input.policy.network) && !supportedSvmNetworks.has(input.policy.network)) {
-    throw new Error("x402 execution currently supports local Base, Base Sepolia, Solana mainnet, and Solana devnet wallets.");
+    throw new Error("x402 execution currently supports local Base, Base Sepolia, Robinhood Chain, Solana mainnet, and Solana devnet wallets.");
   }
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
 
@@ -493,3 +499,7 @@ export function summarizeX402Policy(policy: AgentWalletConfig) {
 }
 
 export type { PaymentRequired };
+
+function stableAssetSymbol(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
+}

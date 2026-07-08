@@ -83,7 +83,7 @@ export function TradeView() {
                   <span className="dk-marketpill">
                     {loading
                       ? <><span className="fr-dot" style={{ color: "var(--fg-4)" }} /> Syncing…</>
-                      : <><span className="fr-dot live" style={{ color: "var(--live)" }} /> {isStock ? <>US market · {paper ? "paper" : "live"}</> : <>Markets live · on-chain · {desk.network.includes("solana") ? "Solana" : "Base"}</>}</>}
+                      : <><span className="fr-dot live" style={{ color: "var(--live)" }} /> {isStock ? <>US market · {paper ? "paper" : "live"}</> : <>Markets live · on-chain · {tradeNetworkLabel(desk.network)}</>}</>}
                   </span>
                 </div>
               </div>
@@ -130,6 +130,12 @@ export function TradeView() {
       </div>
     </div>
   );
+}
+
+function tradeNetworkLabel(network: string): string {
+  if (network.includes("solana")) return "Solana";
+  if (network === "eip155:4663") return "Robinhood Chain";
+  return "Base";
 }
 
 export default TradeView;

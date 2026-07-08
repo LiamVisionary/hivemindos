@@ -296,6 +296,17 @@
 .fw-mywallet .addr { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: var(--f-mono); font-size: 11px; color: var(--fg-3); border-top: 1px solid var(--line); padding-top: 11px; }
 .fw-mywallet .addr button { border: 0; background: transparent; color: var(--fg-3); cursor: pointer; display: grid; place-items: center; padding: 2px; }
 .fw-mywallet .addr button:hover { color: var(--honey); }
+.fw-split-wrap { position: relative; flex: 1 1 150px; min-width: 150px; }
+.fw-split-action { display: grid; grid-template-columns: minmax(0, 1fr) 36px; border-radius: 99px; overflow: hidden; background: var(--honey); color: #1a1305; box-shadow: 0 0 0 1px color-mix(in srgb, var(--honey) 36%, transparent); }
+.fw-split-action[data-open] { filter: brightness(1.04); }
+.fw-split-main, .fw-split-caret { min-height: 32px; border: 0; background: transparent; color: inherit; font-family: var(--f-body); font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .16s, filter .16s; }
+.fw-split-main:hover:not(:disabled), .fw-split-caret:hover:not(:disabled) { background: color-mix(in srgb, white 16%, transparent); }
+.fw-split-main:disabled, .fw-split-caret:disabled { opacity: .5; cursor: default; }
+.fw-split-caret { border-left: 1px solid color-mix(in srgb, #1a1305 18%, transparent); }
+.fw-split-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); z-index: 35; padding: 6px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel-hi); box-shadow: 0 20px 42px -24px rgba(0,0,0,.8); animation: fr-fade-up .18s ease both; }
+.fw-split-menu button { width: 100%; border: 0; border-radius: 8px; padding: 8px 9px; background: transparent; color: var(--fg-2); font: inherit; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; text-align: left; }
+.fw-split-menu button:hover:not(:disabled) { background: var(--panel-2); color: var(--fg); }
+.fw-split-menu button:disabled { opacity: .45; cursor: default; }
 .fw-addrwrap { position: relative; }
 .fw-addrpop { position: absolute; left: 0; right: 0; bottom: calc(100% + 7px); z-index: 50; background: var(--panel-hi); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 6px; box-shadow: 0 24px 50px -22px rgba(0,0,0,0.65); display: flex; flex-direction: column; gap: 2px; }
 .fw-addrpop::after { content: ""; position: absolute; top: 100%; left: 24px; border: 6px solid transparent; border-top-color: var(--panel-hi); }

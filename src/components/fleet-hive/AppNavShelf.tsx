@@ -10,7 +10,7 @@
    receives a DashboardView id; wire it to the dashboard view switch. */
 
 import { Fragment, memo, useEffect, useRef, useState } from "react";
-import { BellRing, Brain, Building2 } from "lucide-react";
+import { BellRing, Brain, Building2, Cpu } from "lucide-react";
 import { buildAppNavShelfGroups, resolveActiveShelfSlot } from "@/features/dashboard/dashboard-navigation";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
@@ -61,6 +61,8 @@ function FrNavIcon({ id }: { id: string }) {
       return (<svg {...p}><path d="M3 12h4l2 6 4-13 2 7h6" /></svg>);
     case "fusion":
       return (<svg {...p}><path d="M9.9 15.5A2 2 0 0 0 8.5 14.1L2.4 12.5a.5.5 0 0 1 0-1L8.5 9.9A2 2 0 0 0 9.9 8.5l1.6-6.1a.5.5 0 0 1 1 0L14.1 8.5A2 2 0 0 0 15.5 9.9l6.1 1.6a.5.5 0 0 1 0 1L15.5 14.1a2 2 0 0 0-1.4 1.4l-1.6 6.1a.5.5 0 0 1-1 0z" /><path d="M20 3v4M22 5h-4" /></svg>);
+    case "compute":
+      return <Cpu aria-hidden="true" width={20} height={20} strokeWidth={1.7} />;
     case "tools":
       return (<svg {...p}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.8 3.8z" /></svg>);
     case "my-apps":

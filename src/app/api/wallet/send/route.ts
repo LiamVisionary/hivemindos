@@ -66,9 +66,9 @@ export async function POST(request: NextRequest) {
       const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;
       return NextResponse.json({ ok: false, status: result.status === "error" ? undefined : result.status, error: result.error, approval: result.approval }, { status });
     }
-    return NextResponse.json({ ok: true, signature: result.signature, network: result.network, platformFee: result.platformFee });
+    return NextResponse.json({ ok: true, signature: result.signature, network: result.network, assetSymbol: result.assetSymbol, platformFee: result.platformFee });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to send USDC" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to send stablecoin" }, { status: 500 });
   }
 }
 
@@ -89,11 +89,11 @@ function createRouteSendApproval(body: SendUsdcBody) {
 function consumeRouteSendApproval(body: SendUsdcBody) {
   pruneRouteSendApprovals();
   const token = body.approvalToken?.trim();
-  if (!token) return sendError("A fresh server approval is required before sending USDC.");
+  if (!token) return sendError("A fresh server approval is required before sending this transfer.");
   const approval = routeSendApprovals.get(token);
   if (approval) routeSendApprovals.delete(token);
   if (!approval || !matchesRouteSendApproval(approval, body)) {
-    return sendError("A fresh server approval is required before sending USDC.");
+    return sendError("A fresh server approval is required before sending this transfer.");
   }
   return null;
 }

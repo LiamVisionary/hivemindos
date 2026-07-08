@@ -3,14 +3,57 @@
    Dynamic tone colors (badges, status dots, pin buttons, the segmented
    active state) are applied inline in MorePanel.tsx because `.commandMain`'s
    hive-light overrides re-color `span`/`button` at a specificity a module
-   class can't beat — inline styles win the cascade there. */
+   class can't beat — inline styles win the cascade there.
+
+   DARK mode is lifted from the Fleet "Hive" view's dark palette
+   (src/components/fleet-hive/fleet-hive.css): a WARM-NEUTRAL field — cells
+   #14161c / #1e222b, cream text, warm hairline borders — with teal (#6fcdba)
+   used SPARINGLY as the accent (glyphs, active/interactive state) and honey for
+   status only. Cells are neutral, NOT teal-tinted (teal-filled cells are the
+   old classic hex-fleet look). The `[data-theme="hive-light"]` mirror keeps the
+   warm-honey light theme unchanged. */
 
 .root {
+  /* Fleet Hive dark palette: warm-neutral surfaces + WARM HONEY accent
+     (#e7b45c / #f0c879) — the Queen-cell warmth, NO mint/teal. */
+  --m-panel: #14161c;
+  --m-panel-soft: #1e222b;
+  --m-line: rgba(238, 232, 220, 0.13);
+  --m-muted: #a7a39a;
+  --m-tile-fill: color-mix(in srgb, #e7b45c 15%, #1e222b);
+  --m-tile-border: rgba(231, 180, 92, 0.32);
+  --m-tile-ink: #f0c879;
+  --m-accent-text: #e7b45c;
+  --m-active-bg: rgba(231, 180, 92, 0.18);
+  --m-active-border: rgba(231, 180, 92, 0.42);
+  --m-active-ink: #f0c879;
+  --m-interact: #e7b45c;
+  --m-interact-soft: rgba(231, 180, 92, 0.18);
+
   height: 100%;
   min-height: 0;
   overflow-y: auto;
   padding: 30px 34px 48px;
   color: var(--foreground);
+}
+
+/* Hive-light mirror — warm-honey light theme (unchanged). Surface tokens are
+   hardcoded to the app light palette so the var(--m-panel)->var(--m-panel) remap
+   below only rewrites the dark body usages, not this block. */
+:global([data-theme="hive-light"]) .root {
+  --m-panel: #fbf8f1;
+  --m-panel-soft: #f6f2e9;
+  --m-line: rgba(54, 46, 30, 0.16);
+  --m-muted: #5e574b;
+  --m-tile-fill: linear-gradient(180deg, #fff8df 0%, #f2c66c 100%);
+  --m-tile-border: rgba(169, 114, 9, 0.42);
+  --m-tile-ink: #7d5404;
+  --m-accent-text: #a97209;
+  --m-active-bg: rgba(169, 114, 9, 0.14);
+  --m-active-border: rgba(169, 114, 9, 0.42);
+  --m-active-ink: #7d5404;
+  --m-interact: #207f78;
+  --m-interact-soft: rgba(32, 127, 120, 0.16);
 }
 
 .header {
@@ -26,7 +69,7 @@
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--honey);
+  color: var(--m-accent-text);
 }
 
 .title {
@@ -45,20 +88,22 @@
   height: 52px;
   margin-top: 18px;
   padding: 0 16px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--m-line);
   border-radius: 14px;
-  background: var(--panel);
+  background: var(--m-panel);
+  cursor: text;
   transition: box-shadow 0.14s ease, border-color 0.14s ease;
 }
 
 .search:focus-within {
-  border-color: var(--comb-line);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--honey) 18%, transparent);
+  border-color: color-mix(in srgb, var(--m-interact) 42%, transparent);
+  box-shadow: 0 0 0 3px var(--m-interact-soft);
 }
 
 .searchIcon {
   display: inline-flex;
-  color: var(--muted);
+  color: var(--m-muted);
+  pointer-events: none;
 }
 
 .searchInput {
@@ -72,7 +117,7 @@
 }
 
 .searchInput::placeholder {
-  color: var(--muted);
+  color: var(--m-muted);
 }
 
 .kbd {
@@ -81,12 +126,13 @@
   height: 24px;
   padding: 0 9px;
   border-radius: 7px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--muted) 8%, transparent);
-  color: var(--muted);
+  border: 1px solid var(--m-line);
+  background: color-mix(in srgb, var(--m-muted) 8%, transparent);
+  color: var(--m-muted);
   font-family: ui-monospace, "JetBrains Mono", monospace;
   font-size: 11px;
   font-weight: 700;
+  pointer-events: none;
 }
 
 /* ---- Pinned row ---- */
@@ -104,18 +150,18 @@
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: var(--honey);
+  color: var(--m-accent-text);
 }
 
 .sectionHint {
   font-family: ui-monospace, "JetBrains Mono", monospace;
   font-size: 10px;
-  color: var(--muted);
+  color: var(--m-muted);
 }
 
 .pinnedRow {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -124,17 +170,17 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding-right: 8px;
-  border: 1px solid var(--line);
+  gap: 2px;
+  padding-right: 5px;
+  border: 1px solid var(--m-line);
   border-radius: 999px;
-  background: var(--panel);
+  background: var(--m-panel);
   color: var(--foreground);
   transition: transform 0.14s ease, box-shadow 0.14s ease;
 }
 
 .chip:hover {
-  box-shadow: inset 0 0 0 1px var(--comb-line);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-interact) 40%, transparent);
   transform: translateY(-1px);
 }
 
@@ -147,17 +193,22 @@
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 4px 9px 15px;
+  gap: 7px;
+  padding: 5px 3px 5px 11px;
 }
 
 .chipIcon {
   display: inline-flex;
-  color: var(--honey);
+  color: var(--m-accent-text);
+}
+
+.chipIcon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .chipLabel {
-  font-size: 13.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--foreground);
 }
@@ -166,12 +217,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--muted);
+  color: var(--m-muted);
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
 }
@@ -186,9 +237,9 @@
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  border: 1px dashed var(--line);
+  border: 1px dashed var(--m-line);
   border-radius: 12px;
-  color: var(--muted);
+  color: var(--m-muted);
   font-size: 12.5px;
 }
 
@@ -200,7 +251,7 @@
   gap: 16px;
   margin-top: 26px;
   padding-top: 22px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--m-line);
 }
 
 .seg {
@@ -208,8 +259,8 @@
   gap: 3px;
   padding: 4px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  border: 1px solid var(--m-line);
+  background: color-mix(in srgb, var(--m-panel) 70%, transparent);
 }
 
 .segBtn {
@@ -250,7 +301,7 @@
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--m-muted);
 }
 
 .grid {
@@ -264,17 +315,17 @@
    nests inside another (valid ARIA, clean keyboard behavior). */
 .card {
   position: relative;
-  border: 1px solid var(--line);
+  border: 1px solid var(--m-line);
   border-radius: 14px;
-  background: var(--panel);
+  background: var(--m-panel);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -32px rgba(0, 0, 0, 0.7);
   transition: border-color 0.14s ease, transform 0.14s ease, background 0.14s ease;
 }
 
 .card:hover {
-  border-color: var(--comb-line);
+  border-color: color-mix(in srgb, var(--m-interact) 42%, transparent);
   transform: translateY(-3px);
-  background: var(--panel-soft);
+  background: var(--m-panel-soft);
 }
 
 .cardActivate {
@@ -321,7 +372,7 @@
 
 .pinBtn:hover {
   transform: scale(1.1);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--honey) 18%, transparent);
+  box-shadow: 0 0 0 3px var(--m-interact-soft);
 }
 
 .pinBtn svg {
@@ -353,7 +404,7 @@
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--m-muted);
 }
 
 .cardTitleRow {
@@ -372,7 +423,7 @@
 .cardText {
   font-size: 12.5px;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--m-muted);
 }
 
 .badge {
@@ -397,9 +448,9 @@
 
 /* ---- List view ---- */
 .list {
-  border: 1px solid var(--line);
+  border: 1px solid var(--m-line);
   border-radius: 14px;
-  background: var(--panel);
+  background: var(--m-panel);
   overflow: hidden;
 }
 
@@ -414,7 +465,7 @@
   align-items: center;
   gap: 12px;
   padding-right: 16px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--m-line);
   transition: background 0.12s ease;
 }
 
@@ -423,7 +474,7 @@
 }
 
 .listRow:hover {
-  background: var(--panel-soft);
+  background: var(--m-panel-soft);
 }
 
 .listActivate {
@@ -474,7 +525,7 @@
 .chev {
   flex: 0 0 auto;
   display: inline-flex;
-  color: var(--muted);
+  color: var(--m-muted);
   opacity: 0.6;
 }
 
@@ -488,9 +539,9 @@
 
 .boardCol {
   padding: 6px 18px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--m-line);
   border-radius: 16px;
-  background: var(--panel);
+  background: var(--m-panel);
 }
 
 .boardColName {
@@ -500,7 +551,7 @@
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--m-muted);
 }
 
 /* Row container is a plain div; .boardActivate is the <button>, pin is a
@@ -511,13 +562,13 @@
   gap: 8px;
   padding-right: 10px;
   margin: 0 -10px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--m-line);
   border-radius: 9px;
   transition: background 0.12s ease;
 }
 
 .boardRow:hover {
-  background: var(--panel-soft);
+  background: var(--m-panel-soft);
 }
 
 .boardActivate {
@@ -566,16 +617,16 @@
 
 .boardEyebrow {
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--m-muted);
 }
 
 .empty {
   margin-top: 24px;
   padding: 28px;
-  border: 1px dashed var(--line);
+  border: 1px dashed var(--m-line);
   border-radius: 14px;
   text-align: center;
-  color: var(--muted);
+  color: var(--m-muted);
   font-size: 13px;
 }
 
@@ -587,7 +638,7 @@
 .segBtn:focus-visible,
 .pinBtn:focus-visible,
 .chipUnpin:focus-visible {
-  outline: 2px solid var(--honey);
+  outline: 2px solid var(--m-interact);
   outline-offset: -2px;
   border-radius: 10px;
 }

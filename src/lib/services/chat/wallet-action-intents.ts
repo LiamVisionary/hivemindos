@@ -1,4 +1,5 @@
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import { supportedRobinhoodStockTickers } from "@/lib/config/robinhood-chain";
 
 export const SEND_CONFIRMATION = "SEND_USDC";
 
@@ -15,6 +16,7 @@ export function networkFamily(network: string): WalletFamily | null {
 
 export function networkChainLabel(network: string): string {
   if (network === "eip155:8453") return "Base";
+  if (network === "eip155:4663") return "Robinhood Chain";
   if (network === "eip155:1") return "Ethereum";
   if (network.startsWith("solana:")) return "Solana";
   if (network.startsWith("eip155:")) return `EVM chain ${network.slice("eip155:".length)}`;
@@ -22,12 +24,12 @@ export function networkChainLabel(network: string): string {
 }
 
 /** What wallet a "from …" phrase points at. `personal` means an explicit "my (personal) wallet" with no address. */
-export type SourceHint = { address?: string; chain?: "base" | "solana"; personal?: boolean };
+export type SourceHint = { address?: string; chain?: "base" | "solana" | "robinhood"; personal?: boolean };
 
 export type SendRequest = { recipient: string; amountUsd: number; source: SourceHint };
 
 /**
- * Parse a plain-language USDC send. Deliberately conservative — funds move, so a
+ * Parse a plain-language dollar-stable send. Deliberately conservative — funds move, so a
  * draft is only produced when the recipient (explicit `to 0x…`) and amount are
  * unambiguous, and never for private/Veil ("private", "shield") or x402 (a URL)
  * phrasing, which other interceptors own.
@@ -44,10 +46,11 @@ export function parseSendRequest(text: string): SendRequest | null {
   if (!toMatch) return null;
   const recipient = toMatch[1];
 
-  // Amount in USD/USDC. Only USDC is supported on this rail.
-  if (/\b(eth|ether|weth|sol|btc)\b/i.test(lower) && !/\busdc?\b/i.test(lower) && !/\$/.test(text)) return null;
+  // Amount in USD/stablecoin terms. The selected wallet network decides whether
+  // the actual transfer is USDC or Robinhood Chain USDG.
+  if (/\b(eth|ether|weth|sol|btc)\b/i.test(lower) && !/\busd[gc]?\b/i.test(lower) && !/\$/.test(text)) return null;
   const amountMatch = text.match(/\$\s*(\d+(?:\.\d{1,6})?)/)
-    ?? text.match(/(\d+(?:\.\d{1,6})?)\s*(?:usdc|usd|dollars?|bucks)\b/i);
+    ?? text.match(/(\d+(?:\.\d{1,6})?)\s*(?:usdc|usdg|usd|dollars?|bucks)\b/i);
   if (!amountMatch) return null;
   const amountUsd = Number(amountMatch[1]);
   if (!(amountUsd > 0)) return null;
@@ -65,9 +68,10 @@ export function parseSourceHint(text: string, excludeAddress?: string): SourceHi
   const fromAddr = text.match(/\bfrom\b[^]*?(0x[a-fA-F0-9]{40})/i);
   if (fromAddr && (!excludeAddress || fromAddr[1].toLowerCase() !== excludeAddress.toLowerCase())) {
     source.address = fromAddr[1];
-  } else if (/\bfrom\s+(?:my\s+)?(?:the\s+)?(personal|base|solana|my)\b/i.test(text) || /\bfrom\s+my\s+wallet\b/i.test(text)) {
+  } else if (/\bfrom\s+(?:my\s+)?(?:the\s+)?(personal|base|solana|robinhood|my)\b/i.test(text) || /\bfrom\s+my\s+wallet\b/i.test(text)) {
     source.personal = true;
-    if (/\bbase\b/i.test(text)) source.chain = "base";
+    if (/\brobinhood\b/i.test(text)) source.chain = "robinhood";
+    else if (/\bbase\b/i.test(text)) source.chain = "base";
     else if (/\bsolana\b/i.test(text)) source.chain = "solana";
   }
   return source;
@@ -82,6 +86,10 @@ export type WalletSourceRef = { agentId: string; address: string; network: strin
 
 export function shortAddress(address: string): string {
   return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
+}
+
+export function stableAssetForNetwork(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
 }
 
 // ---- Draft message (preview) + parse-back -----------------------------------
@@ -102,14 +110,15 @@ export function buildSendDraftMessage(input: {
     return ["**Send unavailable**", "", input.validation || "No source wallet could be resolved.", "", "Fix this, then ask again."].join("\n");
   }
   const { source, recipient, amountUsd } = input;
+  const asset = stableAssetForNetwork(source.network);
   return [
     "**Send ready**",
     "",
     `From ${source.label} \`${source.address}\`${source.isPersonal ? " (personal)" : ""}`,
     `To \`${recipient}\``,
     `Network **${networkChainLabel(source.network)}**`,
-    "Asset **USDC**",
-    `Amount **$${amountUsd.toFixed(2)}** (1 USDC = $1)`,
+    `Asset **${asset}**`,
+    `Amount **$${amountUsd.toFixed(2)}** (1 ${asset} = $1)`,
     "",
     "Reply `SEND_USDC` to send. Personal wallets always require this and never auto-send.",
   ].join("\n");
@@ -137,11 +146,13 @@ export function sendCapUsd(wallet?: AgentWalletConfig): number {
   return Number(wallet?.maxPaymentUsd) || 0;
 }
 
-// ---- DEX swap (local 0x on Base / Jupiter on Solana) ------------------------
+// ---- DEX swap (local 0x on Base/Robinhood Chain, Jupiter on Solana) ----------
 
 // Symbol -> which chain family it implies ("any" = exists on both, e.g. USDC).
+const ROBINHOOD_SWAP_SYMBOLS = new Set(supportedRobinhoodStockTickers());
+
 const SWAP_SYMBOL_FAMILY: Record<string, "evm" | "solana" | "any"> = {
-  USDC: "any", USDT: "any", WETH: "evm", ETH: "evm", HIVE: "evm", SOL: "solana", WSOL: "solana",
+  USDC: "any", USDG: "evm", USDT: "any", WETH: "evm", ETH: "evm", HIVE: "evm", SOL: "solana", WSOL: "solana",
 };
 
 export type SwapRequest = { sellToken: string; buyToken: string; amountHuman: number; source: SourceHint; family: WalletFamily };
@@ -149,7 +160,7 @@ export type SwapRequest = { sellToken: string; buyToken: string; amountHuman: nu
 /**
  * Parse a plain-language DEX swap ("swap 5 USDC to ETH from my wallet"). The
  * amount is in the *sell token's* units; a "$" amount is only accepted for a
- * stablecoin sell (USDC/USDT) since "$5 of ETH" is ambiguous. Returns null for
+ * stablecoin sell (USDC/USDG/USDT) since "$5 of ETH" is ambiguous. Returns null for
  * private/x402 phrasing or unknown symbols. The caller decides routing (local
  * DEX vs Bankr) via hasLocalSwapIntent.
  */
@@ -163,14 +174,15 @@ export function parseSwapRequest(text: string): SwapRequest | null {
   const amountHuman = Number(m[2]);
   const sellToken = m[3].toUpperCase();
   const buyToken = m[4].toUpperCase();
-  if (!(sellToken in SWAP_SYMBOL_FAMILY) || !(buyToken in SWAP_SYMBOL_FAMILY)) return null;
+  if (!(sellToken in SWAP_SYMBOL_FAMILY) && !ROBINHOOD_SWAP_SYMBOLS.has(sellToken)) return null;
+  if (!(buyToken in SWAP_SYMBOL_FAMILY) && !ROBINHOOD_SWAP_SYMBOLS.has(buyToken)) return null;
   if (sellToken === buyToken) return null;
   if (!(amountHuman > 0)) return null;
-  const sellIsStable = sellToken === "USDC" || sellToken === "USDT";
+  const sellIsStable = sellToken === "USDC" || sellToken === "USDG" || sellToken === "USDT";
   if (isUsd && !sellIsStable) return null; // "$5 ETH" is ambiguous — ask for a token amount.
 
-  const sellFam = SWAP_SYMBOL_FAMILY[sellToken];
-  const buyFam = SWAP_SYMBOL_FAMILY[buyToken];
+  const sellFam = SWAP_SYMBOL_FAMILY[sellToken] ?? "evm";
+  const buyFam = SWAP_SYMBOL_FAMILY[buyToken] ?? "evm";
   const family: WalletFamily = sellFam === "solana" || buyFam === "solana" ? "solana"
     : sellFam === "evm" || buyFam === "evm" ? "evm" : "evm";
   return { sellToken, buyToken, amountHuman, source: parseSourceHint(text), family };

@@ -166,7 +166,7 @@ type UtilityPanelsProps = {
   toggleEnvValue: (key: string) => void;
   updateNotificationSettings: (settings: Partial<AgentNotificationSettings>) => void | Promise<void>;
   vaultClass: ClassNameBuilder;
-  vaultPanelMode?: "hive-vault" | "shared-skills" | "brain-services" | "env" | "config";
+  vaultPanelMode?: "atlas" | "dream-inbox" | "skill-roi" | "hive-vault" | "shared-skills" | "brain-services" | "env" | "config";
   walletClass: ClassNameBuilder;
 };
 
@@ -751,6 +751,7 @@ export function UtilityPanels(props: UtilityPanelsProps) {
           notificationsLoading={notificationsLoading}
           notificationsStatus={notificationsStatus}
           fallbackFolder={sharedVault.notificationsFolder}
+          vaultPath={sharedVault.vaultPath}
           onRefresh={refreshNotifications}
           onMarkAllRead={markAllNotificationsRead}
           onMarkRead={markNotificationRead}

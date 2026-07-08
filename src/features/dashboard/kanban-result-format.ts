@@ -14,7 +14,11 @@ const PATH_TOKEN = `[^\\s"'\`)\\]},;]`;
 // Paths may contain single spaces inside directory names ("Work Board/...").
 // A space is absorbed only when the following token still contains a "/" —
 // prose after a path ("…/RESULT.md was created") never matches.
-const PATH_SOURCE = `(?:~|\\/(?:Users|home|var|opt|private|tmp|srv|mnt))\\/${PATH_TOKEN}+(?: ${PATH_TOKEN}*\\/${PATH_TOKEN}+)*`;
+// Root allowlist mirrors `isOpenableFilePath` (deliverables-model) and the
+// read-file route: `root` (Linux fleet agents home under /root) and `Volumes`
+// (external/mounted disks) were missing, so Linux-agent artifact paths were never
+// indexed as openable chips anywhere.
+const PATH_SOURCE = `(?:~|\\/(?:Users|home|root|var|opt|private|tmp|srv|mnt|Volumes))\\/${PATH_TOKEN}+(?: ${PATH_TOKEN}*\\/${PATH_TOKEN}+)*`;
 const ABSOLUTE_PATH_PATTERN = new RegExp(PATH_SOURCE, "g");
 
 /** Pull `Artifact: <path>` clauses and bare absolute paths out of prose so the
@@ -91,6 +95,29 @@ function clipActionText(text: string) {
   return `${cut.slice(0, lastBreak > 120 ? lastBreak + 1 : 300).trim()} …`;
 }
 
+// Text that is NOT a human decision, even though the extractors above may surface
+// it: worker-facing retry directives, control-plane brief boilerplate, and bare
+// completion/claim report lines. A "Needs You" card must never dump these on the
+// owner as their "decision" (real leak 2026-07-08: a worker "re-run or revise the
+// worker result…" directive shown as the human ask). Surfaces treat a match as
+// "no genuine ask" and fall back to an honest prompt instead.
+const NON_HUMAN_ASK_PATTERNS = [
+  /re-?run or revise the worker result/i,
+  /created by the queen bee control plane/i,
+  /final response must declare whether/i,
+  /required work board evidence fields/i,
+  /^\s*status\s*:\s*(?:sent|blocked)\b/i,
+  /^\s*(?:completed|claimed(?: and recorded)?) work board task\b/i,
+];
+
+/** True when `text` reads as a genuine decision or action a human owner can act
+ * on — false for worker/control-plane boilerplate or a bare completion report. */
+export function isGenuineHumanAsk(text: string | undefined | null): boolean {
+  const trimmed = (text ?? "").trim();
+  if (trimmed.length < 8) return false;
+  return !NON_HUMAN_ASK_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
 // ---------------------------------------------------------------------------
 // Structured needs-human asks. Agents may follow their `ACTION NEEDED:` section
 // with optional sibling labeled lines (same ALL-CAPS-label convention, so the
@@ -108,15 +135,17 @@ export type HumanAsk = {
   ask: string;
   links: HumanAskLink[];
   options: string[];
+  inputs?: HumanAskInput[];
   input?: HumanAskInput;
 };
 
 const LINK_LINE = /(?:^|\n)\s*LINKS?\s*:\s*(\S[^\n]*)/gi;
 const OPTIONS_LINE = /(?:^|\n)\s*OPTIONS\s*:\s*(\S[^\n]*)/i;
-const NEEDS_LINE = /(?:^|\n)\s*NEEDS\s*:\s*(api[\s_-]?key|key|secret|token|file|text)\b[ \t]*([A-Z_][A-Z0-9_]*)?/i;
+const NEEDS_LINE = /(?:^|\n)\s*NEEDS\s*:\s*(api[\s_-]?key|key|secret|token|env|variable|file|text)\b[ \t]*([^\n]*)/gi;
 const BARE_URL = /https?:\/\/[^\s"'<>()\[\]]+/g;
-// An env-var-shaped credential name mentioned in prose, e.g. OPENAI_API_KEY.
-const ENV_KEY_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*(?:_(?:KEY|TOKEN|SECRET))\b|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_API_[A-Z0-9_]+\b/;
+// An env-var-shaped name mentioned in prose, e.g. OPENAI_API_KEY or OUTREACH_PHYSICAL_ADDRESS.
+const ENV_KEY_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
+const ENV_KEY_TOKEN_SINGLE = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/;
 
 function linkLabel(url: string): string {
   try {
@@ -131,6 +160,16 @@ function linkLabel(url: string): string {
 
 function trimUrl(raw: string): string {
   return raw.replace(/[.,;:!?]+$/, "");
+}
+
+function envKeysFromText(value: string) {
+  return [...new Set((value.match(ENV_KEY_TOKEN) ?? []).filter((key) => /^[A-Z_][A-Z0-9_]*$/.test(key)))];
+}
+
+function addInput(inputs: HumanAskInput[], input: HumanAskInput) {
+  const dedupeKey = `${input.kind}:${input.envKey ?? ""}`;
+  if (inputs.some((existing) => `${existing.kind}:${existing.envKey ?? ""}` === dedupeKey)) return;
+  inputs.push(input);
 }
 
 /** Structured, renderable form of a needs-human ask: the human-facing text plus
@@ -170,19 +209,37 @@ export function extractHumanAsk(result: string | undefined | null): HumanAsk | n
     .filter((option, index, all) => all.indexOf(option) === index)
     .slice(0, 6);
 
-  let input: HumanAskInput | undefined;
-  const needs = text.match(NEEDS_LINE);
-  if (needs) {
+  const inputs: HumanAskInput[] = [];
+  for (const needs of text.matchAll(NEEDS_LINE)) {
     const kindRaw = needs[1].toLowerCase().replace(/[\s_-]/g, "");
     const kind: HumanAskInput["kind"] = kindRaw === "file" ? "file" : kindRaw === "text" ? "text" : "api-key";
-    input = { kind, envKey: needs[2] || undefined };
-  } else if (/\bAPI[ _-]?key\b/i.test(ask)) {
-    // Conservative inference: the ask names an API key and (ideally) an
-    // env-var-shaped name. Rendering an optional key input is harmless.
-    input = { kind: "api-key", envKey: ask.match(ENV_KEY_TOKEN)?.[0] };
+    if (kind === "file" || kind === "text") {
+      addInput(inputs, { kind, envKey: undefined });
+      continue;
+    }
+    const envKeys = envKeysFromText(needs[2] ?? "");
+    if (envKeys.length) {
+      for (const envKey of envKeys) addInput(inputs, { kind: "api-key", envKey });
+    } else {
+      addInput(inputs, { kind: "api-key", envKey: undefined });
+    }
   }
+  const askEnvKeys = envKeysFromText(ask);
+  if (askEnvKeys.length && (inputs.some((item) => item.kind === "api-key") || /\b(?:shared\s+)?env|API[ _-]?key|token|secret|variable\b/i.test(ask))) {
+    for (const envKey of askEnvKeys) addInput(inputs, { kind: "api-key", envKey });
+  }
+  if (!inputs.length) {
+    if (askEnvKeys.length) {
+      for (const envKey of askEnvKeys) addInput(inputs, { kind: "api-key", envKey });
+    } else if (/\bAPI[ _-]?key\b/i.test(ask)) {
+      // Conservative inference: the ask names an API key and may not name a
+      // specific env var. Rendering an optional key input is harmless.
+      addInput(inputs, { kind: "api-key", envKey: ask.match(ENV_KEY_TOKEN_SINGLE)?.[0] });
+    }
+  }
+  const input = inputs[0];
 
-  return { ask, links, options, input };
+  return { ask, links, options, inputs: inputs.length ? inputs : undefined, input };
 }
 
 // --- Control-plane task briefs ---------------------------------------------

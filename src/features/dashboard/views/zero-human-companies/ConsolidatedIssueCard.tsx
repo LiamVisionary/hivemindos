@@ -8,8 +8,9 @@
 // expandable list of the underlying tasks (each opens its task detail to act).
 import React from "react";
 import { AlertTriangle, Archive, ChevronDown, ChevronRight, MessageSquare, RotateCcw } from "lucide-react";
+import { CollapsibleReasoningTrail } from "@/features/reasoning/ReasoningTrailView";
 import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
-import { issueAgeLabel, type IssueReasonInfo } from "./issue-reason";
+import { issueAgeLabel, issueGroupReasoningTrail, type IssueReasonInfo } from "./issue-reason";
 import { Spinner } from "./primitives";
 import type { Issue } from "./types";
 
@@ -39,6 +40,7 @@ export function ConsolidatedIssueCard({
 }) {
   const [open, setOpen] = React.useState(false);
   const queenChat = useQueenChat();
+  const reasoning = issueGroupReasoningTrail(info, issues);
 
   const discussClass = () => {
     void queenChat.sendText(
@@ -138,6 +140,10 @@ export function ConsolidatedIssueCard({
             <Archive size={14} aria-hidden /> Dismiss all {issues.length}
           </button>
         ) : null}
+      </div>
+
+      <div style={{ paddingLeft: 26 }}>
+        <CollapsibleReasoningTrail trail={reasoning} tone="issue" />
       </div>
 
       {open ? (

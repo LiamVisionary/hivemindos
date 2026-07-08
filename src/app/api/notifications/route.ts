@@ -4,6 +4,7 @@ import {
   listAgentNotifications,
   markAgentNotificationRead,
   markAllAgentNotificationsRead,
+  setAgentNotificationResolution,
   updateAgentNotificationSettings,
 } from "@/lib/services/obsidian/agent-notifications";
 
@@ -57,6 +58,16 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ ok: true, ...result });
     }
     if (!body.id) throw new Error("Notification id is required.");
+    if (body.action === "dismiss") {
+      await setAgentNotificationResolution(
+        body.id,
+        { status: "resolved", note: "Dismissed by human.", by: "dashboard" },
+        options,
+      );
+      const result = await markAgentNotificationRead(body.id, options);
+      clearNotificationCache();
+      return NextResponse.json({ ok: true, ...result });
+    }
     const result = await markAgentNotificationRead(body.id, options);
     clearNotificationCache();
     return NextResponse.json({ ok: true, ...result });

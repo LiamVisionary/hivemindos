@@ -12,11 +12,13 @@ and confirm before anything moves.
 
 These spend from the wallet you've selected.
 
-- **Swap** — trade one token for another, on Base or Solana (for example, USDC → ETH).
+- **Swap** — trade one token for another, on Base, Robinhood Chain, or Solana
+  (for example, USDC → ETH or USDG → WETH).
   Built-in swaps are capped at a small amount per swap as a safety rail. Works with
   both your personal wallet and agent wallets.
-- **Send USDC** — send dollars (USDC) to any address. Your personal wallet always asks
-  you to confirm; an agent wallet follows the limits you set for it.
+- **Send stablecoins** — send dollars from the selected wallet: USDC on Base/Solana
+  or USDG on Robinhood Chain. Your personal wallet always asks you to confirm; an
+  agent wallet follows the limits you set for it.
 - **Private transfer** — send USDC or ETH privately through Veil, so the amount and
   destination aren't openly linked to you. (Private sends to a public address have a
   small minimum.)
@@ -103,7 +105,8 @@ Official HivemindOS builds use a **1% platform fee with a $0.01 minimum** on
 supported local-wallet actions such as sends, swaps, public x402 payments, and Veil
 private payments. A `$100` action produces a `$1.00` platform fee. A tiny test action
 below `$1` produces the `$0.01` minimum. The preview shows the fee before you confirm,
-and the fee is sent as its own USDC transaction after the main action succeeds.
+and the fee is sent as its own USDC or USDG transaction after the main action succeeds,
+depending on the acting network.
 
 Local Hyperliquid trades use a separate builder fee, described in the Hyperliquid
 guide. Bankr and card-style provider flows may have their own provider fees instead

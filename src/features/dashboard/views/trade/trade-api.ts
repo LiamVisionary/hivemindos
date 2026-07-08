@@ -120,6 +120,93 @@ export type TradingReadiness = {
   agents: Array<{ agentId: string; agentName: string; venue?: StockVenue; paper: boolean; liveEnabled: boolean; enabled: boolean }>;
 };
 
+export type TradeNansenComplexTemplateId =
+  | "token-tracking-smart-money"
+  | "hyperliquid-wallet-discovery"
+  | "related-wallets-scale"
+  | "top-wallet-copytrade-research"
+  | "cex-health-monitor";
+
+export type TradeNansenSimpleTemplateId =
+  | "defi-positions"
+  | "smart-money-holdings"
+  | "token-top-holders"
+  | "token-screener-discovery";
+
+export type TradeNansenBriefMetric = {
+  label: string;
+  value: string;
+};
+
+export type TradeNansenBriefCard = {
+  title: string;
+  summary: string;
+  metrics: TradeNansenBriefMetric[];
+  observations: string[];
+  endpoint: string;
+  redistribution: string;
+};
+
+export type TradeNansenBriefSource = {
+  label: string;
+  endpoint: string;
+  credits: number;
+  mode?: string;
+  attributionRequired: boolean;
+  redistribution: string;
+  note: string;
+};
+
+export type TradeNansenInsightBrief = {
+  kind: "simple-template" | "complex-template" | string;
+  generatedAt: string;
+  subject: string;
+  status: "ok" | "partial" | "blocked";
+  summary: string;
+  cards: TradeNansenBriefCard[];
+  riskFlags: string[];
+  nextQuestions: string[];
+  sources: TradeNansenBriefSource[];
+  attribution: {
+    required: boolean;
+    text: string;
+    reason: string;
+  };
+  compliance: string[];
+  billing?: Record<string, unknown>;
+};
+
+export type TradeNansenComplexTemplateParams = {
+  template: TradeNansenComplexTemplateId;
+  chain?: string;
+  chains?: string[];
+  tokenAddress?: string;
+  tokenSymbol?: string;
+  address?: string;
+  entityName?: string;
+  timeframe?: string;
+  includeLabels?: boolean;
+  includeTransactions?: boolean;
+  includeHistoricalBalances?: boolean;
+  includePnlSummary?: boolean;
+  filters?: Record<string, unknown>;
+  date?: { from?: string; to?: string };
+};
+
+export type TradeNansenSimpleTemplateParams = {
+  template: TradeNansenSimpleTemplateId;
+  chain?: string;
+  chains?: string[];
+  tokenAddress?: string;
+  address?: string;
+  timeframe?: string;
+  aggregateByEntity?: boolean;
+  labelType?: string;
+  premiumLabels?: boolean;
+  filters?: Record<string, unknown>;
+  date?: { from?: string; to?: string };
+};
+
 export type AlpacaPosition = {
   symbol: string;
   qty: number;
@@ -221,6 +308,14 @@ export async function prepareCryptoAction(params: TradePrepareParams): Promise<{
   return result;
 }
 
+export async function runNansenComplexTemplate(params: TradeNansenComplexTemplateParams): Promise<{ ok: boolean; error?: string; brief?: TradeNansenInsightBrief }> {
+  return postJson<{ brief: TradeNansenInsightBrief }>("/api/nansen/complex-template", params);
+}
+
+export async function runNansenSimpleTemplate(params: TradeNansenSimpleTemplateParams): Promise<{ ok: boolean; error?: string; brief?: TradeNansenInsightBrief }> {
+  return postJson<{ brief: TradeNansenInsightBrief }>("/api/nansen/simple-template", params);
+}
+
 /** Generic execute: POST the router-prepared requestBody to its prepared route. */
 export async function executePreparedRoute(route: string, requestBody: Record<string, unknown>): Promise<{ ok: boolean; error?: string; [k: string]: unknown }> {
   return postJson(route, requestBody);
@@ -244,10 +339,11 @@ export async function fetchBankrWallet(): Promise<BankrWalletInfo> {
   return data.ok ? { configured: Boolean((data as BankrWalletInfo).configured), address: (data as BankrWalletInfo).address, balanceUsd: (data as BankrWalletInfo).balanceUsd, tokens: Array.isArray((data as BankrWalletInfo).tokens) ? (data as BankrWalletInfo).tokens : [] } : { configured: false };
 }
 
-// ---- Local DEX swap rail (0x on Base) --------------------------------------
+// ---- Local DEX swap rail (0x on Base/Robinhood Chain, Jupiter on Solana) ----
 export const SWAP_CONFIRMATION = "CONFIRM_SWAP";
 export const SWAP_MAX_USD = 10;
 export const SWAP_TOKENS_BASE = ["USDC", "ETH", "WETH", "USDT", "HIVE"];
+export const SWAP_TOKENS_ROBINHOOD = ["USDG", "WETH", "AAPL", "NVDA", "TSLA", "MSFT", "AMZN", "GOOGL", "META", "COIN", "QQQ", "SPY"];
 export const SWAP_TOKENS_SOLANA = ["USDC", "SOL", "USDT"];
 
 export type TradePlatformFee = {
@@ -267,7 +363,7 @@ export async function quoteSwap(params: { agentId: string; sellToken: string; bu
   return postJson("/api/trading/swap", { action: "quote", ...params });
 }
 
-export async function executeSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; confirmation: string; slippageBps?: number }): Promise<{ ok: boolean; error?: string; result?: DexSwapResult }> {
+export async function executeSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; confirmation: string; slippageBps?: number; network?: string }): Promise<{ ok: boolean; error?: string; result?: DexSwapResult }> {
   return postJson("/api/trading/swap", { action: "execute", ...params });
 }
 

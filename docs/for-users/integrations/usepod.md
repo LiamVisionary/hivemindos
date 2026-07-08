@@ -32,6 +32,20 @@ UsePod response metadata is recorded in runtime telemetry when present:
 - `X-Balance-Remaining`
 - `X-Pod-Route`
 
+## HivemindOS-Managed Billing
+
+Direct UsePod tokens remain supported for self-hosted and bring-your-own-token usage. Official HivemindOS services can also route selected UsePod profiles through managed billing with `billingMode: "hivemindos-managed"` or a server-side `HIVEMINDOS_USEPOD_MANAGED_PROXY_ENABLED` rollout.
+
+In managed mode, the app sends OpenAI-compatible requests to the hosted HivemindOS gateway at `/api/usepod/managed/v1`. The gateway holds the UsePod proxy token server-side, reserves a per-request maximum from hosted HivemindOS credits, forwards the original streaming request to UsePod, and keeps streaming chunks back to the user. When the upstream stream ends, the gateway calculates the real UsePod spend, adds the configured HivemindOS platform fee, refunds the unused reservation, emits a final `hivemindos_billing` event, and then sends `[DONE]`.
+
+The default hosted platform fee is 5% of upstream UsePod spend, with the exact policy enforced by HivemindOS-controlled infrastructure rather than the downloadable app. This is a buyer-side managed-service fee. UsePod hosters still receive the normal UsePod provider earnings for the upstream marketplace route.
+
+Useful managed-mode settings:
+
+- `billingMode: "hivemindos-managed"` on a UsePod agent profile.
+- `managedMaxDebitUsd` on the profile, or `HIVEMINDOS_USEPOD_MANAGED_MAX_DEBIT_USD` on the server, to cap the amount reserved for one request.
+- `HIVEMINDOS_USEPOD_MANAGED_CREDIT_SLUG` to choose the hosted credit account family.
+
 ## Dashboard UX
 
 Agent Settings includes a UsePod readiness card for HivemindOS runtime agents:

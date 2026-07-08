@@ -49,6 +49,10 @@ function hasTag(notification: NotificationActionSource, ...names: string[]): boo
   return names.some((name) => tags.includes(name));
 }
 
+function isApprovalNotification(notification: NotificationActionSource, text = haystack(notification)): boolean {
+  return hasTag(notification, "approval") || /approval|approve or deny/.test(text);
+}
+
 /** The message the "Discuss" button sends into the shared Queen chat. */
 export function notificationDiscussPrompt(notification: NotificationActionSource): string {
   const body = notification.body.length > 900 ? `${notification.body.slice(0, 900)}\n[trimmed]` : notification.body;
@@ -92,7 +96,7 @@ export function deriveNotificationActions(notification: NotificationActionSource
     actions.push({ type: "navigate", label: "Open Companies", target: { view: "governance" } });
   }
 
-  if (hasTag(notification, "approval", "wallet") || /approval|approve or deny/.test(text)) {
+  if (hasTag(notification, "approval", "wallet") || isApprovalNotification(notification, text)) {
     actions.push({ type: "navigate", label: "Open Wallet", target: { view: "wallet" } });
   }
 
@@ -107,7 +111,7 @@ export function deriveNotificationActions(notification: NotificationActionSource
   // A notification that already points at a board task doesn't need a second
   // copy of itself on the board — and a RESOLVED condition doesn't need a
   // follow-up task at all.
-  if (!taskId && notification.resolution?.status !== "resolved") {
+  if (!taskId && !isApprovalNotification(notification, text) && notification.resolution?.status !== "resolved") {
     actions.push({ type: "work-board", label: "Send to board" });
   }
 

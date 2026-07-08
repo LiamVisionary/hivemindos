@@ -34,7 +34,7 @@ import {
   mapActivity, moverFromCrypto, moverFromStock, truncateAddress,
 } from "@/components/trade/adapt-trade";
 import {
-  SWAP_MAX_USD, SWAP_TOKENS_BASE, SWAP_TOKENS_SOLANA,
+  SWAP_MAX_USD, SWAP_TOKENS_BASE, SWAP_TOKENS_ROBINHOOD, SWAP_TOKENS_SOLANA,
   cancelStockOrder,
   fetchBankrWallet, fetchCryptoCapabilities, fetchCryptoMarket, fetchFxRates, fetchStockEquityHistory,
   fetchStockMarket, fetchStockPortfolio, fetchTradingReadiness, fetchWalletActivity,
@@ -72,6 +72,12 @@ const EMPTY_READINESS: DeskStockReadiness = {
   paperKeys: [], liveKeys: [], buyingPower: 0, confirmations: { buy: "CONFIRM_BUY", sell: "CONFIRM_SELL" },
   account: null, xstockTickers: [], robinhoodTickers: [], robinhoodExecutable: false,
 };
+
+function swapTokensForWalletNetwork(network: string, isSolanaWallet: boolean): string[] {
+  if (isSolanaWallet) return SWAP_TOKENS_SOLANA;
+  if (network === "eip155:4663") return SWAP_TOKENS_ROBINHOOD;
+  return SWAP_TOKENS_BASE;
+}
 
 // The acting-wallet choice persists across view switches / reloads / app
 // surfaces through the shared dashboard state service (the panel unmounts when
@@ -548,7 +554,7 @@ export function TradePanel(props: TradePanelProps) {
       cryptoPortfolio: data?.cryptoPortfolio ?? EMPTY_PORTFOLIO,
       cryptoBalances: data?.cryptoBalances ?? {},
       cryptoMovers: data?.cryptoMovers ?? [],
-      swapTokens: isSolanaWallet ? SWAP_TOKENS_SOLANA : SWAP_TOKENS_BASE,
+      swapTokens: swapTokensForWalletNetwork(network, isSolanaWallet),
       swapMaxUsd: SWAP_MAX_USD,
       cryptoCaps: data?.cryptoCaps ?? null,
       stockPortfolio: displayStockPortfolio,

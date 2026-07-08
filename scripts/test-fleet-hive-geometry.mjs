@@ -14,6 +14,7 @@ import {
   QY,
   frAddMachinePos,
   frBuildLayout,
+  frPhonePlaceholderPos,
 } from "../src/components/fleet-hive/hive-geometry.ts";
 
 const sharedProjection = axialToPixelWithStep(1, -1);
@@ -49,6 +50,7 @@ const layout = frBuildLayout(machines);
 const cells = [
   { id: "queen", center: { x: QX, y: QY }, size: 150 },
   { id: "add-machine", center: frAddMachinePos(machines, layout), size: MACHINE_SIZE },
+  { id: "phone-placeholder", center: frPhonePlaceholderPos(machines, layout), size: MACHINE_SIZE },
 ];
 
 for (const hiveMachine of machines) {

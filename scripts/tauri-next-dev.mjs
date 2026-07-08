@@ -417,6 +417,10 @@ function proxyTimeoutForRequest(clientRequest) {
     return 11 * 60_000;
   if (clientRequest.url?.startsWith("/api/chat/image-generation"))
     return 4 * 60_000;
+  // Queen text chat can use runtime-held brains with a 120s server budget.
+  // Keep the outer dev proxy slightly above that so it does not replace a
+  // still-running text chat with a confusing route-level fallback.
+  if (clientRequest.url?.startsWith("/api/queen-bee/chat")) return 130_000;
   // Fleet updates run a remote update plus a verification poll (route maxDuration 360s).
   if (clientRequest.url?.startsWith("/api/fleet/update")) return 7 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;

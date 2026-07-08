@@ -1,6 +1,7 @@
 export const RUNTIME_STREAM_EVENT_TYPES = {
   THINKING: "chat.thinking",
   REASONING: "chat.reasoning",
+  COLD_START: "chat.cold_start",
   MESSAGE_START: "chat.start",
   TEXT_DELTA: "chat.text",
   DONE: "chat.done",
@@ -36,6 +37,11 @@ export function normalizeRuntimeStreamEvent(raw: RuntimeStreamEvent): RuntimeStr
       return { type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: String(rest.delta ?? rest.content ?? "") };
     case "reasoning":
       return { type: RUNTIME_STREAM_EVENT_TYPES.REASONING, delta: String(rest.delta ?? rest.content ?? "") };
+    case "cold_start":
+    case "cold-start":
+    case "runtime.cold_start":
+    case "runtime.cold-start":
+      return { type: RUNTIME_STREAM_EVENT_TYPES.COLD_START, ...rest };
     case "message.started":
     case "run.started":
       return { type: RUNTIME_STREAM_EVENT_TYPES.MESSAGE_START, ...rest };

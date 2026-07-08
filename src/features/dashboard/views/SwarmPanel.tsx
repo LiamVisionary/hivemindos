@@ -330,7 +330,7 @@ export function SwarmPanel({
     if (x402Pickables.length > 0) return { ready: true, note: `~${MIROSHARK_X402_SIMULATION_PRICE_LABEL}` };
     if (personalLoading) return { ready: true, note: `~${MIROSHARK_X402_SIMULATION_PRICE_LABEL}` }; // optimistic until wallets load
     const reason = personalWallets.length > 0
-      ? "Your wallets can't fund paid runs yet (watch-only or unsupported network). Open the Wallets tab to add a local Base/Solana key."
+      ? "Your wallets can't fund paid runs yet (watch-only or unsupported network). Open the Wallets tab to add a local Base, Robinhood Chain, or Solana key."
       : "No wallet set up for paid runs. Open the Wallets tab to create or import one.";
     return { ready: false, needsWallet: true, reason };
   }, [x402Pickables.length, personalLoading, personalWallets.length]);

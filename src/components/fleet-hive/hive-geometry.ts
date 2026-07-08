@@ -184,6 +184,60 @@ export function frAddMachinePos(machines: HiveMachine[], layout?: Record<string,
   return best ? best.pt : frPolar(QX, QY, radius, widest.mid);
 }
 
+/** Where the phone placeholder sits before any real mobile Tailnet peer exists.
+ *  It uses the same gap/collision search as the add-machine affordance, while
+ *  avoiding that affordance too, so it never stacks on top of real hive cells. */
+export function frPhonePlaceholderPos(machines: HiveMachine[], layout?: Record<string, MachineLayout>): Pt {
+  const radius = RING + BASE_ADD_MACHINE_GAP * CELL_SCALE;
+  const preferredAngle = 150;
+  const obstacles: HiveLayoutRect[] = [];
+  if (layout) {
+    for (const m of machines) {
+      const L = layout[m.id];
+      if (!L) continue;
+      obstacles.push(frCellRect(L.pos, MACHINE_COLLISION_PAD), frCellRect(L.addPos));
+      for (const a of L.agents) obstacles.push(frCellRect(a.pos));
+    }
+    const addMachine = frAddMachinePos(machines, layout);
+    obstacles.push(frCellRect(addMachine, MACHINE_COLLISION_PAD));
+  }
+
+  const gaps = frMachineGaps(machines.length, preferredAngle);
+  let best: { pt: Pt; extra: number; targetness: number; size: number } | null = null;
+  for (const gap of gaps) {
+    for (let extra = 0; extra <= CELL_STEP * 8; extra += CELL_STEP / 4) {
+      const pt = frPolar(QX, QY, radius + extra, gap.mid);
+      if (!frSlotClears(pt, obstacles)) continue;
+      if (
+        !best ||
+        extra < best.extra - 0.5 ||
+        (Math.abs(extra - best.extra) <= 0.5 && gap.targetness < best.targetness - 0.5) ||
+        (Math.abs(extra - best.extra) <= 0.5 && Math.abs(gap.targetness - best.targetness) <= 0.5 && gap.size > best.size)
+      ) {
+        best = { pt, extra, targetness: gap.targetness, size: gap.size };
+      }
+      break;
+    }
+  }
+  return best ? best.pt : frPolar(QX, QY, radius, preferredAngle);
+}
+
+function frMachineGaps(total: number, preferredAngle: number) {
+  if (total <= 0) return [{ mid: preferredAngle, size: 360, targetness: 0 }];
+  const angs = Array.from({ length: total }, (_, i) => ((frMachineAngle(i, total) % 360) + 360) % 360)
+    .sort((a, b) => a - b);
+  const gaps: { mid: number; size: number; targetness: number }[] = [];
+  for (let i = 0; i < angs.length; i++) {
+    const a = angs[i];
+    const b = i + 1 < angs.length ? angs[i + 1] : angs[0] + 360;
+    const size = b - a;
+    const mid = ((a + b) / 2) % 360;
+    const diff = Math.abs(mid - preferredAngle) % 360;
+    gaps.push({ mid, size, targetness: Math.min(diff, 360 - diff) });
+  }
+  return gaps;
+}
+
 /** Build a layout map: machine id -> { pos, ang, agents, addPos }. */
 export function frBuildLayout(machines: HiveMachine[]): Record<string, MachineLayout> {
   const map: Record<string, MachineLayout> = {};
@@ -220,6 +274,7 @@ export function frBuildLayout(machines: HiveMachine[]): Record<string, MachineLa
 export function frContentBounds(
   machines: HiveMachine[],
   layout: Record<string, MachineLayout>,
+  options: { includePhonePlaceholder?: boolean } = {},
 ): { cx: number; cy: number; w: number; h: number } {
   let minX = QX, maxX = QX, minY = QY, maxY = QY;
   const acc = (x: number, y: number, half: number) => {
@@ -227,6 +282,10 @@ export function frContentBounds(
     minY = Math.min(minY, y - half); maxY = Math.max(maxY, y + half);
   };
   acc(QX, QY, 84); // queen cell (150) + label below
+  if (options.includePhonePlaceholder) {
+    const phone = frPhonePlaceholderPos(machines, layout);
+    acc(phone.x, phone.y, CELL / 2 + 16);
+  }
   for (const m of machines) {
     const L = layout[m.id];
     if (!L) continue;

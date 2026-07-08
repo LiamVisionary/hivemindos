@@ -97,7 +97,7 @@ flowchart LR
   <section class="infoTile"><b>02</b><strong>Agents</strong><span>Profiles bind runtime, model, env, wallet, vault, machine, and call context.</span></section>
   <section class="infoTile"><b>03</b><strong>Work</strong><span>Kanban, scheduler, swarm, history, note intake, and deliverables.</span></section>
   <section class="infoTile"><b>04</b><strong>Brain</strong><span>Obsidian memory, graph, shared skills, GBrain, Syntho, trading brain.</span></section>
-  <section class="infoTile"><b>05</b><strong>Wallets</strong><span>Base/Solana, USDC, UsePod deposits, MoneyClaw, Honey, HIVE, x402.</span></section>
+  <section class="infoTile"><b>05</b><strong>Wallets</strong><span>Base/Robinhood/Solana, USDC/USDG, UsePod deposits, MoneyClaw, Honey, HIVE, x402.</span></section>
   <section class="infoTile"><b>06</b><strong>Native</strong><span>Tauri status, local folder actions, deliverable opening, packaged server.</span></section>
 </div>
 
@@ -150,8 +150,10 @@ sequenceDiagram
 flowchart LR
   Agent["Agent wallet config"] --> LocalVault["Local wallet vault"]
   LocalVault --> Base["Base wallet"]
+  LocalVault --> Robinhood["Robinhood Chain wallet"]
   LocalVault --> Solana["Solana wallet"]
   Base --> USDC["USDC sends with caps"]
+  Robinhood --> USDG["USDG sends and Stock Tokens"]
   Solana --> SolanaUSDC["Solana USDC sends"]
   Agent --> UsePod["UsePod prepaid rail"]
   UsePod --> Deposit["Token deposit address"]

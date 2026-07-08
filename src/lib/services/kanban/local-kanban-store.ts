@@ -29,6 +29,7 @@ import {
 } from "@/lib/services/kanban/kanban-failure-classification";
 import {
   formatOutreachCompletionBlock,
+  formatOutreachCompletionHumanBlock,
   validateOutreachCompletion,
 } from "@/lib/services/kanban/outreach-safeguards";
 import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
@@ -1176,7 +1177,9 @@ export async function completeTask(
   assertResultNotMisattributed(board, taskId, result);
   const outreachBlock = validateOutreachCompletion(task, result);
   if (outreachBlock) {
-    const blockNote = formatOutreachCompletionBlock(outreachBlock);
+    // This routes the task to needs-human (parked for the owner), so store the
+    // human-facing ask — not the worker-facing "re-run or revise" directive.
+    const blockNote = formatOutreachCompletionHumanBlock(outreachBlock);
     const preservedResult = result?.trim()
       ? `${result.trim()}\n\n${blockNote}`
       : blockNote;
@@ -1219,7 +1222,7 @@ export async function completeTask(
     // overwriting it with the missing-receipts summary — a human needs to see what was
     // actually produced before they can unblock it.
     const gateTitles = gateBlock.missingGateTitles.join(", ");
-    const blockNote = `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: Review the output above, then attach passing eval receipts for ${gateTitles} or move the card forward manually.`;
+    const blockNote = `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: The crew finished this but its automated checks (${gateTitles}) haven't passed yet. Review the output above; if it looks right, move the card forward, or use Discuss to have the crew fix the checks.`;
     const preservedResult = result?.trim()
       ? `${result.trim()}\n\n${blockNote}`
       : `${input.summary?.trim() || "Completion blocked."} ${blockNote}`;

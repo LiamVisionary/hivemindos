@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, readdir, rename, rmdir, stat, unlink, writeFile } from "fs/promises";
+import { access, mkdir, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from "fs/promises";
 import { constants } from "fs";
 import { basename, dirname, isAbsolute, join, relative, sep } from "path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -389,6 +389,55 @@ export async function readPastScheduledRuns(input: {
       return { path: relative(location.vault, path), name: basename(path), mtimeMs: fileStat.mtimeMs, content };
     }));
   return runs.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
+}
+
+// Permanently remove a schedule's vault directory (schedule.md + run history)
+// so a deleted automation does NOT reappear on the next vault sync. Both the
+// stable-machine-id-keyed directory and any legacy machine-name-keyed mirror
+// are removed, covering schedules created before a hostname rekey. The path is
+// resolved WITHOUT mkdir so we never recreate a directory we're deleting.
+export async function deleteScheduledSchedule(input: {
+  vaultPath?: string;
+  scheduledFolder?: string;
+  schedule: ScheduleSnapshot;
+}) {
+  const vault = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  const root = join(vault, scheduledFolderName(input.scheduledFolder));
+  // Path-safety: only ever remove a directory strictly INSIDE the scheduled root
+  // (non-empty relative path, no "..", not absolute) — never the root itself or
+  // anything outside it, even if a snapshot carries a hostile sharedRunFolder.
+  const safeInsideRoot = (dir: string) => {
+    const rel = relative(root, dir);
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+  };
+  const candidates: string[] = [];
+  // Prefer the EXACT stored directory. It round-trips from listScheduledSchedules
+  // and is correct even when the owning agent is offline / on another machine, so
+  // the machine-id/name can't be re-derived from the snapshot (the previous
+  // machine-derived-only path silently resolved to a non-existent "dashboard"
+  // dir for cross-machine schedules, so the vault entry survived and resurrected).
+  const storedFolder = input.schedule.sharedRunFolder
+    || (input.schedule.sharedSchedulePath ? dirname(input.schedule.sharedSchedulePath) : "");
+  if (storedFolder) candidates.push(join(vault, storedFolder));
+  // Fall back to the machine-id/name-derived path (freshly-created local schedules
+  // that were never listed, plus the legacy machine-name mirror).
+  const { device, legacyDevice, slug } = scheduleSegments(input.schedule);
+  for (const dev of [device, legacyDevice].filter((value): value is string => Boolean(value))) {
+    candidates.push(join(root, dev, slug));
+  }
+  const removed: string[] = [];
+  const seen = new Set<string>();
+  for (const dir of candidates) {
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    if (!safeInsideRoot(dir)) continue;
+    if (!(await exists(dir))) continue;
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    removed.push(relative(vault, dir));
+    // Prune the now-empty machine directory (rmdir refuses non-empty ones).
+    await rmdir(dirname(dir)).catch(() => {});
+  }
+  return { removed };
 }
 
 async function collectScheduleFiles(dir: string, files: string[] = []) {

@@ -834,6 +834,8 @@ export type CompanyEmailThread = {
   attachments?: CompanyEmailAttachment[];
   /** Epoch ms of the most recent activity, for sorting/display. */
   updatedAt: number;
+  /** Epoch ms of the sent/delivered message when known; stable across later thread updates. */
+  sentAt?: number;
   labels: string[];
 };
 
@@ -1137,6 +1139,7 @@ function normalizeAgentMailThread(thread: AgentMailThread, inbox: { agentId?: st
   const hasReceived = Boolean(thread.received_timestamp) || recipients.some(isSelf);
   const direction: CompanyEmailDirection = hasSent && hasReceived ? "mixed" : hasReceived && !hasSent ? "inbound" : "outbound";
   const threadId = (thread.thread_id || thread.last_message_id || "").trim() || `${inbox.inboxId}-thread`;
+  const sentAt = parseTimestampMs(thread.sent_timestamp);
   return {
     id: `agentmail:${inbox.inboxId}:${threadId}`,
     provider: "agentmail",
@@ -1153,10 +1156,11 @@ function normalizeAgentMailThread(thread: AgentMailThread, inbox: { agentId?: st
     updatedAt:
       parseTimestampMs(thread.updated_at)
       || parseTimestampMs(thread.timestamp)
-      || parseTimestampMs(thread.sent_timestamp)
+      || sentAt
       || parseTimestampMs(thread.received_timestamp)
       || parseTimestampMs(thread.created_at)
       || 0,
+    ...(sentAt ? { sentAt } : {}),
     labels: parseParticipants(thread.labels),
   };
 }

@@ -1,8 +1,8 @@
 /* ──────────────────────────────────────────────────────────────────
    Agent notifications — "Alerts" compact list
    A narrow, editorial inbox: one honey accent, teal for the live/normal
-   signal, warm rose for trouble. Rows collapse to a single title line and
-   expand on hover / keyboard focus to reveal the body + per-item actions
+   signal, warm rose for trouble. Rows collapse to a compact preview and
+   expand only when clicked to reveal the body + per-item actions
    (no data is hidden without an expand affordance). Palette lifted from the
    Fleet-Hive / Trade / Brain views (fleet-hive.css `.fr-root`): warm-neutral
    dark panels, cream hairlines, warm text tiers. Tokens are scoped to
@@ -56,6 +56,8 @@
      (.listScroll owns scrolling) instead of a short card in a tall area. */
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 /* The panel also carries the global .tabPanel class (overflow:auto); override
@@ -157,6 +159,7 @@
   grid-template-rows: minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
+  min-width: 0;
 }
 
 .mainCol {
@@ -168,11 +171,14 @@
 
 .sideCol {
   width: 320px;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: clip;
   overscroll-behavior: contain;
   padding-bottom: 4px;
   scrollbar-width: none;
@@ -194,6 +200,8 @@
   display: flex;
   flex-direction: column;
   gap: 13px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .sidePanelHead {
@@ -255,6 +263,7 @@
 .reviewList {
   display: grid;
   gap: 9px;
+  min-width: 0;
 }
 
 .reviewError {
@@ -290,7 +299,8 @@
 
   .sideCol {
     width: auto;
-    overflow: visible;
+    overflow-y: visible;
+    overflow-x: clip;
   }
 }
 
@@ -590,14 +600,6 @@
   display: none;
 }
 
-/* While the list is actively scrolling, ignore pointer hover on rows so they
-   don't expand/collapse under the cursor mid-scroll (janky). The class is
-   toggled on the scroll container by the panel and cleared shortly after the
-   scroll goes idle; keyboard focus-within expansion is unaffected. */
-.listScroll.scrolling .row {
-  pointer-events: none;
-}
-
 .dayGroups {
   display: flex;
   flex-direction: column;
@@ -678,7 +680,6 @@
 }
 
 .row:hover,
-.row:focus-within,
 .row.open {
   background: var(--nf-panel-2);
 }
@@ -725,9 +726,7 @@
   min-width: 0;
 }
 
-/* Full title revealed on expand — no permanently truncated text. */
-.row:hover .rowTitle,
-.row:focus-within .rowTitle,
+/* Full title revealed on explicit expand — no permanently truncated text. */
 .row.open .rowTitle {
   overflow: visible;
   white-space: normal;
@@ -797,8 +796,6 @@
   transition: max-height 0.34s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
-.row:hover .expandWrap,
-.row:focus-within .expandWrap,
 .row.open .expandWrap {
   /* 460px matches the mockup and clears the tallest real card (a Hermes
      sign-out alert with a code block + pager + full action row measures
@@ -856,14 +853,12 @@
   margin-top: 12px;
   opacity: 0;
   /* Hidden AND removed from the tab order while collapsed so keyboard users
-     never land on an invisible button; the row itself (tabIndex 0) reveals
-     them on focus, after which they enter the tab order. */
+     never land on an invisible button; the row itself (tabIndex 0) toggles
+     them open, after which they enter the tab order. */
   visibility: hidden;
   transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-.row:hover .rowActions,
-.row:focus-within .rowActions,
 .row.open .rowActions {
   opacity: 1;
   visibility: visible;
@@ -911,6 +906,17 @@
 
 .readBtn {
   color: var(--nf-fg-3);
+}
+
+.dismissBtn {
+  color: var(--nf-danger);
+  border-color: var(--nf-danger-line);
+}
+
+.dismissBtn:hover:not(:disabled) {
+  background: var(--nf-danger-soft);
+  color: #ffc7bf;
+  border-color: var(--nf-danger-line);
 }
 
 .actionError {

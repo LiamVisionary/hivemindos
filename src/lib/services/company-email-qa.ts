@@ -36,6 +36,8 @@ export type EmailQaFinding = {
   suggestion?: string;
   /** The offending URL, for dead-link findings. */
   badUrl?: string;
+  /** Timestamp of the source email/thread, used to suppress only findings already taught. */
+  threadUpdatedAt?: number;
 };
 
 export type EmailQaReport = {
@@ -122,6 +124,10 @@ function businessLabel(thread: CompanyEmailThread): string {
   return thread.correspondents?.find((entry) => entry.trim()) || thread.inboxAddress || "unknown recipient";
 }
 
+function threadFindingTimestamp(thread: CompanyEmailThread): number {
+  return thread.sentAt || thread.updatedAt;
+}
+
 /** A thread that represents something the crew actually SENT (vs a queued draft).
  *  The outbox reader marks delivered threads `direction: "outbound"` + a "delivered"
  *  label; AgentMail-style providers use "sent". QA cares most about real sends. */
@@ -195,6 +201,7 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
   for (const thread of threads) {
     const business = businessLabel(thread);
     const body = thread.body ?? "";
+    const threadUpdatedAt = threadFindingTimestamp(thread);
     const seenDeadForThread = new Set<string>();
     const seenPlaceholderDeliverableForThread = new Set<string>();
     for (const url of candidateUrls(thread)) {
@@ -204,6 +211,7 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
           id: `${thread.id}:placeholder-url`, threadId: thread.threadId, business, subject: thread.subject,
           severity: "high", category: "placeholder", categoryLabel: CATEGORY_LABELS.placeholder, source: "deterministic",
           summary: `A link is a placeholder/template URL, not a real destination: ${dest}`, suggestion: CATEGORY_SUGGESTIONS.placeholder, badUrl: dest,
+          threadUpdatedAt,
         });
         continue;
       }
@@ -214,6 +222,7 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
           id: `${thread.id}:dead:${dest}`, threadId: thread.threadId, business, subject: thread.subject,
           severity: "high", category: "dead-link", categoryLabel: CATEGORY_LABELS["dead-link"], source: "deterministic",
           summary: `A link the recipient is asked to click is dead (${probe.reason}): ${dest}`, suggestion: CATEGORY_SUGGESTIONS["dead-link"], badUrl: dest,
+          threadUpdatedAt,
         });
       }
       const rejected = acceptanceByUrl.get(dest);
@@ -224,6 +233,7 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
           severity: "high", category: "placeholder-deliverable", categoryLabel: CATEGORY_LABELS["placeholder-deliverable"], source: "deterministic",
           summary: `The linked deliverable looks unfinished/placeholder (${rejected.violations.map((v) => v.message).join(" ")}): ${dest}`,
           suggestion: CATEGORY_SUGGESTIONS["placeholder-deliverable"], badUrl: dest,
+          threadUpdatedAt,
         });
       }
     }
@@ -232,6 +242,7 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
         id: `${thread.id}:placeholder-text`, threadId: thread.threadId, business, subject: thread.subject,
         severity: "high", category: "placeholder", categoryLabel: CATEGORY_LABELS.placeholder, source: "deterministic",
         summary: "The email still contains an unfilled placeholder / merge field.", suggestion: CATEGORY_SUGGESTIONS.placeholder,
+        threadUpdatedAt,
       });
     }
     if (/tracking\s*pixel/i.test(body) || PIXEL_URL_RE.test(body)) {
@@ -239,6 +250,7 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
         id: `${thread.id}:pixel`, threadId: thread.threadId, business, subject: thread.subject,
         severity: "medium", category: "tracking-pixel", categoryLabel: CATEGORY_LABELS["tracking-pixel"], source: "deterministic",
         summary: "A visible tracking-pixel line / open-pixel URL was left in the plaintext body.", suggestion: CATEGORY_SUGGESTIONS["tracking-pixel"],
+        threadUpdatedAt,
       });
     }
     if (ATTACHMENT_CLAIM_RE.test(body) && (thread.attachmentCount ?? 0) === 0 && !(thread.attachments?.length)) {
@@ -246,6 +258,7 @@ async function deterministicFindings(threads: CompanyEmailThread[]): Promise<Ema
         id: `${thread.id}:attachment`, threadId: thread.threadId, business, subject: thread.subject,
         severity: "low", category: "missing-attachment", categoryLabel: CATEGORY_LABELS["missing-attachment"], source: "deterministic",
         summary: "The email refers to an attachment, but none is attached.", suggestion: CATEGORY_SUGGESTIONS["missing-attachment"],
+        threadUpdatedAt,
       });
     }
   }
@@ -270,6 +283,7 @@ async function aiFindings(input: EmailQaScanInput, threads: CompanyEmailThread[]
           id: `${thread.id}:ai:${index}`, threadId: thread.threadId, business: businessLabel(thread), subject: thread.subject,
           severity: finding.severity, category: `ai:${finding.category}`, categoryLabel: finding.category, source: "ai",
           summary: finding.summary, suggestion: finding.suggestion || undefined,
+          threadUpdatedAt: threadFindingTimestamp(thread),
         });
       });
     } catch (caught) {

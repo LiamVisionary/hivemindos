@@ -13,6 +13,9 @@ import {
 import { cookies } from "next/headers";
 
 const DASHBOARD_VAULT_PANEL_MODES = new Set<DashboardVaultPanelMode>([
+  "atlas",
+  "dream-inbox",
+  "skill-roi",
   "hive-vault",
   "shared-skills",
   "brain-services",

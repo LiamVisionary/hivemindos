@@ -15,6 +15,10 @@ import { bankrLlmAccessStatus, bankrLlmModelOptions, isBankrLlmLowCreditError, l
 import {
   hivemindosWalletPaidModelOptions,
 } from "@/lib/services/hivemindos-wallet-paid-models";
+import {
+  readHiveComputeMarketplaceStatus,
+} from "@/lib/services/hive-compute-marketplace";
+import { HIVE_COMPUTE_PROVIDER_SLUG } from "@/lib/config/hive-compute-marketplace";
 import { mergeRuntimeSessions, previewSessionText } from "@/lib/services/runtime-session-utils";
 import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import type { RuntimeModelSelection } from "./runtime-adapters/types";
@@ -133,6 +137,22 @@ export type RuntimeIntegrationStatus = {
       message?: string;
       modelCount?: number;
       checkedAt?: string;
+    };
+    hiveCompute?: {
+      status?: string;
+      message?: string;
+      modelCount?: number;
+      checkedAt?: string;
+      gatewayConfigured?: boolean;
+      workerInstalled?: boolean;
+      workerReady?: boolean;
+      liveWorkers?: number;
+      liveModels?: string[];
+      keyRelayModels?: string[];
+      fallbackConfigured?: boolean;
+      pendingJobs?: number;
+      capacityLabel?: string;
+      capacityTone?: "live" | "fallback" | "empty";
     };
   };
 };
@@ -334,7 +354,7 @@ async function augmentGatewayModelProviders(
   // memoized per resolved endpoint) no longer serialize, so the settings status
   // sweep waits the slowest probe instead of their sum.
   const lmStudioProfile = localOpenAIProviderProfile(agent);
-  const [bankr, bankrAccess, lmStudio] = await Promise.all([
+  const [bankr, bankrAccess, lmStudio, hiveCompute] = await Promise.all([
     listBankrLlmModels(agent).catch((error) => ({
       models: [],
       error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
@@ -355,12 +375,21 @@ async function augmentGatewayModelProviders(
       lmStudioModelSource: "",
       models: [],
     })),
+    readHiveComputeMarketplaceStatus().catch((error) => ({
+      error: error instanceof Error ? error.message : "Hive Compute status failed.",
+      models: [],
+      routing: { ready: false, message: "Hive Compute status failed.", chatPath: "/api/hive-compute/chat/completions" },
+      gateway: { configured: false },
+      workerModule: { installed: false },
+      earning: { ready: false },
+    })),
   ]);
   const lmStudioSetup = await localRuntimeSetupStatus(lmStudioProfile).catch(() => undefined);
   if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
   if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
   if (lmStudio.modelDiscoveryError) diagnostics.push(`Local model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
-  const providers = [...(modelSelection?.providers ?? [])];
+  if ("error" in hiveCompute && hiveCompute.error) diagnostics.push(`Hive Compute unavailable: ${hiveCompute.error}`);
+  const providers = (modelSelection?.providers ?? []).filter((provider) => provider.slug !== HIVE_COMPUTE_PROVIDER_SLUG);
   const lmStudioModels = lmStudio.models.length
     ? lmStudio.models
     : agent.provider === "lm-studio" && agent.model?.trim()
@@ -440,6 +469,22 @@ async function augmentGatewayModelProviders(
       message: "Free Swarm Sovereign Scout by default; hosted credits or an x402 wallet unlock wallet-paid routes.",
       modelCount: walletPaidModels.length,
       checkedAt: new Date().toISOString(),
+    },
+    hiveCompute: {
+      status: !("error" in hiveCompute) && hiveCompute.routing.ready ? "ready" : "setup",
+      message: "error" in hiveCompute ? hiveCompute.error : hiveCompute.routing.message,
+      modelCount: !("error" in hiveCompute) ? (hiveCompute.gateway.models?.count ?? 0) : 0,
+      checkedAt: new Date().toISOString(),
+      gatewayConfigured: !("error" in hiveCompute) && hiveCompute.gateway.configured,
+      workerInstalled: !("error" in hiveCompute) && hiveCompute.workerModule.installed,
+      workerReady: !("error" in hiveCompute) && hiveCompute.earning.ready,
+      liveWorkers: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.liveWorkers : undefined,
+      liveModels: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.liveModels : undefined,
+      keyRelayModels: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.keyRelayModels : undefined,
+      fallbackConfigured: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.fallbackConfigured : undefined,
+      pendingJobs: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.pendingJobs : undefined,
+      capacityLabel: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.statusLabel : undefined,
+      capacityTone: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.statusTone : undefined,
     },
   };
   return {

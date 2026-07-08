@@ -15,6 +15,7 @@ const {
   taskBriefHeadline,
   isBriefGuidanceSection,
   isBriefGuidanceText,
+  isGenuineHumanAsk,
 } = await import("../src/features/dashboard/kanban-result-format.ts");
 
 // The real Ada Lovelace deliverability result that motivated this formatter.
@@ -92,6 +93,7 @@ const adaResult = "Deliverability setup result recorded by Ada Lovelace: AgentMa
   assert.equal(full.links[0].label, "OpenAI key page", "explicit link label kept");
   assert.deepEqual(full.options, ["Use my existing key", "Create a new key"], "OPTIONS split on pipes");
   assert.deepEqual(full.input, { kind: "api-key", envKey: "OPENAI_API_KEY" }, "NEEDS parsed with env key");
+  assert.deepEqual(full.inputs, [{ kind: "api-key", envKey: "OPENAI_API_KEY" }], "single NEEDS key is also exposed in inputs list");
 }
 
 {
@@ -106,6 +108,22 @@ const adaResult = "Deliverability setup result recorded by Ada Lovelace: AgentMa
   const inferred = extractHumanAsk("ACTION NEEDED: Provide the ANTHROPIC_API_KEY API key so the drafting agent can run.");
   assert.equal(inferred.input?.kind, "api-key", "api-key inferred from prose");
   assert.equal(inferred.input?.envKey, "ANTHROPIC_API_KEY", "env-shaped token picked up");
+  assert.deepEqual(inferred.inputs, [{ kind: "api-key", envKey: "ANTHROPIC_API_KEY" }], "inferred env key is listed as an input");
+}
+
+{
+  const multi = extractHumanAsk([
+    "ACTION NEEDED: Add OUTREACH_PHYSICAL_ADDRESS and AGENTMAIL_API_KEY to the shared hive env/runtime, then rerun this card.",
+    "NEEDS: api-key AGENTMAIL_API_KEY",
+  ].join("\n"));
+  assert.deepEqual(
+    multi.inputs,
+    [
+      { kind: "api-key", envKey: "AGENTMAIL_API_KEY" },
+      { kind: "api-key", envKey: "OUTREACH_PHYSICAL_ADDRESS" },
+    ],
+    "env vars named in the ask prose stay visible even when NEEDS names only one",
+  );
 }
 
 {
@@ -202,6 +220,22 @@ const controlPlaneBrief = [
   assert.equal(isBriefGuidanceText("Complete this scoped task and record the result on the Work Board."), true);
   assert.equal(isBriefGuidanceText("Address the failures in the outreach email deliverability setup."), false);
   assert.equal(isBriefGuidanceText("Created by the Queen Bee control plane."), false);
+}
+
+// isGenuineHumanAsk: worker/control-plane boilerplate and bare completion reports
+// are NOT decisions the owner can act on; a real ask is.
+{
+  assert.equal(isGenuineHumanAsk("Re-run or revise the worker result with Status: sent plus a receipt, or Status: blocked plus the exact blocker and evidence."), false);
+  assert.equal(isGenuineHumanAsk("Re-run or revise the worker result with Status: sent plus a receipt, or Status: blocked plus the exact blocker and evidence. Created by the Queen Bee control plane."), false);
+  assert.equal(isGenuineHumanAsk("Created by the Queen Bee control plane."), false);
+  assert.equal(isGenuineHumanAsk("Required Work Board evidence fields: Status: sent|blocked; Receipt: <if sent>."), false);
+  assert.equal(isGenuineHumanAsk("Status: blocked\nEvidence: form rejected submit"), false);
+  assert.equal(isGenuineHumanAsk("Completed Work Board task t_x."), false);
+  assert.equal(isGenuineHumanAsk(""), false);
+  assert.equal(isGenuineHumanAsk("  "), false);
+  assert.equal(isGenuineHumanAsk("Approve sending the four drafted close replies, or choose the smaller send set."), true);
+  assert.equal(isGenuineHumanAsk("Add PORTFOLIO_OFFER_API_TOKEN to the shared env so the crew can post offers."), true);
+  assert.equal(isGenuineHumanAsk("The crew finished this but couldn't confirm the outreach was actually sent. Review it, then use Discuss to tell the crew what to do."), true);
 }
 
 console.log("kanban-result-format: all assertions passed");

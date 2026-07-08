@@ -13,7 +13,7 @@ const CHAT_MODEL_TYPES = new Set(["text", "llm", "chat", "language"]);
  * Live model list for a configured catalog provider. Resolves the provider's
  * base URL (from the provider catalog) and its API key (from the shared hive
  * env, never returned to the client) and calls `/models`, so configured
- * providers (OpenAI, Anthropic, Groq, Gemini, Venice) show their real, current
+ * providers (OpenRouter, OpenAI, Anthropic, Groq, Gemini, Venice) show their real, current
  * models instead of the Hermes-configured subset. Fetched lazily so it never
  * blocks the settings status sweep. (UsePod is intentionally excluded: its
  * token is per-agent and its own guided setup owns model discovery.)

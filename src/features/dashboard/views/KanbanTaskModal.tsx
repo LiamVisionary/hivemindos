@@ -17,7 +17,7 @@ const convoClass = createStyleClass(convoStyles);
 // messages into a single timeline, so a "Needs You" task always shows what the
 // agent last said even when no streaming chat history exists on this device.
 export function KanbanTaskModal(props: any) {
-  const { ChatMarkdown, Check, ChevronDown, ComposerField, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, answerKanbanNeedsHuman, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, editAndInterruptKanbanTask, formatMessageTimestamp, formatRelativeTime, handleKanbanSteerFileChange, handleKanbanSteerImageChange, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanEventLabel, kanbanAssigneeOptions, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanTaskModal, moveKanbanTask, patchKanbanTask, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanSteerAttachment, removeKanbanSteerDirectory, saveKanbanNeedsHumanApiKey, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, setKanbanEditDraft, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setRecentDirectoriesExpanded, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, voiceBands, voiceTarget, voiceTranscript } = props;
+  const { ChatMarkdown, Check, ChevronDown, ComposerField, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, answerKanbanNeedsHuman, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, editAndInterruptKanbanTask, formatMessageTimestamp, formatRelativeTime, handleKanbanSteerFileChange, handleKanbanSteerImageChange, kanbanClass, kanbanEditDraft, kanbanEditPendingTaskId, kanbanEventLabel, kanbanAssigneeOptions, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanTaskModal, loadKanbanNeedsHumanEnvKeys, moveKanbanTask, patchKanbanTask, recentDirectories, recentDirectoriesExpanded, recording, removeKanbanSteerAttachment, removeKanbanSteerDirectory, saveKanbanNeedsHumanApiKey, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, setKanbanEditDraft, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setRecentDirectoriesExpanded, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, selectKanbanNeedsHumanEnvKey, voiceBands, voiceTarget, voiceTranscript } = props;
   const portalTarget = typeof document === "undefined" ? null : document.body;
   // Legacy "notes" openers land on the unified conversation too.
   const modal = kanbanTaskModal === "notes" ? "chat" : kanbanTaskModal;
@@ -189,14 +189,15 @@ export function KanbanTaskModal(props: any) {
         {modal === "chat" ? (
           <div className={`${kanbanClass("kanbanModalBody", "kanbanChatBody")} ${convoClass("convoScrollBody")}`}>
             {needsHumanAsk ? (
-              <div className={convoClass("needsYouBanner")} role="status">
-                <strong>Needs you</strong>
-                <span>{needsHumanAsk.ask}</span>
+              <div style={{ marginBottom: 12 }} role="status">
                 <KanbanNeedsHumanPanel
                   key={task.id}
                   ask={needsHumanAsk}
+                  task={task}
+                  loadHiveEnvKeys={loadKanbanNeedsHumanEnvKeys}
                   onAnswer={(answer) => answerKanbanNeedsHuman(task, answer)}
                   onSaveApiKey={(envKey, value) => saveKanbanNeedsHumanApiKey(task, envKey, value)}
+                  onUseExistingEnvKey={(requestedEnvKey, selectedEnvKey) => selectKanbanNeedsHumanEnvKey(task, requestedEnvKey, selectedEnvKey)}
                 />
               </div>
             ) : null}

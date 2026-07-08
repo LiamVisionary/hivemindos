@@ -11,6 +11,7 @@ export type WalletSendUsdcResponse = {
   ok?: boolean;
   signature?: string;
   network?: string;
+  assetSymbol?: "USDC" | "USDG";
   platformFee?: unknown;
   error?: string;
 };
@@ -27,7 +28,7 @@ export async function sendApprovedWalletUsdc(input: WalletSendUsdcRequest): Prom
     action: "approve",
   });
   if (!approval.ok || !approval.approvalToken) {
-    return { ok: false, error: approval.error ?? "Could not approve this USDC send." };
+    return { ok: false, error: approval.error ?? "Could not approve this stablecoin send." };
   }
   return postWalletSend<WalletSendUsdcResponse>({
     ...input,
@@ -47,7 +48,7 @@ async function postWalletSend<T extends { ok?: boolean; error?: string }>(body: 
     return {
       ...(data ?? {}),
       ok: false,
-      error: data?.error ?? "Could not send USDC.",
+      error: data?.error ?? "Could not send stablecoin.",
     } as T;
   }
   return data;

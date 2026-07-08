@@ -94,7 +94,7 @@ function humanizeLabel(raw: string, fallback: string): string {
   if (!s) return fallback;
   s = s.split(/[\\/]/).pop() ?? s; // filename only
   s = s.replace(/\.[A-Za-z0-9]{1,8}$/, ""); // drop extension
-  s = s.replace(/[-_]?t_[a-z0-9]{6,}.*$/i, ""); // drop `-t_mr397...` task-hash tails
+  s = s.replace(/[-_]t_[a-z0-9]{6,}.*$/i, ""); // drop `-t_mr397...` task-hash tails (require the leading separator so a real word like "paymenT_oriented" isn't mangled)
   s = s.replace(/^\d{4}-\d{2}-\d{2}[-_]?/, ""); // drop leading ISO date
   s = s.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
   if (!s) return fallback;

@@ -105,7 +105,7 @@ export const AGENT_PAYMENT_PROVIDER_FEATURES = {
   x402: {
     label: "x402",
     summary: "HTTP-native pay-per-call API/resource payments with wallet-selected requirements.",
-    setup: "Configure a Base/Solana wallet and enforce network, scheme, and max-amount payment policies.",
+    setup: "Configure a Base, Robinhood Chain, or Solana wallet and enforce network, scheme, and max-amount payment policies.",
     balanceSource: "x402-wallet",
     addressSource: "local-wallet",
     walletDropInGroup: "x402",

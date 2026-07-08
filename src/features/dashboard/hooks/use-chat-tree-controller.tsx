@@ -601,11 +601,21 @@ export function useChatTreeController(props: any) {
   const chatSidebarTree = useMemo<ChatTreeMachine[]>(() => (
     machineGroups.map((machine) => {
       const folderMap = new Map<string, ChatTreeFolder>();
+      const startFreshChatInMachine = (agent: AgentProfile, path?: string) => {
+        const projectPath = projectDirectoryPath(path);
+        return () => startAgentChat(agent.id, {
+          fresh: true,
+          workingDirectoryPath: projectPath,
+          chatLeafKey: projectPath
+            ? `folder-${machine.key}-${chatDedupeKey(projectPath)}-${agent.id}`
+            : `machine-${machine.key}-${agent.id}`,
+        });
+      };
       const ensureFolder = (label: string, onStartChat?: () => void, path?: string, active?: boolean) => {
         const key = chatDedupeKey(path || label);
         const existing = folderMap.get(key);
         if (existing) {
-          if (!existing.onStartChat && onStartChat) existing.onStartChat = onStartChat;
+          if ((!existing.onStartChat || active) && onStartChat) existing.onStartChat = onStartChat;
           if (!existing.path && path) existing.path = path;
           if (active) existing.active = true;
           return existing;
@@ -622,11 +632,12 @@ export function useChatTreeController(props: any) {
         const machineChatFolder = () => ensureFolder("Unsorted chats");
         const defaultFolder = () => {
           if (!folderPath) return strayFolder();
-          fallbackFolder ??= ensureFolder(workspaceLabelFromPath(folderPath), () => startAgentChat(agent.id, {
-            fresh: true,
-            workingDirectoryPath: folderPath,
-            chatLeafKey: `folder-${machine.key}-${chatDedupeKey(folderPath)}-${agent.id}`,
-          }), folderPath, Boolean(selectedChatDirectoryPath && selectedChatDirectoryPath === folderPath));
+          fallbackFolder ??= ensureFolder(
+            workspaceLabelFromPath(folderPath),
+            startFreshChatInMachine(agent, folderPath),
+            folderPath,
+            selectedAgentId === agent.id && Boolean(selectedChatDirectoryPath && selectedChatDirectoryPath === folderPath),
+          );
           return fallbackFolder;
         };
         const hasDirectConversation = hasConversation(agent.id);
@@ -679,7 +690,7 @@ export function useChatTreeController(props: any) {
           const targetFolder = selectedChatLeafKey.startsWith(`machine-${machine.key}-`)
             ? machineChatFolder()
             : targetProjectPath
-            ? ensureFolder(workspaceLabelFromPath(targetProjectPath), undefined, targetProjectPath, true)
+            ? ensureFolder(workspaceLabelFromPath(targetProjectPath), startFreshChatInMachine(agent, targetProjectPath), targetProjectPath, true)
             : defaultFolder();
           targetFolder.chats.unshift({
             key: selectedChatLeafKey,
@@ -699,11 +710,12 @@ export function useChatTreeController(props: any) {
           const taskChatKey = taskChatLeafKey(agent.id, task, taskIndex);
           const taskWorkingDirectory = projectDirectoryPath(task.workingDirectory);
           const taskFolder = taskWorkingDirectory
-            ? ensureFolder(workspaceLabelFromPath(taskWorkingDirectory), () => startAgentChat(agent.id, {
-              fresh: true,
-              workingDirectoryPath: taskWorkingDirectory,
-              chatLeafKey: `folder-${machine.key}-${chatDedupeKey(taskWorkingDirectory)}-${agent.id}`,
-            }), taskWorkingDirectory, selectedChatDirectoryPath === taskWorkingDirectory)
+            ? ensureFolder(
+              workspaceLabelFromPath(taskWorkingDirectory),
+              startFreshChatInMachine(agent, taskWorkingDirectory),
+              taskWorkingDirectory,
+              selectedAgentId === agent.id && selectedChatDirectoryPath === taskWorkingDirectory,
+            )
             : defaultFolder();
           taskFolder.chats.push({
             key: taskChatKey,
@@ -738,11 +750,12 @@ export function useChatTreeController(props: any) {
       for (const customFolder of chatCustomFolders.filter((folder) => folder.machineKey === machine.key && projectDirectoryPath(folder.path))) {
         const chatAgents = machine.agents.filter((item) => runtimeCan(item, "chat"));
         const agent = chatAgents.find((item) => item.id === customFolder.agentId) ?? chatAgents[0];
-        ensureFolder(customFolder.label, agent ? () => startAgentChat(agent.id, {
-          fresh: true,
-          workingDirectoryPath: customFolder.path,
-          chatLeafKey: `folder-${machine.key}-${chatDedupeKey(customFolder.path)}-${agent.id}`,
-        }) : undefined, customFolder.path, Boolean(selectedChatDirectoryPath && selectedChatDirectoryPath === customFolder.path));
+        ensureFolder(
+          customFolder.label,
+          agent ? startFreshChatInMachine(agent, customFolder.path) : undefined,
+          customFolder.path,
+          selectedAgentId === agent?.id && Boolean(selectedChatDirectoryPath && selectedChatDirectoryPath === customFolder.path),
+        );
       }
 
       const chatAgents = machine.agents.filter((item) => runtimeCan(item, "chat"));
@@ -752,11 +765,7 @@ export function useChatTreeController(props: any) {
         name: machine.name,
         detail: machine.collector === "ready" ? `${machine.agents.length} available` : "Agent bridge not ready",
         onStartChat: newChatAgent
-          ? () => startAgentChat(newChatAgent.id, {
-            fresh: true,
-            workingDirectoryPath: "",
-            chatLeafKey: `machine-${machine.key}-${newChatAgent.id}`,
-          })
+          ? startFreshChatInMachine(newChatAgent)
           : undefined,
         onCreateFolder: chatAgents.length > 0 ? () => openChatFolderCreator(machine) : undefined,
         folders: [...folderMap.values()]
@@ -767,7 +776,11 @@ export function useChatTreeController(props: any) {
               deduped.set(key, preferChatTreeItem(deduped.get(key), chat));
               return deduped;
             }, new Map<string, ChatTreeItem>()).values()]
-              .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0) || a.title.localeCompare(b.title)),
+              .sort((a, b) => (
+                Number(Boolean(b.active)) - Number(Boolean(a.active))
+                || (b.updatedAt ?? 0) - (a.updatedAt ?? 0)
+                || a.title.localeCompare(b.title)
+              )),
           }))
           .sort((a, b) => (
             a.label === "Stray chats" ? 1 : b.label === "Stray chats" ? -1 : a.label.localeCompare(b.label)

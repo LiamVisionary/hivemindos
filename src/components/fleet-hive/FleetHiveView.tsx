@@ -20,6 +20,7 @@ import { MachineTerminalModal } from "@/components/fleet/machine-terminal-modal"
 import { MachineSendFileModal } from "@/components/fleet/machine-send-file-modal";
 import { UsePodHostModal } from "@/components/fleet/usepod-host-modal";
 import { FleetConstellationLoading, FleetScanOverlay } from "@/components/fleet/fleet-loading";
+import { ConnectPhoneModal } from "@/components/phone/ConnectPhoneModal";
 import {
   ALERTS, MACHINES, TASKS, TICKER, FLEET_EDGES,
   type FleetAgent, type FleetMachine,
@@ -33,6 +34,7 @@ import { emitQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { HIVE_H, HIVE_W, frBuildLayout, frContentBounds } from "./hive-geometry";
 import { mapFleetMachines } from "./fleet-hive-mappers";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
+import { isHiveMobileMachine } from "./fleet-hive-types";
 import { HiveStage } from "./HiveStage";
 import { HivePanel, type HivePanelHandlers } from "./HivePanel";
 import { TopBar } from "./TopBar";
@@ -111,6 +113,7 @@ export function FleetHiveView({
   alerts = ALERTS,
   ticker = TICKER,
   edges = FLEET_EDGES,
+  tailnetLabel,
   loading = false,
   recentAgentArrival,
   onRecentAgentArrivalSeen,
@@ -180,7 +183,14 @@ export function FleetHiveView({
   // keep the content centred). The baseline scale fits the whole authored
   // canvas — matching the drop-in's cell size — and the user zooms from there.
   const layout = React.useMemo(() => frBuildLayout(displayMachines), [displayMachines]);
-  const bounds = React.useMemo(() => frContentBounds(displayMachines, layout), [displayMachines, layout]);
+  const primaryMobileMachine = React.useMemo(
+    () => displayMachines.find(isHiveMobileMachine) ?? null,
+    [displayMachines],
+  );
+  const bounds = React.useMemo(
+    () => frContentBounds(displayMachines, layout, { includePhonePlaceholder: !primaryMobileMachine }),
+    [displayMachines, layout, primaryMobileMachine],
+  );
   const baseScale = (area.full > 0 && area.h > 0)
     ? Math.min(area.full / BASELINE_CANVAS_W, area.h / HIVE_H)
     : 1;
@@ -189,6 +199,7 @@ export function FleetHiveView({
   const [terminalMachine, setTerminalMachine] = React.useState<FleetMachine | null>(null);
   const [sendFileMachine, setSendFileMachine] = React.useState<FleetMachine | null>(null);
   const [usePodHostMachine, setUsePodHostMachine] = React.useState<FleetMachine | null>(null);
+  const [phonePairingOpen, setPhonePairingOpen] = React.useState(false);
   const newAgentTimerRef = React.useRef<number>(0);
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const hiveAreaRef = React.useRef<HTMLDivElement>(null);
@@ -197,13 +208,14 @@ export function FleetHiveView({
   // removed/renamed machine or agent falls back to the Queen overview without a
   // setState-in-effect cascade.
   const effectiveSel = React.useMemo<HiveSelection>(() => {
+    if (sel.type === "phone" && primaryMobileMachine) return { type: "machine", id: primaryMobileMachine.id };
     if (sel.type === "machine" && !displayMachines.some((m) => m.id === sel.id)) return { type: "queen" };
     if (sel.type === "agent") {
       const m = displayMachines.find((x) => x.id === sel.machineId);
       if (!m || !m.agents.some((a) => a.id === sel.id)) return { type: "queen" };
     }
     return sel;
-  }, [displayMachines, sel]);
+  }, [displayMachines, primaryMobileMachine, sel]);
 
   // Bridge the hive selection to the id-based selection the legacy graph/map/
   // list visualisations use, plus fleet-typed handlers for those modes.
@@ -402,6 +414,7 @@ export function FleetHiveView({
     onEditSettings: onEditSettings ? (m, a) => onEditSettings(m.source, a.source) : undefined,
     onDuplicate: onDuplicate ? (m, a) => onDuplicate(m.source, a.source) : undefined,
     onRemove: onRemove ? handleRemove : undefined,
+    onOpenPhonePairing: () => setPhonePairingOpen(true),
     getMachineUpdate,
   };
 
@@ -477,6 +490,7 @@ export function FleetHiveView({
                       onAddMachine={onAddMachine}
                       onOpenQueenSettings={onOpenQueenSettings}
                       newAgentId={newAgentId}
+                      tailnetLabel={tailnetLabel}
                     />
                   </div>
                 </div>
@@ -487,6 +501,7 @@ export function FleetHiveView({
                   onSelect={setSel}
                   handlers={handlers}
                   walletsByAgent={walletsByAgent}
+                  tailnetLabel={tailnetLabel}
                 />
                 {/* zoom controls — sit over the hive, clear of the panel */}
                 <div
@@ -603,6 +618,8 @@ export function FleetHiveView({
       {usePodHostMachine && typeof document !== "undefined"
         ? createPortal(<UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />, document.body)
         : null}
+
+      <ConnectPhoneModal open={phonePairingOpen} onClose={() => setPhonePairingOpen(false)} />
     </div>
     </TooltipProvider>
   );

@@ -3,6 +3,7 @@
 import React from "react";
 import { STATUS_TONE } from "./data";
 import { Ring, StatusPill, RoleGlyph, CardLabel, alignColor as ringColorFor } from "./primitives";
+import { isWorkApprovalIssue } from "./work-approval-issues";
 import type { CardStyle, Colony, Density } from "./types";
 
 interface CardProps {
@@ -26,7 +27,10 @@ export function ColonyCard({ colony: c, density, showBudget, onOpen }: CardProps
   const revColor = r && !r.up ? "var(--danger)" : "var(--live)";
   // Everything on this company waiting on a human decision — blocked issues plus
   // pending spend approvals — surfaced as a badge so blockers show from the landing.
-  const needsYou = c.issues.filter((i) => i.work?.status === "needs-human" || i.status === "board_review").length + c.approvals.length;
+  const workApprovalCount = c.issues.filter(isWorkApprovalIssue).length;
+  const blockedCount = c.issues.filter((i) => (i.work?.status === "needs-human" || i.status === "board_review") && !isWorkApprovalIssue(i)).length;
+  const approvalCount = c.approvals.length + (c.pricingProposals?.length ?? 0) + workApprovalCount;
+  const needsYou = blockedCount + approvalCount;
 
   return (
     <div
@@ -136,10 +140,10 @@ export function ColonyCard({ colony: c, density, showBudget, onOpen }: CardProps
           </div>
           <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", whiteSpace: "nowrap" }}>{c.agents.length} agents</span>
         </div>
-        {c.approvals.length > 0 && (
+        {approvalCount > 0 && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, whiteSpace: "nowrap", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 600, color: "var(--honey)", border: "1px solid var(--honey-line)", borderRadius: 999, padding: "3px 10px" }}>
             <span style={{ width: 5, height: 5, borderRadius: 999, background: "var(--honey)", flexShrink: 0 }} />
-            {c.approvals.length} to approve
+            {approvalCount} to approve
           </span>
         )}
       </div>
@@ -159,7 +163,9 @@ export function MinimalColonyCard({ colony: c, density, showBudget, onOpen }: Ca
   const pad = compact ? 26 : 34;
   const minH = compact ? 300 : 360;
   const hoverArrowGutter = 24;
-  const blockedCount = c.issues.filter((i) => i.work?.status === "needs-human" || i.status === "board_review").length;
+  const workApprovalCount = c.issues.filter(isWorkApprovalIssue).length;
+  const blockedCount = c.issues.filter((i) => (i.work?.status === "needs-human" || i.status === "board_review") && !isWorkApprovalIssue(i)).length;
+  const approvalCount = c.approvals.length + (c.pricingProposals?.length ?? 0) + workApprovalCount;
   return (
     <div
       onClick={() => onOpen(c.id)}
@@ -182,8 +188,8 @@ export function MinimalColonyCard({ colony: c, density, showBudget, onOpen }: Ca
         {blockedCount > 0 && (
           <span title={`${blockedCount} item${blockedCount === 1 ? "" : "s"} waiting on your decision`} style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--danger)", whiteSpace: "nowrap" }}>⚑ {blockedCount} needs you</span>
         )}
-        {c.approvals.length > 0 && (
-          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--honey)", whiteSpace: "nowrap" }}>{c.approvals.length} to approve</span>
+        {approvalCount > 0 && (
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--honey)", whiteSpace: "nowrap" }}>{approvalCount} to approve</span>
         )}
       </div>
 

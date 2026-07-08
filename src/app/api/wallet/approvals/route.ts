@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/utils/server-auth";
+import { resolveSpendApprovalEscalationNotifications } from "@/lib/services/messaging/escalation-notify";
 import {
   decideApproval,
   listApprovals,
@@ -45,5 +46,8 @@ export async function POST(request: NextRequest) {
   if (!decision) return NextResponse.json({ ok: false, error: "decision must be 'approved' or 'denied'" }, { status: 400 });
   const approval = await decideApproval(id, decision, body.decidedBy?.trim() || "dashboard", body.note);
   if (!approval) return NextResponse.json({ ok: false, error: "Approval request not found." }, { status: 404 });
+  if (approval.status === "approved" || approval.status === "denied") {
+    await resolveSpendApprovalEscalationNotifications(approval.id, approval.status).catch(() => undefined);
+  }
   return NextResponse.json({ ok: true, approval });
 }

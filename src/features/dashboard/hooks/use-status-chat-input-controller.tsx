@@ -5,15 +5,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-commands";
 import { createFileReferenceAttachments } from "@/features/chat/chat-file-references";
+import { messageVisibleAttachments } from "@/features/chat/chat-message-attachments";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
+import { agentColdStartProcessEvent, recordAgentRuntimeWarm } from "./agent-cold-start-status";
 import { handleStatusChatDashboardCommand } from "./status-chat-dashboard-command-router";
-import { compactRepeatedAssistantText, extractGeneratedKanbanTask, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, yieldChatPaint } from "./status-chat-input-helpers";
+import { compactRepeatedAssistantText, extractGeneratedKanbanTask, isChatTransportInterruption, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, yieldChatPaint } from "./status-chat-input-helpers";
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
 import { appendChatProcessState, finishChatStreamState, markChatStreamChunkState, startChatStreamState } from "./status-chat-stream-state";
 import { pushVoiceBands, resetVoiceBands } from "@/lib/stores/voice-bands-store";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
+import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 
 export function useStatusChatInputController(props: any) {
   const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
@@ -25,8 +28,8 @@ export function useStatusChatInputController(props: any) {
     ? chatQueue.filter((item: any) => item.agentId === selectedAgent.id && item.leafKey === selectedChatLeafKey)
     : [];
 
-  function startChatStream(storageKey: string, agentId: string, leafKey: string, requestLabel?: string, runId?: string, startedAt = Date.now()) {
-    startChatStreamState({ agentId, leafKey, recordActiveChatRun, requestLabel, runId, setChatProcessByKey, setChatStreamingByKey, startedAt, storageKey });
+  function startChatStream(storageKey: string, agentId: string, leafKey: string, requestLabel?: string, runId?: string, startedAt = Date.now(), sessionId?: string) {
+    startChatStreamState({ agentId, leafKey, recordActiveChatRun, requestLabel, runId, sessionId, setChatProcessByKey, setChatStreamingByKey, startedAt, storageKey });
   }
   function markChatStreamChunk(storageKey: string) {
     markChatStreamChunkState(setChatStreamingByKey, storageKey);
@@ -799,10 +802,12 @@ export function useStatusChatInputController(props: any) {
     attachments?: any[];
     clearComposer?: boolean;
     directories?: any[];
+    permissionMode?: unknown;
     prompt: string;
   }) {
     const prompt = input.prompt.trim();
     const agentMode = input.agentMode === "plan" ? "plan" : "act";
+    const permissionMode = normalizeChatPermissionMode(input.permissionMode);
     const outgoingAttachments = input.attachments ?? [];
     const outgoingDirectories = input.directories ?? [];
     if (!selectedAgent || (!prompt && outgoingAttachments.length === 0 && outgoingDirectories.length === 0)) return;
@@ -810,6 +815,7 @@ export function useStatusChatInputController(props: any) {
       selectedAgent.id,
       selectedChatLeafKey,
       agentMode,
+      permissionMode,
       prompt,
       outgoingAttachments.map((attachment: any) => `${attachment.name ?? ""}:${attachment.size ?? ""}:${attachment.kind ?? ""}`).join("|"),
       outgoingDirectories.map((directory: any) => directory.path ?? directory.id ?? linkedDirectoryLabel(directory)).join("|"),
@@ -824,6 +830,7 @@ export function useStatusChatInputController(props: any) {
       agent: selectedAgent,
       agentId: selectedAgent.id,
       agentMode,
+      permissionMode,
       attachments: outgoingAttachments,
       directories: outgoingDirectories,
       directoryPath: selectedChatDirectoryPath,
@@ -840,10 +847,11 @@ export function useStatusChatInputController(props: any) {
     await runChatMessage(queuedMessage);
   }
 
-  async function sendPromptMessage(prompt: string) {
+  async function sendPromptMessage(prompt: string, options: { permissionMode?: unknown; agentMode?: "act" | "plan" } = {}) {
     await submitChatPrompt({
       prompt,
-      agentMode: "act",
+      agentMode: options.agentMode ?? "act",
+      permissionMode: options.permissionMode,
       attachments: [],
       directories: [],
       clearComposer: false,
@@ -858,9 +866,11 @@ export function useStatusChatInputController(props: any) {
     }
     const form = event.currentTarget as HTMLFormElement | null;
     const submittedAgentMode = String(form ? new FormData(form).get("agentMode") ?? "" : "");
+    const submittedPermissionMode = form ? new FormData(form).get("permissionMode") : undefined;
     await submitChatPrompt({
       prompt: text ?? "",
       agentMode: submittedAgentMode === "plan" ? "plan" : "act",
+      permissionMode: submittedPermissionMode,
       attachments: chatAttachments,
       directories: chatDirectories,
       clearComposer: true,
@@ -873,6 +883,7 @@ export function useStatusChatInputController(props: any) {
     const selectedChatDirectoryPath = queuedMessage.directoryPath;
     const prompt = queuedMessage.prompt;
     const agentMode = queuedMessage.agentMode === "plan" ? "plan" : "act";
+    const permissionMode = normalizeChatPermissionMode(queuedMessage.permissionMode);
     const outgoingAttachments = queuedMessage.attachments ?? [];
     const outgoingDirectories = queuedMessage.directories ?? [];
     let activeRunProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = [];
@@ -959,9 +970,10 @@ export function useStatusChatInputController(props: any) {
       ? `Linked directories:\n${outgoingDirectories.map((directory) => `- ${linkedDirectoryLabel(directory)}`).join("\n")}`
       : "";
     const outgoingLabel = prompt || attachmentSummary(outgoingAttachments) || (outgoingDirectories.length ? `Linked ${outgoingDirectories.length} director${outgoingDirectories.length === 1 ? "y" : "ies"}` : "Media message");
+    const outgoingVisibleAttachments = messageVisibleAttachments(outgoingAttachments, outgoingDirectories);
     const setupIssue = chatSetupIssue(selectedAgent);
     if (setupIssue) {
-      appendMessage(selectedAgent.id, { role: "user", content: outgoingLabel, attachments: outgoingAttachments, surface: "chat" });
+      appendMessage(selectedAgent.id, { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat" });
       appendMessage(selectedAgent.id, { role: "assistant", content: `Error: ${setupIssue}`, surface: "chat" });
       return;
     }
@@ -979,8 +991,9 @@ export function useStatusChatInputController(props: any) {
     const workingDirectory = selectedChatDirectoryPath || selectedAgent.localDataDir || "";
     const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
     const requestRuntimeSessionId = chatRuntimeSessionIdsByKey?.[selectedStorageKey] || selectedChatRuntimeSessionId;
+    const localRuntimeSessionId = requestRuntimeSessionId || taskId;
     activeRunProcessEvents = [];
-    startChatStream(selectedStorageKey, selectedAgent.id, selectedChatLeafKey, outgoingLabel, taskId, requestStartedAt);
+    startChatStream(selectedStorageKey, selectedAgent.id, selectedChatLeafKey, outgoingLabel, taskId, requestStartedAt, localRuntimeSessionId);
     const requestAgentId = selectedAgent.id;
     const requestLeafKey = selectedChatLeafKey;
     const requestStillSelected = () => {
@@ -1034,7 +1047,7 @@ export function useStatusChatInputController(props: any) {
       updatedAt: Date.now(),
       workingDirectory,
     });
-    const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingAttachments, surface: "chat", createdAt: requestStartedAt };
+    const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat", createdAt: requestStartedAt };
     const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", createdAt: requestStartedAt + 1 });
     appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
@@ -1126,7 +1139,7 @@ export function useStatusChatInputController(props: any) {
     let sawAgentPrompt = false;
     let sawDone = false;
     let contentEventsSincePaint = 0;
-    let currentRuntimeSessionId = requestRuntimeSessionId || "";
+    let currentRuntimeSessionId = localRuntimeSessionId || "";
     let recoveredAssistantText = "";
     let streamedAssistantText = "";
     let latestSessionSummary = "";
@@ -1200,8 +1213,13 @@ export function useStatusChatInputController(props: any) {
       const data = await response.json().catch(() => null);
       if (data?.ok && data.session) ingestRuntimeSession(data.session);
     };
+    let preserveActiveRun = false;
 
     try {
+      const coldStartEvent = await agentColdStartProcessEvent(selectedAgent);
+      if (coldStartEvent) {
+        appendRunChatProcess(coldStartEvent.label, coldStartEvent.detail, coldStartEvent.status);
+      }
       const response = await fetch("/api/chat/agent-runtime", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1217,6 +1235,7 @@ export function useStatusChatInputController(props: any) {
           wallet: walletsByAgent[selectedAgent.id] ?? createDefaultAgentWallet(selectedAgent.id),
           honeyLedgerEnabled,
           agentMode,
+          permissionMode,
           messages: [
             ...contextMessages.map((message) => ({
               role: message.role,
@@ -1230,6 +1249,7 @@ export function useStatusChatInputController(props: any) {
       if (!response.ok || !response.body) {
         throw new Error(await responseErrorMessage(response, `Request failed with ${response.status}`));
       }
+      recordAgentRuntimeWarm(selectedAgent);
 
       // Prepaid inference providers report the remaining balance on the
       // response, so the stored wallet balance stays fresh after every chat
@@ -1318,8 +1338,21 @@ export function useStatusChatInputController(props: any) {
             maybeStartImageGenerationCard(processEvent.label, processEvent.detail);
           }
           if (parsed.session?.id) {
-            setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: parsed.session.id }));
-            if (requestStillSelected()) setSelectedChatRuntimeSessionId(parsed.session.id);
+            const sessionId = parsed.session.id;
+            currentRuntimeSessionId = sessionId;
+            setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: sessionId }));
+            if (requestStillSelected()) setSelectedChatRuntimeSessionId(sessionId);
+            recordActiveChatRun?.({
+              storageKey: selectedStorageKey,
+              agentId: selectedAgent.id,
+              leafKey: selectedChatLeafKey,
+              startedAt: requestStartedAt,
+              updatedAt: Date.now(),
+              requestLabel: outgoingLabel,
+              sessionId,
+              runId: taskId,
+              status: "active",
+            });
             continue;
           }
           const agentPrompt = runtimePromptFromPayload(parsed);
@@ -1385,8 +1418,10 @@ export function useStatusChatInputController(props: any) {
       updateTask(taskId, sawAgentPrompt ? { status: "active", completedAt: undefined } : { status: "completed", completedAt: Date.now() });
     } catch (error) {
       const aborted = abortController.signal.aborted;
-      if (aborted) {
-        appendRunChatProcess("Chat stream timed out", `Checking the ${runtimeLabel} session for late activity.`);
+      const transportInterrupted = !aborted && isChatTransportInterruption(error);
+      if (aborted || transportInterrupted) {
+        preserveActiveRun = transportInterrupted;
+        appendRunChatProcess(aborted ? "Chat stream timed out" : "Chat stream interrupted", `Checking the ${runtimeLabel} session for late activity.`);
         recordActiveChatRun?.({
           storageKey: selectedStorageKey,
           agentId: selectedAgent.id,
@@ -1394,15 +1429,20 @@ export function useStatusChatInputController(props: any) {
           startedAt: requestStartedAt,
           updatedAt: Date.now(),
           requestLabel: outgoingLabel,
-          sessionId: currentRuntimeSessionId || undefined,
+          sessionId: currentRuntimeSessionId || localRuntimeSessionId || undefined,
           runId: taskId,
-          status: "stalled",
+          status: aborted ? "stalled" : "active",
         });
         await pollRuntimeSession();
       }
-      if (aborted && recoveredAssistantText.trim()) {
+      if ((aborted || transportInterrupted) && recoveredAssistantText.trim()) {
+        preserveActiveRun = false;
         replacePendingAssistant({ role: "assistant", content: recoveredAssistantText.trim(), surface: "chat" });
         updateTask(taskId, { status: "completed", lastMessage: recoveredAssistantText.trim(), completedAt: Date.now() });
+        return;
+      }
+      if (transportInterrupted) {
+        updateTask(taskId, { status: "active", lastMessage: `Checking the ${runtimeLabel} session for late activity.`, completedAt: undefined });
         return;
       }
       const message = aborted
@@ -1415,7 +1455,7 @@ export function useStatusChatInputController(props: any) {
       updateTask(taskId, { status: "failed", lastMessage: message, completedAt: Date.now() });
     } finally {
       window.clearTimeout(stallTimer);
-      if (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim()) clearActiveChatRun?.(selectedStorageKey);
+      if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey);
       finishChatStream(selectedStorageKey);
     }
   }

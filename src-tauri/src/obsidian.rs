@@ -457,10 +457,24 @@ fn personal_wallet_name(agent_id: &str, agent_name: &str, network: &str) -> Stri
 }
 
 fn is_generic_personal_wallet_name(name: &str) -> bool {
-    matches!(
-        name.trim().to_ascii_lowercase().as_str(),
+    let normalized = name.trim().to_ascii_lowercase();
+    if matches!(
+        normalized.as_str(),
         "my wallet" | "my wallet base" | "my wallet solana" | "my base wallet" | "my solana wallet"
-    )
+    ) {
+        return true;
+    }
+    let Some(rest) = normalized.strip_prefix("my ") else {
+        return false;
+    };
+    let chain = rest
+        .strip_suffix(" wallet")
+        .or_else(|| rest.strip_prefix("wallet "));
+    matches!(
+        chain,
+        Some("base" | "base mainnet" | "base sepolia" | "solana" | "solana mainnet" | "solana devnet" | "robinhood chain" | "robinhood chain testnet")
+    ) || chain
+        .is_some_and(|value| value.strip_prefix("evm ").is_some_and(|suffix| suffix.chars().all(|character| character.is_ascii_digit())))
 }
 
 fn wallet_account_key(wallet: &Value) -> Option<String> {

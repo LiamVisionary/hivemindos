@@ -3,12 +3,13 @@ use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use tauri_plugin_dialog::DialogExt;
+use std::sync::mpsc;
+use tauri_plugin_dialog::{DialogExt, FilePath};
 
 const MAX_EXPORT_BYTES: usize = 256 * 1024;
 
 #[tauri::command]
-pub(crate) fn wallet_secret_export_save(
+pub(crate) async fn wallet_secret_export_save(
     app: tauri::AppHandle,
     filename: String,
     content: String,
@@ -20,14 +21,7 @@ pub(crate) fn wallet_secret_export_save(
         return Err("Wallet secret export is too large to save from the dashboard.".to_string());
     }
 
-    let Some(file_path) = app
-        .dialog()
-        .file()
-        .set_title("Export wallet keys")
-        .set_file_name(safe_export_filename(&filename))
-        .add_filter("Text", &["txt"])
-        .blocking_save_file()
-    else {
+    let Some(file_path) = prompt_wallet_export_path(app, safe_export_filename(&filename)).await? else {
         return Ok(json!({ "ok": false, "cancelled": true }));
     };
     let path = file_path
@@ -44,6 +38,26 @@ pub(crate) fn wallet_secret_export_save(
     }
 
     Ok(json!({ "ok": true, "path": path.to_string_lossy() }))
+}
+
+async fn prompt_wallet_export_path(
+    app: tauri::AppHandle,
+    filename: String,
+) -> Result<Option<FilePath>, String> {
+    let (sender, receiver) = mpsc::channel();
+    app.dialog()
+        .file()
+        .set_title("Export wallet keys")
+        .set_file_name(filename)
+        .add_filter("Text", &["txt"])
+        .save_file(move |file_path| {
+            let _ = sender.send(file_path);
+        });
+
+    tauri::async_runtime::spawn_blocking(move || receiver.recv())
+        .await
+        .map_err(|error| format!("Could not wait for wallet export dialog: {error}"))?
+        .map_err(|_| "Wallet export dialog closed unexpectedly.".to_string())
 }
 
 fn safe_export_filename(filename: &str) -> String {

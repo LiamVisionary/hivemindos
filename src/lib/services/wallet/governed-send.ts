@@ -1,4 +1,4 @@
-import { sendUsdc } from "@/lib/services/wallet/chain-wallet";
+import { sendUsdStable } from "@/lib/services/wallet/chain-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { evaluateSpend, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
@@ -11,7 +11,7 @@ import {
 } from "@/lib/services/wallet/platform-fees";
 
 export type GovernedUsdcSendResult =
-  | { ok: true; signature: string; network: string; platformFee?: PlatformFeeCollection }
+  | { ok: true; signature: string; network: string; assetSymbol: "USDC" | "USDG"; platformFee?: PlatformFeeCollection }
   | { ok: false; status: "not_found" | "blocked" | "pending_approval" | "error"; error: string; approval?: unknown };
 
 export async function quoteGovernedUsdcSendFee(input: {
@@ -22,7 +22,7 @@ export async function quoteGovernedUsdcSendFee(input: {
 }
 
 /**
- * Execute a governed on-chain USDC transfer. This is the single source of truth
+ * Execute a governed on-chain dollar-stable transfer. This is the single source of truth
  * shared by POST /api/wallet/send and the chat-runtime send interceptor, so both
  * apply the same governance (company kill switch, cumulative budgets, approval
  * escalation) and ledger accounting. Callers are responsible for the explicit
@@ -52,11 +52,23 @@ export async function executeGovernedUsdcSend(input: {
       wallet: governance.wallet,
       agentName: governance.agentName,
       kind: "send",
-      asset: "USDC",
+      asset: stableAssetSymbol(stored.info.network),
       amountUsd,
       target: toAddress,
       approvalToken: input.approvalToken,
       approvalThresholdSatisfied: input.approvalThresholdSatisfied,
+      explanation: {
+        summary: "This is an on-chain stablecoin transfer from a local agent wallet.",
+        whyNow: "The transfer amount crossed a wallet governance rule and was paused before signing.",
+        impact: `Approving signs and sends $${amountUsd.toFixed(2)} to the recipient address. Rejecting keeps the transfer blocked.`,
+        requestedAction: "Approve only if this recipient and amount are expected. Reject if the agent should revise the recipient, amount, or reason.",
+        evidence: [
+          `Recipient: ${toAddress}`,
+          `Network: ${stored.info.network}`,
+        ],
+        missingContext: [],
+        source: "Governed wallet send",
+      },
     });
     if (decision.decision === "block") {
       return { ok: false, status: "blocked", error: decision.reason };
@@ -74,7 +86,7 @@ export async function executeGovernedUsdcSend(input: {
     amountUsd,
   });
 
-  const result = await sendUsdc({
+  const result = await sendUsdStable({
     network: stored.info.network,
     secret: stored.secret,
     fromAddress: stored.info.address,
@@ -94,12 +106,16 @@ export async function executeGovernedUsdcSend(input: {
     agentId,
     companyId,
     kind: "send",
-    asset: "USDC",
+    asset: result.assetSymbol,
     amountUsd,
     target: shortTarget(toAddress),
     status: "executed",
     approvalId: grantId,
     transactionHash: result.signature,
   }).catch(() => {});
-  return { ok: true, signature: result.signature, network: stored.info.network, platformFee };
+  return { ok: true, signature: result.signature, network: stored.info.network, assetSymbol: result.assetSymbol, platformFee };
+}
+
+function stableAssetSymbol(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
 }

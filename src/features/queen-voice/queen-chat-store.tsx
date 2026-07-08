@@ -3,8 +3,9 @@
 /* queen-chat-store.tsx — the single shared Queen conversation.
    Both the typed "Message the hive" pill and the voice overlay read/write this
    one turn history, so text and voice are one continuous chat. Typed messages
-   run through `runQueenCommand` (= Bee Pilot's runVoiceCommand), which executes
-   the same Cmd+B dashboard actions AND returns the Queen's spoken/text reply. */
+   go through the Queen text-chat route and selected Queen brain; Bee Pilot is
+   used only when Queen explicitly calls the drive_dashboard tool or when no
+   chat brain is reachable for a simple dashboard navigation fallback. */
 
 import * as React from "react";
 import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
@@ -64,6 +65,11 @@ type RunQueenCommand = (
   opts?: { onModalOpen?: () => void; screenContext?: DashboardScreenContext },
 ) => Promise<string>;
 
+type QueenChatSendOptions = {
+  screenContext?: DashboardScreenContext;
+  suppressWalletIntents?: boolean;
+};
+
 type QueenChatContextValue = {
   turns: QueenChatTurn[];
   /** True when the chat history above the input is collapsed. Lifted here so
@@ -75,7 +81,10 @@ type QueenChatContextValue = {
   /** True while the app-wide chat pill is hovered or its input is focused. */
   composerActive: boolean;
   setComposerActive: (active: boolean) => void;
-  /** Effective visibility: manual pin OR hover/focus OR recent message hold. */
+  /** True while the transcript bubble itself is hovered or text is being selected. */
+  transcriptInteractionActive: boolean;
+  setTranscriptInteractionActive: (active: boolean) => void;
+  /** Effective visibility: manual pin, user interaction, active thinking, or recent message hold. */
   transcriptExpanded: boolean;
   /** Append a turn; returns its id. Pass an explicit id for the voice bridge. */
   appendTurn: (turn: Omit<QueenChatTurn, "id"> & { id?: string }) => string;
@@ -85,11 +94,24 @@ type QueenChatContextValue = {
   removeTurn: (id: string) => void;
   clear: () => void;
   /** Typed entry point: append the user turn, run the Queen, fill the reply. */
-  sendText: (text: string, opts?: { screenContext?: DashboardScreenContext }) => Promise<void>;
+  sendText: (text: string, opts?: QueenChatSendOptions) => Promise<void>;
 };
 
 const QueenChatContext = React.createContext<QueenChatContextValue | null>(null);
+const QUEEN_TEXT_CHAT_API_PATH = "/api/queen-bee/chat";
 const QUEEN_CHAT_RECENT_MESSAGE_HOLD_MS = 7000;
+
+function isAutoOpenAgentTurn(turn: QueenChatTurn): boolean {
+  return turn.who === "queen" && Boolean(turn.live || turn.pending || turn.working);
+}
+
+function findAutoOpenDismissalTurnId(turns: QueenChatTurn[]): string | null {
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index];
+    if (isAutoOpenAgentTurn(turn)) return turn.id;
+  }
+  return turns.at(-1)?.id ?? null;
+}
 
 export function QueenChatProvider({
   runQueenCommand,
@@ -107,8 +129,9 @@ export function QueenChatProvider({
   // starts collapsed; hover/focus/recent turns can expand it without pinning it.
   const [historyMinimized, setHistoryMinimizedState] = React.useState(true);
   const [composerActive, setComposerActive] = React.useState(false);
+  const [transcriptInteractionActive, setTranscriptInteractionActive] = React.useState(false);
   const [recentMessageOpen, setRecentMessageOpen] = React.useState(false);
-  const dismissedAutoOpenTurnIdRef = React.useRef<string | null>(null);
+  const [dismissedAutoOpenTurnId, setDismissedAutoOpenTurnId] = React.useState<string | null>(null);
   const lastActivitySignatureRef = React.useRef("");
   const recentOpenTimerRef = React.useRef<number | null>(null);
   const recentCloseTimerRef = React.useRef<number | null>(null);
@@ -144,10 +167,10 @@ export function QueenChatProvider({
 
   const setHistoryMinimized = React.useCallback((minimized: boolean) => {
     if (minimized) {
-      dismissedAutoOpenTurnIdRef.current = turnsRef.current.at(-1)?.id ?? null;
+      setDismissedAutoOpenTurnId(findAutoOpenDismissalTurnId(turnsRef.current));
       clearRecentMessageHold();
     } else {
-      dismissedAutoOpenTurnIdRef.current = null;
+      setDismissedAutoOpenTurnId(null);
     }
     setHistoryMinimizedState(minimized);
   }, [clearRecentMessageHold]);
@@ -185,6 +208,7 @@ export function QueenChatProvider({
 
   const clear = React.useCallback(() => {
     setTurns([]);
+    setDismissedAutoOpenTurnId(null);
     clearRecentMessageHold();
   }, [clearRecentMessageHold]);
 
@@ -205,16 +229,12 @@ export function QueenChatProvider({
   React.useEffect(() => {
     if (!latestTurn || !recentActivitySignature) {
       lastActivitySignatureRef.current = "";
-      dismissedAutoOpenTurnIdRef.current = null;
       clearRecentMessageTimers();
       return undefined;
     }
     if (lastActivitySignatureRef.current === recentActivitySignature) return undefined;
     lastActivitySignatureRef.current = recentActivitySignature;
-    if (dismissedAutoOpenTurnIdRef.current && dismissedAutoOpenTurnIdRef.current !== latestTurn.id) {
-      dismissedAutoOpenTurnIdRef.current = null;
-    }
-    if (dismissedAutoOpenTurnIdRef.current === latestTurn.id) return undefined;
+    if (dismissedAutoOpenTurnId === latestTurn.id) return undefined;
 
     clearRecentMessageTimers();
     const openTimer = window.setTimeout(() => {
@@ -237,7 +257,7 @@ export function QueenChatProvider({
         recentCloseTimerRef.current = null;
       }
     };
-  }, [latestTurn, recentActivitySignature, clearRecentMessageTimers]);
+  }, [latestTurn, recentActivitySignature, dismissedAutoOpenTurnId, clearRecentMessageTimers]);
 
   // Execute one tool the Queen decided to call. drive_dashboard runs the
   // client-side Bee Pilot planner; the rest hit the existing voice-route actions.
@@ -245,6 +265,7 @@ export function QueenChatProvider({
     name: string,
     args: Record<string, unknown>,
     screenContext?: DashboardScreenContext,
+    suppressWalletIntents = false,
   ) => {
     const toolStartedAt = Date.now();
     const finishTool = (result: string, extra: Record<string, unknown> = {}) => {
@@ -313,6 +334,7 @@ export function QueenChatProvider({
         const data = await post({
           action: "agent-turn",
           message: withScreenContext(message, screenContext),
+          suppressWalletIntents,
           // Structured acting-wallet source so the executing agent defaults
           // sends/swaps/trades to the user's selected wallet (the prose context
           // only truncates the address; this carries the full identity).
@@ -369,6 +391,7 @@ export function QueenChatProvider({
     trimmed: string,
     queenId: string,
     screenContext?: DashboardScreenContext,
+    suppressWalletIntents = false,
   ) => {
     const messages = messagesRef.current;
     if (messages.length > 24) messages.splice(0, messages.length - 24);
@@ -457,13 +480,14 @@ export function QueenChatProvider({
       brainLabel?: string;
       brainFallback?: { label?: string; error?: string };
     } | null> => {
-      const res = await fetch("/api/queen-bee/voice", {
+      const res = await fetch(QUEEN_TEXT_CHAT_API_PATH, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           action: "chat-turn-stream",
           messages,
           screenContext,
+          suppressWalletIntents,
           // Budget spent: the server omits the tools so the brain must answer
           // in prose (tool-happy brains otherwise loop until the cap).
           ...(forceAnswer ? { toolChoice: "none" } : {}),
@@ -503,13 +527,14 @@ export function QueenChatProvider({
     };
 
     const blockingTurn = async (forceAnswer: boolean) => {
-      const res = await fetch("/api/queen-bee/voice", {
+      const res = await fetch(QUEEN_TEXT_CHAT_API_PATH, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           action: "chat-turn",
           messages,
           screenContext,
+          suppressWalletIntents,
           ...(forceAnswer ? { toolChoice: "none" } : {}),
         }),
       });
@@ -585,7 +610,7 @@ export function QueenChatProvider({
               ...(data.brainLabel ? { brain: data.brainLabel } : {}),
               ...asBrainFallback(data.brainFallback),
             });
-            const result = await executeQueenTool(tc.name, parsed, screenContext);
+            const result = await executeQueenTool(tc.name, parsed, screenContext, suppressWalletIntents);
             messages.push({ role: "tool", tool_call_id: tc.id, content: result });
             if (tc.name === "drive_dashboard" && isPlainWorkBoardNavigationCommand(String(parsed.command ?? trimmed))) {
               const reply = String(result || "").trim() || "Opened Work.";
@@ -636,7 +661,7 @@ export function QueenChatProvider({
   }, [updateTurn, executeQueenTool]);
 
   const sendText = React.useCallback(
-    async (text: string, opts?: { screenContext?: DashboardScreenContext }) => {
+    async (text: string, opts?: QueenChatSendOptions) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       appendTurn({ who: "you", text: trimmed, source: "text" });
@@ -644,14 +669,27 @@ export function QueenChatProvider({
       // Chain so overlapping sends don't interleave the OpenAI message log.
       const task = sendChainRef.current
         .catch(() => {})
-        .then(() => runQueenTurn(trimmed, queenId, opts?.screenContext));
+        .then(() => runQueenTurn(trimmed, queenId, opts?.screenContext, opts?.suppressWalletIntents === true));
       sendChainRef.current = task;
       return task;
     },
     [appendTurn, runQueenTurn],
   );
 
-  const transcriptExpanded = !historyMinimized || composerActive || recentMessageOpen;
+  const activeAgentTurn = React.useMemo(() => {
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      const turn = turns[index];
+      if (isAutoOpenAgentTurn(turn)) return turn;
+    }
+    return undefined;
+  }, [turns]);
+  const agentActivityOpen = Boolean(activeAgentTurn && dismissedAutoOpenTurnId !== activeAgentTurn.id);
+  const transcriptExpanded =
+    !historyMinimized
+    || composerActive
+    || transcriptInteractionActive
+    || recentMessageOpen
+    || agentActivityOpen;
 
   const value = React.useMemo<QueenChatContextValue>(
     () => ({
@@ -660,6 +698,8 @@ export function QueenChatProvider({
       setHistoryMinimized,
       composerActive,
       setComposerActive,
+      transcriptInteractionActive,
+      setTranscriptInteractionActive,
       transcriptExpanded,
       appendTurn,
       updateTurn,
@@ -673,6 +713,7 @@ export function QueenChatProvider({
       historyMinimized,
       setHistoryMinimized,
       composerActive,
+      transcriptInteractionActive,
       transcriptExpanded,
       appendTurn,
       updateTurn,

@@ -292,8 +292,8 @@ function isPublicX402DraftText(text: string) {
 function parsePublicX402Draft(text: string): PublicX402Draft | null {
   const url = sanitizePrivateX402Url(text.match(/https?:\/\/[^\s<>"'`)\]]+/i)?.[0]);
   if (!url) return null;
-  const maxMatch = text.match(/\bmax(?:imum)?(?:\s+(?:cap|spend|payment|of))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i)
-    ?? text.match(/\bcap(?:ped)?(?:\s+at)?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i);
+  const maxMatch = text.match(/\bmax(?:imum)?(?:\s+(?:cap|spend|payment|of))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USDG|USD)?/i)
+    ?? text.match(/\bcap(?:ped)?(?:\s+at)?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USDG|USD)?/i);
   return {
     url,
     method: /\bPOST\b/i.test(text) ? "POST" : "GET",
@@ -307,8 +307,8 @@ function parsePublicX402Request(text: string, wallet?: AgentWalletConfig): Publi
   if (wallet?.provider === "veil" && wallet.veilAutoPrivateX402 !== false) return null;
   const url = sanitizePrivateX402Url(text.match(/https?:\/\/[^\s<>"'`)\]]+/i)?.[0]);
   if (!url) return null;
-  const maxMatch = text.match(/\bmax(?:imum)?(?:\s+(?:cap|spend|payment|of))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i)
-    ?? text.match(/\bcap(?:ped)?(?:\s+at)?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i);
+  const maxMatch = text.match(/\bmax(?:imum)?(?:\s+(?:cap|spend|payment|of))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USDG|USD)?/i)
+    ?? text.match(/\bcap(?:ped)?(?:\s+at)?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USDG|USD)?/i);
   const maxPayment = maxMatch?.[1] ?? formatMoney(Math.max(0, Number(wallet?.maxPaymentUsd) || 0.5));
   return {
     url,
@@ -344,8 +344,9 @@ async function validatePrivateX402(wallet: AgentWalletConfig | undefined, draft:
   if (executing && !wallet.enabled) return "Wallet spending is off for this agent. Enable Spend on before executing private x402 payments.";
   if (!/^https?:\/\//i.test(draft.url)) return "Private x402 requires a valid HTTP(S) endpoint URL.";
   const maxPayment = Number(draft.maxPayment);
-  if (!Number.isFinite(maxPayment) || maxPayment <= 0) return "Max payment must be a positive USDC value.";
-  if (maxPayment > wallet.maxPaymentUsd) return `Max payment exceeds this agent's USDC spend cap ($${wallet.maxPaymentUsd.toFixed(2)}).`;
+  const asset = stableAssetForNetwork(wallet.network);
+  if (!Number.isFinite(maxPayment) || maxPayment <= 0) return `Max payment must be a positive ${asset} value.`;
+  if (maxPayment > wallet.maxPaymentUsd) return `Max payment exceeds this agent's ${asset} spend cap ($${wallet.maxPaymentUsd.toFixed(2)}).`;
   if (!await veilEnvValue("VEIL_KEY")) return "VEIL_KEY is not configured. Run Veil setup before private x402 payments.";
   return "";
 }
@@ -370,12 +371,13 @@ function publicX402DraftMessage(draft: PublicX402Draft, wallet: AgentWalletConfi
       "Fix this blocker, then send the payment request again.",
     ].join("\n");
   }
+  const asset = stableAssetForNetwork(wallet?.network || "");
   return [
     "**Public x402 ready**",
     "",
     `Endpoint \`${draft.url}\``,
-    `Max cap **${draft.maxPayment} USDC**`,
-    "Network `base`",
+    `Max cap **${draft.maxPayment} ${asset}**`,
+    `Network **${publicX402NetworkLabel(wallet?.network || "")}**`,
     "",
     wallet?.enabled
       ? "Reply `confirm` to pay."
@@ -464,7 +466,7 @@ function privateX402ExecutionSse(input: {
         await sendTool(
           RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
           "Validate spend policy",
-          input.wallet ? `Spend on; cap ${formatMoney(input.wallet.maxPaymentUsd)} USDC; max ${input.draft.maxPayment} USDC.` : "Spend policy already validated.",
+          input.wallet ? `Spend on; cap ${formatMoney(input.wallet.maxPaymentUsd)} ${stableAssetForNetwork(input.wallet.network)}; max ${input.draft.maxPayment} ${stableAssetForNetwork(input.wallet.network)}.` : "Spend policy already validated.",
           "completed",
         );
         await sendTool(
@@ -610,7 +612,7 @@ function miroSharkX402ExecutionSse(input: {
         await sendTool(
           RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
           "Paying MiroShark x402 endpoint",
-          `Cap ${formatMoney(Math.min(input.wallet.maxPaymentUsd, Math.max(MIROSHARK_X402_SIMULATION_PRICE_USD, input.draft.maxPaymentUsd)))} USDC · ${input.draft.seedKind}`,
+          `Cap ${formatMoney(Math.min(input.wallet.maxPaymentUsd, Math.max(MIROSHARK_X402_SIMULATION_PRICE_USD, input.draft.maxPaymentUsd)))} ${stableAssetForNetwork(input.wallet.network)} · ${input.draft.seedKind}`,
         );
         const paidStartedAt = Date.now();
         const paidRun = await executeMiroSharkChatRun(input.profile.id, input.wallet, input.draft);
@@ -721,7 +723,7 @@ function publicX402ExecutionSse(input: {
         await sendTool(
           RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS,
           "Validate spend policy",
-          `Spend ${policy.enabled ? "on" : "off"}; cap ${formatMoney(policy.maxPaymentUsd)} USDC; public x402.`,
+          `Spend ${policy.enabled ? "on" : "off"}; cap ${formatMoney(policy.maxPaymentUsd)} ${stableAssetForNetwork(policy.network)}; public x402.`,
           "completed",
         );
         await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, "Execute public x402 payment", "Signing from the local wallet vault.", "running");
@@ -735,6 +737,19 @@ function publicX402ExecutionSse(input: {
           method: input.draft.method,
           policy,
           confirmation: "PAY_X402",
+          approvalContext: {
+            summary: "This is a public x402 paid API call requested during an agent chat turn.",
+            whyNow: "The agent prepared a paid x402 draft and the wallet governance policy requires review before spending.",
+            impact: "Approving lets the runtime retry the paid HTTP call. Rejecting keeps this chat turn from making the paid request.",
+            requestedAction: "Approve only if this public URL, method, and maximum payment match what you asked the agent to do.",
+            evidence: [
+              `URL: ${input.draft.url}`,
+              `Method: ${input.draft.method}`,
+              `Approved max: ${formatMoney(policy.maxPaymentUsd)}`,
+              `Wallet: ${input.profile.id}`,
+            ],
+            source: "Agent runtime public x402",
+          },
         });
         const message = publicX402ResultMessage(result, Date.now() - startedAt);
         await recordRouteTelemetry(input.request, "agent_runtime.wallet.public_x402.completed", {
@@ -798,8 +813,9 @@ function publicX402Policy(wallet: AgentWalletConfig, storedNetwork: string, appr
 
 function publicX402ResultMessage(result: X402FetchResult, executionMs: number) {
   const body = summarizePaidContent(result.bodyJson ?? result.bodyPreview);
+  const asset = stableAssetForNetwork(result.network);
   return [
-    `**Public x402 complete** · **${formatMoney(result.amountUsd)} USDC**`,
+    `**Public x402 complete** · **${formatMoney(result.amountUsd)} ${asset}**`,
     "",
     `Endpoint \`${result.url}\``,
     result.paid ? "Payment settled from the local wallet." : "No payment was required.",
@@ -814,6 +830,17 @@ function publicX402ResultMessage(result: X402FetchResult, executionMs: number) {
 
 function publicX402ErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function stableAssetForNetwork(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
+}
+
+function publicX402NetworkLabel(network: string): string {
+  if (network === "eip155:4663") return "Robinhood Chain";
+  if (network === "eip155:84532") return "Base Sepolia";
+  if (network.startsWith("solana:")) return "Solana";
+  return "Base";
 }
 
 function privateX402ResultMessage(result: VeilMcpX402ExecutionResult, draft: PrivateX402Draft, executionMs: number) {
