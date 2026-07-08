@@ -5,6 +5,41 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-09 02:34:34 PST+0800 - HivemindOS v0.4.1 latest build
+  - Status: Pushed
+  - Areas changed: `package.json`, `src-tauri/{tauri.conf.json,Cargo.toml,Cargo.lock}`, `.github/workflows/tauri-cross-platform-release.yml`, Fleet graph surfaces, Queen Bee chat surfaces, HivemindOS model setup, and related tests.
+  - Summary: HivemindOS v0.4.1 rolls the latest Fleet graph polish, Queen Bee text-chat routing, and Free Scout allowance-meter fixes into a fresh notarized Apple Silicon, Windows x64, and Linux x64 desktop release. Intel Mac remains excluded.
+  - Verification: `node scripts/test-wallet-paid-models.mjs`, `node scripts/test-queen-chat-stream.mjs`, focused eslint on touched Fleet/Queen/model files and tests, full `./node_modules/.bin/tsc --noEmit --pretty false --skipLibCheck`, `node scripts/check-tauri-command-acl.mjs`, `node scripts/test-tauri-release-mode.mjs`, workflow YAML parse, focused version/workflow assertions, dummy updater manifest generation for `darwin-aarch64`/`windows-x86_64`/`linux-x86_64`, focused `git diff --check`, and touched-file line counts passed. `node scripts/check-file-sizes.mjs` remains red on existing oversized files outside this release diff.
+  - Intended commit message: `release: ship v0.4.1 latest changes`
+
+- 2026-07-09 02:34:22 PST+0800 - Fleet graph left feed becomes bounded and scrollable
+  - Status: Pushed
+  - Areas changed: `src/components/fleet/{orbital-graph.tsx,orbital-graph.module.css}`, `CHANGELOG.md`
+  - Summary: The Fleet graph's left task channel now sits in the left HUD rail directly below the selected machine's node status and resource bars instead of floating as a bottom-anchored block that can grow through the graph. Long task titles wrap inside a bounded, keyboard-focusable scroll region, so the left side no longer stretches over the whole screen while the mesh-link status remains pinned below it.
+  - Verification: Focused `./node_modules/.bin/eslint src/components/fleet/orbital-graph.tsx --max-warnings=0` passed; filtered `./node_modules/.bin/tsc --noEmit --pretty false --skipLibCheck` output had no diagnostics for `src/components/fleet/orbital-graph*`; focused `git diff --check -- src/components/fleet/orbital-graph.tsx src/components/fleet/orbital-graph.module.css` passed; touched graph files stayed under 1500 lines. The fix was traced from the user screenshot and the real `OrbitalGraph` render tree; no unlocked browser visual smoke was available because the running `localhost:5021` dashboard shows the device-token lock.
+  - Intended commit message: `fleet: bound graph task feed`
+
+- 2026-07-09 02:29:27 PST+0800 - Fleet graph gains Hive honey colors
+  - Status: Pushed
+  - Areas changed: `src/components/fleet/{orbital-graph.tsx,orbital-graph.module.css,graph-palette-toggle.tsx,FleetView.tsx}`, `src/components/fleet-hive/FleetHiveView.tsx`, `src/features/dashboard/views/AgentsPanel.tsx`, `CHANGELOG.md`
+  - Summary: The Fleet graph view now has a graph-only color switch with **Classic** and **Hive** options. Classic preserves the existing blue orbital graph, while Hive repaints the animated sphere, rings, markers, radar, HUD panels, clock, task feed, and selected-node telemetry in the Fleet Hive dark graphite and golden honey palette. The option is available in both the default Hive layout's graph mode and the older Classic fleet graph tab, and the app-wide "Message the hive" pill follows the selected graph palette so the honey mode reads as one cohesive surface.
+  - Verification: Focused `./node_modules/.bin/eslint src/components/fleet/orbital-graph.tsx src/components/fleet/graph-palette-toggle.tsx src/components/fleet/FleetView.tsx src/components/fleet-hive/FleetHiveView.tsx src/features/dashboard/views/AgentsPanel.tsx --max-warnings=0` passed; filtered `./node_modules/.bin/tsc --noEmit --pretty false --skipLibCheck` output had no diagnostics for the touched files; focused `git diff --check` passed for tracked touched files; touched code/CSS file line counts stayed under 1500. The existing dev server on `http://localhost:5021/?view=agents` returned HTTP 200, but it rendered the dashboard token lock, so the graph toggle was not live-clicked in the browser.
+  - Intended commit message: `fleet: add hive colors to graph view`
+
+- 2026-07-09 02:09:14 PST+0800 - Queen Bee text chat uses the voice-quality conversation lane
+  - Status: Pushed
+  - Areas changed: `src/lib/services/queen-bee/queen-brain.ts`, `src/features/queen-voice/queen-chat-store.tsx`, `scripts/test-queen-chat-stream.mjs`, `CHANGELOG.md`
+  - Summary: The shared “Message the hive” composer now starts every typed Queen Bee turn through the same `/api/queen-bee/voice` `converse-stream` conversation path that powers the concise voice-chat response style, not just bare latest-status asks. Closed text chat gets the voice-quality synthesis without playing audio, the voice overlay still speaks replies when it is open, and the legacy `/api/queen-bee/chat` typed route remains as a fallback if the voice-quality lane fails. Bare latest-status asks are still recognized as hive brief intents so fallback/tool paths do not leak raw context scaffolding into Codex.
+  - Verification: Baseline `node scripts/test-queen-chat-stream.mjs` passed before edits; post-change `node scripts/test-queen-chat-stream.mjs`, focused `./node_modules/.bin/eslint --quiet` on the touched Queen chat files/test, full `./node_modules/.bin/tsc --noEmit --pretty false --skipLibCheck`, focused `git diff --check`, and touched-file line counts passed. No live browser smoke was run.
+  - Intended commit message: `queen: unify text chat on voice conversation lane`
+
+- 2026-07-09 01:36:44 PST (+0800) - Free Scout allowance meter stays visible at zero
+  - Status: Pushed
+  - Areas changed: `src/features/dashboard/views/chat/{GuidedHivemindosModelsSetup.tsx,hivemindos-free-meter.ts}`, `scripts/test-wallet-paid-models.mjs`, `CHANGELOG.md`
+  - Summary: The HivemindOS model provider now keeps the Swarm Sovereign Scout free-allowance usage bar visible when the last observed daily allowance snapshot is fully exhausted. A 0-request/0-token snapshot now renders as an exhausted 0% meter instead of hiding the row's usage meter because there is no positive high-water denominator yet.
+  - Verification: `node scripts/test-wallet-paid-models.mjs`, focused `./node_modules/.bin/eslint --quiet` on touched source/test files, full `./node_modules/.bin/tsc --noEmit --pretty false --skipLibCheck`, focused `git diff --check`, and touched-file line counts passed. Local port 5020 was not answering, so no live browser/API smoke was run against the managed dev server.
+  - Intended commit message: `models: keep free scout allowance meter visible`
+
 - 2026-07-09 01:12:23 PST+0800 - HivemindOS v0.4 release train
   - Status: Pushed
   - Areas changed: `package.json`, `src-tauri/{tauri.conf.json,Cargo.toml,Cargo.lock}`, `.github/workflows/tauri-cross-platform-release.yml`, `CHANGELOG.md`

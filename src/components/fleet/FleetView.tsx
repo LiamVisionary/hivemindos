@@ -11,7 +11,8 @@ import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
 import { MapView } from "./map-view";
 import { NetworkGraph } from "./network-graph";
-import { OrbitalGraph } from "./orbital-graph";
+import { OrbitalGraph, type OrbitalGraphPalette } from "./orbital-graph";
+import { GraphPaletteToggle } from "./graph-palette-toggle";
 import { FleetConstellationLoading, FleetDispatchLoading, FleetRosterLoading, FleetScanOverlay } from "./fleet-loading";
 import { Roster, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
 import { AeonDeleteModal, isAeonAgent, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult } from "./aeon-delete-modal";
@@ -155,6 +156,7 @@ export function FleetView({
   const [selected, setSelected] = React.useState<string>(() => preferredInitialMachineId(machines));
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [view, setView] = React.useState<ViewMode>("hive");
+  const [graphPalette, setGraphPalette] = React.useState<OrbitalGraphPalette>("classic");
   const [dispatchIdx, setDispatchIdx] = React.useState(0);
   const [aeonDeleteTarget, setAeonDeleteTarget] = React.useState<{ machine: FleetMachine; agent: FleetAgent } | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
@@ -572,26 +574,29 @@ export function FleetView({
               ) : (
                 <div aria-hidden="true" />
               )}
-              <div className="flex" style={{ gap: 6 }}>
-                {(["hive", "graph", "map", "list"] as ViewMode[]).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setView(v)}
-                    aria-pressed={view === v}
-                    data-bee={`fleet-view-${v}`}
-                    className="uppercase cursor-pointer"
-                    style={{
-                      fontFamily: "var(--f-mono)", fontSize: 10,
-                      padding: "5px 10px", borderRadius: 9999,
-                      background: view === v ? "rgba(45,212,191,0.12)" : "transparent",
-                      color: view === v ? "var(--foreground)" : "var(--muted)",
-                      border: `1px solid ${view === v ? "rgba(94,234,212,0.42)" : "rgba(148,163,184,0.18)"}`,
-                      letterSpacing: 0.1,
-                    }}
-                  >
-                    {v}
-                  </button>
-                ))}
+              <div className="flex flex-wrap justify-end" style={{ gap: 6 }}>
+                {view === "graph" ? <GraphPaletteToggle palette={graphPalette} onChoose={setGraphPalette} /> : null}
+                <div className="flex" style={{ gap: 6 }}>
+                  {(["hive", "graph", "map", "list"] as ViewMode[]).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setView(v)}
+                      aria-pressed={view === v}
+                      data-bee={`fleet-view-${v}`}
+                      className="uppercase cursor-pointer"
+                      style={{
+                        fontFamily: "var(--f-mono)", fontSize: 10,
+                        padding: "5px 10px", borderRadius: 9999,
+                        background: view === v ? "rgba(45,212,191,0.12)" : "transparent",
+                        color: view === v ? "var(--foreground)" : "var(--muted)",
+                        border: `1px solid ${view === v ? "rgba(94,234,212,0.42)" : "rgba(148,163,184,0.18)"}`,
+                        letterSpacing: 0.1,
+                      }}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -644,6 +649,7 @@ export function FleetView({
                   alerts={displayAlerts}
                   tasks={displayTasks}
                   ticker={displayTicker}
+                  palette={graphPalette}
                 />
               )}
               {!initialLoading && view === "map" && (

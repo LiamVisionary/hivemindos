@@ -1,17 +1,97 @@
 /* src/components/fleet/orbital-graph.module.css
-   Deep-field "orbital" fleet graph: particle-sphere core + HUD panels.
-   Intentionally blue-monochrome, unlike the teal/gold hex views. */
+   Deep-field "orbital" fleet graph: particle-sphere core + HUD panels. */
 
 .root {
+  --orb-fg: #9fc1ee;
+  --orb-bg:
+    radial-gradient(120% 95% at 50% 45%, rgba(10, 22, 52, 0.92), rgba(3, 7, 18, 0.98));
+  --orb-scanline: rgba(140, 190, 255, 0.025);
+  --orb-cap: #6f8fc4;
+  --orb-title-accent: #a9c9f5;
+  --orb-value: #cfe4ff;
+  --orb-bar-bg: rgba(110, 160, 230, 0.16);
+  --orb-bar-fill: linear-gradient(90deg, rgba(120, 180, 255, 0.55), rgba(170, 215, 255, 0.95));
+  --orb-marker: #8fb4e8;
+  --orb-marker-border: rgba(140, 195, 255, 0.75);
+  --orb-marker-bg: rgba(70, 130, 235, 0.25);
+  --orb-marker-hover-bg: rgba(140, 195, 255, 0.55);
+  --orb-marker-selected-bg: rgba(190, 225, 255, 0.95);
+  --orb-marker-selected-shadow: rgba(150, 200, 255, 0.85);
+  --orb-marker-selected: #e7f2ff;
+  --orb-radar-border: rgba(120, 175, 255, 0.35);
+  --orb-radar-bg: radial-gradient(circle, rgba(40, 90, 200, 0.16), rgba(8, 18, 44, 0.55));
+  --orb-radar-ring: rgba(120, 175, 255, 0.18);
+  --orb-radar-sweep: conic-gradient(from 0deg, rgba(130, 190, 255, 0.45), transparent 70deg);
+  --orb-radar-dot: #9fd2ff;
+  --orb-radar-dot-shadow: rgba(150, 205, 255, 0.9);
+  --orb-log: #7d9fd2;
+  --orb-primary-border: rgba(130, 185, 255, 0.32);
+  --orb-primary-bg: rgba(8, 16, 38, 0.78);
+  --orb-primary-shadow: rgba(50, 110, 230, 0.18);
+  --orb-primary-link-border: rgba(130, 185, 255, 0.2);
+  --orb-big-stat: #eaf4ff;
+  --orb-big-stat-shadow: rgba(140, 195, 255, 0.55);
+  --orb-small-stat: #b9d6fb;
+  --orb-agent-dot-border: rgba(150, 200, 255, 0.6);
+  --orb-agent-dot-working: rgba(160, 215, 255, 0.95);
+  --orb-agent-dot-failed: rgba(251, 113, 133, 0.85);
+  --orb-agent-dot-idle: rgba(90, 130, 200, 0.35);
+  --orb-diagnostic-time: #5d7eb4;
+  --orb-task-doing: #8fe6c0;
+  --orb-task-blocked: #ffb38a;
+  --orb-task-done: #5d7eb4;
+  --orb-task-queued: #8fb7ff;
   position: absolute;
   inset: 0;
   overflow: hidden;
   container-type: inline-size;
   container-name: orbital;
   font-family: var(--f-mono);
-  color: #9fc1ee;
-  background:
-    radial-gradient(120% 95% at 50% 45%, rgba(10, 22, 52, 0.92), rgba(3, 7, 18, 0.98));
+  color: var(--orb-fg);
+  background: var(--orb-bg);
+}
+
+.hivePalette {
+  --orb-fg: #d7c7a4;
+  --orb-bg:
+    radial-gradient(110% 90% at 50% 44%, rgba(50, 35, 14, 0.88), rgba(12, 13, 17, 0.98)),
+    linear-gradient(180deg, #0c0d11 0%, #090a0d 100%);
+  --orb-scanline: rgba(231, 180, 92, 0.028);
+  --orb-cap: #8f7b54;
+  --orb-title-accent: #f0c879;
+  --orb-value: #f3f0e9;
+  --orb-bar-bg: rgba(231, 180, 92, 0.14);
+  --orb-bar-fill: linear-gradient(90deg, rgba(231, 180, 92, 0.46), rgba(240, 200, 121, 0.96));
+  --orb-marker: #c6ad78;
+  --orb-marker-border: rgba(231, 180, 92, 0.76);
+  --orb-marker-bg: rgba(231, 180, 92, 0.18);
+  --orb-marker-hover-bg: rgba(231, 180, 92, 0.46);
+  --orb-marker-selected-bg: rgba(240, 200, 121, 0.95);
+  --orb-marker-selected-shadow: rgba(231, 180, 92, 0.82);
+  --orb-marker-selected: #f3f0e9;
+  --orb-radar-border: rgba(231, 180, 92, 0.34);
+  --orb-radar-bg: radial-gradient(circle, rgba(231, 180, 92, 0.14), rgba(20, 22, 28, 0.72));
+  --orb-radar-ring: rgba(231, 180, 92, 0.16);
+  --orb-radar-sweep: conic-gradient(from 0deg, rgba(240, 200, 121, 0.42), transparent 70deg);
+  --orb-radar-dot: #f0c879;
+  --orb-radar-dot-shadow: rgba(231, 180, 92, 0.9);
+  --orb-log: #9b8c68;
+  --orb-primary-border: rgba(231, 180, 92, 0.32);
+  --orb-primary-bg: rgba(20, 22, 28, 0.82);
+  --orb-primary-shadow: rgba(231, 180, 92, 0.17);
+  --orb-primary-link-border: rgba(231, 180, 92, 0.2);
+  --orb-big-stat: #f3f0e9;
+  --orb-big-stat-shadow: rgba(231, 180, 92, 0.54);
+  --orb-small-stat: #e7b45c;
+  --orb-agent-dot-border: rgba(231, 180, 92, 0.58);
+  --orb-agent-dot-working: rgba(240, 200, 121, 0.95);
+  --orb-agent-dot-failed: rgba(229, 142, 133, 0.86);
+  --orb-agent-dot-idle: rgba(128, 105, 62, 0.42);
+  --orb-diagnostic-time: #7e6b45;
+  --orb-task-doing: #f0c879;
+  --orb-task-blocked: #e58e85;
+  --orb-task-done: #7e6b45;
+  --orb-task-queued: #d8bd78;
 }
 
 .canvas {
@@ -27,8 +107,8 @@
   pointer-events: none;
   background: repeating-linear-gradient(
     180deg,
-    rgba(140, 190, 255, 0.025) 0px,
-    rgba(140, 190, 255, 0.025) 1px,
+    var(--orb-scanline) 0px,
+    var(--orb-scanline) 1px,
     transparent 1px,
     transparent 4px
   );
@@ -39,7 +119,7 @@
   font-size: 9px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #6f8fc4;
+  color: var(--orb-cap);
 }
 
 .panel {
@@ -54,9 +134,65 @@
   pointer-events: auto;
 }
 
+.leftRail {
+  width: 250px;
+  max-width: calc(100% - 32px);
+  min-height: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.nodePanel {
+  flex: 0 0 auto;
+  width: min(196px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.taskPanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.taskScroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--orb-primary-border) transparent;
+}
+
+.taskScroll:focus-visible {
+  outline: 1px solid var(--orb-primary-border);
+  outline-offset: 3px;
+}
+
+.taskScroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.taskScroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.taskScroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--orb-primary-border);
+}
+
 .value {
   font-size: 11px;
-  color: #cfe4ff;
+  color: var(--orb-value);
 }
 
 .row {
@@ -72,7 +208,7 @@
   position: relative;
   height: 3px;
   border-radius: 2px;
-  background: rgba(110, 160, 230, 0.16);
+  background: var(--orb-bar-bg);
   overflow: hidden;
 }
 
@@ -80,7 +216,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 2px;
-  background: linear-gradient(90deg, rgba(120, 180, 255, 0.55), rgba(170, 215, 255, 0.95));
+  background: var(--orb-bar-fill);
 }
 
 /* Machine marker on the orbit ring. */
@@ -95,15 +231,15 @@
   border: 0;
   padding: 4px;
   cursor: pointer;
-  color: #8fb4e8;
+  color: var(--orb-marker);
 }
 
 .markerDiamond {
   width: 9px;
   height: 9px;
   transform: rotate(45deg);
-  border: 1px solid rgba(140, 195, 255, 0.75);
-  background: rgba(70, 130, 235, 0.25);
+  border: 1px solid var(--orb-marker-border);
+  background: var(--orb-marker-bg);
   transition: background 160ms ease, box-shadow 160ms ease;
 }
 
@@ -115,16 +251,16 @@
 }
 
 .marker:hover .markerDiamond {
-  background: rgba(140, 195, 255, 0.55);
+  background: var(--orb-marker-hover-bg);
 }
 
 .markerSelected .markerDiamond {
-  background: rgba(190, 225, 255, 0.95);
-  box-shadow: 0 0 12px rgba(150, 200, 255, 0.85);
+  background: var(--orb-marker-selected-bg);
+  box-shadow: 0 0 12px var(--orb-marker-selected-shadow);
 }
 
 .markerSelected {
-  color: #e7f2ff;
+  color: var(--orb-marker-selected);
 }
 
 .markerWorking .markerDiamond {
@@ -137,22 +273,22 @@
   width: 124px;
   height: 124px;
   border-radius: 50%;
-  border: 1px solid rgba(120, 175, 255, 0.35);
-  background: radial-gradient(circle, rgba(40, 90, 200, 0.16), rgba(8, 18, 44, 0.55));
+  border: 1px solid var(--orb-radar-border);
+  background: var(--orb-radar-bg);
   overflow: hidden;
 }
 
 .radarRing {
   position: absolute;
   border-radius: 50%;
-  border: 1px solid rgba(120, 175, 255, 0.18);
+  border: 1px solid var(--orb-radar-ring);
 }
 
 .radarSweep {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, rgba(130, 190, 255, 0.45), transparent 70deg);
+  background: var(--orb-radar-sweep);
   animation: orbitalSweep 4s linear infinite;
 }
 
@@ -161,24 +297,22 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #9fd2ff;
-  box-shadow: 0 0 6px rgba(150, 205, 255, 0.9);
+  background: var(--orb-radar-dot);
+  box-shadow: 0 0 6px var(--orb-radar-dot-shadow);
   transform: translate(-50%, -50%);
 }
 
 .logLine {
   font-size: 9px;
   line-height: 1.8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #7d9fd2;
+  overflow-wrap: anywhere;
+  color: var(--orb-log);
 }
 
 .primaryCard {
-  border: 1px solid rgba(130, 185, 255, 0.32);
-  background: rgba(8, 16, 38, 0.78);
-  box-shadow: 0 0 28px rgba(50, 110, 230, 0.18);
+  border: 1px solid var(--orb-primary-border);
+  background: var(--orb-primary-bg);
+  box-shadow: 0 0 28px var(--orb-primary-shadow);
   padding: 10px 16px 9px;
   min-width: 320px;
   backdrop-filter: blur(4px);
@@ -214,14 +348,14 @@
 .primaryLinkStats {
   margin-top: auto;
   padding-top: 10px;
-  border-top: 1px solid rgba(130, 185, 255, 0.2);
+  border-top: 1px solid var(--orb-primary-link-border);
   display: flex;
   flex-direction: column;
   gap: 5px;
   font-size: 8px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #6f8fc4;
+  color: var(--orb-cap);
 }
 
 .bigStat {
@@ -229,22 +363,22 @@
   font-size: 28px;
   font-weight: 700;
   line-height: 1.05;
-  color: #eaf4ff;
-  text-shadow: 0 0 18px rgba(140, 195, 255, 0.55);
+  color: var(--orb-big-stat);
+  text-shadow: 0 0 18px var(--orb-big-stat-shadow);
 }
 
 .smallStat {
   font-family: var(--f-display);
   font-size: 15px;
   font-weight: 600;
-  color: #b9d6fb;
+  color: var(--orb-small-stat);
 }
 
 .agentDot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  border: 1px solid rgba(150, 200, 255, 0.6);
+  border: 1px solid var(--orb-agent-dot-border);
 }
 
 @keyframes orbitalSweep {

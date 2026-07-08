@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
 import { AgentCallModal, type AgentCallGeminiLive, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
+import type { OrbitalGraphPalette } from "@/components/fleet/orbital-graph";
 import { FleetHiveView } from "@/components/fleet-hive";
 import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
 import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
@@ -254,6 +255,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   // answer, so gate "Open chat" behind model setup instead of opening a dead chat.
   const [chatBlockedAgent, setChatBlockedAgent] = useState<{ id: string; name: string } | null>(null);
   const [fleetHiveViewMode, setFleetHiveViewMode] = useState<FleetHiveViewMode>("hive");
+  const [fleetGraphPalette, setFleetGraphPalette] = useState<OrbitalGraphPalette>("classic");
   useEffect(() => {
     let cancelled = false;
     void loadDashboardStateSnapshot().then((snapshot) => {
@@ -277,9 +279,11 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   }, [fleetHiveViewMode, fleetLayout, onChatOpenSpaceRightInsetChange]);
   useEffect(() => () => onChatOpenSpaceRightInsetChange?.(0), [onChatOpenSpaceRightInsetChange]);
   useEffect(() => {
-    const tone: FleetChatTone = fleetLayout === "hive" && fleetHiveViewMode === "graph" ? "legacy" : "hive";
+    const tone: FleetChatTone = fleetLayout === "hive" && fleetHiveViewMode === "graph" && fleetGraphPalette === "classic"
+      ? "legacy"
+      : "hive";
     onChatToneChange?.(tone);
-  }, [fleetHiveViewMode, fleetLayout, onChatToneChange]);
+  }, [fleetGraphPalette, fleetHiveViewMode, fleetLayout, onChatToneChange]);
   useEffect(() => () => onChatToneChange?.("hive"), [onChatToneChange]);
 
   const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
@@ -574,7 +578,12 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           ) : null}
           <div className={`${fleetClass("fleetViewport")} fleetViewportShell`} style={{ position: "relative" }}>
             {fleetLayout === "hive" ? (
-              <FleetHiveView {...fleetProps} layoutToggle={layoutToggle} onViewModeChange={setFleetHiveViewMode} />
+              <FleetHiveView
+                {...fleetProps}
+                layoutToggle={layoutToggle}
+                onViewModeChange={setFleetHiveViewMode}
+                onGraphPaletteChange={setFleetGraphPalette}
+              />
             ) : (
               <FleetView {...fleetProps} layoutToggle={layoutToggle} />
             )}

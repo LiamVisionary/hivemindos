@@ -26,7 +26,8 @@ import {
   type FleetAgent, type FleetMachine,
 } from "@/components/fleet/fleet-data";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
-import { HudClock, OrbitalGraph } from "@/components/fleet/orbital-graph";
+import { HudClock, OrbitalGraph, type OrbitalGraphPalette } from "@/components/fleet/orbital-graph";
+import { GraphPaletteToggle } from "@/components/fleet/graph-palette-toggle";
 import { MapView } from "@/components/fleet/map-view";
 import { ListView } from "@/components/fleet/list-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -136,9 +137,11 @@ export function FleetHiveView({
   walletsByAgent,
   layoutToggle,
   onViewModeChange,
+  onGraphPaletteChange,
 }: FleetViewProps & {
   layoutToggle?: React.ReactNode;
   onViewModeChange?: (mode: FleetViewMode) => void;
+  onGraphPaletteChange?: (palette: OrbitalGraphPalette) => void;
 } = {}) {
   const frTheme = useFrTheme();
   // tasks/alerts/ticker/edges drive the graph/map view modes (the hive mode
@@ -169,10 +172,15 @@ export function FleetHiveView({
   // View mode (parity with the legacy FleetView toolbar). "hive" is the new hex
   // layout; graph/map/list reuse the existing visualisations inside this chrome.
   const [viewMode, setViewMode] = React.useState<FleetViewMode>("hive");
+  const [graphPalette, setGraphPalette] = React.useState<OrbitalGraphPalette>("classic");
   const chooseViewMode = React.useCallback((mode: FleetViewMode) => {
     setViewMode(mode);
     onViewModeChange?.(mode);
   }, [onViewModeChange]);
+  const chooseGraphPalette = React.useCallback((palette: OrbitalGraphPalette) => {
+    setGraphPalette(palette);
+    onGraphPaletteChange?.(palette);
+  }, [onGraphPaletteChange]);
   const [selectionTooltipKey, setSelectionTooltipKey] = React.useState<string | null>(null);
   const [area, setArea] = React.useState<{ w: number; h: number; full: number }>({ w: 0, h: 0, full: 0 });
   // User-controlled zoom (1 = drop-in baseline size) + pan offset, in screen px.
@@ -439,13 +447,20 @@ export function FleetHiveView({
         ) : null}
         {/* view-mode (hive/graph/map/list) switcher — right-aligned with the hive canvas */}
         {!initialLoading && viewMode !== "list" ? (
-          <div style={{ position: "absolute", top: 14, right: viewMode === "hive" ? PANEL_W + 16 : 18, zIndex: 30 }}>
+          <div
+            style={{
+              position: "absolute", top: 14, right: viewMode === "hive" ? PANEL_W + 16 : 18, zIndex: 30,
+              display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8,
+              flexWrap: "wrap", maxWidth: "calc(100% - 32px)",
+            }}
+          >
+            {viewMode === "graph" ? <GraphPaletteToggle palette={graphPalette} onChoose={chooseGraphPalette} /> : null}
             <ViewModeToggle mode={viewMode} onChoose={chooseViewMode} />
           </div>
         ) : null}
         {viewMode === "graph" && !initialLoading ? (
           <div className="fr-graph-clock" aria-label="Current time">
-            <HudClock />
+            <HudClock palette={graphPalette} />
           </div>
         ) : null}
         {initialLoading ? (
@@ -541,6 +556,7 @@ export function FleetHiveView({
                   tasks={tasks}
                   ticker={ticker}
                   showClock={false}
+                  palette={graphPalette}
                   leftHudInset={16}
                   topLeftHudTop={layoutToggle ? GRAPH_LAYOUT_TOGGLE_HUD_TOP : 14}
                   selectedHudTop={layoutToggle ? GRAPH_LAYOUT_TOGGLE_SELECTED_HUD_TOP : 84}

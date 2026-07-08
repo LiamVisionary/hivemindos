@@ -36,6 +36,7 @@ import {
   walletAddressForPickable,
   walletUsdcBalanceUsdForPickable,
 } from "./hivemindos-model-funding-wallets";
+import { deriveFreeMeter, type FreeAllowanceSnapshot, type FreeMeterState } from "./hivemindos-free-meter";
 import { scoreModelStrength } from "@/lib/config/model-strength";
 import styles from "./HivemindosModelsSetup.module.css";
 
@@ -73,54 +74,6 @@ type GatewayModelOption = {
 };
 
 type PaidModelChipOption = GatewayModelOption & { upstreamModel?: string };
-
-/** Client mirror of FreeModelAllowanceSnapshot (the service module is
- *  server-only — it reads the snapshot file). */
-type FreeAllowanceSnapshot = {
-  remainingRequests: number | null;
-  remainingTokens: number | null;
-  resetAt: string | null;
-  observedAt: string;
-  highWaterRequests: number | null;
-  highWaterTokens: number | null;
-};
-
-function compactTokenCount(tokens: number) {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`;
-  return String(tokens);
-}
-
-type FreeMeterState = { fraction: number; label: string; exhausted: boolean };
-
-/** Meter shape from the last-seen allowance snapshot. The gateway reports only
- *  "remaining", so the denominator is the highest value seen this reset
- *  window; a past reset marker means the window rolled over and the allowance
- *  is full again. Derived at fetch time (not render) so it stays pure. */
-function deriveFreeMeter(allowance: FreeAllowanceSnapshot | null, nowMs: number): FreeMeterState | null {
-  if (!allowance) return null;
-  const resetMs = allowance.resetAt ? Date.parse(allowance.resetAt) : NaN;
-  if (Number.isFinite(resetMs) && resetMs <= nowMs) {
-    return { fraction: 1, label: "Full daily allowance available", exhausted: false };
-  }
-  const remaining = allowance.remainingRequests;
-  const ceiling = allowance.highWaterRequests;
-  if (remaining === null || ceiling === null || ceiling <= 0) return null;
-  const tokens = allowance.remainingTokens;
-  // Zero tokens exhausts the allowance even with requests nominally left —
-  // the hosted gateway 429s either way (observed live 2026-07-05).
-  if (remaining <= 0 || tokens === 0) {
-    const resetLabel = Number.isFinite(resetMs)
-      ? ` — resets ${new Date(resetMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-      : " — resets daily";
-    return { fraction: 0, label: `Daily allowance used up${resetLabel}`, exhausted: true };
-  }
-  return {
-    fraction: Math.max(0, Math.min(1, remaining / ceiling)),
-    label: `${remaining} ${remaining === 1 ? "request" : "requests"}${tokens !== null ? ` · ${compactTokenCount(tokens)} tokens` : ""} left today`,
-    exhausted: false,
-  };
-}
 
 type GatewayModelSort = "top" | "new" | "cheap" | "pricey" | "az";
 

@@ -25,6 +25,7 @@ const {
   queenChatTools,
   queenInstructionsForPersonality,
   queenRealtimeTools,
+  isHivemindLatestBriefCommand,
   userAuthorizedHiveTaskCreation,
   isTrivialConversationalTurn,
   isHivemindFastContextCommand,
@@ -74,9 +75,13 @@ const {
   assert.match(source, /suppressWalletIntents: true/, "runtime-held Queen text chat should always suppress deterministic wallet/payment rails");
   assert.match(source, /RUNTIME_COMMAND_GATE_FALLBACK/, "runtime-held Queen chat should sanitize command-gate timeout replies");
   assert.match(source, /runtimeCommandGate: true/, "Queen chat telemetry should mark sanitized runtime command-gate replies");
+  assert.match(chatStoreSource, /return runQueenVoiceTextTurn\(trimmed, queenId, history, voiceTextAudioContext,/, "typed Queen chat should use the voice-quality conversation route by default");
+  assert.match(chatStoreSource, /speak: shouldSpeakReply/, "closed text chat must not trigger spoken audio");
+  assert.match(chatStoreSource, /Falling back to typed chat/, "closed text-chat should keep the legacy typed route as a fallback");
+  assert.doesNotMatch(chatStoreSource, /hivemindLatestBriefQuery|messagesForModel\(\)/, "shared typed Queen chat should not expose raw hive-context scaffolding to Codex");
   assert.doesNotMatch(source, /provider !== "openai-oauth" && provider !== "openai-codex"/, "typed Queen chat must not skip OpenAI Codex to the built-in fallback");
   assert.match(chatStoreSource, /suppressWalletIntents\?: boolean/, "Queen chat sendText should expose an advice-only wallet-intent suppression option");
-  assert.match(chatStoreSource, /runQueenTurn\(trimmed, queenId, opts\?\.screenContext, opts\?\.suppressWalletIntents === true\)/, "Queen chat should pass the suppression flag to the text-chat route");
+  assert.match(chatStoreSource, /runQueenTurn\(trimmed, queenId, opts\?\.screenContext, opts\?\.suppressWalletIntents === true\)/, "legacy typed fallback should pass the suppression flag to the text-chat route");
   assert.match(chatStoreSource, /action: "agent-turn"[\s\S]{0,160}suppressWalletIntents/, "Queen tool relays should keep advice-only turns out of wallet rails");
   assert.match(agentRuntimeRoute, /suppressWalletIntents = body\.suppressWalletIntents === true/, "agent runtime should parse the wallet-intent suppression flag");
   assert.match(agentRuntimeRoute, /if \(!suppressWalletIntents\) \{[\s\S]{0,500}dispatchWalletAndTradeIntents/, "agent runtime should skip deterministic wallet rails when suppression is active");
@@ -85,27 +90,28 @@ const {
   assert.equal((notificationsSource.match(/suppressWalletIntents: true/g) ?? []).length, 2, "both alert Discuss paths should mark Queen turns as advice-only");
 }
 
-// ── typed Queen chat must not expose the legacy voice route in UI errors ─────
+// ── legacy typed Queen chat remains available only as fallback ───────────────
 {
   const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/queen-bee/chat/route.ts", import.meta.url), "utf8");
-  assert.equal(QUEEN_TEXT_CHAT_API_PATH, "/api/queen-bee/chat", "typed Queen chat should use the text-chat route");
-  assert.equal(source.match(/fetch\(QUEEN_TEXT_CHAT_API_PATH,/g)?.length, 2, "both typed Queen chat fetches should go through the text-chat route constant");
-  assert.doesNotMatch(source, /action: "chat-turn(?:-stream)?"[\s\S]{0,220}fetch\("\/api\/queen-bee\/voice"/, "typed Queen chat actions must not fetch the legacy voice route");
+  assert.equal(QUEEN_TEXT_CHAT_API_PATH, "/api/queen-bee/chat", "legacy typed fallback should keep the text-chat route");
+  assert.equal(source.match(/fetch\(QUEEN_TEXT_CHAT_API_PATH,/g)?.length, 2, "legacy typed fallback fetches should still go through the text-chat route constant");
+  assert.match(source, /Falling back to typed chat[\s\S]*runQueenTurn/, "closed text-chat should fall back to the legacy route if the voice-quality lane fails");
   assert.match(route, /runQueenChatTurnStream/, "Queen text-chat route should serve the streaming typed chat action");
   assert.match(route, /runQueenChatTurn/, "Queen text-chat route should serve the blocking typed chat action");
 }
 
-// ── text typed while the voice overlay is open uses the voice route ──────────
+// ── all shared Queen text starts from the voice conversation lane ────────────
 {
   const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
   const overlay = readFileSync(new URL("../src/features/queen-voice/QueenBeeVoiceOverlay.tsx", import.meta.url), "utf8");
-  assert.equal(QUEEN_VOICE_CHAT_API_PATH, "/api/queen-bee/voice", "voice-active typed messages should use the voice route");
-  assert.equal(queenChatRouteForSend(false), "text", "closed voice chat keeps the typed route");
-  assert.equal(queenChatRouteForSend(true), "voice", "open voice chat selects the voice route");
-  assert.match(source, /queenChatRouteForSend\(voiceChatActiveRef\.current\)/, "sendText should route from the active voice-chat flag");
-  assert.match(source, /fetch\(QUEEN_VOICE_CHAT_API_PATH,[\s\S]{0,520}action: "converse-stream"/, "voice-active text sends should hit the voice converse-stream action");
-  assert.match(source, /ensureVoiceTextAudioContext\(\)/, "voice-active text sends should prime an audio context on the send gesture");
+  assert.equal(QUEEN_VOICE_CHAT_API_PATH, "/api/queen-bee/voice", "shared Queen text should use the voice conversation route");
+  assert.equal(queenChatRouteForSend(false), "text", "closed voice chat keeps audio muted");
+  assert.equal(queenChatRouteForSend(true), "voice", "open voice chat enables spoken replies");
+  assert.match(source, /queenChatRouteForSend\(voiceChatActiveRef\.current\)/, "sendText should still use the active voice-chat flag to decide audio behavior");
+  assert.match(source, /source: "voice"/, "closed text chat should also render as the voice-quality conversation lane before fallback");
+  assert.match(source, /fetch\(QUEEN_VOICE_CHAT_API_PATH,[\s\S]{0,520}action: "converse-stream"/, "shared text sends should hit the voice converse-stream action");
+  assert.match(source, /shouldSpeakReply \? ensureVoiceTextAudioContext\(\) : null/, "only voice-open text sends should prime an audio context on the send gesture");
   assert.match(source, /playSpokenReply\(text, abort\.signal, audioContext, false\)/, "voice-active text replies should be spoken through the shared playback ladder");
   assert.match(overlay, /setVoiceChatActive\(open\)/, "the overlay should publish its open state to the shared chat store");
   assert.deepEqual(
@@ -390,6 +396,10 @@ const {
     "what agents are in the fleet?",
     "list schedules in the app data",
     "what tools can Queen Bee use?",
+    "what's the latest?",
+    "what's new?",
+    "what's happening in the hive?",
+    "latest in the hive?",
   ];
   for (const msg of fastContext) {
     assert.equal(isHivemindFastContextCommand(msg), true, `"${msg}" should use direct HivemindOS context`);
@@ -403,9 +413,17 @@ const {
     "swap 1 usdc to eth",
     "check wallet balances",
     "open wallets",
+    "what's the latest Base news?",
   ];
   for (const msg of needsAgentOrAction) {
     assert.equal(isHivemindFastContextCommand(msg), false, `"${msg}" must not use generic fast context`);
+  }
+
+  for (const msg of ["what's the latest?", "What’s new?", "latest in the hive?", "catch me up"]) {
+    assert.equal(isHivemindLatestBriefCommand(msg), true, `"${msg}" should be a hive latest brief`);
+  }
+  for (const msg of ["what's the latest Base news?", "latest OpenAI model?", "run the latest tests"]) {
+    assert.equal(isHivemindLatestBriefCommand(msg), false, `"${msg}" must not be hijacked as a hive latest brief`);
   }
 }
 

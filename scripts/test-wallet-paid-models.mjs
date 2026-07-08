@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -20,6 +21,14 @@ async function sourceDir(dir) {
 
 function includes(haystack, needle, label) {
   assert.ok(haystack.includes(needle), `${label} should include ${needle}`);
+}
+
+function runTsxAssertion(code, label) {
+  const result = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", code], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, `${label} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
 }
 
 const [
@@ -258,6 +267,19 @@ assert.ok(!setupComponent.includes("cancelUrl: returnUrl"), "guided setup should
 includes(setupComponent, "Fund with crypto", "guided setup crypto top-up action");
 includes(setupComponent, "creditBalanceSummaryLabel", "guided setup model credits balance label");
 includes(setupComponent, "const selectedModelIsFree = isFreeHivemindosWalletPaidModel(selectedModel)", "guided setup detects the free model");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { deriveFreeMeter } from "./src/features/dashboard/views/chat/hivemindos-free-meter.ts";
+  const exhausted = deriveFreeMeter({
+    remainingRequests: 0,
+    remainingTokens: 0,
+    resetAt: null,
+    observedAt: "2026-07-08T08:14:55.058Z",
+    highWaterRequests: 0,
+    highWaterTokens: 0,
+  }, Date.parse("2026-07-09T00:00:00Z"));
+  assert.deepEqual(exhausted, { fraction: 0, label: "Daily allowance used up — resets daily", exhausted: true });
+`, "free Scout meter exhausted 0/0 snapshot");
 assert.ok(!setupComponent.includes("async function finishSetup"), "embedded panel has no Done handler of its own — every change persists immediately via onComplete");
 assert.ok(!setupComponent.includes("onCancel: () => void"), "embedded panel takes no onCancel prop (only the wallet browser's internal Back remains)");
 includes(setupComponent, "const fundingConfigured = walletReady || cardFundingReady", "guided setup derives one funded flag for the balance pill and paid-model gate");

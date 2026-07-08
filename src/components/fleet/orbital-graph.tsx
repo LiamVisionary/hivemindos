@@ -6,6 +6,8 @@ import type { FleetAlert, FleetMachine, FleetTask } from "./fleet-data";
 import { readQueenVoiceAmplitude } from "@/lib/audio/queen-voice-amplitude";
 import styles from "./orbital-graph.module.css";
 
+export type OrbitalGraphPalette = "classic" | "hive";
+
 export interface OrbitalGraphProps {
   machines: FleetMachine[];
   selected: string;
@@ -18,9 +20,61 @@ export interface OrbitalGraphProps {
   topLeftHudTop?: number;
   selectedHudTop?: number;
   topRightHudTop?: number;
+  palette?: OrbitalGraphPalette;
 }
 
 const PARTICLE_COUNT = 850;
+
+type Rgb = readonly [number, number, number];
+type OrbitalGraphPaint = {
+  clockText: string;
+  clockShadow: string;
+  grid: string;
+  glowCore: Rgb;
+  glowMid: Rgb;
+  glowOuter: Rgb;
+  particleCore: Rgb;
+  particleShell: Rgb;
+  ring: Rgb;
+  tick: Rgb;
+  arc: Rgb;
+  spoke: Rgb;
+};
+
+const ORBITAL_GRAPH_PALETTES: Record<OrbitalGraphPalette, OrbitalGraphPaint> = {
+  classic: {
+    clockText: "#dcebff",
+    clockShadow: "rgba(130,190,255,0.6)",
+    grid: "rgba(90, 140, 220, 0.05)",
+    glowCore: [200, 230, 255],
+    glowMid: [110, 170, 255],
+    glowOuter: [45, 95, 210],
+    particleCore: [225, 240, 255],
+    particleShell: [150, 200, 255],
+    ring: [120, 175, 255],
+    tick: [130, 185, 255],
+    arc: [150, 200, 255],
+    spoke: [140, 195, 255],
+  },
+  hive: {
+    clockText: "#f0c879",
+    clockShadow: "rgba(231,180,92,0.58)",
+    grid: "rgba(231, 180, 92, 0.045)",
+    glowCore: [255, 250, 229],
+    glowMid: [231, 180, 92],
+    glowOuter: [121, 75, 10],
+    particleCore: [255, 246, 219],
+    particleShell: [240, 200, 121],
+    ring: [231, 180, 92],
+    tick: [240, 200, 121],
+    arc: [240, 200, 121],
+    spoke: [231, 180, 92],
+  },
+};
+
+function rgba([r, g, b]: Rgb, alpha: number) {
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 type Particle = {
   x: number; y: number; z: number;
@@ -55,8 +109,9 @@ function markerAngle(index: number, total: number) {
 }
 
 /** HH:MM:SS readout, rendered on a 1s tick isolated from the rest of the HUD. */
-export function HudClock() {
+export function HudClock({ palette = "classic" }: { palette?: OrbitalGraphPalette } = {}) {
   const [now, setNow] = React.useState<Date | null>(null);
+  const paint = ORBITAL_GRAPH_PALETTES[palette];
   React.useEffect(() => {
     const t = window.setInterval(() => {
       // Don't churn state (and re-render) while the tab/window is hidden.
@@ -67,7 +122,7 @@ export function HudClock() {
   }, []);
   const pad = (n: number, len = 2) => String(n).padStart(len, "0");
   return (
-    <div style={{ fontSize: 19, color: "#dcebff", letterSpacing: "0.08em", textShadow: "0 0 14px rgba(130,190,255,0.6)" }}>
+    <div style={{ fontSize: 19, color: paint.clockText, letterSpacing: "0.08em", textShadow: `0 0 14px ${paint.clockShadow}` }}>
       {now
         ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
         : "--:--:--"}
@@ -87,6 +142,7 @@ export function OrbitalGraph({
   topLeftHudTop = 14,
   selectedHudTop = 84,
   topRightHudTop = 14,
+  palette = "classic",
 }: OrbitalGraphProps) {
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
@@ -96,10 +152,14 @@ export function OrbitalGraph({
   // restart the animation (which would visibly reseed the particle cloud).
   const machinesRef = React.useRef(machines);
   const selectedRef = React.useRef(selected);
+  const paletteRef = React.useRef<OrbitalGraphPalette>(palette);
   React.useEffect(() => {
     machinesRef.current = machines;
     selectedRef.current = selected;
   }, [machines, selected]);
+  React.useEffect(() => {
+    paletteRef.current = palette;
+  }, [palette]);
 
   React.useEffect(() => {
     const root = rootRef.current;
@@ -141,6 +201,7 @@ export function OrbitalGraph({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       const { cx, cy, R } = orbGeometry(w, h);
+      const paint = ORBITAL_GRAPH_PALETTES[paletteRef.current];
 
       // Voice-reactive breathe: while the Queen speaks in voice chat, her live
       // output amplitude (0..1, envelope-followed to hit the beat) swells the
@@ -151,7 +212,7 @@ export function OrbitalGraph({
       const corePulse = 1 + voiceAmp * 0.09;
 
       // Faint backdrop grid.
-      ctx.strokeStyle = "rgba(90, 140, 220, 0.05)";
+      ctx.strokeStyle = paint.grid;
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let gx = 0.5; gx < w; gx += 48) { ctx.moveTo(gx, 0); ctx.lineTo(gx, h); }
@@ -161,10 +222,10 @@ export function OrbitalGraph({
       // Core glow — brightens and swells with her voice.
       const glowR = R * 1.1 * corePulse;
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
-      glow.addColorStop(0, `rgba(200, 230, 255, ${Math.min(1, 0.85 + voiceAmp * 0.15)})`);
-      glow.addColorStop(0.22, `rgba(110, 170, 255, ${Math.min(1, 0.32 + voiceAmp * 0.3)})`);
-      glow.addColorStop(0.6, `rgba(45, 95, 210, ${Math.min(1, 0.10 + voiceAmp * 0.14)})`);
-      glow.addColorStop(1, "rgba(45, 95, 210, 0)");
+      glow.addColorStop(0, rgba(paint.glowCore, Math.min(1, 0.85 + voiceAmp * 0.15)));
+      glow.addColorStop(0.22, rgba(paint.glowMid, Math.min(1, 0.32 + voiceAmp * 0.3)));
+      glow.addColorStop(0.6, rgba(paint.glowOuter, Math.min(1, 0.10 + voiceAmp * 0.14)));
+      glow.addColorStop(1, rgba(paint.glowOuter, 0));
       ctx.fillStyle = glow;
       ctx.beginPath();
       ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
@@ -186,14 +247,14 @@ export function OrbitalGraph({
         const px = cx + x1 * R * p.r * corePulse;
         const py = cy + y2 * R * p.r * 0.96 * corePulse;
         ctx.fillStyle = p.r < 0.22
-          ? `rgba(225, 240, 255, ${Math.min(1, alpha + 0.25)})`
-          : `rgba(150, 200, 255, ${alpha})`;
+          ? rgba(paint.particleCore, Math.min(1, alpha + 0.25))
+          : rgba(paint.particleShell, alpha);
         const s = p.size * (0.75 + 0.45 * depth);
         ctx.fillRect(px - s / 2, py - s / 2, s, s);
       }
 
       // Dashed boundary ring + tick marks.
-      ctx.strokeStyle = "rgba(120, 175, 255, 0.28)";
+      ctx.strokeStyle = rgba(paint.ring, 0.28);
       ctx.setLineDash([2, 6]);
       ctx.beginPath();
       ctx.arc(cx, cy, R * 1.14, 0, Math.PI * 2);
@@ -204,7 +265,7 @@ export function OrbitalGraph({
         const major = i % 5 === 0;
         const r0 = R * (major ? 1.30 : 1.33);
         const r1 = R * 1.36;
-        ctx.strokeStyle = `rgba(130, 185, 255, ${major ? 0.5 : 0.2})`;
+        ctx.strokeStyle = rgba(paint.tick, major ? 0.5 : 0.2);
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(t) * r0, cy + Math.sin(t) * r0);
         ctx.lineTo(cx + Math.cos(t) * r1, cy + Math.sin(t) * r1);
@@ -213,7 +274,7 @@ export function OrbitalGraph({
 
       // Counter-rotating sweep arcs.
       const arc = (radius: number, start: number, span: number, alpha: number, width: number) => {
-        ctx.strokeStyle = `rgba(150, 200, 255, ${alpha})`;
+        ctx.strokeStyle = rgba(paint.arc, alpha);
         ctx.lineWidth = width;
         ctx.beginPath();
         ctx.arc(cx, cy, radius, start, start + span);
@@ -229,7 +290,7 @@ export function OrbitalGraph({
       for (let i = 0; i < ms.length; i++) {
         const t = markerAngle(i, ms.length);
         const isSel = ms[i].id === selectedRef.current;
-        ctx.strokeStyle = `rgba(140, 195, 255, ${isSel ? 0.5 : 0.16})`;
+        ctx.strokeStyle = rgba(paint.spoke, isSel ? 0.5 : 0.16);
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(t) * R * 1.14, cy + Math.sin(t) * R * 1.14);
         ctx.lineTo(cx + Math.cos(t) * R * 1.52, cy + Math.sin(t) * R * 1.52);
@@ -263,9 +324,10 @@ export function OrbitalGraph({
   const sessionId = (selectedMachine?.tailnet?.split(".")[0] || selectedMachine?.id || "fleet")
     .toUpperCase()
     .slice(0, 14);
+  const rootClassName = [styles.root, palette === "hive" ? styles.hivePalette : ""].filter(Boolean).join(" ");
 
   return (
-    <div ref={rootRef} className={styles.root}>
+    <div ref={rootRef} className={rootClassName}>
       <canvas ref={canvasRef} className={styles.canvas} />
 
       {/* Machine markers around the orbit. */}
@@ -294,7 +356,7 @@ export function OrbitalGraph({
 
       {/* Top-left — system title. */}
       <div className={styles.panel} style={{ top: topLeftHudTop, left: leftHudInset, maxWidth: 360 }}>
-        <div className={styles.monoCap} style={{ color: "#a9c9f5", fontSize: 10 }}>
+        <div className={styles.monoCap} style={{ color: "var(--orb-title-accent)", fontSize: 10 }}>
           H.I.V.E. · Hive &amp; machine intelligence system
         </div>
         <div className={styles.monoCap}>
@@ -304,7 +366,7 @@ export function OrbitalGraph({
 
       {/* Top-right — clock + session. */}
       <div className={styles.panel} style={{ top: topRightHudTop, right: 16, alignItems: "flex-end", textAlign: "right" }}>
-        {showClock ? <HudClock /> : null}
+        {showClock ? <HudClock palette={palette} /> : null}
         <div className={styles.monoCap}>
           Session: {sessionId}
           {selectedMachine ? <> &nbsp;·&nbsp; lat {selectedMachine.lat.toFixed(3)} · lon {selectedMachine.lon.toFixed(3)}</> : null}
@@ -351,9 +413,9 @@ export function OrbitalGraph({
               title={`${a.name} · ${a.state}`}
               style={{
                 background:
-                  a.state === "working" ? "rgba(160, 215, 255, 0.95)"
-                  : a.state === "failed" ? "rgba(251, 113, 133, 0.85)"
-                  : "rgba(90, 130, 200, 0.35)",
+                  a.state === "working" ? "var(--orb-agent-dot-working)"
+                  : a.state === "failed" ? "var(--orb-agent-dot-failed)"
+                  : "var(--orb-agent-dot-idle)",
               }}
             />
           ))}
@@ -363,7 +425,7 @@ export function OrbitalGraph({
         <div style={{ width: "100%", textAlign: "right" }}>
           {diagnostics.length ? diagnostics.map((d) => (
             <div key={d.key} className={styles.logLine}>
-              <span style={{ color: "#5d7eb4" }}>[{d.since}]</span> {d.text}
+              <span style={{ color: "var(--orb-diagnostic-time)" }}>[{d.since}]</span> {d.text}
             </div>
           )) : (
             <div className={styles.logLine}>channel quiet · no diagnostics</div>
@@ -404,67 +466,73 @@ export function OrbitalGraph({
         </div>
       </div>
 
-      {/* Left — selected-node telemetry. */}
-      {selectedMachine ? (
-        <div className={`${styles.panel} ${styles.sideOnly}`} style={{ top: selectedHudTop, left: leftHudInset, width: 196 }}>
-          <div className={styles.monoCap}>Node status</div>
-          <div className={styles.row}>
-            <span className={styles.monoCap}>node</span>
-            <span className={styles.value}>{selectedMachine.name}</span>
-          </div>
-          <div className={styles.row}>
-            <span className={styles.monoCap}>class</span>
-            <span className={styles.value}>{selectedMachine.kind}</span>
-          </div>
-          <div className={styles.row}>
-            <span className={styles.monoCap}>ping</span>
-            <span className={styles.value}>{selectedMachine.ping} ms</span>
-          </div>
-          {([
-            ["cpu", selectedMachine.cpu],
-            ["ram", selectedMachine.ram],
-            ["disk", selectedMachine.disk],
-          ] as const).map(([label, pct]) => (
-            <div key={label}>
-              <div className={styles.row}>
-                <span className={styles.monoCap}>{label}</span>
-                <span className={styles.value}>{Math.round(pct)}%</span>
-              </div>
-              <div className={styles.bar}>
-                <span className={styles.barFill} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
-              </div>
+      {/* Left — selected-node telemetry with task feed constrained underneath. */}
+      <div
+        className={`${styles.panel} ${styles.leftRail} ${styles.sideOnly}`}
+        style={{ top: selectedHudTop, bottom: 64, left: leftHudInset }}
+      >
+        {selectedMachine ? (
+          <div className={styles.nodePanel}>
+            <div className={styles.monoCap}>Node status</div>
+            <div className={styles.row}>
+              <span className={styles.monoCap}>node</span>
+              <span className={styles.value}>{selectedMachine.name}</span>
             </div>
-          ))}
-          <div className={styles.row}>
-            <span className={styles.monoCap}>uptime</span>
-            <span className={styles.value}>{selectedMachine.uptime || "—"}</span>
+            <div className={styles.row}>
+              <span className={styles.monoCap}>class</span>
+              <span className={styles.value}>{selectedMachine.kind}</span>
+            </div>
+            <div className={styles.row}>
+              <span className={styles.monoCap}>ping</span>
+              <span className={styles.value}>{selectedMachine.ping} ms</span>
+            </div>
+            {([
+              ["cpu", selectedMachine.cpu],
+              ["ram", selectedMachine.ram],
+              ["disk", selectedMachine.disk],
+            ] as const).map(([label, pct]) => (
+              <div key={label}>
+                <div className={styles.row}>
+                  <span className={styles.monoCap}>{label}</span>
+                  <span className={styles.value}>{Math.round(pct)}%</span>
+                </div>
+                <div className={styles.bar}>
+                  <span className={styles.barFill} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+                </div>
+              </div>
+            ))}
+            <div className={styles.row}>
+              <span className={styles.monoCap}>uptime</span>
+              <span className={styles.value}>{selectedMachine.uptime || "—"}</span>
+            </div>
+            <div className={styles.row}>
+              <span className={styles.monoCap}>build</span>
+              <span className={styles.value}>{selectedMachine.version}</span>
+            </div>
           </div>
-          <div className={styles.row}>
-            <span className={styles.monoCap}>build</span>
-            <span className={styles.value}>{selectedMachine.version}</span>
+        ) : null}
+
+        <div className={styles.taskPanel}>
+          <div className={styles.monoCap}>Task channel</div>
+          <div className={styles.taskScroll} role="region" tabIndex={0} aria-label="Fleet task channel">
+            {tasks.slice(0, 12).map((t) => (
+              <div
+                key={t.id}
+                className={styles.logLine}
+                style={{
+                  color:
+                    t.lane === "doing" ? "var(--orb-task-doing)"
+                    : t.lane === "blocked" ? "var(--orb-task-blocked)"
+                    : t.lane === "done" ? "var(--orb-task-done)"
+                    : "var(--orb-task-queued)",
+                }}
+              >
+                {t.eta.padEnd(6, " ")} {t.title}
+              </div>
+            ))}
+            {!tasks.length && <div className={styles.logLine}>no tasks in flight</div>}
           </div>
         </div>
-      ) : null}
-
-      {/* Left bottom — task feed. */}
-      <div className={`${styles.panel} ${styles.sideOnly}`} style={{ bottom: 64, left: leftHudInset, width: 250 }}>
-        <div className={styles.monoCap}>Task channel</div>
-        {tasks.slice(0, 6).map((t) => (
-          <div
-            key={t.id}
-            className={styles.logLine}
-            style={{
-              color:
-                t.lane === "doing" ? "#8fe6c0"
-                : t.lane === "blocked" ? "#ffb38a"
-                : t.lane === "done" ? "#5d7eb4"
-                : "#8fb7ff",
-            }}
-          >
-            {t.eta.padEnd(6, " ")} {t.title}
-          </div>
-        ))}
-        {!tasks.length && <div className={styles.logLine}>no tasks in flight</div>}
       </div>
 
       {/* Bottom left corner — mesh flavor. */}

@@ -13,6 +13,7 @@ const QUEEN_OPERATIONAL_INSTRUCTIONS = [
   "Wallet and Bankr requests are HivemindOS agent-wallet operations, not consumer banking - never refuse them as banking; relay them through your tools.",
   "Keep replies short and natural - one to three sentences. No reasoning preambles.",
   "Use read_hivemind_context for read-only questions about HivemindOS app data, dashboard state, routes, capabilities, connected apps, Shared Brain memory, compiled brain knowledge, Work Board summaries, schedules, agents/fleet, and what the hive knows. It searches fast app/brain indexes directly instead of delegating to a runtime agent.",
+  "When the user asks a bare latest-status question like 'what's latest?', 'what's new?', or 'what's happening in the hive?', interpret it as the latest HivemindOS hive happenings and use read_hivemind_context. Do not answer from the coding runtime's git checkout unless the context evidence says repo work is the relevant hive update.",
   "Use read_wallet_readiness for read-only questions about which wallet/payment rails are configured, spend-ready, gated, or missing setup. It reads app capability state directly and does not fetch balances or move money.",
   "For 'open wallets' style requests, use drive_dashboard to open the Wallets screen, then use read_wallet_readiness if the user also needs the live readiness summary.",
   "Use ask_hivemind_agent whenever the user asks about themselves, their notes, files, projects, memories, fleet, wallet balances, wallet actions, or anything requiring their computer (opening apps, checking status, reading or writing notes, recalling shared memory, Bankr actions).",
@@ -258,6 +259,23 @@ const HIVEMIND_FAST_CONTEXT_QUERY_RE =
 const HIVEMIND_FAST_CONTEXT_ACTION_RE =
   /\b(create|add|edit|write|save|remember|delete|remove|archive|send|swap|trade|buy|sell|transfer|pay|withdraw|bridge|claim|fund|top\s*up|open|launch|run|execute|deploy|fix|repair|install|restart|kill|commit|push|publish|call|message|email)\b/i;
 
+const HIVE_LATEST_SUBJECT_RE =
+  /\b(?:hive|hivemind(?:os)?|queen\s*bee|agents?|fleet|work\s*board|kanban|dashboard|brain|memory|vault|schedules?|automations?)\b/i;
+
+const BARE_HIVE_LATEST_RE = new RegExp(
+  [
+    "^\\s*(?:hey|hi|yo|gm|morning)?\\s*(?:queen(?:\\s*bee)?[,!]?\\s*)?",
+    "(?:",
+    "(?:what(?:'|’)?s|whats|what\\s+is)\\s+(?:the\\s+)?(?:latest|new|newest|happening|going\\s+on|update|updates|pulse|brief)",
+    "|(?:any\\s+)?(?:latest|updates?|news|pulse|brief)",
+    "|(?:catch\\s+me\\s+up|update\\s+me)",
+    ")",
+    "(?:\\s+(?:in|inside|with|from|across|around|on)\\s+(?:the\\s+)?(?:hive|hivemind(?:os)?|queen\\s*bee|agents?|fleet|work\\s*board|kanban|dashboard|brain|memory|vault|schedules?|automations?))?",
+    "\\s*[?.!]*\\s*$",
+  ].join(""),
+  "i",
+);
+
 /**
  * Read-only wallet readiness can be answered from the app capability matrix.
  * Balances and state-changing actions stay on ask_hivemind_agent because those
@@ -278,7 +296,19 @@ export function isHivemindFastContextCommand(userMessage: string): boolean {
   const trimmed = userMessage.trim();
   if (!trimmed || isWalletReadinessCommand(trimmed)) return false;
   if (WALLET_ACTION_OR_BALANCE_RE.test(trimmed) || HIVEMIND_FAST_CONTEXT_ACTION_RE.test(trimmed)) return false;
+  if (isHivemindLatestBriefCommand(trimmed)) return true;
   return HIVEMIND_FAST_CONTEXT_SUBJECT_RE.test(trimmed) && HIVEMIND_FAST_CONTEXT_QUERY_RE.test(trimmed);
+}
+
+export function isHivemindLatestBriefCommand(userMessage: string): boolean {
+  const trimmed = userMessage.trim();
+  if (!trimmed || trimmed.length > 160) return false;
+  if (isWalletReadinessCommand(trimmed)) return false;
+  if (WALLET_ACTION_OR_BALANCE_RE.test(trimmed) || HIVEMIND_FAST_CONTEXT_ACTION_RE.test(trimmed)) return false;
+  if (BARE_HIVE_LATEST_RE.test(trimmed)) return true;
+  return /\b(?:latest|new|happening|updates?|pulse|brief)\b/i.test(trimmed)
+    && HIVE_LATEST_SUBJECT_RE.test(trimmed)
+    && HIVEMIND_FAST_CONTEXT_QUERY_RE.test(trimmed);
 }
 
 /**
