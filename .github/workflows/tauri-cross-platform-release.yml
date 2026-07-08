@@ -15,6 +15,10 @@ on:
         description: Publish as a pre-release (downloadable, but does NOT move the updater / auto-update installs)
         required: false
         default: "false"
+      notarize_macos:
+        description: Notarize the macOS build with Apple ID credentials
+        required: false
+        default: "true"
 
 permissions:
   contents: write
@@ -282,9 +286,9 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_TEAM_ID || '' }}
           # Updater artifact signing (createUpdaterArtifacts). The build fails
           # if this secret is unset — a release without signed updater
           # artifacts would silently strand existing installs.
