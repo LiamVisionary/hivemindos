@@ -279,6 +279,7 @@ jobs:
         run: node scripts/check-tauri-command-acl.mjs
 
       - name: Build Tauri app
+        if: runner.os != 'macOS' || github.event.inputs.notarize_macos == 'true'
         env:
           # macOS Developer ID code signing + notarization. These are read by
           # the Tauri bundler only on macOS (ignored on Windows/Linux). If the
@@ -305,6 +306,25 @@ jobs:
           TAURI_NEXT_BUILD_HEAP_MB: "12288"
           TAURI_NEXT_BUILD_MEMORY_MB: "14000"
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '2700' }}
+        run: pnpm tauri:build:release
+
+      - name: Build Tauri app without macOS notarization
+        if: runner.os == 'macOS' && github.event.inputs.notarize_macos != 'true'
+        env:
+          # Keep Developer ID signing and updater signing, but deliberately omit
+          # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID. Tauri treats empty Apple
+          # notarization variables as present, so this must be a separate step
+          # where those variables are absent instead of blank.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          HIVEMINDOS_TAURI_EMBEDDED_NEXT: "1"
+          HIVEMINDOS_TAURI_PREBUILT_STANDALONE: "1"
+          TAURI_NEXT_BUILD_HEAP_MB: "12288"
+          TAURI_NEXT_BUILD_MEMORY_MB: "14000"
+          TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
         run: pnpm tauri:build:release
 
       - name: Collect bundle assets
