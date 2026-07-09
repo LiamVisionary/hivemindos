@@ -135,3 +135,21 @@ export async function nativePairingHost(): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * The dashboard device token, straight from the native app (packaged: the token
+ * the native server was started with; dev: read from the checkout .env.local).
+ * The pairing QR embeds this so a paired phone authenticates to the hub's /api
+ * gate — and this native path works even when the dashboard webview has no
+ * session (its data comes via native commands, so a bare /api fetch 401s).
+ * Returns null off-desktop or if the command has no token.
+ */
+export async function nativeDashboardToken(): Promise<string | null> {
+  if (!isTauriDesktopRuntime()) return null;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return (await invoke<string | null>("native_dashboard_unlock_token")) ?? null;
+  } catch {
+    return null;
+  }
+}

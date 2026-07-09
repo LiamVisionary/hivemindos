@@ -8,6 +8,7 @@ import {
   ChevronUp,
   MessageSquareText,
   Phone,
+  QrCode,
   RefreshCcw,
   Send,
   Shield,
@@ -58,10 +59,27 @@ const CALL_SOURCES: Array<{ key: AgentCallSourceKey; label: string; sub: string;
   { key: "blockedAgentDecision", label: "Blocked decision", sub: "Ring when a choice needs you.", Icon: Wand2 },
 ];
 
-const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const DAY_OPTIONS = [
+  { value: 1, label: "M", short: "Mon", name: "Monday" },
+  { value: 2, label: "T", short: "Tue", name: "Tuesday" },
+  { value: 3, label: "W", short: "Wed", name: "Wednesday" },
+  { value: 4, label: "T", short: "Thu", name: "Thursday" },
+  { value: 5, label: "F", short: "Fri", name: "Friday" },
+  { value: 6, label: "S", short: "Sat", name: "Saturday" },
+  { value: 0, label: "S", short: "Sun", name: "Sunday" },
+];
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");
+}
+
+function summarizeCallDays(days: number[]) {
+  const selected = new Set(days);
+  const hasAll = (values: number[]) => values.every((day) => selected.has(day));
+  if (DAY_OPTIONS.every((day) => selected.has(day.value))) return "every day";
+  if (selected.size === 5 && hasAll([1, 2, 3, 4, 5])) return "weekdays";
+  if (selected.size === 2 && hasAll([6, 0])) return "weekends";
+  return DAY_OPTIONS.filter((day) => selected.has(day.value)).map((day) => day.short).join(", ");
 }
 
 export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
@@ -86,11 +104,18 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   const [callTestTone, setCallTestTone] = useState<"ok" | "error" | "muted">("muted");
   const [timeOpen, setTimeOpen] = useState(false);
   const [timeRect, setTimeRect] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  // Reveal the pairing QR even when the phone reads "connected": tailnet presence
+  // (lastSeenAt) says nothing about whether the phone's stored hub device token
+  // still matches. When the phone reports "hub rejected your device token", the
+  // fix is to re-scan — so surface a re-pair QR from the connected row too.
+  const [showRepairQr, setShowRepairQr] = useState(false);
 
   const agentCallSettings = buildAgentCallPreferences(agentCreateMachine ? agentCreateDraft.calls : roleModalAgent?.calls);
   const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
   const callTimezone = agentCallSettings.timezone || "UTC";
   const selectedTime = fmt12(agentCallSettings.dailyCallTime);
+  const selectedDailyCallDays = new Set(agentCallSettings.dailyCallDays);
+  const dailyCallDaysSummary = summarizeCallDays(agentCallSettings.dailyCallDays);
   const localTtsDiscoveryLoading = localTtsDiscoveryStatus === "loading";
   const { qr: phoneQr, hubUrl: phoneHubUrl, error: phoneConnectError } = usePairingQr(true);
 
@@ -135,6 +160,13 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
     if (ap === "PM" && !isPm) h += 12;
     if (ap === "AM" && isPm) h -= 12;
     updateAgentCalls({ dailyCallTime: `${pad2(h)}:${pad2(m || 0)}` });
+  };
+  const toggleDailyCallDay = (day: number) => {
+    const nextDays = new Set(agentCallSettings.dailyCallDays);
+    if (nextDays.has(day)) nextDays.delete(day);
+    else nextDays.add(day);
+    const orderedDays = DAY_OPTIONS.map((option) => option.value).filter((value) => nextDays.has(value));
+    if (orderedDays.length) updateAgentCalls({ dailyCallDays: orderedDays });
   };
 
   // ---- Discovery + pairing ----------------------------------------------
@@ -289,10 +321,21 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
               </div>
             </div>
             {phoneStatus.connected ? (
-              <Btn sm disabled={callTestBusy} onClick={() => void requestAgentTestCall()}>
-                {callTestBusy ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
-                {callTestBusy ? "Requesting..." : "Test call"}
-              </Btn>
+              <>
+                <Btn
+                  sm
+                  title="Re-pair this phone — refresh its hub device token (no data lost)"
+                  aria-pressed={showRepairQr}
+                  onClick={() => setShowRepairQr((current) => !current)}
+                >
+                  <QrCode size={13} aria-hidden="true" />
+                  {showRepairQr ? "Hide QR" : "Re-pair"}
+                </Btn>
+                <Btn sm disabled={callTestBusy} onClick={() => void requestAgentTestCall()}>
+                  {callTestBusy ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
+                  {callTestBusy ? "Requesting..." : "Test call"}
+                </Btn>
+              </>
             ) : null}
             <Toggle on={agentCallSettings.enabled} onChange={() => updateAgentCalls({ enabled: !agentCallSettings.enabled })} />
           </section>
@@ -300,12 +343,16 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
             <p className={["as-status", callTestTone === "ok" ? styles.messageOk : callTestTone === "error" ? styles.messageError : ""].filter(Boolean).join(" ")}>{callTestMessage}</p>
           ) : null}
 
-          {phoneStatus.checked && !phoneStatus.connected ? (
+          {(phoneStatus.checked && !phoneStatus.connected) || showRepairQr ? (
             <section className={styles.setupCard}>
               <PanelHead
                 eyebrow="Mobile pairing"
-                title="Connect HivemindOS Mobile"
-                sub="Your phone scans the same pairing code from /connect-phone, then the gateway can ring the device for scheduled agent calls."
+                title={phoneStatus.connected ? "Re-pair HivemindOS Mobile" : "Connect HivemindOS Mobile"}
+                sub={
+                  phoneStatus.connected
+                    ? "Connected, but the phone says the hub rejected its device token? Re-scan this code to refresh the token — nothing is lost, it re-uses the existing pairing."
+                    : "Your phone scans the same pairing code from /connect-phone, then the gateway can ring the device for scheduled agent calls."
+                }
               />
               <ol className={styles.setupSteps}>
                 <li>
@@ -398,11 +445,20 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                       </>
                     ) : null}
                   </div>
-                  <div className={styles.days} aria-label="Runs every day">
-                    {DAY_LABELS.map((day, index) => (
-                      <span key={`${day}-${index}`} className={styles.day}>
-                        {day}
-                      </span>
+                  <div className={styles.days} aria-label="Call days">
+                    {DAY_OPTIONS.map((day) => (
+                      <button
+                        key={day.value}
+                        type="button"
+                        className={styles.day}
+                        data-on={selectedDailyCallDays.has(day.value) ? "" : undefined}
+                        aria-pressed={selectedDailyCallDays.has(day.value)}
+                        aria-label={`${selectedDailyCallDays.has(day.value) ? "Disable" : "Enable"} calls on ${day.name}`}
+                        title={day.name}
+                        onClick={() => toggleDailyCallDay(day.value)}
+                      >
+                        {day.label}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -412,7 +468,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                 <div className={styles.next}>
                   <Phone size={12} aria-hidden="true" />
                   {agentCallSettings.dailyEnabled
-                    ? `Next call · tomorrow ${selectedTime.h}:${selectedTime.m} ${selectedTime.ap} · every day · ${callTimezone}`
+                    ? `Schedule · ${dailyCallDaysSummary} · ${selectedTime.h}:${selectedTime.m} ${selectedTime.ap} · ${callTimezone}`
                     : "Daily call paused"}
                 </div>
               </section>

@@ -20,6 +20,7 @@ mod desktop_navigation;
 mod deliverables;
 mod env;
 mod fleet;
+mod image_preview;
 mod kanban;
 mod memory;
 mod obsidian;
@@ -79,13 +80,13 @@ const NATIVE_PREFERRED_PORT: u16 = 5020;
 const NATIVE_CACHE_TTL: Duration = Duration::from_secs(30);
 #[cfg(not(debug_assertions))]
 const DASHBOARD_AUTH_SECRET_KEY: &str = "HIVEMINDOS_DASHBOARD_AUTH_SECRET";
-#[cfg(not(debug_assertions))]
+// Not debug-gated: dashboard_token_from_checkout() reads this in dev too.
 const DASHBOARD_DEVICE_TOKEN_KEY: &str = "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN";
 #[cfg(not(debug_assertions))]
 const NATIVE_BOOTSTRAP_TOKEN_KEY: &str = "HIVEMINDOS_NATIVE_BOOTSTRAP_TOKEN";
 #[cfg(not(debug_assertions))]
 const MIN_DASHBOARD_AUTH_SECRET_LENGTH: usize = 32;
-#[cfg(not(debug_assertions))]
+// Not debug-gated: used by dashboard_token_from_checkout()/native_dashboard_unlock_token in dev too.
 const MIN_DASHBOARD_DEVICE_TOKEN_LENGTH: usize = 24;
 
 struct NativeCacheEntry {
@@ -618,18 +619,58 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
     })
 }
 
+// The dashboard device token, read from the checkout .env.local — the SAME
+// source the dev `tauri:next-dev` server verifies against. Used as a fallback so
+// the pairing QR can embed a token the hub accepts even in dev, where the
+// dashboard webview has no session (its data comes via native commands, so a
+// bare /api/phone/pairing-token fetch 401s and the QR would otherwise be
+// token-less). Self-contained (no cfg-gated helpers); returns None on any miss.
+fn dashboard_token_from_checkout() -> Option<String> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(root) = std::env::var("HIVE_ENV_PROJECT_ROOT") {
+        if !root.is_empty() {
+            candidates.push(PathBuf::from(root).join(".env.local"));
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join(".env.local"));
+        if let Some(parent) = cwd.parent() {
+            candidates.push(parent.join(".env.local"));
+        }
+    }
+    let prefix = format!("{DASHBOARD_DEVICE_TOKEN_KEY}=");
+    for path in candidates {
+        let Ok(content) = fs::read_to_string(&path) else { continue };
+        for raw in content.lines() {
+            let line = raw.trim().strip_prefix("export ").unwrap_or(raw.trim());
+            if let Some(rest) = line.strip_prefix(&prefix) {
+                let value = rest.trim().trim_matches('"').trim_matches('\'');
+                if value.len() >= MIN_DASHBOARD_DEVICE_TOKEN_LENGTH {
+                    return Some(value.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 fn native_dashboard_unlock_token(
     state: tauri::State<NativeServerState>,
 ) -> Result<Option<String>, String> {
-    if cfg!(debug_assertions) {
-        return Ok(None);
+    // Packaged: the token the native server was started with.
+    let from_state = state
+        .dashboard_token
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .filter(|token| token.len() >= MIN_DASHBOARD_DEVICE_TOKEN_LENGTH);
+    if from_state.is_some() {
+        return Ok(from_state);
     }
-    let native_server_running = state.port.lock().ok().and_then(|guard| *guard).is_some();
-    if !native_server_running {
-        return Ok(None);
-    }
-    Ok(state.dashboard_token.lock().ok().and_then(|guard| guard.clone()))
+    // Dev (native server not running / token not set): read the checkout
+    // .env.local so a pairing QR still embeds a token the running hub accepts.
+    Ok(dashboard_token_from_checkout())
 }
 
 fn native_payload(result: Result<serde_json::Value, String>) -> serde_json::Value {
@@ -1578,6 +1619,7 @@ pub fn run() {
             retry_native_server,
             runtime_files::runtime_files,
             runtime_usage::runtime_usage,
+            image_preview::read_local_image_preview,
             setup::native_setup_run,
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
