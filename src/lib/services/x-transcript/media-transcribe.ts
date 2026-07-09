@@ -141,10 +141,10 @@ export async function downloadTwimgMp4(url: string, workDir: string): Promise<st
   // not constrain the final host — re-check where we actually landed.
   if (response.url && response.url !== url) assertTwimgHost(response.url);
   if (!response.ok) throw new Error(`Video download failed with HTTP ${response.status}.`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) throw new Error("Downloaded video was empty.");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length) throw new Error("Downloaded video was empty.");
   const mp4Path = join(workDir, "video.mp4");
-  await writeFile(mp4Path, buffer);
+  await writeFile(mp4Path, bytes);
   return mp4Path;
 }
 
@@ -204,7 +204,7 @@ export async function mapWithConcurrency<T, R>(
 export async function transcribeAudioFile(audioPath: string, workDir: string): Promise<string> {
   const chunks = await extractAudioChunks(audioPath, workDir);
   const parts = await mapWithConcurrency(chunks, MAX_CONCURRENT_TRANSCRIPTIONS, async (chunkPath, index) => {
-    const bytes = await readFile(chunkPath);
+    const bytes = new Uint8Array(await readFile(chunkPath));
     const file = new File([bytes], `chunk_${String(index).padStart(3, "0")}.mp3`, { type: "audio/mpeg" });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FFMPEG_TIMEOUT_MS);
