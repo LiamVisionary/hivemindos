@@ -149,16 +149,38 @@
 }
 
 .day {
+  appearance: none;
   display: grid;
   place-items: center;
   width: 30px;
   height: 26px;
-  border: 1px solid var(--honey-line);
+  border: 1px solid var(--line-2);
   border-radius: 7px;
-  background: var(--honey-soft);
-  color: var(--honey);
+  background: var(--panel);
+  color: var(--fg-4);
+  cursor: pointer;
   font-family: var(--f-mono);
   font-size: 10px;
+  line-height: 1;
+  padding: 0;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.day[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+.day:hover,
+.day:focus-visible {
+  border-color: var(--honey-line);
+  color: var(--honey);
+  outline: none;
+}
+
+.day:active {
+  transform: translateY(1px);
 }
 
 .alarmActions {

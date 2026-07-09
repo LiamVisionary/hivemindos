@@ -76,6 +76,13 @@ export type HiveActionDefinition<
   mcp?: HiveActionMcpConfig;
   contextIndex?: HiveActionContextIndexConfig;
   confirmation?: HiveActionConfirmation;
+  // Env credential keys this action's backing integration needs to be usable.
+  // When set, the action is surfaced in capability search ONLY if at least one of
+  // these keys is present in the shared hive env (i.e. the integration is
+  // connected). Omit for always-available core tools. Governance (claims,
+  // confirmation, route enforcement) is unaffected — this only controls whether
+  // the capability is advertised.
+  requiresConnection?: string[];
   run?: (input: z.infer<TSchema>, ctx: HiveActionContext) => Promise<TResult>;
 };
 

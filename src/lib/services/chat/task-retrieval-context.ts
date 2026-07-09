@@ -123,6 +123,59 @@ function userAppPreferenceContext(apps: ContextConnectedApp[] | undefined, query
   return lines.join("\n");
 }
 
+const APP_ROSTER_LIMIT = 24;
+const GENERIC_APP_KINDS = new Set(["api", "app", "service", ""]);
+
+function appDoesText(app: ContextConnectedApp): string {
+  if (app.capabilities?.length) return `can: ${app.capabilities.join(", ")}`;
+  const description = app.description?.trim();
+  if (description) return description;
+  const routes = (app.apiRoutes ?? [])
+    .filter((route) => (route.method ?? "").toUpperCase() === "POST")
+    .concat(app.apiRoutes ?? [])
+    .map((route) => (route.summary?.trim() || route.path?.trim() || ""))
+    .filter(Boolean);
+  const unique = [...new Set(routes)].slice(0, 3);
+  if (unique.length) return `endpoints: ${unique.join("; ")}`;
+  return app.serviceKind?.trim() || app.kind?.trim() || "connected app";
+}
+
+function appRosterInterest(app: ContextConnectedApp): number {
+  let score = 0;
+  if (app.capabilities?.length) score += 4;
+  if (app.usageNotes?.trim()) score += 3;
+  if (app.priority) score += 3;
+  if (app.kind && !GENERIC_APP_KINDS.has(app.kind.toLowerCase())) score += 2;
+  if (app.serviceKind && !GENERIC_APP_KINDS.has(app.serviceKind.toLowerCase())) score += 2;
+  if ((app.apiRoutes ?? []).length) score += 1;
+  return score;
+}
+
+/**
+ * Always-on roster of every connected app and what it does, so an agent knows
+ * its fleet's capabilities regardless of whether the prompt happened to
+ * text-match a retrieval query. Previously only a bare count was injected, so an
+ * app's real capability (e.g. video generation) stayed invisible unless the
+ * prompt used its words.
+ */
+function connectedAppsRosterContext(apps: ContextConnectedApp[] | undefined): string {
+  const list = (apps ?? []).filter((app) => app.name || app.id);
+  if (!list.length) return "";
+  const ranked = list
+    .map((app, index) => ({ app, index, interest: appRosterInterest(app) }))
+    .sort((left, right) => right.interest - left.interest || left.index - right.index);
+  const shown = ranked.slice(0, APP_ROSTER_LIMIT);
+  const lines = ["Connected apps on this fleet (what each can do — resolve live URLs via the Apps APIs, don't hardcode addresses):"];
+  for (const { app } of shown) {
+    const name = (app.name ?? app.id ?? "Connected app").trim();
+    const machine = app.machineName?.trim() ? ` [${app.machineName.trim()}]` : "";
+    lines.push(`- ${name}${machine}: ${compactContextText(appDoesText(app), 160)}`);
+  }
+  const remaining = ranked.length - shown.length;
+  if (remaining > 0) lines.push(`- …and ${remaining} more connected app${remaining === 1 ? "" : "s"} (ask to list all).`);
+  return lines.join("\n");
+}
+
 type RuntimeCapabilityContext = {
   runtime?: string;
   hasRuntimeImageGeneration?: boolean;
@@ -552,6 +605,7 @@ export async function buildTaskRetrievalContextResult(input: {
     input.agent?.workerClass
       ? `- Worker class lens: ${input.agent.workerClass}. Hits marked class-preferred or agent task preference match this agent's specialization; prefer them on ties, but any listed capability remains usable.`
       : "",
+    connectedAppsRosterContext(connectedApps),
     userAppPreferenceContext(connectedApps, trimmed),
     loopEngineeringCapabilityContext(trimmed),
     imageGenerationCapabilityContext(trimmed, input.runtime, connectedApps),

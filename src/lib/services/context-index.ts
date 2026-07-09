@@ -42,6 +42,7 @@ import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import { applyAppPreferences, readAppPreferences, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
 import { connectorManifestContextIndexItems } from "@/lib/services/integrations/connector-context-index";
+import { readSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
 import { visualArtifactContextIndexItems } from "@/lib/services/visual-artifact-context-index";
 import {
   principalCanReadScope,
@@ -141,6 +142,7 @@ export type ContextConnectedApp = {
   apiRoutesSource?: string;
   priority?: boolean;
   usageNotes?: string;
+  capabilities?: string[];
   preferredModels?: AppModelPreference[];
 };
 
@@ -1565,19 +1567,41 @@ function scheduleFsSourceRefresh(state: FsIndexState, options: ContextIndexOptio
   });
 }
 
-function perRequestItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean): ContextIndexItem[] {
+function perRequestItems(
+  options: ContextIndexOptions,
+  wants: (kind: ContextIndexKind) => boolean,
+  sharedEnv: Record<string, string>,
+): ContextIndexItem[] {
   return [
-    ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions()), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
+    // Integration-backed hive actions (requiresConnection) are advertised only
+    // when their integration is connected; core actions are always available.
+    ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions().filter((action) => actionIntegrationConnected(action, sharedEnv))), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
     ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
-    ...(wants("connector") ? connectorManifestContextIndexItems() : []),
+    // Connectors surface only when actually connected (token present) — see
+    // connectorManifestContextIndexItems. Disconnected integrations are not capabilities.
+    ...(wants("connector") ? connectorManifestContextIndexItems(sharedEnv) : []),
     ...(wants("runtime") ? runtimeItems() : []),
     ...(wants("code-route") ? codeCapabilityRouteItems() : []),
   ].filter((item) => wants(item.kind));
 }
 
+// An integration-backed action is advertised only when its integration is
+// connected (a required credential key is present in the shared env). Core
+// actions (no requiresConnection) are always available. Governance is unaffected.
+function actionIntegrationConnected(
+  action: { requiresConnection?: string[] },
+  sharedEnv: Record<string, string>,
+): boolean {
+  const keys = action.requiresConnection;
+  if (!keys || keys.length === 0) return true;
+  return keys.some((key) => Boolean(sharedEnvValue(key, sharedEnv)));
+}
+
 async function dynamicItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean) {
+  // Pay the shared-env read only when connection-gated items are requested.
+  const sharedEnv = wants("connector") || wants("tool-schema") ? await readSharedAgentEnv() : {};
   return [
-    ...perRequestItems(options, wants),
+    ...perRequestItems(options, wants, sharedEnv),
     ...(wants("artifact") ? await visualArtifactContextIndexItems({ vaultPath: options.vaultPath }) : []),
   ];
 }

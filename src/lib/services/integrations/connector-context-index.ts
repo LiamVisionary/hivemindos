@@ -1,9 +1,23 @@
 import type { ContextIndexItem } from "@/lib/services/context-index";
 import { CONNECTOR_MANIFESTS } from "@/lib/services/integrations/connector-manifests";
+import { sharedEnvValue } from "@/lib/services/integrations/shared-env";
 import { workspaceScope } from "@/lib/types/principal";
 
-export function connectorManifestContextIndexItems(): ContextIndexItem[] {
-  return CONNECTOR_MANIFESTS.flatMap((manifest) => {
+/**
+ * Surface a connector (and its operations) in the capability index ONLY when it
+ * is actually connected — i.e. its token/credential is present in the shared hive
+ * env (or process env). Capability search must reflect real, usable capabilities,
+ * not every connector that could theoretically be set up; a freshly-connected
+ * integration appears automatically and a disconnected one drops out. Connection
+ * is the same signal `providerStatus` uses (`connected = token present`).
+ */
+export function connectorManifestContextIndexItems(sharedEnv: Record<string, string>): ContextIndexItem[] {
+  const connectedManifests = CONNECTOR_MANIFESTS.filter((manifest) =>
+    [manifest.auth.tokenEnvKey, ...(manifest.auth.tokenEnvAliases ?? [])].some((key) =>
+      Boolean(sharedEnvValue(key, sharedEnv)),
+    ),
+  );
+  return connectedManifests.flatMap((manifest) => {
     const credentialKeys = [
       manifest.auth.tokenEnvKey,
       ...(manifest.auth.tokenEnvAliases ?? []),

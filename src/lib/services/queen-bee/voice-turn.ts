@@ -7,6 +7,7 @@ import {
   type AgentProfile,
   type AgentRuntime,
 } from "@/lib/types/agent-runtime";
+import { readStoredAgentProfilesStrict } from "@/lib/services/agent-profile-store";
 import { isHivemindosWalletPaidModelProfile } from "@/lib/services/hivemindos-wallet-paid-models";
 import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
 import {
@@ -39,7 +40,13 @@ import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import {
   voiceTaskApprovalPrompt,
   voiceTaskSubmissionAuthorized,
+  voiceTranscriptRequestsImmediateAnswer,
 } from "@/lib/services/queen-bee/voice-task-approval";
+import { latestOwnXPostAnswer } from "@/lib/services/x-latest-post";
+import {
+  isXaiOAuthProvider,
+  xaiOAuthVoiceRequestOptions,
+} from "@/lib/services/xai-oauth-inference-contract";
 
 // The persisted session every Queen agent-turn shares; multi-step rail flows (a
 // swap/send/Bankr DRAFT prepared on one turn, then a confirmation on the next)
@@ -57,6 +64,11 @@ const CONFIRMATION_REQUEST = /^(?:confirm|confirmed|yes|yes,?\s*confirm|go ahead
 // /api/chat/agent-runtime, so a 10s agent budget aborted into the alerted
 // OpenAI fallback right before the reply landed, on every turn.
 const AGENT_TURN_TIMEOUT_MS = 20_000;
+// OAuth-held runtime brains have to run through the full agent/runtime loop:
+// provider OAuth resolution, model call, tool calls, and final JSON answer.
+// They are still interactive, but a 20s voice budget cuts off successful xAI
+// or ChatGPT-subscription turns before their tool-backed answer arrives.
+const OAUTH_AGENT_TURN_TIMEOUT_MS = 75_000;
 // The HivemindOS-models gateway buffers upstream responses (no deltas until
 // done) and its free host can cold-start, so 20s aborts into the alerted
 // OpenAI fallback + 5-minute cooldown on every cold turn. Mirrors the typed
@@ -88,9 +100,67 @@ type ConversationMessagesOptions = {
   cacheControl?: { provider: string; model: string };
 };
 
+type ProviderInferenceEvidence = {
+  model?: string;
+  usage?: Record<string, unknown>;
+};
+
+function voiceInferenceUsageFields(usage: Record<string, unknown> | undefined) {
+  const promptDetails = usage?.prompt_tokens_details;
+  const completionDetails = usage?.completion_tokens_details;
+  return {
+    inputTokens: Number(usage?.prompt_tokens) || null,
+    cachedPromptTokens:
+      promptDetails && typeof promptDetails === "object"
+        ? Number((promptDetails as { cached_tokens?: unknown }).cached_tokens) || 0
+        : null,
+    outputTokens: Number(usage?.completion_tokens) || null,
+    reasoningTokens:
+      completionDetails && typeof completionDetails === "object"
+        ? Number((completionDetails as { reasoning_tokens?: unknown }).reasoning_tokens) || 0
+        : null,
+  };
+}
+
+function recordQueenVoiceInference(input: {
+  provider: string;
+  requestedModel: string;
+  evidence?: ProviderInferenceEvidence;
+  elapsedMs: number;
+}) {
+  void import("@/lib/services/telemetry/local-telemetry")
+    .then(({ recordTelemetryBatch }) => recordTelemetryBatch([{
+      source: "route",
+      type: "queen_voice.inference",
+      payload: {
+        provider: input.provider,
+        requestedModel: input.requestedModel,
+        servedModel: input.evidence?.model ?? null,
+        ...voiceInferenceUsageFields(input.evidence?.usage),
+        elapsedMs: input.elapsedMs,
+      },
+    }]))
+    .catch(() => undefined);
+}
+
 /** The model the OpenAI fallback lane actually answers with. */
 export function voiceFallbackModelName() {
   return process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL;
+}
+
+export function runtimeConversationTurnTimeoutMs(agent: Pick<AgentProfile, "provider">) {
+  if (isHivemindosWalletPaidModelProfile(agent as AgentProfile)) {
+    return WALLET_PAID_AGENT_TURN_TIMEOUT_MS;
+  }
+  const provider = agent.provider?.trim().toLowerCase() ?? "";
+  if (
+    provider.includes("oauth") ||
+    provider === "openai-codex" ||
+    provider === "copilot"
+  ) {
+    return OAUTH_AGENT_TURN_TIMEOUT_MS;
+  }
+  return AGENT_TURN_TIMEOUT_MS;
 }
 
 /**
@@ -104,8 +174,8 @@ export function voiceFallbackModelName() {
 export type VoiceChatBrainPlan =
   | { kind: "fleet-agent" }
   | {
-      /** The agent's own runtime answers — REQUIRED for OAuth-held providers
-       *  (openai-codex, copilot, xai-oauth): their credential lives inside
+      /** The agent's own runtime answers — REQUIRED for runtime-held providers
+       *  (openai-codex, copilot): their credential lives inside
        *  the runtime, so this is the only lane that uses the user's actual
        *  credentials for that model. Slower than direct, honest by design. */
       kind: "agent-runtime";
@@ -138,6 +208,7 @@ const QUEEN_VOICE_TURN_INSTRUCTIONS = [
   "speech: one or two short, natural spoken sentences. No markdown, no lists, no reasoning preambles.",
   "You are MID-conversation: never greet again, never reintroduce yourself, never restart the conversation - answer the latest message directly in context.",
   "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive).",
+  "Read-only retrieval requests like 'grab/get/show/fetch my latest X post' are questions to answer now with available tools/context; keep task null and do not queue Work Board work.",
   "If you choose a next step after an open-ended prompt like 'you tell me', keep task null and ask for approval. Only set task after the user's latest message asks for specific work or confirms your immediately previous task proposal.",
   "Greetings, questions, status chat, and thinking-out-loud get task: null and a conversational speech reply.",
   "When you do create a task, make title a short imperative summary, message the full work request in the user's words, and have speech briefly confirm what you are kicking off.",
@@ -229,7 +300,15 @@ export function buildRuntimeVoiceMessages(
   return [
     {
       role: "system" as const,
-      content: buildRuntimeVoiceSystemText(systemPreamble, personality),
+      content: buildRuntimeVoiceSystemText(undefined, personality),
+    },
+    {
+      role: "user" as const,
+      content: "Apply these standing Queen Bee voice instructions to the current turn and wait for the user's live message.",
+    },
+    {
+      role: "assistant" as const,
+      content: "Understood. I will apply the Queen Bee voice contract to the current turn.",
     },
     {
       role: "user" as const,
@@ -285,6 +364,11 @@ export async function runQueenBeeVoiceTurn(options: {
     emitter?.finalize(result.reply);
     return result;
   };
+  const exactLatestXReply = await latestOwnXPostAnswer(options.transcript).catch(() => null);
+  if (exactLatestXReply) {
+    options.progress?.("Reading your X timeline");
+    return finish({ reply: exactLatestXReply });
+  }
   const text = await conversationTurnText({
     ...options,
     onTextDelta: emitter ? (chunk) => emitter.onTextDelta(chunk) : undefined,
@@ -297,6 +381,14 @@ export async function runQueenBeeVoiceTurn(options: {
   if (text) {
     const parsed = parseVoiceTurnJson(text);
     if (parsed?.task) {
+      if (voiceTranscriptRequestsImmediateAnswer(options.transcript)) {
+        if (emitter?.attemptReset()) options.onSpeechReset?.();
+        return finish({
+          reply:
+            parsed.speech?.trim() ||
+            "I should answer that directly instead of queueing it. Ask me again and I will check X here.",
+        });
+      }
       if (!voiceTaskSubmissionAuthorized(options.transcript, options.history)) {
         if (emitter?.attemptReset()) options.onSpeechReset?.();
         return finish({ reply: voiceTaskApprovalPrompt(parsed.task) });
@@ -386,6 +478,9 @@ async function conversationTurnText(options: {
   // the pipeline also captures simple spoken preference utterances itself,
   // because it does not run the realtime session's remember_preference tool.
   const preferencePreamble = await queenVoicePreferencePreamble();
+  const immediateAnswerPreamble = voiceTranscriptRequestsImmediateAnswer(options.transcript)
+    ? "The latest user message is a read-only X/Twitter retrieval request. Answer it directly now with available tools/context. Return task:null; do not create, offer, or propose a Work Board task."
+    : "";
   const queenDefaults = await readQueenBeeBrainDefaults().catch(() => null);
   const queenPersonality = queenDefaults?.soulPrompt;
   // Best-effort hive context (shared-brain recall + open work digest) rides
@@ -405,7 +500,7 @@ async function conversationTurnText(options: {
       return "";
     }
   })();
-  const systemPreamble = [preferencePreamble, brainContext]
+  const systemPreamble = [preferencePreamble, immediateAnswerPreamble, brainContext]
     .filter((part) => part && part.trim())
     .join("\n\n");
   const plan = options.voiceBrain ?? { kind: "fleet-agent" as const };
@@ -454,6 +549,8 @@ async function conversationTurnText(options: {
     if (plan.kind === "agent-runtime") {
       // Pinned to the configured agent so the turn runs on ITS credentials
       // (OAuth providers); missing/chat-incapable pins fall to the fallback.
+      const stored = await readStoredConversationAgent(plan.agentId).catch(() => null);
+      if (stored) return stored;
       const ranked = await rankConversationAgents(options.vaultPath);
       return ranked.find((profile) => profile.id === plan.agentId) ?? null;
     }
@@ -601,9 +698,13 @@ async function runOpenAiConversationTurn(
 export async function resolveProviderChatEndpoint(
   provider: string,
 ): Promise<{ url: string; key: string } | null> {
-  // NOTE: OAuth-held providers (openai-codex, copilot, xai-oauth) are never
-  // resolved here — their credential lives inside the agent runtime, so the
-  // route plans them as kind:"agent-runtime" instead of a key substitution.
+  if (isXaiOAuthProvider(provider)) {
+    const { resolveXaiOAuthChatEndpoint } = await import(
+      "@/lib/services/xai-oauth-inference"
+    );
+    return resolveXaiOAuthChatEndpoint();
+  }
+  // Other OAuth-held providers (openai-codex, copilot) remain runtime-owned.
   if (!provider || provider === "openai" || provider === "openai-api") {
     const apiKey = await transcriptionApiKey();
     return apiKey
@@ -627,6 +728,7 @@ async function runProviderConversationTurn(
   onTextDelta?: (chunk: string) => void,
   personality?: string | null,
 ) {
+  const providerStartedAt = Date.now();
   // Every provider-direct lane invokes target.model itself, so the injected
   // identity is exact — "which model are you?" gets a real answer per lane.
   const stableSystemAddendum = queenModelTransparencyNote(target.model, target.provider);
@@ -675,6 +777,9 @@ async function runProviderConversationTurn(
         // Streamed turns feed the fused converse+speak pipeline; the buffered
         // legacy action keeps the plain JSON response.
         ...(onTextDelta ? { stream: true } : {}),
+        ...(onTextDelta && isXaiOAuthProvider(target.provider)
+          ? { stream_options: { include_usage: true } }
+          : {}),
         ...cacheHints.body,
         ...params,
       }),
@@ -688,11 +793,12 @@ async function runProviderConversationTurn(
   // unsupported parameter retries once with the legacy-safe body so older
   // OpenAI-compatible servers (and misclassified models) still work.
   const reasoningModel = /^(o\d|gpt-5)/i.test(target.model.trim());
-  let response = await post(
-    reasoningModel
+  const requestOptions = isXaiOAuthProvider(target.provider)
+    ? xaiOAuthVoiceRequestOptions(target.model)
+    : reasoningModel
       ? { max_completion_tokens: 700, reasoning_effort: "low" }
-      : { max_tokens: 300, temperature: 0.6 },
-  );
+      : { max_tokens: 300, temperature: 0.6 };
+  let response = await post(requestOptions);
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as {
       error?: { message?: string } | string;
@@ -719,10 +825,31 @@ async function runProviderConversationTurn(
       throw new Error(retryDetail || `${target.label} chat returned HTTP ${response.status}.`);
     }
   }
-  if (onTextDelta) return await readOpenAiSseText(response, onTextDelta);
+  if (onTextDelta) {
+    const evidence: ProviderInferenceEvidence = {};
+    const text = await readOpenAiSseText(response, onTextDelta, (next) => {
+      if (next.model) evidence.model = next.model;
+      if (next.usage) evidence.usage = next.usage;
+    });
+    recordQueenVoiceInference({
+      provider: target.provider,
+      requestedModel: target.model,
+      evidence,
+      elapsedMs: Date.now() - providerStartedAt,
+    });
+    return text;
+  }
   const data = (await response.json().catch(() => null)) as {
+    model?: string;
+    usage?: Record<string, unknown>;
     choices?: Array<{ message?: { content?: string } }>;
   } | null;
+  recordQueenVoiceInference({
+    provider: target.provider,
+    requestedModel: target.model,
+    evidence: { model: data?.model, usage: data?.usage },
+    elapsedMs: Date.now() - providerStartedAt,
+  });
   return data?.choices?.[0]?.message?.content?.trim() || "";
 }
 
@@ -734,6 +861,7 @@ async function runProviderConversationTurn(
 export async function readOpenAiSseText(
   response: Response,
   onTextDelta: (chunk: string) => void,
+  onEvidence?: (evidence: ProviderInferenceEvidence) => void,
 ) {
   if (!response.body) return "";
   const reader = response.body.getReader();
@@ -743,9 +871,14 @@ export async function readOpenAiSseText(
   const consume = (raw: string) => {
     if (!raw || raw === "[DONE]") return;
     try {
-      const parsed = JSON.parse(raw) as {
-        choices?: Array<{ delta?: { content?: string } }>;
-      };
+        const parsed = JSON.parse(raw) as {
+          model?: string;
+          usage?: Record<string, unknown>;
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
+        if (parsed.model || parsed.usage) {
+          onEvidence?.({ model: parsed.model, usage: parsed.usage });
+        }
       const delta =
         parsed.choices?.map((choice) => choice.delta?.content || "").join("") ||
         "";
@@ -1087,6 +1220,12 @@ export async function pickConversationAgent(vaultPath?: string) {
   return (await rankConversationAgents(vaultPath))[0] ?? null;
 }
 
+async function readStoredConversationAgent(agentId: string) {
+  const profiles = await readStoredAgentProfilesStrict();
+  const profile = profiles.find((candidate) => candidate.id === agentId) ?? null;
+  return profile && supportsLiveChatTurn(profile) ? profile : null;
+}
+
 async function runRuntimeConversationTurn(
   origin: string,
   agent: AgentProfile,
@@ -1114,11 +1253,7 @@ async function runRuntimeConversationTurn(
       latencyMode: "voice",
     }),
     cache: "no-store",
-    signal: AbortSignal.timeout(
-      isHivemindosWalletPaidModelProfile(agent)
-        ? WALLET_PAID_AGENT_TURN_TIMEOUT_MS
-        : AGENT_TURN_TIMEOUT_MS,
-    ),
+    signal: AbortSignal.timeout(runtimeConversationTurnTimeoutMs(agent)),
   });
   return readRuntimeResponseText(response, onActivity, onTextDelta);
 }

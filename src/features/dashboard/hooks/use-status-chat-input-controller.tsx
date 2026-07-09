@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-commands";
 import { createFileReferenceAttachments, hydrateImageReferencePreviews } from "@/features/chat/chat-file-references";
+import { readLocalImagePreview } from "@/lib/native/local-image";
 import { messageVisibleAttachments } from "@/features/chat/chat-message-attachments";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
@@ -12,6 +13,7 @@ import { agentColdStartProcessEvent, recordAgentRuntimeWarm } from "./agent-cold
 import { handleStatusChatDashboardCommand } from "./status-chat-dashboard-command-router";
 import { compactRepeatedAssistantText, extractGeneratedKanbanTask, isChatTransportInterruption, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, yieldChatPaint } from "./status-chat-input-helpers";
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
+import { handleTranscriptCommand } from "./status-chat-transcript";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
 import { appendChatProcessState, finishChatStreamState, markChatStreamChunkState, startChatStreamState } from "./status-chat-stream-state";
 import { pushVoiceBands, resetVoiceBands } from "@/lib/stores/voice-bands-store";
@@ -556,12 +558,14 @@ export function useStatusChatInputController(props: any) {
     setChatAttachments((current) => [...current, ...created]);
     setAttachmentError("");
     setAttachmentMenuOpen(false);
-    // Progressively swap image references to thumbnails once their preview renders.
+    // Progressively swap image references to thumbnails once their preview
+    // renders — from the dropped bytes (browser) or, on the desktop where a
+    // native drop is path-only, by reading the file via the native command.
     void hydrateImageReferencePreviews(incoming, created, (id, previewUrl) => {
       setChatAttachments((current) => current.map((attachment) => (
         attachment.id === id ? { ...attachment, previewUrl } : attachment
       )));
-    });
+    }, readLocalImagePreview);
   }
 
   function handleChatFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -1046,6 +1050,7 @@ export function useStatusChatInputController(props: any) {
       ? resolveDashboardSlashCommand(prompt)
       : null;
     if (outgoingAttachments.length === 0 && outgoingDirectories.length === 0 && await handleNativeImageGenerationCommand({ rawPrompt: prompt, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey: chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey), chatAutoScrollRef, clearChatComposerDraft, appendMessage, appendPreviewMessages, setMessagesByAgent, setSelectedChatPreview })) return;
+    if (outgoingAttachments.length === 0 && outgoingDirectories.length === 0 && await handleTranscriptCommand({ rawPrompt: prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey: chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey), chatAutoScrollRef, clearChatComposerDraft, appendMessage, appendPreviewMessages, setMessagesByAgent, setSelectedChatPreview })) return;
     if (dashboardCommand) {
       const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
       await handleStatusChatDashboardCommand({ dashboardCommand, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, agents, chatSetupIssue, sharedVault, selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled, queuedMessage, setActiveView, refreshMaintenanceReport, searchAllRuntimeSessions, refreshRuntimeUsage, refreshNotifications });

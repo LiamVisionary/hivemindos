@@ -8,12 +8,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
 import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
-import { imageAttachmentPreviewSrc } from "@/features/chat/chat-file-references";
-import { ImageAttachmentThumbnail } from "@/features/chat/image-attachment-preview";
+import { shouldRenderImageGenerationCard } from "@/features/dashboard/hooks/status-chat-process-image-generation";
+import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
 import { markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type ProcessEvent } from "@/features/dashboard/views/chat/AgentProcessPanel";
 import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
 import { extractMiroSharkSimulationCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
+import { extractTranscriptCard } from "@/features/dashboard/chat-transcript-card";
+import { TranscriptCard } from "@/features/dashboard/views/chat/TranscriptCard";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatAttachment, ChatMessage } from "@/features/dashboard/dashboard-types";
@@ -287,26 +289,13 @@ function MessageFooter({ actions, align = "agent", timeLabel }: { actions?: Reac
   );
 }
 
-function AttachmentPills({ FileText, attachments }: { FileText?: IconComponent; attachments: ThreadAttachment[] }) {
+function AttachmentPills({ attachments }: { attachments: ThreadAttachment[] }) {
   if (!attachments.length) return null;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
-      {attachments.map((attachment, index) => {
-        const previewSrc = imageAttachmentPreviewSrc(attachment);
-        return previewSrc ? (
-          <ImageAttachmentThumbnail
-            key={`${attachment.id ?? attachment.name ?? index}-${index}`}
-            src={previewSrc}
-            alt={attachment.name ?? attachment.label ?? "Image attachment"}
-            variant="message"
-          />
-        ) : (
-          <span key={`${attachment.name ?? index}-${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--line-2)", borderRadius: 8, background: "var(--panel-2)", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "3px 9px" }}>
-            {FileText ? <FileText aria-hidden="true" /> : null}
-            {attachment.name ?? attachment.label ?? "Attachment"}
-          </span>
-        );
-      })}
+      {attachments.map((attachment, index) => (
+        <ChatAttachmentView key={`${attachment.id ?? attachment.name ?? index}-${index}`} attachment={attachment} surface="message" />
+      ))}
     </div>
   );
 }
@@ -466,16 +455,20 @@ function MessageThreadBase({
         const content = messageText(message, chatDisplayContent);
         const isUser = message.role === "user";
         const mirosharkCard = !isUser && content ? extractMiroSharkSimulationCard(content) : null;
+        const transcriptCard = !isUser && content ? extractTranscriptCard(content) : null;
         const rawApplicationGenerationCard = !isUser
           ? message.applicationGeneration ?? (message.imageGeneration ? imageGenerationToApplicationGeneration(message.imageGeneration) : null)
           : null;
         const generatedImagePathCard = !isUser && content ? generatedImageCardFromAssistantText(content, message.createdAt) : null;
-        const applicationGenerationCard = generatedImagePathCard && rawApplicationGenerationCard?.status !== "ready"
+        const preferredApplicationGenerationCard = generatedImagePathCard && rawApplicationGenerationCard?.status !== "ready"
           ? generatedImagePathCard
           : rawApplicationGenerationCard;
-        const hasAssistantBody = Boolean(content || applicationGenerationCard || generatedImagePathCard || mirosharkCard);
+        const applicationGenerationCard = shouldRenderImageGenerationCard(preferredApplicationGenerationCard)
+          ? preferredApplicationGenerationCard
+          : null;
+        const hasAssistantBody = Boolean(content || applicationGenerationCard || generatedImagePathCard || mirosharkCard || transcriptCard);
         const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
-        const assistantDisplayText = promptUi?.displayText ?? content;
+        const assistantDisplayText = transcriptCard ? transcriptCard.remainingText : (promptUi?.displayText ?? content);
         const jsonRenderPayload = !isUser && assistantDisplayText ? extractJsonRenderPayload(assistantDisplayText) : null;
         const assistantDisplayTextWithoutJsonRender = jsonRenderPayload?.remainingText ?? assistantDisplayText;
         const timeLabel = Number.isFinite(message.createdAt) ? formatRelativeTime?.(message.createdAt) : "";
@@ -503,17 +496,22 @@ function MessageThreadBase({
           : [];
         const events = messageEvents.length ? messageEvents : liveEvents;
         const generationForMessage = chatKanbanGeneration?.key === renderKey ? chatKanbanGeneration : null;
+        // Copying a transcript message should yield the readable transcript +
+        // summary, not the raw hidden marker that carries the card payload.
+        const copyText = transcriptCard
+          ? [transcriptCard.card.transcript, transcriptCard.remainingText].filter(Boolean).join("\n\n")
+          : content;
         const actionProps = {
           Check: iconProps.Check,
           Copy: iconProps.Copy,
           KanbanSquare: iconProps.KanbanSquare,
           LoaderCircle: iconProps.LoaderCircle,
           Sparkles: iconProps.Sparkles,
-          content,
+          content: copyText,
           copied: copiedMessageKey === renderKey,
           generation: generationForMessage,
           generateKanbanTaskFromChat,
-          onCopy: () => copyMessageContent(renderKey, content),
+          onCopy: () => copyMessageContent(renderKey, copyText),
           onDismissKanban: () => dismissKanbanPopover(renderKey),
           onToggleKanban: () => setOpenKanbanTaskMenuKey((current) => current === renderKey ? "" : renderKey),
           open: openKanbanTaskMenuKey === renderKey,
@@ -527,7 +525,7 @@ function MessageThreadBase({
                 <div style={{ maxWidth: "82%", border: "1px solid var(--honey-line)", borderRadius: "16px 16px 6px 16px", background: "var(--honey-soft)", color: "var(--fg)", fontSize: 14.5, lineHeight: 1.6, padding: "11px 16px" }}>
                   {ChatMarkdown ? <ChatMarkdown text={markdownText(content || "(sent attachments)")} className="fr-chat-markdown" /> : renderInline(content || "(sent attachments)")}
                 </div>
-                <AttachmentPills FileText={FileText} attachments={attachments} />
+                <AttachmentPills attachments={attachments} />
                 <MessageFooter align="user" timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} />
               </article>
               {userLiveEvents.length ? <ProcessPanel iconProps={iconProps} active={busy || processEventsAreActive(userLiveEvents)} events={userLiveEvents} /> : null}
@@ -560,6 +558,7 @@ function MessageThreadBase({
                   {applicationGenerationCard ? <ApplicationGenerationCard card={applicationGenerationCard} /> : null}
                   {!applicationGenerationCard && generatedImagePathCard ? <ApplicationGenerationCard card={generatedImagePathCard} /> : null}
                   {mirosharkCard ? <MiroSharkSimulationCard card={mirosharkCard} ChatMarkdown={ChatMarkdown} /> : null}
+                  {transcriptCard ? <TranscriptCard card={transcriptCard.card} /> : null}
                   {jsonRenderPayload && !applicationGenerationCard && !generatedImagePathCard && !mirosharkCard?.hideRawContent ? (
                     <div style={{ display: "grid", gap: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>

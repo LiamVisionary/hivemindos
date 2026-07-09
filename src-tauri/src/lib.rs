@@ -29,6 +29,7 @@ mod runtime_files;
 mod runtime_usage;
 mod scheduler;
 mod setup;
+mod slack_session;
 mod speech;
 mod wallet_export;
 
@@ -1624,6 +1625,7 @@ pub fn run() {
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
             wallet_export::wallet_secret_export_save,
+            slack_session::slack_session_capture,
             obsidian::obsidian_capture_note,
             obsidian::obsidian_agents,
             obsidian::obsidian_personal_wallets,

@@ -21,6 +21,7 @@ const XAI_OAUTH_REDIRECT_PATH = "/callback";
 const XAI_OAUTH_REDIRECT_URI = `http://${XAI_OAUTH_REDIRECT_HOST}:${XAI_OAUTH_REDIRECT_PORT}${XAI_OAUTH_REDIRECT_PATH}`;
 const XAI_OAUTH_BASE_URL = "https://api.x.ai/v1";
 const LOGIN_FLOW_TTL_MS = 10 * 60_000;
+const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
 
 export const XAI_OAUTH_ENV_KEYS = {
   accessToken: "XAI_OAUTH_ACCESS_TOKEN",
@@ -59,6 +60,13 @@ type XaiTokenPayload = {
   error_description?: string;
 };
 
+export type XaiOAuthAccess = {
+  accessToken: string;
+  tokenType: string;
+  expiresAt: number | null;
+  baseUrl: string;
+};
+
 type ExistingHermesOAuth = {
   home: string;
   tokens: XaiTokenPayload & { refresh_token: string };
@@ -79,6 +87,7 @@ type LoginFlow = {
 };
 
 let loginFlow: LoginFlow | null = null;
+let accessTokenRefreshPromise: Promise<XaiOAuthAccess> | null = null;
 
 function base64Url(buffer: Buffer) {
   return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -393,6 +402,112 @@ async function persistTokens(tokens: XaiTokenPayload, discovery: Discovery, herm
     }
   }
   return warnings;
+}
+
+async function refreshXaiOAuthTokens(
+  refreshToken: string,
+  discovery: Discovery,
+  prior: Pick<XaiTokenPayload, "id_token" | "token_type">,
+) {
+  const response = await fetch(discovery.token_endpoint, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: XAI_OAUTH_CLIENT_ID,
+      refresh_token: refreshToken,
+    }).toString(),
+    signal: AbortSignal.timeout(30_000),
+  });
+  const data = await response.json().catch(() => null) as XaiTokenPayload | null;
+  if (!response.ok || !data?.access_token) {
+    const detail =
+      data?.error_description ||
+      (typeof data?.error === "string" ? data.error : data?.error?.message);
+    throw new Error(detail || `xAI OAuth refresh returned HTTP ${response.status}. Reconnect xAI OAuth.`);
+  }
+  return {
+    ...data,
+    refresh_token: data.refresh_token || refreshToken,
+    id_token: data.id_token || prior.id_token,
+    token_type: data.token_type || prior.token_type || "Bearer",
+  } satisfies XaiTokenPayload;
+}
+
+/** Returns a current xAI OAuth access token without exposing it to callers that
+ * only need status. Expiring tokens are refreshed once per process and then
+ * mirrored back to the shared hive env plus Hermes auth stores. */
+export async function getXaiOAuthAccess(): Promise<XaiOAuthAccess> {
+  if (accessTokenRefreshPromise) return accessTokenRefreshPromise;
+  accessTokenRefreshPromise = (async () => {
+    const envValues = await Promise.all([
+      hiveEnvValue(XAI_OAUTH_ENV_KEYS.accessToken).catch(() => ""),
+      hiveEnvValue(XAI_OAUTH_ENV_KEYS.refreshToken).catch(() => ""),
+      hiveEnvValue(XAI_OAUTH_ENV_KEYS.idToken).catch(() => ""),
+      hiveEnvValue(XAI_OAUTH_ENV_KEYS.tokenType).catch(() => ""),
+      hiveEnvValue(XAI_OAUTH_ENV_KEYS.expiresAt).catch(() => ""),
+      hiveEnvValue(XAI_OAUTH_ENV_KEYS.baseUrl).catch(() => ""),
+    ]);
+    let [accessToken, refreshToken, idToken, tokenType, expiresAtRaw] = envValues;
+    const baseUrl = envValues[5];
+
+    if (!refreshToken.trim()) {
+      const synced = await syncExistingHermesOAuth({
+        writeSharedEnv: true,
+        writeToHermes: true,
+      });
+      const existing = synced.existing;
+      if (existing) {
+        accessToken = existing.tokens.access_token || "";
+        refreshToken = existing.tokens.refresh_token;
+        idToken = existing.tokens.id_token || "";
+        tokenType = existing.tokens.token_type || "Bearer";
+        expiresAtRaw = String(existing.accessTokenExpiresAt || "");
+      }
+    }
+
+    const expiresAtNumber = Number(expiresAtRaw);
+    const expiresAt = Number.isFinite(expiresAtNumber) && expiresAtNumber > 0
+      ? expiresAtNumber
+      : null;
+    if (
+      accessToken.trim() &&
+      (!expiresAt || expiresAt > Date.now() + ACCESS_TOKEN_REFRESH_SKEW_MS)
+    ) {
+      return {
+        accessToken: accessToken.trim(),
+        tokenType: tokenType.trim() || "Bearer",
+        expiresAt,
+        baseUrl: baseUrl.trim() || XAI_OAUTH_BASE_URL,
+      };
+    }
+    if (!refreshToken.trim()) {
+      throw new Error("xAI OAuth is not connected. Sign in from the xAI OAuth tab first.");
+    }
+
+    const discovery = await xaiOAuthDiscovery();
+    const refreshed = await refreshXaiOAuthTokens(refreshToken.trim(), discovery, {
+      id_token: idToken.trim(),
+      token_type: tokenType.trim(),
+    });
+    await persistTokens(refreshed, discovery, hermesHomesFromInput());
+    const refreshedExpiresAt = Date.now() + Math.max(60, Number(refreshed.expires_in) || 3600) * 1000;
+    return {
+      accessToken: refreshed.access_token || "",
+      tokenType: refreshed.token_type || "Bearer",
+      expiresAt: refreshedExpiresAt,
+      baseUrl: baseUrl.trim() || XAI_OAUTH_BASE_URL,
+    };
+  })();
+  try {
+    return await accessTokenRefreshPromise;
+  } finally {
+    accessTokenRefreshPromise = null;
+  }
 }
 
 function callbackHtml(title: string, body: string, status = 200) {

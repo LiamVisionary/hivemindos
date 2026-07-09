@@ -47,9 +47,12 @@ import type {
   HiveComputeEnvPresence,
   HiveComputeGatewayStatus,
   HiveComputeHostContext,
+  HiveComputeHostDiscovery,
   HiveComputeHostModel,
   HiveComputeHostRunConfig,
+  HiveComputeHostTarget,
   HiveComputeInstallResult,
+  HiveComputeLocalBackendKind,
   HiveComputeLocalBackendStatus,
   HiveComputeMarketplaceStatus,
   HiveComputeModelPerformance,
@@ -58,6 +61,8 @@ import type {
   HiveComputeWorkerRunStatus,
 } from "@/lib/types/hive-compute-marketplace";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { readLocalLmStudioLinkMap } from "@/lib/services/runtime-adapters/openai-compatible";
+import { isFleetCollectorUrl } from "@/lib/services/local-collector-url";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 const execFileAsync = promisify(execFile);
@@ -194,7 +199,7 @@ export function resolveHiveComputeRuntimeConfig(
   };
 }
 
-export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMarketplaceStatus> {
+export async function readHiveComputeMarketplaceStatus(target?: HiveComputeHostTarget | null): Promise<HiveComputeMarketplaceStatus> {
   const [
     gatewayUrl,
     openAiBaseUrl,
@@ -298,6 +303,7 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
     nodeInstalled: node.installed,
     workerTokenPresent: workerToken.present,
     gatewayConfigured,
+    target,
   });
   const earningReady = host.canRun;
   const status: HiveComputeMarketplaceStatus = {
@@ -769,9 +775,85 @@ async function probeBackend(candidate: HiveComputeLocalBackendStatus, config: Hi
   }
 }
 
-async function discoverHiveComputeBackend(config: HiveComputeHostRunConfig) {
-  const checked = await Promise.all((await localBackendCandidates()).map((candidate) => probeBackend(candidate, config)));
-  return checked.find((candidate) => candidate.backend.reachable && candidate.models.length) ??
+function isRemoteCollectorTarget(
+  target?: HiveComputeHostTarget | null,
+): target is HiveComputeHostTarget & { collectorUrl: string } {
+  if (!target?.collectorUrl || target.isSelf) return false;
+  const url = target.collectorUrl.trim();
+  if (!url) return false;
+  // A linkd peer-proxy URL (…/peer/<ip>:<port>) is loopback-hosted but reaches a
+  // remote machine, so it stays eligible; a plain loopback collector is the local
+  // host and should be probed directly instead.
+  const isPeerProxy = /\/peer\//i.test(url);
+  if (!isPeerProxy && /^https?:\/\/(127\.0\.0\.1|localhost|\[?::1\]?|0\.0\.0\.0)(:|\/|$)/i.test(url)) return false;
+  return isFleetCollectorUrl(url);
+}
+
+// A target was meant for a remote machine (not the dashboard host) even if we
+// cannot reach its collector — used to keep the UI honest instead of silently
+// showing the local host's models.
+function isRemoteTargetIntent(target?: HiveComputeHostTarget | null): boolean {
+  return Boolean(target && target.isSelf === false);
+}
+
+// Every HivemindOS collector reverse-proxies its machine's local LM Studio
+// (:1234) and arbitrary loopback ports (Ollama :11434) at /app-proxy/<port>/*,
+// so a remote fleet machine's backend is reachable over Tailscale without any
+// per-machine URL setup (see src/lib/services/fleet/lmstudio-model-hosts.ts).
+function remoteBackendCandidates(collectorUrl: string): HiveComputeLocalBackendStatus[] {
+  const base = collectorUrl.trim().replace(/\/+$/, "");
+  return [
+    { kind: "lmstudio", label: "LM Studio", host: `${base}/app-proxy/1234/v1`, reachable: false, message: "" },
+    { kind: "ollama", label: "Ollama", host: `${base}/app-proxy/11434`, reachable: false, message: "" },
+  ];
+}
+
+// Tag LM Studio models that are actually served from a linked device (LM Link)
+// with that device's friendly name, since the local /v1/models endpoint flattens
+// them as if they were local on-disk models.
+async function enrichLocalLmLinkModels(
+  models: HiveComputeHostModel[],
+  backendKind: HiveComputeLocalBackendKind,
+): Promise<HiveComputeHostModel[]> {
+  if (!models.length || backendKind === "ollama") return models;
+  const linkMap = await readLocalLmStudioLinkMap().catch(() => null);
+  if (!linkMap || !linkMap.byKey.size) return models;
+  const lookup = (id: string) => {
+    const direct = linkMap.byKey.get(id);
+    if (direct) return direct;
+    for (const [key, entry] of linkMap.byKey) {
+      if (key === id || key.endsWith(`/${id}`) || id.endsWith(`/${key}`)) return entry;
+    }
+    return null;
+  };
+  return models.map((model) => {
+    const entry = lookup(model.providerModelId) ?? lookup(model.id);
+    if (entry?.remote) {
+      return { ...model, remote: true, ...(entry.hostDeviceName ? { hostDeviceName: entry.hostDeviceName } : {}) };
+    }
+    return model;
+  });
+}
+
+async function discoverHiveComputeBackend(config: HiveComputeHostRunConfig, target?: HiveComputeHostTarget | null) {
+  const remote = isRemoteCollectorTarget(target);
+  // Remote machine we can't reach over its collector — surface that instead of
+  // falling back to the local host's models (the mismatch we're fixing).
+  if (!remote && isRemoteTargetIntent(target)) {
+    return {
+      backend: {
+        kind: "openai" as const,
+        label: "Remote machine",
+        host: target?.collectorUrl || "",
+        reachable: false,
+        message: `Can't reach ${target?.machineName || "that machine"}'s collector over Tailscale to list its models.`,
+      },
+      models: [] as HiveComputeHostModel[],
+    };
+  }
+  const candidates = remote ? remoteBackendCandidates(target.collectorUrl) : await localBackendCandidates();
+  const checked = await Promise.all(candidates.map((candidate) => probeBackend(candidate, config)));
+  const chosen = checked.find((candidate) => candidate.backend.reachable && candidate.models.length) ??
     checked.find((candidate) => candidate.backend.reachable) ??
     checked[0] ?? {
       backend: {
@@ -781,8 +863,19 @@ async function discoverHiveComputeBackend(config: HiveComputeHostRunConfig) {
         reachable: false,
         message: "No local OpenAI-compatible backend was checked.",
       },
-      models: [],
+      models: [] as HiveComputeHostModel[],
     };
+  if (remote) {
+    const models = chosen.models.map((model) => ({
+      ...model,
+      remote: true,
+      ...(target.machineName ? { hostDeviceName: target.machineName } : {}),
+      ...(target.location ? { hostLocation: target.location } : {}),
+    }));
+    return { ...chosen, models };
+  }
+  const models = await enrichLocalLmLinkModels(chosen.models, chosen.backend.kind);
+  return { ...chosen, models };
 }
 
 function currentWorkerRun(): HiveComputeWorkerRunStatus {
@@ -825,9 +918,10 @@ async function buildHiveComputeHostContext(params: {
   workerTokenPresent: boolean;
   gatewayConfigured: boolean;
   config?: Partial<HiveComputeHostRunConfig> | null;
+  target?: HiveComputeHostTarget | null;
 }): Promise<HiveComputeHostContext> {
   const config = await resolveHiveComputeRunConfig(params.config);
-  const discovered = await discoverHiveComputeBackend(config);
+  const discovered = await discoverHiveComputeBackend(config, params.target);
   const advertisedModels = advertisedWorkerModels(discovered.models, config);
   const canRun = Boolean(
     params.installed &&
@@ -839,6 +933,15 @@ async function buildHiveComputeHostContext(params: {
     discovered.models.length &&
     advertisedModels.length,
   );
+  const remoteTarget = isRemoteTargetIntent(params.target);
+  const discoveredFrom: HiveComputeHostDiscovery = remoteTarget
+    ? {
+      remote: true,
+      ...(params.target?.machineName ? { machineName: params.target.machineName } : {}),
+      ...(params.target?.collectorUrl ? { collectorUrl: params.target.collectorUrl } : {}),
+      ...(params.target?.location ? { location: params.target.location } : {}),
+    }
+    : { remote: false, ...(params.target?.machineName ? { machineName: params.target.machineName } : {}) };
   return {
     backend: discovered.backend,
     models: discovered.models,
@@ -852,6 +955,7 @@ async function buildHiveComputeHostContext(params: {
       advertisedModelCount: advertisedModels.length,
     }),
     run: currentWorkerRun(),
+    discoveredFrom,
   };
 }
 

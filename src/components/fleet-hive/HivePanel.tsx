@@ -39,16 +39,29 @@ function ActionIcon({ icon: Icon, size = 13 }: { icon: LucideIcon; size?: number
   return <Icon size={size} strokeWidth={2} aria-hidden="true" />;
 }
 
+// Identify the actual Queen Bee agent, mirroring how AgentsPanel resolves it
+// (beeRole first, then id/name), so the Queen's "Chat" button targets the Queen
+// rather than an arbitrary worker.
+function isQueenAgent(a: HiveAgent) {
+  return a.source.beeRole === "queen" || /^queen-bee-/i.test(a.source.id) || /queen/i.test(a.name);
+}
+
 function firstQueenChatTarget(machines: HiveMachine[]) {
-  let fallback: { m: HiveMachine; a: HiveAgent } | null = null;
+  let workingFallback: { m: HiveMachine; a: HiveAgent } | null = null;
+  let anyFallback: { m: HiveMachine; a: HiveAgent } | null = null;
   for (const m of machines) {
     for (const a of m.agents) {
+      // The Queen's Chat button must open a chat with the Queen Bee, not the
+      // first working worker. Prefer the Queen agent whenever it's present.
+      if (isQueenAgent(a)) return { m, a };
       if (!fleetAgentCanChat(a.source)) continue;
-      if (a.state === "working") return { m, a };
-      fallback ??= { m, a };
+      if (a.state === "working") workingFallback ??= { m, a };
+      anyFallback ??= { m, a };
     }
   }
-  return fallback;
+  // No Queen agent in the fleet: fall back to a working chat-capable worker, else
+  // the first chat-capable one (the pre-existing behaviour).
+  return workingFallback ?? anyFallback;
 }
 
 export interface HivePanelHandlers {

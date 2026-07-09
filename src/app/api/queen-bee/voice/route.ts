@@ -22,6 +22,7 @@ import {
 } from "@/lib/services/queen-bee/voice-settings";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { openAiOAuthConfigured, preferOpenAiApiKey } from "@/lib/services/openai-oauth";
+import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract";
 import {
   LOCAL_TTS_RUNTIME,
   isLocalTtsProviderId,
@@ -194,13 +195,16 @@ export async function POST(request: NextRequest) {
 const OPENAI_TTS_RUNTIME = "openai-tts";
 
 // Which brain answers a pipeline voice turn, from the Queen's Calls prefs
-// (`voiceChatBrain`): explicit custom override > the Queen agent's own
+// (`voiceChatBrain`): explicit voice override > the Queen agent's own
 // selected provider/model (the default — voice speaks with the model you
-// picked for the agent) > the legacy ranked fleet-agent lane.
+// picked for the agent) > the legacy ranked fleet-agent lane. Older persisted
+// `fleet-agent` rows did not record whether the user actually chose that lane,
+// so only an explicit new fleet selection can override the Queen's model.
 async function resolveVoiceChatBrainPlan(): Promise<VoiceChatBrainPlan> {
   const calls = await readQueenBeeCallPreferences().catch(() => null);
   const pref = calls?.voiceChatBrain;
-  if (pref?.source === "fleet-agent") return { kind: "fleet-agent" };
+  const explicitFleetAgent = pref?.source === "fleet-agent" && pref.explicit === true;
+  if (explicitFleetAgent) return { kind: "fleet-agent" };
   if (pref?.source === "custom" && pref.model) {
     const provider = pref.provider || "openai-api";
     return {
@@ -247,11 +251,12 @@ async function resolveVoiceChatBrainPlan(): Promise<VoiceChatBrainPlan> {
     }
     // Direct-callable = the server holds the SAME credential the agent uses
     // (a key-based catalog provider read from the shared hive env). OAuth-held
-    // providers (openai-codex, copilot, xai-oauth) keep the turn inside the
+    // providers (openai-codex, copilot) keep the turn inside the
     // agent's own runtime — never a silent credential substitution.
     const directCallable =
       provider === "openai" ||
       provider === "openai-api" ||
+      isXaiOAuthProvider(provider) ||
       (() => {
         const entry = providerCatalogEntry(provider);
         return Boolean(entry?.baseUrl && entry.keyEnv);

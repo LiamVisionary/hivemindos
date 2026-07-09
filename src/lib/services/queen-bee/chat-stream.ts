@@ -16,9 +16,17 @@ export type QueenChatToolCall = { id: string; name: string; arguments: string };
 export type QueenChatStreamState = {
   content: string;
   toolCalls: Map<number, QueenChatToolCall>;
+  servedModel?: string;
+  usage?: QueenChatUsage;
+};
+
+export type QueenChatUsage = Record<string, unknown> & {
+  prompt_tokens_details?: { cached_tokens?: number };
 };
 
 type OpenAiStreamChunk = {
+  model?: string;
+  usage?: QueenChatUsage;
   choices?: Array<{
     delta?: {
       content?: string | null;
@@ -37,6 +45,8 @@ export function createQueenChatStreamState(): QueenChatStreamState {
 
 /** Fold one parsed stream chunk in; returns the text delta (if any) to forward. */
 export function applyOpenAiChatChunk(state: QueenChatStreamState, chunk: OpenAiStreamChunk): string {
+  if (typeof chunk.model === "string" && chunk.model.trim()) state.servedModel = chunk.model.trim();
+  if (chunk.usage && typeof chunk.usage === "object") state.usage = chunk.usage;
   const delta = chunk.choices?.[0]?.delta;
   if (!delta) return "";
   for (const fragment of delta.tool_calls ?? []) {
@@ -59,6 +69,8 @@ export function finalizeQueenChatStream(state: QueenChatStreamState): {
   content: string;
   toolCalls: QueenChatToolCall[];
   assistant: Record<string, unknown>;
+  servedModel?: string;
+  usage?: QueenChatUsage;
 } {
   const toolCalls = [...state.toolCalls.entries()]
     .sort(([a], [b]) => a - b)
@@ -72,7 +84,13 @@ export function finalizeQueenChatStream(state: QueenChatStreamState): {
       function: { name: call.name, arguments: call.arguments || "{}" },
     }));
   }
-  return { content: state.content, toolCalls, assistant };
+  return {
+    content: state.content,
+    toolCalls,
+    assistant,
+    ...(state.servedModel ? { servedModel: state.servedModel } : {}),
+    ...(state.usage ? { usage: state.usage } : {}),
+  };
 }
 
 /**

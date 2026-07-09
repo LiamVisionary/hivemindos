@@ -69,6 +69,10 @@ export type VideoGenerationFailure = {
   error: string;
   status: number;
   appCount?: number;
+  appId?: string;
+  appName?: string;
+  machineName?: string;
+  serviceKind?: string;
 };
 
 export type VideoGenerationResult = VideoGenerationSuccess | VideoGenerationFailure;
@@ -150,20 +154,31 @@ function appPreferenceScore(app: ConnectedHostedApp, prompt: string, preferences
   return score;
 }
 
+// Strong app name/description terms that specifically indicate a VIDEO generator.
+// Deliberately EXCLUDES ambiguous image-or-anything words ("comfyui", "media",
+// "creative", bare "generate") that previously let an image studio pose as a
+// video app (2026-07-10: a Z-Image/ComfyUI control surface with a bare
+// `/api/generate` route out-scored everything and wasted an 18s image render).
+const VIDEO_APP_KEYWORD = /\b(?:videos?|movie|animatediff|animate|motion|reel|palmier|seedance|higgsfield|kling|runway|pika|luma|veo|sora|mochi|ltx|svd|hunyuan)\b|image[-\s]?to[-\s]?video|img2vid|\bi2v\b|text[-\s]?to[-\s]?video|txt2vid/i;
+const VIDEO_TASK_KEYWORD = /image[-\s]?to[-\s]?video|img2vid|\bi2v\b|text[-\s]?to[-\s]?video|txt2vid|video[-\s]?generation|generate[-\s]?video/i;
+
+// A connected app route only counts as a *video* route when its path/summary
+// carries a genuinely video-specific signal. A bare image `/api/generate` (or a
+// generic "prompt"/"generate" summary) must NOT qualify.
 function videoRouteScore(route: { method?: string; path?: string; summary?: string; category?: string }) {
   const method = clean(route.method || "GET").toUpperCase();
   if (method && method !== "POST") return 0;
   const text = `${route.path ?? ""} ${route.summary ?? ""} ${route.category ?? ""}`.toLowerCase();
   let score = 0;
-  if (/\/(?:api\/)?(?:generate|generation|video|videos|image-to-video|img2vid|i2v|text-to-video|txt2vid)(?:\/|$)/.test(text)) score += 50;
-  if (/video|image.?to.?video|img2vid|i2v|text.?to.?video|txt2vid|animate|motion|clip|reel/.test(text)) score += 45;
-  if (/prompt|generate|generation/.test(text)) score += 20;
+  if (/image[-_\s]?to[-_\s]?video|img2vid|\bi2v\b|text[-_\s]?to[-_\s]?video|txt2vid|generate[-_\s]?video|video[-_\s]?generat|\/videos?(?:\/|$)/.test(text)) score += 60;
+  if (/\bvideos?\b|animatediff|\banimate\b|\bmotion\b|\.mp4|\.mov|\.webm/.test(text)) score += 40;
   if (/status|history|models|health|download|delete/.test(text)) score -= 35;
   return score;
 }
 
 function appScore(app: ConnectedHostedApp, input: VideoGenerationInput, preferences: ConnectedAppPreference[]) {
   if (!app.apiBaseUrl) return -1;
+  // An explicit app pin from the caller always wins — the agent/user chose it.
   if (input.appId && appMatchesId(app, input.appId)) return 10_000;
   const requestedKind = clean(input.serviceKind).toLowerCase();
   const routeText = (app.apiRoutes ?? []).map((route) => `${route.method ?? ""} ${route.path ?? ""} ${route.summary ?? ""} ${route.category ?? ""}`).join(" ");
@@ -171,10 +186,19 @@ function appScore(app: ConnectedHostedApp, input: VideoGenerationInput, preferen
   const haystack = `${app.name ?? ""} ${app.description ?? ""} ${app.serviceKind ?? ""} ${appUrls.openUrl ?? ""} ${app.apiBaseUrl ?? ""} ${routeText}`.toLowerCase();
   const routes = app.apiRoutes ?? [];
   const hasVideoRoute = routes.some((route) => videoRouteScore(route) > 0);
+  const kindIsVideo = app.serviceKind?.toLowerCase() === "video";
+  const hasVideoKeyword = VIDEO_APP_KEYWORD.test(haystack) || VIDEO_TASK_KEYWORD.test(haystack);
+  // Hard gate: without a genuine video signal (a "video" serviceKind, a real
+  // video route, or a video-specific name/description) the app is NOT a video
+  // candidate. selectVideoApp filters score > 0, so returning 0 surfaces the
+  // honest "No connected video generation app…" instead of dispatching a video
+  // request to an image-only app that will never return a video URL.
+  if (!kindIsVideo && !hasVideoRoute && !hasVideoKeyword) return 0;
   let score = 0;
-  if (requestedKind && app.serviceKind?.toLowerCase() === requestedKind) score += 120;
-  if (/\b(?:video|movie|clip|animation|reel|media|creative|palmier|seedance|higgsfield|kling|runway|wan|comfyui|animatediff|hunyuan)\b/.test(haystack)) score += 95;
-  if (/\b(?:image[-\s]?to[-\s]?video|img2vid|i2v|text[-\s]?to[-\s]?video|txt2vid|video generation|generate video)\b/.test(haystack)) score += 90;
+  if (requestedKind === "video" && kindIsVideo) score += 120;
+  else if (kindIsVideo) score += 100;
+  if (VIDEO_APP_KEYWORD.test(haystack)) score += 95;
+  if (VIDEO_TASK_KEYWORD.test(haystack)) score += 90;
   if (hasVideoRoute) score += 110;
   score += localProxyScore(app.apiBaseUrl);
   score += appPreferenceScore(app, clean(input.prompt), preferences);
@@ -460,12 +484,18 @@ export async function runChatVideoGeneration(input: VideoGenerationInput): Promi
   const startedAt = Date.now();
   const prompt = clean(input.prompt);
   if (!prompt) return { ok: false, reason: "generation-failed", error: "Prompt is required.", status: 400 };
+  // Hoisted so the generation-failed catch below can name the app it dispatched
+  // to — otherwise a failure record can't say which app returned no video URL.
+  let selectedApp: VideoGenerationCandidate | null = null;
+  let discoveredAppCount = 0;
   try {
     const [apps, preferences] = await Promise.all([
       discoveredApps(input.origin, input.appId),
       readAppPreferences().catch(() => [] as ConnectedAppPreference[]),
     ]);
+    discoveredAppCount = apps.length;
     const app = selectVideoApp(apps, input, preferences);
+    selectedApp = app;
     if (!app) {
       return {
         ok: false,
@@ -515,6 +545,11 @@ export async function runChatVideoGeneration(input: VideoGenerationInput): Promi
       reason: "generation-failed",
       error: error instanceof Error ? error.message : "Video generation failed.",
       status: 502,
+      appId: selectedApp?.id,
+      appName: selectedApp?.name,
+      machineName: selectedApp?.machineName,
+      serviceKind: selectedApp?.serviceKind,
+      appCount: discoveredAppCount,
     };
   }
 }

@@ -742,6 +742,60 @@ async function runLmsJson(args: string[], timeout = 15_000) {
   return JSON.parse(trimmed) as unknown;
 }
 
+export type LmStudioLinkMapEntry = {
+  remote: boolean;
+  deviceIdentifier: string | null;
+  hostDeviceName: string | null;
+};
+
+/**
+ * Classifies each LM Studio model as local-on-disk vs served from a linked
+ * device (LM Link) and resolves the linked device's friendly name, using
+ * `lms ls --json` (`deviceIdentifier`) + `lms link status --json` (peer names).
+ * The OpenAI-compatible `/v1/models` REST endpoint flattens LM Link models as
+ * local, so the CLI is the only reliable source. Degrades to empty maps when
+ * LM Studio / the `lms` CLI is unavailable so callers stay non-fatal.
+ */
+export async function readLocalLmStudioLinkMap(): Promise<{
+  selfDeviceName: string | null;
+  byKey: Map<string, LmStudioLinkMapEntry>;
+}> {
+  const byKey = new Map<string, LmStudioLinkMapEntry>();
+  try {
+    const [rawModels, linkStatus] = await Promise.all([
+      runLmsJson(["ls", "--json"]).catch(() => []),
+      runLmsJson(["link", "status", "--json"]).catch(() => null),
+    ]);
+    const peerNames = new Map<string, string>();
+    let selfDeviceName: string | null = null;
+    if (linkStatus && typeof linkStatus === "object") {
+      const status = linkStatus as { deviceName?: string; peers?: Array<{ deviceIdentifier?: string; deviceName?: string }> };
+      selfDeviceName = typeof status.deviceName === "string" ? status.deviceName : null;
+      for (const peer of status.peers ?? []) {
+        if (peer?.deviceIdentifier && peer.deviceName) peerNames.set(String(peer.deviceIdentifier), String(peer.deviceName));
+      }
+    }
+    for (const model of Array.isArray(rawModels) ? rawModels : []) {
+      if (!model || typeof model !== "object") continue;
+      const row = model as { key?: string; modelKey?: string; deviceIdentifier?: string | null };
+      const key = (row.key || row.modelKey || "").trim();
+      if (!key) continue;
+      const deviceIdentifier = row.deviceIdentifier ? String(row.deviceIdentifier) : null;
+      const entry: LmStudioLinkMapEntry = {
+        remote: Boolean(deviceIdentifier),
+        deviceIdentifier,
+        hostDeviceName: deviceIdentifier ? peerNames.get(deviceIdentifier) ?? null : null,
+      };
+      // Prefer a local copy when the same key is both on-disk and shared via LM Link.
+      const existing = byKey.get(key);
+      if (!existing || (existing.remote && !entry.remote)) byKey.set(key, entry);
+    }
+    return { selfDeviceName, byKey };
+  } catch {
+    return { selfDeviceName: null, byKey };
+  }
+}
+
 async function fetchModels(profile: AgentProfile): Promise<OpenAIModelList> {
   if (isHivemindosWalletPaidModelProfile(profile)) {
     return {

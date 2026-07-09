@@ -80,14 +80,18 @@ function loadImageElement(src: string) {
   });
 }
 
-async function generateImagePreviewDataUrl(file: File) {
-  const dataUrl = await readFileAsDataUrl(file);
-  if (!dataUrl) return "";
-  // SVGs are already tiny and vector — use them as-is rather than rasterizing.
-  if (file.type === "image/svg+xml" || /\.svg$/i.test(file.name)) return dataUrl;
+// Downscale a full-resolution image data URL to a small display-only preview.
+// Returns "" when the format can't be decoded here (e.g. HEIC in Chromium) so
+// the caller falls back to the pill rather than showing a broken image.
+async function downscaleImageDataUrl(dataUrl: string, keepsAlpha: boolean) {
   if (typeof document === "undefined" || typeof Image === "undefined") return dataUrl;
+  let image: HTMLImageElement;
   try {
-    const image = await loadImageElement(dataUrl);
+    image = await loadImageElement(dataUrl);
+  } catch {
+    return "";
+  }
+  try {
     const width = image.naturalWidth || image.width;
     const height = image.naturalHeight || image.height;
     if (!width || !height) return dataUrl;
@@ -101,7 +105,6 @@ async function generateImagePreviewDataUrl(file: File) {
     context.imageSmoothingQuality = "high";
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     // Keep transparency for formats that use it; JPEG-encode photos to stay small.
-    const keepsAlpha = /^image\/(png|webp|gif|avif)$/.test(file.type);
     const encoded = keepsAlpha
       ? canvas.toDataURL("image/webp", 0.82)
       : canvas.toDataURL("image/jpeg", PREVIEW_JPEG_QUALITY);
@@ -111,26 +114,48 @@ async function generateImagePreviewDataUrl(file: File) {
   }
 }
 
+async function generateImagePreviewDataUrl(file: File) {
+  const dataUrl = await readFileAsDataUrl(file);
+  if (!dataUrl) return "";
+  // SVGs are already tiny and vector — use them as-is rather than rasterizing.
+  if (file.type === "image/svg+xml" || /\.svg$/i.test(file.name)) return dataUrl;
+  return downscaleImageDataUrl(dataUrl, /^image\/(png|webp|gif|avif)$/.test(file.type));
+}
+
+// Build a preview from a full-resolution data URL (e.g. a desktop native
+// local-file read of a path-only drop), classifying transparency by source.
+async function generateImagePreviewFromDataUrl(dataUrl: string, nameOrPath: string) {
+  if (!dataUrl) return "";
+  if (/^data:image\/svg\+xml/i.test(dataUrl) || /\.svg$/i.test(nameOrPath)) return dataUrl;
+  const keepsAlpha = /^data:image\/(png|webp|gif|avif)/i.test(dataUrl) || /\.(png|webp|gif|avif)$/i.test(nameOrPath);
+  return downscaleImageDataUrl(dataUrl, keepsAlpha);
+}
+
 /**
- * Progressively attach a display-only `previewUrl` to any image reference that
- * still carries bytes (browser file drops / picker). Path-only references (e.g.
- * Tauri native drops with `size` 0) have no bytes to read and are left as pills.
- * `attachments[i]` must correspond to `files[i]` (as produced by
- * `createFileReferenceAttachments`).
+ * Progressively attach a display-only `previewUrl` to image references. When the
+ * dropped file carries bytes (browser drops / pickers) the preview is built from
+ * those bytes; when it's a path-only reference (Tauri native drops give a path
+ * and no bytes) the optional `readPathPreview` reads the file to a data URL that
+ * is then downscaled. `attachments[i]` must correspond to `files[i]`.
  */
 export async function hydrateImageReferencePreviews(
   files: FileList | File[],
   attachments: KanbanTaskAttachment[],
   onPreview: (id: string, previewUrl: string) => void,
+  readPathPreview?: (path: string) => Promise<string | null>,
 ) {
   const list = Array.from(files);
   await Promise.all(attachments.map(async (attachment, index) => {
+    if (attachment.previewUrl || attachment.dataUrl || !isImageAttachment(attachment)) return;
     const file = list[index];
-    if (!file || attachment.previewUrl || attachment.dataUrl) return;
-    if (!isImageAttachment(attachment)) return;
-    if (!(Number(file.size) > 0)) return; // path-only reference — no bytes to preview
     try {
-      const previewUrl = await generateImagePreviewDataUrl(file);
+      let previewUrl = "";
+      if (file && Number(file.size) > 0) {
+        previewUrl = await generateImagePreviewDataUrl(file);
+      } else if (attachment.referencePath && readPathPreview) {
+        const raw = await readPathPreview(attachment.referencePath);
+        if (raw) previewUrl = await generateImagePreviewFromDataUrl(raw, attachment.referencePath);
+      }
       if (previewUrl) onPreview(attachment.id, previewUrl);
     } catch {
       // Leave the attachment as a reference pill if the preview can't be built.

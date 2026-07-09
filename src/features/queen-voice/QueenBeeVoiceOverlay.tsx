@@ -156,6 +156,22 @@ function TranscriptTurns({
     syncInteractionActive();
   }, [syncInteractionActive]);
 
+  // The down-tail collapse control lives INSIDE this panel, so at click time the
+  // pointer is over the transcript and has already latched the interaction hold
+  // on (handlePointerEnter → transcriptInteractionActive=true). That hold keeps
+  // transcriptExpanded true, so a plain onCollapse() set nothing visible and the
+  // down-tail "did nothing" (2026-07-10). Drop the local pointer/selection
+  // latches and clear the shared interaction signal BEFORE collapsing so the
+  // manual gesture wins; a trailing pointerup/selectionchange re-sync then reads
+  // the refs as down and can't immediately re-open the bubble.
+  const handleCollapse = React.useCallback(() => {
+    pointerInsideRef.current = false;
+    pointerSelectingTextRef.current = false;
+    textSelectionInsideRef.current = false;
+    onInteractionActiveChange(false);
+    onCollapse();
+  }, [onCollapse, onInteractionActiveChange]);
+
   // Spring open/close: keep the bubble mounted through its exit animation.
   // `wantOpen` is the desired state; `closing` holds the bubble one beat longer
   // so transcriptCollapse can finish; `rendered` (derived) is DOM presence.
@@ -343,7 +359,7 @@ function TranscriptTurns({
       <button
         type="button"
         className={styles.bubbleTail}
-        onClick={onCollapse}
+        onClick={handleCollapse}
         aria-label="Hide chat history"
         title="Hide chat history"
       >

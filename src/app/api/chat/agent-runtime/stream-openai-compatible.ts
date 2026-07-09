@@ -82,6 +82,10 @@ import { runtimeProcessEventsSsePayload } from "./process-events";
 import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
 import {
+  isXaiOAuthProvider,
+  xaiOAuthChatRequestOptions,
+} from "@/lib/services/xai-oauth-inference-contract";
+import {
   execFileAsync,
   interactiveRuntimeLockKey,
   recordChatHoney,
@@ -604,7 +608,7 @@ export async function streamOpenAICompatibleRuntime(
       name: selected.name,
     }] : [];
   };
-  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean; cacheBody: Record<string, unknown> } | null = null;
+  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean; cacheBody: Record<string, unknown>; inferenceBody: Record<string, unknown> } | null = null;
   const runNonStreamToolCalls = async (toolCalls: AccumulatedToolCall[]): Promise<NonStreamToolRun> => {
     const events: string[] = [];
     const assistantToolCalls: Array<Record<string, unknown>> = [];
@@ -797,6 +801,7 @@ export async function streamOpenAICompatibleRuntime(
         messages: conversation,
         stream: false,
         ...winningRequest.cacheBody,
+        ...winningRequest.inferenceBody,
         ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
       };
       let continuation: Response | null = null;
@@ -911,6 +916,9 @@ export async function streamOpenAICompatibleRuntime(
       model,
       cacheScope: `${candidateProfile.id || runtimeProfile.id || "agent"}:${runtimeSessionId || candidateProfile.sessionKey || "session"}`,
     });
+    const inferenceBody = isXaiOAuthProvider(candidateProfile.provider)
+      ? xaiOAuthChatRequestOptions(model)
+      : {};
     const attemptHeaders = {
       "Content-Type": "application/json",
       ...(candidateProfile.token ? { Authorization: `Bearer ${candidateProfile.token}` } : {}),
@@ -925,6 +933,7 @@ export async function streamOpenAICompatibleRuntime(
       messages: modelMessages,
       stream: true,
       ...cacheHints.body,
+      ...inferenceBody,
       ...(withTools && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
     });
     let requestBody = requestBodyFor(sentTools);
@@ -1044,7 +1053,7 @@ export async function streamOpenAICompatibleRuntime(
             elapsedMs: Date.now() - fetchStartedAt,
           });
           if (upstream.ok) {
-            winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools, cacheBody: cacheHints.body };
+            winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools, cacheBody: cacheHints.body, inferenceBody };
             break;
           }
         } catch (retryError) {
@@ -1066,7 +1075,7 @@ export async function streamOpenAICompatibleRuntime(
     }
     if (upstream.ok) {
       recordAgentRuntimeWarm(candidateProfile);
-      winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools, cacheBody: cacheHints.body };
+      winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools, cacheBody: cacheHints.body, inferenceBody };
       break;
     }
     lastStatus = upstream.status;
@@ -1769,6 +1778,7 @@ export async function streamOpenAICompatibleRuntime(
             messages: conversation,
             stream: true,
             ...winningRequest.cacheBody,
+            ...winningRequest.inferenceBody,
             ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
           };
           let continuation: Response | null = null;

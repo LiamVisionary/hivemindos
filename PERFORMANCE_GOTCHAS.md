@@ -146,3 +146,36 @@ those frames now appear on `tokio-rt-worker` threads.
 - `OPTIMIZATIONS.md` — the change entry (files, verification, tradeoffs).
 - `CHANGELOG.md` — the release-facing entry.
 - Fixed 2026-07-04.
+
+## G2 - A cached agent request can still be slow, and the selected-model label can be false
+
+### Symptom
+
+An agent or Queen Bee takes 10-40 seconds, may never call the requested tool, and the UI says a specific provider/model is selected. Adding a cache key does not obviously fix it.
+
+### What to measure before tuning
+
+1. Record the upstream `model` field, not the configured label. A runtime bridge may accept `model` in its body but still use machine-wide config internally.
+2. Count model iterations and aggregate prompt tokens. One 33K-token prompt sent three times is a 100K-token turn even if each individual request is cached well.
+3. Separate first byte, first visible content, prompt/input tokens, cached input tokens, output tokens, and reasoning tokens. Prompt caching only reduces repeated prefix ingestion; it does not remove tool round trips or generated reasoning.
+4. Confirm the requested tool actually ran. A slow planning response that merely says it will fetch something is not tool latency.
+
+### HivemindOS case
+
+The July 2026 latest-X failure had all four traps: Hermes ignored the request-level xAI provider/model override, a random first system marker forced a new session/cache prefix, the agent made several huge model turns, and one 11.3-second response never called X at all. The fix was to route xAI OAuth directly, remove the random prefix, preserve upstream model/cache telemetry, and bypass inference for the deterministic signed-in timeline read.
+
+### Cache-read interpretation
+
+- A cache write is not a cache read and still processes the full prefix.
+- Provider cache publication may be asynchronous; an immediate second request can miss while a later one hits.
+- Static instructions/tools belong first; volatile retrieval, screen state, history tails, and the latest user message belong afterward.
+- A high cache percentage can coexist with visible latency. In the fixed Queen voice path, 98.0% of input tokens were cached, but Grok 4.5 still generated 214-449 hidden reasoning tokens and took 2.38-4.09 seconds.
+- For deterministic authenticated reads, the fastest safe model call is no model call. Use the exact API/account credential and return the verified resource.
+
+### Current evidence surfaces
+
+- Queen typed terminal frames expose `servedModel` and provider `usage`.
+- `queen_chat.turn` telemetry records served model and cached prompt tokens.
+- `queen_voice.inference` telemetry records requested/served model, input/cached/output/reasoning tokens, and provider elapsed time.
+- `scripts/benchmark-xai-oauth-queen-cache.mjs` gives repeatable salted-miss, cache-write, and cache-read measurements without printing credentials.
+- Fixed 2026-07-10.

@@ -23,7 +23,9 @@ function runTsxAssertion(code, label) {
 
 const [
   helper,
+  httpRuntime,
   runtime,
+  adaptiveHermes,
   pageAgent,
   fusion,
   typedQueen,
@@ -31,7 +33,9 @@ const [
   modelsRoute,
 ] = await Promise.all([
   source("src/lib/services/chat/inference-cache-hints.ts"),
+  source("src/app/api/chat/agent-runtime/stream-http-runtime.ts"),
   source("src/app/api/chat/agent-runtime/stream-openai-compatible.ts"),
+  source("src/app/api/chat/agent-runtime/stream-adaptive-hermes.ts"),
   source("src/app/api/page-agent/chat/completions/route.ts"),
   source("src/lib/services/fusion/client.ts"),
   source("src/lib/services/queen-bee/typed-chat-turn.ts"),
@@ -42,10 +46,15 @@ const [
 includes(helper, "body.prompt_cache_key", "OpenAI cache key body hint");
 includes(helper, "body.session_id", "OpenRouter sticky session body hint");
 includes(helper, "headers[\"x-grok-conv-id\"]", "xAI cache-routing header");
+includes(helper, "value === \"xai-oauth\"", "xAI OAuth provider cache alias");
 includes(helper, "body.cache_prompt = true", "llama.cpp prompt-cache body hint");
 includes(helper, "openAICompatibleMessageCacheControlSupported", "explicit message cache-control support helper");
+includes(httpRuntime, "runtimeProfile.sessionKey?.trim() || runtimeSessionId", "Hermes HTTP runtime session-key fallback");
+includes(httpRuntime, "sessionKey: runtimeSessionKey", "Hermes HTTP runtime sends stable session key");
 includes(runtime, "openAICompatibleInferenceCacheHints", "agent runtime cache hint wiring");
 includes(runtime, "...winningRequest.cacheBody", "agent runtime continuation cache hints");
+includes(adaptiveHermes, "candidateProfile.sessionKey?.trim()", "adaptive Hermes session-key profile check");
+includes(adaptiveHermes, "sessionKey: candidateSessionKey", "adaptive Hermes sends stable session key");
 includes(pageAgent, "provider: \"openrouter\"", "Page Agent OpenRouter cache hints");
 includes(fusion, "cacheScope: `fusion:${member.id}`", "Fusion per-member cache scope");
 includes(typedQueen, "queenBrainCacheHints", "Queen typed cache hints");
@@ -75,6 +84,10 @@ runTsxAssertion(`
   const xai = openAICompatibleInferenceCacheHints({ provider: "xai", model: "grok-4.5", cacheScope: "scope" });
   assert.equal(typeof xai.headers["x-grok-conv-id"], "string");
   assert.equal(xai.modes.includes("xai:x-grok-conv-id"), true);
+
+  const xaiOAuth = openAICompatibleInferenceCacheHints({ provider: "xai-oauth", model: "grok-4.5", cacheScope: "scope" });
+  assert.equal(xaiOAuth.headers["x-grok-conv-id"], xai.headers["x-grok-conv-id"]);
+  assert.equal(xaiOAuth.modes.includes("xai:x-grok-conv-id"), true);
 
   const scout = openAICompatibleInferenceCacheHints({ provider: "hivemindos-models", model: "hivemindos/swarm-sovereign-scout", cacheScope: "scope" });
   assert.equal(scout.body.cache_prompt, true);

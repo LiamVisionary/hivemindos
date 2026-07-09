@@ -90,6 +90,10 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     await recordVideoGenerationTelemetry(request, result.reason === "no-app" ? "chat.video_generation.app_missing" : "chat.video_generation.failed", {
       agentId: clean(body.agentId) || null,
+      appId: result.appId ?? null,
+      appName: result.appName ?? null,
+      machineName: result.machineName ?? null,
+      serviceKind: result.serviceKind ?? null,
       appCount: result.appCount ?? 0,
       error: result.error,
       elapsedMs: Date.now() - routeStartedAt,

@@ -56,7 +56,7 @@ const {
   queenVoiceHistoryBeforeTurn,
 } = await import("../src/features/queen-voice/queen-chat-routing.ts");
 
-// ── OAuth-held Queen models must not silently skip to gpt-4o-mini ────────────
+// ── OAuth Queen models must not silently skip to gpt-4o-mini ────────────────
 {
   const source = readFileSync(new URL("../src/lib/services/queen-bee/typed-chat-turn.ts", import.meta.url), "utf8");
   const chatStoreSource = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
@@ -65,7 +65,8 @@ const {
   const queenVoiceRoute = readFileSync(new URL("../src/app/api/queen-bee/voice/route.ts", import.meta.url), "utf8");
   const queenVoiceTurn = readFileSync(new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url), "utf8");
   assert.match(source, /isRuntimeHeldQueenProvider\(provider\)/, "typed Queen chat should recognize runtime-held OAuth providers");
-  assert.match(source, /provider === "xai-oauth"/, "typed Queen chat should route xAI OAuth through the Queen runtime");
+  assert.match(source, /isXaiOAuthProvider\(provider\)/, "typed Queen chat should recognize xAI OAuth separately");
+  assert.match(source, /resolveXaiOAuthChatEndpoint/, "typed Queen chat should call xAI OAuth directly with the selected model");
   assert.match(source, /provider === "copilot"/, "typed Queen chat should route Copilot OAuth through the Queen runtime");
   assert.match(source, /\/api\/chat\/agent-runtime/, "typed Queen chat should route OpenAI Codex through the Queen runtime");
   assert.match(source, /readRuntimeResponseText/, "typed Queen chat should parse the runtime stream response");
@@ -157,6 +158,22 @@ const {
   assert.equal(done.content, "Hello");
   assert.deepEqual(done.toolCalls, []);
   assert.deepEqual(done.assistant, { role: "assistant", content: "Hello" });
+}
+
+// ── upstream model/cache evidence survives the Queen stream bridge ──────────
+{
+  const state = createQueenChatStreamState();
+  applyOpenAiChatChunk(state, {
+    model: "grok-4.5",
+    usage: {
+      prompt_tokens: 1000,
+      prompt_tokens_details: { cached_tokens: 896 },
+    },
+    choices: [{ delta: { content: "OK" } }],
+  });
+  const done = finalizeQueenChatStream(state);
+  assert.equal(done.servedModel, "grok-4.5");
+  assert.equal(done.usage?.prompt_tokens_details?.cached_tokens, 896);
 }
 
 // ── tool-call fragments concatenate per index, not per chunk position ────────

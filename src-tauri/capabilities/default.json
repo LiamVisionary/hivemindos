@@ -52,6 +52,7 @@
     "allow-retry-native-server",
     "allow-runtime-files",
     "allow-runtime-usage",
+    "allow-read-local-image-preview",
     "allow-native-setup-run",
     "allow-native-setup-status",
     "allow-scheduler-shared-schedules",
@@ -64,6 +65,7 @@
     "allow-send-aeon-deliverable",
     "allow-open-route-window",
     "allow-wallet-secret-export-save",
+    "allow-slack-session-capture",
     "allow-speech-recognition-available",
     "allow-speech-recognition-start",
     "allow-speech-recognition-stop"

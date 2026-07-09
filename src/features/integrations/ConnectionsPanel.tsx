@@ -203,6 +203,10 @@ function ConnectModal({
   // For the Slack broker flow: the flowId returned by /start, polled at /poll
   // (which persists the token) until the hosted Worker reports the token is ready.
   const slackFlowRef = React.useRef("");
+  // Prevents overlapping poll runs (interval + focus firing together) — without
+  // this, one poll consumes the ready flow and a second races in to find it gone
+  // and falsely reports "expired".
+  const checkingRef = React.useRef(false);
   const oauthUrl = OAUTH_START_URL[provider.key];
   const isGoogle = provider.key === "google";
   const isGoogleCloud = provider.key === "google-cloud";
@@ -233,6 +237,8 @@ function ConnectModal({
     if (!polling) return;
     let cancelled = false;
     async function check() {
+      if (checkingRef.current) return;
+      checkingRef.current = true;
       try {
         // Slack broker flow: advance the rendezvous first. /poll persists the
         // token server-side on success; only then does the connections status flip.
@@ -290,6 +296,8 @@ function ConnectModal({
         }
       } catch {
         // Transient (offline, dev-server restart) — keep polling until the deadline.
+      } finally {
+        checkingRef.current = false;
       }
     }
     const timer = window.setInterval(() => void check(), 2500);

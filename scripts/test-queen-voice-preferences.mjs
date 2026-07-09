@@ -17,6 +17,12 @@ const {
   parseVoicePreferences,
   serializeVoicePreferences,
 } = await import("../src/lib/services/queen-bee/voice-preferences-core.ts");
+const {
+  buildAgentCallPreferences,
+} = await import("../src/lib/types/agent-runtime.ts");
+const {
+  runtimeConversationTurnTimeoutMs,
+} = await import("../src/lib/services/queen-bee/voice-turn.ts");
 
 let passed = 0;
 function check(label, fn) {
@@ -109,6 +115,8 @@ const cloudVoiceTransports = read("src/lib/services/phone/cloud-voice-transports
 const callProviderMatrix = read("src/lib/config/voice-call-providers.ts");
 const callGateway = read("src/lib/services/phone/call-gateway.ts");
 const turn = read("src/lib/services/queen-bee/voice-turn.ts");
+const agentRuntimeTypes = read("src/lib/types/agent-runtime.ts");
+const callsVoiceSection = read("src/features/dashboard/views/chat/AgentSettingsCallsVoiceSection.tsx");
 // The realtime tool declaration moved out of the route into the shared voice
 // tool bundle (also used by phone calls) — pin it there instead.
 const toolBundles = read("src/lib/services/phone/voice-tool-bundles.ts");
@@ -135,9 +143,46 @@ check("INJECT: the fallback + relay paths thread the preamble into the prompt", 
   assert.match(turn, /queenVoicePreferencePreamble\(/, "fallback never reads stored preferences");
   assert.match(
     turn,
-    /conversationMessages\(transcript, history, systemPreamble, personality\)/,
-    "system preamble not threaded into conversationMessages",
+    /buildRuntimeVoiceMessages\(transcript, history, systemPreamble, personality\)/,
+    "system preamble not threaded into runtime voice messages",
   );
+  assert.match(
+    turn,
+    /conversationMessages\(transcript, history, \{[\s\S]*systemPreamble,[\s\S]*personality,/,
+    "system preamble not threaded into provider conversation messages",
+  );
+});
+
+check("BRAIN: legacy fleet-agent prefs do not silently override the Queen model", () => {
+  const legacyFleet = buildAgentCallPreferences({
+    voiceChatBrain: { source: "fleet-agent", provider: "openai-api" },
+  });
+  assert.deepEqual(legacyFleet.voiceChatBrain, {
+    source: "fleet-agent",
+    provider: "openai-api",
+    model: undefined,
+    explicit: undefined,
+  });
+  const explicitFleet = buildAgentCallPreferences({
+    voiceChatBrain: { source: "fleet-agent", explicit: true },
+  });
+  assert.equal(explicitFleet.voiceChatBrain?.explicit, true);
+  assert.match(agentRuntimeTypes, /explicit\?: boolean/, "voice brain preference must persist an explicit user choice");
+  assert.match(callsVoiceSection, /explicit:\s*true/, "Calls voice selector must mark new brain choices explicit");
+  assert.match(route, /const explicitFleetAgent = pref\?\.source === "fleet-agent" && pref\.explicit === true/, "resolver must only honor explicit fleet-agent overrides");
+  assert.match(route, /if \(explicitFleetAgent\) return \{ kind: "fleet-agent" \}/, "resolver must keep explicit fleet-agent selectable");
+  assert.doesNotMatch(route, /if \(pref\?\.source === "fleet-agent"\) return \{ kind: "fleet-agent" \}/, "stale fleet-agent rows must not bypass the Queen model");
+  assert.match(turn, /readStoredAgentProfilesStrict/, "agent-runtime voice plans must read persisted dashboard agents");
+  assert.match(turn, /const stored = await readStoredConversationAgent\(plan\.agentId\)/, "agent-runtime voice plans must try the pinned persisted agent before the ranked fleet");
+});
+
+check("BRAIN: OAuth runtime voice brains get enough time for tool-backed answers", () => {
+  assert.equal(runtimeConversationTurnTimeoutMs({ provider: "openai-api" }), 20_000);
+  assert.equal(runtimeConversationTurnTimeoutMs({ provider: "xai-oauth" }), 75_000);
+  assert.equal(runtimeConversationTurnTimeoutMs({ provider: "openai-codex" }), 75_000);
+  assert.match(turn, /const OAUTH_AGENT_TURN_TIMEOUT_MS = 75_000/, "OAuth runtime turns must not share the direct-provider 20s budget");
+  assert.match(turn, /provider\.includes\("oauth"\)/, "OAuth providers must use the longer runtime turn timeout");
+  assert.match(turn, /AbortSignal\.timeout\(runtimeConversationTurnTimeoutMs\(agent\)\)/, "runtime voice fetch must use the provider-aware timeout");
 });
 
 check("GEMINI: Queen Calls prefs route Gemini Live to the Gemini hook", () => {

@@ -41,6 +41,7 @@ import { streamMobileAgentTurn } from "@/lib/services/mobile-agents/chat-turn";
 import { isMobileAgentGatewayUrl } from "@/lib/types/mobile-agents";
 import {
   attachmentPromptSummary,
+  bareUserRequestText,
   extractUserText,
   latestUserMessage,
   ssePayload,
@@ -293,12 +294,45 @@ export async function POST(request: NextRequest) {
       agentMode,
       elapsedMs: Date.now() - routeStartedAt,
     });
-    return streamHttpRuntime(effectiveProfile, messages, promptCheck.text, null, agentMode, workingDirectory, undefined, false, runtimeSessionId, {
-      request,
-      routeStartedAt,
+    const runtimeSession = runtimeSessionId
+      ? await startRuntimeChatSession({
+          sessionId: runtimeSessionId,
+          agent: effectiveProfile,
+          chatStorageKey,
+          sharedVaultPath: vault?.vaultPath,
+          userContent: bareUserRequestText(promptCheck.text) || promptCheck.text,
+          startedAt: routeStartedAt,
+        }).catch(() => null)
+      : null;
+    await recordRouteTelemetry(request, "agent_runtime.voice.session.started", {
+      ...telemetryPayloadForProfile(effectiveProfile),
       runtimeSessionId,
-      chatStorageKey,
-    }, "", "", "", permissionMode, mediaArtifacts);
+      chatStorageKey: chatStorageKey || null,
+      session: chatTelemetrySession(runtimeSession),
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamHttpRuntime(
+      effectiveProfile,
+      messages,
+      promptCheck.text,
+      null,
+      agentMode,
+      workingDirectory,
+      undefined,
+      false,
+      runtimeSessionId,
+      {
+        request,
+        routeStartedAt,
+        runtimeSessionId,
+        chatStorageKey,
+      },
+      "",
+      "",
+      "",
+      permissionMode,
+      mediaArtifacts,
+    );
   }
   const fallbackRuntimeCapabilityContext: Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> = {
     runtime: profile.runtime,

@@ -63,6 +63,9 @@ import {
 import { streamAdaptiveHermesOpenRouterRuntime } from "./stream-adaptive-hermes";
 import { streamOpenAICompatibleRuntime } from "./stream-openai-compatible";
 import { runtimeProcessEventsSsePayload } from "./process-events";
+import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract";
+import { resolveXaiOAuthRuntimeProfile } from "@/lib/services/xai-oauth-inference";
+import { latestOwnXPostAnswer } from "@/lib/services/x-latest-post";
 
 export async function streamHttpRuntime(
   profile: AgentProfile,
@@ -85,6 +88,32 @@ export async function streamHttpRuntime(
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
+  }
+  const latestXReply = await latestOwnXPostAnswer(inputCheck.text).catch(() => null);
+  if (latestXReply) {
+    if (runtimeSessionId) {
+      await appendRuntimeChatSessionText(runtimeSessionId, "assistant", latestXReply).catch(() => undefined);
+      await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
+    }
+    return new Response(
+      ssePayload({ choices: [{ delta: { content: latestXReply } }] }) + "data: [DONE]\n\n",
+      {
+        headers: {
+          "content-type": "text/event-stream; charset=utf-8",
+          "cache-control": "no-cache",
+        },
+      },
+    );
+  }
+  if (isXaiOAuthProvider(profile.provider)) {
+    try {
+      const xaiProfile = await resolveXaiOAuthRuntimeProfile(profile);
+      return streamOpenAICompatibleRuntime(xaiProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+    } catch (error) {
+      return Response.json({
+        error: error instanceof Error ? error.message : "xAI OAuth setup is incomplete.",
+      }, { status: 502 });
+    }
   }
   if (isAdaptiveProviderProfile(profile)) {
     try {
@@ -167,6 +196,7 @@ export async function streamHttpRuntime(
   const hermesSlashCommand = profile.runtime === "hermes" && /^\/[^\s/]*(?:\s|$)/.test(inputCheck.text.trim());
   const runtimeMessages = hermesSlashCommand ? messages : prependHivemindSystemMessage(messages, promptEnvelope);
   const runtimeMessage = inputCheck.text;
+  const runtimeSessionKey = runtimeProfile.sessionKey?.trim() || runtimeSessionId || undefined;
   // Local models hosted on a fleet machine resolve automatically: the hosting
   // collector proxies LM Studio and OpenAI-compatible server ports, and the
   // agent's Hermes run gets that base URL for this turn only.
@@ -227,7 +257,7 @@ export async function streamHttpRuntime(
       body: JSON.stringify({
         agent: runtimeProfile,
         agentId: runtimeProfile.agentId || runtimeProfile.id,
-        sessionKey: runtimeProfile.sessionKey,
+        sessionKey: runtimeSessionKey,
         provider: runtimeProfile.provider || undefined,
         model: runtimeProfile.model || undefined,
         agentEnv: safeAgentEnv(runtimeProfile.agentEnv),
@@ -235,7 +265,6 @@ export async function streamHttpRuntime(
         agentMode,
         mode: agentMode,
         runtimeSessionId: runtimeSessionId || undefined,
-        hermesSessionId: runtimeSessionId || undefined,
         message: runtimeMessage,
         messages: runtimeMessages,
         stream: true,

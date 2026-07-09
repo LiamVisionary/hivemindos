@@ -1576,6 +1576,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 name = "hivemindos-desktop"
 version = "0.4.1"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "getrandom 0.2.17",
  "hivemindos-speech-native",

@@ -17,7 +17,15 @@ export type OpenAICompatibleInferenceCacheHints = {
 function normalizedProvider(provider: string | null | undefined) {
   const value = provider?.trim().toLowerCase() || "openai";
   if (value === "openai-api") return "openai";
-  if (value === "grok") return "xai";
+  if (
+    value === "grok" ||
+    value === "x-ai" ||
+    value === "x.ai" ||
+    value === "xai-oauth" ||
+    value === "xai oauth" ||
+    value === "grok-oauth" ||
+    value === "x-ai-oauth"
+  ) return "xai";
   if (value === "llamacpp" || value === "llama-cpp") return "llama.cpp";
   return value;
 }

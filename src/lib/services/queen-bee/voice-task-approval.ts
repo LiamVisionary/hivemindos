@@ -17,6 +17,9 @@ const WORK_REQUEST_PATTERN =
 const DO_WORK_REQUEST_PATTERN =
   /^(?:please\s+)?do\s+(?:a\s+|the\s+)?(?:review|audit|research|write-?up|analysis|diagnosis|fix|build|test|implementation)\b/i;
 
+const READ_ONLY_X_POST_RETRIEVAL_PATTERN =
+  /^(?:please\s+|can you\s+|could you\s+|would you\s+|hey\s+)?(?:(?:grab|get|fetch|pull|show|read|check|find|look\s+up|tell\s+me|give\s+me)\b|what(?:'|\u2019)?s\b|what\s+is\b)[\s\S]{0,160}\b(?:latest|last|newest|recent)\b[\s\S]{0,160}(?:(?:\b(?:x|twitter)\b[\s\S]{0,80}\b(?:post|tweet|reply|repost|status)\b)|(?:\b(?:post|tweet|reply|repost|status)\b[\s\S]{0,80}\b(?:x|twitter)\b))/i;
+
 const CONFIRMATION_PATTERN =
   /^(?:yes(?:,?\s+(?:do it|do that|please|queue it|go ahead))?|yep|yeah|ok(?:ay)?|sure|confirm(?:ed)?|go ahead|do it|do that|queue it|send it|kick it off|start it|run it|please do|sounds good|let'?s do it)[.! ]*$/i;
 
@@ -53,11 +56,18 @@ export function queenAskedForTaskApproval(
 export function voiceTranscriptDirectlyRequestsTask(transcript: string) {
   const text = cleanText(transcript);
   if (!text) return false;
+  if (voiceTranscriptRequestsImmediateAnswer(text)) return false;
   return (
     DIRECT_DELEGATION_PATTERN.test(text) ||
     WORK_REQUEST_PATTERN.test(text) ||
     DO_WORK_REQUEST_PATTERN.test(text)
   );
+}
+
+export function voiceTranscriptRequestsImmediateAnswer(transcript: string) {
+  const text = cleanText(transcript);
+  if (!text) return false;
+  return READ_ONLY_X_POST_RETRIEVAL_PATTERN.test(text);
 }
 
 export function voiceTranscriptConfirmsTask(transcript: string) {
@@ -85,4 +95,3 @@ function taskLabel(task: QueenVoiceTaskApprovalRequest) {
 export function voiceTaskApprovalPrompt(task: QueenVoiceTaskApprovalRequest) {
   return `I can queue "${taskLabel(task)}" on the Work Board. Say yes to queue it, or tell me a different direction.`;
 }
-

@@ -40,6 +40,12 @@ import { queenModelTransparencyNote } from "./model-transparency";
 import { resolveProviderChatEndpoint } from "./voice-turn";
 import { readQueenBeeBrainDefaults } from "./voice-settings";
 import { queenVoicePreferencePreamble } from "./voice-preferences";
+import {
+  isXaiOAuthProvider,
+  xaiOAuthChatRequestOptions,
+} from "@/lib/services/xai-oauth-inference-contract";
+import { resolveXaiOAuthChatEndpoint } from "@/lib/services/xai-oauth-inference";
+import { latestOwnXPostAnswer } from "@/lib/services/x-latest-post";
 
 const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
 
@@ -93,7 +99,6 @@ function isRuntimeHeldQueenProvider(provider: string) {
   return (
     provider === "openai-oauth" ||
     provider === "openai-codex" ||
-    provider === "xai-oauth" ||
     provider === "copilot"
   );
 }
@@ -142,6 +147,19 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
       streaming: false,
       timeoutMs: 120_000,
     });
+  } else if (defaults?.model && isXaiOAuthProvider(provider)) {
+    const endpoint = await resolveXaiOAuthChatEndpoint().catch(() => null);
+    if (endpoint) {
+      brains.push({
+        kind: "openai-compatible",
+        url: endpoint.url,
+        key: endpoint.key,
+        model: defaults.model,
+        providerSlug: "xai-oauth",
+        label: `${defaults.model} · ${queenBrainProviderLabel(provider)}`,
+        configured: true,
+      });
+    }
   } else if (defaults?.model && isRuntimeHeldQueenProvider(provider)) {
     const agent = await readQueenBeeAgentProfile(defaults.agentId).catch(() => null);
     if (agent) {
@@ -258,6 +276,8 @@ async function queenChatRuntimeRequest(
     toolCalls: [],
     assistant: { role: "assistant", content },
     brainLabel: brain.label,
+    servedModel: undefined,
+    usage: undefined,
   };
 }
 
@@ -357,6 +377,8 @@ async function queenChatBlockingRequest(
     signal: AbortSignal.timeout(brain.timeoutMs ?? 20_000),
   });
   const data = (await response.json().catch(() => null)) as {
+    model?: string;
+    usage?: Record<string, unknown>;
     choices?: Array<{
       message?: {
         content?: string | null;
@@ -388,6 +410,8 @@ async function queenChatBlockingRequest(
     // model to emit more of it on every following round.
     assistant: { ...message, content },
     brainLabel: brain.label,
+    servedModel: typeof data?.model === "string" ? data.model : undefined,
+    usage: data?.usage,
   };
 }
 
@@ -539,6 +563,11 @@ function queenChatRequestBody(
   options?: { noTools?: boolean },
 ) {
   const reasoningModel = /^(o\d|gpt-5|codex)/i.test(brain.model.trim());
+  const inferenceOptions = isXaiOAuthProvider(brain.providerSlug)
+    ? xaiOAuthChatRequestOptions(brain.model)
+    : reasoningModel
+      ? { max_completion_tokens: 700, reasoning_effort: "low" }
+      : { temperature: 0.4, max_tokens: 500 };
   return {
     model: brain.model,
     messages: [
@@ -562,11 +591,44 @@ function queenChatRequestBody(
     // answer: omit the tools entirely so tool-happy brains (Scout looped
     // read_work_board four rounds straight on 2026-07-06) must reply in prose.
     ...(options?.noTools ? {} : { tools: queenChatTools(), tool_choice: "auto" }),
-    ...(reasoningModel
-      ? { max_completion_tokens: 700, reasoning_effort: "low" }
-      : { temperature: 0.4, max_tokens: 500 }),
+    ...(isXaiOAuthProvider(brain.providerSlug) && extra?.stream === true
+      ? { stream_options: { include_usage: true } }
+      : {}),
+    ...inferenceOptions,
     ...extra,
   };
+}
+
+function queenCachedPromptTokens(usage: unknown) {
+  if (!usage || typeof usage !== "object") return null;
+  const details = (usage as { prompt_tokens_details?: unknown }).prompt_tokens_details;
+  if (!details || typeof details !== "object") return null;
+  const cached = Number((details as { cached_tokens?: unknown }).cached_tokens);
+  return Number.isFinite(cached) ? cached : null;
+}
+
+function latestUserTextFromQueenBody(body: Record<string, unknown>) {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || typeof message !== "object") continue;
+    const record = message as { role?: unknown; content?: unknown };
+    if (record.role !== "user") continue;
+    if (typeof record.content === "string") return record.content;
+    if (Array.isArray(record.content)) {
+      return record.content
+        .map((block) => block && typeof block === "object" && "text" in block
+          ? String((block as { text?: unknown }).text ?? "")
+          : "")
+        .filter(Boolean)
+        .join("\n");
+    }
+  }
+  return "";
+}
+
+async function queenLatestXFastReply(body: Record<string, unknown>) {
+  return latestOwnXPostAnswer(latestUserTextFromQueenBody(body)).catch(() => null);
 }
 
 /** Shared setup for the typed chat turn (blocking and streaming variants). */
@@ -613,6 +675,16 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
 }
 
 export async function runQueenChatTurn(body: Record<string, unknown>, origin: string) {
+  const latestXReply = await queenLatestXFastReply(body);
+  if (latestXReply) {
+    return NextResponse.json({
+      ok: true,
+      content: latestXReply,
+      toolCalls: [],
+      assistant: { role: "assistant", content: latestXReply },
+      brainLabel: "X account · OAuth",
+    });
+  }
   const prepared = await prepareQueenChatTurn(body, origin);
   if (!prepared) {
     return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
@@ -637,6 +709,8 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
         configuredBrain: brain.configured,
         toolCallCount: result.toolCalls.length,
         contentChars: result.content.length,
+        servedModel: result.servedModel ?? null,
+        cachedPromptTokens: queenCachedPromptTokens(result.usage),
         skippedBrain: skipped[0]?.label ?? null,
         skippedError: skipped[0]?.error ?? null,
         messageCount: incoming.length,
@@ -671,9 +745,23 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
  * the client can retry via the blocking action.
  */
 export async function runQueenChatTurnStream(body: Record<string, unknown>, origin: string) {
-  const prepared = await prepareQueenChatTurn(body, origin);
   const ndjson = { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" };
   const line = (value: unknown) => `${JSON.stringify(value)}\n`;
+  const latestXReply = await queenLatestXFastReply(body);
+  if (latestXReply) {
+    return new Response(
+      line({
+        done: true,
+        ok: true,
+        content: latestXReply,
+        toolCalls: [],
+        assistant: { role: "assistant", content: latestXReply },
+        brainLabel: "X account · OAuth",
+      }),
+      { headers: ndjson },
+    );
+  }
+  const prepared = await prepareQueenChatTurn(body, origin);
   if (!prepared) {
     return new Response(line({ ok: false, fallback: true, error: "no-openai-key" }), { headers: ndjson });
   }
@@ -733,6 +821,8 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
           configuredBrain: brain.configured,
           toolCallCount: result.toolCalls.length,
           contentChars: result.content.length,
+          servedModel: result.servedModel ?? null,
+          cachedPromptTokens: queenCachedPromptTokens(result.usage),
           skippedBrain: skipped[0]?.label ?? null,
           skippedError: skipped[0]?.error ?? null,
           messageCount: incoming.length,
@@ -833,6 +923,8 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
           configuredBrain,
           toolCallCount: Array.isArray(finalized.toolCalls) ? finalized.toolCalls.length : 0,
           contentChars: typeof finalized.content === "string" ? finalized.content.length : 0,
+          servedModel: finalized.servedModel ?? null,
+          cachedPromptTokens: queenCachedPromptTokens(finalized.usage),
           skippedBrain: brainFallback?.label ?? null,
           skippedError: brainFallback?.error ?? null,
           messageCount: incoming.length,

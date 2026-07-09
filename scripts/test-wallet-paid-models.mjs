@@ -78,6 +78,7 @@ const [
   chatComposer,
   statusChatInputController,
   statusChatInputHelpers,
+  statusChatProcessImageGeneration,
   messageThread,
   chatExchangeStyles,
   chatGeneratedMedia,
@@ -131,6 +132,7 @@ const [
   source("src/features/chat/chat-composer.tsx"),
   source("src/features/dashboard/hooks/use-status-chat-input-controller.tsx"),
   source("src/features/dashboard/hooks/status-chat-input-helpers.ts"),
+  source("src/features/dashboard/hooks/status-chat-process-image-generation.ts"),
   source("src/features/dashboard/views/chat/exchange/MessageThread.tsx"),
   source("src/features/dashboard/views/chat/exchange/chat-exchange.css"),
   source("src/features/dashboard/chat-generated-media.ts"),
@@ -216,6 +218,19 @@ includes(taskRetrievalContext, "export function videoGenerationRequest", "capabi
 includes(taskRetrievalContext, "|| videoGenerationRequest(query)", "video generation prompts force capability routing");
 includes(taskRetrievalContext, "label: \"video generation\"", "capability routing runs a video-generation retrieval query");
 includes(taskRetrievalContext, "videoGenerationCapabilityContext", "capability routing injects video-generation tool guidance");
+includes(statusChatProcessImageGeneration, "isCapabilitySearchProcessEvent", "image generation process card ignores discovery-only capability events");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { shouldRenderImageGenerationCard, shouldStartImageGenerationCard } from "./src/features/dashboard/hooks/status-chat-process-image-generation.ts";
+
+  const capabilityDetail = "12 retrieval hits; 2 queries; 29 connected apps observed; runtime image generation available via Hermes image_gen config";
+  assert.equal(shouldStartImageGenerationCard("whats this image say?", "Hive capability search", capabilityDetail), false);
+  assert.equal(shouldStartImageGenerationCard("generate an image of a bee", "Hive capability search", capabilityDetail), false);
+  assert.equal(shouldStartImageGenerationCard("generate an image of a bee", "Image generation", "generating image with Hermes image_gen"), true);
+  assert.equal(shouldRenderImageGenerationCard({ status: "running", prompt: "whats this image say?", artifacts: [] }), false);
+  assert.equal(shouldRenderImageGenerationCard({ status: "running", prompt: "generate an image of a bee", artifacts: [] }), true);
+  assert.equal(shouldRenderImageGenerationCard({ status: "ready", prompt: "whats this image say?", artifacts: [{ url: "/image.png" }] }), true);
+`, "capability discovery must not start image generation cards");
 includes(generatedMediaRoute, "VIDEO_MEDIA_TYPES", "generated media route supports video artifacts");
 includes(generatedMediaRoute, "Accept-Ranges", "generated media route supports browser video range requests");
 includes(chatGeneratedMedia, "return \"Image file\"", "local image path fallback does not claim arbitrary files are generated images");

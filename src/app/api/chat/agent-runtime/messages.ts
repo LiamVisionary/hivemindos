@@ -242,6 +242,7 @@ export function extractChunk(payload: unknown): string {
     delta?: string;
     text?: string;
     content?: string;
+    event?: { delta?: string; content?: string };
     message?: { content?: string; reasoning?: string };
     choices?: Array<{ delta?: { content?: string; reasoning?: string }; text?: string; message?: { content?: string; reasoning?: string } }>;
   };
@@ -249,6 +250,8 @@ export function extractChunk(payload: unknown): string {
     value.choices?.[0]?.delta?.content ??
     value.choices?.[0]?.text ??
     value.choices?.[0]?.message?.content ??
+    value.event?.delta ??
+    value.event?.content ??
     value.delta ??
     value.text ??
     value.content ??

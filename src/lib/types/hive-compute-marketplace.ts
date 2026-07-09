@@ -155,6 +155,36 @@ export type HiveComputeHostModel = {
   backendKind: HiveComputeLocalBackendKind;
   inputPer1m: number;
   outputPer1m: number;
+  /** True when this model is not served from the discovering machine's own disk
+   * (an LM Studio LM Link model shared by a linked device, or a model discovered
+   * on a remote fleet machine's backend over the collector). */
+  remote?: boolean;
+  /** Friendly name of the machine/device that actually runs this model —
+   * the LM Link peer's device name, or the targeted remote fleet machine. */
+  hostDeviceName?: string;
+  /** Best-effort location label of the serving machine (e.g. "New York relay"). */
+  hostLocation?: string;
+};
+
+/** Which machine's backend a Hive Compute host status was discovered from. */
+export type HiveComputeHostDiscovery = {
+  /** Display name of the machine whose models were discovered. */
+  machineName?: string;
+  /** True when discovery targeted a remote fleet machine over its collector. */
+  remote: boolean;
+  /** Collector base URL used for remote discovery. */
+  collectorUrl?: string;
+  /** Location label of the discovered machine (remote targets only). */
+  location?: string;
+};
+
+/** Optional target passed to marketplace status reads to discover a specific
+ * fleet machine's local models instead of the dashboard host's. */
+export type HiveComputeHostTarget = {
+  collectorUrl?: string;
+  machineName?: string;
+  location?: string;
+  isSelf?: boolean;
 };
 
 export type HiveComputeWorkerRunStatus = {
@@ -173,6 +203,8 @@ export type HiveComputeHostContext = {
   canRun: boolean;
   message: string;
   run?: HiveComputeWorkerRunStatus;
+  /** Which machine's backend these models were discovered from. */
+  discoveredFrom?: HiveComputeHostDiscovery;
 };
 
 export type HiveComputeMarketplaceStatus = {

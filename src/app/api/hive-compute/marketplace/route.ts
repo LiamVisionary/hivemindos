@@ -10,16 +10,47 @@ import {
   startHiveComputeWorker,
   stopHiveComputeWorker,
 } from "@/lib/services/hive-compute-marketplace";
-import type { HiveComputeHostRunConfig } from "@/lib/types/hive-compute-marketplace";
+import type { HiveComputeHostRunConfig, HiveComputeHostTarget } from "@/lib/types/hive-compute-marketplace";
 import { errorJson, okJson, upstreamErrorJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
+
+function targetFromQuery(request: NextRequest): HiveComputeHostTarget | null {
+  const params = request.nextUrl.searchParams;
+  const collectorUrl = params.get("targetCollectorUrl")?.trim() || "";
+  const machineName = params.get("targetMachineName")?.trim() || "";
+  const location = params.get("targetLocation")?.trim() || "";
+  const isSelf = params.get("targetSelf") === "1";
+  if (!collectorUrl && !machineName && !location && !isSelf) return null;
+  return {
+    ...(collectorUrl ? { collectorUrl } : {}),
+    ...(machineName ? { machineName } : {}),
+    ...(location ? { location } : {}),
+    isSelf,
+  };
+}
+
+function targetFromBody(target: unknown): HiveComputeHostTarget | null {
+  if (!target || typeof target !== "object") return null;
+  const record = target as Record<string, unknown>;
+  const collectorUrl = typeof record.collectorUrl === "string" ? record.collectorUrl.trim() : "";
+  const machineName = typeof record.machineName === "string" ? record.machineName.trim() : "";
+  const location = typeof record.location === "string" ? record.location.trim() : "";
+  const isSelf = record.isSelf === true;
+  if (!collectorUrl && !machineName && !location && !isSelf) return null;
+  return {
+    ...(collectorUrl ? { collectorUrl } : {}),
+    ...(machineName ? { machineName } : {}),
+    ...(location ? { location } : {}),
+    isSelf,
+  };
+}
 
 // guard:allow-hive-action-route - dashboard setup endpoint for optional local worker module
 export async function GET(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
   try {
-    return okJson({ status: await readHiveComputeMarketplaceStatus() });
+    return okJson({ status: await readHiveComputeMarketplaceStatus(targetFromQuery(request)) });
   } catch (error) {
     return upstreamErrorJson("Hive Compute status failed", error);
   }
@@ -32,8 +63,10 @@ export async function POST(request: NextRequest) {
     action?: unknown;
     force?: unknown;
     config?: Partial<HiveComputeHostRunConfig>;
+    target?: unknown;
   } | null;
   const action = typeof body?.action === "string" ? body.action : "";
+  const target = targetFromBody(body?.target);
   try {
     if (action === "install-worker" || action === "repair-worker") {
       return okJson(await installHiveComputeWorkerModule({ force: action === "repair-worker" || body?.force === true }));
@@ -57,7 +90,7 @@ export async function POST(request: NextRequest) {
       return okJson({ status: await openHiveComputeMppSession() });
     }
     if (action === "refresh") {
-      return okJson({ status: await readHiveComputeMarketplaceStatus() });
+      return okJson({ status: await readHiveComputeMarketplaceStatus(target) });
     }
     return errorJson("Unsupported Hive Compute marketplace action.", 400);
   } catch (error) {

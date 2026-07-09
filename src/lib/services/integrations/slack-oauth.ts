@@ -44,8 +44,14 @@ const OAUTH_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize";
 // Cloud connector uses; override with SLACK_OAUTH_BROKER_URL.
 const OAUTH_BROKER_URL_DEFAULT = "https://hivemindos-google-oauth-exchange.hivemindos.workers.dev";
 const SLACK_CALLBACK_PATH = "/slack/callback";
-// Minimal user scope: post messages as the connecting user. Widen here later.
-const OAUTH_USER_SCOPE = "chat:write";
+// User scopes (comma-separated for Slack's user_scope param):
+//   chat:write        — post messages as the connecting user
+//   channels:history  — read messages/files in public channels the user is in
+//   groups:history    — read messages/files in private channels the user is in
+//   files:read        — download files shared in those channels
+// The Slack app manifest must grant these too, and adding a scope requires the
+// user to re-connect (Slack re-consents on scope change).
+const OAUTH_USER_SCOPE = "chat:write,channels:history,groups:history,files:read";
 const FLOW_TTL_MS = 10 * 60_000;
 
 /** The effective client id: env override wins, else the baked-in default. */

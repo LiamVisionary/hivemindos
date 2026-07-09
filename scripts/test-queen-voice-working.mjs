@@ -5,6 +5,7 @@
 // - tool-activity labels parsed from runtime SSE payloads
 import { register } from "node:module";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 register(new URL("./lib/json-esm-loader.mjs", import.meta.url));
@@ -24,8 +25,10 @@ const {
 } = await import("../src/lib/services/queen-bee/voice-turn.ts");
 const {
   queenAskedForTaskApproval,
+  voiceTranscriptDirectlyRequestsTask,
   voiceTaskApprovalPrompt,
   voiceTaskSubmissionAuthorized,
+  voiceTranscriptRequestsImmediateAnswer,
 } = await import("../src/lib/services/queen-bee/voice-task-approval.ts");
 const { toolActivityLabel } = await import("../src/lib/services/phone/runtime-voice-turn.ts");
 const {
@@ -121,9 +124,18 @@ const {
   const messages = buildRuntimeVoiceMessages("Sure", history, "Call the user boss.");
   assert.equal(messages[0].role, "system", "runtime voice turn sends a real system message");
   assert.match(messages[0].content, /Queen Bee live voice override/i, "system message overrides runtime profile identity");
-  assert.match(messages[0].content, /Call the user boss/i, "system message carries stored preferences");
-  assert.equal(messages[1].role, "user", "runtime voice turn still sends latest user prompt");
-  assert.match(messages[1].content, /User's latest spoken message: Sure/, "user message keeps the unwrap marker");
+  assert.doesNotMatch(messages[0].content, /Call the user boss/i, "volatile preferences stay after the reusable prefix");
+  assert.equal(messages[1].role, "user", "runtime voice turn has a stable cache bootstrap");
+  assert.equal(messages[2].role, "assistant", "runtime voice turn acknowledges the stable bootstrap");
+  assert.equal(messages[3].role, "user", "runtime voice turn keeps the dynamic request last");
+  assert.match(messages[3].content, /Call the user boss/i, "dynamic prompt carries stored preferences");
+  assert.match(messages[3].content, /User's latest spoken message: Sure/, "user message keeps the unwrap marker");
+  const changedMessages = buildRuntimeVoiceMessages("Different turn", [], "Different preference.");
+  assert.deepEqual(
+    changedMessages.slice(0, 3),
+    messages.slice(0, 3),
+    "the reusable voice prefix is identical across turns",
+  );
   console.log("flattened runtime prompt ok");
 }
 
@@ -189,6 +201,37 @@ const {
     true,
     "a direct work request still authorizes the voice task path",
   );
+  assert.equal(
+    voiceTranscriptRequestsImmediateAnswer("grab my latest x post"),
+    true,
+    "latest X post retrieval is an immediate answer request",
+  );
+  assert.equal(
+    voiceTranscriptDirectlyRequestsTask("grab my latest x post"),
+    false,
+    "latest X post retrieval is not a Work Board task request",
+  );
+  assert.equal(
+    voiceTaskSubmissionAuthorized("check my latest post on X", []),
+    false,
+    "read-only X post retrieval is not authorized as queued work",
+  );
+  const voiceTurnSource = readFileSync(
+    new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url),
+    "utf8",
+  );
+  assert.ok(
+    voiceTurnSource.includes("Read-only retrieval requests like"),
+    "voice prompt tells the model not to queue read-only X post retrieval",
+  );
+  assert.ok(
+    voiceTurnSource.includes("The latest user message is a read-only X/Twitter retrieval request."),
+    "voice runtime preamble reinforces immediate answer handling for X post retrieval",
+  );
+  assert.ok(
+    voiceTurnSource.includes("if (voiceTranscriptRequestsImmediateAnswer(options.transcript))"),
+    "voice wrapper guards against Work Board prompts for read-only X post retrieval",
+  );
   console.log("voice task approval boundary ok");
 }
 
@@ -198,7 +241,7 @@ const {
 // ("automation" in the persona sentence hijacked every spoken turn with a real
 // Bankr call), so the REAL builder must round-trip through the REAL unwrapper.
 {
-  const { bareUserRequestText, unwrapLatestUserRequest } = await import(
+  const { bareUserRequestText, extractChunk, unwrapLatestUserRequest } = await import(
     "../src/app/api/chat/agent-runtime/messages.ts"
   );
   const prompt = buildRuntimeVoiceUserText("Uh nothing much", [
@@ -217,7 +260,42 @@ const {
   assert.equal(bareUserRequestText("swap 1 usdc to eth"), "", "plain messages have nothing to unwrap");
   const plain = [{ role: "user", content: "hello" }];
   assert.equal(unwrapLatestUserRequest(plain), plain, "no marker returns the original list");
+  assert.equal(
+    extractChunk({ event: { delta: "Hermes says hi." } }),
+    "Hermes says hi.",
+    "agent-runtime route treats Hermes event.delta frames as assistant text",
+  );
   console.log("rails unwrap contract ok");
+}
+
+// --- low-latency voice runtime session boundary -----------------------------------
+// The agent-runtime voice fast path returns the stream before the normal chat
+// route reaches its shared session-start block. It must create the session
+// first, or assistant chunks can merge into an old assistant row because no new
+// user boundary was recorded for the long-lived queen-bee-voice session.
+{
+  const routeSource = readFileSync(
+    new URL("../src/app/api/chat/agent-runtime/route.ts", import.meta.url),
+    "utf8",
+  );
+  const fastPathStart = routeSource.indexOf('const lowLatencyVoiceTurn = latencyMode === "voice";');
+  assert.ok(fastPathStart > 0, "agent-runtime route still has a low-latency voice fast path");
+  const fastPathReturn = routeSource.indexOf("return streamHttpRuntime(", fastPathStart);
+  const sessionStart = routeSource.indexOf("await startRuntimeChatSession({", fastPathStart);
+  assert.ok(sessionStart > fastPathStart, "voice fast path starts a runtime chat session");
+  assert.ok(
+    sessionStart < fastPathReturn,
+    "voice fast path records the user boundary before returning the stream",
+  );
+  assert.ok(
+    routeSource.includes("userContent: bareUserRequestText(promptCheck.text) || promptCheck.text"),
+    "voice fast path stores the unwrapped spoken request as the session user message",
+  );
+  assert.ok(
+    routeSource.includes('"agent_runtime.voice.session.started"'),
+    "voice fast path emits session-start telemetry",
+  );
+  console.log("low-latency voice session boundary ok");
 }
 
 // --- streaming speech extraction + sentence chunking -------------------------------

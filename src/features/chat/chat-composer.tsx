@@ -1,4 +1,4 @@
-import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, Puzzle, RefreshCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, Puzzle, RefreshCcw, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { useVoiceBands } from "@/lib/stores/voice-bands-store";
 
@@ -8,9 +8,10 @@ import { LottiePlayer } from "@/components/ui/lottie-player";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { filesFromDataTransfer, filesFromReferencePaths } from "@/features/chat/chat-drop-references";
-import { attachmentDetailLabel, attachmentKindLabel, attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
+import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
+import { isImageAttachment } from "@/features/chat/chat-file-references";
+import { attachmentDetailLabel, attachmentKindLabel, attachmentReferenceTarget, attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { CHAT_SLASH_COMMANDS, filterChatSlashCommands, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
-import { ComposerAttachmentItem } from "@/features/chat/composer-attachment-item";
 import { listenForTauriComposerDragDrop, type TauriDragDropEvent, type TauriDropPosition, type TauriWebviewApi } from "@/features/chat/tauri-composer-drag-drop";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
@@ -20,6 +21,7 @@ import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/ka
 import type { RecentDirectory } from "@/lib/types/recent-directories";
 
 export { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
+export { MessageAttachments } from "@/features/chat/chat-attachment-view";
 
 const chatClass = createStyleClass(chatStyles);
 const kanbanClass = createStyleClass(kanbanStyles);
@@ -259,20 +261,16 @@ export function chatDisplayContent(message: ChatMessage) {
 
 export function attachmentSummary(attachments: ChatAttachment[]) {
   if (attachments.length === 0) return "";
-  const images = attachments.filter((attachment) => attachment.kind === "image").length;
+  const images = attachments.filter((attachment) => attachment.referenceKind !== "directory" && isImageAttachment(attachment)).length;
   const audio = attachments.filter((attachment) => attachment.kind === "audio").length;
   const folders = attachments.filter((attachment) => attachment.referenceKind === "directory").length;
-  const files = attachments.filter((attachment) => attachment.kind === "file" && attachment.referenceKind !== "directory").length;
+  const files = attachments.filter((attachment) => attachment.kind === "file" && attachment.referenceKind !== "directory" && !isImageAttachment(attachment)).length;
   return [
     images ? `${images} image${images === 1 ? "" : "s"}` : "",
     audio ? `${audio} audio clip${audio === 1 ? "" : "s"}` : "",
     folders ? `${folders} folder${folders === 1 ? "" : "s"}` : "",
     files ? `${files} file${files === 1 ? "" : "s"}` : "",
   ].filter(Boolean).join(", ");
-}
-
-function attachmentReferenceTarget(attachment: ChatAttachment) {
-  return attachment.referencePath?.trim() || attachment.name;
 }
 
 function attachmentReferenceText(attachments: ChatAttachment[]) {
@@ -1035,7 +1033,7 @@ export function ComposerField({
             </div>
           ))}
           {attachments.map((attachment) => (
-            <ComposerAttachmentItem key={attachment.id} attachment={attachment} disabled={disabled} onRemove={onRemoveAttachment} />
+            <ChatAttachmentView key={attachment.id} attachment={attachment} surface="composer" onRemove={onRemoveAttachment} removeDisabled={disabled} />
           ))}
         </div>
       ) : null}
@@ -1453,31 +1451,3 @@ export function ComposerField({
   );
 }
 
-export function MessageAttachments({ attachments }: { attachments?: ChatAttachment[] }) {
-  if (!attachments?.length) return null;
-  return (
-    <div className={chatClass("messageAttachments")}>
-      {attachments.map((attachment) => (
-        <figure className={chatClass("messageAttachment", attachment.kind)} key={attachment.id}>
-          {attachment.kind === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            attachment.dataUrl ? <img src={attachment.dataUrl} alt={attachment.name} /> : null
-          ) : attachment.kind === "audio" && attachment.dataUrl ? (
-            <audio src={attachment.dataUrl} controls preload="metadata" />
-          ) : attachment.dataUrl ? (
-            <a href={attachment.dataUrl} download={attachment.name}>
-              <FileText aria-hidden="true" />
-              {attachment.name}
-            </a>
-          ) : (
-            <div className={chatClass("messageAttachmentReference")}>
-              <FileText aria-hidden="true" />
-              <span>{attachmentReferenceTarget(attachment)}</span>
-            </div>
-          )}
-          <figcaption>{attachment.name}</figcaption>
-        </figure>
-      ))}
-    </div>
-  );
-}

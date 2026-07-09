@@ -334,6 +334,9 @@ export interface VoiceChatBrainPreference {
   source: VoiceChatBrainSource;
   provider?: string;
   model?: string;
+  /** True when the user explicitly picked this source in the Calls voice UI.
+   *  Legacy rows without this flag must not override the agent's own model. */
+  explicit?: boolean;
 }
 
 /** How the selected voice provider authenticates: "oauth" = a subscription
@@ -376,6 +379,8 @@ export interface AgentCallPreferences {
   enabled: boolean;
   dailyEnabled: boolean;
   dailyCallTime: string;
+  /** JavaScript day numbers, rendered Monday-first in the Calls UI. */
+  dailyCallDays: number[];
   timezone: string;
   quietHoursEnabled: boolean;
   quietHoursStart: string;
@@ -432,6 +437,19 @@ function normalizeAgentMinistry(
   };
 }
 
+const DEFAULT_AGENT_CALL_DAYS = [1, 2, 3, 4, 5, 6, 0];
+
+function normalizeAgentCallDays(input: unknown): number[] {
+  if (!Array.isArray(input)) return [...DEFAULT_AGENT_CALL_DAYS];
+  const selected = new Set<number>();
+  for (const value of input) {
+    const day = Number(value);
+    if (Number.isInteger(day) && day >= 0 && day <= 6) selected.add(day);
+  }
+  if (!selected.size) return [...DEFAULT_AGENT_CALL_DAYS];
+  return DEFAULT_AGENT_CALL_DAYS.filter((day) => selected.has(day));
+}
+
 export function buildAgentCallPreferences(
   input?: Partial<AgentCallPreferences> | null,
 ): AgentCallPreferences {
@@ -449,12 +467,14 @@ export function buildAgentCallPreferences(
           source: input.voiceChatBrain.source,
           provider: input.voiceChatBrain.provider?.trim() || undefined,
           model: input.voiceChatBrain.model?.trim() || undefined,
+          explicit: input.voiceChatBrain.explicit === true ? true : undefined,
         }
       : undefined,
     ministry: normalizeAgentMinistry(input?.ministry),
     enabled: input?.enabled ?? false,
     dailyEnabled: input?.dailyEnabled ?? false,
     dailyCallTime: input?.dailyCallTime || "09:00",
+    dailyCallDays: normalizeAgentCallDays(input?.dailyCallDays),
     timezone: input?.timezone || detectAgentCallTimezone(),
     quietHoursEnabled: input?.quietHoursEnabled ?? true,
     quietHoursStart: input?.quietHoursStart || "22:00",

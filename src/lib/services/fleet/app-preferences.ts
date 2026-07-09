@@ -18,6 +18,13 @@ export type ConnectedAppPreference = {
   priority?: boolean;
   /** Natural-prose routing hint, e.g. "Use this app for anime-style images". */
   usageNotes?: string;
+  /**
+   * Capability tags this app can do, e.g. ["video", "image-to-video"]. A
+   * HivemindOS-side overlay so a user/agent can declare what a connected app
+   * does WITHOUT modifying the service — surfaced to agents in the connected-app
+   * roster. Kept short/lowercased.
+   */
+  capabilities?: string[];
   preferredModels?: AppModelPreference[];
   updatedAt?: number;
 };
@@ -27,6 +34,7 @@ export type AppPreferenceCarrier = {
   name?: string;
   priority?: boolean;
   usageNotes?: string;
+  capabilities?: string[];
   preferredModels?: AppModelPreference[];
 };
 
@@ -47,16 +55,36 @@ function normalizeModelPreferences(value: unknown): AppModelPreference[] {
     .slice(0, 16);
 }
 
+function normalizeCapabilities(value: unknown): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,\n]/)
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const entry of raw) {
+    const tag = cleanText(entry).toLowerCase().slice(0, 40);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 export function normalizeAppPreference(value: unknown): ConnectedAppPreference | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   const appId = cleanText(record.appId);
   if (!appId) return null;
+  const capabilities = normalizeCapabilities(record.capabilities);
   return {
     appId,
     appName: cleanText(record.appName) || undefined,
     priority: record.priority === true || undefined,
     usageNotes: cleanText(record.usageNotes).slice(0, 2_000) || undefined,
+    capabilities: capabilities.length ? capabilities : undefined,
     preferredModels: normalizeModelPreferences(record.preferredModels),
     updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : undefined,
   };
@@ -131,7 +159,7 @@ export async function saveAppPreference(input: unknown): Promise<ConnectedAppPre
   preference.updatedAt = Date.now();
   const preferences = await readAppPreferences();
   const next = preferences.filter((entry) => entry.appId !== preference.appId);
-  const isEmpty = !preference.priority && !preference.usageNotes && !(preference.preferredModels?.length);
+  const isEmpty = !preference.priority && !preference.usageNotes && !(preference.capabilities?.length) && !(preference.preferredModels?.length);
   if (!isEmpty) next.push(preference);
   await writeAppPreferences(next);
   return preference;
@@ -157,6 +185,7 @@ export function applyAppPreferences<T extends AppPreferenceCarrier>(
       ...app,
       priority: preference.priority === true,
       usageNotes: preference.usageNotes,
+      capabilities: preference.capabilities?.length ? preference.capabilities : undefined,
       preferredModels: preference.preferredModels?.length ? preference.preferredModels : undefined,
     };
   });

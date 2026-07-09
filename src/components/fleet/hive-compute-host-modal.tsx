@@ -11,6 +11,7 @@ import {
   Download,
   Gauge,
   Key,
+  Link2,
   Lock,
   Moon,
   Network,
@@ -29,6 +30,7 @@ import {
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import type { FleetMachine } from "@/components/fleet/fleet-data";
 import type {
+  HiveComputeHostModel,
   HiveComputeHostRunConfig,
   HiveComputeHostWhen,
   HiveComputeMarketplaceStatus,
@@ -41,7 +43,7 @@ type ApiResponse = {
   status?: HiveComputeMarketplaceStatus;
 };
 
-type BusyAction = "refresh" | "setup-hosting" | "run-worker" | "stop-worker" | null;
+type BusyAction = "refresh" | "setup-hosting" | "run-worker" | "stop-worker" | "open-mpp-session" | null;
 type Step = "intro" | "setup" | "manage" | "earnings";
 type StageStatus = "ready" | "block" | "error" | "dim";
 
@@ -106,6 +108,49 @@ function formatDuration(ms: number): string {
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${minutes % 60}m`;
+}
+
+function normalizeDeviceToken(value: string): string {
+  // Drop possessives ("Liam's" → "Liam") so an LM Studio device name and a
+  // Tailscale machine name for the same box normalize alike.
+  return value.toLowerCase().replace(/['’]s\b/g, "").replace(/[^a-z0-9]+/g, "");
+}
+
+function deviceCoreName(value: string): string {
+  // LM Studio device names often carry a role suffix ("-Host", ".local") the
+  // fleet name lacks — strip it before comparing.
+  return normalizeDeviceToken(value.replace(/[\s._-]*(host|local|lan|pc|node)$/i, ""));
+}
+
+// Best-effort location for an LM Link host: match the LM Studio device name to a
+// non-self fleet machine and borrow its (fleet-derived) location. Returns
+// undefined when there is no confident match, or when tied matches disagree on
+// location, rather than guessing.
+function resolveLinkHostLocation(deviceName: string | undefined, machines: FleetMachine[] | undefined): string | undefined {
+  if (!deviceName || !machines?.length) return undefined;
+  const target = deviceCoreName(deviceName);
+  if (target.length < 4) return undefined;
+  const scored = machines
+    .filter((machine) => !/^this\b/i.test((machine.name || "").trim()))
+    .map((machine) => {
+      const name = normalizeDeviceToken(machine.name || "");
+      const tailnet = normalizeDeviceToken(machine.tailnet || "");
+      let score = 0;
+      if (name === target || tailnet === target) score = 3;
+      else if (name.includes(target) || target.includes(name) || tailnet.includes(target)) score = 2;
+      return { machine, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+  if (!scored.length) return undefined;
+  const topScore = scored[0].score;
+  const tied = scored.filter((entry) => entry.score === topScore);
+  // Prefer the human city label ("New York relay") over the generic location
+  // bucket ("Tailscale relay").
+  const labels = new Set(
+    tied.map((entry) => (entry.machine.city || entry.machine.location || "").trim()).filter(Boolean),
+  );
+  return labels.size === 1 ? [...labels][0] : undefined;
 }
 
 function paymentsReady(status: HiveComputeMarketplaceStatus): boolean {
@@ -181,7 +226,15 @@ function meterStatusFor(
   return { text: "Waiting to go live", tone: "honey", live: false };
 }
 
-export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachine; onClose: () => void }) {
+export function HiveComputeHostModal({
+  machine,
+  machines,
+  onClose,
+}: {
+  machine: FleetMachine;
+  machines?: FleetMachine[];
+  onClose: () => void;
+}) {
   const [status, setStatus] = React.useState<HiveComputeMarketplaceStatus | null>(null);
   const [busy, setBusy] = React.useState<BusyAction>("refresh");
   const [message, setMessage] = React.useState("");
@@ -205,6 +258,42 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
 
   const machineName = machine.name || "this machine";
   const running = isRunning(status);
+
+  // Which machine's models to discover. A "This …" display name or a direct
+  // loopback collector means the dashboard host itself. A linkd peer-proxy URL
+  // (http://127.0.0.1:8788/peer/<ip>:<port>) is loopback-hosted but reaches a
+  // REMOTE machine, so it must NOT count as self.
+  const targetCollectorUrl = (machine.collectorUrl || "").trim();
+  const isPeerProxyCollector = /\/peer\//i.test(targetCollectorUrl);
+  const isSelfMachine =
+    /^this\b/i.test((machine.name || "").trim()) ||
+    (!!targetCollectorUrl &&
+      !isPeerProxyCollector &&
+      /^https?:\/\/(127\.0\.0\.1|localhost|\[?::1\]?)(:|\/|$)/i.test(targetCollectorUrl));
+
+  // Prefer the human city label ("New York relay") over the generic location
+  // bucket ("Tailscale relay") when attributing where a machine's models run.
+  const targetLocation = (machine.city || machine.location || "").trim();
+
+  const targetQuery = React.useMemo(() => {
+    const params = new URLSearchParams();
+    if (targetCollectorUrl) params.set("targetCollectorUrl", targetCollectorUrl);
+    if (machine.name) params.set("targetMachineName", machine.name);
+    if (targetLocation) params.set("targetLocation", targetLocation);
+    if (isSelfMachine) params.set("targetSelf", "1");
+    const query = params.toString();
+    return query ? `?${query}` : "";
+  }, [targetCollectorUrl, machine.name, targetLocation, isSelfMachine]);
+
+  const targetBody = React.useMemo(
+    () => ({
+      ...(targetCollectorUrl ? { collectorUrl: targetCollectorUrl } : {}),
+      ...(machine.name ? { machineName: machine.name } : {}),
+      ...(targetLocation ? { location: targetLocation } : {}),
+      isSelf: isSelfMachine,
+    }),
+    [targetCollectorUrl, machine.name, targetLocation, isSelfMachine],
+  );
 
   const applyStatus = React.useCallback((next: HiveComputeMarketplaceStatus) => {
     setStatus(next);
@@ -233,7 +322,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
   React.useEffect(() => {
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      fetch("/api/hive-compute/marketplace", { cache: "no-store" })
+      fetch(`/api/hive-compute/marketplace${targetQuery}`, { cache: "no-store" })
         .then(async (response) => {
           const data = (await response.json().catch(() => ({}))) as ApiResponse;
           if (!response.ok || data.ok === false || !data.status) {
@@ -252,7 +341,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [applyStatus]);
+  }, [applyStatus, targetQuery]);
 
   // Cleanup timers on unmount.
   React.useEffect(() => () => clearSetupTimer(), [clearSetupTimer]);
@@ -277,7 +366,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
     setBusy("refresh");
     setError("");
     try {
-      const response = await fetch("/api/hive-compute/marketplace", { cache: "no-store" });
+      const response = await fetch(`/api/hive-compute/marketplace${targetQuery}`, { cache: "no-store" });
       const data = (await response.json().catch(() => ({}))) as ApiResponse;
       if (!response.ok || data.ok === false || !data.status) {
         throw new Error(data.error || "Hive Compute status failed.");
@@ -288,7 +377,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
     } finally {
       setBusy((current) => (current === "refresh" ? null : current));
     }
-  }, [applyStatus]);
+  }, [applyStatus, targetQuery]);
 
   const postAction = React.useCallback(
     async (action: Exclude<BusyAction, null | "refresh">, successMessage: string): Promise<boolean> => {
@@ -299,7 +388,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
         const response = await fetch("/api/hive-compute/marketplace", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, config }),
+          body: JSON.stringify({ action, config, target: targetBody }),
         });
         const data = (await response.json().catch(() => ({}))) as ApiResponse;
         if (!response.ok || data.ok === false || !data.status) {
@@ -315,7 +404,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
         setBusy(null);
       }
     },
-    [applyStatus, config],
+    [applyStatus, config, targetBody],
   );
 
   const startSetup = React.useCallback(async () => {
@@ -332,7 +421,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
       const response = await fetch("/api/hive-compute/marketplace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "setup-hosting", config }),
+        body: JSON.stringify({ action: "setup-hosting", config, target: targetBody }),
       });
       const data = (await response.json().catch(() => ({}))) as ApiResponse;
       if (!response.ok || data.ok === false || !data.status) {
@@ -352,7 +441,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
       setStep("intro");
       setBusy(null);
     }
-  }, [applyStatus, clearSetupTimer, config]);
+  }, [applyStatus, clearSetupTimer, config, targetBody]);
 
   const patchConfig = React.useCallback((patch: Partial<HiveComputeHostRunConfig>) => {
     setConfig((current) => ({ ...current, ...patch }));
@@ -385,6 +474,10 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
     [availableModelIds],
   );
 
+  const enableAllModels = React.useCallback(() => {
+    setConfig((current) => ({ ...current, selectedModelIds: null }));
+  }, []);
+
   const advertisedModels = React.useMemo(
     () => (status?.host.models ?? []).filter((model) => selectedModelIdSet.has(model.providerModelId)),
     [status?.host.models, selectedModelIdSet],
@@ -415,14 +508,21 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
     if (ok) setStep("manage");
   }, [postAction]);
 
+  const openMppSession = React.useCallback(() => {
+    void postAction("open-mpp-session", "MPP machine-payment session opened.");
+  }, [postAction]);
+
   const backHandler = React.useCallback(() => {
     clearSetupTimer();
-    setStep((current) => (current === "earnings" ? "manage" : "intro"));
+    setStep("manage");
   }, [clearSetupTimer]);
 
   // ---- derived view flags ----
   const isSkeleton = status === null;
-  const showBack = step === "manage" || step === "earnings";
+  // Manage is the root view for a set-up machine; Intro is only the pre-setup pitch and
+  // must never be reachable afterwards (it would falsely read "not set up yet"). So the
+  // only back affordance is Earnings → Manage.
+  const showBack = step === "earnings";
   const meterOverride: MeterOverride =
     step === "intro"
       ? { mode: "empty" }
@@ -460,15 +560,29 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
   const noticeTone: "live" | "error" | "honey" = error ? "error" : running ? "live" : "honey";
   const noticeText = error || message;
 
+  const discoveredFrom = status?.host.discoveredFrom;
+  const remoteDiscovery = Boolean(discoveredFrom?.remote);
+  // Going live runs the worker on the dashboard host, so it can't rent out a
+  // different fleet machine from here — discovery is read-only for remote targets.
+  const primaryDisabled = Boolean(busy) || remoteDiscovery;
+
+  const modelHost = (model: HiveComputeHostModel): { name: string; location?: string } | null => {
+    if (!model.remote || !model.hostDeviceName) return null;
+    return {
+      name: model.hostDeviceName,
+      location: model.hostLocation || resolveLinkHostLocation(model.hostDeviceName, machines),
+    };
+  };
+
   return (
     <div role="presentation" className={styles.backdrop} onClick={onClose}>
-      <div className={styles.desk} onClick={(event) => event.stopPropagation()}>
-        <section
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Hive Compute host setup for ${machineName}`}
-          className={styles.modal}
-        >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Hive Compute host setup for ${machineName}`}
+        className={styles.modal}
+        onClick={(event) => event.stopPropagation()}
+      >
           <CloseIconButton
             type="button"
             title="Close"
@@ -503,7 +617,9 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
             </div>
           ) : (
             <div className={styles.body}>
-              {/* ---------- readiness meter ---------- */}
+              {/* ---------- readiness meter (local host only; a remote target
+                   can't be gone-live from here, so its local readiness is moot) ---------- */}
+              {!remoteDiscovery ? (
               <div className={styles.meter}>
                 <div className={styles.meterHead}>
                   <span className={styles.meterKicker}>Readiness path</span>
@@ -531,6 +647,18 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
                   })}
                 </div>
               </div>
+              ) : null}
+
+              {remoteDiscovery ? (
+                <p className={styles.remoteBanner} role="status">
+                  <Link2 size={14} aria-hidden="true" />
+                  <span>
+                    Showing the models <b>{machineName}</b>
+                    {discoveredFrom?.location ? ` · ${discoveredFrom.location}` : ""} can serve. Renting it out runs the
+                    worker on that machine — open HivemindOS on {machineName} to go live there.
+                  </span>
+                </p>
+              ) : null}
 
               {step === "setup" ? renderSetup() : null}
               {step === "intro" ? renderIntro() : null}
@@ -544,8 +672,7 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
               ) : null}
             </div>
           )}
-        </section>
-      </div>
+      </section>
     </div>
   );
 
@@ -678,15 +805,17 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
         : status.host.message;
     return (
       <>
-        <div className={styles.nextCard}>
-          <div className={styles.nextMain}>
-            <span className={styles.cardKicker}>
-              <Cpu size={13} aria-hidden="true" /> What happens next
-            </span>
-            <h3 className={styles.nextTitle}>{nextTitle}</h3>
+        {!remoteDiscovery ? (
+          <div className={styles.nextCard}>
+            <div className={styles.nextMain}>
+              <span className={styles.cardKicker}>
+                <Cpu size={13} aria-hidden="true" /> What happens next
+              </span>
+              <h3 className={styles.nextTitle}>{nextTitle}</h3>
+            </div>
+            <p className={styles.nextLede}>{nextLede}</p>
           </div>
-          <p className={styles.nextLede}>{nextLede}</p>
-        </div>
+        ) : null}
 
         <div className={styles.modelsCard}>
           <div className={styles.modelsHead}>
@@ -699,18 +828,25 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
             </span>
             <span className={styles.modelsCount}>
               {enabledCount} of {totalModels} advertised
+              {enabledCount < totalModels ? (
+                <button type="button" className={styles.enableAll} onClick={enableAllModels}>
+                  <Check size={11} aria-hidden="true" /> Enable all
+                </button>
+              ) : null}
             </span>
           </div>
           {status.host.models.length ? (
             <div className={styles.modelChips} role="group" aria-label="Models to advertise through Hive Compute">
               {status.host.models.map((model) => {
                 const active = selectedModelIdSet.has(model.providerModelId);
+                const host = modelHost(model);
                 return (
                   <button
                     key={model.providerModelId}
                     type="button"
                     className={styles.modelChip}
                     data-active={active}
+                    data-remote={Boolean(host)}
                     aria-pressed={active}
                     onClick={() => toggleModel(model.providerModelId)}
                   >
@@ -720,6 +856,12 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
                       <span className={styles.modelChipPrice}>
                         ${moneyMicro(model.inputPer1m)} / ${moneyMicro(model.outputPer1m)} per M
                       </span>
+                      {host ? (
+                        <span className={styles.modelChipHost}>
+                          <Link2 size={9} aria-hidden="true" /> on {host.name}
+                          {host.location ? ` · ${host.location}` : ""}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 );
@@ -820,6 +962,41 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
           </div>
         </section>
 
+        {!remoteDiscovery ? (
+          <details className={styles.details}>
+            <summary className={styles.detailsSummary}>Advanced diagnostics</summary>
+            <div className={styles.detailsBody}>
+              <div className={styles.detailRow}>
+                <span className={styles.cardKicker}>
+                  <ShieldCheck size={13} aria-hidden="true" /> Payments &amp; privacy
+                </span>
+                <span className={styles.detailPill}>
+                  Privacy: {status.privacy.attestationReady && status.privacy.encryptedDeliveryReady ? "Verified enclave" : "Standard"}
+                </span>
+              </div>
+              <p className={styles.detailText}>{status.payments.mpp.message}</p>
+              <p className={styles.detailText}>{status.privacy.message}</p>
+              <div className={styles.detailRow}>
+                <span className={styles.detailPill}>
+                  {status.payments.mpp.sessionToken.present
+                    ? `MPP via ${status.payments.mpp.sessionToken.source || "environment"}`
+                    : "MPP not open"}
+                </span>
+                <span className={styles.detailPill}>{status.privacy.mode}</span>
+              </div>
+              <button
+                type="button"
+                className={styles.btnSecondary}
+                onClick={openMppSession}
+                disabled={Boolean(busy) || !status.gateway.configured || !status.payments.mpp.enabled}
+              >
+                {busy === "open-mpp-session" ? <span className={styles.spinner} aria-hidden="true" /> : <Zap size={15} aria-hidden="true" />}
+                Open MPP session
+              </button>
+            </div>
+          </details>
+        ) : null}
+
         {renderWorkerOutput()}
 
         <div className={styles.footer}>
@@ -831,7 +1008,13 @@ export function HiveComputeHostModal({ machine, onClose }: { machine: FleetMachi
               {busy === "refresh" ? <span className={styles.spinner} aria-hidden="true" /> : <RefreshCcw size={15} aria-hidden="true" />}
               Refresh
             </button>
-            <button type="button" className={styles.btnPrimary} onClick={() => void runPrimary()} disabled={Boolean(busy)}>
+            <button
+              type="button"
+              className={styles.btnPrimary}
+              onClick={() => void runPrimary()}
+              disabled={primaryDisabled}
+              title={remoteDiscovery ? `Open HivemindOS on ${machineName} to host it` : undefined}
+            >
               {primaryBusy ? <span className={styles.spinner} aria-hidden="true" /> : <primary.Icon size={15} aria-hidden="true" />}
               {primary.label}
             </button>

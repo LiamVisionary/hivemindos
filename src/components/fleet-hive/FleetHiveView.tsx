@@ -637,7 +637,7 @@ export function FleetHiveView({
         ? createPortal(
           USEPOD_COMPUTE_RENTALS_ENABLED
             ? <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
-            : <HiveComputeHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />,
+            : <HiveComputeHostModal machine={usePodHostMachine} machines={machines} onClose={() => setUsePodHostMachine(null)} />,
           document.body,
         )
         : null}

@@ -48,6 +48,10 @@ const RUNTIME_KINDS: VoiceRuntimeKind[] = ["realtime-hybrid", "cloud-tts", "loca
 // configurable; the realtime hybrid bundles the brain into the voice model.
 const PIPELINE_KINDS = new Set<VoiceRuntimeKind>(["cloud-tts", "local-tts"]);
 
+function currentTimeMs() {
+  return Date.now();
+}
+
 export type AgentSettingsCallsVoiceSectionProps = {
   agentCallSettings: AgentCallPreferences;
   updateAgentCalls: (patch: Partial<AgentCallPreferences>) => void;
@@ -149,8 +153,8 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
   const brainModel = voiceBrainPref?.model || "";
   const agentBrainModelLabel = [roleModalAgent?.provider, roleModalAgent?.model].filter(Boolean).join(" / ");
   const updateVoiceChatBrain = (patch: Partial<VoiceChatBrainPreference>) => {
-    const next: VoiceChatBrainPreference = { source: brainSource, provider: brainProvider, model: brainModel, ...patch };
-    updateAgentCalls({ voiceChatBrain: next.source === "agent" ? { source: "agent" } : next });
+    const next: VoiceChatBrainPreference = { source: brainSource, provider: brainProvider, model: brainModel, ...patch, explicit: true };
+    updateAgentCalls({ voiceChatBrain: next.source === "agent" ? { source: "agent", explicit: true } : next });
   };
   const [brainModelOptions, setBrainModelOptions] = useState<string[]>([]);
   useEffect(() => {
@@ -305,6 +309,7 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
     setPreviewBusy(true);
     setPreviewError("");
     const sampleText = "Hi, this is a quick preview of how I sound on your HivemindOS calls.";
+    const previewStartedAt = currentTimeMs();
     try {
       let response: Response;
       let sampleRate = 24_000;
@@ -331,7 +336,7 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
               openingLine: "",
             },
             input: sampleText,
-            utteranceId: `preview_${Date.now()}`,
+            utteranceId: `preview_${previewStartedAt}`,
           }),
           signal: controller.signal,
         });
@@ -356,7 +361,7 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
       if (!response.ok || !response.body) {
         throw new Error((await response.text().catch(() => "")) || `Voice preview returned HTTP ${response.status}.`);
       }
-      await playRealtimePcmStream(response, { channels: 1, sampleRate, signal: controller.signal, startedAt: Date.now() });
+      await playRealtimePcmStream(response, { channels: 1, sampleRate, signal: controller.signal, startedAt: previewStartedAt });
     } catch (error) {
       if (!controller.signal.aborted) setPreviewError(error instanceof Error ? error.message : "Voice preview failed.");
     } finally {

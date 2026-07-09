@@ -173,6 +173,11 @@ function safeVoiceConfigPayload(
   const recipes = Array.isArray(config.recipes)
     ? config.recipes.filter((recipe) => recipe && typeof recipe === "object")
     : [];
+  const dailyCallDays = Array.isArray(config.dailyCallDays)
+    ? config.dailyCallDays
+        .map((day) => Number(day))
+        .filter((day, index, list) => Number.isInteger(day) && day >= 0 && day <= 6 && list.indexOf(day) === index)
+    : undefined;
   return {
     ...result,
     result: {
@@ -199,6 +204,7 @@ function safeVoiceConfigPayload(
           typeof config.dailyCallTime === "string"
             ? config.dailyCallTime
             : undefined,
+        dailyCallDays,
         voiceProviders,
         voiceOptions: [...voiceOptions, ...extraVoiceOptions],
         localTtsCandidates,

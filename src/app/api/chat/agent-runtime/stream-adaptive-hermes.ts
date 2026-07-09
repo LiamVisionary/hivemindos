@@ -128,6 +128,10 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
       try {
         for (const candidateModel of candidateModels) {
           const candidateProfile = profileWithResolvedModel(profile, candidateModel);
+          const candidateSessionKey = candidateProfile.sessionKey?.trim()
+            || runtimeSessionId
+            || hermesCliSessionId
+            || undefined;
           const promptEnvelope = buildHivemindPromptEnvelope({
             profile: candidateProfile,
             agentMode,
@@ -167,7 +171,7 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
               body: JSON.stringify({
                 agent: candidateProfile,
                 agentId: candidateProfile.agentId || candidateProfile.id,
-                sessionKey: candidateProfile.sessionKey,
+                sessionKey: candidateSessionKey,
                 provider: candidateProfile.provider || undefined,
                 model: candidateModel,
                 agentEnv: safeAgentEnv({

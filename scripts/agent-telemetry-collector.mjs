@@ -77,6 +77,11 @@ import {
   summarizeHermesDbSessionTimeline,
   summarizeHermesProcessPayload,
 } from "./lib/hermes-api-proxy-telemetry.mjs";
+import {
+  hermesApiMessages,
+  hermesApiSessionHeaders,
+  hermesSessionIdFromResponse,
+} from "./lib/hermes-api-request-routing.mjs";
 import { discoverLocalOpenAiServers } from "./lib/local-openai-server-discovery.mjs";
 import { createCollectorMessagingChannelBridge } from "./lib/collector-messaging-channels.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
@@ -6846,40 +6851,6 @@ async function ensureHermesApiServer(hermesHome) {
   return hermesApiStartPromise;
 }
 
-function apiServerMessages(body, text, requestMarker = "") {
-  const markerMessage = requestMarker
-    ? [
-        {
-          role: "system",
-          content: `HivemindOS request marker: ${requestMarker}`,
-        },
-      ]
-    : [];
-  if (Array.isArray(body.messages) && body.messages.length > 0) {
-    return [
-      ...markerMessage,
-      ...body.messages
-        .filter((message) => message && typeof message === "object")
-        .map((message) => {
-          const content = normalizeMessageContent(message.content);
-          return {
-            role:
-              message.role === "assistant" || message.role === "system"
-                ? message.role
-                : "user",
-            content,
-          };
-        })
-        .filter((message) =>
-          Array.isArray(message.content)
-            ? message.content.length > 0
-            : message.content.trim(),
-        ),
-    ];
-  }
-  return [...markerMessage, { role: "user", content: text }];
-}
-
 // Hermes' built-in lmstudio provider reads LM_BASE_URL at request time, so a
 // model hosted on another fleet machine routes there for this run only — no
 // config files change anywhere.
@@ -7290,7 +7261,6 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
         hermesHome,
         requestStartedAt - 2_000,
         text,
-        requestMarker,
       );
       if (!session || emittedSession || response.writableEnded) return;
       emittedSession = true;
@@ -7348,15 +7318,39 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
     });
     const upstream = await fetch(`${hermesApiBaseUrl}/v1/chat/completions`, {
       method: "POST",
-      headers: hermesApiHeaders({ "Content-Type": "application/json" }),
+      headers: hermesApiHeaders({
+        "Content-Type": "application/json",
+        ...hermesApiSessionHeaders(body, { authenticated: Boolean(hermesApiKey) }),
+      }),
       body: JSON.stringify({
         model: agent.model || "hermes-agent",
         provider: agent.provider || undefined,
         stream: true,
-        messages: apiServerMessages(body, text, requestMarker),
+        messages: hermesApiMessages(body, text, normalizeMessageContent),
       }),
       signal: controller.signal,
     });
+    const upstreamHermesSessionId = hermesSessionIdFromResponse(upstream.headers);
+    if (upstreamHermesSessionId) {
+      observedHermesSessionId = upstreamHermesSessionId;
+      if (!emittedSession) {
+        emittedSession = true;
+        void emitTelemetry("session.detected", {
+          hermesSessionId: observedHermesSessionId,
+          sessionSource: "api-response-header",
+        });
+        ensureHeaders();
+        response.write(
+          ssePayload({
+            session: {
+              id: observedHermesSessionId,
+              runtime: "hermes",
+              source: "api-response-header",
+            },
+          }),
+        );
+      }
+    }
     void emitTelemetry("model_request.response", {
       status: upstream.status,
       ok: upstream.ok,

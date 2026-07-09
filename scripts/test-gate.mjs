@@ -56,6 +56,7 @@ const TESTS = [
   "test:company-task-dedup",
   "test:company-vault-store",
   "test:compiled-knowledge",
+  "test:connected-app-capabilities",
   "test:context-index:loop-readiness",
   "test:context-index:swarm-goal",
   "test:copy-trading",
@@ -131,14 +132,17 @@ const TESTS = [
   "test:system-health",
   "test:tauri-dev-resilience",
   "test:tauri-release-mode",
+  "test:transcript-card",
   "test:untrusted-context",
   "test:vault-structure",
   "test:veil-auto-send",
+  "test:video-app-routing",
   "test:wallet-paid-models",
   "test:wallet-real-tabs",
   "test:wallet-vault",
   "test:work-events",
   "test:worker-output-failure",
+  "test:x-url",
 ];
 
 // Hermetic but currently failing (stale source anchors / moved docs) or owned

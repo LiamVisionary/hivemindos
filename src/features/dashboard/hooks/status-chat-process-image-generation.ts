@@ -65,15 +65,37 @@ export function cloneApplicationGenerationCard(card: any) {
   return card ? { ...card, artifacts: card.artifacts?.map((artifact: any) => ({ ...artifact })) } : undefined;
 }
 
-export function shouldStartImageGenerationCard(prompt: string, label: string, detail?: string) {
-  const text = `${label}\n${detail ?? ""}`;
-  const currentTurnWantsImageGeneration = /\b(?:generate|create|make|draw|render|txt2img|text\s*to\s*image|image[-_\s]?gen|image generation)\b[\s\S]*\b(?:image|images|picture|pictures|illustration|artwork|photo|visual)\b/i.test(prompt)
+function isCapabilitySearchProcessEvent(label: string, detail?: string) {
+  const normalizedLabel = label.trim().toLowerCase();
+  if (normalizedLabel === "hive capability search" || normalizedLabel === "capability search") return true;
+  const detailText = detail ?? "";
+  return /\b(?:retrieval hits?|connected apps? observed)\b/i.test(detailText)
+    && /\b(?:image generation available|image[-_\s]?gen config)\b/i.test(detailText);
+}
+
+function promptWantsImageGeneration(prompt: string) {
+  return /\b(?:generate|create|make|draw|render|txt2img|text\s*to\s*image|image[-_\s]?gen|image generation)\b[\s\S]*\b(?:image|images|picture|pictures|illustration|artwork|photo|visual)\b/i.test(prompt)
     || /\b(?:txt2img|text\s*to\s*image|image[-_\s]?gen|image generation|comfyui|z[-_\s]?image)\b/i.test(prompt);
+}
+
+export function shouldStartImageGenerationCard(prompt: string, label: string, detail?: string) {
+  if (isCapabilitySearchProcessEvent(label, detail)) return false;
+  const text = `${label}\n${detail ?? ""}`;
+  const currentTurnWantsImageGeneration = promptWantsImageGeneration(prompt);
   const imageGenerationActivityPattern = /\b(?:image[-_\s]?gen|image generation|generate(?:d|s|ing)? image|generating image|txt2img|text\s*to\s*image|comfyui|z[-_\s]?image|gpt-image|dall-e|local[-_\s]?ai|image studio|\/api\/job|job_url)\b/i;
   const strongImageGenerationActivityPattern = /\b(?:image[-_\s]?gen|txt2img|text\s*to\s*image|comfyui|z[-_\s]?image|gpt-image|dall-e|local[-_\s]?ai|image studio|\/api\/job|job_url)\b/i;
   if (!imageGenerationActivityPattern.test(text)) return false;
   if (/\b(?:capabilit|context|search|skill context|file content read)\b/i.test(label) && !strongImageGenerationActivityPattern.test(text)) return false;
   return currentTurnWantsImageGeneration || strongImageGenerationActivityPattern.test(text);
+}
+
+export function shouldRenderImageGenerationCard(card: any) {
+  if (!card) return false;
+  if (Array.isArray(card.artifacts) && card.artifacts.length > 0) return true;
+  if (card.error) return true;
+  const status = String(card.status ?? "").trim().toLowerCase();
+  if (status === "ready" || status === "failed" || status === "error") return true;
+  return promptWantsImageGeneration(String(card.prompt ?? ""));
 }
 
 export function buildActiveImageGenerationCard(input: {
