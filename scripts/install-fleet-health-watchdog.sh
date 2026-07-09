@@ -17,8 +17,25 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="com.hivemindos.fleet-health-watchdog"
 SCRIPT="$REPO_DIR/scripts/fleet-health-watchdog.mjs"
 NODE_BIN="$(command -v node || true)"
+PROBE_PROFILE="$HOME/.hermes/profiles/runtime-capability-probe"
+
+# The deep /chat liveness probe runs under this RESERVED hermes profile so its
+# turns never land in a real agent's history / the dashboard chat tree (the
+# collector hides the slug via RESERVED_HERMES_PROFILE_SLUGS). hermes reads
+# provider keys from $HERMES_HOME/.env, so symlink the default env in — no secret
+# copy, and the link resolves once ~/.hermes/.env exists. Keep in sync with the
+# FLEET_WATCHDOG_PROBE_PROFILE default in scripts/fleet-health-watchdog.mjs.
+seed_probe_profile() {
+  mkdir -p "$PROBE_PROFILE"
+  ln -sfn "$HOME/.hermes/.env" "$PROBE_PROFILE/.env"
+}
+unseed_probe_profile() {
+  rm -f "$PROBE_PROFILE/.env"
+  rmdir "$PROBE_PROFILE" 2>/dev/null || true
+}
 
 uninstall() {
+  unseed_probe_profile
   if [[ "$(uname -s)" == "Darwin" ]]; then
     local plist="$HOME/Library/LaunchAgents/$LABEL.plist"
     launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
@@ -39,6 +56,8 @@ fi
 
 [[ -n "$NODE_BIN" ]] || { echo "node not found on PATH — install Node 20+ first." >&2; exit 1; }
 [[ -f "$SCRIPT" ]] || { echo "watchdog script missing at $SCRIPT" >&2; exit 1; }
+
+seed_probe_profile
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
