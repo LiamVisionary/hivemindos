@@ -20,6 +20,7 @@ import {
 } from "./integrations-primitives";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { XAccountMcpPanel, type ManagedXPanelStatus, type XMcpStatus } from "./XAccountMcpPanel";
+import { XTranscriptPanel } from "./XTranscriptPanel";
 import {
   managedXReturnUrl,
   managedXStatusUrl,
@@ -32,7 +33,7 @@ import {
 } from "./integrations-view-helpers";
 import "./integrations-redesign.css";
 
-type TabId = "connections" | "mcp" | "codeproof";
+type TabId = "connections" | "mcp" | "transcript" | "codeproof";
 
 type HiveMcpCatalogItem = {
   id: string;
@@ -76,6 +77,7 @@ type ManagedXReturnPoll = {
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "connections", label: "Connections" },
   { id: "mcp", label: "MCP Servers" },
+  { id: "transcript", label: "Transcript" },
   { id: "codeproof", label: "Code Proof" },
 ];
 
@@ -161,6 +163,12 @@ export function IntegrationsView({ embedded = false, defaultTab = "connections" 
           <>
             <TabHeader eyebrow="Model Context Protocol" title="MCP Servers" sub="Tool servers the hive connects to and calls natively." />
             <McpManager managedXReturn={managedXReturn} onManagedXReturn={setManagedXReturn} />
+          </>
+        ) : null}
+        {tab === "transcript" ? (
+          <>
+            <TabHeader eyebrow="X / Twitter" title="Transcript" sub="Paste an X link — pull the transcript from the video, or stitch the whole thread into text." />
+            <XTranscriptPanel />
           </>
         ) : null}
         {tab === "codeproof" ? (
