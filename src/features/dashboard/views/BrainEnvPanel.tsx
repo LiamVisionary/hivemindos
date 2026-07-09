@@ -9,6 +9,7 @@ import type { AgentEnvCardProps } from "@/features/env/env-components";
 import type { RuntimeSecretStatus } from "@/lib/services/runtime-adapters/types";
 import type { DashboardView, HiveEnvBackupStatus, HiveEnvImportEntry, HiveEnvSource, RuntimeModelSelection } from "@/features/dashboard/dashboard-types";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
+import { HiveEnvKeyInput } from "@/features/env/HiveEnvKeyInput";
 import envStyles from "./brain-env.module.css";
 
 // Non-string entries are falsy toggles; envStyles[falsy] is undefined and filtered out.
@@ -427,15 +428,20 @@ export function BrainEnvPanel(props: BrainEnvPanelProps) {
       {sharedEnvEditable && sharedEnvAddMenuOpen ? (
         <div className={`${envClass("envCard", "envEditCard")} p-4`}>
           <p className="eyebrow">Add shared variable</p>
-          <div className={envClass("envEditGrid")}>
-            <input className={envClass("envField")} value={sharedEnvDraft.key} onChange={(event) => setSharedEnvDraft((current) => ({ ...current, key: event.target.value.toUpperCase() }))} placeholder="KEY" />
-            <input className={`${envClass("envField")} ${maskedSecretValueClass}`} {...secretInputProps} value={sharedEnvDraft.value} onChange={(event) => setSharedEnvDraft((current) => ({ ...current, value: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !sharedEnvDraftSaving) void addSharedEnvValue(); }} placeholder="value" />
-            <button type="button" className={envClass("envActionButton")} onClick={generateSharedEnvSecret}><Sparkles aria-hidden="true" />Secret</button>
-            <button type="button" className={envClass("envActionButton", "envActionPrimary")} onClick={() => void addSharedEnvValue()} disabled={sharedEnvDraftSaving} aria-label="Save shared env variable">
-              {sharedEnvDraftSaving ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <Check aria-hidden="true" />}
-              SAVE
-            </button>
-          </div>
+          <HiveEnvKeyInput
+            keyValue={sharedEnvDraft.key}
+            onKeyChange={(next) => setSharedEnvDraft((current) => ({ ...current, key: next.toUpperCase() }))}
+            value={sharedEnvDraft.value}
+            onValueChange={(next) => setSharedEnvDraft((current) => ({ ...current, value: next }))}
+            onSave={() => void addSharedEnvValue()}
+            saving={sharedEnvDraftSaving}
+            saveLabel="Save"
+            extraAction={
+              <button type="button" className={envClass("envActionButton")} onClick={generateSharedEnvSecret}>
+                <Sparkles aria-hidden="true" />Secret
+              </button>
+            }
+          />
         </div>
       ) : null}
 

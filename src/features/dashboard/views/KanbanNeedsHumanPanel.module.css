@@ -57,7 +57,7 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--wrc-honey);
+  background: var(--wrc-honey-fill, var(--wrc-honey));
   opacity: 0.85;
   z-index: 1;
 }
@@ -404,7 +404,7 @@
 }
 
 .radioSelected {
-  background: var(--wrc-honey);
+  background: var(--wrc-honey-fill, var(--wrc-honey));
   border-color: var(--wrc-honey);
 }
 
@@ -927,7 +927,7 @@
   --wrc-line-2: rgba(54, 46, 30, 0.16);
   --wrc-line-3: rgba(54, 46, 30, 0.26);
 
-  --wrc-honey: #b07f1c;
+  --wrc-honey: #936811; --wrc-honey-fill: #e6bb5c;
   --wrc-honey-2: #936811;
   --wrc-honey-soft: rgba(176, 127, 28, 0.12);
   --wrc-honey-line: rgba(176, 127, 28, 0.34);

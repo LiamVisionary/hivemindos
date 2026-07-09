@@ -96,7 +96,11 @@ export function processLabelFromRuntimeEvent(parsed: any) {
     const statusPayload = parsed.status;
     const label = String(statusPayload.message ?? statusPayload.label ?? statusPayload.type ?? "Runtime status").trim();
     const detail = String(statusPayload.detail ?? statusPayload.phase ?? "").trim();
-    return { label, detail: detail || undefined };
+    const rawNestedStatus = String(statusPayload.status ?? "").trim().toLowerCase();
+    const nestedStatus = rawNestedStatus === "completed" || rawNestedStatus === "failed" || rawNestedStatus === "running"
+      ? rawNestedStatus
+      : undefined;
+    return { label, detail: detail || undefined, status: nestedStatus };
   }
   if (type && !/^chat\.text$/i.test(type)) {
     return { label: message || type.replace(/^chat\./, "").replace(/[._-]+/g, " "), detail: message && message !== type ? type : undefined };

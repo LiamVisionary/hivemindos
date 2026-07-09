@@ -72,3 +72,16 @@ export function openAICompatibleInferenceCacheHints(
 
   return { body, headers, modes };
 }
+
+export function openAICompatibleMessageCacheControlSupported(
+  input: Pick<OpenAICompatibleInferenceCacheInput, "provider" | "model">,
+) {
+  const provider = normalizedProvider(input.provider);
+  const model = normalizedModel(input.model).toLowerCase().replace(/^~/u, "");
+  if (provider !== "openrouter") return false;
+  return (
+    model.startsWith("anthropic/") ||
+    model.includes("/claude") ||
+    model.startsWith("qwen/")
+  );
+}

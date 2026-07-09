@@ -64,7 +64,7 @@
   --fg-3: #867d6e;
   --fg-4: #a59b89;
 
-  --honey: #b07f1c;
+  --honey: #936811; --honey-fill: #e6bb5c;
   --honey-2: #936811;
   --honey-soft: rgba(176, 127, 28, 0.12);
   --honey-line: rgba(176, 127, 28, 0.34);
@@ -97,7 +97,7 @@
 .sim-root .fb-seg { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--line-2); border-radius: 99px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
 .sim-root .fb-seg button { border: 0; background: transparent; cursor: pointer; border-radius: 99px; padding: 8px 16px; font-family: var(--f-body); font-size: 12.5px; color: var(--fg-3); transition: color .16s, background .16s; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .sim-root .fb-seg button:hover { color: var(--fg); }
-.sim-root .fb-seg button[data-active] { background: var(--honey); color: #1a1305; font-weight: 500; }
+.sim-root .fb-seg button[data-active] { background: var(--honey-fill, var(--honey)); color: #1a1305; font-weight: 500; }
 .sim-root .fb-seg.sub button[data-active] { background: var(--panel-hi); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-3); }
 
 /* select */
@@ -106,7 +106,7 @@
 
 /* buttons */
 .sim-root .fb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 99px; padding: 9px 15px; font-size: 12.5px; font-family: var(--f-body); cursor: pointer; border: 1px solid transparent; transition: filter .16s, border-color .16s, color .16s, background .16s; white-space: nowrap; }
-.sim-root .fb-btn.primary { background: var(--honey); color: #1a1305; font-weight: 500; }
+.sim-root .fb-btn.primary { background: var(--honey-fill, var(--honey)); color: #1a1305; font-weight: 500; }
 .sim-root .fb-btn.primary:hover { filter: brightness(1.06); }
 .sim-root .fb-btn.ghost { background: transparent; color: var(--fg-2); border-color: var(--line-2); }
 .sim-root .fb-btn.ghost:hover { border-color: var(--line-3); color: var(--fg); }
@@ -223,7 +223,7 @@
 .sim-root .fr-streamline { display: grid; align-items: baseline; font-family: var(--f-mono); padding: 4px 9px; border-radius: 6px; animation: fr-in .34s ease; }
 @keyframes fr-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
-.sim-root .fr-locked { border: 1px solid var(--honey-line); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--honey) 6%, var(--panel)); display: grid; gap: 11px; }
+.sim-root .fr-locked { border: 1px solid var(--honey-line); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--honey-fill, var(--honey)) 6%, var(--panel)); display: grid; gap: 11px; }
 .sim-root .fr-skel { height: 9px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in srgb, var(--fg-4) 16%, transparent) 25%, color-mix(in srgb, var(--fg-4) 34%, transparent) 50%, color-mix(in srgb, var(--fg-4) 16%, transparent) 75%); background-size: 200% 100%; animation: fr-shim 1.5s linear infinite; }
 @keyframes fr-shim { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .sim-root .fr-done { border: 1px solid color-mix(in srgb, var(--live) 45%, transparent); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--live) 8%, var(--panel)); display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }

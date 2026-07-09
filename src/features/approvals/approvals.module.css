@@ -37,7 +37,7 @@
   --ap-fg-2: #5e574b;
   --ap-fg-3: #867d6e;
   --ap-fg-4: #a59b89;
-  --ap-honey: #b07f1c;
+  --ap-honey: #936811; --ap-honey-fill: #e6bb5c;
   --ap-honey-ink: #fdf7ea;
   --ap-honey-soft: rgba(176, 127, 28, 0.12);
   --ap-honey-line: rgba(176, 127, 28, 0.34);
@@ -230,7 +230,7 @@
 
 .btnPrimary {
   border-color: transparent;
-  background: var(--ap-honey);
+  background: var(--ap-honey-fill, var(--ap-honey));
   color: var(--ap-honey-ink);
 }
 
@@ -313,7 +313,7 @@
 
 .btnPrimary.splitCaret {
   border: 1px solid transparent;
-  background: var(--ap-honey);
+  background: var(--ap-honey-fill, var(--ap-honey));
   color: var(--ap-honey-ink);
 }
 

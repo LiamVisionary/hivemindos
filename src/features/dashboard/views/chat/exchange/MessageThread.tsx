@@ -8,6 +8,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
 import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
+import { imageAttachmentPreviewSrc } from "@/features/chat/chat-file-references";
+import { ImageAttachmentThumbnail } from "@/features/chat/image-attachment-preview";
 import { markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type ProcessEvent } from "@/features/dashboard/views/chat/AgentProcessPanel";
 import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
@@ -21,6 +23,9 @@ import { Dot, Glyph, ICON } from "./primitives";
 type IconComponent = ElementType<{ "aria-hidden"?: boolean | "true" | "false"; className?: string }>;
 type AgentResponseLoaderComponent = ElementType<{ phrase?: string }>;
 type ChatMarkdownComponent = ComponentType<{ text: string; className?: string; headingClassName?: string }>;
+type PromptResponse = { label: string; value?: string; respondedAt?: number };
+type PromptOption = { label: string; value: string; permissionMode?: ChatPermissionMode };
+type SendPromptOptions = { permissionMode?: ChatPermissionMode; promptResponse?: PromptResponse };
 
 // events/label are read defensively; the canonical ChatMessage/attachment types do not define them.
 export type ThreadMessage = ChatMessage & { events?: ProcessEvent[] };
@@ -81,46 +86,50 @@ function renderInline(text: string) {
   return out;
 }
 
-function InteractivePromptControls({ disabled, options, sendPromptMessage, Send }: {
+function InteractivePromptControls({ allowFreeText = true, disabled, options, sendPromptMessage, Send }: {
+  allowFreeText?: boolean;
   disabled?: boolean;
-  options: Array<{ label: string; value: string; permissionMode?: ChatPermissionMode }>;
-  sendPromptMessage?: (prompt: string, options?: { permissionMode?: ChatPermissionMode }) => void | Promise<void>;
+  options: PromptOption[];
+  sendPromptMessage?: (prompt: string, options?: SendPromptOptions) => void | Promise<void>;
   Send?: IconComponent;
 }) {
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState("");
   if (!sendPromptMessage || !options.length) return null;
-  const submitOption = (option: { value: string; permissionMode?: ChatPermissionMode }) => {
+  const submitOption = (option: PromptOption) => {
     const prompt = option.value.trim();
     if (!prompt) return;
-    void sendPromptMessage(prompt, option.permissionMode ? { permissionMode: option.permissionMode } : undefined);
+    void sendPromptMessage(prompt, {
+      ...(option.permissionMode ? { permissionMode: option.permissionMode } : {}),
+      promptResponse: { label: decisionResponseLabel(option.label, prompt), value: prompt },
+    });
     setOtherText("");
     setOtherOpen(false);
   };
   const submitValue = (value: string) => {
     const prompt = value.trim();
     if (!prompt) return;
-    void sendPromptMessage(prompt);
+    void sendPromptMessage(prompt, { promptResponse: { label: "Answered", value: prompt } });
     setOtherText("");
     setOtherOpen(false);
   };
   return (
-    <div style={{ display: "grid", gap: 8, marginTop: 10 }} aria-label="Prompt response options">
-      <div style={{ display: "grid", gap: 7, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+    <div className="fr-chat-prompt-actions" aria-label="Prompt response options">
+      <div className="fr-chat-prompt-choice-grid">
         {options.map((option, index) => (
-          <button key={`${option.value}-${index}`} type="button" className="fr-chat-mini-button" onClick={() => submitOption(option)} disabled={disabled}>
-            <span>{index + 1}</span>
+          <button key={`${option.value}-${index}`} type="button" className="fr-chat-prompt-button" onClick={() => submitOption(option)} disabled={disabled}>
             <strong>{option.label}</strong>
           </button>
         ))}
-        <button type="button" className="fr-chat-mini-button" onClick={() => setOtherOpen((open) => !open)} aria-expanded={otherOpen} disabled={disabled}>
-          <span>{options.length + 1}</span>
-          <strong>Other</strong>
-        </button>
+        {allowFreeText ? (
+          <button type="button" className="fr-chat-prompt-button fr-chat-prompt-button-muted" onClick={() => setOtherOpen((open) => !open)} aria-expanded={otherOpen} disabled={disabled}>
+            <strong>Other</strong>
+          </button>
+        ) : null}
       </div>
-      {otherOpen ? (
+      {allowFreeText && otherOpen ? (
         <form
-          style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 7 }}
+          className="fr-chat-prompt-other-form"
           onSubmit={(event) => {
             event.preventDefault();
             submitValue(otherText);
@@ -133,13 +142,29 @@ function InteractivePromptControls({ disabled, options, sendPromptMessage, Send 
             placeholder="Type another answer..."
             disabled={disabled}
             autoFocus
-            style={{ minWidth: 0, border: "1px solid var(--line-2)", borderRadius: "var(--radius-sm)", background: "var(--panel-2)", color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 13, outline: 0, padding: "8px 10px" }}
           />
-          <button type="submit" className="fr-chat-mini-button" disabled={disabled || !otherText.trim()} aria-label="Send other answer">
+          <button type="submit" className="fr-chat-prompt-send-button" disabled={disabled || !otherText.trim()} aria-label="Send other answer">
             {Send ? <Send aria-hidden="true" /> : "Send"}
           </button>
         </form>
       ) : null}
+    </div>
+  );
+}
+
+function decisionResponseLabel(label: string, value: string) {
+  const text = (label || value).replace(/\s+/g, " ").trim();
+  if (/^approve\b/i.test(text)) return text.replace(/^approve\b/i, "Approved");
+  if (/^accept\b/i.test(text)) return text.replace(/^accept\b/i, "Accepted");
+  if (/^reject\b/i.test(text)) return text.replace(/^reject\b/i, "Rejected");
+  return text || "Answered";
+}
+
+function InteractivePromptResponse({ response }: { response: PromptResponse }) {
+  return (
+    <div className="fr-chat-prompt-settled" aria-label={`Prompt response: ${response.label}`}>
+      <span aria-hidden="true" />
+      <strong>{response.label}</strong>
     </div>
   );
 }
@@ -265,13 +290,23 @@ function MessageFooter({ actions, align = "agent", timeLabel }: { actions?: Reac
 function AttachmentPills({ FileText, attachments }: { FileText?: IconComponent; attachments: ThreadAttachment[] }) {
   if (!attachments.length) return null;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 5 }}>
-      {attachments.map((attachment, index) => (
-        <span key={`${attachment.name ?? index}-${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--line-2)", borderRadius: 8, background: "var(--panel-2)", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "3px 9px" }}>
-          {FileText ? <FileText aria-hidden="true" /> : null}
-          {attachment.name ?? attachment.label ?? "Attachment"}
-        </span>
-      ))}
+    <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 }}>
+      {attachments.map((attachment, index) => {
+        const previewSrc = imageAttachmentPreviewSrc(attachment);
+        return previewSrc ? (
+          <ImageAttachmentThumbnail
+            key={`${attachment.id ?? attachment.name ?? index}-${index}`}
+            src={previewSrc}
+            alt={attachment.name ?? attachment.label ?? "Image attachment"}
+            variant="message"
+          />
+        ) : (
+          <span key={`${attachment.name ?? index}-${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid var(--line-2)", borderRadius: 8, background: "var(--panel-2)", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "3px 9px" }}>
+            {FileText ? <FileText aria-hidden="true" /> : null}
+            {attachment.name ?? attachment.label ?? "Attachment"}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -392,7 +427,7 @@ function MessageThreadBase({
   processEventsForDisplay: ProcessEvent[];
   processEventsTargetKey: string;
   selectedAgent?: AgentProfile | null;
-  sendPromptMessage?: (prompt: string, options?: { permissionMode?: ChatPermissionMode }) => void | Promise<void>;
+  sendPromptMessage?: (prompt: string, options?: SendPromptOptions) => void | Promise<void>;
   setCopiedMessageKey: Dispatch<SetStateAction<string>>;
   setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
   chatKanbanGeneration?: ChatKanbanGeneration | null;
@@ -516,7 +551,7 @@ function MessageThreadBase({
                 </div>
               </article>
             ) : hasAssistantBody ? (
-              <article style={{ display: "grid", gap: 9 }}>
+              <article className={promptUi ? "fr-chat-prompt-article" : undefined} style={{ display: "grid", gap: 9 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--f-mono)", fontSize: 11 }}>
                   <Dot state={activeChatTaskRunning && index === messages.length - 1 ? "working" : "ready"} size={6} />
                   <strong style={{ color: "var(--fg)", fontFamily: "var(--f-display)", fontWeight: 600, whiteSpace: "nowrap" }}>{selectedAgent?.name ?? "Agent"}</strong>
@@ -541,8 +576,10 @@ function MessageThreadBase({
                         : <ChatMarkdown text={markdownText(assistantDisplayTextWithoutJsonRender)} className="fr-chat-markdown" />
                       : null)
                     : renderInline(assistantDisplayTextWithoutJsonRender)}
-                  {promptUi?.options?.length ? (
-                    <InteractivePromptControls disabled={false} options={promptUi.options} sendPromptMessage={sendPromptMessage} Send={Send} />
+                  {promptUi?.response ? (
+                    <InteractivePromptResponse response={promptUi.response} />
+                  ) : promptUi?.options?.length ? (
+                    <InteractivePromptControls allowFreeText={promptUi.allowFreeText !== false} disabled={false} options={promptUi.options} sendPromptMessage={sendPromptMessage} Send={Send} />
                   ) : null}
                 </div>
                 {responseBilling ? <div className="fr-chat-response-billing">{responseBilling}</div> : null}

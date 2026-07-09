@@ -113,6 +113,12 @@ export type KanbanTaskAttachment = {
   mimeType: string;
   size: number;
   dataUrl: string;
+  /**
+   * Display-only downscaled image preview (data URL) for image attachments that
+   * are stored as path references (no `dataUrl` sent to the runtime). Never sent
+   * to the agent — used purely to render the composer/thread thumbnail.
+   */
+  previewUrl?: string;
   referencePath?: string;
   referenceKind?: "file" | "directory";
   referenceOnly?: boolean;

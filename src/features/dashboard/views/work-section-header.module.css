@@ -269,7 +269,7 @@
 :global(:root[data-theme="hive-light"]) .modeRail .activeMode {
   background: rgba(176, 127, 28, 0.12);
   box-shadow: inset 0 0 0 1px rgba(176, 127, 28, 0.34);
-  color: #b07f1c;
+  color: #936811;
 }
 
 :global(:root[data-theme="hive-light"]) .titleText,
@@ -297,11 +297,11 @@
 }
 
 :global(:root[data-theme="hive-light"]) .stats .honey strong {
-  color: #b07f1c;
+  color: #936811;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .honey::before {
-  background: #b07f1c;
+  background: #e6bb5c;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .danger strong {

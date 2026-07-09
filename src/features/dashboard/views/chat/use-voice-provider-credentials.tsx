@@ -13,7 +13,8 @@ import {
  * the OAuth-vs-API-key auto-select and the inline hive-env key input.
  *
  * Presence booleans come from /api/phone/voice-credentials (never the secret
- * value); OAuth sign-in reuses /api/openai-oauth (the only real OAuth flow).
+ * value); voice OAuth sign-in reuses /api/openai-oauth. Grok model OAuth lives
+ * on /api/xai-oauth and is surfaced from the model provider setup card.
  */
 
 export type ProviderCredentialStatus = {
@@ -93,9 +94,12 @@ export function useVoiceProviderCredentials(active: boolean) {
   // another tab/window reflects here without a manual refresh.
   useEffect(() => {
     if (!active) return undefined;
-    void refresh();
+    const initial = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => void refresh(), 4_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
   }, [active, refresh]);
 
   const saveKey = useCallback(

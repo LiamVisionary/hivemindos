@@ -1,5 +1,4 @@
 import {
-  HIVE_COMPUTE_API_KEY_ENV,
   HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV,
   HIVE_COMPUTE_CONFIDENTIAL_MODE_ENV,
   HIVE_COMPUTE_DEFAULT_MODEL,
@@ -90,15 +89,16 @@ Set these in the shared hive env, project env, or process env:
   \`HIVE_COMPUTE_TEE_NONCE\`.
 - ${HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV}: public key advertised to the
   gateway for encrypted prompt delivery.
-- ${HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV}: optional X25519 private
-  key PEM path for encrypted job payloads.
+- ${HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV}: optional RSA-OAEP or
+  X25519 private key PEM path for encrypted job payloads.
 - ${HIVE_COMPUTE_TEE_PAYLOAD_KEY_ENV}: optional sealed symmetric AES-256-GCM key
   for encrypted job payloads.
 
 Standard workers receive prompt contents for jobs they accept. Hardware-enforced
-privacy requires gateway-verified TEE attestation and encrypted prompt delivery;
-the worker can collect evidence and decrypt encrypted payloads only when the
-runtime provides the required enclave keys/evidence.
+privacy requires gateway-verified TEE attestation plus encrypted prompt and
+output delivery; the worker can collect evidence, decrypt encrypted payloads,
+and encrypt responses only when the runtime provides the required enclave
+keys/evidence.
 
 ## Run
 
@@ -117,8 +117,8 @@ small native WebSocket worker protocol compatible with Hive Compute gateways,
 with local Ollama and OpenAI-compatible serving adapters.
 TEE privacy, x402 settlement, MPP sessions, bonds, payouts, and reputation are
 gateway-side capabilities. This worker can enforce gateway-supplied payment
-proofs, collect remote-attestation evidence, and decrypt encrypted payloads
-when the enclosing runtime supplies enclave keys.
+proofs, collect remote-attestation evidence, decrypt encrypted payloads, and
+encrypt response output when the enclosing runtime supplies enclave keys.
 The public HivemindOS app contains no official marketplace ledger, payout,
 quota, entitlement, treasury, or fraud-control authority; official authority
 belongs in hosted HivemindOS infrastructure or in a self-hosted operator's own
@@ -128,7 +128,7 @@ gateway.
 
 export const HIVE_COMPUTE_WORKER_SOURCE = `#!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { createDecipheriv, createHash, createPrivateKey, createPublicKey, diffieHellman, hkdfSync } from "node:crypto";
+import { constants, createCipheriv, createDecipheriv, createHash, createPrivateKey, createPublicKey, diffieHellman, hkdfSync, privateDecrypt, publicEncrypt, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import os from "node:os";
 import WebSocket from "ws";
@@ -145,7 +145,7 @@ const workerId = process.env.HIVE_COMPUTE_WORKER_ID || workerName;
 const advertisedModels = splitList(process.env.HIVE_COMPUTE_MODELS || "${HIVE_COMPUTE_DEFAULT_MODEL},hive-compute/fast");
 const modelMap = parseModelMap(process.env.HIVE_COMPUTE_MODEL_MAP_JSON || "");
 const wsPath = process.env.HIVE_COMPUTE_WORKER_WS_PATH || "/hive-compute/worker/ws";
-const maxConcurrency = positiveInteger(process.env.HIVE_COMPUTE_WORKER_MAX_CONCURRENCY, 4);
+const maxConcurrency = positiveInteger(process.env.HIVE_COMPUTE_WORKER_MAX_CONCURRENCY, 1);
 const hostWhen = process.env.HIVE_COMPUTE_WORKER_HOST_WHEN || "idle";
 const paymentRail = normalizeRail(process.env.${HIVE_COMPUTE_PAYMENT_RAIL_ENV} || "x402");
 const mppPolicyUrl = process.env.${HIVE_COMPUTE_MPP_POLICY_URL_ENV} || "";
@@ -277,6 +277,7 @@ function workerCapabilities() {
       provider: teeProvider,
       teeAttestation: attestation.ready,
       encryptedPromptDelivery: Boolean(teeEncryptionPublicKey && (teePrivateKeyFile || teePayloadKey)),
+      encryptedOutputDelivery: true,
       attestationPolicyUrl,
       encryptionPublicKey: teeEncryptionPublicKey,
       attestation,
@@ -293,14 +294,15 @@ async function runJob(job) {
   const routeModel = String(normalizedJob.model || advertisedModels[0] || "${HIVE_COMPUTE_DEFAULT_MODEL}");
   const localModel = modelMap[routeModel] || modelMap["*"] || defaultLocalModel(routeModel);
   const messages = normalizeMessages(normalizedJob);
+  const outputEncryption = outputEncryptionFromJob(normalizedJob);
   console.log("[hive-compute] job", jobId, routeModel, "->", localModel, "(" + localEngine + ")");
   emit("job.accepted", { jobId, workerId, model: routeModel, localModel, engine: localEngine });
 
   if (localEngine === "openai") {
-    await runOpenAICompatibleJob({ jobId, localModel, messages, options: normalizedJob.options });
+    await runOpenAICompatibleJob({ jobId, localModel, messages, options: normalizedJob.options, outputEncryption });
     return;
   }
-  await runOllamaJob({ jobId, localModel, messages, options: normalizedJob.options });
+  await runOllamaJob({ jobId, localModel, messages, options: normalizedJob.options, outputEncryption });
 }
 
 function validateJobPayment(job) {
@@ -317,6 +319,21 @@ function validateJobPayment(job) {
   throw new Error("Job is missing a gateway-authorized payment proof.");
 }
 
+function outputEncryptionFromJob(job) {
+  const privacy = job.privacy && typeof job.privacy === "object" ? job.privacy : {};
+  const output = privacy.outputEncryption && typeof privacy.outputEncryption === "object" ? privacy.outputEncryption : {};
+  const required = output.required === true;
+  if (!required) return null;
+  const publicKey = normalizePublicKeyMaterial(String(output.publicKey || ""));
+  if (!publicKey) throw new Error("Output encryption is required but no client public key was provided.");
+  return {
+    required: true,
+    algorithm: "rsa-oaep-a256gcm",
+    publicKey,
+    publicKeySha256: String(output.publicKeySha256 || sha256(publicKey)).trim() || sha256(publicKey),
+  };
+}
+
 function normalizeEncryptedJob(job) {
   const encrypted = job.encryptedPayload || job.encrypted_payload;
   if (!encrypted) return job;
@@ -328,6 +345,7 @@ function decryptPayload(envelope) {
   if (!envelope || typeof envelope !== "object") throw new Error("Encrypted payload envelope is invalid.");
   const algorithm = String(envelope.algorithm || "").toLowerCase();
   if (algorithm === "dir-a256gcm" || algorithm === "aes-256-gcm") return decryptAesGcm(envelope, directPayloadKey());
+  if (algorithm === "rsa-oaep-a256gcm") return decryptRsaOaepAesGcm(envelope);
   if (algorithm === "x25519-chacha20-poly1305") return decryptX25519Chacha(envelope);
   throw new Error("Unsupported encrypted payload algorithm: " + algorithm);
 }
@@ -350,6 +368,17 @@ function decryptAesGcm(envelope, key) {
   return JSON.parse(plaintext);
 }
 
+function decryptRsaOaepAesGcm(envelope) {
+  if (!teePrivateKeyFile) throw new Error("${HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV} is required for RSA-OAEP encrypted payloads.");
+  const privateKey = readFileSync(teePrivateKeyFile, "utf8");
+  const key = privateDecrypt({
+    key: privateKey,
+    padding: constants.RSA_PKCS1_OAEP_PADDING,
+    oaepHash: "sha256",
+  }, b64(envelope.encryptedKey || envelope.encrypted_key));
+  return decryptAesGcm(envelope, key);
+}
+
 function decryptX25519Chacha(envelope) {
   if (!teePrivateKeyFile) throw new Error("${HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV} is required for X25519 encrypted payloads.");
   const privateKey = createPrivateKey(readFileSync(teePrivateKeyFile, "utf8"));
@@ -369,6 +398,90 @@ function decryptX25519Chacha(envelope) {
   decipher.setAuthTag(tag);
   const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
   return JSON.parse(plaintext);
+}
+
+function emitJobToken(input, tokenText, sequence) {
+  if (!tokenText) return;
+  if (!input.outputEncryption) {
+    emit("job.token", { jobId: input.jobId, token: tokenText });
+    return;
+  }
+  emit("job.encrypted_token", {
+    jobId: input.jobId,
+    encryptedToken: encryptOutputPayload(input.outputEncryption, {
+      type: "delta",
+      text: tokenText,
+      sequence,
+    }, outputAad(input.jobId, "delta", sequence)),
+  });
+}
+
+function emitJobComplete(input, finalText, usage) {
+  const finalUsage = usageWithCompletionEstimate(finalText, usage);
+  if (!input.outputEncryption) {
+    emit("job.complete", { jobId: input.jobId, text: finalText, usage: finalUsage });
+    return;
+  }
+  emit("job.complete", {
+    jobId: input.jobId,
+    encryptedOutput: encryptOutputPayload(input.outputEncryption, {
+      type: "final",
+      text: finalText,
+    }, outputAad(input.jobId, "final", 0)),
+    usage: finalUsage,
+    outputEncryption: {
+      algorithm: input.outputEncryption.algorithm,
+      publicKeySha256: input.outputEncryption.publicKeySha256,
+    },
+  });
+}
+
+function usageWithCompletionEstimate(text, usage) {
+  const normalized = usage && typeof usage === "object" ? { ...usage } : {};
+  if (!Number.isFinite(Number(normalized.completionTokens)) || Number(normalized.completionTokens) <= 0) {
+    normalized.completionTokens = estimateTokens(text);
+  }
+  return normalized;
+}
+
+function encryptOutputPayload(outputEncryption, payload, aad) {
+  if (outputEncryption.algorithm !== "rsa-oaep-a256gcm") throw new Error("Unsupported output encryption algorithm.");
+  const key = randomBytes(32);
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, nonce);
+  cipher.setAAD(Buffer.from(aad));
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(payload), "utf8"),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag();
+  const encryptedKey = publicEncrypt({
+    key: outputEncryption.publicKey,
+    padding: constants.RSA_PKCS1_OAEP_PADDING,
+    oaepHash: "sha256",
+  }, key);
+  return {
+    algorithm: "rsa-oaep-a256gcm",
+    encryptedKey: encryptedKey.toString("base64"),
+    nonce: nonce.toString("base64"),
+    tag: tag.toString("base64"),
+    ciphertext: ciphertext.toString("base64"),
+    aad,
+    publicKeySha256: outputEncryption.publicKeySha256,
+    sequence: payload.sequence,
+  };
+}
+
+function outputAad(jobId, kind, sequence) {
+  return "hivemindos-hive-compute-output:" + jobId + ":" + kind + ":" + sequence;
+}
+
+function normalizePublicKeyMaterial(value) {
+  const trimmed = String(value || "").trim().replace(/\\\\n/g, "\\n");
+  if (!trimmed) return "";
+  if (trimmed.includes("-----BEGIN PUBLIC KEY-----")) return trimmed;
+  const compact = trimmed.replace(/\\s+/g, "");
+  return "-----BEGIN PUBLIC KEY-----\\n" + (compact.match(/.{1,64}/g) || [compact]).join("\\n") + "\\n-----END PUBLIC KEY-----";
 }
 
 function collectAttestation(nonce) {
@@ -429,6 +542,7 @@ async function runOllamaJob(input) {
   let finalText = "";
   const decoder = new TextDecoder();
   let buffer = "";
+  let sequence = 0;
   for await (const chunk of response.body) {
     buffer += decoder.decode(chunk, { stream: true });
     const lines = buffer.split(/\\r?\\n/);
@@ -440,23 +554,19 @@ async function runOllamaJob(input) {
       const tokenText = payload.message && typeof payload.message.content === "string" ? payload.message.content : "";
       if (tokenText) {
         finalText += tokenText;
-        emit("job.token", { jobId: input.jobId, token: tokenText });
+        emitJobToken(input, tokenText, sequence++);
       }
       if (payload.done) {
-        emit("job.complete", {
-          jobId: input.jobId,
-          text: finalText,
-          usage: payload.eval_count || payload.prompt_eval_count ? {
+        emitJobComplete(input, finalText, payload.eval_count || payload.prompt_eval_count ? {
             promptTokens: payload.prompt_eval_count || 0,
             completionTokens: payload.eval_count || 0,
-          } : undefined,
-        });
+          } : undefined);
         console.log("[hive-compute] completed", input.jobId);
         return;
       }
     }
   }
-  emit("job.complete", { jobId: input.jobId, text: finalText });
+  emitJobComplete(input, finalText);
 }
 
 async function runOpenAICompatibleJob(input) {
@@ -482,6 +592,7 @@ async function runOpenAICompatibleJob(input) {
   let finalUsage = undefined;
   const decoder = new TextDecoder();
   let buffer = "";
+  let sequence = 0;
   for await (const chunk of response.body) {
     buffer += decoder.decode(chunk, { stream: true });
     const lines = buffer.split(/\\r?\\n/);
@@ -491,7 +602,7 @@ async function runOpenAICompatibleJob(input) {
       if (!trimmed || !trimmed.startsWith("data:")) continue;
       const data = trimmed.slice(5).trim();
       if (!data || data === "[DONE]") {
-        emit("job.complete", { jobId: input.jobId, text: finalText, usage: finalUsage });
+        emitJobComplete(input, finalText, finalUsage);
         console.log("[hive-compute] completed", input.jobId);
         return;
       }
@@ -507,11 +618,11 @@ async function runOpenAICompatibleJob(input) {
             : "";
         if (!tokenText) continue;
         finalText += tokenText;
-        emit("job.token", { jobId: input.jobId, token: tokenText });
+        emitJobToken(input, tokenText, sequence++);
       }
     }
   }
-  emit("job.complete", { jobId: input.jobId, text: finalText, usage: finalUsage });
+  emitJobComplete(input, finalText, finalUsage);
 }
 
 function normalizeMessages(job) {
@@ -605,6 +716,10 @@ function splitList(value) {
 function positiveInteger(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
+}
+
+function estimateTokens(text) {
+  return Math.max(1, Math.ceil(String(text || "").trim().length / 4));
 }
 
 function booleanEnv(value, fallback) {

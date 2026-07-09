@@ -96,6 +96,11 @@ When building features involving payments, billing, managed cloud, enterprise ac
 - Use browser-only storage only for disposable, per-tab affordances where losing the value is harmless, and document that choice in the code when it is not obvious.
 - For knowledge that agents should reason about, store compact structured operational data in the app store first, then publish summaries or durable facts to Shared Brain Memory or Obsidian. Do not spam the shared brain with high-volume raw telemetry samples.
 
+## Integration OAuth Connectors
+
+- Adding or debugging a "Connect with …" OAuth button in the Integrations panel? Read **`INTEGRATIONS.md`** first — file-by-file checklist + gotchas. HivemindOS is a downloaded desktop app, so a client **secret never ships in the binary/repo** — it lives only in the hosted Cloudflare OAuth-broker Worker (`hivemindos-google-oauth-exchange`; private repo, see gitignored `WORKERS.local.md`). Two redirect models by provider: **loopback-wildcard** (Google — redirect on the app's own localhost, Worker does exchange only) vs **exact-match/HTTPS** (Slack — redirect lands on the Worker, which rendezvouses the token back to the app via a poll). Baked-in **public client id**, tokens in the shared hive env.
+- **Two easy-to-forget steps:** (1) for a callback that lands on the *app* (loopback-wildcard providers), add the callback path to `SELF_AUTHENTICATING_API_PREFIXES` in `src/proxy.ts` or the auth gate rejects the credential-less browser redirect with `{"ok":false,"error":"Dashboard authentication is required."}`. (2) For exact-match providers, register the **Worker's HTTPS callback** as the redirect URL (a per-user `localhost:<port>` is never registrable) and keep the app a **confidential** client (secret in the Worker) — do **not** flip Slack's one-way PKCE/public-client switch.
+
 ## Code Style Guide
 
 Agents are senior software engineers in this codebase and must follow these rules strictly.

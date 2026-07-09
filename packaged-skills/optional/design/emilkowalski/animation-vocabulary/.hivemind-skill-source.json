@@ -1,0 +1,20 @@
+{
+  "upstreamName": "animation-vocabulary",
+  "upstreamSlug": "animation-vocabulary",
+  "hiveSlug": "animation-vocabulary",
+  "sourceLabel": "emilkowalski",
+  "sourceUrl": "https://github.com/emilkowalski/skills/blob/f76beceb7d3fc8c43309cefad5a095a206103a4e/skills/animation-vocabulary/SKILL.md",
+  "repository": "https://github.com/emilkowalski/skills",
+  "installCommand": "npx skills add https://github.com/emilkowalski/skills --skill animation-vocabulary",
+  "importedAt": "2026-07-09T15:40:48.642Z",
+  "refreshedAt": "2026-07-09T15:40:48.642Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/emilkowalski/animation-vocabulary",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "f76beceb7d3fc8c43309cefad5a095a206103a4e",
+  "normalized": "verbatim-frontmatter",
+  "description": "Reverse-lookup glossary that turns a vague description of a web animation or motion effect into its exact term ('the bouncy thing when a popover opens' → Pop in; 'the iOS rubber-band scroll' → Rubber-banding). Use when the user asks 'what's it called when…', or describes a motion effect without knowing its name and wants the right word to prompt an AI or designer with. For naming an effect, not designing or building one."
+}

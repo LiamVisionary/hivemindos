@@ -82,3 +82,7 @@ __pycache__/
 # Keep the public boundary note, but do not commit private Worker source here.
 workers/*
 !workers/README.md
+
+# Local-only operator reference to the private Cloudflare Workers repo. Points at
+# machine-local paths / infra; never committed.
+WORKERS.local.md

@@ -37,7 +37,10 @@ import {
   inferredModalColdStartProcessEvent,
   recordAgentRuntimeWarm,
 } from "@/lib/services/chat/agent-cold-start";
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
+import {
+  openAICompatibleInferenceCacheHints,
+  openAICompatibleMessageCacheControlSupported,
+} from "@/lib/services/chat/inference-cache-hints";
 import { resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
 import {
   flushChannelMarkup,
@@ -64,6 +67,7 @@ import {
   extractReasoningChunk,
   extractUserText,
   isTerminalOpenAiStreamMetadata,
+  messagesWithCurrentMediaArtifacts,
   routeChannelMarkupDelta,
   ssePayload,
   textOnlyMessagesForTextModel,
@@ -71,6 +75,10 @@ import {
   type IncomingMessage,
 } from "./messages";
 import type { ChatMediaArtifact } from "./media-artifacts";
+import {
+  shouldSuppressCommandToolForNativeMedia,
+} from "./media-tool-routing";
+import { runtimeProcessEventsSsePayload } from "./process-events";
 import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
 import {
@@ -113,6 +121,16 @@ function numericHeader(headers: Headers, name: string) {
 function stringHeader(headers: Headers, name: string) {
   const value = headers.get(name)?.trim();
   return value || undefined;
+}
+
+function dataUrlDecodedBytes(dataUrl?: string) {
+  if (!dataUrl) return 0;
+  const payload = dataUrl.split(",", 2)[1] ?? "";
+  return Math.floor((payload.replace(/=+$/u, "").length * 3) / 4);
+}
+
+function modelVisibleMediaBytes(artifacts: ChatMediaArtifact[]) {
+  return artifacts.reduce((total, artifact) => total + dataUrlDecodedBytes(artifact.dataUrl || artifact.previewDataUrl), 0);
 }
 
 function hivemindosModelsBillingFromHeaders(headers: Headers): ChatResponseBilling | null {
@@ -447,12 +465,12 @@ export async function streamOpenAICompatibleRuntime(
   // can reach our own dispatch route. Every other chat is byte-for-byte unchanged.
   const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(intentText);
   const offerVideoTool = Boolean(requestOrigin) && videoGenerationRequest(intentText);
-  const routeMediaViaArtifactHandles = walletPaidModelsEnabled
-    && isFreeHivemindosWalletPaidModel(runtimeProfile.model)
-    && offerVideoTool;
+  const freeScoutModel = walletPaidModelsEnabled && isFreeHivemindosWalletPaidModel(runtimeProfile.model);
+  const routeMediaViaArtifactHandles = freeScoutModel && offerVideoTool;
+  const multimodalModelMessages = messagesWithCurrentMediaArtifacts(messages, mediaArtifacts);
   const modelInputMessages = routeMediaViaArtifactHandles
     ? textOnlyMessagesForTextModel(messages, mediaArtifacts)
-    : messages;
+    : multimodalModelMessages;
   const url = buildOpenAICompatibleUrl(runtimeProfile);
   const lockKey = interactiveRuntimeLockKey(runtimeProfile, url);
   if (!reserveInteractiveRuntime(lockKey)) {
@@ -484,7 +502,12 @@ export async function streamOpenAICompatibleRuntime(
       runtimeSessionId,
       extraDynamicContext: buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel),
     });
-    return prependHivemindSystemMessage(modelInputMessages, promptEnvelope);
+    return prependHivemindSystemMessage(modelInputMessages, promptEnvelope, {
+      cacheControl: openAICompatibleMessageCacheControlSupported({
+        provider: candidateProfile.provider,
+        model: candidateModel,
+      }),
+    });
   };
   let candidateModels: string[];
   try {
@@ -501,7 +524,15 @@ export async function streamOpenAICompatibleRuntime(
   // skillActions runtime capability. This gives a hivemind-os chat agent an
   // actual local-execution loop (allowlisted commands) instead of letting it
   // role-play "I ran osascript…". Agents without the capability are unchanged.
-  const offerCommandTool = profile.runtimeCapabilities?.skillActions === true && normalizedPermissionMode !== "plan";
+  const suppressCommandToolForNativeMedia = shouldSuppressCommandToolForNativeMedia({
+    messages,
+    mediaArtifacts,
+    intentText,
+    generationToolOffered: offerImageTool || offerVideoTool,
+  });
+  const offerCommandTool = profile.runtimeCapabilities?.skillActions === true
+    && normalizedPermissionMode !== "plan"
+    && !suppressCommandToolForNativeMedia;
   const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(intentText);
   // Tool definitions advertised on every request attempt. Empty → no tools
   // field is sent and the chat path is byte-for-byte unchanged.
@@ -896,6 +927,8 @@ export async function streamOpenAICompatibleRuntime(
       ...cacheHints.body,
       ...(withTools && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
     });
+    let requestBody = requestBodyFor(sentTools);
+    const requestBodyBytes = () => Buffer.byteLength(requestBody);
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.start", {
       ...telemetryPayloadForProfile(candidateProfile),
       url: candidateUrl,
@@ -905,6 +938,8 @@ export async function streamOpenAICompatibleRuntime(
       usePod: usePodEnabled,
       offerImageTool: sentTools,
       messageCount: modelMessages.length,
+      requestBodyBytes: requestBodyBytes(),
+      modelVisibleMediaBytes: modelVisibleMediaBytes(mediaArtifacts),
     });
     // A cold LM Studio model makes the chat fetch block on a JIT load with
     // zero feedback (a dead LM Link host holds it ~70s before failing).
@@ -944,7 +979,7 @@ export async function streamOpenAICompatibleRuntime(
       upstream = await fetch(candidateUrl, {
         method: "POST",
         headers: attemptHeaders,
-        body: requestBodyFor(sentTools),
+        body: requestBody,
         signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
       });
       // Some OpenAI-compatible providers reject a `tools` array with a 400. Retry the
@@ -963,10 +998,11 @@ export async function streamOpenAICompatibleRuntime(
           });
           sentTools = false;
           upstreamErrorText = null;
+          requestBody = requestBodyFor(false);
           upstream = await fetch(candidateUrl, {
             method: "POST",
             headers: attemptHeaders,
-            body: requestBodyFor(false),
+            body: requestBody,
             signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
           });
         }
@@ -996,7 +1032,7 @@ export async function streamOpenAICompatibleRuntime(
           upstream = await fetch(candidateUrl, {
             method: "POST",
             headers: attemptHeaders,
-            body: requestBodyFor(sentTools),
+            body: requestBody,
             signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
           });
           recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.retry_response", {
@@ -1111,6 +1147,7 @@ export async function streamOpenAICompatibleRuntime(
   // refresh.
   const providerBalanceHeader = veniceResponse?.balanceRemaining || usePodResponse?.balanceRemaining || "";
   let responseBilling = walletPaidModelsEnabled ? hivemindosModelsBillingFromHeaders(upstream.headers) : null;
+  const preflightProcessPayload = runtimeProcessEventsSsePayload(telemetry?.preflightProcessEvents ?? []);
   if (veniceResponse?.balanceRemaining) {
     recordRuntimeTelemetry(telemetry, "agent_runtime.venice.response", {
       ...telemetryPayloadForProfile(runtimeProfile),
@@ -1147,7 +1184,8 @@ export async function streamOpenAICompatibleRuntime(
         await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
         releaseInteractiveRuntime(lockKey);
         return new Response(
-          toolRun.events.join("")
+          preflightProcessPayload
+          + toolRun.events.join("")
           + (responseBilling ? ssePayload({ billing: responseBilling }) : "")
           + "data: [DONE]\n\n",
           {
@@ -1175,7 +1213,8 @@ export async function streamOpenAICompatibleRuntime(
       }
       releaseInteractiveRuntime(lockKey);
       return new Response(
-        toolRun.events.join("")
+        preflightProcessPayload
+        + toolRun.events.join("")
         + (routed.thinking ? ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking }) : "")
         + ssePayload(outputCheck.verdict === "block"
           ? { error: outputCheck.reason ?? "Response blocked by security policy" }
@@ -1206,7 +1245,8 @@ export async function streamOpenAICompatibleRuntime(
     }
     releaseInteractiveRuntime(lockKey);
     return new Response(
-      (routed.thinking ? ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking }) : "")
+      preflightProcessPayload
+      + (routed.thinking ? ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking }) : "")
       +
       ssePayload(outputCheck.verdict === "block"
         ? { error: outputCheck.reason ?? "Response blocked by security policy" }
@@ -1236,6 +1276,7 @@ export async function streamOpenAICompatibleRuntime(
           session: { id: runtimeSessionId, runtime: profile.runtime, source: "hivemindos-chat", startedAt: fetchStartedAt },
         })));
       }
+      if (preflightProcessPayload) controller.enqueue(encoder.encode(preflightProcessPayload));
       let fullText = "";
       // Consume one upstream SSE stream: emit content/thinking to the client exactly as
       // before, and (when allowed) accumulate any tool_calls instead of leaking them as

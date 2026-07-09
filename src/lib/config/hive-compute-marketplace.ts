@@ -3,7 +3,7 @@ import type { HiveComputeModelOption } from "@/lib/types/hive-compute-marketplac
 export const HIVE_COMPUTE_PROVIDER_SLUG = "hive-compute";
 export const HIVE_COMPUTE_PRODUCT_NAME = "Hive Compute";
 export const HIVE_COMPUTE_WORKER_PACKAGE_NAME = "@hivemindos/hive-compute-worker";
-export const HIVE_COMPUTE_WORKER_VERSION = "0.1.1";
+export const HIVE_COMPUTE_WORKER_VERSION = "0.1.4";
 
 export const HIVE_COMPUTE_GATEWAY_URL_ENV = "HIVEMINDOS_HIVE_COMPUTE_GATEWAY_URL";
 export const HIVE_COMPUTE_OPENAI_BASE_URL_ENV = "HIVEMINDOS_HIVE_COMPUTE_OPENAI_BASE_URL";

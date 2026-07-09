@@ -37,7 +37,7 @@
   --line: rgba(54, 46, 30, 0.10); --line-2: rgba(54, 46, 30, 0.16);
   --fg: #221d14; --fg-2: #5e574b; --fg-3: #867d6e; --fg-4: #a59b89;
   --cyan: #5f8f5a; --cyan-2: #4f7d4b; --cyan-glow: rgba(95, 143, 90, 0.22);
-  --honey: #b07f1c; --honey-2: #936811; --honey-3: #6f5011;
+  --honey: #936811; --honey-fill: #e6bb5c; --honey-2: #936811; --honey-3: #6f5011;
   --danger: #c0524d; --danger-2: #963a37;
   --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
   --panel-card-grad: linear-gradient(180deg, rgba(255,252,246,0.88), rgba(244,239,228,0.76));

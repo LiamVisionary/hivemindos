@@ -47,10 +47,12 @@ import type {
   HiveComputeEnvPresence,
   HiveComputeGatewayStatus,
   HiveComputeHostContext,
+  HiveComputeHostModel,
   HiveComputeHostRunConfig,
   HiveComputeInstallResult,
   HiveComputeLocalBackendStatus,
   HiveComputeMarketplaceStatus,
+  HiveComputeModelPerformance,
   HiveComputeModelOption,
   HiveComputePaymentRail,
   HiveComputeWorkerRunStatus,
@@ -131,13 +133,18 @@ function hiveComputeModelOptionFromGateway(id: string, status: HiveComputeMarket
   const alias = HIVE_COMPUTE_ALIAS_BY_ID.get(id);
   const liveModels = new Set(status.gateway.capacity?.liveModels ?? []);
   const keyRelayModels = new Set(status.gateway.capacity?.keyRelayModels ?? []);
+  const performance = status.gateway.capacity?.modelPerformance.find((item) => item.model === id);
+  const speedLabel = modelPerformanceLabel(performance);
   if (alias) {
     return {
       ...alias,
+      ...(performance ? { performance } : {}),
       subtitle: status.gateway.capacity?.fallbackConfigured && !status.gateway.capacity.liveWorkers
         ? "Routes through centralized fallback when no worker is live."
-        : alias.subtitle,
-      badge: status.gateway.capacity?.fallbackConfigured && !status.gateway.capacity.liveWorkers ? "Fallback" : alias.badge,
+        : speedLabel || alias.subtitle,
+      badge: status.gateway.capacity?.fallbackConfigured && !status.gateway.capacity.liveWorkers
+        ? "Fallback"
+        : performanceBadge(performance) || alias.badge,
     };
   }
   const live = liveModels.has(id);
@@ -146,9 +153,29 @@ function hiveComputeModelOptionFromGateway(id: string, status: HiveComputeMarket
     id,
     name: id,
     group: "Marketplace",
-    subtitle: live ? "Live worker model" : relay ? "Key-relay model" : "Marketplace model",
-    badge: live ? "Live" : relay ? "Relay" : "Gateway",
+    ...(performance ? { performance } : {}),
+    subtitle: speedLabel || (live ? "Live worker model" : relay ? "Key-relay model" : "Marketplace model"),
+    badge: performanceBadge(performance) || (live ? "Live" : relay ? "Relay" : "Gateway"),
   };
+}
+
+function modelPerformanceLabel(performance?: HiveComputeModelPerformance) {
+  if (!performance?.samples || !performance.tokensPerSecond) return "";
+  if (performance.speedTier === "warming") return "Measuring speed";
+  const tier = performance.speedTier === "fast"
+      ? "Fast"
+      : performance.speedTier === "balanced"
+        ? "Balanced"
+        : "Heavy";
+  return `${tier} · ${performance.tokensPerSecond.toFixed(1)} tok/s`;
+}
+
+function performanceBadge(performance?: HiveComputeModelPerformance) {
+  if (!performance?.samples || !performance.speedTier || performance.speedTier === "unmeasured") return "";
+  if (performance.speedTier === "warming") return "Measuring";
+  if (performance.speedTier === "fast") return "Fast";
+  if (performance.speedTier === "balanced") return "Balanced";
+  return "Heavy";
 }
 
 export function resolveHiveComputeRuntimeConfig(
@@ -195,6 +222,7 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
     ollama,
     installed,
     depsInstalled,
+    installedWorkerVersion,
   ] = await Promise.all([
     readEnv(HIVE_COMPUTE_GATEWAY_URL_ENV),
     readEnv(HIVE_COMPUTE_OPENAI_BASE_URL_ENV),
@@ -222,6 +250,7 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
     commandStatus("ollama", ["--version"]),
     exists(WORKER_FILE),
     exists(NODE_MODULES_WS),
+    installedHiveComputeWorkerVersion(),
   ]);
   const openAiBase = openAiBaseUrl.value || (gatewayUrl.value ? joinUrl(gatewayUrl.value, "/v1") : "");
   const gatewayConfigured = Boolean(gatewayUrl.value || openAiBaseUrl.value);
@@ -303,6 +332,8 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
       nodeModulesInstalled: depsInstalled,
       packageName: HIVE_COMPUTE_WORKER_PACKAGE_NAME,
       version: HIVE_COMPUTE_WORKER_VERSION,
+      ...(installedWorkerVersion ? { installedVersion: installedWorkerVersion } : {}),
+      updateAvailable: installedWorkerVersion !== "" && installedWorkerVersion !== HIVE_COMPUTE_WORKER_VERSION,
       runCommand: "cd ~/.hivemindos/modules/hive-compute-worker && hive-env-run -- npm start",
       dependencyInstallCommand: "cd ~/.hivemindos/modules/hive-compute-worker && npm install --omit=dev",
     },
@@ -328,7 +359,7 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
       officialAuthority: "Official marketplace matching, prepaid balances, x402/deposit crediting, key relays, fallback policy, payouts, quotas, receipts, provider bonds, reputation, and fraud controls must be enforced by HivemindOS-controlled hosted infrastructure.",
       selfHosted: "Forks can point this app and worker module at their own compatible gateway for self-hosted marketplaces.",
       promptPrivacy: "Standard workers receive prompt contents for jobs they accept; use a gateway policy and worker allowlist you trust.",
-      confidentialCompute: "Hardware-enforced privacy requires gateway-verified TEE attestation and encrypted prompt delivery. Local app state can request verified-only routing, but it cannot prove confidential compute by itself.",
+      confidentialCompute: "Hardware-enforced privacy requires gateway-verified TEE attestation plus encrypted prompt and output delivery. Local app state can request private routing, but it cannot prove confidential compute by itself.",
       micropayments: "x402 per-call settlement is the default machine-payment rail. MPP session settlement is enabled only when a hosted gateway exposes a Stripe/Tempo-compatible session policy.",
     },
   };
@@ -344,12 +375,19 @@ function capacityFromHealth(json: unknown): HiveComputeGatewayStatus["capacity"]
     : undefined;
   const record = marketplace && typeof marketplace === "object" ? marketplace as Record<string, unknown> : {};
   const liveWorkers = positiveNumber(record.liveWorkers, 0);
+  const totalSlots = positiveNumber(record.totalSlots, 0);
+  const busySlots = positiveNumber(record.busySlots, 0);
+  const availableSlots = positiveNumber(record.availableSlots, 0);
+  const hardwareTeeWorkers = positiveNumber(record.hardwareTeeWorkers, 0);
   const pendingJobs = positiveNumber(record.pendingJobs, 0);
   const liveModels = stringArray(record.liveModels);
   const keyRelayModels = stringArray(record.keyRelayModels);
+  const modelPerformance = modelPerformanceArray(record.modelPerformance);
   const fallbackConfigured = record.fallbackConfigured === true;
   const statusLabel = liveWorkers > 0
-    ? `${liveWorkers} worker${liveWorkers === 1 ? "" : "s"} live`
+    ? totalSlots > 0
+      ? `${availableSlots}/${totalSlots} slot${totalSlots === 1 ? "" : "s"} open`
+      : `${liveWorkers} worker${liveWorkers === 1 ? "" : "s"} live`
     : fallbackConfigured
       ? "Fallback only"
       : keyRelayModels.length
@@ -357,8 +395,11 @@ function capacityFromHealth(json: unknown): HiveComputeGatewayStatus["capacity"]
         : "No live workers";
   return {
     liveWorkers,
+    ...(totalSlots ? { totalSlots, busySlots, availableSlots } : {}),
+    ...(hardwareTeeWorkers ? { hardwareTeeWorkers } : {}),
     liveModels,
     keyRelayModels,
+    modelPerformance,
     fallbackConfigured,
     pendingJobs,
     statusLabel,
@@ -377,10 +418,37 @@ function positiveNumber(value: unknown, fallback: number) {
   return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
 }
 
+function positiveFloat(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
 function stringArray(value: unknown) {
   return Array.isArray(value)
     ? value.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
+}
+
+function modelPerformanceArray(value: unknown): HiveComputeModelPerformance[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): HiveComputeModelPerformance[] => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const model = String(record.model || "").trim();
+    if (!model) return [];
+    const speedTier = String(record.speedTier || "").trim();
+    return [{
+      model,
+      samples: positiveNumber(record.samples, 0),
+      completionTokens: positiveNumber(record.completionTokens, 0),
+      tokensPerSecond: positiveFloat(record.tokensPerSecond, 0),
+      timeToFirstTokenMs: positiveNumber(record.timeToFirstTokenMs, 0),
+      durationMs: positiveNumber(record.durationMs, 0),
+      speedTier: speedTier === "warming" || speedTier === "heavy" || speedTier === "balanced" || speedTier === "fast"
+        ? speedTier
+        : "unmeasured",
+      ...(String(record.updatedAt || "").trim() ? { updatedAt: String(record.updatedAt).trim() } : {}),
+    }];
+  });
 }
 
 function booleanSetting(value: string) {
@@ -503,10 +571,25 @@ function normalizeHostWhen(value: unknown): HiveComputeHostRunConfig["hostWhen"]
   return value === "always" || value === "sched" || value === "idle" ? value : "idle";
 }
 
+function normalizeSelectedModelIds(value: unknown): string[] | null {
+  if (value === null || typeof value === "undefined") return null;
+  if (!Array.isArray(value)) return null;
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const item of value) {
+    const id = String(item ?? "").trim();
+    if (!id || id.length > 200 || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
 function normalizeRunConfig(value?: Partial<HiveComputeHostRunConfig> | null): HiveComputeHostRunConfig {
   return {
     markdown: Math.round(clampNumber(value?.markdown, 20, 0, 80)),
-    maxConcurrency: Math.round(clampNumber(value?.maxConcurrency, 4, 1, 256)),
+    maxConcurrency: Math.round(clampNumber(value?.maxConcurrency, 1, 1, 256)),
+    selectedModelIds: normalizeSelectedModelIds(value?.selectedModelIds),
     hostWhen: normalizeHostWhen(value?.hostWhen),
     dailyCapUsd: value?.dailyCapUsd === null || typeof value?.dailyCapUsd === "undefined"
       ? null
@@ -519,7 +602,20 @@ function normalizeRunConfig(value?: Partial<HiveComputeHostRunConfig> | null): H
 async function savedHiveComputeRunConfig() {
   const raw = await readFile(HIVE_COMPUTE_RUN_CONFIG_FILE, "utf8").catch(() => "");
   if (!raw) return null;
-  return parseJson(raw) as Partial<HiveComputeHostRunConfig> | null;
+  const parsed = parseJson(raw);
+  if (!parsed || typeof parsed !== "object") return null;
+  const record = parsed as { config?: unknown };
+  return (record.config && typeof record.config === "object"
+    ? record.config
+    : parsed) as Partial<HiveComputeHostRunConfig>;
+}
+
+async function installedHiveComputeWorkerVersion() {
+  const raw = await readFile(PACKAGE_FILE, "utf8").catch(() => "");
+  if (!raw) return "";
+  const parsed = parseJson(raw);
+  if (!parsed || typeof parsed !== "object") return "";
+  return String((parsed as { version?: unknown }).version || "").trim();
 }
 
 async function resolveHiveComputeRunConfig(value?: Partial<HiveComputeHostRunConfig> | null) {
@@ -709,6 +805,7 @@ function hostReadinessMessage(params: {
   gatewayConfigured: boolean;
   backend: HiveComputeLocalBackendStatus;
   modelCount: number;
+  advertisedModelCount: number;
 }) {
   if (!params.nodeInstalled) return "Install Node.js before running the Hive Compute worker.";
   if (!params.installed) return "Install the Hive Compute worker module.";
@@ -717,6 +814,7 @@ function hostReadinessMessage(params: {
   if (!params.workerTokenPresent) return `Set ${HIVE_COMPUTE_WORKER_TOKEN_ENV} from the gateway.`;
   if (!params.backend.reachable) return params.backend.message || "Start LM Studio or Ollama so the worker has a local model backend.";
   if (!params.modelCount) return `${params.backend.label} is reachable, but it did not report any models.`;
+  if (!params.advertisedModelCount) return "Choose at least one local model to advertise before going live.";
   return "This machine can go live as a Hive Compute worker.";
 }
 
@@ -730,6 +828,7 @@ async function buildHiveComputeHostContext(params: {
 }): Promise<HiveComputeHostContext> {
   const config = await resolveHiveComputeRunConfig(params.config);
   const discovered = await discoverHiveComputeBackend(config);
+  const advertisedModels = advertisedWorkerModels(discovered.models, config);
   const canRun = Boolean(
     params.installed &&
     params.depsInstalled &&
@@ -737,17 +836,20 @@ async function buildHiveComputeHostContext(params: {
     params.workerTokenPresent &&
     params.gatewayConfigured &&
     discovered.backend.reachable &&
-    discovered.models.length,
+    discovered.models.length &&
+    advertisedModels.length,
   );
   return {
     backend: discovered.backend,
     models: discovered.models,
+    advertisedModels,
     config,
     canRun,
     message: hostReadinessMessage({
       ...params,
       backend: discovered.backend,
       modelCount: discovered.models.length,
+      advertisedModelCount: advertisedModels.length,
     }),
     run: currentWorkerRun(),
   };
@@ -787,8 +889,8 @@ export async function installHiveComputeWorkerDependencies() {
 
 export async function setupHiveComputeHosting(config?: Partial<HiveComputeHostRunConfig> | null) {
   const before = await readHiveComputeMarketplaceStatus();
-  if (!before.workerModule.installed) {
-    await installHiveComputeWorkerModule();
+  if (!before.workerModule.installed || before.workerModule.updateAvailable) {
+    await installHiveComputeWorkerModule({ force: before.workerModule.updateAvailable });
   }
   if (!before.workerModule.nodeModulesInstalled) {
     await installHiveComputeWorkerDependencies();
@@ -881,6 +983,9 @@ export async function startHiveComputeWorker(config?: Partial<HiveComputeHostRun
   if (!await exists(WORKER_FILE)) {
     throw new HiveComputeMarketplaceError("Install the Hive Compute worker module before going live.", 424);
   }
+  if (await installedHiveComputeWorkerVersion() !== HIVE_COMPUTE_WORKER_VERSION) {
+    await installHiveComputeWorkerModule({ force: true });
+  }
   if (!await exists(NODE_MODULES_WS)) {
     throw new HiveComputeMarketplaceError("Install Hive Compute worker dependencies before going live.", 424);
   }
@@ -919,7 +1024,7 @@ export async function startHiveComputeWorker(config?: Partial<HiveComputeHostRun
     HIVE_COMPUTE_LOCAL_ENGINE: host.backend.kind === "ollama" ? "ollama" : "openai",
     HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL: host.backend.kind === "ollama" ? "" : host.backend.host,
     OLLAMA_HOST: host.backend.kind === "ollama" ? host.backend.host : process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
-    HIVE_COMPUTE_MODELS: advertisedWorkerModels(host).join(","),
+    HIVE_COMPUTE_MODELS: host.advertisedModels.join(","),
     HIVE_COMPUTE_MODEL_MAP_JSON: JSON.stringify(workerModelMap(host)),
     HIVE_COMPUTE_WORKER_MAX_CONCURRENCY: String(host.config.maxConcurrency),
     HIVE_COMPUTE_WORKER_HOST_WHEN: host.config.hostWhen,
@@ -1023,25 +1128,34 @@ function cleanOutput(value: unknown) {
   return String(value ?? "").trim();
 }
 
-function advertisedWorkerModels(host: HiveComputeHostContext) {
+function selectedHostModels(models: HiveComputeHostModel[], config: HiveComputeHostRunConfig) {
+  if (config.selectedModelIds === null) return models;
+  const selected = new Set(config.selectedModelIds);
+  return models.filter((model) => selected.has(model.providerModelId));
+}
+
+function advertisedWorkerModels(models: HiveComputeHostModel[], config: HiveComputeHostRunConfig) {
+  const selectedModels = selectedHostModels(models, config);
+  if (!selectedModels.length) return [];
   const ids = [
     HIVE_COMPUTE_DEFAULT_MODEL,
     "hive-compute/fast",
     "hive-compute/deep",
-    ...host.models.map((model) => model.providerModelId),
+    ...selectedModels.map((model) => model.providerModelId),
   ];
   return Array.from(new Set(ids.filter(Boolean)));
 }
 
 function workerModelMap(host: HiveComputeHostContext) {
-  const first = host.models[0]?.providerModelId || HIVE_COMPUTE_DEFAULT_MODEL;
+  const selectedModels = selectedHostModels(host.models, host.config);
+  const first = selectedModels[0]?.providerModelId || HIVE_COMPUTE_DEFAULT_MODEL;
   const map: Record<string, string> = {
     [HIVE_COMPUTE_DEFAULT_MODEL]: first,
     "hive-compute/fast": first,
     "hive-compute/deep": first,
     "*": first,
   };
-  for (const model of host.models) map[model.providerModelId] = model.providerModelId;
+  for (const model of selectedModels) map[model.providerModelId] = model.providerModelId;
   return map;
 }
 
@@ -1051,12 +1165,12 @@ async function writeHiveComputeRunConfig(host: HiveComputeHostContext) {
     config: host.config,
     backend: host.backend,
     models: host.models,
-    advertisedModels: advertisedWorkerModels(host),
+    advertisedModels: host.advertisedModels,
     writtenAt: new Date().toISOString(),
   }, null, 2), { mode: 0o600 });
 }
 
-export async function proxyHiveComputeChatCompletion(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
+export async function proxyHiveComputeChatCompletion(body: Record<string, unknown>, signal?: AbortSignal, requestHeaders?: Headers): Promise<Response> {
   const [
     gatewayUrl,
     openAiBaseUrl,
@@ -1104,11 +1218,27 @@ export async function proxyHiveComputeChatCompletion(body: Record<string, unknow
       ...(attestationPolicyUrl.value ? { "X-HivemindOS-Compute-Attestation-Policy": attestationPolicyUrl.value } : {}),
       ...(teeProvider.value ? { "X-HivemindOS-Compute-TEE-Provider": teeProvider.value } : {}),
       ...(teeEncryptionPublicKey.value ? { "X-HivemindOS-Compute-TEE-Encryption-Key": teeEncryptionPublicKey.value } : {}),
+      ...forwardedHiveComputePrivacyHeaders(requestHeaders),
       ...(apiKey.value ? { Authorization: `Bearer ${apiKey.value}` } : {}),
     },
     body: JSON.stringify({ ...body, model }),
     signal: signal ?? AbortSignal.timeout(MARKETPLACE_CHAT_TIMEOUT_MS),
   });
+}
+
+function forwardedHiveComputePrivacyHeaders(headers?: Headers): Record<string, string> {
+  if (!headers) return {};
+  const forwarded: Record<string, string> = {};
+  for (const name of [
+    "X-HivemindOS-Compute-Output-Encryption",
+    "X-HivemindOS-Compute-Output-Public-Key",
+    "X-HivemindOS-Compute-Output-Encryption-Key",
+    "X-HivemindOS-Compute-Hardware-TEE-Required",
+  ]) {
+    const value = headers.get(name)?.trim();
+    if (value) forwarded[name] = value;
+  }
+  return forwarded;
 }
 
 async function writeManagedFile(path: string, content: string, force: boolean | undefined, wrote: string[], skipped: string[]) {

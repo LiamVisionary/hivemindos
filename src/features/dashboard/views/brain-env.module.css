@@ -196,14 +196,14 @@
 
 .envActionPrimary {
   border-color: var(--brain-honey);
-  background: var(--brain-honey);
+  background: var(--brain-honey-fill, var(--brain-honey));
   color: #1a1305;
 }
 
 .envActionPrimary:hover:not(:disabled),
 .envActionPrimary:focus-visible:not(:disabled) {
   border-color: var(--brain-honey);
-  background: color-mix(in srgb, var(--brain-honey) 88%, white);
+  background: color-mix(in srgb, var(--brain-honey-fill, var(--brain-honey)) 88%, white);
   color: #1a1305;
 }
 
@@ -393,7 +393,7 @@
 }
 
 .envRuntimeTabs button[aria-selected="true"] {
-  background: var(--brain-honey);
+  background: var(--brain-honey-fill, var(--brain-honey));
   color: #1a1305;
 }
 
@@ -455,7 +455,7 @@
   --brain-fg: #221d14;
   --brain-fg-2: #5e574b;
   --brain-fg-3: #867d6e;
-  --brain-honey: #b07f1c;
+  --brain-honey: #936811; --brain-honey-fill: #e6bb5c;
   --brain-honey-soft: rgba(176, 127, 28, 0.12);
   --brain-live: #1d8e7c;
 }

@@ -9,16 +9,25 @@ export const runtime = "nodejs";
 // authed dashboard call, so it is NOT gated by requireAuth — same as the
 // Drive/Gmail Google callback route. The signed `state` (PKCE verifier + HMAC +
 // 10-minute TTL) is what authenticates the flow.
-const RETURN_URL = "/?view=integrations&connections=google-cloud";
-const RETURN_LABEL = "Back to integrations";
+//
+// The consent flow opens in the user's DEFAULT BROWSER (not the Tauri webview),
+// so this page renders in a tab that is NOT the HivemindOS app. A relative
+// "/?view=integrations" link would just load the dashboard *in the browser* —
+// wrong target. Instead we tell the user to close the tab (the app auto-detects
+// the connection by polling), and offer a `hivemindos://` deep link that
+// foregrounds the desktop app and navigates to Integrations.
+const RETURN_URL = "hivemindos://integrations/google-cloud";
+const RETURN_LABEL = "Return to HivemindOS";
+const CLOSE_TAB_HINT =
+  "You can close this tab and return to HivemindOS — it picks up the connection automatically.";
 
 export async function GET(request: NextRequest) {
   const oauthError = request.nextUrl.searchParams.get("error");
   if (oauthError) {
     return renderGitHubOAuthPage({
       title: "Google Cloud authorization cancelled",
-      body: request.nextUrl.searchParams.get("error_description") || oauthError,
-      returnUrl: "/?view=integrations",
+      body: `${request.nextUrl.searchParams.get("error_description") || oauthError}<br><br>${CLOSE_TAB_HINT}`,
+      returnUrl: RETURN_URL,
       returnLabel: RETURN_LABEL,
       status: 400,
     });
@@ -31,15 +40,15 @@ export async function GET(request: NextRequest) {
     await exchangeGoogleCloudCode(code, state, request);
     return renderGitHubOAuthPage({
       title: "Google Cloud connected",
-      body: "Saved Google Cloud access to the shared hive env. Your hive can now use Google Cloud on every machine.",
+      body: `Saved Google Cloud access to the shared hive env. Your hive can now manage Google Cloud on every machine.<br><br>${CLOSE_TAB_HINT}`,
       returnUrl: RETURN_URL,
       returnLabel: RETURN_LABEL,
     });
   } catch (error) {
     return renderGitHubOAuthPage({
       title: "Google Cloud sign-in failed",
-      body: error instanceof Error ? error.message : "Could not finish Google Cloud sign-in.",
-      returnUrl: "/?view=integrations",
+      body: `${error instanceof Error ? error.message : "Could not finish Google Cloud sign-in."}<br><br>${CLOSE_TAB_HINT}`,
+      returnUrl: RETURN_URL,
       returnLabel: RETURN_LABEL,
       status: 502,
     });

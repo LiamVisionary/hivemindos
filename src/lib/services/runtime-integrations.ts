@@ -21,6 +21,7 @@ import {
 import { HIVE_COMPUTE_PROVIDER_SLUG } from "@/lib/config/hive-compute-marketplace";
 import { mergeRuntimeSessions, previewSessionText } from "@/lib/services/runtime-session-utils";
 import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
+import { startXaiOAuthLogin } from "@/lib/services/xai-oauth";
 import type { RuntimeModelSelection } from "./runtime-adapters/types";
 
 const execFileAsync = promisify(execFile);
@@ -537,13 +538,16 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     return { ok: true, message: `Disabled Hermes ${tool}.` };
   }
   if (action === "xai-login") {
-    const child = spawn("hermes", ["login", "--provider", "xai-oauth"], {
-      detached: true,
-      stdio: "ignore",
-      env: sanitizeProcessEnv(),
+    const profileEnv = hermesProfileEnv(agent);
+    const { authorizeUrl } = await startXaiOAuthLogin({
+      hermesHomes: profileEnv?.HERMES_HOME ? [profileEnv.HERMES_HOME] : undefined,
     });
-    child.unref();
-    return { ok: true, message: "Started Hermes xAI OAuth login in a separate process." };
+    return {
+      ok: true,
+      authorizeUrl,
+      statusEndpoint: "/api/xai-oauth",
+      message: "Open the xAI sign-in page in your browser to connect Grok.",
+    };
   }
   if (action === "hermes-update") {
     const output = await runHermes(["update"], 300_000);

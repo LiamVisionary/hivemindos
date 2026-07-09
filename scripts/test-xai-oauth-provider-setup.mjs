@@ -1,0 +1,90 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+function read(path) {
+  return readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+}
+
+const setupCard = read("src/features/dashboard/views/chat/MissingSharedEnvKeySetup.tsx");
+const setupStyles = read("src/features/env/hive-env-honey.module.css");
+const modal = read("src/features/dashboard/views/chat/AgentSettingsModal.tsx");
+const settingsController = read("src/features/dashboard/hooks/use-agent-settings-controller.tsx");
+const providerView = read("src/features/dashboard/model-provider-view.ts");
+const runtimeIntegrations = read("src/lib/services/runtime-integrations.ts");
+const telemetryCollector = read("scripts/agent-telemetry-collector.mjs");
+const providerCatalog = read("src/lib/config/provider-catalog.ts");
+const xaiOAuthService = read("src/lib/services/xai-oauth.ts");
+const xaiOAuthRoute = read("src/app/api/xai-oauth/route.ts");
+
+assert.match(providerView, /export type ProviderCredentialMode = "api-key" \| "oauth"/, "provider view-model should own the API-key/OAuth mode type");
+assert.match(providerView, /XAI_PROVIDER_SLUG = "xai"/, "provider view-model should define the xAI API-key runtime slug");
+assert.match(providerView, /XAI_OAUTH_PROVIDER_SLUG = "xai-oauth"/, "provider view-model should define the xAI OAuth runtime slug");
+assert.match(providerView, /runtimeProviderForCredentialMode/, "provider view-model should map display provider + credential mode to the runtime provider slug");
+assert.match(providerView, /modelProviderSelection/, "provider view-model should derive display provider and credential mode from the selected runtime provider");
+assert.match(providerView, /collapseDashboardProviderAliases/, "provider view-model should own collapsing runtime aliases into one dashboard provider tile");
+assert.match(providerView, /providerSortIndex/, "provider view-model should own stable provider ordering");
+assert.match(setupCard, /type AuthMode = ProviderCredentialMode/, "missing-key card should reuse the provider view-model credential mode type");
+assert.match(setupCard, /onOAuthConnect/, "missing-key card should accept an OAuth connect action");
+assert.match(setupCard, /oauthStatusEndpoint/, "missing-key card should accept an OAuth status endpoint for existing sign-ins");
+assert.match(setupCard, /onOAuthCodeSubmit/, "missing-key card should accept the xAI Grok Build code fallback");
+assert.match(setupCard, /initialAuthMode = "api-key"/, "missing-key card should let xAI setup open directly to the API-key or OAuth lane");
+assert.match(setupCard, /onAuthModeChange/, "missing-key card should tell the parent when the user switches between API-key and OAuth lanes");
+assert.match(setupCard, /authorizeUrl/, "OAuth branch should consume an OAuth authorization URL");
+assert.match(setupCard, /\/api\/system\/browsers\/open/, "OAuth branch should open the provider login in the system browser");
+assert.match(setupCard, /Refresh models/, "OAuth branch should offer a post-login model refresh");
+assert.match(setupCard, /Grok Build code/, "OAuth branch should tell the user where to paste xAI's Grok Build code");
+assert.match(setupCard, /const shouldSwitchProvider = authMode === "oauth"/, "existing Hermes OAuth should only switch providers when the OAuth tab is active");
+assert.match(setupCard, /switchProvider: shouldSwitchProvider/, "existing Hermes OAuth detection should not silently switch providers from API-key mode");
+assert.match(setupCard, /revealOAuth: shouldSwitchProvider/, "existing Hermes OAuth detection should not silently switch the setup card from API-key mode to OAuth mode");
+assert.match(setupCard, /authMode !== "oauth" \|\| !oauthConnected \|\| !oauthConnectedFromExisting/, "selecting the OAuth tab with an existing OAuth login should activate OAuth models automatically");
+assert.doesNotMatch(setupCard, /Use OAuth models/, "connected OAuth state should not require a second manual Use OAuth models button");
+assert.doesNotMatch(setupCard, /separate process/, "OAuth setup copy should not describe a hidden Hermes subprocess");
+assert.match(setupStyles, /\.authMode\b/, "honey setup styles should include segmented auth-mode controls");
+assert.match(setupStyles, /\.oauthPanel\b/, "honey setup styles should include OAuth setup panel styling");
+assert.match(setupStyles, /\.oauthCodePanel\b/, "honey setup styles should include xAI OAuth code fallback styling");
+
+assert.match(modal, /modelProviderSelection\(rawSelectedProviderSlug\)/, "Agent settings should derive selected display provider and credential mode from the provider view-model");
+assert.match(modal, /providerSupportsCredentialMode\(selectedProviderSlug, "oauth"\)/, "Grok provider setup should enable OAuth through the provider view-model");
+assert.match(modal, /fetch\("\/api\/xai-oauth"/, "Grok OAuth button should start the app-owned xAI OAuth flow");
+assert.match(modal, /oauthStatusEndpoint=\{selectedSupportsXaiOAuth \? xaiOAuthStatusEndpoint\(\)/, "Grok setup should check existing Hermes xAI OAuth status");
+assert.match(modal, /action: "submit-code"/, "Grok setup should submit xAI's fallback browser code through the app-owned OAuth route");
+assert.doesNotMatch(modal, /rawSelectedProviderSlug === "xai-oauth" \? "xai"/, "Agent settings should not hard-code xai-oauth display aliasing outside the provider view-model");
+assert.match(modal, /selectedRuntimeProviderSlug/, "Agent settings should preserve xai-oauth internally for model updates");
+assert.match(modal, /const selectedNeedsKey = !selectedUsesXaiOAuth && providerNeedsKey\(selectedProviderSlug\)/, "the API-key lane should show API-key setup only when xai is selected and XAI_API_KEY is missing");
+assert.match(modal, /const selectedNeedsXaiOAuthSetup = selectedSupportsXaiOAuth && selectedUsesXaiOAuth/, "the OAuth lane should show OAuth setup when xai-oauth is selected but not connected");
+assert.match(modal, /onClick=\{\(\) => selectXaiCredentialMode\("api-key"\)\}/, "configured xAI should let the user switch back to the API-key lane");
+assert.match(modal, /onClick=\{\(\) => selectXaiCredentialMode\("oauth"\)\}/, "configured xAI should let the user switch to the OAuth lane");
+assert.match(modal, /selectedNeedsKey \|\| selectedNeedsXaiOAuthSetup/, "xAI should show setup for whichever selected credential lane is not ready");
+assert.match(modal, /initialAuthMode=\{selectedNeedsXaiOAuthSetup \? "oauth" : "api-key"\}/, "xAI setup should open to the selected credential lane");
+assert.match(modal, /onAuthModeChange=\{selectedSupportsXaiOAuth \? selectXaiCredentialMode/, "switching tabs inside setup should update the selected xAI provider lane");
+assert.match(modal, /honeyStyles\.scope[\s\S]*honeyStyles\.card/, "configured xAI lane switching should use the honey setup container, not raw provider tiles");
+assert.match(modal, /honeyStyles\.authMode[\s\S]*honeyStyles\.authModeButton/, "configured xAI lane switching should use the same two-way segmented toggle as setup");
+assert.doesNotMatch(modal, /agent-provider-xai-api/, "configured xAI lane switching should not render the generic provider-card grid");
+assert.match(modal, /providerSortIndex\(a\.slug\)/, "provider tiles should use the shared stable provider order instead of reshuffling as readiness changes");
+assert.match(modal, /const selectedDelta = \(a\.slug === selectedProviderSlug \? 0 : 1\)/, "selected provider should remain pinned while runtime status refreshes");
+assert.match(modal, /oauthLabel=\{selectedSupportsXaiOAuth \? "xAI OAuth"/, "Grok missing-key card should label the OAuth action clearly");
+assert.match(modal, /onOAuthConnected=\{selectedSupportsXaiOAuth \? applyXaiOAuthProviderSelection/, "Grok OAuth completion should switch the selected provider");
+assert.match(modal, /selectXaiCredentialMode\("oauth"\)/, "Grok OAuth completion should select the xai-oauth runtime provider");
+
+assert.match(runtimeIntegrations, /action === "xai-login"/, "Hermes runtime integrations should keep the xAI login action");
+assert.match(runtimeIntegrations, /startXaiOAuthLogin/, "Hermes runtime integration action should delegate to the app-owned xAI OAuth service");
+assert.doesNotMatch(runtimeIntegrations, /Started Hermes xAI OAuth login in a separate process/, "xAI OAuth should not report a hidden subprocess login");
+assert.doesNotMatch(telemetryCollector, /\["login", "--provider", "xai-oauth"\]/, "collector xAI login should not shell out to Hermes OAuth");
+assert.match(telemetryCollector, /dashboard OAuth flow/, "collector xAI login should point users to the dashboard OAuth flow");
+assert.match(settingsController, /collapseDashboardProviderAliases\(providersBySlug, agentSettingsProvider\)/, "controller should collapse provider aliases through the provider view-model");
+assert.match(settingsController, /dashboardProviderSlug\(agentSettingsProvider\)/, "saved xai-oauth providers should select the single dashboard xAI tile");
+assert.match(settingsController, /stableProviderDisplayName\(provider\.slug, provider\.name\)/, "runtime provider names should be normalized through the catalog before rendering");
+assert.doesNotMatch(settingsController, /providersBySlug\.delete\("xai-oauth"\)/, "controller should not hard-code xai-oauth collapse details");
+assert.match(xaiOAuthRoute, /startXaiOAuthLogin/, "xAI OAuth API route should start the app-owned flow");
+assert.match(xaiOAuthRoute, /submitXaiOAuthCode/, "xAI OAuth API route should accept xAI's fallback browser code");
+assert.match(xaiOAuthRoute, /syncFromHermes: request\.nextUrl\.searchParams\.get\("sync"\) === "1"/, "xAI OAuth status should explicitly sync existing Hermes OAuth when requested");
+assert.match(xaiOAuthRoute, /statusEndpoint: "\/api\/xai-oauth"/, "xAI OAuth route should return a pollable status endpoint");
+assert.match(xaiOAuthService, /XAI_OAUTH_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"/, "xAI OAuth service should use the Hermes-compatible public client id");
+assert.match(xaiOAuthService, /writeSharedHiveEnvValues\(hiveEnvValuesFromTokens/, "xAI OAuth tokens should be saved to the shared hive env");
+assert.match(xaiOAuthService, /providers\["xai-oauth"\] = state/, "xAI OAuth tokens should be propagated to Hermes auth stores");
+assert.match(xaiOAuthService, /providers\["xai-oauth"\][\s\S]*refresh_token/, "xAI OAuth status should recognize existing Hermes OAuth tokens");
+assert.match(xaiOAuthService, /submitXaiOAuthCode[\s\S]*exchangeCodeForTokens/, "xAI OAuth service should exchange pasted xAI browser codes with the active PKCE verifier");
+assert.match(providerCatalog, /xai-oauth, copilot, openai-codex[\s\S]*dedicated OAuth\/runtime setup paths/, "provider catalog should keep OAuth providers out of API-key-only rows");
+
+console.log("xAI OAuth provider setup checks passed");

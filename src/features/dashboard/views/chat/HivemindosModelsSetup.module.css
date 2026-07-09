@@ -49,7 +49,7 @@
   --fg-2: #5e574b;
   --fg-3: #867d6e;
   --fg-4: #a59b89;
-  --honey: #b07f1c;
+  --honey: #936811; --honey-fill: #e6bb5c;
   --honey-2: #936811;
   --honey-soft: rgba(176, 127, 28, 0.12);
   --honey-line: rgba(176, 127, 28, 0.34);
@@ -518,7 +518,7 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--honey) 30%, transparent);
   animation: fundingPulse 1.25s ease-in-out infinite;
 }
@@ -528,7 +528,7 @@
   grid-column: 1 / -1;
   height: 3px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--honey) 18%, transparent);
+  background: color-mix(in srgb, var(--honey-fill, var(--honey)) 18%, transparent);
   border-radius: 999px;
 }
 
@@ -537,7 +537,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 42%;
-  background: linear-gradient(90deg, transparent, var(--honey), transparent);
+  background: linear-gradient(90deg, transparent, var(--honey-fill, var(--honey)), transparent);
   animation: fundingSlide 1.35s ease-in-out infinite;
 }
 
@@ -668,7 +668,7 @@
 
 .primary {
   color: #1a1305;
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
   border-color: var(--honey);
 }
 
@@ -799,7 +799,7 @@
   height: 40px;
   flex: 0 0 auto;
   color: var(--honey);
-  background: color-mix(in srgb, var(--honey) 15%, var(--panel-hi));
+  background: color-mix(in srgb, var(--honey-fill, var(--honey)) 15%, var(--panel-hi));
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 
@@ -866,7 +866,7 @@
 }
 
 .freeMeter[data-exhausted] .freeMeterFill {
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
 }
 
 .freeMeterLabel {
@@ -901,7 +901,7 @@
 
 .freeHero[data-active] .freeCheck {
   color: #1a1305;
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
   border-color: var(--honey);
 }
 
@@ -1301,7 +1301,7 @@
   height: 30px;
   flex: 0 0 auto;
   color: var(--honey);
-  background: color-mix(in srgb, var(--honey) 16%, transparent);
+  background: color-mix(in srgb, var(--honey-fill, var(--honey)) 16%, transparent);
   border-radius: 8px;
 }
 

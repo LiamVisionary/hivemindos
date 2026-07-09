@@ -328,6 +328,11 @@ export type ChatMessage = {
     question: string;
     choices?: Array<string | { label: string; value: string; permissionMode?: ChatPermissionMode }>;
     allowFreeText?: boolean;
+    response?: {
+      label: string;
+      value?: string;
+      respondedAt?: number;
+    };
   };
 };
 

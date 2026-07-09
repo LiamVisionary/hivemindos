@@ -14,7 +14,7 @@ export type ConnectionProviderStatus = {
   error?: string;
   tokenHint: string;
   tokenPlaceholder: string;
-  authMode?: "api-token" | "oauth-refresh-token";
+  authMode?: "api-token" | "oauth-refresh-token" | "oauth-user-token";
   credentialKeys?: string[];
   operations?: string[];
   /** In-app OAuth is available for this provider (client credentials present). */

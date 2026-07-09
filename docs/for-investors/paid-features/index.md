@@ -28,8 +28,13 @@ The free product should let someone run HivemindOS, connect their own keys, talk
     <a href="../ecosystem-plan.html#managed-x-api-and-x-mcp">Open revenue model</a>
   </section>
   <section class="docCard">
+    <h3>Hive Compute Marketplace</h3>
+    <p>First-party marketplace inference with spare-GPU supply, x402 and MPP payment rails, provider earnings, and a default 20% platform fee on marketplace usage.</p>
+    <a href="hive-compute-marketplace.html">Open compute marketplace</a>
+  </section>
+  <section class="docCard">
     <h3>Future Premium Services</h3>
-    <p>Hive Cloud, managed compute, the Agent Marketplace, and Enterprise are planned as optional services around the free product.</p>
+    <p>Hive Cloud, expanded managed compute, the Agent Marketplace, and Enterprise are planned as optional services around the free product.</p>
     <a href="../ecosystem-plan.html">Open ecosystem plan</a>
   </section>
 </div>
@@ -57,6 +62,7 @@ Eligible managed services can offer a small HIVE checkout discount, such as 3-5%
 | Paid path         | What HivemindOS operates                               |
 | ----------------- | ------------------------------------------------------ |
 | Hive Cloud        | Deployment, hosted memory, team workspaces, monitoring |
+| Hive Compute Marketplace | Marketplace inference matching, settlement, receipts, reputation, and payout state |
 | Managed compute   | Agent and swarm runtime capacity                       |
 | Managed integrations | Hosted OAuth custody, managed API/MCP gateways, usage receipts, and credit billing |
 | Agent Marketplace | Paid agents, swarms, workflows, templates, and commissions on workflow earnings |

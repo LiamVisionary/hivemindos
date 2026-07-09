@@ -64,6 +64,8 @@ sections:
             url: /for-users/features/token-and-cost-savings.html
           - title: Wallets, Honey, And x402
             url: /for-users/features/wallets-honey-and-x402.html
+          - title: Hive Compute
+            url: /for-users/features/hive-compute.html
           - title: Evo Optimization
             url: /for-users/features/evo-optimization.html
           - title: Env, Notifications, Maintenance
@@ -141,8 +143,6 @@ sections:
         url: /for-users/integrations/
       - title: GitLawb Code Proof
         url: /for-users/integrations/gitlawb.html
-      - title: UsePod
-        url: /for-users/integrations/usepod.html
       - title: MiroShark
         url: /for-users/integrations/miroshark/
         children:
@@ -179,3 +179,5 @@ sections:
         url: /for-investors/paid-features/
       - title: Hivemind Cloud Agent Calls
         url: /for-investors/paid-features/hivemind-cloud-agent-calls.html
+      - title: Hive Compute Marketplace
+        url: /for-investors/paid-features/hive-compute-marketplace.html

@@ -4,7 +4,7 @@
 /* eslint-disable react-hooks/immutability */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-commands";
-import { createFileReferenceAttachments } from "@/features/chat/chat-file-references";
+import { createFileReferenceAttachments, hydrateImageReferencePreviews } from "@/features/chat/chat-file-references";
 import { messageVisibleAttachments } from "@/features/chat/chat-message-attachments";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
@@ -48,6 +48,34 @@ export function useStatusChatInputController(props: any) {
     return "Queued message";
   }
 
+  function historicalMessageContent(message: any) {
+    const text = String(message?.content ?? "").trim();
+    const attachments = Array.isArray(message?.attachments) ? message.attachments : [];
+    if (!attachments.length) return text;
+    const attachmentLines = attachments
+      .map((attachment: any) => {
+        const name = String(attachment?.name ?? "attachment").trim() || "attachment";
+        const kind = String(attachment?.referenceKind || attachment?.kind || "file").trim() || "file";
+        const mimeType = String(attachment?.mimeType ?? "").trim();
+        const details = [kind, mimeType].filter(Boolean).join(", ");
+        return `- ${name}${details ? ` (${details})` : ""}`;
+      })
+      .join("\n");
+    return [
+      text,
+      "Previous turn attachments are not re-sent as image inputs:",
+      attachmentLines,
+    ].filter(Boolean).join("\n\n");
+  }
+
+  function currentRuntimeMessageAttachments(attachments: any[] = []) {
+    return attachments.map((attachment) => ({
+      ...attachment,
+      dataUrl: "",
+      referenceOnly: true,
+    }));
+  }
+
   function clearChatComposerDraft() {
     setText("");
     setChatAttachments([]);
@@ -74,6 +102,55 @@ export function useStatusChatInputController(props: any) {
     setFlushingChatQueueId(id);
     setChatQueue((current: any[]) => current.filter((item) => item.id !== id));
     void runChatMessage(queuedMessage).finally(() => setFlushingChatQueueId(""));
+  }
+
+  function settledPromptResponseLabel(label: unknown, value: unknown) {
+    const text = String(label || value || "").replace(/\s+/g, " ").trim();
+    if (/^approve\b/i.test(text)) return text.replace(/^approve\b/i, "Approved");
+    if (/^accept\b/i.test(text)) return text.replace(/^accept\b/i, "Accepted");
+    if (/^reject\b/i.test(text)) return text.replace(/^reject\b/i, "Rejected");
+    return text || "Answered";
+  }
+
+  function settleLatestAgentPromptResponse(responseInput: { label?: unknown; value?: unknown } = {}) {
+    if (!selectedAgent) return;
+    const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
+    const response = {
+      label: settledPromptResponseLabel(responseInput.label, responseInput.value),
+      value: typeof responseInput.value === "string" ? responseInput.value.trim() : undefined,
+      respondedAt: Date.now(),
+    };
+    const settleMessages = (items: ChatMessage[] = []) => {
+      const promptIndex = (() => {
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+          const message = items[index];
+          if (message?.role === "assistant" && message.agentPrompt && !message.agentPrompt.response) return index;
+        }
+        return -1;
+      })();
+      if (promptIndex < 0) return items;
+      const next = [...items];
+      const message = next[promptIndex];
+      next[promptIndex] = {
+        ...message,
+        agentPrompt: {
+          ...message.agentPrompt,
+          response,
+        },
+      };
+      return next;
+    };
+    setMessagesByAgent((current: Record<string, ChatMessage[]>) => {
+      const existing = current[selectedStorageKey] ?? [];
+      const next = settleMessages(existing);
+      return next === existing ? current : { ...current, [selectedStorageKey]: next };
+    });
+    setSelectedChatPreview((current: { agentId?: string; leafKey?: string; messages?: ChatMessage[] } | null) => {
+      if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
+      const existing = current.messages ?? [];
+      const next = settleMessages(existing);
+      return next === existing ? current : { ...current, messages: next };
+    });
   }
 
   useEffect(() => {
@@ -475,9 +552,16 @@ export function useStatusChatInputController(props: any) {
       setAttachmentError("Drop at least one file.");
       return;
     }
-    setChatAttachments((current) => [...current, ...createFileReferenceAttachments(incoming)]);
+    const created = createFileReferenceAttachments(incoming);
+    setChatAttachments((current) => [...current, ...created]);
     setAttachmentError("");
     setAttachmentMenuOpen(false);
+    // Progressively swap image references to thumbnails once their preview renders.
+    void hydrateImageReferencePreviews(incoming, created, (id, previewUrl) => {
+      setChatAttachments((current) => current.map((attachment) => (
+        attachment.id === id ? { ...attachment, previewUrl } : attachment
+      )));
+    });
   }
 
   function handleChatFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -848,6 +932,7 @@ export function useStatusChatInputController(props: any) {
   }
 
   async function sendPromptMessage(prompt: string, options: { permissionMode?: unknown; agentMode?: "act" | "plan" } = {}) {
+    settleLatestAgentPromptResponse(options.promptResponse ?? { label: prompt, value: prompt });
     await submitChatPrompt({
       prompt,
       agentMode: options.agentMode ?? "act",
@@ -1007,7 +1092,10 @@ export function useStatusChatInputController(props: any) {
         && (message.content.trim() || message.attachments?.length)
       ))
       .slice(-5);
-    const outgoingContent = messageContentParts([prompt, outgoingDirectorySummary].filter(Boolean).join("\n\n"), outgoingAttachments);
+    const outgoingContent = messageContentParts(
+      [prompt, outgoingDirectorySummary].filter(Boolean).join("\n\n"),
+      currentRuntimeMessageAttachments(outgoingAttachments),
+    );
     const sessionMessageCreatedMs = (message: any) => {
       const raw = Number(message?.createdAt ?? message?.timestamp ?? 0);
       if (!Number.isFinite(raw) || raw <= 0) return 0;
@@ -1240,7 +1328,7 @@ export function useStatusChatInputController(props: any) {
           messages: [
             ...contextMessages.map((message) => ({
               role: message.role,
-              content: messageContentParts(message.content, message.attachments ?? []),
+              content: historicalMessageContent(message),
             })),
             { role: "user", content: outgoingContent },
           ],

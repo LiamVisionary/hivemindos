@@ -70,7 +70,7 @@
   --hm-line: rgba(54, 46, 30, 0.1);
   --hm-line-2: rgba(54, 46, 30, 0.16);
   --hm-line-3: rgba(54, 46, 30, 0.26);
-  --hm-honey: #b07f1c;
+  --hm-honey: #936811; --hm-honey-fill: #e6bb5c;
   --hm-honey-2: #936811;
   --hm-honey-soft: rgba(176, 127, 28, 0.12);
   --hm-honey-line: rgba(176, 127, 28, 0.34);
@@ -150,7 +150,7 @@
 .segItem:hover { color: var(--hm-fg-2); }
 .segItemActive {
   color: var(--hm-on-honey);
-  background: var(--hm-honey);
+  background: var(--hm-honey-fill, var(--hm-honey));
 }
 .segItemActive:hover { color: var(--hm-on-honey); }
 
@@ -179,7 +179,7 @@
 .stat[data-tone="live"] { color: var(--hm-live); }
 .stat[data-tone="live"] .statDot { background: var(--hm-live); }
 .stat[data-tone="enabled"] { color: var(--hm-honey); }
-.stat[data-tone="enabled"] .statDot { background: var(--hm-honey); }
+.stat[data-tone="enabled"] .statDot { background: var(--hm-honey-fill, var(--hm-honey)); }
 .stat[data-tone="attention"] { color: var(--hm-danger); }
 .stat[data-tone="attention"] .statDot { background: var(--hm-danger); }
 
@@ -212,7 +212,7 @@
   font-family: var(--hm-mono);
   font-weight: 700;
   letter-spacing: 0.02em;
-  background: color-mix(in srgb, var(--tile, var(--hm-honey)) 16%, var(--hm-bg-3));
+  background: color-mix(in srgb, var(--tile, var(--hm-honey-fill, var(--hm-honey))) 16%, var(--hm-bg-3));
   color: var(--tile, var(--hm-honey));
   border: 1px solid color-mix(in srgb, var(--tile, var(--hm-honey)) 34%, transparent);
 }
@@ -232,7 +232,7 @@
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--hm-live) 60%, transparent);
   animation: hmPulse 1.8s var(--hm-ease) infinite;
 }
-.dot[data-tone="enabled"] { background: var(--hm-honey); }
+.dot[data-tone="enabled"] { background: var(--hm-honey-fill, var(--hm-honey)); }
 .dot[data-tone="paused"] { background: var(--hm-fg-4); }
 .dot[data-tone="attention"] { background: var(--hm-danger); }
 .dot[data-tone="ok"] { background: var(--hm-live); }
@@ -530,7 +530,7 @@
   border: 1px solid var(--hm-line-2);
   overflow: hidden;
 }
-.chipRail { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tile, var(--hm-honey)); opacity: 0.85; }
+.chipRail { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tile, var(--hm-honey-fill, var(--hm-honey))); opacity: 0.85; }
 .chip[data-tone="live"] { border-color: color-mix(in srgb, var(--hm-live) 42%, transparent); }
 .chip[data-tone="attention"] { border-color: var(--hm-danger-line); }
 .chipMain { min-width: 0; flex: 1; }
@@ -768,7 +768,7 @@
 .btn:disabled { opacity: 0.5; pointer-events: none; }
 .btn:focus-visible { outline: 2px solid var(--hm-honey-line); outline-offset: 2px; }
 .btn svg { flex: 0 0 auto; }
-.btnPrimary { background: var(--hm-honey); color: var(--hm-on-honey); }
+.btnPrimary { background: var(--hm-honey-fill, var(--hm-honey)); color: var(--hm-on-honey); }
 .btnPrimary:hover { background: var(--hm-honey-2); }
 .btnSecondary { background: var(--hm-bg-3); border-color: var(--hm-line-2); color: var(--hm-fg); }
 .btnSecondary:hover { border-color: var(--hm-line-3); }

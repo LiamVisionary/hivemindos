@@ -90,10 +90,10 @@
 //   FLEET_WATCHDOG_ESCALATE_REPEAT_MS repeat interval for escalations while still failing (default 1800000)
 //   FLEET_WATCHDOG_ONCE=1             run a single cycle and exit (for testing)
 
-import { readFile, writeFile, mkdir, appendFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir, appendFile, rename } from "node:fs/promises";
 import { readFileSync } from "node:fs";
-import { homedir, platform } from "node:os";
-import { join } from "node:path";
+import { homedir, hostname, platform } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -157,7 +157,9 @@ const MACHINES_CACHE = join(STATE_DIR, "fleet-health-watchdog-machines.json");
 const TTS_CACHE = join(STATE_DIR, "fleet-health-watchdog-tts.json");
 const PORTS_CACHE = join(STATE_DIR, "fleet-health-watchdog-ports.json");
 const LOG_PATH = join(STATE_DIR, "fleet-health-watchdog.log");
+const ALERT_STATE_PATH = join(STATE_DIR, "fleet-health-watchdog-alerts.json");
 const SHELL_SESSION = "fleet-health-watchdog";
+const WATCHDOG_SOURCE = (process.env.FLEET_WATCHDOG_SOURCE || hostname() || "unknown-host").trim();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -220,20 +222,49 @@ const TELEGRAM_BOT_TOKEN = (
 ).trim();
 
 const lastAlertAt = new Map();
+const ALERT_STATE_TTL_MS = 7 * 24 * 60 * 60_000;
+
+async function readAlertState() {
+  try {
+    const parsed = JSON.parse(await readFile(ALERT_STATE_PATH, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeAlertState(state) {
+  await mkdir(dirname(ALERT_STATE_PATH), { recursive: true });
+  const tmp = `${ALERT_STATE_PATH}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmp, JSON.stringify(state, null, 2), { mode: 0o600 });
+  await rename(tmp, ALERT_STATE_PATH);
+}
+
+function pruneAlertState(state, now) {
+  for (const [key, value] of Object.entries(state)) {
+    if (typeof value !== "number" || value + ALERT_STATE_TTL_MS < now) delete state[key];
+  }
+}
 
 // Push watchdog events somewhere a human actually sees. Telegram when
 // configured; always the log. Never throws, rate-limits repeats per key.
 async function alert(key, message) {
   const now = Date.now();
-  if ((lastAlertAt.get(key) || 0) + ALERT_REPEAT_MS > now) return;
-  lastAlertAt.set(key, now);
+  const sourceKey = `${WATCHDOG_SOURCE}:${key}`;
+  const state = await readAlertState();
+  const lastSentAt = Math.max(Number(lastAlertAt.get(sourceKey) || 0), Number(state[sourceKey] || 0));
+  if (lastSentAt + ALERT_REPEAT_MS > now) return;
+  lastAlertAt.set(sourceKey, now);
+  state[sourceKey] = now;
+  pruneAlertState(state, now);
+  await writeAlertState(state).catch((error) => log(`  alert state write failed: ${error.message}`));
   await log(`ALERT ${message}`);
   if (!TELEGRAM_CHAT_ID || !TELEGRAM_BOT_TOKEN) return;
   try {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: `🩺 fleet-watchdog: ${message}` }),
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: `🩺 fleet-watchdog (${WATCHDOG_SOURCE}): ${message}` }),
       signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
@@ -251,6 +282,112 @@ async function fetchJson(url, init, timeoutMs) {
     data = { text };
   }
   return { ok: response.ok, status: response.status, data, text };
+}
+
+function expandHomePath(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text === "~") return homedir();
+  if (text.startsWith("~/")) return join(homedir(), text.slice(2));
+  return text;
+}
+
+function configuredVaultPath() {
+  return expandHomePath(
+    process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH
+      || hiveEnv.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH
+      || checkoutEnv.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH
+      || "~/Documents/Obsidian/hivemindos-vault",
+  );
+}
+
+function normalizeMachineName(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function machineIdentityStem(value) {
+  const raw = String(value || "").trim();
+  const dotLocal = /^(.*?)(?:-\d+)?\.local$/i.exec(raw);
+  return normalizeMachineName(dotLocal ? dotLocal[1] : raw);
+}
+
+function sameMachineIdentity(a, b) {
+  const na = normalizeMachineName(a);
+  const nb = normalizeMachineName(b);
+  if (na && na === nb) return true;
+  const stem = machineIdentityStem(a);
+  return Boolean(stem) && stem === machineIdentityStem(b);
+}
+
+function companyRecord(entry) {
+  return entry?.company && typeof entry.company === "object" ? entry.company : entry;
+}
+
+function isAutonomousCompany(entry) {
+  const company = companyRecord(entry);
+  return Boolean(company?.autonomy && !company?.frozen);
+}
+
+function companyNeedsThisDriver(entry) {
+  const company = companyRecord(entry);
+  if (!isAutonomousCompany(company)) return false;
+  const home = String(company?.homeMachineKey || "").trim();
+  if (!home) return true;
+  return sameMachineIdentity(home, WATCHDOG_SOURCE) || sameMachineIdentity(home, hostname());
+}
+
+function summarizeCompanyDriverNeed(entries, source) {
+  const companies = Array.isArray(entries) ? entries : [];
+  const active = companies.filter(isAutonomousCompany);
+  const localActive = active.filter(companyNeedsThisDriver);
+  return {
+    available: true,
+    source,
+    totalCount: companies.length,
+    activeCount: active.length,
+    localActiveCount: localActive.length,
+    localActiveNames: localActive.map((entry) => companyRecord(entry)?.name).filter(Boolean).slice(0, 3),
+  };
+}
+
+async function readJsonArray(file) {
+  const parsed = JSON.parse(await readFile(file, "utf8"));
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+async function readCompanyDriverNeedFromDisk() {
+  const vaultFile = resolve(configuredVaultPath(), "Operations", "Companies", "companies.json");
+  try {
+    return summarizeCompanyDriverNeed(await readJsonArray(vaultFile), `vault:${vaultFile}`);
+  } catch (vaultError) {
+    const localFile = join(STATE_DIR, "companies.json");
+    try {
+      return summarizeCompanyDriverNeed(await readJsonArray(localFile), `local:${localFile}`);
+    } catch (localError) {
+      return {
+        available: false,
+        source: "unavailable",
+        reason: `vault ${vaultError?.code || vaultError?.message || "error"}; local ${localError?.code || localError?.message || "error"}`,
+        totalCount: 0,
+        activeCount: 0,
+        localActiveCount: -1,
+        localActiveNames: [],
+      };
+    }
+  }
+}
+
+function companyNeedDetail(need) {
+  if (!need?.available) return `company state unavailable (${need?.reason || "unknown"})`;
+  const names = need.localActiveNames?.length ? `: ${need.localActiveNames.join(", ")}` : "";
+  return `${need.localActiveCount} launched local/unclaimed compan${need.localActiveCount === 1 ? "y" : "ies"}${names}`;
+}
+
+function noDashboardCompanyDriverAlert(need) {
+  if (!need?.available) {
+    return `company autonomy driver lease is dead/stale and NO local dashboard is reachable; company state could not be checked (${need?.reason || "unknown"}). Start the HivemindOS app or dev server if companies should be running.`;
+  }
+  return `company autonomy driver lease is dead/stale and NO local dashboard is reachable — ${companyNeedDetail(need)} ${need.localActiveCount === 1 ? "is" : "are"} not being driven. Start the HivemindOS app or dev server.`;
 }
 
 // Escalations must land where a human actually looks: the dashboard's
@@ -1022,8 +1159,12 @@ async function checkCompanyAutonomyDriver() {
           continue;
         }
         sawDashboard = true;
-        autonomousCompanies = companies.data.companies.filter((entry) => entry?.company?.autonomy && !entry?.company?.frozen).length;
-        if (autonomousCompanies === 0) return; // nothing launched → a stopped driver is fine
+        const need = summarizeCompanyDriverNeed(companies.data.companies, `dashboard:${host}:${port}`);
+        autonomousCompanies = need.localActiveCount;
+        if (autonomousCompanies === 0) {
+          await log(`company driver: lease dead/stale but ${host}:${port} reports no launched companies for ${WATCHDOG_SOURCE} (${need.activeCount} active total) — no alert`);
+          return;
+        }
         const started = await fetchJson(`http://${host}:${port}/api/company-autonomy-driver`, {
           method: "POST",
           headers: dashboardHeaders({ "content-type": "application/json" }),
@@ -1043,15 +1184,20 @@ async function checkCompanyAutonomyDriver() {
   // "a dashboard is up but refusing us" (auth, bind family, proxy) — log it.
   await log(`company driver check found no usable dashboard: ${candidateFailures.join(", ")}`);
   if (!sawDashboard) {
+    const need = await readCompanyDriverNeedFromDisk();
+    if (need.available && need.localActiveCount === 0) {
+      await log(`company driver: lease dead/stale and no dashboard is reachable, but disk state reports no launched companies for ${WATCHDOG_SOURCE} (${need.activeCount} active total via ${need.source}) — no alert`);
+      return;
+    }
     await alert(
       "company-driver-down",
-      "company autonomy driver lease is dead/stale and NO local dashboard is reachable — launched companies are not being driven. Start the HivemindOS app or dev server.",
+      noDashboardCompanyDriverAlert(need),
     );
     return;
   }
   await alert(
     "company-driver-down",
-    `company autonomy driver could not be revived via any local dashboard (${APP_PORTS.map((p) => `:${p}`).join(", ")}) — launched companies are stalled.`,
+    `company autonomy driver could not be revived via any local dashboard (${APP_PORTS.map((p) => `:${p}`).join(", ")}) — ${autonomousCompanies} launched local/unclaimed compan${autonomousCompanies === 1 ? "y is" : "ies are"} stalled.`,
   );
   await postDashboardNotification(
     "Company autonomy driver down",
@@ -1059,7 +1205,7 @@ async function checkCompanyAutonomyDriver() {
   );
 }
 
-await log(`fleet-health-watchdog up — poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles, self=${SELF_ENABLED ? "on" : "off"}, alerts=${TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN ? "telegram" : "log-only"}, escalate after ${ESCALATE_AFTER} deep fails (dashboard token ${DASHBOARD_DEVICE_TOKEN ? "found" : "MISSING — dashboard notifications will 401 if auth is on"})${RUN_ONCE ? " (ONCE)" : ""}`);
+await log(`fleet-health-watchdog up — source=${WATCHDOG_SOURCE}, poll ${POLL_MS}ms, threshold ${FAIL_THRESHOLD}, cooldown ${COOLDOWN_MS}ms, deep every ${CHAT_EVERY} cycles, self=${SELF_ENABLED ? "on" : "off"}, alerts=${TELEGRAM_CHAT_ID && TELEGRAM_BOT_TOKEN ? "telegram" : "log-only"}, escalate after ${ESCALATE_AFTER} deep fails (dashboard token ${DASHBOARD_DEVICE_TOKEN ? "found" : "MISSING — dashboard notifications will 401 if auth is on"})${RUN_ONCE ? " (ONCE)" : ""}`);
 let cycle = 0;
 for (;;) {
   try {

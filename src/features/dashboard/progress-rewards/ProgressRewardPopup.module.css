@@ -74,7 +74,7 @@
   --fg-2: #5e574b;
   --fg-3: #867d6e;
   --fg-4: #a59b89;
-  --honey: #b07f1c;
+  --honey: #936811; --honey-fill: #e6bb5c;
   --honey-soft: rgba(176, 127, 28, 0.12);
   --honey-line: rgba(176, 127, 28, 0.34);
   --live: #1d8e7c;
@@ -186,7 +186,7 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--honey) 20%, transparent), transparent 48%),
+    linear-gradient(135deg, color-mix(in srgb, var(--honey-fill, var(--honey)) 20%, transparent), transparent 48%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 34%);
   opacity: 0.35;
 }
@@ -414,7 +414,7 @@
   height: 100%;
   min-width: 0;
   border-radius: inherit;
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
   transition: width 0.5s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
@@ -459,7 +459,7 @@
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
   flex: 0 0 auto;
 }
 
@@ -512,7 +512,7 @@
 }
 
 .leaderboardRow[data-lead="true"] .rank {
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
   color: #1a1305;
 }
 
@@ -546,7 +546,7 @@
 }
 
 .leaderboardRow[data-lead="true"] .barTrack span {
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
 }
 
 /* actions */
@@ -576,7 +576,7 @@
 }
 
 .primaryAction {
-  background: var(--honey);
+  background: var(--honey-fill, var(--honey));
   color: #1a1305;
 }
 

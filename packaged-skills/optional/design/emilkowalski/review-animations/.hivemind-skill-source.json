@@ -1,0 +1,20 @@
+{
+  "upstreamName": "review-animations",
+  "upstreamSlug": "review-animations",
+  "hiveSlug": "review-animations",
+  "sourceLabel": "emilkowalski",
+  "sourceUrl": "https://github.com/emilkowalski/skills/blob/f76beceb7d3fc8c43309cefad5a095a206103a4e/skills/review-animations/SKILL.md",
+  "repository": "https://github.com/emilkowalski/skills",
+  "installCommand": "npx skills add https://github.com/emilkowalski/skills --skill review-animations",
+  "importedAt": "2026-07-09T15:40:48.642Z",
+  "refreshedAt": "2026-07-09T15:40:48.642Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/emilkowalski/review-animations",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "f76beceb7d3fc8c43309cefad5a095a206103a4e",
+  "normalized": "verbatim-frontmatter",
+  "description": "Reviews animation and motion code against a high craft bar derived from Emil Kowalski's design engineering philosophy. Default to flagging; approval is earned."
+}

@@ -102,6 +102,13 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
                 "slug": slug,
                 "url": url.to_string(),
             }));
+        } else if host == "integrations" && path == "google-cloud" {
+            // Return target from the Google Cloud OAuth "close this tab" page.
+            // The consent flow ran in the external browser; this deep link brings
+            // the desktop app back to the front and opens Integrations, where the
+            // open Connect modal is already polling for the saved refresh token.
+            show_main_window(app);
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));
         } else if host == "integrations" && path == "x-managed" {
             show_main_window(app);
             let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));

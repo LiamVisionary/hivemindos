@@ -43,17 +43,25 @@ includes(helper, "body.prompt_cache_key", "OpenAI cache key body hint");
 includes(helper, "body.session_id", "OpenRouter sticky session body hint");
 includes(helper, "headers[\"x-grok-conv-id\"]", "xAI cache-routing header");
 includes(helper, "body.cache_prompt = true", "llama.cpp prompt-cache body hint");
+includes(helper, "openAICompatibleMessageCacheControlSupported", "explicit message cache-control support helper");
 includes(runtime, "openAICompatibleInferenceCacheHints", "agent runtime cache hint wiring");
 includes(runtime, "...winningRequest.cacheBody", "agent runtime continuation cache hints");
 includes(pageAgent, "provider: \"openrouter\"", "Page Agent OpenRouter cache hints");
 includes(fusion, "cacheScope: `fusion:${member.id}`", "Fusion per-member cache scope");
 includes(typedQueen, "queenBrainCacheHints", "Queen typed cache hints");
+includes(typedQueen, "QueenTypedSystemPrompt", "Queen typed stable/volatile prompt split");
+includes(typedQueen, "openAICompatibleMessageCacheControlSupported", "Queen typed explicit cache-control blocks");
 includes(voiceQueen, "cacheScope: `queen-voice:${target.provider}:${target.model}`", "Queen voice cache hints");
+includes(voiceQueen, "conversationSystemContent", "Queen voice stable/volatile prompt split");
+includes(voiceQueen, "cacheScope: \"queen-agent-turn-fallback\"", "Queen voice agent-turn fallback cache hints");
 includes(modelsRoute, "cache_prompt: typeof body.cache_prompt === \"boolean\" ? body.cache_prompt : true", "free Scout proxy cache default");
 
 runTsxAssertion(`
   import assert from "node:assert/strict";
-  import { openAICompatibleInferenceCacheHints } from "./src/lib/services/chat/inference-cache-hints.ts";
+  import {
+    openAICompatibleInferenceCacheHints,
+    openAICompatibleMessageCacheControlSupported,
+  } from "./src/lib/services/chat/inference-cache-hints.ts";
 
   const openai = openAICompatibleInferenceCacheHints({ provider: "openai-api", model: "gpt-5.5", cacheScope: "scope" });
   assert.equal(typeof openai.body.prompt_cache_key, "string");
@@ -71,6 +79,11 @@ runTsxAssertion(`
   const scout = openAICompatibleInferenceCacheHints({ provider: "hivemindos-models", model: "hivemindos/swarm-sovereign-scout", cacheScope: "scope" });
   assert.equal(scout.body.cache_prompt, true);
   assert.equal(scout.modes.includes("llama.cpp:cache_prompt"), true);
+
+  assert.equal(openAICompatibleMessageCacheControlSupported({ provider: "openrouter", model: "~anthropic/claude-haiku-latest" }), true);
+  assert.equal(openAICompatibleMessageCacheControlSupported({ provider: "openrouter", model: "qwen/qwen3.7-plus" }), true);
+  assert.equal(openAICompatibleMessageCacheControlSupported({ provider: "openrouter", model: "openai/gpt-5.4-nano" }), false);
+  assert.equal(openAICompatibleMessageCacheControlSupported({ provider: "openai", model: "gpt-4o-mini" }), false);
 `, "cache hint behavior");
 
 console.log("inference cache hints checks passed");

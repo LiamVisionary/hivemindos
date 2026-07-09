@@ -142,6 +142,12 @@ payout, receipt, quota, and fraud-control authority still belongs in hosted
 HivemindOS infrastructure or a self-hosted operator's own gateway, not in the
 downloadable app.
 
+For private marketplace jobs, Hive Compute supports encrypted prompt delivery
+to verified workers and opt-in output E2E encryption for clients that can
+decrypt response envelopes locally. Hardware-only routing is stricter than dev
+verified-only routing: it must be backed by gateway-verified hardware
+attestation and fails closed when only local test evidence is available.
+
 ## What Agents And Chat Can Do
 
 - Runtime/provider/model selection where supported.

@@ -26,7 +26,10 @@ import {
 } from "@/lib/services/queen-bee/voice-preferences";
 import { readQueenBeeBrainDefaults } from "@/lib/services/queen-bee/voice-settings";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
+import {
+  openAICompatibleInferenceCacheHints,
+  openAICompatibleMessageCacheControlSupported,
+} from "@/lib/services/chat/inference-cache-hints";
 import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
 import {
   noteQueenVoiceBrainFailure,
@@ -66,6 +69,24 @@ const MAX_HISTORY_TURNS = 8;
 // dead-end the request.
 const MAX_AGENT_FALLBACK_ATTEMPTS = 3;
 const OPENAI_VOICE_CHAT_FALLBACK_MODEL = "gpt-4o-mini";
+
+type ProviderConversationTextBlock = {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
+};
+
+type ProviderConversationMessage = {
+  role: "system" | "assistant" | "user";
+  content: string | ProviderConversationTextBlock[];
+};
+
+type ConversationMessagesOptions = {
+  systemPreamble?: string;
+  stableSystemAddendum?: string;
+  personality?: string | null;
+  cacheControl?: { provider: string; model: string };
+};
 
 /** The model the OpenAI fallback lane actually answers with. */
 export function voiceFallbackModelName() {
@@ -504,24 +525,55 @@ async function conversationTurnText(options: {
   }
 }
 
+function conversationSystemContent(options: ConversationMessagesOptions) {
+  const stable = [
+    queenVoiceSystemPrompt(options.personality),
+    options.stableSystemAddendum?.trim() || "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const volatile = options.systemPreamble?.trim() || "";
+  if (
+    options.cacheControl &&
+    openAICompatibleMessageCacheControlSupported(options.cacheControl)
+  ) {
+    return [
+      stable
+        ? { type: "text", text: stable, cache_control: { type: "ephemeral" } }
+        : null,
+      volatile ? { type: "text", text: volatile } : null,
+    ].filter((block): block is ProviderConversationTextBlock => Boolean(block));
+  }
+  return [stable, volatile].filter(Boolean).join("\n\n");
+}
+
 function conversationMessages(
   transcript: string,
   history: QueenVoiceHistoryTurn[],
-  systemPreamble?: string,
-  personality?: string | null,
-) {
+  options: ConversationMessagesOptions = {},
+): ProviderConversationMessage[] {
   const historyMessages = history.slice(-MAX_HISTORY_TURNS).map((turn) => ({
-    role: turn.who === "queen" ? "assistant" : "user",
+    role: turn.who === "queen" ? "assistant" as const : "user" as const,
     content: turn.text.slice(0, 600),
   }));
-  const system = systemPreamble?.trim()
-    ? `${queenVoiceSystemPrompt(personality)} ${systemPreamble.trim()}`
-    : queenVoiceSystemPrompt(personality);
   return [
-    { role: "system", content: system },
+    { role: "system", content: conversationSystemContent(options) },
     ...historyMessages,
     { role: "user", content: transcript },
   ];
+}
+
+function conversationStringMessages(
+  transcript: string,
+  history: QueenVoiceHistoryTurn[],
+  options: Omit<ConversationMessagesOptions, "cacheControl"> = {},
+) {
+  return conversationMessages(transcript, history, options).map((message) => ({
+    role: message.role,
+    content: typeof message.content === "string"
+      ? message.content
+      : message.content.map((block) => block.text).join("\n\n"),
+  }));
 }
 
 async function runOpenAiConversationTurn(
@@ -577,12 +629,7 @@ async function runProviderConversationTurn(
 ) {
   // Every provider-direct lane invokes target.model itself, so the injected
   // identity is exact — "which model are you?" gets a real answer per lane.
-  systemPreamble = [
-    systemPreamble?.trim(),
-    queenModelTransparencyNote(target.model, target.provider),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const stableSystemAddendum = queenModelTransparencyNote(target.model, target.provider);
   if (target.provider === "openai-oauth") {
     // The user's ChatGPT subscription credentials (shared hive env), via the
     // Responses backend. Lazy import: server-only module, and the hermetic
@@ -590,7 +637,11 @@ async function runProviderConversationTurn(
     const { runOpenAiOAuthChatTurn } = await import("@/lib/services/openai-oauth");
     return runOpenAiOAuthChatTurn(
       target.model,
-      conversationMessages(transcript, history, systemPreamble, personality),
+      conversationStringMessages(transcript, history, {
+        systemPreamble,
+        stableSystemAddendum,
+        personality,
+      }),
       { onTextDelta, timeoutMs: OPENAI_TURN_TIMEOUT_MS },
     );
   }
@@ -615,7 +666,12 @@ async function runProviderConversationTurn(
       },
       body: JSON.stringify({
         model: target.model,
-        messages: conversationMessages(transcript, history, systemPreamble, personality),
+        messages: conversationMessages(transcript, history, {
+          systemPreamble,
+          stableSystemAddendum,
+          personality,
+          cacheControl: { provider: target.provider, model: target.model },
+        }),
         // Streamed turns feed the fused converse+speak pipeline; the buffered
         // legacy action keeps the plain JSON response.
         ...(onTextDelta ? { stream: true } : {}),
@@ -787,27 +843,38 @@ function extractDraftConfirmToken(draft: string): string {
 async function runOpenAiAgentTurn(request: string, systemPreamble?: string): Promise<string> {
   const apiKey = await transcriptionApiKey();
   if (!apiKey) throw new Error("No OpenAI key for the agent-turn fallback.");
+  const model = process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL;
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: "openai-api",
+    model,
+    cacheScope: "queen-agent-turn-fallback",
+  });
+  const stableSystem = [
+    "You are Queen Bee's fallback brain. The user's HivemindOS agents are unavailable, so answer the request directly and briefly from your own knowledge. If it strictly needs their computer, files, or wallet, say plainly that you couldn't reach an agent to do it.",
+    queenModelTransparencyNote(model, "OpenAI (fallback lane)"),
+  ].join("\n\n");
+  const volatileSystem = systemPreamble?.trim() || "";
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+      ...cacheHints.headers,
+    },
     body: JSON.stringify({
-      model: process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
+      model,
       messages: [
         {
           role: "system",
-          content:
-            "You are Queen Bee's fallback brain. The user's HivemindOS agents are unavailable, so answer the request directly and briefly from your own knowledge. If it strictly needs their computer, files, or wallet, say plainly that you couldn't reach an agent to do it. " +
-            queenModelTransparencyNote(
-              process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL,
-              "OpenAI (fallback lane)",
-            ) +
-            (systemPreamble ? ` ${systemPreamble}` : ""),
+          content: [stableSystem, volatileSystem].filter(Boolean).join("\n\n"),
         },
         { role: "user", content: request },
       ],
       max_tokens: 300,
       temperature: 0.5,
+      ...cacheHints.body,
     }),
+    cache: "no-store",
     signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`OpenAI agent-turn fallback HTTP ${response.status}.`);

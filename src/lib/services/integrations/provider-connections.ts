@@ -6,9 +6,12 @@ import {
   type ConnectorManifest,
 } from "@/lib/services/integrations/connector-manifests";
 import {
+  GOOGLE_CLOUD_MANAGE_SCOPE,
+  googleCloudGrantedScopes,
   googleCloudOAuthClientReady,
   mintGoogleCloudAccessToken,
 } from "@/lib/services/integrations/google-cloud-oauth";
+import { slackOAuthClientReady } from "@/lib/services/integrations/slack-oauth";
 import {
   GOOGLE_CLIENT_ID_ENV,
   GOOGLE_CLIENT_SECRET_ENV,
@@ -155,6 +158,12 @@ function providerOAuthReady(key: ConnectionProviderKey, sharedEnv: Record<string
     // OAuth-ready once the client id is non-placeholder — no pasted client.
     return googleCloudOAuthClientReady();
   }
+  if (key === "slack") {
+    // PKCE public-client model: the Slack client id is baked into HivemindOS (or
+    // supplied via SLACK_OAUTH_CLIENT_ID), so slack is OAuth-ready once the id is
+    // non-placeholder — no pasted client, no client secret.
+    return slackOAuthClientReady();
+  }
   return false;
 }
 
@@ -283,6 +292,19 @@ async function verifyGoogleCloud(_refreshToken: string): Promise<VerifyResult> {
   }
   return apiCheck(async () => {
     const accessToken = await mintGoogleCloudAccessToken();
+    // Granular consent: if the user unticked the Cloud Platform box on the
+    // consent screen, Google still issues a token (openid/email only), so the
+    // refresh above succeeds — but every budget/quota-cap call would 403 later.
+    // Catch it here so the card shows an actionable "reconnect and tick the box"
+    // error instead of a silent half-connection. Fails OPEN (see helper).
+    const scopes = await googleCloudGrantedScopes(accessToken);
+    if (scopes && !scopes.split(/\s+/).includes(GOOGLE_CLOUD_MANAGE_SCOPE)) {
+      return {
+        ok: false,
+        error:
+          'Signed in, but Google Cloud management access wasn’t granted. Reconnect and tick the box for "See, edit, configure, and delete your Google Cloud data" so HivemindOS can set your budgets and caps.',
+      };
+    }
     const account = await googleAccountEmail(accessToken);
     return { ok: true, account: account || "Google Cloud account" };
   });

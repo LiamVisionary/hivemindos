@@ -6,11 +6,12 @@
  *
  * Honesty rules baked into this table (verified against the code + the real
  * provider APIs, 2026-07-06):
- *  - OAuth ("sign in with your subscription") is REAL only for OpenAI
- *    (src/lib/services/openai-oauth.ts). xAI/Grok and the Gemini API authenticate
- *    by API key only; there is no consumer OAuth grant for them, and the repo's
- *    Google OAuth is Drive/Gmail/GA4 integration scope, not Gemini LLM auth. So
- *    `oauth` is set only on the openai row.
+ *  - OAuth ("sign in with your subscription") is real for OpenAI voice auth
+ *    (src/lib/services/openai-oauth.ts). xAI/Grok also has a model/runtime OAuth
+ *    setup path (src/lib/services/xai-oauth.ts), but Grok has no realtime voice
+ *    transport here, so this voice transport matrix does not present it as a
+ *    voice OAuth provider. The repo's Google OAuth is Drive/Gmail/GA4 integration
+ *    scope, not Gemini LLM auth.
  *  - Realtime speech-to-speech ("realtime hybrid") is real for OpenAI (Realtime
  *    API) and Gemini (Gemini Live API). Grok has no public realtime voice API;
  *    ElevenLabs and Cartesia are TTS engines. So Grok is a chat BRAIN only, and
@@ -63,7 +64,7 @@ export type VoiceProviderCapability = {
   /** Shared hive-env var(s) that hold this provider's API key; [0] is the save target. */
   apiKeyEnvVars: string[];
   apiKeyPlaceholder: string;
-  /** Real in-repo OAuth sign-in for this provider (only OpenAI today). */
+  /** Real in-repo OAuth sign-in for this voice transport provider. */
   oauth?: VoiceProviderOAuth;
   /** provider-catalog slug for pipeline chat-brain turns, when usable as a brain. */
   brainProviderSlug?: string;

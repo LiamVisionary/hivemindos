@@ -3948,7 +3948,7 @@
   --kb-cyan-3: #166b5d;
   --kb-danger: #c0524d;
   --kb-danger-2: #8f3a36;
-  --kb-honey: #b07f1c;
+  --kb-honey: #936811; --kb-honey-fill: #e6bb5c;
   --kb-honey-2: #936811;
   --kb-honey-3: #6b4d12;
   border-color: rgba(79, 68, 52, 0.12);
@@ -4155,8 +4155,8 @@
 .workBoardPanel .kanbanColumnDot.ideas { background: #76726a !important; }
 .workBoardPanel .kanbanColumnDot.ready { background: #a7a39a !important; }
 .workBoardPanel .kanbanColumnDot.working { background: var(--fc-live) !important; }
-.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-honey) !important; }
-.workBoardPanel .kanbanColumnDot.done { background: var(--fc-honey) !important; }
+.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-honey-fill, var(--fc-honey)) !important; }
+.workBoardPanel .kanbanColumnDot.done { background: var(--fc-honey-fill, var(--fc-honey)) !important; }
 .workBoardPanel .kanbanColumnDot.archived { background: #545049 !important; }
 .workBoardPanel .kanbanColumnCount {
   min-width: auto !important;
@@ -4305,7 +4305,7 @@
 .workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]:hover:not(:disabled)),
 .workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]:focus-visible) {
   border-color: var(--fc-honey-line) !important;
-  background: var(--fc-honey) !important;
+  background: var(--fc-honey-fill, var(--fc-honey)) !important;
   color: var(--fc-bg-soft) !important;
 }
 .workBoardPanel .kanbanInlineAdd :global([data-bee-send]:disabled),
@@ -4399,7 +4399,7 @@
 }
 .workBoardPanel .kanbanCard.active {
   border-color: var(--fc-honey-line) !important;
-  background: color-mix(in srgb, var(--fc-honey) 5%, var(--fc-panel)) !important;
+  background: color-mix(in srgb, var(--fc-honey-fill, var(--fc-honey)) 5%, var(--fc-panel)) !important;
   box-shadow: 0 0 0 1px var(--fc-honey-line) !important;
 }
 .workBoardPanel .kanbanCard.working { box-shadow: none !important; }
@@ -4583,7 +4583,7 @@
   --fc-fg-2: #5e574b;
   --fc-fg-3: #867d6e;
   --fc-fg-4: #a59b89;
-  --fc-honey: #b07f1c;
+  --fc-honey: #936811; --fc-honey-fill: #e6bb5c;
   --fc-honey-soft: rgba(176, 127, 28, 0.12);
   --fc-honey-line: rgba(176, 127, 28, 0.34);
   --fc-live: #1d8e7c;

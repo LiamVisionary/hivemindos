@@ -87,7 +87,8 @@
 }
 
 .button,
-.secondaryButton {
+.secondaryButton,
+.chipButton {
   display: inline-flex;
   min-height: 38px;
   align-items: center;
@@ -110,8 +111,16 @@
   color: var(--hc-muted);
 }
 
+.chipButton {
+  min-height: 34px;
+  background: color-mix(in srgb, var(--hc-surface) 88%, transparent);
+  color: var(--hc-muted);
+  padding: 7px 10px;
+}
+
 .button:disabled,
-.secondaryButton:disabled {
+.secondaryButton:disabled,
+.chipButton:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -194,6 +203,90 @@
 
 .body {
   margin: 0;
+}
+
+.hostControls,
+.modelPicker {
+  display: grid;
+  gap: 10px;
+}
+
+.controlRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.controlRow .body {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.range {
+  display: grid;
+  gap: 8px;
+}
+
+.range input {
+  width: 100%;
+  accent-color: var(--hc-honey);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--hc-line) 78%, transparent);
+  border-radius: 8px;
+}
+
+.stepper button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: color-mix(in srgb, var(--hc-surface-strong) 76%, transparent);
+  color: var(--hc-text);
+  cursor: pointer;
+}
+
+.stepper span {
+  min-width: 38px;
+  text-align: center;
+  font-weight: 800;
+}
+
+.modelChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modelChip {
+  display: inline-flex;
+  min-height: 34px;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--hc-line) 70%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--hc-surface) 84%, transparent);
+  color: var(--hc-muted);
+  cursor: pointer;
+  padding: 7px 10px;
+  text-align: left;
+}
+
+.modelChip span {
+  overflow-wrap: anywhere;
+}
+
+.modelChip[data-active="true"] {
+  border-color: color-mix(in srgb, var(--hc-live) 42%, transparent);
+  background: color-mix(in srgb, var(--hc-live) 10%, var(--hc-surface));
+  color: var(--hc-text);
 }
 
 .pill {

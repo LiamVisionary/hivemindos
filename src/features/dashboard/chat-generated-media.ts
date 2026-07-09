@@ -17,7 +17,7 @@ function uniqueImagePaths(text: string) {
 function promptFromAssistantText(text: string) {
   const generated = text.match(/\bgenerated\s+(?:\w+\s+)?images?\s+of\s+(.+?)\s+for\s+you\b/i);
   if (generated?.[1]?.trim()) return generated[1].trim();
-  return "Generated image";
+  return "Image file";
 }
 
 export function generatedImageCardFromAssistantText(text: string, createdAt?: number): ChatApplicationGenerationCard | null {
@@ -26,15 +26,15 @@ export function generatedImageCardFromAssistantText(text: string, createdAt?: nu
   const artifacts: ChatApplicationGenerationArtifact[] = paths.map((path, index) => ({
     kind: "image",
     url: generatedMediaUrl(path),
-    label: paths.length === 1 ? "Generated image" : `Generated image ${index + 1}`,
+    label: paths.length === 1 ? "Image file" : `Image file ${index + 1}`,
   }));
   return {
     id: `generated-image-paths-${createdAt ?? ""}-${paths[0]}`,
     kind: "image",
     prompt: promptFromAssistantText(text),
     status: "ready",
-    title: paths.length === 1 ? "Generated image" : "Generated images",
-    appName: "Agent image cache",
+    title: paths.length === 1 ? "Image file" : "Image files",
+    appName: "Agent media cache",
     artifacts,
     completedAt: createdAt,
   };

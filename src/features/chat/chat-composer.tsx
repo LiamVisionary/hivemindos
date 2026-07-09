@@ -8,8 +8,9 @@ import { LottiePlayer } from "@/components/ui/lottie-player";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { filesFromDataTransfer, filesFromReferencePaths } from "@/features/chat/chat-drop-references";
-import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
+import { attachmentDetailLabel, attachmentKindLabel, attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { CHAT_SLASH_COMMANDS, filterChatSlashCommands, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
+import { ComposerAttachmentItem } from "@/features/chat/composer-attachment-item";
 import { listenForTauriComposerDragDrop, type TauriDragDropEvent, type TauriDropPosition, type TauriWebviewApi } from "@/features/chat/tauri-composer-drag-drop";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
@@ -270,17 +271,6 @@ export function attachmentSummary(attachments: ChatAttachment[]) {
   ].filter(Boolean).join(", ");
 }
 
-function attachmentKindLabel(attachment: ChatAttachment) {
-  if (attachment.referenceKind === "directory") return "Folder";
-  if (attachment.kind === "image") return "Image";
-  if (attachment.kind === "audio") return "Audio";
-  return "File";
-}
-
-function attachmentDetailLabel(attachment: ChatAttachment) {
-  return attachment.referenceOnly ? "reference" : attachmentSizeLabel(attachment.size);
-}
-
 function attachmentReferenceTarget(attachment: ChatAttachment) {
   return attachment.referencePath?.trim() || attachment.name;
 }
@@ -344,19 +334,21 @@ export function readAttachmentFile(file: File, kind: "image" | "file"): Promise<
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
-      if (!dataUrl) {
-        reject(new Error(`Could not read ${file.name}`));
-        return;
-      }
-      resolve({
-        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
-        kind,
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        dataUrl,
-      });
+      void (async () => {
+        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+        if (!dataUrl) {
+          reject(new Error(`Could not read ${file.name}`));
+          return;
+        }
+        resolve({
+          id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+          kind,
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          dataUrl,
+        });
+      })().catch(reject);
     };
     reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
     reader.readAsDataURL(file);
@@ -1043,12 +1035,7 @@ export function ComposerField({
             </div>
           ))}
           {attachments.map((attachment) => (
-            <div className={chatClass("attachmentPill")} key={attachment.id}>
-              <span>{attachmentKindLabel(attachment)}</span>
-              <strong>{attachment.name}</strong>
-              <small>{attachmentDetailLabel(attachment)}</small>
-              <CloseIconButton size="sm" aria-label={`Remove ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)} disabled={disabled} />
-            </div>
+            <ComposerAttachmentItem key={attachment.id} attachment={attachment} disabled={disabled} onRemove={onRemoveAttachment} />
           ))}
         </div>
       ) : null}

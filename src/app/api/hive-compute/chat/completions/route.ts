@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
   if (!body || typeof body !== "object") return errorJson("OpenAI-compatible chat completion JSON is required.", 400);
   if (!Array.isArray(body.messages)) return errorJson("messages must be an array.", 400);
   try {
-    const upstream = await proxyHiveComputeChatCompletion(body, request.signal);
+    const upstream = await proxyHiveComputeChatCompletion(body, request.signal, request.headers);
     return proxyResponse(upstream);
   } catch (error) {
     const status = error instanceof HiveComputeMarketplaceError ? error.status : 502;

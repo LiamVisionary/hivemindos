@@ -17,8 +17,20 @@ export type HiveComputeModelOption = {
   subtitle?: string;
   group?: string;
   badge?: string;
+  performance?: HiveComputeModelPerformance;
   disabled?: boolean;
   disabledReason?: string;
+};
+
+export type HiveComputeModelPerformance = {
+  model: string;
+  samples: number;
+  completionTokens: number;
+  tokensPerSecond: number;
+  timeToFirstTokenMs: number;
+  durationMs: number;
+  speedTier: "unmeasured" | "warming" | "heavy" | "balanced" | "fast";
+  updatedAt?: string;
 };
 
 export type HiveComputeGatewayStatus = {
@@ -28,8 +40,13 @@ export type HiveComputeGatewayStatus = {
   apiKey: HiveComputeEnvPresence;
   capacity?: {
     liveWorkers: number;
+    totalSlots?: number;
+    busySlots?: number;
+    availableSlots?: number;
+    hardwareTeeWorkers?: number;
     liveModels: string[];
     keyRelayModels: string[];
+    modelPerformance: HiveComputeModelPerformance[];
     fallbackConfigured: boolean;
     pendingJobs: number;
     statusLabel: string;
@@ -103,6 +120,8 @@ export type HiveComputeWorkerModuleStatus = {
   nodeModulesInstalled: boolean;
   packageName: string;
   version: string;
+  installedVersion?: string;
+  updateAvailable: boolean;
   runCommand: string;
   dependencyInstallCommand: string;
 };
@@ -112,6 +131,7 @@ export type HiveComputeHostWhen = "idle" | "always" | "sched";
 export type HiveComputeHostRunConfig = {
   markdown: number;
   maxConcurrency: number;
+  selectedModelIds: string[] | null;
   hostWhen: HiveComputeHostWhen;
   dailyCapUsd: number | null;
   pauseOnBattery: boolean;
@@ -148,6 +168,7 @@ export type HiveComputeWorkerRunStatus = {
 export type HiveComputeHostContext = {
   backend: HiveComputeLocalBackendStatus;
   models: HiveComputeHostModel[];
+  advertisedModels: string[];
   config: HiveComputeHostRunConfig;
   canRun: boolean;
   message: string;

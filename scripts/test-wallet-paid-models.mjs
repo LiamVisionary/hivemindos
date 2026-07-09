@@ -75,9 +75,12 @@ const [
   dashboardTypes,
   dashboardApp,
   dashboardStorage,
+  chatComposer,
   statusChatInputController,
+  statusChatInputHelpers,
   messageThread,
   chatExchangeStyles,
+  chatGeneratedMedia,
   generatedMediaRoute,
   videoGenerationRoute,
   videoGenerationService,
@@ -125,9 +128,12 @@ const [
   source("src/features/dashboard/dashboard-types.ts"),
   source("src/features/dashboard/DashboardApp.tsx"),
   source("src/features/dashboard/dashboard-storage.ts"),
+  source("src/features/chat/chat-composer.tsx"),
   source("src/features/dashboard/hooks/use-status-chat-input-controller.tsx"),
+  source("src/features/dashboard/hooks/status-chat-input-helpers.ts"),
   source("src/features/dashboard/views/chat/exchange/MessageThread.tsx"),
   source("src/features/dashboard/views/chat/exchange/chat-exchange.css"),
+  source("src/features/dashboard/chat-generated-media.ts"),
   source("src/app/api/chat/generated-media/route.ts"),
   source("src/app/api/chat/video-generation/route.ts"),
   source("src/lib/services/chat/video-generation.ts"),
@@ -155,25 +161,56 @@ includes(runtimeRoute, "runNonStreamToolConversation", "chat runtime continues n
 includes(runtimeRoute, "conversation.push({ role: \"assistant\", content: \"\", tool_calls: toolRun.assistantToolCalls })", "chat runtime preserves non-stream assistant tool calls before continuation");
 includes(runtimeRoute, "conversation.push(...toolRun.toolResultMessages)", "chat runtime appends non-stream tool results before continuation");
 includes(runtimeRoute, "toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? extractOpenAIToolCalls(continuationJson) : []", "chat runtime can chain non-stream tool-call continuations");
-includes(runtimeRoute, "shouldUseCompactFreeScoutContext", "chat runtime can compact simple free Scout prompts");
-includes(runtimeRoute, "skipped: compactFreeScoutContext", "chat runtime records compact free Scout preflight skips");
-includes(runtimeRoute, "compactFreeScoutContext\n    ? [\"\", \"\", \"\", \"\"]", "chat runtime skips commercial capability briefings for compact free Scout turns");
-includes(runtimeRoute, "const vaultPromptContext = compactFreeScoutContext ? \"\" : buildChatVaultContext(vault, userPrompt)", "chat runtime skips vault prompt context for compact free Scout turns");
-includes(runtimeRoute, "wallet: promptWallet", "chat runtime uses compact free Scout wallet prompt context");
+assert.ok(!runtimeRoute.includes("shouldUseCompactFreeScoutContext"), "chat runtime must not compact simple free Scout prompts");
+assert.ok(!runtimeRoute.includes("compactFreeScoutContext"), "chat runtime must not carry a compact free Scout context gate");
+includes(runtimeRoute, "buildTaskRetrievalContextResult", "chat runtime keeps capability retrieval context for Scout turns");
+includes(runtimeRoute, "buildSharedBrainMemoryContext(vault, userPrompt)", "chat runtime keeps shared brain context for Scout turns");
+includes(runtimeRoute, "const vaultPromptContext = buildChatVaultContext(vault, userPrompt)", "chat runtime keeps vault prompt context for Scout turns");
+includes(runtimeRoute, "const promptWallet = wallet", "chat runtime keeps wallet prompt context for Scout turns");
 includes(runtimeRoute, "const routeMediaViaArtifactHandles", "chat runtime scopes media-handle routing");
 includes(runtimeRoute, "&& offerVideoTool", "chat runtime only swaps free Scout media payloads to handles for video-tool turns");
+includes(runtimeRoute, "messagesWithCurrentMediaArtifacts(messages, mediaArtifacts)", "chat runtime converts current image references into model image inputs");
 includes(runtimeRoute, "const modelInputMessages = routeMediaViaArtifactHandles", "chat runtime preserves native multimodal messages outside handle-routed turns");
 includes(runtimeRoute, "textOnlyMessagesForTextModel(messages, mediaArtifacts)", "chat runtime can convert inline media payloads to artifact handles for tool-routed requests");
-includes(runtimeRoute, "image[-\\s]?to[-\\s]?video", "chat runtime keeps video-generation prompts out of compact free Scout context");
+includes(runtimeRoute, "requestBodyBytes", "chat runtime records hosted model request body byte telemetry");
+includes(runtimeRoute, "modelVisibleMediaBytes", "chat runtime records model-visible media byte telemetry");
+assert.ok(!runtimeRoute.includes("latestUserOnlyModelMessages"), "chat runtime must not drop previous turns for Scout media Q&A");
+assert.ok(!runtimeRoute.includes("compactFreeScoutMediaSystemPrompt"), "chat runtime must not replace the full conversation with a compact media-only prompt");
+includes(runtimeRoute, "shouldSuppressCommandToolForNativeMedia", "chat runtime suppresses shell tools for native media inspection turns");
+includes(runtimeRoute, "mediaArtifacts,", "chat runtime includes prepared media artifacts in shell-tool suppression");
+includes(runtimeRoute, "generationToolOffered: offerImageTool || offerVideoTool", "chat runtime suppresses shell tools when media generation tools are available for inline images");
 includes(runtimeRoute, "attachments: requestAttachments", "chat runtime accepts current-turn attachment metadata");
 includes(runtimeRoute, "materializeChatMediaArtifacts", "chat runtime materializes media attachments before tool routing");
 includes(runtimeRoute, "formatChatMediaArtifactContext", "chat runtime injects media artifact handles into capability context");
-includes(runtimeRoute, "Multimodal models may inspect image/video message parts directly", "chat runtime preserves native multimodal inspection contract");
+includes(runtimeRoute, "preflightProcessEvents", "chat runtime sends preflight process events to the live stream");
+includes(runtimeRoute, "runtimeProcessEvent({", "chat runtime creates preflight process events through the canonical helper");
+includes(runtimeRoute, "appendRuntimeProcessEvents", "chat runtime persists preflight process events through the canonical helper");
+includes(runtimeRoute, "runtimeProcessEventsSsePayload", "chat runtime serializes preflight process events through the canonical helper");
+includes(runtimeRoute, "status: input.status ?? \"completed\"", "chat runtime marks canonical process events completed by default");
+includes(runtimeRoute, "Multimodal models may inspect image parts and video preview frames directly", "chat runtime preserves native multimodal inspection contract");
+includes(runtimeRoute, "Do not call run_command, grep, Python, or base64 encoders just to inspect the attachment.", "chat runtime tells multimodal models not to shell out for visual Q&A");
+includes(runtimeRoute, "describe it as screenshot content", "chat runtime frames screenshot UI text as image content rather than live state");
+assert.ok(!runtimeRoute.includes("MAX_MODEL_INLINE_IMAGE_BYTES"), "chat runtime must not cap model-facing image bytes before Scout");
+assert.ok(!runtimeRoute.includes("compactImageWithSips"), "chat runtime must not downsample images before Scout");
+includes(runtimeRoute, "extractVideoPreviewDataUrl", "chat runtime extracts model-visible video preview frames");
+includes(runtimeRoute, "previewDataUrl", "chat runtime carries video preview frames on media artifacts");
+includes(runtimeRoute, "currentVisualArtifactParts", "chat runtime converts image artifacts and video previews into model image inputs");
+includes(runtimeRoute, ".filter((part) => !partMatchesArtifactPayload(part, mediaArtifacts))", "chat runtime replaces oversized original image/file parts with artifact visual parts");
 includes(runtimeRoute, "VIDEO_GENERATION_TOOL_NAME = \"generate_video\"", "chat runtime exposes a video generation tool");
 includes(runtimeRoute, "videoGenerationToolDefinition", "chat runtime defines the video tool schema");
 includes(runtimeRoute, "dispatchVideoGenerationViaRoute", "chat runtime dispatches video generation through the dashboard route");
 includes(runtimeRoute, "videoInputImagesForArgs", "chat runtime maps video tool calls to current-turn media artifacts");
+assert.ok(!chatComposer.includes("MAX_RUNTIME_INLINE_IMAGE_BYTES"), "dashboard must not cap image attachments before posting chat requests");
+assert.ok(!chatComposer.includes("compactImageDataUrlForRuntime"), "dashboard must not create lossy canvas vision copies before posting image attachments");
 includes(statusChatInputController, "attachments: outgoingAttachments", "dashboard sends current-turn attachments alongside message content");
+includes(statusChatInputController, "function currentRuntimeMessageAttachments", "dashboard can render current attachment references without duplicating bytes");
+includes(statusChatInputController, "currentRuntimeMessageAttachments(outgoingAttachments)", "dashboard omits duplicate current-turn data URLs from runtime messages");
+includes(statusChatInputController, "function historicalMessageContent", "dashboard strips historical attachment bytes from chat context");
+includes(statusChatInputController, "Previous turn attachments are not re-sent as image inputs:", "dashboard leaves historical attachment references as text");
+includes(statusChatInputController, "content: historicalMessageContent(message)", "dashboard uses text-only historical attachment context");
+includes(statusChatInputHelpers, "const rawNestedStatus = String(statusPayload.status ?? \"\").trim().toLowerCase();", "dashboard keeps status on generic runtime status events");
+assert.ok(!statusChatInputController.includes("const outgoingContent = messageContentParts([prompt, outgoingDirectorySummary].filter(Boolean).join(\"\\n\\n\"), outgoingAttachments);"), "dashboard must not duplicate current-turn attachment data URLs inside messages");
+assert.ok(!statusChatInputController.includes("content: messageContentParts(message.content, message.attachments ?? [])"), "dashboard must not resend previous-turn attachment data URLs as model image inputs");
 includes(walletPaidService, "X-HivemindOS-Wallet-Agent-Id", "wallet-paid runtime resolver");
 includes(taskRetrievalContext, "export function videoGenerationRequest", "capability routing detects video generation intent");
 includes(taskRetrievalContext, "|| videoGenerationRequest(query)", "video generation prompts force capability routing");
@@ -181,6 +218,8 @@ includes(taskRetrievalContext, "label: \"video generation\"", "capability routin
 includes(taskRetrievalContext, "videoGenerationCapabilityContext", "capability routing injects video-generation tool guidance");
 includes(generatedMediaRoute, "VIDEO_MEDIA_TYPES", "generated media route supports video artifacts");
 includes(generatedMediaRoute, "Accept-Ranges", "generated media route supports browser video range requests");
+includes(chatGeneratedMedia, "return \"Image file\"", "local image path fallback does not claim arbitrary files are generated images");
+includes(chatGeneratedMedia, "Agent media cache", "local image path fallback labels the preview as media cache");
 includes(videoGenerationRoute, "runChatVideoGeneration", "video generation API route calls shared dispatcher");
 includes(videoGenerationService, "inputImages", "video generation dispatcher forwards source images");
 includes(videoGenerationService, "imageDataUrl", "video generation dispatcher can send source image bytes to remote apps");
@@ -331,6 +370,187 @@ runTsxAssertion(`
   assert.ok(sanitized[0].content.includes("/tmp/swarm-scout-card.jpg"));
   assert.ok(!sanitized[0].content.includes(dataUrl.slice(0, 80)));
 `, "free Scout text-model attachment sanitizer");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { runtimeProcessEvent, runtimeProcessEventsSsePayload } from "./src/app/api/chat/agent-runtime/process-events.ts";
+  const event = runtimeProcessEvent({ label: "Hive capability search", detail: "8 retrieval hits; 1 query" });
+  assert.equal(event.status, "completed");
+  const payload = runtimeProcessEventsSsePayload([event]);
+  assert.ok(payload.includes('"label":"Hive capability search"'));
+  assert.ok(payload.includes('"status":"completed"'));
+`, "canonical runtime process events serialize to live status SSE");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { processLabelFromRuntimeEvent } from "./src/features/dashboard/hooks/status-chat-input-helpers.ts";
+  assert.deepEqual(
+    processLabelFromRuntimeEvent({ status: { label: "Hive capability search", detail: "8 retrieval hits; 1 query", status: "completed" } }),
+    { label: "Hive capability search", detail: "8 retrieval hits; 1 query", status: "completed" },
+  );
+`, "generic runtime status events surface in the process panel");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { shouldSuppressCommandToolForNativeMedia, visualMediaInspectionRequest } from "./src/app/api/chat/agent-runtime/media-tool-routing.ts";
+  assert.equal(visualMediaInspectionRequest("and this?"), true);
+  assert.equal(visualMediaInspectionRequest("what about this?"), true);
+  const imageMessages = [{
+    role: "user",
+    content: [
+      { type: "text", text: "what do you think of this?" },
+      { type: "image_url", image_url: { url: "data:image/jpeg;base64,YmVl" } },
+    ],
+  }];
+  assert.equal(shouldSuppressCommandToolForNativeMedia({
+    messages: imageMessages,
+    intentText: "what do you think of this?",
+    generationToolOffered: false,
+  }), true);
+  assert.equal(shouldSuppressCommandToolForNativeMedia({
+    messages: imageMessages,
+    intentText: "generate a video of this bee flying",
+    generationToolOffered: true,
+  }), true);
+  assert.equal(shouldSuppressCommandToolForNativeMedia({
+    messages: imageMessages,
+    intentText: "run exiftool on this image",
+    generationToolOffered: false,
+  }), false);
+  assert.equal(shouldSuppressCommandToolForNativeMedia({
+    messages: [{ role: "user", content: "what's in this image? swarm-scout-card.jpg" }],
+    mediaArtifacts: [{
+      id: "media_test",
+      kind: "image",
+      name: "swarm-scout-card.jpg",
+      mimeType: "image/jpeg",
+      sizeBytes: 1024,
+      path: "/Users/liam/Downloads/swarm-scout-card.jpg",
+    }],
+    intentText: "what's in this image? swarm-scout-card.jpg",
+    generationToolOffered: false,
+  }), true);
+  assert.equal(shouldSuppressCommandToolForNativeMedia({
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: "whats in this image?" },
+        { type: "text", text: "Attached file references:\\n- Screenshot 2026-07-09 at 9.56.17 PM.png (kind: file; path: /Users/liam/Documents/images/screenshots/Screenshot 2026-07-09 at 9.56.17 PM.png; type: image/png)" },
+      ],
+    }],
+    intentText: "whats in this image?",
+    generationToolOffered: false,
+  }), true);
+`, "native multimodal image turns do not advertise run_command");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { mkdtemp, rm, writeFile } from "node:fs/promises";
+  import { join } from "node:path";
+  import { tmpdir } from "node:os";
+  import { materializeChatMediaArtifacts } from "./src/app/api/chat/agent-runtime/media-artifacts.ts";
+  import { messagesWithCurrentMediaArtifacts } from "./src/app/api/chat/agent-runtime/messages.ts";
+  const dir = await mkdtemp(join(tmpdir(), "hmos-media-ref-"));
+  try {
+    const path = join(dir, "Screenshot 2026-07-09 at 9.56.17 PM.png");
+    await writeFile(path, Buffer.from("not a real png but enough for routing"));
+    const artifacts = await materializeChatMediaArtifacts({
+      runtimeSessionId: "media-ref-test",
+      attachments: [{
+        id: "ref-1",
+        kind: "file",
+        name: "Screenshot 2026-07-09 at 9.56.17 PM.png",
+        mimeType: "image/png",
+        size: 33,
+        dataUrl: "",
+        referencePath: path,
+        referenceKind: "file",
+        referenceOnly: true,
+      }],
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: "whats in this image?" },
+          { type: "text", text: \`Attached file references:\\n- Screenshot 2026-07-09 at 9.56.17 PM.png (kind: file; path: \${path}; type: image/png)\` },
+        ],
+      }],
+    });
+    assert.equal(artifacts.length, 1);
+    assert.equal(artifacts[0].kind, "image");
+    assert.ok(artifacts[0].dataUrl.startsWith("data:image/png;base64,"));
+    const shaped = messagesWithCurrentMediaArtifacts([{
+      role: "user",
+      content: [
+        { type: "text", text: "whats in this image?" },
+        { type: "text", text: \`Attached file references:\\n- Screenshot 2026-07-09 at 9.56.17 PM.png (kind: file; path: \${path}; type: image/png)\` },
+      ],
+    }], artifacts);
+    assert.ok(Array.isArray(shaped[0].content));
+    assert.ok(shaped[0].content.some((part) => part.type === "image_url" && part.image_url.url.startsWith("data:image/png;base64,")));
+    const text = shaped[0].content.filter((part) => part.type === "text").map((part) => part.text).join("\\n");
+    assert.equal(text.includes(path), false);
+    assert.equal(text.includes("Attached file references:"), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+`, "current local image reference becomes model image input without path prompt leakage");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { createHash } from "node:crypto";
+  import { messagesWithCurrentMediaArtifacts } from "./src/app/api/chat/agent-runtime/messages.ts";
+  const originalDataUrl = "data:image/jpeg;base64," + Buffer.from("original image bytes").toString("base64");
+  const artifactDataUrl = "data:image/jpeg;base64," + Buffer.from("artifact image bytes").toString("base64");
+  const dataHash = createHash("sha256").update(Buffer.from("original image bytes")).digest("hex");
+  const shaped = messagesWithCurrentMediaArtifacts([{
+    role: "user",
+    content: [
+      { type: "text", text: "what about this?" },
+      { type: "image_url", image_url: { url: originalDataUrl } },
+    ],
+  }], [{
+    id: "media_full",
+    kind: "image",
+    name: "swarm-scout-card.jpg",
+    mimeType: "image/jpeg",
+    sizeBytes: 320000,
+    path: "/Users/liam/Downloads/swarm-scout-card.jpg",
+    dataUrl: artifactDataUrl,
+    dataHash,
+  }]);
+  assert.ok(Array.isArray(shaped[0].content));
+  const imageParts = shaped[0].content.filter((part) => part.type === "image_url");
+  assert.equal(imageParts.length, 1);
+  assert.equal(imageParts[0].image_url.url, artifactDataUrl);
+  assert.equal(JSON.stringify(shaped).includes(originalDataUrl), false);
+`, "current image payload is replaced by artifact image data");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { createHash } from "node:crypto";
+  import { messagesWithCurrentMediaArtifacts } from "./src/app/api/chat/agent-runtime/messages.ts";
+  const originalVideoDataUrl = "data:video/quicktime;base64," + Buffer.from("original video bytes").toString("base64");
+  const previewDataUrl = "data:image/jpeg;base64," + Buffer.from("video preview bytes").toString("base64");
+  const dataHash = createHash("sha256").update(Buffer.from("original video bytes")).digest("hex");
+  const shaped = messagesWithCurrentMediaArtifacts([{
+    role: "user",
+    content: [
+      { type: "text", text: "whats this?" },
+      { type: "file", file: { filename: "Screen Recording.mov", file_data: originalVideoDataUrl } },
+    ],
+  }], [{
+    id: "media_video",
+    kind: "video",
+    name: "Screen Recording.mov",
+    mimeType: "video/quicktime",
+    sizeBytes: 900000,
+    path: "/Users/liam/Desktop/Screen Recording.mov",
+    dataHash,
+    previewDataUrl,
+    previewMimeType: "image/jpeg",
+  }]);
+  assert.ok(Array.isArray(shaped[0].content));
+  const imageParts = shaped[0].content.filter((part) => part.type === "image_url");
+  const fileParts = shaped[0].content.filter((part) => part.type === "file");
+  assert.equal(imageParts.length, 1);
+  assert.equal(imageParts[0].image_url.url, previewDataUrl);
+  assert.equal(fileParts.length, 0);
+  assert.equal(JSON.stringify(shaped).includes(originalVideoDataUrl), false);
+`, "current video payload is replaced by compact preview frame");
 runTsxAssertion(`
   import assert from "node:assert/strict";
   import { deriveFreeMeter } from "./src/features/dashboard/views/chat/hivemindos-free-meter.ts";

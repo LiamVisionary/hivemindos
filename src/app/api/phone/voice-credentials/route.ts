@@ -1,5 +1,5 @@
 // guard:allow-hive-action-route - dashboard-only voice-provider credential
-// surface: reports which provider API keys / OpenAI OAuth are present in the
+// surface: reports which voice-provider API keys / OpenAI voice OAuth are present in the
 // shared hive env and saves a user-entered key. Never an agent-invokable Hive
 // action (agents must not enumerate or write credential material).
 import { NextRequest } from "next/server";
@@ -20,7 +20,8 @@ export const dynamic = "force-dynamic";
  * API key when a key is present), so it needs a presence check that never
  * returns the secret value — only booleans. Saving routes through the sanctioned
  * shared-env writer (hive-env-write), which replicates the key to every fleet
- * machine over Tailnet. OAuth sign-in itself stays on /api/openai-oauth.
+ * machine over Tailnet. Voice OAuth sign-in itself stays on /api/openai-oauth;
+ * Grok model/runtime OAuth is handled separately by /api/xai-oauth.
  */
 
 type ProviderCredentialStatus = {

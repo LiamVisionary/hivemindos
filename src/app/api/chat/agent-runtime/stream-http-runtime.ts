@@ -62,6 +62,7 @@ import {
 } from "./openai-compat";
 import { streamAdaptiveHermesOpenRouterRuntime } from "./stream-adaptive-hermes";
 import { streamOpenAICompatibleRuntime } from "./stream-openai-compatible";
+import { runtimeProcessEventsSsePayload } from "./process-events";
 
 export async function streamHttpRuntime(
   profile: AgentProfile,
@@ -373,6 +374,8 @@ export async function streamHttpRuntime(
           session: { id: runtimeSessionId, runtime: runtimeProfile.runtime, source: "hivemindos-chat", startedAt: fetchStartedAt },
         }));
       }
+      const preflightProcessPayload = runtimeProcessEventsSsePayload(telemetry?.preflightProcessEvents ?? []);
+      if (preflightProcessPayload) safeEnqueue(preflightProcessPayload);
       const reader = upstream.body?.getReader();
       if (!reader) {
         safeEnqueue(ssePayload({ error: "Runtime response body is empty" }));

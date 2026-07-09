@@ -4,11 +4,13 @@ Optional UI and design-engineering skills imported from curated external design-
 
 - Source directory: https://www.ui-skills.com/skills/
 - Additional source: https://github.com/MengTo/Skills
+- Additional source: https://github.com/emilkowalski/skills
 - Install behavior: optional packaged skills only; setup must not auto-install this folder.
 - Layout: `design/<source>/<skill>/SKILL.md` preserves upstream source namespaces and avoids duplicate slug collisions.
 
 UI Skills directory import: 109 skills.
 MengTo/Skills import: 73 MIT-licensed skills under `design/mengto/`, covering Codex workflows, asset sourcing, design-first UI prompting, page conversion patterns, motion systems, WebGL/canvas/3D effects, CSS treatments, layout systems, and visual style recipes.
+emilkowalski/skills import: 4 MIT-licensed design-engineering skills under `design/emilkowalski/` (`emil-design-eng`, `review-animations` + its companion `STANDARDS.md`, `animation-vocabulary`, `apple-design`). `emil-design-eng` was previously vendored from the UI Skills directory and is now re-sourced directly from `emilkowalski/skills`.
 
 | Skill | Source | HivemindOS slug |
 | --- | --- | --- |
@@ -54,6 +56,9 @@ MengTo/Skills import: 73 MIT-licensed skills under `design/mengto/`, covering Co
 | `interface-design` | dammyjay93 | `interface-design` |
 | `swiftui-ui-patterns` | dimillian | `swiftui-ui-patterns` |
 | `emil-design-eng` | emilkowalski | `emil-design-eng` |
+| `review-animations` | emilkowalski | `review-animations` |
+| `animation-vocabulary` | emilkowalski | `animation-vocabulary` |
+| `apple-design` | emilkowalski | `apple-design` |
 | `baseline-ui` | ibelick | `baseline-ui` |
 | `fixing-accessibility` | ibelick | `fixing-accessibility` |
 | `fixing-metadata` | ibelick | `fixing-metadata` |

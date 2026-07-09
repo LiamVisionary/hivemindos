@@ -40,6 +40,8 @@ type ChatMessageLike = {
   agentPrompt?: {
     question?: unknown;
     choices?: unknown;
+    allowFreeText?: unknown;
+    response?: unknown;
   };
 };
 
@@ -199,6 +201,16 @@ function promptOptionButtonLabel(value: string) {
 
 export function promptUiFromMessage(message: ChatMessageLike, content: string) {
   const structuredPrompt = message?.agentPrompt;
+  const structuredResponse = structuredPrompt?.response && typeof structuredPrompt.response === "object"
+    ? structuredPrompt.response as { label?: unknown; value?: unknown; respondedAt?: unknown }
+    : null;
+  const response = structuredResponse && typeof structuredResponse.label === "string" && structuredResponse.label.trim()
+    ? {
+      label: structuredResponse.label.trim(),
+      value: typeof structuredResponse.value === "string" ? structuredResponse.value.trim() : undefined,
+      respondedAt: typeof structuredResponse.respondedAt === "number" ? structuredResponse.respondedAt : undefined,
+    }
+    : undefined;
   const structuredChoices = Array.isArray(structuredPrompt?.choices)
     ? structuredPrompt.choices.map((choice) => {
       if (typeof choice === "string") {
@@ -221,6 +233,8 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string) {
     return {
       displayText: String(structuredPrompt.question).trim() || content,
       options: structuredChoices,
+      allowFreeText: structuredPrompt.allowFreeText !== false,
+      response,
     };
   }
 

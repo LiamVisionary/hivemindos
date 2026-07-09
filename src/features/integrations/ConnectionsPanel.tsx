@@ -49,6 +49,7 @@ const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
   github: "/api/integrations/github/oauth/start?source=integrations",
   google: "/api/integrations/google/oauth/start",
   "google-cloud": "/api/integrations/google-cloud/oauth/start",
+  slack: "/api/integrations/slack/oauth/start",
 };
 
 /** One screen: connect apps in place. Credentials are validated live, then
@@ -79,9 +80,15 @@ export function ConnectionsPanel() {
     let returnMessageTimer: number | undefined;
     const params = new URLSearchParams(window.location.search);
     const returned = params.get("connections");
-    if (returned === "github" || returned === "google" || returned === "google-cloud") {
+    if (returned === "github" || returned === "google" || returned === "google-cloud" || returned === "slack") {
       const connectedLabel =
-        returned === "github" ? "GitHub" : returned === "google-cloud" ? "Google Cloud" : "Google";
+        returned === "github"
+          ? "GitHub"
+          : returned === "google-cloud"
+            ? "Google Cloud"
+            : returned === "slack"
+              ? "Slack"
+              : "Google";
       returnMessageTimer = window.setTimeout(() => {
         setMessage(`${connectedLabel} connected.`);
       }, 0);
@@ -188,17 +195,31 @@ function ConnectModal({
   const [show, setShow] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [note, setNote] = React.useState("");
+  // After the sign-in tab opens in the external browser, poll the connections
+  // endpoint so the modal flips to Connected on its own — the user never has to
+  // come back and hit Refresh. `pollDeadlineRef` bounds the wait.
+  const [polling, setPolling] = React.useState(false);
+  const pollDeadlineRef = React.useRef(0);
+  // For the Slack broker flow: the flowId returned by /start, polled at /poll
+  // (which persists the token) until the hosted Worker reports the token is ready.
+  const slackFlowRef = React.useRef("");
   const oauthUrl = OAUTH_START_URL[provider.key];
   const isGoogle = provider.key === "google";
   const isGoogleCloud = provider.key === "google-cloud";
+  const isSlack = provider.key === "slack";
   const isClawBank = provider.key === "clawbank";
   // OAuth-only providers connect purely through the browser sign-in button — no
   // pasted-token fallback (the token comes from the OAuth round-trip). `google`
   // uses a one-time pasted OAuth client (web-app model), then browser sign-in;
-  // `google-cloud` uses the desktop-app model with a baked-in client (PKCE +
-  // loopback listener), so it is always oauthReady and never shows a client form.
-  const oauthOnly = isGoogle || isGoogleCloud;
-  const usesOAuthClient = isGoogle || isGoogleCloud;
+  // `google-cloud` and `slack` use a baked-in client (PKCE, persistent callback),
+  // so they are oauthReady once the client id is set and never show a client form.
+  const oauthOnly = isGoogle || isGoogleCloud || isSlack;
+  const usesOAuthClient = isGoogle || isGoogleCloud || isSlack;
+
+  // Keep the latest props reachable from the poll interval without making it a
+  // dependency (which would tear down and recreate the interval every render).
+  const liveRef = React.useRef({ provider, onUpdated, onClose });
+  liveRef.current = { provider, onUpdated, onClose };
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -207,6 +228,82 @@ function ConnectModal({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, busy]);
+
+  React.useEffect(() => {
+    if (!polling) return;
+    let cancelled = false;
+    async function check() {
+      try {
+        // Slack broker flow: advance the rendezvous first. /poll persists the
+        // token server-side on success; only then does the connections status flip.
+        const slackFlow = liveRef.current.provider.key === "slack" ? slackFlowRef.current : "";
+        if (slackFlow) {
+          const pollRes = await fetch("/api/integrations/slack/oauth/poll", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ flowId: slackFlow }),
+          });
+          const pollData = await readJson<{ ok?: boolean; status?: string; error?: string } & FetchErrorPayload>(pollRes);
+          if (cancelled) return;
+          if (pollRes.ok && pollData.ok !== false) {
+            if (pollData.status === "pending") {
+              if (Date.now() > pollDeadlineRef.current) {
+                setPolling(false);
+                setNote("Still waiting on Slack. Finish the sign-in in your browser, then click Refresh.");
+              }
+              return;
+            }
+            if (pollData.status === "error" || pollData.status === "expired") {
+              setPolling(false);
+              slackFlowRef.current = "";
+              setNote(
+                pollData.status === "expired"
+                  ? "The Slack sign-in expired. Start it again."
+                  : `Slack sign-in failed${pollData.error ? ` (${pollData.error})` : ""}.`,
+              );
+              return;
+            }
+            // connected → clear and fall through to refresh the connections status.
+            slackFlowRef.current = "";
+          }
+        }
+        const response = await fetch("/api/integrations/connections", { cache: "no-store" });
+        const data = await readJson<ConnectionsPayload & FetchErrorPayload>(response);
+        if (cancelled || !response.ok || data.ok === false) return;
+        const { provider: p, onUpdated: upd, onClose: close } = liveRef.current;
+        const me = data.providers?.find((entry) => entry.key === p.key);
+        if (me?.connected) {
+          setPolling(false);
+          if (me.verified) {
+            upd(data, `${p.label} connected${me.account ? ` as ${me.account}` : ""}.`);
+            close();
+          } else {
+            // Connected but the live check failed — most often the Cloud Platform
+            // consent box was left unticked. Keep the modal open and say why.
+            setNote(me.error || `${p.label} connected, but the live check failed. Reconnect below to retry.`);
+          }
+          return;
+        }
+        if (Date.now() > pollDeadlineRef.current) {
+          setPolling(false);
+          setNote(`Still waiting on ${p.label}. Finish the sign-in in your browser, then click Refresh.`);
+        }
+      } catch {
+        // Transient (offline, dev-server restart) — keep polling until the deadline.
+      }
+    }
+    const timer = window.setInterval(() => void check(), 2500);
+    // A refresh the instant the app regains focus makes the flip feel immediate
+    // when the user switches back from the browser.
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    void check();
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [polling]);
 
   async function post(body: Record<string, unknown>, pending: string) {
     setBusy(pending);
@@ -246,10 +343,10 @@ function ConnectModal({
     const data = await post({ action: "save-oauth-client", provider: provider.key, clientId, clientSecret }, "client");
     if (!data) return;
     onUpdated(data);
-    await startGoogleOAuth();
+    await startOAuthConnect();
   }
 
-  async function startGoogleOAuth() {
+  async function startOAuthConnect() {
     setBusy("oauth");
     setNote("");
     try {
@@ -258,19 +355,28 @@ function ConnectModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "start" }),
       });
-      const data = await readJson<{ ok?: boolean; authorizationUrl?: string } & FetchErrorPayload>(response);
-      if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not start Google sign-in.");
-      if (!data.authorizationUrl) throw new Error("Google sign-in did not return an authorization URL.");
+      const data = await readJson<{ ok?: boolean; authorizationUrl?: string; flowId?: string } & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? `Could not start ${provider.label} sign-in.`);
+      if (!data.authorizationUrl) throw new Error(`${provider.label} sign-in did not return an authorization URL.`);
+      slackFlowRef.current = data.flowId ?? "";
       await openExternalUrl(data.authorizationUrl);
-      setNote("Opened Google sign-in in your browser. Finish there, then refresh this connection.");
+      setNote(
+        isGoogleCloud
+          ? "Opened Google sign-in in your browser. Finish there — keep the Cloud Platform box ticked — and this window will update on its own."
+          : `Opened ${provider.label} sign-in in your browser. Finish there and this window will update on its own.`,
+      );
+      pollDeadlineRef.current = Date.now() + 3 * 60_000;
+      setPolling(true);
     } catch (error) {
-      setNote(error instanceof Error ? error.message : "Could not start Google sign-in.");
+      setNote(error instanceof Error ? error.message : `Could not start ${provider.label} sign-in.`);
     } finally {
       setBusy("");
     }
   }
 
-  const googleNeedsClient = usesOAuthClient && !provider.oauthReady;
+  // Only `google` (web-app model) pastes a client id + secret. `google-cloud`
+  // and `slack` bake in a client, so they never show the client-paste form.
+  const googleNeedsClient = isGoogle && !provider.oauthReady;
   const googleRedirectUri = typeof window === "undefined"
     ? ""
     : new URL(`/api/integrations/${isGoogleCloud ? "google-cloud" : "google"}/oauth/callback`, window.location.origin.replace("//localhost", "//127.0.0.1")).toString();
@@ -301,15 +407,36 @@ function ConnectModal({
             </div>
           ) : null}
 
+          {isGoogleCloud && !googleNeedsClient ? (
+            <div className="fm-note" style={{ alignItems: "flex-start" }}>
+              <BIcon name="alert" size={15} />
+              {/* Explicit {" "} around <strong> — JSX collapses the newline after
+                  a tag to nothing, which jams "ticked" into "for" when Prettier
+                  reflows the line. */}
+              <span style={{ lineHeight: 1.6 }}>
+                On Google&rsquo;s consent screen,{" "}
+                <strong>keep the box ticked</strong>{" "}
+                for &ldquo;See, edit, configure, and delete your Google Cloud data.&rdquo; HivemindOS needs it to
+                set your budgets and API caps &mdash; without it the connection can&rsquo;t manage Google Cloud.
+              </span>
+            </div>
+          ) : null}
+
           {oauthUrl && !googleNeedsClient ? (
             <BBtn
               variant="primary"
-              onClick={() => usesOAuthClient ? void startGoogleOAuth() : window.location.assign(oauthUrl)}
-              disabled={Boolean(busy)}
+              onClick={() => usesOAuthClient ? void startOAuthConnect() : window.location.assign(oauthUrl)}
+              disabled={Boolean(busy) || polling}
               style={{ justifySelf: "start", padding: "11px 18px", fontSize: 13.5 }}
             >
-              {busy === "oauth" ? <span className="ni-spin" /> : <BIcon name="key" size={15} />}
-              {busy === "oauth" && usesOAuthClient ? "Opening Google..." : isGoogle ? "Sign in with Google" : `Connect with ${provider.label}`}
+              {busy === "oauth" || polling ? <span className="ni-spin" /> : <BIcon name="key" size={15} />}
+              {polling
+                ? `Waiting for ${provider.label} sign-in…`
+                : busy === "oauth" && usesOAuthClient
+                  ? `Opening ${provider.label}…`
+                  : isGoogle
+                    ? "Sign in with Google"
+                    : `Connect with ${provider.label}`}
             </BBtn>
           ) : null}
 
@@ -363,7 +490,7 @@ function ConnectModal({
         <div className="fm-mfoot">
           {provider.connected ? (
             <BBtn onClick={() => void disconnect()} disabled={Boolean(busy)}>
-              <BIcon name="trash" size={14} /> {busy === "disconnect" ? "Removing..." : "Disconnect"}
+              {busy === "disconnect" ? <span className="ni-spin" /> : <BIcon name="trash" size={14} />} {busy === "disconnect" ? "Removing…" : "Disconnect"}
             </BBtn>
           ) : (
             <BBtn onClick={onClose} disabled={Boolean(busy)}>Cancel</BBtn>

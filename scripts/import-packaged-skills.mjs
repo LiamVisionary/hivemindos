@@ -85,6 +85,25 @@ const SOURCES = {
     licenseFile: "LICENSE",
   },
 
+  emilkowalski: {
+    category: "design",
+    sourceLabel: "emilkowalski",
+    repo: "emilkowalski/skills",
+    repoUrl: "https://github.com/emilkowalski/skills",
+    license: "MIT",
+    // Emil Kowalski's design-engineering skills live at `skills/<slug>/SKILL.md`.
+    // `review-animations` ships a companion `STANDARDS.md`, so copy the whole skill
+    // directory (like mengto) rather than only the SKILL.md.
+    skillsRoot: "skills",
+    layout: "dir",
+    validated: true,
+    copySkillDirectory: true,
+    licenseFile: "LICENSE",
+    // `review-animations` sets `disable-model-invocation: true`; keep upstream
+    // frontmatter directives verbatim instead of flattening to name/description/license.
+    preserveFrontmatter: true,
+  },
+
   // --- Configured but NOT yet validated by a clone. Run with --dry-run first to confirm
   //     skillsRoot/layout before trusting the output. ---
   gtm: {
@@ -280,11 +299,25 @@ function normalizeSkill(unit, source) {
   description = description.replace(/"/g, "'").trim() || `Optional packaged skill: ${name}.`;
   const synthesized = !has || !fields.name || !fields.description;
   const content = has ? body : unit.markdown.replace(/^\s*\n/, "");
+  // Opt-in: carry through upstream frontmatter directives (e.g. `disable-model-invocation`,
+  // `allowed-tools`) verbatim instead of flattening to name/description/license only. The
+  // canonical trio is always re-emitted first; every other original frontmatter line is kept
+  // as-is (block-style YAML lists included), so nothing meaningful is silently dropped.
+  const passthrough = [];
+  if (source.preserveFrontmatter && has) {
+    const inner = unit.markdown.match(/^---\s*\n([\s\S]*?)\n---/)?.[1] ?? "";
+    for (const line of inner.split("\n")) {
+      if (/^(name|description|license)\s*:/i.test(line)) continue;
+      passthrough.push(line);
+    }
+    while (passthrough.length && !passthrough[passthrough.length - 1].trim()) passthrough.pop();
+  }
   const frontmatter = [
     "---",
     `name: ${name}`,
     `description: ${description}`,
     `license: ${source.license}`,
+    ...passthrough,
     "---",
     "",
   ].join("\n");

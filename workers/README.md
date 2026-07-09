@@ -20,8 +20,8 @@ The public app may call official HivemindOS endpoints for:
 - Hive Compute marketplace routing and worker enrollment through a hosted or
   self-hosted compatible gateway. The public app may install a local worker
   module and forward OpenAI-compatible chat bodies, but official matching,
-  payout, receipt, quota, entitlement, fraud-control, and platform-fee
-  authority stays hosted.
+  payout, receipt, quota, entitlement, fraud-control, platform-fee,
+  hardware-attestation, and output-encryption policy authority stays hosted.
 - Official platform-fee and Hyperliquid builder-code policy.
 - Production health-report collection for official builds.
 

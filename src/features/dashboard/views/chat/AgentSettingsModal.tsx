@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, ChevronUp, Minus, Plus, Search, Sparkles, Upload } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, ChevronUp, KeyRound, Minus, PlugZap, Plus, Search, Sparkles, Upload } from "lucide-react";
 import { AgentBrowserModal } from "./AgentBrowserModal";
 import { AgentSettingsCallsPanel } from "./AgentSettingsCallsPanel";
 import { AgentSettingsMinistryPanel } from "./AgentSettingsMinistryPanel";
@@ -29,6 +29,7 @@ import { ModelPillSelector } from "./ModelPillSelector";
 import { ResearchMethodSettingsPanel } from "./ResearchMethodSettingsPanel";
 import { RuntimeInstallSetup } from "./RuntimeInstallSetup";
 import { WorkerTaskPreferencesEditor } from "./WorkerTaskPreferencesEditor";
+import honeyStyles from "@/features/env/hive-env-honey.module.css";
 import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { normalizeResearchMethod } from "@/lib/config/research-methods";
@@ -38,6 +39,7 @@ import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
 import { HIVEMIND_OS_RUNTIME, buildAgentCallPreferences, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
+import { XAI_OAUTH_DEFAULT_MODEL, XAI_PROVIDER_SLUG, modelProviderSelection, providerSortIndex, providerSupportsCredentialMode, runtimeProviderForCredentialMode } from "@/features/dashboard/model-provider-view";
 import { gateBankrModelsForCredits, selectBestRuntimeModel } from "./runtime-model-registry";
 import { AsOrb, Badge, Btn, Field, GroupLabel, PanelHead, TextArea, TextInput, hasUsePodSetup, hasVeniceSetup, iconMark, isHivemindosModelsSetupReady, isUsePodSetupReady, isVeniceSetupReady, titleCaseId } from "./AgentSettingsModalPrimitives";
 
@@ -114,6 +116,7 @@ export function AgentSettingsModal(props: any) {
     runtimeIntegrationMessage,
     runtimeIntegrationStatus,
     runtimeModelDraft,
+    runtimeModelSelection,
     runtimeModelProviders = [],
     runtimeModelSelectionsByRuntime,
     runtimeModelSelectionFresh,
@@ -159,7 +162,10 @@ export function AgentSettingsModal(props: any) {
   const activePanel = activePanels.includes(agentSettingsPanel) ? agentSettingsPanel : activePanels[0];
   const isAutopilotSettings = runtimeSettings.kind === "autopilot";
   const runtimeLabel = RUNTIME_LABELS[activeRuntime] ?? activeRuntime;
-  const selectedProviderSlug = agentSettingsProvider || selectedRuntimeProvider?.slug || "";
+  const rawSelectedProviderSlug = agentSettingsProvider || runtimeModelSelection?.provider || selectedRuntimeProvider?.slug || "";
+  const selectedProviderView = modelProviderSelection(rawSelectedProviderSlug);
+  const selectedProviderSlug = selectedProviderView.displaySlug;
+  const selectedRuntimeProviderSlug = selectedProviderView.runtimeSlug || selectedProviderSlug;
   const openRouterSelected = selectedProviderSlug === "openrouter";
   const usePodSelected = selectedProviderSlug === "usepod";
   const hivemindosModelsSelected = selectedProviderSlug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER;
@@ -179,6 +185,8 @@ export function AgentSettingsModal(props: any) {
   const [envHermesKeys, setEnvHermesKeys] = useState(() => new Set());
   const [envLoaded, setEnvLoaded] = useState(false);
   const [envRefreshKey, setEnvRefreshKey] = useState(0);
+  const [xaiOAuthConnected, setXaiOAuthConnected] = useState(false);
+  const [xaiOAuthStatusLoaded, setXaiOAuthStatusLoaded] = useState(false);
   const [fetchedProviderModels, setFetchedProviderModels] = useState(() => ({}));
   const [lmStudioEmptyDiscoveryGraceActive, setLmStudioEmptyDiscoveryGraceActive] = useState(false);
   const [lmStudioPendingLoadModelKeys, setLmStudioPendingLoadModelKeys] = useState<string[]>([]);
@@ -290,7 +298,10 @@ export function AgentSettingsModal(props: any) {
     return Boolean(entry?.keyEnv) && !entry?.guidedSetup && !providerConfigured(slug);
   }
 
-  const selectedNeedsKey = providerNeedsKey(selectedProviderSlug);
+  const selectedUsesXaiOAuth = selectedProviderSlug === XAI_PROVIDER_SLUG && selectedProviderView.credentialMode === "oauth";
+  const selectedNeedsKey = !selectedUsesXaiOAuth && providerNeedsKey(selectedProviderSlug);
+  const selectedSupportsXaiOAuth = providerSupportsCredentialMode(selectedProviderSlug, "oauth");
+  const selectedNeedsXaiOAuthSetup = selectedSupportsXaiOAuth && selectedUsesXaiOAuth && (!xaiOAuthStatusLoaded || !xaiOAuthConnected);
   const existingUsePodAgents = (displayAgents ?? []).filter((agent) => agent.provider === "usepod" && hasUsePodSetup(agent.usePod));
   const unfinishedUsePodAgent = agentCreateMachine && !usePodSetupStarted ? existingUsePodAgents.find((agent) => !isUsePodSetupReady(agent.usePod)) ?? null : null;
   const completedUsePodWallets = unfinishedUsePodAgent ? [] : existingUsePodAgents.filter((agent) => isUsePodSetupReady(agent.usePod));
@@ -310,6 +321,65 @@ export function AgentSettingsModal(props: any) {
     hivemindosModels: agentCreateDraft.hivemindosModels,
   } : null;
   const hivemindosModelsSetupTarget = hivemindosModelsDraftSetupTarget ?? agentSettingsIntegrationTarget;
+  function xaiOAuthHermesHomes() {
+    const targetAgent = agentSettingsIntegrationTarget ?? roleModalAgent ?? undefined;
+    return targetAgent?.runtime === "hermes" && targetAgent.localDataDir
+      ? [targetAgent.localDataDir]
+      : [];
+  }
+  function xaiOAuthStatusEndpoint() {
+    const params = new URLSearchParams({ sync: "1" });
+    for (const home of xaiOAuthHermesHomes()) params.append("hermesHome", home);
+    return `/api/xai-oauth?${params.toString()}`;
+  }
+  async function startXaiOAuthLogin() {
+    const response = await fetch("/api/xai-oauth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start", hermesHomes: xaiOAuthHermesHomes() }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null);
+    if (!response?.ok || data?.ok === false) {
+      return { ok: false, error: data?.error || "Could not start xAI OAuth sign-in." };
+    }
+    return {
+      ok: true,
+      authorizeUrl: data?.authorizeUrl || data?.authorizationUrl,
+      statusEndpoint: data?.statusEndpoint || "/api/xai-oauth",
+      message: data?.message || "xAI sign-in opened in your browser. Finish the OAuth page to connect Grok.",
+    };
+  }
+  async function submitXaiOAuthCode(code: string) {
+    const response = await fetch("/api/xai-oauth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "submit-code", code, hermesHomes: xaiOAuthHermesHomes() }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null);
+    if (!response?.ok || data?.ok === false) {
+      return { ok: false, error: data?.error || "Could not finish xAI OAuth with that code." };
+    }
+    return {
+      ok: true,
+      warnings: Array.isArray(data?.warnings) ? data.warnings : [],
+      statusEndpoint: data?.statusEndpoint || "/api/xai-oauth",
+      message: data?.message || "xAI OAuth connected. Refreshing models.",
+    };
+  }
+  function preferredXaiModelId() {
+    return /^grok[-\w.]+$/i.test(selectedRuntimeModelId || "")
+      ? selectedRuntimeModelId
+      : XAI_OAUTH_DEFAULT_MODEL;
+  }
+  function selectXaiCredentialMode(mode: "api-key" | "oauth") {
+    updateAgentRuntimeModel(runtimeProviderForCredentialMode(XAI_PROVIDER_SLUG, mode), preferredXaiModelId());
+  }
+  async function applyXaiOAuthProviderSelection() {
+    setXaiOAuthConnected(true);
+    setXaiOAuthStatusLoaded(true);
+    selectXaiCredentialMode("oauth");
+  }
+  const xaiOAuthStatusUrl = selectedSupportsXaiOAuth ? xaiOAuthStatusEndpoint() : "";
   const creditProviderBalances = {
     bankr: bankrCreditStatus?.balanceLabel ?? "",
     usepod: (() => {
@@ -416,6 +486,25 @@ export function AgentSettingsModal(props: any) {
     });
     return () => { cancelled = true; };
   }, [modalOpen, envLoaded, runtimeModelProviders, envPresentKeys, fetchedProviderModels]);
+
+  useEffect(() => {
+    if (!modalOpen || !selectedSupportsXaiOAuth || !xaiOAuthStatusUrl) return;
+    let cancelled = false;
+    const resetTimer = window.setTimeout(() => {
+      if (!cancelled) setXaiOAuthStatusLoaded(false);
+    }, 0);
+    void (async () => {
+      const response = await fetch(xaiOAuthStatusUrl, { cache: "no-store" }).catch(() => null);
+      const data = response && response.ok ? await response.json().catch(() => null) : null;
+      if (cancelled) return;
+      setXaiOAuthConnected(Boolean(data?.connected || data?.login?.phase === "connected"));
+      setXaiOAuthStatusLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(resetTimer);
+    };
+  }, [modalOpen, selectedSupportsXaiOAuth, xaiOAuthStatusUrl, envRefreshKey]);
 
   useEffect(() => {
     if (!modalOpen || !lmStudioSelected || lmStudioHasDiscoveredModels) {
@@ -925,10 +1014,10 @@ export function AgentSettingsModal(props: any) {
   function renderProviderModelPanel() {
     if (!runtimeModelPanelAvailable && !usePodSelected && !veniceSelected && !hivemindosModelsSelected) return null;
     const PROVIDER_TILE_LIMIT = 8;
-    const providerReady = (provider) => providerConfigured(provider.slug) || (provider.source !== "catalog" && provider.source !== "HivemindOS provider gateway" && (provider.totalModels || 0) > 0);
     const sortedProviders = [...runtimeModelProviders].sort((a, b) => {
-      const readyDelta = (providerReady(a) ? 0 : 1) - (providerReady(b) ? 0 : 1);
-      return readyDelta || String(a.name).localeCompare(String(b.name));
+      const selectedDelta = (a.slug === selectedProviderSlug ? 0 : 1) - (b.slug === selectedProviderSlug ? 0 : 1);
+      const orderDelta = providerSortIndex(a.slug) - providerSortIndex(b.slug);
+      return selectedDelta || orderDelta || String(a.slug).localeCompare(String(b.slug));
     });
     const visibleProviders = showAllProviders ? sortedProviders : sortedProviders.slice(0, PROVIDER_TILE_LIMIT);
     const hiddenProviderCount = Math.max(0, sortedProviders.length - PROVIDER_TILE_LIMIT);
@@ -1009,6 +1098,34 @@ export function AgentSettingsModal(props: any) {
           </div>
         ) : null}
 
+        {selectedSupportsXaiOAuth && !selectedNeedsKey && !selectedNeedsXaiOAuthSetup ? (
+          <section className={`${honeyStyles.scope} ${honeyStyles.card}`}>
+            <div className={honeyStyles.header}>
+              <div>
+                <p className="eyebrow">xAI connection</p>
+                <h3 className={honeyStyles.heading}>Choose how Grok connects</h3>
+                <p className={honeyStyles.subtext}>API key and OAuth stay available. Model picks use the selected connection.</p>
+              </div>
+              <span className={honeyStyles.pill}>{selectedUsesXaiOAuth ? "OAuth" : "API key"}</span>
+            </div>
+            <div className={honeyStyles.authMode} role="group" aria-label="xAI credential method">
+              <button type="button" className={honeyStyles.authModeButton} data-active={!selectedUsesXaiOAuth ? "" : undefined} aria-pressed={!selectedUsesXaiOAuth} onClick={() => selectXaiCredentialMode("api-key")}>
+                <KeyRound aria-hidden="true" />
+                API key
+              </button>
+              <button type="button" className={honeyStyles.authModeButton} data-active={selectedUsesXaiOAuth ? "" : undefined} aria-pressed={selectedUsesXaiOAuth} onClick={() => selectXaiCredentialMode("oauth")}>
+                <PlugZap aria-hidden="true" />
+                OAuth
+              </button>
+            </div>
+            <p className={honeyStyles.hint}>
+              {selectedUsesXaiOAuth
+                ? xaiOAuthStatusLoaded ? xaiOAuthConnected ? "Signed in with xAI OAuth." : "OAuth is selected. Connect your xAI account to use OAuth models." : "Checking xAI OAuth status."
+                : envLoaded && envPresentKeys.has("XAI_API_KEY") ? "Using XAI_API_KEY from the shared hive env." : "API key is selected. Add XAI_API_KEY to use API-key models."}
+            </p>
+          </section>
+        ) : null}
+
         {veniceSelected ? (
           <div className="as-block">
             <GroupLabel>Venice setup</GroupLabel>
@@ -1058,12 +1175,20 @@ export function AgentSettingsModal(props: any) {
           />
         ) : bankrSetupVisible && bankrLowCredits && !selectedRuntimeModels.length ? (
           <BankrLowCreditSetup diagnostic={bankrSetupDetail} initialCredits={bankrInitialCredits} onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)} />
-        ) : selectedNeedsKey ? (
+        ) : selectedNeedsKey || selectedNeedsXaiOAuthSetup ? (
           <MissingSharedEnvKeySetup
             apiKeyName={selectedCatalogEntry.keyEnv}
             providerLabel={selectedCatalogEntry?.name}
             hermesProvider={selectedCatalogEntry?.slug}
             hermesKeyPresent={envHermesKeys.has(selectedCatalogEntry?.keyEnv)}
+            oauthLabel={selectedSupportsXaiOAuth ? "xAI OAuth" : undefined}
+            oauthDetail={selectedSupportsXaiOAuth ? "Use your xAI/Grok account with browser OAuth instead of storing XAI_API_KEY." : undefined}
+            oauthStatusEndpoint={selectedSupportsXaiOAuth ? xaiOAuthStatusEndpoint() : undefined}
+            initialAuthMode={selectedNeedsXaiOAuthSetup ? "oauth" : "api-key"}
+            onAuthModeChange={selectedSupportsXaiOAuth ? selectXaiCredentialMode : undefined}
+            onOAuthConnect={selectedSupportsXaiOAuth ? startXaiOAuthLogin : undefined}
+            onOAuthCodeSubmit={selectedSupportsXaiOAuth ? submitXaiOAuthCode : undefined}
+            onOAuthConnected={selectedSupportsXaiOAuth ? applyXaiOAuthProviderSelection : undefined}
             onSaved={async () => {
               await refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined);
               setEnvRefreshKey((current) => current + 1);
@@ -1083,7 +1208,7 @@ export function AgentSettingsModal(props: any) {
                   addModelDisabled={Boolean(runtimeIntegrationBusy)}
                   canAddModel={runtimeCanAddCustomModel}
                   emptyLabel={runtimeModelProviders.length ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
-                  onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && selectedProviderSlug === "openrouter" ? "openrouter" : selectedProviderSlug, modelId)}
+                  onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && selectedProviderSlug === "openrouter" ? "openrouter" : selectedRuntimeProviderSlug, modelId)}
                   onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
                 />
               </>

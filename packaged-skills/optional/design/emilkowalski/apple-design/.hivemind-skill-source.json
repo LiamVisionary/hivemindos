@@ -1,0 +1,20 @@
+{
+  "upstreamName": "apple-design",
+  "upstreamSlug": "apple-design",
+  "hiveSlug": "apple-design",
+  "sourceLabel": "emilkowalski",
+  "sourceUrl": "https://github.com/emilkowalski/skills/blob/f76beceb7d3fc8c43309cefad5a095a206103a4e/skills/apple-design/SKILL.md",
+  "repository": "https://github.com/emilkowalski/skills",
+  "installCommand": "npx skills add https://github.com/emilkowalski/skills --skill apple-design",
+  "importedAt": "2026-07-09T15:40:48.642Z",
+  "refreshedAt": "2026-07-09T15:40:48.642Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/emilkowalski/apple-design",
+  "packageGroup": "design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "f76beceb7d3fc8c43309cefad5a095a206103a4e",
+  "normalized": "verbatim-frontmatter",
+  "description": "Apple's approach to interface design and fluid, physical motion, translated for the web. Use when building or reviewing gesture-driven UI, spring animations, drag/swipe/sheet interactions, momentum and interruptible transitions, translucent materials and depth, typography (optical sizing, tracking, leading), reduced-motion, or the design foundations (feedback, spatial consistency, restraint) behind Apple-style interfaces."
+}

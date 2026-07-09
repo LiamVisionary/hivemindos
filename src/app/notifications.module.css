@@ -131,13 +131,13 @@
 
 .headerBtnPrimary {
   border-color: transparent;
-  background: var(--nf-honey);
+  background: var(--nf-honey-fill, var(--nf-honey));
   color: var(--nf-honey-ink, #1a1305);
 }
 
 .headerBtnPrimary:hover:not(:disabled) {
   filter: brightness(1.06);
-  background: var(--nf-honey);
+  background: var(--nf-honey-fill, var(--nf-honey));
   color: var(--nf-honey-ink, #1a1305);
 }
 
@@ -563,7 +563,7 @@
 }
 
 .escalateTrack.on {
-  background: var(--nf-honey);
+  background: var(--nf-honey-fill, var(--nf-honey));
 }
 
 .escalateKnob {
@@ -737,7 +737,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--nf-honey);
+  background: var(--nf-honey-fill, var(--nf-honey));
   flex: 0 0 auto;
 }
 
@@ -1025,7 +1025,7 @@
   --nf-fg-2: #5e574b;
   --nf-fg-3: #867d6e;
   --nf-fg-4: #a59b89;
-  --nf-honey: #b07f1c;
+  --nf-honey: #936811; --nf-honey-fill: #e6bb5c;
   --nf-honey-2: #936811;
   --nf-honey-soft: rgba(176, 127, 28, 0.12);
   --nf-honey-line: rgba(176, 127, 28, 0.34);

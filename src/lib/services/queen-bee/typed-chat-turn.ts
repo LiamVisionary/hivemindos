@@ -11,7 +11,10 @@
  */
 import { NextResponse } from "next/server";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
+import {
+  openAICompatibleInferenceCacheHints,
+  openAICompatibleMessageCacheControlSupported,
+} from "@/lib/services/chat/inference-cache-hints";
 import {
   hivemindosWalletPaidModelAgentSlug,
   isHivemindosWalletPaidModelProfile,
@@ -62,6 +65,12 @@ type QueenTypedChatBrain = {
   timeoutMs?: number;
 };
 
+type QueenTypedSystemPrompt = {
+  stable: string;
+  volatile: string;
+  text: string;
+};
+
 const RUNTIME_COMMAND_GATE_FALLBACK =
   "The selected Queen runtime hit its command-safety timeout before it produced a chat answer. I did not run any command.";
 
@@ -81,7 +90,12 @@ function queenBrainCacheHints(brain: QueenTypedChatBrain) {
 }
 
 function isRuntimeHeldQueenProvider(provider: string) {
-  return provider === "openai-oauth" || provider === "openai-codex";
+  return (
+    provider === "openai-oauth" ||
+    provider === "openai-codex" ||
+    provider === "xai-oauth" ||
+    provider === "copilot"
+  );
 }
 
 async function readQueenBeeAgentProfile(agentId?: string): Promise<AgentProfile | null> {
@@ -204,9 +218,35 @@ function runtimeMessagesFor(system: string, incoming: unknown[]) {
   return [{ role: "system", content: system }, ...messages];
 }
 
+function queenSystemText(system: string | QueenTypedSystemPrompt) {
+  return typeof system === "string" ? system : system.text;
+}
+
+function queenSystemMessageFor(brain: QueenTypedChatBrain, system: string | QueenTypedSystemPrompt) {
+  if (
+    typeof system !== "string" &&
+    openAICompatibleMessageCacheControlSupported({ provider: brain.providerSlug, model: brain.model })
+  ) {
+    return {
+      role: "system",
+      content: [
+        system.stable.trim()
+          ? { type: "text", text: system.stable.trim(), cache_control: { type: "ephemeral" } }
+          : null,
+        system.volatile.trim()
+          ? { type: "text", text: system.volatile.trim() }
+          : null,
+      ].filter((block): block is { type: "text"; text: string; cache_control?: { type: "ephemeral" } } => (
+        Boolean(block)
+      )),
+    };
+  }
+  return { role: "system", content: queenSystemText(system) };
+}
+
 async function queenChatRuntimeRequest(
   brain: QueenTypedChatBrain,
-  system: string,
+  system: string | QueenTypedSystemPrompt,
   incoming: unknown[],
 ) {
   if (!brain.agent) throw new Error(`${brain.label} has no Queen runtime profile.`);
@@ -223,13 +263,13 @@ async function queenChatRuntimeRequest(
 
 function queenChatRuntimeRequestBody(
   brain: QueenTypedChatBrain,
-  system: string,
+  system: string | QueenTypedSystemPrompt,
   incoming: unknown[],
 ) {
   if (!brain.agent) throw new Error(`${brain.label} has no Queen runtime profile.`);
   return {
     agent: brain.agent,
-    messages: runtimeMessagesFor(system, incoming),
+    messages: runtimeMessagesFor(queenSystemText(system), incoming),
     runtimeSessionId: `queen-fab-${brain.agent.id || "runtime"}`,
     chatStorageKey: `queen-fab-${brain.agent.id || "runtime"}`,
     // Queen's typed client owns the allowed tool loop. Runtime-held OAuth
@@ -241,7 +281,7 @@ function queenChatRuntimeRequestBody(
 
 async function fetchQueenChatRuntimeResponse(
   brain: QueenTypedChatBrain,
-  system: string,
+  system: string | QueenTypedSystemPrompt,
   incoming: unknown[],
 ) {
   return fetch(brain.url, {
@@ -303,7 +343,7 @@ function normalizeQueenRuntimeChatContent(content: string): string {
  *  payload shape both chat-turn actions hand to the client, or throws. */
 async function queenChatBlockingRequest(
   brain: QueenTypedChatBrain,
-  system: string,
+  system: string | QueenTypedSystemPrompt,
   incoming: unknown[],
   options?: { noTools?: boolean; suppressWalletIntents?: boolean },
 ) {
@@ -493,7 +533,7 @@ function recordQueenChatTelemetry(payload: Record<string, unknown>) {
  *  max_tokens/temperature (see runProviderConversationTurn in voice-turn.ts). */
 function queenChatRequestBody(
   brain: QueenTypedChatBrain,
-  system: string,
+  system: string | QueenTypedSystemPrompt,
   incoming: unknown[],
   extra?: Record<string, unknown>,
   options?: { noTools?: boolean },
@@ -502,7 +542,7 @@ function queenChatRequestBody(
   return {
     model: brain.model,
     messages: [
-      { role: "system", content: system },
+      queenSystemMessageFor(brain, system),
       ...incoming,
       // Omitting the tools is not enough on its own: Scout still tries to
       // call one and its template tokens leak into the text. Say it outright.
@@ -550,8 +590,8 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
     : "";
   // Each brain gets its OWN transparency note naming the model this request is
   // about to invoke — this is what lets her answer "which LLM?" honestly.
-  const systemFor = (brain: QueenTypedChatBrain) =>
-    [
+  const systemFor = (brain: QueenTypedChatBrain): QueenTypedSystemPrompt => {
+    const stable = [
       queenInstructionsForPersonality(defaults?.soulPrompt),
       queenModelTransparencyNote(
         brain.model,
@@ -559,10 +599,16 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
         { relayTool: true },
       ),
       preamble,
-      screenContextPrompt,
     ]
       .filter(Boolean)
-      .join(" ");
+      .join("\n\n");
+    const volatile = screenContextPrompt;
+    return {
+      stable,
+      volatile,
+      text: [stable, volatile].filter(Boolean).join("\n\n"),
+    };
+  };
   return { brains, incoming, systemFor, suppressWalletIntents };
 }
 

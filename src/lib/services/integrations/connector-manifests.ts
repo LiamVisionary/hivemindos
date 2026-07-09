@@ -5,10 +5,13 @@ import {
   GOOGLE_CLIENT_SECRET_ENV,
   GOOGLE_CLOUD_CLIENT_ID_ENV,
   GOOGLE_CLOUD_CLIENT_SECRET_ENV,
+  SLACK_OAUTH_CLIENT_ID_ENV,
 } from "@/lib/services/integrations/provider-connection-env";
 import { CLAWBANK_TOKEN_ENV_NAMES } from "@/lib/services/clawbank";
 
-export type ConnectorAuthMode = "api-token" | "oauth-refresh-token";
+// "oauth-user-token": a PKCE public-client sign-in that yields a long-lived user
+// token (no refresh token, no pasted client) — e.g. Slack.
+export type ConnectorAuthMode = "api-token" | "oauth-refresh-token" | "oauth-user-token";
 
 export type ConnectorAuthManifest = {
   mode: ConnectorAuthMode;
@@ -93,12 +96,15 @@ export const CONNECTOR_MANIFESTS: ConnectorManifest[] = [
     key: "slack",
     label: "Slack",
     detail: "Channels, mentions, and approval messages.",
-    tags: ["messaging", "approvals", "channels"],
+    tags: ["messaging", "approvals", "channels", "oauth"],
     auth: {
-      mode: "api-token",
+      // PKCE public-client sign-in -> a Slack user token (xoxp-), stored in the
+      // same SLACK_BOT_TOKEN key the send/verify paths already read.
+      mode: "oauth-user-token",
       tokenEnvKey: "SLACK_BOT_TOKEN",
-      tokenHint: "Slack app -> OAuth & Permissions -> Bot User OAuth Token.",
-      tokenPlaceholder: "xoxb-...",
+      tokenHint: "One-time setup so you can sign in with your Slack account.",
+      tokenPlaceholder: "",
+      oauthClientEnvKeys: [SLACK_OAUTH_CLIENT_ID_ENV],
     },
     operations: [
       READ_CONNECTION_OPERATION,

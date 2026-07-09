@@ -10,6 +10,7 @@ import { PROVIDER_CATALOG } from "@/lib/config/provider-catalog";
 import { HIVEMIND_OS_RUNTIME, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass, type CustomWorkerClassProfile } from "@/lib/types/agent-runtime";
 import type { BrainSkillSummary, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 import type { AgentCreateDraft, AgentWorkerClassView, RuntimeModelDraft } from "@/features/dashboard/agent-settings-types";
+import { collapseDashboardProviderAliases, configuredProviderDisplayName, dashboardProviderSlug, stableProviderDisplayName } from "@/features/dashboard/model-provider-view";
 import { selectBestRuntimeModel } from "@/features/dashboard/views/chat/runtime-model-registry";
 type HetznerServerTypeOption = {
   value: string;
@@ -39,23 +40,6 @@ function localOpenAiProviderName(slug: string) {
   if (slug === "vllm") return "vLLM";
   if (slug === "llamacpp") return "llama.cpp";
   return "OpenAI-compatible";
-}
-
-// Human label for a provider slug the runtime hasn't enumerated (so we can
-// synthesize a tile for the agent's own configured provider). Prefers the known
-// gateway/catalog name, else title-cases the slug ("openai-codex" -> "OpenAI Codex").
-function configuredProviderDisplayName(slug: string) {
-  const gateway = MODEL_PROVIDER_GATEWAYS[slug];
-  if (gateway) return gateway.name;
-  const catalog = PROVIDER_CATALOG.find((entry) => entry.slug === slug);
-  if (catalog) return catalog.name;
-  return slug
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .map((part) =>
-      part === "openai" ? "OpenAI" : part === "ai" ? "AI" : part === "llm" ? "LLM" : part.charAt(0).toUpperCase() + part.slice(1),
-    )
-    .join(" ") || slug;
 }
 
 type UseAgentSettingsControllerProps = {
@@ -159,7 +143,10 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
     const baseProviders = runtimeModelSelection?.providers ?? [];
     const modelSettings = runtimeSettingsFeature(agentSettingsRuntime);
     if (modelSettings.modelSource !== "runtime" || agentSettingsRuntime === "aeon") return baseProviders;
-    const providersBySlug = new Map(baseProviders.map((provider) => [provider.slug, provider]));
+    const providersBySlug = new Map(baseProviders.map((provider) => [
+      provider.slug,
+      { ...provider, name: stableProviderDisplayName(provider.slug, provider.name) },
+    ]));
     if (agentSettingsRuntime === HIVEMIND_OS_RUNTIME) {
       const localProviderSlug = agentSettingsProvider || modelSettings.defaultProvider || "openai-compatible";
       if (!providersBySlug.has(localProviderSlug)) {
@@ -237,11 +224,12 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
         });
       }
     }
+    collapseDashboardProviderAliases(providersBySlug, agentSettingsProvider);
     return [...providersBySlug.values()];
   }, [agentSettingsModel, agentSettingsProvider, agentSettingsRuntime, runtimeModelSelection]);
   const selectedRuntimeProvider = agentSettingsProvider
-    ? runtimeModelProviders.find((provider) => provider.slug === agentSettingsProvider)
-    : runtimeModelProviders.find((provider) => provider.slug === runtimeModelSelection?.provider)
+    ? runtimeModelProviders.find((provider) => provider.slug === dashboardProviderSlug(agentSettingsProvider))
+    : runtimeModelProviders.find((provider) => provider.slug === dashboardProviderSlug(runtimeModelSelection?.provider))
       ?? runtimeModelProviders[0];
   const selectedRuntimeModels = selectedRuntimeProvider?.models ?? [];
   const selectedRuntimeModelId = agentSettingsModel || selectBestRuntimeModel(selectedRuntimeProvider, {

@@ -9,8 +9,8 @@ import { MODEL_PROVIDER_GATEWAYS } from "./model-provider-gateways";
  *
  * Slugs align with Hermes provider slugs so `set-model` / routing stay correct.
  * Only API-key providers are listed; OAuth / subscription providers
- * (xai-oauth, copilot, openai-codex) keep onboarding through the "Add provider"
- * guided flow rather than a hive-env key.
+ * (xai-oauth, copilot, openai-codex) use dedicated OAuth/runtime setup paths
+ * rather than pretending they have a hive-env API key.
  */
 export type ProviderCatalogEntry = {
   slug: string;

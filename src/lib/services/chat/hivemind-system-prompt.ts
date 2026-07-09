@@ -14,8 +14,16 @@ export type HivemindPromptDelivery = "full-system" | "runtime-overlay" | "user-c
 export type HivemindPromptEnvelope = {
   delivery: HivemindPromptDelivery;
   basePrompt: string;
+  stableContext: string;
+  volatileContext: string;
   dynamicContext: string;
   systemContext: string;
+};
+
+export type HivemindSystemTextPart = {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
 };
 
 export type HivemindPromptInput = {
@@ -235,35 +243,68 @@ export function buildWalletToolContext(wallet?: AgentWalletConfig): string {
   return lines.join("\n");
 }
 
-export function buildHivemindDynamicContext(input: HivemindPromptInput): string {
+function sessionMetadataContext(input: HivemindPromptInput): string {
+  return [
+    input.runtimeSessionId ? `Session metadata:\n- Runtime session ID: ${input.runtimeSessionId}` : "",
+    input.chatStorageKey ? `- Chat storage key: ${input.chatStorageKey}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+export function buildHivemindStableDynamicContext(input: HivemindPromptInput): string {
   return [
     buildAgentProfileContext(input.profile),
-    input.extraDynamicContext,
     buildAgentModeContext(input.agentMode),
     buildWorkingDirectoryContext(input.workingDirectory),
+    buildWalletToolContext(input.wallet),
+    input.platform ? `Platform context:\n- Active surface: ${input.platform}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+export function buildHivemindVolatileContext(input: HivemindPromptInput): string {
+  return [
+    input.extraDynamicContext,
     input.vaultContext,
     input.sharedBrainMemoryContext,
     input.taskRetrievalContext,
-    buildWalletToolContext(input.wallet),
-    input.runtimeSessionId ? `Session metadata:\n- Runtime session ID: ${input.runtimeSessionId}` : "",
-    input.chatStorageKey ? `- Chat storage key: ${input.chatStorageKey}` : "",
-    input.platform ? `Platform context:\n- Active surface: ${input.platform}` : "",
+    sessionMetadataContext(input),
+  ].filter(Boolean).join("\n\n");
+}
+
+export function buildHivemindDynamicContext(input: HivemindPromptInput): string {
+  return [
+    buildHivemindStableDynamicContext(input),
+    buildHivemindVolatileContext(input),
   ].filter(Boolean).join("\n\n");
 }
 
 export function buildHivemindPromptEnvelope(input: HivemindPromptInput): HivemindPromptEnvelope {
   const delivery = hivemindPromptDeliveryFor(input.profile);
   const basePrompt = buildHivemindBasePrompt(delivery);
-  const dynamicContext = buildHivemindDynamicContext(input);
-  const systemContext = [basePrompt, dynamicContext].filter(Boolean).join("\n\n");
-  return { delivery, basePrompt, dynamicContext, systemContext };
+  const stableDynamicContext = buildHivemindStableDynamicContext(input);
+  const volatileContext = buildHivemindVolatileContext(input);
+  const stableContext = [basePrompt, stableDynamicContext].filter(Boolean).join("\n\n");
+  const dynamicContext = [stableDynamicContext, volatileContext].filter(Boolean).join("\n\n");
+  const systemContext = [stableContext, volatileContext].filter(Boolean).join("\n\n");
+  return { delivery, basePrompt, stableContext, volatileContext, dynamicContext, systemContext };
 }
 
 export function prependHivemindSystemMessage<T extends { role: string; content: unknown }>(
   messages: T[],
   envelope: HivemindPromptEnvelope,
-): Array<T | { role: "system"; content: string }> {
+  options: { cacheControl?: boolean } = {},
+): Array<T | { role: "system"; content: string | HivemindSystemTextPart[] }> {
   if (!envelope.systemContext.trim()) return messages;
+  if (options.cacheControl) {
+    const content: HivemindSystemTextPart[] = [
+      envelope.stableContext.trim()
+        ? { type: "text", text: envelope.stableContext.trim(), cache_control: { type: "ephemeral" } }
+        : null,
+      envelope.volatileContext.trim()
+        ? { type: "text", text: envelope.volatileContext.trim() }
+        : null,
+    ].filter((part): part is HivemindSystemTextPart => Boolean(part));
+    if (content.length) return [{ role: "system", content }, ...messages];
+  }
   return [{ role: "system", content: envelope.systemContext }, ...messages];
 }
 

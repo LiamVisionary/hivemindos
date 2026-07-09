@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import type { RuntimeProcessEvent } from "./process-events";
 
 export type RuntimeRouteTelemetry = {
   request: NextRequest;
   routeStartedAt: number;
   runtimeSessionId?: string;
   chatStorageKey?: string;
+  preflightProcessEvents?: RuntimeProcessEvent[];
 };
 
 export function telemetryPayloadForProfile(profile?: AgentProfile) {

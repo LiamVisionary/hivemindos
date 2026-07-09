@@ -131,6 +131,34 @@ check("local dashboard calls carry the device token so auth-enabled dashboards a
   assert.match(watchdog, /api\/fleet\/apps\?fast=1`, \{ headers: dashboardHeaders\(\) \}/);
 });
 
+check("telegram alerts identify the watchdog source machine", () => {
+  assert.match(watchdog, /const WATCHDOG_SOURCE =/);
+  assert.match(watchdog, /fleet-watchdog \(\$\{WATCHDOG_SOURCE\}\):/);
+  assert.match(watchdog, /fleet-health-watchdog up — source=\$\{WATCHDOG_SOURCE\}/);
+});
+
+check("alert throttling is persisted across watchdog restarts", () => {
+  assert.match(watchdog, /fleet-health-watchdog-alerts\.json/);
+  assert.match(watchdog, /readAlertState/);
+  assert.match(watchdog, /writeAlertState/);
+  assert.match(watchdog, /const sourceKey = `\$\{WATCHDOG_SOURCE\}:\$\{key\}`/);
+  assert.match(watchdog, /lastSentAt \+ ALERT_REPEAT_MS > now/);
+});
+
+check("company-driver alerts are suppressed when disk state has nothing local to drive", () => {
+  assert.match(watchdog, /readCompanyDriverNeedFromDisk/);
+  assert.match(watchdog, /Operations", "Companies", "companies\.json/);
+  assert.match(watchdog, /need\.available && need\.localActiveCount === 0/);
+  assert.match(watchdog, /no launched companies for \$\{WATCHDOG_SOURCE\}/);
+});
+
+check("company-driver need honors home machine identity and unclaimed companies", () => {
+  assert.match(watchdog, /function sameMachineIdentity/);
+  assert.match(watchdog, /function companyNeedsThisDriver/);
+  assert.match(watchdog, /if \(!home\) return true/);
+  assert.match(watchdog, /sameMachineIdentity\(home, WATCHDOG_SOURCE\)/);
+});
+
 check("package script exposes the regression test", () => {
   const pkg = readFileSync(new URL("../package.json", import.meta.url), "utf8");
   assert.match(pkg, /"test:fleet-watchdog-escalation":\s*"node scripts\/test-fleet-watchdog-escalation\.mjs"/);

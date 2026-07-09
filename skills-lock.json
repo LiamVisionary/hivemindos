@@ -28,6 +28,24 @@
       "packagedPath": "packaged-skills/optional/design/mengto/animation-systems/SKILL.md",
       "computedHash": "279133d594e5d4aeb9d2965ab54fa083ec63ebdad8472065ef1f9ce62ca9db41"
     },
+    "animation-vocabulary": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "ref": "f76beceb7d3fc8c43309cefad5a095a206103a4e",
+      "license": "MIT",
+      "skillPath": "skills/animation-vocabulary/SKILL.md",
+      "packagedPath": "packaged-skills/optional/design/emilkowalski/animation-vocabulary/SKILL.md",
+      "computedHash": "d7d14a23a967376cfed380e099f20a0a84de039af5f47e6767ee4b125b723806"
+    },
+    "apple-design": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "ref": "f76beceb7d3fc8c43309cefad5a095a206103a4e",
+      "license": "MIT",
+      "skillPath": "skills/apple-design/SKILL.md",
+      "packagedPath": "packaged-skills/optional/design/emilkowalski/apple-design/SKILL.md",
+      "computedHash": "b277ebb956578ef3bedb3deb900452e98b232c5dec93d9ae5d8b687c0a46b970"
+    },
     "atmosphere-background": {
       "source": "MengTo/Skills",
       "sourceType": "github",
@@ -279,6 +297,15 @@
       "skillPath": "agent-skills/web-design/editorial-tech/SKILL.md",
       "packagedPath": "packaged-skills/optional/design/mengto/editorial-tech/SKILL.md",
       "computedHash": "4c4db52549aa648b1802ad7ec42ee6ff24e2a91fd71d5121a6aa7d43de30aea8"
+    },
+    "emil-design-eng": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "ref": "f76beceb7d3fc8c43309cefad5a095a206103a4e",
+      "license": "MIT",
+      "skillPath": "skills/emil-design-eng/SKILL.md",
+      "packagedPath": "packaged-skills/optional/design/emilkowalski/emil-design-eng/SKILL.md",
+      "computedHash": "84b9ef0fda73234cd71007327a77f0a51b6cadc48cbcdef9e062f06f12840ef9"
     },
     "framed-grid-layout": {
       "source": "MengTo/Skills",
@@ -609,6 +636,15 @@
       "skillPath": "agent-skills/web-design/progressive-blur/SKILL.md",
       "packagedPath": "packaged-skills/optional/design/mengto/progressive-blur/SKILL.md",
       "computedHash": "bffcdd23dfb5028944e4eafe045d7b641110a3a22a220e051841555b09c75a15"
+    },
+    "review-animations": {
+      "source": "emilkowalski/skills",
+      "sourceType": "github",
+      "ref": "f76beceb7d3fc8c43309cefad5a095a206103a4e",
+      "license": "MIT",
+      "skillPath": "skills/review-animations/SKILL.md",
+      "packagedPath": "packaged-skills/optional/design/emilkowalski/review-animations/SKILL.md",
+      "computedHash": "c134999d294cbd631b1e332f072909faa51fb926d5eed49484dbc9e7f75088f3"
     },
     "skeuomorphic-ui": {
       "source": "MengTo/Skills",

@@ -15,7 +15,7 @@ Revenue comes from optional premium services, trading and on-chain fees, hosted 
 | --- | ---: | --- |
 | Wallet sends, swaps, live stocks, tokenized stocks, ordinary public x402, and private payments | **1%**, with a **$0.01 minimum** | A `$100` action produces `$1.00` in revenue. A tiny `$0.25` test action produces the `$0.01` minimum. |
 | MiroShark hosted x402 simulations | **$0.20 gross proxy spread** inside the **$1.20 USDC** user charge | The user pays HivemindOS `$1.20`; the hosted proxy pays MiroShark upstream up to `$1.00`; HivemindOS keeps the expected `$0.20` only after upstream success. No extra 1% local x402 platform fee is added. |
-| Managed UsePod inference brokerage | Upstream UsePod spend plus a **5% default HivemindOS platform fee** | The user spends hosted HivemindOS credits; the hosted gateway pays UsePod with a server-held token, preserves streaming, refunds unused per-request reservations, and keeps the buyer-side fee. UsePod hoster earnings remain governed by UsePod. |
+| Hive Compute marketplace inference | Default **20% platform fee** on token-metered marketplace usage | At the current default provider price, 1M input plus 1M output tokens debits `$0.040`: `$0.032` provider earning and `$0.008` gross HivemindOS platform revenue before infrastructure, payment, support, and payout costs. |
 | Zero Human Company revenue share | **2%**, with a **$0.01 minimum** | A company running in HivemindOS that records `$1,000` in revenue produces `$20.00` in HivemindOS revenue. |
 | Hyperliquid builder fee | **0.005%** of eligible filled notional | A `$10,000` fill produces `$0.50` in revenue. |
 | Hosted HivemindOS agent/model messages | **$0.001 per successful hosted chat completion** on the current default hosted paid agent | `1,000` messages produces `$1`. `100,000` messages produces `$100`. `1,000,000` messages produces `$1,000`. |
@@ -57,6 +57,11 @@ The ecosystem plan keeps that boundary explicit: HivemindOS remains free and ope
     <span>5</span>
     <a href="paid-features/hivemind-cloud-agent-calls.html">Cloud Agent Calls</a>
     <small>The first concrete paid feature example.</small>
+  </li>
+  <li>
+    <span>6</span>
+    <a href="paid-features/hive-compute-marketplace.html">Hive Compute Marketplace</a>
+    <small>Marketplace inference, spare-GPU supply, x402/MPP rails, provider earnings, and the platform fee.</small>
   </li>
 </ol>
 
@@ -123,6 +128,11 @@ The seasonal reward rules are simple: there is no pre-season staking requirement
     <p>Managed LiveKit/SFU rooms for mobile-friendly, multi-party, and multi-agent voice calls.</p>
     <a href="paid-features/hivemind-cloud-agent-calls.html">Open cloud calls</a>
   </section>
+  <section class="docCard">
+    <h3>Hive Compute Marketplace</h3>
+    <p>First-party marketplace inference with spare-GPU supply, x402 and MPP payment rails, provider earnings, and a default 20% platform fee.</p>
+    <a href="paid-features/hive-compute-marketplace.html">Open compute marketplace</a>
+  </section>
 </div>
 
 ## Current Boundary
@@ -131,6 +141,7 @@ The seasonal reward rules are simple: there is no pre-season staking requirement
 | ------------------ | ----------------------------------------------------- | ------------------------------------------------------------ |
 | Agent calls        | BYOK Agent Calls using the user's OpenAI Realtime key | HivemindOS Cloud Agent Calls using managed LiveKit/SFU rooms |
 | Agent runtime work | Local and user-configured runtimes                    | Future managed runtime capacity, if offered                  |
+| Model inference    | Local models and user-configured model keys           | Hive Compute marketplace routing, settlement, receipts, reputation, and payout state |
 | Brain and vault    | Local Obsidian vault and user-owned sync choices      | Future managed brain hosting, if offered                     |
 
 ## Managed Agent Credits
@@ -163,9 +174,11 @@ The product rule is: HIVE can be used to pay, but HIVE should not be the only wa
 
 ## Revenue Sources
 
-Optional premium services may include Hive Cloud, managed compute, the Agent Marketplace, and Enterprise.
+Optional premium services may include Hive Cloud, Hive Compute, managed compute, the Agent Marketplace, and Enterprise.
 
 Hive Cloud covers one-click deployment, managed infrastructure, hosted memory, team workspaces, and monitoring.
+
+Hive Compute routes marketplace inference to live worker capacity and settles usage through the hosted gateway. The current default marketplace policy charges token-metered retail usage, keeps a **20% HivemindOS platform fee**, and records provider earnings for payout.
 
 Managed compute runs agents and swarms on Hivemind infrastructure with usage-based pricing.
 

@@ -1,17 +1,18 @@
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
 import { artifactByDataUrl, textHandleForArtifact, type ChatMediaArtifact } from "./media-artifacts";
 
-export type IncomingMessage = {
-  role: string;
-  content: string | Array<{
-    type: string;
-    text?: string;
-    image_url?: { url?: string };
-    file?: { filename?: string; file_data?: string };
-  }>;
+export type IncomingContentPart = {
+  type: string;
+  text?: string;
+  image_url?: { url?: string };
+  file?: { filename?: string; file_data?: string };
+  cache_control?: { type: string };
 };
 
-type IncomingContentPart = Extract<IncomingMessage["content"], Array<unknown>>[number];
+export type IncomingMessage = {
+  role: string;
+  content: string | IncomingContentPart[];
+};
 
 export function messageText(message?: IncomingMessage) {
   if (!message) return "";
@@ -94,6 +95,80 @@ function attachmentHandleLine(part: IncomingContentPart, artifacts: ChatMediaArt
     return `[media artifact: unmaterialized-file-${index + 1}] kind=file name=${name}${detail ? ` ${detail}` : ""}`;
   }
   return "";
+}
+
+function stripAttachmentReferenceText(value: string) {
+  const lines = value.split(/\r?\n/);
+  const output: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^Attached file(?: and folder)? references:\s*$/i.test(line.trim())) {
+      while (index + 1 < lines.length && /^\s*-\s+/.test(lines[index + 1])) index += 1;
+      continue;
+    }
+    output.push(line);
+  }
+  return output.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function currentVisualArtifactParts(mediaArtifacts: ChatMediaArtifact[]) {
+  return mediaArtifacts.flatMap((artifact) => {
+    if (artifact.kind === "image" && artifact.dataUrl) {
+      return [{ type: "image_url", image_url: { url: artifact.dataUrl } }];
+    }
+    if (artifact.kind === "video" && artifact.previewDataUrl) {
+      return [{ type: "image_url", image_url: { url: artifact.previewDataUrl } }];
+    }
+    return [];
+  });
+}
+
+function messageHasImageDataUrl(message: IncomingMessage, dataUrl: string) {
+  if (typeof message.content === "string") return false;
+  return message.content.some((part) => part.type === "image_url" && part.image_url?.url === dataUrl);
+}
+
+function partMatchesArtifactPayload(part: IncomingContentPart, mediaArtifacts: ChatMediaArtifact[]) {
+  const dataUrl = part.type === "image_url"
+    ? part.image_url?.url?.trim()
+    : part.type === "file"
+      ? part.file?.file_data?.trim()
+      : "";
+  return Boolean(dataUrl && artifactByDataUrl(mediaArtifacts, dataUrl));
+}
+
+export function messagesWithCurrentMediaArtifacts(messages: IncomingMessage[], mediaArtifacts: ChatMediaArtifact[] = []): IncomingMessage[] {
+  const visualParts = currentVisualArtifactParts(mediaArtifacts);
+  if (!visualParts.length) return messages;
+  const latestUserIndex = (() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].role === "user") return index;
+    }
+    return -1;
+  })();
+  if (latestUserIndex < 0) return messages;
+  return messages.map((message, index) => {
+    if (index !== latestUserIndex) return message;
+    if (typeof message.content === "string") {
+      return {
+        ...message,
+        content: [
+          { type: "text", text: stripAttachmentReferenceText(message.content) },
+          ...visualParts,
+        ],
+      };
+    }
+    const content = message.content
+      .map((part) => (
+        part.type === "text" && part.text
+          ? { ...part, text: stripAttachmentReferenceText(part.text) }
+          : part
+      ))
+      .filter((part) => !partMatchesArtifactPayload(part, mediaArtifacts))
+      .filter((part) => !(part.type === "text" && !part.text?.trim()));
+    const missingImageParts = visualParts.filter((part) => !messageHasImageDataUrl({ ...message, content }, part.image_url.url));
+    return { ...message, content: [...content, ...missingImageParts] };
+  });
 }
 
 export function textOnlyMessagesForTextModel(messages: IncomingMessage[], mediaArtifacts: ChatMediaArtifact[] = []): IncomingMessage[] {

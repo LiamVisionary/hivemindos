@@ -54,9 +54,12 @@ const GOOGLE_CLOUD_OAUTH_CLIENT_ID_PLACEHOLDER = "REPLACE_WITH_HIVEMINDOS_GOOGLE
 const GOOGLE_CLOUD_OAUTH_CLIENT_ID_DEFAULT = "259019272643-f8j74casb2etr012fr3bi8gcg5kibsia.apps.googleusercontent.com";
 
 const OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const OAUTH_CALLBACK_PATH = "/api/integrations/google-cloud/oauth/callback";
-const OAUTH_SCOPE = "openid email https://www.googleapis.com/auth/cloud-platform";
+/** The Cloud Platform scope Google shows as a *separately checkable* box on the
+ *  consent screen (granular consent). If the user unticks it, budgets + quota
+ *  caps 403 later — so we single-source it and verify it was actually granted. */
+export const GOOGLE_CLOUD_MANAGE_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
+const OAUTH_SCOPE = `openid email ${GOOGLE_CLOUD_MANAGE_SCOPE}`;
 const LOGIN_FLOW_TTL_MS = 10 * 60_000;
 
 // Last-resort fixed signing key so state HMAC never throws when neither the
@@ -198,28 +201,57 @@ export function googleCloudAuthorizeUrl(request: NextRequest): { authorizeUrl: s
   return { authorizeUrl, missing: [] };
 }
 
-async function exchangeToken(body: Record<string, string>) {
-  const response = await fetch(OAUTH_TOKEN_URL, {
+/** The HivemindOS token-exchange Worker base URL. It holds the Google client
+ *  secret server-side (never in this app / the MIT repo) and forwards to
+ *  Google's token endpoint. Overridable via GOOGLE_CLOUD_OAUTH_EXCHANGE_URL. */
+const OAUTH_EXCHANGE_URL_DEFAULT = "https://hivemindos-google-oauth-exchange.hivemindos.workers.dev";
+function googleCloudExchangeUrl(): string {
+  return (process.env.GOOGLE_CLOUD_OAUTH_EXCHANGE_URL?.trim() || OAUTH_EXCHANGE_URL_DEFAULT).replace(/\/+$/, "");
+}
+
+/**
+ * Call the HivemindOS exchange Worker (which adds the client_secret) instead of
+ * hitting Google directly, so the secret never ships in the distributed app.
+ * The Worker already sanitizes Google errors and never returns raw internals.
+ */
+async function callExchangeWorker(
+  path: "/token" | "/refresh",
+  body: Record<string, string>,
+): Promise<{ access_token: string; refresh_token?: string; id_token?: string; expires_in?: number }> {
+  const response = await fetch(`${googleCloudExchangeUrl()}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(body).toString(),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
     cache: "no-store",
     signal: AbortSignal.timeout(30_000),
   });
-  const data = (await response.json().catch(() => null)) as {
-    access_token?: string;
-    refresh_token?: string;
-    id_token?: string;
-    expires_in?: number;
-    error?: string;
-    error_description?: string;
-  } | null;
-  if (!response.ok || !data?.access_token) {
-    const detail = data?.error_description || data?.error;
-    // Never surface the raw token endpoint body — only the sanitized reason.
-    throw new Error(detail || `Google OAuth token endpoint returned HTTP ${response.status}.`);
+  const data = (await response.json().catch(() => null)) as
+    | { ok?: boolean; access_token?: string; refresh_token?: string; id_token?: string; expires_in?: number; error?: string }
+    | null;
+  if (!response.ok || data?.ok === false || !data?.access_token) {
+    throw new Error(data?.error || `Token exchange failed (HTTP ${response.status}).`);
   }
-  return data;
+  return data as { access_token: string; refresh_token?: string; id_token?: string; expires_in?: number };
+}
+
+/**
+ * Space-delimited scopes actually granted for an access token, via Google's
+ * `tokeninfo` endpoint. Used to detect a granular-consent miss (the user
+ * unticked the Cloud Platform box). Returns "" when it can't be determined, so
+ * callers fail OPEN — a network blip must never falsely reject a real grant.
+ */
+export async function googleCloudGrantedScopes(accessToken: string): Promise<string> {
+  try {
+    const response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+      { cache: "no-store", signal: AbortSignal.timeout(6_000) },
+    );
+    if (!response.ok) return "";
+    const payload = (await response.json()) as { scope?: string };
+    return payload.scope ?? "";
+  } catch {
+    return "";
+  }
 }
 
 /** Best-effort account email from a fresh access token (userinfo). */
@@ -275,15 +307,11 @@ export async function exchangeGoogleCloudCode(
     throw new Error("The sign-in session expired or did not match this app. Start the Google Cloud connection again.");
   }
 
-  const clientSecret = googleCloudOAuthClientSecret();
-  const tokens = await exchangeToken({
-    grant_type: "authorization_code",
+  const tokens = await callExchangeWorker("/token", {
     code,
+    code_verifier: verified.verifier,
     redirect_uri: googleCloudRedirectUri(request),
     client_id: googleCloudOAuthClientId(),
-    code_verifier: verified.verifier,
-    // Client secret is optional under PKCE; only send it when set.
-    ...(clientSecret ? { client_secret: clientSecret } : {}),
   });
   await persistTokens(tokens as { access_token: string; refresh_token?: string });
 }
@@ -298,29 +326,9 @@ export async function exchangeGoogleCloudCode(
  */
 export async function mintGoogleCloudAccessToken(): Promise<string> {
   const clientId = googleCloudOAuthClientId();
-  const clientSecret = googleCloudOAuthClientSecret();
   const refreshToken = await hiveEnvValue(GOOGLE_CLOUD_REFRESH_TOKEN_ENV);
   if (!googleCloudOAuthClientReady()) throw new Error("The Google Cloud OAuth client is not configured.");
   if (!refreshToken) throw new Error("No Google Cloud account is connected.");
-
-  const response = await fetch(OAUTH_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      client_id: clientId,
-      ...(clientSecret ? { client_secret: clientSecret } : {}),
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  const payload = (await response.json().catch(() => null)) as
-    | { access_token?: string; error_description?: string; error?: string }
-    | null;
-  if (!response.ok || !payload?.access_token) {
-    throw new Error(
-      payload?.error_description || payload?.error || `Google rejected the refresh (HTTP ${response.status}).`,
-    );
-  }
-  return payload.access_token;
+  const data = await callExchangeWorker("/refresh", { refresh_token: refreshToken, client_id: clientId });
+  return data.access_token;
 }

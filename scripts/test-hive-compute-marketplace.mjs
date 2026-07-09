@@ -7,6 +7,7 @@ const root = process.cwd();
 const requiredFiles = [
   "src/lib/config/hive-compute-marketplace.ts",
   "src/lib/services/hive-compute-marketplace.ts",
+  "src/lib/services/hive-compute-output-e2ee.ts",
   "src/lib/types/hive-compute-marketplace.ts",
   "src/app/api/hive-compute/marketplace/route.ts",
   "src/app/api/hive-compute/chat/completions/route.ts",
@@ -26,6 +27,7 @@ for (const file of requiredFiles) {
 
 const read = (file) => readFileSync(join(root, file), "utf8");
 const service = read("src/lib/services/hive-compute-marketplace.ts");
+const outputE2ee = read("src/lib/services/hive-compute-output-e2ee.ts");
 const workerModule = read("src/lib/services/hive-compute-marketplace/worker-module.ts");
 const config = read("src/lib/config/hive-compute-marketplace.ts");
 const gatewayCatalog = read("src/lib/config/model-provider-gateways.ts");
@@ -69,6 +71,9 @@ assert(fleetView.includes("USEPOD_COMPUTE_RENTALS_ENABLED") && fleetView.include
 assert(fleetHiveView.includes("USEPOD_COMPUTE_RENTALS_ENABLED") && fleetHiveView.includes("HiveComputeHostModal"), "Hive Fleet compute rental entry must default to Hive Compute with UsePod flag fallback.");
 assert(hiveHostModal.includes("Set up hosting") && hiveHostModal.includes("Advanced diagnostics") && hiveHostModal.includes("Open MPP session") && hiveHostModal.includes("Privacy:"), "Hive Compute host modal must keep one-click setup primary while surfacing MPP and TEE privacy gates.");
 assert(dashboardComputePanel.includes("Set up hosting") && dashboardComputePanel.includes("Advanced diagnostics") && dashboardComputePanel.includes("Open MPP session") && dashboardComputePanel.includes("Privacy:"), "Hive Compute dashboard must keep one-click setup primary while surfacing MPP and TEE privacy gates.");
+assert(hiveHostModal.includes("selectedModelIds: null") && hiveHostModal.includes("Models to advertise") && hiveHostModal.includes("aria-pressed") && hiveHostModal.includes("Enable all"), "Hive Compute host modal must expose default-on model advertising chips.");
+assert(dashboardComputePanel.includes("selectedModelIds: null") && dashboardComputePanel.includes("Models to advertise") && dashboardComputePanel.includes("aria-pressed") && dashboardComputePanel.includes("Enable all"), "Hive Compute dashboard must expose default-on model advertising chips.");
+assert(hiveHostModal.includes("maxConcurrency: 1") && dashboardComputePanel.includes("maxConcurrency: 1"), "Hive Compute host controls must default concurrency to one slot.");
 assert(dashboardNav.includes('compute: { label: "Hive Compute"'), "Dashboard route catalog must include Hive Compute.");
 assert(morePanel.includes('id: "compute"'), "More launcher must include a Hive Compute tile.");
 assert(!agentSettingsModal.includes('selectedProviderSlug === "hive-compute"'), "Agent settings must not special-case a standalone Hive Compute picker.");
@@ -97,8 +102,12 @@ assert(staticToolItems.includes("tool-schema:hive-compute-marketplace") && stati
 assert(service.includes("prompt contents for jobs they accept"), "Worker setup must warn that workers can see accepted prompt contents.");
 assert(service.includes("prepaid balances") && service.includes("key relays") && service.includes("reputation"), "Public status boundary must name hosted commercial authority surfaces.");
 assert(service.includes("startHiveComputeWorker") && service.includes("HIVE_COMPUTE_MODEL_MAP_JSON"), "Hive Compute service must start the managed worker with a local model map.");
+assert(service.includes("selectedModelIds") && service.includes("advertisedWorkerModels") && service.includes("selectedHostModels"), "Hive Compute service must persist selected advertised models.");
+assert(service.includes("HIVE_COMPUTE_MODELS: host.advertisedModels.join") && service.includes("HIVE_COMPUTE_WORKER_MAX_CONCURRENCY"), "Hive Compute service must pass advertised models and slots into the worker env.");
+assert(service.includes("installedHiveComputeWorkerVersion") && service.includes("workerModule.updateAvailable") && service.includes("installHiveComputeWorkerModule({ force: true })"), "Hive Compute service must refresh stale managed worker modules before hosting.");
 assert(service.includes("setupHiveComputeHosting") && service.includes("installHiveComputeWorkerDependencies") && service.includes("openHiveComputeMppSession"), "Hive Compute service must provide one-click setup that installs dependencies and opens MPP sessions when available.");
 assert(service.includes("HIVE_COMPUTE_MPP_POLICY_URL_ENV") && service.includes("HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV"), "Hive Compute service must expose MPP and TEE attestation capability gates.");
+assert(service.includes("forwardedHiveComputePrivacyHeaders") && service.includes("X-HivemindOS-Compute-Output-Encryption"), "Hive Compute proxy must forward output E2EE request headers.");
 assert(service.includes("openHiveComputeMppSession") && service.includes("HIVE_COMPUTE_MPP_SESSION_FILE"), "Hive Compute service must open and store local MPP session authorizations.");
 assert(workerModule.includes('import WebSocket from "ws"'), "Generated worker must use the native WebSocket client.");
 assert(workerModule.includes("/hive-compute/worker/ws"), "Generated worker must default to the hosted marketplace WebSocket path.");
@@ -107,11 +116,20 @@ assert(workerModule.includes("HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL"), "Generated w
 assert(workerModule.includes("runOpenAICompatibleJob"), "Generated worker must route jobs to the OpenAI-compatible adapter when configured.");
 assert(workerModule.includes("validateJobPayment") && workerModule.includes("MPP session payment proof is required"), "Generated worker must enforce gateway payment proofs for MPP sessions.");
 assert(workerModule.includes("collectAttestation") && workerModule.includes("worker.attestation.challenge"), "Generated worker must answer TEE attestation challenges.");
-assert(workerModule.includes("decryptPayload") && workerModule.includes("x25519-chacha20-poly1305") && workerModule.includes("dir-a256gcm"), "Generated worker must support encrypted prompt payload delivery for TEE jobs.");
+assert(workerModule.includes("decryptPayload") && workerModule.includes("x25519-chacha20-poly1305") && workerModule.includes("dir-a256gcm") && workerModule.includes("rsa-oaep-a256gcm"), "Generated worker must support encrypted prompt payload delivery for TEE jobs.");
+assert(workerModule.includes("encryptedOutputDelivery: true") && workerModule.includes("job.encrypted_token") && workerModule.includes("encryptOutputPayload"), "Generated worker must support encrypted output delivery.");
+assert(workerModule.includes("emitJobComplete(input, finalText, finalUsage)") && workerModule.includes("usageWithCompletionEstimate"), "Generated worker must report usage while keeping E2EE output ciphertext-only to the gateway.");
 assert(workerModule.includes("teeAttestation") && workerModule.includes("mppPolicyUrl"), "Generated worker must advertise TEE and MPP capability hints.");
+assert(workerModule.includes("positiveInteger(process.env.HIVE_COMPUTE_WORKER_MAX_CONCURRENCY, 1)") && workerModule.includes("maxConcurrency"), "Generated worker must default to one slot and advertise configured max concurrency.");
 assert(service.includes("capacityFromHealth"), "Hive Compute status must parse live marketplace capacity.");
+assert(service.includes("totalSlots") && service.includes("availableSlots"), "Hive Compute status must parse marketplace slot capacity.");
+assert(service.includes("modelPerformanceArray") && service.includes("tokensPerSecond") && service.includes("modelPerformanceLabel"), "Hive Compute status must parse and display measured model speed.");
+assert(service.includes('performance.speedTier === "warming") return "Measuring speed"'), "Hive Compute must not show tiny warming samples as numeric tok/s benchmarks.");
+assert(dashboardComputePanel.includes("model.subtitle") && guidedHivemindosSetup.includes("sale: computeFirst || computeHosted"), "Dashboard model surfaces must keep measured Hive Compute route subtitles visible.");
 assert(service.includes("Live worker model"), "Hive Compute model options must include live worker model metadata.");
 assert(!service.includes("socket.io-client"), "Generated worker must not depend on Socket.IO.");
+assert(outputE2ee.includes("generateHiveComputeOutputKeyPair") && outputE2ee.includes("decryptHiveComputeOutputEnvelope"), "Public client helper must generate output E2EE keys and decrypt envelopes.");
+assert(outputE2ee.includes("X-HivemindOS-Compute-Output-Public-Key"), "Public client helper must expose the gateway output public-key header.");
 
 for (const forbidden of [
   "TREASURY_PRIVATE_KEY",

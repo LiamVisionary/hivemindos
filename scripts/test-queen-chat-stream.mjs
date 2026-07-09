@@ -56,7 +56,7 @@ const {
   queenVoiceHistoryBeforeTurn,
 } = await import("../src/features/queen-voice/queen-chat-routing.ts");
 
-// ── OpenAI Codex Queen models must not silently skip to gpt-4o-mini ──────────
+// ── OAuth-held Queen models must not silently skip to gpt-4o-mini ────────────
 {
   const source = readFileSync(new URL("../src/lib/services/queen-bee/typed-chat-turn.ts", import.meta.url), "utf8");
   const chatStoreSource = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
@@ -65,6 +65,8 @@ const {
   const queenVoiceRoute = readFileSync(new URL("../src/app/api/queen-bee/voice/route.ts", import.meta.url), "utf8");
   const queenVoiceTurn = readFileSync(new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url), "utf8");
   assert.match(source, /isRuntimeHeldQueenProvider\(provider\)/, "typed Queen chat should recognize runtime-held OAuth providers");
+  assert.match(source, /provider === "xai-oauth"/, "typed Queen chat should route xAI OAuth through the Queen runtime");
+  assert.match(source, /provider === "copilot"/, "typed Queen chat should route Copilot OAuth through the Queen runtime");
   assert.match(source, /\/api\/chat\/agent-runtime/, "typed Queen chat should route OpenAI Codex through the Queen runtime");
   assert.match(source, /readRuntimeResponseText/, "typed Queen chat should parse the runtime stream response");
   assert.match(source, /queenChatRuntimeStreamResponse/, "typed Queen chat should bridge runtime streams into Queen chat streams");
@@ -75,6 +77,13 @@ const {
   assert.match(source, /suppressWalletIntents: true/, "runtime-held Queen text chat should always suppress deterministic wallet/payment rails");
   assert.match(source, /RUNTIME_COMMAND_GATE_FALLBACK/, "runtime-held Queen chat should sanitize command-gate timeout replies");
   assert.match(source, /runtimeCommandGate: true/, "Queen chat telemetry should mark sanitized runtime command-gate replies");
+  assert.match(source, /QueenTypedSystemPrompt/, "typed Queen chat should split stable and volatile system prompt sections");
+  assert.match(source, /openAICompatibleMessageCacheControlSupported/, "typed Queen chat should apply explicit cache-control blocks when supported");
+  assert.match(source, /cache_control: \{ type: "ephemeral" \}/, "typed Queen chat should mark stable direct-brain system text cacheable where supported");
+  assert.match(queenVoiceTurn, /conversationSystemContent/, "Queen voice direct turns should build stable/volatile system prompt sections");
+  assert.match(queenVoiceTurn, /stableSystemAddendum/, "Queen voice direct turns should keep model transparency in the stable cacheable section");
+  assert.match(queenVoiceTurn, /openAICompatibleMessageCacheControlSupported/, "Queen voice direct turns should use explicit provider cache-control when available");
+  assert.match(queenVoiceTurn, /cacheScope: "queen-agent-turn-fallback"/, "Queen voice agent-turn fallback should carry OpenAI cache hints");
   assert.match(chatStoreSource, /return runQueenVoiceTextTurn\(trimmed, queenId, history, voiceTextAudioContext,/, "typed Queen chat should use the voice-quality conversation route by default");
   assert.match(chatStoreSource, /speak: shouldSpeakReply/, "closed text chat must not trigger spoken audio");
   assert.match(chatStoreSource, /Falling back to typed chat/, "closed text-chat should keep the legacy typed route as a fallback");

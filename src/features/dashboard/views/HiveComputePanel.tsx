@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, Cpu, Pause, Play, RefreshCcw, ShieldCheck, Terminal, WalletCards, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, Copy, Cpu, Gauge, Pause, Play, RefreshCcw, ShieldCheck, Terminal, WalletCards, Zap } from "lucide-react";
 
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
-import type { HiveComputeMarketplaceStatus } from "@/lib/types/hive-compute-marketplace";
+import type { HiveComputeHostRunConfig, HiveComputeMarketplaceStatus } from "@/lib/types/hive-compute-marketplace";
 import styles from "./HiveComputePanel.module.css";
 
 type HiveComputePanelProps = {
@@ -19,11 +19,31 @@ type ApiResponse = {
 
 type BusyAction = "refresh" | "install-worker" | "install-worker-deps" | "repair-worker" | "setup-hosting" | "run-worker" | "stop-worker" | "open-mpp-session" | null;
 
+const DEFAULT_HOST_CONFIG: HiveComputeHostRunConfig = {
+  markdown: 20,
+  maxConcurrency: 1,
+  selectedModelIds: null,
+  hostWhen: "idle",
+  dailyCapUsd: null,
+  pauseOnBattery: true,
+  yieldToUser: true,
+};
+
 export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
   const [status, setStatus] = useState<HiveComputeMarketplaceStatus | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<BusyAction>("refresh");
   const [copied, setCopied] = useState(false);
+  const [config, setConfig] = useState<HiveComputeHostRunConfig>(DEFAULT_HOST_CONFIG);
+  const appliedConfigRef = useRef(false);
+
+  const applyStatus = useCallback((next: HiveComputeMarketplaceStatus) => {
+    setStatus(next);
+    if (!appliedConfigRef.current) {
+      appliedConfigRef.current = true;
+      setConfig(next.host.config);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +52,7 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
         const response = await fetch("/api/hive-compute/marketplace", { cache: "no-store" });
         const data = await response.json().catch(() => ({})) as ApiResponse;
         if (!response.ok || data.ok === false || !data.status) throw new Error(data.error || "Hive Compute status failed.");
-        if (!cancelled) setStatus(data.status);
+        if (!cancelled) applyStatus(data.status);
       } catch (error) {
         if (!cancelled) setMessage(error instanceof Error ? error.message : "Hive Compute status failed.");
       } finally {
@@ -43,7 +63,7 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyStatus]);
 
   const refreshStatus = useCallback(async () => {
     setBusy("refresh");
@@ -52,13 +72,13 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
       const response = await fetch("/api/hive-compute/marketplace", { cache: "no-store" });
       const data = await response.json().catch(() => ({})) as ApiResponse;
       if (!response.ok || data.ok === false || !data.status) throw new Error(data.error || "Hive Compute status failed.");
-      setStatus(data.status);
+      applyStatus(data.status);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Hive Compute status failed.");
     } finally {
       setBusy((current) => (current === "refresh" ? null : current));
     }
-  }, []);
+  }, [applyStatus]);
 
   const runAction = useCallback(async (action: Exclude<BusyAction, null | "refresh">) => {
     setBusy(action);
@@ -67,11 +87,11 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
       const response = await fetch("/api/hive-compute/marketplace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, config }),
       });
       const data = await response.json().catch(() => ({})) as ApiResponse;
       if (!response.ok || data.ok === false || !data.status) throw new Error(data.error || "Hive Compute action failed.");
-      setStatus(data.status);
+      applyStatus(data.status);
       if (action === "install-worker-deps") setMessage("Worker dependencies installed.");
       if (action === "install-worker") setMessage("Worker module installed.");
       if (action === "repair-worker") setMessage("Worker module repaired.");
@@ -84,7 +104,36 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
     } finally {
       setBusy(null);
     }
-  }, []);
+  }, [applyStatus, config]);
+
+  const patchConfig = (patch: Partial<HiveComputeHostRunConfig>) => {
+    setConfig((current) => ({ ...current, ...patch }));
+  };
+
+  const availableModelIds = useMemo(
+    () => status?.host.models.map((model) => model.providerModelId) ?? [],
+    [status?.host.models],
+  );
+  const selectedModelIdSet = useMemo(
+    () => new Set(config.selectedModelIds ?? availableModelIds),
+    [availableModelIds, config.selectedModelIds],
+  );
+
+  const toggleModel = useCallback((modelId: string) => {
+    setConfig((current) => {
+      const selected = new Set(current.selectedModelIds === null ? availableModelIds : current.selectedModelIds);
+      if (selected.has(modelId)) {
+        selected.delete(modelId);
+      } else {
+        selected.add(modelId);
+      }
+      return { ...current, selectedModelIds: availableModelIds.filter((id) => selected.has(id)) };
+    });
+  }, [availableModelIds]);
+
+  const enableAllModels = () => {
+    patchConfig({ selectedModelIds: null });
+  };
 
   const runCommand = status?.workerModule.runCommand || "";
   async function copyRunCommand() {
@@ -122,6 +171,7 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
   const primaryLabel = workerRunning ? "Stop hosting" : status.host.canRun ? "Go live" : "Set up hosting";
   const paymentReady = status.payments.x402.ready && (!status.payments.mpp.enabled || status.payments.mpp.ready || !status.payments.mpp.requireSession);
   const privacyLabel = status.privacy.attestationReady && status.privacy.encryptedDeliveryReady ? "Verified enclave" : "Standard";
+  const advertisedModelCount = status.host.models.filter((model) => selectedModelIdSet.has(model.providerModelId)).length;
   const statusTiles = [
     {
       title: "Gateway",
@@ -130,8 +180,10 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
     },
     {
       title: "Worker",
-      ready: status.workerModule.installed && status.workerModule.nodeModulesInstalled,
-      detail: status.workerModule.installed && status.workerModule.nodeModulesInstalled ? "Installed." : "Set up hosting will install it.",
+      ready: status.workerModule.installed && status.workerModule.nodeModulesInstalled && !status.workerModule.updateAvailable,
+      detail: status.workerModule.updateAvailable
+        ? "Set up hosting will update it."
+        : status.workerModule.installed && status.workerModule.nodeModulesInstalled ? "Installed." : "Set up hosting will install it.",
     },
     {
       title: "Token",
@@ -210,9 +262,53 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
                   : "Set up hosting installs the worker, installs dependencies, discovers local models, saves safe defaults, and opens a payment session when your gateway supports it."}
             </p>
             <div className={styles.chips}>
-              <span className={`${styles.pill} ${status.host.models.length ? styles.pillReady : ""}`}><span className={styles.dot} aria-hidden="true" />{status.host.models.length} model{status.host.models.length === 1 ? "" : "s"}</span>
+              <span className={`${styles.pill} ${advertisedModelCount ? styles.pillReady : ""}`}><span className={styles.dot} aria-hidden="true" />{advertisedModelCount} advertised model{advertisedModelCount === 1 ? "" : "s"}</span>
               <span className={`${styles.pill} ${paymentReady ? styles.pillReady : ""}`}><span className={styles.dot} aria-hidden="true" />Payments: {paymentReady ? "Active" : "Setup"}</span>
               <span className={`${styles.pill} ${privacyLabel === "Verified enclave" ? styles.pillReady : ""}`}><span className={styles.dot} aria-hidden="true" />Privacy: {privacyLabel}</span>
+            </div>
+            <div className={styles.hostControls}>
+              <label className={styles.range}>
+                <span className={styles.body}>List markdown: <b>{config.markdown}%</b></span>
+                <input type="range" min={0} max={80} step={1} value={config.markdown} onChange={(event) => patchConfig({ markdown: Number(event.target.value) })} />
+              </label>
+              <div className={styles.controlRow}>
+                <span className={styles.body}><Gauge size={15} aria-hidden="true" /> Max concurrency</span>
+                <span className={styles.stepper}>
+                  <button type="button" onClick={() => patchConfig({ maxConcurrency: Math.max(1, config.maxConcurrency - 1) })} aria-label="Lower concurrency">-</button>
+                  <span>{config.maxConcurrency}</span>
+                  <button type="button" onClick={() => patchConfig({ maxConcurrency: Math.min(256, config.maxConcurrency + 1) })} aria-label="Raise concurrency">+</button>
+                </span>
+              </div>
+              <div className={styles.modelPicker}>
+                <div className={styles.controlRow}>
+                  <span className={styles.body}>Models to advertise</span>
+                  <button type="button" className={styles.chipButton} onClick={enableAllModels}>
+                    <Check size={14} aria-hidden="true" />
+                    Enable all
+                  </button>
+                </div>
+                <div className={styles.modelChips} role="group" aria-label="Models to advertise through Hive Compute">
+                  {status.host.models.length ? status.host.models.map((model) => {
+                    const active = selectedModelIdSet.has(model.providerModelId);
+                    return (
+                      <button
+                        key={model.providerModelId}
+                        type="button"
+                        className={styles.modelChip}
+                        data-active={active}
+                        aria-pressed={active}
+                        onClick={() => toggleModel(model.providerModelId)}
+                      >
+                        {active ? <Check size={14} aria-hidden="true" /> : null}
+                        <span>{model.name || model.id}</span>
+                      </button>
+                    );
+                  }) : (
+                    <p className={styles.body}>Start LM Studio or Ollama, then refresh.</p>
+                  )}
+                </div>
+                <p className={styles.small}>Disabled models stay available locally but are not listed for marketplace jobs.</p>
+              </div>
             </div>
           </article>
 

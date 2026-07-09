@@ -12,6 +12,7 @@ import type { AgentSchedule, AgentSnapshot, AgentTask, ChatCustomFolder, ChatMes
 import { imageGenerationToApplicationGeneration, normalizeApplicationGenerationUrl, type ChatApplicationGenerationArtifact, type ChatApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
 import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
 const VAULT_STORAGE_KEY = "hivemindos.sharedVault.v1";
@@ -38,6 +39,7 @@ const STORAGE_SUFFIXES = {
   fleetSnapshots: ".fleetSnapshots.v1",
 };
 const runtimeCapabilitiesByRuntime = RUNTIME_CAPABILITIES as Record<string, RuntimeCapabilities>;
+type StoredAgentPromptChoice = NonNullable<NonNullable<ChatMessage["agentPrompt"]>["choices"]>[number];
 const runtimeKindsByRuntime = RUNTIME_KINDS as Record<string, AgentRuntimeKind | undefined>;
 
 function normalizeVaultRelativePath(path?: string) {
@@ -573,6 +575,38 @@ function parseStoredApplicationGeneration(message: ChatMessage): ChatApplication
   };
 }
 
+function parseStoredAgentPromptChoice(choice: unknown): StoredAgentPromptChoice | null {
+  if (typeof choice === "string") return choice;
+  if (!choice || typeof choice !== "object") return null;
+  const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown };
+  const label = typeof record.label === "string" ? record.label.trim() : "";
+  const value = typeof record.value === "string" ? record.value.trim() : "";
+  if (!label && !value) return null;
+  const permissionMode = ["manual", "accept-edits", "plan", "auto", "bypass"].includes(String(record.permissionMode))
+    ? record.permissionMode as ChatPermissionMode
+    : undefined;
+  return { label: label || value, value: value || label, permissionMode };
+}
+
+function parseStoredAgentPrompt(message: ChatMessage, agentId: string): ChatMessage["agentPrompt"] {
+  if (!message.agentPrompt || typeof message.agentPrompt !== "object" || typeof message.agentPrompt.question !== "string") return undefined;
+  const response = message.agentPrompt.response && typeof message.agentPrompt.response === "object" && typeof message.agentPrompt.response.label === "string"
+    ? {
+      label: message.agentPrompt.response.label.trim(),
+      value: typeof message.agentPrompt.response.value === "string" ? message.agentPrompt.response.value.trim() : undefined,
+      respondedAt: typeof message.agentPrompt.response.respondedAt === "number" ? message.agentPrompt.response.respondedAt : undefined,
+    }
+    : undefined;
+  return {
+    id: typeof message.agentPrompt.id === "string" ? message.agentPrompt.id : `${agentId}-${message.createdAt ?? Date.now()}`,
+    type: ["clarify", "approval", "sudo", "secret", "prompt"].includes(message.agentPrompt.type) ? message.agentPrompt.type : "prompt",
+    question: message.agentPrompt.question,
+    choices: Array.isArray(message.agentPrompt.choices) ? message.agentPrompt.choices.map(parseStoredAgentPromptChoice).filter((choice): choice is StoredAgentPromptChoice => Boolean(choice)) : undefined,
+    allowFreeText: message.agentPrompt.allowFreeText !== false,
+    response: response?.label ? response : undefined,
+  };
+}
+
 export function parseStoredChatMessages(snapshot: DashboardStateSnapshot = {}): Record<string, ChatMessage[]> {
   return parseChatMessagesValue(readStoredValue(snapshot, CHAT_MESSAGES_STORAGE_KEY, STORAGE_SUFFIXES.chatMessages));
 }
@@ -611,15 +645,7 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
           attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
           applicationGeneration: parseStoredApplicationGeneration(message),
           imageGeneration: parseStoredImageGeneration(message),
-          agentPrompt: message.agentPrompt && typeof message.agentPrompt === "object" && typeof message.agentPrompt.question === "string"
-            ? {
-              id: typeof message.agentPrompt.id === "string" ? message.agentPrompt.id : `${agentId}-${message.createdAt ?? Date.now()}`,
-              type: ["clarify", "approval", "sudo", "secret", "prompt"].includes(message.agentPrompt.type) ? message.agentPrompt.type : "prompt",
-              question: message.agentPrompt.question,
-              choices: Array.isArray(message.agentPrompt.choices) ? message.agentPrompt.choices.filter((choice) => typeof choice === "string") : undefined,
-              allowFreeText: message.agentPrompt.allowFreeText === true,
-            }
-            : undefined,
+          agentPrompt: parseStoredAgentPrompt(message, agentId),
         })).slice(-120),
       ])
       .filter(([, messages]) => !isAutomationChatTranscript(messages)));

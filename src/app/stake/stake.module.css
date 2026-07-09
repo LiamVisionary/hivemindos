@@ -52,7 +52,7 @@
   --s-teal-border: rgba(29, 142, 124, 0.30);
   --s-teal-glow: rgba(29, 142, 124, 0.18);
 
-  --s-honey: #b07f1c;
+  --s-honey: #936811; --s-honey-fill: #e6bb5c;
   --s-honey-2: #936811;
   --s-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.16), rgba(176, 127, 28, 0.05));
   --s-honey-border: rgba(176, 127, 28, 0.34);
@@ -161,7 +161,7 @@
 
 /* primary = solid honey fill, dark text (fb-btn.primary) */
 .primaryButton {
-  background: var(--s-honey);
+  background: var(--s-honey-fill, var(--s-honey));
   color: #1a1305;
   border-color: transparent;
 }
@@ -414,7 +414,7 @@
 
 .pillNext {
   border-color: var(--s-honey-border);
-  background: color-mix(in srgb, var(--s-honey) 12%, transparent);
+  background: color-mix(in srgb, var(--s-honey-fill, var(--s-honey)) 12%, transparent);
   color: var(--s-honey);
 }
 
@@ -432,7 +432,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--s-honey), var(--s-honey-2));
+  background: linear-gradient(90deg, var(--s-honey-fill, var(--s-honey)), var(--s-honey-2));
   box-shadow: 0 0 12px var(--s-honey-glow);
   transition: width 700ms cubic-bezier(0.2, 0.7, 0.3, 1);
 }
@@ -550,7 +550,7 @@
 /* The next tier to aim for. */
 .tierCardNext {
   border-color: var(--s-honey-border);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--s-honey) 10%, transparent), var(--s-surface-inset) 64%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--s-honey-fill, var(--s-honey)) 10%, transparent), var(--s-surface-inset) 64%);
   box-shadow: 0 0 16px var(--s-honey-glow);
 }
 
@@ -620,7 +620,7 @@
 
 .tierBadgeNext {
   border: 1px solid var(--s-honey-border);
-  background: color-mix(in srgb, var(--s-honey) 14%, transparent);
+  background: color-mix(in srgb, var(--s-honey-fill, var(--s-honey)) 14%, transparent);
   color: var(--s-honey);
 }
 
@@ -650,7 +650,7 @@
 .tierReward span {
   border: 1px solid var(--s-border-soft);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--s-honey) 8%, transparent);
+  background: color-mix(in srgb, var(--s-honey-fill, var(--s-honey)) 8%, transparent);
   color: var(--s-honey);
   padding: 4px 8px;
   font-family: var(--s-mono);

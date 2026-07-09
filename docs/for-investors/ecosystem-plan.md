@@ -42,6 +42,14 @@ Run agents and swarms on Hivemind infrastructure.
 
 Users pay only for usage.
 
+### Hive Compute Marketplace
+
+Route model inference to first-party marketplace workers.
+
+Users pay for token-metered inference. Hosts earn when their workers complete
+jobs. HivemindOS keeps a platform fee for running matching, settlement,
+receipts, reputation, and payout state.
+
 ### Agent Marketplace
 
 Buy and sell:
@@ -105,11 +113,13 @@ Current default examples:
 
 The revenue HivemindOS collects is the retail credit debit. The margin is the retail debit minus upstream X/API cost, before ordinary hosting, payment-processing, and operations costs.
 
-### Managed UsePod Inference Brokerage
+### Hive Compute Marketplace
 
-HivemindOS can broker UsePod demand through hosted infrastructure when users want UsePod routing without managing a UsePod payer token locally. The hosted gateway holds the UsePod token server-side, reserves the user's hosted HivemindOS credits before each request, forwards the original streaming request to UsePod, and reconciles the charge after the upstream stream finishes.
+HivemindOS can route model demand through a first-party compute marketplace. Users pick normal HivemindOS model routes, hosts bring spare local GPU or model-server capacity, and the hosted gateway handles matching, balance reservation, token-metered settlement, receipts, provider earnings, and payout state.
 
-The current default policy debits upstream UsePod spend plus a **5% HivemindOS platform fee**, then refunds any unused reservation. This fee is buyer-side managed-service margin. It does not change UsePod's own hoster earnings model or pretend the downloadable app can enforce official platform revenue locally.
+The current default marketplace policy keeps a **20% HivemindOS platform fee** on retail marketplace usage. At the current default provider price, 1M input plus 1M output tokens debits `$0.040`: `$0.032` goes to the provider earning ledger and `$0.008` is gross HivemindOS platform revenue before infrastructure, payment processing, support, fraud controls, and payout operations.
+
+x402 covers per-call machine payments. MPP sessions cover sustained machine-speed inference when the hosted gateway publishes a compatible policy. Verified private routing can become a premium trust layer with encrypted prompt delivery, opt-in output E2E response envelopes, and hardware-only routing that fails closed unless the gateway verifies real confidential-compute evidence.
 
 ### Trading & On-Chain Fees
 
@@ -128,7 +138,7 @@ Current examples:
 | Wallet send, swap, live stock, tokenized stock, paid API, or private payment | `$100` | `$1.00` |
 | Wallet send, swap, live stock, tokenized stock, paid API, or private payment | `$0.25` | `$0.01` minimum |
 | MiroShark hosted x402 simulation | `$1.20` | `$0.20` gross proxy spread |
-| Managed UsePod inference | `$1.00` upstream UsePod spend | `$0.05` gross hosted platform fee |
+| Hive Compute marketplace inference | `$4.00` token-metered marketplace usage | `$0.80` gross platform fee at the current default policy |
 | Recorded Zero Human Company revenue | `$500` | `$10.00` |
 | Hyperliquid eligible fill | `$10,000` | `$0.50` |
 
