@@ -17,6 +17,7 @@ import { ProductsPanel } from "./ProductsPanel";
 import { ImportedOperationsPanel } from "./ImportedOperationsPanel";
 import { CompanyKnowledgePanel } from "./CompanyKnowledgePanel";
 import { CommsPanel } from "./CommsPanel";
+import { SalesContentPanel } from "./SalesContentPanel";
 import { CompanyRunsPanel } from "./CompanyRunsPanel";
 import { ApprovalPoliciesPanel } from "./ApprovalPoliciesPanel";
 import { collectCompanyDeliverables, partitionByOutput, dispatchedAgo } from "./company-deliverables";
@@ -706,6 +707,29 @@ function TreasuryColumn({ colony: c, handlers }: { colony: Colony; handlers: Coc
         </div>
       </Panel>
 
+      {c.apiSpend && (c.apiSpend.monthlyCeilingUsd != null || c.apiSpend.monthUsd > 0) ? (() => {
+        const api = c.apiSpend!;
+        const ceiling = api.monthlyCeilingUsd;
+        const pct = ceiling && ceiling > 0 ? Math.min(100, Math.round((api.monthUsd / ceiling) * 100)) : 0;
+        const over = pct >= 80;
+        const barColor = over ? "var(--danger)" : "var(--honey)";
+        return (
+          <Panel>
+            <SectionLabel>paid API spend · month-to-date</SectionLabel>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: ceiling != null ? 10 : 0 }}>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 14, fontWeight: 600, color: barColor, fontVariantNumeric: "tabular-nums" }}>${api.monthUsd}</span>
+              <span style={{ fontFamily: "var(--f-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--fg-2)", fontVariantNumeric: "tabular-nums" }}><span style={{ color: "var(--fg-4)", fontWeight: 400 }}>/ </span>{ceiling != null ? `$${ceiling}` : "no cap"}</span>
+            </div>
+            {ceiling != null ? (
+              <span style={{ display: "block", height: 8, borderRadius: 999, border: "1px solid var(--line-2)", background: "var(--panel-hi)", overflow: "hidden" }} aria-label={`${pct}% of monthly API budget used`}>
+                <span style={{ display: "block", width: pct + "%", minWidth: pct > 0 ? 3 : 0, height: "100%", background: barColor }} />
+              </span>
+            ) : null}
+            <div style={{ marginTop: 10, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>today ${api.dayUsd} · hard-capped at the app meter + Google quota</div>
+          </Panel>
+        );
+      })() : null}
+
       <Panel>
         <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>% of daily cap used</span>}>per-agent caps</SectionLabel>
         {c.agents.length === 0 ? (
@@ -829,6 +853,7 @@ export function Cockpit({
     { key: "issues", label: "Issues", badge: activeIssueCount || null, badgeLoading: initialTasksLoading && activeIssueCount === 0, tone: needsYouIssueCount ? "danger" : undefined },
     { key: "deliverables", label: spec.primaryLabel, badge: deliverableCount || null },
     { key: "comms", label: spec.commsLabel || "Comms" },
+    { key: "sales", label: "Sales" },
     // Only companies that sell fixed products carry a catalog.
     ...(c.products ? [{ key: "products", label: "Products", badge: c.products.items.length || null }] : []),
     ...(c.importedOperations ? [{ key: "systems", label: "Systems", badge: (c.importedOperations.workflows.length + c.importedOperations.schedules.length) || null }] : []),
@@ -995,6 +1020,8 @@ export function Cockpit({
       {active === "deliverables" && <DeliverablesPanel colony={c} spec={spec} theme={theme} loading={initialTasksLoading} />}
 
       {active === "comms" && <CommsPanel colony={c} spec={spec} theme={theme} />}
+
+      {active === "sales" && <SalesContentPanel colony={c} />}
 
       {active === "products" && (
         <ProductsPanel colony={c} pendingProposals={pricingProposals} onGoToApprovals={() => setTab("approvals")} />

@@ -9,6 +9,7 @@ import {
   readRuntimeResponseText,
   voiceOptimizedAgent,
 } from "@/lib/services/phone/runtime-voice-turn";
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
@@ -91,18 +92,26 @@ async function runOpenAiPilotTurn(system: string, command: string): Promise<stri
   const apiKey = await transcriptionApiKey();
   if (!apiKey) return "";
   try {
+    const model = process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_PILOT_FALLBACK_MODEL;
+    const cacheHints = openAICompatibleInferenceCacheHints({
+      provider: "openai",
+      model,
+      cacheScope: "queen-pilot",
+    });
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
+        ...cacheHints.headers,
       },
       body: JSON.stringify({
-        model: process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_PILOT_FALLBACK_MODEL,
+        model,
         messages: [
           { role: "system", content: system },
           { role: "user", content: command },
         ],
+        ...cacheHints.body,
         max_tokens: 400,
         temperature: 0.2,
         response_format: { type: "json_object" },

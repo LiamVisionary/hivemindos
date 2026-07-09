@@ -7,11 +7,11 @@
 import { DeepProbesToggle } from "@/components/fleet/deep-probes-toggle";
 import { fleetAgentCanChat, type FleetAgentChat } from "@/components/fleet/fleet-data";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
-import Image from "next/image";
 import {
   AlertTriangle,
   ChevronLeft,
   Copy,
+  Cpu,
   Download,
   ExternalLink,
   FileUp,
@@ -35,23 +35,8 @@ import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
 import { frFleetSummary, frMachineState, frStateMeta, hivePhoneStatus, isHiveMobileMachine } from "./fleet-hive-types";
 import { Dot, HiveMark, Meter, Summary } from "./primitives";
 
-const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
-
 function ActionIcon({ icon: Icon, size = 13 }: { icon: LucideIcon; size?: number }) {
   return <Icon size={size} strokeWidth={2} aria-hidden="true" />;
-}
-
-function UsePodActionIcon() {
-  return (
-    <Image
-      src={USEPOD_RUNTIME_ICON_PATH}
-      alt=""
-      aria-hidden="true"
-      width={15}
-      height={15}
-      unoptimized
-    />
-  );
 }
 
 function firstQueenChatTarget(machines: HiveMachine[]) {
@@ -404,9 +389,9 @@ export function HivePanel({
                 type="button"
                 className="fr-chip fr-chip-usepod"
                 onClick={() => handlers.onOpenUsePodHost?.(m)}
-                aria-label={`Rent ${m.name} compute through UsePod`}
+                aria-label={`Rent ${m.name} compute through Hive Compute`}
               >
-                <UsePodActionIcon />
+                <ActionIcon icon={Cpu} />
                 Rent compute
               </button>
             ) : null}

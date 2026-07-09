@@ -29,6 +29,7 @@ import {
   type TaskRetrievalTelemetry,
 } from "@/lib/services/chat/task-retrieval-context";
 import { runtimeImageGenerationCapabilityContext } from "@/lib/services/chat/runtime-image-generation-capability";
+import { maybeCreateTeachHiveReviewProposal } from "@/lib/services/chat/teach-hive";
 import {
   buildHivemindPromptEnvelope,
   buildHivemindUserContextText,
@@ -50,6 +51,11 @@ import {
   type IncomingMessage,
 } from "./messages";
 import {
+  formatChatMediaArtifactContext,
+  materializeChatMediaArtifacts,
+  type ChatMediaArtifact,
+} from "./media-artifacts";
+import {
   recordRouteTelemetry,
   telemetryPayloadForProfile,
 } from "./route-telemetry";
@@ -66,6 +72,8 @@ import {
 import { coerceActingWalletSourceHint, type ActingWalletSourceHint } from "./wallet-transfer-rails";
 import { dispatchWalletAndTradeIntents } from "./wallet-trade-rails";
 import { streamHttpRuntime } from "./stream-http-runtime";
+import { localAdminPrincipal } from "@/lib/types/principal";
+import { verifyAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
@@ -85,6 +93,8 @@ const FULL_CONTEXT_FREE_SCOUT_PATTERNS = [
   /\b(?:generate|create|make|draw|render|produce|imagine)\b[\s\S]{0,80}\b(?:image|picture|photo|visual|art|illustration)\b/i,
   /\b(?:image|picture|photo|visual|art|illustration)\b[\s\S]{0,80}\b(?:generate|generation|create|make|draw|render|produce|imagine)\b/i,
   /\b(?:txt2img|text\s*to\s*image|image[-\s]?gen|image generation)\b/i,
+  /\b(?:generate|create|make|render|produce|animate)\b[\s\S]{0,100}\b(?:video|movie|clip|animation|reel)\b/i,
+  /\b(?:image[-\s]?to[-\s]?video|img2vid|text[-\s]?to[-\s]?video|txt2vid|video generation)\b/i,
 ];
 
 function isFreeHivemindosScoutProfile(profile: AgentProfile) {
@@ -116,10 +126,13 @@ export async function POST(request: NextRequest) {
   let actingWalletSource: ActingWalletSourceHint | undefined;
   let suppressWalletIntents = false;
   let permissionMode: ChatPermissionMode = "manual";
+  let requestAttachments: unknown[] = [];
+  let mediaArtifacts: ChatMediaArtifact[] = [];
   try {
     const body = (await request.json()) as {
       agent?: AgentProfile;
       messages?: IncomingMessage[];
+      attachments?: unknown[];
       sharedVault?: SharedVaultConfig;
       workingDirectory?: string;
       wallet?: AgentWalletConfig;
@@ -137,6 +150,7 @@ export async function POST(request: NextRequest) {
     if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
     profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
     messages = body.messages;
+    requestAttachments = Array.isArray(body.attachments) ? body.attachments : [];
     sharedVault = body.sharedVault;
     workingDirectory = body.workingDirectory;
     wallet = body.wallet;
@@ -194,8 +208,42 @@ export async function POST(request: NextRequest) {
     });
     return Response.json({ error: promptCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
   }
+  const auth = await verifyAuth(request);
+  const principal = auth.principal ?? localAdminPrincipal(auth.userId ?? "local-user", "fallback");
   const vault = activeSharedVault(profile, sharedVault);
   runtimeSessionId = createRuntimeChatSessionId(profile, runtimeSessionId || clientRunId);
+  try {
+    mediaArtifacts = await materializeChatMediaArtifacts({
+      attachments: requestAttachments,
+      messages,
+      runtimeSessionId,
+    });
+  } catch (error) {
+    await recordRouteTelemetry(request, "agent_runtime.media_artifacts.failed", {
+      ...telemetryPayloadForProfile(profile),
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      errorName: error instanceof Error ? error.name : "unknown",
+      message: error instanceof Error ? error.message : String(error),
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return Response.json({ error: error instanceof Error ? error.message : "Could not prepare attached media for tool routing." }, { status: 400 });
+  }
+  const teachHiveProposal = await maybeCreateTeachHiveReviewProposal({
+    userPrompt,
+    principal,
+    runtimeSessionId,
+    chatStorageKey,
+  }).catch(() => null);
+  if (teachHiveProposal) {
+    await recordRouteTelemetry(request, "agent_runtime.teach_hive.proposed", {
+      ...telemetryPayloadForProfile(profile),
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      proposalId: teachHiveProposal.id,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+  }
   if (isFusionProfile(profile)) {
     // Hive Fusion compound model: fan out to a panel of configured models,
     // judge their responses, and stream a synthesized answer. Runs before the
@@ -273,7 +321,7 @@ export async function POST(request: NextRequest) {
       routeStartedAt,
       runtimeSessionId,
       chatStorageKey,
-    }, "", "", "", permissionMode);
+    }, "", "", "", permissionMode, mediaArtifacts);
   }
   const fallbackRuntimeCapabilityContext: Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> = {
     runtime: profile.runtime,
@@ -344,7 +392,9 @@ export async function POST(request: NextRequest) {
       buildXMcpCapabilityContext().catch(() => ""),
       buildNansenCapabilityContext().catch(() => ""),
     ]);
+  const mediaArtifactContext = formatChatMediaArtifactContext(mediaArtifacts);
   const taskRetrievalContext = [
+    mediaArtifactContext,
     taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
       query: userPrompt,
       origin: request.url,
@@ -371,6 +421,7 @@ export async function POST(request: NextRequest) {
     sharedBrainMemoryTimedOut: sharedBrainMemoryPreflight.timedOut,
     sharedBrainMemoryFailed: sharedBrainMemoryPreflight.failed,
     contextInjected: Boolean(taskRetrievalContext),
+    mediaArtifactCount: mediaArtifacts.length,
     telemetry: taskRetrievalResult.telemetry,
     elapsedMs: Date.now() - routeStartedAt,
   });
@@ -471,7 +522,7 @@ export async function POST(request: NextRequest) {
       routeStartedAt,
       runtimeSessionId,
       chatStorageKey,
-    }, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext, permissionMode);
+    }, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext, permissionMode, mediaArtifacts);
   }
 
   const token = await getGatewayAuthToken(profile.token);

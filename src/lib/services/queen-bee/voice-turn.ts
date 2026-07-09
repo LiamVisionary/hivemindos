@@ -26,6 +26,7 @@ import {
 } from "@/lib/services/queen-bee/voice-preferences";
 import { readQueenBeeBrainDefaults } from "@/lib/services/queen-bee/voice-settings";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
 import {
   noteQueenVoiceBrainFailure,
@@ -599,12 +600,18 @@ async function runProviderConversationTurn(
       `No key or OpenAI-compatible endpoint for provider "${target.provider || "openai"}" (${target.label}).`,
     );
   }
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: target.provider,
+    model: target.model,
+    cacheScope: `queen-voice:${target.provider}:${target.model}`,
+  });
   const post = (params: Record<string, unknown>) =>
     fetch(endpoint.url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${endpoint.key}`,
         "content-type": "application/json",
+        ...cacheHints.headers,
       },
       body: JSON.stringify({
         model: target.model,
@@ -612,6 +619,7 @@ async function runProviderConversationTurn(
         // Streamed turns feed the fused converse+speak pipeline; the buffered
         // legacy action keeps the plain JSON response.
         ...(onTextDelta ? { stream: true } : {}),
+        ...cacheHints.body,
         ...params,
       }),
       cache: "no-store",

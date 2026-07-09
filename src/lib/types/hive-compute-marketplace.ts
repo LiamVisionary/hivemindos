@@ -8,7 +8,7 @@ export type HiveComputeBinaryStatus = {
 export type HiveComputeEnvPresence = {
   name: string;
   present: boolean;
-  source?: "process" | "shared-hive-env";
+  source?: "process" | "shared-hive-env" | "local-session";
 };
 
 export type HiveComputeModelOption = {
@@ -49,6 +49,51 @@ export type HiveComputeGatewayStatus = {
   };
 };
 
+export type HiveComputePaymentRail = "x402" | "mpp" | "prepaid" | "self-hosted";
+
+export type HiveComputePaymentStatus = {
+  defaultRail: HiveComputePaymentRail;
+  railEnv: string;
+  x402: {
+    ready: boolean;
+    message: string;
+  };
+  mpp: {
+    enabled: boolean;
+    ready: boolean;
+    enabledEnv: string;
+    policyUrlEnv: string;
+    sessionTokenEnv: string;
+    requireSessionEnv: string;
+    policyUrl?: string;
+    sessionToken: HiveComputeEnvPresence;
+    requireSession: boolean;
+    message: string;
+  };
+};
+
+export type HiveComputePrivacyStatus = {
+  mode: "standard" | "tee-required" | "attestation-policy";
+  verifiedOnly: boolean;
+  teeRequiredEnv: string;
+  confidentialModeEnv: string;
+  attestationPolicyUrlEnv: string;
+  teeProviderEnv: string;
+  attestationFileEnv: string;
+  attestationCommandEnv: string;
+  attestationFormatEnv: string;
+  measurementEnv: string;
+  imageDigestEnv: string;
+  encryptionPublicKeyEnv: string;
+  decryptionPrivateKeyFileEnv: string;
+  attestationPolicyUrl?: string;
+  teeProvider?: string;
+  attestationReady: boolean;
+  encryptedDeliveryReady: boolean;
+  evidenceSource?: "file" | "command";
+  message: string;
+};
+
 export type HiveComputeWorkerModuleStatus = {
   root: string;
   installed: boolean;
@@ -60,6 +105,53 @@ export type HiveComputeWorkerModuleStatus = {
   version: string;
   runCommand: string;
   dependencyInstallCommand: string;
+};
+
+export type HiveComputeHostWhen = "idle" | "always" | "sched";
+
+export type HiveComputeHostRunConfig = {
+  markdown: number;
+  maxConcurrency: number;
+  hostWhen: HiveComputeHostWhen;
+  dailyCapUsd: number | null;
+  pauseOnBattery: boolean;
+  yieldToUser: boolean;
+};
+
+export type HiveComputeLocalBackendKind = "lmstudio" | "openai" | "ollama";
+
+export type HiveComputeLocalBackendStatus = {
+  kind: HiveComputeLocalBackendKind;
+  label: string;
+  host: string;
+  reachable: boolean;
+  message: string;
+};
+
+export type HiveComputeHostModel = {
+  id: string;
+  name?: string;
+  providerModelId: string;
+  backendKind: HiveComputeLocalBackendKind;
+  inputPer1m: number;
+  outputPer1m: number;
+};
+
+export type HiveComputeWorkerRunStatus = {
+  status: "idle" | "starting" | "running" | "failed";
+  output: string;
+  error: string;
+  startedAt: number;
+  pid?: number;
+};
+
+export type HiveComputeHostContext = {
+  backend: HiveComputeLocalBackendStatus;
+  models: HiveComputeHostModel[];
+  config: HiveComputeHostRunConfig;
+  canRun: boolean;
+  message: string;
+  run?: HiveComputeWorkerRunStatus;
 };
 
 export type HiveComputeMarketplaceStatus = {
@@ -74,8 +166,11 @@ export type HiveComputeMarketplaceStatus = {
   estimatedEarningsLabel?: string;
   checkedAt: string;
   gateway: HiveComputeGatewayStatus;
+  payments: HiveComputePaymentStatus;
+  privacy: HiveComputePrivacyStatus;
   workerToken: HiveComputeEnvPresence;
   workerModule: HiveComputeWorkerModuleStatus;
+  host: HiveComputeHostContext;
   prerequisites: {
     node: HiveComputeBinaryStatus;
     ollama: HiveComputeBinaryStatus;
@@ -96,6 +191,8 @@ export type HiveComputeMarketplaceStatus = {
     officialAuthority: string;
     selfHosted: string;
     promptPrivacy: string;
+    confidentialCompute: string;
+    micropayments: string;
   };
 };
 

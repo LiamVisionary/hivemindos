@@ -1,4 +1,5 @@
 import { normalizeRuntimeStreamEvent, RUNTIME_STREAM_EVENT_TYPES, type RuntimeStreamEvent } from "@/lib/services/runtime-stream-events";
+import { artifactByDataUrl, textHandleForArtifact, type ChatMediaArtifact } from "./media-artifacts";
 
 export type IncomingMessage = {
   role: string;
@@ -9,6 +10,8 @@ export type IncomingMessage = {
     file?: { filename?: string; file_data?: string };
   }>;
 };
+
+type IncomingContentPart = Extract<IncomingMessage["content"], Array<unknown>>[number];
 
 export function messageText(message?: IncomingMessage) {
   if (!message) return "";
@@ -58,6 +61,64 @@ export function attachmentPromptSummary(message?: IncomingMessage) {
     files ? `${files} file${files === 1 ? "" : "s"}` : "",
   ].filter(Boolean);
   return pieces.length ? `Please respond to the attached ${pieces.join(" and ")}.` : "";
+}
+
+function dataUrlMetadata(value: string) {
+  const match = value.match(/^data:([^;,]+)?(?:;[^,]*)?,([A-Za-z0-9+/=_-]*)$/);
+  if (!match) return { mimeType: "", sizeLabel: "" };
+  const rawSize = Math.floor((match[2].length * 3) / 4);
+  const sizeLabel = rawSize >= 1_000_000
+    ? `${(rawSize / 1_000_000).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(rawSize / 1_000))} KB`;
+  return { mimeType: match[1] || "", sizeLabel };
+}
+
+function attachmentHandleLine(part: IncomingContentPart, artifacts: ChatMediaArtifact[], index: number) {
+  if (part.type === "image_url") {
+    const url = part.image_url?.url ?? "";
+    if (!url) return "";
+    const artifact = artifactByDataUrl(artifacts, url);
+    if (artifact) return textHandleForArtifact(artifact);
+    const meta = dataUrlMetadata(url);
+    const detail = [meta.mimeType || "image", meta.sizeLabel].filter(Boolean).join(", ");
+    return `[media artifact: unmaterialized-image-${index + 1}] kind=image${detail ? ` ${detail}` : ""}`;
+  }
+  if (part.type === "file") {
+    const data = part.file?.file_data ?? "";
+    if (!data) return "";
+    const artifact = artifactByDataUrl(artifacts, data);
+    if (artifact) return textHandleForArtifact(artifact);
+    const meta = dataUrlMetadata(data);
+    const name = part.file?.filename?.trim() || `file ${index + 1}`;
+    const detail = [meta.mimeType, meta.sizeLabel].filter(Boolean).join(", ");
+    return `[media artifact: unmaterialized-file-${index + 1}] kind=file name=${name}${detail ? ` ${detail}` : ""}`;
+  }
+  return "";
+}
+
+export function textOnlyMessagesForTextModel(messages: IncomingMessage[], mediaArtifacts: ChatMediaArtifact[] = []): IncomingMessage[] {
+  return messages.map((message) => {
+    if (typeof message.content === "string") return message;
+    const textParts = message.content
+      .filter((part) => part.type === "text" && part.text?.trim())
+      .map((part) => part.text?.trim() ?? "");
+    let omittedAttachmentIndex = 0;
+    const attachmentHandles = message.content.flatMap((part) => {
+      const line = attachmentHandleLine(part, mediaArtifacts, omittedAttachmentIndex);
+      if (!line) return [];
+      omittedAttachmentIndex += 1;
+      return [line];
+    });
+    if (!attachmentHandles.length) return message;
+    const content = [
+      ...textParts,
+      [
+        "Attached media artifact handles:",
+        ...attachmentHandles,
+      ].join("\n"),
+    ].filter(Boolean).join("\n\n");
+    return { ...message, content };
+  });
 }
 
 function streamEventForPayload(payload: unknown) {

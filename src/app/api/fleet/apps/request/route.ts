@@ -1,6 +1,10 @@
 import { NextRequest } from "next/server";
 import { discoverRawConnectedApps } from "@/lib/services/fleet/connected-apps";
+import { authorizeOperation, decisionAllowed } from "@/lib/services/security/action-authorization";
+import { recordAuditEvent } from "@/lib/services/security/audit-events";
+import { errorJson } from "@/lib/utils/api-response";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import { requireAuthContext } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 
@@ -79,30 +83,55 @@ async function discoveredApps(origin: string, body: AppRequestBody) {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuthContext(request);
+  if (auth.response) return auth.response;
   let body: AppRequestBody;
   try {
     body = await request.json() as AppRequestBody;
   } catch {
-    return Response.json({ ok: false, error: "Expected JSON body." }, { status: 400 });
+    return errorJson("Expected JSON body.", 400);
   }
 
   const method = (body.method || "GET").trim().toUpperCase();
   if (!ALLOWED_METHODS.has(method)) {
-    return Response.json({ ok: false, error: "Only GET and POST app requests are supported." }, { status: 400 });
+    return errorJson("Only GET and POST app requests are supported.", 400);
   }
 
   let path: string;
   try {
     path = normalizeRequestPath(body.path);
   } catch (error) {
-    return Response.json({ ok: false, error: error instanceof Error ? error.message : "Invalid app request path." }, { status: 400 });
+    return errorJson(error instanceof Error ? error.message : "Invalid app request path.", 400);
+  }
+
+  const decision = authorizeOperation({
+    id: `connected-app:${method}`,
+    title: "Connected app request",
+    sideEffects: method === "GET" ? ["read", "network"] : ["network", "write"],
+    risk: method === "GET" ? "low" : "medium",
+    readOnly: method === "GET",
+    requiredClaims: method === "GET" ? ["apps:read"] : ["apps:invoke"],
+  }, { principal: auth.principal, caller: "connected-app" });
+  await recordAuditEvent({
+    type: "connected-app.request",
+    principal: auth.principal,
+    decision,
+    target: `${method} ${path}`,
+    payload: {
+      appId: body.appId ?? null,
+      serviceKind: body.serviceKind ?? null,
+      method,
+    },
+  });
+  if (!decisionAllowed(decision)) {
+    return errorJson(decision.reason, decision.status === "needs-approval" ? 409 : 403, { decision });
   }
 
   try {
     const apps = await discoveredApps(request.nextUrl.origin, body);
     const app = selectedApp(apps, body);
     if (!app?.apiBaseUrl) {
-      return Response.json({ ok: false, error: "No matching connected app with an API base URL was found." }, { status: 404 });
+      return errorJson("No matching connected app with an API base URL was found.", 404);
     }
 
     const baseUrl = app.apiBaseUrl.replace(/\/+$/, "");
@@ -145,9 +174,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    return Response.json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Connected app request failed.",
-    }, { status: 502 });
+    return errorJson(error instanceof Error ? error.message : "Connected app request failed.", 502);
   }
 }

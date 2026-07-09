@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { DASHBOARD_AUTH_HEADER } from "@/lib/utils/internal-api-auth";
+import { localAdminPrincipal, type PrincipalContext } from "@/lib/types/principal";
 
 export const DASHBOARD_SESSION_COOKIE = "hivemindos_session";
 export { DASHBOARD_AUTH_HEADER };
@@ -11,8 +12,9 @@ const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_SECRET_LENGTH = 32;
 const MIN_TOKEN_LENGTH = 24;
 
-type AuthResult = {
+export type AuthResult = {
   userId: string | null;
+  principal?: PrincipalContext;
   reason?: string;
 };
 
@@ -39,6 +41,14 @@ function nativeBootstrapToken() {
 
 function userId() {
   return process.env.OPENCLAW_NEXT_USER_ID?.trim() || "local-user";
+}
+
+function authResult(source: "session" | "device-token"): AuthResult {
+  const id = userId();
+  return {
+    userId: id,
+    principal: localAdminPrincipal(id, source),
+  };
 }
 
 export function dashboardAuthConfigured() {
@@ -208,19 +218,19 @@ export async function verifyAuth(request: Request): Promise<AuthResult> {
 
   const sessionValue = requestCookie(request, DASHBOARD_SESSION_COOKIE);
   if (sessionValue) {
-    if (verifiedRecently(`session:${sessionValue}`, now)) return { userId: userId() };
+    if (verifiedRecently(`session:${sessionValue}`, now)) return authResult("session");
     if (await verifyDashboardSessionCookie(sessionValue)) {
       rememberVerified(`session:${sessionValue}`, now);
-      return { userId: userId() };
+      return authResult("session");
     }
   }
 
   const headerToken = request.headers.get(DASHBOARD_AUTH_HEADER)?.trim() || bearerToken(request);
   if (headerToken) {
-    if (verifiedRecently(`device:${headerToken}`, now)) return { userId: userId() };
+    if (verifiedRecently(`device:${headerToken}`, now)) return authResult("device-token");
     if (await verifyDeviceToken(headerToken)) {
       rememberVerified(`device:${headerToken}`, now);
-      return { userId: userId() };
+      return authResult("device-token");
     }
   }
 
@@ -234,4 +244,12 @@ export function unauthorizedJson(reason = "Dashboard authentication is required.
 export async function requireAuth(request: Request) {
   const auth = await verifyAuth(request);
   return auth.userId ? null : unauthorizedJson(auth.reason);
+}
+
+export async function requireAuthContext(request: Request) {
+  const auth = await verifyAuth(request);
+  if (!auth.userId || !auth.principal) {
+    return { auth, response: unauthorizedJson(auth.reason) };
+  }
+  return { auth, principal: auth.principal, response: null };
 }

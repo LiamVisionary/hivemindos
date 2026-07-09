@@ -734,16 +734,7 @@ export async function readGatewayVoiceConfig(origin?: string): Promise<GatewayCa
 }
 
 export async function readGatewayVoiceDeviceStatus(): Promise<GatewayCallResult> {
-  return {
-    ok: true,
-    gateway: "hivemindos",
-    result: {
-      ok: true,
-      count: 0,
-      device: null,
-      apns: { configured: false, missing: ["HivemindOS in-app agent calls do not require the Claw gateway APNs device registry."] },
-    },
-  };
+  return gatewayJson("/voice/devices/status");
 }
 
 export function ringStoredPrompt(scriptId: string) {

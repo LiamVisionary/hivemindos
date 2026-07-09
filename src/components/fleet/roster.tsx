@@ -4,11 +4,11 @@
 // machine itself: health bars, specs, agent counts, and hosted apps.
 "use client";
 
-import Image from "next/image";
 import * as React from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
+  Cpu,
   GitBranch,
   LoaderCircle,
   Monitor,
@@ -40,7 +40,6 @@ export type {
   AeonDeleteStepStatus,
 } from "./aeon-delete-modal";
 
-const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
 const MAX_APP_BADGES = 8;
 
 export type MachineUpdateButtonStatus =
@@ -621,20 +620,13 @@ function RosterRow({
                     onOpenUsePodHost();
                   }}
                   className={styles.rosterUsePodHostButton}
-                  aria-label={`Rent ${machine.name} compute through UsePod`}
+                  aria-label={`Rent ${machine.name} compute through Hive Compute`}
                 >
-                  <Image
-                    src={USEPOD_RUNTIME_ICON_PATH}
-                    alt=""
-                    aria-hidden="true"
-                    width={15}
-                    height={15}
-                    unoptimized
-                  />
+                  <Cpu size={15} aria-hidden="true" />
                   <span>Rent compute</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Run usepod-agent on this machine</TooltipContent>
+              <TooltipContent>Run Hive Compute on this machine</TooltipContent>
             </Tooltip>
           ) : null}
 

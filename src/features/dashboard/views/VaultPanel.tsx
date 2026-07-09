@@ -14,6 +14,7 @@ import { BrainAtlasPanel, BrainDreamInboxPanel, BrainSkillRoiPanel } from "./Bra
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
 import { AgentMemoryHealthCard } from "./AgentMemoryHealthCard";
 import { SkillSecurityCard } from "./SkillSecurityCard";
+import { SyntoModelTierSettings } from "./SyntoModelTierSettings";
 import brainServiceStyles from "./brain-services.module.css";
 import { SectionModeHeader } from "./WorkSectionHeader";
 
@@ -21,7 +22,7 @@ export const VaultPanel = memo(VaultPanelComponent);
 
 // Memoized (see export above) so unrelated background re-renders skip this panel.
 function VaultPanelComponent(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startAgentChat, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshRuntimeIntegrations, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runRuntimeIntegrationAction, runSyntoAction, runVaultTailnetSync, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startAgentChat, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
   const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
@@ -861,19 +862,15 @@ function VaultPanelComponent(props: any) {
               <option value="disabled">Disabled</option>
             </select>
           </label>
-          <label>
-            Compare model
-            <select
-              value={sharedVault.synto.compareHeavyModel}
-              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, compareHeavyModel: event.target.value } })}
-            >
-              <option value="llama3.1:8b">llama3.1:8b</option>
-              <option value="qwen2.5:14b">qwen2.5:14b</option>
-              <option value="gemma4:e4b">gemma4:e4b</option>
-              <option value="mistral-nemo:12b">mistral-nemo:12b</option>
-              <option value="deepseek-r1:8b">deepseek-r1:8b</option>
-            </select>
-          </label>
+          <SyntoModelTierSettings
+            sharedVault={sharedVault}
+            updateSharedVault={updateSharedVault}
+            runtimeIntegrationBusy={runtimeIntegrationBusy}
+            runtimeIntegrationMessage={runtimeIntegrationMessage}
+            runtimeIntegrationStatus={runtimeIntegrationStatus}
+            refreshRuntimeIntegrations={refreshRuntimeIntegrations}
+            runRuntimeIntegrationAction={runRuntimeIntegrationAction}
+          />
           <label>
             Min confidence
             <input

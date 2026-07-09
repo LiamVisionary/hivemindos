@@ -27,7 +27,7 @@ import {
   BANKR_ACTION_TOOL_NAME,
   runBankrActionTool,
 } from "@/lib/services/bankr-actions";
-import { imageGenerationRequest } from "@/lib/services/chat/task-retrieval-context";
+import { imageGenerationRequest, videoGenerationRequest } from "@/lib/services/chat/task-retrieval-context";
 import {
   buildHivemindPromptEnvelope,
   prependHivemindSystemMessage,
@@ -37,6 +37,7 @@ import {
   inferredModalColdStartProcessEvent,
   recordAgentRuntimeWarm,
 } from "@/lib/services/chat/agent-cold-start";
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
 import {
   flushChannelMarkup,
@@ -65,9 +66,12 @@ import {
   isTerminalOpenAiStreamMetadata,
   routeChannelMarkupDelta,
   ssePayload,
+  textOnlyMessagesForTextModel,
   unwrapLatestUserRequest,
   type IncomingMessage,
 } from "./messages";
+import type { ChatMediaArtifact } from "./media-artifacts";
+import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
 import {
   execFileAsync,
@@ -131,7 +135,9 @@ function hivemindosModelsBillingFromHeaders(headers: Headers): ChatResponseBilli
 }
 
 const IMAGE_TOOL_DISPATCH_TIMEOUT_MS = 190_000;
+const VIDEO_TOOL_DISPATCH_TIMEOUT_MS = 260_000;
 const IMAGE_GENERATION_TOOL_NAME = "generate_image";
+const VIDEO_GENERATION_TOOL_NAME = "generate_video";
 
 // Single tool offered to OpenAI-compatible models when the user is asking for an
 // image. The model only supplies the prompt; HivemindOS picks the best reachable
@@ -147,6 +153,25 @@ function imageGenerationToolDefinition() {
         type: "object",
         properties: {
           prompt: { type: "string", description: "The complete image-generation prompt to render." },
+        },
+        required: ["prompt"],
+      },
+    },
+  };
+}
+
+function videoGenerationToolDefinition() {
+  return {
+    type: "function",
+    function: {
+      name: VIDEO_GENERATION_TOOL_NAME,
+      description: "Generate a video using a connected HivemindOS video-generation app or service. Call this when the user asks for video, animation, image-to-video, img2vid, or to animate an attached image. If the current turn has media artifact handles, pass the relevant artifact id or path; otherwise HivemindOS will use the current turn's first attached image by default.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "The complete video-generation prompt." },
+          inputImageId: { type: "string", description: "Optional current-turn media artifact id to use as the source image." },
+          inputImagePath: { type: "string", description: "Optional local path for the source image artifact." },
         },
         required: ["prompt"],
       },
@@ -229,6 +254,15 @@ type ImageGenerationDispatchResult = {
   images?: Array<{ url: string; width?: number; height?: number; seed?: string | number }>;
 };
 
+type VideoGenerationDispatchResult = {
+  ok: boolean;
+  error?: string;
+  prompt?: string;
+  app?: { id?: string; name?: string; machineName?: string; serviceKind?: string };
+  endpoint?: string;
+  videos?: Array<{ url: string; mimeType?: string; durationMs?: number }>;
+};
+
 async function dispatchImageGenerationViaRoute(origin: string, prompt: string, signal?: AbortSignal): Promise<ImageGenerationDispatchResult> {
   const response = await fetch(new URL("/api/chat/image-generation", origin), {
     method: "POST",
@@ -246,12 +280,43 @@ async function dispatchImageGenerationViaRoute(origin: string, prompt: string, s
   return json;
 }
 
+async function dispatchVideoGenerationViaRoute(
+  origin: string,
+  prompt: string,
+  inputImages: Array<{ path?: string; dataUrl?: string; mimeType?: string; name?: string }>,
+  signal?: AbortSignal,
+): Promise<VideoGenerationDispatchResult> {
+  const response = await fetch(new URL("/api/chat/video-generation", origin), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...internalApiAuthHeaders() },
+    body: JSON.stringify({ prompt, inputImages }),
+    cache: "no-store",
+    signal: signal ?? AbortSignal.timeout(VIDEO_TOOL_DISPATCH_TIMEOUT_MS),
+  });
+  const json = await response.json().catch(() => null) as VideoGenerationDispatchResult | null;
+  if (!response.ok || !json?.ok) {
+    throw new Error(json?.error || `Video generation failed (${response.status}).`);
+  }
+  return json;
+}
+
 function imageGenerationArtifacts(images?: Array<{ url: string }>) {
   const urls = (images ?? []).map((image) => image?.url).filter((url): url is string => Boolean(url));
   return urls.map((url, index) => ({
     kind: "image",
     url,
     label: urls.length === 1 ? "Generated image" : `Generated image ${index + 1}`,
+  }));
+}
+
+function videoGenerationArtifacts(videos?: Array<{ url: string; mimeType?: string; durationMs?: number }>) {
+  const entries = (videos ?? []).filter((video): video is { url: string; mimeType?: string; durationMs?: number } => Boolean(video?.url));
+  return entries.map((video, index) => ({
+    kind: "video",
+    url: video.url,
+    label: entries.length === 1 ? "Generated video" : `Generated video ${index + 1}`,
+    mimeType: video.mimeType,
+    durationMs: video.durationMs,
   }));
 }
 
@@ -271,6 +336,7 @@ export async function streamOpenAICompatibleRuntime(
   adaptiveRoutePlan?: AdaptiveRoutePlan,
   vaultPromptContext = "",
   permissionMode: ChatPermissionMode = "manual",
+  mediaArtifacts: ChatMediaArtifact[] = [],
 ) {
   const normalizedPermissionMode = normalizeChatPermissionMode(permissionMode);
   const allowUnlistedCommands = chatPermissionModeAllowsUnlistedCommands(normalizedPermissionMode);
@@ -372,6 +438,21 @@ export async function streamOpenAICompatibleRuntime(
       return Response.json({ error: error instanceof Error ? error.message : "Hive Compute setup is incomplete." }, { status: 400 });
     }
   }
+  // Tool offers key on the user's bare request: FAB briefings and the Queen
+  // voice pipeline's flattened persona/history would otherwise re-trigger an
+  // offer on every turn (weak local models then CALL the offered tool even for
+  // "nothing much"). Falls back to the full text for ordinary chat messages.
+  const intentText = extractUserText(unwrapLatestUserRequest(messages)).trim() || userText;
+  // Only advertise the image tool when the user is actually asking for an image and we
+  // can reach our own dispatch route. Every other chat is byte-for-byte unchanged.
+  const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(intentText);
+  const offerVideoTool = Boolean(requestOrigin) && videoGenerationRequest(intentText);
+  const routeMediaViaArtifactHandles = walletPaidModelsEnabled
+    && isFreeHivemindosWalletPaidModel(runtimeProfile.model)
+    && offerVideoTool;
+  const modelInputMessages = routeMediaViaArtifactHandles
+    ? textOnlyMessagesForTextModel(messages, mediaArtifacts)
+    : messages;
   const url = buildOpenAICompatibleUrl(runtimeProfile);
   const lockKey = interactiveRuntimeLockKey(runtimeProfile, url);
   if (!reserveInteractiveRuntime(lockKey)) {
@@ -403,7 +484,7 @@ export async function streamOpenAICompatibleRuntime(
       runtimeSessionId,
       extraDynamicContext: buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel),
     });
-    return prependHivemindSystemMessage(messages, promptEnvelope);
+    return prependHivemindSystemMessage(modelInputMessages, promptEnvelope);
   };
   let candidateModels: string[];
   try {
@@ -416,14 +497,6 @@ export async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
-  // Tool offers key on the user's bare request: FAB briefings and the Queen
-  // voice pipeline's flattened persona/history would otherwise re-trigger an
-  // offer on every turn (weak local models then CALL the offered tool even for
-  // "nothing much"). Falls back to the full text for ordinary chat messages.
-  const intentText = extractUserText(unwrapLatestUserRequest(messages)).trim() || userText;
-  // Only advertise the image tool when the user is actually asking for an image and we
-  // can reach our own dispatch route. Every other chat is byte-for-byte unchanged.
-  const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(intentText);
   // Advertise the real-command tool to agents whose profile declares the
   // skillActions runtime capability. This gives a hivemind-os chat agent an
   // actual local-execution loop (allowlisted commands) instead of letting it
@@ -434,6 +507,7 @@ export async function streamOpenAICompatibleRuntime(
   // field is sent and the chat path is byte-for-byte unchanged.
   const toolDefinitions = [
     ...(offerImageTool ? [imageGenerationToolDefinition()] : []),
+    ...(offerVideoTool ? [videoGenerationToolDefinition()] : []),
     ...(offerBankrTool ? [bankrActionToolDefinition()] : []),
     ...(offerCommandTool ? [runCommandToolDefinition()] : []),
   ];
@@ -485,7 +559,21 @@ export async function streamOpenAICompatibleRuntime(
       },
     ],
   });
-  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean } | null = null;
+  const videoInputImagesForArgs = (args: Record<string, unknown>) => {
+    const imageId = typeof args.inputImageId === "string" ? args.inputImageId.trim() : "";
+    const imagePath = typeof args.inputImagePath === "string" ? args.inputImagePath.trim() : "";
+    const selected = mediaArtifacts.find((artifact) => (
+      artifact.kind === "image"
+      && ((imageId && artifact.id === imageId) || (imagePath && artifact.path === imagePath))
+    )) ?? mediaArtifacts.find((artifact) => artifact.kind === "image");
+    return selected ? [{
+      path: selected.path,
+      dataUrl: selected.dataUrl,
+      mimeType: selected.mimeType,
+      name: selected.name,
+    }] : [];
+  };
+  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean; cacheBody: Record<string, unknown> } | null = null;
   const runNonStreamToolCalls = async (toolCalls: AccumulatedToolCall[]): Promise<NonStreamToolRun> => {
     const events: string[] = [];
     const assistantToolCalls: Array<Record<string, unknown>> = [];
@@ -495,6 +583,37 @@ export async function streamOpenAICompatibleRuntime(
     for (const call of toolCalls) {
       const callId = call.id || `call_${call.name}`;
       assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
+      if (call.name === VIDEO_GENERATION_TOOL_NAME) {
+        const args = parseToolCallArguments(call.arguments);
+        const videoPrompt = typeof args.prompt === "string" && args.prompt.trim() ? args.prompt.trim() : userText;
+        const inputImages = videoInputImagesForArgs(args);
+        events.push(ssePayload({ applicationGeneration: { status: "running", kind: "video", prompt: videoPrompt, title: "Video generation", createdAt: Date.now() } }));
+        await appendRuntimeChatSessionEvent(runtimeSessionId, "Video generation", `Dispatching ${inputImages.length ? "attached-image" : "text"} video request to a connected video app.`).catch(() => undefined);
+        try {
+          const result = await dispatchVideoGenerationViaRoute(requestOrigin, videoPrompt, inputImages, telemetry?.request?.signal);
+          const artifacts = videoGenerationArtifacts(result.videos);
+          events.push(ssePayload({ applicationGeneration: {
+            status: "ready",
+            kind: "video",
+            prompt: result.prompt || videoPrompt,
+            title: "Video generation",
+            appName: result.app?.name,
+            machineName: result.app?.machineName,
+            artifacts,
+            completedAt: Date.now(),
+          } }));
+          await appendRuntimeChatSessionEvent(runtimeSessionId, "Video generation completed", `${artifacts.length} video${artifacts.length === 1 ? "" : "s"} from ${result.app?.name ?? "connected app"}.`).catch(() => undefined);
+          toolResultMessages.push({ role: "tool", tool_call_id: callId, content: JSON.stringify({ ok: true, app: result.app?.name, endpoint: result.endpoint, videos: artifacts.map((artifact) => artifact.url) }) });
+          fallbacks.push(artifacts.length ? `Generated ${artifacts.length} video${artifacts.length === 1 ? "" : "s"} with ${result.app?.name ?? "the connected app"}.` : "The video generation finished.");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Video generation failed.";
+          events.push(ssePayload({ applicationGeneration: { status: "error", kind: "video", prompt: videoPrompt, title: "Video generation", error: message, completedAt: Date.now() } }));
+          await appendRuntimeChatSessionEvent(runtimeSessionId, "Video generation failed", message).catch(() => undefined);
+          toolResultMessages.push({ role: "tool", tool_call_id: callId, content: JSON.stringify({ ok: false, error: message }) });
+          fallbacks.push(`I couldn't complete the video generation: ${message}`);
+        }
+        continue;
+      }
       if (call.name !== RUN_COMMAND_TOOL_NAME) {
         const message = `Tool ${call.name} is not available for this non-streamed HivemindOS Models response.`;
         events.push(ssePayload({
@@ -646,6 +765,7 @@ export async function streamOpenAICompatibleRuntime(
         model: winningRequest.model,
         messages: conversation,
         stream: false,
+        ...winningRequest.cacheBody,
         ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
       };
       let continuation: Response | null = null;
@@ -755,11 +875,17 @@ export async function streamOpenAICompatibleRuntime(
     const candidateUrl = buildOpenAICompatibleUrl(candidateProfile);
     attemptedModels.push(`${routeAttempt.provider}/${candidateModel}`);
     const modelMessages = modelMessagesFor(candidateProfile, candidateModel);
+    const cacheHints = openAICompatibleInferenceCacheHints({
+      provider: candidateProfile.provider,
+      model,
+      cacheScope: `${candidateProfile.id || runtimeProfile.id || "agent"}:${runtimeSessionId || candidateProfile.sessionKey || "session"}`,
+    });
     const attemptHeaders = {
       "Content-Type": "application/json",
       ...(candidateProfile.token ? { Authorization: `Bearer ${candidateProfile.token}` } : {}),
       ...usePodHeaders,
       ...providerHeaders,
+      ...cacheHints.headers,
       ...(routeAttempt.headers ?? {}),
     };
     let sentTools = toolDefinitions.length > 0;
@@ -767,6 +893,7 @@ export async function streamOpenAICompatibleRuntime(
       model,
       messages: modelMessages,
       stream: true,
+      ...cacheHints.body,
       ...(withTools && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
     });
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.start", {
@@ -881,7 +1008,7 @@ export async function streamOpenAICompatibleRuntime(
             elapsedMs: Date.now() - fetchStartedAt,
           });
           if (upstream.ok) {
-            winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools };
+            winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools, cacheBody: cacheHints.body };
             break;
           }
         } catch (retryError) {
@@ -903,7 +1030,7 @@ export async function streamOpenAICompatibleRuntime(
     }
     if (upstream.ok) {
       recordAgentRuntimeWarm(candidateProfile);
-      winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools };
+      winningRequest = { url: candidateUrl, headers: attemptHeaders, messages: modelMessages, model, provider: routeAttempt.provider, sentTools, cacheBody: cacheHints.body };
       break;
     }
     lastStatus = upstream.status;
@@ -1292,6 +1419,82 @@ export async function streamOpenAICompatibleRuntime(
         }
       };
 
+      const runVideoToolCall = async (call: AccumulatedToolCall) => {
+        const args = parseToolCallArguments(call.arguments);
+        const videoPrompt = typeof args.prompt === "string" && args.prompt.trim() ? args.prompt.trim() : userText;
+        const inputImages = videoInputImagesForArgs(args);
+        controller.enqueue(encoder.encode(ssePayload({ applicationGeneration: {
+          status: "running",
+          prompt: videoPrompt,
+          title: "Video generation",
+          kind: "video",
+          createdAt: Date.now(),
+        } })));
+        queueSessionWrite(() => appendRuntimeChatSessionEvent(
+          runtimeSessionId,
+          "Video generation",
+          inputImages.length
+            ? `Dispatching the prompt with ${inputImages.length} source image to the best reachable connected video app.`
+            : "Dispatching the prompt to the best reachable connected video app.",
+        ));
+        recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.video_tool.dispatch", {
+          ...telemetryPayloadForProfile(profile),
+          url,
+          model,
+          promptLength: videoPrompt.length,
+          inputImageCount: inputImages.length,
+        });
+        const heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(ssePayload({})));
+          } catch {
+            // controller already closed; nothing to keep alive
+          }
+        }, 20_000);
+        try {
+          const result = await dispatchVideoGenerationViaRoute(requestOrigin, videoPrompt, inputImages, telemetry?.request?.signal);
+          clearInterval(heartbeat);
+          const artifacts = videoGenerationArtifacts(result.videos);
+          const completedAt = Date.now();
+          controller.enqueue(encoder.encode(ssePayload({ applicationGeneration: {
+            status: "ready",
+            kind: "video",
+            prompt: result.prompt || videoPrompt,
+            title: "Video generation",
+            appName: result.app?.name,
+            machineName: result.app?.machineName,
+            artifacts,
+            completedAt,
+          } })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Video generation completed", `${artifacts.length} video${artifacts.length === 1 ? "" : "s"} from ${result.app?.name ?? "connected app"}.`));
+          recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.video_tool.completed", {
+            ...telemetryPayloadForProfile(profile),
+            appName: result.app?.name ?? null,
+            endpoint: result.endpoint ?? null,
+            videoCount: artifacts.length,
+          });
+          return {
+            toolResultContent: JSON.stringify({ ok: true, app: result.app?.name, endpoint: result.endpoint, videos: artifacts.map((artifact) => artifact.url) }),
+            fallbackText: artifacts.length
+              ? `Generated ${artifacts.length} video${artifacts.length === 1 ? "" : "s"} with ${result.app?.name ?? "the connected app"}.`
+              : "The video generation finished.",
+          };
+        } catch (error) {
+          clearInterval(heartbeat);
+          const message = error instanceof Error ? error.message : "Video generation failed.";
+          controller.enqueue(encoder.encode(ssePayload({ applicationGeneration: { status: "error", kind: "video", prompt: videoPrompt, title: "Video generation", error: message, completedAt: Date.now() } })));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Video generation failed", message));
+          recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.video_tool.failed", {
+            ...telemetryPayloadForProfile(profile),
+            errorMessage: message,
+          });
+          return {
+            toolResultContent: JSON.stringify({ ok: false, error: message }),
+            fallbackText: `I couldn't complete the video generation: ${message}`,
+          };
+        }
+      };
+
       // Execute a run_command tool call: stream a running/finished tool card (the
       // same chat.tool.* shape the dashboard + mobile client render), run the
       // allowlisted command, then return the tool-result payload for the
@@ -1466,6 +1669,7 @@ export async function streamOpenAICompatibleRuntime(
       // error result so the model can recover instead of stalling.
       const runToolCall = async (call: AccumulatedToolCall): Promise<ToolCallOutcome> => {
         if (call.name === IMAGE_GENERATION_TOOL_NAME) return runImageToolCall(call);
+        if (call.name === VIDEO_GENERATION_TOOL_NAME) return runVideoToolCall(call);
         if (call.name === BANKR_ACTION_TOOL_NAME) return runBankrToolCall(call);
         if (call.name === RUN_COMMAND_TOOL_NAME) return runCommandToolCall(call);
         return {
@@ -1523,6 +1727,7 @@ export async function streamOpenAICompatibleRuntime(
             model: winningRequest.model,
             messages: conversation,
             stream: true,
+            ...winningRequest.cacheBody,
             ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
           };
           let continuation: Response | null = null;

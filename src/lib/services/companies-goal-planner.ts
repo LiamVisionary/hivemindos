@@ -4,6 +4,7 @@ import type { Company } from "@/lib/types/company";
 import type { QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
 import { readRuntimeResponseText, voiceOptimizedAgent } from "@/lib/services/phone/runtime-voice-turn";
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
@@ -55,7 +56,7 @@ function systemPrompt(maxTasks: number): string {
 /** How many lifetime completed-task titles the planner prompt carries. */
 const COMPLETED_INVENTORY_LIMIT = 40;
 
-export function userPrompt(company: Company, history?: string, completedTitles?: readonly string[]): string {
+export function userPrompt(company: Company, history?: string, completedTitles?: readonly string[], salesContentContext?: string): string {
   const apex = company.apexGoal;
   const goal = apex?.title?.trim() || company.name;
   const lines = [
@@ -100,6 +101,10 @@ export function userPrompt(company: Company, history?: string, completedTitles?:
   const trimmedHistory = history?.trim();
   if (trimmedHistory) {
     lines.push("", "Recent company activity (newest first):", trimmedHistory, "");
+  }
+  const salesContext = salesContentContext?.trim();
+  if (salesContext) {
+    lines.push("", salesContext, "");
   }
   lines.push("Produce the next batch of tasks that moves this goal toward its target.");
   return lines.join("\n");
@@ -156,12 +161,19 @@ async function runOpenAiDecompose(system: string, user: string): Promise<string>
   const apiKey = await transcriptionApiKey().catch(() => "");
   if (!apiKey) return "";
   try {
+    const model = process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_FALLBACK_MODEL;
+    const cacheHints = openAICompatibleInferenceCacheHints({
+      provider: "openai",
+      model,
+      cacheScope: "company-goal-planner",
+    });
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json", ...cacheHints.headers },
       body: JSON.stringify({
-        model: process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_FALLBACK_MODEL,
+        model,
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        ...cacheHints.body,
         max_tokens: 900,
         temperature: 0.3,
         response_format: { type: "json_object" },
@@ -179,12 +191,12 @@ async function runOpenAiDecompose(system: string, user: string): Promise<string>
 
 export async function llmDecomposeApexGoal(
   company: Company,
-  opts: { origin?: string; vaultPath?: string; maxTasks?: number; history?: string; completedTitles?: readonly string[] } = {},
+  opts: { origin?: string; vaultPath?: string; maxTasks?: number; history?: string; completedTitles?: readonly string[]; salesContentContext?: string } = {},
 ): Promise<QueenBeePrdTaskDraft[] | null> {
   if (!company.apexGoal?.title?.trim()) return null;
   const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
   const system = systemPrompt(maxTasks);
-  const user = userPrompt(company, opts.history, opts.completedTitles);
+  const user = userPrompt(company, opts.history, opts.completedTitles, opts.salesContentContext);
 
   // 1. Brain: the company's own chat-capable fleet agent (agent-scoped model),
   //    via the same /api/chat/agent-runtime path queen-bee's pilot/voice turns use.

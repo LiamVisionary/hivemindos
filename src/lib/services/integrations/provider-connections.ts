@@ -1,106 +1,59 @@
 import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayload } from "@/lib/types/integrations";
 import { readSharedAgentEnv, removeSharedAgentEnv, saveSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
-import { CLAWBANK_TOKEN_ENV_NAMES, clawbankMe } from "@/lib/services/clawbank";
+import { clawbankMe } from "@/lib/services/clawbank";
+import {
+  CONNECTOR_MANIFESTS,
+  type ConnectorManifest,
+} from "@/lib/services/integrations/connector-manifests";
+import {
+  googleCloudOAuthClientReady,
+  mintGoogleCloudAccessToken,
+} from "@/lib/services/integrations/google-cloud-oauth";
+import {
+  GOOGLE_CLIENT_ID_ENV,
+  GOOGLE_CLIENT_SECRET_ENV,
+  GOOGLE_CLOUD_ACCOUNT_EMAIL_ENV,
+  GOOGLE_CLOUD_CLIENT_ID_ENV,
+  GOOGLE_CLOUD_CLIENT_SECRET_ENV,
+  GOOGLE_CLOUD_REFRESH_TOKEN_ENV,
+  GOOGLE_REFRESH_TOKEN_ENV,
+} from "@/lib/services/integrations/provider-connection-env";
+
+export {
+  GOOGLE_CLIENT_ID_ENV,
+  GOOGLE_CLIENT_SECRET_ENV,
+  GOOGLE_REFRESH_TOKEN_ENV,
+  GOOGLE_CLOUD_CLIENT_ID_ENV,
+  GOOGLE_CLOUD_CLIENT_SECRET_ENV,
+  GOOGLE_CLOUD_REFRESH_TOKEN_ENV,
+  GOOGLE_CLOUD_ACCOUNT_EMAIL_ENV,
+} from "@/lib/services/integrations/provider-connection-env";
 
 type VerifyResult = { ok: boolean; account?: string; error?: string };
 
-type ProviderSpec = {
-  key: ConnectionProviderKey;
-  label: string;
-  detail: string;
-  /** Env key that holds the account credential; presence means "connected". */
-  tokenEnvKey: string;
-  /** Legacy env-key names also accepted (read for status, removed on disconnect).
-   *  New tokens are always saved under tokenEnvKey. */
-  tokenEnvAliases?: string[];
-  /** Short instructions shown next to the token field. */
-  tokenHint: string;
-  tokenPlaceholder: string;
+type ProviderSpec = ConnectorManifest & {
   verify: (token: string, sharedEnv: Record<string, string>) => Promise<VerifyResult>;
 };
 
 const VERIFY_TIMEOUT_MS = 6_000;
 const USER_AGENT = "hivemindos-connections";
 
-export const GOOGLE_CLIENT_ID_ENV = "GOOGLE_OAUTH_CLIENT_ID";
-export const GOOGLE_CLIENT_SECRET_ENV = "GOOGLE_OAUTH_CLIENT_SECRET";
-export const GOOGLE_REFRESH_TOKEN_ENV = "GOOGLE_OAUTH_REFRESH_TOKEN";
+const VERIFY_BY_PROVIDER: Record<ConnectionProviderKey, ProviderSpec["verify"]> = {
+  github: verifyGitHub,
+  linear: verifyLinear,
+  slack: verifySlack,
+  notion: verifyNotion,
+  google: verifyGoogle,
+  "google-cloud": verifyGoogleCloud,
+  posthog: verifyPostHog,
+  plausible: verifyPlausible,
+  clawbank: verifyClawBank,
+};
 
-const PROVIDERS: ProviderSpec[] = [
-  {
-    key: "github",
-    label: "GitHub",
-    detail: "Code, issues, pull requests, and releases.",
-    tokenEnvKey: "GH_GLOBAL",
-    tokenHint: "GitHub → Settings → Developer settings → Personal access tokens.",
-    tokenPlaceholder: "ghp_... or github_pat_...",
-    verify: verifyGitHub,
-  },
-  {
-    key: "linear",
-    label: "Linear",
-    detail: "Tasks, projects, and triage queues.",
-    tokenEnvKey: "LINEAR_API_KEY",
-    tokenHint: "Linear → Settings → Security & access → Personal API keys.",
-    tokenPlaceholder: "lin_api_...",
-    verify: verifyLinear,
-  },
-  {
-    key: "slack",
-    label: "Slack",
-    detail: "Channels, mentions, and approval messages.",
-    tokenEnvKey: "SLACK_BOT_TOKEN",
-    tokenHint: "Slack app → OAuth & Permissions → Bot User OAuth Token.",
-    tokenPlaceholder: "xoxb-...",
-    verify: verifySlack,
-  },
-  {
-    key: "notion",
-    label: "Notion",
-    detail: "Docs, project pages, and task databases.",
-    tokenEnvKey: "NOTION_API_KEY",
-    tokenHint: "notion.so/profile/integrations → New integration → Internal integration secret.",
-    tokenPlaceholder: "ntn_... or secret_...",
-    verify: verifyNotion,
-  },
-  {
-    key: "google",
-    label: "Google",
-    detail: "Drive, Gmail, and Calendar context.",
-    tokenEnvKey: GOOGLE_REFRESH_TOKEN_ENV,
-    tokenHint: "Connect with your Google account. One-time: paste an OAuth client (Desktop app type) from console.cloud.google.com.",
-    tokenPlaceholder: "",
-    verify: verifyGoogle,
-  },
-  {
-    key: "posthog",
-    label: "PostHog",
-    detail: "Per-company product analytics (funnels, events, visitors) via HogQL.",
-    tokenEnvKey: "POSTHOG_PERSONAL_API_KEY",
-    tokenHint: "PostHog → Settings → Personal API keys. Grant query:read (and user:read so we can verify + show your account).",
-    tokenPlaceholder: "phx_...",
-    verify: verifyPostHog,
-  },
-  {
-    key: "plausible",
-    label: "Plausible",
-    detail: "Privacy-friendly web analytics. The key is checked against each company's site when its Analytics tab loads.",
-    tokenEnvKey: "PLAUSIBLE_API_KEY",
-    tokenHint: "Plausible → Settings → API keys. Validated per site at query time (Plausible can't check a key without a site).",
-    tokenPlaceholder: "",
-    verify: verifyPlausible,
-  },
-  {
-    key: "clawbank",
-    label: "ClawBank",
-    detail: "Banking, a self-custody wallet, trading, LLC formation, and USD off-ramp for your agents.",
-    tokenEnvKey: CLAWBANK_TOKEN_ENV_NAMES[0],
-    tokenEnvAliases: CLAWBANK_TOKEN_ENV_NAMES.slice(1),
-    tokenHint: "Use the guided email setup, or paste an API token minted by `clawbank login`.",
-    tokenPlaceholder: "ClawBank API token",
-    verify: verifyClawBank,
-  },
-];
+const PROVIDERS: ProviderSpec[] = CONNECTOR_MANIFESTS.map((manifest) => ({
+  ...manifest,
+  verify: VERIFY_BY_PROVIDER[manifest.key],
+}));
 
 export function connectionProvider(key: string) {
   return PROVIDERS.find((provider) => provider.key === key);
@@ -116,12 +69,13 @@ export async function saveProviderToken(providerKey: string, token: string): Pro
   const provider = connectionProvider(providerKey);
   if (!provider) throw new Error(`Unknown provider: ${providerKey}`);
   if (provider.key === "google") throw new Error("Google connects through sign-in, not a pasted token.");
+  if (provider.key === "google-cloud") throw new Error("Google Cloud connects through sign-in, not a pasted token.");
   const clean = token.trim();
   if (clean.length < 8 || /\s/.test(clean)) throw new Error("That does not look like a valid token.");
   const sharedEnv = await readSharedAgentEnv();
   const result = await provider.verify(clean, sharedEnv);
   if (!result.ok) throw new Error(result.error || `${provider.label} rejected the token.`);
-  await saveSharedAgentEnv(provider.tokenEnvKey, clean);
+  await saveSharedAgentEnv(provider.auth.tokenEnvKey, clean);
   return { account: result.account };
 }
 
@@ -131,7 +85,7 @@ export async function disconnectProvider(providerKey: string) {
   const sharedEnv = await readSharedAgentEnv();
   // Remove the canonical key plus any legacy alias that is actually set —
   // otherwise a provider with an old-name credential stays "connected".
-  const keys = [provider.tokenEnvKey, ...(provider.tokenEnvAliases ?? []).filter((alias) => sharedEnvValue(alias, sharedEnv))];
+  const keys = [provider.auth.tokenEnvKey, ...(provider.auth.tokenEnvAliases ?? []).filter((alias) => sharedEnvValue(alias, sharedEnv))];
   for (const key of keys) await removeSharedAgentEnv(key);
 }
 
@@ -144,8 +98,17 @@ export async function saveGoogleOAuthClient(clientId: string, clientSecret: stri
   await saveSharedAgentEnv(GOOGLE_CLIENT_SECRET_ENV, secret);
 }
 
+export async function saveGoogleCloudOAuthClient(clientId: string, clientSecret: string) {
+  const id = clientId.trim();
+  const secret = clientSecret.trim();
+  if (!id || !secret) throw new Error("Both the client ID and client secret are required.");
+  if (/\s/.test(id) || /\s/.test(secret)) throw new Error("Client credentials cannot contain spaces.");
+  await saveSharedAgentEnv(GOOGLE_CLOUD_CLIENT_ID_ENV, id);
+  await saveSharedAgentEnv(GOOGLE_CLOUD_CLIENT_SECRET_ENV, secret);
+}
+
 async function providerStatus(provider: ProviderSpec, sharedEnv: Record<string, string>): Promise<ConnectionProviderStatus> {
-  const token = [provider.tokenEnvKey, ...(provider.tokenEnvAliases ?? [])]
+  const token = [provider.auth.tokenEnvKey, ...(provider.auth.tokenEnvAliases ?? [])]
     .map((key) => sharedEnvValue(key, sharedEnv))
     .find(Boolean) ?? "";
   const base: ConnectionProviderStatus = {
@@ -154,8 +117,15 @@ async function providerStatus(provider: ProviderSpec, sharedEnv: Record<string, 
     detail: provider.detail,
     connected: Boolean(token),
     verified: false,
-    tokenHint: provider.tokenHint,
-    tokenPlaceholder: provider.tokenPlaceholder,
+    tokenHint: provider.auth.tokenHint,
+    tokenPlaceholder: provider.auth.tokenPlaceholder,
+    authMode: provider.auth.mode,
+    credentialKeys: [
+      provider.auth.tokenEnvKey,
+      ...(provider.auth.tokenEnvAliases ?? []),
+      ...(provider.auth.oauthClientEnvKeys ?? []),
+    ],
+    operations: provider.operations.map((operation) => operation.id),
     oauthReady: providerOAuthReady(provider.key, sharedEnv),
     checkedAt: new Date().toISOString(),
   };
@@ -178,6 +148,12 @@ function providerOAuthReady(key: ConnectionProviderKey, sharedEnv: Record<string
   }
   if (key === "google") {
     return Boolean(sharedEnvValue(GOOGLE_CLIENT_ID_ENV, sharedEnv) && sharedEnvValue(GOOGLE_CLIENT_SECRET_ENV, sharedEnv));
+  }
+  if (key === "google-cloud") {
+    // Desktop-app model: the OAuth client is baked into HivemindOS (or supplied
+    // via the GOOGLE_CLOUD_OAUTH_CLIENT_ID env var), so google-cloud is always
+    // OAuth-ready once the client id is non-placeholder — no pasted client.
+    return googleCloudOAuthClientReady();
   }
   return false;
 }
@@ -293,6 +269,23 @@ async function googleAccountEmail(accessToken: string) {
   } catch {
     return "";
   }
+}
+
+// Google Cloud uses the DESKTOP-app model: the OAuth client is baked into
+// HivemindOS (or supplied via GOOGLE_CLOUD_OAUTH_CLIENT_ID), and its refresh
+// tokens are PKCE-issued (client secret optional). So verification mints an
+// access token through the canonical minter — the same baked-in client +
+// optional-secret path the rest of the connector uses — rather than a pasted
+// client id/secret from the shared env.
+async function verifyGoogleCloud(_refreshToken: string): Promise<VerifyResult> {
+  if (!googleCloudOAuthClientReady()) {
+    return { ok: false, error: "The Google Cloud OAuth client is not configured, so the saved account cannot be refreshed." };
+  }
+  return apiCheck(async () => {
+    const accessToken = await mintGoogleCloudAccessToken();
+    const account = await googleAccountEmail(accessToken);
+    return { ok: true, account: account || "Google Cloud account" };
+  });
 }
 
 // PostHog personal API keys are region-bound (US vs EU cloud). We can't run a real

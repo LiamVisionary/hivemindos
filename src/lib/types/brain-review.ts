@@ -1,3 +1,5 @@
+import type { ScopePolicy } from "@/lib/types/principal";
+
 export const BRAIN_REVIEW_KINDS = [
   "memory",
   "memory-evolution",
@@ -47,6 +49,8 @@ export type BrainReviewProposal = {
   evidence: BrainReviewEvidence[];
   risk: BrainReviewRisk;
   status: BrainReviewStatus;
+  createdByPrincipalId?: string;
+  scope?: ScopePolicy;
   rejectionReason?: string;
   appliedAt?: string;
   appliedMemoryId?: string;
@@ -62,6 +66,8 @@ export type BrainReviewProposalInput = {
   supersedesMemoryId?: unknown;
   evidence?: unknown;
   risk?: unknown;
+  createdByPrincipalId?: unknown;
+  scope?: unknown;
 };
 
 export type BrainReviewQueueFile = {

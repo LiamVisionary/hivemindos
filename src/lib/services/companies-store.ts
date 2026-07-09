@@ -19,6 +19,7 @@ import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type {
   Company,
   CompanyApexGoal,
+  CompanyApiBudget,
   CompanyApprovalPolicy,
   CompanyAutonomyPause,
   CompanyAutonomyPauseMode,
@@ -46,6 +47,7 @@ import {
   ROLLING_MONTH_MS,
   readSpendLedger,
   sumCompanySpendUsdSince,
+  sumCompanyKindSpendUsdSince,
   type SpendLedgerRecord,
 } from "@/lib/services/wallet/spend-ledger";
 
@@ -175,6 +177,7 @@ function companyDefinitionOf(record: Company): Company {
     analyticsConfig: record.analyticsConfig,
     importedOperations: record.importedOperations,
     directives: record.directives,
+    apiBudgets: record.apiBudgets,
   };
 }
 
@@ -646,6 +649,36 @@ export async function setCompanyProducts(
     updatedAt: new Date().toISOString(),
   });
   company.products = catalog;
+  company.updatedAt = new Date().toISOString();
+  await writeRaw(records);
+  await recordConfigChange("updated", before, company, source);
+  return company;
+}
+
+/**
+ * Write a company's per-API cloud cost guardrail into the replicated definition
+ * (mirrors {@link setCompanyProducts}). Only the dedicated apply route calls
+ * this, so a generic treasury/upsert save can never blank `apiBudgets`. Replaces
+ * the entry for the given service in place (keyed by provider + service) and
+ * leaves other services' budgets untouched. The server owns `appliedAt` /
+ * `appliedError` / `budgetResourceName`; callers pass whatever the provider
+ * apply returned.
+ */
+export async function setCompanyApiBudget(
+  id: string,
+  apiBudget: CompanyApiBudget,
+  source = "companies-store:set-api-budget",
+): Promise<Company | null> {
+  const records = await readRaw();
+  const company = records.find((record) => record.id === id);
+  if (!company) return null;
+  const before = companyDefinitionOf(company);
+  const current = Array.isArray(company.apiBudgets) ? company.apiBudgets : [];
+  const next = current.filter(
+    (entry) => !(entry.provider === apiBudget.provider && entry.service === apiBudget.service),
+  );
+  next.push(apiBudget);
+  company.apiBudgets = next;
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
   await recordConfigChange("updated", before, company, source);
@@ -1264,6 +1297,8 @@ export async function companySpendRollup(company: Company, memberCount: number, 
   const dailySpentUsd = await sumCompanySpendUsdSince(company.id, now - ROLLING_DAY_MS, ledger);
   const monthlySpentUsd = await sumCompanySpendUsdSince(company.id, now - ROLLING_MONTH_MS, ledger);
   const totalSpentUsd = await sumCompanySpendUsdSince(company.id, 0, ledger);
+  const apiSpentUsd = await sumCompanyKindSpendUsdSince(company.id, "api", now - ROLLING_DAY_MS, ledger);
+  const apiMonthlySpentUsd = await sumCompanyKindSpendUsdSince(company.id, "api", now - ROLLING_MONTH_MS, ledger);
 
   const memberSpend: Record<string, CompanyMemberSpend> = {};
   for (const agentId of company.agentIds ?? []) {
@@ -1283,6 +1318,8 @@ export async function companySpendRollup(company: Company, memberCount: number, 
     dailyRemainingUsd: remaining(company.dailyBudgetUsd, dailySpentUsd),
     monthlyRemainingUsd: remaining(company.monthlyBudgetUsd, monthlySpentUsd),
     totalRemainingUsd: remaining(company.totalBudgetUsd, totalSpentUsd),
+    apiSpentUsd,
+    apiMonthlySpentUsd,
     memberSpend,
   };
 }

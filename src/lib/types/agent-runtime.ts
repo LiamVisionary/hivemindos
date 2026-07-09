@@ -44,6 +44,8 @@ export interface RuntimeCapabilities {
   walletTools?: boolean;
   modelSelection?: boolean;
   skillActions?: boolean;
+  deterministicDataQuery?: boolean;
+  artifactAuthoring?: boolean;
   skillActionRuntimes?: Array<
     "osascript" | "http" | "shell" | "node" | "python" | "mcp" | "tauri-native"
   >;
@@ -881,6 +883,8 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
         walletTools: true,
         modelSelection: true,
         skillActions: true,
+        deterministicDataQuery: true,
+        artifactAuthoring: true,
         skillActionRuntimes: ["http", "shell", "node", "python", "mcp"],
         skillCapabilities: [
           "chat",

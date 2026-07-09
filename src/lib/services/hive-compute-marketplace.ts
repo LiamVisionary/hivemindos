@@ -1,30 +1,59 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
 import {
   HIVE_COMPUTE_API_KEY_ENV,
+  HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV,
+  HIVE_COMPUTE_CONFIDENTIAL_MODE_ENV,
   HIVE_COMPUTE_DEFAULT_MODEL,
+  HIVE_COMPUTE_TEE_ATTESTATION_COMMAND_ENV,
+  HIVE_COMPUTE_TEE_ATTESTATION_FILE_ENV,
+  HIVE_COMPUTE_TEE_ATTESTATION_FORMAT_ENV,
+  HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV,
+  HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV,
+  HIVE_COMPUTE_TEE_IMAGE_DIGEST_ENV,
+  HIVE_COMPUTE_TEE_MEASUREMENT_ENV,
+  HIVE_COMPUTE_TEE_PAYLOAD_KEY_ENV,
+  HIVE_COMPUTE_TEE_PROVIDER_ENV,
   HIVE_COMPUTE_ESTIMATED_EARNINGS_ENV,
   HIVE_COMPUTE_GATEWAY_URL_ENV,
+  HIVE_COMPUTE_MPP_ENABLED_ENV,
+  HIVE_COMPUTE_MPP_POLICY_URL_ENV,
+  HIVE_COMPUTE_MPP_REQUIRE_SESSION_ENV,
+  HIVE_COMPUTE_MPP_SESSION_TOKEN_ENV,
   HIVE_COMPUTE_MODEL_OPTIONS,
   HIVE_COMPUTE_OPENAI_BASE_URL_ENV,
+  HIVE_COMPUTE_PAYMENT_RAIL_ENV,
   HIVE_COMPUTE_PRODUCT_NAME,
   HIVE_COMPUTE_PROVIDER_SLUG,
+  HIVE_COMPUTE_TEE_REQUIRED_ENV,
+  HIVE_COMPUTE_WORKER_REQUIRE_PAYMENT_PROOF_ENV,
   HIVE_COMPUTE_WORKER_PACKAGE_NAME,
   HIVE_COMPUTE_WORKER_TOKEN_ENV,
   HIVE_COMPUTE_WORKER_VERSION,
   normalizeHiveComputeModel,
 } from "@/lib/config/hive-compute-marketplace";
+import {
+  HIVE_COMPUTE_WORKER_SOURCE,
+  hiveComputeWorkerNotice,
+  hiveComputeWorkerPackageJson,
+  hiveComputeWorkerReadme,
+} from "@/lib/services/hive-compute-marketplace/worker-module";
 import { homedir } from "@/lib/home-dir";
 import type {
   HiveComputeBinaryStatus,
   HiveComputeEnvPresence,
   HiveComputeGatewayStatus,
+  HiveComputeHostContext,
+  HiveComputeHostRunConfig,
   HiveComputeInstallResult,
+  HiveComputeLocalBackendStatus,
   HiveComputeMarketplaceStatus,
   HiveComputeModelOption,
+  HiveComputePaymentRail,
+  HiveComputeWorkerRunStatus,
 } from "@/lib/types/hive-compute-marketplace";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
@@ -39,8 +68,24 @@ const NOTICE_FILE = join(MODULE_DIR, "NOTICE.md");
 const NODE_MODULES_WS = join(MODULE_DIR, "node_modules", "ws");
 const MARKETPLACE_CHAT_TIMEOUT_MS = 600_000;
 const MARKETPLACE_STATUS_TIMEOUT_MS = 2_500;
+const HIVE_COMPUTE_DEFAULT_INPUT_MICRO_USDC_PER_1M = 500_000;
+const HIVE_COMPUTE_DEFAULT_OUTPUT_MICRO_USDC_PER_1M = 750_000;
+const HIVE_COMPUTE_RUN_CONFIG_FILE = join(MODULE_DIR, "hivemind-host-config.json");
+const HIVE_COMPUTE_MPP_SESSION_FILE = join(MODULE_DIR, "hivemind-mpp-session.json");
 
 type EnvRead = HiveComputeEnvPresence & { value: string };
+
+type HiveComputeWorkerSession = {
+  child: ChildProcessWithoutNullStreams;
+  output: string;
+  error: string;
+  status: "starting" | "running" | "failed";
+  startedAt: number;
+};
+
+const globalHiveComputeState = globalThis as typeof globalThis & {
+  __hivemindHiveComputeWorkerRun?: HiveComputeWorkerSession;
+};
 
 export type HiveComputeRuntimeConfig = {
   baseUrl: string;
@@ -123,12 +168,56 @@ export function resolveHiveComputeRuntimeConfig(
 }
 
 export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMarketplaceStatus> {
-  const [gatewayUrl, openAiBaseUrl, apiKey, workerToken, earningsLabel, node, ollama, installed, depsInstalled] = await Promise.all([
+  const [
+    gatewayUrl,
+    openAiBaseUrl,
+    apiKey,
+    workerToken,
+    earningsLabel,
+    paymentRail,
+    mppEnabled,
+    mppPolicyUrl,
+    mppSessionToken,
+    mppRequireSession,
+    teeRequired,
+    confidentialMode,
+    attestationPolicyUrl,
+    teeProvider,
+    teeAttestationFile,
+    teeAttestationCommand,
+    teeAttestationFormat,
+    teeMeasurement,
+    teeImageDigest,
+    teeEncryptionPublicKey,
+    teeDecryptionPrivateKeyFile,
+    teePayloadKey,
+    node,
+    ollama,
+    installed,
+    depsInstalled,
+  ] = await Promise.all([
     readEnv(HIVE_COMPUTE_GATEWAY_URL_ENV),
     readEnv(HIVE_COMPUTE_OPENAI_BASE_URL_ENV),
     readEnv(HIVE_COMPUTE_API_KEY_ENV),
     readEnv(HIVE_COMPUTE_WORKER_TOKEN_ENV),
     readEnv(HIVE_COMPUTE_ESTIMATED_EARNINGS_ENV),
+    readEnv(HIVE_COMPUTE_PAYMENT_RAIL_ENV),
+    readEnv(HIVE_COMPUTE_MPP_ENABLED_ENV),
+    readEnv(HIVE_COMPUTE_MPP_POLICY_URL_ENV),
+    readMppSessionToken(),
+    readEnv(HIVE_COMPUTE_MPP_REQUIRE_SESSION_ENV),
+    readEnv(HIVE_COMPUTE_TEE_REQUIRED_ENV),
+    readEnv(HIVE_COMPUTE_CONFIDENTIAL_MODE_ENV),
+    readEnv(HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV),
+    readEnv(HIVE_COMPUTE_TEE_PROVIDER_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ATTESTATION_FILE_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ATTESTATION_COMMAND_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ATTESTATION_FORMAT_ENV),
+    readEnv(HIVE_COMPUTE_TEE_MEASUREMENT_ENV),
+    readEnv(HIVE_COMPUTE_TEE_IMAGE_DIGEST_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV),
+    readEnv(HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV),
+    readEnv(HIVE_COMPUTE_TEE_PAYLOAD_KEY_ENV),
     commandStatus("node", ["--version"]),
     commandStatus("ollama", ["--version"]),
     exists(WORKER_FILE),
@@ -151,8 +240,37 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
     ])
     : [undefined, undefined];
   const routingReady = Boolean(gatewayConfigured && (health?.ok !== false || openAiBaseUrl.value));
-  const earningReady = Boolean(installed && workerToken.present && gatewayUrl.present && ollama.installed);
   const estimatedEarningsLabel = earningsLabel.value.trim();
+  const paymentStatus = paymentStatusFromEnv({
+    rail: paymentRail.value,
+    gatewayConfigured,
+    mppEnabled: mppEnabled.value,
+    mppPolicyUrl: mppPolicyUrl.value,
+    mppSessionToken,
+    mppRequireSession: mppRequireSession.value,
+  });
+  const privacyStatus = privacyStatusFromEnv({
+    teeRequired: teeRequired.value,
+    confidentialMode: confidentialMode.value,
+    attestationPolicyUrl: attestationPolicyUrl.value,
+    teeProvider: teeProvider.value,
+    teeAttestationFile: teeAttestationFile.value,
+    teeAttestationCommand: teeAttestationCommand.value,
+    teeAttestationFormat: teeAttestationFormat.value,
+    teeMeasurement: teeMeasurement.value,
+    teeImageDigest: teeImageDigest.value,
+    teeEncryptionPublicKey: teeEncryptionPublicKey.value,
+    teeDecryptionPrivateKeyFile: teeDecryptionPrivateKeyFile.value,
+    teePayloadKey: teePayloadKey.value,
+  });
+  const host = await buildHiveComputeHostContext({
+    installed,
+    depsInstalled,
+    nodeInstalled: node.installed,
+    workerTokenPresent: workerToken.present,
+    gatewayConfigured,
+  });
+  const earningReady = host.canRun;
   const status: HiveComputeMarketplaceStatus = {
     productName: HIVE_COMPUTE_PRODUCT_NAME,
     providerSlug: HIVE_COMPUTE_PROVIDER_SLUG,
@@ -173,6 +291,8 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
       ...(health ? { health } : {}),
       ...(models ? { models } : {}),
     },
+    payments: paymentStatus,
+    privacy: privacyStatus,
     workerToken: envPresence(workerToken),
     workerModule: {
       root: MODULE_DIR,
@@ -186,6 +306,7 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
       runCommand: "cd ~/.hivemindos/modules/hive-compute-worker && hive-env-run -- npm start",
       dependencyInstallCommand: "cd ~/.hivemindos/modules/hive-compute-worker && npm install --omit=dev",
     },
+    host,
     prerequisites: { node, ollama },
     models: HIVE_COMPUTE_MODEL_OPTIONS,
     routing: {
@@ -198,15 +319,17 @@ export async function readHiveComputeMarketplaceStatus(): Promise<HiveComputeMar
     earning: {
       ready: earningReady,
       message: earningReady
-        ? "This machine has the worker module, gateway URL, worker token, and Ollama ready."
-        : "Install the worker module, set the worker token, and make sure Ollama can serve the models you advertise.",
+        ? "This machine has the worker module, gateway URL, worker token, and a local model backend ready."
+        : host.message,
       cta: `Want to earn on your spare GPU? Install ${HIVE_COMPUTE_PRODUCT_NAME} Worker to rent out your GPUs and earn ${estimatedEarningsLabel || "per completed inference job"}.`,
     },
     boundary: {
       mode: "client-module",
       officialAuthority: "Official marketplace matching, prepaid balances, x402/deposit crediting, key relays, fallback policy, payouts, quotas, receipts, provider bonds, reputation, and fraud controls must be enforced by HivemindOS-controlled hosted infrastructure.",
       selfHosted: "Forks can point this app and worker module at their own compatible gateway for self-hosted marketplaces.",
-      promptPrivacy: "Workers receive the prompt contents for jobs they accept; use a gateway policy and worker allowlist you trust.",
+      promptPrivacy: "Standard workers receive prompt contents for jobs they accept; use a gateway policy and worker allowlist you trust.",
+      confidentialCompute: "Hardware-enforced privacy requires gateway-verified TEE attestation and encrypted prompt delivery. Local app state can request verified-only routing, but it cannot prove confidential compute by itself.",
+      micropayments: "x402 per-call settlement is the default machine-payment rail. MPP session settlement is enabled only when a hosted gateway exposes a Stripe/Tempo-compatible session policy.",
     },
   };
   return {
@@ -260,14 +383,384 @@ function stringArray(value: unknown) {
     : [];
 }
 
+function booleanSetting(value: string) {
+  return ["1", "true", "yes", "on", "enabled"].includes(value.trim().toLowerCase());
+}
+
+function normalizePaymentRail(value: string): HiveComputePaymentRail {
+  const lowered = value.trim().toLowerCase();
+  if (lowered === "mpp" || lowered === "prepaid" || lowered === "self-hosted") return lowered;
+  return "x402";
+}
+
+function paymentStatusFromEnv(params: {
+  rail: string;
+  gatewayConfigured: boolean;
+  mppEnabled: string;
+  mppPolicyUrl: string;
+  mppSessionToken: EnvRead;
+  mppRequireSession: string;
+}): HiveComputeMarketplaceStatus["payments"] {
+  const defaultRail = normalizePaymentRail(params.rail);
+  const mppEnabled = booleanSetting(params.mppEnabled) || defaultRail === "mpp";
+  const requireSession = booleanSetting(params.mppRequireSession) || defaultRail === "mpp";
+  const mppReady = mppEnabled && Boolean(params.mppPolicyUrl.trim()) && (!requireSession || params.mppSessionToken.present);
+  return {
+    defaultRail,
+    railEnv: HIVE_COMPUTE_PAYMENT_RAIL_ENV,
+    x402: {
+      ready: params.gatewayConfigured,
+      message: params.gatewayConfigured
+        ? "Gateway handles x402 per-call settlement for paid marketplace requests."
+        : "Configure a Hive Compute gateway before x402 settlement can be checked.",
+    },
+    mpp: {
+      enabled: mppEnabled,
+      ready: mppReady,
+      enabledEnv: HIVE_COMPUTE_MPP_ENABLED_ENV,
+      policyUrlEnv: HIVE_COMPUTE_MPP_POLICY_URL_ENV,
+      sessionTokenEnv: HIVE_COMPUTE_MPP_SESSION_TOKEN_ENV,
+      requireSessionEnv: HIVE_COMPUTE_MPP_REQUIRE_SESSION_ENV,
+      ...(params.mppPolicyUrl.trim() ? { policyUrl: params.mppPolicyUrl.trim() } : {}),
+      sessionToken: envPresence(params.mppSessionToken),
+      requireSession,
+      message: mppReady
+        ? "MPP session policy and session authorization are configured for machine-speed settlement."
+        : mppEnabled
+          ? requireSession && !params.mppSessionToken.present
+            ? `Set ${HIVE_COMPUTE_MPP_SESSION_TOKEN_ENV} or open a gateway MPP session before requiring session settlement.`
+            : `Set ${HIVE_COMPUTE_MPP_POLICY_URL_ENV} to let the gateway advertise MPP sessions.`
+          : "MPP is available as an optional session rail, off by default.",
+    },
+  };
+}
+
+function privacyStatusFromEnv(params: {
+  teeRequired: string;
+  confidentialMode: string;
+  attestationPolicyUrl: string;
+  teeProvider: string;
+  teeAttestationFile: string;
+  teeAttestationCommand: string;
+  teeAttestationFormat: string;
+  teeMeasurement: string;
+  teeImageDigest: string;
+  teeEncryptionPublicKey: string;
+  teeDecryptionPrivateKeyFile: string;
+  teePayloadKey: string;
+}): HiveComputeMarketplaceStatus["privacy"] {
+  const verifiedOnly = booleanSetting(params.teeRequired);
+  const confidentialMode = params.confidentialMode.trim().toLowerCase();
+  const attestationPolicyUrl = params.attestationPolicyUrl.trim();
+  const hasPolicy = Boolean(attestationPolicyUrl);
+  const teeProvider = params.teeProvider.trim();
+  const evidenceSource = params.teeAttestationCommand.trim()
+    ? "command" as const
+    : params.teeAttestationFile.trim()
+      ? "file" as const
+      : undefined;
+  const attestationReady = confidentialMode === "tee-attested" && hasPolicy && Boolean(teeProvider) && Boolean(evidenceSource);
+  const encryptedDeliveryReady = Boolean(params.teeEncryptionPublicKey.trim()) &&
+    (Boolean(params.teeDecryptionPrivateKeyFile.trim()) || Boolean(params.teePayloadKey.trim()));
+  return {
+    mode: verifiedOnly ? "tee-required" : hasPolicy || confidentialMode === "tee-attested" ? "attestation-policy" : "standard",
+    verifiedOnly,
+    teeRequiredEnv: HIVE_COMPUTE_TEE_REQUIRED_ENV,
+    confidentialModeEnv: HIVE_COMPUTE_CONFIDENTIAL_MODE_ENV,
+    attestationPolicyUrlEnv: HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV,
+    teeProviderEnv: HIVE_COMPUTE_TEE_PROVIDER_ENV,
+    attestationFileEnv: HIVE_COMPUTE_TEE_ATTESTATION_FILE_ENV,
+    attestationCommandEnv: HIVE_COMPUTE_TEE_ATTESTATION_COMMAND_ENV,
+    attestationFormatEnv: HIVE_COMPUTE_TEE_ATTESTATION_FORMAT_ENV,
+    measurementEnv: HIVE_COMPUTE_TEE_MEASUREMENT_ENV,
+    imageDigestEnv: HIVE_COMPUTE_TEE_IMAGE_DIGEST_ENV,
+    encryptionPublicKeyEnv: HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV,
+    decryptionPrivateKeyFileEnv: HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV,
+    ...(attestationPolicyUrl ? { attestationPolicyUrl } : {}),
+    ...(teeProvider ? { teeProvider } : {}),
+    attestationReady,
+    encryptedDeliveryReady,
+    ...(evidenceSource ? { evidenceSource } : {}),
+    message: verifiedOnly
+      ? attestationReady && encryptedDeliveryReady
+        ? "Verified-only routing, attestation evidence, and encrypted prompt delivery are configured."
+        : "Verified-only routing is requested, but this worker still needs TEE evidence and encrypted prompt delivery before it can prove hardware privacy."
+      : attestationReady
+        ? "TEE attestation evidence is configured; eligible gateways can verify this worker before routing private jobs."
+        : hasPolicy
+          ? "Attestation policy is configured; add TEE provider evidence and encryption keys before advertising hardware privacy."
+        : "Standard local workers are not hardware-confidential. Enable TEE policy when the gateway supports remote attestation.",
+  };
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeHostWhen(value: unknown): HiveComputeHostRunConfig["hostWhen"] {
+  return value === "always" || value === "sched" || value === "idle" ? value : "idle";
+}
+
+function normalizeRunConfig(value?: Partial<HiveComputeHostRunConfig> | null): HiveComputeHostRunConfig {
+  return {
+    markdown: Math.round(clampNumber(value?.markdown, 20, 0, 80)),
+    maxConcurrency: Math.round(clampNumber(value?.maxConcurrency, 4, 1, 256)),
+    hostWhen: normalizeHostWhen(value?.hostWhen),
+    dailyCapUsd: value?.dailyCapUsd === null || typeof value?.dailyCapUsd === "undefined"
+      ? null
+      : clampNumber(value.dailyCapUsd, 25, 1, 10_000),
+    pauseOnBattery: value?.pauseOnBattery !== false,
+    yieldToUser: value?.yieldToUser !== false,
+  };
+}
+
+async function savedHiveComputeRunConfig() {
+  const raw = await readFile(HIVE_COMPUTE_RUN_CONFIG_FILE, "utf8").catch(() => "");
+  if (!raw) return null;
+  return parseJson(raw) as Partial<HiveComputeHostRunConfig> | null;
+}
+
+async function resolveHiveComputeRunConfig(value?: Partial<HiveComputeHostRunConfig> | null) {
+  return normalizeRunConfig(value ?? await savedHiveComputeRunConfig().catch(() => null));
+}
+
+function advertisedPriceMicroUsdc(basePrice: number, config: HiveComputeHostRunConfig) {
+  const multiplier = Math.max(0.2, 1 - config.markdown / 100);
+  return Math.max(1, Math.round(basePrice * multiplier));
+}
+
+async function readSavedEnvValue(key: string) {
+  const direct = process.env[key]?.trim();
+  if (direct) return direct;
+  if (!hiveEnvCache) hiveEnvCache = readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
+  return parseEnvFileValue(await hiveEnvCache, key);
+}
+
+function normalizeOpenAiLocalBaseUrl(value: string) {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  if (/\/v1$/i.test(trimmed)) return trimmed;
+  return `${trimmed}/v1`;
+}
+
+async function localBackendCandidates(): Promise<HiveComputeLocalBackendStatus[]> {
+  const localOpenAiBase = normalizeOpenAiLocalBaseUrl(
+    await readSavedEnvValue("HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL") ||
+    await readSavedEnvValue("LOCAL_OPENAI_BASE_URL") ||
+    await readSavedEnvValue("NEXT_PUBLIC_LOCAL_OPENAI_BASE_URL") ||
+    "http://127.0.0.1:1234/v1",
+  );
+  const ollamaBase = (await readSavedEnvValue("OLLAMA_HOST") || await readSavedEnvValue("OLLAMA_BASE_URL") || "http://127.0.0.1:11434")
+    .trim()
+    .replace(/\/+$/, "");
+  const candidates: HiveComputeLocalBackendStatus[] = [
+    {
+      kind: /1234(?:\/v1)?$/i.test(localOpenAiBase) ? "lmstudio" : "openai",
+      label: /1234(?:\/v1)?$/i.test(localOpenAiBase) ? "LM Studio" : "OpenAI-compatible",
+      host: localOpenAiBase,
+      reachable: false,
+      message: "",
+    },
+    {
+      kind: "ollama",
+      label: "Ollama",
+      host: ollamaBase,
+      reachable: false,
+      message: "",
+    },
+  ];
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = `${candidate.kind}:${candidate.host}`;
+    if (!candidate.host || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function modelName(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  return name;
+}
+
+function extractOpenAiModels(data: unknown) {
+  const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const rawModels = Array.isArray(record.data) ? record.data : Array.isArray(record.models) ? record.models : [];
+  const models: Array<{ id: string; name?: string }> = [];
+  const seen = new Set<string>();
+  for (const item of rawModels) {
+    const id = typeof item === "string"
+      ? item.trim()
+      : item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string"
+        ? String((item as Record<string, unknown>).id).trim()
+        : "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    models.push({ id, name: modelName(item) || undefined });
+  }
+  return models;
+}
+
+function extractOllamaModels(data: unknown) {
+  const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const rawModels = Array.isArray(record.models) ? record.models : [];
+  const models: Array<{ id: string; name?: string }> = [];
+  const seen = new Set<string>();
+  for (const item of rawModels) {
+    const id = item && typeof item === "object" && typeof (item as Record<string, unknown>).name === "string"
+      ? String((item as Record<string, unknown>).name).trim()
+      : item && typeof item === "object" && typeof (item as Record<string, unknown>).model === "string"
+        ? String((item as Record<string, unknown>).model).trim()
+        : typeof item === "string"
+          ? item.trim()
+          : "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    models.push({ id });
+  }
+  return models;
+}
+
+async function probeBackend(candidate: HiveComputeLocalBackendStatus, config: HiveComputeHostRunConfig) {
+  const url = candidate.kind === "ollama" ? joinUrl(candidate.host, "/api/tags") : joinUrl(candidate.host, "/models");
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(2_500),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      return {
+        backend: { ...candidate, reachable: false, message: `${candidate.label} returned HTTP ${response.status}.` },
+        models: [],
+      };
+    }
+    const inputPer1m = advertisedPriceMicroUsdc(HIVE_COMPUTE_DEFAULT_INPUT_MICRO_USDC_PER_1M, config);
+    const outputPer1m = advertisedPriceMicroUsdc(HIVE_COMPUTE_DEFAULT_OUTPUT_MICRO_USDC_PER_1M, config);
+    const parsedModels = candidate.kind === "ollama" ? extractOllamaModels(data) : extractOpenAiModels(data);
+    return {
+      backend: {
+        ...candidate,
+        reachable: true,
+        message: parsedModels.length
+          ? `${candidate.label} reported ${parsedModels.length} model${parsedModels.length === 1 ? "" : "s"}.`
+          : `${candidate.label} is reachable but did not report models.`,
+      },
+      models: parsedModels.map((model) => ({
+        id: model.id,
+        name: model.name,
+        providerModelId: model.id,
+        backendKind: candidate.kind,
+        inputPer1m,
+        outputPer1m,
+      })),
+    };
+  } catch (error) {
+    return {
+      backend: {
+        ...candidate,
+        reachable: false,
+        message: error instanceof Error && error.name === "TimeoutError"
+          ? `${candidate.label} did not answer before timeout.`
+          : `${candidate.label} is not reachable at ${candidate.host}.`,
+      },
+      models: [],
+    };
+  }
+}
+
+async function discoverHiveComputeBackend(config: HiveComputeHostRunConfig) {
+  const checked = await Promise.all((await localBackendCandidates()).map((candidate) => probeBackend(candidate, config)));
+  return checked.find((candidate) => candidate.backend.reachable && candidate.models.length) ??
+    checked.find((candidate) => candidate.backend.reachable) ??
+    checked[0] ?? {
+      backend: {
+        kind: "openai" as const,
+        label: "OpenAI-compatible",
+        host: "http://127.0.0.1:1234/v1",
+        reachable: false,
+        message: "No local OpenAI-compatible backend was checked.",
+      },
+      models: [],
+    };
+}
+
+function currentWorkerRun(): HiveComputeWorkerRunStatus {
+  const session = globalHiveComputeState.__hivemindHiveComputeWorkerRun;
+  if (!session) return { status: "idle", output: "", error: "", startedAt: 0 };
+  return {
+    status: session.status,
+    output: session.output,
+    error: session.error,
+    startedAt: session.startedAt,
+    ...(session.child.pid ? { pid: session.child.pid } : {}),
+  };
+}
+
+function hostReadinessMessage(params: {
+  installed: boolean;
+  depsInstalled: boolean;
+  nodeInstalled: boolean;
+  workerTokenPresent: boolean;
+  gatewayConfigured: boolean;
+  backend: HiveComputeLocalBackendStatus;
+  modelCount: number;
+}) {
+  if (!params.nodeInstalled) return "Install Node.js before running the Hive Compute worker.";
+  if (!params.installed) return "Install the Hive Compute worker module.";
+  if (!params.depsInstalled) return "Install worker dependencies.";
+  if (!params.gatewayConfigured) return `Set ${HIVE_COMPUTE_GATEWAY_URL_ENV} for the gateway that issues jobs.`;
+  if (!params.workerTokenPresent) return `Set ${HIVE_COMPUTE_WORKER_TOKEN_ENV} from the gateway.`;
+  if (!params.backend.reachable) return params.backend.message || "Start LM Studio or Ollama so the worker has a local model backend.";
+  if (!params.modelCount) return `${params.backend.label} is reachable, but it did not report any models.`;
+  return "This machine can go live as a Hive Compute worker.";
+}
+
+async function buildHiveComputeHostContext(params: {
+  installed: boolean;
+  depsInstalled: boolean;
+  nodeInstalled: boolean;
+  workerTokenPresent: boolean;
+  gatewayConfigured: boolean;
+  config?: Partial<HiveComputeHostRunConfig> | null;
+}): Promise<HiveComputeHostContext> {
+  const config = await resolveHiveComputeRunConfig(params.config);
+  const discovered = await discoverHiveComputeBackend(config);
+  const canRun = Boolean(
+    params.installed &&
+    params.depsInstalled &&
+    params.nodeInstalled &&
+    params.workerTokenPresent &&
+    params.gatewayConfigured &&
+    discovered.backend.reachable &&
+    discovered.models.length,
+  );
+  return {
+    backend: discovered.backend,
+    models: discovered.models,
+    config,
+    canRun,
+    message: hostReadinessMessage({
+      ...params,
+      backend: discovered.backend,
+      modelCount: discovered.models.length,
+    }),
+    run: currentWorkerRun(),
+  };
+}
+
 export async function installHiveComputeWorkerModule(options: { force?: boolean } = {}): Promise<HiveComputeInstallResult> {
   const wrote: string[] = [];
   const skipped: string[] = [];
   await mkdir(MODULE_DIR, { recursive: true });
-  await writeManagedFile(PACKAGE_FILE, workerPackageJson(), options.force, wrote, skipped);
+  await writeManagedFile(PACKAGE_FILE, hiveComputeWorkerPackageJson(), options.force, wrote, skipped);
   await writeManagedFile(WORKER_FILE, HIVE_COMPUTE_WORKER_SOURCE, options.force, wrote, skipped);
-  await writeManagedFile(README_FILE, workerReadme(), options.force, wrote, skipped);
-  await writeManagedFile(NOTICE_FILE, workerNotice(), options.force, wrote, skipped);
+  await writeManagedFile(README_FILE, hiveComputeWorkerReadme(), options.force, wrote, skipped);
+  await writeManagedFile(NOTICE_FILE, hiveComputeWorkerNotice(), options.force, wrote, skipped);
   return {
     installed: true,
     wrote,
@@ -292,11 +785,302 @@ export async function installHiveComputeWorkerDependencies() {
   return readHiveComputeMarketplaceStatus();
 }
 
+export async function setupHiveComputeHosting(config?: Partial<HiveComputeHostRunConfig> | null) {
+  const before = await readHiveComputeMarketplaceStatus();
+  if (!before.workerModule.installed) {
+    await installHiveComputeWorkerModule();
+  }
+  if (!before.workerModule.nodeModulesInstalled) {
+    await installHiveComputeWorkerDependencies();
+  }
+  const host = await readHiveComputeHostContext(config);
+  if (host.config) {
+    await writeHiveComputeRunConfig(host);
+  }
+  const afterDeps = await readHiveComputeMarketplaceStatus();
+  if (
+    afterDeps.payments.mpp.enabled &&
+    !afterDeps.payments.mpp.sessionToken.present &&
+    afterDeps.gateway.configured &&
+    afterDeps.gateway.apiKey.present
+  ) {
+    try {
+      return await openHiveComputeMppSession();
+    } catch (error) {
+      if (afterDeps.payments.mpp.requireSession) throw error;
+    }
+  }
+  return readHiveComputeMarketplaceStatus();
+}
+
+export async function readHiveComputeHostContext(config?: Partial<HiveComputeHostRunConfig> | null) {
+  const [gatewayUrl, openAiBaseUrl, workerToken, node, installed, depsInstalled] = await Promise.all([
+    readEnv(HIVE_COMPUTE_GATEWAY_URL_ENV),
+    readEnv(HIVE_COMPUTE_OPENAI_BASE_URL_ENV),
+    readEnv(HIVE_COMPUTE_WORKER_TOKEN_ENV),
+    commandStatus("node", ["--version"]),
+    exists(WORKER_FILE),
+    exists(NODE_MODULES_WS),
+  ]);
+  return buildHiveComputeHostContext({
+    installed,
+    depsInstalled,
+    nodeInstalled: node.installed,
+    workerTokenPresent: workerToken.present,
+    gatewayConfigured: Boolean(gatewayUrl.value || openAiBaseUrl.value),
+    config,
+  });
+}
+
+export async function startHiveComputeWorker(config?: Partial<HiveComputeHostRunConfig> | null) {
+  const existing = globalHiveComputeState.__hivemindHiveComputeWorkerRun;
+  if (existing && existing.status !== "failed" && !existing.child.killed) {
+    existing.status = existing.status === "starting" ? "running" : existing.status;
+    return readHiveComputeMarketplaceStatus();
+  }
+
+  const [
+    gatewayUrl,
+    workerToken,
+    apiKey,
+    paymentRail,
+    mppPolicyUrl,
+    mppSessionToken,
+    mppRequireSession,
+    attestationPolicyUrl,
+    confidentialMode,
+    teeProvider,
+    teeAttestationFile,
+    teeAttestationCommand,
+    teeAttestationFormat,
+    teeMeasurement,
+    teeImageDigest,
+    teeEncryptionPublicKey,
+    teeDecryptionPrivateKeyFile,
+    teePayloadKey,
+  ] = await Promise.all([
+    readEnv(HIVE_COMPUTE_GATEWAY_URL_ENV),
+    readEnv(HIVE_COMPUTE_WORKER_TOKEN_ENV),
+    readEnv(HIVE_COMPUTE_API_KEY_ENV),
+    readEnv(HIVE_COMPUTE_PAYMENT_RAIL_ENV),
+    readEnv(HIVE_COMPUTE_MPP_POLICY_URL_ENV),
+    readMppSessionToken(),
+    readEnv(HIVE_COMPUTE_MPP_REQUIRE_SESSION_ENV),
+    readEnv(HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV),
+    readEnv(HIVE_COMPUTE_CONFIDENTIAL_MODE_ENV),
+    readEnv(HIVE_COMPUTE_TEE_PROVIDER_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ATTESTATION_FILE_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ATTESTATION_COMMAND_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ATTESTATION_FORMAT_ENV),
+    readEnv(HIVE_COMPUTE_TEE_MEASUREMENT_ENV),
+    readEnv(HIVE_COMPUTE_TEE_IMAGE_DIGEST_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV),
+    readEnv(HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV),
+    readEnv(HIVE_COMPUTE_TEE_PAYLOAD_KEY_ENV),
+  ]);
+  if (!await exists(WORKER_FILE)) {
+    throw new HiveComputeMarketplaceError("Install the Hive Compute worker module before going live.", 424);
+  }
+  if (!await exists(NODE_MODULES_WS)) {
+    throw new HiveComputeMarketplaceError("Install Hive Compute worker dependencies before going live.", 424);
+  }
+  if (!gatewayUrl.value) {
+    throw new HiveComputeMarketplaceError(`Set ${HIVE_COMPUTE_GATEWAY_URL_ENV} before going live.`, 424);
+  }
+  if (!workerToken.value) {
+    throw new HiveComputeMarketplaceError(`Set ${HIVE_COMPUTE_WORKER_TOKEN_ENV} before going live.`, 424);
+  }
+
+  const host = await readHiveComputeHostContext(config);
+  if (!host.canRun) throw new HiveComputeMarketplaceError(host.message, 424);
+  await writeHiveComputeRunConfig(host);
+
+  const env = {
+    ...process.env,
+    [HIVE_COMPUTE_GATEWAY_URL_ENV]: gatewayUrl.value,
+    [HIVE_COMPUTE_WORKER_TOKEN_ENV]: workerToken.value,
+    ...(apiKey.value ? { [HIVE_COMPUTE_API_KEY_ENV]: apiKey.value } : {}),
+    [HIVE_COMPUTE_PAYMENT_RAIL_ENV]: normalizePaymentRail(paymentRail.value),
+    ...(mppPolicyUrl.value ? { [HIVE_COMPUTE_MPP_POLICY_URL_ENV]: mppPolicyUrl.value } : {}),
+    ...(mppSessionToken.value ? { [HIVE_COMPUTE_MPP_SESSION_TOKEN_ENV]: mppSessionToken.value } : {}),
+    ...(mppRequireSession.value ? { [HIVE_COMPUTE_MPP_REQUIRE_SESSION_ENV]: mppRequireSession.value } : {}),
+    ...(attestationPolicyUrl.value ? { [HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV]: attestationPolicyUrl.value } : {}),
+    ...(confidentialMode.value ? { [HIVE_COMPUTE_CONFIDENTIAL_MODE_ENV]: confidentialMode.value } : {}),
+    ...(teeProvider.value ? { [HIVE_COMPUTE_TEE_PROVIDER_ENV]: teeProvider.value } : {}),
+    ...(teeAttestationFile.value ? { [HIVE_COMPUTE_TEE_ATTESTATION_FILE_ENV]: teeAttestationFile.value } : {}),
+    ...(teeAttestationCommand.value ? { [HIVE_COMPUTE_TEE_ATTESTATION_COMMAND_ENV]: teeAttestationCommand.value } : {}),
+    ...(teeAttestationFormat.value ? { [HIVE_COMPUTE_TEE_ATTESTATION_FORMAT_ENV]: teeAttestationFormat.value } : {}),
+    ...(teeMeasurement.value ? { [HIVE_COMPUTE_TEE_MEASUREMENT_ENV]: teeMeasurement.value } : {}),
+    ...(teeImageDigest.value ? { [HIVE_COMPUTE_TEE_IMAGE_DIGEST_ENV]: teeImageDigest.value } : {}),
+    ...(teeEncryptionPublicKey.value ? { [HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV]: teeEncryptionPublicKey.value } : {}),
+    ...(teeDecryptionPrivateKeyFile.value ? { [HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV]: teeDecryptionPrivateKeyFile.value } : {}),
+    ...(teePayloadKey.value ? { [HIVE_COMPUTE_TEE_PAYLOAD_KEY_ENV]: teePayloadKey.value } : {}),
+    [HIVE_COMPUTE_WORKER_REQUIRE_PAYMENT_PROOF_ENV]: booleanSetting(mppRequireSession.value) || normalizePaymentRail(paymentRail.value) === "mpp" ? "1" : "0",
+    HIVE_COMPUTE_LOCAL_ENGINE: host.backend.kind === "ollama" ? "ollama" : "openai",
+    HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL: host.backend.kind === "ollama" ? "" : host.backend.host,
+    OLLAMA_HOST: host.backend.kind === "ollama" ? host.backend.host : process.env.OLLAMA_HOST || "http://127.0.0.1:11434",
+    HIVE_COMPUTE_MODELS: advertisedWorkerModels(host).join(","),
+    HIVE_COMPUTE_MODEL_MAP_JSON: JSON.stringify(workerModelMap(host)),
+    HIVE_COMPUTE_WORKER_MAX_CONCURRENCY: String(host.config.maxConcurrency),
+    HIVE_COMPUTE_WORKER_HOST_WHEN: host.config.hostWhen,
+    HIVE_COMPUTE_WORKER_PAUSE_ON_BATTERY: host.config.pauseOnBattery ? "1" : "0",
+    HIVE_COMPUTE_WORKER_YIELD_TO_USER: host.config.yieldToUser ? "1" : "0",
+    ...(host.config.dailyCapUsd !== null ? { HIVE_COMPUTE_WORKER_DAILY_CAP_USD: String(host.config.dailyCapUsd) } : {}),
+  };
+
+  const child = spawn("npm", ["start"], {
+    cwd: MODULE_DIR,
+    env,
+  });
+  const session: HiveComputeWorkerSession = {
+    child,
+    output: "",
+    error: "",
+    status: "starting",
+    startedAt: Date.now(),
+  };
+  const appendOutput = (chunk: Buffer) => {
+    session.output = cleanOutput(`${session.output}\n${chunk.toString("utf8")}`).split(/\r?\n/).slice(-80).join("\n");
+    if (session.status === "starting") session.status = "running";
+  };
+  child.stdout.on("data", appendOutput);
+  child.stderr.on("data", appendOutput);
+  child.on("error", (error) => {
+    session.status = "failed";
+    session.error = error.message;
+  });
+  child.on("exit", (code, signal) => {
+    if (session.status === "failed") return;
+    session.status = "failed";
+    session.error = cleanOutput([
+      `Hive Compute worker exited${code === null ? "" : ` with code ${code}`}${signal ? ` (${signal})` : ""}.`,
+      session.output,
+    ].join("\n\n"));
+  });
+  globalHiveComputeState.__hivemindHiveComputeWorkerRun = session;
+
+  await new Promise((resolve) => setTimeout(resolve, 1_200));
+  if (session.status === "failed") {
+    throw new HiveComputeMarketplaceError(session.error || "Hive Compute worker stopped before it could host.", 500);
+  }
+  session.status = "running";
+  return readHiveComputeMarketplaceStatus();
+}
+
+export async function stopHiveComputeWorker() {
+  const session = globalHiveComputeState.__hivemindHiveComputeWorkerRun;
+  if (session && !session.child.killed) {
+    session.child.kill("SIGTERM");
+    session.status = "failed";
+    session.error = "Stopped from the Hive Compute dashboard.";
+  }
+  delete globalHiveComputeState.__hivemindHiveComputeWorkerRun;
+  return readHiveComputeMarketplaceStatus();
+}
+
+export async function openHiveComputeMppSession(maxUsdMicro = 1_000_000) {
+  const [gatewayUrl, apiKey] = await Promise.all([
+    readEnv(HIVE_COMPUTE_GATEWAY_URL_ENV),
+    readEnv(HIVE_COMPUTE_API_KEY_ENV),
+  ]);
+  if (!gatewayUrl.value) {
+    throw new HiveComputeMarketplaceError(`Set ${HIVE_COMPUTE_GATEWAY_URL_ENV} before opening an MPP session.`, 424);
+  }
+  if (!apiKey.value) {
+    throw new HiveComputeMarketplaceError(`Set ${HIVE_COMPUTE_API_KEY_ENV} before opening an MPP session.`, 424);
+  }
+  const response = await fetch(joinUrl(gatewayUrl.value, "/hive-compute/mpp/sessions"), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey.value}`,
+    },
+    body: JSON.stringify({ maxUsdMicro }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+  const text = await response.text();
+  const json = parseJson(text);
+  if (!response.ok || !json || typeof json !== "object") {
+    throw new HiveComputeMarketplaceError(upstreamError(json, text) || `MPP session request returned HTTP ${response.status}.`, response.status || 502);
+  }
+  const token = String((json as { token?: unknown }).token || "").trim();
+  const sessionId = String((json as { sessionId?: unknown }).sessionId || "").trim();
+  if (!token || !sessionId) throw new HiveComputeMarketplaceError("MPP session response did not include a session token.", 502);
+  await mkdir(MODULE_DIR, { recursive: true });
+  await writeFile(HIVE_COMPUTE_MPP_SESSION_FILE, JSON.stringify({
+    sessionId,
+    token,
+    expiresAt: (json as { expiresAt?: unknown }).expiresAt || null,
+    maxUsdMicro,
+    writtenAt: new Date().toISOString(),
+  }, null, 2), { mode: 0o600 });
+  return readHiveComputeMarketplaceStatus();
+}
+
+function cleanOutput(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function advertisedWorkerModels(host: HiveComputeHostContext) {
+  const ids = [
+    HIVE_COMPUTE_DEFAULT_MODEL,
+    "hive-compute/fast",
+    "hive-compute/deep",
+    ...host.models.map((model) => model.providerModelId),
+  ];
+  return Array.from(new Set(ids.filter(Boolean)));
+}
+
+function workerModelMap(host: HiveComputeHostContext) {
+  const first = host.models[0]?.providerModelId || HIVE_COMPUTE_DEFAULT_MODEL;
+  const map: Record<string, string> = {
+    [HIVE_COMPUTE_DEFAULT_MODEL]: first,
+    "hive-compute/fast": first,
+    "hive-compute/deep": first,
+    "*": first,
+  };
+  for (const model of host.models) map[model.providerModelId] = model.providerModelId;
+  return map;
+}
+
+async function writeHiveComputeRunConfig(host: HiveComputeHostContext) {
+  await mkdir(MODULE_DIR, { recursive: true });
+  await writeFile(HIVE_COMPUTE_RUN_CONFIG_FILE, JSON.stringify({
+    config: host.config,
+    backend: host.backend,
+    models: host.models,
+    advertisedModels: advertisedWorkerModels(host),
+    writtenAt: new Date().toISOString(),
+  }, null, 2), { mode: 0o600 });
+}
+
 export async function proxyHiveComputeChatCompletion(body: Record<string, unknown>, signal?: AbortSignal): Promise<Response> {
-  const [gatewayUrl, openAiBaseUrl, apiKey] = await Promise.all([
+  const [
+    gatewayUrl,
+    openAiBaseUrl,
+    apiKey,
+    paymentRail,
+    mppPolicyUrl,
+    mppSessionToken,
+    mppRequireSession,
+    teeRequired,
+    attestationPolicyUrl,
+    teeProvider,
+    teeEncryptionPublicKey,
+  ] = await Promise.all([
     readEnv(HIVE_COMPUTE_GATEWAY_URL_ENV),
     readEnv(HIVE_COMPUTE_OPENAI_BASE_URL_ENV),
     readEnv(HIVE_COMPUTE_API_KEY_ENV),
+    readEnv(HIVE_COMPUTE_PAYMENT_RAIL_ENV),
+    readEnv(HIVE_COMPUTE_MPP_POLICY_URL_ENV),
+    readMppSessionToken(),
+    readEnv(HIVE_COMPUTE_MPP_REQUIRE_SESSION_ENV),
+    readEnv(HIVE_COMPUTE_TEE_REQUIRED_ENV),
+    readEnv(HIVE_COMPUTE_ATTESTATION_POLICY_URL_ENV),
+    readEnv(HIVE_COMPUTE_TEE_PROVIDER_ENV),
+    readEnv(HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV),
   ]);
   const openAiBase = openAiBaseUrl.value || (gatewayUrl.value ? joinUrl(gatewayUrl.value, "/v1") : "");
   if (!openAiBase) {
@@ -312,6 +1096,14 @@ export async function proxyHiveComputeChatCompletion(body: Record<string, unknow
       Accept: "application/json, text/event-stream",
       "Content-Type": "application/json",
       "X-HivemindOS-Compute-Client": "dashboard",
+      "X-HivemindOS-Compute-Payment-Rail": normalizePaymentRail(paymentRail.value),
+      ...(mppPolicyUrl.value ? { "X-HivemindOS-Compute-MPP-Policy": mppPolicyUrl.value } : {}),
+      ...(mppSessionToken.value ? { "X-HivemindOS-Compute-MPP-Authorization": mppSessionToken.value } : {}),
+      ...(booleanSetting(mppRequireSession.value) || normalizePaymentRail(paymentRail.value) === "mpp" ? { "X-HivemindOS-Compute-MPP-Require-Session": "true" } : {}),
+      ...(booleanSetting(teeRequired.value) ? { "X-HivemindOS-Compute-Verified-Only": "true" } : {}),
+      ...(attestationPolicyUrl.value ? { "X-HivemindOS-Compute-Attestation-Policy": attestationPolicyUrl.value } : {}),
+      ...(teeProvider.value ? { "X-HivemindOS-Compute-TEE-Provider": teeProvider.value } : {}),
+      ...(teeEncryptionPublicKey.value ? { "X-HivemindOS-Compute-TEE-Encryption-Key": teeEncryptionPublicKey.value } : {}),
       ...(apiKey.value ? { Authorization: `Bearer ${apiKey.value}` } : {}),
     },
     body: JSON.stringify({ ...body, model }),
@@ -347,6 +1139,17 @@ async function readEnv(key: string): Promise<EnvRead> {
   return value
     ? { name: key, value, present: true, source: "shared-hive-env" }
     : { name: key, value: "", present: false };
+}
+
+async function readMppSessionToken(): Promise<EnvRead> {
+  const configured = await readEnv(HIVE_COMPUTE_MPP_SESSION_TOKEN_ENV);
+  if (configured.present) return configured;
+  const raw = await readFile(HIVE_COMPUTE_MPP_SESSION_FILE, "utf8").catch(() => "");
+  const parsed = parseJson(raw);
+  const token = parsed && typeof parsed === "object" ? String((parsed as { token?: unknown }).token || "").trim() : "";
+  return token
+    ? { name: HIVE_COMPUTE_MPP_SESSION_TOKEN_ENV, value: token, present: true, source: "local-session" }
+    : { name: HIVE_COMPUTE_MPP_SESSION_TOKEN_ENV, value: "", present: false };
 }
 
 function envPresence(read: EnvRead): HiveComputeEnvPresence {
@@ -451,413 +1254,3 @@ function errorMessage(error: unknown, fallback: string) {
   if (typeof error === "string" && error) return error;
   return fallback;
 }
-
-function workerPackageJson() {
-  return `${JSON.stringify({
-    name: HIVE_COMPUTE_WORKER_PACKAGE_NAME,
-    version: HIVE_COMPUTE_WORKER_VERSION,
-    private: true,
-    type: "module",
-    description: "Optional HivemindOS marketplace worker for renting out local GPUs through a compatible gateway.",
-    scripts: {
-      start: "node worker.mjs",
-    },
-    dependencies: {
-      "ws": "^8.18.0",
-    },
-    engines: {
-      node: ">=20",
-    },
-  }, null, 2)}\n`;
-}
-
-function workerReadme() {
-  return `# ${HIVE_COMPUTE_PRODUCT_NAME} Worker
-
-This optional module lets this machine accept marketplace inference jobs from a
-compatible Hive Compute gateway and serve them with local Ollama or
-OpenAI-compatible models such as LM Studio.
-
-## Configure
-
-Set these in the shared hive env, project env, or process env:
-
-- ${HIVE_COMPUTE_GATEWAY_URL_ENV}: HTTPS URL of the official or self-hosted gateway.
-- ${HIVE_COMPUTE_WORKER_TOKEN_ENV}: worker token issued by that gateway.
-- HIVE_COMPUTE_LOCAL_ENGINE: optional, \`ollama\` or \`openai\`; defaults to
-  \`openai\` when HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL is set, otherwise
-  \`ollama\`.
-- OLLAMA_HOST: optional for Ollama mode, defaults to http://127.0.0.1:11434.
-- HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL: optional for LM Studio/OpenAI-compatible
-  mode, for example http://127.0.0.1:1234/v1.
-- HIVE_COMPUTE_LOCAL_OPENAI_API_KEY: optional bearer token for the local
-  OpenAI-compatible server.
-- HIVE_COMPUTE_MODELS: optional comma-separated model routes to advertise.
-- HIVE_COMPUTE_MODEL_MAP_JSON: optional JSON mapping route ids to local model
-  ids.
-- HIVE_COMPUTE_DEFAULT_OPENAI_MODEL: optional default local model for
-  OpenAI-compatible mode.
-- HIVE_COMPUTE_WORKER_WS_PATH: optional, defaults to /hive-compute/worker/ws.
-
-The worker receives prompt contents for jobs it accepts. Use only with a gateway
-and allowlist policy you trust.
-
-## Run
-
-\`\`\`sh
-npm install --omit=dev
-hive-env-run -- npm start
-\`\`\`
-`;
-}
-
-function workerNotice() {
-  return `Hive Compute Worker
-
-Generated by HivemindOS as an optional installable module. It implements a
-small native WebSocket worker protocol compatible with Hive Compute gateways,
-with local Ollama and OpenAI-compatible serving adapters.
-The public HivemindOS app contains no official marketplace ledger, payout,
-quota, entitlement, treasury, or fraud-control authority; official authority
-belongs in hosted HivemindOS infrastructure or in a self-hosted operator's own
-gateway.
-`;
-}
-
-const HIVE_COMPUTE_WORKER_SOURCE = `#!/usr/bin/env node
-import os from "node:os";
-import WebSocket from "ws";
-
-const VERSION = "${HIVE_COMPUTE_WORKER_VERSION}";
-const gateway = requiredEnv("${HIVE_COMPUTE_GATEWAY_URL_ENV}");
-const token = requiredEnv("${HIVE_COMPUTE_WORKER_TOKEN_ENV}");
-const ollamaHost = (process.env.OLLAMA_HOST || "http://127.0.0.1:11434").replace(/\\/+$/, "");
-const openAiBaseUrl = (process.env.HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL || "").replace(/\\/+$/, "");
-const openAiApiKey = process.env.HIVE_COMPUTE_LOCAL_OPENAI_API_KEY || "";
-const localEngine = normalizeEngine(process.env.HIVE_COMPUTE_LOCAL_ENGINE || (openAiBaseUrl ? "openai" : "ollama"));
-const workerName = process.env.HIVE_COMPUTE_WORKER_NAME || os.hostname();
-const workerId = process.env.HIVE_COMPUTE_WORKER_ID || workerName;
-const advertisedModels = splitList(process.env.HIVE_COMPUTE_MODELS || "${HIVE_COMPUTE_DEFAULT_MODEL},hive-compute/fast");
-const modelMap = parseModelMap(process.env.HIVE_COMPUTE_MODEL_MAP_JSON || "");
-const wsPath = process.env.HIVE_COMPUTE_WORKER_WS_PATH || "/hive-compute/worker/ws";
-let socket = null;
-let reconnectDelayMs = 1000;
-
-connect();
-
-const registerInterval = setInterval(register, 30000);
-registerInterval.unref && registerInterval.unref();
-const heartbeatInterval = setInterval(() => {
-  emit("worker.heartbeat", {
-    workerId,
-    workerName,
-    models: advertisedModels,
-    engine: localEngine,
-    localBaseUrl: localEngine === "openai" ? openAiBaseUrl : ollamaHost,
-    version: VERSION,
-    at: new Date().toISOString(),
-  });
-}, 15000);
-heartbeatInterval.unref && heartbeatInterval.unref();
-
-function connect() {
-  const url = websocketUrl(joinUrl(gateway, wsPath));
-  socket = new WebSocket(url, {
-    headers: { Authorization: "Bearer " + token },
-  });
-
-  socket.on("open", () => {
-    reconnectDelayMs = 1000;
-    register();
-    console.log("[hive-compute] connected", url);
-  });
-
-  socket.on("message", (raw) => {
-    const message = parseServerMessage(raw);
-    if (!message) return;
-    handleServerMessage(message).catch((error) => {
-      console.error("[hive-compute] server message failed:", error instanceof Error ? error.message : String(error));
-    });
-  });
-
-  socket.on("close", (code, reason) => {
-    console.log("[hive-compute] disconnected", code, String(reason || ""));
-    scheduleReconnect();
-  });
-
-  socket.on("error", (error) => {
-    console.error("[hive-compute] connection failed:", error.message);
-  });
-}
-
-function scheduleReconnect() {
-  const delay = reconnectDelayMs;
-  reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30000);
-  const timer = setTimeout(connect, delay);
-  timer.unref && timer.unref();
-}
-
-async function handleServerMessage(message) {
-  if (message.type === "server.ready" || message.type === "worker.registered") return;
-  if (message.type === "job.assign") {
-    try {
-      await runJob(message.payload);
-    } catch (error) {
-      emitJobError(message.payload && message.payload.jobId, error);
-    }
-    return;
-  }
-  if (message.type === "worker.earning") {
-    const earning = message.payload;
-    if (!earning || typeof earning !== "object") return;
-    const amount = earning.usdMicro ? "$" + (Number(earning.usdMicro) / 1_000_000).toFixed(6) : "pending";
-    console.log("[hive-compute] earning", earning.jobId || "", amount);
-    return;
-  }
-  if (message.type === "server.error") {
-    console.error("[hive-compute] server error:", JSON.stringify(message.payload || {}));
-  }
-}
-
-function register() {
-  emit("worker.register", {
-    workerId,
-    workerName,
-    models: advertisedModels,
-    capabilities: {
-      chat: true,
-      streaming: true,
-      engine: localEngine,
-    },
-    version: VERSION,
-  });
-}
-
-async function runJob(job) {
-  if (!job || typeof job !== "object") throw new Error("Invalid job assignment.");
-  const jobId = String(job.jobId || job.id || "");
-  if (!jobId) throw new Error("Job assignment is missing jobId.");
-  const routeModel = String(job.model || advertisedModels[0] || "${HIVE_COMPUTE_DEFAULT_MODEL}");
-  const localModel = modelMap[routeModel] || modelMap["*"] || defaultLocalModel(routeModel);
-  const messages = normalizeMessages(job);
-  console.log("[hive-compute] job", jobId, routeModel, "->", localModel, "(" + localEngine + ")");
-  emit("job.accepted", { jobId, workerId, model: routeModel, localModel, engine: localEngine });
-
-  if (localEngine === "openai") {
-    await runOpenAICompatibleJob({ jobId, localModel, messages, options: job.options });
-    return;
-  }
-  await runOllamaJob({ jobId, localModel, messages, options: job.options });
-}
-
-async function runOllamaJob(input) {
-  const response = await fetch(joinUrl(ollamaHost, "/api/chat"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: input.localModel,
-      messages: input.messages,
-      stream: true,
-      options: input.options && typeof input.options === "object" ? input.options : undefined,
-    }),
-  });
-  if (!response.ok || !response.body) {
-    const text = await response.text().catch(() => "");
-    throw new Error("Ollama returned HTTP " + response.status + (text ? ": " + text.slice(0, 400) : ""));
-  }
-
-  let finalText = "";
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for await (const chunk of response.body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    const lines = buffer.split(/\\r?\\n/);
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const payload = JSON.parse(trimmed);
-      const tokenText = payload.message && typeof payload.message.content === "string" ? payload.message.content : "";
-      if (tokenText) {
-        finalText += tokenText;
-        emit("job.token", { jobId: input.jobId, token: tokenText });
-      }
-      if (payload.done) {
-        emit("job.complete", {
-          jobId: input.jobId,
-          text: finalText,
-          usage: payload.eval_count || payload.prompt_eval_count ? {
-            promptTokens: payload.prompt_eval_count || 0,
-            completionTokens: payload.eval_count || 0,
-          } : undefined,
-        });
-        console.log("[hive-compute] completed", input.jobId);
-        return;
-      }
-    }
-  }
-  emit("job.complete", { jobId: input.jobId, text: finalText });
-}
-
-async function runOpenAICompatibleJob(input) {
-  if (!openAiBaseUrl) throw new Error("HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL is required when HIVE_COMPUTE_LOCAL_ENGINE=openai.");
-  const headers = { "Content-Type": "application/json" };
-  if (openAiApiKey) headers.Authorization = "Bearer " + openAiApiKey;
-  const response = await fetch(joinUrl(openAiBaseUrl, "/chat/completions"), {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: input.localModel,
-      messages: input.messages,
-      stream: true,
-      ...openAIOptions(input.options),
-    }),
-  });
-  if (!response.ok || !response.body) {
-    const text = await response.text().catch(() => "");
-    throw new Error("OpenAI-compatible server returned HTTP " + response.status + (text ? ": " + text.slice(0, 400) : ""));
-  }
-
-  let finalText = "";
-  let finalUsage = undefined;
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for await (const chunk of response.body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    const lines = buffer.split(/\\r?\\n/);
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data:")) continue;
-      const data = trimmed.slice(5).trim();
-      if (!data || data === "[DONE]") {
-        emit("job.complete", { jobId: input.jobId, text: finalText, usage: finalUsage });
-        console.log("[hive-compute] completed", input.jobId);
-        return;
-      }
-      const payload = JSON.parse(data);
-      if (payload.usage && typeof payload.usage === "object") finalUsage = normalizeOpenAIUsage(payload.usage);
-      const choices = Array.isArray(payload.choices) ? payload.choices : [];
-      for (const choice of choices) {
-        const delta = choice && typeof choice === "object" ? choice.delta || choice.message || {} : {};
-        const tokenText = typeof delta.content === "string"
-          ? delta.content
-          : Array.isArray(delta.content)
-            ? delta.content.map((part) => typeof part?.text === "string" ? part.text : "").join("")
-            : "";
-        if (!tokenText) continue;
-        finalText += tokenText;
-        emit("job.token", { jobId: input.jobId, token: tokenText });
-      }
-    }
-  }
-  emit("job.complete", { jobId: input.jobId, text: finalText, usage: finalUsage });
-}
-
-function normalizeMessages(job) {
-  if (Array.isArray(job.messages)) {
-    return job.messages
-      .filter((message) => message && typeof message === "object")
-      .map((message) => ({
-        role: typeof message.role === "string" ? message.role : "user",
-        content: typeof message.content === "string" ? message.content : JSON.stringify(message.content || ""),
-      }));
-  }
-  const prompt = typeof job.prompt === "string" ? job.prompt : "";
-  if (!prompt) throw new Error("Job assignment is missing messages or prompt.");
-  return [{ role: "user", content: prompt }];
-}
-
-function emitJobError(jobId, error) {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error("[hive-compute] job failed", jobId || "", message);
-  if (jobId) emit("job.error", { jobId, error: message });
-}
-
-function emit(type, payload) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
-  socket.send(JSON.stringify({ type, payload }));
-  return true;
-}
-
-function parseServerMessage(raw) {
-  try {
-    const text = Buffer.isBuffer(raw) ? raw.toString("utf8") : String(raw);
-    const parsed = JSON.parse(text);
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function openAIOptions(options) {
-  const source = options && typeof options === "object" ? options : {};
-  const next = {};
-  if (typeof source.temperature === "number") next.temperature = source.temperature;
-  if (Number.isFinite(Number(source.num_predict)) && Number(source.num_predict) > 0) {
-    next.max_tokens = Math.floor(Number(source.num_predict));
-  }
-  if (Number.isFinite(Number(source.max_tokens)) && Number(source.max_tokens) > 0) {
-    next.max_tokens = Math.floor(Number(source.max_tokens));
-  }
-  return next;
-}
-
-function normalizeOpenAIUsage(usage) {
-  if (!usage || typeof usage !== "object") return undefined;
-  const promptTokens = Number(usage.prompt_tokens ?? usage.promptTokens ?? 0);
-  const completionTokens = Number(usage.completion_tokens ?? usage.completionTokens ?? 0);
-  const normalized = {};
-  if (Number.isFinite(promptTokens) && promptTokens > 0) normalized.promptTokens = Math.floor(promptTokens);
-  if (Number.isFinite(completionTokens) && completionTokens > 0) normalized.completionTokens = Math.floor(completionTokens);
-  return Object.keys(normalized).length ? normalized : undefined;
-}
-
-function defaultLocalModel(routeModel) {
-  if (localEngine === "openai") {
-    return process.env.HIVE_COMPUTE_DEFAULT_OPENAI_MODEL || process.env.HIVE_COMPUTE_DEFAULT_LM_STUDIO_MODEL || routeModel;
-  }
-  if (/deep|large|70b/i.test(routeModel)) return "llama3.3:70b";
-  return process.env.HIVE_COMPUTE_DEFAULT_OLLAMA_MODEL || "llama3.2:3b";
-}
-
-function normalizeEngine(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "openai" || normalized === "lmstudio" || normalized === "lm-studio") return "openai";
-  return "ollama";
-}
-
-function parseModelMap(raw) {
-  if (!raw.trim()) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (error) {
-    console.warn("[hive-compute] ignoring invalid HIVE_COMPUTE_MODEL_MAP_JSON:", error.message);
-    return {};
-  }
-}
-
-function splitList(value) {
-  return value.split(",").map((item) => item.trim()).filter(Boolean);
-}
-
-function requiredEnv(key) {
-  const value = process.env[key] && process.env[key].trim();
-  if (!value) {
-    console.error("[hive-compute] missing required env:", key);
-    process.exit(1);
-  }
-  return value;
-}
-
-function joinUrl(base, suffix) {
-  return base.replace(/\\/+$/, "") + (suffix.startsWith("/") ? suffix : "/" + suffix);
-}
-
-function websocketUrl(url) {
-  const parsed = new URL(url);
-  parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
-  return parsed.toString();
-}
-`;

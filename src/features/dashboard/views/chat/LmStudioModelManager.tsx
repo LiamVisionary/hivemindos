@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronRight, Download, HardDrive, Play, Repeat2, Terminal, X } from "lucide-react";
 import { Btn } from "@/components/aeon/parts";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { LocalModelInstallCatalogStatus } from "@/lib/config/local-model-install-catalog";
 import type { RuntimeIntegrationStatus } from "@/features/dashboard/dashboard-types";
 
 function GroupLabel({ children }: { children: React.ReactNode }) {
@@ -50,6 +51,7 @@ type LmStudioModelManagerProps = {
   runRuntimeIntegrationAction: (action: string, input: Record<string, unknown>, agent: AgentProfile) => void | Promise<{ ok?: boolean; error?: string; message?: string } | void>;
   onLoadModel?: (modelKey: string, modelType?: string) => Promise<void>;
   onSelectModel?: (modelKey: string, model?: LoadPromptModel) => void;
+  catalogFilter?: (entry: LocalModelInstallCatalogStatus) => boolean;
 };
 
 type LmStudioStatus = NonNullable<RuntimeIntegrationStatus["providerStatus"]>["lmStudio"];
@@ -85,11 +87,12 @@ export function LmStudioModelManager({
   runRuntimeIntegrationAction,
   onLoadModel,
   onSelectModel,
+  catalogFilter,
 }: LmStudioModelManagerProps) {
   const [setupExpanded, setSetupExpanded] = useState(false);
   const [loadPromptModel, setLoadPromptModel] = useState<LoadPromptModel | null>(null);
   const inventoryModels = (lmStudioStatus?.models ?? []) as LocalInventoryModel[];
-  const catalogModels = lmStudioStatus?.catalog ?? [];
+  const catalogModels = (lmStudioStatus?.catalog ?? []).filter((entry) => !catalogFilter || catalogFilter(entry));
   const downloads = lmStudioStatus?.downloads ?? [];
   const hardware = lmStudioStatus?.hardware;
   const setup = lmStudioStatus?.setup;

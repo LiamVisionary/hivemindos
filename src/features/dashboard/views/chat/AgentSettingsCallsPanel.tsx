@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import QRCode from "qrcode";
 import {
   Bell,
   Briefcase,
@@ -19,7 +18,7 @@ import {
 import { buildAgentCallPreferences } from "@/lib/types/agent-runtime";
 import type { AgentCallMissedFallback, AgentCallPreferences, AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft } from "@/features/dashboard/agent-settings-types";
-import { clawMobilePairingUrl, hubUrlForPairingHost } from "@/lib/phone/pairing-url";
+import { usePairingQr } from "@/lib/phone/usePairingQr";
 import { Btn, Field, GroupLabel, PanelHead, Toggle } from "./AgentSettingsModalPrimitives";
 import { AgentSettingsCallsVoiceSection } from "./AgentSettingsCallsVoiceSection";
 import {
@@ -77,9 +76,6 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   } = props;
 
   const [section, setSection] = useState<"calls" | "voice">("voice");
-  const [phoneQr, setPhoneQr] = useState("");
-  const [phoneHubUrl, setPhoneHubUrl] = useState("");
-  const [phoneConnectError, setPhoneConnectError] = useState("");
   const [phoneStatus, setPhoneStatus] = useState<PhoneStatus>({ checked: false, connected: false, apnsMissing: [] });
   const [localTtsDiscoveryStatus, setLocalTtsDiscoveryStatus] = useState<"idle" | "loading" | "ready" | "error">("loading");
   const [localTtsDiscoveryError, setLocalTtsDiscoveryError] = useState("");
@@ -96,6 +92,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   const callTimezone = agentCallSettings.timezone || "UTC";
   const selectedTime = fmt12(agentCallSettings.dailyCallTime);
   const localTtsDiscoveryLoading = localTtsDiscoveryStatus === "loading";
+  const { qr: phoneQr, hubUrl: phoneHubUrl, error: phoneConnectError } = usePairingQr(true);
 
   const updateAgentCalls = (patch: Partial<AgentCallPreferences>) => {
     const next = buildAgentCallPreferences({ ...agentCallSettings, ...patch });
@@ -105,6 +102,21 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
 
   const updateCallSource = (source: AgentCallSourceKey, enabled: boolean) => {
     updateAgentCalls({ sources: { ...agentCallSettings.sources, [source]: enabled } });
+  };
+
+  const updatePhoneStatusFromResponse = async (statusResponse: Response | null) => {
+    const statusData = asRecord(await statusResponse?.json().catch(() => null));
+    const statusResult = asRecord(statusData?.result) ?? statusData;
+    const device = asRecord(statusResult?.device);
+    const apns = asRecord(statusResult?.apns);
+    const missingApns = apns?.missing;
+    setPhoneStatus({
+      checked: true,
+      connected: Boolean(statusResponse?.ok && statusData?.ok !== false && device),
+      lastSeenAt: typeof device?.lastSeenAt === "string" ? device.lastSeenAt : undefined,
+      apnsConfigured: typeof apns?.configured === "boolean" ? apns.configured : undefined,
+      apnsMissing: Array.isArray(missingApns) ? missingApns.filter((item) => typeof item === "string") : [],
+    });
   };
 
   // ---- Time popover -----------------------------------------------------
@@ -130,25 +142,14 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
     setLocalTtsDiscoveryStatus("loading");
     setLocalTtsDiscoveryError("");
     try {
-      const [statusResponse, voiceResponse, localTtsResponse] = await Promise.all([
-        fetch("/api/phone?action=device-status", { cache: "no-store" }).catch(() => null),
-        fetch("/api/phone?action=voice-config", { cache: "no-store" }).catch(() => null),
-        fetch("/api/phone/local-tts", { cache: "no-store" }).catch(() => null),
-      ]);
-      const statusData = asRecord(await statusResponse?.json().catch(() => null));
+      const statusRequest = fetch("/api/phone?action=device-status", { cache: "no-store" }).catch(() => null);
+      const voiceRequest = fetch("/api/phone?action=voice-config", { cache: "no-store" }).catch(() => null);
+      const localTtsRequest = fetch("/api/phone/local-tts", { cache: "no-store" }).catch(() => null);
+      const statusResponse = await statusRequest;
+      await updatePhoneStatusFromResponse(statusResponse);
+      const [voiceResponse, localTtsResponse] = await Promise.all([voiceRequest, localTtsRequest]);
       const voiceData = asRecord(await voiceResponse?.json().catch(() => null));
       const localTtsData = asRecord(await localTtsResponse?.json().catch(() => null));
-      const statusResult = asRecord(statusData?.result) ?? statusData;
-      const device = asRecord(statusResult?.device);
-      const apns = asRecord(statusResult?.apns);
-      const missingApns = apns?.missing;
-      setPhoneStatus({
-        checked: true,
-        connected: Boolean(statusResponse?.ok && statusData?.ok !== false && device),
-        lastSeenAt: typeof device?.lastSeenAt === "string" ? device.lastSeenAt : undefined,
-        apnsConfigured: typeof apns?.configured === "boolean" ? apns.configured : undefined,
-        apnsMissing: Array.isArray(missingApns) ? missingApns.filter((item) => typeof item === "string") : [],
-      });
       const voicePayload = voiceData?.result ?? voiceData;
       // voiceOptions are still parsed to keep the gateway discovery contract warm.
       readVoiceOptions(voicePayload);
@@ -162,27 +163,6 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
       setLocalTtsDiscoveryStatus("error");
       setLocalTtsDiscoveryError(error instanceof Error ? error.message : "Local TTS discovery failed.");
       return { localTtsCandidates, localTtsLaunchCandidates };
-    }
-  };
-
-  const buildPairingQr = async () => {
-    try {
-      const response = await fetch("/api/tailscale/devices", { cache: "no-store" });
-      const data = (await response.json()) as { devices?: Array<{ self?: boolean; ip?: string; dnsName?: string; machineId?: string }> };
-      const self = (data.devices ?? []).find((device) => device?.self) ?? data.devices?.[0];
-      const host = self?.ip || (self?.dnsName ? String(self.dnsName).replace(/\.$/, "") : "") || "";
-      if (!host) {
-        setPhoneConnectError("Couldn't determine this machine's tailnet address. Is Tailscale up?");
-        return;
-      }
-      const hubUrl = hubUrlForPairingHost(host);
-      const name = (self?.dnsName ? String(self.dnsName).split(".")[0] : "") || host;
-      const pairUrl = clawMobilePairingUrl({ hubUrl, name, machineId: self?.machineId });
-      setPhoneHubUrl(hubUrl);
-      setPhoneQr(await QRCode.toDataURL(pairUrl, { width: 320, margin: 2 }));
-      setPhoneConnectError("");
-    } catch (error) {
-      setPhoneConnectError(error instanceof Error ? error.message : "Failed to build the pairing code.");
     }
   };
 
@@ -246,7 +226,6 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void refreshCallConnectionState();
-      void buildPairingQr();
     }, 0);
     return () => window.clearTimeout(timer);
     // Mount-only discovery; manual Refresh handles later availability checks.
@@ -254,6 +233,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   }, []);
 
   const isCalls = section === "calls";
+  const phoneChecking = !phoneStatus.checked;
   const showSchedule = isCalls && phoneStatus.connected && agentCallSettings.enabled;
 
   return (
@@ -294,8 +274,14 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
             <div className={styles.meta}>
               <div className={styles.title}>iPhone · HivemindOS Mobile</div>
               <div className={styles.status}>
-                <span className={["fr-dot", phoneStatus.connected && agentCallSettings.enabled ? "live" : ""].filter(Boolean).join(" ")} />
-                {phoneStatus.connected
+                {phoneChecking ? (
+                  <RefreshCcw size={11} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <span className={["fr-dot", phoneStatus.connected && agentCallSettings.enabled ? "live" : ""].filter(Boolean).join(" ")} />
+                )}
+                {phoneChecking
+                  ? "Checking mobile pairing"
+                  : phoneStatus.connected
                   ? agentCallSettings.enabled
                     ? `Connected${phoneStatus.lastSeenAt ? ` · last seen ${new Date(phoneStatus.lastSeenAt).toLocaleString()}` : ""}`
                     : "Calls paused"
@@ -314,7 +300,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
             <p className={["as-status", callTestTone === "ok" ? styles.messageOk : callTestTone === "error" ? styles.messageError : ""].filter(Boolean).join(" ")}>{callTestMessage}</p>
           ) : null}
 
-          {!phoneStatus.connected ? (
+          {phoneStatus.checked && !phoneStatus.connected ? (
             <section className={styles.setupCard}>
               <PanelHead
                 eyebrow="Mobile pairing"
@@ -342,7 +328,10 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                         <code>{phoneHubUrl}</code>
                       </div>
                     ) : (
-                      <p>Generating pairing code...</p>
+                      <p className={styles.inlineLoading} role="status" aria-label="Generating phone pairing code">
+                        <RefreshCcw size={12} className="animate-spin" aria-hidden="true" />
+                        Generating pairing code
+                      </p>
                     )}
                   </div>
                 </li>
@@ -458,7 +447,12 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
                 </div>
               </div>
             </>
-          ) : isCalls && !phoneStatus.connected ? (
+          ) : isCalls && phoneChecking ? (
+            <div className="as-info" role="status" aria-label="Checking mobile pairing">
+              <RefreshCcw size={16} className="ic animate-spin" aria-hidden="true" />
+              <p>Checking mobile pairing before showing call setup.</p>
+            </div>
+          ) : isCalls && phoneStatus.checked && !phoneStatus.connected ? (
             <div className="as-info">
               <Phone size={16} className="ic" aria-hidden="true" />
               <p>Finish pairing your phone to schedule a daily briefing and event triggers.</p>

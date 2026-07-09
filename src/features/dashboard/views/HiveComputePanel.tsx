@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, Cpu, Download, RefreshCcw, ShieldCheck, Terminal, WalletCards } from "lucide-react";
+import { Check, Copy, Cpu, Pause, Play, RefreshCcw, ShieldCheck, Terminal, WalletCards, Zap } from "lucide-react";
 
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import type { HiveComputeMarketplaceStatus } from "@/lib/types/hive-compute-marketplace";
@@ -17,7 +17,7 @@ type ApiResponse = {
   status?: HiveComputeMarketplaceStatus;
 };
 
-type BusyAction = "refresh" | "install-worker" | "install-worker-deps" | "repair-worker" | null;
+type BusyAction = "refresh" | "install-worker" | "install-worker-deps" | "repair-worker" | "setup-hosting" | "run-worker" | "stop-worker" | "open-mpp-session" | null;
 
 export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
   const [status, setStatus] = useState<HiveComputeMarketplaceStatus | null>(null);
@@ -72,7 +72,13 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
       const data = await response.json().catch(() => ({})) as ApiResponse;
       if (!response.ok || data.ok === false || !data.status) throw new Error(data.error || "Hive Compute action failed.");
       setStatus(data.status);
-      setMessage(action === "install-worker-deps" ? "Worker dependencies installed." : "Worker module installed.");
+      if (action === "install-worker-deps") setMessage("Worker dependencies installed.");
+      if (action === "install-worker") setMessage("Worker module installed.");
+      if (action === "repair-worker") setMessage("Worker module repaired.");
+      if (action === "setup-hosting") setMessage("Hosting setup finished.");
+      if (action === "run-worker") setMessage("Hive Compute worker is live.");
+      if (action === "stop-worker") setMessage("Hive Compute worker stopped.");
+      if (action === "open-mpp-session") setMessage("MPP machine-payment session opened.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Hive Compute action failed.");
     } finally {
@@ -87,31 +93,6 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
   }
-
-  const statusTiles = status
-    ? [
-      {
-        title: "Gateway",
-        ready: status.gateway.configured && status.routing.ready,
-        detail: status.gateway.configured ? status.routing.message : `Set ${status.gatewayEnv} in Env.`,
-      },
-      {
-        title: "Worker module",
-        ready: status.workerModule.installed,
-        detail: status.workerModule.installed ? "Installed locally." : "Installable on demand.",
-      },
-      {
-        title: "Ollama",
-        ready: status.prerequisites.ollama.installed,
-        detail: status.prerequisites.ollama.version || "Needed when this machine earns as a worker.",
-      },
-      {
-        title: "Worker token",
-        ready: status.workerToken.present,
-        detail: status.workerToken.present ? `Set via ${status.workerToken.source || "environment"}.` : `Set ${status.workerTokenEnv}.`,
-      },
-    ]
-    : [];
 
   if (!status) {
     return (
@@ -135,8 +116,39 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
     );
   }
 
-  const workerInstallBusy = busy === "install-worker" || busy === "repair-worker";
-  const depsBusy = busy === "install-worker-deps";
+  const workerRunning = status.host.run?.status === "running" || status.host.run?.status === "starting";
+  const setupBusy = busy === "setup-hosting" || busy === "install-worker" || busy === "install-worker-deps" || busy === "repair-worker";
+  const primaryAction = workerRunning ? "stop-worker" : status.host.canRun ? "run-worker" : "setup-hosting";
+  const primaryLabel = workerRunning ? "Stop hosting" : status.host.canRun ? "Go live" : "Set up hosting";
+  const paymentReady = status.payments.x402.ready && (!status.payments.mpp.enabled || status.payments.mpp.ready || !status.payments.mpp.requireSession);
+  const privacyLabel = status.privacy.attestationReady && status.privacy.encryptedDeliveryReady ? "Verified enclave" : "Standard";
+  const statusTiles = [
+    {
+      title: "Gateway",
+      ready: status.gateway.configured && status.routing.ready,
+      detail: status.gateway.configured ? "Connected." : "Needs gateway access.",
+    },
+    {
+      title: "Worker",
+      ready: status.workerModule.installed && status.workerModule.nodeModulesInstalled,
+      detail: status.workerModule.installed && status.workerModule.nodeModulesInstalled ? "Installed." : "Set up hosting will install it.",
+    },
+    {
+      title: "Token",
+      ready: status.workerToken.present,
+      detail: status.workerToken.present ? "Worker can authenticate." : "Needs worker token.",
+    },
+    {
+      title: "Model",
+      ready: status.host.backend.reachable && status.host.models.length > 0,
+      detail: status.host.backend.message,
+    },
+    {
+      title: "Payments",
+      ready: paymentReady,
+      detail: paymentReady ? "Ready." : status.payments.mpp.enabled ? "Needs payment session." : "Needs gateway.",
+    },
+  ];
 
   return (
     <div className={styles.panel}>
@@ -150,13 +162,13 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
             </p>
           </div>
           <div className={styles.heroActions}>
+            <button type="button" className={styles.button} onClick={() => void runAction(primaryAction)} disabled={Boolean(busy)}>
+              {busy === primaryAction || setupBusy ? <span className={styles.spinner} aria-hidden="true" /> : workerRunning ? <Pause size={16} aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
+              {setupBusy ? "Setting up" : primaryLabel}
+            </button>
             <button type="button" className={styles.secondaryButton} onClick={() => void refreshStatus()} disabled={Boolean(busy)}>
               {busy === "refresh" ? <span className={styles.spinner} aria-hidden="true" /> : <RefreshCcw size={16} aria-hidden="true" />}
               Refresh
-            </button>
-            <button type="button" className={styles.secondaryButton} onClick={() => setActiveView?.("env")}>
-              <Terminal size={16} aria-hidden="true" />
-              Open Env
             </button>
           </div>
         </section>
@@ -182,82 +194,123 @@ export function HiveComputePanel({ setActiveView }: HiveComputePanelProps) {
           <article className={styles.section}>
             <div className={styles.sectionHead}>
               <div>
-                <span className={styles.eyebrow}><WalletCards size={15} /> Earn with spare GPU</span>
-                <h2 className={styles.sectionTitle}>{status.earning.cta}</h2>
+                <span className={styles.eyebrow}><WalletCards size={15} /> Host this machine</span>
+                <h2 className={styles.sectionTitle}>{workerRunning ? "Accepting jobs" : status.host.canRun ? "Ready to go live" : "One-click setup"}</h2>
               </div>
-              <span className={`${styles.pill} ${status.earning.ready ? styles.pillReady : ""}`}>
+              <span className={`${styles.pill} ${workerRunning || status.host.canRun ? styles.pillReady : ""}`}>
                 <span className={styles.dot} aria-hidden="true" />
-                {status.earning.ready ? "Worker ready" : "Installable"}
+                {workerRunning ? "Live" : status.host.canRun ? "Ready" : "Setup"}
               </span>
             </div>
-            <p className={styles.body}>{status.earning.message}</p>
-            <div className={styles.actions}>
-              <button type="button" className={styles.button} onClick={() => void runAction(status.workerModule.installed ? "repair-worker" : "install-worker")} disabled={Boolean(busy)}>
-                {workerInstallBusy ? <span className={styles.spinner} aria-hidden="true" /> : <Download size={16} aria-hidden="true" />}
-                {status.workerModule.installed ? "Repair worker" : "Install worker"}
-              </button>
-              <button type="button" className={styles.secondaryButton} onClick={() => void runAction("install-worker-deps")} disabled={Boolean(busy) || !status.prerequisites.node.installed}>
-                {depsBusy ? <span className={styles.spinner} aria-hidden="true" /> : <Terminal size={16} aria-hidden="true" />}
-                Install dependencies
-              </button>
-              <button type="button" className={styles.secondaryButton} onClick={() => void copyRunCommand()} disabled={!status.workerModule.installed}>
-                {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
-                {copied ? "Copied" : "Copy run command"}
-              </button>
-            </div>
-            <div className={styles.list}>
-              <InfoRow label="Module path" value={status.workerModule.root} mono />
-              <InfoRow label="Run command" value={status.workerModule.runCommand} mono />
-              <InfoRow label="Dependency install" value={status.workerModule.dependencyInstallCommand} mono />
+            <p className={styles.body}>
+              {workerRunning
+                ? "This machine is live on Hive Compute and can receive eligible marketplace inference jobs."
+                : status.host.canRun
+                  ? "Everything needed is ready. Use Go live when you want this machine to start accepting jobs."
+                  : "Set up hosting installs the worker, installs dependencies, discovers local models, saves safe defaults, and opens a payment session when your gateway supports it."}
+            </p>
+            <div className={styles.chips}>
+              <span className={`${styles.pill} ${status.host.models.length ? styles.pillReady : ""}`}><span className={styles.dot} aria-hidden="true" />{status.host.models.length} model{status.host.models.length === 1 ? "" : "s"}</span>
+              <span className={`${styles.pill} ${paymentReady ? styles.pillReady : ""}`}><span className={styles.dot} aria-hidden="true" />Payments: {paymentReady ? "Active" : "Setup"}</span>
+              <span className={`${styles.pill} ${privacyLabel === "Verified enclave" ? styles.pillReady : ""}`}><span className={styles.dot} aria-hidden="true" />Privacy: {privacyLabel}</span>
             </div>
           </article>
 
           <article className={styles.section}>
             <div className={styles.sectionHead}>
               <div>
-                <span className={styles.eyebrow}><ShieldCheck size={15} /> Routing boundary</span>
-                <h2 className={styles.sectionTitle}>Marketplace authority stays hosted</h2>
+                <span className={styles.eyebrow}><ShieldCheck size={15} /> Safety</span>
+                <h2 className={styles.sectionTitle}>Payments and privacy</h2>
               </div>
-              <span className={`${styles.pill} ${status.routing.ready ? styles.pillReady : ""}`}>
+              <span className={`${styles.pill} ${paymentReady ? styles.pillReady : ""}`}>
                 <span className={styles.dot} aria-hidden="true" />
-                {status.routing.ready ? "Routing ready" : "Needs gateway"}
+                {paymentReady ? "Active" : "Setup"}
               </span>
             </div>
-            <p className={styles.body}>{status.boundary.officialAuthority}</p>
-            <p className={styles.body}>{status.boundary.selfHosted}</p>
-            <p className={`${styles.body} ${styles.warning}`}>{status.boundary.promptPrivacy}</p>
-            <div className={styles.list}>
-              <InfoRow label="Gateway env" value={status.gatewayEnv} mono />
-              <InfoRow label="OpenAI base env" value={status.openAiBaseEnv} mono />
-              <InfoRow label="API key env" value={status.apiKeyEnv} mono />
-              <InfoRow label="Chat route" value={status.routing.chatPath} mono />
+            <p className={styles.body}>{status.payments.mpp.enabled ? status.payments.mpp.message : status.payments.x402.message}</p>
+            <p className={styles.body}>{status.privacy.message}</p>
+            <div className={styles.chips}>
+              <span className={styles.pill}>{status.payments.mpp.enabled ? "MPP available" : "x402 per call"}</span>
+              <span className={styles.pill}>{privacyLabel}</span>
             </div>
           </article>
         </section>
 
-        <section className={styles.section}>
-          <div className={styles.sectionHead}>
-            <div>
-              <span className={styles.eyebrow}><Cpu size={15} /> Model routes</span>
-              <h2 className={styles.sectionTitle}>Agent model picker options</h2>
-            </div>
-            <span className={styles.pill}>{status.models.length} routes</span>
-          </div>
-          <div className={styles.modelList}>
-            {status.models.map((model) => (
-              <article key={model.id} className={styles.model}>
-                <div className={styles.row}>
-                  <div>
-                    <strong>{model.name || model.id}</strong>
-                    <p className={styles.small}>{model.subtitle || model.disabledReason || "Advertised by the configured gateway."}</p>
-                  </div>
-                  <span className={styles.pill}>{model.badge || model.group || "Route"}</span>
+        <details className={styles.details}>
+          <summary>Advanced diagnostics</summary>
+          <section className={styles.mainGrid}>
+            <article className={styles.section}>
+              <div className={styles.sectionHead}>
+                <div>
+                  <span className={styles.eyebrow}><Terminal size={15} /> Runtime details</span>
+                  <h2 className={styles.sectionTitle}>Setup internals</h2>
                 </div>
-                <div className={styles.mono}>{model.id}</div>
-              </article>
-            ))}
-          </div>
-        </section>
+                <button type="button" className={styles.secondaryButton} onClick={() => setActiveView?.("env")}>
+                  <Terminal size={16} aria-hidden="true" />
+                  Open Env
+                </button>
+              </div>
+              <div className={styles.actions}>
+                <button type="button" className={styles.secondaryButton} onClick={() => void copyRunCommand()} disabled={!status.workerModule.installed}>
+                  {copied ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                  {copied ? "Copied" : "Copy run command"}
+                </button>
+                <button type="button" className={styles.secondaryButton} onClick={() => void runAction("open-mpp-session")} disabled={Boolean(busy) || !status.gateway.configured || !status.payments.mpp.enabled}>
+                  {busy === "open-mpp-session" ? <span className={styles.spinner} aria-hidden="true" /> : <Zap size={16} aria-hidden="true" />}
+                  Open MPP session
+                </button>
+              </div>
+              <div className={styles.list}>
+                <InfoRow label="Module path" value={status.workerModule.root} mono />
+                <InfoRow label="Run command" value={status.workerModule.runCommand} mono />
+                <InfoRow label="Gateway env" value={status.gatewayEnv} mono />
+                <InfoRow label="Local backend" value={`${status.host.backend.label} · ${status.host.backend.host}`} mono />
+                <InfoRow label="MPP session" value={status.payments.mpp.sessionToken.present ? `Present via ${status.payments.mpp.sessionToken.source || "environment"}` : "Not open"} />
+                <InfoRow label="TEE evidence" value={status.privacy.attestationReady ? `${status.privacy.teeProvider || "TEE"} via ${status.privacy.evidenceSource || "evidence"}` : "Not ready"} />
+              </div>
+            </article>
+
+            <article className={styles.section}>
+              <div className={styles.sectionHead}>
+                <div>
+                  <span className={styles.eyebrow}><ShieldCheck size={15} /> Boundary</span>
+                  <h2 className={styles.sectionTitle}>Hosted authority</h2>
+                </div>
+                <span className={`${styles.pill} ${status.routing.ready ? styles.pillReady : ""}`}>
+                  <span className={styles.dot} aria-hidden="true" />
+                  {status.routing.ready ? "Routing ready" : "Needs gateway"}
+                </span>
+              </div>
+              <p className={styles.body}>{status.boundary.officialAuthority}</p>
+              <p className={`${styles.body} ${styles.warning}`}>{status.boundary.promptPrivacy}</p>
+              <p className={styles.body}>{status.boundary.confidentialCompute}</p>
+            </article>
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <div>
+                <span className={styles.eyebrow}><Cpu size={15} /> Model routes</span>
+                <h2 className={styles.sectionTitle}>Agent model picker options</h2>
+              </div>
+              <span className={styles.pill}>{status.models.length} routes</span>
+            </div>
+            <div className={styles.modelList}>
+              {status.models.map((model) => (
+                <article key={model.id} className={styles.model}>
+                  <div className={styles.row}>
+                    <div>
+                      <strong>{model.name || model.id}</strong>
+                      <p className={styles.small}>{model.subtitle || model.disabledReason || "Advertised by the configured gateway."}</p>
+                    </div>
+                    <span className={styles.pill}>{model.badge || model.group || "Route"}</span>
+                  </div>
+                  <div className={styles.mono}>{model.id}</div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </details>
       </div>
     </div>
   );

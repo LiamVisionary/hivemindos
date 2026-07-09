@@ -15,9 +15,11 @@ The Integrations view owns setup/debug details for external systems that should 
 How it works:
 
 - UI: `src/features/integrations/ConnectionsPanel.tsx` and `src/features/integrations/GitLawbIntegrationPanel.tsx`.
-- Services: `src/lib/services/integrations/provider-connections.ts`, `src/lib/services/integrations/github-oauth.ts`, and `src/lib/services/integrations/google-oauth.ts`.
+- Services: `src/lib/services/integrations/connector-manifests.ts`, `src/lib/services/integrations/provider-connections.ts`, `src/lib/services/integrations/github-oauth.ts`, and `src/lib/services/integrations/google-oauth.ts`.
 - Routes: `/api/integrations/connections`, `/api/integrations/github/oauth/*`, `/api/integrations/google/oauth/*`, `/api/gitlawb/*`, and `/api/projects/*`.
 - Credentials are validated live against each provider, then stored in the shared hive env (`hive-env-add`), which replicates them to every machine — no host machine or separate service to run.
+- Connector manifests are the source of truth for auth mode, credential key names, read/write operation metadata, side effects, and risk.
+- `/api/hive-query` exposes deterministic read-only connector status and manifest receipts. It reports whether configured credential keys are set or missing, but never returns credential values.
 
 What Integrations can do:
 
@@ -25,6 +27,7 @@ What Integrations can do:
 - Connect GitHub with one click via in-app OAuth, or by pasting a personal access token.
 - Connect Google via in-app OAuth with a one-time pasted OAuth client (Desktop app type).
 - Show live per-app status (connected account, failing check) and disconnect in place.
+- Give agents a safe connector map through Context Index and Hive Query before they call provider-specific tools.
 - Show GitLawb Code Proof readiness, local DID status, optional node status, and linked project count.
 - Install/repair the lightweight GitLawb CLI where supported.
 - Create a local GitLawb DID without public registration.
@@ -139,9 +142,11 @@ What Work History can do:
 - `src/lib/services/integrations/github-oauth.ts`
 - `src/lib/services/gitlawb/gitlawb-service.ts`
 - `src/lib/services/projects/project-registry.ts`
+- `src/lib/services/integrations/connector-manifests.ts`
 - `src/lib/services/integrations/provider-connections.ts`
 - `src/lib/services/integrations/shared-env.ts`
 - `src/lib/services/integrations/google-oauth.ts`
+- `src/lib/services/hive-query.ts`
 - `src/lib/services/phone/call-gateway.ts`
 - `src/app/api/fleet/apps/route.ts`
 - `src/app/api/fleet/app-icon/route.ts`
@@ -151,6 +156,7 @@ What Work History can do:
 - `src/app/api/integrations/connections/route.ts`
 - `src/app/api/integrations/google/oauth/start/route.ts`
 - `src/app/api/integrations/google/oauth/callback/route.ts`
+- `src/app/api/hive-query/route.ts`
 - `src/app/api/gitlawb/**`
 - `src/app/api/projects/**`
 - `src/lib/services/work-history/dynamic-changelog.ts`

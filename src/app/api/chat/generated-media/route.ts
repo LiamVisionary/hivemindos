@@ -1,5 +1,7 @@
+import { createReadStream } from "fs";
 import { access, constants, realpath, readFile, stat } from "fs/promises";
 import { extname, isAbsolute } from "path";
+import { Readable } from "stream";
 import { requireAuth } from "@/lib/utils/server-auth";
 import { verifySignedGeneratedMedia } from "@/lib/services/chat/generated-media-signing";
 
@@ -14,10 +16,23 @@ const IMAGE_MEDIA_TYPES: Record<string, string> = {
   ".webp": "image/webp",
 };
 
+const VIDEO_MEDIA_TYPES: Record<string, string> = {
+  ".m4v": "video/mp4",
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+};
+
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 1024 * 1024 * 1024;
 
 function mediaTypeFor(path: string) {
-  return IMAGE_MEDIA_TYPES[extname(path).toLowerCase()] ?? "";
+  const extension = extname(path).toLowerCase();
+  return IMAGE_MEDIA_TYPES[extension] ?? VIDEO_MEDIA_TYPES[extension] ?? "";
+}
+
+function isImageType(type: string) {
+  return type.startsWith("image/");
 }
 
 function hasImageSignature(data: ArrayLike<number>, type: string) {
@@ -37,16 +52,26 @@ function hasImageSignature(data: ArrayLike<number>, type: string) {
   return false;
 }
 
-async function assertAllowedGeneratedImage(path: string) {
+async function assertAllowedGeneratedMedia(path: string) {
   const type = mediaTypeFor(path);
-  if (!type) throw new Error("Only generated image files can be displayed in chat.");
+  if (!type) throw new Error("Only generated image and video files can be displayed in chat.");
   if (!isAbsolute(path)) throw new Error("Generated media path must be absolute.");
   const resolved = await realpath(path);
   const info = await stat(resolved);
   if (!info.isFile()) throw new Error("Generated media path is not a file.");
-  if (info.size > MAX_IMAGE_BYTES) throw new Error("Generated image is too large to display in chat.");
+  if (isImageType(type) && info.size > MAX_IMAGE_BYTES) throw new Error("Generated image is too large to display in chat.");
+  if (!isImageType(type) && info.size > MAX_VIDEO_BYTES) throw new Error("Generated video is too large to display in chat.");
   await access(resolved, constants.R_OK);
-  return { path: resolved, type };
+  return { path: resolved, type, size: info.size };
+}
+
+function rangeBounds(rangeHeader: string | null, size: number) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader ?? "");
+  if (!match) return null;
+  const start = match[1] ? Number(match[1]) : 0;
+  const end = match[2] ? Number(match[2]) : size - 1;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || start >= size) return null;
+  return { start, end: Math.min(end, size - 1) };
 }
 
 export async function GET(request: Request) {
@@ -72,18 +97,35 @@ export async function GET(request: Request) {
   }
 
   try {
-    const image = await assertAllowedGeneratedImage(path);
-    const data = await readFile(image.path);
-    if (!hasImageSignature(data, image.type)) {
-      return Response.json({ ok: false, error: "Generated media is not a valid image file." }, { status: 415 });
+    const media = await assertAllowedGeneratedMedia(path);
+    if (isImageType(media.type)) {
+      const data = await readFile(media.path);
+      if (!hasImageSignature(data, media.type)) {
+        return Response.json({ ok: false, error: "Generated media is not a valid image file." }, { status: 415 });
+      }
+      const body = new Uint8Array(data.byteLength);
+      body.set(data);
+      return new Response(body.buffer, {
+        headers: {
+          "Cache-Control": "private, max-age=3600",
+          "Content-Type": media.type,
+        },
+      });
     }
-    const body = new Uint8Array(data.byteLength);
-    body.set(data);
-    return new Response(body.buffer, {
-      headers: {
-        "Cache-Control": "private, max-age=3600",
-        "Content-Type": image.type,
-      },
+    const range = rangeBounds(request.headers.get("range"), media.size);
+    const stream = range
+      ? createReadStream(media.path, { start: range.start, end: range.end })
+      : createReadStream(media.path);
+    const headers = new Headers({
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "private, max-age=3600",
+      "Content-Type": media.type,
+      "Content-Length": String(range ? range.end - range.start + 1 : media.size),
+    });
+    if (range) headers.set("Content-Range", `bytes ${range.start}-${range.end}/${media.size}`);
+    return new Response(Readable.toWeb(stream) as ReadableStream, {
+      status: range ? 206 : 200,
+      headers,
     });
   } catch (error) {
     return Response.json({

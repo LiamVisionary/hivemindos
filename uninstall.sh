@@ -634,8 +634,8 @@ if ask "Remove the HivemindOS MCP server from agent harness configs (Claude, Cod
   node "$ROOT/scripts/register-mcp-clients.mjs" --remove --targets all || true
 fi
 
-if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, and dashboard auth commands from ~/.local/bin if they point to this checkout?" "yes"; then
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse dashboard-auth; do
+if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" "yes"; then
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse hive-capability-search dashboard-auth; do
     command_path="$HOME/.local/bin/$command_name"
     script_path="$ROOT/scripts/$command_name"
     if [[ -L "$command_path" && "$(readlink "$command_path")" == "$script_path" ]]; then

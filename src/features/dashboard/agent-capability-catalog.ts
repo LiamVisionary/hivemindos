@@ -75,6 +75,14 @@ export const BUILT_IN_AGENT_TOOLS: BuiltInAgentTool[] = [
     scope: "Native",
     badges: ["Discovery", "Router"],
   },
+  {
+    id: "company-sales-content",
+    name: "Company sales/content machine",
+    handle: "/api/companies/:id/sales-content",
+    description: "Read a Zero Human Company's sales/content sources, normalized events, ranked signals, and approval-aware Work Board recommendations.",
+    scope: "Workspace",
+    badges: ["Company", "Signals", "Read-only"],
+  },
 ];
 
 export const AGENT_APP_CATALOG: AgentAppCatalogItem[] = [

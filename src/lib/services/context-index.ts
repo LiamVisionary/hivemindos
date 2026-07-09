@@ -21,7 +21,7 @@ import { NANSEN_HIVEMIND_INTEGRATION_FACTS } from "@/lib/services/chat/nansen-ca
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
-import { dashboardSwarmGoalContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem } from "@/lib/services/context-index/static-tool-items";
+import { dashboardSwarmGoalContextIndexItem, hiveComputeContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem } from "@/lib/services/context-index/static-tool-items";
 import { packagedSkillFileStats, packagedSkillItem } from "@/lib/services/context-index/packaged-skills";
 import { hiveActionContextIndexItems, hiveActionMcpName, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
@@ -41,6 +41,15 @@ import {
 import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import { applyAppPreferences, readAppPreferences, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
+import { connectorManifestContextIndexItems } from "@/lib/services/integrations/connector-context-index";
+import { visualArtifactContextIndexItems } from "@/lib/services/visual-artifact-context-index";
+import {
+  principalCanReadScope,
+  localAdminPrincipal,
+  type AuthorizationMetadata,
+  type PrincipalContext,
+  type ScopePolicy,
+} from "@/lib/types/principal";
 
 export type ContextIndexKind =
   | "skill"
@@ -48,6 +57,8 @@ export type ContextIndexKind =
   | "api-route"
   | "connected-app"
   | "app-endpoint"
+  | "connector"
+  | "artifact"
   | "runtime"
   | "doc"
   | "workspace-file"
@@ -78,6 +89,8 @@ export type ContextIndexItem = {
   score?: number;
   /** Rank bonus applied on top of text relevance, e.g. user-pinned priority apps. */
   priorityBoost?: number;
+  scope?: ScopePolicy;
+  authorization?: AuthorizationMetadata;
 };
 
 export type ContextIndex = {
@@ -93,6 +106,7 @@ export type ContextIndexOptions = {
   includeRuntimeProviders?: boolean;
   connectedApps?: ContextConnectedApp[];
   kinds?: ContextIndexKind[];
+  principal?: PrincipalContext | null;
 };
 
 export type ContextIndexSearchOptions = ContextIndexOptions & {
@@ -913,34 +927,7 @@ function localCliToolItems(): ContextIndexItem[] {
         note: "GET lists the keyless HivemindOS model ids. POST is the local buyer/proxy path and spends only through persisted x402 wallet policy.",
       },
     },
-    {
-      id: "tool-schema:hive-compute-marketplace",
-      kind: "tool-schema",
-      title: "Hive Compute marketplace routing",
-      summary: "GPU-first HivemindOS model routes plus an installable local worker module for spare-GPU earning.",
-      tags: ["hive compute", "gpu marketplace", "inference routing", "spare gpu", "worker module", "ollama", "model provider", "chat completions", "earn"],
-      aliases: [
-        "rent out GPU",
-        "earn with spare GPU",
-        "marketplace inference",
-        "Hive Compute Worker",
-        "GPU job routing",
-      ],
-      retrievalText: [
-        "Select the HivemindOS model provider and GPU-first routes such as hivemindos/auto, hivemindos/fast, or hivemindos/deep when a user wants marketplace GPUs first with hosted OpenRouter fallback.",
-        "The HivemindOS Models chat route tries Hive Compute through the local /api/hive-compute/chat/completions proxy, then falls back to the matching OpenRouter-backed HivemindOS hosted model tier when the marketplace route is unavailable.",
-        "The dashboard view 'compute' calls /api/hive-compute/marketplace to report setup readiness and install an optional worker module under ~/.hivemindos/modules/hive-compute-worker. The worker uses the native hosted WebSocket protocol, supports Ollama or LM Studio/OpenAI-compatible local servers, and requires HIVEMINDOS_HIVE_COMPUTE_WORKER_TOKEN before it can accept jobs.",
-        "Official marketplace matching, payout, quota, entitlement, receipts, fraud controls, and platform fee authority must stay in HivemindOS-controlled hosted infrastructure. The public repo contains only client adapters, worker setup, self-hosted-compatible protocol code, and docs.",
-        "Workers receive prompt contents for jobs they accept. Use only with a trusted official or self-hosted gateway policy and do not advertise secrets, private vault paths, or unrestricted local tools to public marketplace jobs.",
-      ].join(" "),
-      route: "/api/hive-compute/marketplace",
-      methods: ["GET", "POST"],
-      load: {
-        type: "api",
-        target: "/api/hive-compute/marketplace",
-        note: "GET reports non-secret setup readiness. POST installs or repairs the optional local worker module. It must not enforce official payouts locally.",
-      },
-    },
+    hiveComputeContextIndexItem(),
     {
       id: "tool-schema:wallet-actions",
       kind: "tool-schema",
@@ -1410,6 +1397,8 @@ function totals(items: ContextIndexItem[]) {
     "api-route": 0,
     "connected-app": 0,
     "app-endpoint": 0,
+    connector: 0,
+    artifact: 0,
     runtime: 0,
     doc: 0,
     "workspace-file": 0,
@@ -1580,18 +1569,34 @@ function perRequestItems(options: ContextIndexOptions, wants: (kind: ContextInde
   return [
     ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions()), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
     ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
+    ...(wants("connector") ? connectorManifestContextIndexItems() : []),
     ...(wants("runtime") ? runtimeItems() : []),
     ...(wants("code-route") ? codeCapabilityRouteItems() : []),
   ].filter((item) => wants(item.kind));
 }
 
+async function dynamicItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean) {
+  return [
+    ...perRequestItems(options, wants),
+    ...(wants("artifact") ? await visualArtifactContextIndexItems({ vaultPath: options.vaultPath }) : []),
+  ];
+}
+
+function scopedItems(options: ContextIndexOptions, items: ContextIndexItem[]) {
+  const principal = options.principal === undefined
+    ? localAdminPrincipal("local-user", "fallback")
+    : options.principal;
+  return items.filter((item) => principalCanReadScope(principal, item.scope));
+}
+
 function assembleIndex(options: ContextIndexOptions, items: ContextIndexItem[]): ContextIndex {
+  const visibleItems = scopedItems(options, items);
   return {
     generatedAt: new Date().toISOString(),
     root: workspaceRoot(),
     vaultPath: options.vaultPath,
-    items,
-    totals: totals(items),
+    items: visibleItems,
+    totals: totals(visibleItems),
   };
 }
 
@@ -1610,7 +1615,8 @@ export async function buildContextIndex(rawOptions: ContextIndexOptions = {}): P
     .filter((source) => source.kinds.some(wants))
     .map((source) => probeAndBuildSource(source, options).then((snapshot) => snapshot.items).catch(() => []))
   )).flat();
-  return assembleIndex(options, [...fsItems, ...perRequestItems(options, wants)]);
+  const liveItems = await dynamicItems(options, wants);
+  return assembleIndex(options, [...fsItems, ...liveItems]);
 }
 
 function tokenize(value: string) {
@@ -1666,7 +1672,8 @@ export async function getContextIndex(rawOptions: ContextIndexOptions = {}): Pro
     .map((source) => ensureSourceItems(state, source, options).catch(() => []))
   )).flat();
   scheduleFsSourceRefresh(state, options);
-  return assembleIndex(options, [...fsItems, ...perRequestItems(options, wants)]);
+  const liveItems = await dynamicItems(options, wants);
+  return assembleIndex(options, [...fsItems, ...liveItems]);
 }
 
 export async function searchContextIndex(options: ContextIndexSearchOptions = {}) {

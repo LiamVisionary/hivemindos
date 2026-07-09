@@ -18,6 +18,7 @@ import { createPortal } from "react-dom";
 import { AeonDeleteModal, isAeonAgent } from "@/components/fleet/aeon-delete-modal";
 import { MachineTerminalModal } from "@/components/fleet/machine-terminal-modal";
 import { MachineSendFileModal } from "@/components/fleet/machine-send-file-modal";
+import { HiveComputeHostModal } from "@/components/fleet/hive-compute-host-modal";
 import { UsePodHostModal } from "@/components/fleet/usepod-host-modal";
 import { FleetConstellationLoading, FleetScanOverlay } from "@/components/fleet/fleet-loading";
 import { ConnectPhoneModal } from "@/components/phone/ConnectPhoneModal";
@@ -32,6 +33,7 @@ import { MapView } from "@/components/fleet/map-view";
 import { ListView } from "@/components/fleet/list-view";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { emitQueenVoiceToggle } from "@/lib/native/queen-voice-events";
+import { USEPOD_COMPUTE_RENTALS_ENABLED } from "@/lib/config/compute-rentals";
 import { HIVE_H, HIVE_W, frBuildLayout, frContentBounds } from "./hive-geometry";
 import { mapFleetMachines } from "./fleet-hive-mappers";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
@@ -632,7 +634,12 @@ export function FleetHiveView({
         : null}
 
       {usePodHostMachine && typeof document !== "undefined"
-        ? createPortal(<UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />, document.body)
+        ? createPortal(
+          USEPOD_COMPUTE_RENTALS_ENABLED
+            ? <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
+            : <HiveComputeHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />,
+          document.body,
+        )
         : null}
 
       <ConnectPhoneModal open={phonePairingOpen} onClose={() => setPhonePairingOpen(false)} />

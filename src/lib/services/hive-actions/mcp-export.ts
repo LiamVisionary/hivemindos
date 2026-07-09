@@ -38,6 +38,12 @@ export function toMcpTool(action: HiveActionDefinition): HiveMcpToolDescriptor {
   if (action.confirmation) {
     annotations["hivemindos/confirmation"] = action.confirmation;
   }
+  annotations["hivemindos/authorization"] = {
+    sideEffects: [...action.sideEffects],
+    risk: action.risk,
+    readOnly: action.readOnly === true,
+    confirmation: action.confirmation,
+  };
   return {
     name: hiveActionMcpName(action),
     description: action.description,

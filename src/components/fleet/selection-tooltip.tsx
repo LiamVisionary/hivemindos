@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import * as React from "react";
 import {
   AlertTriangle,
   Copy,
+  Cpu,
   GitBranch,
   LoaderCircle,
   MessageSquare,
@@ -40,8 +40,6 @@ import type {
 } from "./roster";
 import { FleetTaskPreviewRow } from "./task-preview-row";
 import styles from "./fleet-tokens.module.css";
-
-const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
 
 type AgentAction = (machine: FleetMachine, agent: FleetAgent) => void;
 
@@ -577,22 +575,15 @@ function FleetMachineDetailPanel({
                   event.stopPropagation();
                   onOpenUsePodHost(machine);
                 }}
-                aria-label={`Rent ${machine.name} compute through UsePod`}
+                aria-label={`Rent ${machine.name} compute through Hive Compute`}
                 className={styles.rosterUsePodHostButton}
                 style={{ minHeight: 28, padding: "7px 9px" }}
               >
-                <Image
-                  src={USEPOD_RUNTIME_ICON_PATH}
-                  alt=""
-                  aria-hidden="true"
-                  width={15}
-                  height={15}
-                  unoptimized
-                />
+                <Cpu size={15} aria-hidden="true" />
                 <span>Rent compute</span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>Run usepod-agent on this machine</TooltipContent>
+            <TooltipContent>Run Hive Compute on this machine</TooltipContent>
           </Tooltip>
         ) : null}
       </div>

@@ -495,6 +495,11 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     apex,
     workBlock,
     burn,
+    apiSpend: {
+      dayUsd: Math.round((rollup.apiSpentUsd ?? 0) * 100) / 100,
+      monthUsd: Math.round((rollup.apiMonthlySpentUsd ?? 0) * 100) / 100,
+      monthlyCeilingUsd: company.apiBudgets?.[0]?.monthlyCeilingUsd ?? null,
+    },
     capabilityCapital,
     revenue,
     revenueShare,

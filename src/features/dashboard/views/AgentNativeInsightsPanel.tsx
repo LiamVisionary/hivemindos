@@ -347,11 +347,7 @@ function ContextSourceRow({ source }: { source: ContextXraySource }) {
 
 function ArtifactBlockPreview({ block }: { block: VisualArtifactBlock }) {
   const icon = block.type === "diagram" ? <GitBranch aria-hidden="true" /> : <FileText aria-hidden="true" />;
-  const content = block.type === "file-tree"
-    ? block.items.slice(0, 6).map((item) => `${item.path}: ${item.note}`).join("\n")
-    : block.type === "diagram"
-      ? block.mermaid
-      : block.markdown;
+  const content = artifactBlockPreviewContent(block);
   return (
     <article className="rounded-md border border-[rgba(148,163,184,0.1)] bg-[rgba(10,14,21,0.38)] p-2 text-xs">
       <div className="mb-2 flex items-center gap-2 text-[var(--accent-strong)] [&_svg]:h-4 [&_svg]:w-4">
@@ -361,6 +357,19 @@ function ArtifactBlockPreview({ block }: { block: VisualArtifactBlock }) {
       <p className="m-0 max-h-64 overflow-auto whitespace-pre-wrap break-words text-[var(--muted)]">{content}</p>
     </article>
   );
+}
+
+function artifactBlockPreviewContent(block: VisualArtifactBlock) {
+  if (block.type === "file-tree") return block.items.slice(0, 6).map((item) => `${item.path}: ${item.note}`).join("\n");
+  if (block.type === "diagram") return block.mermaid;
+  if (block.type === "table") {
+    const header = block.columns.join(" | ");
+    const rows = block.rows.slice(0, 6).map((row) => block.columns.map((column) => String(row[column] ?? "")).join(" | "));
+    return [block.caption, header, ...rows].filter(Boolean).join("\n");
+  }
+  if (block.type === "chart") return [block.caption, JSON.stringify(block.spec, null, 2)].filter(Boolean).join("\n");
+  if (block.type === "metric") return [block.label, block.value, block.note].filter(Boolean).join("\n");
+  return block.markdown;
 }
 
 function EmptyState({ text }: { text: string }) {

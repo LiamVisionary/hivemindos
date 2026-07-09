@@ -8,6 +8,8 @@ function fail(message) {
 const setup = readFileSync("src-tauri/src/setup.rs", "utf8");
 const setupSh = readFileSync("setup.sh", "utf8");
 const setupPs = readFileSync("setup.ps1", "utf8");
+const uninstallPs = readFileSync("uninstall.ps1", "utf8");
+const collectorPs = readFileSync("scripts/install-telemetry-collector.ps1", "utf8");
 const env = readFileSync("src-tauri/src/env.rs", "utf8");
 const nativeBootstrap = readFileSync("src-tauri/src/lib.rs", "utf8");
 const bootstrapClient = readFileSync("src/lib/native/dashboard-bootstrap.ts", "utf8");
@@ -52,12 +54,36 @@ if (!setup.includes("--skip-deps --skip-build --skip-dashboard")) {
   fail("native setup repair commands must skip source dependency/build/dev-server work by default.");
 }
 
+if (!setup.includes("HIVE_SETUP_EXIT=%ERRORLEVEL%") || !setup.includes("exit /b %HIVE_SETUP_EXIT%")) {
+  fail("Windows native setup launcher must preserve the setup.ps1 exit code after printing the finished marker.");
+}
+
 if (!setupSh.includes("needs_pnpm=\"false\"") || !setupSh.includes("CLI_SKIP_DEPS") || !setupSh.includes("CLI_SKIP_DASHBOARD")) {
   fail("setup.sh must not install or enable pnpm when no workspace install/build/dev dashboard is requested.");
 }
 
 if (!setupPs.includes("$needsPnpm = (-not $SkipDeps) -or (-not $SkipBuild) -or (-not $SkipDashboard)")) {
   fail("setup.ps1 must not install or enable pnpm when no workspace install/build/dev dashboard is requested.");
+}
+
+if (!setupPs.includes("$collectorInstallFailed = $false") || !setupPs.includes("if ($collectorInstallFailed)") || !setupPs.includes("exit 1")) {
+  fail("setup.ps1 must report collector install failure to app-driven first-run callers.");
+}
+
+if (!collectorPs.includes("-LogonType Interactive") || !collectorPs.includes("-LogonType S4U") || !collectorPs.includes("Register-HivemindScheduledTask")) {
+  fail("Windows collector scheduled tasks must support both durable S4U start-now registration and desktop-user Interactive fallback.");
+}
+
+if (!collectorPs.includes("Start-HivemindHiddenLauncher") || !collectorPs.includes('Start-Process -FilePath "wscript.exe"') || !collectorPs.includes("Start-HivemindScheduledTaskNow") || !collectorPs.includes("Register-HivemindStartupLauncher")) {
+  fail("Windows collector setup must start the hidden collector process immediately and keep bounded scheduled-task plus Startup-folder fallbacks.");
+}
+
+if (!uninstallPs.includes("Remove-HivemindStartupLauncher") || !uninstallPs.includes("HivemindOS Telemetry Collector") || !uninstallPs.includes("HivemindOS Link")) {
+  fail("Windows uninstall must remove collector/link Startup-folder launchers as well as scheduled tasks.");
+}
+
+if (!onboarding.includes("setupProcessDone") || !onboarding.includes("Setup finished, but the local agent bridge did not come online.") || !onboarding.includes("Retry setup")) {
+  fail("native first-run must turn a finished-but-offline collector run into a retryable setup error.");
 }
 
 if (!hiveEnv.includes("nativePrivateFilesystemAccessGranted()") || !hiveEnv.includes("allowPrivateFilesystem")) {

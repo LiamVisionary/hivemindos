@@ -1,5 +1,7 @@
 import "server-only";
 
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
+
 import { messageText } from "./prompts";
 import type {
   FusionCompletionOptions,
@@ -90,10 +92,16 @@ function buildBody(
   stream: boolean,
   options?: FusionCompletionOptions,
 ): string {
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: member.provider,
+    model: member.model,
+    cacheScope: `fusion:${member.id}`,
+  });
   return JSON.stringify({
     model: member.model,
     messages: normalizeMessages(messages),
     stream,
+    ...cacheHints.body,
     ...(typeof options?.temperature === "number" ? { temperature: options.temperature } : {}),
     ...(typeof options?.maxTokens === "number" ? { max_tokens: options.maxTokens } : {}),
     ...(options?.extraBody ?? {}),
@@ -101,10 +109,16 @@ function buildBody(
 }
 
 function buildHeaders(member: ResolvedFusionMember): Record<string, string> {
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: member.provider,
+    model: member.model,
+    cacheScope: `fusion:${member.id}`,
+  });
   return {
     "Content-Type": "application/json",
     Accept: "text/event-stream",
     ...(member.apiKey && member.apiKey !== "local" ? { Authorization: `Bearer ${member.apiKey}` } : {}),
+    ...cacheHints.headers,
     ...(member.headers ?? {}),
   };
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 import {
   applyBrainReviewProposal,
@@ -13,14 +13,16 @@ import type {
   BrainReviewKind,
   BrainReviewStatus,
 } from "@/lib/types/brain-review";
-import { requireAuth } from "@/lib/utils/server-auth";
+import { errorJson, okJson } from "@/lib/utils/api-response";
+import { requireAuthContext } from "@/lib/utils/server-auth";
+import { workspaceScope } from "@/lib/types/principal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const unauthorized = await requireAuth(request);
-  if (unauthorized) return unauthorized;
+  const auth = await requireAuthContext(request);
+  if (auth.response) return auth.response;
 
   try {
     const status = request.nextUrl.searchParams.get("status");
@@ -29,8 +31,7 @@ export async function GET(request: NextRequest) {
       status: status as BrainReviewStatus | "all" | null,
       kind: kind as BrainReviewKind | "all" | null,
     });
-    return NextResponse.json({
-      ok: true,
+    return okJson({
       proposals: queue.proposals,
       updatedAt: queue.updatedAt,
     });
@@ -40,16 +41,19 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const unauthorized = await requireAuth(request);
-  if (unauthorized) return unauthorized;
+  const auth = await requireAuthContext(request);
+  if (auth.response) return auth.response;
 
   try {
     const body = normalizeBody(await request.json().catch(() => ({})));
     const action = typeof body.action === "string" ? body.action : "create";
     if (action === "create") {
-      const result = await createBrainReviewProposal(body);
-      return NextResponse.json({
-        ok: true,
+      const result = await createBrainReviewProposal({
+        ...body,
+        createdByPrincipalId: body.createdByPrincipalId ?? auth.principal.principalId,
+        scope: body.scope ?? workspaceScope(["brain:read"], ["brain-review"]),
+      });
+      return okJson({
         proposal: result.proposal,
         proposals: result.file.proposals,
         updatedAt: result.file.updatedAt,
@@ -57,16 +61,14 @@ export async function POST(request: NextRequest) {
     }
     if (action === "list") {
       const result = await readBrainReviewQueue();
-      return NextResponse.json({
-        ok: true,
+      return okJson({
         proposals: result.proposals,
         updatedAt: result.updatedAt,
       });
     }
     if (action === "approve") {
       const result = await approveBrainReviewProposal(bodyId(body));
-      return NextResponse.json({
-        ok: true,
+      return okJson({
         proposal: result.proposal,
         proposals: result.file.proposals,
         updatedAt: result.file.updatedAt,
@@ -74,8 +76,7 @@ export async function POST(request: NextRequest) {
     }
     if (action === "reject") {
       const result = await rejectBrainReviewProposal(bodyId(body), body.reason);
-      return NextResponse.json({
-        ok: true,
+      return okJson({
         proposal: result.proposal,
         proposals: result.file.proposals,
         updatedAt: result.file.updatedAt,
@@ -83,12 +84,11 @@ export async function POST(request: NextRequest) {
     }
     if (action === "preview-apply") {
       const preview = await previewBrainReviewApply(bodyId(body));
-      return NextResponse.json({ ok: true, preview });
+      return okJson({ preview });
     }
     if (action === "apply") {
       const result = await applyBrainReviewProposal(bodyId(body), body);
-      return NextResponse.json({
-        ok: true,
+      return okJson({
         applied: result.applied,
         action: result.action,
         reason: result.reason,
@@ -99,10 +99,7 @@ export async function POST(request: NextRequest) {
         memory: result.memory,
       });
     }
-    return NextResponse.json({
-      ok: false,
-      error: `Unsupported brain review action: ${action}`,
-    }, { status: 400 });
+    return errorJson(`Unsupported brain review action: ${action}`, 400);
   } catch (error) {
     return errorResponse(error);
   }
@@ -118,5 +115,5 @@ function bodyId(body: Record<string, unknown>) {
 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "Brain review request failed.";
-  return NextResponse.json({ ok: false, error: message }, { status: 400 });
+  return errorJson(message, 400);
 }

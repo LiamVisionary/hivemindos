@@ -141,7 +141,12 @@ Health and readiness reports should be useful but secret-free:
 
 ## Known Gaps
 
-- HivemindOS has a dashboard device-token model, not a multi-user RBAC system.
+- HivemindOS has a dashboard device-token model with a local admin principal by
+  default, not a full multi-user RBAC system. New capability surfaces should use
+  the shared principal, scope, and action-authorization helpers so future
+  multi-principal installs do not need parallel policy code.
+- Connector credentials remain server-side. Agents may see credential key names,
+  connector status, and approved operation metadata, but not token values.
 - Some runtime tools are delegated to external agent runtimes whose permissions
   are enforced outside this repository.
 - Not every retrieved-context path uses the centralized untrusted-context helper

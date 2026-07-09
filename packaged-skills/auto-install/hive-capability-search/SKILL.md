@@ -21,6 +21,17 @@ Search only surfaces available to the current agent/runtime:
 - Workspace docs/files only when task-relevant.
 - Shared hive env credential presence by key name only. Use approved presence/status checks such as `hive-env-check KEY`; never read, print, copy, summarize, or persist secret values.
 
+## Discovery Surfaces
+
+Use the best surface available in the current runtime; do not assume every agent has shell access.
+
+1. If the runtime already injected "Hive capability search" hits or context-index evidence, consume that first and avoid rerunning discovery.
+2. If an authenticated dashboard/app/phone bridge, MCP tool, or route tool exposes `/api/context-index`, call it with the task query. This is the preferred no-shell path, especially for phone-hosted or app-routed agents.
+3. If shell access exists, run `hive-capability-search "<task>"`. Use `--json` for machine-readable output, and `--live` only when fresh connected-app/endpoints matter and dashboard auth is available.
+4. If none of those surfaces are available, build the map from visible shared skills, runtime tool schemas, app context, and current workspace evidence, then mark `gaps` with the missing capability-search surface instead of claiming the route was verified.
+
+The CLI is a delivery channel for this skill, not the skill itself. A missing CLI is a gap only for shell-based agents; it is not a failure when another verified context-index or injected-context surface is available.
+
 ## Bounded Retrieval
 
 - Start with one broad query using the user's full goal.

@@ -16,6 +16,7 @@ const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: stri
   slack: { mono: "Sl", accent: "#e09a86" },
   notion: { mono: "No", accent: "#d8d6cf" },
   google: { mono: "Go", accent: "#6f9bd6" },
+  "google-cloud": { mono: "Gc", accent: "#5a8dee" },
   posthog: { mono: "Ph", accent: "#f0a868" },
   plausible: { mono: "Pl", accent: "#4fb5a3" },
   clawbank: { mono: "Cb", accent: "#e6dcc6", logo: "/icons/runtimes/clawbank.svg" },
@@ -47,6 +48,7 @@ function ProviderGlyph({ providerKey, size = 38, radius = 11 }: { providerKey: C
 const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
   github: "/api/integrations/github/oauth/start?source=integrations",
   google: "/api/integrations/google/oauth/start",
+  "google-cloud": "/api/integrations/google-cloud/oauth/start",
 };
 
 /** One screen: connect apps in place. Credentials are validated live, then
@@ -77,9 +79,11 @@ export function ConnectionsPanel() {
     let returnMessageTimer: number | undefined;
     const params = new URLSearchParams(window.location.search);
     const returned = params.get("connections");
-    if (returned === "github" || returned === "google") {
+    if (returned === "github" || returned === "google" || returned === "google-cloud") {
+      const connectedLabel =
+        returned === "github" ? "GitHub" : returned === "google-cloud" ? "Google Cloud" : "Google";
       returnMessageTimer = window.setTimeout(() => {
-        setMessage(`${returned === "github" ? "GitHub" : "Google"} connected.`);
+        setMessage(`${connectedLabel} connected.`);
       }, 0);
       params.delete("connections");
       const search = params.toString();
@@ -186,7 +190,15 @@ function ConnectModal({
   const [note, setNote] = React.useState("");
   const oauthUrl = OAUTH_START_URL[provider.key];
   const isGoogle = provider.key === "google";
+  const isGoogleCloud = provider.key === "google-cloud";
   const isClawBank = provider.key === "clawbank";
+  // OAuth-only providers connect purely through the browser sign-in button — no
+  // pasted-token fallback (the token comes from the OAuth round-trip). `google`
+  // uses a one-time pasted OAuth client (web-app model), then browser sign-in;
+  // `google-cloud` uses the desktop-app model with a baked-in client (PKCE +
+  // loopback listener), so it is always oauthReady and never shows a client form.
+  const oauthOnly = isGoogle || isGoogleCloud;
+  const usesOAuthClient = isGoogle || isGoogleCloud;
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -231,7 +243,7 @@ function ConnectModal({
   }
 
   async function saveGoogleClient() {
-    const data = await post({ action: "save-oauth-client", provider: "google", clientId, clientSecret }, "client");
+    const data = await post({ action: "save-oauth-client", provider: provider.key, clientId, clientSecret }, "client");
     if (!data) return;
     onUpdated(data);
     await startGoogleOAuth();
@@ -241,7 +253,7 @@ function ConnectModal({
     setBusy("oauth");
     setNote("");
     try {
-      const response = await fetch(OAUTH_START_URL.google as string, {
+      const response = await fetch(oauthUrl as string, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "start" }),
@@ -258,10 +270,10 @@ function ConnectModal({
     }
   }
 
-  const googleNeedsClient = isGoogle && !provider.oauthReady;
+  const googleNeedsClient = usesOAuthClient && !provider.oauthReady;
   const googleRedirectUri = typeof window === "undefined"
     ? ""
-    : new URL("/api/integrations/google/oauth/callback", window.location.origin.replace("//localhost", "//127.0.0.1")).toString();
+    : new URL(`/api/integrations/${isGoogleCloud ? "google-cloud" : "google"}/oauth/callback`, window.location.origin.replace("//localhost", "//127.0.0.1")).toString();
 
   return (
     <div className="fm-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
@@ -292,12 +304,12 @@ function ConnectModal({
           {oauthUrl && !googleNeedsClient ? (
             <BBtn
               variant="primary"
-              onClick={() => isGoogle ? void startGoogleOAuth() : window.location.assign(oauthUrl)}
+              onClick={() => usesOAuthClient ? void startGoogleOAuth() : window.location.assign(oauthUrl)}
               disabled={Boolean(busy)}
               style={{ justifySelf: "start", padding: "11px 18px", fontSize: 13.5 }}
             >
               {busy === "oauth" ? <span className="ni-spin" /> : <BIcon name="key" size={15} />}
-              {busy === "oauth" && isGoogle ? "Opening Google..." : isGoogle ? "Sign in with Google" : `Connect with ${provider.label}`}
+              {busy === "oauth" && usesOAuthClient ? "Opening Google..." : isGoogle ? "Sign in with Google" : `Connect with ${provider.label}`}
             </BBtn>
           ) : null}
 
@@ -316,7 +328,7 @@ function ConnectModal({
 
           {googleNeedsClient ? (
             <div style={{ display: "grid", gap: 12 }}>
-              <div className="fm-note"><BIcon name="shield" size={15} /><span>{provider.tokenHint} Give it the redirect URI below (Desktop app clients accept it automatically).</span></div>
+              <div className="fm-note"><BIcon name="shield" size={15} /><span>{provider.tokenHint} Create a <strong>Web application</strong> OAuth client and add the exact redirect URI below to it.</span></div>
               <label className="fb-label">Client ID
                 <input className="fb-field fb-mono" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="....apps.googleusercontent.com" />
               </label>
@@ -332,7 +344,7 @@ function ConnectModal({
             </div>
           ) : null}
 
-          {!isGoogle ? (
+          {!oauthOnly ? (
             <div style={{ display: "grid", gap: 9 }}>
               <div className="fm-sec" style={{ margin: "2px 0 0" }}>{isClawBank || (oauthUrl && provider.oauthReady) ? "Or paste a token" : "Paste a token"}</div>
               <div className="fm-note"><BIcon name="shield" size={15} /><span>{provider.tokenHint} The token is checked live, then stored in the shared hive env.</span></div>
@@ -361,7 +373,7 @@ function ConnectModal({
               {busy === "client" ? <span className="ni-spin" /> : <BIcon name="key" size={14} />} Save &amp; sign in
             </BBtn>
           ) : null}
-          {!isGoogle ? (
+          {!oauthOnly ? (
             <BBtn variant="primary" onClick={() => void saveToken()} disabled={Boolean(busy) || token.trim().length < 8}>
               {busy === "token" ? <span className="ni-spin" /> : <BIcon name="plug" size={14} />} {busy === "token" ? "Checking..." : "Validate & save"}
             </BBtn>

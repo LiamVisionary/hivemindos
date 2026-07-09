@@ -412,12 +412,12 @@ function Ensure-HiveEnvAdd {
     Warn "Python is missing; hive env shims installed but will need Python to run."
     $pythonCommand = "python"
   }
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "dashboard-auth")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "hive-capability-search", "dashboard-auth")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     $scriptPath = Join-Path $Root "scripts\$commandName"
     if ($commandName -eq "hive-transfer") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath.mjs`" %*`r`n" -Encoding ASCII
-    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook" -or $commandName -eq "hive-workspace" -or $commandName -eq "hive-workspace-switch" -or $commandName -eq "hive-workspace-add" -or $commandName -eq "hive-pulse" -or $commandName -eq "dashboard-auth") {
+    } elseif ($commandName -eq "hive-handoff" -or $commandName -eq "hivemind-mcp" -or $commandName -eq "hive-brain" -or $commandName -eq "hive-brain-hook" -or $commandName -eq "hive-workspace" -or $commandName -eq "hive-workspace-switch" -or $commandName -eq "hive-workspace-add" -or $commandName -eq "hive-pulse" -or $commandName -eq "hive-capability-search" -or $commandName -eq "dashboard-auth") {
       Set-Content -Path $shimPath -Value "@echo off`r`nnode `"$scriptPath`" %*`r`n" -Encoding ASCII
     } elseif ($commandName -eq "hive-update") {
       Set-Content -Path $shimPath -Value "@echo off`r`nbash `"$scriptPath`" %*`r`n" -Encoding ASCII
@@ -428,13 +428,13 @@ function Ensure-HiveEnvAdd {
   }
   $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
   if (($userPath -split ";") -notcontains $binDir) {
-    if (Ask-YesNo "Add $binDir to your user PATH for hive env, transfer, handoff, MCP, and dashboard auth commands?" $true) {
+    if (Ask-YesNo "Add $binDir to your user PATH for hive env, transfer, handoff, MCP, Hive Pulse, capability search, and dashboard auth commands?" $true) {
       $nextPath = if ($userPath) { "$userPath;$binDir" } else { $binDir }
       [Environment]::SetEnvironmentVariable("Path", $nextPath, "User")
       Refresh-Path
       Ok "Added $binDir to user PATH"
     } else {
-      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, hive-pulse, and dashboard-auth from any folder"
+      Warn "Add $binDir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, hive-pulse, hive-capability-search, and dashboard-auth from any folder"
     }
   } else {
     Refresh-Path
@@ -1134,8 +1134,9 @@ Write-Host "Collector:"
 # Install + start the local agent telemetry collector as a per-user logon
 # Scheduled Task (the Windows analog of the launchd/systemd service set up by
 # install-telemetry-collector.sh). Without this the collector never runs, so a
-# Windows machine can never host agents or report "ready" in the Fleet. Best
-# effort: a failure here must not abort setup.
+# Windows machine can never host agents or report "ready" in the Fleet. Treat a
+# failure here as setup failure so app-driven first-run can stop and offer a
+# retry instead of showing a finished-but-still-working modal.
 #
 # Hivemind Link gating mirrors setup.sh, which passes HIVE_LINK_ENABLED to the
 # Unix installer based on the network mode. Windows v1 is opt-in (Unix defaults
@@ -1143,6 +1144,7 @@ Write-Host "Collector:"
 # is explicitly "link". $env:HIVE_LINK_ENABLED also reaches the installer
 # directly (it runs in-process); the explicit switch just makes the gate
 # legible and adds the HIVE_NETWORK_MODE spelling for parity with setup.sh.
+$collectorInstallFailed = $false
 try {
   $collectorArgs = @{ Port = $CollectorPort; RepoRoot = $Root }
   if ($env:HIVE_LINK_ENABLED -eq "true" -or $env:HIVE_NETWORK_MODE -eq "link") {
@@ -1150,6 +1152,7 @@ try {
   }
   & (Join-Path $Root "scripts\install-telemetry-collector.ps1") @collectorArgs
 } catch {
+  $collectorInstallFailed = $true
   Warn "Collector install did not complete: $_"
   Write-Host "  Re-run later: powershell -ExecutionPolicy Bypass -File scripts\install-telemetry-collector.ps1"
 }
@@ -1170,6 +1173,10 @@ if ($tailnetSyncEnabled) {
 Write-Host ""
 if ($dashboardOpenable) {
   Open-DashboardIfRequested "http://localhost:$Port"
+}
+
+if ($collectorInstallFailed) {
+  exit 1
 }
 
 # Reaching here means setup succeeded; exit explicitly so a lingering

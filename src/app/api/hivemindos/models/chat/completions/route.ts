@@ -279,6 +279,7 @@ async function fetchFreeModelCompletion(
         ...body,
         model: upstreamModel,
         stream: false,
+        cache_prompt: typeof body.cache_prompt === "boolean" ? body.cache_prompt : true,
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS),

@@ -10,7 +10,7 @@ import type { BeeWorkerClass, SharedVaultConfig, WorkerTaskPreference } from "@/
 const CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS = 250;
 const CONNECTED_APPS_CACHE_TTL_MS = 60_000;
 const CONNECTED_APPS_STALE_TTL_MS = 5 * 60_000;
-const CHAT_CAPABILITY_SEARCH_KINDS = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime"] as const;
+const CHAT_CAPABILITY_SEARCH_KINDS = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "connector", "artifact", "runtime"] as const;
 
 let connectedAppsCache: { origin: string; apps: ContextConnectedApp[]; updatedAt: number } | null = null;
 let connectedAppsRefresh: Promise<ContextConnectedApp[] | undefined> | null = null;
@@ -28,6 +28,12 @@ function safeContextTags(item: ContextIndexItem) {
 function contextItemLocator(item: ContextIndexItem) {
   if (item.kind === "connected-app" || item.kind === "app-endpoint") {
     return "Dashboard can resolve current app URLs through /api/context-index or /api/fleet/apps for tool-capable runtimes; do not hard-code Tailnet endpoints.";
+  }
+  if (item.kind === "connector") {
+    return "Use /api/hive-query for deterministic read-only connector metadata/status; credentials are resolved server-side by key name only.";
+  }
+  if (item.kind === "artifact") {
+    return "Load through /api/visual-artifacts; public views redact local paths.";
   }
   if (item.route && item.path) return `${item.route}; source: ${item.path}`;
   return item.path || item.route || item.load.note || "No direct locator.";
@@ -217,6 +223,9 @@ function taskRetrievalQueries(query: string) {
   if (/image|picture|photo|visual|render|generate|generation/.test(normalized)) {
     queries.push({ label: "image generation", query: "image generation open generative ai zimage z-image imagegen visual creative diffusion comfyui" });
   }
+  if (/video|movie|clip|animation|reel|img2vid|i2v|animate/.test(normalized)) {
+    queries.push({ label: "video generation", query: "video generation image to video img2vid i2v animation connected app mcp palmier seedance higgsfield kling runway comfyui" });
+  }
   if (/telegram|message|send|deliver|delivery|notify|notification/.test(normalized)) {
     queries.push({ label: "delivery channel", query: "telegram message send notification delivery channel configure access bot" });
   }
@@ -247,6 +256,12 @@ export function imageGenerationRequest(query: string) {
     || /\b(?:txt2img|text\s*to\s*image|image[-\s]?gen|image generation)\b/i.test(query);
 }
 
+export function videoGenerationRequest(query: string) {
+  return /\b(?:generate|create|make|render|produce|animate)\b[\s\S]{0,100}\b(?:video|movie|clip|animation|reel)\b/i.test(query)
+    || /\b(?:video|movie|clip|animation|reel|image[-\s]?to[-\s]?video|img2vid|text[-\s]?to[-\s]?video|txt2vid)\b[\s\S]{0,100}\b(?:generate|generation|create|make|render|produce|animate)\b/i.test(query)
+    || /\b(?:image[-\s]?to[-\s]?video|img2vid|text[-\s]?to[-\s]?video|txt2vid|video generation)\b/i.test(query);
+}
+
 export function localImageGenerationRequest(query: string) {
   return imageGenerationRequest(query) && /\b(?:local|locally|on this mac|this mac|my mac|self[-\s]?hosted|tailnet|comfyui|z[-\s]?image|zimage)\b/i.test(query);
 }
@@ -254,6 +269,7 @@ export function localImageGenerationRequest(query: string) {
 export function requiresCapabilityRouting(query: string) {
   return loopEngineeringRequest(query)
     || localImageGenerationRequest(query)
+    || videoGenerationRequest(query)
     || /\b(?:capabilit(?:y|ies)|connected app|tool|api|x402|wallet|payment|send|deliver|deploy|workflow|kanban|scheduler|miroshark|bankr|crypto|trade|trading|token|swap|portfolio)\b/i.test(query)
     || /\bwhat\b[\s\S]{0,40}\bcan you do\b|\bcan you do with\b/i.test(query);
 }
@@ -376,6 +392,18 @@ function imageGenerationCapabilityContext(query: string, runtime?: RuntimeCapabi
     "- If this chat bridge does not expose real tool calls/app dispatch, do not say the generation was initiated, sent, dispatched, queued, or executed. Say the selected route and that HivemindOS needs to run the native image-generation dispatch path.",
     "- OpenRouter free image-model search is only a fallback when no runtime-native image generator and no suitable hive capability/app is available, unless the user explicitly asks for OpenRouter.",
   ].filter(Boolean).join("\n");
+}
+
+function videoGenerationCapabilityContext(query: string) {
+  if (!videoGenerationRequest(query)) return "";
+  return [
+    "Video generation capability routing:",
+    "- Prefer connected video-generation apps, MCP servers, or media services discovered by Hive capability search before provider-specific fallbacks.",
+    "- If the user attached an image, use the current turn media artifact path/id as the image-to-video source input. Do not embed base64 in the model prompt.",
+    "- Tool-capable OpenAI-compatible runtimes may call the generate_video tool; the runtime will pass the prepared media artifact bytes/path to the selected connected video app.",
+    "- For connected apps and MCP servers, resolve fresh routes through HivemindOS APIs instead of hard-coding Tailnet or localhost endpoints.",
+    "- Do not claim a video was generated unless a tool/app route returns a video artifact or receipt.",
+  ].join("\n");
 }
 
 function loopEngineeringCapabilityContext(query: string) {
@@ -527,6 +555,7 @@ export async function buildTaskRetrievalContextResult(input: {
     userAppPreferenceContext(connectedApps, trimmed),
     loopEngineeringCapabilityContext(trimmed),
     imageGenerationCapabilityContext(trimmed, input.runtime, connectedApps),
+    videoGenerationCapabilityContext(trimmed),
     generationPerformanceContext,
     hits.length ? untrustedContextMessage("Hive capability search hits", hits.map(formatTaskRetrievalItem).join("\n")).content : "",
   ].filter(Boolean).join("\n");

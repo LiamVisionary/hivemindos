@@ -27,6 +27,7 @@ import {
   rememberCompanyDriverSelfBase,
 } from "@/lib/services/company-autonomy-driver";
 import { companyRevenueRollup, readCompanyRevenueLedger } from "@/lib/services/company-revenue-share";
+import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import type {
   Company,
@@ -123,6 +124,10 @@ type CompanyBody = {
   // resolve-pricing (human decision on a crew-raised price-change request)
   proposalId?: string;
   decision?: string;
+  // record-api-cost (paid cloud-API spend reported by a company's meter)
+  amountUsd?: number;
+  target?: string;
+  agentId?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -149,6 +154,23 @@ export async function POST(request: NextRequest) {
       const company = await addCompanyMembers(body.id.trim(), body.members ?? []);
       if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
       return NextResponse.json({ ok: true, company });
+    }
+    if (action === "record-api-cost") {
+      // A company's paid-API meter reports its incremental cloud spend so it lands
+      // in the unified spend ledger and surfaces in the Treasury. Server records
+      // the amount as reported (spend up); it never grants entitlement.
+      if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });
+      const amountUsd = Math.max(0, Number(body.amountUsd) || 0);
+      await appendSpend({
+        agentId: (body.agentId || "system:api-meter").trim(),
+        companyId: body.id.trim(),
+        kind: "api",
+        asset: "USDC",
+        amountUsd,
+        target: shortTarget(body.target),
+        status: "executed",
+      });
+      return NextResponse.json({ ok: true });
     }
     if (action === "dispatch-goal") {
       if (!body.id?.trim()) return NextResponse.json({ ok: false, error: "id is required" }, { status: 400 });

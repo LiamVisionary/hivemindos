@@ -93,3 +93,40 @@ export function loopEngineeringContextIndexItem(absolutePath: AbsolutePathResolv
     },
   };
 }
+
+export function hiveComputeContextIndexItem(): ContextIndexItem {
+  return {
+    id: "tool-schema:hive-compute-marketplace",
+    kind: "tool-schema",
+    title: "Hive Compute marketplace routing",
+    summary: "GPU-first HivemindOS model routes plus an in-app Hive Compute host flow for spare-GPU earning.",
+    tags: ["hive compute", "gpu marketplace", "inference routing", "spare gpu", "worker module", "ollama", "lm studio", "x402", "mpp", "tee", "model provider", "chat completions", "earn"],
+    aliases: [
+      "rent out GPU",
+      "rent compute",
+      "earn with spare GPU",
+      "marketplace inference",
+      "Hive Compute Worker",
+      "machine-speed payments",
+      "TEE inference privacy",
+      "GPU job routing",
+    ],
+    retrievalText: [
+      "Select the HivemindOS model provider and GPU-first routes such as hivemindos/auto, hivemindos/fast, or hivemindos/deep when a user wants marketplace GPUs first with hosted OpenRouter fallback.",
+      "The HivemindOS Models chat route tries Hive Compute through the local /api/hive-compute/chat/completions proxy, then falls back to the matching OpenRouter-backed HivemindOS hosted model tier when the marketplace route is unavailable.",
+      "The dashboard view 'compute' and Fleet Rent compute modal call /api/hive-compute/marketplace to report setup readiness, install or repair the optional worker module under ~/.hivemindos/modules/hive-compute-worker, install dependencies, discover LM Studio/OpenAI-compatible or Ollama local models, open an MPP machine-payment session, and start or stop the managed worker process.",
+      "UsePod compute rentals are retained only behind NEXT_PUBLIC_HIVEMINDOS_USEPOD_COMPUTE_RENTALS_ENABLED; the default in-app compute rental path is Hive Compute.",
+      "The worker uses the native hosted WebSocket protocol, supports Ollama or LM Studio/OpenAI-compatible local servers, and requires HIVEMINDOS_HIVE_COMPUTE_WORKER_TOKEN before it can accept jobs.",
+      "x402 is the default per-call payment rail. MPP session settlement is optional and requires HIVEMINDOS_HIVE_COMPUTE_MPP_POLICY_URL from a compatible hosted gateway; POST action open-mpp-session stores a short-lived local session token, and HIVEMINDOS_HIVE_COMPUTE_MPP_REQUIRE_SESSION makes workers reject jobs without gateway payment proof.",
+      "Standard workers receive prompt contents for jobs they accept. Hardware-enforced privacy requires gateway-verified TEE attestation evidence, encrypted prompt delivery keys, and a compatible policy; set HIVEMINDOS_HIVE_COMPUTE_CONFIDENTIAL_MODE=tee-attested plus TEE provider/evidence/key envs before claiming a worker is hardware-confidential.",
+      "Official marketplace matching, payout, quota, entitlement, receipts, fraud controls, provider bonds, reputation, x402/MPP settlement, TEE attestation enforcement, and platform fee authority must stay in HivemindOS-controlled hosted infrastructure. The public repo contains only client adapters, worker setup, self-hosted-compatible protocol code, and docs.",
+    ].join(" "),
+    route: "/api/hive-compute/marketplace",
+    methods: ["GET", "POST"],
+    load: {
+      type: "api",
+      target: "/api/hive-compute/marketplace",
+      note: "GET reports non-secret setup readiness. POST installs, repairs, opens MPP sessions, starts, or stops the optional local worker module. It must not enforce official payouts locally.",
+    },
+  };
+}

@@ -866,6 +866,13 @@
   padding-top: 9px;
 }
 
+/* `display: grid` above outranks the UA `[hidden]` rule, so a Needs-You card's
+   hidden message row would otherwise render as an empty bordered strip below
+   the card. Honor the attribute so the space collapses. */
+.kanbanMessageRow[hidden] {
+  display: none;
+}
+
 .kanbanCardMarkdown {
   display: -webkit-box;
   overflow: hidden;
@@ -4360,15 +4367,24 @@
   box-shadow: none !important;
   padding: 12px 13px 11px !important;
 }
-/* A Needs-You card renders the standalone Work Route card as its whole body —
-   drop the generic card chrome so the honey card is the card. */
-.workBoardPanel .kanbanCard.workRoute {
+/* A Needs-You card renders the Work Route card as its whole body — drop the
+   generic card chrome in every interactive state so only the honey card's own
+   16px border shows. The hover/active/stale chrome otherwise exposed the outer
+   card's 9px radius around the 16px card — two mismatched rounded borders. */
+.workBoardPanel .kanbanCard.workRoute,
+.workBoardPanel .kanbanCard.workRoute:hover,
+.workBoardPanel .kanbanCard.workRoute:focus-visible,
+.workBoardPanel .kanbanCard.workRoute.stale,
+.workBoardPanel .kanbanCard.workRoute.active {
   gap: 0 !important;
   padding: 0 !important;
+  border-radius: 16px !important;
   border-color: transparent !important;
   background: transparent !important;
   box-shadow: none !important;
 }
+/* selection cue rides the honey card's own 16px edge, not the outer 9px box */
+.workBoardPanel .kanbanCard.workRoute.active { box-shadow: 0 0 0 1px var(--fc-honey-line) !important; }
 .workBoardPanel .kanbanCard.workRoute .kanbanCardHeader,
 .workBoardPanel .kanbanCard.workRoute .kanbanCardMeta,
 .workBoardPanel .kanbanCard.workRoute .kanbanCardFooter {

@@ -23,7 +23,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 
 ## Supporting Hive Search Commands
 
-There is no separate packaged skill named `hive-find` or `hive-search` in this repo. The canonical shared-brain search surface is the installed `hive-brain` CLI:
+There is no separate packaged skill named `hive-find` or `hive-search` in this repo. The canonical shared-brain memory search surface is the installed `hive-brain` CLI:
 
 ```bash
 hive-brain answer "query"
@@ -34,6 +34,18 @@ hive-brain evolve --memory-id mem-... --content "Updated durable memory"
 `hive-brain answer` returns a concise grounded answer. `hive-brain recall` returns a hit list. Both try the running HivemindOS brain API first and fall back to local vault/index search, so raw agents can use the same private brain without needing dashboard-routed context. `hive-brain evolve` is the API-backed write path for replacing reviewed stale memory while preserving superseded history. Use the auto-installed `hive-brain-memory` skill for the full recall/remember/evolve policy.
 
 For durable synthesized wiki knowledge, use the auto-installed `hive-brain-compiled-wiki` skill instead of broad recall. It teaches agents to call `brain_search_knowledge` first for compiled entity, concept, and summary pages, then follow up with `brain_get_node`, `brain_get_backlinks`, or `brain_graph_overview` when they need graph detail.
+
+For capability routing, setup also installs:
+
+```bash
+hive-capability-search "task or goal"
+hive-capability-search --json --kinds skill,tool-schema "task or goal"
+hive-capability-search --live "task or goal"
+```
+
+The command searches the local Context Index without needing a running dashboard. `--live` asks the authenticated dashboard `/api/context-index` route first so connected-app endpoint freshness can be included, then falls back to the local index unless `--require-api` is set.
+
+Agents without shell access, including app-routed or phone-hosted agents, should not treat a missing CLI as a failed skill. They should use already-injected capability-search context, an authenticated `/api/context-index` bridge, or an exposed MCP/context-index tool. If none are available, they should build the map from visible skills/tools and record the retrieval gap.
 
 ## Hive Assimilate
 

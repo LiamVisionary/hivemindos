@@ -177,6 +177,21 @@ if ($gbrainDataDir.StartsWith('~\') -or $gbrainDataDir.StartsWith('~/')) {
   $gbrainDataDir = Join-Path $UserHome $gbrainDataDir.Substring(2)
 }
 
+function Get-HivemindStartupFolder {
+  $startupFolder = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
+  if (-not $startupFolder) {
+    $startupFolder = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
+  }
+  return $startupFolder
+}
+
+function Remove-HivemindStartupLauncher($Name) {
+  $startupFolder = Get-HivemindStartupFolder
+  if (-not $startupFolder) { return }
+  $safeName = $Name -replace '[\\/:*?"<>|]', '-'
+  Remove-Item (Join-Path $startupFolder "$safeName.vbs") -Force -ErrorAction SilentlyContinue
+}
+
 function Remove-EmptyVaultFolder($RelativePath) {
   $path = Join-Path $vaultPath $RelativePath
   if ((Test-Path $path) -and -not (Get-ChildItem $path -Force -ErrorAction SilentlyContinue)) {
@@ -208,13 +223,23 @@ if (Ask-YesNo "Stop HivemindOS Link sidecar processes?" $true) {
   Ok "Stopped HivemindOS Link sidecar processes"
 }
 
-if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, run-linkd launcher files, and installed sidecar binary?" $true) {
+if (Ask-YesNo "Remove the 'HivemindOS Telemetry Collector' scheduled task, Startup launcher, and run-collector launcher files?" $true) {
+  Unregister-ScheduledTask -TaskName "HivemindOS Telemetry Collector" -Confirm:$false -ErrorAction SilentlyContinue
+  Remove-HivemindStartupLauncher "HivemindOS Telemetry Collector"
+  $hiveHome = Join-Path $UserHome ".hivemindos"
+  Remove-Item (Join-Path $hiveHome "run-collector.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-collector-hidden.vbs") -Force -ErrorAction SilentlyContinue
+  Ok "Removed the HivemindOS collector task/startup launcher and launcher files"
+}
+
+if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, Startup launcher, run-linkd launcher files, and installed sidecar binary?" $true) {
   Unregister-ScheduledTask -TaskName "HivemindOS Link" -Confirm:$false -ErrorAction SilentlyContinue
+  Remove-HivemindStartupLauncher "HivemindOS Link"
   $hiveHome = Join-Path $UserHome ".hivemindos"
   Remove-Item (Join-Path $hiveHome "run-linkd.cmd") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "run-linkd-hidden.vbs") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "bin\hivemind-linkd.exe") -Force -ErrorAction SilentlyContinue
-  Ok "Removed the HivemindOS Link scheduled task, launcher files, and installed sidecar binary"
+  Ok "Removed the HivemindOS Link task/startup launcher, launcher files, and installed sidecar binary"
   Warn "Tailscale sign-in state stays in ~/.hivemindos/link; a later prompt offers to remove it"
 }
 
@@ -522,9 +547,9 @@ if (Ask-YesNo "Remove the HivemindOS MCP server from agent harness configs (Clau
   & node (Join-Path $Root "scripts\register-mcp-clients.mjs") --remove --targets all
 }
 
-if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, and dashboard auth commands from ~/.local/bin if they point to this checkout?" $true) {
+if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" $true) {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "dashboard-auth")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "hive-capability-search", "dashboard-auth")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     if (Test-Path $shimPath) {
       $content = Get-Content $shimPath -Raw

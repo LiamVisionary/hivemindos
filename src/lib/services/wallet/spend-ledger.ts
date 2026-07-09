@@ -14,7 +14,7 @@ import type { AgentSpendCapAsset } from "@/lib/types/agent-wallet";
  * per-rail x402-spend-log.json is left intact for back-compat.
  */
 
-export type SpendKind = "x402" | "x402-private" | "send" | "veil-transfer" | "trade" | "platform-fee";
+export type SpendKind = "x402" | "x402-private" | "send" | "veil-transfer" | "trade" | "platform-fee" | "api";
 
 export type SpendLedgerRecord = {
   id: string;
@@ -92,6 +92,17 @@ export async function sumCompanySpendUsdSince(companyId: string, sinceMs: number
   if (!companyId) return 0;
   const ledger = records ?? (await readSpendLedger());
   return sumUsd(ledger, (record) => record.companyId === companyId, sinceMs);
+}
+
+export async function sumCompanyKindSpendUsdSince(
+  companyId: string,
+  kind: SpendKind,
+  sinceMs: number,
+  records?: SpendLedgerRecord[],
+): Promise<number> {
+  if (!companyId) return 0;
+  const ledger = records ?? (await readSpendLedger());
+  return sumUsd(ledger, (record) => record.companyId === companyId && record.kind === kind, sinceMs);
 }
 
 export function shortTarget(value?: string): string | undefined {

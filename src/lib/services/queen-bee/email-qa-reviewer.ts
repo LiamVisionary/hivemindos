@@ -9,6 +9,7 @@
 // the same OpenAI key (transcriptionApiKey). Deliberately uses a stronger default
 // model than the voice/explain path because email QA is a quality-over-cost
 // judgment task; override with OPENAI_EMAIL_QA_MODEL.
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
 
 export type EmailQaAiFinding = {
@@ -94,16 +95,23 @@ export async function reviewOutreachEmail(input: EmailQaReviewInput): Promise<Em
   if (!input.body?.trim()) return [];
   const apiKey = await transcriptionApiKey();
   if (!apiKey) throw new Error("No OpenAI key is configured for email QA review.");
+  const model = reviewModel();
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: "openai",
+    model,
+    cacheScope: "email-qa-review",
+  });
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json", ...cacheHints.headers },
     body: JSON.stringify({
-      model: reviewModel(),
+      model,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: formatContext(input) },
       ],
+      ...cacheHints.body,
       response_format: { type: "json_object" },
       temperature: 0.2,
       max_tokens: 700,

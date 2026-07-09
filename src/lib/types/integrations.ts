@@ -1,4 +1,4 @@
-export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "posthog" | "plausible" | "clawbank";
+export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "google-cloud" | "posthog" | "plausible" | "clawbank";
 
 export type ConnectionProviderStatus = {
   key: ConnectionProviderKey;
@@ -14,6 +14,9 @@ export type ConnectionProviderStatus = {
   error?: string;
   tokenHint: string;
   tokenPlaceholder: string;
+  authMode?: "api-token" | "oauth-refresh-token";
+  credentialKeys?: string[];
+  operations?: string[];
   /** In-app OAuth is available for this provider (client credentials present). */
   oauthReady: boolean;
   checkedAt: string;

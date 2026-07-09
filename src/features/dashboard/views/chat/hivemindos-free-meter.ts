@@ -17,13 +17,21 @@ function compactTokenCount(tokens: number) {
   return String(tokens);
 }
 
+function nextUtcDayMsAfter(value: string) {
+  const observedMs = Date.parse(value);
+  if (!Number.isFinite(observedMs)) return NaN;
+  const observed = new Date(observedMs);
+  return Date.UTC(observed.getUTCFullYear(), observed.getUTCMonth(), observed.getUTCDate() + 1);
+}
+
 /** Meter shape from the last-seen allowance snapshot. The gateway reports only
  *  "remaining", so the denominator is the highest value seen this reset
  *  window; a past reset marker means the window rolled over and the allowance
  *  is full again. Derived at fetch time (not render) so it stays pure. */
 export function deriveFreeMeter(allowance: FreeAllowanceSnapshot | null, nowMs: number): FreeMeterState | null {
   if (!allowance) return null;
-  const resetMs = allowance.resetAt ? Date.parse(allowance.resetAt) : NaN;
+  const reportedResetMs = allowance.resetAt ? Date.parse(allowance.resetAt) : NaN;
+  const resetMs = Number.isFinite(reportedResetMs) ? reportedResetMs : nextUtcDayMsAfter(allowance.observedAt);
   if (Number.isFinite(resetMs) && resetMs <= nowMs) {
     return { fraction: 1, label: "Full daily allowance available", exhausted: false };
   }
@@ -32,8 +40,8 @@ export function deriveFreeMeter(allowance: FreeAllowanceSnapshot | null, nowMs: 
   // Exhaustion still needs to render when the first observed snapshot is 0/0
   // and therefore has no positive high-water denominator yet.
   if ((remaining !== null && remaining <= 0) || tokens === 0) {
-    const resetLabel = Number.isFinite(resetMs)
-      ? ` — resets ${new Date(resetMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    const resetLabel = Number.isFinite(reportedResetMs)
+      ? ` — resets ${new Date(reportedResetMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
       : " — resets daily";
     return { fraction: 0, label: `Daily allowance used up${resetLabel}`, exhausted: true };
   }

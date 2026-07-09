@@ -159,6 +159,7 @@ export function NativeFirstRunOnboarding() {
   // plus a captured non-zero exit so the wizard can show an error instead of
   // spinning. Kept short (tail) since it's a live activity feed, not a full log.
   const [setupLines, setSetupLines] = useState<string[]>([]);
+  const [setupProcessDone, setSetupProcessDone] = useState(false);
   const [setupExitError, setSetupExitError] = useState("");
   // ClawBank may already be configured (re-run setup, credential replicated from
   // another machine). When it is, the final button finishes instead of opening
@@ -271,6 +272,17 @@ export function NativeFirstRunOnboarding() {
     return () => window.clearInterval(id);
   }, [step, setupSettled, demoMode, refreshStatus]);
 
+  // If the hidden setup launcher exits but the collector never appears, stop
+  // presenting the modal as busy. This covers older setup scripts that printed
+  // "finished" after swallowing a collector failure.
+  useEffect(() => {
+    if (step !== "running" || setupSettled || setupExitError || !setupProcessDone) return;
+    const id = window.setTimeout(() => {
+      setSetupExitError("Setup finished, but the local agent bridge did not come online.");
+    }, 6000);
+    return () => window.clearTimeout(id);
+  }, [step, setupSettled, setupExitError, setupProcessDone]);
+
   // Once the collector is up, briefly hold the full emblem, then reveal "done".
   useEffect(() => {
     if (step !== "running" || !setupSettled) return;
@@ -287,14 +299,18 @@ export function NativeFirstRunOnboarding() {
     let cleanup: (() => void) | undefined;
     void import("@tauri-apps/api/event").then(({ listen }) => listen<{ kind?: string; line?: string; exitCode?: number | null }>(NATIVE_SETUP_PROGRESS_EVENT, (event) => {
       const p = event.payload ?? {};
-      if (p.kind === "start") { setSetupLines([]); setSetupExitError(""); return; }
+      if (p.kind === "start") { setSetupLines([]); setSetupProcessDone(false); setSetupExitError(""); return; }
       if (p.kind === "line" && typeof p.line === "string") {
         const line = p.line;
         setSetupLines((current) => [...current.slice(-149), line]);
         return;
       }
-      if (p.kind === "done" && p.exitCode != null && p.exitCode !== 0) {
-        setSetupExitError(`Setup exited with code ${p.exitCode}.`);
+      if (p.kind === "done") {
+        setSetupProcessDone(true);
+        void refreshStatus();
+        if (p.exitCode != null && p.exitCode !== 0) {
+          setSetupExitError(`Setup exited with code ${p.exitCode}.`);
+        }
       }
     })).then((unlisten) => {
       const safeUnlisten = createSafeTauriUnlisten(unlisten);
@@ -302,7 +318,7 @@ export function NativeFirstRunOnboarding() {
       cleanup = safeUnlisten;
     }).catch(() => undefined);
     return () => { cancelled = true; cleanup?.(); };
-  }, []);
+  }, [refreshStatus]);
 
   useEffect(() => {
     if (!isTauriDesktopRuntime()) return;
@@ -370,6 +386,9 @@ export function NativeFirstRunOnboarding() {
 
   async function launchSetup(): Promise<boolean> {
     setRunError("");
+    setSetupProcessDone(false);
+    setSetupExitError("");
+    setSetupLines([]);
     if (demoMode) {
       await launchDemoSetup();
       setLaunchedCommand("demo");
@@ -415,6 +434,10 @@ export function NativeFirstRunOnboarding() {
     if (await launchSetup()) setStep("running");
   }
 
+  async function retrySetup() {
+    if (await launchSetup()) setStep("running");
+  }
+
   function copy(key: string, value: string) {
     try { void navigator.clipboard?.writeText(value); } catch { /* clipboard may be unavailable */ }
     setCopied(key);
@@ -425,7 +448,7 @@ export function NativeFirstRunOnboarding() {
   const rows = planRows(mode);
   const filled = step === "running" ? (setupSettled ? EMBLEM_CELLS : setupMilestoneCells(setupLines)) : 0;
   const meterPct = Math.round((filled / EMBLEM_CELLS) * 100);
-  const phaseLabel = setupPhaseLabel(setupLines, setupSettled);
+  const phaseLabel = setupExitError ? "Setup needs attention." : setupPhaseLabel(setupLines, setupSettled);
 
   const runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }> = [];
   if (step === "running") {
@@ -442,7 +465,7 @@ export function NativeFirstRunOnboarding() {
     }
   }
   const effectiveRunStatus = setupExitError
-    ? `${setupExitError} Open “Run it yourself” below to retry, or close and re-open Add agent.`
+    ? `${setupExitError} Use Retry setup, or expand “Run it yourself” to repair manually.`
     : runStatus;
 
   return (
@@ -520,8 +543,14 @@ export function NativeFirstRunOnboarding() {
               </>
             ) : step === "running" ? (
               <>
-                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={dismiss}>Close — finishes in the background</button>
-                <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" disabled><IconSpinner /> Working…</button>
+                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={dismiss}>{setupExitError ? "Close" : "Close — finishes in the background"}</button>
+                {setupExitError ? (
+                  <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => void retrySetup()} disabled={running}>
+                    {running ? <><IconSpinner /> Starting…</> : <><IconRefresh /> Retry setup</>}
+                  </button>
+                ) : (
+                  <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" disabled><IconSpinner /> Working…</button>
+                )}
               </>
             ) : (
               <button className={`${styles.btn} ${styles.primary} ${styles.grow}`} type="button" data-tone="live" onClick={() => { dismiss(); if (!clawbankConfigured) window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }}>{clawbankConfigured ? "Finish" : "Next"} <IconArrow /></button>

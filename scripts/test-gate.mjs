@@ -76,6 +76,7 @@ const TESTS = [
   "test:fusion",
   "test:fusion-blind-compare",
   "test:gbrain-foundation",
+  "test:gcp-budget-admin",
   "test:hive-env-remove",
   "test:hive-env-roundtrip",
   "test:hive-staking",

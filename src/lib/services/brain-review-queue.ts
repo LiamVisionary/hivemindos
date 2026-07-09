@@ -23,6 +23,7 @@ import {
   type BrainReviewRisk,
   type BrainReviewStatus,
 } from "@/lib/types/brain-review";
+import type { ScopePolicy } from "@/lib/types/principal";
 
 const BRAIN_REVIEW_QUEUE_FILE = join(homedir(), ".hivemindos", "brain-review-queue.json");
 const MAX_TITLE_LENGTH = 160;
@@ -500,6 +501,8 @@ function normalizeStoredProposal(value: unknown): BrainReviewProposal | null {
     appliedAt: cleanOptional(item.appliedAt),
     appliedMemoryId: cleanOptional(item.appliedMemoryId),
     appliedMemoryPath: cleanStoredPath(item.appliedMemoryPath),
+    createdByPrincipalId: cleanOptional(item.createdByPrincipalId),
+    scope: normalizeScope(item.scope),
     createdAt: cleanOptional(item.createdAt) ?? new Date(0).toISOString(),
     updatedAt: cleanOptional(item.updatedAt) ?? new Date(0).toISOString(),
   };
@@ -526,6 +529,24 @@ function normalizeProposalInput(input: BrainReviewProposalInput) {
     supersedesMemoryId,
     evidence: normalizeEvidenceList(input.evidence),
     risk: normalizeRisk(input.risk),
+    createdByPrincipalId: cleanOptional(input.createdByPrincipalId),
+    scope: normalizeScope(input.scope),
+  };
+}
+
+function normalizeScope(value: unknown): ScopePolicy | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Partial<ScopePolicy>;
+  const visibility = record.visibility;
+  if (visibility !== "private" && visibility !== "workspace" && visibility !== "team" && visibility !== "public") {
+    return undefined;
+  }
+  return {
+    visibility,
+    ownerPrincipalId: cleanOptional(record.ownerPrincipalId),
+    allowedPrincipalIds: cleanStringList(record.allowedPrincipalIds),
+    requiredClaims: cleanStringList(record.requiredClaims),
+    tags: cleanStringList(record.tags),
   };
 }
 

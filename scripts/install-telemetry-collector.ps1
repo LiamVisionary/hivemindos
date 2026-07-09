@@ -261,30 +261,181 @@ WScript.Quit(code)
 "@
 Set-Content -Path $vbsFile -Encoding ASCII -Value $vbsContent
 
-# --- register the per-user logon Scheduled Task (hidden, restart on crash) ---
+# --- register the per-user logon launcher (Task Scheduler when allowed,
+#     Startup folder fallback when a standard user cannot access the scheduler) ---
 $taskName = "HivemindOS Telemetry Collector"
-$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$vbsFile`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$settings = New-ScheduledTaskSettingsSet `
-  -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-  -StartWhenAvailable `
-  -RestartCount 9999 -RestartInterval (New-TimeSpan -Minutes 1) `
-  -ExecutionTimeLimit ([TimeSpan]::Zero)
 # Build the principal from the canonical, resolvable account name
 # ("MACHINE\User" or the domain form). Do NOT use "$env:USERDOMAIN\$env:USERNAME":
 # on a workgroup PC USERDOMAIN is "WORKGROUP" (and Microsoft-account logins are
 # similar), so that string fails to map to a SID and Register-ScheduledTask dies
 # with ERROR_NONE_MAPPED (0x80070534) -- which silently left Windows machines
-# with no collector. S4U (vs Interactive) lets the task start on demand and at
-# logon without requiring an interactive session, so the collector comes up
-# right after setup and survives logon. Verified on a real Windows box.
+# with no collector.
+#
+# Prefer S4U when Windows allows it so a setup/repair run can start the task
+# durably right away, even from a headless session. Fall back to Interactive for
+# normal, non-elevated desktop users where S4U registration can return
+# "Access is denied"; the direct hidden launch below covers the current session.
 $principalUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$principal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType S4U -RunLevel Limited
+function Register-HivemindScheduledTask {
+  param(
+    [string]$Name,
+    $Action,
+    $Trigger,
+    $Settings,
+    [string]$Description
+  )
 
-Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
-  -Settings $settings -Principal $principal -Description "Runs the HivemindOS agent telemetry collector (local agent bridge)." -Force | Out-Null
+  $s4uPrincipal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType S4U -RunLevel Limited
+  try {
+    Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $Trigger `
+      -Settings $Settings -Principal $s4uPrincipal -Description $Description -Force | Out-Null
+    return "S4U"
+  } catch {
+    $s4uError = $_
+    $interactivePrincipal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType Interactive -RunLevel Limited
+    try {
+      Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $Trigger `
+        -Settings $Settings -Principal $interactivePrincipal -Description $Description -Force | Out-Null
+      Write-Warning "Scheduled Task '$Name' used Interactive fallback after S4U registration failed: $($s4uError.Exception.Message)"
+      return "Interactive"
+    } catch {
+      throw "Could not register Scheduled Task '$Name' for $principalUser. S4U registration failed: $($s4uError.Exception.Message). Interactive fallback failed: $($_.Exception.Message)"
+    }
+  }
+}
 
-Write-Host "Registered Scheduled Task '$taskName' (runs at logon, restarts on crash)."
+function Get-HivemindStartupFolder {
+  $startupFolder = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
+  if (-not $startupFolder) {
+    $startupFolder = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
+  }
+  New-Item -ItemType Directory -Force -Path $startupFolder | Out-Null
+  return $startupFolder
+}
+
+function Register-HivemindStartupLauncher {
+  param(
+    [string]$Name,
+    [string]$LauncherPath
+  )
+
+  $safeName = $Name -replace '[\\/:*?"<>|]', '-'
+  $startupLauncher = Join-Path (Get-HivemindStartupFolder) "$safeName.vbs"
+  $escapedLauncherPath = $LauncherPath.Replace('"', '""')
+  $startupContent = @"
+Dim shell
+Set shell = CreateObject("WScript.Shell")
+shell.Run "wscript.exe ""$escapedLauncherPath""", 0, False
+"@
+  Set-Content -Path $startupLauncher -Encoding ASCII -Value $startupContent
+  return $startupLauncher
+}
+
+function Register-HivemindLogonLauncher {
+  param(
+    [string]$Name,
+    [string]$LauncherPath,
+    [string]$Description
+  )
+
+  try {
+    $taskAction = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$LauncherPath`""
+    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
+    $taskSettings = New-ScheduledTaskSettingsSet `
+      -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+      -StartWhenAvailable `
+      -RestartCount 9999 -RestartInterval (New-TimeSpan -Minutes 1) `
+      -ExecutionTimeLimit ([TimeSpan]::Zero)
+
+    $taskLogonType = Register-HivemindScheduledTask `
+      -Name $Name `
+      -Action $taskAction `
+      -Trigger $taskTrigger `
+      -Settings $taskSettings `
+      -Description $Description
+
+    Write-Host "Registered Scheduled Task '$Name' (logon type: $taskLogonType; runs at logon, restarts on crash)."
+    return [pscustomobject]@{ Kind = "ScheduledTask"; LogonType = $taskLogonType; Path = $null }
+  } catch {
+    $taskError = $_
+    try {
+      $startupPath = Register-HivemindStartupLauncher -Name $Name -LauncherPath $LauncherPath
+      Write-Warning "Scheduled Task '$Name' could not be registered: $($taskError.Exception.Message)"
+      Write-Host "Registered Startup folder launcher '$Name' -> $startupPath"
+      return [pscustomobject]@{ Kind = "StartupFolder"; LogonType = "StartupFolder"; Path = $startupPath }
+    } catch {
+      throw "Could not register '$Name' as a Scheduled Task ($($taskError.Exception.Message)) or Startup folder launcher ($($_.Exception.Message))."
+    }
+  }
+}
+
+function Start-HivemindHiddenLauncher {
+  param(
+    [string]$Label,
+    [string]$LauncherPath
+  )
+
+  try {
+    $process = Start-Process -FilePath "wscript.exe" -ArgumentList "`"$LauncherPath`"" -WindowStyle Hidden -PassThru -ErrorAction Stop
+    if ($process -and $process.Id) {
+      Write-Host "Started $Label launcher (pid $($process.Id))."
+    } else {
+      Write-Host "Started $Label launcher."
+    }
+    return $true
+  } catch {
+    Write-Warning "Could not start the $Label launcher immediately ($_)."
+    return $false
+  }
+}
+
+function Start-HivemindScheduledTaskNow {
+  param(
+    [string]$Name,
+    [int]$TimeoutSeconds = 10
+  )
+
+  $process = $null
+  try {
+    $process = Start-Process -FilePath "schtasks.exe" -ArgumentList "/Run /TN `"$Name`"" -WindowStyle Hidden -PassThru -ErrorAction Stop
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+      try { $process.Kill() } catch {}
+      Write-Warning "Timed out while asking Scheduled Task '$Name' to start; it will start at next logon."
+      return $false
+    }
+    if ($process.ExitCode -ne 0) {
+      Write-Warning "Could not start Scheduled Task '$Name' immediately (schtasks exit code $($process.ExitCode)); it will start at next logon."
+      return $false
+    }
+    return $true
+  } catch {
+    Write-Warning "Could not start Scheduled Task '$Name' immediately ($_); it will start at next logon."
+    return $false
+  }
+}
+
+function Wait-HivemindCollectorHealth {
+  param(
+    [int]$Port,
+    [int]$Attempts = 30
+  )
+
+  for ($i = 0; $i -lt $Attempts; $i++) {
+    try {
+      $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$Port/health"
+      if ($r.StatusCode -eq 200) { return $true }
+    } catch {}
+    Start-Sleep -Seconds 1
+  }
+
+  return $false
+}
+
+$collectorRegistration = Register-HivemindLogonLauncher `
+  -Name $taskName `
+  -LauncherPath $vbsFile `
+  -Description "Runs the HivemindOS agent telemetry collector (local agent bridge)."
+
 Write-Host "Collector port: $Port  ->  $envFile"
 
 if ($linkActive) {
@@ -315,22 +466,14 @@ WScript.Quit(code)
 "@
   Set-Content -Path $linkVbsFile -Encoding ASCII -Value $linkVbsContent
 
-  # --- register the per-user logon Scheduled Task (hidden, restart on crash);
-  #     same trigger/settings and the same canonical-identity S4U principal as
+  # --- register the per-user logon launcher (hidden, restart on crash when
+  #     Task Scheduler is available); same canonical identity/logon fallback as
   #     the collector task above — never "$env:USERDOMAIN\$env:USERNAME". ---
-  $linkAction = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$linkVbsFile`""
-  $linkTrigger = New-ScheduledTaskTrigger -AtLogOn
-  $linkSettings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable `
-    -RestartCount 9999 -RestartInterval (New-TimeSpan -Minutes 1) `
-    -ExecutionTimeLimit ([TimeSpan]::Zero)
-  $linkPrincipal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType S4U -RunLevel Limited
+  $linkRegistration = Register-HivemindLogonLauncher `
+    -Name $linkTaskName `
+    -LauncherPath $linkVbsFile `
+    -Description "Runs the HivemindOS Link tsnet sidecar (Tailnet proxy for the local agent bridge)."
 
-  Register-ScheduledTask -TaskName $linkTaskName -Action $linkAction -Trigger $linkTrigger `
-    -Settings $linkSettings -Principal $linkPrincipal -Description "Runs the HivemindOS Link tsnet sidecar (Tailnet proxy for the local agent bridge)." -Force | Out-Null
-
-  Write-Host "Registered Scheduled Task '$linkTaskName' (runs at logon, restarts on crash)."
   Write-Host "Hivemind Link control URL: http://$linkControl/status"
 }
 
@@ -340,17 +483,21 @@ if ($NoStart) {
 }
 
 # --- start now + verify /health ---
-try { Start-ScheduledTask -TaskName $taskName } catch {
-  Write-Warning "Could not start the task immediately ($_); it will start at next logon."
+$startedNow = $false
+if ($collectorRegistration.Kind -eq "ScheduledTask" -and $collectorRegistration.LogonType -eq "S4U") {
+  $startedNow = Start-HivemindScheduledTaskNow -Name $taskName
+  $ok = Wait-HivemindCollectorHealth -Port $Port
+  if (-not $ok) {
+    $startedNow = Start-HivemindHiddenLauncher -Label "collector" -LauncherPath $vbsFile
+    $ok = Wait-HivemindCollectorHealth -Port $Port -Attempts 15
+  }
+} else {
+  $startedNow = Start-HivemindHiddenLauncher -Label "collector" -LauncherPath $vbsFile
+  $ok = Wait-HivemindCollectorHealth -Port $Port
 }
-
-$ok = $false
-for ($i = 0; $i -lt 30; $i++) {
-  try {
-    $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$Port/health"
-    if ($r.StatusCode -eq 200) { $ok = $true; break }
-  } catch {}
-  Start-Sleep -Seconds 1
+if (-not $ok -and -not $startedNow -and $collectorRegistration.Kind -eq "ScheduledTask") {
+  Start-HivemindScheduledTaskNow -Name $taskName | Out-Null
+  $ok = Wait-HivemindCollectorHealth -Port $Port -Attempts 15
 }
 
 if ($ok) {
@@ -361,8 +508,16 @@ if ($ok) {
 
 if ($linkActive) {
   Write-Host "Starting Hivemind Link..."
-  try { Start-ScheduledTask -TaskName $linkTaskName } catch {
-    Write-Warning "Could not start the '$linkTaskName' task immediately ($_); it will start at next logon."
+  if ($linkRegistration.Kind -eq "ScheduledTask" -and $linkRegistration.LogonType -eq "S4U") {
+    $linkStartedNow = Start-HivemindScheduledTaskNow -Name $linkTaskName
+    if (-not $linkStartedNow) {
+      Start-HivemindHiddenLauncher -Label "Hivemind Link" -LauncherPath $linkVbsFile | Out-Null
+    }
+  } else {
+    $linkStartedNow = Start-HivemindHiddenLauncher -Label "Hivemind Link" -LauncherPath $linkVbsFile
+    if (-not $linkStartedNow) {
+      Start-HivemindScheduledTaskNow -Name $linkTaskName | Out-Null
+    }
   }
 
   # Poll the control /health. The daemon serves an honest health: HTTP 200 with

@@ -4,6 +4,7 @@ import {
   disconnectProvider,
   readConnectionsPayload,
   saveGoogleOAuthClient,
+  saveGoogleCloudOAuthClient,
   saveProviderToken,
 } from "@/lib/services/integrations/provider-connections";
 import { errorJson, okJson } from "@/lib/utils/api-response";
@@ -39,8 +40,13 @@ export async function POST(request: Request) {
       return okJson(await readConnectionsPayload());
     }
     if (body.action === "save-oauth-client") {
-      if (body.provider !== "google") return errorJson("Only Google uses a pasted OAuth client.");
-      await saveGoogleOAuthClient(body.clientId ?? "", body.clientSecret ?? "");
+      if (body.provider === "google-cloud") {
+        await saveGoogleCloudOAuthClient(body.clientId ?? "", body.clientSecret ?? "");
+      } else if (body.provider === "google") {
+        await saveGoogleOAuthClient(body.clientId ?? "", body.clientSecret ?? "");
+      } else {
+        return errorJson("Only Google and Google Cloud use a pasted OAuth client.");
+      }
       return okJson(await readConnectionsPayload());
     }
     return errorJson("Unknown action.");

@@ -19,6 +19,7 @@ import {
   type VisualArtifactListFilter,
   type VisualArtifactStorageLocation,
 } from "@/lib/types/visual-artifacts";
+import type { ScopePolicy } from "@/lib/types/principal";
 
 const canAccess = promisify(access);
 
@@ -29,6 +30,8 @@ const MAX_TEXT_LENGTH = 20_000;
 const MAX_PATH_LENGTH = 1_000;
 const MAX_BLOCKS = 40;
 const MAX_FILE_TREE_ITEMS = 120;
+const MAX_TABLE_COLUMNS = 30;
+const MAX_TABLE_ROWS = 300;
 const DEFAULT_LIST_LIMIT = 40;
 const MAX_LIST_LIMIT = 200;
 
@@ -183,6 +186,8 @@ function normalizeStoredArtifact(value: unknown): VisualArtifact | null {
     workBoardTaskId: cleanString(item.workBoardTaskId),
     queenBeeRunId: cleanString(item.queenBeeRunId),
     projectPath: cleanPath(item.projectPath),
+    createdByPrincipalId: cleanString(item.createdByPrincipalId),
+    scope: normalizeScope(item.scope),
     blocks,
     redactedLabels: uniqueLabels([
       ...cleanStringList(item.redactedLabels),
@@ -202,6 +207,8 @@ function normalizeCreateInput(input: VisualArtifactCreateInput) {
     workBoardTaskId: cleanString(input.workBoardTaskId),
     queenBeeRunId: cleanString(input.queenBeeRunId),
     projectPath: cleanPath(input.projectPath),
+    createdByPrincipalId: cleanString(input.createdByPrincipalId),
+    scope: normalizeScope(input.scope),
     blocks,
     redactedLabels: uniqueLabels(blocks.flatMap(blockRedactedLabels)),
   };
@@ -241,9 +248,84 @@ function normalizeBlock(value: unknown, strict: boolean): VisualArtifactBlock | 
     if (!mermaid && strict) throw new Error("Diagram blocks need mermaid content.");
     return mermaid ? { type, mermaid } : null;
   }
+  if (type === "table") {
+    const table = normalizeTableBlock(block);
+    if ((!table.columns.length || !table.rows.length) && strict) throw new Error("Table blocks need columns and rows.");
+    return table.columns.length && table.rows.length ? { type, ...table } : null;
+  }
+  if (type === "chart") {
+    const spec = normalizeJsonObject(block.spec);
+    if (!spec && strict) throw new Error("Chart blocks need a JSON object spec.");
+    const caption = redactMarkdown(block.caption, 1_000);
+    return spec ? { type, spec, ...(caption ? { caption } : {}) } : null;
+  }
+  if (type === "metric") {
+    const label = redactMarkdown(block.label, 400);
+    const value = redactMarkdown(block.value, 400);
+    const note = redactMarkdown(block.note, 1_000);
+    if ((!label || !value) && strict) throw new Error("Metric blocks need label and value.");
+    return label && value ? { type, label, value, ...(note ? { note } : {}) } : null;
+  }
   const markdown = redactMarkdown(block.markdown);
   if (!markdown && strict) throw new Error(`${type} blocks need markdown content.`);
-  return markdown ? { type: type as Exclude<VisualArtifactBlock["type"], "file-tree" | "diagram">, markdown } as VisualArtifactBlock : null;
+  if (
+    type === "summary" ||
+    type === "wireframe" ||
+    type === "diff-summary" ||
+    type === "risk" ||
+    type === "source-receipt"
+  ) {
+    return markdown ? { type, markdown } : null;
+  }
+  return null;
+}
+
+function normalizeTableBlock(block: Record<string, unknown>) {
+  const columns = Array.isArray(block.columns)
+    ? block.columns.map((column) => redactMarkdown(column, 160)).filter((column): column is string => Boolean(column)).slice(0, MAX_TABLE_COLUMNS)
+    : [];
+  const rows = Array.isArray(block.rows)
+    ? block.rows.map((row) => normalizeTableRow(row, columns)).filter((row): row is Record<string, string | number | boolean | null> => Boolean(row)).slice(0, MAX_TABLE_ROWS)
+    : [];
+  const caption = redactMarkdown(block.caption, 1_000);
+  return {
+    columns,
+    rows,
+    ...(caption ? { caption } : {}),
+  };
+}
+
+function normalizeTableRow(value: unknown, columns: string[]) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const row: Record<string, string | number | boolean | null> = {};
+  for (const column of columns) {
+    const cell = record[column];
+    if (cell === null || typeof cell === "number" || typeof cell === "boolean") {
+      row[column] = cell;
+    } else if (typeof cell === "string") {
+      row[column] = redactMarkdown(cell, 1_000) ?? "";
+    } else if (cell !== undefined) {
+      row[column] = redactMarkdown(JSON.stringify(cell), 1_000) ?? "";
+    } else {
+      row[column] = "";
+    }
+  }
+  return row;
+}
+
+function normalizeJsonObject(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const text = redactMarkdown(JSON.stringify(value), MAX_TEXT_LENGTH);
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeFileTreeItems(value: unknown): VisualArtifactFileTreeItem[] {
@@ -268,6 +350,19 @@ function blockRedactedLabels(block: VisualArtifactBlock): string[] {
     ]);
   }
   if (block.type === "diagram") return redactSecretText(block.mermaid).redactedLabels;
+  if (block.type === "table") {
+    return [
+      ...block.columns.flatMap((column) => redactSecretText(column).redactedLabels),
+      ...block.rows.flatMap((row) => Object.values(row).flatMap((cell) => redactSecretText(String(cell ?? "")).redactedLabels)),
+      ...redactSecretText(block.caption ?? "").redactedLabels,
+    ];
+  }
+  if (block.type === "chart") return redactSecretText(JSON.stringify(block.spec)).redactedLabels;
+  if (block.type === "metric") return [
+    ...redactSecretText(block.label).redactedLabels,
+    ...redactSecretText(block.value).redactedLabels,
+    ...redactSecretText(block.note ?? "").redactedLabels,
+  ];
   return redactSecretText(block.markdown).redactedLabels;
 }
 
@@ -320,6 +415,22 @@ function cleanString(value: unknown, maxLength = MAX_PATH_LENGTH) {
 function cleanStringList(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => cleanString(item, 120)).filter((item): item is string => Boolean(item));
+}
+
+function normalizeScope(value: unknown): ScopePolicy | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Partial<ScopePolicy>;
+  const visibility = record.visibility;
+  if (visibility !== "private" && visibility !== "workspace" && visibility !== "team" && visibility !== "public") {
+    return undefined;
+  }
+  return {
+    visibility,
+    ownerPrincipalId: cleanString(record.ownerPrincipalId, 160),
+    allowedPrincipalIds: cleanStringList(record.allowedPrincipalIds),
+    requiredClaims: cleanStringList(record.requiredClaims),
+    tags: cleanStringList(record.tags),
+  };
 }
 
 function uniqueLabels(values: string[]) {

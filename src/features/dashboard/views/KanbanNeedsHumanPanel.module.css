@@ -203,34 +203,6 @@
   outline: none;
 }
 
-.chevronBtn {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--wrc-fg-3);
-  cursor: pointer;
-}
-
-.chevronBtn:hover,
-.chevronBtn:focus-visible {
-  background: var(--wrc-bg-3);
-  border-color: var(--wrc-line-2);
-  color: var(--wrc-fg-2);
-  outline: none;
-}
-
-.chevronBtn svg {
-  transition: transform 160ms var(--wrc-ease-out);
-}
-
-.chevronOpen svg {
-  transform: rotate(180deg);
-}
-
 /* collapsed summary bar */
 .taskClickable {
   cursor: pointer;
@@ -262,6 +234,15 @@
 .collapsedHint svg {
   flex: 0 0 auto;
   color: var(--wrc-fg-4);
+  transition: transform 160ms var(--wrc-ease-out);
+}
+
+/* expanded: the chevron flips to an up-carot in the SAME spot the down-carot
+   sat, so the card collapses/expands without moving the pointer. Driven off the
+   button's aria-expanded so it never depends on a fresh CSS-module class map. */
+.collapsedHint[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+  color: var(--wrc-fg-2);
 }
 
 .collapsedHintLabel {

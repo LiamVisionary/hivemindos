@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { AuthorizationMetadata, PrincipalContext } from "@/lib/types/principal";
 
 export type HiveActionCaller =
   | "dashboard"
@@ -34,6 +35,7 @@ export type HiveActionConfirmation =
 export type HiveActionContext = {
   caller: HiveActionCaller;
   userId?: string;
+  principal?: PrincipalContext;
   sessionId?: string;
   signal?: AbortSignal;
 };
@@ -88,5 +90,6 @@ export type HiveMcpToolDescriptor = {
     "hivemindos/risk": HiveActionRisk;
     "hivemindos/sideEffects": HiveActionSideEffect[];
     "hivemindos/confirmation"?: HiveActionConfirmation;
+    "hivemindos/authorization"?: AuthorizationMetadata;
   };
 };

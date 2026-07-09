@@ -9,6 +9,7 @@
 // Queen chat overlay uses (transcriptionApiKey + OPENAI_VOICE_CHAT_MODEL), so a
 // good answer needs no extra configuration. The evidence is already in-context,
 // which is why the model does not need live tools to reach it.
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { transcriptionApiKey } from "@/lib/services/phone/transcription";
 import { reasoningTrailPromptRules } from "@/lib/types/reasoning-trail";
 
@@ -136,16 +137,23 @@ export async function explainBlockedIssue(input: IssueExplainerInput): Promise<I
 
   const apiKey = await transcriptionApiKey();
   if (!apiKey) throw new Error("No OpenAI key is configured for issue explanations.");
+  const model = explainModel();
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: "openai",
+    model,
+    cacheScope: "issue-explainer",
+  });
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json", ...cacheHints.headers },
     body: JSON.stringify({
-      model: explainModel(),
+      model,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: formatContext(input) },
       ],
+      ...cacheHints.body,
       response_format: { type: "json_object" },
       temperature: 0.3,
       max_tokens: 800,

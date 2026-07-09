@@ -19,8 +19,10 @@ import { AeonDeleteModal, isAeonAgent, type AeonDeleteDepth, type AeonDeleteProg
 import { DeepProbesToggle } from "./deep-probes-toggle";
 import { EconomyStrip } from "./economy-strip";
 import type { FleetHostedApp } from "./active-apps";
+import { HiveComputeHostModal } from "./hive-compute-host-modal";
 import { UsePodHostModal } from "./usepod-host-modal";
 import { MachineTerminalModal } from "./machine-terminal-modal";
+import { USEPOD_COMPUTE_RENTALS_ENABLED } from "@/lib/config/compute-rentals";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import {
   ALERTS,
@@ -840,7 +842,9 @@ export function FleetView({
         ) : null}
 
         {usePodHostMachine && typeof document !== "undefined" ? createPortal((
-          <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
+          USEPOD_COMPUTE_RENTALS_ENABLED
+            ? <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
+            : <HiveComputeHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
         ), document.body) : null}
 
         {terminalMachine && typeof document !== "undefined" ? (

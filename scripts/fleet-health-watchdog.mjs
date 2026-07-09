@@ -60,6 +60,14 @@
 //                                     TTS synth — these consume tokens/compute); off by default,
 //                                     toggleable from the Fleet view (writes the shared hive env)
 //   FLEET_WATCHDOG_CHAT_EVERY         run the deep /chat probe every Nth cycle (default 15)
+//   FLEET_WATCHDOG_PROBE_PROFILE      hermes localDataDir the deep /chat probe runs under
+//                                     (default ~/.hermes/profiles/runtime-capability-probe — a
+//                                     RESERVED slug the collector hides from the agent roster, so
+//                                     probe turns never pollute the dashboard chat tree)
+//   FLEET_WATCHDOG_PROBE_MODEL        model for the deep /chat probe (default
+//                                     meta-llama/llama-3.3-70b-instruct — cheap + reliable; avoid
+//                                     `:free` ids, they 429 and false-fail the probe)
+//   FLEET_WATCHDOG_PROBE_PROVIDER     provider for the deep /chat probe (default openrouter)
 //   FLEET_WATCHDOG_TTS_MODELS         comma list of models the deep TTS probe synthesizes
 //                                     (default chatterbox-turbo,qwen3-tts-1.7b-custom —
 //                                     every backend the voice pipeline depends on;
@@ -100,6 +108,20 @@ const FAIL_THRESHOLD = Number(process.env.FLEET_WATCHDOG_FAIL_THRESHOLD || 3);
 const COOLDOWN_MS = Number(process.env.FLEET_WATCHDOG_COOLDOWN_MS || 300_000);
 const CHAT_EVERY = Math.max(1, Number(process.env.FLEET_WATCHDOG_CHAT_EVERY || 15));
 const SEVERE_RECHECK_MS = Number(process.env.FLEET_WATCHDOG_SEVERE_RECHECK_MS || 10_000);
+// Deep /chat probe identity. A health probe must NOT pollute a box's real agent
+// history: route it at a RESERVED hermes profile (runtime-capability-probe),
+// whose sessions the collector excludes from the agent roster
+// (RESERVED_HERMES_PROFILE_SLUGS), so probe turns never surface in the dashboard
+// chat tree. `~` is expanded to the TARGET box's home by the collector, so a
+// single path works for every machine and existing collectors already honor it
+// (localDataDir -> HERMES_HOME; provider/model -> hermes -m/--provider). Pin a
+// cheap, reliable model — the OpenRouter key is fleet-wide, whereas a box's
+// default may be a premium model (gpt-5.5) and a `:free` model rate-limits (429)
+// and would false-fail the probe.
+const PROBE_PROFILE_DIR =
+  process.env.FLEET_WATCHDOG_PROBE_PROFILE || "~/.hermes/profiles/runtime-capability-probe";
+const PROBE_MODEL = process.env.FLEET_WATCHDOG_PROBE_MODEL || "meta-llama/llama-3.3-70b-instruct";
+const PROBE_PROVIDER = process.env.FLEET_WATCHDOG_PROBE_PROVIDER || "openrouter";
 // Deep TTS synth probe: generous timeout so a cold model LOAD (slow but real) is
 // not mistaken for a wedged backend — we judge by the result (real PCM bytes),
 // not by latency. Every model the voice pipeline depends on must synth: backends
@@ -622,7 +644,17 @@ async function probeCollector(collectorUrl, deep) {
     const chat = await fetchJson(`${collectorUrl}/chat`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "reply with the single word OK", stream: false, agent: { name: "Hermes", runtime: "hermes" } }),
+      body: JSON.stringify({
+        message: "reply with the single word OK",
+        stream: false,
+        agent: {
+          name: "Runtime capability probe",
+          runtime: "hermes",
+          localDataDir: PROBE_PROFILE_DIR,
+          provider: PROBE_PROVIDER,
+          model: PROBE_MODEL,
+        },
+      }),
     }, 30_000);
     if (!chat.ok || chat.data?.ok === false) {
       return { healthy: false, severe: true, reason: `chat HTTP ${chat.status} ${String(chat.data?.error || chat.text).slice(0, 80)}` };

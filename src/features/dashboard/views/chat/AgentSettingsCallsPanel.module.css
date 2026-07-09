@@ -95,6 +95,12 @@
   overflow-wrap: anywhere;
 }
 
+.inlineLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .alarm {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

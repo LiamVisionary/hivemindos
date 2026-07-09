@@ -180,7 +180,7 @@ export function KanbanNeedsHumanPanel({ ask, task, beeIcon, loadHiveEnvKeys, onA
   if (keyInputs.length) summaryBits.push(`${keyInputs.length} key${keyInputs.length === 1 ? "" : "s"}`);
   if (options.length) summaryBits.push("a route");
   if (wantsText) summaryBits.push("a reply");
-  const collapsedSummary = ready ? "Ready — expand to resume" : summaryBits.length ? `Needs ${summaryBits.join(" · ")}` : "Expand to respond";
+  const toggleSummary = ready ? "Ready to resume" : summaryBits.length ? `Needs ${summaryBits.join(" · ")}` : "Respond below";
 
   return (
     <div className={wrc("wrc")} role="group" aria-label="Needs you — work route">
@@ -191,17 +191,6 @@ export function KanbanNeedsHumanPanel({ ask, task, beeIcon, loadHiveEnvKeys, onA
           {context ? <span className={wrc("context")} title={context}>{context}</span> : null}
         </div>
         <div className={wrc("headRight")}>
-          {collapsible ? (
-            <button
-              type="button"
-              className={wrc("chevronBtn", expanded && "chevronOpen")}
-              onClick={(event) => { stop(event); setExpanded((value) => !value); }}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Collapse" : "Expand"}
-            >
-              <IconChevron size={16} />
-            </button>
-          ) : null}
           {beeIcon ? (
             <span className={wrc("avatar")} title={task?.assignee}>
               <span className={wrc("avatarRing")} aria-hidden="true" />
@@ -239,9 +228,15 @@ export function KanbanNeedsHumanPanel({ ask, task, beeIcon, loadHiveEnvKeys, onA
         ) : null}
       </div>
 
-      {collapsible && !expanded ? (
-        <button type="button" className={wrc("collapsedHint")} onClick={(event) => { stop(event); setExpanded(true); }} aria-label="Expand actions">
-          <span className={wrc("collapsedHintLabel", ready && "collapsedHintReady")}>{collapsedSummary}</span>
+      {collapsible ? (
+        <button
+          type="button"
+          className={wrc("collapsedHint")}
+          onClick={(event) => { stop(event); setExpanded((value) => !value); }}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Collapse actions" : "Expand actions"}
+        >
+          <span className={wrc("collapsedHintLabel", ready && "collapsedHintReady")}>{toggleSummary}</span>
           <IconChevron size={16} />
         </button>
       ) : null}

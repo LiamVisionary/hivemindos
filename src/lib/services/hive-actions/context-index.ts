@@ -1,6 +1,8 @@
 import type { ContextIndexItem } from "@/lib/services/context-index";
 import type { HiveActionDefinition } from "./types";
 import { hiveActionMcpName } from "./mcp-export";
+import { requiredClaimsForSideEffects } from "@/lib/services/security/action-authorization";
+import { workspaceScope } from "@/lib/types/principal";
 
 export function toContextIndexItem(
   action: HiveActionDefinition,
@@ -25,6 +27,14 @@ export function toContextIndexItem(
     retrievalText,
     ...(route ? { route } : {}),
     ...(action.contextIndex?.methods ? { methods: action.contextIndex.methods } : {}),
+    scope: workspaceScope(requiredClaimsForSideEffects(action.sideEffects), ["hive-action"]),
+    authorization: {
+      sideEffects: action.sideEffects,
+      risk: action.risk,
+      readOnly: action.readOnly,
+      requiredClaims: requiredClaimsForSideEffects(action.sideEffects),
+      confirmation: action.confirmation,
+    },
     load: action.contextIndex?.load ?? {
       type: route ? "api" : "none",
       target: route,

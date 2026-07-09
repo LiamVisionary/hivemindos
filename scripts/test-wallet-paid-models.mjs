@@ -36,6 +36,7 @@ const [
   runtimeRoute,
   walletPaidService,
   proxyRoute,
+  freeAllowanceService,
   modelsRoute,
   setupWalletRoute,
   setupComponent,
@@ -52,6 +53,7 @@ const [
   safeProcessEnv,
   chatRuntimeRoute,
   runtimeIntegrations,
+  taskRetrievalContext,
   contextIndex,
   x402Executor,
   walletPaidModelsConfig,
@@ -76,11 +78,15 @@ const [
   statusChatInputController,
   messageThread,
   chatExchangeStyles,
+  generatedMediaRoute,
+  videoGenerationRoute,
+  videoGenerationService,
 ] = await Promise.all([
   source("src/lib/config/model-provider-gateways.ts"),
   sourceDir("src/app/api/chat/agent-runtime"),
   source("src/lib/services/hivemindos-wallet-paid-models.ts"),
   source("src/app/api/hivemindos/models/chat/completions/route.ts"),
+  source("src/lib/services/hivemindos-free-allowance.ts"),
   source("src/app/api/hivemindos/models/models/route.ts"),
   source("src/app/api/hivemindos/models/wallet/route.ts"),
   source("src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx"),
@@ -97,6 +103,7 @@ const [
   source("src/lib/utils/safe-process-env.ts"),
   sourceDir("src/app/api/chat/agent-runtime"),
   source("src/lib/services/runtime-integrations.ts"),
+  source("src/lib/services/chat/task-retrieval-context.ts"),
   source("src/lib/services/context-index.ts"),
   source("src/lib/services/wallet/x402-agent-fetch.ts"),
   source("src/lib/config/hivemindos-wallet-paid-models.ts"),
@@ -121,6 +128,9 @@ const [
   source("src/features/dashboard/hooks/use-status-chat-input-controller.tsx"),
   source("src/features/dashboard/views/chat/exchange/MessageThread.tsx"),
   source("src/features/dashboard/views/chat/exchange/chat-exchange.css"),
+  source("src/app/api/chat/generated-media/route.ts"),
+  source("src/app/api/chat/video-generation/route.ts"),
+  source("src/lib/services/chat/video-generation.ts"),
 ]);
 
 includes(gatewayConfig, "HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER", "provider gateway config");
@@ -150,7 +160,30 @@ includes(runtimeRoute, "skipped: compactFreeScoutContext", "chat runtime records
 includes(runtimeRoute, "compactFreeScoutContext\n    ? [\"\", \"\", \"\", \"\"]", "chat runtime skips commercial capability briefings for compact free Scout turns");
 includes(runtimeRoute, "const vaultPromptContext = compactFreeScoutContext ? \"\" : buildChatVaultContext(vault, userPrompt)", "chat runtime skips vault prompt context for compact free Scout turns");
 includes(runtimeRoute, "wallet: promptWallet", "chat runtime uses compact free Scout wallet prompt context");
+includes(runtimeRoute, "const routeMediaViaArtifactHandles", "chat runtime scopes media-handle routing");
+includes(runtimeRoute, "&& offerVideoTool", "chat runtime only swaps free Scout media payloads to handles for video-tool turns");
+includes(runtimeRoute, "const modelInputMessages = routeMediaViaArtifactHandles", "chat runtime preserves native multimodal messages outside handle-routed turns");
+includes(runtimeRoute, "textOnlyMessagesForTextModel(messages, mediaArtifacts)", "chat runtime can convert inline media payloads to artifact handles for tool-routed requests");
+includes(runtimeRoute, "image[-\\s]?to[-\\s]?video", "chat runtime keeps video-generation prompts out of compact free Scout context");
+includes(runtimeRoute, "attachments: requestAttachments", "chat runtime accepts current-turn attachment metadata");
+includes(runtimeRoute, "materializeChatMediaArtifacts", "chat runtime materializes media attachments before tool routing");
+includes(runtimeRoute, "formatChatMediaArtifactContext", "chat runtime injects media artifact handles into capability context");
+includes(runtimeRoute, "Multimodal models may inspect image/video message parts directly", "chat runtime preserves native multimodal inspection contract");
+includes(runtimeRoute, "VIDEO_GENERATION_TOOL_NAME = \"generate_video\"", "chat runtime exposes a video generation tool");
+includes(runtimeRoute, "videoGenerationToolDefinition", "chat runtime defines the video tool schema");
+includes(runtimeRoute, "dispatchVideoGenerationViaRoute", "chat runtime dispatches video generation through the dashboard route");
+includes(runtimeRoute, "videoInputImagesForArgs", "chat runtime maps video tool calls to current-turn media artifacts");
+includes(statusChatInputController, "attachments: outgoingAttachments", "dashboard sends current-turn attachments alongside message content");
 includes(walletPaidService, "X-HivemindOS-Wallet-Agent-Id", "wallet-paid runtime resolver");
+includes(taskRetrievalContext, "export function videoGenerationRequest", "capability routing detects video generation intent");
+includes(taskRetrievalContext, "|| videoGenerationRequest(query)", "video generation prompts force capability routing");
+includes(taskRetrievalContext, "label: \"video generation\"", "capability routing runs a video-generation retrieval query");
+includes(taskRetrievalContext, "videoGenerationCapabilityContext", "capability routing injects video-generation tool guidance");
+includes(generatedMediaRoute, "VIDEO_MEDIA_TYPES", "generated media route supports video artifacts");
+includes(generatedMediaRoute, "Accept-Ranges", "generated media route supports browser video range requests");
+includes(videoGenerationRoute, "runChatVideoGeneration", "video generation API route calls shared dispatcher");
+includes(videoGenerationService, "inputImages", "video generation dispatcher forwards source images");
+includes(videoGenerationService, "imageDataUrl", "video generation dispatcher can send source image bytes to remote apps");
 includes(walletPaidService, "funding.walletVaultId", "wallet-paid runtime resolver setup wallet id");
 includes(walletPaidService, "funding.creditAccountId", "wallet-paid runtime resolver hosted credit account id");
 includes(walletPaidService, "/api/hivemindos/models", "wallet-paid runtime resolver");
@@ -267,19 +300,57 @@ assert.ok(!setupComponent.includes("cancelUrl: returnUrl"), "guided setup should
 includes(setupComponent, "Fund with crypto", "guided setup crypto top-up action");
 includes(setupComponent, "creditBalanceSummaryLabel", "guided setup model credits balance label");
 includes(setupComponent, "const selectedModelIsFree = isFreeHivemindosWalletPaidModel(selectedModel)", "guided setup detects the free model");
+includes(freeAllowanceService, "if (!hasRemainingCount || !resetAt || !Number.isFinite(Date.parse(resetAt))) return;", "free allowance cache ignores incomplete or invalid allowance reset headers");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { createHash } from "node:crypto";
+  import { textOnlyMessagesForTextModel } from "./src/app/api/chat/agent-runtime/messages.ts";
+  const data = Buffer.from("bee image");
+  const dataUrl = "data:image/jpeg;base64," + data.toString("base64");
+  const mediaArtifacts = [{
+    id: "media_test",
+    kind: "image",
+    name: "swarm-scout-card.jpg",
+    mimeType: "image/jpeg",
+    sizeBytes: data.length,
+    path: "/tmp/swarm-scout-card.jpg",
+    dataUrl,
+    dataHash: createHash("sha256").update(data).digest("hex"),
+  }];
+  const sanitized = textOnlyMessagesForTextModel([{
+    role: "user",
+    content: [
+      { type: "text", text: "generate a video of this bee flying" },
+      { type: "image_url", image_url: { url: dataUrl } },
+    ],
+  }], mediaArtifacts);
+  assert.equal(typeof sanitized[0].content, "string");
+  assert.ok(sanitized[0].content.includes("generate a video of this bee flying"));
+  assert.ok(sanitized[0].content.includes("Attached media artifact handles:"));
+  assert.ok(sanitized[0].content.includes("media_test"));
+  assert.ok(sanitized[0].content.includes("/tmp/swarm-scout-card.jpg"));
+  assert.ok(!sanitized[0].content.includes(dataUrl.slice(0, 80)));
+`, "free Scout text-model attachment sanitizer");
 runTsxAssertion(`
   import assert from "node:assert/strict";
   import { deriveFreeMeter } from "./src/features/dashboard/views/chat/hivemindos-free-meter.ts";
-  const exhausted = deriveFreeMeter({
+  const staleSnapshot = {
     remainingRequests: 0,
     remainingTokens: 0,
     resetAt: null,
     observedAt: "2026-07-08T08:14:55.058Z",
     highWaterRequests: 0,
     highWaterTokens: 0,
-  }, Date.parse("2026-07-09T00:00:00Z"));
-  assert.deepEqual(exhausted, { fraction: 0, label: "Daily allowance used up — resets daily", exhausted: true });
-`, "free Scout meter exhausted 0/0 snapshot");
+  };
+  assert.deepEqual(
+    deriveFreeMeter(staleSnapshot, Date.parse("2026-07-08T09:00:00Z")),
+    { fraction: 0, label: "Daily allowance used up — resets daily", exhausted: true },
+  );
+  assert.deepEqual(
+    deriveFreeMeter(staleSnapshot, Date.parse("2026-07-09T00:00:00Z")),
+    { fraction: 1, label: "Full daily allowance available", exhausted: false },
+  );
+`, "free Scout meter recovers stale 0/0 snapshot");
 assert.ok(!setupComponent.includes("async function finishSetup"), "embedded panel has no Done handler of its own — every change persists immediately via onComplete");
 assert.ok(!setupComponent.includes("onCancel: () => void"), "embedded panel takes no onCancel prop (only the wallet browser's internal Back remains)");
 includes(setupComponent, "const fundingConfigured = walletReady || cardFundingReady", "guided setup derives one funded flag for the balance pill and paid-model gate");

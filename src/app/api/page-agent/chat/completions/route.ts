@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 /**
@@ -71,10 +72,17 @@ export async function POST(request: NextRequest) {
   // Forward the caller's body verbatim — the whole point is that `tools` and
   // `tool_choice` survive. We only fill a default model and force non-streaming
   // (Page Agent's OpenAI client issues a single non-streaming tool call).
+  const model = (typeof body.model === "string" && body.model.trim()) || DEFAULT_MODEL;
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: "openrouter",
+    model,
+    cacheScope: "page-agent",
+  });
   const upstreamBody: OpenAIChatCompletionBody = {
     ...body,
-    model: (typeof body.model === "string" && body.model.trim()) || DEFAULT_MODEL,
+    model,
     stream: false,
+    ...cacheHints.body,
   };
 
   let upstream: Response;
@@ -88,6 +96,7 @@ export async function POST(request: NextRequest) {
         // OpenRouter attribution headers (optional, recommended).
         "HTTP-Referer": "https://hivemindos.local/page-agent",
         "X-Title": "HivemindOS Page Agent",
+        ...cacheHints.headers,
       },
       body: JSON.stringify(upstreamBody),
       cache: "no-store",

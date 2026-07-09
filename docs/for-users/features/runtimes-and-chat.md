@@ -15,7 +15,7 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 | Runtime           | Kind        | Main capabilities                                                                                                                        |
 | ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | OpenClaw          | Gateway     | status, chat, model selection                                                                                                            |
-| Hermes            | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection |
+| Hermes            | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection, deterministic data query, artifact authoring |
 | Aeon              | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications                                                        |
 | Evo               | Background  | status, runs (experiment tree), background tasks, dashboard URL discovery                                                                 |
 | HivemindOS | Interactive | status, chat, model selection                                                                                                            |
@@ -37,6 +37,8 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 - Chat history and folders are cached in browser storage and supported by `/api/chat/folders`.
 - Chat folder creation and linked directory context use the same machine-aware directory helper as Kanban and Scheduler: native local folder picker in Tauri, Hivemind Link/collector directory browsing for remote machines, and API fallback in the browser.
 - Capability-search preflight can record redacted Context X-Ray manifests for a runtime session. The Memory workbench uses those manifests to show which skills, tools, API routes, connected apps, runtimes, docs, or workspace files were visible to the agent.
+- Runtime-specific powers such as deterministic connector queries and artifact authoring are declared in the runtime capability matrix. Hermes is the first runtime enabled for these PromptQL-style work-product flows; other runtimes opt in through the same matrix instead of separate branches.
+- Explicit Teach Hive phrasing in chat creates a Brain Review proposal, not an immediate memory write. The normal Brain Review approval/apply path still decides what becomes durable Shared Brain Memory.
 
 ### Chat Swarm Commands
 

@@ -175,6 +175,8 @@ export interface Colony {
   apex: ApexGoal;
   workBlock: WorkBlock;
   burn: Burn;
+  /** Rolling paid cloud-API spend (kind "api") + configured monthly ceiling, for the Treasury API panel. */
+  apiSpend?: { dayUsd: number; monthUsd: number; monthlyCeilingUsd: number | null };
   capabilityCapital: CapabilityCapital;
   revenue?: Revenue;
   revenueShare?: CompanyRevenueRollup;

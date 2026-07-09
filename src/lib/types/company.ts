@@ -211,6 +211,42 @@ export interface CompanyDirective {
   createdAt: string;
 }
 
+/** One Google-Cloud per-day quota override to push to Service Usage. */
+export interface GcpApiDailyCap {
+  /** Fully-qualified quota metric, e.g. "places.googleapis.com/SearchTextRequest". */
+  metric: string;
+  /** Cap value for the unit window. */
+  value: number;
+  /** Quota unit, e.g. "1/d/{project}". */
+  unit: string;
+  /** Optional per-call cost + free tier for month-cost estimation (mirrors the meter config). */
+  skuUnitCostUsd?: number;
+  freeMonthlyCalls?: number;
+}
+
+/**
+ * A per-company, per-API cost guardrail applied directly to a cloud provider
+ * (per-day quota caps + a monthly billing budget). Config only — the SA key that
+ * actually applies it lives in server-only hive env, never here.
+ */
+export interface CompanyApiBudget {
+  /** Provider discriminant; only "gcp" for now. */
+  provider: "gcp";
+  /** e.g. "places.googleapis.com". */
+  service: string;
+  projectId: string;
+  projectNumber: string;
+  billingAccount: string;
+  /** Monthly billing-budget ceiling in USD. */
+  monthlyCeilingUsd: number;
+  dailyCaps: GcpApiDailyCap[];
+  /** Provider-side apply status — set by the server, never trusted from the client. */
+  appliedAt?: string;
+  appliedError?: string;
+  /** Cloud budget resource name once created, so re-applies update in place. */
+  budgetResourceName?: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -302,6 +338,12 @@ export interface Company {
    * crew follows them without a charter edit. Newest last.
    */
   directives?: CompanyDirective[];
+  /**
+   * Per-API cloud cost guardrails (per-day quota caps + a monthly billing budget),
+   * applied server-side to the provider. Written only by the dedicated apply route,
+   * not the generic upsert, so a treasury save can't blank it.
+   */
+  apiBudgets?: CompanyApiBudget[];
 }
 
 export interface CompanySpendRollup {
@@ -313,6 +355,10 @@ export interface CompanySpendRollup {
   dailyRemainingUsd: number | null;
   monthlyRemainingUsd: number | null;
   totalRemainingUsd: number | null;
+  /** Rolling-24h spend recorded under the "api" kind (paid cloud APIs). */
+  apiSpentUsd: number;
+  /** Rolling-30d spend recorded under the "api" kind. */
+  apiMonthlySpentUsd: number;
   /** Per-agent company-scoped spend, keyed by agentId. Powers per-agent budget bars. */
   memberSpend?: Record<string, CompanyMemberSpend>;
 }

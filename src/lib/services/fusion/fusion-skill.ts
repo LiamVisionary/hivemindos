@@ -61,7 +61,7 @@ export type FusionSkillResult = {
   markdown: string;
 };
 
-const CONTEXT_KINDS: ContextIndexKind[] = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime"];
+const CONTEXT_KINDS: ContextIndexKind[] = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "connector", "artifact", "runtime"];
 const MAX_CAPABILITIES = 10;
 const MAX_FUSED = 5;
 
@@ -307,7 +307,7 @@ function prioritizeCapabilities(items: ContextIndexItem[], prompt: string) {
     seen.add(item.id);
   };
   for (const pattern of intentPatterns) pick(pattern);
-  const wantedKinds: ContextIndexKind[] = ["skill", "tool-schema", "connected-app", "app-endpoint", "runtime", "api-route"];
+  const wantedKinds: ContextIndexKind[] = ["skill", "tool-schema", "connected-app", "app-endpoint", "connector", "artifact", "runtime", "api-route"];
   for (const kind of wantedKinds) {
     const item = items.find((candidate) => {
       const text = itemSearchText(candidate);
@@ -389,7 +389,7 @@ function fusedCapabilities(capabilities: FusionCapabilityRecord[], prompt: strin
     pick(/xurl|twitter|\bx\b|social|post|writer|writing|caption/);
   }
   const preferred = capabilities.filter((capability) =>
-    ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime"].includes(capability.kind)
+    ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "connector", "artifact", "runtime"].includes(capability.kind)
     && matchesPromptIntent(prompt, capabilitySearchText(capability)),
   );
   for (const capability of preferred.length ? preferred : capabilities) {
@@ -418,6 +418,8 @@ function markdownForSkill(input: {
   const all = input.capabilities;
   const discoveryRef = (capability: FusionCapabilityRecord) => {
     if (capability.kind === "connected-app" || capability.kind === "app-endpoint") return "connected-app discovery record";
+    if (capability.kind === "connector") return "connector manifest record";
+    if (capability.kind === "artifact") return "artifact record";
     if (capability.kind === "skill") return "shared brain skill record";
     if (capability.kind === "tool-schema") return "runtime tool-schema record";
     if (capability.kind === "api-route") return "dashboard API route record";

@@ -548,7 +548,7 @@ function ZeroHumanCompaniesLiveView({
         const companyTasks = tasks.filter((t) => t.source?.startsWith(sourcePrefix));
         const colony = buildColony({
           company,
-          rollup: entry.rollup ?? { companyId: company.id, memberCount: company.agentIds?.length ?? 0, dailySpentUsd: 0, monthlySpentUsd: 0, totalSpentUsd: 0, dailyRemainingUsd: null, monthlyRemainingUsd: null, totalRemainingUsd: null },
+          rollup: entry.rollup ?? { companyId: company.id, memberCount: company.agentIds?.length ?? 0, dailySpentUsd: 0, monthlySpentUsd: 0, totalSpentUsd: 0, dailyRemainingUsd: null, monthlyRemainingUsd: null, totalRemainingUsd: null, apiSpentUsd: 0, apiMonthlySpentUsd: 0 },
           approvals: approvalsByCompany.get(company.id) ?? [],
           agentsById,
           tasks: companyTasks,

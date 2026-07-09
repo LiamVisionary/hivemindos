@@ -197,7 +197,8 @@ function contextIndexKindToXrayKind(kind: ContextIndexItem["kind"]): ContextXray
   if (kind === "tool-schema") return "tool";
   if (kind === "api-route" || kind === "app-endpoint") return "api-route";
   if (kind === "workspace-file" || kind === "doc") return "workspace-file";
-  if (kind === "connected-app" || kind === "runtime") return "tool";
+  if (kind === "connected-app" || kind === "connector" || kind === "runtime") return "tool";
+  if (kind === "artifact") return "workspace-file";
   return "file";
 }
 

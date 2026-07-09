@@ -11,6 +11,7 @@
  */
 import { NextResponse } from "next/server";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import {
   hivemindosWalletPaidModelAgentSlug,
   isHivemindosWalletPaidModelProfile,
@@ -69,6 +70,14 @@ function queenBrainProviderLabel(provider: string) {
   if (provider === "openai-codex") return "OpenAI Codex";
   if (!provider || provider === "openai" || provider === "openai-api") return "OpenAI";
   return provider;
+}
+
+function queenBrainCacheHints(brain: QueenTypedChatBrain) {
+  return openAICompatibleInferenceCacheHints({
+    provider: brain.providerSlug,
+    model: brain.model,
+    cacheScope: `queen-typed:${brain.providerSlug}:${brain.model}`,
+  });
 }
 
 function isRuntimeHeldQueenProvider(provider: string) {
@@ -299,10 +308,11 @@ async function queenChatBlockingRequest(
   options?: { noTools?: boolean; suppressWalletIntents?: boolean },
 ) {
   if (brain.kind === "agent-runtime") return queenChatRuntimeRequest(brain, system, incoming);
+  const cacheHints = queenBrainCacheHints(brain);
   const response = await fetch(brain.url, {
     method: "POST",
-    headers: queenBrainRequestHeaders(brain),
-    body: JSON.stringify(queenChatRequestBody(brain, system, incoming, undefined, options)),
+    headers: { ...queenBrainRequestHeaders(brain), ...cacheHints.headers },
+    body: JSON.stringify(queenChatRequestBody(brain, system, incoming, cacheHints.body, options)),
     cache: "no-store",
     signal: AbortSignal.timeout(brain.timeoutMs ?? 20_000),
   });
@@ -698,11 +708,12 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
       }
     }
     answeringBrain = brain;
+    const cacheHints = queenBrainCacheHints(brain);
     upstream = await fetch(brain.url, {
       method: "POST",
-      headers: queenBrainRequestHeaders(brain),
+      headers: { ...queenBrainRequestHeaders(brain), ...cacheHints.headers },
       body: JSON.stringify(
-        queenChatRequestBody(brain, systemFor(brain), incoming, { stream: true }, { noTools }),
+        queenChatRequestBody(brain, systemFor(brain), incoming, { stream: true, ...cacheHints.body }, { noTools }),
       ),
       cache: "no-store",
       // Generous vs the blocking action's 20s: this bounds the WHOLE stream, and

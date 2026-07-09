@@ -89,6 +89,7 @@ function activityTypeForKind(kind: string): string {
 }
 
 function activityLabelForKind(kind: string): string {
+  if (kind === "api") return "API spend";
   if (kind === "platform-fee") return "Platform fee";
   if (kind === "x402-private") return "Private x402";
   if (kind === "veil-transfer") return "Veil private transfer";

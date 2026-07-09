@@ -1236,6 +1236,7 @@ export function useStatusChatInputController(props: any) {
           honeyLedgerEnabled,
           agentMode,
           permissionMode,
+          attachments: outgoingAttachments,
           messages: [
             ...contextMessages.map((message) => ({
               role: message.role,

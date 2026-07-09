@@ -1,4 +1,6 @@
-export const VISUAL_ARTIFACT_KINDS = ["plan", "recap"] as const;
+import type { ScopePolicy } from "@/lib/types/principal";
+
+export const VISUAL_ARTIFACT_KINDS = ["plan", "recap", "query-result", "report", "dashboard"] as const;
 export const VISUAL_ARTIFACT_BLOCK_TYPES = [
   "summary",
   "file-tree",
@@ -6,6 +8,10 @@ export const VISUAL_ARTIFACT_BLOCK_TYPES = [
   "wireframe",
   "diff-summary",
   "risk",
+  "table",
+  "chart",
+  "metric",
+  "source-receipt",
 ] as const;
 
 export type VisualArtifactKind = (typeof VISUAL_ARTIFACT_KINDS)[number];
@@ -16,13 +22,21 @@ export type VisualArtifactFileTreeItem = {
   note: string;
 };
 
+export type VisualArtifactTableCell = string | number | boolean | null;
+
+export type VisualArtifactTableRow = Record<string, VisualArtifactTableCell>;
+
 export type VisualArtifactBlock =
   | { type: "summary"; markdown: string }
   | { type: "file-tree"; items: VisualArtifactFileTreeItem[] }
   | { type: "diagram"; mermaid: string }
   | { type: "wireframe"; markdown: string }
   | { type: "diff-summary"; markdown: string }
-  | { type: "risk"; markdown: string };
+  | { type: "risk"; markdown: string }
+  | { type: "table"; columns: string[]; rows: VisualArtifactTableRow[]; caption?: string }
+  | { type: "chart"; spec: Record<string, unknown>; caption?: string }
+  | { type: "metric"; label: string; value: string; note?: string }
+  | { type: "source-receipt"; markdown: string };
 
 export type VisualArtifact = {
   id: string;
@@ -33,6 +47,8 @@ export type VisualArtifact = {
   workBoardTaskId?: string;
   queenBeeRunId?: string;
   projectPath?: string;
+  createdByPrincipalId?: string;
+  scope?: ScopePolicy;
   blocks: VisualArtifactBlock[];
   redactedLabels?: string[];
 };
@@ -43,6 +59,8 @@ export type VisualArtifactCreateInput = {
   workBoardTaskId?: unknown;
   queenBeeRunId?: unknown;
   projectPath?: unknown;
+  createdByPrincipalId?: unknown;
+  scope?: unknown;
   blocks?: unknown;
   vaultPath?: unknown;
 };

@@ -26,6 +26,7 @@ const SELF_AUTHENTICATING_API_PREFIXES = [
   // dashboard session cookie, so the proxy must let the callback route verify
   // state and exchange the provider code itself.
   "/api/integrations/google/oauth/callback",
+  "/api/integrations/google-cloud/oauth/callback",
   // Managed X OAuth returns through the external browser, which cannot carry
   // the Tauri webview session. This route only records a short-lived local
   // receipt; the authenticated desktop app polls a separate protected route.

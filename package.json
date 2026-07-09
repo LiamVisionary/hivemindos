@@ -130,6 +130,7 @@
     "test:honey-economics": "node scripts/simulate-honey-economics.mjs",
     "test:hive-staking": "node scripts/test-hive-staking.mjs",
     "test:gbrain-foundation": "node scripts/test-gbrain-foundation.mjs",
+    "test:gcp-budget-admin": "node scripts/test-gcp-budget-admin.mjs",
     "test:qmd-brain-service": "node scripts/test-qmd-brain-service.mjs",
     "test:shared-brain-index": "node scripts/test-shared-brain-full-vault-index.mjs",
     "test:schedule-health": "node scripts/test-schedule-health.mjs",

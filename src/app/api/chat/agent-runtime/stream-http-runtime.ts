@@ -38,6 +38,7 @@ import {
   ssePayload,
   type IncomingMessage,
 } from "./messages";
+import type { ChatMediaArtifact } from "./media-artifacts";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
 import {
   buildWalletTools,
@@ -77,6 +78,7 @@ export async function streamHttpRuntime(
   sharedBrainMemoryContext = "",
   vaultPromptContext = "",
   permissionMode = "manual",
+  mediaArtifacts: ChatMediaArtifact[] = [],
 ) {
   const normalizedPermissionMode = normalizeChatPermissionMode(permissionMode);
   const inputCheck = proxyInput(userText);
@@ -87,7 +89,7 @@ export async function streamHttpRuntime(
     try {
       const adaptiveRoutePlan = await resolveAdaptiveRoutePlan(profile, messages);
       if (adaptiveRoutePlan.profile.runtime === HIVEMIND_OS_RUNTIME) {
-        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext, normalizedPermissionMode);
+        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
       }
       // A Hermes-selected plan is always OpenRouter-backed. Re-shape to the
       // adaptive-OpenRouter profile instead of pinning the single selected
@@ -100,21 +102,21 @@ export async function streamHttpRuntime(
     }
   }
   if (isBankrLlmProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
   }
   if (isHivemindosWalletPaidModelProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
   }
   if (isHiveComputeProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
   }
   if (isOpenAICompatibleRuntime(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
   }
   if (isOpenRouterProvider(profile) && !isAdaptiveOpenRouterProfile(profile)) {
     try {
       const openRouterProfile = await openRouterCompatibleProfile(profile);
-      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode);
+      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "OpenRouter model selection failed." }, { status: 502 });
     }

@@ -31,13 +31,19 @@ For code work, Queen Bee uses the GitLawb/project registry as the project graph 
 
 ## Context Index
 
-The context index is the lightweight retrieval surface for code, tools, runtime capabilities, docs, connected apps, shared skills, and command delivery channels.
+The context index is the lightweight retrieval surface for code, tools, runtime capabilities, docs, connected apps, connector manifests, artifacts, shared skills, and command delivery channels.
 
 It helps agents find the right surface before they load huge files or schemas.
 
 Primary source: `src/lib/services/context-index.ts`
 
 Capability search can use context-index hits to select dashboard slash commands as delivery channels. For example, `/swarm-goal <build request>` is indexed as a dashboard/Queen Bee delivery path for build requests that should be rewritten, split across parallel agents, and recorded as Work Board tasks through `/api/queen-bee`.
+
+Context Index entries can also carry scope and authorization metadata. This lets
+agents retrieve capabilities through one surface while the app still enforces
+principal claims, action risk, side effects, and connector policy below the
+model. Connector entries expose credential key names and operation metadata only;
+the credential values stay in shared env or the relevant backend.
 
 ## Shared Brain Memory
 
@@ -53,6 +59,12 @@ Access paths:
 | Durable memory writes | `/api/brain/memory`, `hive-brain remember ...`, or `hive-brain evolve ...` | Writes are typed notes in Agent Memory with optional GitLawb receipts; evolved writes preserve superseded history. |
 
 The raw-agent rule is deliberate: agents should not need to know which port the dashboard is using, and they should still recall when the dashboard is not running.
+
+Teach Hive requests are reviewed before they become durable memory. When a user
+explicitly asks HivemindOS to remember, save, or teach the hive durable context,
+the chat path creates a Brain Review proposal with conversation evidence. A
+reviewer still approves and applies the proposal before it writes typed Agent
+Memory.
 
 It writes typed memory notes under:
 

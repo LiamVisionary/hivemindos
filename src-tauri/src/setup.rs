@@ -420,7 +420,7 @@ fn launcher_file_content(command: &str, platform: SetupPlatform) -> String {
             "#!/usr/bin/env bash\nset -euo pipefail\n{command}\necho\necho 'HivemindOS setup step finished.'\n"
         ),
         SetupPlatform::Windows => format!(
-            "@echo off\r\nsetlocal\r\n{command}\r\necho.\r\necho HivemindOS setup step finished.\r\n"
+            "@echo off\r\nsetlocal\r\n{command}\r\nset \"HIVE_SETUP_EXIT=%ERRORLEVEL%\"\r\necho.\r\necho HivemindOS setup step finished.\r\nexit /b %HIVE_SETUP_EXIT%\r\n"
         ),
     }
 }
@@ -889,13 +889,16 @@ mod tests {
     }
 
     #[test]
-    fn windows_launcher_is_a_batch_file_that_pauses() {
+    fn launcher_files_stream_hidden_setup_and_preserve_windows_exit_code() {
         let content = launcher_file_content("echo hi", SetupPlatform::Windows);
         assert!(content.starts_with("@echo off\r\n"));
-        assert!(content.contains("pause"));
+        assert!(content.contains("set \"HIVE_SETUP_EXIT=%ERRORLEVEL%\""));
+        assert!(content.contains("exit /b %HIVE_SETUP_EXIT%"));
+        assert!(!content.contains("pause"));
         let unix = launcher_file_content("echo hi", SetupPlatform::Unix);
         assert!(unix.starts_with("#!/usr/bin/env bash\n"));
-        assert!(unix.contains("read -r -p"));
+        assert!(unix.contains("set -euo pipefail"));
+        assert!(!unix.contains("read -r -p"));
     }
 
     #[test]

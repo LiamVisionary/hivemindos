@@ -56,7 +56,8 @@ export async function recordFreeModelAllowance(headers: {
   const remainingRequests = asCount(headers.remainingRequests);
   const remainingTokens = asCount(headers.remainingTokens);
   const resetAt = headers.resetAt?.trim() || null;
-  if (remainingRequests === null && remainingTokens === null && !resetAt) return;
+  const hasRemainingCount = remainingRequests !== null || remainingTokens !== null;
+  if (!hasRemainingCount || !resetAt || !Number.isFinite(Date.parse(resetAt))) return;
   try {
     const prior = await readFreeModelAllowance();
     // A changed reset marker means a new daily window: high-water restarts at

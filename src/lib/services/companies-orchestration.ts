@@ -18,6 +18,7 @@ import type { FlowSpec } from "@/lib/types/agent-flow";
 import { flowFromSequence, getFlowTemplate } from "@/lib/services/queen-bee/flow-templates";
 import { startFlowRun } from "@/lib/services/queen-bee/flow-runner";
 import { activeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
+import { buildStoredSalesContentDispatchContext } from "@/lib/services/sales-content";
 
 /**
  * Company orchestration bridge: turn a company's apex goal into a per-role work
@@ -86,7 +87,7 @@ export function countDispatchableMembers(scoped: QueenBeeFleetMachine[]): number
 }
 
 /** Build a structured PRD brief from the apex goal + the crew's roles. */
-export function buildApexBrief(company: Company): { prd: string; title: string } {
+export function buildApexBrief(company: Company, salesContentContext?: string): { prd: string; title: string } {
   const goal = (company.apexGoal?.title || company.name).trim();
   const metric = company.apexGoal?.metric?.trim();
   const target = company.apexGoal?.target?.trim();
@@ -109,6 +110,7 @@ export function buildApexBrief(company: Company): { prd: string; title: string }
     "",
     "## Requirements",
     ...requirements.map((r) => `- ${r}`),
+    salesContentContext?.trim() ? `\n## Sales/content machine\n${salesContentContext.trim()}` : "",
     "",
     "## Acceptance criteria",
     ...(metric && target ? [`- ${metric} reaches ${target}.`] : []),
@@ -124,7 +126,7 @@ export function buildApexBrief(company: Company): { prd: string; title: string }
  * compact digest of what the company has already done. Business-agnostic — the
  * digest is whatever the company's own memory ledger accumulated.
  */
-export function companyWorkerContext(company: Company, memoryDigest: string): string {
+export function companyWorkerContext(company: Company, memoryDigest: string, salesContentContext?: string): string {
   const apex = company.apexGoal;
   const metricLine = apex?.metric || apex?.target
     ? `Metric: ${apex?.metric || "—"}${apex?.target ? ` → target ${apex.target}` : ""}${apex?.current ? ` (current ${apex.current})` : ""}`
@@ -191,6 +193,8 @@ export function companyWorkerContext(company: Company, memoryDigest: string): st
   }
   const digest = memoryDigest.trim();
   if (digest) lines.push("", "What the company has done recently (newest first):", digest);
+  const salesContext = salesContentContext?.trim();
+  if (salesContext) lines.push("", salesContext);
   lines.push(
     "",
     "Do not repeat work listed as DONE above. Record a concrete, durable result on the Work Board — it becomes company memory for the next cycle.",
@@ -266,7 +270,8 @@ export async function dispatchCompanyFlow(
     if (!spec) throw new Error("Select a flow template for a graph-process company.");
   } else {
     const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
-    const { prd, title } = buildApexBrief(company);
+    const salesContentContext = await buildStoredSalesContentDispatchContext(company).catch(() => "");
+    const { prd, title } = buildApexBrief(company, salesContentContext);
     const drafts = decomposePrdToTaskDrafts(prd, { title, maxTasks }).drafts;
     spec = planCompanyFlowSpec(company, drafts);
   }
@@ -400,6 +405,7 @@ export async function dispatchCompanyGoal(
   // (plan the NEXT batch), each worker body a shorter one (don't run cold).
   const plannerMemory = await companyMemoryDigest(company.id, { maxChars: 1_600 }).catch(() => "");
   const workerMemory = plannerMemory.length > 900 ? `${plannerMemory.slice(0, 899)}…` : plannerMemory;
+  const salesContentContext = await buildStoredSalesContentDispatchContext(company).catch(() => "");
 
   // Prefer an LLM-authored, goal-specific plan via queen-bee's brain order
   // (the company's own agent first, then OpenAI). Fall back to the deterministic
@@ -415,12 +421,13 @@ export async function dispatchCompanyGoal(
     // few records back, so without this the planner re-creates assets built days
     // earlier once they roll off the digest and the 24h dedupe window.
     completedTitles: opts.completedCompanyTaskTitles,
+    salesContentContext,
   }).catch(() => null);
   if (llmDrafts && llmDrafts.length > 0) {
     drafts = llmDrafts;
     planner = "llm";
   } else {
-    const { prd, title } = buildApexBrief(company);
+    const { prd, title } = buildApexBrief(company, salesContentContext);
     drafts = decomposePrdToTaskDrafts(prd, { title, maxTasks }).drafts;
     planner = "heuristic";
   }
@@ -475,7 +482,7 @@ export async function dispatchCompanyGoal(
   // to the durable company trace.
   const runId = companyRun.id;
 
-  const workerContext = companyWorkerContext(company, workerMemory);
+  const workerContext = companyWorkerContext(company, workerMemory, salesContentContext);
   const tasks: CompanyDispatchTask[] = [];
   let firstError: Error | null = null;
   // Sequential: each submit reads+writes the shared board file; avoid clobbering.

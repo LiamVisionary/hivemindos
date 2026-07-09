@@ -65,7 +65,20 @@ type CallPrompt = {
   enabled: boolean;
   instructions: string;
   path: string;
+  // Optional shared-list agent binding (mirrors the phone's StoredCallScript).
+  // When an agent is bound, the phone schedules + connects the call to that
+  // agent; the external gateway scheduler should skip agent-bound prompts so
+  // the ring isn't duplicated. Absent = agent-less (today's behaviour).
+  agentId?: string;
+  agentName?: string;
+  machineName?: string;
+  voiceProviderId?: string;
 };
+
+type CallPromptBinding = Pick<
+  CallPrompt,
+  "agentId" | "agentName" | "machineName" | "voiceProviderId"
+>;
 
 type MobileAgentTarget = Pick<
   AgentProfile,
@@ -900,14 +913,22 @@ function serializePrompt(prompt: {
   time: string;
   enabled: boolean;
   instructions: string;
-}): string {
+} & Partial<CallPromptBinding>): string {
   const title = JSON.stringify(String(prompt.title ?? ""));
   const time = JSON.stringify(String(prompt.time ?? ""));
   const enabled = prompt.enabled ? "true" : "false";
   const body = String(prompt.instructions ?? "")
     .replace(/\r\n/g, "\n")
     .replace(/\s+$/, "");
-  return `---\ntitle: ${title}\ntime: ${time}\nenabled: ${enabled}\n---\n\n${body}\n`;
+  // Optional binding lines. Keys match the phone's callScripts serializer, and
+  // are only written when set so an agent-less prompt stays byte-identical.
+  const bindingLines = [
+    prompt.agentId?.trim() ? `\nagentId: ${JSON.stringify(prompt.agentId.trim())}` : "",
+    prompt.agentName?.trim() ? `\nagent: ${JSON.stringify(prompt.agentName.trim())}` : "",
+    prompt.machineName?.trim() ? `\nmachine: ${JSON.stringify(prompt.machineName.trim())}` : "",
+    prompt.voiceProviderId?.trim() ? `\nvoice: ${JSON.stringify(prompt.voiceProviderId.trim())}` : "",
+  ].join("");
+  return `---\ntitle: ${title}\ntime: ${time}\nenabled: ${enabled}${bindingLines}\n---\n\n${body}\n`;
 }
 
 function parseQuotedString(raw: string): string {
@@ -934,24 +955,30 @@ function parsePrompt(content: string): {
   time: string;
   enabled: boolean;
   instructions: string;
-} {
+} & CallPromptBinding {
   const normalized = content.replace(/\r\n/g, "\n");
   const match = /^---\n([\s\S]*?)\n---\n?/.exec(normalized);
   let title = "";
   let time = "";
   let enabled = true;
   let instructions = normalized;
+  const binding: CallPromptBinding = {};
   if (match) {
     instructions = normalized.slice(match[0].length);
     for (const line of match[1].split("\n")) {
       const sep = line.indexOf(":");
       if (sep < 0) continue;
+      // Keys are lower-cased here; the phone writes `agentId` (→ `agentid`).
       const key = line.slice(0, sep).trim().toLowerCase();
       const value = line.slice(sep + 1).trim();
       if (key === "title") title = parseQuotedString(value);
       else if (key === "time") time = parseQuotedString(value);
       else if (key === "enabled")
         enabled = !/^(false|no|0)$/i.test(value.trim());
+      else if (key === "agentid") binding.agentId = parseQuotedString(value) || undefined;
+      else if (key === "agent") binding.agentName = parseQuotedString(value) || undefined;
+      else if (key === "machine") binding.machineName = parseQuotedString(value) || undefined;
+      else if (key === "voice") binding.voiceProviderId = parseQuotedString(value) || undefined;
     }
   }
   return {
@@ -959,6 +986,7 @@ function parsePrompt(content: string): {
     time,
     enabled,
     instructions: instructions.replace(/^\n+/, "").replace(/\s+$/, ""),
+    ...binding,
   };
 }
 
@@ -1008,6 +1036,10 @@ async function readFolderPrompts(
         enabled: parsed.enabled,
         instructions: parsed.instructions,
         path: filePath,
+        agentId: parsed.agentId,
+        agentName: parsed.agentName,
+        machineName: parsed.machineName,
+        voiceProviderId: parsed.voiceProviderId,
       };
     }),
   );
@@ -1261,6 +1293,16 @@ export async function POST(request: NextRequest) {
       const enabled = Boolean(body.enabled);
       const instructions = String(body.instructions ?? "");
       const slug = slugifyTitle(title);
+      // Optional shared-list agent binding + voice. Preserved through save so a
+      // call bound to a fleet agent stays bound.
+      const asString = (v: unknown) =>
+        typeof v === "string" && v.trim() ? v.trim() : undefined;
+      const binding: CallPromptBinding = {
+        agentId: asString(body.agentId),
+        agentName: asString(body.agentName),
+        machineName: asString(body.machineName),
+        voiceProviderId: asString(body.voiceProviderId),
+      };
 
       // If the prompt is being renamed, drop the old slug file so we never duplicate.
       if (body.id) {
@@ -1276,7 +1318,7 @@ export async function POST(request: NextRequest) {
       const filePath = join(dir, `${slug}.md`);
       await writeFile(
         filePath,
-        serializePrompt({ title, time, enabled, instructions }),
+        serializePrompt({ title, time, enabled, instructions, ...binding }),
         "utf8",
       );
       return NextResponse.json({
@@ -1288,6 +1330,7 @@ export async function POST(request: NextRequest) {
           enabled,
           instructions,
           path: filePath,
+          ...binding,
         },
       });
     }
