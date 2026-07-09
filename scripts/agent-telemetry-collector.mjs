@@ -4968,19 +4968,10 @@ async function runHermesIntegrationAction(action, input = {}, agent = {}) {
     return { ok: true, message: `Disabled Hermes ${tool}.` };
   }
   if (action === "xai-login") {
-    const child = spawn(
-      await resolveHermesBin(),
-      ["login", "--provider", "xai-oauth"],
-      {
-        detached: true,
-        stdio: "ignore",
-        env: runtimeProcessEnv(),
-      },
-    );
-    child.unref();
     return {
-      ok: true,
-      message: "Started Hermes xAI OAuth login on this machine.",
+      ok: false,
+      error:
+        "xAI OAuth sign-in is handled by the HivemindOS dashboard OAuth flow. Open Agent Settings, choose xAI, then use the OAuth lane.",
     };
   }
   if (action === "hermes-update") {
@@ -7133,6 +7124,12 @@ async function readRuntimeSession(runtime, options = {}) {
   const hermesHome = expandHome(
     sanitizeLocalDataDir(options.localDataDir) || defaultHermesDir,
   );
+  // RESERVED profiles (e.g. the fleet-watchdog's runtime-capability-probe) are
+  // excluded from the agent roster, but a dashboard may still hold a stale
+  // persisted agent pointing at one and poll its sessions. Never serve them, so
+  // health-probe turns can't surface in the chat tree via that back door.
+  const hermesHomeSlug = hermesHome.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "";
+  if (RESERVED_HERMES_PROFILE_SLUGS.has(hermesHomeSlug)) return null;
   const sessionId = options.sessionId || "";
   const sinceMs = Number(options.sinceMs || 0);
   if (sessionId) {
