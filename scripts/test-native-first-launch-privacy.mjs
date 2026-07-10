@@ -74,8 +74,20 @@ if (!collectorPs.includes("-LogonType Interactive") || !collectorPs.includes("-L
   fail("Windows collector scheduled tasks must support both durable S4U start-now registration and desktop-user Interactive fallback.");
 }
 
-if (!collectorPs.includes("Start-HivemindHiddenLauncher") || !collectorPs.includes('Start-Process -FilePath "wscript.exe"') || !collectorPs.includes("Start-HivemindScheduledTaskNow") || !collectorPs.includes("Register-HivemindStartupLauncher")) {
-  fail("Windows collector setup must start the hidden collector process immediately and keep bounded scheduled-task plus Startup-folder fallbacks.");
+if (!collectorPs.includes("Start-HivemindHiddenLauncher") || !collectorPs.includes('Start-Process -FilePath "powershell.exe"') || !collectorPs.includes("Start-HivemindScheduledTaskNow") || !collectorPs.includes("Register-HivemindStartupLauncher")) {
+  fail("Windows collector setup must start the hidden PowerShell supervisor immediately and keep bounded scheduled-task plus Startup-folder fallbacks.");
+}
+
+if (collectorPs.includes(', 0, True)') || collectorPs.includes("bWaitOnReturn=True")) {
+  fail("Windows long-running launchers must not synchronously wait through WScript.Shell.Run, which can raise 80020009 on desktop Windows.");
+}
+
+if (!collectorPs.includes("System.Diagnostics.ProcessStartInfo") || !collectorPs.includes("CreateNoWindow = `$true") || !collectorPs.includes("WaitForExit()") || !collectorPs.includes("exit `$process.ExitCode")) {
+  fail("Windows collector and Link launchers must use a hidden .NET process supervisor that preserves the child exit code.");
+}
+
+if (!collectorPs.includes("Remove-HivemindStartupLauncher -Name $Name")) {
+  fail("Successful Windows Scheduled Task registration must remove any stale Startup-folder fallback launcher.");
 }
 
 if (!uninstallPs.includes("Remove-HivemindStartupLauncher") || !uninstallPs.includes("HivemindOS Telemetry Collector") || !uninstallPs.includes("HivemindOS Link")) {

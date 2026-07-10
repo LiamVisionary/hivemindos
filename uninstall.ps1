@@ -228,6 +228,7 @@ if (Ask-YesNo "Remove the 'HivemindOS Telemetry Collector' scheduled task, Start
   Remove-HivemindStartupLauncher "HivemindOS Telemetry Collector"
   $hiveHome = Join-Path $UserHome ".hivemindos"
   Remove-Item (Join-Path $hiveHome "run-collector.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-collector-hidden.ps1") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "run-collector-hidden.vbs") -Force -ErrorAction SilentlyContinue
   Ok "Removed the HivemindOS collector task/startup launcher and launcher files"
 }
@@ -237,6 +238,7 @@ if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, Startup launcher, ru
   Remove-HivemindStartupLauncher "HivemindOS Link"
   $hiveHome = Join-Path $UserHome ".hivemindos"
   Remove-Item (Join-Path $hiveHome "run-linkd.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-linkd-hidden.ps1") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "run-linkd-hidden.vbs") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "bin\hivemind-linkd.exe") -Force -ErrorAction SilentlyContinue
   Ok "Removed the HivemindOS Link task/startup launcher, launcher files, and installed sidecar binary"
