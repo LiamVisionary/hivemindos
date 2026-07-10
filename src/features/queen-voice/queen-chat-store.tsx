@@ -46,6 +46,9 @@ import {
   type ConverseStreamEvent,
 } from "./converse-stream";
 import { playSpokenReply } from "./spoken-reply-playback";
+import { transcriptCommandUrl } from "@/features/dashboard/hooks/status-chat-transcript";
+import { looksLikeXPost } from "@/lib/services/x-transcript/x-url";
+import type { XTranscriptResult } from "@/lib/services/x-transcript/x-transcript-service";
 
 export type QueenChatTurn = {
   id: string;
@@ -799,10 +802,58 @@ export function QueenChatProvider({
     if (options.speak !== false) await speakReply(reply);
   }, [updateTurn]);
 
+  // `/transcript <x-link>` from the hive pill. The main Chat view runs this in
+  // its own controller; the pill routes straight to sendText, so it needs its
+  // own handler. The Queen "says" the summary + follow-up (concise, in-bubble);
+  // the full transcript rides in `detail` (the "Show what she found" modal).
+  const runTranscriptCommand = React.useCallback(async (rawText: string, url: string) => {
+    appendTurn({ who: "you", text: rawText, source: "text" });
+    if (!url || !looksLikeXPost(url)) {
+      appendTurn({
+        who: "queen",
+        text: "Add an X link after `/transcript`, for example `/transcript https://x.com/user/status/1780000000000000001`.",
+        source: "text",
+      });
+      return;
+    }
+    const queenId = appendTurn({ who: "queen", text: "", live: true, pending: true, working: "Pulling the transcript…", source: "text" });
+    try {
+      const res = await fetch("/api/integrations/x-transcript", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url, summarize: true }),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; result?: XTranscriptResult } | null;
+      if (!res.ok || !data?.ok || !data.result) {
+        throw new Error(data?.error || `Transcript request failed with HTTP ${res.status}.`);
+      }
+      const result = data.result;
+      const meta = [
+        result.author?.handle ? `@${result.author.handle}` : result.kind === "thread" ? "thread" : "post",
+        result.durationSec ? `${Math.round(result.durationSec / 60)} min video` : typeof result.postCount === "number" && result.postCount > 1 ? `${result.postCount}-post thread` : "",
+      ].filter(Boolean).join(" · ");
+      const spoken = [result.summary, result.followUpQuestion].filter(Boolean).join("\n\n")
+        || `Transcript ready${meta ? ` (${meta})` : ""}.`;
+      const detail = `**Transcript${meta ? ` — ${meta}` : ""}**\n\n${result.transcript}`;
+      updateTurn(queenId, { text: spoken, detail, live: false, pending: false, working: undefined });
+    } catch (error) {
+      updateTurn(queenId, {
+        text: `I couldn't pull that transcript: ${error instanceof Error ? error.message : String(error)}`,
+        live: false,
+        pending: false,
+        working: undefined,
+      });
+    }
+  }, [appendTurn, updateTurn]);
+
   const sendText = React.useCallback(
     async (text: string, opts?: QueenChatSendOptions) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      // Intercept the /transcript slash command before the Queen agentic loop —
+      // the pill has no other slash-command handler.
+      const transcriptUrl = transcriptCommandUrl(trimmed);
+      if (transcriptUrl !== null) return runTranscriptCommand(trimmed, transcriptUrl);
       const audioRoute = queenChatRouteForSend(voiceChatActiveRef.current);
       const shouldSpeakReply = audioRoute === "voice";
       const voiceTextAudioContext = shouldSpeakReply ? ensureVoiceTextAudioContext() : null;
@@ -846,7 +897,7 @@ export function QueenChatProvider({
       sendChainRef.current = task;
       return task;
     },
-    [appendTurn, ensureVoiceTextAudioContext, runQueenTurn, runQueenVoiceTextTurn, updateTurn],
+    [appendTurn, ensureVoiceTextAudioContext, runQueenTurn, runQueenVoiceTextTurn, runTranscriptCommand, updateTurn],
   );
 
   const activeAgentTurn = React.useMemo(() => {
