@@ -568,6 +568,175 @@ fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<St
     Ok(serde_json::json!({ "ok": true }))
 }
 
+/// How the chat header's "Open in <app>" menu launches a local target, per app
+/// id. This is the capability matrix for `open_in_app`: add a row here rather
+/// than scattering per-app `match`/`if` arms through the command body.
+enum OpenInAppMethod {
+    /// Editor-style launch: try the CLI on PATH first, then a macOS `open -a`
+    /// application bundle, then a URL scheme — in that order — until one works.
+    Editor {
+        /// CLI to try on PATH (all OSes), e.g. `code`.
+        cli: Option<&'static str>,
+        /// macOS application bundle name for `open -a <app>`.
+        mac_app: Option<&'static str>,
+        /// URL-scheme prefix appended with the absolute path, e.g. `vscode://file`.
+        url_scheme: Option<&'static str>,
+        /// When true, the app only exists on macOS; other OSes get a clear error.
+        mac_only: bool,
+    },
+    /// Open a terminal at the target directory (reuses `open_terminal_in_directory`).
+    Terminal,
+    /// Reveal the target in the OS file manager (reuses `reveal_system_path`).
+    Reveal,
+    /// Hand the target to the OS default handler (reuses `open_system_target`).
+    Default,
+}
+
+struct OpenInAppSpec {
+    id: &'static str,
+    /// Human-readable name used in error messages.
+    display: &'static str,
+    method: OpenInAppMethod,
+}
+
+const OPEN_IN_APP_MATRIX: &[OpenInAppSpec] = &[
+    OpenInAppSpec {
+        id: "vscode",
+        display: "Visual Studio Code",
+        method: OpenInAppMethod::Editor {
+            cli: Some("code"),
+            mac_app: Some("Visual Studio Code"),
+            url_scheme: Some("vscode://file"),
+            mac_only: false,
+        },
+    },
+    OpenInAppSpec {
+        id: "xcode",
+        display: "Xcode",
+        method: OpenInAppMethod::Editor {
+            cli: None,
+            mac_app: Some("Xcode"),
+            url_scheme: None,
+            mac_only: true,
+        },
+    },
+    OpenInAppSpec {
+        id: "terminal",
+        display: "Terminal",
+        method: OpenInAppMethod::Terminal,
+    },
+    OpenInAppSpec {
+        id: "finder",
+        display: "the file manager",
+        method: OpenInAppMethod::Reveal,
+    },
+    OpenInAppSpec {
+        id: "default",
+        display: "the default app",
+        method: OpenInAppMethod::Default,
+    },
+];
+
+/// Launch a program with a single path argument. Returns `Ok(false)` when the
+/// program is not on PATH so the caller can fall through to the next strategy;
+/// `Ok(true)` when it spawned; `Err` for any other spawn failure. The path is
+/// passed as a separate argument (never interpolated into a shell string).
+fn try_launch_cli(program: &str, path: &Path) -> Result<bool, String> {
+    match Command::new(program).arg(path).spawn() {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+/// Open a path with a macOS application bundle via `open -a <app> <path>`.
+fn open_with_mac_app(app: &str, path: &Path) -> Result<(), String> {
+    Command::new("open")
+        .args(["-a", app])
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+/// Run the CLI → macOS-app → URL-scheme fallback chain for an editor entry.
+/// Returns the strategy that succeeded (`"cli"`/`"app"`/`"url"`).
+fn launch_editor(
+    display: &str,
+    cli: Option<&str>,
+    mac_app: Option<&str>,
+    url_scheme: Option<&str>,
+    mac_only: bool,
+    path: &Path,
+) -> Result<&'static str, String> {
+    if mac_only && !cfg!(target_os = "macos") {
+        return Err(format!("{} is only available on macOS.", display));
+    }
+    if let Some(program) = cli {
+        if try_launch_cli(program, path)? {
+            return Ok("cli");
+        }
+    }
+    if cfg!(target_os = "macos") {
+        if let Some(app) = mac_app {
+            open_with_mac_app(app, path)?;
+            return Ok("app");
+        }
+    }
+    if let Some(scheme) = url_scheme {
+        // path is absolute (validated below), so it already starts with a
+        // separator: `vscode://file` + `/Users/x` => `vscode://file/Users/x`.
+        let target = format!("{}{}", scheme, path.to_string_lossy());
+        open_system_target(&target)?;
+        return Ok("url");
+    }
+    Err(format!("{} is not available on this machine.", display))
+}
+
+#[tauri::command]
+fn open_in_app(app: String, path: String) -> Result<serde_json::Value, String> {
+    let app_id = clean_target(&app);
+    let spec = OPEN_IN_APP_MATRIX
+        .iter()
+        .find(|entry| entry.id == app_id.as_str())
+        .ok_or_else(|| format!("Unknown app target: {}", app_id))?;
+
+    // Reuse the existing validators: expands `~`, resolves `file://`, and
+    // requires an absolute path; then confirm it exists on this machine.
+    let file_path = path_from_target(&path)?;
+    if !file_path.exists() {
+        return Err("Target does not exist on this machine.".to_string());
+    }
+
+    let method_used: &'static str = match &spec.method {
+        OpenInAppMethod::Editor {
+            cli,
+            mac_app,
+            url_scheme,
+            mac_only,
+        } => launch_editor(spec.display, *cli, *mac_app, *url_scheme, *mac_only, &file_path)?,
+        OpenInAppMethod::Terminal => {
+            open_terminal_in_directory(&file_path)?;
+            "terminal"
+        }
+        OpenInAppMethod::Reveal => {
+            reveal_system_path(&file_path)?;
+            "reveal"
+        }
+        OpenInAppMethod::Default => {
+            open_system_target(&file_path.to_string_lossy())?;
+            "default"
+        }
+    };
+
+    Ok(serde_json::json!({
+        "ok": true,
+        "app": spec.id,
+        "method": method_used,
+        "path": display_path(&file_path),
+    }))
+}
+
 fn optional_build_value(value: &'static str) -> Option<&'static str> {
     if value.is_empty() {
         None
@@ -1599,6 +1768,7 @@ pub fn run() {
             display_local_path,
             open_deliverable,
             open_project_terminal,
+            open_in_app,
             deliverables::list_aeon_deliverables,
             deliverables::list_aeon_outputs,
             deliverables::list_aeon_schedules,

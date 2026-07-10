@@ -25,6 +25,7 @@ export type ChatApplicationGenerationCard = {
   modelName?: string;
   machineName?: string;
   machineSpecs?: string;
+  sourceArtifacts?: ChatApplicationGenerationArtifact[];
   artifacts?: ChatApplicationGenerationArtifact[];
   error?: string;
   createdAt?: number;
@@ -58,6 +59,61 @@ export function normalizeApplicationGenerationUrl(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function normalizeApplicationGenerationArtifacts(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  return value.flatMap((artifact) => {
+    if (!artifact || typeof artifact !== "object") return [];
+    const item = artifact as Partial<ChatApplicationGenerationArtifact>;
+    const url = normalizeApplicationGenerationUrl(item.url);
+    if (!url) return [];
+    const artifactKind = item.kind === "image" || item.kind === "audio" || item.kind === "video" || item.kind === "model3d" || item.kind === "file"
+      ? item.kind
+      : "file";
+    return [{
+      kind: artifactKind,
+      url,
+      ...(typeof item.label === "string" ? { label: item.label } : {}),
+      ...(typeof item.mimeType === "string" ? { mimeType: item.mimeType } : {}),
+      ...(typeof item.width === "number" ? { width: item.width } : {}),
+      ...(typeof item.height === "number" ? { height: item.height } : {}),
+      ...(typeof item.durationMs === "number" ? { durationMs: item.durationMs } : {}),
+      ...(typeof item.seed === "string" || typeof item.seed === "number" ? { seed: item.seed } : {}),
+    } satisfies ChatApplicationGenerationArtifact];
+  });
+}
+
+export function normalizeApplicationGenerationCard(value: unknown): ChatApplicationGenerationCard | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const card = value as Partial<ChatApplicationGenerationCard>;
+  const id = typeof card.id === "string" ? card.id.trim() : "";
+  const prompt = typeof card.prompt === "string" ? card.prompt.trim() : "";
+  if (!id || !prompt) return undefined;
+  const kind = card.kind === "image" || card.kind === "music" || card.kind === "tts" || card.kind === "model3d" || card.kind === "video"
+    ? card.kind
+    : "image";
+  const status = card.status === "running" || card.status === "ready" || card.status === "error" ? card.status : "ready";
+  const sourceArtifacts = normalizeApplicationGenerationArtifacts(card.sourceArtifacts);
+  const artifacts = normalizeApplicationGenerationArtifacts(card.artifacts);
+  return {
+    id,
+    kind,
+    prompt,
+    status,
+    ...(typeof card.title === "string" ? { title: card.title } : {}),
+    ...(typeof card.appId === "string" ? { appId: card.appId } : {}),
+    ...(typeof card.appName === "string" ? { appName: card.appName } : {}),
+    ...(typeof card.serviceKind === "string" ? { serviceKind: card.serviceKind } : {}),
+    ...(typeof card.modelName === "string" ? { modelName: card.modelName } : {}),
+    ...(typeof card.machineName === "string" ? { machineName: card.machineName } : {}),
+    ...(typeof card.machineSpecs === "string" ? { machineSpecs: card.machineSpecs } : {}),
+    ...(sourceArtifacts ? { sourceArtifacts } : {}),
+    ...(artifacts ? { artifacts } : {}),
+    ...(typeof card.error === "string" ? { error: card.error } : {}),
+    ...(typeof card.createdAt === "number" ? { createdAt: card.createdAt } : {}),
+    ...(typeof card.completedAt === "number" ? { completedAt: card.completedAt } : {}),
+  };
 }
 
 export function applicationGenerationContent(card: Pick<ChatApplicationGenerationCard, "kind" | "prompt" | "status">) {

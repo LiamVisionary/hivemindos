@@ -8,34 +8,18 @@ import {
   SYNTO_CLOUD_ENDPOINT_PROVIDERS,
   SYNTO_CLOUD_MODEL_ID,
   SYNTO_CLOUD_PROVIDER,
-  SYNTO_COMPARE_MODEL_OPTIONS,
   SYNTO_DEFAULT_LOCAL_MODEL_ID,
   SYNTO_LOCAL_EXTRA_OPTIONS,
   SYNTO_LOCAL_MODEL_ID_SET,
   SYNTO_LOCAL_ROUTE_OPTIONS,
-  type SyntoModelRoute,
 } from "@/lib/config/synto-model-tiers";
 import { HIVEMIND_OS_RUNTIME, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { RuntimeIntegrationStatus } from "@/features/dashboard/dashboard-types";
 import { LmStudioModelManager } from "./chat/LmStudioModelManager";
 
-type SyntoSettings = SharedVaultConfig["synto"] & {
-  modelRoute?: SyntoModelRoute;
-  cloudProvider?: typeof SYNTO_CLOUD_PROVIDER;
-  cloudModel?: string;
-  cloudRequireZdr?: boolean;
-  localProvider?: "lm-studio";
-  localModelId?: string;
-  localLoadedModelKey?: string;
-};
-
-type SharedVaultWithSyntoModelSettings = Omit<SharedVaultConfig, "synto"> & {
-  synto: SyntoSettings;
-};
-
 type SyntoModelTierSettingsProps = {
-  sharedVault: SharedVaultWithSyntoModelSettings;
-  updateSharedVault: (patch: { synto: SyntoSettings }) => void;
+  sharedVault: SharedVaultConfig;
+  updateSharedVault: (patch: { synto: SharedVaultConfig["synto"] }) => void;
   runtimeIntegrationBusy?: string;
   runtimeIntegrationMessage?: string;
   runtimeIntegrationStatus?: RuntimeIntegrationStatus | null;
@@ -59,7 +43,7 @@ function settingCardStyle(active: boolean): CSSProperties {
     gap: 8,
     alignContent: "start",
     padding: "12px 13px",
-    borderRadius: 10,
+    borderRadius: 8,
     border: `1px solid ${active ? "rgba(94,234,212,0.68)" : "var(--line)"}`,
     background: active ? "rgba(45,212,191,0.12)" : "rgba(15,23,42,0.36)",
     boxShadow: active ? "0 0 0 1px rgba(94,234,212,0.14) inset" : "none",
@@ -131,12 +115,12 @@ export function SyntoModelTierSettings({
   }), [selectedLocalModelId]);
 
   useEffect(() => {
-    if (requestedStatusRef.current || !refreshRuntimeIntegrations || lmStudioStatus || runtimeIntegrationBusy === "status") return;
+    if (selectedRoute === "cloud-best" || requestedStatusRef.current || !refreshRuntimeIntegrations || lmStudioStatus || runtimeIntegrationBusy === "status") return;
     requestedStatusRef.current = true;
     void refreshRuntimeIntegrations(localAgent);
-  }, [lmStudioStatus, localAgent, refreshRuntimeIntegrations, runtimeIntegrationBusy]);
+  }, [lmStudioStatus, localAgent, refreshRuntimeIntegrations, runtimeIntegrationBusy, selectedRoute]);
 
-  const updateSynto = (patch: Partial<SyntoSettings>) => {
+  const updateSynto = (patch: Partial<SharedVaultConfig["synto"]>) => {
     updateSharedVault({ synto: { ...synto, ...patch } });
   };
 
@@ -146,6 +130,7 @@ export function SyntoModelTierSettings({
       cloudProvider: SYNTO_CLOUD_PROVIDER,
       cloudModel: SYNTO_CLOUD_MODEL_ID,
       cloudRequireZdr,
+      compareHeavyModel: SYNTO_CLOUD_MODEL_ID,
     });
   };
 
@@ -154,7 +139,7 @@ export function SyntoModelTierSettings({
       modelRoute: option.route,
       localProvider: "lm-studio",
       localModelId: option.modelId,
-      localLoadedModelKey: undefined,
+      localLoadedModelKey: "",
       compareHeavyModel: option.compareModel,
     });
   };
@@ -173,7 +158,7 @@ export function SyntoModelTierSettings({
       modelRoute: route,
       localProvider: "lm-studio",
       localModelId: catalogModelId,
-      localLoadedModelKey: catalogModelId === modelKey ? undefined : modelKey,
+      localLoadedModelKey: catalogModelId === modelKey ? "" : modelKey,
       compareHeavyModel,
     });
   };
@@ -209,11 +194,11 @@ export function SyntoModelTierSettings({
                 onChange={(event) => updateSynto({ cloudRequireZdr: event.target.checked })}
                 style={{ marginTop: 2 }}
               />
-              <span>Require OpenRouter ZDR-only routing when an eligible endpoint exists.</span>
+              <span>Prefer ZDR-only routing. Enforce the same policy in OpenRouter privacy settings before using sensitive notes.</span>
             </label>
             <div style={{ ...pillStyle("warn"), alignItems: "flex-start", borderRadius: 8, width: "auto" }}>
               <TriangleAlert size={12} style={{ marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
-              <span>Do not label this route E2E/no-collection unless the selected endpoint is ZDR-confirmed.</span>
+              <span>Syntho 0.4 cannot enforce OpenRouter ZDR per request, so this records your policy but does not prove endpoint compliance.</span>
             </div>
             <Btn variant={selectedRoute === "cloud-best" ? "ghost" : "primary"} size="sm" onClick={selectCloud}>
               <Sparkles size={13} aria-hidden="true" />
@@ -246,7 +231,7 @@ export function SyntoModelTierSettings({
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: 8, padding: "10px 11px", borderRadius: 10, border: "1px solid var(--line)", background: "rgba(2,6,23,0.18)" }}>
+      <div style={{ display: "grid", gap: 8, padding: "10px 11px", borderRadius: 8, border: "1px solid var(--line)", background: "rgba(2,6,23,0.18)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <SyntoSectionLabel>Privacy posture</SyntoSectionLabel>
           <span style={pillStyle("accent")}><ShieldCheck size={12} aria-hidden="true" /> Local tiers stay on-device</span>
@@ -256,7 +241,7 @@ export function SyntoModelTierSettings({
         </p>
       </div>
 
-      <div style={{ display: "grid", gap: 7 }}>
+      {selectedRoute !== "cloud-best" ? <div style={{ display: "grid", gap: 7 }}>
         <SyntoSectionLabel>Extra local candidates</SyntoSectionLabel>
         <div style={{ display: "grid", gap: 7 }}>
           {SYNTO_LOCAL_EXTRA_OPTIONS.map((option) => {
@@ -275,9 +260,9 @@ export function SyntoModelTierSettings({
             );
           })}
         </div>
-      </div>
+      </div> : null}
 
-      {refreshRuntimeIntegrations && runRuntimeIntegrationAction ? (
+      {selectedRoute !== "cloud-best" && refreshRuntimeIntegrations && runRuntimeIntegrationAction ? (
         <LmStudioModelManager
           agent={localAgent}
           busy={runtimeIntegrationBusy}
@@ -293,21 +278,10 @@ export function SyntoModelTierSettings({
         />
       ) : null}
 
-      {runtimeIntegrationMessage ? (
+      {selectedRoute !== "cloud-best" && runtimeIntegrationMessage ? (
         <p style={{ margin: 0, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.4, overflowWrap: "anywhere" }}>{runtimeIntegrationMessage}</p>
       ) : null}
 
-      <label>
-        Compare model
-        <select
-          value={synto.compareHeavyModel}
-          onChange={(event) => updateSynto({ compareHeavyModel: event.target.value })}
-        >
-          {SYNTO_COMPARE_MODEL_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-      </label>
     </div>
   );
 }

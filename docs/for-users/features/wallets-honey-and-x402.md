@@ -63,13 +63,15 @@ Managed agents use HONEY as the visible credit unit, but the ledger keeps two se
 
 This prevents a funding/cash-out loop while still giving users one simple credit language.
 
-The current hosted paid agent default is **$0.001 per successful hosted chat completion**. That means:
+Hosted model messages are **metered**: each successful message is charged the **upstream provider price × 1.25 (a 25% markup)**, with a **$0.001 minimum per message**. A short message on a cheap model hits the `$0.001` floor; a longer message on a premium model costs proportionally more.
 
-| Usage | Cost |
-| ---: | ---: |
-| `1,000` messages | `$1` |
-| `100,000` messages | `$100` |
-| `1,000,000` messages | `$1,000` |
+| Hosted model message | Charge |
+| --- | ---: |
+| Minimum per message (floor) | `$0.001` |
+| Cheap model, short reply | ~`$0.001` (floor) |
+| Premium (Opus-class) model, ~400 output tokens | ~`$0.038` (≈`$0.030` upstream × 1.25) |
+
+Prepaid HONEY/credit accounts are debited the actual metered usage after each message. A raw x402 caller pays the estimated maximum for the request up front, bounded by `max_tokens`. The flat `$0.001` is the floor and the fixed price for per-call tool routes — it is not the price of a typical model message.
 
 The no-API-key flow is:
 
@@ -85,7 +87,7 @@ The official ledger rejects browser-spoofed credits. Its `/managed-billing/event
 
 HivemindOS can expose a curated agent as an OpenAI-compatible paid endpoint. For official monetized agents, this endpoint should run on HivemindOS-controlled hosted infrastructure, not inside the downloaded desktop app.
 
-The current official default hosted paid agent charges **$0.001 per successful chat completion**. Self-hosted sellers can set their own `priceUsd`, but official HivemindOS pricing comes from the hosted endpoint, not from a local app setting.
+The official default hosted paid agent is a **metered (prepaid) agent**: it charges the **upstream provider price × 1.25 (a 25% markup)**, with a **$0.001 minimum per message**. Fixed per-call routes (a `per-call` billing mode) charge a flat `priceUsd` instead. Self-hosted sellers can set their own price and billing mode, but official HivemindOS pricing comes from the hosted endpoint, not from a local app setting.
 
 - Downloaded apps should call `GET /api/official-paid-agents/<slug>/chat/completions` for official hosted-agent readiness and `POST /api/official-paid-agents/<slug>/chat/completions` for paid calls. This local route is only a buyer/proxy path to HivemindOS-hosted infrastructure.
 - Self-hosted sellers can expose `GET /api/paid-agents/<slug>/chat/completions` for non-secret readiness, price, runtime, provider, model, and supported runtime/provider matrices.
@@ -143,7 +145,7 @@ Optional accounting:
 The model picker includes `HivemindOS Models` for users who want managed model calls without bringing provider API keys. It is a wallet-paid provider:
 
 - The selected agent's persisted local x402 wallet pays each official hosted model call.
-- The current official hosted default is **$0.001 per successful chat completion**.
+- The official hosted default is metered: **upstream provider price × 1.25 (25% markup)**, with a **$0.001 minimum per message**. The wallet is charged the estimated maximum for each call up front, bounded by `max_tokens`.
 - The app uses the same wallet Spend, max-payment, auto-use, network, and governance policy as other x402 paid requests.
 - The local route is `POST /api/hivemindos/models/chat/completions`, with model ids `hivemindos/auto`, `hivemindos/fast`, `hivemindos/frontier`, and `hivemindos/research`.
 - The route pays the official hosted paid-agent resource through `/api/official-paid-agents/<slug>/chat/completions`, then returns an OpenAI-compatible `chat.completion` response to the normal chat streamer.

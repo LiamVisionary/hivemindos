@@ -1,5 +1,5 @@
 import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, Puzzle, RefreshCcw, ShieldCheck, Sparkles } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { useVoiceBands } from "@/lib/stores/voice-bands-store";
 
 import chatStyles from "@/app/chat.module.css";
@@ -7,14 +7,12 @@ import kanbanStyles from "@/app/kanban-board.module.css";
 import { LottiePlayer } from "@/components/ui/lottie-player";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { filesFromDataTransfer, filesFromReferencePaths } from "@/features/chat/chat-drop-references";
 import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
 import { isImageAttachment } from "@/features/chat/chat-file-references";
 import { attachmentDetailLabel, attachmentKindLabel, attachmentReferenceTarget, attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { CHAT_SLASH_COMMANDS, filterChatSlashCommands, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
-import { listenForTauriComposerDragDrop, type TauriDragDropEvent, type TauriDropPosition, type TauriWebviewApi } from "@/features/chat/tauri-composer-drag-drop";
+import { useComposerFileDrop, type ComposerFileDropHandler } from "@/features/chat/use-composer-file-drop";
 import { createStyleClass } from "@/features/dashboard/style-classes";
-import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { CHAT_PERMISSION_MODE_OPTIONS, chatPermissionModeLabel } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
@@ -60,10 +58,6 @@ function shouldKeepEnterAsNewline() {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 }
-
-type TauriRuntimeWindow = Window & {
-  __TAURI_INTERNALS__?: unknown;
-};
 
 type ChatAttachment = KanbanTaskAttachment;
 type LinkedDirectory = KanbanLinkedDirectory;
@@ -703,7 +697,7 @@ export function ComposerField({
   imageInputRef: RefObject<HTMLInputElement | null>;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onDropFileReferences?: (files: FileList | File[]) => void;
+  onDropFileReferences?: ComposerFileDropHandler;
   onRemoveAttachment: (id: string) => void;
   onAttachDirectory?: () => void;
   onAttachSkill?: () => void;
@@ -735,12 +729,13 @@ export function ComposerField({
   onPermissionModeChange?: (mode: ChatPermissionMode) => void;
   modelPicker?: ComposerModelPicker;
 }) {
-  const composerFieldRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const composerDragDepthRef = useRef(0);
-  const composerDropActiveRef = useRef(false);
   const composerValue = value ?? "";
-  const [composerDropActive, setComposerDropActive] = useState(false);
+  const {
+    dropRef: composerFieldRef,
+    dropActive: composerDropActive,
+    dropHandlers: composerDropHandlers,
+  } = useComposerFileDrop({ enabled: !disabled, onDropFileReferences });
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
   const [agentModeMenuOpen, setAgentModeMenuOpen] = useState(false);
   const [permissionModeMenuOpen, setPermissionModeMenuOpen] = useState(false);
@@ -814,184 +809,11 @@ export function ComposerField({
     event.currentTarget.form?.requestSubmit();
   }
 
-  const canDropFileReferences = Boolean(onDropFileReferences && !disabled);
-
-  function setComposerDropActiveValue(active: boolean) {
-    composerDropActiveRef.current = active;
-    setComposerDropActive((current) => current === active ? current : active);
-  }
-
-  function resetComposerDropState() {
-    composerDragDepthRef.current = 0;
-    setComposerDropActiveValue(false);
-  }
-
-  useEffect(() => {
-    if (!canDropFileReferences) return;
-
-    function isInsideComposer(event: Pick<DragEvent, "clientX" | "clientY">) {
-      const node = composerFieldRef.current;
-      if (!node) return false;
-      const rect = node.getBoundingClientRect();
-      return event.clientX >= rect.left
-        && event.clientX <= rect.right
-        && event.clientY >= rect.top
-        && event.clientY <= rect.bottom;
-    }
-
-    function handleDocumentDragEnter(event: DragEvent) {
-      if (!isInsideComposer(event)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      composerDragDepthRef.current += 1;
-      setComposerDropActiveValue(true);
-    }
-
-    function handleDocumentDragOver(event: DragEvent) {
-      if (!isInsideComposer(event)) {
-        if (composerDropActiveRef.current) setComposerDropActiveValue(false);
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-      setComposerDropActiveValue(true);
-    }
-
-    function handleDocumentDragLeave(event: DragEvent) {
-      if (isInsideComposer(event)) return;
-      composerDragDepthRef.current = 0;
-      setComposerDropActiveValue(false);
-    }
-
-    function handleDocumentDrop(event: DragEvent) {
-      if (!isInsideComposer(event)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      composerDragDepthRef.current = 0;
-      setComposerDropActiveValue(false);
-      onDropFileReferences?.(event.dataTransfer ? filesFromDataTransfer(event.dataTransfer) : []);
-    }
-
-    document.addEventListener("dragenter", handleDocumentDragEnter, true);
-    document.addEventListener("dragover", handleDocumentDragOver, true);
-    document.addEventListener("dragleave", handleDocumentDragLeave, true);
-    document.addEventListener("drop", handleDocumentDrop, true);
-    return () => {
-      document.removeEventListener("dragenter", handleDocumentDragEnter, true);
-      document.removeEventListener("dragover", handleDocumentDragOver, true);
-      document.removeEventListener("dragleave", handleDocumentDragLeave, true);
-      document.removeEventListener("drop", handleDocumentDrop, true);
-    };
-  }, [canDropFileReferences, onDropFileReferences]);
-
-  useEffect(() => {
-    if (!canDropFileReferences) return;
-    if (typeof window === "undefined" || !(window as TauriRuntimeWindow).__TAURI_INTERNALS__) return;
-
-    let disposed = false;
-    let safeUnlisten = createSafeTauriUnlisten();
-
-    function isInsideComposerPosition(position: TauriDropPosition) {
-      const node = composerFieldRef.current;
-      if (!node) return false;
-      const rect = node.getBoundingClientRect();
-      const contains = (x: number, y: number) => x >= rect.left
-        && x <= rect.right
-        && y >= rect.top
-        && y <= rect.bottom;
-      const scale = window.devicePixelRatio || 1;
-      return contains(position.x, position.y)
-        || (scale > 1 && contains(position.x / scale, position.y / scale));
-    }
-
-    function handleTauriDragDrop(event: TauriDragDropEvent) {
-      const payload = event.payload;
-      if (payload.type === "leave") {
-        composerDragDepthRef.current = 0;
-        setComposerDropActiveValue(false);
-        return;
-      }
-      const insideComposer = isInsideComposerPosition(payload.position);
-      if (!insideComposer) {
-        if (composerDropActiveRef.current) setComposerDropActiveValue(false);
-        return;
-      }
-      if (payload.type === "drop") {
-        composerDragDepthRef.current = 0;
-        setComposerDropActiveValue(false);
-        void filesFromReferencePaths(payload.paths).then((files) => {
-          if (!disposed) onDropFileReferences?.(files);
-        });
-        return;
-      }
-      setComposerDropActiveValue(true);
-    }
-
-    void import("@tauri-apps/api/webview")
-      .then((module) => {
-        if (disposed) return undefined;
-        const webviewApi = module as TauriWebviewApi;
-        return listenForTauriComposerDragDrop(webviewApi, handleTauriDragDrop);
-      })
-      .then((unlisten) => {
-        if (!unlisten) return;
-        safeUnlisten = createSafeTauriUnlisten(unlisten);
-        if (disposed) safeUnlisten();
-      })
-      .catch(() => {
-        if (!disposed) {
-          composerDragDepthRef.current = 0;
-          setComposerDropActiveValue(false);
-        }
-      });
-
-    return () => {
-      disposed = true;
-      safeUnlisten();
-    };
-  }, [canDropFileReferences, onDropFileReferences]);
-
-  function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    composerDragDepthRef.current += 1;
-    setComposerDropActiveValue(true);
-  }
-
-  function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "copy";
-    setComposerDropActiveValue(true);
-  }
-
-  function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
-    if (composerDragDepthRef.current === 0) setComposerDropActiveValue(false);
-  }
-
-  function handleComposerDrop(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    resetComposerDropState();
-    onDropFileReferences?.(event.dataTransfer ? filesFromDataTransfer(event.dataTransfer) : []);
-  }
-
   return (
     <div
       ref={composerFieldRef}
       className={chatClass("chatComposerField", floating && "floatingComposer", compact && "compactComposer", composerDropActive && "dropActive", className)}
-      onDragEnter={handleComposerDragEnter}
-      onDragOver={handleComposerDragOver}
-      onDragLeave={handleComposerDragLeave}
-      onDrop={handleComposerDrop}
+      {...composerDropHandlers}
     >
       {agentMode ? <input type="hidden" name="agentMode" value={agentMode} /> : null}
       {permissionMode ? <input type="hidden" name="permissionMode" value={permissionMode} /> : null}

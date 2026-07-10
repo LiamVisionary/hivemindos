@@ -46,12 +46,12 @@ The product starts with machines and agents. Fleet tells you what is online, whi
 
 ## Looped Work
 
-Looped work is where operator intent turns into agent execution. A loop contract can start from chat, Scheduler, Queen Bee, Evo, a company launch, or the Work Board. The board remains one access path: it captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Zero Human Companies add a company cockpit around the same generic loop layer: charters, crews, budgets, approvals, apex goals, and private learning loops. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
+Looped work is where operator intent turns into agent execution. A loop contract can start from chat, Scheduler, Queen Bee, Evo, a company launch, or the Work Board. The board remains one access path: it captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Zero Human Companies add a company cockpit with two autonomy choices: the default HivemindOS crew engine uses the Work Board and private learning loops, while the optional AEON engine runs one saved background skill and records accepted handoffs in Company Runs. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
 
 <div class="docGrid">
   <section class="docCard">
     <h3>Zero Human Companies</h3>
-    <p>Agent-run company cockpits with charters, crews, apex goals, approvals, budgets, kill switches, Work Board dispatch, outreach email threads across the crew's mailboxes, and capability-capital learning summaries.</p>
+    <p>Agent-run company cockpits with charters, apex goals, approvals, budgets, kill switches, Company Runs, and either a HivemindOS crew or an optional AEON background skill.</p>
     <a href="zero-human-companies.html">Open company docs</a>
   </section>
   <section class="docCard">
@@ -104,13 +104,18 @@ That gives the Work board a better answer than “an agent changed something.”
 
 ## Shared Brain
 
-The shared brain is a normal Obsidian vault, not a proprietary database. HivemindOS writes durable state into that vault when available: Kanban records, notifications, scheduled runs, wallet records, shared skills, service notes, and reviewed outputs. Agent Memory now supports entity-linked recall, temporal history, action memories, and soft retrieval telemetry. QMD, GBrain, Neo4j, Syntho, and Trading Brain stay optional service layers around the vault.
+The shared brain is a normal Obsidian vault, not a proprietary database. HivemindOS writes durable state into that vault when available: Kanban records, notifications, scheduled runs, wallet records, shared skills, service notes, and reviewed outputs. Agent Memory supports entity-linked recall, canonical memory heads, temporal history, and soft retrieval telemetry; high-volume operational events stay in a separate bounded local journal and only become durable knowledge through review. QMD, GBrain, Neo4j, Syntho, and Trading Brain stay optional service layers around the vault.
 
 <div class="docGrid">
   <section class="docCard">
     <h3>Brain, Vault, And Skills</h3>
     <p>Obsidian vault routing, entity-linked memory, temporal recall, compiled wiki search, graph access, shared skills, QMD, Neo4j, GBrain, Syntho, Trading Brain, Synthesis, OKF export, and sync ownership.</p>
     <a href="brain-vault-and-skills.html">Open brain docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Shared Brain Benchmarks</h3>
+    <p>Measured recall quality, authenticated API latency, scale, full-vault speedups, contradiction control, pattern precision, and live token reduction.</p>
+    <a href="shared-brain-benchmarks.html">Open benchmark scorecard</a>
   </section>
   <section class="docCard">
     <h3>Agent-Native Workflows</h3>
@@ -165,6 +170,11 @@ Wallet and token features are explicit rails, not a background permission pool. 
     <a href="hive-compute.html">Open compute docs</a>
   </section>
   <section class="docCard">
+    <h3>Managed Cloud Agents</h3>
+    <p>Dedicated always-on Hermes agents with persistent workspaces, governed Base USDC funding, browser chat, and running or stopped metering.</p>
+    <a href="managed-cloud-agents.html">Open cloud agent docs</a>
+  </section>
+  <section class="docCard">
     <h3>Monetization</h3>
     <p>The free-vs-paid product boundary, including HivemindOS Cloud Agent Calls as a premium managed LiveKit feature.</p>
     <a href="../../for-investors/">Open monetization</a>
@@ -190,6 +200,11 @@ The browser and native app share the same Next.js UI. Tauri adds local filesyste
     <h3>Native App</h3>
     <p>Tauri development shell, packaged Next server, native status bridge, and desktop filesystem helpers.</p>
     <a href="../native-app.html">Open native docs</a>
+  </section>
+  <section class="docCard">
+    <h3>AEON For Zero Human Companies</h3>
+    <p>Choose a saved AEON workspace and skill as an optional company engine, understand the authority boundary, and monitor accepted handoffs without requiring a native crew.</p>
+    <a href="../runtimes/aeon/zero-human-companies.html">Open the AEON company guide</a>
   </section>
   <section class="docCard">
     <h3>AEON Brain Access</h3>
@@ -228,6 +243,9 @@ flowchart TD
   Runtimes --> OpenClaw["OpenClaw"]
   Runtimes --> Evo["Evo optimization runs"]
   Runtimes --> MiroShark["MiroShark"]
+  Runtimes --> AEON["AEON"]
+  Work --> Companies["Zero Human Companies"]
+  Companies --> AEON
   MiroShark --> Swarm["Swarm theater"]
   Runtimes --> Wallets["Wallets and tokens"]
   Wallets --> HiveCompute["Hive Compute payments"]

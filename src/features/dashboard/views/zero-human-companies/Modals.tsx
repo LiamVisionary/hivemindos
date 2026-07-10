@@ -25,6 +25,17 @@ import type { CompanyAutonomyPauseMode } from "@/lib/types/company";
 import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
 import { ANALYTICS_ADAPTERS, analyticsAdapter } from "@/lib/services/company-analytics/registry-meta";
+import {
+  COMPANY_EXECUTION_ENGINE_MATRIX,
+  isCompleteCompanyExecutionSelection,
+  type CompanyExecutionSelection,
+} from "@/lib/services/company-execution-capabilities";
+import { CompanyExecutionFields } from "./CompanyExecutionFields";
+import {
+  FORM_INPUT_STYLE as inputStyle,
+  FormField as Field,
+  FormSelect as Select,
+} from "./modal-form-primitives";
 
 // ── shared input primitives ──────────────────────────────────────────────
 /** A registry project as the "Code project" picker needs it. */
@@ -34,22 +45,6 @@ type ProjectPickerEntry = { id: string; name: string; localPath?: string; repoNa
 function shortenHomePath(path: string): string {
   return path.replace(/^\/(?:Users|home)\/[^/]+/, "~");
 }
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span className="mono-cap" style={{ color: "var(--fg-4)" }}>{label}</span>
-      {children}
-      {hint ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{hint}</span> : null}
-    </label>
-  );
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", background: "var(--panel-2)",
-  border: "1px solid var(--line-2)", borderRadius: 9, padding: "9px 11px",
-  color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 13.5, outline: "none",
-};
 
 function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const [focus, setFocus] = React.useState(false);
@@ -72,21 +67,6 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
       onBlur={() => setFocus(false)}
       style={{ ...inputStyle, minHeight: 76, resize: "vertical", lineHeight: 1.45, borderColor: focus ? "var(--honey-2)" : "var(--line-2)", ...(props.style || {}) }}
     />
-  );
-}
-
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
-  const [focus, setFocus] = React.useState(false);
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onFocus={() => setFocus(true)}
-      onBlur={() => setFocus(false)}
-      style={{ ...inputStyle, appearance: "none", cursor: "pointer", borderColor: focus ? "var(--honey-2)" : "var(--line-2)" }}
-    >
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
   );
 }
 
@@ -320,7 +300,7 @@ export function AgentBrowserModal({
 }
 
 // ── identity form (shared by create step 0 + edit) ────────────────────────
-type FormState = Required<Pick<CreateForm, "name">> & {
+type FormState = Required<Pick<CreateForm, "name">> & CompanyExecutionSelection & {
   ticker: string; sector: string; apexTitle: string; apexMetric: string; apexTarget: string; metricUnit: MetricUnit; _tickerTouched?: boolean;
 };
 
@@ -358,6 +338,9 @@ function readForm(form: FormState): CreateForm {
     name: form.name.trim(), ticker: form.ticker.trim(), sector: form.sector.trim(),
     apexTitle: form.apexTitle.trim(), apexMetric: form.apexMetric.trim(), apexTarget: form.apexTarget.trim(),
     metricUnit: form.metricUnit,
+    executionEngine: form.executionEngine,
+    aeonProfileId: form.aeonProfileId.trim(),
+    aeonSkill: form.aeonSkill.trim(),
   };
 }
 
@@ -369,16 +352,17 @@ export function CreateCompanyModal({
   onClose: () => void; onCreate: (form: CreateForm, crew: Agent[]) => void;
 }) {
   const [step, setStep] = React.useState(0);
-  const [form, setForm] = React.useState<FormState>({ name: "", ticker: "", sector: "", apexTitle: "", apexMetric: "", apexTarget: "", metricUnit: "number" });
+  const [form, setForm] = React.useState<FormState>({ name: "", ticker: "", sector: "", apexTitle: "", apexMetric: "", apexTarget: "", metricUnit: "number", executionEngine: "hivemind", aeonProfileId: "", aeonSkill: "" });
   const [crew, setCrew] = React.useState<Agent[]>(() => (initialCrew ?? []).map((member) => ({ ...member })));
-  const canNext = form.name.trim().length > 0 && form.apexTitle.trim().length > 0;
+  const requiresCrew = COMPANY_EXECUTION_ENGINE_MATRIX[form.executionEngine].autonomy.requiresCompanyCrew;
+  const canNext = form.name.trim().length > 0 && form.apexTitle.trim().length > 0 && isCompleteCompanyExecutionSelection(form);
   const create = () => {
     const snapshot = readForm(form);
     if (!snapshot.name || !snapshot.apexTitle) return;
     onCreate(snapshot, crew.map((a) => ({ ...a })));
   };
 
-  const steps = ["Identity", "Founding crew"];
+  const steps = ["Identity", requiresCrew ? "Founding crew" : "Optional crew"];
   return (
     <Modal
       title="Found a company"
@@ -398,15 +382,19 @@ export function CreateCompanyModal({
           </div>
           {step > 0 && <GhostBtn onClick={() => setStep(step - 1)}>Back</GhostBtn>}
           {step === 0
-            ? <PrimaryBtn disabled={!canNext} onClick={() => setStep(1)}>Next · staff the crew</PrimaryBtn>
-            : <PrimaryBtn disabled={crew.length === 0 || !canNext || busy} onClick={create}>{busy ? <><Spinner size={12} /> Founding</> : `Found ${form.name || "company"}`}</PrimaryBtn>}
+            ? <PrimaryBtn disabled={!canNext} onClick={() => setStep(1)}>{requiresCrew ? "Next · staff the crew" : "Next · optional crew"}</PrimaryBtn>
+            : <PrimaryBtn disabled={(requiresCrew && crew.length === 0) || !canNext || busy} onClick={create}>{busy ? <><Spinner size={12} /> Founding</> : `Found ${form.name || "company"}`}</PrimaryBtn>}
         </>
       }
     >
       {step === 0 ? (
-        <IdentityFields form={form} setForm={setForm} />
+        <div style={{ display: "grid", gap: 18 }}>
+          <IdentityFields form={form} setForm={setForm} />
+          <div style={{ height: 1, background: "var(--line)" }} />
+          <CompanyExecutionFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
+        </div>
       ) : (
-        <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen />
+        <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen={requiresCrew} />
       )}
     </Modal>
   );
@@ -462,6 +450,9 @@ function initialEditState(initial: CompanyEditForm): EditFormState {
     apexMetric: initial.apexMetric ?? "",
     apexTarget: initial.apexTarget ?? "",
     metricUnit: initial.metricUnit ?? "number",
+    executionEngine: initial.executionEngine ?? "hivemind",
+    aeonProfileId: initial.aeonProfileId ?? "",
+    aeonSkill: initial.aeonSkill ?? "",
     _tickerTouched: true,
     charter: initial.charter ?? "",
     blurb: initial.blurb ?? "",
@@ -719,7 +710,7 @@ export function EditCompanyModal({
     const name = path.split("/").filter(Boolean).at(-1) || path;
     await registerProject(name, path);
   };
-  const canSave = form.name.trim().length > 0;
+  const canSave = form.name.trim().length > 0 && isCompleteCompanyExecutionSelection(form);
   const updateMember = (agentId: string, next: CompanyMemberEdit) => setForm((current) => ({
     ...current,
     members: current.members.map((member) => (member.agentId === agentId ? next : member)),
@@ -757,6 +748,8 @@ export function EditCompanyModal({
               <TextArea value={form.blurb} placeholder="One-line company tagline" onChange={(event) => setForm((current) => ({ ...current, blurb: event.target.value }))} />
             </Field>
           </div>
+          <div style={{ height: 1, background: "var(--line)", margin: "16px 0" }} />
+          <CompanyExecutionFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
           <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
             <Field label="Code project" hint="The repo this company's product work lives in. New tasks carry it, so work routes to machines that have the repo checked out and shows its code proof.">
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>

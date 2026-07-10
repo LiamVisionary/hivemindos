@@ -1,0 +1,92 @@
+{
+  "schema": "hivemindos.standard-memory-micro.v1",
+  "version": "micro-v1",
+  "selection": {
+    "questionCount": 36,
+    "targetRuntimeSeconds": 90,
+    "method": "Frozen stratified calibration panel selected from the completed July 10, 2026 Top-50 runs to approximate both systems' full-suite aggregate scores while minimizing fixture conversations.",
+    "use": "Fast development iteration and regression detection only; it is not a replacement for full-suite publication runs.",
+    "calibrationDisclosure": "Question selection used the completed HivemindOS GPT-5.4 Mini and Mem0 GPT-5 outcomes. Never change question ids to improve a candidate score; use a new version and a held-out full run."
+  },
+  "pinned": {
+    "harness": "mem0ai/memory-benchmarks@4b61c5d31b9c668a12b4f5e78064248a02c82d2b",
+    "locomo": "snap-research/locomo@3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376",
+    "longmemeval": "xiaowu0162/LongMemEval@9e0b455f4ef0e2ab8f2e582289761153549043fc",
+    "beam": "mohammadtavakoli78/BEAM@3e12035532eb85768f1a7cd779832b650c4b2ef9"
+  },
+  "suites": {
+    "locomo": {
+      "benchmark": "locomo",
+      "dataset": ".outputs/benchmarks/standard-memory/datasets/locomo10.json",
+      "conversations": "4",
+      "reference": { "system": "Mem0 Platform v3", "model": "gpt-5", "provider": "azure", "retrievalTopK": 50, "scorePercent": 90.0, "fullScorePercent": 91.8 },
+      "baseline": { "system": "HivemindOS", "model": "gpt-5.4-mini", "provider": "chatgpt-oauth", "scorePercent": 80.0, "fullScorePercent": 76.62 },
+      "questions": [
+        { "id": "conv4_q176", "dimension": "single-hop", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "conv4_q174", "dimension": "single-hop", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "conv4_q98", "dimension": "single-hop", "referenceScore": 1.0, "baselineScore": 0.0 },
+        { "id": "conv4_q92", "dimension": "single-hop", "referenceScore": 1.0, "baselineScore": 0.0 },
+        { "id": "conv4_q144", "dimension": "single-hop", "referenceScore": 0.0, "baselineScore": 1.0 },
+        { "id": "conv4_q25", "dimension": "multi-hop", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "conv4_q9", "dimension": "multi-hop", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "conv4_q28", "dimension": "open-domain", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "conv4_q23", "dimension": "temporal", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "conv4_q40", "dimension": "temporal", "referenceScore": 1.0, "baselineScore": 1.0 }
+      ]
+    },
+    "longmemeval": {
+      "benchmark": "longmemeval",
+      "dataset": ".outputs/benchmarks/standard-memory/datasets/longmemeval_s_cleaned.json",
+      "reference": { "system": "Mem0 Platform v3", "model": "gpt-5", "provider": "azure", "retrievalTopK": 50, "scorePercent": 100.0, "fullScorePercent": 94.8 },
+      "baseline": { "system": "HivemindOS", "model": "gpt-5.4-mini", "provider": "chatgpt-oauth", "scorePercent": 50.0, "fullScorePercent": 53.4 },
+      "questions": [
+        { "id": "cc5ded98", "dimension": "knowledge-update", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "60472f9c", "dimension": "multi-session", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "778164c6", "dimension": "single-session-assistant", "referenceScore": 1.0, "baselineScore": 0.0 },
+        { "id": "fca70973", "dimension": "single-session-preference", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "b86304ba", "dimension": "single-session-user", "referenceScore": 1.0, "baselineScore": 0.0 },
+        { "id": "c8090214", "dimension": "temporal-reasoning", "referenceScore": 1.0, "baselineScore": 0.0 }
+      ]
+    },
+    "beam1m": {
+      "benchmark": "beam",
+      "chatSize": "1M",
+      "dataset": ".outputs/benchmarks/standard-memory/datasets/beam-1m/026.json",
+      "conversationOffset": 26,
+      "reference": { "system": "Mem0 Platform v3", "model": "gpt-5", "provider": "azure", "retrievalTopK": 50, "scorePercent": 60.42, "fullScorePercent": 60.4 },
+      "baseline": { "system": "HivemindOS", "model": "gpt-5.4-mini", "provider": "chatgpt-oauth", "scorePercent": 41.17, "fullScorePercent": 41.12 },
+      "questions": [
+        { "id": "1M_26_q1_abstention", "dimension": "abstention", "referenceScore": 0.0, "baselineScore": 1.0 },
+        { "id": "1M_26_q2_contradiction_resolution", "dimension": "contradiction_resolution", "referenceScore": 0.375, "baselineScore": 0.5 },
+        { "id": "1M_26_q5_event_ordering", "dimension": "event_ordering", "referenceScore": 0.8, "baselineScore": 0.3 },
+        { "id": "1M_26_q7_information_extraction", "dimension": "information_extraction", "referenceScore": 0.9167, "baselineScore": 0.6666666667 },
+        { "id": "1M_26_q8_instruction_following", "dimension": "instruction_following", "referenceScore": 1.0, "baselineScore": 0.5 },
+        { "id": "1M_26_q10_knowledge_update", "dimension": "knowledge_update", "referenceScore": 0.0, "baselineScore": 0.0 },
+        { "id": "1M_26_q12_multi_session_reasoning", "dimension": "multi_session_reasoning", "referenceScore": 0.75, "baselineScore": 0.25 },
+        { "id": "1M_26_q15_preference_following", "dimension": "preference_following", "referenceScore": 0.5, "baselineScore": 0.0 },
+        { "id": "1M_26_q17_summarization", "dimension": "summarization", "referenceScore": 0.7, "baselineScore": 0.4 },
+        { "id": "1M_26_q19_temporal_reasoning", "dimension": "temporal_reasoning", "referenceScore": 1.0, "baselineScore": 0.5 }
+      ]
+    },
+    "beam10m": {
+      "benchmark": "beam",
+      "chatSize": "10M",
+      "dataset": ".outputs/benchmarks/standard-memory/datasets/beam-10m/002.json",
+      "conversationOffset": 2,
+      "reference": { "system": "Mem0 Platform v3", "model": "gpt-5", "provider": "azure", "retrievalTopK": 50, "scorePercent": 41.0, "fullScorePercent": 41.3 },
+      "baseline": { "system": "HivemindOS", "model": "gpt-5.4-mini", "provider": "chatgpt-oauth", "scorePercent": 37.25, "fullScorePercent": 37.04 },
+      "questions": [
+        { "id": "10M_2_q1_abstention", "dimension": "abstention", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "10M_2_q2_contradiction_resolution", "dimension": "contradiction_resolution", "referenceScore": 0.0, "baselineScore": 0.25 },
+        { "id": "10M_2_q4_event_ordering", "dimension": "event_ordering", "referenceScore": 0.0, "baselineScore": 0.275 },
+        { "id": "10M_2_q6_information_extraction", "dimension": "information_extraction", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "10M_2_q8_instruction_following", "dimension": "instruction_following", "referenceScore": 0.0, "baselineScore": 0.0 },
+        { "id": "10M_2_q10_knowledge_update", "dimension": "knowledge_update", "referenceScore": 1.0, "baselineScore": 0.0 },
+        { "id": "10M_2_q12_multi_session_reasoning", "dimension": "multi_session_reasoning", "referenceScore": 0.0, "baselineScore": 0.0 },
+        { "id": "10M_2_q15_preference_following", "dimension": "preference_following", "referenceScore": 1.0, "baselineScore": 1.0 },
+        { "id": "10M_2_q16_summarization", "dimension": "summarization", "referenceScore": 0.1, "baselineScore": 0.2 },
+        { "id": "10M_2_q18_temporal_reasoning", "dimension": "temporal_reasoning", "referenceScore": 0.0, "baselineScore": 0.0 }
+      ]
+    }
+  }
+}

@@ -19,6 +19,10 @@ import { flowFromSequence, getFlowTemplate } from "@/lib/services/queen-bee/flow
 import { startFlowRun } from "@/lib/services/queen-bee/flow-runner";
 import { activeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 import { buildStoredSalesContentDispatchContext } from "@/lib/services/sales-content";
+import {
+  dispatchCompanyWithAeon,
+  type CompanyAeonDispatchResult,
+} from "@/lib/services/company-aeon-execution";
 
 /**
  * Company orchestration bridge: turn a company's apex goal into a per-role work
@@ -213,7 +217,7 @@ export type CompanyDispatchTask = {
   pickupScheduled: boolean;
 };
 
-export type CompanyDispatchResult = {
+export type HivemindCompanyDispatchResult = {
   goal: string;
   taskCount: number;
   delegatedCount: number;
@@ -229,7 +233,13 @@ export type CompanyDispatchResult = {
   process?: CompanyProcess;
   /** How many planned drafts were dropped as duplicates of recent/in-flight work. */
   deduped?: number;
+  /** Absent on older native traces. */
+  executionEngine?: "hivemind";
+  externalRunCount?: never;
+  aeon?: never;
 };
+
+export type CompanyDispatchResult = HivemindCompanyDispatchResult | CompanyAeonDispatchResult;
 
 // Build a sequential FlowSpec from decomposed PRD drafts: each draft becomes a step whose success
 // hands off to the next, so the crew runs in order with each step consuming the prior output.
@@ -390,6 +400,10 @@ export async function dispatchCompanyGoal(
 ): Promise<CompanyDispatchResult> {
   const goal = company.apexGoal?.title?.trim();
   if (!goal) throw new Error("Set an apex goal before launching work.");
+
+  if (company.execution?.engine === "aeon") {
+    return dispatchCompanyWithAeon(company, { vaultPath: opts.vaultPath });
+  }
   if (!company.agentIds?.length) throw new Error("Staff the company with at least one agent first.");
 
   // Sequential/graph processes run as an agent flow; hierarchical (default) fans tasks out below.

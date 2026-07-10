@@ -49,8 +49,11 @@ export type CopyTradingConfig = {
 
   // ── lifecycle ───────────────────────────────────────────────────────────────
   enabled: boolean;
-  /** When true, the engine detects + sizes + governance-checks but never executes. */
+  /** When true, the engine paper-trades: it detects + sizes + governance-checks and
+   *  simulates fills against a `paper` ledger, but never touches the chain. */
   dryRun: boolean;
+  /** Dry-run starting bankroll (USD). null = seed from the wallet's fundable balance. */
+  paperStartUsd: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -62,6 +65,23 @@ export type CopyTradeOpenPosition = {
   amount: number;
   openedAt: number;
   lastActionAt: number;
+  /** Paper positions only: last mark-to-market USD value + when it was taken. */
+  markUsd?: number;
+  markAt?: number;
+};
+
+/** Simulated portfolio for a dry-run config — the paper analogue of a live run.
+ *  Seeded once from the wallet's fundable USD (or `paperStartUsd`), then the SAME
+ *  buy/sell/exit path spends this simulated cash instead of touching the chain. */
+export type CopyTradePaperLedger = {
+  initialized: boolean;
+  startCashUsd: number;
+  cashUsd: number;
+  /** Cumulative realized P&L from simulated sells. */
+  realizedPnlUsd: number;
+  /** Simulated fills (buys + sells) — the paper analogue of stats.mirrored. */
+  mirrored: number;
+  positions: Record<string, CopyTradeOpenPosition>;
 };
 
 export type CopyTradeEventKind =
@@ -97,6 +117,8 @@ export type CopyTradeRuntimeState = {
   consumedTxRefs: string[];
   openPositions: Record<string, CopyTradeOpenPosition>;
   stats: { polls: number; mirrored: number; skipped: number; errors: number };
+  /** Simulated portfolio for dry-run configs (absent until the first dry-run tick). */
+  paper?: CopyTradePaperLedger;
   lastError: string | null;
   lastPollAt: number | null;
   running: boolean;
@@ -112,6 +134,11 @@ export type CopyTradeEngineStatus = {
   heartbeatMs: number;
   activeConfigs: number;
 };
+
+/** One asset the acting wallet can spend to fund copied buys (USDC/USDT/native). */
+export type CopyTradeFundableAsset = { symbol: string; amount: number; usd: number };
+/** The acting wallet's spendable balance for a copy config's chain (for the UI). */
+export type CopyTradeFundable = { assets: CopyTradeFundableAsset[]; totalUsd: number };
 
 export const COPY_TRADE_NETWORKS: readonly CopyTradeNetwork[] = ["eip155:8453", "solana:mainnet"];
 
@@ -164,6 +191,7 @@ export function defaultCopyTradingConfig(seed: {
     blacklist: [],
     enabled: false,
     dryRun: true,
+    paperStartUsd: null,
     createdAt: now,
     updatedAt: now,
   };

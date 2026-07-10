@@ -7,6 +7,7 @@ import {
   readHiveComputeHostContext,
   readHiveComputeMarketplaceStatus,
   setupHiveComputeHosting,
+  startHiveComputeLocalBackend,
   startHiveComputeWorker,
   stopHiveComputeWorker,
 } from "@/lib/services/hive-compute-marketplace";
@@ -88,6 +89,9 @@ export async function POST(request: NextRequest) {
     }
     if (action === "open-mpp-session") {
       return okJson({ status: await openHiveComputeMppSession() });
+    }
+    if (action === "start-lmstudio") {
+      return okJson({ status: await startHiveComputeLocalBackend(target) });
     }
     if (action === "refresh") {
       return okJson({ status: await readHiveComputeMarketplaceStatus(target) });

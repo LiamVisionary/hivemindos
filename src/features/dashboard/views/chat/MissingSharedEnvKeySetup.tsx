@@ -296,11 +296,14 @@ export function MissingSharedEnvKeySetup({
       const data = await response?.json().catch(() => null) as {
         ok?: boolean;
         connected?: boolean;
+        usable?: boolean;
+        needsReconnect?: boolean;
+        error?: string | null;
         warnings?: string[];
         login?: { phase?: string; error?: string; warnings?: string[] };
       } | null;
       if (cancelled || !data?.ok) return;
-      if (data.connected || data.login?.phase === "connected") {
+      if (data.usable || data.login?.phase === "connected") {
         setOauthStatusEndpoint(configuredOAuthStatusEndpoint);
         const shouldSwitchProvider = authMode === "oauth";
         await completeOAuthConnection([...(data.warnings ?? []), ...(data.login?.warnings ?? [])], {
@@ -308,6 +311,8 @@ export function MissingSharedEnvKeySetup({
           revealOAuth: shouldSwitchProvider,
           silent: !shouldSwitchProvider,
         });
+      } else if (data.needsReconnect && data.error) {
+        setStatus(data.error);
       }
     };
     const timer = window.setTimeout(() => void checkExistingOAuth(), 0);
@@ -331,14 +336,18 @@ export function MissingSharedEnvKeySetup({
       const data = await response?.json().catch(() => null) as {
         ok?: boolean;
         connected?: boolean;
+        usable?: boolean;
+        needsReconnect?: boolean;
+        error?: string | null;
         warnings?: string[];
         login?: { phase?: string; error?: string; warnings?: string[] };
       } | null;
       if (cancelled || !data?.ok) return;
-      if (data.connected || data.login?.phase === "connected") {
+      if (data.usable || data.login?.phase === "connected") {
         await completeOAuthConnection([...(data.warnings ?? []), ...(data.login?.warnings ?? [])], { switchProvider: true });
         return;
       }
+      if (data.needsReconnect && data.error) setStatus(data.error);
       if (data.login?.phase === "error" && data.login.error) {
         setStatus(data.login.error);
       }

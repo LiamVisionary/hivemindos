@@ -146,13 +146,13 @@ Current examples:
 
 HivemindOS also earns from hosted agent/model messages when the user does not bring their own model key or wants a HivemindOS-managed model route.
 
-The current default hosted paid agent is **$0.001 per successful chat completion**.
+Hosted model messages are metered at the **upstream provider price × 1.25 (a 25% markup)**, with a **$0.001 minimum per message**. HivemindOS keeps the markup — about **20% of what the buyer pays** (`0.25 / 1.25`) — after upstream provider cost, before infrastructure, payment, and payout costs.
 
-| Hosted message volume | HivemindOS revenue |
+| Buyer spend on hosted messages | HivemindOS revenue (markup share) |
 | ---: | ---: |
-| `1,000` messages | `$1` |
-| `100,000` messages | `$100` |
-| `1,000,000` messages | `$1,000` |
+| `$1,000` | ~`$200` |
+| `$10,000` | ~`$2,000` |
+| `$100,000` | ~`$20,000` |
 
 ## Contribution And Ownership
 

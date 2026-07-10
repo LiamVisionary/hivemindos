@@ -3,6 +3,28 @@ import { JSON_RENDER_COMPONENT_LIST } from "@/components/json-render/catalog";
 
 type AbsolutePathResolver = (path: string) => string;
 
+export function founderModeContextIndexItem(absolutePath: AbsolutePathResolver): ContextIndexItem {
+  return {
+    id: "tool-schema:founder-mode",
+    kind: "tool-schema",
+    title: "Founder Mode goal-to-company compiler",
+    summary: "Compiles one outcome into a governed Zero Human Company blueprint with crew, capabilities, compute routes, budgets, Labs, and proof requirements.",
+    tags: ["founder mode", "goal compiler", "zero human company", "company", "crew", "capability routing", "outcome routing", "hivemind labs", "proof pack", "budget", "approval"],
+    aliases: ["turn goal into company", "start one person company", "found an ai company", "goal to outcome", "company blueprint", "create outcome lab"],
+    retrievalText: [
+      "Use POST /api/founder with action compile for a read-only company blueprint from a natural-language outcome. It discovers stored agents, capability-index matches, fleet model fit, privacy preferences, budget tier, and pace.",
+      "Use POST /api/founder with action found only after the operator approves the blueprint. Founding creates a local company and its first private Agent Challenge-backed Hivemind Lab; it does not launch autonomous work.",
+      "Use /api/hivemind-labs to list a company's Labs, create a bounded experiment, record measured evidence, and generate a capability-promotion draft. A reviewable Lab can run fusion-preview to compose a no-write Hive Skill Fusion draft, then fusion-publish only after explicit operator confirmation; promotion never publishes a skill or marketplace listing automatically.",
+      "Adaptive model routing consumes local outcome-routing records so accepted task outcomes can adjust provider/model selection beyond metadata and transport reliability. POST /api/outcome-routing records an operator- or evaluator-confirmed result; local records are not official hosted reputation or commercial authority.",
+      "Task detail proof packs combine Work Board deliverables, eval receipts, machine/agent provenance, and signature-verified work receipts. They label unverified gaps instead of claiming blanket verification.",
+    ].join(" "),
+    route: "/api/founder",
+    methods: ["POST"],
+    path: absolutePath("src/app/api/founder/route.ts"),
+    load: { type: "api", target: "/api/founder", note: "Compile is read-only. Found creates local durable state but does not start autonomy." },
+  };
+}
+
 export function dashboardSwarmGoalContextIndexItem(absolutePath: AbsolutePathResolver): ContextIndexItem {
   const hookPath = absolutePath("src/features/dashboard/hooks/dashboard-swarm-goal-command.ts");
   return {
@@ -127,6 +149,31 @@ export function hiveComputeContextIndexItem(): ContextIndexItem {
       type: "api",
       target: "/api/hive-compute/marketplace",
       note: "GET reports non-secret setup readiness. POST installs, repairs, opens MPP sessions, starts, or stops the optional local worker module. It must not enforce official payouts locally.",
+    },
+  };
+}
+
+export function managedCloudAgentsContextIndexItem(): ContextIndexItem {
+  return {
+    id: "tool-schema:managed-cloud-agents",
+    kind: "tool-schema",
+    title: "HivemindOS managed cloud agents",
+    summary: "One-click dedicated Hermes agents with persistent workspaces, server-metered credits, managed inference, and stop/start lifecycle controls.",
+    tags: ["managed cloud", "cloud agent", "hosted agent", "always on", "hermes", "persistent workspace", "pay as you go", "Base USDC", "agent hosting"],
+    aliases: ["deploy cloud agent", "agent runs while computer is off", "host hermes", "always-on agent", "one-click agent deploy", "stop cloud agent", "start cloud agent"],
+    retrievalText: [
+      "Use GET /api/managed-cloud-agents to read the official plan catalog, encrypted hosted-account readiness, eligible governed Base wallets, current credit balance, and owned managed agents.",
+      "Use POST /api/managed-cloud-agents action top_up to request a server-authored Base USDC quote and fund managed credits through the selected local wallet. The route enforces wallet custody, network, per-payment cap, cumulative budgets, company kill switches, approval thresholds, exact USDC contract, amount, recipient, quote expiry, and onchain settlement before storing the hosted account credential in an encrypted local vault.",
+      "Use POST action create to provision a dedicated Hermes VM, firewall, stable Primary IP, and persistent volume. Plans, regions, model tiers, provider resource IDs, prices, credit balances, and official payment recipients are controlled by HivemindOS hosted infrastructure rather than the downloaded client.",
+      "Use POST actions status, start, stop, delete, and chat for lifecycle and browser chat. Stop deletes compute but retains persistent storage; start creates fresh compute around the same workspace; delete removes compute and storage.",
+      "Current beta managed agents include the persistent Hermes workspace and managed inference. A cloud-native OAuth/MCP must be promoted into hosted secret storage to remain available while personal machines are off. A machine-hosted MCP or local file/app capability remains available only while its source machine and Tailnet bridge are online. Do not claim automatic Tailnet enrollment, Shared Brain sync, or local-MCP portability until those user-authorized bridges report ready.",
+    ].join(" "),
+    route: "/api/managed-cloud-agents",
+    methods: ["GET", "POST"],
+    load: {
+      type: "api",
+      target: "/api/managed-cloud-agents",
+      note: "GET is read-only. Top-up spends Base USDC, create/start/stop/delete mutate hosted resources, and chat spends managed inference credit.",
     },
   };
 }

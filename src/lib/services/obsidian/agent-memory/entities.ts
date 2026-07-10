@@ -22,7 +22,7 @@ const KNOWN_HIVE_ENTITIES = [
 ];
 
 const GENERIC_ENTITY_WORDS = new Set([
-  "agent", "agents", "brain", "memory", "note", "notes", "service", "services", "shared", "vault",
+  "agent", "agents", "brain", "critical", "fixed", "memory", "note", "notes", "service", "services", "shared", "vault", "verified",
 ]);
 
 function normalizeEntity(value: string) {

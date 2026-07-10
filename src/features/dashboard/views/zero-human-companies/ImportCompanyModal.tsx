@@ -6,6 +6,7 @@ import { Panel, SectionLabel, Spinner } from "./primitives";
 import type { CompanyImportForm, Theme } from "./types";
 import type { CompanyImportPreview } from "@/lib/types/company-import";
 import type { KanbanLinkedDirectory, KanbanMachineTarget } from "@/lib/types/kanban";
+import { FormField as Field } from "./modal-form-primitives";
 
 type ImportResponse = {
   ok?: boolean;
@@ -40,16 +41,6 @@ function PrimaryButton({ children, onClick, disabled }: { children: React.ReactN
     <button type="button" onClick={onClick} disabled={disabled} style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid var(--btn-line)", borderRadius: 9, background: disabled ? "var(--panel-2)" : "var(--btn-bg)", color: disabled ? "var(--fg-4)" : "var(--btn-fg)", cursor: disabled ? "not-allowed" : "pointer", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, padding: "9px 16px", opacity: disabled ? 0.6 : 1 }}>
       {children}
     </button>
-  );
-}
-
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span className="mono-cap" style={{ color: "var(--fg-4)" }}>{label}</span>
-      {children}
-      {hint ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", lineHeight: 1.45 }}>{hint}</span> : null}
-    </label>
   );
 }
 

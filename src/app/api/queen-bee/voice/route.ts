@@ -56,6 +56,8 @@ import {
   queenInstructionsForPersonality,
   queenRealtimeTools,
 } from "@/lib/services/queen-bee/queen-brain";
+import { runXAccountReadTool } from "@/lib/services/x-latest-post";
+import { coerceXAccountReadToolInput } from "@/lib/services/x-account-tool-contract";
 import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
 import {
   runQueenChatTurn,
@@ -153,7 +155,10 @@ export async function POST(request: NextRequest) {
         request.nextUrl.origin,
         String(body.message ?? ""),
         coerceActingWalletSource(body.actingWallet),
-        { suppressWalletIntents: body.suppressWalletIntents === true },
+        {
+          suppressWalletIntents: body.suppressWalletIntents === true,
+          preferBuiltInCapability: body.preferBuiltInCapability === true,
+        },
       );
       return NextResponse.json({
         ok: true,
@@ -171,6 +176,10 @@ export async function POST(request: NextRequest) {
       if (!preference) throw new Error("A preference is required.");
       const preferences = await addQueenBeeVoicePreference(preference);
       return NextResponse.json({ ok: true, preferences });
+    }
+    if (body.action === "read-x-account") {
+      const result = await runXAccountReadTool(coerceXAccountReadToolInput(body));
+      return NextResponse.json({ ok: true, result });
     }
     if (body.action === "chat-turn") {
       return await runQueenChatTurn(body, request.nextUrl.origin);

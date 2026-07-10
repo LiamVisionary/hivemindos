@@ -12,7 +12,10 @@ import {
   mintGoogleCloudAccessToken,
 } from "@/lib/services/integrations/google-cloud-oauth";
 import { slackOAuthClientReady } from "@/lib/services/integrations/slack-oauth";
+import { azureOAuthClientReady, mintAzureAccessToken } from "@/lib/services/integrations/azure-oauth";
 import {
+  AZURE_ACCOUNT_EMAIL_ENV,
+  AZURE_TENANT_ID_ENV,
   GOOGLE_CLIENT_ID_ENV,
   GOOGLE_CLIENT_SECRET_ENV,
   GOOGLE_CLOUD_ACCOUNT_EMAIL_ENV,
@@ -48,6 +51,7 @@ const VERIFY_BY_PROVIDER: Record<ConnectionProviderKey, ProviderSpec["verify"]> 
   notion: verifyNotion,
   google: verifyGoogle,
   "google-cloud": verifyGoogleCloud,
+  azure: verifyAzure,
   posthog: verifyPostHog,
   plausible: verifyPlausible,
   clawbank: verifyClawBank,
@@ -73,6 +77,7 @@ export async function saveProviderToken(providerKey: string, token: string): Pro
   if (!provider) throw new Error(`Unknown provider: ${providerKey}`);
   if (provider.key === "google") throw new Error("Google connects through sign-in, not a pasted token.");
   if (provider.key === "google-cloud") throw new Error("Google Cloud connects through sign-in, not a pasted token.");
+  if (provider.key === "azure") throw new Error("Microsoft Azure connects through sign-in, not a pasted token.");
   const clean = token.trim();
   if (clean.length < 8 || /\s/.test(clean)) throw new Error("That does not look like a valid token.");
   const sharedEnv = await readSharedAgentEnv();
@@ -89,6 +94,7 @@ export async function disconnectProvider(providerKey: string) {
   // Remove the canonical key plus any legacy alias that is actually set —
   // otherwise a provider with an old-name credential stays "connected".
   const keys = [provider.auth.tokenEnvKey, ...(provider.auth.tokenEnvAliases ?? []).filter((alias) => sharedEnvValue(alias, sharedEnv))];
+  if (provider.key === "azure") keys.push(AZURE_ACCOUNT_EMAIL_ENV, AZURE_TENANT_ID_ENV);
   for (const key of keys) await removeSharedAgentEnv(key);
 }
 
@@ -164,6 +170,7 @@ function providerOAuthReady(key: ConnectionProviderKey, sharedEnv: Record<string
     // non-placeholder — no pasted client, no client secret.
     return slackOAuthClientReady();
   }
+  if (key === "azure") return azureOAuthClientReady();
   return false;
 }
 
@@ -307,6 +314,25 @@ async function verifyGoogleCloud(_refreshToken: string): Promise<VerifyResult> {
     }
     const account = await googleAccountEmail(accessToken);
     return { ok: true, account: account || "Google Cloud account" };
+  });
+}
+
+async function verifyAzure(refreshToken: string, sharedEnv: Record<string, string>): Promise<VerifyResult> {
+  if (!azureOAuthClientReady()) {
+    return { ok: false, error: "The HivemindOS Azure OAuth client is not configured." };
+  }
+  return apiCheck(async () => {
+    const accessToken = await mintAzureAccessToken(refreshToken);
+    const response = await fetch("https://management.azure.com/subscriptions?api-version=2022-12-01", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      return { ok: false, error: `Azure Resource Manager rejected the saved account (HTTP ${response.status}).` };
+    }
+    const account = sharedEnvValue(AZURE_ACCOUNT_EMAIL_ENV, sharedEnv) || "Microsoft account";
+    return { ok: true, account };
   });
 }
 

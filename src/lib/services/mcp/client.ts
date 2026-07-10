@@ -18,6 +18,7 @@ export interface McpToolInfo {
   name: string;
   description?: string;
   inputSchema?: unknown;
+  annotations?: Record<string, unknown>;
 }
 
 export interface McpServerStatus {
@@ -94,6 +95,7 @@ export async function connectMcpServer(config: McpServerConfig): Promise<McpServ
     name: t.name,
     description: t.description,
     inputSchema: t.inputSchema,
+    annotations: t.annotations as Record<string, unknown> | undefined,
   }));
   const connectedAt = Date.now();
   connections.set(config.id, { client, config, tools, connectedAt });
@@ -104,7 +106,12 @@ export async function listMcpTools(id: string): Promise<McpToolInfo[]> {
   const conn = connections.get(id);
   if (!conn) throw new Error(`MCP server "${id}" is not connected`);
   const listed = await conn.client.listTools();
-  conn.tools = (listed.tools ?? []).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+  conn.tools = (listed.tools ?? []).map((t) => ({
+    name: t.name,
+    description: t.description,
+    inputSchema: t.inputSchema,
+    annotations: t.annotations as Record<string, unknown> | undefined,
+  }));
   return conn.tools;
 }
 

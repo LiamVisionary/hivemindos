@@ -1,4 +1,6 @@
 import { invalidateCachedCall } from "@/lib/services/async-cache";
+import { createHash } from "crypto";
+import { readFile } from "fs/promises";
 import {
   searchContextIndex,
   type ContextConnectedApp,
@@ -59,6 +61,28 @@ export type FusionSkillResult = {
   fusedCount: number;
   machineCount: number;
   markdown: string;
+  draftHash: string;
+  change: FusionSkillChangePreview;
+};
+
+export type FusionSkillChangePreview = {
+  mode: "create" | "update" | "unchanged";
+  existingPath?: string;
+  addedLines: number;
+  removedLines: number;
+  unchangedLines: number;
+  warnings: string[];
+};
+
+export type FusionSkillInput = {
+  prompt: string;
+  vaultPath?: string;
+  connectedApps?: ContextConnectedApp[];
+  name?: string;
+  slug?: string;
+  description?: string;
+  appendixMarkdown?: string;
+  expectedDraftHash?: string;
 };
 
 const CONTEXT_KINDS: ContextIndexKind[] = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "connector", "artifact", "runtime"];
@@ -408,6 +432,41 @@ function selectedSkill(after: BrainSkillSummary[], before: BrainSkillSummary[], 
   return byName.sort((left, right) => right.updatedAt - left.updatedAt)[0] ?? created.sort((left, right) => right.updatedAt - left.updatedAt)[0] ?? after[0];
 }
 
+function commonLineCount(left: string[], right: string[]) {
+  let previous = new Uint32Array(right.length + 1);
+  for (const leftLine of left) {
+    const current = new Uint32Array(right.length + 1);
+    for (let index = 1; index <= right.length; index += 1) {
+      current[index] = leftLine === right[index - 1]
+        ? previous[index - 1] + 1
+        : Math.max(previous[index], current[index - 1]);
+    }
+    previous = current;
+  }
+  return previous[right.length];
+}
+
+function lineChangePreview(existing: BrainSkillSummary | undefined, existingMarkdown: string, markdown: string): FusionSkillChangePreview {
+  const nextLines = markdown.trim().split("\n");
+  if (!existing) {
+    return { mode: "create", addedLines: nextLines.length, removedLines: 0, unchangedLines: 0, warnings: [] };
+  }
+  const previousLines = existingMarkdown.trim() ? existingMarkdown.trim().split("\n") : [];
+  const unchangedLines = commonLineCount(previousLines, nextLines);
+  const addedLines = nextLines.length - unchangedLines;
+  const removedLines = previousLines.length - unchangedLines;
+  return {
+    mode: addedLines || removedLines ? "update" : "unchanged",
+    existingPath: existing.path,
+    addedLines,
+    removedLines,
+    unchangedLines,
+    warnings: existingMarkdown.trim()
+      ? ["Publishing replaces this managed skill draft after explicit confirmation; review the generated SKILL.md before continuing."]
+      : ["The existing skill could not be read. Publishing would replace its managed skill folder."],
+  };
+}
+
 function markdownForSkill(input: {
   prompt: string;
   name: string;
@@ -474,19 +533,16 @@ function markdownForSkill(input: {
 export const fusionSkillTestHooks = {
   capabilityFromItem,
   fusedCapabilities,
+  lineChangePreview,
   prioritizeCapabilities,
   relatedQueries,
 };
 
-export async function createFusionSkill(input: {
-  prompt: string;
-  vaultPath?: string;
-  connectedApps?: ContextConnectedApp[];
-}): Promise<FusionSkillResult> {
+async function composeFusionSkill(input: FusionSkillInput) {
   const prompt = input.prompt.trim();
   if (!prompt) throw new Error("Enter a task before creating a fusion skill.");
-  const name = skillNameFromPrompt(prompt);
-  const slug = skillSlugFromName(name);
+  const name = input.name?.trim() || skillNameFromPrompt(prompt);
+  const slug = skillSlugFromName(input.slug?.trim() || name);
 
   const before = await getSharedBrainSkills(input.vaultPath);
   const queries = [...new Set([...relatedQueries(prompt), ...requiredQueries(prompt)])];
@@ -514,29 +570,57 @@ export async function createFusionSkill(input: {
     .sort((left, right) => (right.score ?? 0) - (left.score ?? 0));
   const prioritizedItems = prioritizeCapabilities(rankedItems, prompt);
   const capabilities = fusedCapabilities(prioritizedItems.map((item, index) => capabilityFromItem(item, index, index < MAX_FUSED)), prompt);
-  const description = skillDescription(prompt);
-  const markdown = markdownForSkill({ prompt, name, description, capabilities });
-  const afterInventory = await writeBrainSkill({
-    vaultPath: input.vaultPath,
-    markdown,
-    slug,
-    replaceExisting: true,
-  });
-  invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
-  const created = selectedSkill(afterInventory.shared, before.shared, name);
+  const description = input.description?.trim() || skillDescription(prompt);
+  const baseMarkdown = markdownForSkill({ prompt, name, description, capabilities });
+  const appendix = input.appendixMarkdown?.trim();
+  const markdown = appendix ? `${baseMarkdown}\n${appendix}\n` : baseMarkdown;
+  const existing = before.shared.find((skill) => skill.slug === slug);
+  const existingMarkdown = existing ? await readFile(existing.path, "utf8").catch(() => "") : "";
   const machineCount = new Set(capabilities.map((capability) => capability.machine)).size;
-  return {
+  const result: FusionSkillResult = {
     prompt,
     skill: {
-      name: created?.name ?? name,
-      slug: created?.slug ?? slug,
-      description: created?.description ?? description,
-      path: created?.path ?? "",
+      name,
+      slug,
+      description,
+      path: existing?.path ?? "",
     },
     capabilities,
     discoveredCount: capabilities.length,
     fusedCount: capabilities.filter((capability) => capability.used).length,
     machineCount,
     markdown,
+    draftHash: createHash("sha256").update(markdown).digest("hex"),
+    change: lineChangePreview(existing, existingMarkdown, markdown),
+  };
+  return { before, result };
+}
+
+export async function previewFusionSkill(input: FusionSkillInput): Promise<FusionSkillResult> {
+  return (await composeFusionSkill(input)).result;
+}
+
+export async function createFusionSkill(input: FusionSkillInput): Promise<FusionSkillResult> {
+  const { before, result } = await composeFusionSkill(input);
+  if (input.expectedDraftHash && input.expectedDraftHash !== result.draftHash) {
+    throw new Error("The fused skill changed since preview. Rebuild and review the latest draft before publishing.");
+  }
+  const afterInventory = await writeBrainSkill({
+    vaultPath: input.vaultPath,
+    markdown: result.markdown,
+    slug: result.skill.slug,
+    replaceExisting: true,
+  });
+  invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
+  const created = afterInventory.shared.find((skill) => skill.slug === result.skill.slug)
+    ?? selectedSkill(afterInventory.shared, before.shared, result.skill.name);
+  return {
+    ...result,
+    skill: {
+      name: created?.name ?? result.skill.name,
+      slug: created?.slug ?? result.skill.slug,
+      description: created?.description ?? result.skill.description,
+      path: created?.path ?? "",
+    },
   };
 }

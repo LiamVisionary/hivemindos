@@ -86,7 +86,7 @@ export type BrainSkillAeonSyncResult = {
   vaultPath: string;
   aeonRoot: string;
   skillsFolder: string;
-  manifestPath: string;
+  manifestPath?: string;
   synced: BrainSkillSummary[];
   skipped: Array<BrainSkillSummary & { reason: string }>;
   /** Managed mirrors GC'd because their vault source no longer exists. */
@@ -1479,7 +1479,6 @@ export async function syncSharedBrainSkillsToAeon(input: {
   const inventory = await getBrainSkillInventory(input.vaultPath);
   const aeonRoot = resolveAeonRoot(input.aeonLocalPath);
   const skillsFolder = join(aeonRoot, "skills");
-  const manifestPath = join(aeonRoot, "skills.json");
   await mkdir(skillsFolder, { recursive: true });
 
   const synced: BrainSkillSummary[] = [];
@@ -1545,12 +1544,10 @@ export async function syncSharedBrainSkillsToAeon(input: {
     removed.push(entry.name);
   }
 
-  await writeAeonSkillsManifest(manifestPath, inventory.shared, skipped);
   return {
     vaultPath: inventory.vaultPath,
     aeonRoot,
     skillsFolder,
-    manifestPath,
     synced,
     skipped,
     removed,
@@ -1590,49 +1587,6 @@ async function exists(path: string) {
   } catch {
     return false;
   }
-}
-
-async function writeAeonSkillsManifest(
-  manifestPath: string,
-  shared: BrainSkillSummary[],
-  skipped: Array<BrainSkillSummary & { reason: string }>,
-) {
-  let existingSkills: Array<Record<string, unknown>> = [];
-  const existing = await readText(manifestPath);
-  if (existing.trim()) {
-    try {
-      const parsed = JSON.parse(existing) as { skills?: Array<Record<string, unknown>> };
-      existingSkills = Array.isArray(parsed.skills) ? parsed.skills : [];
-    } catch {
-      existingSkills = [];
-    }
-  }
-
-  const skippedSlugs = new Set(skipped.map((skill) => skill.slug));
-  const retained = existingSkills.filter((skill) => {
-    const slug = typeof skill.slug === "string" ? skill.slug : "";
-    if (!slug) return false;
-    if (skill.source === "shared-brain") return false;
-    return true;
-  });
-  const sharedEntries = shared
-    .filter((skill) => !skippedSlugs.has(skill.slug))
-    .map((skill) => ({
-      slug: skill.slug,
-      name: skill.name,
-      description: skill.description,
-      source: "shared-brain",
-      skillMdPath: skill.path,
-      checksum: skill.checksum,
-    }));
-
-  const manifest = {
-    managedBy: "hivemindos",
-    updatedAt: new Date().toISOString(),
-    skills: [...retained, ...sharedEntries].sort((a, b) => String(a.slug).localeCompare(String(b.slug))),
-  };
-  await mkdir(dirname(manifestPath), { recursive: true });
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 
 export async function writeSkillsReadme(inventory: BrainSkillInventory) {

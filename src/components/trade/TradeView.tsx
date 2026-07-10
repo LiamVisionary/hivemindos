@@ -53,7 +53,9 @@ export function TradeView() {
   const [view, setView] = React.useState<"trade" | "history">("trade");
   const [histFilter, setHistFilter] = React.useState<"crypto" | "stocks" | "all">("crypto");
   const isStock = segment === "stocks";
-  const { loading, paper, setPaper, hasActingWallet } = desk;
+  const { loading, refreshing, stockLoading, stockRefreshing, activityLoading, activityRefreshing, paper, setPaper, hasActingWallet } = desk;
+  const contentLoading = loading || (isStock && stockLoading);
+  const dataRefreshing = isStock ? stockRefreshing : refreshing;
   const pf = isStock ? desk.stockPortfolio : desk.cryptoPortfolio;
   const movers = isStock ? desk.stockMovers : desk.cryptoMovers;
 
@@ -63,8 +65,8 @@ export function TradeView() {
       <div className="fr-scroll" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
         <div className="dk-wrap">
           {view === "history" ? (
-            loading ? <ActivitySkeleton /> : (
-              <ActivityView items={desk.activity} filter={histFilter} onFilter={setHistFilter} onBack={() => setView("trade")} />
+            activityLoading ? <ActivitySkeleton /> : (
+              <ActivityView items={desk.activity} filter={histFilter} refreshing={activityRefreshing} onFilter={setHistFilter} onBack={() => setView("trade")} />
             )
           ) : (
             <>
@@ -81,7 +83,7 @@ export function TradeView() {
                     </div>
                   ) : null}
                   <span className="dk-marketpill">
-                    {loading
+                    {contentLoading || (!isStock && refreshing)
                       ? <><span className="fr-dot" style={{ color: "var(--fg-4)" }} /> Syncing…</>
                       : <><span className="fr-dot live" style={{ color: "var(--live)" }} /> {isStock ? <>US market · {paper ? "paper" : "live"}</> : <>Markets live · on-chain · {tradeNetworkLabel(desk.network)}</>}</>}
                   </span>
@@ -93,13 +95,13 @@ export function TradeView() {
                   <p style={{ color: "var(--fg-2)", fontSize: 13.5, margin: "0 0 14px" }}>No wallet to trade with yet. Create or import one in the Wallets tab, then come back to trade.</p>
                   <button type="button" className="tk-place" style={{ maxWidth: 220, margin: "0 auto" }} onClick={() => desk.onOpenView("wallet")}>Open Wallets</button>
                 </div>
-              ) : loading ? (
+              ) : contentLoading ? (
                 <DeskSkeleton />
               ) : (
                 <>
                   <div className="dk-hero">
-                    <PortfolioCard pf={pf} isStock={isStock} win={isStock ? "30d" : "24h"} />
-                    <MoversCard movers={movers} isStock={isStock} />
+                    <PortfolioCard pf={pf} isStock={isStock} refreshing={dataRefreshing} win={isStock ? "30d" : "24h"} />
+                    <MoversCard movers={movers} isStock={isStock} refreshing={dataRefreshing} />
                   </div>
 
                   <div className="dk-grid">
@@ -118,6 +120,7 @@ export function TradeView() {
                       <PositionsPanel pf={pf} isStock={isStock} />
                       <ActivityPanel
                         items={desk.activity.filter((a) => a.src === (isStock ? "stocks" : "crypto"))}
+                        refreshing={activityRefreshing}
                         onViewAll={() => { setHistFilter(isStock ? "stocks" : "crypto"); setView("history"); }}
                       />
                     </div>

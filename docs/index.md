@@ -55,8 +55,13 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Zero Human Companies</h3>
-    <p>See how agent-run company cockpits connect charters, crews, apex goals, approvals, budgets, Work Board dispatch, and private learning loops.</p>
+    <p>Run a company with the default HivemindOS crew engine or an optional AEON background skill, while keeping goals, approvals, budgets, kill switches, and company history in one cockpit.</p>
     <a href="./for-users/features/zero-human-companies.html">Open company docs</a>
+  </section>
+  <section class="docCard">
+    <h3>AEON For Zero Human Companies</h3>
+    <p>Connect one company to a saved AEON workspace and skill, understand what each layer owns, and monitor background handoffs without requiring a native crew.</p>
+    <a href="./for-users/runtimes/aeon/zero-human-companies.html">Open the AEON company guide</a>
   </section>
   <section class="docCard">
     <h3>Diagrams And Maps</h3>
@@ -89,6 +94,11 @@ description: Local-first agent fleet control room documentation.
     <a href="./for-users/whole-brain/">Open whole brain</a>
   </section>
   <section class="docCard">
+    <h3>Memory Benchmarks</h3>
+    <p>See measured recall quality, local API latency, scale, full-vault speedups, truth maintenance, pattern precision, and token reduction.</p>
+    <a href="./for-users/features/shared-brain-benchmarks.html">Open benchmark scorecard</a>
+  </section>
+  <section class="docCard">
     <h3>Packaged Skills</h3>
     <p>Review HivemindOS Hive skills, third-party packaged skills, auto-install policy, and optional skill boundaries.</p>
     <a href="./for-users/packaged-skills/">Open packaged skills</a>
@@ -105,7 +115,7 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Runtime Guides</h3>
-    <p>Review runtime-specific setup and behavior for Hermes, AEON, and the adapter layer that keeps runtime surfaces consistent.</p>
+    <p>Review runtime-specific setup and behavior for Hermes and AEON, including how a Zero Human Company can optionally use one saved AEON workspace and skill.</p>
     <a href="./for-users/runtimes/">Open runtimes</a>
   </section>
   <section class="docCard">
@@ -135,7 +145,8 @@ description: Local-first agent fleet control room documentation.
 The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wallet shell. The current dashboard also includes:
 
 - My Apps: hivenet app and API-service discovery with icon proxying, health checks, service-kind signatures, OpenAPI/Hivemind route catalogs, route copy actions, and safe open links.
-- AEON: repository/workspace management, local clone/link flows, GitHub-backed duplicates, scheduler handoff, brain access, and deliverable discovery/download/transfer.
+- AEON: validated v0.1 workspaces, CLI-backed skills and schedules, packs, MCP, Strategy/Soul, gateways and harnesses, chains/reactive evidence, provenance, brain access, deliverable handoff, and an optional Zero Human Company engine.
+- Zero Human Companies: company cockpits with native crew execution by default, optional AEON background-skill execution, governance controls, Company Runs, and reviewed learning.
 - Swarm: chat-launched `/swarm [number]` agent-team passes, `/swarm-goal` Queen Bee build orchestration, `/swarm-sim` MiroShark simulation launches, MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
 - Brain Services: Obsidian graph, shared skills, Agent Memory entity/usage indexes, QMD, Neo4j, GBrain, Syntho, trading brain install/status, service notes, Synthesis folder configuration, source access policy controls, vault doctor, and whole brain architecture docs.
 - Wallets, Tokens, and Usage: per-agent wallets, Base/Robinhood Chain/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.

@@ -127,6 +127,16 @@ export type TradeDeskData = {
 
   // status
   loading: boolean;
+  /** The visible Crypto snapshot is usable while its acting-wallet RPC refresh runs. */
+  refreshing: boolean;
+  /** Stock-only data is deferred until the default Crypto desk is ready. */
+  stockLoading: boolean;
+  /** A stock portfolio/market refresh is running over the last usable snapshot. */
+  stockRefreshing: boolean;
+  /** The spend-ledger feed loads with the deferred secondary data. */
+  activityLoading: boolean;
+  /** The activity feed is refreshing over the last usable snapshot. */
+  activityRefreshing: boolean;
 
   // crypto
   cryptoPortfolio: DeskPortfolio;

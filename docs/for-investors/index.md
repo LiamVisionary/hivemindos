@@ -18,7 +18,7 @@ Revenue comes from optional premium services, trading and on-chain fees, hosted 
 | Hive Compute marketplace inference | Default **20% platform fee** on token-metered marketplace usage | At the current default provider price, 1M input plus 1M output tokens debits `$0.040`: `$0.032` provider earning and `$0.008` gross HivemindOS platform revenue before infrastructure, payment, support, and payout costs. |
 | Zero Human Company revenue share | **2%**, with a **$0.01 minimum** | A company running in HivemindOS that records `$1,000` in revenue produces `$20.00` in HivemindOS revenue. |
 | Hyperliquid builder fee | **0.005%** of eligible filled notional | A `$10,000` fill produces `$0.50` in revenue. |
-| Hosted HivemindOS agent/model messages | **$0.001 per successful hosted chat completion** on the current default hosted paid agent | `1,000` messages produces `$1`. `100,000` messages produces `$100`. `1,000,000` messages produces `$1,000`. |
+| Hosted HivemindOS agent/model messages | Metered: **upstream provider price × 1.25 (25% markup)**, with a **$0.001 minimum** per message | HivemindOS keeps the markup — about **20% of buyer spend** after upstream cost. `$1,000` of hosted message spend produces about `$200` in HivemindOS revenue. A short message on a cheap model hits the `$0.001` floor. |
 | Managed X API and X MCP calls | Hosted policy retail debit: upstream X API unit cost plus **25% markup**, with a **$0.001 minimum** by default | The current default X MCP tool-call policy debits `$0.00625` from hosted credits for a `$0.005` upstream unit. HivemindOS collects the retail debit and keeps the markup after upstream X/API cost, infrastructure, and payment-processing costs. |
 | Future paid infrastructure | TBD by product | Hive Cloud, managed compute, marketplace fees, and enterprise contracts. |
 
@@ -151,7 +151,7 @@ Managed agents use HONEY as the visible credit unit. The ledger separates reward
 - Reward Honey is earned through ecosystem participation and may be claimable to HIVE.
 - Managed HONEY credits are spend-only service credits for HivemindOS-managed agents and cannot be claimed to HIVE.
 
-Users can start without provider API keys. For the current hosted paid agent, the visible default is **$0.001 per successful hosted chat completion**. HivemindOS can also quote larger managed jobs through managed HONEY credits, then run the agent through HivemindOS-held provider keys at a configured markup.
+Users can start without provider API keys. Hosted messages are metered at the **upstream provider price × 1.25 (25% markup)**, with a **$0.001 minimum** per message, so revenue scales with usage instead of a flat per-message price. HivemindOS can also quote larger managed jobs through managed HONEY credits, then run the agent through HivemindOS-held provider keys at the same markup.
 
 Official credit changes are spoof-resistant: credits are written only from verified funding events, and debits are signed by trusted managed runtimes after provider usage is observed server-side.
 

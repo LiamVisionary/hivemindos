@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
+import { nativeUsdPrice } from "@/lib/services/copy-trading/market";
+import { fundableSummary } from "@/lib/services/copy-trading/funding";
 import { requireAuth } from "@/lib/utils/server-auth";
 import {
   ENGINE_OFFLINE_AFTER_MS,
   MAX_COPY_TRADE_USD,
   defaultCopyTradingConfig,
   isCopyTradeNetwork,
+  type CopyTradeFundable,
+  type CopyTradeNetwork,
   type CopyTradingConfig,
 } from "@/lib/types/copy-trading";
 import {
@@ -33,10 +38,50 @@ export async function GET(request: NextRequest) {
   try {
     const [configs, states, engine] = await Promise.all([readConfigs(), readRuntimeStates(), readEngineStatus()]);
     const online = Boolean(engine && Date.now() - engine.heartbeatMs < ENGINE_OFFLINE_AFTER_MS);
-    return NextResponse.json({ ok: true, configs, states, engine, online });
+    const fundable = await computeFundable(configs);
+    return NextResponse.json({ ok: true, configs, states, engine, online, fundable });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to read copy-trading." }, { status: 500 });
   }
+}
+
+// The acting wallet's spendable balance per (wallet, chain), for the UI's
+// "available to copy-trade" line. Cached briefly so 5s status polls don't hammer
+// the chain RPCs; keyed by raw address (Solana addresses are case-sensitive).
+const FUNDABLE_TTL_MS = 20_000;
+const fundableCache = new Map<string, { at: number; value: CopyTradeFundable | null }>();
+
+function fundableKey(walletAddress: string, network: CopyTradeNetwork): string {
+  return `${walletAddress}:${network}`;
+}
+
+async function computeFundable(configs: CopyTradingConfig[]): Promise<Record<string, CopyTradeFundable>> {
+  const pairs = new Map<string, { walletAddress: string; network: CopyTradeNetwork }>();
+  for (const config of configs) {
+    if (!isCopyTradeNetwork(config.network) || !config.walletAddress) continue;
+    pairs.set(fundableKey(config.walletAddress, config.network), { walletAddress: config.walletAddress, network: config.network });
+  }
+  const out: Record<string, CopyTradeFundable> = {};
+  await Promise.all([...pairs].map(async ([key, { walletAddress, network }]) => {
+    const cached = fundableCache.get(key);
+    if (cached && Date.now() - cached.at < FUNDABLE_TTL_MS) {
+      if (cached.value) out[key] = cached.value;
+      return;
+    }
+    let value: CopyTradeFundable | null = null;
+    try {
+      const [balance, nativePrice] = await Promise.all([
+        getWalletBalance(walletAddress, network),
+        nativeUsdPrice(network).catch(() => null),
+      ]);
+      value = fundableSummary(network, balance, nativePrice);
+    } catch {
+      value = null; // balance unreadable → UI shows "—" rather than a stale number
+    }
+    fundableCache.set(key, { at: Date.now(), value });
+    if (value) out[key] = value;
+  }));
+  return out;
 }
 
 type Body = {

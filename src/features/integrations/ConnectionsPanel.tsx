@@ -4,11 +4,16 @@ import * as React from "react";
 import Image from "next/image";
 import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayload } from "@/lib/types/integrations";
 import { CLAWBANK_OPEN_EVENT, CLAWBANK_UPDATED_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
+import { DASHBOARD_TARGET_APPLIED_EVENT, dashboardTargetFromSearch, type DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
 import { openExternalUrl } from "@/lib/native/open-external-url";
+import { IntegrationModalActions } from "./IntegrationModalActions";
+import { AzureMcpSetup } from "./AzureMcpSetup";
 import { BBtn, BIcon, ServiceGlyph } from "./integrations-primitives";
+import { integrationModalTargetFromDashboardTarget, type IntegrationModalActionId, type IntegrationModalTarget } from "./integration-modal-actions";
 import { readJson } from "./integrations-view-helpers";
 
 type FetchErrorPayload = { error?: string; message?: string };
+type ModalTab = "connect" | "actions";
 
 const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: string; logo?: string }> = {
   github: { mono: "Gh", accent: "#c7ccd4" },
@@ -17,6 +22,7 @@ const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: stri
   notion: { mono: "No", accent: "#d8d6cf" },
   google: { mono: "Go", accent: "#6f9bd6" },
   "google-cloud": { mono: "Gc", accent: "#5a8dee" },
+  azure: { mono: "Az", accent: "#4aa4e8" },
   posthog: { mono: "Ph", accent: "#f0a868" },
   plausible: { mono: "Pl", accent: "#4fb5a3" },
   clawbank: { mono: "Cb", accent: "#e6dcc6", logo: "/icons/runtimes/clawbank.svg" },
@@ -50,16 +56,24 @@ const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
   google: "/api/integrations/google/oauth/start",
   "google-cloud": "/api/integrations/google-cloud/oauth/start",
   slack: "/api/integrations/slack/oauth/start",
+  azure: "/api/integrations/azure/oauth/start",
 };
 
 /** One screen: connect apps in place. Credentials are validated live, then
  * saved to the shared hive env, which syncs them to every machine — no host
  * machine, no external dashboard, no separate account. */
 export function ConnectionsPanel() {
+  const initialModalTarget = React.useMemo(
+    () => typeof window === "undefined"
+      ? null
+      : integrationModalTargetFromDashboardTarget(dashboardTargetFromSearch(window.location.search)),
+    [],
+  );
   const [payload, setPayload] = React.useState<ConnectionsPayload | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [message, setMessage] = React.useState("");
-  const [openKey, setOpenKey] = React.useState<ConnectionProviderKey | "">("");
+  const [modalTarget, setModalTarget] = React.useState<IntegrationModalTarget | null>(initialModalTarget);
+  const [openKey, setOpenKey] = React.useState<ConnectionProviderKey | "">(initialModalTarget?.providerKey ?? "");
 
   const refresh = React.useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -102,11 +116,22 @@ export function ConnectionsPanel() {
       setMessage("ClawBank connected.");
       void refresh();
     };
+    const onDashboardTarget = (event: Event) => {
+      const target = integrationModalTargetFromDashboardTarget(
+        (event as CustomEvent<DashboardRouteTarget>).detail,
+      );
+      if (!target) return;
+      setMessage("");
+      setModalTarget(target);
+      setOpenKey(target.providerKey);
+    };
     window.addEventListener(CLAWBANK_UPDATED_EVENT, onClawBankUpdated);
+    window.addEventListener(DASHBOARD_TARGET_APPLIED_EVENT, onDashboardTarget);
     return () => {
       window.clearTimeout(timer);
       if (returnMessageTimer !== undefined) window.clearTimeout(returnMessageTimer);
       window.removeEventListener(CLAWBANK_UPDATED_EVENT, onClawBankUpdated);
+      window.removeEventListener(DASHBOARD_TARGET_APPLIED_EVENT, onDashboardTarget);
     };
   }, [refresh]);
 
@@ -120,7 +145,7 @@ export function ConnectionsPanel() {
         <div>
           <div className="fr-eyebrow" style={{ color: "var(--honey)" }}>App connections</div>
           <h1>Integrations</h1>
-          <p>Connect an app once and your whole hive can use it, on every machine. Nothing to install, nowhere else to sign in.</p>
+          <p>Connect hosted apps once for your whole hive. Optional local MCP tools install only when you choose them.</p>
         </div>
         <div className="ni-abtns">
           <BBtn onClick={() => void refresh(true)}><BIcon name="refresh" size={14} /> Refresh</BBtn>
@@ -142,7 +167,7 @@ export function ConnectionsPanel() {
           </div>
           <div className="ni-agrid">
             {providers.map((provider) => (
-              <button key={provider.key} type="button" className="ni-acard" data-on={provider.connected ? "" : undefined} onClick={() => { setMessage(""); setOpenKey(provider.key); }}>
+              <button key={provider.key} type="button" className="ni-acard" data-on={provider.connected ? "" : undefined} onClick={() => { setMessage(""); setModalTarget(null); setOpenKey(provider.key); }}>
                 <ProviderGlyph providerKey={provider.key} size={56} radius={16} />
                 <strong>{provider.label}</strong>
                 <span className="adet">{provider.detail}</span>
@@ -156,8 +181,20 @@ export function ConnectionsPanel() {
 
       {open ? (
         <ConnectModal
+          key={`${open.key}:${modalTarget?.tab ?? "connect"}:${modalTarget?.actionId ?? "grid"}`}
           provider={open}
-          onClose={() => setOpenKey("")}
+          initialTab={modalTarget?.providerKey === open.key ? modalTarget.tab : "connect"}
+          initialActionId={modalTarget?.providerKey === open.key ? modalTarget.actionId : undefined}
+          onClose={() => {
+            setOpenKey("");
+            setModalTarget(null);
+            const params = new URLSearchParams(window.location.search);
+            params.delete("integration");
+            params.delete("integrationTab");
+            params.delete("integrationAction");
+            const search = params.toString();
+            window.history.replaceState(null, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+          }}
           onUpdated={(next, note) => {
             setPayload(next);
             if (note) setMessage(note);
@@ -182,27 +219,33 @@ function StatusPill({ provider }: { provider: ConnectionProviderStatus }) {
 
 function ConnectModal({
   provider,
+  initialTab,
+  initialActionId,
   onClose,
   onUpdated,
 }: {
   provider: ConnectionProviderStatus;
+  initialTab: ModalTab;
+  initialActionId?: IntegrationModalActionId;
   onClose: () => void;
   onUpdated: (payload: ConnectionsPayload, note?: string) => void;
 }) {
   const [token, setToken] = React.useState("");
   const [clientId, setClientId] = React.useState("");
   const [clientSecret, setClientSecret] = React.useState("");
+  const [azureTenantId, setAzureTenantId] = React.useState("");
   const [show, setShow] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [note, setNote] = React.useState("");
+  const [modalTab, setModalTab] = React.useState<ModalTab>(initialTab);
   // After the sign-in tab opens in the external browser, poll the connections
   // endpoint so the modal flips to Connected on its own — the user never has to
   // come back and hit Refresh. `pollDeadlineRef` bounds the wait.
   const [polling, setPolling] = React.useState(false);
   const pollDeadlineRef = React.useRef(0);
-  // For the Slack broker flow: the flowId returned by /start, polled at /poll
+  // For hosted broker flows: the flowId returned by /start, polled at /poll
   // (which persists the token) until the hosted Worker reports the token is ready.
-  const slackFlowRef = React.useRef("");
+  const brokerFlowRef = React.useRef("");
   // Prevents overlapping poll runs (interval + focus firing together) — without
   // this, one poll consumes the ready flow and a second races in to find it gone
   // and falsely reports "expired".
@@ -211,14 +254,15 @@ function ConnectModal({
   const isGoogle = provider.key === "google";
   const isGoogleCloud = provider.key === "google-cloud";
   const isSlack = provider.key === "slack";
+  const isAzure = provider.key === "azure";
   const isClawBank = provider.key === "clawbank";
   // OAuth-only providers connect purely through the browser sign-in button — no
   // pasted-token fallback (the token comes from the OAuth round-trip). `google`
   // uses a one-time pasted OAuth client (web-app model), then browser sign-in;
   // `google-cloud` and `slack` use a baked-in client (PKCE, persistent callback),
   // so they are oauthReady once the client id is set and never show a client form.
-  const oauthOnly = isGoogle || isGoogleCloud || isSlack;
-  const usesOAuthClient = isGoogle || isGoogleCloud || isSlack;
+  const oauthOnly = isGoogle || isGoogleCloud || isSlack || isAzure;
+  const usesOAuthClient = isGoogle || isGoogleCloud || isSlack || isAzure;
 
   // Keep the latest props reachable from the poll interval without making it a
   // dependency (which would tear down and recreate the interval every render).
@@ -240,14 +284,19 @@ function ConnectModal({
       if (checkingRef.current) return;
       checkingRef.current = true;
       try {
-        // Slack broker flow: advance the rendezvous first. /poll persists the
+        // Hosted broker flow: advance the rendezvous first. /poll persists the
         // token server-side on success; only then does the connections status flip.
-        const slackFlow = liveRef.current.provider.key === "slack" ? slackFlowRef.current : "";
-        if (slackFlow) {
-          const pollRes = await fetch("/api/integrations/slack/oauth/poll", {
+        const brokerProvider = liveRef.current.provider.key === "slack"
+          ? "slack"
+          : liveRef.current.provider.key === "azure"
+            ? "azure"
+            : "";
+        const brokerFlow = brokerProvider ? brokerFlowRef.current : "";
+        if (brokerProvider && brokerFlow) {
+          const pollRes = await fetch(`/api/integrations/${brokerProvider}/oauth/poll`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ flowId: slackFlow }),
+            body: JSON.stringify({ flowId: brokerFlow }),
           });
           const pollData = await readJson<{ ok?: boolean; status?: string; error?: string } & FetchErrorPayload>(pollRes);
           if (cancelled) return;
@@ -255,22 +304,22 @@ function ConnectModal({
             if (pollData.status === "pending") {
               if (Date.now() > pollDeadlineRef.current) {
                 setPolling(false);
-                setNote("Still waiting on Slack. Finish the sign-in in your browser, then click Refresh.");
+                setNote(`Still waiting on ${liveRef.current.provider.label}. Finish the sign-in in your browser, then click Refresh.`);
               }
               return;
             }
             if (pollData.status === "error" || pollData.status === "expired") {
               setPolling(false);
-              slackFlowRef.current = "";
+              brokerFlowRef.current = "";
               setNote(
                 pollData.status === "expired"
-                  ? "The Slack sign-in expired. Start it again."
-                  : `Slack sign-in failed${pollData.error ? ` (${pollData.error})` : ""}.`,
+                  ? `The ${liveRef.current.provider.label} sign-in expired. Start it again.`
+                  : `${liveRef.current.provider.label} sign-in failed${pollData.error ? ` (${pollData.error})` : ""}.`,
               );
               return;
             }
             // connected → clear and fall through to refresh the connections status.
-            slackFlowRef.current = "";
+            brokerFlowRef.current = "";
           }
         }
         const response = await fetch("/api/integrations/connections", { cache: "no-store" });
@@ -361,12 +410,15 @@ function ConnectModal({
       const response = await fetch(oauthUrl as string, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start" }),
+        body: JSON.stringify({
+          action: "start",
+          ...(isAzure && azureTenantId.trim() ? { tenantId: azureTenantId.trim() } : {}),
+        }),
       });
       const data = await readJson<{ ok?: boolean; authorizationUrl?: string; flowId?: string } & FetchErrorPayload>(response);
       if (!response.ok || data.ok === false) throw new Error(data.error ?? `Could not start ${provider.label} sign-in.`);
       if (!data.authorizationUrl) throw new Error(`${provider.label} sign-in did not return an authorization URL.`);
-      slackFlowRef.current = data.flowId ?? "";
+      brokerFlowRef.current = data.flowId ?? "";
       await openExternalUrl(data.authorizationUrl);
       setNote(
         isGoogleCloud
@@ -404,6 +456,25 @@ function ConnectModal({
         </div>
 
         <div className="fm-mbody">
+          <div className="fb-seg fm-modal-tabs" role="tablist" aria-label={`${provider.label} integration sections`}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={modalTab === "connect"}
+              data-active={modalTab === "connect" ? "" : undefined}
+              onClick={() => setModalTab("connect")}
+            >Connect</button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={modalTab === "actions"}
+              data-active={modalTab === "actions" ? "" : undefined}
+              onClick={() => setModalTab("actions")}
+            >Actions</button>
+          </div>
+
+          {modalTab === "connect" ? (
+            <>
           {provider.connected ? (
             <div className="fm-note">
               <BIcon name={provider.verified ? "check" : "alert"} size={15} />
@@ -411,6 +482,17 @@ function ConnectModal({
                 {provider.verified
                   ? `Connected${provider.account ? ` as ${provider.account}` : ""}. Reconnect below to switch accounts.`
                   : `A credential is saved but the live check failed: ${provider.error ?? "unknown error"}. Reconnect below to replace it.`}
+              </span>
+            </div>
+          ) : null}
+
+          {isAzure ? (
+            <div className="fm-note" style={{ alignItems: "flex-start" }}>
+              <BIcon name="shield" size={15} />
+              <span style={{ lineHeight: 1.6 }}>
+                <strong>Hosted connection:</strong> sign-in and read-only Azure Resource Manager access are covered by HivemindOS.
+                Your Azure account is billed only for Azure resources you choose to create or run; connecting does not create a subscription or resource.
+                Some organization tenants may require administrator approval until Microsoft publisher verification is complete.
               </span>
             </div>
           ) : null}
@@ -428,6 +510,27 @@ function ConnectModal({
                 set your budgets and API caps &mdash; without it the connection can&rsquo;t manage Google Cloud.
               </span>
             </div>
+          ) : null}
+
+          {isAzure ? (
+            <details style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+              <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 650 }}>Personal Microsoft account</summary>
+              <div style={{ display: "grid", gap: 9, marginTop: 10 }}>
+                <p className="ni-note" style={{ margin: 0, lineHeight: 1.55 }}>
+                  Outlook, Hotmail, Skype, and Xbox accounts must sign in through the Entra tenant that owns their Azure subscription.
+                  Work or school accounts can leave this blank.
+                </p>
+                <label className="fb-label">Microsoft Entra tenant ID
+                  <input
+                    className="fb-field fb-mono"
+                    value={azureTenantId}
+                    onChange={(event) => setAzureTenantId(event.target.value)}
+                    placeholder="00000000-0000-0000-0000-000000000000"
+                    autoComplete="off"
+                  />
+                </label>
+              </div>
+            </details>
           ) : null}
 
           {oauthUrl && !googleNeedsClient ? (
@@ -493,9 +596,15 @@ function ConnectModal({
           ) : null}
 
           {note ? <p className="ni-note">{note}</p> : null}
+          {isAzure ? <AzureMcpSetup /> : null}
+            </>
+          ) : (
+            <IntegrationModalActions providerKey={provider.key} providerLabel={provider.label} initialActionId={initialActionId} />
+          )}
         </div>
 
-        <div className="fm-mfoot">
+        {modalTab === "connect" ? (
+          <div className="fm-mfoot">
           {provider.connected ? (
             <BBtn onClick={() => void disconnect()} disabled={Boolean(busy)}>
               {busy === "disconnect" ? <span className="ni-spin" /> : <BIcon name="trash" size={14} />} {busy === "disconnect" ? "Removing…" : "Disconnect"}
@@ -513,7 +622,8 @@ function ConnectModal({
               {busy === "token" ? <span className="ni-spin" /> : <BIcon name="plug" size={14} />} {busy === "token" ? "Checking..." : "Validate & save"}
             </BBtn>
           ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

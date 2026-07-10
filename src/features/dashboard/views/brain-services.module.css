@@ -447,6 +447,11 @@
 
 .brainServicePrimaryActions { border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08)); padding: 12px 0; }
 
+.brainServiceSetup {
+  border-top: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  padding: 14px 0;
+}
+
 .brainServicePrimaryActions button {
   min-height: 31px;
 }

@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+"""Lock-compatible xAI OAuth token storage and refresh for HivemindOS.
+
+The native session lives under ~/.hivemindos. Callers may explicitly point the
+broker at an existing Hermes auth.json, in which case the same auth.lock is
+used and Hermes remains that session's sole refresh authority. Secrets enter
+through stdin and the resolve result is written only to the caller's stdout.
+"""
+from __future__ import annotations
+
+import base64
+import contextlib
+import datetime as dt
+import json
+import os
+import pathlib
+import stat
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX
+    msvcrt = None
+
+
+CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
+DEFAULT_TOKEN_ENDPOINT = "https://auth.x.ai/oauth2/token"
+DEFAULT_BASE_URL = "https://api.x.ai/v1"
+LOCK_TIMEOUT_SECONDS = 35.0
+
+
+class BrokerError(RuntimeError):
+    pass
+
+
+def auth_path() -> pathlib.Path:
+    configured = os.environ.get("HIVEMINDOS_XAI_OAUTH_STORE", "").strip()
+    if configured:
+        return pathlib.Path(configured).expanduser()
+    return pathlib.Path.home() / ".hivemindos" / "oauth" / "xai.json"
+
+
+def lock_path() -> pathlib.Path:
+    return auth_path().with_suffix(".lock")
+
+
+@contextlib.contextmanager
+def auth_store_lock():
+    path = lock_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if msvcrt and (not path.exists() or path.stat().st_size == 0):
+        path.write_text(" ", encoding="utf-8")
+    with path.open("r+" if msvcrt else "a+", encoding="utf-8") as handle:
+        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                if fcntl:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                elif msvcrt:  # pragma: no cover - Windows
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                break
+            except (BlockingIOError, OSError, PermissionError):
+                if time.monotonic() >= deadline:
+                    raise BrokerError("Timed out waiting for the xAI OAuth session lock.")
+                time.sleep(0.05)
+        try:
+            yield
+        finally:
+            if fcntl:
+                with contextlib.suppress(OSError):
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            elif msvcrt:  # pragma: no cover - Windows
+                with contextlib.suppress(OSError):
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+def read_store() -> dict:
+    path = auth_path()
+    if not path.exists():
+        return {"version": 2, "providers": {}}
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise BrokerError(f"Could not read the local OAuth session store: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise BrokerError("The local OAuth session store is not a JSON object.")
+    if not isinstance(parsed.get("providers"), dict):
+        parsed["providers"] = {}
+    return parsed
+
+
+def write_store(store: dict) -> None:
+    path = auth_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with contextlib.suppress(OSError):
+        path.parent.chmod(stat.S_IRWXU)
+    store["version"] = int(store.get("version") or 2)
+    store["updated_at"] = utc_now()
+    fd, raw_tmp = tempfile.mkstemp(prefix=f"{path.name}.tmp.", dir=path.parent)
+    tmp_path = pathlib.Path(raw_tmp)
+    try:
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(store, handle, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+        with contextlib.suppress(OSError):
+            path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    finally:
+        with contextlib.suppress(OSError):
+            tmp_path.unlink()
+
+
+def utc_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def parse_time(value: object) -> float | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return dt.datetime.fromisoformat(value.strip().replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def jwt_expiry(token: str) -> float | None:
+    parts = token.split(".")
+    if len(parts) < 2:
+        return None
+    try:
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")).decode("utf-8"))
+        expires = decoded.get("exp")
+        return float(expires) if isinstance(expires, (int, float)) else None
+    except Exception:
+        return None
+
+
+def token_expiry(state: dict, tokens: dict) -> float | None:
+    access = str(tokens.get("access_token") or "").strip()
+    jwt_exp = jwt_expiry(access) if access else None
+    if jwt_exp:
+        return jwt_exp
+    refreshed_at = parse_time(state.get("last_refresh"))
+    try:
+        expires_in = float(tokens.get("expires_in"))
+    except (TypeError, ValueError):
+        expires_in = 0
+    if refreshed_at and expires_in > 0:
+        return refreshed_at + expires_in
+    return None
+
+
+def provider_state(store: dict) -> dict:
+    state = store["providers"].get("xai-oauth")
+    return state if isinstance(state, dict) else {}
+
+
+def provider_tokens(state: dict) -> dict:
+    tokens = state.get("tokens")
+    return dict(tokens) if isinstance(tokens, dict) else {}
+
+
+def endpoint_allowed(url: str) -> bool:
+    parsed = urllib.parse.urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme == "https" and (host == "x.ai" or host.endswith(".x.ai")):
+        return True
+    return (
+        os.environ.get("HIVEMINDOS_XAI_OAUTH_TEST_MODE") == "1"
+        and parsed.scheme == "http"
+        and host in {"127.0.0.1", "localhost", "::1"}
+    )
+
+
+def validated_endpoint(value: object, *, fallback: str = "") -> str:
+    endpoint = str(value or fallback).strip()
+    if not endpoint or not endpoint_allowed(endpoint):
+        raise BrokerError("Refusing an xAI OAuth endpoint outside the x.ai HTTPS origin.")
+    return endpoint
+
+
+def clean_error_detail(raw: bytes) -> str:
+    text = raw.decode("utf-8", errors="replace").strip()
+    try:
+        payload = json.loads(text)
+        if isinstance(payload, dict):
+            text = str(payload.get("error_description") or payload.get("error") or text)
+    except Exception:
+        pass
+    return " ".join(text.split())[:500]
+
+
+def friendly_auth_error(message: str) -> str:
+    lowered = message.lower()
+    if "refresh token has been revoked" in lowered or "invalid_grant" in lowered:
+        return "Refresh token has been revoked"
+    return message.rstrip(". ")
+
+
+def refresh_tokens(refresh_token: str, token_endpoint: str) -> dict:
+    encoded = urllib.parse.urlencode({
+        "grant_type": "refresh_token",
+        "client_id": CLIENT_ID,
+        "refresh_token": refresh_token,
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        token_endpoint,
+        data=encoded,
+        headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            status = int(response.status)
+            body = response.read()
+    except urllib.error.HTTPError as exc:
+        status = int(exc.code)
+        body = exc.read()
+    except Exception as exc:
+        raise BrokerError(f"xAI OAuth refresh could not reach xAI: {exc}") from exc
+    if status != 200:
+        detail = clean_error_detail(body)
+        message = detail or f"xAI OAuth refresh returned HTTP {status}"
+        error = BrokerError(message.rstrip(". "))
+        error.status = status  # type: ignore[attr-defined]
+        raise error
+    try:
+        payload = json.loads(body)
+    except Exception as exc:
+        raise BrokerError("xAI OAuth refresh returned invalid JSON.") from exc
+    if not isinstance(payload, dict) or not str(payload.get("access_token") or "").strip():
+        raise BrokerError("xAI OAuth refresh returned no access token.")
+    return payload
+
+
+def status_payload(store: dict) -> dict:
+    state = provider_state(store)
+    tokens = provider_tokens(state)
+    access = str(tokens.get("access_token") or "").strip()
+    refresh = str(tokens.get("refresh_token") or "").strip()
+    expires_at = token_expiry(state, tokens)
+    last_error = state.get("last_auth_error") if isinstance(state.get("last_auth_error"), dict) else None
+    credentials_present = bool(access or refresh or last_error)
+    usable = bool(access and (expires_at is None or expires_at > time.time() + 60))
+    return {
+        "credentialsPresent": credentials_present,
+        "usable": usable,
+        "needsReconnect": bool(credentials_present and not usable and last_error and last_error.get("relogin_required")),
+        "expiresAt": int(expires_at * 1000) if expires_at else None,
+        "error": str(last_error.get("message") or "") if last_error else None,
+    }
+
+
+def store_tokens(payload: dict) -> dict:
+    tokens = payload.get("tokens")
+    discovery = payload.get("discovery")
+    if not isinstance(tokens, dict):
+        raise BrokerError("The xAI OAuth token response is missing.")
+    if not str(tokens.get("access_token") or "").strip() or not str(tokens.get("refresh_token") or "").strip():
+        raise BrokerError("The xAI OAuth token response is incomplete.")
+    if not isinstance(discovery, dict):
+        discovery = {}
+    normalized_discovery = {
+        "authorization_endpoint": validated_endpoint(discovery.get("authorization_endpoint"), fallback="https://auth.x.ai/oauth2/authorize"),
+        "token_endpoint": validated_endpoint(discovery.get("token_endpoint"), fallback=DEFAULT_TOKEN_ENDPOINT),
+    }
+    with auth_store_lock():
+        store = read_store()
+        state = provider_state(store)
+        state.update({
+            "tokens": tokens,
+            "last_refresh": str(payload.get("lastRefresh") or utc_now()),
+            "auth_mode": "oauth_pkce",
+            "discovery": normalized_discovery,
+            "redirect_uri": str(payload.get("redirectUri") or ""),
+        })
+        state.pop("last_auth_error", None)
+        store["providers"]["xai-oauth"] = state
+        store["active_provider"] = "xai-oauth"
+        write_store(store)
+        return status_payload(store)
+
+
+def resolve_access(payload: dict) -> dict:
+    skew = max(0, int(payload.get("refreshSkewSeconds") or 60))
+    force_refresh = payload.get("forceRefresh") is True
+    with auth_store_lock():
+        store = read_store()
+        state = provider_state(store)
+        tokens = provider_tokens(state)
+        access = str(tokens.get("access_token") or "").strip()
+        refresh = str(tokens.get("refresh_token") or "").strip()
+        expires_at = token_expiry(state, tokens)
+        if access and not force_refresh and (expires_at is None or expires_at > time.time() + skew):
+            return {
+                "accessToken": access,
+                "tokenType": str(tokens.get("token_type") or "Bearer"),
+                "expiresAt": int(expires_at * 1000) if expires_at else None,
+                "baseUrl": DEFAULT_BASE_URL,
+                "refreshed": False,
+            }
+        if not refresh:
+            prior = state.get("last_auth_error") if isinstance(state.get("last_auth_error"), dict) else {}
+            message = friendly_auth_error(str(prior.get("message") or "xAI OAuth is not connected"))
+            raise BrokerError(f"{message}. Reconnect xAI OAuth.")
+        discovery = state.get("discovery") if isinstance(state.get("discovery"), dict) else {}
+        token_endpoint = validated_endpoint(discovery.get("token_endpoint"), fallback=DEFAULT_TOKEN_ENDPOINT)
+        try:
+            refreshed = refresh_tokens(refresh, token_endpoint)
+        except BrokerError as exc:
+            status = int(getattr(exc, "status", 0) or 0)
+            terminal = status in {400, 401}
+            state["last_auth_error"] = {
+                "provider": "xai-oauth",
+                "code": "xai_refresh_failed",
+                "message": str(exc),
+                "reason": "hivemindos_token_broker_refresh_failure",
+                "relogin_required": terminal,
+                "at": utc_now(),
+            }
+            if terminal:
+                tokens.pop("access_token", None)
+                tokens.pop("refresh_token", None)
+                state["tokens"] = tokens
+            store["providers"]["xai-oauth"] = state
+            write_store(store)
+            suffix = " Reconnect xAI OAuth." if terminal else ""
+            raise BrokerError(f"{str(exc).rstrip('. ')}.{suffix}".strip()) from exc
+        updated = dict(tokens)
+        updated["access_token"] = str(refreshed.get("access_token") or "").strip()
+        updated["refresh_token"] = str(refreshed.get("refresh_token") or refresh).strip()
+        for key in ("id_token", "expires_in", "token_type"):
+            if refreshed.get(key) is not None:
+                updated[key] = refreshed[key]
+        state["tokens"] = updated
+        state["last_refresh"] = utc_now()
+        state.pop("last_auth_error", None)
+        store["providers"]["xai-oauth"] = state
+        write_store(store)
+        expires_at = token_expiry(state, updated)
+        return {
+            "accessToken": updated["access_token"],
+            "tokenType": str(updated.get("token_type") or "Bearer"),
+            "expiresAt": int(expires_at * 1000) if expires_at else None,
+            "baseUrl": DEFAULT_BASE_URL,
+            "refreshed": True,
+        }
+
+
+def read_input() -> dict:
+    raw = sys.stdin.read().strip()
+    if not raw:
+        return {}
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise BrokerError("Broker input must be a JSON object.")
+    return parsed
+
+
+def main() -> int:
+    action = sys.argv[1] if len(sys.argv) > 1 else ""
+    try:
+        payload = read_input()
+        if action == "store":
+            result = store_tokens(payload)
+        elif action == "resolve":
+            result = resolve_access(payload)
+        elif action == "status":
+            with auth_store_lock():
+                result = status_payload(read_store())
+        else:
+            raise BrokerError("Expected one of: store, resolve, status.")
+        print(json.dumps(result, separators=(",", ":")))
+        return 0
+    except (BrokerError, json.JSONDecodeError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -8,7 +8,7 @@ export type RuntimeAdapterContext = {
 };
 
 export type RuntimeScheduleAction = "run-now" | "enable" | "disable";
-export type RuntimeSkillConfigAction = "enable" | "disable" | "schedule" | "var" | "model" | "automate";
+export type RuntimeSkillConfigAction = "enable" | "disable" | "schedule" | "var" | "model" | "harness" | "automate";
 
 export type RuntimeSchedule = {
   id: string;
@@ -80,6 +80,12 @@ export type RuntimeSkill = {
   schedule?: string;
   var?: string;
   model?: string;
+  harness?: string;
+  tags?: string[];
+  requires?: Array<{ key: string; optional?: boolean }>;
+  mcp?: Array<{ slug: string; optional?: boolean }>;
+  pack?: string;
+  packName?: string;
   source?: string;
   path?: string;
   checksum?: string;

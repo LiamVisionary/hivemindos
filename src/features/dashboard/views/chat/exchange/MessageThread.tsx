@@ -1,10 +1,7 @@
 "use client";
 
-import { Fragment, memo, useState } from "react";
+import { Fragment, memo, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
 import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
@@ -117,15 +114,29 @@ function InteractivePromptControls({ allowFreeText = true, disabled, options, se
   };
   return (
     <div className="fr-chat-prompt-actions" aria-label="Prompt response options">
-      <div className="fr-chat-prompt-choice-grid">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
         {options.map((option, index) => (
-          <button key={`${option.value}-${index}`} type="button" className="fr-chat-prompt-button" onClick={() => submitOption(option)} disabled={disabled}>
-            <strong>{option.label}</strong>
+          <button
+            key={`${option.value}-${index}`}
+            type="button"
+            className="cx-promptbtn"
+            onClick={() => submitOption(option)}
+            disabled={disabled}
+            style={{ ...promptButtonStyle, ...(isAffirmativeOption(option.label) ? promptButtonPrimary : promptButtonSecondary) }}
+          >
+            {option.label}
           </button>
         ))}
         {allowFreeText ? (
-          <button type="button" className="fr-chat-prompt-button fr-chat-prompt-button-muted" onClick={() => setOtherOpen((open) => !open)} aria-expanded={otherOpen} disabled={disabled}>
-            <strong>Other</strong>
+          <button
+            type="button"
+            className="cx-promptbtn"
+            onClick={() => setOtherOpen((open) => !open)}
+            aria-expanded={otherOpen}
+            disabled={disabled}
+            style={{ ...promptButtonStyle, border: "1px solid color-mix(in srgb, var(--fg-4) 35%, transparent)", background: "var(--panel-2)", color: "var(--fg-3)" }}
+          >
+            Other
           </button>
         ) : null}
       </div>
@@ -154,6 +165,34 @@ function InteractivePromptControls({ allowFreeText = true, disabled, options, se
   );
 }
 
+// The prototype's pill row: an affirmative choice reads honey, everything else
+// reads muted. (Chat.dc.html lines 603-606.)
+const promptButtonStyle: React.CSSProperties = {
+  minHeight: 40,
+  borderRadius: 999,
+  cursor: "pointer",
+  fontFamily: "var(--f-body)",
+  fontSize: 10,
+  fontWeight: 650,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  padding: "10px 14px",
+};
+const promptButtonPrimary: React.CSSProperties = {
+  border: "1px solid var(--honey-line)",
+  background: "var(--honey-soft)",
+  color: "var(--honey)",
+};
+const promptButtonSecondary: React.CSSProperties = {
+  border: "1px solid var(--line-2)",
+  background: "var(--panel-2)",
+  color: "var(--fg-3)",
+};
+
+function isAffirmativeOption(label: string) {
+  return /^(approve|accept|yes|confirm|allow|deploy|continue)\b/i.test(label.trim());
+}
+
 function decisionResponseLabel(label: string, value: string) {
   const text = (label || value).replace(/\s+/g, " ").trim();
   if (/^approve\b/i.test(text)) return text.replace(/^approve\b/i, "Approved");
@@ -162,11 +201,26 @@ function decisionResponseLabel(label: string, value: string) {
   return text || "Answered";
 }
 
+/** Tone of a settled prompt, derived from the label `decisionResponseLabel` produced. */
+function settledPromptTone(label: string) {
+  if (/^reject|^den(y|ied)|^declin/i.test(label)) {
+    return { color: "var(--danger)", background: "var(--danger-soft)", border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)" };
+  }
+  if (/^approv|^accept/i.test(label)) {
+    return { color: "var(--live)", background: "var(--honey-soft)", border: "1px solid var(--honey-line)" };
+  }
+  return { color: "var(--honey)", background: "var(--honey-soft)", border: "1px solid var(--honey-line)" };
+}
+
 function InteractivePromptResponse({ response }: { response: PromptResponse }) {
+  const tone = settledPromptTone(response.label);
   return (
-    <div className="fr-chat-prompt-settled" aria-label={`Prompt response: ${response.label}`}>
-      <span aria-hidden="true" />
-      <strong>{response.label}</strong>
+    <div
+      aria-label={`Prompt response: ${response.label}`}
+      style={{ display: "inline-flex", width: "fit-content", alignItems: "center", gap: 8, borderRadius: 999, fontFamily: "var(--f-body)", fontSize: 10, fontWeight: 650, letterSpacing: "0.08em", textTransform: "uppercase", padding: "8px 12px", ...tone }}
+    >
+      <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 99, background: "currentColor" }} />
+      {response.label}
     </div>
   );
 }
@@ -218,45 +272,34 @@ function MessageActions({
   const generating = Boolean(generation && ["generating", "creating"].includes(generation.phase));
   return (
     <div style={{ position: "relative", justifySelf: "end" }}>
+      {/* Prototype (Chat.dc.html 458-466): one rounded segmented pill, hairline
+          divider between segments. `cx-msgaction` supplies the honey hover. */}
       <div className="fr-chat-action-row">
-        <TooltipProvider>
-          <ButtonGroup className="fr-chat-segmented-actions">
-            <Tooltip {...(copied ? { open: true } : {})}>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-xs"
-                  className="fr-chat-segmented-button"
-                  aria-label={copied ? "Copied message" : "Copy message"}
-                  data-active={copied ? "true" : undefined}
-                  onClick={onCopy}
-                >
-                  {copied && Check ? <Check aria-hidden="true" /> : Copy ? <Copy aria-hidden="true" /> : <Glyph d={ICON.paperclip} s={12} />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{copied ? "Copied!" : "Copy message"}</TooltipContent>
-            </Tooltip>
-            {generateKanbanTaskFromChat ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-xs"
-                    className="fr-chat-segmented-button"
-                    aria-label="Generate Kanban task from this message"
-                    disabled={generating}
-                    onClick={onToggleKanban}
-                  >
-                    {generating && LoaderCircle ? <LoaderCircle aria-hidden="true" className="fr-chat-spin-icon" /> : KanbanSquare ? <KanbanSquare aria-hidden="true" /> : <Glyph d={ICON.sparkles} s={12} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Send to Kanban</TooltipContent>
-              </Tooltip>
-            ) : null}
-          </ButtonGroup>
-        </TooltipProvider>
+        <div style={{ display: "inline-flex", overflow: "hidden", border: "1px solid var(--line-2)", borderRadius: 999, marginLeft: 2 }}>
+          <button
+            type="button"
+            className="cx-msgaction"
+            title={copied ? "Copied!" : "Copy message"}
+            aria-label={copied ? "Copied message" : "Copy message"}
+            onClick={onCopy}
+            style={{ display: "grid", placeItems: "center", width: 30, height: 27, border: 0, background: "transparent", color: "var(--fg-3)", cursor: "pointer" }}
+          >
+            {copied && Check ? <Check aria-hidden="true" style={{ color: "var(--live)" }} /> : Copy ? <Copy aria-hidden="true" /> : <Glyph d={ICON.paperclip} s={12} />}
+          </button>
+          {generateKanbanTaskFromChat ? (
+            <button
+              type="button"
+              className="cx-msgaction"
+              title="Send to Kanban"
+              aria-label="Generate Kanban task from this message"
+              disabled={generating}
+              onClick={onToggleKanban}
+              style={{ display: "grid", placeItems: "center", width: 30, height: 27, border: 0, borderLeft: "1px solid var(--line-2)", background: "transparent", color: generation?.phase === "done" ? "var(--live)" : "var(--fg-3)", cursor: generating ? "default" : "pointer" }}
+            >
+              {generating && LoaderCircle ? <LoaderCircle aria-hidden="true" className="cx-spin" /> : KanbanSquare ? <KanbanSquare aria-hidden="true" /> : <Glyph d={ICON.sparkles} s={12} />}
+            </button>
+          ) : null}
+        </div>
       </div>
       {generateKanbanTaskFromChat && (open || generation) ? (
         <div className="fr-chat-kanban-popover">
@@ -300,8 +343,61 @@ function AttachmentPills({ attachments }: { attachments: ThreadAttachment[] }) {
   );
 }
 
+function formatWorkedDuration(ms: number) {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return `${hours ? `${hours}h ` : ""}${minutes}m ${seconds % 60}s`;
+}
+
+/**
+ * "Worked for 2m 47s" / live "Working for 1h 10m 41s" divider above a turn's
+ * tool timeline (Chat.dc.html 409-412, 488-491).
+ *
+ * Timings come from the real `ProcessEvent.at` epochs. When the events carry no
+ * usable timestamps the divider renders nothing rather than inventing a
+ * duration.
+ */
+function WorkedForDivider({ active, events }: { active: boolean; events: ProcessEvent[] }) {
+  const stamps = events.map((event) => Number(event.at)).filter((at) => Number.isFinite(at) && at > 0);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!active || !stamps.length) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active, stamps.length]);
+
+  if (!stamps.length) return null;
+  const first = Math.min(...stamps);
+  const last = Math.max(...stamps);
+  const elapsed = active ? Math.max(0, now - first) : last - first;
+  if (!active && elapsed <= 0) return null;
+
+  return (
+    <div style={{ display: "grid", gap: 9, paddingTop: 6 }}>
+      {active ? (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--f-body)", fontSize: 12.5, color: "var(--live)" }}>
+          <span className="cx-dot-live" style={{ width: 6, height: 6, borderRadius: 99, background: "currentColor" }} />
+          Working for {formatWorkedDuration(elapsed)}
+        </span>
+      ) : (
+        <span style={{ fontFamily: "var(--f-body)", fontSize: 12.5, color: "var(--fg-4)" }}>
+          Worked for {formatWorkedDuration(elapsed)}
+        </span>
+      )}
+      <span style={{ height: 1, background: "var(--line)" }} />
+    </div>
+  );
+}
+
 function ProcessPanel({ iconProps, active, events }: { iconProps: ThreadIconProps; active: boolean; events: ProcessEvent[] }) {
-  return <AgentProcessPanel {...iconProps} active={active} events={events} />;
+  return (
+    <>
+      <WorkedForDivider active={active} events={events} />
+      <AgentProcessPanel {...iconProps} active={active} events={events} />
+    </>
+  );
 }
 
 const RESEARCH_BRIEF_TABS = [
@@ -377,6 +473,7 @@ function MessageThreadBase({
   FileText,
   Send,
   activeChatTaskRunning,
+  agentSubline,
   busy,
   chatDisplayContent,
   chatProcessScopeKey,
@@ -402,6 +499,8 @@ function MessageThreadBase({
   FileText?: IconComponent;
   Send?: IconComponent;
   activeChatTaskRunning?: boolean;
+  /** "Coder · atlas" — the agent's role and machine, shown beside its name. */
+  agentSubline?: string;
   busy?: boolean;
   chatDisplayContent?: (message: unknown) => string;
   chatProcessScopeKey: string;
@@ -442,9 +541,20 @@ function MessageThreadBase({
 
   if (!messages.length) {
     return (
-      <div className="fr-chat-enter" style={{ display: "grid", justifyItems: "center", gap: 6, padding: "44px 16px", textAlign: "center" }}>
-        <strong style={{ color: "var(--fg)", fontFamily: "var(--f-display)", fontSize: 16 }}>{selectedAgent ? `Start with ${selectedAgent.name}` : "No agent selected"}</strong>
-        <p style={{ maxWidth: 360, margin: 0, color: "var(--fg-3)", fontSize: 13.5, lineHeight: 1.6 }}>{selectedAgent ? "Send a message from the composer below." : "Use the rail to select a chat or start a new one."}</p>
+      <div className="cx-fade" style={{ display: "grid", justifyItems: "center", gap: 12, padding: "48px 20px", textAlign: "center" }}>
+        <span style={{ display: "grid", placeItems: "center", width: 52, height: 52, border: "1px solid var(--line-2)", borderRadius: 16, background: "var(--bg-soft)", color: "var(--honey)" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </span>
+        <div style={{ color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 17, fontWeight: 600 }}>
+          {selectedAgent ? `New chat with ${selectedAgent.name}` : "No agent selected"}
+        </div>
+        <p style={{ maxWidth: 340, margin: 0, color: "var(--fg-3)", fontFamily: "var(--f-body)", fontSize: 13, lineHeight: 1.6 }}>
+          {selectedAgent
+            ? `Send a message to kick off a task. ${selectedAgent.name} runs on the machine you route it to and keeps spend and deploys behind approval.`
+            : "Use the rail to select a chat or start a new one."}
+        </p>
       </div>
     );
   }
@@ -550,9 +660,19 @@ function MessageThreadBase({
               </article>
             ) : hasAssistantBody ? (
               <article className={promptUi ? "fr-chat-prompt-article" : undefined} style={{ display: "grid", gap: 9 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--f-mono)", fontSize: 11 }}>
-                  <Dot state={activeChatTaskRunning && index === messages.length - 1 ? "working" : "ready"} size={6} />
-                  <strong style={{ color: "var(--fg)", fontFamily: "var(--f-display)", fontWeight: 600, whiteSpace: "nowrap" }}>{selectedAgent?.name ?? "Agent"}</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <strong style={{ color: "var(--fg)", fontFamily: "var(--f-body)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>{selectedAgent?.name ?? "Agent"}</strong>
+                  {promptUi?.options?.length && !promptUi.response ? (
+                    /* Prototype 599: a pending decision reads "needs approval". */
+                    <span style={{ flexShrink: 0, fontFamily: "var(--f-body)", fontSize: 11, color: "var(--honey)" }}>needs approval</span>
+                  ) : activeChatTaskRunning && index === messages.length - 1 ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, fontFamily: "var(--f-body)", fontSize: 11.5, color: "var(--live)" }}>
+                      <Dot state="working" size={6} />
+                      working
+                    </span>
+                  ) : agentSubline ? (
+                    <span style={{ fontFamily: "var(--f-body)", fontSize: 11.5, color: "var(--fg-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agentSubline}</span>
+                  ) : null}
                 </div>
                 <div style={{ display: "grid", gap: 10, color: "var(--fg-2)", fontSize: 14.5, lineHeight: 1.7, paddingLeft: 14 }}>
                   {applicationGenerationCard ? <ApplicationGenerationCard card={applicationGenerationCard} /> : null}

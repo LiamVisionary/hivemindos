@@ -36,7 +36,7 @@ assert.ok(helperEnd > helperStart, "dashboard helper test end anchor must exist"
 
 const helperSubset =
   helperSource.slice(helperStart, helperEnd).replace(/\bexport\s+/g, "") +
-  "\n;globalThis.__fleetMerge = { mergeDiscoveredMachines, machineNetworkIssue };";
+  "\n;globalThis.__fleetMerge = { mergeDiscoveredMachines, machineNetworkIssue, readyTailnetSelfShadowBases, isTailnetSelfShadowGroup };";
 
 const helperContext = vm.createContext({
   ...identityContext.__fleetIdentity,
@@ -44,7 +44,7 @@ const helperContext = vm.createContext({
 });
 compileIntoContext(helperSubset, helperContext, "dashboard-display-helpers.tsx");
 
-const { mergeDiscoveredMachines, machineNetworkIssue } =
+const { mergeDiscoveredMachines, machineNetworkIssue, readyTailnetSelfShadowBases, isTailnetSelfShadowGroup } =
   helperContext.__fleetMerge;
 
 function readyUbuntuMachine() {
@@ -260,6 +260,67 @@ assert.equal(
   "an unclaimed missing machine with agents is still preserved",
 );
 
+// --- fleet-view group fold (2026-07-10): the fleet view rebuilds MachineGroups
+// from the raw tailscale device list, which carries no tailnetSelf, so a
+// rename-orphaned system node (a second MacBook sharing the ComputerName, so
+// tailscale suffixes it "-1") resurfaces as an empty "pending" ghost machine.
+// The group layer must fold it via the tailnetSelf a ready collector reported.
+const { machineExactIdentity: exactId } = identityContext.__fleetIdentity;
+const shadowDiscovered = [
+  {
+    device: { self: true, name: "This Mac", dnsName: "hivemindos-liams-macbook-pro.tail1.ts.net" },
+    collector: "ready",
+    tailnetSelf: { name: "Liam’s MacBook Pro", dnsName: "liams-macbook-pro.tail1.ts.net" },
+  },
+  {
+    device: { self: false, name: "hivemindos-liams-macbook-pro-nyc", dnsName: "hivemindos-liams-macbook-pro-nyc.tail1.ts.net" },
+    collector: "ready",
+    tailnetSelf: { name: "Liam’s MacBook Pro", dnsName: "liams-macbook-pro-1.tail1.ts.net" },
+  },
+];
+const shadowBases = readyTailnetSelfShadowBases(shadowDiscovered);
+assert.ok(
+  shadowBases.has(exactId("", "liams-macbook-pro-1.tail1.ts.net")),
+  "the NYC collector's claimed system node enters the shadow set",
+);
+assert.ok(
+  !shadowBases.has(exactId("This Mac", "liams-macbook-pro.tail1.ts.net")),
+  "a collector's claim on its OWN system node never enters the shadow set (no self-fold)",
+);
+assert.ok(
+  isTailnetSelfShadowGroup(
+    { name: "Liam’s MacBook Pro", dnsName: "liams-macbook-pro-1.tail1.ts.net", self: false, collector: "unknown" },
+    shadowBases,
+  ),
+  "the bridge-less NYC system node folds out of the fleet view",
+);
+assert.ok(
+  !isTailnetSelfShadowGroup(
+    { name: "hivemindos-liams-macbook-pro-nyc", dnsName: "hivemindos-liams-macbook-pro-nyc.tail1.ts.net", self: false, collector: "ready" },
+    shadowBases,
+  ),
+  "the ready NYC collector node is never folded",
+);
+assert.ok(
+  !isTailnetSelfShadowGroup(
+    { name: "This Mac", dnsName: "liams-macbook-pro.tail1.ts.net", self: true, collector: "unknown" },
+    shadowBases,
+  ),
+  "self is never folded, even mid-probe when it looks device-only",
+);
+assert.ok(
+  !isTailnetSelfShadowGroup(
+    { name: "someones-laptop", dnsName: "someones-laptop.tail1.ts.net", self: false, collector: "unknown" },
+    shadowBases,
+  ),
+  "an unclaimed standalone machine is never folded",
+);
+assert.equal(
+  readyTailnetSelfShadowBases([]).size,
+  0,
+  "no ready collectors means no shadow bases (empty fleet is a no-op)",
+);
+
 // --- reverse reachability: peers' env-sync unreachable reports annotate the
 // target machine and surface a network issue even when the local probe is ok.
 const reachabilitySource = readFileSync(
@@ -347,5 +408,6 @@ assert.ok(
 );
 
 console.log("✓ fleet discovery merge keeps verified bridges across device-only refreshes");
+console.log("✓ fleet view folds rename-orphaned system tailnet nodes out of the machine groups");
 console.log("✓ fleet discovery merge still surfaces real bridge probe failures");
 console.log("✓ reverse reachability annotates peer-reported unreachable machines");

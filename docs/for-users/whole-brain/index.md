@@ -11,7 +11,7 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
 
 <section class="atlasHero">
   <strong>Short version:</strong>
-  <p>The vault is the durable shared brain. Shared Brain Memory gives agents private millisecond typed-memory recall first, entity-linked memories, action memories, temporal history, memory evolution when reviewed facts replace stale ones, then broader full-vault context retrieval when distilled memory is not enough. Compiled Knowledge turns reviewed source material into searchable entity/concept/summary wiki pages with graph-native lookups. OKF export turns selected memory and conversation notes into a portable markdown bundle for outside agents and catalog tools. The Obsidian Native Brain Pack gives agents shared skills for Markdown, Bases, and Canvas, while optional brain services such as QMD, GBrain, and Neo4j can index, compile, visualize, or query the vault without replacing it.</p>
+  <p>The vault is the durable shared brain. Shared Brain Memory gives agents private millisecond typed-memory recall first, entity-linked canonical memory heads, temporal history, memory evolution when reviewed facts replace stale ones, then broader full-vault context retrieval when distilled memory is not enough. High-volume operational events stay in a separate bounded local journal and can generate review-gated memory, skill, or job proposals without automatically applying them. Compiled Knowledge turns reviewed source material into searchable entity/concept/summary wiki pages with graph-native lookups. OKF export turns selected memory and conversation notes into a portable markdown bundle for outside agents and catalog tools. The Obsidian Native Brain Pack gives agents shared skills for Markdown, Bases, and Canvas, while optional brain services such as QMD, GBrain, and Neo4j can index, compile, visualize, or query the vault without replacing it.</p>
 </section>
 
 ## Component Pages
@@ -26,6 +26,11 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
     <h3>Brain Services</h3>
     <p>Shared Brain Memory, Compiled Knowledge search, OKF exchange bundles, Neo4j, GBrain, Syntho, Trading Brain, the Brain Graph, the context index, and service notes.</p>
     <a href="brain-services.html">Open services</a>
+  </section>
+  <section class="docCard">
+    <h3>Memory Benchmarks</h3>
+    <p>Public scorecards for live recall, local API latency, typed-memory scale, full-vault search, truth maintenance, pattern mining, and token reduction.</p>
+    <a href="../features/shared-brain-benchmarks.html">Open benchmarks</a>
   </section>
   <section class="docCard">
     <h3>Shared Skills</h3>
@@ -103,7 +108,7 @@ The important split is access path, not storage path:
 - HivemindOS-managed chats inject Shared Brain Memory through the dashboard runtime context.
 - Raw or non-managed runtimes use `hive-brain`, which tries `/api/brain/memory` first and falls back to local vault/index search.
 - Claude Code also gets `hive-brain-hook` as a `UserPromptSubmit` hook, so raw Claude prompts can receive relevant full-vault context before answering.
-- Durable memory writes still go to typed Agent Memory notes; `remember-action` records durable assistant/agent receipts; `hive-brain evolve` preserves superseded memory history when reviewed context changes; temporal recall can include older chain entries; broad recall can read normal vault notes when the typed layer is not enough.
+- Durable memory writes go to typed Agent Memory notes with canonical `memoryKey` heads; `record-operation` keeps run receipts out of durable recall; `hive-brain evolve` preserves superseded memory history when reviewed context changes; temporal recall can include older chain entries; broad recall can read normal vault notes when the typed layer is not enough.
 - OKF export writes selected memory and conversation concepts to `Operations/Brain Services/OKF Export/` for outside agents, catalogs, and graph tools without changing the native vault.
 - The Obsidian Native Brain Pack lets agents write durable notes, `.base` views, and `.canvas` maps in formats Obsidian can open directly.
 
@@ -128,6 +133,7 @@ The doctor is read only unless `--fix` is passed. Fixes move content into canoni
 
 - [Vault Map](vault-map.html)
 - [Brain Services](brain-services.html)
+- [Memory Benchmarks](../features/shared-brain-benchmarks.html)
 - [Packaged Skills](../packaged-skills/)
 - [Shared Env](shared-env.html)
 - [Workspaces](workspaces.html)

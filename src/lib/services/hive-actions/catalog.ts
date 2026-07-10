@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineHiveAction } from "./define";
 import { SLACK_TOKEN_ENV } from "@/lib/services/integrations/provider-connection-env";
+import { azureResourcesAction } from "./integrations/azure-resources";
 
 const handoffTargetSchema = {
   target: z.string().describe("Fuzzy machine name, such as ubuntu."),
@@ -1695,6 +1696,7 @@ export const slackSendMessageAction = defineHiveAction({
 });
 
 export const HIVE_ACTIONS = [
+  azureResourcesAction,
   slackSendMessageAction,
   listHivemindMachinesAction,
   planHandoffAction,

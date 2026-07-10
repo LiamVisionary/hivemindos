@@ -26,7 +26,7 @@
 // upgrade changes that path, so setup AND hive-update re-run this to self-heal.
 //
 // Usage:
-//   node scripts/register-mcp-clients.mjs [--server hivemind|xapi] [--targets all|none|claude,codex,…] [--remove] [--force] [--dry-run] [--aeon-project <dir>]
+//   node scripts/register-mcp-clients.mjs [--server hivemind|xapi|azure] [--targets all|none|claude,codex,…] [--azure-access read|manage] [--remove] [--force] [--dry-run] [--aeon-project <dir>]
 
 import fs from "node:fs";
 import os from "node:os";
@@ -36,23 +36,7 @@ import { fileURLToPath } from "node:url";
 const SELF_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SELF_DIR, "..");
 const HOME = os.homedir();
-const COMMAND = process.execPath; // absolute node — no PATH dependency for GUI harnesses
-const SERVER_CATALOG = {
-  hivemind: {
-    name: "hivemind",
-    script: path.join(ROOT, "scripts", "hivemind-mcp"),
-    args: [path.join(ROOT, "scripts", "hivemind-mcp")],
-    env: { HIVE_ENV_PROJECT_ROOT: ROOT },
-    description: "HivemindOS MCP",
-  },
-  xapi: {
-    name: "xapi",
-    script: path.join(ROOT, "scripts", "x-mcp-bridge.mjs"),
-    args: [path.join(ROOT, "scripts", "x-mcp-bridge.mjs")],
-    env: { HIVE_ENV_PROJECT_ROOT: ROOT },
-    description: "X API MCP",
-  },
-};
+const NODE_COMMAND = process.execPath; // absolute node — no PATH dependency for GUI harnesses
 
 const KNOWN = ["claude", "codex", "gemini", "openclaw", "hermes", "aeon"];
 const RUNTIME_COMMANDS = {
@@ -73,7 +57,43 @@ function flagValue(name) {
   if (i < 0) return "";
   return argv[i].includes("=") ? argv[i].split("=").slice(1).join("=") : (argv[i + 1] || "");
 }
-const AEON_PROJECT = flagValue("--aeon-project");
+const AEON_PROJECT_INPUT = flagValue("--aeon-project") || process.env.AEON_LOCAL_PATH || process.env.AEON_HOME || "";
+const AEON_PROJECT = AEON_PROJECT_INPUT.startsWith("~/")
+  ? path.join(HOME, AEON_PROJECT_INPUT.slice(2))
+  : AEON_PROJECT_INPUT;
+const AZURE_ACCESS = flagValue("--azure-access").trim().toLowerCase() === "manage" ? "manage" : "read";
+const AZURE_MCP_COMMAND = path.join(
+  HOME,
+  ".hivemindos",
+  "integrations",
+  "azure-mcp",
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "azmcp.cmd" : "azmcp",
+);
+const SERVER_CATALOG = {
+  hivemind: {
+    name: "hivemind",
+    command: NODE_COMMAND,
+    args: [path.join(ROOT, "scripts", "hivemind-mcp")],
+    env: { HIVE_ENV_PROJECT_ROOT: ROOT },
+    description: "HivemindOS MCP",
+  },
+  xapi: {
+    name: "xapi",
+    command: NODE_COMMAND,
+    args: [path.join(ROOT, "scripts", "x-mcp-bridge.mjs")],
+    env: { HIVE_ENV_PROJECT_ROOT: ROOT },
+    description: "X API MCP",
+  },
+  azure: {
+    name: "azure",
+    command: AZURE_MCP_COMMAND,
+    args: ["server", "start", "--mode", "consolidated", ...(AZURE_ACCESS === "read" ? ["--read-only"] : [])],
+    env: { AZURE_MCP_COLLECT_TELEMETRY: "false" },
+    description: `Microsoft Azure MCP (${AZURE_ACCESS === "read" ? "read-only" : "management"})`,
+  },
+};
 const SERVER_KEY = (flagValue("--server") || flagValue("--name") || "hivemind").trim().toLowerCase();
 const SERVER = SERVER_CATALOG[SERVER_KEY];
 if (!SERVER) {
@@ -81,6 +101,7 @@ if (!SERVER) {
   process.exit(2);
 }
 const NAME = SERVER.name;
+const COMMAND = SERVER.command;
 const ARGS = SERVER.args;
 const ENV = SERVER.env;
 
@@ -164,11 +185,14 @@ function mergeJson(file, { wrapperKey = "mcpServers", includeType = false } = {}
 
 // ---- Codex (TOML) -----------------------------------------------------------
 function codexBlock() {
+  const env = Object.entries(ENV)
+    .map(([key, value]) => `${key} = ${JSON.stringify(value)}`)
+    .join(", ");
   return [
     `[mcp_servers.${NAME}]`,
     `command = ${JSON.stringify(COMMAND)}`,
     `args = [${ARGS.map((a) => JSON.stringify(a)).join(", ")}]`,
-    `env = { HIVE_ENV_PROJECT_ROOT = ${JSON.stringify(ROOT)} }`,
+    `env = { ${env} }`,
     "",
   ].join("\n");
 }
@@ -199,9 +223,9 @@ function hermesBlockLines() {
     `  ${NAME}:`,
     `    command: ${yamlStr(COMMAND)}`,
     "    args:",
-    `      - ${yamlStr(ARGS[0])}`,
+    ...ARGS.map((arg) => `      - ${yamlStr(arg)}`),
     "    env:",
-    `      HIVE_ENV_PROJECT_ROOT: ${yamlStr(ROOT)}`,
+    ...Object.entries(ENV).map(([key, value]) => `      ${key}: ${yamlStr(value)}`),
   ];
 }
 function mergeHermes(file) {
@@ -250,18 +274,23 @@ const REGISTRARS = {
   codex: () => (!FORCE && !runtimePresent("codex", path.join(HOME, ".codex"))) ? { skipped: "not installed" } : mergeCodex(path.join(HOME, ".codex", "config.toml")),
   hermes: () => (!FORCE && !runtimePresent("hermes", path.join(HOME, ".hermes"))) ? { skipped: "not installed" } : mergeHermes(path.join(HOME, ".hermes", "config.yaml")),
   aeon: () => {
-    // Aeon's MCP config is project-scoped (a committed <repo>/.mcp.json). With an
-    // explicit --aeon-project, register there; otherwise fall back to ~/.aeon
-    // (Aeon's local home on this machine). Top-level keys + type:stdio per its README.
-    const file = AEON_PROJECT ? path.join(AEON_PROJECT, ".mcp.json") : path.join(HOME, ".aeon", ".mcp.json");
-    if (!FORCE && !AEON_PROJECT && !runtimePresent("aeon", path.join(HOME, ".aeon"))) return { skipped: "not installed" };
+    // AEON v0.1 keeps MCP config in a concrete repo checkout. Never invent a
+    // ~/.aeon project: target an explicit checkout or AEON_LOCAL_PATH/AEON_HOME.
+    if (!AEON_PROJECT) return { skipped: "no project (pass --aeon-project or set AEON_LOCAL_PATH)" };
+    const hasV01Layout = present(
+      path.join(AEON_PROJECT, "apps", "cli", "aeon"),
+      path.join(AEON_PROJECT, "aeon"),
+    ) && fs.existsSync(path.join(AEON_PROJECT, "aeon.yml"))
+      && fs.existsSync(path.join(AEON_PROJECT, "catalog", "skills.json"));
+    if (!FORCE && !hasV01Layout) return { skipped: "project is not an AEON v0.1 checkout" };
+    const file = path.join(AEON_PROJECT, ".mcp.json");
     return mergeJson(file, { wrapperKey: null, includeType: true });
   },
 };
 
 const targets = parseTargets();
 console.log(`${SERVER.description} ${REMOVE ? "removal" : "registration"} → server "${NAME}" = ${COMMAND} ${ARGS.join(" ")}`);
-console.log(`  repo root: ${ROOT}`);
+if (ENV.HIVE_ENV_PROJECT_ROOT) console.log(`  repo root: ${ROOT}`);
 console.log(`  targets: ${targets.join(", ") || "(none)"}${DRY ? "  [dry-run]" : ""}${FORCE ? "  [force]" : ""}`);
 let changed = 0;
 for (const t of targets) {

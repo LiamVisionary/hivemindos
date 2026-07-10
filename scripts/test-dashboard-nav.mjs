@@ -31,9 +31,9 @@ assert.deepEqual(
   [
     ["kanban", "vault", "chat", "wallet", "trade"],
     ["scheduler", "swarm", "history"],
-    ["governance", "aeon", "integrations", "notifications"],
+    ["governance", "cloud", "aeon", "integrations", "notifications"],
   ],
-  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade, Schedules/Swarm/History, Companies/Aeon/Integrations/Alerts",
+  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade, Schedules/Swarm/History, Companies/Cloud/Aeon/Integrations/Alerts",
 );
 assert.equal(navigation.shelfSlotForView("agents"), "agents", "Fleet lights the brand slot");
 assert.equal(navigation.shelfSlotForView("my-apps"), "integrations", "Apps & Services lights the Integrations slot");
@@ -41,6 +41,7 @@ assert.equal(navigation.shelfSlotForView("memory"), "more", "Memory lights the M
 assert.equal(navigation.shelfSlotForView("env"), "more", "Unpinned utility views light the More slot");
 assert.equal(navigation.DASHBOARD_ROUTE_LABELS.history, "Work History", "Route labels derive from the catalog");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("env"), "Utilities set includes env (the More grid renders every utility view)");
+assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("cloud"), "Utilities set includes managed Cloud Agents");
 
 assert.match(
   appNavShelf,

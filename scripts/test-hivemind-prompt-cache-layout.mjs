@@ -24,11 +24,13 @@ const [
   promptSource,
   messageSource,
   runtimeSource,
+  runtimePromptSource,
   cacheHintSource,
 ] = await Promise.all([
   source("src/lib/services/chat/hivemind-system-prompt.ts"),
   source("src/app/api/chat/agent-runtime/messages.ts"),
   source("src/app/api/chat/agent-runtime/stream-openai-compatible.ts"),
+  source("src/app/api/chat/agent-runtime/openai-compatible-prompt.ts"),
   source("src/lib/services/chat/inference-cache-hints.ts"),
 ]);
 
@@ -63,8 +65,9 @@ assertBefore(envelopeBuilder, "const stableContext", "const systemContext", "env
 assertIncludes(envelopeBuilder, "[stableContext, volatileContext]", "system context keeps volatile context after stable context");
 
 assertIncludes(messageSource, "cache_control?: { type: string };", "message text part cache-control metadata");
-assertIncludes(runtimeSource, "openAICompatibleMessageCacheControlSupported", "runtime explicit cache-control gate");
-assertIncludes(runtimeSource, "cacheControl: openAICompatibleMessageCacheControlSupported", "runtime passes explicit cache-control option");
+assertIncludes(runtimeSource, "createOpenAICompatibleModelMessagesBuilder", "runtime delegates prompt assembly to its focused builder");
+assertIncludes(runtimePromptSource, "openAICompatibleMessageCacheControlSupported", "runtime prompt builder explicit cache-control gate");
+assertIncludes(runtimePromptSource, "cacheControl: openAICompatibleMessageCacheControlSupported", "runtime prompt builder passes explicit cache-control option");
 assertIncludes(cacheHintSource, "model.startsWith(\"anthropic/\")", "OpenRouter Anthropic cache-control support");
 assertIncludes(cacheHintSource, "model.startsWith(\"qwen/\")", "OpenRouter Qwen cache-control support");
 

@@ -17,8 +17,19 @@ export type ConverseStreamEvent = {
   transcript?: string;
   /** Canonical final reply text (type "done"). */
   reply?: string;
+  brainLabel?: string;
+  brainFallback?: { label?: string; error?: string };
   error?: string;
 };
+
+export function voiceTurnBrainMetadata(value: Pick<ConverseStreamEvent, "brainLabel" | "brainFallback">) {
+  return {
+    ...(value.brainLabel ? { brain: value.brainLabel } : {}),
+    ...(value.brainFallback?.label
+      ? { brainFallback: { label: value.brainFallback.label, error: String(value.brainFallback.error || "") } }
+      : {}),
+  };
+}
 
 export type NdjsonEventReader<T> = {
   /** Parsed events since the last take, in arrival order. */

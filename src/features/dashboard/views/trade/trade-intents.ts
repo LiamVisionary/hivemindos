@@ -49,15 +49,15 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "card-payment", label: "Card payment", desc: "Virtual-card checkout (MoneyClaw)", group: "Pay & fund", input: "info", mutating: true },
 
   { id: "portfolio", label: "Portfolio", desc: "Read balances, PnL, positions", group: "Read", input: "none", mutating: false },
-  { id: "nansen-defi-positions", label: "Nansen DeFi positions", desc: "Wallet DeFi holdings", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-smart-money-holdings", label: "Nansen Smart Money holdings", desc: "Top Smart Money tokens", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-token-holders", label: "Nansen token holders", desc: "Top holder context", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-token-screener", label: "Nansen token screener", desc: "New-token discovery", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-token-tracking", label: "Nansen token tracking", desc: "Smart Money token brief", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-hyperliquid-wallets", label: "Nansen Hyperliquid wallets", desc: "Leaderboard + wallet context", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-related-wallets", label: "Nansen related wallets", desc: "Cluster wallet relationships", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-top-wallets", label: "Nansen top wallets", desc: "Find top wallets for a token", group: "Read", input: "nansen", mutating: false },
-  { id: "nansen-cex-health", label: "Nansen CEX health", desc: "Exchange balance/flow brief", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-defi-positions", label: "DeFi positions", desc: "Wallet DeFi holdings", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-smart-money-holdings", label: "Smart Money holdings", desc: "Top Smart Money tokens", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-holders", label: "Token holders", desc: "Top holder context", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-screener", label: "Token screener", desc: "New-token discovery", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-tracking", label: "Token tracking", desc: "Smart Money token brief", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-hyperliquid-wallets", label: "Hyperliquid wallets", desc: "Leaderboard + wallet context", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-related-wallets", label: "Related wallets", desc: "Cluster wallet relationships", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-top-wallets", label: "Top wallets", desc: "Find top wallets for a token", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-cex-health", label: "CEX health", desc: "Exchange balance/flow brief", group: "Read", input: "nansen", mutating: false },
 ];
 
 export const STOCK_SIDES = ["buy", "sell"] as const;

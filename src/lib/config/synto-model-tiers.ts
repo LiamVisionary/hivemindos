@@ -1,5 +1,9 @@
 export const SYNTO_CLOUD_MODEL_ID = "qwen/qwen3-235b-a22b-2507";
 export const SYNTO_CLOUD_PROVIDER = "openrouter";
+export const SYNTO_CLOUD_PROVIDER_URL = "https://openrouter.ai/api/v1";
+export const SYNTO_CLOUD_API_KEY_ENV = "OPENROUTER_API_KEY";
+export const SYNTO_LOCAL_PROVIDER_NAME = "lm_studio";
+export const SYNTO_LOCAL_PROVIDER_URL = "http://127.0.0.1:1234/v1";
 export const SYNTO_DEFAULT_LOCAL_MODEL_ID = "synto-qwen3-30b-a3b-q4-k-m";
 
 export type SyntoModelRoute = "cloud-best" | "local-recommended" | "local-light";

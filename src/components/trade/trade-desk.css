@@ -362,6 +362,11 @@
 .dk-seg button:hover { color: var(--fg); }
 .dk-seg button[data-active] { background: var(--honey); color: #1a1305; }
 .dk-marketpill { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; font-family: var(--f-mono); color: var(--fg-3); border: 1px solid var(--line-2); border-radius: 99px; padding: 7px 13px; white-space: nowrap; }
+.dk-refreshable { position: relative; }
+.dk-refresh-indicator { position: absolute; z-index: 2; top: 13px; right: 13px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--honey); background: color-mix(in srgb, var(--panel-hi) 88%, transparent); border: 1px solid var(--line-2); border-radius: 50%; box-shadow: 0 5px 18px color-mix(in srgb, #000 18%, transparent); pointer-events: none; }
+.dk-refreshable > h3:first-of-type,
+.dk-refreshable > .lbl:first-of-type,
+.dk-refreshable > .dk-panel-heading:first-of-type { padding-right: 34px; }
 
 /* hero */
 .dk-hero { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; margin-bottom: 16px; }
@@ -528,5 +533,6 @@
 .sk::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fg) 7%, transparent), transparent); animation: sk-shimmer 1.25s infinite; }
 @keyframes sk-shimmer { 100% { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .sk::after { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dk-refresh-indicator .tk-spin { animation: none; } }
 .sk-row { display: flex; align-items: center; gap: 12px; }
 .sk-spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; }

@@ -592,6 +592,22 @@ export type MachineSystemStats = {
   arch?: string;
   osRelease?: string;
   uptimeSec?: number;
+  // Extended resource telemetry (collector v0.19+; older collectors omit
+  // these, so every field stays optional and the UI degrades gracefully).
+  swapUsedGb?: number | null;
+  swapTotalGb?: number | null;
+  cacheGb?: number | null;
+  tempC?: number | null;
+  diskReadMBs?: number | null;
+  diskWriteMBs?: number | null;
+  netRxMBs?: number | null;
+  netTxMBs?: number | null;
+  procCount?: number | null;
+  topProcesses?: Array<{ name: string; rssMb: number }>;
+  /** Rolling recent samples (cpu%/ram%/net MB-s) accumulated by the collector for sparklines. */
+  history?: { cpu: number[]; ram: number[]; netRx: number[]; netTx: number[] };
+  /** Round-trip latency to the collector /health endpoint (ms), measured by the discovery probe. */
+  rttMs?: number | null;
 };
 
 export type MachineGroup = {
@@ -654,6 +670,9 @@ export type MachineDirectoryBrowser = {
 
 export type ChatTreeItem = {
   key: string;
+  /** Owning agent id. Every producer in `use-chat-tree-controller` sets this;
+   *  it was missing from this type only because that file is `@ts-nocheck`. */
+  agentId?: string;
   title: string;
   subtitle: string;
   updatedAt?: number;
@@ -1070,7 +1089,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance" | "compute";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

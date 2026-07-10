@@ -5,6 +5,7 @@ import {
   GOOGLE_CLIENT_SECRET_ENV,
   GOOGLE_CLOUD_CLIENT_ID_ENV,
   GOOGLE_CLOUD_CLIENT_SECRET_ENV,
+  AZURE_OAUTH_CLIENT_ID_ENV,
   SLACK_OAUTH_CLIENT_ID_ENV,
 } from "@/lib/services/integrations/provider-connection-env";
 import { CLAWBANK_TOKEN_ENV_NAMES } from "@/lib/services/clawbank";
@@ -164,6 +165,37 @@ export const CONNECTOR_MANIFESTS: ConnectorManifest[] = [
       oauthClientEnvKeys: [GOOGLE_CLOUD_CLIENT_ID_ENV, GOOGLE_CLOUD_CLIENT_SECRET_ENV],
     },
     operations: [READ_CONNECTION_OPERATION, READ_API_OPERATION],
+  },
+  {
+    key: "azure",
+    label: "Microsoft Azure",
+    detail: "Subscriptions, resource groups, resources, and local Azure management tools.",
+    tags: ["cloud", "resources", "subscriptions", "oauth", "mcp"],
+    auth: {
+      mode: "oauth-refresh-token",
+      tokenEnvKey: "AZURE_OAUTH_REFRESH_TOKEN",
+      tokenHint: "Sign in with Microsoft. Hosted access is read-only; the optional local MCP installs separately and starts read-only.",
+      tokenPlaceholder: "",
+      oauthClientEnvKeys: [AZURE_OAUTH_CLIENT_ID_ENV],
+    },
+    operations: [
+      READ_CONNECTION_OPERATION,
+      {
+        ...READ_API_OPERATION,
+        id: "read-azure-resources",
+        label: "Read Azure resources",
+        description: "List subscriptions, resource groups, and resources through Azure Resource Manager.",
+      },
+      {
+        id: "configure-azure-mcp",
+        label: "Configure Azure MCP",
+        description: "Install Microsoft's official Azure MCP locally and register it with selected agent runtimes.",
+        methods: ["POST"],
+        sideEffects: ["network", "filesystem", "write"],
+        risk: "medium",
+        requiredClaims: ["connectors:invoke"],
+      },
+    ],
   },
   {
     key: "posthog",

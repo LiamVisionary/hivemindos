@@ -21,6 +21,7 @@ import {
 import { resolveAdaptiveOpenRouterModel } from "@/lib/services/chat/adaptive-openrouter-models";
 import { flushChannelMarkup } from "@/lib/services/chat/channel-markup";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
+import { normalizeChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
 import { isAdaptiveProviderProfile, resolveAdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
 import {
   appendRuntimeChatSessionEvent,
@@ -65,7 +66,6 @@ import { streamOpenAICompatibleRuntime } from "./stream-openai-compatible";
 import { runtimeProcessEventsSsePayload } from "./process-events";
 import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract";
 import { resolveXaiOAuthRuntimeProfile } from "@/lib/services/xai-oauth-inference";
-import { latestOwnXPostAnswer } from "@/lib/services/x-latest-post";
 
 export async function streamHttpRuntime(
   profile: AgentProfile,
@@ -83,32 +83,18 @@ export async function streamHttpRuntime(
   vaultPromptContext = "",
   permissionMode = "manual",
   mediaArtifacts: ChatMediaArtifact[] = [],
+  reasoningEffort: unknown = "medium",
 ) {
   const normalizedPermissionMode = normalizeChatPermissionMode(permissionMode);
+  const normalizedReasoningEffort = normalizeChatReasoningEffort(reasoningEffort);
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
   }
-  const latestXReply = await latestOwnXPostAnswer(inputCheck.text).catch(() => null);
-  if (latestXReply) {
-    if (runtimeSessionId) {
-      await appendRuntimeChatSessionText(runtimeSessionId, "assistant", latestXReply).catch(() => undefined);
-      await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
-    }
-    return new Response(
-      ssePayload({ choices: [{ delta: { content: latestXReply } }] }) + "data: [DONE]\n\n",
-      {
-        headers: {
-          "content-type": "text/event-stream; charset=utf-8",
-          "cache-control": "no-cache",
-        },
-      },
-    );
-  }
   if (isXaiOAuthProvider(profile.provider)) {
     try {
       const xaiProfile = await resolveXaiOAuthRuntimeProfile(profile);
-      return streamOpenAICompatibleRuntime(xaiProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+      return streamOpenAICompatibleRuntime(xaiProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
     } catch (error) {
       return Response.json({
         error: error instanceof Error ? error.message : "xAI OAuth setup is incomplete.",
@@ -119,7 +105,7 @@ export async function streamHttpRuntime(
     try {
       const adaptiveRoutePlan = await resolveAdaptiveRoutePlan(profile, messages);
       if (adaptiveRoutePlan.profile.runtime === HIVEMIND_OS_RUNTIME) {
-        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+        return streamOpenAICompatibleRuntime(adaptiveRoutePlan.profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, adaptiveRoutePlan, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
       }
       // A Hermes-selected plan is always OpenRouter-backed. Re-shape to the
       // adaptive-OpenRouter profile instead of pinning the single selected
@@ -132,21 +118,21 @@ export async function streamHttpRuntime(
     }
   }
   if (isBankrLlmProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
   }
   if (isHivemindosWalletPaidModelProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
   }
   if (isHiveComputeProfile(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
   }
   if (isOpenAICompatibleRuntime(profile)) {
-    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+    return streamOpenAICompatibleRuntime(profile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
   }
   if (isOpenRouterProvider(profile) && !isAdaptiveOpenRouterProfile(profile)) {
     try {
       const openRouterProfile = await openRouterCompatibleProfile(profile);
-      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts);
+      return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "OpenRouter model selection failed." }, { status: 502 });
     }
@@ -170,7 +156,7 @@ export async function streamHttpRuntime(
     }
   }
   const url = getRuntimeUrl(profile, profile.chatPath || "/chat");
-  const lockKey = interactiveRuntimeLockKey(profile, url);
+  const lockKey = interactiveRuntimeLockKey(profile, url, telemetry?.chatStorageKey || runtimeSessionId);
   if (!reserveInteractiveRuntime(lockKey)) {
     const message = `${profile.name || profile.runtime} is already running another interactive request at ${url}. Wait for that run to finish before sending another chat, scheduler run, or Kanban assignment.`;
     recordRuntimeTelemetry(telemetry, "agent_runtime.http.busy", {

@@ -21,11 +21,13 @@ import {
 } from "@/lib/services/queen-bee/control-plane";
 import { formatQueenBeePersonalityInstruction } from "@/lib/config/queen-bee-personality";
 import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
+import { runConfiguredQueenProviderFallback } from "@/lib/services/queen-bee/provider-fallback";
 import {
   addQueenBeeVoicePreference,
   queenVoicePreferencePreamble,
 } from "@/lib/services/queen-bee/voice-preferences";
 import { readQueenBeeBrainDefaults } from "@/lib/services/queen-bee/voice-settings";
+import { runBuiltInQueenCapabilityTurnWithEvidence } from "@/lib/services/queen-bee/capability-fallback";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
 import {
   openAICompatibleInferenceCacheHints,
@@ -40,9 +42,19 @@ import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import {
   voiceTaskApprovalPrompt,
   voiceTaskSubmissionAuthorized,
-  voiceTranscriptRequestsImmediateAnswer,
 } from "@/lib/services/queen-bee/voice-task-approval";
-import { latestOwnXPostAnswer } from "@/lib/services/x-latest-post";
+import { runXAccountReadTool } from "@/lib/services/x-latest-post";
+import {
+  coerceXAccountReadToolInput,
+  X_ACCOUNT_CAPABILITY_INSTRUCTION,
+  X_ACCOUNT_READ_TOOL_NAME,
+} from "@/lib/services/x-account-tool-contract";
+import { queenPipelineChatTools } from "@/lib/services/queen-bee/queen-brain";
+import {
+  applyOpenAiChatChunk,
+  createQueenChatStreamState,
+  finalizeQueenChatStream,
+} from "@/lib/services/queen-bee/chat-stream";
 import {
   isXaiOAuthProvider,
   xaiOAuthVoiceRequestOptions,
@@ -52,6 +64,7 @@ import {
 // swap/send/Bankr DRAFT prepared on one turn, then a confirmation on the next)
 // thread their draft through it because the agent-turn is otherwise stateless.
 const QUEEN_VOICE_SESSION_ID = "queen-bee-voice";
+const QUEEN_PIPELINE_CHAT_TOOLS = queenPipelineChatTools();
 
 // A bare confirmation token ("CONFIRM_SWAP", "confirm", ...) carries no request of
 // its own — it points at a draft prepared on the previous turn. Used to decide when
@@ -103,6 +116,18 @@ type ConversationMessagesOptions = {
 type ProviderInferenceEvidence = {
   model?: string;
   usage?: Record<string, unknown>;
+};
+
+type ProviderConversationToolCall = {
+  id: string;
+  name: string;
+  arguments: string;
+};
+
+type ProviderConversationTurn = {
+  text: string;
+  toolCalls: ProviderConversationToolCall[];
+  evidence: ProviderInferenceEvidence;
 };
 
 function voiceInferenceUsageFields(usage: Record<string, unknown> | undefined) {
@@ -196,6 +221,8 @@ export type QueenVoiceHistoryTurn = { who: "you" | "queen"; text: string };
 
 export type QueenVoiceTurnResult = {
   reply: string;
+  brainLabel?: string;
+  brainFallback?: { label: string; error: string };
   taskId?: string;
   taskTitle?: string;
   created?: boolean;
@@ -208,7 +235,9 @@ const QUEEN_VOICE_TURN_INSTRUCTIONS = [
   "speech: one or two short, natural spoken sentences. No markdown, no lists, no reasoning preambles.",
   "You are MID-conversation: never greet again, never reintroduce yourself, never restart the conversation - answer the latest message directly in context.",
   "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive).",
-  "Read-only retrieval requests like 'grab/get/show/fetch my latest X post' are questions to answer now with available tools/context; keep task null and do not queue Work Board work.",
+  "When an offered tool can fulfill the user's request during this turn, call it and answer now with task null. Do not turn immediate read-only retrieval or capability use into Work Board work.",
+  X_ACCOUNT_CAPABILITY_INSTRUCTION,
+  "When no more-specific offered tool fully covers the request, call use_hive_capability with the user's complete goal and needed conversation context. It performs full capability search and governed execution across registered skills, MCP tools, connected app APIs, Hive Actions, runtime tools, and specialty agents. Never guess or claim a capability is unavailable merely because it is not named as a direct tool here.",
   "If you choose a next step after an open-ended prompt like 'you tell me', keep task null and ask for approval. Only set task after the user's latest message asks for specific work or confirms your immediately previous task proposal.",
   "Greetings, questions, status chat, and thinking-out-loud get task: null and a conversational speech reply.",
   "When you do create a task, make title a short imperative summary, message the full work request in the user's words, and have speech briefly confirm what you are kicking off.",
@@ -354,6 +383,7 @@ export async function runQueenBeeVoiceTurn(options: {
    *  Queen's Calls prefs). Defaults to the fleet-agent lane. */
   voiceBrain?: VoiceChatBrainPlan;
 }): Promise<QueenVoiceTurnResult> {
+  let brainMetadata: Pick<QueenVoiceTurnResult, "brainLabel" | "brainFallback"> = {};
   const emitter = options.onSpeechDelta
     ? createVoiceSpeechEmitter(options.onSpeechDelta)
     : null;
@@ -361,14 +391,10 @@ export async function runQueenBeeVoiceTurn(options: {
   // delegation receipt) is emitted before the result returns, so the client
   // always hears the same text the buffered turn would have spoken.
   const finish = (result: QueenVoiceTurnResult) => {
-    emitter?.finalize(result.reply);
-    return result;
+    const complete = { ...result, ...brainMetadata };
+    emitter?.finalize(complete.reply);
+    return complete;
   };
-  const exactLatestXReply = await latestOwnXPostAnswer(options.transcript).catch(() => null);
-  if (exactLatestXReply) {
-    options.progress?.("Reading your X timeline");
-    return finish({ reply: exactLatestXReply });
-  }
   const text = await conversationTurnText({
     ...options,
     onTextDelta: emitter ? (chunk) => emitter.onTextDelta(chunk) : undefined,
@@ -377,18 +403,11 @@ export async function runQueenBeeVoiceTurn(options: {
           if (emitter.attemptReset()) options.onSpeechReset?.();
         }
       : undefined,
+    onBrainFallback: (metadata) => { brainMetadata = metadata; },
   });
   if (text) {
     const parsed = parseVoiceTurnJson(text);
     if (parsed?.task) {
-      if (voiceTranscriptRequestsImmediateAnswer(options.transcript)) {
-        if (emitter?.attemptReset()) options.onSpeechReset?.();
-        return finish({
-          reply:
-            parsed.speech?.trim() ||
-            "I should answer that directly instead of queueing it. Ask me again and I will check X here.",
-        });
-      }
       if (!voiceTaskSubmissionAuthorized(options.transcript, options.history)) {
         if (emitter?.attemptReset()) options.onSpeechReset?.();
         return finish({ reply: voiceTaskApprovalPrompt(parsed.task) });
@@ -471,6 +490,7 @@ async function conversationTurnText(options: {
   /** Called before every attempt so delta consumers can reset between them. */
   onAttemptStart?: () => void;
   voiceBrain?: VoiceChatBrainPlan;
+  onBrainFallback?: (metadata: Pick<QueenVoiceTurnResult, "brainLabel" | "brainFallback">) => void;
 }) {
   await captureSpokenVoicePreference(options.transcript).catch(() => "");
   // Standing preferences ("call me boss") splice onto the system prompt so
@@ -478,9 +498,6 @@ async function conversationTurnText(options: {
   // the pipeline also captures simple spoken preference utterances itself,
   // because it does not run the realtime session's remember_preference tool.
   const preferencePreamble = await queenVoicePreferencePreamble();
-  const immediateAnswerPreamble = voiceTranscriptRequestsImmediateAnswer(options.transcript)
-    ? "The latest user message is a read-only X/Twitter retrieval request. Answer it directly now with available tools/context. Return task:null; do not create, offer, or propose a Work Board task."
-    : "";
   const queenDefaults = await readQueenBeeBrainDefaults().catch(() => null);
   const queenPersonality = queenDefaults?.soulPrompt;
   // Best-effort hive context (shared-brain recall + open work digest) rides
@@ -500,11 +517,12 @@ async function conversationTurnText(options: {
       return "";
     }
   })();
-  const systemPreamble = [preferencePreamble, immediateAnswerPreamble, brainContext]
+  const systemPreamble = [preferencePreamble, brainContext]
     .filter((part) => part && part.trim())
     .join("\n\n");
   const plan = options.voiceBrain ?? { kind: "fleet-agent" as const };
   if (plan.kind === "direct") {
+    let directFailure = `${plan.label} did not answer.`;
     const directStartedAt = Date.now();
     // No "Thinking with X" progress chip: the overlay shows the resolved
     // brain as a static tag by her name; chips are for real work stages.
@@ -517,13 +535,14 @@ async function conversationTurnText(options: {
         systemPreamble,
         options.onTextDelta,
         queenPersonality,
+        options.origin,
       );
-      if (options.marks)
-        options.marks.directTurnMs = Date.now() - directStartedAt;
+      if (options.marks) options.marks.directTurnMs = Date.now() - directStartedAt;
       if (text.trim()) {
         void noteQueenVoiceBrainSuccess(plan.statusAgent);
         return text;
       }
+      directFailure = `${plan.label} returned an empty reply.`;
       void noteQueenVoiceBrainFailure({
         agent: plan.statusAgent,
         error: `${plan.label} returned an empty reply.`,
@@ -531,18 +550,42 @@ async function conversationTurnText(options: {
         vaultPath: options.vaultPath,
       });
     } catch (directError) {
-      if (options.marks)
-        options.marks.directTurnMs = Date.now() - directStartedAt;
+      directFailure = directError instanceof Error ? directError.message : String(directError);
+      if (options.marks) options.marks.directTurnMs = Date.now() - directStartedAt;
       void noteQueenVoiceBrainFailure({
         agent: plan.statusAgent,
-        error:
-          directError instanceof Error ? directError.message : String(directError),
+        error: directFailure,
         fallbackModel: voiceFallbackModelName(),
         vaultPath: options.vaultPath,
       });
     }
-    // Deliberate: no fleet-agent detour on failure — the user chose a model;
-    // the OpenAI fallback below is the only substitute, and it is alerted.
+    const fallbackStartedAt = Date.now();
+    const recovered = await runConfiguredQueenProviderFallback(
+      { excludeProvider: plan.provider, excludeModel: plan.model, limit: 2 },
+      async (fallback) => {
+        options.onAttemptStart?.();
+        return runProviderConversationTurn(
+          fallback,
+          options.transcript,
+          options.history,
+          systemPreamble,
+          options.onTextDelta,
+          queenPersonality,
+          options.origin,
+        );
+      },
+      (fallback, error) => {
+        console.warn(
+          `[queen-bee-voice] configured fallback ${fallback.label} failed:`,
+          error instanceof Error ? error.message : error,
+        );
+      },
+    );
+    if (options.marks) options.marks.providerFallbackMs = Date.now() - fallbackStartedAt;
+    if (recovered) {
+      options.onBrainFallback?.({ brainLabel: recovered.fallback.label, brainFallback: { label: `${plan.model} · ${plan.provider}`, error: directFailure } });
+      return recovered.text;
+    }
   }
   const agent = await (async () => {
     if (plan.kind === "direct" || (await runtimeTurnCoolingDown())) return null;
@@ -604,6 +647,7 @@ async function conversationTurnText(options: {
   try {
     options.onAttemptStart?.();
     return await runOpenAiConversationTurn(
+      options.origin,
       options.transcript,
       options.history,
       systemPreamble,
@@ -674,6 +718,7 @@ function conversationStringMessages(
 }
 
 async function runOpenAiConversationTurn(
+  origin: string,
   transcript: string,
   history: QueenVoiceHistoryTurn[],
   systemPreamble?: string,
@@ -687,6 +732,7 @@ async function runOpenAiConversationTurn(
     systemPreamble,
     onTextDelta,
     personality,
+    origin,
   );
 }
 
@@ -727,6 +773,7 @@ async function runProviderConversationTurn(
   systemPreamble?: string,
   onTextDelta?: (chunk: string) => void,
   personality?: string | null,
+  origin = "",
 ) {
   const providerStartedAt = Date.now();
   // Every provider-direct lane invokes target.model itself, so the injected
@@ -758,7 +805,17 @@ async function runProviderConversationTurn(
     model: target.model,
     cacheScope: `queen-voice:${target.provider}:${target.model}`,
   });
-  const post = (params: Record<string, unknown>) =>
+  const initialMessages = conversationMessages(transcript, history, {
+    systemPreamble,
+    stableSystemAddendum,
+    personality,
+    cacheControl: { provider: target.provider, model: target.model },
+  });
+  const post = (
+    params: Record<string, unknown>,
+    messages: Array<Record<string, unknown>> = initialMessages as Array<Record<string, unknown>>,
+    offerTools = true,
+  ) =>
     fetch(endpoint.url, {
       method: "POST",
       headers: {
@@ -768,18 +825,14 @@ async function runProviderConversationTurn(
       },
       body: JSON.stringify({
         model: target.model,
-        messages: conversationMessages(transcript, history, {
-          systemPreamble,
-          stableSystemAddendum,
-          personality,
-          cacheControl: { provider: target.provider, model: target.model },
-        }),
+        messages,
         // Streamed turns feed the fused converse+speak pipeline; the buffered
         // legacy action keeps the plain JSON response.
         ...(onTextDelta ? { stream: true } : {}),
         ...(onTextDelta && isXaiOAuthProvider(target.provider)
           ? { stream_options: { include_usage: true } }
           : {}),
+        ...(offerTools ? { tools: QUEEN_PIPELINE_CHAT_TOOLS, tool_choice: "auto" } : {}),
         ...cacheHints.body,
         ...params,
       }),
@@ -805,17 +858,23 @@ async function runProviderConversationTurn(
     } | null;
     const detail =
       typeof data?.error === "string" ? data.error : data?.error?.message;
+    const toolError =
+      response.status === 400 &&
+      /tool|function.?call/i.test(detail ?? "");
     const parameterError =
       response.status === 400 &&
       /unsupported|unrecognized|unknown|max_tokens|max_completion_tokens|reasoning_effort|temperature/i.test(detail ?? "");
-    if (!parameterError) {
+    if (toolError) {
+      response = await post(requestOptions, initialMessages as Array<Record<string, unknown>>, false);
+    } else if (!parameterError) {
       throw new Error(detail || `${target.label} chat returned HTTP ${response.status}.`);
+    } else {
+      response = await post(
+        reasoningModel
+          ? { max_completion_tokens: 700 }
+          : { max_completion_tokens: 300 },
+      );
     }
-    response = await post(
-      reasoningModel
-        ? { max_completion_tokens: 700 }
-        : { max_completion_tokens: 300 },
-    );
     if (!response.ok) {
       const retryData = (await response.json().catch(() => null)) as {
         error?: { message?: string } | string;
@@ -825,32 +884,88 @@ async function runProviderConversationTurn(
       throw new Error(retryDetail || `${target.label} chat returned HTTP ${response.status}.`);
     }
   }
-  if (onTextDelta) {
-    const evidence: ProviderInferenceEvidence = {};
-    const text = await readOpenAiSseText(response, onTextDelta, (next) => {
-      if (next.model) evidence.model = next.model;
-      if (next.usage) evidence.usage = next.usage;
-    });
-    recordQueenVoiceInference({
-      provider: target.provider,
-      requestedModel: target.model,
-      evidence,
-      elapsedMs: Date.now() - providerStartedAt,
-    });
-    return text;
+  const readTurn = async (turnResponse: Response): Promise<ProviderConversationTurn> => {
+    if (onTextDelta) {
+      return readOpenAiSseTurn(turnResponse, onTextDelta);
+    }
+    const data = (await turnResponse.json().catch(() => null)) as {
+      model?: string;
+      usage?: Record<string, unknown>;
+      choices?: Array<{
+        message?: {
+          content?: string;
+          tool_calls?: Array<{
+            id?: string;
+            function?: { name?: string; arguments?: string };
+          }>;
+        };
+      }>;
+    } | null;
+    const message = data?.choices?.[0]?.message;
+    return {
+      text: message?.content?.trim() || "",
+      toolCalls: (message?.tool_calls ?? []).map((call, index) => ({
+        id: call.id || `x_account_${index}`,
+        name: call.function?.name || "",
+        arguments: call.function?.arguments || "{}",
+      })).filter((call) => call.name),
+      evidence: { model: data?.model, usage: data?.usage },
+    };
+  };
+  let turn = await readTurn(response);
+  if (turn.toolCalls.length) {
+    const assistantToolCalls = turn.toolCalls.map((call) => ({
+      id: call.id,
+      type: "function",
+      function: { name: call.name, arguments: call.arguments },
+    }));
+    const toolMessages = await Promise.all(turn.toolCalls.map(async (call) => {
+      let content: string;
+      try {
+        const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
+        if (call.name === X_ACCOUNT_READ_TOOL_NAME) {
+          content = await runXAccountReadTool(coerceXAccountReadToolInput(args));
+        } else if (call.name === "use_hive_capability") {
+          const message = typeof args.message === "string" ? args.message.trim() : "";
+          if (!message) throw new Error("A capability goal is required.");
+          content = JSON.stringify({
+            ok: true,
+            ...(await runQueenBeeAgentTurn(origin, message, undefined, { preferBuiltInCapability: true })),
+          });
+        } else {
+          throw new Error(`Unknown Queen voice tool: ${call.name}.`);
+        }
+      } catch (error) {
+        content = JSON.stringify({
+          ok: false,
+          error: error instanceof Error ? error.message : "Queen capability tool failed.",
+        });
+      }
+      return { role: "tool", tool_call_id: call.id, content };
+    }));
+    const continuationMessages: Array<Record<string, unknown>> = [
+      ...(initialMessages as Array<Record<string, unknown>>),
+      { role: "assistant", content: turn.text || null, tool_calls: assistantToolCalls },
+      ...toolMessages,
+    ];
+    const continuation = await post(requestOptions, continuationMessages, false);
+    if (continuation.ok) {
+      turn = await readTurn(continuation);
+    } else {
+      turn = {
+        text: toolMessages.map((message) => message.content).join("\n\n"),
+        toolCalls: [],
+        evidence: turn.evidence,
+      };
+    }
   }
-  const data = (await response.json().catch(() => null)) as {
-    model?: string;
-    usage?: Record<string, unknown>;
-    choices?: Array<{ message?: { content?: string } }>;
-  } | null;
   recordQueenVoiceInference({
     provider: target.provider,
     requestedModel: target.model,
-    evidence: { model: data?.model, usage: data?.usage },
+    evidence: turn.evidence,
     elapsedMs: Date.now() - providerStartedAt,
   });
-  return data?.choices?.[0]?.message?.content?.trim() || "";
+  return turn.text;
 }
 
 // Minimal OpenAI chat-completions SSE reader. readRuntimeResponseText would
@@ -858,32 +973,30 @@ async function runProviderConversationTurn(
 // this path only ever sees OpenAI's delta shape, so the smaller reader stays.
 // Exported for the hermetic gate (this path only runs live when the runtime
 // brain is cooling down).
-export async function readOpenAiSseText(
+async function readOpenAiSseTurn(
   response: Response,
   onTextDelta: (chunk: string) => void,
   onEvidence?: (evidence: ProviderInferenceEvidence) => void,
-) {
-  if (!response.body) return "";
+): Promise<ProviderConversationTurn> {
+  if (!response.body) return { text: "", toolCalls: [], evidence: {} };
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-  let text = "";
+  const state = createQueenChatStreamState();
+  const evidence: ProviderInferenceEvidence = {};
   const consume = (raw: string) => {
     if (!raw || raw === "[DONE]") return;
     try {
-        const parsed = JSON.parse(raw) as {
+      const parsed = JSON.parse(raw) as {
           model?: string;
           usage?: Record<string, unknown>;
           choices?: Array<{ delta?: { content?: string } }>;
         };
-        if (parsed.model || parsed.usage) {
-          onEvidence?.({ model: parsed.model, usage: parsed.usage });
-        }
-      const delta =
-        parsed.choices?.map((choice) => choice.delta?.content || "").join("") ||
-        "";
+      if (parsed.model) evidence.model = parsed.model;
+      if (parsed.usage) evidence.usage = parsed.usage;
+      if (parsed.model || parsed.usage) onEvidence?.({ model: parsed.model, usage: parsed.usage });
+      const delta = applyOpenAiChatChunk(state, parsed);
       if (delta) {
-        text += delta;
         onTextDelta(delta);
       }
     } catch {
@@ -907,7 +1020,20 @@ export async function readOpenAiSseText(
     for (const frame of frames) consumeFrame(frame);
   }
   if (buffer) consumeFrame(buffer);
-  return text.trim();
+  const finalized = finalizeQueenChatStream(state);
+  return {
+    text: finalized.content.trim(),
+    toolCalls: finalized.toolCalls,
+    evidence,
+  };
+}
+
+export async function readOpenAiSseText(
+  response: Response,
+  onTextDelta: (chunk: string) => void,
+  onEvidence?: (evidence: ProviderInferenceEvidence) => void,
+) {
+  return (await readOpenAiSseTurn(response, onTextDelta, onEvidence)).text;
 }
 
 export type QueenAgentTurnResult = {
@@ -919,6 +1045,7 @@ export type QueenAgentTurnResult = {
 
 type QueenAgentTurnOptions = {
   suppressWalletIntents?: boolean;
+  preferBuiltInCapability?: boolean;
 };
 
 /** The user's selected acting wallet, relayed so the executing agent defaults
@@ -1054,13 +1181,6 @@ export async function runQueenBeeAgentTurn(
     if (draftToken) userContent = draftToken;
   }
   const agents = await rankConversationAgents();
-  if (agents.length === 0) {
-    return {
-      speech:
-        "No chat-capable HivemindOS agent is configured yet, so the request could not be run.",
-      detail: "",
-    };
-  }
   const preferencePreamble = await queenVoicePreferencePreamble();
   const relayMessages = [
     {
@@ -1081,6 +1201,32 @@ export async function runQueenBeeAgentTurn(
   // BEFORE the agent runs, so the first agent's call returns the rail draft for
   // those regardless of agent health.
   let lastError = "";
+  let nonExecutingBuiltInResult: QueenAgentTurnResult | null = null;
+  const runBuiltInFallback = async () => {
+    try {
+      const evidence = await runBuiltInQueenCapabilityTurnWithEvidence({
+        origin,
+        messages: relayMessages,
+        model: voiceFallbackModelName(),
+        sessionId: `${QUEEN_VOICE_SESSION_ID}-capability`,
+        actingWalletSource: actingWallet,
+        suppressWalletIntents: options?.suppressWalletIntents === true,
+      });
+      if (!evidence.text.trim()) return null;
+      return {
+        result: parseAgentTurnResult(evidence.text),
+        authoritative: evidence.capabilityExecuted || evidence.approvalRequired || looksLikeRichCard(evidence.text),
+      };
+    } catch (fallbackError) {
+      lastError = fallbackError instanceof Error ? fallbackError.message : lastError;
+      return null;
+    }
+  };
+  if (options?.preferBuiltInCapability) {
+    const builtInResult = await runBuiltInFallback();
+    if (builtInResult?.authoritative) return builtInResult.result;
+    nonExecutingBuiltInResult = builtInResult?.result ?? null;
+  }
   for (const agent of agents.slice(0, MAX_AGENT_FALLBACK_ATTEMPTS)) {
     try {
       const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
@@ -1091,7 +1237,7 @@ export async function runQueenBeeAgentTurn(
           messages: relayMessages,
           runtimeSessionId: QUEEN_VOICE_SESSION_ID,
           agentMode: "act",
-          latencyMode: "voice",
+          latencyMode: "capability",
           actingWalletSource: actingWallet,
           suppressWalletIntents: options?.suppressWalletIntents === true,
         }),
@@ -1109,9 +1255,15 @@ export async function runQueenBeeAgentTurn(
       );
     }
   }
-  // Every capable agent came up empty/unreachable - last resort is OpenAI. No computer
-  // tools, but answering from its own knowledge beats dead-ending (any money action was
-  // already handled by the rails before reaching here).
+  // Configured runtimes can all be down at once. Keep the final execution
+  // fallback tool-capable and inside the normal runtime authorization gates.
+  if (!options?.preferBuiltInCapability) {
+    const builtInResult = await runBuiltInFallback();
+    if (builtInResult) return builtInResult.result;
+  }
+  if (nonExecutingBuiltInResult) return nonExecutingBuiltInResult;
+  // Plain OpenAI remains the conversational last resort when even the native
+  // capability runtime cannot run; it must not claim any external action.
   try {
     const text = await runOpenAiAgentTurn(userContent, preferencePreamble);
     if (text.trim()) return parseAgentTurnResult(text);

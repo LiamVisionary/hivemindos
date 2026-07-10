@@ -19,7 +19,11 @@ import type {
 } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
 import { filterSuppressedAgents } from "@/features/fleet/fleet-identity";
-import { dedupeMachineGroups } from "@/features/dashboard/dashboard-display-helpers";
+import {
+  dedupeMachineGroups,
+  isTailnetSelfShadowGroup,
+  readyTailnetSelfShadowBases,
+} from "@/features/dashboard/dashboard-display-helpers";
 
 // Hoisted so the alternation is compiled once instead of being re-created on
 // every .test() call inside the per-agent fleetViewData loop (which runs over
@@ -1000,7 +1004,13 @@ export function useDashboardDerivedState(props: any) {
       }
     }
 
+    // Fold a rename-orphaned system tailnet node (a bridge-less duplicate a
+    // ready collector claims via tailnetSelf) out of the fleet view, so it does
+    // not resurface as an empty "pending" ghost machine rebuilt from the raw
+    // tailscale device list. See readyTailnetSelfShadowBases.
+    const tailnetSelfShadowBases = readyTailnetSelfShadowBases(discoveredMachines);
     const visibleGroups = dedupeMachineGroups(groups)
+      .filter((group) => !isTailnetSelfShadowGroup(group, tailnetSelfShadowBases))
       .filter(isVisibleFleetMachine)
       .map((machine) => ({
         ...machine,
@@ -1288,8 +1298,9 @@ export function useDashboardDerivedState(props: any) {
     const edges: Array<[string, string]> = machines
       .slice(1)
       .map((machine) => [machines[0]?.id ?? machine.id, machine.id]);
-    const tasks: FleetTask[] = Object.entries(agentWorkById).flatMap(
-      ([agentId, work]) => {
+    const seenTaskIds = new Set<string>();
+    const tasks: FleetTask[] = Object.entries(agentWorkById)
+      .flatMap(([agentId, work]) => {
         const agent = agentById.get(agentId);
         const machine = machineByAgentId.get(agentId);
         return work.slice(0, 3).map(
@@ -1318,8 +1329,18 @@ export function useDashboardDerivedState(props: any) {
                     : "queue",
           }),
         );
-      },
-    );
+      })
+      // The same underlying task can surface under more than one agent — e.g. a
+      // shared Hermes `~/.hermes` session, whose snapshot id is
+      // `hermes-state:<sessionId>` with no agent prefix. Per-agent lists are
+      // already deduped in candidateWorkById, but this cross-agent flatten is
+      // not, so drop repeats here to keep FleetTask ids unique for React keys
+      // and stop the task channel/ticker showing the same session twice.
+      .filter((task) => {
+        if (seenTaskIds.has(task.id)) return false;
+        seenTaskIds.add(task.id);
+        return true;
+      });
     const machineAlertTimestamp = (machine: MachineGroup) => {
       const handshakeAt = machine.lastHandshake
         ? Date.parse(machine.lastHandshake)

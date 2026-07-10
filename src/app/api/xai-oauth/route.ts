@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       ...(await xaiOAuthStatus({
         hermesHomes: hermesHomesFromSearch(request),
         syncFromHermes: request.nextUrl.searchParams.get("sync") === "1",
+        validateAccess: true,
       })),
     });
   } catch (error) {
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
   };
   try {
     if (body.action === "start") {
-      const { authorizeUrl } = await startXaiOAuthLogin({ hermesHomes: body.hermesHomes });
+      const { authorizeUrl } = await startXaiOAuthLogin();
       return NextResponse.json({
         ok: true,
         authorizeUrl,
@@ -56,17 +57,21 @@ export async function POST(request: NextRequest) {
     if (body.action === "status") {
       return NextResponse.json({
         ok: true,
-        ...(await xaiOAuthStatus({ hermesHomes: body.hermesHomes, syncFromHermes: true })),
+        ...(await xaiOAuthStatus({
+          hermesHomes: body.hermesHomes,
+          syncFromHermes: true,
+          validateAccess: true,
+        })),
       });
     }
     if (body.action === "submit-code") {
-      const { warnings } = await submitXaiOAuthCode({ code: body.code, hermesHomes: body.hermesHomes });
+      const { warnings } = await submitXaiOAuthCode({ code: body.code });
       return NextResponse.json({
         ok: true,
         connected: true,
         warnings,
         statusEndpoint: "/api/xai-oauth",
-        message: "xAI OAuth connected. Tokens were saved to the shared hive env and supported Hermes auth stores.",
+        message: "xAI OAuth connected. The HivemindOS-owned local session will refresh automatically.",
       });
     }
     if (body.action === "login-state") {

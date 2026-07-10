@@ -1,24 +1,33 @@
 import "server-only";
 
 /* Target-wallet swap detection for copy-trading — the one genuinely new
-   subsystem (the app has no tx-history reader). We detect a swap as an IN+OUT
-   token pair in the same transaction where exactly one side is a "quote" asset
-   (USDC/USDT/WETH on Base, USDC/USDT/SOL on Solana):
+   subsystem (the app has no tx-history reader). Two layers on Base so no real
+   trade shape is invisible:
 
-     out = quote, in = token   → BUY of token
-     in  = quote, out = token  → SELL of token
+   1. ERC-20-quote swaps (classifyEvmSwaps, pure): an IN+OUT token pair in one tx
+      where exactly one side is a "quote" ERC-20 (USDC/USDT/WETH):
+        out = quote, in = token  → BUY;  in = quote, out = token → SELL.
 
-   A plain transfer/airdrop (no pair) and quote↔quote stable swaps never signal,
-   which keeps us from mirroring non-trades. Native-ETH-only buys (no WETH leg)
-   are not detectable in v1 — most Base aggregator routes touch WETH, so this is
-   rare. The classify* functions are pure so they can be unit-tested on fixtures;
-   detectNewSwaps wires them to viem (Base) and @solana/web3.js (Solana). */
+   2. The shapes a log-only view can't see (classifyEnrichedEvmSwap, pure + a
+      per-tx RPC enrichment pass in detectEnrichedBaseSwaps):
+        • native-ETH buy  — paid ETH (tx.value) for a token, no WETH leg;
+        • native-ETH sell — token routed into a pool and unwrapped to ETH (no
+                            quote leg comes back to the wallet);
+        • token↔token     — hub-token rotation (e.g. launchpad pairs). The
+                            deeper-liquidity leg is the pseudo-quote, so rotating
+                            INTO the thin leg = BUY, back to the hub = SELL.
+
+   Plain transfers/airdrops (a single leg to/from an EOA, no ETH paid) and
+   quote↔quote stable swaps still never signal. Solana (classifySolanaSwap) reads
+   native-SOL + SPL deltas directly, so it already sees SOL-quoted swaps. The
+   classify* functions are pure for fixture unit-tests; detectNewSwaps wires them
+   to viem (Base) and @solana/web3.js (Solana). */
 
 import { createPublicClient, fallback, http, parseAbiItem, type Log } from "viem";
 import { base } from "viem/chains";
 import { Connection, PublicKey } from "@solana/web3.js";
 import type { CopyTradeNetwork } from "@/lib/types/copy-trading";
-import { nativeUsdPrice } from "./market";
+import { nativeUsdPrice, tokenLiquidityUsd } from "./market";
 
 export type CopyTradeSignal = {
   /** Target's tx hash / signature that triggered this. */
@@ -43,6 +52,11 @@ const TRANSFER_EVENT = parseAbiItem("event Transfer(address indexed from, addres
 const MAX_LOG_RANGE = 2_000n; // public Base RPC rejects wide getLogs ranges
 const BASE_CONFIRMATIONS = 2n;
 const SOLANA_SIG_LIMIT = 50;
+// Per-poll ceiling on enrichment RPC lookups (getTransaction/getCode/liquidity).
+// Steady-state polls cover a few blocks → a handful of candidates; this only
+// bites on a large backfill, where we keep the NEWEST N (recent trades are what
+// a copy-trader wants) and let the cursor move past older ones.
+const MAX_ENRICH_PER_POLL = 60;
 
 // ── quote-asset registries (lowercased keys) ────────────────────────────────
 type QuoteAsset = { symbol: string; decimals: number; native?: boolean };
@@ -143,6 +157,98 @@ function evmQuoteUsd(valueRaw: string, quote: QuoteAsset, nativePriceUsd: number
   return nativePriceUsd != null ? human * nativePriceUsd : null;
 }
 
+// ── enriched Base classification: native-ETH + token↔token ───────────────────
+const ETH_QUOTE = "ETH";
+
+/** Per-tx facts the log-only view lacks, gathered by detectEnrichedBaseSwaps. */
+export type EnrichedEvmTx = {
+  txHash: string;
+  blockNumber: string;
+  /** Tx initiator address. */
+  txFrom: string;
+  /** Native ETH sent by the tx (wei, stringified). */
+  valueWei: string;
+  /** Non-quote token legs received by the target (to === target). */
+  insNonQuote: EvmTransfer[];
+  /** Non-quote token legs sent by the target (from === target). */
+  outsNonQuote: EvmTransfer[];
+  /** True when a quote ERC-20 touched the target here → classifyEvmSwaps owns it. */
+  hasHardQuote: boolean;
+  /** Does the token-out recipient (the pool) have code — swap vs. plain transfer. */
+  outRecipientHasCode: boolean;
+  /** Deepest-pool USD liquidity of the in/out token (for token↔token direction). */
+  inLiquidityUsd: number | null;
+  outLiquidityUsd: number | null;
+};
+
+/** Classify the swap shapes classifyEvmSwaps can't see (native-ETH, token↔token).
+ *  Pure so it can be unit-tested on fixtures; the RPC lookups live in the caller. */
+export function classifyEnrichedEvmSwap(
+  targetAddress: string,
+  tx: EnrichedEvmTx,
+  ethPriceUsd: number | null,
+): CopyTradeSignal | null {
+  if (tx.hasHardQuote) return null; // owned by classifyEvmSwaps (or a quote↔quote no-op)
+  const target = targetAddress.toLowerCase();
+  const initiated = tx.txFrom.toLowerCase() === target;
+  const value = safeBigInt(tx.valueWei);
+  const inTokens = distinctTokens(tx.insNonQuote);
+  const outTokens = distinctTokens(tx.outsNonQuote);
+
+  // 1) native-ETH BUY: the target paid ETH for exactly one token and sent none.
+  //    tx.from === target + tx.value > 0 excludes airdrops (someone else's tx,
+  //    zero value) and NFT/plain-transfer noise.
+  if (initiated && value > 0n && inTokens.length === 1 && outTokens.length === 0) {
+    const human = Number(value) / 1e18;
+    const quoteUsd = ethPriceUsd != null && Number.isFinite(human) ? human * ethPriceUsd : null;
+    return enrichedSignal(tx, "buy", inTokens[0]!, ETH_QUOTE, quoteUsd);
+  }
+
+  // 2) token↔token rotation: the deeper-liquidity leg is the pseudo-quote (hub).
+  //    Received the hub (deeper) → they exited the thin out-token → SELL.
+  //    Spent the hub for the thin token (or liquidity unknown) → BUY the in-token.
+  if (inTokens.length >= 1 && outTokens.length >= 1) {
+    const inLiq = tx.inLiquidityUsd;
+    const outLiq = tx.outLiquidityUsd;
+    if (inLiq != null && outLiq != null && inLiq > outLiq) {
+      return enrichedSignal(tx, "sell", outTokens[0]!, "TOKEN", null);
+    }
+    return enrichedSignal(tx, "buy", inTokens[0]!, "TOKEN", null);
+  }
+
+  // 3) native-ETH SELL: the target routed exactly one token into a pool (a
+  //    contract) and nothing came back as a token/quote leg (ETH was unwrapped
+  //    to it internally). Recipient-has-code separates a swap from a plain
+  //    transfer to a friend's EOA. Size comes from the copied position, not here.
+  if (initiated && outTokens.length === 1 && inTokens.length === 0 && tx.outRecipientHasCode) {
+    return enrichedSignal(tx, "sell", outTokens[0]!, ETH_QUOTE, null);
+  }
+
+  return null;
+}
+
+function enrichedSignal(
+  tx: EnrichedEvmTx,
+  direction: "buy" | "sell",
+  token: string,
+  quoteSymbol: string,
+  quoteUsd: number | null,
+): CopyTradeSignal {
+  return { targetTxRef: tx.txHash, direction, token: token.toLowerCase(), quoteSymbol, quoteUsd, blockOrSlot: tx.blockNumber };
+}
+
+function distinctTokens(legs: EvmTransfer[]): string[] {
+  return Array.from(new Set(legs.map((l) => l.token.toLowerCase())));
+}
+
+function safeBigInt(value: string): bigint {
+  try {
+    return BigInt(value || "0");
+  } catch {
+    return 0n;
+  }
+}
+
 // ── pure classification: Solana ─────────────────────────────────────────────
 export type SolanaDelta = { mint: string; uiDelta: number };
 
@@ -228,11 +334,122 @@ async function detectBase(targetAddress: string, lastBlock?: string): Promise<Wa
     for (const log of [...incoming, ...outgoing]) pushEvmTransfer(transfers, log);
   }
 
-  const nativePrice = transfers.some((t) => BASE_QUOTES[t.token.toLowerCase()]?.native)
-    ? await nativeUsdPrice("eip155:8453")
-    : null;
-  const signals = classifyEvmSwaps(targetAddress, transfers, nativePrice);
+  // ETH price backs both WETH quote legs and native-ETH buys (best-effort, cached).
+  const nativePrice = transfers.length ? await nativeUsdPrice("eip155:8453") : null;
+  const quoteSignals = classifyEvmSwaps(targetAddress, transfers, nativePrice);
+  const handled = new Set(quoteSignals.map((s) => s.targetTxRef));
+  const enriched = await detectEnrichedBaseSwaps(client, targetAddress, transfers, handled, nativePrice);
+
+  // One signal per target tx, oldest-first so the engine's cooldown stays ordered.
+  const signals = dedupeByTxRef([...quoteSignals, ...enriched]).sort(
+    (a, b) => Number(a.blockOrSlot) - Number(b.blockOrSlot),
+  );
   return { signals, cursor: { lastBlock: safeBlock.toString() } };
+}
+
+function dedupeByTxRef(signals: CopyTradeSignal[]): CopyTradeSignal[] {
+  const seen = new Set<string>();
+  const out: CopyTradeSignal[] = [];
+  for (const s of signals) {
+    if (seen.has(s.targetTxRef)) continue;
+    seen.add(s.targetTxRef);
+    out.push(s);
+  }
+  return out;
+}
+
+/** Enrich the txs classifyEvmSwaps couldn't classify (no quote leg) with per-tx
+ *  RPC facts, then run the pure native-ETH / token↔token classifier over them. */
+async function detectEnrichedBaseSwaps(
+  client: ReturnType<typeof basePublicClient>,
+  targetAddress: string,
+  transfers: EvmTransfer[],
+  handled: Set<string>,
+  ethPrice: number | null,
+): Promise<CopyTradeSignal[]> {
+  const target = targetAddress.toLowerCase();
+  const byTx = new Map<string, EvmTransfer[]>();
+  for (const t of transfers) {
+    if (handled.has(t.txHash)) continue;
+    const list = byTx.get(t.txHash) ?? [];
+    list.push(t);
+    byTx.set(t.txHash, list);
+  }
+
+  type Candidate = { txHash: string; blockNumber: string; ins: EvmTransfer[]; outs: EvmTransfer[] };
+  const candidates: Candidate[] = [];
+  for (const [txHash, legs] of byTx) {
+    const hasHardQuote = legs.some(
+      (l) => BASE_QUOTES[l.token.toLowerCase()] && (l.from.toLowerCase() === target || l.to.toLowerCase() === target),
+    );
+    if (hasHardQuote) continue; // classifyEvmSwaps owns it (or it's a quote↔quote no-op)
+    const ins = legs.filter((l) => l.to.toLowerCase() === target && !BASE_QUOTES[l.token.toLowerCase()]);
+    const outs = legs.filter((l) => l.from.toLowerCase() === target && !BASE_QUOTES[l.token.toLowerCase()]);
+    if (ins.length === 0 && outs.length === 0) continue;
+    candidates.push({ txHash, blockNumber: legs[0]?.blockNumber ?? "0", ins, outs });
+  }
+
+  candidates.sort((a, b) => Number(a.blockNumber) - Number(b.blockNumber));
+  const budget = candidates.length > MAX_ENRICH_PER_POLL ? candidates.slice(-MAX_ENRICH_PER_POLL) : candidates;
+
+  const signals: CopyTradeSignal[] = [];
+  for (const c of budget) {
+    let meta: Awaited<ReturnType<typeof client.getTransaction>>;
+    try {
+      meta = await client.getTransaction({ hash: c.txHash as `0x${string}` });
+    } catch {
+      continue; // can't enrich this tx this round; leave it unsignaled
+    }
+    const bothSides = c.ins.length >= 1 && c.outs.length >= 1;
+    const sellShape = c.ins.length === 0 && c.outs.length === 1;
+    let outRecipientHasCode = false;
+    let inLiquidityUsd: number | null = null;
+    let outLiquidityUsd: number | null = null;
+    if (sellShape) {
+      outRecipientHasCode = await addressHasCode(client, c.outs[0]!.to);
+    } else if (bothSides) {
+      [inLiquidityUsd, outLiquidityUsd] = await Promise.all([
+        tokenLiquidityUsd("eip155:8453", c.ins[0]!.token),
+        tokenLiquidityUsd("eip155:8453", c.outs[0]!.token),
+      ]);
+    }
+    const sig = classifyEnrichedEvmSwap(
+      targetAddress,
+      {
+        txHash: c.txHash,
+        blockNumber: c.blockNumber,
+        txFrom: (meta.from ?? "").toLowerCase(),
+        valueWei: (meta.value ?? 0n).toString(),
+        insNonQuote: c.ins,
+        outsNonQuote: c.outs,
+        hasHardQuote: false,
+        outRecipientHasCode,
+        inLiquidityUsd,
+        outLiquidityUsd,
+      },
+      ethPrice,
+    );
+    if (sig) signals.push(sig);
+  }
+  return signals;
+}
+
+// Contract-code lookups are stable per address (pools/routers repeat) → cache them.
+const codeCache = new Map<string, boolean>();
+async function addressHasCode(client: ReturnType<typeof basePublicClient>, address: string): Promise<boolean> {
+  const key = address.toLowerCase();
+  const cached = codeCache.get(key);
+  if (cached !== undefined) return cached;
+  let has = false;
+  try {
+    const code = await client.getCode({ address: address as `0x${string}` });
+    has = Boolean(code && code !== "0x");
+  } catch {
+    has = false;
+  }
+  if (codeCache.size > 5_000) codeCache.clear();
+  codeCache.set(key, has);
+  return has;
 }
 
 type TransferLog = Log<bigint, number, false, typeof TRANSFER_EVENT>;

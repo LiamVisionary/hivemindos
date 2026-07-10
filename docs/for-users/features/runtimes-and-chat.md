@@ -16,9 +16,15 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 | ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | OpenClaw          | Gateway     | status, chat, model selection                                                                                                            |
 | Hermes            | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection, deterministic data query, artifact authoring |
-| Aeon              | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications                                                        |
+| Aeon              | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications, optional Zero Human Company execution                 |
 | Evo               | Background  | status, runs (experiment tree), background tasks, dashboard URL discovery                                                                 |
 | HivemindOS | Interactive | status, chat, model selection                                                                                                            |
+
+## AEON And Zero Human Companies
+
+AEON remains an optional runtime. Choosing it for one Zero Human Company links that company to one saved AEON workspace and skill; it does not make AEON the authority for unrelated agents, companies, schedules, models, or app settings.
+
+The default company engine is still a HivemindOS crew. In AEON mode, a native crew is optional, Company Runs records the accepted handoff, and AEON owns the detailed run state and outputs. See [Using AEON With Zero Human Companies](../runtimes/aeon/zero-human-companies.html).
 
 ## How Runtime Settings Work
 
@@ -34,11 +40,22 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 - Session reads use `/api/chat/agent-session`.
 - Runtime stream events are normalized by `src/lib/services/runtime-stream-events.ts`.
 - The collector bridges Hermes and other local runtime sessions when a remote machine owns the agent.
-- Chat history and folders are cached in browser storage and supported by `/api/chat/folders`.
+- Chat history and thread preferences use the shared dashboard state, so they survive restarts consistently in the desktop app and browser. Folder creation is supported by `/api/chat/folders`.
 - Chat folder creation and linked directory context use the same machine-aware directory helper as Kanban and Scheduler: native local folder picker in Tauri, Hivemind Link/collector directory browsing for remote machines, and API fallback in the browser.
 - Capability-search preflight can record redacted Context X-Ray manifests for a runtime session. The Memory workbench uses those manifests to show which skills, tools, API routes, connected apps, runtimes, docs, or workspace files were visible to the agent.
 - Runtime-specific powers such as deterministic connector queries and artifact authoring are declared in the runtime capability matrix. Hermes is the first runtime enabled for these PromptQL-style work-product flows; other runtimes opt in through the same matrix instead of separate branches.
 - Explicit Teach Hive phrasing in chat creates a Brain Review proposal, not an immediate memory write. The normal Brain Review approval/apply path still decides what becomes durable Shared Brain Memory.
+
+### Automatic Thread Titles
+
+Open the thread-title settings from the Chat sidebar to keep first-message previews or choose Local or Cloud captioning.
+
+- A title is requested as soon as the first substantive user message is sent. It runs alongside the assistant request rather than waiting for the reply.
+- Generic openers such as “hello” or “can you help?” wait for the next substantive user turn.
+- Local captioning offers a lightweight Qwen3.5 0.8B model and a larger 4B option through the same in-app LM Studio install, download, load, and test flow used by other local models.
+- Cloud captioning scans callable models from configured runtimes and providers. The searchable picker puts the best lightweight title models first, then shows the rest, with separate OAuth and API badges when both routes exist.
+- Only the first and latest substantive user turns are used, capped at 600 characters each. System prompts, tool output, attachments, and process events are excluded. Cloud-bound text passes through secret redaction before it leaves the machine.
+- A generated title is stored once and is not silently replaced by later messages.
 
 ### Chat Swarm Commands
 
@@ -164,7 +181,7 @@ attestation and fails closed when only local test evidence is available.
 - Agent role, worker class, preferred skills, and per-agent env values.
 - Dashboard agent calls that start through `/api/phone` using the gateway's in-app voice path instead of ringing the phone.
 - Scheduled/ring-agent calls that can ring the paired mobile device when explicitly triggered.
-- AEON call briefings with repository, branch, workspace, A2A, memory, skills, and recent MiroShark deliverable context.
+- AEON call briefings with repository, branch, workspace, Strategy/Soul, memory, the v0.1 skill catalog, chains/reactive work, and recent MiroShark deliverable context.
 
 For the full product split between free BYOK calls and paid Cloud/LiveKit rooms, see [Calling](calling.html).
 

@@ -11,8 +11,17 @@ import { BIcon, activityIcon, walletKindIcon } from "./icons";
 import { trUsd, trUsd2, trMoney, trPct, trAmt } from "./format";
 import { useTradeDesk, type DeskPortfolio, type DeskMover, type DeskActivity } from "./trade-context";
 
+function RefreshIndicator({ refreshing, label }: { refreshing: boolean; label: string }) {
+  if (!refreshing) return null;
+  return (
+    <span className="dk-refresh-indicator" role="status" aria-label={label} title={label}>
+      <BIcon name="spinner" size={14} spin />
+    </span>
+  );
+}
+
 // ── portfolio hero ───────────────────────────────────────────────────────────
-export function PortfolioCard({ pf, isStock, win = "24h" }: { pf: DeskPortfolio; isStock: boolean; win?: "24h" | "7d" | "30d" }) {
+export function PortfolioCard({ pf, isStock, refreshing, win = "24h" }: { pf: DeskPortfolio; isStock: boolean; refreshing: boolean; win?: "24h" | "7d" | "30d" }) {
   const up = pf.dayChange >= 0;
   const total = pf.total || 0;
   const [barHi, setBarHi] = React.useState<number | null>(null);
@@ -29,7 +38,8 @@ export function PortfolioCard({ pf, isStock, win = "24h" }: { pf: DeskPortfolio;
     return { id: row.id, sym: row.sym, amount: isStock ? (row.shares ?? 0) : row.amount, usd: row.usd, pct, left: priorPct + pct / 2 };
   });
   return (
-    <div className="dk-pf">
+    <div className="dk-pf dk-refreshable">
+      <RefreshIndicator refreshing={refreshing} label={isStock ? "Refreshing stock balance" : "Refreshing crypto balance"} />
       <span className="lbl"><BIcon name="trade" size={13} /> {isStock ? "Stock portfolio" : "Crypto portfolio"} · acting wallet</span>
       <span className="big">{failed && total === 0 ? "—" : trUsd2(total)}</span>
       {failed ? (
@@ -72,9 +82,10 @@ export function PortfolioCard({ pf, isStock, win = "24h" }: { pf: DeskPortfolio;
 }
 
 // ── market movers ────────────────────────────────────────────────────────────
-export function MoversCard({ movers, isStock }: { movers: DeskMover[]; isStock: boolean }) {
+export function MoversCard({ movers, isStock, refreshing }: { movers: DeskMover[]; isStock: boolean; refreshing: boolean }) {
   return (
-    <div className="dk-mov">
+    <div className="dk-mov dk-refreshable">
+      <RefreshIndicator refreshing={refreshing} label={isStock ? "Refreshing stock market data" : "Refreshing crypto market data"} />
       <h3>Market movers</h3>
       <div className="sub">{isStock ? "US equities · IEX" : "Top tokens · live"}</div>
       {movers.length ? movers.map((m) => {
@@ -172,10 +183,11 @@ function WalletChip({ wid }: { wid: string }) {
   );
 }
 
-export function ActivityPanel({ items, onViewAll }: { items: DeskActivity[]; onViewAll: () => void }) {
+export function ActivityPanel({ items, refreshing, onViewAll }: { items: DeskActivity[]; refreshing: boolean; onViewAll: () => void }) {
   return (
-    <div className="dk-panel">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+    <div className="dk-panel dk-refreshable">
+      <RefreshIndicator refreshing={refreshing} label="Refreshing activity" />
+      <div className="dk-panel-heading" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <h3>Recent activity</h3>
         <button type="button" className="fw-manage" onClick={onViewAll}>View all →</button>
       </div>
@@ -202,8 +214,8 @@ const HIST_SRC: Record<string, { label: string; color: string }> = {
   stocks: { label: "Stocks", color: "#5fa8f0" },
 };
 
-export function ActivityView({ items, filter, onFilter, onBack }: {
-  items: DeskActivity[]; filter: "crypto" | "stocks" | "all"; onFilter: (f: "crypto" | "stocks" | "all") => void; onBack: () => void;
+export function ActivityView({ items, filter, refreshing, onFilter, onBack }: {
+  items: DeskActivity[]; filter: "crypto" | "stocks" | "all"; refreshing: boolean; onFilter: (f: "crypto" | "stocks" | "all") => void; onBack: () => void;
 }) {
   const rows = React.useMemo(() => {
     const list = filter === "all" ? items : items.filter((x) => x.src === filter);
@@ -233,7 +245,8 @@ export function ActivityView({ items, filter, onFilter, onBack }: {
         </div>
       </div>
 
-      <div className="dk-panel">
+      <div className="dk-panel dk-refreshable">
+        <RefreshIndicator refreshing={refreshing} label="Refreshing activity" />
         {groups.map(([day, list]) => (
           <React.Fragment key={day}>
             <div className="dk-daylabel">{day}</div>

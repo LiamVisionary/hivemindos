@@ -1185,6 +1185,16 @@ async function callTool(name, args = {}) {
   if (name === "slack_send_message") {
     if (args.confirmation !== "CONFIRM_SLACK_SEND") throw new Error("slack_send_message requires confirmation CONFIRM_SLACK_SEND.");
     return callDashboard("/api/integrations/slack/send", "POST", { text: args.text, channel: args.channel, confirmation: args.confirmation }); }
+  if (name === "azure_resources") {
+    return callDashboard("/api/integrations/azure/resources", "POST", {
+      action: args.action || "subscriptions",
+      subscriptionId: args.subscriptionId,
+      resourceGroup: args.resourceGroup,
+      resourceId: args.resourceId,
+      apiVersion: args.apiVersion,
+      top: args.top,
+    });
+  }
   if (name === "select_crypto_rail") {
     return callDashboard("/api/crypto/capabilities", "POST", {
       action: "select",

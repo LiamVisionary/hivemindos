@@ -123,6 +123,7 @@ export function normalizeConfig(input: CopyTradingConfig): CopyTradingConfig {
       : [],
     enabled: Boolean(input.enabled),
     dryRun: input.dryRun !== false,
+    paperStartUsd: input.paperStartUsd == null ? null : Math.max(0, num(input.paperStartUsd, 0)),
     createdAt: num(input.createdAt, now),
     updatedAt: now,
   };

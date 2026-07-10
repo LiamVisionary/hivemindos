@@ -5,6 +5,7 @@ import type { DashboardScreenContext } from "@/features/dashboard/screen-context
 import {
   fetchHivemindFastContext,
   fetchWalletReadiness,
+  fetchXAccountRead,
 } from "./queen-fast-context";
 import type { QueenVoicePhase, QueenVoiceTurn } from "./use-queen-bee-voice";
 import {
@@ -253,8 +254,10 @@ export function useQueenBeeGeminiLive(
           lastQueenUtterance,
         });
       }
-      if (name === "ask_hivemind_agent") {
-        const result = await askHivemindAgent(args, context);
+      if (name === "ask_hivemind_agent" || name === "use_hive_capability") {
+        const result = await askHivemindAgent(args, context, {
+          preferBuiltInCapability: name === "use_hive_capability",
+        });
         addPendingDetail(result.detail);
         return result.speech;
       }
@@ -271,6 +274,11 @@ export function useQueenBeeGeminiLive(
       }
       if (name === "read_hivemind_context") {
         const output = await fetchHivemindFastContext(String(args.query ?? ""), context);
+        addPendingDetail(output);
+        return output;
+      }
+      if (name === "read_x_account") {
+        const output = await fetchXAccountRead(args);
         addPendingDetail(output);
         return output;
       }

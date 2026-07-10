@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const { fusionSkillTestHooks } = await import("../src/lib/services/fusion/fusion-skill.ts");
-const { capabilityFromItem, fusedCapabilities, prioritizeCapabilities, relatedQueries } = fusionSkillTestHooks;
+const { capabilityFromItem, fusedCapabilities, lineChangePreview, prioritizeCapabilities, relatedQueries } = fusionSkillTestHooks;
 
 function item(id, kind, title, summary, score = 10) {
   return {
@@ -61,6 +61,16 @@ function select(prompt) {
 {
   const queries = relatedQueries("draft an X post for my generated image");
   assert.ok(!queries.some((query) => query.includes("latest news")), "generic X post query does not request news");
+}
+
+{
+  const created = lineChangePreview(undefined, "", "alpha\nbeta");
+  assert.deepEqual({ mode: created.mode, added: created.addedLines, removed: created.removedLines }, { mode: "create", added: 2, removed: 0 });
+  const updated = lineChangePreview({ path: "/vault/Skills/lab-method/SKILL.md" }, "alpha\nbeta\ngamma", "alpha\ngamma\ndelta");
+  assert.deepEqual({ mode: updated.mode, added: updated.addedLines, removed: updated.removedLines, unchanged: updated.unchangedLines }, { mode: "update", added: 1, removed: 1, unchanged: 2 });
+  assert.equal(updated.existingPath, "/vault/Skills/lab-method/SKILL.md");
+  const unchanged = lineChangePreview({ path: "/vault/Skills/lab-method/SKILL.md" }, "alpha\nbeta", "alpha\nbeta");
+  assert.equal(unchanged.mode, "unchanged");
 }
 
 console.log("fusion skill selection tests passed");

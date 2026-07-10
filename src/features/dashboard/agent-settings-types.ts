@@ -26,7 +26,7 @@ export type AgentCreateDraft = {
   aeonLocalPath?: string;
   aeonRepo?: string;
   aeonBranch?: string;
-  aeonMode?: "github" | "a2a" | "local";
+  aeonMode?: "github" | "local";
   a2aUrl?: string;
 };
 

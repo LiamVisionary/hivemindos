@@ -1,3 +1,7 @@
+import { DEFAULT_SYNTO_CONFIG, type SyntoConfig } from "@/lib/config/synto-config";
+
+export type { SyntoConfig, SyntoInstallMode, SyntoMcpMode, SyntoModelRoute, SyntoSourceAccessMode } from "@/lib/config/synto-config";
+
 export const HIVEMIND_OS_RUNTIME = "hivemind-os";
 export const LEGACY_OPENAI_COMPATIBLE_RUNTIME = "openai-compatible";
 
@@ -172,8 +176,6 @@ export type RuntimeProfileFeature = {
     localPathFallback: string;
     branch: string;
     mode: NonNullable<AgentProfile["aeonMode"]>;
-    a2aUrl: "gatewayUrl";
-    a2aUrlFallback: string;
   };
 };
 
@@ -564,7 +566,7 @@ export interface AgentProfile {
   aeonBranch?: string;
   aeonLocalPath?: string;
   a2aUrl?: string;
-  aeonMode?: "github" | "a2a" | "local";
+  aeonMode?: "github" | "local";
   beeRole?: BeeAgentRole;
   workerClass?: BeeWorkerClass;
   customWorkerClass?: CustomWorkerClassProfile;
@@ -678,21 +680,6 @@ export interface Neo4jBrainConfig {
   queryLimit: number;
 }
 
-export type SyntoInstallMode = "optional" | "uv-tool" | "pip-user" | "existing";
-export type SyntoMcpMode = "stdio" | "disabled";
-export type SyntoSourceAccessMode = "permissive_only" | "all" | "deny";
-
-export interface SyntoConfig {
-  enabled: boolean;
-  installMode: SyntoInstallMode;
-  cliPath: string;
-  mcpMode: SyntoMcpMode;
-  sourceAccessMode: SyntoSourceAccessMode;
-  compareHeavyModel: string;
-  autoApprove: boolean;
-  minConfidence: number;
-}
-
 const DEFAULT_SYNCTHING_AUTO_PAIR_ENABLED =
   process.env.NEXT_PUBLIC_TAILNET_SYNC_ENABLED === "true";
 
@@ -769,17 +756,7 @@ export const DEFAULT_SHARED_VAULT: SharedVaultConfig = {
     database: "",
     queryLimit: 100,
   },
-  synto: {
-    enabled: false,
-    installMode: "optional",
-    cliPath: process.env.NEXT_PUBLIC_SYNTO_CLI_PATH ?? "synto",
-    mcpMode: "stdio",
-    sourceAccessMode: "deny",
-    compareHeavyModel:
-      process.env.NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL ?? "llama3.1:8b",
-    autoApprove: false,
-    minConfidence: 0.8,
-  },
+  synto: DEFAULT_SYNTO_CONFIG,
   controlRoomPath:
     process.env.NEXT_PUBLIC_HERMES_CONTROL_ROOM_PATH ?? "~/agent-control-room",
   instructions:
@@ -1119,12 +1096,9 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
       label: "Aeon",
       kind: "background",
       defaults: {
-        gatewayUrl:
-          process.env.NEXT_PUBLIC_AEON_A2A_URL ??
-          process.env.NEXT_PUBLIC_AEON_BASE_URL ??
-          "http://127.0.0.1:41241",
+        gatewayUrl: "",
         chatPath: "",
-        statusPath: "/health",
+        statusPath: "",
       },
       capabilities: {
         status: true,
@@ -1195,8 +1169,6 @@ export const RUNTIME_DEFINITIONS: Record<KnownAgentRuntime, RuntimeDefinition> =
           localPathFallback: "~/.aeon",
           branch: "main",
           mode: "github",
-          a2aUrl: "gatewayUrl",
-          a2aUrlFallback: "http://127.0.0.1:41241",
         },
       },
       integration: DEFAULT_RUNTIME_INTEGRATION_FEATURE,
@@ -1549,10 +1521,6 @@ export function createAgentProfile(
       ? (process.env[aeonDefaults.localPathEnvVar] ??
         aeonDefaults.localPathFallback)
       : undefined,
-    a2aUrl:
-      aeonDefaults?.a2aUrl === "gatewayUrl"
-        ? defaults.gatewayUrl || aeonDefaults.a2aUrlFallback
-        : undefined,
     aeonMode: aeonDefaults?.mode,
     beeRole,
     workerClass,

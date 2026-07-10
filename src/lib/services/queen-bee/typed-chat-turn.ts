@@ -37,6 +37,7 @@ import {
 } from "./chat-stream";
 import { queenChatTools, queenInstructionsForPersonality } from "./queen-brain";
 import { queenModelTransparencyNote } from "./model-transparency";
+import { configuredQueenProviderFallbacks } from "./provider-fallback";
 import { resolveProviderChatEndpoint } from "./voice-turn";
 import { readQueenBeeBrainDefaults } from "./voice-settings";
 import { queenVoicePreferencePreamble } from "./voice-preferences";
@@ -45,7 +46,6 @@ import {
   xaiOAuthChatRequestOptions,
 } from "@/lib/services/xai-oauth-inference-contract";
 import { resolveXaiOAuthChatEndpoint } from "@/lib/services/xai-oauth-inference";
-import { latestOwnXPostAnswer } from "@/lib/services/x-latest-post";
 
 const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
 
@@ -75,6 +75,11 @@ type QueenTypedSystemPrompt = {
   stable: string;
   volatile: string;
   text: string;
+};
+
+type QueenConfiguredBrainFailure = {
+  label: string;
+  error: string;
 };
 
 const RUNTIME_COMMAND_GATE_FALLBACK =
@@ -122,8 +127,12 @@ async function readQueenBeeAgentProfile(agentId?: string): Promise<AgentProfile 
  * Queen agent's own runtime, then plain key-based OpenAI-compatible providers.
  * The built-in OpenAI lane remains only as the declared final fallback.
  */
-async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedChatBrain[]> {
+async function resolveQueenTypedChatBrains(origin: string): Promise<{
+  brains: QueenTypedChatBrain[];
+  configuredBrainFailure?: QueenConfiguredBrainFailure;
+}> {
   const brains: QueenTypedChatBrain[] = [];
+  let configuredBrainFailure: QueenConfiguredBrainFailure | undefined;
   const defaults = await readQueenBeeBrainDefaults().catch(() => null);
   const provider = defaults?.provider?.trim() || "";
   if (defaults?.model && isHivemindosWalletPaidModelProfile({ provider })) {
@@ -148,8 +157,8 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
       timeoutMs: 120_000,
     });
   } else if (defaults?.model && isXaiOAuthProvider(provider)) {
-    const endpoint = await resolveXaiOAuthChatEndpoint().catch(() => null);
-    if (endpoint) {
+    try {
+      const endpoint = await resolveXaiOAuthChatEndpoint();
       brains.push({
         kind: "openai-compatible",
         url: endpoint.url,
@@ -159,6 +168,11 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
         label: `${defaults.model} · ${queenBrainProviderLabel(provider)}`,
         configured: true,
       });
+    } catch (error) {
+      configuredBrainFailure = {
+        label: `${defaults.model} · ${queenBrainProviderLabel(provider)}`,
+        error: error instanceof Error ? error.message : "xAI OAuth is unavailable.",
+      };
     }
   } else if (defaults?.model && isRuntimeHeldQueenProvider(provider)) {
     const agent = await readQueenBeeAgentProfile(defaults.agentId).catch(() => null);
@@ -190,6 +204,26 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
       });
     }
   }
+  if (defaults?.model) {
+    const fallbacks = await configuredQueenProviderFallbacks({
+      excludeProvider: provider,
+      excludeModel: defaults.model,
+      limit: 2,
+    });
+    for (const fallback of fallbacks) {
+      const endpoint = await resolveProviderChatEndpoint(fallback.provider).catch(() => null);
+      if (!endpoint) continue;
+      brains.push({
+        kind: "openai-compatible",
+        url: endpoint.url,
+        key: endpoint.key,
+        model: fallback.model,
+        providerSlug: fallback.provider,
+        label: fallback.label,
+        configured: false,
+      });
+    }
+  }
   const apiKey = await transcriptionApiKey();
   const builtinModel = process.env.OPENAI_VOICE_CHAT_MODEL || QUEEN_CHAT_MODEL_FALLBACK;
   const duplicate = brains.some(
@@ -206,7 +240,7 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<QueenTypedCh
       configured: false,
     });
   }
-  return brains;
+  return { brains, configuredBrainFailure };
 }
 
 function queenBrainRequestHeaders(brain: QueenTypedChatBrain): Record<string, string> {
@@ -607,33 +641,9 @@ function queenCachedPromptTokens(usage: unknown) {
   return Number.isFinite(cached) ? cached : null;
 }
 
-function latestUserTextFromQueenBody(body: Record<string, unknown>) {
-  const messages = Array.isArray(body.messages) ? body.messages : [];
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!message || typeof message !== "object") continue;
-    const record = message as { role?: unknown; content?: unknown };
-    if (record.role !== "user") continue;
-    if (typeof record.content === "string") return record.content;
-    if (Array.isArray(record.content)) {
-      return record.content
-        .map((block) => block && typeof block === "object" && "text" in block
-          ? String((block as { text?: unknown }).text ?? "")
-          : "")
-        .filter(Boolean)
-        .join("\n");
-    }
-  }
-  return "";
-}
-
-async function queenLatestXFastReply(body: Record<string, unknown>) {
-  return latestOwnXPostAnswer(latestUserTextFromQueenBody(body)).catch(() => null);
-}
-
 /** Shared setup for the typed chat turn (blocking and streaming variants). */
 async function prepareQueenChatTurn(body: Record<string, unknown>, origin: string) {
-  const brains = await resolveQueenTypedChatBrains(origin);
+  const { brains, configuredBrainFailure } = await resolveQueenTypedChatBrains(origin);
   if (!brains.length) return null;
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   const suppressWalletIntents = body.suppressWalletIntents === true;
@@ -671,25 +681,15 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
       text: [stable, volatile].filter(Boolean).join("\n\n"),
     };
   };
-  return { brains, incoming, systemFor, suppressWalletIntents };
+  return { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure };
 }
 
 export async function runQueenChatTurn(body: Record<string, unknown>, origin: string) {
-  const latestXReply = await queenLatestXFastReply(body);
-  if (latestXReply) {
-    return NextResponse.json({
-      ok: true,
-      content: latestXReply,
-      toolCalls: [],
-      assistant: { role: "assistant", content: latestXReply },
-      brainLabel: "X account · OAuth",
-    });
-  }
   const prepared = await prepareQueenChatTurn(body, origin);
   if (!prepared) {
     return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
   }
-  const { brains, incoming, systemFor, suppressWalletIntents } = prepared;
+  const { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure } = prepared;
   // toolChoice:"none" = the client tool loop's budget is spent; force prose.
   const noTools = body.toolChoice === "none";
   // The agent's own brain first, built-in OpenAI lane last — a failing
@@ -698,7 +698,9 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
   // skipped configured brain is DECLARED via brainFallback (never silent).
   let lastError = "";
   const startedAt = Date.now();
-  const skipped: Array<{ label: string; error: string }> = [];
+  const skipped: Array<{ label: string; error: string }> = configuredBrainFailure
+    ? [configuredBrainFailure]
+    : [];
   for (const brain of brains) {
     try {
       const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools, suppressWalletIntents });
@@ -747,25 +749,11 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
 export async function runQueenChatTurnStream(body: Record<string, unknown>, origin: string) {
   const ndjson = { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" };
   const line = (value: unknown) => `${JSON.stringify(value)}\n`;
-  const latestXReply = await queenLatestXFastReply(body);
-  if (latestXReply) {
-    return new Response(
-      line({
-        done: true,
-        ok: true,
-        content: latestXReply,
-        toolCalls: [],
-        assistant: { role: "assistant", content: latestXReply },
-        brainLabel: "X account · OAuth",
-      }),
-      { headers: ndjson },
-    );
-  }
   const prepared = await prepareQueenChatTurn(body, origin);
   if (!prepared) {
     return new Response(line({ ok: false, fallback: true, error: "no-openai-key" }), { headers: ndjson });
   }
-  const { brains, incoming, systemFor, suppressWalletIntents } = prepared;
+  const { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure } = prepared;
   // Try brains in order for the INITIAL connection (the agent's own brain,
   // then the built-in OpenAI lane). Buffered-only brains (the HivemindOS
   // models gateway) answer as one terminal frame — the client tool loop is
@@ -778,7 +766,9 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
   let answeringBrain = brains[0];
   let lastError = "";
   const startedAt = Date.now();
-  const skipped: Array<{ label: string; error: string }> = [];
+  const skipped: Array<{ label: string; error: string }> = configuredBrainFailure
+    ? [configuredBrainFailure]
+    : [];
   for (const brain of brains) {
     if (brain.kind === "agent-runtime") {
       const runtimeResponse = await fetchQueenChatRuntimeResponse(

@@ -109,6 +109,15 @@ export interface CompanyMember {
 export type CompanyProcess = "hierarchical" | "sequential" | "graph";
 
 /**
+ * Which engine advances a company's apex goal when autonomy launches.
+ * HivemindOS remains the default and fans work across the company's crew;
+ * AEON dispatches one configured background skill per autonomy cycle.
+ */
+export type CompanyExecutionConfig =
+  | { engine: "hivemind" }
+  | { engine: "aeon"; profileId: string; skill: string };
+
+/**
  * One sellable product/package in a company's catalog. Field names deliberately
  * match the self-serve offer funnel's `packages[]` shape ({key, name, amountUsd,
  * description, recommended}) so agents can drop catalog entries straight into
@@ -299,6 +308,8 @@ export interface Company {
   autonomyPause?: CompanyAutonomyPause;
   /** How the crew executes the apex goal. Defaults to "hierarchical" (parallel fan-out). */
   process?: CompanyProcess;
+  /** Optional autonomy engine. Absent means the native HivemindOS crew path. */
+  execution?: CompanyExecutionConfig;
   /** For process: "graph" — the saved FlowSpec id to run. */
   flowTemplateId?: string;
   /**

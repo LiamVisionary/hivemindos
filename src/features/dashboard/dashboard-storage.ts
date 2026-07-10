@@ -566,6 +566,9 @@ function parseStoredApplicationGeneration(message: ChatMessage): ChatApplication
     modelName: typeof card.modelName === "string" ? card.modelName : undefined,
     machineName: typeof card.machineName === "string" ? card.machineName : undefined,
     machineSpecs: typeof card.machineSpecs === "string" ? card.machineSpecs : undefined,
+    sourceArtifacts: Array.isArray(card.sourceArtifacts)
+      ? card.sourceArtifacts.map(parseStoredApplicationGenerationArtifact).filter((artifact): artifact is ChatApplicationGenerationArtifact => Boolean(artifact))
+      : undefined,
     artifacts: Array.isArray(card.artifacts)
       ? card.artifacts.map(parseStoredApplicationGenerationArtifact).filter((artifact): artifact is ChatApplicationGenerationArtifact => Boolean(artifact))
       : undefined,

@@ -7,7 +7,6 @@ import {
   recallAgentMemory,
   recordAgentMemoryUsage,
   rememberAgentMemory,
-  rememberActionAgentMemory,
   rebuildAgentMemoryIndex,
   type EvolveAgentMemoryInput,
   type RecallAgentMemoryInput,
@@ -15,6 +14,8 @@ import {
   type RecordAgentMemoryUsageInput,
   type RememberAgentMemoryInput,
 } from "@/lib/services/obsidian/agent-memory";
+import { reviewOperationalPatterns } from "@/lib/services/brain-pattern-mining";
+import { recordAgentOperationalEvent } from "@/lib/services/obsidian/agent-memory/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ function recallInputFromSearchParams(request: NextRequest): RecallAgentMemoryInp
     tags: params.get("tags")?.split(",").map((tag) => tag.trim()).filter(Boolean),
     limit: params.get("limit") ? Number(params.get("limit")) : undefined,
     includeArchived: params.get("includeArchived") === "1",
+    includeOperational: params.get("includeOperational") === "1",
     scope: params.get("scope") ?? undefined,
     temporalMode: (params.get("temporalMode") as RecallAgentMemoryInput["temporalMode"] | null) ?? undefined,
     asOf: params.get("asOf") ?? undefined,
@@ -61,8 +63,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as (RememberAgentMemoryInput & EvolveAgentMemoryInput & RecallAgentMemoryInput & RebuildAgentMemoryIndexInput & RecordAgentMemoryUsageInput & {
-      action?: "remember" | "remember-action" | "evolve" | "recall" | "answer" | "rebuild-index" | "record-usage" | "health" | "consolidate";
+      action?: "remember" | "remember-action" | "record-operation" | "mine-patterns" | "evolve" | "recall" | "answer" | "rebuild-index" | "record-usage" | "health" | "consolidate";
       applyArchives?: boolean;
+      enqueueProposals?: boolean;
+      since?: string;
     });
     const action = body.action ?? "recall";
     if (action === "remember") {
@@ -71,9 +75,12 @@ export async function POST(request: NextRequest) {
       if (result.blocked) return NextResponse.json({ ok: false, action, ...result }, { status: 409 });
       return NextResponse.json({ ok: true, action, ...result });
     }
-    if (action === "remember-action") {
-      const result = await rememberActionAgentMemory(body);
-      if (result.blocked) return NextResponse.json({ ok: false, action, ...result }, { status: 409 });
+    if (action === "remember-action" || action === "record-operation") {
+      const result = await recordAgentOperationalEvent(body);
+      return NextResponse.json({ ok: true, action, durableMemoryWritten: false, ...result });
+    }
+    if (action === "mine-patterns") {
+      const result = await reviewOperationalPatterns(body);
       return NextResponse.json({ ok: true, action, ...result });
     }
     if (action === "health") {

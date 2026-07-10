@@ -20,6 +20,7 @@ import { CommsPanel } from "./CommsPanel";
 import { SalesContentPanel } from "./SalesContentPanel";
 import { CompanyRunsPanel } from "./CompanyRunsPanel";
 import { ApprovalPoliciesPanel } from "./ApprovalPoliciesPanel";
+import { HivemindLabsPanel } from "./HivemindLabsPanel";
 import { collectCompanyDeliverables, partitionByOutput, dispatchedAgo } from "./company-deliverables";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
 import { isWorkApprovalIssue, workApprovalIssueToView } from "./work-approval-issues";
@@ -29,6 +30,7 @@ import type { ApprovalDecision, SpendApprovalView } from "@/features/approvals/s
 import type { CompanyApprovalPolicy, CompanyPricingProposal } from "@/lib/types/company";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
+import { companyExecutionCapability } from "@/lib/services/company-execution-capabilities";
 
 type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 
@@ -860,6 +862,7 @@ export function Cockpit({
     { key: "team", label: "Team" },
     { key: "analytics", label: "Analytics" },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
+    { key: "labs", label: "Labs" },
     { key: "approvals", label: "Approvals", badge: approveCount || null },
     { key: "runs", label: "Runs" },
     { key: "ops", label: "Ops" },
@@ -945,30 +948,37 @@ export function Cockpit({
 
       {active === "board" && (
         <Panel>
-          {/* autonomous-execution CTA: decompose the apex goal + dispatch to the crew */}
+          {/* autonomous-execution CTA: dispatch the apex goal through the selected engine */}
           {(() => {
             const busy = handlers.busyId === c.id;
             const launchedAgo = dispatchedAgo(c.lastDispatchedAt);
             const noGoal = !c.hasApexGoal;
             const running = Boolean(c.autonomy) && !c.frozen;
-            const launchDisabled = busy || c.frozen || c.agents.length === 0 || noGoal;
+            const usingAeon = c.execution?.engine === "aeon";
+            const requiresCrew = companyExecutionCapability(c.execution).autonomy.requiresCompanyCrew;
+            const needsCrew = requiresCrew && c.agents.length === 0;
+            const launchDisabled = busy || c.frozen || needsCrew || noGoal;
             return (
               <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 220 }}>
                   <span className="mcap" style={{ color: running ? "var(--live)" : "var(--honey)", display: "inline-flex", alignItems: "center", gap: 7 }}>
                     {running ? <span className="dot live" style={{ color: "var(--live)" }} /> : null}
-                    {running ? "autonomous · running" : "autonomous execution"}
+                    {running ? (usingAeon ? "AEON autonomy · running" : "autonomous · running") : (usingAeon ? "AEON background automation" : "autonomous execution")}
                   </span>
                   <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-3)", marginTop: 5, lineHeight: 1.5 }}>
                     {c.frozen
                       ? "Company is frozen — unfreeze it in Ops to run autonomously."
-                      : c.agents.length === 0
+                      : needsCrew
                         ? "Staff the company first, then launch it toward the apex goal."
                         : noGoal
                           ? "Set an apex goal for this company before launching work."
-                          : running
-                            ? "The crew keeps pursuing this goal on its own — re-dispatching whenever the board goes idle — until you stop it. Spend stays within the company budget."
-                            : "Launch the crew to pursue this goal autonomously, continuously, until you stop it. Online agents run the work; spend stays within the company budget."}
+                          : usingAeon
+                            ? running
+                              ? `AEON keeps dispatching ${c.execution?.engine === "aeon" ? c.execution.skill : "the selected skill"} on idle cycles until you stop it. Its workspace owns runtime permissions, secrets, outputs, and run history; HivemindOS keeps the company control and trace.`
+                              : `Launch ${c.execution?.engine === "aeon" ? c.execution.skill : "the selected AEON skill"} with this company's goal. AEON runs in the background; HivemindOS records the dispatch in Company Runs.`
+                            : running
+                              ? "The crew keeps pursuing this goal on its own — re-dispatching whenever the board goes idle — until you stop it. Spend stays within the company budget."
+                              : "Launch the crew to pursue this goal autonomously, continuously, until you stop it. Online agents run the work; spend stays within the company budget."}
                     {launchedAgo ? <span style={{ color: "var(--fg-4)" }}> · last dispatched {launchedAgo}</span> : null}
                   </div>
                 </div>
@@ -978,7 +988,7 @@ export function Cockpit({
                   </button>
                 ) : (
                   <button disabled={launchDisabled} onClick={handlers.onDispatch} style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", padding: "9px 16px", borderRadius: 9, cursor: launchDisabled ? "not-allowed" : "pointer", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.04, border: "1px solid var(--honey-line)", background: launchDisabled ? "var(--panel-2)" : "var(--btn-bg)", color: launchDisabled ? "var(--fg-4)" : "var(--btn-fg)", opacity: launchDisabled ? 0.6 : 1 }}>
-                    {busy ? <><Spinner size={13} /> Launching</> : launchedAgo ? "▶ Re-launch autonomy" : "▶ Launch autonomous work"}
+                    {busy ? <><Spinner size={13} /> Launching</> : usingAeon ? (launchedAgo ? "▶ Re-launch AEON" : "▶ Launch AEON skill") : launchedAgo ? "▶ Re-launch autonomy" : "▶ Launch autonomous work"}
                   </button>
                 )}
               </div>
@@ -1032,6 +1042,8 @@ export function Cockpit({
       {active === "analytics" && <AnalyticsPanel colony={c} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />}
+
+      {active === "labs" && <HivemindLabsPanel companyId={c.id} companyName={c.name} objective={c.apex.title} metricName={c.apex.metric} />}
 
       {active === "runs" && <CompanyRunsPanel companyId={c.id} />}
 

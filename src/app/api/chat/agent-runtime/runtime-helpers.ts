@@ -7,10 +7,74 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
 import { canonicalLocalCollectorUrl } from "@/lib/services/local-collector-url";
+import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
 import { buildVaultContext } from "@/lib/services/chat/shared-vault-context";
 import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 
 export type AgentMode = "plan" | "act";
+
+export function commandSuccessText(label: string, commandLine: string) {
+  const cleanLabel = label.trim();
+  if (/^open\b/i.test(cleanLabel)) {
+    const sentence = cleanLabel.replace(/^open\b/i, "Opened");
+    return sentence.endsWith(".") ? sentence : `${sentence}.`;
+  }
+  if (cleanLabel && !/^run\b/i.test(cleanLabel)) {
+    return cleanLabel.endsWith(".") ? cleanLabel : `${cleanLabel}.`;
+  }
+  return `Ran \`${commandLine}\`.`;
+}
+
+export function commandApprovalQuestion(commandLine: string) {
+  return [
+    "Approve this local command?",
+    "",
+    commandLine ? `\`${commandLine}\`` : "`(empty command)`",
+    "",
+    "This executable is outside the current chat permission mode's allowlist.",
+  ].join("\n");
+}
+
+export function commandApprovalEvent(input: {
+  command: string;
+  args: string[];
+  commandLine: string;
+  label: string;
+  error?: string;
+}) {
+  return {
+    type: RUNTIME_STREAM_EVENT_TYPES.APPROVAL,
+    id: `command-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    approvalKind: "local_command",
+    message: "Command permission required",
+    question: commandApprovalQuestion(input.commandLine),
+    command: input.command,
+    args: input.args,
+    commandLine: input.commandLine,
+    reason: input.label,
+    detail: input.error,
+    status: "running",
+    allowFreeText: false,
+    choices: [
+      {
+        label: "Approve once",
+        value: [
+          "Approved: run this pending local command now.",
+          `Command: ${input.commandLine || input.command || "(empty command)"}`,
+        ].join("\n"),
+        permissionMode: "bypass",
+      },
+      {
+        label: "Reject",
+        value: [
+          "Rejected: do not run that local command.",
+          "Choose another allowlisted approach or ask me for the correct path.",
+        ].join("\n"),
+        permissionMode: "manual",
+      },
+    ],
+  };
+}
 
 const INTERACTIVE_RUNTIME_LOCK_MS = 130_000;
 export const RUNTIME_FETCH_TIMEOUT_MS = 10 * 60 * 1000;
@@ -30,10 +94,11 @@ export function userFacingMachineName(profile: AgentProfile) {
   return name;
 }
 
-export function interactiveRuntimeLockKey(profile: AgentProfile, url: string) {
+export function interactiveRuntimeLockKey(profile: AgentProfile, url: string, conversationId = "") {
   if (profile.runtime !== "hermes" && profile.runtime !== HIVEMIND_OS_RUNTIME) return "";
   if ((profile.runtimeKind ?? "interactive") !== "interactive") return "";
-  return url;
+  const scope = conversationId.trim();
+  return scope ? `${url}::${scope}` : url;
 }
 
 export function reserveInteractiveRuntime(key: string) {

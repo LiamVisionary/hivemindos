@@ -674,6 +674,8 @@ export function QueenBeeVoiceOverlay({
         text: turn.text,
         live: turn.live,
         detail: turn.detail,
+        brain: turn.brain,
+        brainFallback: turn.brainFallback,
         source: "voice",
       });
     }

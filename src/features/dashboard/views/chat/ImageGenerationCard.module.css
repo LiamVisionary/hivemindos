@@ -1,17 +1,14 @@
 .card {
   display: grid;
-  width: min(476px, 100%);
+  width: 100%;
   min-width: 0;
-  gap: 10px;
+  gap: 11px;
   overflow: hidden;
-  border: 1px solid rgba(94, 234, 212, 0.24);
-  border-radius: 12px;
-  background:
-    radial-gradient(circle at 18% 10%, rgba(94, 234, 212, 0.17), transparent 32%),
-    radial-gradient(circle at 86% 16%, rgba(251, 191, 36, 0.12), transparent 30%),
-    linear-gradient(135deg, rgba(4, 10, 18, 0.96), rgba(13, 18, 30, 0.94));
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  padding: 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--panel);
+  padding: 12px;
+  box-shadow: 0 18px 50px -34px rgba(0, 0, 0, 0.7);
 }
 
 .header {
@@ -27,12 +24,11 @@
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(94, 234, 212, 0.32);
+  border: 1px solid var(--line-2);
   border-radius: 10px;
-  background:
-    linear-gradient(135deg, rgba(45, 212, 191, 0.16), rgba(251, 191, 36, 0.08)),
-    rgba(2, 6, 12, 0.72);
-  color: #99f6e4;
+  background: var(--panel-2);
+  color: var(--fg-2);
+  transition: border-color 160ms ease, color 160ms ease;
 }
 
 .icon svg {
@@ -47,44 +43,59 @@
   gap: 2px;
 }
 
-.title strong,
-.prompt strong {
-  color: #f8fafc;
+.title strong {
+  color: var(--fg);
+  font-family: var(--f-body);
   font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.prompt strong {
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.3;
 }
 
 .title small,
 .prompt span {
-  color: rgba(203, 213, 225, 0.72);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--fg-3);
+  font-family: var(--f-mono);
   font-size: 10.5px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timing {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  color: var(--fg-4);
   white-space: nowrap;
 }
 
 .progressTrack {
-  display: inline-flex;
-  width: 74px;
+  display: block;
+  width: 100%;
   height: 5px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.18);
-  vertical-align: middle;
+  background: var(--line-2);
 }
 
 .progressFill {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #5eead4, #fbbf24);
+  background: linear-gradient(90deg, var(--live), var(--honey));
   transition: width 500ms ease;
 }
 
@@ -94,45 +105,91 @@
   align-items: center;
   gap: 6px;
   margin-left: auto;
-  border: 1px solid rgba(94, 234, 212, 0.28);
+  border: 1px solid var(--honey-line);
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.72);
-  color: #5eead4;
+  background: var(--honey-soft);
+  color: var(--honey);
   padding: 5px 9px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--f-mono);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.06em;
-  line-height: 1;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .status.error {
-  border-color: rgba(251, 113, 133, 0.36);
-  color: #fda4af;
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .status.ready {
-  border-color: rgba(52, 211, 153, 0.32);
-  color: #86efac;
+  border-color: color-mix(in srgb, var(--live) 34%, transparent);
+  background: var(--live-soft);
+  color: var(--live);
 }
 
 .prompt {
   display: grid;
-  gap: 4px;
-  border-left: 2px solid rgba(94, 234, 212, 0.42);
+  gap: 3px;
+  border-left: 2px solid var(--honey-line);
   padding-left: 11px;
 }
 
+.promptRow {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.promptCopy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.sourceThumbnail {
+  display: block;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--panel-2);
+  padding: 0;
+  cursor: zoom-in;
+}
+
+.sourceThumbnail:focus-visible {
+  outline: 2px solid var(--honey-line);
+  outline-offset: 2px;
+}
+
+.sourceThumbnailImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .frame,
-.frameButton,
-.skeleton {
+.frameButton {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 10px;
-  background: rgba(2, 6, 12, 0.7);
+  border: 1px solid var(--line-2);
+  border-radius: 11px;
+  background: var(--bg-soft);
+}
+
+/* The generating placeholder gets its grid texture + honey/live shimmer sweep
+   from the shared `.cx-genskel` class (chat-exchange-shell.css); this rule only
+   gives it the prototype's 16:9 footprint. */
+.skeleton {
+  aspect-ratio: 16 / 9;
+  min-height: 150px;
 }
 
 .frame {
@@ -150,7 +207,7 @@
 }
 
 .frameButton:focus-visible {
-  outline: 2px solid rgba(94, 234, 212, 0.75);
+  outline: 2px solid var(--honey-line);
   outline-offset: 2px;
 }
 
@@ -164,10 +221,10 @@
   display: grid;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 10px;
-  background: rgba(2, 6, 12, 0.7);
-  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 11px;
+  background: var(--bg-soft);
+  padding: 0;
 }
 
 .frame img,
@@ -200,43 +257,13 @@
 }
 
 .skeleton {
-  aspect-ratio: 4 / 3;
-  min-height: 154px;
-  background:
-    repeating-linear-gradient(0deg, rgba(148, 163, 184, 0.08) 0 1px, transparent 1px 24px),
-    repeating-linear-gradient(90deg, rgba(148, 163, 184, 0.08) 0 1px, transparent 1px 24px),
-    linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(4, 10, 18, 0.95));
-}
-
-.skeleton::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 -36%;
-  width: 36%;
-  background: linear-gradient(100deg, transparent 20%, rgba(94, 234, 212, 0.11) 48%, rgba(251, 191, 36, 0.07) 58%, transparent 82%);
-  transform: translateX(0);
-  animation: shimmer 1.9s ease-in-out infinite;
-  will-change: transform;
-}
-
-.skeleton::after {
-  content: "";
-  position: absolute;
-  inset: 18px;
-  border-radius: 6px;
-  background-image:
-    linear-gradient(rgba(94, 234, 212, 0.16) 0 0),
-    linear-gradient(rgba(251, 191, 36, 0.12) 0 0),
-    linear-gradient(rgba(148, 163, 184, 0.08) 0 0);
-  background-position: 0 0, 0 52px, 0 104px;
-  background-repeat: no-repeat;
-  background-size: 34% 34px, 68% 34px, 48% 34px;
-  image-rendering: pixelated;
+  aspect-ratio: 16 / 9;
+  min-height: 150px;
 }
 
 .errorText {
   margin: 0;
-  color: #fecdd3;
+  color: var(--danger);
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -248,19 +275,56 @@
   gap: 8px;
 }
 
-.actions a {
+.actions a,
+.actionButton {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(94, 234, 212, 0.24);
+  border: 1px solid var(--line-2);
   border-radius: 8px;
-  background: rgba(45, 212, 191, 0.08);
-  color: #99f6e4;
+  background: var(--panel-2);
+  color: var(--fg-2);
   padding: 7px 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--f-body);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.actionButton svg {
+  width: 13px;
+  height: 13px;
+}
+
+.actionButton:hover:not(:disabled) {
+  border-color: var(--honey-line);
+  color: var(--fg);
+}
+
+.actionButton:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.actionSpinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--line-3);
+  border-top-color: var(--honey);
+  border-radius: 50%;
+  animation: actionSpin 0.7s linear infinite;
+}
+
+@keyframes actionSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .actionSpinner {
+    animation-duration: 2.4s;
+  }
 }
 
 .previewOverlay {
@@ -301,8 +365,8 @@
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
-  background: rgba(2, 6, 12, 0.78);
-  color: #f8fafc;
+  background: var(--panel-2);
+  color: var(--fg);
   cursor: pointer;
 }
 
@@ -333,6 +397,11 @@
   .status {
     margin-left: 0;
   }
+
+  .sourceThumbnail {
+    width: 56px;
+    height: 56px;
+  }
 }
 
 :global(:root[data-theme="hive-light"]) .card {
@@ -351,6 +420,7 @@
 :global(:root[data-theme="hive-light"]) .frameButton,
 :global(:root[data-theme="hive-light"]) .skeleton,
 :global(:root[data-theme="hive-light"]) .mediaFrame,
+:global(:root[data-theme="hive-light"]) .sourceThumbnail,
 :global(:root[data-theme="hive-light"]) .actions a {
   border-color: var(--line);
   background: var(--surface-soft);

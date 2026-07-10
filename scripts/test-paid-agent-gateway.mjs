@@ -62,7 +62,7 @@ const checks = [
   ["docs describe official hosted client env", contents.docs.includes("HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL=<https-hivemindos-hosted-base-url>")],
   ["docs warn not to package payTo", contents.docs.includes("Do not package an official `payTo` address")],
   ["docs name official downloaded-app route", contents.docs.includes("/api/official-paid-agents/<slug>/chat/completions")],
-  ["docs publish current hosted chat price", contents.docs.includes("$0.001 per successful chat completion")],
+  ["docs publish metered hosted chat pricing", contents.docs.includes("metered") && contents.docs.includes("25% markup") && contents.docs.includes("$0.001 minimum per message")],
   ["docs describe runtime policy", contents.docs.includes("Runtime policy:")],
   ["docs describe builder code attribution", contents.docs.includes("HIVEMINDOS_PAID_AGENT_BUILDER_CODE=<base-builder-code>")],
   ["docs describe CDP facilitator auth", contents.docs.includes("CDP_API_KEY_ID=<cdp-api-key-id>") && contents.docs.includes("@coinbase/x402")],

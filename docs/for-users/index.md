@@ -14,6 +14,16 @@ Everything you need to run HivemindOS as a local-first agent fleet control room.
     <a href="features/">Open features</a>
   </section>
   <section class="docCard">
+    <h3>Zero Human Companies</h3>
+    <p>Operate a company through a native HivemindOS crew or an optional AEON background skill, with explicit goals, approvals, budgets, stop controls, and run history.</p>
+    <a href="features/zero-human-companies.html">Open company docs</a>
+  </section>
+  <section class="docCard">
+    <h3>AEON For Zero Human Companies</h3>
+    <p>Choose a saved workspace and skill, launch the company, and follow the boundary between HivemindOS company controls and AEON execution.</p>
+    <a href="runtimes/aeon/zero-human-companies.html">Open the AEON company guide</a>
+  </section>
+  <section class="docCard">
     <h3>Trading</h3>
     <p>Crypto swaps, stablecoin sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca, xStocks, or Robinhood Chain Stock Tokens, with governance and agent access.</p>
     <a href="trading/">Open trading docs</a>
@@ -45,7 +55,7 @@ Everything you need to run HivemindOS as a local-first agent fleet control room.
   </section>
   <section class="docCard">
     <h3>Runtime Guides</h3>
-    <p>Runtime-specific setup and behavior for Hermes, AEON, and the adapter layer that keeps runtime surfaces consistent.</p>
+    <p>Runtime-specific setup and behavior for Hermes and AEON, including the optional AEON engine for Zero Human Companies.</p>
     <a href="runtimes/">Open runtimes</a>
   </section>
   <section class="docCard">

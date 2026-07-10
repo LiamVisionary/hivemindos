@@ -19,6 +19,7 @@ const files = {
   route: await source("src/app/api/chat/agent-runtime/route.ts"),
   streamHttp: await source("src/app/api/chat/agent-runtime/stream-http-runtime.ts"),
   streamOpenai: await source("src/app/api/chat/agent-runtime/stream-openai-compatible.ts"),
+  runtimeHelpers: await source("src/app/api/chat/agent-runtime/runtime-helpers.ts"),
   runtimeEvents: await source("src/lib/services/runtime-stream-events.ts"),
   statusHelpers: await source("src/features/dashboard/hooks/status-chat-input-helpers.ts"),
   chatPanelHelpers: await source("src/features/dashboard/views/chat/chat-panel-helpers.ts"),
@@ -44,18 +45,21 @@ includes(files.commandTool, "execFileAsync(command, args", "command tool still a
 includes(files.runtimeEvents, 'APPROVAL: "chat.approval"', "runtime stream events");
 includes(files.route, "permissionMode = normalizeChatPermissionMode(body.permissionMode)", "route request parsing");
 includes(files.route, "permissionMode,", "route telemetry");
-includes(files.route, "vaultPromptContext, permissionMode)", "route dispatch");
+includes(files.route, "      permissionMode,\n      mediaArtifacts,", "route dispatch");
 includes(files.streamHttp, "const normalizedPermissionMode = normalizeChatPermissionMode(permissionMode)", "HTTP runtime permission normalization");
 includes(files.streamHttp, "normalizedPermissionMode", "HTTP runtime dispatch");
 
 includes(files.streamOpenai, 'permissionMode: ChatPermissionMode = "manual"', "OpenAI-compatible permission input");
-includes(files.streamOpenai, 'normalizedPermissionMode !== "plan"', "plan mode disables local command tools");
-includes(files.streamOpenai, "commandApprovalEvent", "approval event builder");
-includes(files.streamOpenai, "RUNTIME_STREAM_EVENT_TYPES.APPROVAL", "approval event emission");
-includes(files.streamOpenai, 'approvalKind: "local_command"', "approval event kind");
-includes(files.streamOpenai, 'label: "Approve once"', "approve once option");
-includes(files.streamOpenai, 'permissionMode: "bypass"', "approve option bypasses once");
-includes(files.streamOpenai, 'label: "Reject"', "reject option");
+includes(files.streamOpenai, 'permissionMode !== "plan"', "plan mode disables local command tools");
+includes(files.runtimeHelpers, "export function commandApprovalEvent", "approval event builder");
+includes(files.runtimeHelpers, "type: RUNTIME_STREAM_EVENT_TYPES.APPROVAL", "approval event uses the canonical stream event type");
+includes(files.runtimeHelpers, 'approvalKind: "local_command"', "approval event kind");
+includes(files.runtimeHelpers, 'label: "Approve once"', "approve once option");
+includes(files.runtimeHelpers, 'permissionMode: "bypass"', "approve option bypasses once");
+includes(files.runtimeHelpers, 'label: "Reject"', "reject option");
+includes(files.streamOpenai, "commandApprovalEvent(", "approval event builder is called");
+includes(files.streamOpenai, "events.push(ssePayload(approvalEvent))", "non-stream approval event emission");
+includes(files.streamOpenai, "controller.enqueue(encoder.encode(ssePayload(approvalEvent)))", "stream approval event emission");
 includes(files.streamOpenai, "if (toolRun.prompted)", "non-stream approval short-circuit");
 includes(files.streamOpenai, "if (outcome.prompted)", "stream approval short-circuit");
 includes(files.streamOpenai, '"agent_runtime.command_tool.permission_required"', "permission telemetry");
@@ -64,10 +68,10 @@ includes(files.statusHelpers, "permissionMode = String(choice.permissionMode", "
 includes(files.statusHelpers, "/approval/i.test(type)", "approval prompt detection");
 includes(files.chatPanelHelpers, "permissionMode: normalizeChatPermissionMode(record.permissionMode)", "stored prompt keeps permission mode");
 includes(files.dashboardTypes, "permissionMode?: ChatPermissionMode", "chat message prompt type");
-includes(files.messageThread, "sendPromptMessage(prompt, option.permissionMode", "prompt buttons send permission mode");
+includes(files.messageThread, "permissionMode: option.permissionMode", "prompt buttons send permission mode");
 includes(files.statusController, "permissionMode: submittedPermissionMode", "composer form permission mode");
 includes(files.statusController, "permissionMode,", "agent-runtime request permission mode");
-includes(files.chatExchange, "choosePermissionMode", "chat exchange permission mode state");
+includes(files.chatExchange, "setPermissionMode(normalized)", "chat exchange permission mode state");
 includes(files.chatExchange, 'setAgentMode(normalized === "plan" ? "plan" : "act")', "permission plan syncs agent mode");
 
 includes(files.composer, "CHAT_PERMISSION_MODE_OPTIONS.map", "composer permission menu");

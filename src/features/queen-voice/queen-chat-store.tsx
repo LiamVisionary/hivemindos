@@ -32,6 +32,7 @@ import {
   actingWalletSourceFromContext,
   fetchHivemindFastContext,
   fetchWalletReadiness,
+  fetchXAccountRead,
   withScreenContext,
 } from "./queen-fast-context";
 import {
@@ -45,10 +46,8 @@ import {
   createNdjsonEventReader,
   type ConverseStreamEvent,
 } from "./converse-stream";
+import { dispatchQueenSlashCommand } from "./queen-slash-commands";
 import { playSpokenReply } from "./spoken-reply-playback";
-import { transcriptCommandUrl } from "@/features/dashboard/hooks/status-chat-transcript";
-import { looksLikeXPost } from "@/lib/services/x-transcript/x-url";
-import type { XTranscriptResult } from "@/lib/services/x-transcript/x-transcript-service";
 
 export type QueenChatTurn = {
   id: string;
@@ -373,7 +372,11 @@ export function QueenChatProvider({
         const result = await fetchWalletReadiness(screenContext);
         return finishTool(result, { directRoute: "wallet-readiness" });
       }
-      if (name === "ask_hivemind_agent") {
+      if (name === "read_x_account") {
+        const result = await fetchXAccountRead(args);
+        return finishTool(result, { directRoute: "x-account" });
+      }
+      if (name === "ask_hivemind_agent" || name === "use_hive_capability") {
         const message = String(args.message ?? "");
         if (isWalletReadinessCommand(message)) {
           const result = await fetchWalletReadiness(screenContext);
@@ -387,6 +390,7 @@ export function QueenChatProvider({
           action: "agent-turn",
           message: withScreenContext(message, screenContext),
           suppressWalletIntents,
+          preferBuiltInCapability: name === "use_hive_capability",
           // Structured acting-wallet source so the executing agent defaults
           // sends/swaps/trades to the user's selected wallet (the prose context
           // only truncates the address; this carries the full identity).
@@ -485,10 +489,12 @@ export function QueenChatProvider({
     const toolStatus = (name: string) => ({
       drive_dashboard: "Driving the dashboard…",
       ask_hivemind_agent: "Asking a hive agent…",
+      use_hive_capability: "Finding and using the right hive capability…",
       create_hive_task: "Creating the Work Board task…",
       remember_preference: "Saving that preference…",
       read_hivemind_context: "Reading app and brain context…",
       read_wallet_readiness: "Checking wallet readiness…",
+      read_x_account: "Reading the connected X account…",
       read_work_board: "Checking the Work Board…",
       read_agent_status: "Checking agent status…",
     } as Record<string, string>)[name] ?? "Working on it…";
@@ -802,58 +808,24 @@ export function QueenChatProvider({
     if (options.speak !== false) await speakReply(reply);
   }, [updateTurn]);
 
-  // `/transcript <x-link>` from the hive pill. The main Chat view runs this in
-  // its own controller; the pill routes straight to sendText, so it needs its
-  // own handler. The Queen "says" the summary + follow-up (concise, in-bubble);
-  // the full transcript rides in `detail` (the "Show what she found" modal).
-  const runTranscriptCommand = React.useCallback(async (rawText: string, url: string) => {
-    appendTurn({ who: "you", text: rawText, source: "text" });
-    if (!url || !looksLikeXPost(url)) {
-      appendTurn({
-        who: "queen",
-        text: "Add an X link after `/transcript`, for example `/transcript https://x.com/user/status/1780000000000000001`.",
-        source: "text",
-      });
-      return;
-    }
-    const queenId = appendTurn({ who: "queen", text: "", live: true, pending: true, working: "Pulling the transcript…", source: "text" });
-    try {
-      const res = await fetch("/api/integrations/x-transcript", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, summarize: true }),
-      });
-      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; result?: XTranscriptResult } | null;
-      if (!res.ok || !data?.ok || !data.result) {
-        throw new Error(data?.error || `Transcript request failed with HTTP ${res.status}.`);
-      }
-      const result = data.result;
-      const meta = [
-        result.author?.handle ? `@${result.author.handle}` : result.kind === "thread" ? "thread" : "post",
-        result.durationSec ? `${Math.round(result.durationSec / 60)} min video` : typeof result.postCount === "number" && result.postCount > 1 ? `${result.postCount}-post thread` : "",
-      ].filter(Boolean).join(" · ");
-      const spoken = [result.summary, result.followUpQuestion].filter(Boolean).join("\n\n")
-        || `Transcript ready${meta ? ` (${meta})` : ""}.`;
-      const detail = `**Transcript${meta ? ` — ${meta}` : ""}**\n\n${result.transcript}`;
-      updateTurn(queenId, { text: spoken, detail, live: false, pending: false, working: undefined });
-    } catch (error) {
-      updateTurn(queenId, {
-        text: `I couldn't pull that transcript: ${error instanceof Error ? error.message : String(error)}`,
-        live: false,
-        pending: false,
-        working: undefined,
-      });
-    }
-  }, [appendTurn, updateTurn]);
-
   const sendText = React.useCallback(
     async (text: string, opts?: QueenChatSendOptions) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      // Intercept the /transcript slash command before the Queen agentic loop —
-      // the pill has no other slash-command handler.
-      const transcriptUrl = transcriptCommandUrl(trimmed);
-      if (transcriptUrl !== null) return runTranscriptCommand(trimmed, transcriptUrl);
+      // Intercept ANY slash command before the Queen agentic loop. The pill
+      // shares the whole command namespace but had no dispatcher, so commands
+      // fell through and were answered conversationally. Route each to a real
+      // action (transcript, dashboard-drive, clear/help, or an honest reply).
+      if (await dispatchQueenSlashCommand(trimmed, {
+        appendTurn,
+        updateTurn,
+        clear,
+        drive: (command) => {
+          const run = runRef.current;
+          if (!run) return Promise.reject(new Error("Bee Pilot is not available."));
+          return run(command, { screenContext: opts?.screenContext });
+        },
+      })) return;
       const audioRoute = queenChatRouteForSend(voiceChatActiveRef.current);
       const shouldSpeakReply = audioRoute === "voice";
       const voiceTextAudioContext = shouldSpeakReply ? ensureVoiceTextAudioContext() : null;
@@ -897,7 +869,7 @@ export function QueenChatProvider({
       sendChainRef.current = task;
       return task;
     },
-    [appendTurn, ensureVoiceTextAudioContext, runQueenTurn, runQueenVoiceTextTurn, runTranscriptCommand, updateTurn],
+    [appendTurn, clear, ensureVoiceTextAudioContext, runQueenTurn, runQueenVoiceTextTurn, updateTurn],
   );
 
   const activeAgentTurn = React.useMemo(() => {

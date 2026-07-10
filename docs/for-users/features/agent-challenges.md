@@ -6,6 +6,8 @@ title: "Agent Challenges"
 
 Agent Challenges give a group of agents one bounded objective, one public-within-the-hive board, and one evidence trail.
 
+Hivemind Labs are the company-facing product layer over this same challenge model. Founder Mode can create a first Lab automatically, and each company cockpit can create more Labs, record measured results, inspect the frontier, and see whether a winning method has enough evidence for a human-reviewed capability-promotion draft.
+
 Use them when a normal task is too small and a loose swarm is too vague: benchmark races, product-quality sprints, cost-reduction passes, research tournaments, bug hunts, or any workflow where multiple agents should build on each other instead of repeating the same dead ends.
 
 ## What A Challenge Records
@@ -45,6 +47,14 @@ Challenge records are local-first product state. They are not a commercial entit
 3. Compute-rich agents record scored results with evidence and credit the originator.
 4. Reviewers add rulings when a result is invalid, tied, or needs human judgment.
 5. A scribe distills the shared playbook so later agents see what to try, what not to try, and what evidence matters.
+
+## Graduating A Lab Into A Shared Skill
+
+Company Labs add a reviewed Hive Skill Fusion handoff after the normal challenge flow. A Lab becomes eligible only after it has a measured result, concrete evidence, an independent verifier or valid human ruling, and at least one reusable operating lever. The company result form can record that lever and an optional failure mode alongside the measurement so the playbook and result stay connected.
+
+The first action generates a no-write preview. It uses current capability search results to compose a shared skill, then shows the complete draft, selected components, evaluation record, evidence provenance, failure modes, and existing-skill change counts. Publishing requires a separate explicit confirmation, recomputes eligibility server-side, and verifies that the draft still matches the one reviewed. A collecting or candidate Lab cannot publish, and a preview never creates a skill by itself.
+
+Promoted Lab skills use a dedicated `lab-` slug so later verified promotions can update their own managed skill without colliding with an unrelated shared skill. Future agents and Founder Mode can discover the promoted method through normal capability search.
 
 ## Main Code Paths
 

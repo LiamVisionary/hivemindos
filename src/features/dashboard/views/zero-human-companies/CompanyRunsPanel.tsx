@@ -123,6 +123,9 @@ function RunCard({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {typeof run.output.taskCount === "number" ? <Pill>{run.output.taskCount} tasks</Pill> : null}
           {typeof run.output.delegatedCount === "number" ? <Pill>{run.output.delegatedCount} delegated</Pill> : null}
+          {run.output.executionEngine === "aeon" ? <Pill tone="approved">AEON</Pill> : null}
+          {typeof run.output.aeonSkill === "string" ? <Pill>{run.output.aeonSkill}</Pill> : null}
+          {typeof run.output.externalRunCount === "number" ? <Pill>{run.output.externalRunCount} background run</Pill> : null}
           {typeof run.output.feeStatus === "string" ? <Pill tone={run.output.feeStatus === "collected" ? "applied" : "pending"}>fee {run.output.feeStatus}</Pill> : null}
         </div>
       ) : null}

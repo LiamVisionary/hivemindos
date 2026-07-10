@@ -5,6 +5,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { readSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
+import { downloadSlackLinkedContent } from "@/lib/services/integrations/slack-linked-content";
+import type { LongRunningProcessProgress } from "@/lib/types/long-running-processes";
 
 /**
  * Session-based Slack access — uses the user's OWN logged-in Slack session (the
@@ -78,64 +80,280 @@ type SlackFile = {
 };
 
 type SlackMessage = { ts?: string; files?: SlackFile[] };
+type SlackConversation = { id?: string; name?: string; is_private?: boolean };
+
+export type SlackChannel = {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+};
+
+export type SlackIgnoredFileType = "image";
+
+export type SlackRetrievalOptions = {
+  ignoreFileTypes?: SlackIgnoredFileType[];
+  deepDownload?: boolean;
+  onProgress?: (progress: LongRunningProcessProgress) => void;
+};
+
+const SLACK_CHANNEL_ID_RE = /^[CGD][A-Z0-9]+$/;
 
 function safeName(name: string, fallback: string): string {
   const clean = name.replace(/[\/\\:\0]+/g, "-").trim();
   return clean || fallback;
 }
 
-/**
- * Pull a channel's full history and download every file into `saveDir` (default
- * ~/Downloads/hivemindos-slack/<channel>/). Returns a summary. External links in
- * messages are collected but not fetched here (they're not Slack files).
- */
-export async function retrieveSlackChannel(
-  channelId: string,
-  saveDir?: string,
-): Promise<{ saveDir: string; messages: number; files: number; downloaded: number; failedFiles: string[] }> {
+function shouldIgnoreSlackFile(
+  file: SlackFile,
+  ignoredFileTypes: ReadonlySet<SlackIgnoredFileType>,
+): boolean {
+  const mimeType = file.mimetype?.trim().toLowerCase() || "";
+  return ignoredFileTypes.has("image") && mimeType.startsWith("image/");
+}
+
+function publishSlackRetrievalProgress(
+  options: SlackRetrievalOptions | undefined,
+  progress: LongRunningProcessProgress,
+): void {
+  try {
+    options?.onProgress?.(progress);
+  } catch {
+    // Progress reporting is observational and must never interrupt a download.
+  }
+}
+
+async function* slackConversationPages(
+  creds: SessionCreds,
+): AsyncGenerator<SlackConversation[]> {
+  let cursor: string | undefined;
+  do {
+    const data = await sessionCall(
+      "conversations.list",
+      {
+        types: "public_channel,private_channel",
+        exclude_archived: "true",
+        limit: "200",
+        ...(cursor ? { cursor } : {}),
+      },
+      creds,
+    );
+    yield (data.channels as SlackConversation[]) || [];
+    cursor = ((data.response_metadata as { next_cursor?: string })?.next_cursor || "").trim() || undefined;
+  } while (cursor);
+}
+
+export async function listSlackChannels(): Promise<SlackChannel[]> {
   const creds = await slackSessionCreds();
   if (!creds) throw new Error("No Slack session connected. Capture a Slack session first.");
 
-  const dir = saveDir?.trim() || join(homedir(), "Downloads", "hivemindos-slack", safeName(channelId, "channel"));
+  const channels: SlackChannel[] = [];
+  for await (const page of slackConversationPages(creds)) {
+    for (const channel of page) {
+      if (!channel.id || !channel.name) continue;
+      channels.push({
+        id: channel.id,
+        name: channel.name,
+        isPrivate: channel.is_private === true,
+      });
+    }
+  }
+
+  return channels.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function resolveSlackChannelReference(
+  reference: string,
+  creds: SessionCreds,
+): Promise<{ id: string; name?: string }> {
+  const clean = reference.trim();
+  if (SLACK_CHANNEL_ID_RE.test(clean)) return { id: clean };
+
+  const requestedName = clean.replace(/^#/, "").trim().toLowerCase();
+  if (!requestedName) throw new Error("Enter a Slack channel name or id.");
+
+  for await (const page of slackConversationPages(creds)) {
+    const channel = page.find(
+      (candidate) => candidate.name?.toLowerCase() === requestedName && candidate.id,
+    );
+    if (channel?.id) return { id: channel.id, name: channel.name || requestedName };
+  }
+
+  throw new Error(
+    `Slack channel #${requestedName} was not found. Make sure this signed-in account can see it.`,
+  );
+}
+
+/**
+ * Pull a channel's full history and download every file into `saveDir` (default
+ * ~/Downloads/hivemindos-slack/<channel>/). When deep download is enabled,
+ * public linked pages are saved as Markdown and their linked assets are fetched
+ * through the bounded linked-content crawler.
+ */
+export async function retrieveSlackChannel(
+  channelReference: string,
+  saveDir?: string,
+  options?: SlackRetrievalOptions,
+): Promise<{
+  saveDir: string;
+  channelId: string;
+  channelName?: string;
+  messages: number;
+  files: number;
+  ignoredFiles: number;
+  downloaded: number;
+  failedFiles: string[];
+  linkedLinksFound: number;
+  linkedItemsDiscovered: number;
+  linkedItemsProcessed: number;
+  linkedPages: number;
+  linkedNotionPages: number;
+  linkedFiles: number;
+  linkedIgnoredFiles: number;
+  linkedSkippedByLimit: number;
+  linkedMaxGraphDepth: number;
+  linkedComplete: boolean;
+  linkedFailures: string[];
+}> {
+  const creds = await slackSessionCreds();
+  if (!creds) throw new Error("No Slack session connected. Capture a Slack session first.");
+  publishSlackRetrievalProgress(options, {
+    stage: "resolving-channel",
+    label: "Finding Slack channel",
+    detail: channelReference.trim(),
+  });
+  const channel = await resolveSlackChannelReference(channelReference, creds);
+
+  const dir = saveDir?.trim()
+    || join(homedir(), "Downloads", "hivemindos-slack", safeName(channel.name || channel.id, "channel"));
   await mkdir(dir, { recursive: true });
 
   // Paginate the whole history.
   const messages: SlackMessage[] = [];
   let cursor: string | undefined;
+  let historyPages = 0;
   do {
     const data = await sessionCall(
       "conversations.history",
-      { channel: channelId, limit: "200", ...(cursor ? { cursor } : {}) },
+      { channel: channel.id, limit: "200", ...(cursor ? { cursor } : {}) },
       creds,
     );
     messages.push(...((data.messages as SlackMessage[]) || []));
+    historyPages += 1;
+    publishSlackRetrievalProgress(options, {
+      stage: "slack-history",
+      label: "Reading Slack message history",
+      completed: messages.length,
+      detail: `${messages.length} message${messages.length === 1 ? "" : "s"} across ${historyPages} page${historyPages === 1 ? "" : "s"}`,
+    });
     cursor = ((data.response_metadata as { next_cursor?: string })?.next_cursor || "").trim() || undefined;
   } while (cursor);
 
+  publishSlackRetrievalProgress(options, {
+    stage: "saving-history",
+    label: "Saving Slack message history",
+    completed: messages.length,
+    detail: "Writing messages.json",
+  });
   await writeFile(join(dir, "messages.json"), JSON.stringify(messages, null, 2), "utf8");
 
   const files = messages.flatMap((m) => m.files || []).filter((f) => f && (f.url_private_download || f.url_private));
+  const ignoredFileTypes = new Set(options?.ignoreFileTypes || []);
+  const downloadableFiles = files.filter((file) => !shouldIgnoreSlackFile(file, ignoredFileTypes));
   const failedFiles: string[] = [];
   let downloaded = 0;
   const filesDir = join(dir, "files");
-  if (files.length) await mkdir(filesDir, { recursive: true });
+  if (downloadableFiles.length) await mkdir(filesDir, { recursive: true });
 
-  for (const file of files) {
+  publishSlackRetrievalProgress(options, {
+    stage: "slack-files",
+    label: "Downloading Slack files",
+    completed: 0,
+    total: downloadableFiles.length,
+    detail: downloadableFiles.length
+      ? `${downloadableFiles.length} file${downloadableFiles.length === 1 ? "" : "s"} queued`
+      : "No Slack files to download",
+  });
+  for (const [index, file] of downloadableFiles.entries()) {
     const url = file.url_private_download || file.url_private!;
     const name = safeName(file.name || file.title || file.id || "file", file.id || "file");
+    let detail = `Downloading ${name}`;
+    publishSlackRetrievalProgress(options, {
+      stage: "slack-files",
+      label: "Downloading Slack files",
+      completed: index,
+      total: downloadableFiles.length,
+      detail,
+    });
     try {
       const res = await fetch(url, {
         headers: { cookie: cookieHeader(creds), authorization: `Bearer ${creds.token}` },
         signal: AbortSignal.timeout(60_000),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      await writeFile(join(filesDir, `${file.id ? `${file.id}-` : ""}${name}`), buf);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      await writeFile(join(filesDir, `${file.id ? `${file.id}-` : ""}${name}`), bytes);
       downloaded += 1;
+      detail = `Downloaded ${name}`;
     } catch (error) {
       failedFiles.push(`${name}: ${error instanceof Error ? error.message : "download failed"}`);
+      detail = `Could not download ${name}`;
+    } finally {
+      publishSlackRetrievalProgress(options, {
+        stage: "slack-files",
+        label: "Downloading Slack files",
+        completed: index + 1,
+        total: downloadableFiles.length,
+        detail,
+      });
     }
   }
 
-  return { saveDir: dir, messages: messages.length, files: files.length, downloaded, failedFiles };
+  const linkedSummary = options?.deepDownload
+    ? await downloadSlackLinkedContent(messages, dir, {
+        ignoreFileTypes: options.ignoreFileTypes,
+        onProgress: options.onProgress,
+      })
+    : {
+        linksFound: 0,
+        itemsDiscovered: 0,
+        itemsProcessed: 0,
+        pagesDownloaded: 0,
+        notionPagesDownloaded: 0,
+        filesDownloaded: 0,
+        ignoredFiles: 0,
+        skippedByLimit: 0,
+        maxGraphDepth: 0,
+        complete: true,
+        failed: [],
+      };
+
+  publishSlackRetrievalProgress(options, {
+    stage: "finalizing",
+    label: "Finalizing Slack download",
+    completed: 1,
+    total: 1,
+    detail: `Saved to ${dir}`,
+  });
+
+  return {
+    saveDir: dir,
+    channelId: channel.id,
+    ...(channel.name ? { channelName: channel.name } : {}),
+    messages: messages.length,
+    files: files.length,
+    ignoredFiles: files.length - downloadableFiles.length,
+    downloaded,
+    failedFiles,
+    linkedLinksFound: linkedSummary.linksFound,
+    linkedItemsDiscovered: linkedSummary.itemsDiscovered,
+    linkedItemsProcessed: linkedSummary.itemsProcessed,
+    linkedPages: linkedSummary.pagesDownloaded,
+    linkedNotionPages: linkedSummary.notionPagesDownloaded,
+    linkedFiles: linkedSummary.filesDownloaded,
+    linkedIgnoredFiles: linkedSummary.ignoredFiles,
+    linkedSkippedByLimit: linkedSummary.skippedByLimit,
+    linkedMaxGraphDepth: linkedSummary.maxGraphDepth,
+    linkedComplete: linkedSummary.complete,
+    linkedFailures: linkedSummary.failed,
+  };
 }

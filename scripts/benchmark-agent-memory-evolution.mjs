@@ -104,7 +104,7 @@ for (const [path, tokens] of [
     "cognitiveStage",
     "traceEvolutionChain",
   ]],
-  ["src/app/api/brain/memory/route.ts", ["\"remember-action\"", "\"record-usage\"", "\"evolve\""]],
+  ["src/app/api/brain/memory/route.ts", ["\"record-operation\"", "\"mine-patterns\"", "\"record-usage\"", "\"evolve\""]],
   ["scripts/hive-brain", ["hive-brain evolve", "formatEvolutionChain"]],
   ["src/lib/services/context-index.ts", ["action: 'evolve'"]],
 ]) {

@@ -1,51 +1,26 @@
 import { HIVEMIND_OS_RUNTIME, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
-import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
-import { normalizeChatResponseBilling, type ChatResponseBilling } from "@/lib/types/chat-billing";
-import { chatPermissionModeAllowsUnlistedCommands, normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
-import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
+import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
+import { chatPermissionModeAllowsUnlistedCommands, type ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { proxyInput, proxyOutput } from "@/lib/services/agent-security-proxy";
 import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
-import { isUsePodProfile, resolveUsePodRuntimeConfig, summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
-import { interpretVeniceError, isVeniceProfile, resolveVeniceRuntimeConfig, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
+import { summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
+import { interpretVeniceError, isVeniceProfile, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
 import {
   isBankrAdaptiveModel,
   isBankrLlmProfile,
-  resolveBankrLlmRuntimeProfile,
   resolveAdaptiveBankrLlmModels,
 } from "@/lib/services/bankr-llm";
-import {
-  isHivemindosWalletPaidModelProfile,
-  resolveHivemindosWalletPaidModelRuntimeConfig,
-} from "@/lib/services/hivemindos-wallet-paid-models";
-import {
-  isHiveComputeProfile,
-  resolveHiveComputeRuntimeConfig,
-} from "@/lib/services/hive-compute-marketplace";
 import {
   bankrActionToolDefinition,
   BANKR_ACTION_TOOL_NAME,
   runBankrActionTool,
 } from "@/lib/services/bankr-actions";
 import { imageGenerationRequest, videoGenerationRequest } from "@/lib/services/chat/task-retrieval-context";
-import {
-  buildHivemindPromptEnvelope,
-  prependHivemindSystemMessage,
-} from "@/lib/services/chat/hivemind-system-prompt";
-import {
-  AGENT_COLD_START_EVENT_TYPE,
-  inferredModalColdStartProcessEvent,
-  recordAgentRuntimeWarm,
-} from "@/lib/services/chat/agent-cold-start";
-import {
-  openAICompatibleInferenceCacheHints,
-  openAICompatibleMessageCacheControlSupported,
-} from "@/lib/services/chat/inference-cache-hints";
+import { AGENT_COLD_START_EVENT_TYPE, inferredModalColdStartProcessEvent, recordAgentRuntimeWarm } from "@/lib/services/chat/agent-cold-start";
+import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
-import {
-  flushChannelMarkup,
-  routeChannelMarkupText,
-} from "@/lib/services/chat/channel-markup";
+import { flushChannelMarkup, routeChannelMarkupText } from "@/lib/services/chat/channel-markup";
 import {
   contentHasLeakedToolCallMarker,
   extractLeakedToolCalls,
@@ -54,12 +29,7 @@ import {
 } from "@/lib/services/chat/leaked-tool-call-markup";
 import { type AdaptiveRoutePlan } from "@/lib/services/chat/adaptive-model-router";
 import { adaptiveReliabilityKey, assessAdaptiveResponseQuality, classifyAdaptiveModelFailure, recordAdaptiveModelOutcome } from "@/lib/services/chat/adaptive-model-reliability";
-import {
-  appendRuntimeChatSessionEvent,
-  appendRuntimeChatSessionText,
-  finishRuntimeChatSession,
-  updateRuntimeChatSessionLastAssistantBilling,
-} from "@/lib/services/chat/runtime-session-store";
+import { appendRuntimeChatSessionEvent, appendRuntimeChatSessionText, finishRuntimeChatSession, updateRuntimeChatSessionLastAssistantBilling } from "@/lib/services/chat/runtime-session-store";
 import { RUN_COMMAND_TOOL_NAME, runAgentCommand, runCommandToolDefinition } from "@/lib/services/agent-shell/command-tool";
 import {
   createChannelMarkupState,
@@ -75,17 +45,21 @@ import {
   type IncomingMessage,
 } from "./messages";
 import type { ChatMediaArtifact } from "./media-artifacts";
-import {
-  shouldSuppressCommandToolForNativeMedia,
-} from "./media-tool-routing";
+import { explicitLocalCommandRequest, forceVideoGenerationToolCall, shouldSuppressCommandToolForNativeMedia, videoInputImagesForArgs } from "./media-tool-routing";
 import { runtimeProcessEventsSsePayload } from "./process-events";
 import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
+import { isXaiOAuthProvider, xaiOAuthChatRequestOptions } from "@/lib/services/xai-oauth-inference-contract";
+import { reasoningEffortRequestBody, type ChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
 import {
-  isXaiOAuthProvider,
-  xaiOAuthChatRequestOptions,
-} from "@/lib/services/xai-oauth-inference-contract";
+  X_ACCOUNT_RUNTIME_TOOL_DEFINITION,
+  X_ACCOUNT_RUNTIME_TOOL_NAME,
+  runXAccountRuntimeTool,
+  xAccountRuntimeToolAvailable,
+} from "./x-account-runtime-tool";
 import {
+  commandApprovalEvent,
+  commandSuccessText,
   execFileAsync,
   interactiveRuntimeLockKey,
   recordChatHoney,
@@ -96,7 +70,6 @@ import {
   type AgentMode,
 } from "./runtime-helpers";
 import {
-  buildAdaptiveOpenRouterResolvedModelContext,
   buildOpenAICompatibleUrl,
   finalAdaptiveOpenRouterError,
   finalAdaptiveProviderError,
@@ -114,234 +87,31 @@ import {
   retryableAdaptiveOpenRouterStatus,
   stripTerminalControls,
 } from "./openai-compat";
-
-function numericHeader(headers: Headers, name: string) {
-  const value = headers.get(name)?.trim();
-  if (!value) return undefined;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : undefined;
-}
-
-function stringHeader(headers: Headers, name: string) {
-  const value = headers.get(name)?.trim();
-  return value || undefined;
-}
-
-function dataUrlDecodedBytes(dataUrl?: string) {
-  if (!dataUrl) return 0;
-  const payload = dataUrl.split(",", 2)[1] ?? "";
-  return Math.floor((payload.replace(/=+$/u, "").length * 3) / 4);
-}
-
-function modelVisibleMediaBytes(artifacts: ChatMediaArtifact[]) {
-  return artifacts.reduce((total, artifact) => total + dataUrlDecodedBytes(artifact.dataUrl || artifact.previewDataUrl), 0);
-}
-
-function hivemindosModelsBillingFromHeaders(headers: Headers): ChatResponseBilling | null {
-  const creditDebitUsd = numericHeader(headers, "X-HivemindOS-Models-Credit-Debited-Usd");
-  const creditBalanceUsd = numericHeader(headers, "X-HivemindOS-Models-Credit-Balance-Usd");
-  const walletDebitUsd = numericHeader(headers, "X-HivemindOS-Wallet-Paid-Amount-Usd");
-  const paidHeader = stringHeader(headers, "X-HivemindOS-Wallet-Paid");
-  const costUsd = creditDebitUsd ?? walletDebitUsd;
-  if (costUsd === undefined && creditBalanceUsd === undefined && !paidHeader) return null;
-  const hiveComputeRoute = paidHeader === "hive-compute";
-  return {
-    provider: hiveComputeRoute ? "hive-compute" : "hivemindos-models",
-    label: hiveComputeRoute ? "Hive Compute" : "HivemindOS Models",
-    source: hiveComputeRoute ? "marketplace" : creditDebitUsd !== undefined ? "prepaid-credit" : paidHeader === "x402" ? "x402" : undefined,
-    costUsd,
-    balanceUsd: creditBalanceUsd,
-    paid: creditDebitUsd !== undefined || walletDebitUsd !== undefined || paidHeader === "x402" || hiveComputeRoute,
-    network: stringHeader(headers, "X-HivemindOS-Wallet-Paid-Network"),
-  };
-}
-
-const IMAGE_TOOL_DISPATCH_TIMEOUT_MS = 190_000;
-const VIDEO_TOOL_DISPATCH_TIMEOUT_MS = 260_000;
-const IMAGE_GENERATION_TOOL_NAME = "generate_image";
-const VIDEO_GENERATION_TOOL_NAME = "generate_video";
-
-// Single tool offered to OpenAI-compatible models when the user is asking for an
-// image. The model only supplies the prompt; HivemindOS picks the best reachable
-// connected app server-side (see appScore in /api/chat/image-generation), so the
-// "strongest endpoint wins" ranking applies instead of a name-only model guess.
-function imageGenerationToolDefinition() {
-  return {
-    type: "function",
-    function: {
-      name: IMAGE_GENERATION_TOOL_NAME,
-      description: "Generate an image from a text prompt using a connected HivemindOS image-generation app (for example Open Generative AI, ComfyUI, or Z-Image). Call this whenever the user asks to generate, create, draw, or render an image. HivemindOS automatically routes to the best reachable connected app, so do not pick an app yourself — just pass the full prompt.",
-      parameters: {
-        type: "object",
-        properties: {
-          prompt: { type: "string", description: "The complete image-generation prompt to render." },
-        },
-        required: ["prompt"],
-      },
-    },
-  };
-}
-
-function videoGenerationToolDefinition() {
-  return {
-    type: "function",
-    function: {
-      name: VIDEO_GENERATION_TOOL_NAME,
-      description: "Generate a video using a connected HivemindOS video-generation app or service. Call this when the user asks for video, animation, image-to-video, img2vid, or to animate an attached image. If the current turn has media artifact handles, pass the relevant artifact id or path; otherwise HivemindOS will use the current turn's first attached image by default.",
-      parameters: {
-        type: "object",
-        properties: {
-          prompt: { type: "string", description: "The complete video-generation prompt." },
-          inputImageId: { type: "string", description: "Optional current-turn media artifact id to use as the source image." },
-          inputImagePath: { type: "string", description: "Optional local path for the source image artifact." },
-        },
-        required: ["prompt"],
-      },
-    },
-  };
-}
-
-type AccumulatedToolCall = { id: string; name: string; arguments: string };
-type ToolCallOutcome = { toolResultContent: string; fallbackText: string; finalText?: string; prompted?: boolean };
-type NonStreamToolRun = {
-  events: string[];
-  assistantToolCalls: Array<Record<string, unknown>>;
-  toolResultMessages: Array<Record<string, unknown>>;
-  fallbacks: string[];
-  finalTexts: string[];
-  prompted: boolean;
-};
-
-function firstCommandFailureLine(result: { error?: string; stderr?: string }) {
-  const text = (result.error || result.stderr || "unknown error").trim();
-  return text.split(/\n/).map((line) => line.trim()).find(Boolean) || "unknown error";
-}
-
-function commandFailureFallbackText(commandLine: string, result: { command?: string; error?: string; stderr?: string }) {
-  const command = result.command?.trim() || commandLine.trim() || "the command";
-  const failure = firstCommandFailureLine(result);
-  if (/not allowlisted/i.test(failure)) {
-    return `I couldn't run \`${command}\` because it is not in this agent's local command allowlist.`;
-  }
-  const label = commandLine.trim() || command;
-  return `I tried \`${label}\`, but it failed: ${failure}`;
-}
-
-function parseToolCallArguments(raw: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(raw || "{}");
-    return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : {};
-  } catch {
-    return {};
-  }
-}
-
-function extractOpenAIToolCalls(payload: unknown): AccumulatedToolCall[] {
-  if (!payload || typeof payload !== "object") return [];
-  const record = payload as {
-    choices?: Array<{
-      message?: { tool_calls?: unknown };
-      delta?: { tool_calls?: unknown };
-    }>;
-    message?: { tool_calls?: unknown };
-    tool_calls?: unknown;
-  };
-  const rawCalls = record.choices?.flatMap((choice) => (
-    Array.isArray(choice?.message?.tool_calls) ? choice.message.tool_calls
-      : Array.isArray(choice?.delta?.tool_calls) ? choice.delta.tool_calls
-        : []
-  )) ?? (Array.isArray(record.message?.tool_calls) ? record.message.tool_calls : Array.isArray(record.tool_calls) ? record.tool_calls : []);
-  return rawCalls
-    .map((toolCall, index): AccumulatedToolCall | null => {
-      if (!toolCall || typeof toolCall !== "object") return null;
-      const entry = toolCall as { id?: unknown; function?: { name?: unknown; arguments?: unknown }; name?: unknown; arguments?: unknown };
-      const name = typeof entry.function?.name === "string" ? entry.function.name : typeof entry.name === "string" ? entry.name : "";
-      if (!name.trim()) return null;
-      const args = typeof entry.function?.arguments === "string" ? entry.function.arguments : typeof entry.arguments === "string" ? entry.arguments : "";
-      return {
-        id: typeof entry.id === "string" && entry.id.trim() ? entry.id : `call_${index}`,
-        name,
-        arguments: args,
-      };
-    })
-    .filter((call): call is AccumulatedToolCall => Boolean(call));
-}
-
-type ImageGenerationDispatchResult = {
-  ok: boolean;
-  error?: string;
-  prompt?: string;
-  app?: { id?: string; name?: string; machineName?: string; serviceKind?: string };
-  endpoint?: string;
-  images?: Array<{ url: string; width?: number; height?: number; seed?: string | number }>;
-};
-
-type VideoGenerationDispatchResult = {
-  ok: boolean;
-  error?: string;
-  prompt?: string;
-  app?: { id?: string; name?: string; machineName?: string; serviceKind?: string };
-  endpoint?: string;
-  videos?: Array<{ url: string; mimeType?: string; durationMs?: number }>;
-};
-
-async function dispatchImageGenerationViaRoute(origin: string, prompt: string, signal?: AbortSignal): Promise<ImageGenerationDispatchResult> {
-  const response = await fetch(new URL("/api/chat/image-generation", origin), {
-    method: "POST",
-    // Self-fetches 401 without the server's own device token since the API
-    // auth gate moved to src/proxy.ts.
-    headers: { "Content-Type": "application/json", ...internalApiAuthHeaders() },
-    body: JSON.stringify({ prompt }),
-    cache: "no-store",
-    signal: signal ?? AbortSignal.timeout(IMAGE_TOOL_DISPATCH_TIMEOUT_MS),
-  });
-  const json = await response.json().catch(() => null) as ImageGenerationDispatchResult | null;
-  if (!response.ok || !json?.ok) {
-    throw new Error(json?.error || `Image generation failed (${response.status}).`);
-  }
-  return json;
-}
-
-async function dispatchVideoGenerationViaRoute(
-  origin: string,
-  prompt: string,
-  inputImages: Array<{ path?: string; dataUrl?: string; mimeType?: string; name?: string }>,
-  signal?: AbortSignal,
-): Promise<VideoGenerationDispatchResult> {
-  const response = await fetch(new URL("/api/chat/video-generation", origin), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...internalApiAuthHeaders() },
-    body: JSON.stringify({ prompt, inputImages }),
-    cache: "no-store",
-    signal: signal ?? AbortSignal.timeout(VIDEO_TOOL_DISPATCH_TIMEOUT_MS),
-  });
-  const json = await response.json().catch(() => null) as VideoGenerationDispatchResult | null;
-  if (!response.ok || !json?.ok) {
-    throw new Error(json?.error || `Video generation failed (${response.status}).`);
-  }
-  return json;
-}
-
-function imageGenerationArtifacts(images?: Array<{ url: string }>) {
-  const urls = (images ?? []).map((image) => image?.url).filter((url): url is string => Boolean(url));
-  return urls.map((url, index) => ({
-    kind: "image",
-    url,
-    label: urls.length === 1 ? "Generated image" : `Generated image ${index + 1}`,
-  }));
-}
-
-function videoGenerationArtifacts(videos?: Array<{ url: string; mimeType?: string; durationMs?: number }>) {
-  const entries = (videos ?? []).filter((video): video is { url: string; mimeType?: string; durationMs?: number } => Boolean(video?.url));
-  return entries.map((video, index) => ({
-    kind: "video",
-    url: video.url,
-    label: entries.length === 1 ? "Generated video" : `Generated video ${index + 1}`,
-    mimeType: video.mimeType,
-    durationMs: video.durationMs,
-  }));
-}
-
+import {
+  commandFailureFallbackText,
+  dispatchImageGenerationViaRoute,
+  dispatchVideoGenerationViaRoute,
+  extractOpenAIToolCalls,
+  hivemindosModelsBillingFromHeaders,
+  imageGenerationArtifacts,
+  imageGenerationToolDefinition,
+  IMAGE_GENERATION_TOOL_NAME,
+  modelVisibleMediaBytes,
+  parseToolCallArguments,
+  videoGenerationArtifacts,
+  videoGenerationToolDefinition,
+  VIDEO_GENERATION_TOOL_NAME,
+  type AccumulatedToolCall,
+  type NonStreamToolRun,
+  type ToolCallOutcome,
+} from "./openai-compatible-tools";
+import {
+  OpenAICompatibleProfileError,
+  requestOriginFromUrl,
+  resolveOpenAICompatibleProfile,
+} from "./openai-compatible-profile";
+import { createOpenAICompatibleModelMessagesBuilder } from "./openai-compatible-prompt";
+import { INVOKE_HIVE_CAPABILITY_TOOL_NAME, invokeHiveCapabilityRuntimeEvent, invokeHiveCapabilityToolDefinition, runInvokeHiveCapabilityTool } from "./invoke-hive-capability-tool";
 export async function streamOpenAICompatibleRuntime(
   profile: AgentProfile,
   messages: IncomingMessage[],
@@ -359,107 +129,30 @@ export async function streamOpenAICompatibleRuntime(
   vaultPromptContext = "",
   permissionMode: ChatPermissionMode = "manual",
   mediaArtifacts: ChatMediaArtifact[] = [],
+  reasoningEffort: ChatReasoningEffort = "medium",
 ) {
-  const normalizedPermissionMode = normalizeChatPermissionMode(permissionMode);
-  const allowUnlistedCommands = chatPermissionModeAllowsUnlistedCommands(normalizedPermissionMode);
+  const allowUnlistedCommands = chatPermissionModeAllowsUnlistedCommands(permissionMode);
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
     return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
   }
-  let runtimeProfile = profile;
-  let usePodHeaders: Record<string, string> = {};
-  let providerHeaders: Record<string, string> = {};
-  const usePodEnabled = isUsePodProfile(profile);
-  const walletPaidModelsEnabled = isHivemindosWalletPaidModelProfile(profile);
-  const hiveComputeEnabled = isHiveComputeProfile(profile);
-  const requestOrigin = (() => {
-    try {
-      return new URL(telemetry?.request?.url ?? "").origin;
-    } catch {
-      return "";
-    }
-  })();
+  const requestOrigin = requestOriginFromUrl(telemetry?.request?.url);
+  let resolvedProfile: Awaited<ReturnType<typeof resolveOpenAICompatibleProfile>>;
   try {
-    const usePodConfig = await resolveUsePodRuntimeConfig(profile);
-    if (usePodConfig) {
-      runtimeProfile = {
-        ...profile,
-        gatewayUrl: usePodConfig.baseUrl,
-        chatPath: usePodConfig.chatPath,
-        statusPath: usePodConfig.statusPath,
-        token: "",
-      };
-      usePodHeaders = usePodConfig.headers;
-    }
+    resolvedProfile = await resolveOpenAICompatibleProfile({ profile, wallet, requestOrigin });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "UsePod setup is incomplete." }, { status: 502 });
+    const status = error instanceof OpenAICompatibleProfileError ? error.status : 500;
+    return Response.json({
+      error: error instanceof Error ? error.message : "Provider setup is incomplete.",
+    }, { status });
   }
-  if (isVeniceProfile(profile)) {
-    try {
-      const veniceConfig = await resolveVeniceRuntimeConfig(profile);
-      if (veniceConfig) {
-        runtimeProfile = {
-          ...profile,
-          gatewayUrl: veniceConfig.baseUrl,
-          chatPath: veniceConfig.chatPath,
-          statusPath: veniceConfig.statusPath,
-          token: "",
-        };
-        // Wallet mode signs a short-lived Sign-In-With-X header per request;
-        // API-key mode is a plain bearer token. Either way the profile token
-        // must stay empty so no stale Authorization header is added.
-        providerHeaders = veniceConfig.headers;
-      }
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Venice setup is incomplete." }, { status: 502 });
-    }
-  }
-  if (isBankrLlmProfile(profile)) {
-    const resolved = await resolveBankrLlmRuntimeProfile(runtimeProfile);
-    if (resolved.error) return Response.json({ error: resolved.error }, { status: 400 });
-    runtimeProfile = resolved.profile;
-    providerHeaders = resolved.headers;
-  }
-  if (walletPaidModelsEnabled) {
-    try {
-      const walletPaidConfig = resolveHivemindosWalletPaidModelRuntimeConfig(profile, wallet, requestOrigin);
-      runtimeProfile = {
-        ...profile,
-        gatewayUrl: walletPaidConfig.baseUrl,
-        chatPath: walletPaidConfig.chatPath,
-        statusPath: walletPaidConfig.statusPath,
-        model: walletPaidConfig.model,
-        token: "",
-        telemetryUrl: "",
-      };
-      providerHeaders = {
-        ...providerHeaders,
-        ...walletPaidConfig.headers,
-      };
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "HivemindOS Models setup is incomplete." }, { status: 400 });
-    }
-  }
-  if (hiveComputeEnabled) {
-    try {
-      const hiveComputeConfig = resolveHiveComputeRuntimeConfig(profile, requestOrigin);
-      runtimeProfile = {
-        ...profile,
-        gatewayUrl: hiveComputeConfig.baseUrl,
-        chatPath: hiveComputeConfig.chatPath,
-        statusPath: hiveComputeConfig.statusPath,
-        model: hiveComputeConfig.model,
-        token: "",
-        telemetryUrl: "",
-      };
-      providerHeaders = {
-        ...providerHeaders,
-        ...hiveComputeConfig.headers,
-      };
-    } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Hive Compute setup is incomplete." }, { status: 400 });
-    }
-  }
+  const {
+    runtimeProfile,
+    usePodHeaders,
+    providerHeaders,
+    usePodEnabled,
+    walletPaidModelsEnabled,
+  } = resolvedProfile;
   // Tool offers key on the user's bare request: FAB briefings and the Queen
   // voice pipeline's flattened persona/history would otherwise re-trigger an
   // offer on every turn (weak local models then CALL the offered tool even for
@@ -476,11 +169,10 @@ export async function streamOpenAICompatibleRuntime(
     ? textOnlyMessagesForTextModel(messages, mediaArtifacts)
     : multimodalModelMessages;
   const url = buildOpenAICompatibleUrl(runtimeProfile);
-  const lockKey = interactiveRuntimeLockKey(runtimeProfile, url);
+  const lockKey = interactiveRuntimeLockKey(runtimeProfile, url, telemetry?.chatStorageKey || runtimeSessionId);
   if (!reserveInteractiveRuntime(lockKey)) {
     return Response.json({ error: `${runtimeProfile.name || runtimeProfile.runtime} is already running another interactive request at ${url}.` }, { status: 409 });
   }
-
   const adaptiveProvider = Boolean(adaptiveRoutePlan);
   const adaptiveOpenRouter = isAdaptiveOpenRouterProfile(runtimeProfile) || (isOpenRouterProvider(runtimeProfile) && Boolean(runtimeProfile.adaptiveOpenRouter));
   if (usePodEnabled) {
@@ -494,25 +186,17 @@ export async function streamOpenAICompatibleRuntime(
       `UsePod · ${openAICompatibleModel(runtimeProfile)}${capLabel ? ` · ${capLabel}` : ""}`,
     ).catch(() => undefined);
   }
-  const modelMessagesFor = (candidateProfile: AgentProfile, candidateModel: string) => {
-    const promptEnvelope = buildHivemindPromptEnvelope({
-      profile: candidateProfile,
-      agentMode,
-      workingDirectory,
-      vaultContext: vaultPromptContext,
-      sharedBrainMemoryContext,
-      taskRetrievalContext,
-      wallet,
-      runtimeSessionId,
-      extraDynamicContext: buildAdaptiveOpenRouterResolvedModelContext(runtimeProfile, candidateModel),
-    });
-    return prependHivemindSystemMessage(modelInputMessages, promptEnvelope, {
-      cacheControl: openAICompatibleMessageCacheControlSupported({
-        provider: candidateProfile.provider,
-        model: candidateModel,
-      }),
-    });
-  };
+  const modelMessagesFor = createOpenAICompatibleModelMessagesBuilder({
+    runtimeProfile,
+    modelInputMessages,
+    agentMode,
+    workingDirectory,
+    vaultPromptContext,
+    sharedBrainMemoryContext,
+    taskRetrievalContext,
+    wallet,
+    runtimeSessionId,
+  });
   let candidateModels: string[];
   try {
     candidateModels = isAdaptiveOpenRouterProfile(runtimeProfile)
@@ -524,10 +208,7 @@ export async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
-  // Advertise the real-command tool to agents whose profile declares the
-  // skillActions runtime capability. This gives a hivemind-os chat agent an
-  // actual local-execution loop (allowlisted commands) instead of letting it
-  // role-play "I ran osascript…". Agents without the capability are unchanged.
+  // Profiles with skillActions get real governed execution tools.
   const suppressCommandToolForNativeMedia = shouldSuppressCommandToolForNativeMedia({
     messages,
     mediaArtifacts,
@@ -535,79 +216,20 @@ export async function streamOpenAICompatibleRuntime(
     generationToolOffered: offerImageTool || offerVideoTool,
   });
   const offerCommandTool = profile.runtimeCapabilities?.skillActions === true
-    && normalizedPermissionMode !== "plan"
+    && permissionMode !== "plan"
     && !suppressCommandToolForNativeMedia;
+  const forceVideoTool = offerVideoTool && !explicitLocalCommandRequest(intentText);
+  const offerHiveCapabilityTool = Boolean(requestOrigin) && profile.runtimeCapabilities?.skillActions === true && permissionMode !== "plan";
   const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(intentText);
-  // Tool definitions advertised on every request attempt. Empty → no tools
-  // field is sent and the chat path is byte-for-byte unchanged.
+  const offerXAccountTool = xAccountRuntimeToolAvailable();
   const toolDefinitions = [
     ...(offerImageTool ? [imageGenerationToolDefinition()] : []),
     ...(offerVideoTool ? [videoGenerationToolDefinition()] : []),
     ...(offerBankrTool ? [bankrActionToolDefinition()] : []),
     ...(offerCommandTool ? [runCommandToolDefinition()] : []),
+    ...(offerHiveCapabilityTool ? [invokeHiveCapabilityToolDefinition()] : []),
+    ...(offerXAccountTool ? [X_ACCOUNT_RUNTIME_TOOL_DEFINITION] : []),
   ];
-  const commandSuccessText = (label: string, commandLine: string) => {
-    const cleanLabel = label.trim();
-    if (/^open\b/i.test(cleanLabel)) {
-      const sentence = cleanLabel.replace(/^open\b/i, "Opened");
-      return sentence.endsWith(".") ? sentence : `${sentence}.`;
-    }
-    if (cleanLabel && !/^run\b/i.test(cleanLabel)) return cleanLabel.endsWith(".") ? cleanLabel : `${cleanLabel}.`;
-    return `Ran \`${commandLine}\`.`;
-  };
-  const commandApprovalQuestion = (commandLine: string) => [
-    "Approve this local command?",
-    "",
-    commandLine ? `\`${commandLine}\`` : "`(empty command)`",
-    "",
-    "This executable is outside the current chat permission mode's allowlist.",
-  ].join("\n");
-  const commandApprovalEvent = (input: { command: string; args: string[]; commandLine: string; label: string; error?: string }) => ({
-    type: RUNTIME_STREAM_EVENT_TYPES.APPROVAL,
-    id: `command-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    approvalKind: "local_command",
-    message: "Command permission required",
-    question: commandApprovalQuestion(input.commandLine),
-    command: input.command,
-    args: input.args,
-    commandLine: input.commandLine,
-    reason: input.label,
-    detail: input.error,
-    status: "running",
-    allowFreeText: false,
-    choices: [
-      {
-        label: "Approve once",
-        value: [
-          "Approved: run this pending local command now.",
-          `Command: ${input.commandLine || input.command || "(empty command)"}`,
-        ].join("\n"),
-        permissionMode: "bypass",
-      },
-      {
-        label: "Reject",
-        value: [
-          "Rejected: do not run that local command.",
-          "Choose another allowlisted approach or ask me for the correct path.",
-        ].join("\n"),
-        permissionMode: "manual",
-      },
-    ],
-  });
-  const videoInputImagesForArgs = (args: Record<string, unknown>) => {
-    const imageId = typeof args.inputImageId === "string" ? args.inputImageId.trim() : "";
-    const imagePath = typeof args.inputImagePath === "string" ? args.inputImagePath.trim() : "";
-    const selected = mediaArtifacts.find((artifact) => (
-      artifact.kind === "image"
-      && ((imageId && artifact.id === imageId) || (imagePath && artifact.path === imagePath))
-    )) ?? mediaArtifacts.find((artifact) => artifact.kind === "image");
-    return selected ? [{
-      path: selected.path,
-      dataUrl: selected.dataUrl,
-      mimeType: selected.mimeType,
-      name: selected.name,
-    }] : [];
-  };
   let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean; cacheBody: Record<string, unknown>; inferenceBody: Record<string, unknown> } | null = null;
   const runNonStreamToolCalls = async (toolCalls: AccumulatedToolCall[]): Promise<NonStreamToolRun> => {
     const events: string[] = [];
@@ -618,10 +240,22 @@ export async function streamOpenAICompatibleRuntime(
     for (const call of toolCalls) {
       const callId = call.id || `call_${call.name}`;
       assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
+      if (call.name === X_ACCOUNT_RUNTIME_TOOL_NAME) {
+        const outcome = await runXAccountRuntimeTool(call.arguments);
+        toolResultMessages.push({ role: "tool", tool_call_id: callId, content: outcome.toolResultContent });
+        fallbacks.push(outcome.fallbackText);
+        continue;
+      }
+      if (call.name === INVOKE_HIVE_CAPABILITY_TOOL_NAME) {
+        const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText });
+        toolResultMessages.push({ role: "tool", tool_call_id: callId, content: outcome.toolResultContent });
+        fallbacks.push(outcome.fallbackText);
+        continue;
+      }
       if (call.name === VIDEO_GENERATION_TOOL_NAME) {
         const args = parseToolCallArguments(call.arguments);
         const videoPrompt = typeof args.prompt === "string" && args.prompt.trim() ? args.prompt.trim() : userText;
-        const inputImages = videoInputImagesForArgs(args);
+        const inputImages = videoInputImagesForArgs(args, mediaArtifacts);
         events.push(ssePayload({ applicationGeneration: { status: "running", kind: "video", prompt: videoPrompt, title: "Video generation", createdAt: Date.now() } }));
         await appendRuntimeChatSessionEvent(runtimeSessionId, "Video generation", `Dispatching ${inputImages.length ? "attached-image" : "text"} video request to a connected video app.`).catch(() => undefined);
         try {
@@ -705,7 +339,7 @@ export async function streamOpenAICompatibleRuntime(
         command,
         args: commandArgs,
         cwd: workingDirectory,
-        permissionMode: normalizedPermissionMode,
+        permissionMode: permissionMode,
         signal: telemetry?.request?.signal,
       });
       if (result.blockedByPolicy && !allowUnlistedCommands) {
@@ -722,7 +356,7 @@ export async function streamOpenAICompatibleRuntime(
           ...telemetryPayloadForProfile(profile),
           command,
           argCount: commandArgs.length,
-          permissionMode: normalizedPermissionMode,
+          permissionMode: permissionMode,
           nonStream: true,
         });
         return {
@@ -782,7 +416,9 @@ export async function streamOpenAICompatibleRuntime(
       ? [...(winningRequest.messages as unknown as Array<Record<string, unknown>>)]
       : [];
     let toolCalls = initialToolCalls;
-    let toolRoundsLeft = winningRequest?.sentTools ? (offerCommandTool ? 6 : 1) : 0;
+    let toolRoundsLeft = winningRequest?.sentTools
+      ? forceVideoTool ? 1 : offerCommandTool ? 6 : offerXAccountTool ? 3 : 1
+      : 0;
     let fallbackText = "The tool finished.";
     let raw: unknown = null;
     while (toolCalls.length && toolRoundsLeft > 0 && winningRequest) {
@@ -820,9 +456,10 @@ export async function streamOpenAICompatibleRuntime(
       }
       const continuationJson = await continuation.json().catch(async () => ({ text: await continuation.text().catch(() => "") }));
       raw = continuationJson;
-      toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? extractOpenAIToolCalls(continuationJson) : [];
+      const continuationText = extractChunk(continuationJson);
+      toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? [...extractOpenAIToolCalls(continuationJson), ...extractLeakedToolCalls(continuationText)] : [];
       if (!toolCalls.length) {
-        return { events, text: extractChunk(continuationJson) || JSON.stringify(continuationJson), raw: continuationJson, prompted: false };
+        return { events, text: stripLeakedToolCallMarkup(continuationText) || fallbackText, raw: continuationJson, prompted: false };
       }
     }
     return { events, text: fallbackText, raw, prompted: false };
@@ -917,8 +554,7 @@ export async function streamOpenAICompatibleRuntime(
       cacheScope: `${candidateProfile.id || runtimeProfile.id || "agent"}:${runtimeSessionId || candidateProfile.sessionKey || "session"}`,
     });
     const inferenceBody = isXaiOAuthProvider(candidateProfile.provider)
-      ? xaiOAuthChatRequestOptions(model)
-      : {};
+      ? xaiOAuthChatRequestOptions(model) : reasoningEffortRequestBody(candidateProfile.provider, model, reasoningEffort);
     const attemptHeaders = {
       "Content-Type": "application/json",
       ...(candidateProfile.token ? { Authorization: `Bearer ${candidateProfile.token}` } : {}),
@@ -934,7 +570,7 @@ export async function streamOpenAICompatibleRuntime(
       stream: true,
       ...cacheHints.body,
       ...inferenceBody,
-      ...(withTools && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
+      ...(withTools && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: forceVideoTool ? { type: "function", function: { name: VIDEO_GENERATION_TOOL_NAME } } : "auto" } : {}),
     });
     let requestBody = requestBodyFor(sentTools);
     const requestBodyBytes = () => Buffer.byteLength(requestBody);
@@ -1186,7 +822,7 @@ export async function streamOpenAICompatibleRuntime(
     const json = await upstream.json().catch(async () => ({ text: await upstream.text().catch(() => "") }));
     const rawChunk = extractChunk(json);
     const leakedToolCalls = winningRequest?.sentTools ? extractLeakedToolCalls(rawChunk) : [];
-    const toolCalls = winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [];
+    const toolCalls = forceVideoGenerationToolCall(winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [], forceVideoTool, userText);
     if (toolCalls.length) {
       const toolRun = await runNonStreamToolConversation(toolCalls);
       if (toolRun.prompted) {
@@ -1270,7 +906,6 @@ export async function streamOpenAICompatibleRuntime(
       } },
     );
   }
-
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   const readable = new ReadableStream({
@@ -1472,7 +1107,7 @@ export async function streamOpenAICompatibleRuntime(
       const runVideoToolCall = async (call: AccumulatedToolCall) => {
         const args = parseToolCallArguments(call.arguments);
         const videoPrompt = typeof args.prompt === "string" && args.prompt.trim() ? args.prompt.trim() : userText;
-        const inputImages = videoInputImagesForArgs(args);
+        const inputImages = videoInputImagesForArgs(args, mediaArtifacts);
         controller.enqueue(encoder.encode(ssePayload({ applicationGeneration: {
           status: "running",
           prompt: videoPrompt,
@@ -1576,7 +1211,7 @@ export async function streamOpenAICompatibleRuntime(
           command: args.command,
           args: args.args,
           cwd: workingDirectory,
-          permissionMode: normalizedPermissionMode,
+          permissionMode: permissionMode,
           signal: telemetry?.request?.signal,
         });
         if (result.blockedByPolicy && !allowUnlistedCommands) {
@@ -1603,7 +1238,7 @@ export async function streamOpenAICompatibleRuntime(
             ...telemetryPayloadForProfile(profile),
             command,
             argCount: commandArgs.length,
-            permissionMode: normalizedPermissionMode,
+            permissionMode: permissionMode,
           });
           return {
             toolResultContent: JSON.stringify({ ok: false, approvalRequired: true, error: result.error }),
@@ -1721,6 +1356,13 @@ export async function streamOpenAICompatibleRuntime(
         if (call.name === IMAGE_GENERATION_TOOL_NAME) return runImageToolCall(call);
         if (call.name === VIDEO_GENERATION_TOOL_NAME) return runVideoToolCall(call);
         if (call.name === BANKR_ACTION_TOOL_NAME) return runBankrToolCall(call);
+        if (call.name === X_ACCOUNT_RUNTIME_TOOL_NAME) return runXAccountRuntimeTool(call.arguments);
+        if (call.name === INVOKE_HIVE_CAPABILITY_TOOL_NAME) {
+          const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText });
+          controller.enqueue(encoder.encode(ssePayload(invokeHiveCapabilityRuntimeEvent(outcome))));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, outcome.ok ? outcome.operation === "invoke" ? "Hive capability completed" : "Hive capability inspected" : outcome.approvalRequired ? "Hive capability approval required" : "Hive capability failed", outcome.target || outcome.fallbackText));
+          return outcome;
+        }
         if (call.name === RUN_COMMAND_TOOL_NAME) return runCommandToolCall(call);
         return {
           toolResultContent: JSON.stringify({ ok: false, error: `Unknown tool: ${call.name}` }),
@@ -1734,12 +1376,15 @@ export async function streamOpenAICompatibleRuntime(
         // several (inspect → act → verify), so allow a bounded number when it
         // is on offer. Each round consumes the model's tool_calls, runs them,
         // and feeds the results back for a continuation turn.
-        let toolRoundsLeft = winningRequest?.sentTools ? (offerCommandTool ? 6 : 1) : 0;
+        let toolRoundsLeft = winningRequest?.sentTools
+          ? forceVideoTool ? 1 : offerCommandTool ? 6 : offerXAccountTool ? 3 : 1
+          : 0;
         const conversation: Array<Record<string, unknown>> = winningRequest
           ? [...(winningRequest.messages as unknown as Array<Record<string, unknown>>)]
           : [];
         while (true) {
-          const { toolCalls } = await consume(active, toolRoundsLeft > 0);
+          const { toolCalls: returnedToolCalls } = await consume(active, toolRoundsLeft > 0);
+          const toolCalls = forceVideoGenerationToolCall(returnedToolCalls, forceVideoTool && toolRoundsLeft > 0, userText);
           if (!toolCalls.length || toolRoundsLeft <= 0 || !winningRequest) break;
           toolRoundsLeft -= 1;
           // Run every tool call the model emitted this round and collect the
@@ -1842,7 +1487,6 @@ export async function streamOpenAICompatibleRuntime(
       }
     },
   });
-
   return new Response(readable, {
     headers: {
       "Content-Type": "text/event-stream",

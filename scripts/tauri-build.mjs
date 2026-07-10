@@ -83,6 +83,7 @@ const backgroundHelpers =
     : [];
 const standaloneDir = join(nextBuildDir, "standalone");
 const standaloneServer = join(standaloneDir, "server.js");
+const embeddedRuntimeScripts = ["hive-env-add", "xai-oauth-token-broker"];
 const embeddedFingerprintFile = join(
   nextBuildDir,
   ".hivemindos-embedded-fingerprint.json",
@@ -1229,6 +1230,20 @@ function completeTurbopackStandalone() {
   }
 }
 
+function copyEmbeddedRuntimeScripts() {
+  const runtimeScriptsDir = join(serverResourceDir, "scripts");
+  mkdirSync(runtimeScriptsDir, { recursive: true });
+  for (const scriptName of embeddedRuntimeScripts) {
+    const source = join(projectRoot, "scripts", scriptName);
+    const destination = join(runtimeScriptsDir, scriptName);
+    if (!existsSync(source)) {
+      throw new Error(`Missing embedded runtime script: ${source}`);
+    }
+    copyFileSync(source, destination);
+    chmodSync(destination, 0o755);
+  }
+}
+
 function copyEmbeddedNextResources(fingerprint) {
   rmSync(serverResourceDir, { force: true, recursive: true });
   rmSync(nodeResourceDir, { force: true, recursive: true });
@@ -1255,6 +1270,7 @@ function copyEmbeddedNextResources(fingerprint) {
   pruneMaterializedPnpmStore();
   prunePackagedBuildArtifacts();
   optimizePackagedPngAssets();
+  copyEmbeddedRuntimeScripts();
   copyNodeBinary();
   writeEmbeddedFingerprint(packagedFingerprintFile, fingerprint);
 

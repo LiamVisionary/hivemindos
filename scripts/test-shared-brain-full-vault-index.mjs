@@ -105,8 +105,9 @@ for (const [path, tokens] of [
   ]],
   ["src/lib/services/obsidian/agent-memory/core.ts", [
     "searchFullVaultSearchIndex",
-    "record.searchScore = hit.score",
-    "record.searchCollection = hit.collection",
+    "withAgentMemorySearchMetadata(baseRecord",
+    "searchScore: hit.score",
+    "searchCollection: hit.collection",
     "fullVaultIndex",
   ]],
   ["scripts/hive-brain", [

@@ -9,10 +9,13 @@ import type { CopyTradeNetwork } from "@/lib/types/copy-trading";
 
 type Cached<T> = { value: T; at: number };
 const NATIVE_TTL_MS = 60_000;
-const LIQ_TTL_MS = 60_000;
+const MARKET_TTL_MS = 60_000;
 
 const nativeCache = new Map<string, Cached<number | null>>();
-const liqCache = new Map<string, Cached<number | null>>();
+const marketCache = new Map<string, Cached<TokenMarket>>();
+
+/** Deepest-pool price/liquidity/symbol for a token (all best-effort, may be null). */
+export type TokenMarket = { priceUsd: number | null; liquidityUsd: number | null; symbol: string | null };
 
 function dexScreenerChain(network: CopyTradeNetwork): string {
   return network === "solana:mainnet" ? "solana" : "base";
@@ -39,25 +42,54 @@ export async function nativeUsdPrice(network: CopyTradeNetwork): Promise<number 
   return value;
 }
 
-/** Deepest-pool liquidity (USD) for a token via DexScreener, or null if unknown. */
-export async function tokenLiquidityUsd(network: CopyTradeNetwork, tokenAddress: string): Promise<number | null> {
+type DexPair = {
+  priceUsd?: string | number;
+  liquidity?: { usd?: number };
+  baseToken?: { address?: string; symbol?: string };
+};
+
+/** Deepest-pool price + liquidity + symbol for a token via DexScreener (one fetch,
+ *  shared cache). Liquidity is the deepest across all pairs; price/symbol come from
+ *  the token's own deepest base-token pair. All fields degrade to null on failure. */
+export async function tokenMarket(network: CopyTradeNetwork, tokenAddress: string): Promise<TokenMarket> {
   const key = `${network}:${tokenAddress.toLowerCase()}`;
-  const cached = liqCache.get(key);
-  if (cached && Date.now() - cached.at < LIQ_TTL_MS) return cached.value;
-  let value: number | null = null;
+  const cached = marketCache.get(key);
+  if (cached && Date.now() - cached.at < MARKET_TTL_MS) return cached.value;
+  let value: TokenMarket = { priceUsd: null, liquidityUsd: null, symbol: null };
   try {
     const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/${dexScreenerChain(network)}/${tokenAddress}`, {
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(8_000),
     });
-    const pairs = (await res.json().catch(() => null)) as Array<{ liquidity?: { usd?: number } }> | null;
-    if (Array.isArray(pairs)) {
+    const pairs = (await res.json().catch(() => null)) as DexPair[] | null;
+    if (Array.isArray(pairs) && pairs.length) {
       const deepest = pairs.reduce((max, p) => Math.max(max, Number(p?.liquidity?.usd) || 0), 0);
-      value = deepest > 0 ? deepest : null;
+      const liquidityUsd = deepest > 0 ? deepest : null;
+      const want = tokenAddress.toLowerCase();
+      const ownPairs = pairs
+        .filter((p) => (p?.baseToken?.address || "").toLowerCase() === want)
+        .sort((a, b) => (Number(b?.liquidity?.usd) || 0) - (Number(a?.liquidity?.usd) || 0));
+      const top = ownPairs[0];
+      const price = top ? Number(top.priceUsd) : NaN;
+      value = {
+        priceUsd: Number.isFinite(price) && price > 0 ? price : null,
+        liquidityUsd,
+        symbol: top?.baseToken?.symbol ?? null,
+      };
     }
   } catch {
-    value = null;
+    value = { priceUsd: null, liquidityUsd: null, symbol: null };
   }
-  liqCache.set(key, { value, at: Date.now() });
+  marketCache.set(key, { value, at: Date.now() });
   return value;
+}
+
+/** Deepest-pool liquidity (USD) for a token via DexScreener, or null if unknown. */
+export async function tokenLiquidityUsd(network: CopyTradeNetwork, tokenAddress: string): Promise<number | null> {
+  return (await tokenMarket(network, tokenAddress)).liquidityUsd;
+}
+
+/** Current market price (USD) for a token via DexScreener, or null if unknown. */
+export async function tokenPriceUsd(network: CopyTradeNetwork, tokenAddress: string): Promise<number | null> {
+  return (await tokenMarket(network, tokenAddress)).priceUsd;
 }

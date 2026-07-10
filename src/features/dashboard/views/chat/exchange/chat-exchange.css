@@ -1,7 +1,20 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Geist:wght@300;400;500;600&display=swap");
+/* Font families are loaded once in src/app/layout.tsx's <head> link. A CSS
+   @import here would serialize a second blocking request behind this sheet. */
+
+/* The panel root carries BOTH `.fr-root` and `.fr-chat-root`. `.fr-root`
+   (fr-style.css) also declares --f-body/--f-mono at equal specificity and is
+   emitted later, so a bare `.fr-chat-root` block loses the cascade. Doubling the
+   class (0,2,0) makes the chat-route typeface win without !important. */
+.fr-root.fr-chat-root {
+  /* Chat-route typeface. Scoped to this root so the rest of the dashboard keeps
+     Space Grotesk / Geist / JetBrains Mono. */
+  --f-display: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --f-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --f-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 
 .fr-chat-root {
-  --fr-chat-content-width: 1100px;
+  --fr-chat-content-width: 760px;
 
   position: relative;
   display: flex;
@@ -11,21 +24,68 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--bg);
+  color: var(--fg);
+  font-family: var(--f-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Honeycomb backdrop. Sits under the layout (z-index 0 vs 1) and never eats
+   pointer events. */
+.fr-chat-root::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='96' viewBox='0 0 56 96'%3E%3Cg fill='none' stroke='%236fcdba' stroke-opacity='0.09' stroke-width='1'%3E%3Cpath d='M28 1 L54 16 L54 46 L28 61 L2 46 L2 16 Z'/%3E%3Cpath d='M28 49 L54 64 L54 94 L28 109 L2 94 L2 64 Z'/%3E%3C/svg%3E");
+  background-size: 56px 96px;
 }
 
 .fr-chat-layout {
+  position: relative;
+  z-index: 1;
   display: grid;
   min-height: 0;
   height: 100%;
   max-height: 100%;
   flex: 1 1 auto;
-  grid-template-columns: 286px minmax(0, 1fr) 0;
+  grid-template-columns: 276px minmax(0, 1fr) 0;
   overflow: hidden;
-  transition: grid-template-columns 340ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: grid-template-columns 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .fr-chat-layout[data-shelf-open="true"] {
-  grid-template-columns: 286px minmax(0, 1fr) 344px;
+  grid-template-columns: 276px minmax(0, 1fr) 322px;
+}
+
+@media (max-width: 760px) {
+  .fr-chat-layout[data-shelf-open="true"] {
+    grid-template-columns: 276px minmax(0, 1fr) 0;
+  }
+
+  .fr-chat-shelf {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .fr-chat-layout,
+  .fr-chat-layout[data-shelf-open="true"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fr-chat-sidebar,
+  .fr-chat-shelf {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-chat-layout {
+    transition: none;
+  }
 }
 
 .fr-chat-sidebar {

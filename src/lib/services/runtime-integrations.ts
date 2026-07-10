@@ -538,10 +538,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     return { ok: true, message: `Disabled Hermes ${tool}.` };
   }
   if (action === "xai-login") {
-    const profileEnv = hermesProfileEnv(agent);
-    const { authorizeUrl } = await startXaiOAuthLogin({
-      hermesHomes: profileEnv?.HERMES_HOME ? [profileEnv.HERMES_HOME] : undefined,
-    });
+    const { authorizeUrl } = await startXaiOAuthLogin();
     return {
       ok: true,
       authorizeUrl,

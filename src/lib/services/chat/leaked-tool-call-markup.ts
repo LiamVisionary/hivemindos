@@ -36,78 +36,96 @@ function normalizeLeakedToolCallMarkup(content: string) {
     .replace(/<[^<>|]*\|>/g, "\n");
 }
 
-function quotedOrBareValueForKey(source: string, key: string) {
-  const match = new RegExp(`\\b${key}\\s*:\\s*(?:"([^"]*)"|'([^']*)'|([^,\\n\\]}]+))`, "i").exec(source);
-  return String(match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim();
-}
+function parseLeakedArgumentObject(source: string): Record<string, unknown> {
+  let index = source.indexOf("{");
+  if (index < 0) return {};
 
-function extractArrayBodyForKey(source: string, key: string) {
-  const keyMatch = new RegExp(`\\b${key}\\s*:`, "i").exec(source);
-  if (!keyMatch) return "";
-  const openIndex = source.indexOf("[", keyMatch.index + keyMatch[0].length);
-  if (openIndex < 0) return "";
-  let quote = "";
-  let escaped = false;
-  let depth = 0;
-  for (let index = openIndex; index < source.length; index += 1) {
-    const char = source[index];
-    if (quote) {
+  const skipWhitespace = () => {
+    while (index < source.length && /\s/.test(source[index])) index += 1;
+  };
+  const parseString = () => {
+    const quote = source[index];
+    index += 1;
+    let value = "";
+    let escaped = false;
+    while (index < source.length) {
+      const char = source[index];
+      index += 1;
       if (escaped) {
+        value += ({ n: "\n", r: "\r", t: "\t" } as Record<string, string>)[char] ?? char;
         escaped = false;
       } else if (char === "\\") {
         escaped = true;
       } else if (char === quote) {
-        quote = "";
-      }
-      continue;
-    }
-    if (char === "\"" || char === "'") {
-      quote = char;
-      continue;
-    }
-    if (char === "[") depth += 1;
-    if (char === "]") {
-      depth -= 1;
-      if (depth === 0) return source.slice(openIndex + 1, index);
-    }
-  }
-  return "";
-}
-
-function stringItemsFromArrayBody(body: string) {
-  const items: string[] = [];
-  let index = 0;
-  while (index < body.length) {
-    while (index < body.length && /[\s,]/.test(body[index])) index += 1;
-    const quote = body[index];
-    if (quote !== "\"" && quote !== "'") {
-      const start = index;
-      while (index < body.length && body[index] !== ",") index += 1;
-      const value = body.slice(start, index).trim();
-      if (value && !/^[\]}]+$/.test(value)) items.push(value);
-      continue;
-    }
-    index += 1;
-    let value = "";
-    let escaped = false;
-    while (index < body.length) {
-      const char = body[index];
-      index += 1;
-      if (escaped) {
+        break;
+      } else {
         value += char;
-        escaped = false;
-        continue;
       }
-      if (char === "\\") {
-        escaped = true;
-        continue;
-      }
-      if (char === quote) break;
-      value += char;
     }
-    items.push(value);
-  }
-  return items.filter((item) => item.length > 0);
+    return value;
+  };
+  const parseBareValue = () => {
+    const start = index;
+    while (index < source.length && !/[,\]}\r\n]/.test(source[index])) index += 1;
+    const value = source.slice(start, index).trim();
+    if (value === "true") return true;
+    if (value === "false") return false;
+    if (value === "null") return null;
+    return value;
+  };
+  const parseValue = (): unknown => {
+    skipWhitespace();
+    if (source[index] === "{") return parseObject();
+    if (source[index] === "[") return parseArray();
+    if (source[index] === "\"" || source[index] === "'") return parseString();
+    return parseBareValue();
+  };
+  const parseArray = (): unknown[] => {
+    const values: unknown[] = [];
+    index += 1;
+    while (index < source.length) {
+      skipWhitespace();
+      if (source[index] === "]") {
+        index += 1;
+        break;
+      }
+      if (source[index] === ",") {
+        index += 1;
+        continue;
+      }
+      values.push(parseValue());
+    }
+    return values;
+  };
+  const parseObject = (): Record<string, unknown> => {
+    const value: Record<string, unknown> = {};
+    index += 1;
+    while (index < source.length) {
+      skipWhitespace();
+      if (source[index] === "}") {
+        index += 1;
+        break;
+      }
+      if (source[index] === ",") {
+        index += 1;
+        continue;
+      }
+      const key = source[index] === "\"" || source[index] === "'"
+        ? parseString()
+        : (() => {
+          const start = index;
+          while (index < source.length && /[A-Za-z0-9_$-]/.test(source[index])) index += 1;
+          return source.slice(start, index);
+        })();
+      skipWhitespace();
+      if (!key || source[index] !== ":") break;
+      index += 1;
+      value[key] = parseValue();
+    }
+    return value;
+  };
+
+  return parseObject();
 }
 
 export function extractLeakedToolCalls(content: string): LeakedTextToolCall[] {
@@ -116,13 +134,7 @@ export function extractLeakedToolCalls(content: string): LeakedTextToolCall[] {
   const nameMatch = /\bcall\s*:\s*([A-Za-z0-9_.-]+)/i.exec(normalized);
   const name = nameMatch?.[1]?.trim() ?? "";
   if (!name) return [];
-  const command = quotedOrBareValueForKey(normalized, "command");
-  const reason = quotedOrBareValueForKey(normalized, "reason");
-  const args = stringItemsFromArrayBody(extractArrayBodyForKey(normalized, "args"));
-  const argumentPayload: Record<string, unknown> = {};
-  if (command) argumentPayload.command = command;
-  if (args.length) argumentPayload.args = args;
-  if (reason) argumentPayload.reason = reason;
+  const argumentPayload = parseLeakedArgumentObject(normalized.slice((nameMatch?.index ?? 0) + (nameMatch?.[0]?.length ?? 0)));
   return [{
     id: "leaked_tool_call_0",
     name,

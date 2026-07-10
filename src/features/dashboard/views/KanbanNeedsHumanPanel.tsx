@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import Image from "next/image";
 import { createStyleClass } from "@/features/dashboard/style-classes";
+import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 import type { HumanAsk } from "@/features/dashboard/kanban-result-format";
 import {
   isValidHiveEnvKey,
@@ -219,7 +220,19 @@ export function KanbanNeedsHumanPanel({ ask, task, beeIcon, loadHiveEnvKeys, onA
         {ask.links.length ? (
           <div className={wrc("links")} onClick={stop} role="presentation">
             {ask.links.map((link) => (
-              <a key={link.url} className={wrc("link")} href={link.url} target="_blank" rel="noreferrer" title={link.url}>
+              <a
+                key={link.url}
+                className={wrc("link")}
+                href={link.url}
+                target="_blank"
+                rel="noreferrer"
+                title={link.url}
+                onClick={(event) => {
+                  if (!isExternalHttpUrl(link.url)) return;
+                  event.preventDefault();
+                  void openExternalUrl(link.url);
+                }}
+              >
                 {link.label}
                 <IconUp size={13} />
               </a>

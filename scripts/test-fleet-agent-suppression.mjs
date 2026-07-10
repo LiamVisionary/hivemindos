@@ -135,11 +135,38 @@ const currentRemoteEmerson = {
   telemetryUrl: "http://127.0.0.1:8788/peer/ubuntu-agent.example%3A8787",
 };
 
+const oldRemoteCapabilityProbe = {
+  id: "hermes-runtime-capability-probe-8e01d0",
+  name: "Runtime Capability Probe",
+  runtime: "hermes",
+  agentId: "runtime-capability-probe",
+  telemetryUrl: "http://127.0.0.1:8788/peer/ubuntu-agent.example%3A8789",
+  localDataDir: "/root/.hermes/profiles/runtime-capability-probe",
+};
+
+const currentRemoteCapabilityProbe = {
+  ...oldRemoteCapabilityProbe,
+  telemetryUrl: "http://127.0.0.1:8788/peer/ubuntu-agent.example%3A8787",
+};
+
 const staleRemoteTombstones = new Set(agentSuppressionKeys(oldRemoteEmerson));
 assert.equal(
   agentMatchesSuppression(currentRemoteEmerson, staleRemoteTombstones),
   false,
   "a stale remote id tombstone must not hide an agent at a new collector workspace",
+);
+
+const staleCapabilityProbeTombstones = new Set(agentSuppressionKeys(oldRemoteCapabilityProbe));
+assert.equal(
+  agentMatchesSuppression(currentRemoteCapabilityProbe, staleCapabilityProbeTombstones),
+  true,
+  "a reserved internal profile must stay suppressed when its remote collector endpoint changes",
+);
+
+assert.deepEqual(
+  filterSuppressedAgents([currentRemoteCapabilityProbe, currentRemoteEmerson], new Set()).map((agent) => agent.id),
+  [currentRemoteEmerson.id],
+  "reserved internal profiles must never enter the visible agent roster even without a tombstone",
 );
 
 assert.equal(

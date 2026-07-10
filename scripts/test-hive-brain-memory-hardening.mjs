@@ -109,6 +109,24 @@ const noisy = await answerFromAgentMemory({
 assert.equal(noisy.hits.length, 0, `noisy informational prompt should return 0 hits, got ${noisy.hits.length}: ${noisy.hits.map((hit) => hit.title).join(", ")}`);
 ok("noisy informational prompt returns no hits");
 
+await rememberAgentMemory({
+  vaultPath,
+  type: "learning",
+  title: "Framing control uses object anchors instead of visibility rules",
+  content: "Keep character heads inside the framing anchors; this is unrelated to memory architecture.",
+  confidence: 1,
+});
+const compoundUnsupported = await answerFromAgentMemory({
+  vaultPath,
+  query: "What are the current shared-brain rules for operational events, canonical heads, and pattern mining?",
+});
+assert.equal(
+  compoundUnsupported.hits.length,
+  0,
+  `compound unsupported query should abstain, got ${compoundUnsupported.hits.map((hit) => hit.title).join(", ")}`,
+);
+ok("compound unsupported query abstains instead of joining unrelated topic fragments");
+
 const known = await answerFromAgentMemory({ vaultPath, query: "hermes gateway default model rule" });
 assert.equal(known.hits[0]?.title, "Never write the Hermes gateway default model", "known-item should rank first");
 ok("known-item query ranks the right memory first");
@@ -118,6 +136,65 @@ const derived = await answerFromAgentMemory({ vaultPath, query: longPrompt });
 assert.ok(derived.queryDerived, "long prompts should use a derived query");
 assert.equal(derived.hits[0]?.title, "Vultr provisioning needs the API key allowlist", `derived query should find the Vultr memory, got: ${derived.hits.map((hit) => hit.title).join(", ") || "none"}`);
 ok("long orchestrator prompt derives a query and finds the right memory");
+
+// --- natural-language intent ranking ------------------------------------------
+
+await rememberAgentMemory({
+  vaultPath,
+  type: "decision",
+  title: "Use dedicated Atlas builder wallet for revenue",
+  content: "The dedicated Atlas wallet receives builder revenue. The builder fee was set during launch.",
+  confidence: 1,
+  entities: ["Atlas Revenue"],
+});
+await rememberAgentMemory({
+  vaultPath,
+  type: "decision",
+  title: "Set Atlas builder fee to 0.5 bps",
+  content: "The selected Atlas builder fee is 0.5 basis points.",
+  confidence: 0.7,
+});
+const feeIntent = await recallAgentMemory({ vaultPath, query: "what builder fee did we set for Atlas" });
+assert.equal(feeIntent.hits[0]?.title, "Set Atlas builder fee to 0.5 bps", "complete title coverage should beat a related high-confidence entity hit");
+ok("natural fee question ranks the specific decision first");
+
+await rememberAgentMemory({
+  vaultPath,
+  type: "decision",
+  title: "Use dedicated Orion wallet for builder revenue",
+  content: "The Orion wallet is the canonical revenue recipient.",
+  confidence: 1,
+  entities: ["Orion Revenue"],
+});
+await rememberAgentMemory({
+  vaultPath,
+  type: "artifact",
+  title: "Orion builder revenue live verification",
+  content: "This verification artifact proved the builder revenue path live.",
+  confidence: 0.7,
+});
+const artifactIntent = await recallAgentMemory({ vaultPath, query: "what artifact proved Orion builder revenue live" });
+assert.equal(artifactIntent.hits[0]?.type, "artifact", "artifact wording should prefer an artifact over a related decision");
+ok("artifact question ranks an artifact first");
+
+await rememberAgentMemory({
+  vaultPath,
+  type: "learning",
+  title: "Windows fleet bug fixed after three filters",
+  content: "A concrete bug was fixed after finding three visibility filters.",
+  confidence: 0.9,
+  entities: ["FIXED"],
+});
+await rememberAgentMemory({
+  vaultPath,
+  type: "instruction",
+  title: "Require full E2E before saying fixed",
+  content: "Run the real user path end to end before declaring any bug fixed.",
+  confidence: 0.7,
+});
+const instructionIntent = await recallAgentMemory({ vaultPath, query: "what must we do before declaring a bug fixed" });
+assert.equal(instructionIntent.hits[0]?.type, "instruction", "normative wording should prefer an instruction over an incident learning");
+ok("normative question ranks an instruction first");
 
 // --- duplicate gate -------------------------------------------------------------
 
@@ -298,6 +375,23 @@ ok("optional embeddings enable paraphrase recall (hybrid)");
 
 // --- consolidation -----------------------------------------------------------------
 
+const staleSsh = await rememberAgentMemory({
+  vaultPath,
+  type: "learning",
+  title: "SSH fallback unavailable on Atlas server",
+  content: "Atlas server access has no key-based SSH fallback; use the provider console for recovery.",
+  memoryKey: "learning/atlas/ssh-fallback-unavailable",
+});
+const correctedSsh = await rememberAgentMemory({
+  vaultPath,
+  type: "learning",
+  title: "Direct SSH access works on Atlas server",
+  content: "Correction to the older Atlas SSH note: direct key-based SSH now works with the managed identity. This replaces the provider-console-only guidance.",
+  memoryKey: "learning/atlas/direct-ssh-access",
+  allowDuplicate: true,
+});
+assert.ok(staleSsh.record && correctedSsh.record, "correction fixture should write two differently titled active memories");
+
 // Plant a stale, never-retrieved context memory by writing the note + index row
 // with an old createdAt, then rebuilding from markdown.
 const staleId = "mem-20250101000000-stale00001";
@@ -328,6 +422,11 @@ await rebuildAgentMemoryIndex({ vaultPath, includeFullVault: false });
 const report = await consolidateAgentMemory({ vaultPath });
 assert.ok(report.duplicateGroups.length >= 1, "consolidation should find the planted near-duplicate group");
 assert.ok(report.duplicateGroups[0].evolveHint.includes("hive-brain evolve"), "duplicate groups should carry an evolve hint");
+assert.ok(
+  report.correctionCandidates.some((candidate) => candidate.newerId === correctedSsh.record.id && candidate.olderId === staleSsh.record.id),
+  "explicit correction language should propose linking the newer and older canonical heads",
+);
+assert.ok(report.correctionCandidates[0].evolveHint.includes("--supersedes"), "correction candidates should be review-gated evolve proposals");
 assert.ok(report.archiveCandidates.some((candidate) => candidate.id === staleId), "stale context memory should be an archive candidate");
 assert.equal(report.archivedCount, 0, "report-only run must not archive");
 const applied = await consolidateAgentMemory({ vaultPath, applyArchives: true });

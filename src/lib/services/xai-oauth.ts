@@ -2,12 +2,24 @@ import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import { homedir } from "@/lib/home-dir";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
-import { writeSharedHiveEnvValues } from "@/lib/services/hive-env-write";
+import { removeSharedHiveEnvValues } from "@/lib/services/hive-env-write";
+import {
+  hermesXaiOAuthStorePath,
+  nativeXaiOAuthStorePath,
+  resolveXaiOAuthTokenStoreAccess,
+  selectXaiOAuthAuthority,
+  selectedXaiOAuthAuthority,
+  storeXaiOAuthTokens,
+  xaiOAuthTokenStoreStatus,
+  type XaiOAuthAuthority,
+  type XaiOAuthTokenStoreAccess,
+  type XaiOAuthTokenStoreStatus,
+} from "@/lib/services/xai-oauth-token-store";
 
 const XAI_OAUTH_ISSUER = "https://auth.x.ai";
 const XAI_OAUTH_DISCOVERY_URL = `${XAI_OAUTH_ISSUER}/.well-known/openid-configuration`;
@@ -67,14 +79,6 @@ export type XaiOAuthAccess = {
   baseUrl: string;
 };
 
-type ExistingHermesOAuth = {
-  home: string;
-  tokens: XaiTokenPayload & { refresh_token: string };
-  discovery: Discovery;
-  lastRefresh: string;
-  accessTokenExpiresAt: number | null;
-};
-
 type LoginFlow = {
   state: XaiOAuthLoginState;
   server: Server | null;
@@ -83,11 +87,11 @@ type LoginFlow = {
   oauthState: string;
   nonce: string;
   discovery: Discovery;
-  hermesHomes: string[];
 };
 
 let loginFlow: LoginFlow | null = null;
 let accessTokenRefreshPromise: Promise<XaiOAuthAccess> | null = null;
+let cachedAccess: XaiOAuthAccess | null = null;
 
 function base64Url(buffer: Buffer) {
   return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -98,6 +102,16 @@ function xaiPkceVerifier() {
   return base64Url(randomBytes(48));
 }
 
+function validatedXaiOAuthEndpoint(value: string, fallback: string) {
+  const candidate = value.trim() || fallback;
+  const parsed = new URL(candidate);
+  const host = parsed.hostname.toLowerCase();
+  if (parsed.protocol !== "https:" || (host !== "x.ai" && !host.endsWith(".x.ai"))) {
+    throw new Error("xAI OAuth discovery returned an endpoint outside the x.ai HTTPS origin.");
+  }
+  return candidate;
+}
+
 async function xaiOAuthDiscovery(): Promise<Discovery> {
   const response = await fetch(XAI_OAUTH_DISCOVERY_URL, {
     cache: "no-store",
@@ -105,12 +119,14 @@ async function xaiOAuthDiscovery(): Promise<Discovery> {
   }).catch(() => null);
   const data = await response?.json().catch(() => null) as Partial<Discovery> | null;
   return {
-    authorization_endpoint: typeof data?.authorization_endpoint === "string" && data.authorization_endpoint
-      ? data.authorization_endpoint
-      : XAI_OAUTH_AUTHORIZE_URL,
-    token_endpoint: typeof data?.token_endpoint === "string" && data.token_endpoint
-      ? data.token_endpoint
-      : XAI_OAUTH_TOKEN_URL,
+    authorization_endpoint: validatedXaiOAuthEndpoint(
+      typeof data?.authorization_endpoint === "string" ? data.authorization_endpoint : "",
+      XAI_OAUTH_AUTHORIZE_URL,
+    ),
+    token_endpoint: validatedXaiOAuthEndpoint(
+      typeof data?.token_endpoint === "string" ? data.token_endpoint : "",
+      XAI_OAUTH_TOKEN_URL,
+    ),
   };
 }
 
@@ -232,276 +248,204 @@ function hermesHomesFromInput(input?: unknown, options: { preferInput?: boolean 
   return [...homes];
 }
 
-async function readAuthStore(authPath: string): Promise<Record<string, unknown>> {
-  const raw = await readFile(authPath, "utf8").catch((error: NodeJS.ErrnoException) => {
-    if (error?.code === "ENOENT") return "";
-    throw error;
+const LEGACY_SHARED_ENV_KEYS = Object.values(XAI_OAUTH_ENV_KEYS);
+let legacyEnvRetirementPromise: Promise<void> | null = null;
+
+async function readLegacySharedEnvTokens() {
+  const [accessToken, refreshToken, idToken, tokenType, expiresAtRaw] = await Promise.all([
+    hiveEnvValue(XAI_OAUTH_ENV_KEYS.accessToken).catch(() => ""),
+    hiveEnvValue(XAI_OAUTH_ENV_KEYS.refreshToken).catch(() => ""),
+    hiveEnvValue(XAI_OAUTH_ENV_KEYS.idToken).catch(() => ""),
+    hiveEnvValue(XAI_OAUTH_ENV_KEYS.tokenType).catch(() => ""),
+    hiveEnvValue(XAI_OAUTH_ENV_KEYS.expiresAt).catch(() => ""),
+  ]);
+  const expiresAt = Number(expiresAtRaw);
+  return {
+    accessToken: accessToken.trim(),
+    refreshToken: refreshToken.trim(),
+    idToken: idToken.trim(),
+    tokenType: tokenType.trim() || "Bearer",
+    expiresAt: Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : null,
+  };
+}
+
+async function retireLegacySharedEnvTokens() {
+  if (legacyEnvRetirementPromise) return legacyEnvRetirementPromise;
+  legacyEnvRetirementPromise = removeSharedHiveEnvValues(LEGACY_SHARED_ENV_KEYS);
+  try {
+    await legacyEnvRetirementPromise;
+  } finally {
+    legacyEnvRetirementPromise = null;
+  }
+}
+
+async function migrateLegacySharedEnvTokens(warnings: string[]) {
+  const legacy = await readLegacySharedEnvTokens();
+  if (!legacy.accessToken || !legacy.refreshToken) return false;
+  const expiresIn = legacy.expiresAt
+    ? Math.max(1, Math.ceil((legacy.expiresAt - Date.now()) / 1000))
+    : 3600;
+  await storeXaiOAuthTokens(
+    {
+      access_token: legacy.accessToken,
+      refresh_token: legacy.refreshToken,
+      id_token: legacy.idToken,
+      token_type: legacy.tokenType,
+      expires_in: expiresIn,
+    },
+    {
+      authorization_endpoint: XAI_OAUTH_AUTHORIZE_URL,
+      token_endpoint: XAI_OAUTH_TOKEN_URL,
+    },
+    XAI_OAUTH_REDIRECT_URI,
+  );
+  await selectXaiOAuthAuthority({
+    source: "hivemindos",
+    storePath: nativeXaiOAuthStorePath(),
+    hermesHome: null,
   });
-  if (!raw.trim()) return { version: 2, providers: {} };
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
-  if (!parsed || typeof parsed !== "object") return { version: 2, providers: {} };
-  if (!parsed.providers || typeof parsed.providers !== "object" || Array.isArray(parsed.providers)) {
-    parsed.providers = {};
+  cachedAccess = null;
+  try {
+    await retireLegacySharedEnvTokens();
+  } catch (error) {
+    warnings.push(`Could not retire the old shared-env OAuth copy: ${error instanceof Error ? error.message : String(error)}`);
   }
-  return parsed;
+  return true;
 }
 
-async function writeJsonPrivate(path: string, data: Record<string, unknown>) {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const tmp = `${path}.tmp.${process.pid}.${randomUUID()}`;
-  await writeFile(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
-  await chmod(tmp, 0o600).catch(() => undefined);
-  await rename(tmp, path);
-  await chmod(path, 0o600).catch(() => undefined);
+async function selectExistingHermesOAuth(
+  hermesHomes: unknown,
+  currentAuthority: XaiOAuthAuthority,
+  warnings: string[],
+) {
+  for (const home of hermesHomesFromInput(hermesHomes, { preferInput: true })) {
+    const storePath = hermesXaiOAuthStorePath(home);
+    if (storePath === currentAuthority.storePath) continue;
+    const exists = await access(storePath).then(() => true).catch(() => false);
+    if (!exists) continue;
+    try {
+      const status = await xaiOAuthTokenStoreStatus(storePath);
+      if (!status.credentialsPresent) continue;
+      await resolveXaiOAuthTokenStoreAccess(storePath);
+      const authority = await selectXaiOAuthAuthority({
+        source: "hermes",
+        storePath,
+        hermesHome: home,
+      });
+      cachedAccess = null;
+      return {
+        authority,
+        status: await xaiOAuthTokenStoreStatus(storePath),
+      };
+    } catch (error) {
+      warnings.push(`Could not use xAI OAuth from ${home}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return null;
 }
 
-function stringField(record: Record<string, unknown>, key: string) {
-  const value = record[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function finiteNumber(value: unknown) {
-  const number = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function discoveryFromRecord(value: unknown): Discovery {
-  const record = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-  return {
-    authorization_endpoint: stringField(record, "authorization_endpoint") || XAI_OAUTH_AUTHORIZE_URL,
-    token_endpoint: stringField(record, "token_endpoint") || XAI_OAUTH_TOKEN_URL,
-  };
-}
-
-function accessTokenExpiresAt(providerState: Record<string, unknown>, tokens: XaiTokenPayload) {
-  const expiresIn = finiteNumber(tokens.expires_in);
-  if (!expiresIn || expiresIn <= 0) return null;
-  const lastRefresh = stringField(providerState, "last_refresh");
-  const lastRefreshMs = lastRefresh ? Date.parse(lastRefresh) : NaN;
-  if (!Number.isFinite(lastRefreshMs)) return null;
-  return lastRefreshMs + expiresIn * 1000;
-}
-
-function hiveEnvValuesFromTokens(tokens: XaiTokenPayload, expiresAt: number | null = null) {
-  const computedExpiresAt = expiresAt ?? Date.now() + Math.max(60, Number(tokens.expires_in) || 3600) * 1000;
-  const values: Record<string, string> = {
-    [XAI_OAUTH_ENV_KEYS.accessToken]: String(tokens.access_token || ""),
-    [XAI_OAUTH_ENV_KEYS.refreshToken]: String(tokens.refresh_token || ""),
-    [XAI_OAUTH_ENV_KEYS.tokenType]: String(tokens.token_type || "Bearer"),
-    [XAI_OAUTH_ENV_KEYS.expiresAt]: String(computedExpiresAt),
-    [XAI_OAUTH_ENV_KEYS.baseUrl]: XAI_OAUTH_BASE_URL,
-  };
-  if (tokens.id_token) values[XAI_OAUTH_ENV_KEYS.idToken] = tokens.id_token;
-  return values;
-}
-
-async function readExistingHermesOAuth(home: string): Promise<ExistingHermesOAuth | null> {
-  const authStore = await readAuthStore(join(home, "auth.json"));
-  const providers = authStore.providers as Record<string, unknown>;
-  const providerState = providers["xai-oauth"];
-  if (!providerState || typeof providerState !== "object" || Array.isArray(providerState)) return null;
-  const state = providerState as Record<string, unknown>;
-  const tokensRecord = state.tokens && typeof state.tokens === "object" && !Array.isArray(state.tokens)
-    ? state.tokens as Record<string, unknown>
-    : {};
-  const refreshToken = stringField(tokensRecord, "refresh_token");
-  if (!refreshToken) return null;
-  const expiresIn = finiteNumber(tokensRecord.expires_in);
-  const tokens: XaiTokenPayload & { refresh_token: string } = {
-    access_token: stringField(tokensRecord, "access_token"),
-    refresh_token: refreshToken,
-    id_token: stringField(tokensRecord, "id_token"),
-    token_type: stringField(tokensRecord, "token_type") || "Bearer",
-  };
-  if (expiresIn !== null) tokens.expires_in = expiresIn;
-  const lastRefresh = stringField(state, "last_refresh") || new Date().toISOString();
-  return {
-    home,
-    tokens,
-    discovery: discoveryFromRecord(state.discovery),
-    lastRefresh,
-    accessTokenExpiresAt: accessTokenExpiresAt(state, tokens),
-  };
-}
-
-async function syncExistingHermesOAuth(input: { hermesHomes?: unknown; writeSharedEnv?: boolean; writeToHermes?: boolean }) {
-  const homes = hermesHomesFromInput(input.hermesHomes, { preferInput: true });
+async function ensureSelectedOAuthSession(input: { hermesHomes?: unknown; discoverHermes?: boolean; retireLegacyEnv?: boolean } = {}) {
   const warnings: string[] = [];
-  let existing: ExistingHermesOAuth | null = null;
-  for (const home of homes) {
-    try {
-      existing = await readExistingHermesOAuth(home);
-      if (existing) break;
-    } catch (error) {
-      warnings.push(`Could not read Hermes auth store at ${home}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  if (!existing) return { existing: null, warnings };
-
-  if (input.writeSharedEnv) {
-    try {
-      await writeSharedHiveEnvValues(hiveEnvValuesFromTokens(existing.tokens, existing.accessTokenExpiresAt));
-    } catch (error) {
-      warnings.push(`Could not sync xAI OAuth from Hermes into the shared hive env: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  if (input.writeToHermes) {
-    for (const home of homes) {
-      if (home === existing.home) continue;
+  let authority = await selectedXaiOAuthAuthority();
+  let status = await xaiOAuthTokenStoreStatus(authority.storePath);
+  if ((!status.credentialsPresent || status.needsReconnect) && authority.source === "hermes") {
+    const nativePath = nativeXaiOAuthStorePath();
+    const nativeExists = await access(nativePath).then(() => true).catch(() => false);
+    if (nativeExists) {
       try {
-        await writeHermesAuthStore(home, existing.tokens, existing.discovery, existing.lastRefresh);
-      } catch (error) {
-        warnings.push(`Could not mirror xAI OAuth into Hermes auth store at ${home}: ${error instanceof Error ? error.message : String(error)}`);
+        await resolveXaiOAuthTokenStoreAccess(nativePath);
+        authority = await selectXaiOAuthAuthority({
+          source: "hivemindos",
+          storePath: nativePath,
+          hermesHome: null,
+        });
+        status = await xaiOAuthTokenStoreStatus(nativePath);
+        cachedAccess = null;
+      } catch {
+        // Preserve the selected Hermes error; profile discovery may still find another valid authority.
       }
     }
   }
-
-  return { existing, warnings };
-}
-
-async function writeHermesAuthStore(home: string, tokens: XaiTokenPayload, discovery: Discovery, lastRefresh: string) {
-  const authPath = join(home, "auth.json");
-  const authStore = await readAuthStore(authPath);
-  const providers = authStore.providers as Record<string, unknown>;
-  const priorState = providers["xai-oauth"];
-  const state = priorState && typeof priorState === "object" && !Array.isArray(priorState)
-    ? { ...(priorState as Record<string, unknown>) }
-    : {};
-  state.tokens = {
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    id_token: tokens.id_token || "",
-    expires_in: tokens.expires_in,
-    token_type: tokens.token_type || "Bearer",
-  };
-  state.last_refresh = lastRefresh;
-  state.auth_mode = "oauth_pkce";
-  state.discovery = discovery;
-  state.redirect_uri = XAI_OAUTH_REDIRECT_URI;
-  providers["xai-oauth"] = state;
-  authStore.providers = providers;
-  authStore.active_provider = "xai-oauth";
-  authStore.version = typeof authStore.version === "number" ? authStore.version : 2;
-  authStore.updated_at = new Date().toISOString();
-  await writeJsonPrivate(authPath, authStore);
-}
-
-async function persistTokens(tokens: XaiTokenPayload, discovery: Discovery, hermesHomes: string[]) {
-  await writeSharedHiveEnvValues(hiveEnvValuesFromTokens(tokens));
-
-  const warnings: string[] = [];
-  const lastRefresh = new Date().toISOString().replace("+00:00", "Z");
-  for (const home of hermesHomes) {
-    try {
-      await writeHermesAuthStore(home, tokens, discovery, lastRefresh);
-    } catch (error) {
-      warnings.push(`Could not update Hermes auth store at ${home}: ${error instanceof Error ? error.message : String(error)}`);
+  if ((!status.credentialsPresent || status.needsReconnect) && input.discoverHermes) {
+    const selected = await selectExistingHermesOAuth(input.hermesHomes, authority, warnings);
+    if (selected) {
+      authority = selected.authority;
+      status = selected.status;
     }
+  }
+  if (!status.credentialsPresent) {
+    try {
+      if (await migrateLegacySharedEnvTokens(warnings)) {
+        authority = await selectedXaiOAuthAuthority();
+        status = await xaiOAuthTokenStoreStatus(authority.storePath);
+      }
+    } catch (error) {
+      warnings.push(`Could not migrate the previous xAI OAuth session: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } else if (input.retireLegacyEnv) {
+    const legacy = await readLegacySharedEnvTokens();
+    if (legacy.accessToken || legacy.refreshToken) {
+      try {
+        await retireLegacySharedEnvTokens();
+      } catch (error) {
+        warnings.push(`Could not retire the old shared-env OAuth copy: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  return { authority, status, warnings };
+}
+
+async function persistTokens(tokens: XaiTokenPayload, discovery: Discovery) {
+  const storePath = nativeXaiOAuthStorePath();
+  await storeXaiOAuthTokens(tokens, discovery, XAI_OAUTH_REDIRECT_URI, undefined, storePath);
+  await selectXaiOAuthAuthority({ source: "hivemindos", storePath, hermesHome: null });
+  cachedAccess = null;
+  const warnings: string[] = [];
+  try {
+    await retireLegacySharedEnvTokens();
+  } catch (error) {
+    warnings.push(`Could not remove the previous shared-env OAuth copy: ${error instanceof Error ? error.message : String(error)}`);
   }
   return warnings;
 }
 
-async function refreshXaiOAuthTokens(
-  refreshToken: string,
-  discovery: Discovery,
-  prior: Pick<XaiTokenPayload, "id_token" | "token_type">,
-) {
-  const response = await fetch(discovery.token_endpoint, {
-    method: "POST",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: XAI_OAUTH_CLIENT_ID,
-      refresh_token: refreshToken,
-    }).toString(),
-    signal: AbortSignal.timeout(30_000),
-  });
-  const data = await response.json().catch(() => null) as XaiTokenPayload | null;
-  if (!response.ok || !data?.access_token) {
-    const detail =
-      data?.error_description ||
-      (typeof data?.error === "string" ? data.error : data?.error?.message);
-    throw new Error(detail || `xAI OAuth refresh returned HTTP ${response.status}. Reconnect xAI OAuth.`);
-  }
+function publicAccess(access: XaiOAuthTokenStoreAccess): XaiOAuthAccess {
   return {
-    ...data,
-    refresh_token: data.refresh_token || refreshToken,
-    id_token: data.id_token || prior.id_token,
-    token_type: data.token_type || prior.token_type || "Bearer",
-  } satisfies XaiTokenPayload;
+    accessToken: access.accessToken,
+    tokenType: access.tokenType || "Bearer",
+    expiresAt: access.expiresAt,
+    baseUrl: XAI_OAUTH_BASE_URL,
+  };
 }
 
-/** Returns a current xAI OAuth access token without exposing it to callers that
- * only need status. Expiring tokens are refreshed once per process and then
- * mirrored back to the shared hive env plus Hermes auth stores. */
+function friendlyXaiOAuthError(value: string | null) {
+  const message = value?.trim() || "";
+  if (/refresh token (?:has been )?revoked|invalid_grant/i.test(message)) {
+    return "Refresh token has been revoked. Reconnect xAI OAuth.";
+  }
+  return message;
+}
+
+/** Return a current access token. Native sessions use HivemindOS' xai.lock;
+ * an explicitly selected Hermes session uses that store's auth.lock in place. */
 export async function getXaiOAuthAccess(): Promise<XaiOAuthAccess> {
+  if (
+    cachedAccess?.accessToken &&
+    (!cachedAccess.expiresAt || cachedAccess.expiresAt > Date.now() + ACCESS_TOKEN_REFRESH_SKEW_MS)
+  ) {
+    return cachedAccess;
+  }
   if (accessTokenRefreshPromise) return accessTokenRefreshPromise;
   accessTokenRefreshPromise = (async () => {
-    const envValues = await Promise.all([
-      hiveEnvValue(XAI_OAUTH_ENV_KEYS.accessToken).catch(() => ""),
-      hiveEnvValue(XAI_OAUTH_ENV_KEYS.refreshToken).catch(() => ""),
-      hiveEnvValue(XAI_OAUTH_ENV_KEYS.idToken).catch(() => ""),
-      hiveEnvValue(XAI_OAUTH_ENV_KEYS.tokenType).catch(() => ""),
-      hiveEnvValue(XAI_OAUTH_ENV_KEYS.expiresAt).catch(() => ""),
-      hiveEnvValue(XAI_OAUTH_ENV_KEYS.baseUrl).catch(() => ""),
-    ]);
-    let [accessToken, refreshToken, idToken, tokenType, expiresAtRaw] = envValues;
-    const baseUrl = envValues[5];
-
-    if (!refreshToken.trim()) {
-      const synced = await syncExistingHermesOAuth({
-        writeSharedEnv: true,
-        writeToHermes: true,
-      });
-      const existing = synced.existing;
-      if (existing) {
-        accessToken = existing.tokens.access_token || "";
-        refreshToken = existing.tokens.refresh_token;
-        idToken = existing.tokens.id_token || "";
-        tokenType = existing.tokens.token_type || "Bearer";
-        expiresAtRaw = String(existing.accessTokenExpiresAt || "");
-      }
+    const selected = await ensureSelectedOAuthSession({ discoverHermes: true });
+    try {
+      cachedAccess = publicAccess(await resolveXaiOAuthTokenStoreAccess(selected.authority.storePath));
+    } catch (initialError) {
+      const recovered = await ensureSelectedOAuthSession({ discoverHermes: true });
+      if (recovered.authority.storePath === selected.authority.storePath) throw initialError;
+      cachedAccess = publicAccess(await resolveXaiOAuthTokenStoreAccess(recovered.authority.storePath));
     }
-
-    const expiresAtNumber = Number(expiresAtRaw);
-    const expiresAt = Number.isFinite(expiresAtNumber) && expiresAtNumber > 0
-      ? expiresAtNumber
-      : null;
-    if (
-      accessToken.trim() &&
-      (!expiresAt || expiresAt > Date.now() + ACCESS_TOKEN_REFRESH_SKEW_MS)
-    ) {
-      return {
-        accessToken: accessToken.trim(),
-        tokenType: tokenType.trim() || "Bearer",
-        expiresAt,
-        baseUrl: baseUrl.trim() || XAI_OAUTH_BASE_URL,
-      };
-    }
-    if (!refreshToken.trim()) {
-      throw new Error("xAI OAuth is not connected. Sign in from the xAI OAuth tab first.");
-    }
-
-    const discovery = await xaiOAuthDiscovery();
-    const refreshed = await refreshXaiOAuthTokens(refreshToken.trim(), discovery, {
-      id_token: idToken.trim(),
-      token_type: tokenType.trim(),
-    });
-    await persistTokens(refreshed, discovery, hermesHomesFromInput());
-    const refreshedExpiresAt = Date.now() + Math.max(60, Number(refreshed.expires_in) || 3600) * 1000;
-    return {
-      accessToken: refreshed.access_token || "",
-      tokenType: refreshed.token_type || "Bearer",
-      expiresAt: refreshedExpiresAt,
-      baseUrl: baseUrl.trim() || XAI_OAUTH_BASE_URL,
-    };
+    return cachedAccess;
   })();
   try {
     return await accessTokenRefreshPromise;
@@ -526,36 +470,56 @@ function escapeHtml(value: string) {
 }
 
 export async function xaiOAuthConfigured(input: { hermesHomes?: unknown } = {}): Promise<boolean> {
-  const status = await xaiOAuthStatus({ ...input, syncFromHermes: false });
-  return status.connected;
+  const status = await xaiOAuthStatus({ ...input, syncFromHermes: false, validateAccess: true });
+  return status.usable;
 }
 
-export async function xaiOAuthStatus(input: { hermesHomes?: unknown; syncFromHermes?: boolean } = {}) {
-  const [refresh, expiresAtRaw] = await Promise.all([
-    hiveEnvValue(XAI_OAUTH_ENV_KEYS.refreshToken).catch(() => ""),
-    hiveEnvValue(XAI_OAUTH_ENV_KEYS.expiresAt).catch(() => ""),
-  ]);
-  const envConnected = Boolean(refresh?.trim());
-  const hermes = envConnected
-    ? { existing: null, warnings: [] as string[] }
-    : await syncExistingHermesOAuth({
-      hermesHomes: input.hermesHomes,
-      writeSharedEnv: Boolean(input.syncFromHermes),
-      writeToHermes: Boolean(input.syncFromHermes),
-    });
-  const existing = hermes.existing;
-  const connected = envConnected || Boolean(existing);
+export async function xaiOAuthStatus(input: {
+  hermesHomes?: unknown;
+  syncFromHermes?: boolean;
+  validateAccess?: boolean;
+} = {}) {
+  let selected = await ensureSelectedOAuthSession({
+    hermesHomes: input.hermesHomes,
+    discoverHermes: Boolean(input.syncFromHermes),
+    retireLegacyEnv: Boolean(input.syncFromHermes),
+  });
+  let tokenStatus: XaiOAuthTokenStoreStatus = selected.status;
+  let usable = tokenStatus.usable;
+  let accessError: string | null = null;
+  if (tokenStatus.credentialsPresent && input.validateAccess) {
+    try {
+      usable = Boolean((await getXaiOAuthAccess()).accessToken);
+    } catch (error) {
+      usable = false;
+      accessError = friendlyXaiOAuthError(
+        error instanceof Error ? error.message : "xAI OAuth access validation failed.",
+      );
+    }
+    const activeAuthority = await selectedXaiOAuthAuthority();
+    if (activeAuthority.storePath !== selected.authority.storePath) {
+      selected = {
+        ...selected,
+        authority: activeAuthority,
+      };
+    }
+    tokenStatus = await xaiOAuthTokenStoreStatus(selected.authority.storePath).catch(() => tokenStatus);
+  }
   return {
-    connected,
-    source: envConnected ? "shared-hive-env" : existing ? "hermes" : null,
-    hermesHome: existing?.home ?? null,
-    accessTokenExpiresAt: Number(expiresAtRaw) || existing?.accessTokenExpiresAt || null,
-    warnings: hermes.warnings,
+    connected: usable,
+    credentialsPresent: tokenStatus.credentialsPresent,
+    usable,
+    needsReconnect: tokenStatus.needsReconnect,
+    error: accessError || friendlyXaiOAuthError(tokenStatus.error),
+    source: tokenStatus.credentialsPresent ? selected.authority.source : null,
+    hermesHome: tokenStatus.credentialsPresent ? selected.authority.hermesHome : null,
+    accessTokenExpiresAt: tokenStatus.expiresAt,
+    warnings: selected.warnings,
     login: loginFlow?.state ?? ({ phase: "idle" } as const),
   };
 }
 
-export async function startXaiOAuthLogin(input: { hermesHomes?: unknown } = {}): Promise<{ authorizeUrl: string }> {
+export async function startXaiOAuthLogin(): Promise<{ authorizeUrl: string }> {
   closeLoginServer();
   const discovery = await xaiOAuthDiscovery();
   const verifier = xaiPkceVerifier();
@@ -568,7 +532,6 @@ export async function startXaiOAuthLogin(input: { hermesHomes?: unknown } = {}):
     oauthState: randomUUID().replaceAll("-", ""),
     nonce: randomUUID().replaceAll("-", ""),
     discovery,
-    hermesHomes: hermesHomesFromInput(input.hermesHomes),
   };
   const authorizeUrl = buildAuthorizeUrl(flow);
   flow.state = { phase: "pending", authorizeUrl, startedAt: Date.now() };
@@ -590,13 +553,13 @@ export async function startXaiOAuthLogin(input: { hermesHomes?: unknown } = {}):
           const code = url.searchParams.get("code") ?? "";
           if (!code) throw new Error("The OAuth callback carried no authorization code.");
           const tokens = await exchangeCodeForTokens(code, flow);
-          const warnings = await persistTokens(tokens, flow.discovery, flow.hermesHomes);
+          const warnings = await persistTokens(tokens, flow.discovery);
           flow.state = { phase: "connected", connectedAt: Date.now(), warnings };
           const page = callbackHtml(
             warnings.length ? "xAI connected with a warning" : "xAI connected",
             warnings.length
-              ? "Tokens were saved to the shared hive env, but one runtime auth store could not be updated. Return to HivemindOS for details."
-              : "Tokens were saved to the shared hive env and Hermes. You can close this tab and return to HivemindOS.",
+              ? "The HivemindOS OAuth session was saved, but an old shared-env copy could not be retired. Return to HivemindOS for details."
+              : "Your local xAI OAuth session is connected and will refresh automatically. You can close this tab and return to HivemindOS.",
             warnings.length ? 207 : 200,
           );
           response.writeHead(page.status, { "content-type": "text/html; charset=utf-8" }).end(page.html);
@@ -633,7 +596,7 @@ export async function startXaiOAuthLogin(input: { hermesHomes?: unknown } = {}):
   return { authorizeUrl };
 }
 
-export async function submitXaiOAuthCode(input: { code?: unknown; hermesHomes?: unknown } = {}) {
+export async function submitXaiOAuthCode(input: { code?: unknown } = {}) {
   const raw = typeof input.code === "string" ? input.code.trim() : "";
   if (!raw) throw new Error("Paste the code xAI showed in the browser.");
   const flow = loginFlow;
@@ -649,11 +612,8 @@ export async function submitXaiOAuthCode(input: { code?: unknown; hermesHomes?: 
   }
   const code = parsed.code?.trim() ?? "";
   if (!code) throw new Error("The pasted xAI OAuth code was empty.");
-  if (Array.isArray(input.hermesHomes) && input.hermesHomes.length) {
-    flow.hermesHomes = hermesHomesFromInput(input.hermesHomes);
-  }
   const tokens = await exchangeCodeForTokens(code, flow);
-  const warnings = await persistTokens(tokens, flow.discovery, flow.hermesHomes);
+  const warnings = await persistTokens(tokens, flow.discovery);
   flow.state = { phase: "connected", connectedAt: Date.now(), warnings };
   closeLoginServer();
   return { warnings };

@@ -118,6 +118,9 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 - For synthesized entity/concept/summary knowledge under \`Synthesis/Compiled Knowledge/<domain>/\`, load the \`hive-brain-compiled-wiki\` skill and prefer \`brain_search_knowledge\` or \`/api/brain/knowledge\` action \`search\` before broad full-vault recall.
 - Recall before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context.
 - Save shared memories under \`Memory/Distillations/Agent Memory/\` through the API, include available agent/runtime/machine/Tailnet provenance, and prefer \`proof: "auto"\` unless explicit proof is requested.
+- Record run receipts and high-volume operational events with \`record-operation\`; they stay in the bounded local journal at \`~/.hivemindos/brain/operational-events.jsonl\` instead of durable Agent Memory. \`remember-action\` remains a compatibility alias and does not write durable memory.
+- Durable memories use a canonical \`memoryKey\`. Evolve the existing head when reviewed truth changes; do not create a competing active record with the same key.
+- Pattern mining is review-gated. Run \`hive-brain mine-patterns\` as a dry run, and use \`--enqueue\` only when proposals should enter Brain Review. Never auto-apply mined memory, skill, or job proposals.
 - Use \`action: "evolve"\` or \`hive-brain evolve --memory-id <id> --content <text>\` when a reviewed durable memory replaces an older one. Evolved memories preserve prior versions with \`supersedes\`, \`supersededBy\`, \`evolutionRootId\`, \`evolutionType\`, \`evolutionReason\`, and \`cognitiveStage\`; the latest active version is current truth and prior versions are history/evidence.
 - Never store raw Tailnet IPs, provider secrets, private keys, bearer tokens, or plaintext sensitive data in memory notes or proof receipts.
 - \`${folders.secureFolder}/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.
@@ -587,6 +590,8 @@ properties:
     displayName: "Type"
   status:
     displayName: "Status"
+  memoryKey:
+    displayName: "Canonical Key"
   project:
     displayName: "Project"
   runtime:
@@ -609,6 +614,7 @@ views:
       - file.name
       - type
       - status
+      - memoryKey
       - project
       - runtime
       - agentName

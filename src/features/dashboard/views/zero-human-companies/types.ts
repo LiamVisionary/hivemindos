@@ -3,12 +3,14 @@
 // PoolAgent so the live view can persist real agent membership.
 import type { CompanyRevenueEventSource, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
-import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyExecutionConfig, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyExecutionSelection } from "@/lib/services/company-execution-capabilities";
 import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type { CompanyImportRequest, CompanyImportedOperations } from "@/lib/types/company-import";
 import type { WorkBoardPipelineImpact, WorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
 import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
+import type { GitLawbProof } from "@/lib/types/gitlawb";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -139,6 +141,8 @@ export interface IssueWork {
   result?: string;
   deliverables: IssueDeliverable[];
   receipts: IssueReceipt[];
+  /** Signed code/task provenance and linked project proofs attached to this work. */
+  proofs?: GitLawbProof[];
   /** Name of the machine that produced the work (for deliverable provenance). */
   machineName?: string;
   updatedAt?: number;
@@ -196,6 +200,8 @@ export interface Colony {
   hasApexGoal?: boolean;
   /** True when perpetual autonomy is on — the driver keeps re-dispatching until stopped/frozen. */
   autonomy?: boolean;
+  /** Selected autonomy engine and its optional AEON binding. */
+  execution?: CompanyExecutionConfig;
   /** Standing directives injected by a human or captured from rejecting a deliverable. */
   directives?: CompanyDirective[];
   /** Official product catalog from the shared brain; non-empty items → the Products tab shows. */
@@ -237,7 +243,7 @@ export interface PoolAgent {
 /** How an apex metric is read/rendered (plain number, %, currency, or users). */
 export type MetricUnit = "number" | "percent" | "currency" | "users";
 
-export interface CreateForm {
+export interface CreateForm extends Partial<CompanyExecutionSelection> {
   name: string;
   ticker?: string;
   sector?: string;

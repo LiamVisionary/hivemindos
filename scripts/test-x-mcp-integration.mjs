@@ -49,6 +49,12 @@ assert.match(service, /removeXMcpRuntimeConfigs/);
 assert.match(service, /getManagedXGatewayStatus/);
 assert.doesNotMatch(service, /readFileSync\(.*\.xurl.*utf8/s);
 
+const capabilityContext = readFileSync("src/lib/services/chat/x-mcp-capability-context.ts", "utf8");
+assert.match(capabilityContext, /xurlCachePresent/);
+assert.match(capabilityContext, /official xurl CLI/i);
+assert.match(capabilityContext, /three shared paths/i);
+assert.match(capabilityContext, /read_x_account/);
+
 const managedClient = readFileSync("src/lib/services/managed-x-api-client.ts", "utf8");
 assert.match(managedClient, /DEFAULT_MANAGED_X_API_BASE_URL = "https:\/\/hivemindos-x-api-gateway\.hivemindos\.workers\.dev"/);
 assert.match(managedClient, /DEFAULT_MANAGED_X_OAUTH_SCOPES = "tweet\.read users\.read tweet\.write offline\.access"/);

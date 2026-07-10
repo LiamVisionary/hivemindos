@@ -57,6 +57,8 @@ Access paths:
 | Raw Codex, Hermes, Gemini, OpenClaw, Aeon, or shell agents | `hive-brain answer "<query>"` | The CLI tries the local API, then falls back to local vault/index search. |
 | Raw Claude Code | `hive-brain-hook` registered as `UserPromptSubmit`, plus the same `hive-brain` CLI | The hook injects relevant context before Claude answers, including full-vault hits outside Agent Memory. |
 | Durable memory writes | `/api/brain/memory`, `hive-brain remember ...`, or `hive-brain evolve ...` | Writes are typed notes in Agent Memory with optional GitLawb receipts; evolved writes preserve superseded history. |
+| Operational events | `hive-brain record-operation ...` or API action `record-operation` | Writes a bounded local event journal, not durable Agent Memory; the CLI can write it even when the app API is offline. |
+| Pattern proposals | `hive-brain mine-patterns` | Dry-run by default; `--enqueue` adds deduplicated proposals to Brain Review without applying them. |
 
 The raw-agent rule is deliberate: agents should not need to know which port the dashboard is using, and they should still recall when the dashboard is not running.
 
@@ -96,13 +98,21 @@ Operations/Brain Services/Agent Memory Retrievals.jsonl
 
 This log records memory ids, timestamps, retrieved/final-answer usage, and optional usage context. It gently reorders crowded result sets; it does not hide memories that have never been retrieved.
 
+Routine completions, handoff receipts, retries, and other high-volume operational events use a separate bounded local journal:
+
+```text
+~/.hivemindos/brain/operational-events.jsonl
+```
+
+The journal rotates to one `.1` file at 8 MB. It stays out of the shared vault and typed-memory index, so repeated receipts cannot crowd durable recall or create false duplicate clusters. Existing domain stores such as Queen Bee and Work Board receipts remain their authoritative shared records. Legacy `action` Agent Memory notes are preserved as history but hidden from default recall and consolidation; callers can still request them explicitly with `type: "action"` or `includeOperational`.
+
 Full-vault recall has its own generated lexical index at:
 
 ```text
 Operations/Brain Services/Full Vault Search Index.jsonl
 ```
 
-That index is inspired by QMD's useful non-embedding pieces: markdown collections, compact term-frequency records, and BM25-style lexical ranking before source notes are loaded. It maps normal vault folders to collections such as `memory`, `projects`, `synthesis`, `operations`, and `skills`, and supports lightweight query filters such as `collection:projects`, `path:Synthesis/`, quoted phrases, and `-excluded` terms. It does not store embeddings or call a model.
+That index is inspired by QMD's useful non-embedding pieces: markdown collections, compact term-frequency records, and BM25-style lexical ranking before source notes are loaded. It maps normal vault folders to collections such as `memory`, `projects`, `synthesis`, `operations`, and `skills`, and supports lightweight query filters such as `collection:projects`, `path:Synthesis/`, quoted phrases, and `-excluded` terms. Index rebuilds replace the JSONL file atomically so concurrent recalls never read a partially written index. It does not store embeddings or call a model.
 
 When the tiered path augments with full-vault recall, it includes normal vault markdown from `Memory/`, `Projects/`, `Synthesis/`, `Ideas/`, `Operations/`, `Skills/`, templates, and shared context notes. It intentionally includes `Operations/Secure/` reference/status notes so agents can know which credential names exist or are set. Plaintext secret values still belong only in shared env or encrypted artifacts and must not be printed, copied, summarized, or saved as memory.
 
@@ -153,9 +163,11 @@ All content searches over the vault and conversations use ripgrep (`rg`) first, 
 The API supports:
 
 - `remember`: save a typed memory note.
-- `remember-action`: save a durable assistant/agent-confirmed action memory, such as a Queen Bee receipt or handoff completion.
+- `record-operation`: append an operational event without writing durable memory.
+- `remember-action`: compatibility alias for `record-operation`; responses include `durableMemoryWritten: false`.
+- `mine-patterns`: inspect operational events and return review candidates; `enqueueProposals: true` adds deduplicated proposals to Brain Review.
 - `evolve`: save a new active memory while marking older Agent Memory notes as `superseded`.
-- `recall`: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, optional `scope`, optional `temporalMode`, optional `asOf`, and optional usage tracking.
+- `recall`: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, optional `scope`, optional `temporalMode`, optional `asOf`, optional `includeOperational`, and optional usage tracking.
 - `answer`: return a grounded memory context pack from the matching memories and vault notes.
 - `rebuild-index`: scan existing markdown memory notes, append rich searchable entries to the private typed-memory index, and refresh the generated full-vault lexical index unless `includeFullVault: false` is passed.
 - `record-usage`: append retrieved or final-answer usage telemetry for memory ids.
@@ -167,13 +179,19 @@ The CLI mirrors the same recall path for non-managed agents:
 ```bash
 hive-brain answer "what does the user prefer here?"
 hive-brain recall "BYOK Agent Calls" --scope full-vault --limit 5
-hive-brain remember --type preference --title "Short title" --content "Durable memory body"
+hive-brain remember --type preference --title "Short title" --content "Durable memory body" --memory-key "preference/project/short-title"
 hive-brain evolve --memory-id mem-... --content "Updated durable memory body"
+hive-brain record-operation --title "Provider request" --content "Request timed out" --operation-key "provider/request" --failure-key "provider/timeout" --outcome failure --task-id task-123
+hive-brain mine-patterns
 ```
 
-Memory evolution keeps agent memory from becoming a pile of contradictory notes. A normal `remember` call is the fast System 1 capture path. When a later reviewed fact, preference, instruction, or decision replaces an older one, callers use `action: "evolve"` with `memoryId` or `supersedes`. HivemindOS writes a new active note with `cognitiveStage: "system2"`, records `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, and optional `evolutionReason`, then appends replacement rows to `Agent Memory Index.jsonl` and entity rows to `Agent Memory Entity Index.jsonl`. Current recall returns active chain heads by default and includes prior versions as `evolutionChain` evidence when relevant. Temporal recall auto-detects prompts such as "before," "used to," "as of," explicit dates, and relative time phrases; those queries may include superseded history or as-of chain heads as evidence.
+Canonical heads and memory evolution keep agent memory from becoming a pile of contradictory notes. Every durable record carries a canonical `memoryKey`, derived from type, project, and title unless the caller supplies one. `remember` blocks a second active record with the same key and points the caller to the existing head. When a later reviewed fact, preference, instruction, or decision replaces an older one, callers use `action: "evolve"` with `memoryId` or `supersedes`. HivemindOS writes a new active note with the same key and `cognitiveStage: "system2"`, records `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, and optional `evolutionReason`, then appends replacement rows to `Agent Memory Index.jsonl` and entity rows to `Agent Memory Entity Index.jsonl`. Current recall returns the newest active canonical head by default, even for legacy records whose key is derived during indexing, and includes prior versions as `evolutionChain` evidence when relevant. `consolidate` reports an explicit-correction candidate when a newer active record says it corrects or replaces an older note but the two were never linked; this remains a reviewed `evolve` proposal and is never auto-applied.
 
-Typed Agent Memory ranking fuses exact/title/tag/content matches, BM25-lite lexical scoring, entity/alias matches, confidence, temporal fit, recency, status, optional full-vault lexical score, and soft usage telemetry into `scoreDetails`. Embeddings are intentionally deferred in this local v1 path.
+Temporal intent is conservative. Phrases such as “used to,” “previously,” and “historical” request history; “as of <date>,” “before <date>,” and relative periods request an as-of cutoff. A bare date inside a memory title does not change current recall mode, the procedural word “before” does not imply history, explicit historical mode does not become an as-of filter, and a date-only “as of” includes the whole named day.
+
+Pattern mining groups separate operational events by stable operation and failure keys, requires evidence across distinct task ids, rejects test/E2E noise, and distinguishes recurring failures, reusable workflows, and stable routines. Before the review bridge was enabled, the deterministic 47-event adversarial benchmark produced exactly the three labeled candidates with precision `1.00` and recall `1.00`; run `pnpm benchmark:agent-memory-pattern-mining` to reproduce it. This is a fixture benchmark, not proof of production precision, so broad autonomous enablement remains off. The default command is a dry run, and explicit `--enqueue` only creates Brain Review proposals for a human or authorized reviewer.
+
+Typed Agent Memory ranking fuses exact/title/tag/content matches, query-term coverage, natural question intent, BM25-lite lexical scoring, entity/alias matches, confidence, temporal fit, recency, status, optional semantic similarity, normalized full-vault lexical evidence, and soft usage telemetry into `scoreDetails`. Direct questions that name a memory kind—such as an instruction, decision, preference, or artifact—receive a bounded type-intent preference rather than a hard filter. Generic status words such as “fixed,” “verified,” and “critical” are rejected as acronym entities, so they cannot overpower that intent. Answer mode also requires proportional term coverage for longer direct questions, which lets the system abstain instead of combining unrelated topic fragments.
 
 The prompt hook is intentionally small and local:
 
@@ -220,24 +238,28 @@ The pack is curated from [`kepano/obsidian-skills`](https://github.com/kepano/ob
 
 Shared Brain Memory is intentionally local-first. The default tiered path keeps common preference, decision, instruction, and durable fact recall on the typed Agent Memory hot path. That hot path reads a private JSONL retrieval view inside the vault, so agents avoid a network call and avoid rescanning typed memory notes after the first index build. When distilled memory is weak, full-vault recall broadens the search to thousands of markdown notes through the generated BM25-lite lexical index, then loads only ranked candidate source notes before answering. Markdown notes remain human-readable, private, and syncable through the user's chosen vault sync owner.
 
-Benchmarks from the live local API route at `http://127.0.0.1:5022/api/brain/memory`:
+The current indexed scale fixture uses 200 exact, natural, sparse, and noisy queries at each corpus size with local embeddings disabled:
 
-| Memory count | Recall p50 | Recall p95 | First indexed recall p50 | Answer p50 | Top-1 / Top-3 / MRR |
+| Memory count | Recall p50 | Recall p95 | First cold recall | Sequential queries/s | Top-1 / Top-3 / MRR |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 100 | 2.69ms | 3.15ms | 2.72ms | 2.83ms | 1.0 / 1.0 / 1.0 |
-| 500 | 4.37ms | 5.26ms | 4.68ms | 4.18ms | 1.0 / 1.0 / 1.0 |
-| 1500 | 19.20ms | 31.33ms | 19.37ms | 21.04ms | 1.0 / 1.0 / 1.0 |
+| 100 | 1.86ms | 2.76ms | 25.02ms | 506.98 | 1.0 / 1.0 / 1.0 |
+| 500 | 9.08ms | 10.91ms | 30.63ms | 108.07 | 1.0 / 1.0 / 1.0 |
+| 1500 | 27.16ms | 33.63ms | 78.71ms | 35.52 | 1.0 / 1.0 / 1.0 |
 
-The pre-index typed-memory markdown scan path measured p50 recall of 99.51ms at 100 memories, 293.49ms at 500 memories, 562.38ms at 1000 memories, and 784.03ms at 1500 memories. The optimized typed Agent Memory index keeps retrieval in the single-digit millisecond range through 500 memories and around 20ms p50 at 1500 memories while preserving perfect synthetic relevance in the benchmark set.
+Run `pnpm benchmark:agent-memory-scale -- --calls 200` to reproduce this synthetic scale snapshot. A historical pre-index markdown-scan test measured p50 recall of 99.51ms at 100 memories, 293.49ms at 500 memories, 562.38ms at 1000 memories, and 784.03ms at 1500 memories. Treat those older numbers as architecture history rather than a same-run comparison with the current fixture.
 
-On a large reference vault of 28,549 markdown files, the generated full-vault lexical index scanned 26,019 eligible notes, indexed 25,995 notes, built in about 9.2s, and produced a 70.6 MB JSONL index. A five-query old-vs-indexed latency benchmark improved from 2,285ms median old full-vault recall to 118ms median indexed recall, a 19.4x median speedup, with identical top-1 results for all five queries. A seven-query quality benchmark over named project, operations, skill, secure-reference, imported-source, and intake targets found no relevance regression: both old and indexed search hit Top-1 for six exact expected notes, both missed one ambiguous Bankr imported-source query, and cached indexed median latency was 27.75ms versus 4,506.20ms for the old `rg`-first baseline. Run `pnpm benchmark:shared-brain-search` for the deterministic fixture or `node scripts/benchmark-shared-brain-search-quality.mjs --vault <vault>` for a live vault.
+On a large reference vault of 28,549 markdown files, the generated full-vault lexical index scanned 26,019 eligible notes, indexed 25,995 notes, built in about 9.2s, and produced a 70.6 MB JSONL index. A five-query old-vs-indexed latency benchmark improved from 2,285ms median old full-vault recall to 118ms median indexed recall, a 19.4x median speedup, with identical top-1 results for all five queries. The current quality benchmark separates routing-policy and control-plane questions and measures the real final recall runtime instead of only a mirrored scorer. Its deterministic nine-case fixture scored Top-1/Top-3/MRR `1.00/1.00/1.00` at the old, indexed, and runtime layers. On the live vault, eight project, operations, control-plane, skill, secure-reference, imported-source, and intake targets also scored `1.00/1.00/1.00`; median old/indexed/runtime latency was `745.04/48.42/300.33ms`, a 15.39x direct-index speedup. Run `pnpm benchmark:shared-brain-search` for the fixture or add `--vault <vault>` for a live vault.
+
+The read-only 1,000-call live Agent Memory matrix covers exact and date-bearing titles, sparse titles, noisy and typo queries, natural type intent, type/project/tag filters, unsupported abstention, legacy operational isolation, and current/historical/as-of evolution chains. The current run scored generated retrieval Top-1/Top-3/MRR `0.90/0.98/0.94` at p50/p95 `12.27/16.28ms` and 86.38 sequential queries/s; exact automatic/current title recall was `1.00/1.00`, unsupported questions abstained `10/10`, operational routing passed `40/40`, and temporal recall reached Top-1/Top-3 `0.96/1.00`. Run `pnpm benchmark:agent-memory-live-recall -- --vault <vault> --calls 1000` to reproduce it. Sparse and typo Top-1 remain the main measured weakness, while Top-3 stays high.
+
+The authenticated HTTP benchmark exercises the product API rather than calling the scorer directly. Across 400 measured requests after warmup, its entity, alias, current-head, historical, usage-signal, explicit-operational, default-operational-isolation, and abstention cases passed `8/8`; ranked cases passed Top-1 `6/6`; latency was `6.75ms` p50 and `12.12ms` p95 at 125.97 sequential requests/s. Run `pnpm benchmark:agent-memory-upgrade -- --base-url <dashboard-url> --iterations 50 --warmup 2` against a running dashboard.
 
 Raw-agent smoke tests confirmed both layers:
 
 - A typed fruit preference in `Memory/Distillations/Agent Memory/` was recalled by raw Claude and raw Hermes.
 - A project note outside Agent Memory, `Projects/Agent Calls - BYOK vs HivemindOS Cloud.md`, was recalled with `recallScope: full-vault`, `memoryHitCount: 0`, and answered correctly by raw Claude and raw Hermes.
 
-Marketing-safe positioning: HivemindOS agents get rich, typed, provenance-aware memory with network-free local retrieval at a fraction of the latency of network-bound memory stacks, and the same local-first design makes the memory 100% private by default.
+Measured positioning: HivemindOS gives agents typed, provenance-aware memory with network-free local retrieval, broad-vault fallback, explicit history, and review-gated learning. The public [Shared Brain Memory Benchmarks](../features/shared-brain-benchmarks.html) page collects the marketing-safe claims, sample sizes, and limitations. No competitor-latency comparison has been run yet.
 
 Primary sources:
 

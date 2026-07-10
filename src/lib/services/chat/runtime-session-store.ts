@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
+import { mkdir, readFile, readdir, stat, unlink, writeFile } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { join } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
@@ -13,6 +13,15 @@ export type RuntimeChatSessionMessage = {
   type?: string;
   raw?: unknown;
   billing?: ChatResponseBilling;
+  applicationGeneration?: RuntimeApplicationGeneration;
+};
+
+export type RuntimeApplicationGeneration = {
+  id: string;
+  kind: string;
+  prompt: string;
+  status: string;
+  [key: string]: unknown;
 };
 
 export type RuntimeChatSessionRecord = {
@@ -180,6 +189,46 @@ export async function appendRuntimeChatSessionText(sessionId: string, role: "ass
   await writeSession(session);
 }
 
+function applicationGenerationContent(card: RuntimeApplicationGeneration) {
+  const label = card.kind === "model3d" ? "3D model" : card.kind;
+  if (card.status === "ready") return `Generated ${label}: ${card.prompt}`;
+  if (card.status === "error") return `${label} generation failed: ${card.prompt}`;
+  return `Generating ${label}: ${card.prompt}`;
+}
+
+export function upsertRuntimeApplicationGenerationMessage(
+  messages: RuntimeChatSessionMessage[],
+  card: RuntimeApplicationGeneration,
+  now = Date.now(),
+) {
+  const content = applicationGenerationContent(card);
+  const existingIndex = messages.findIndex((message) => message.applicationGeneration?.id === card.id);
+  if (existingIndex < 0) {
+    return [...messages, {
+      index: messages.length,
+      role: "assistant",
+      content,
+      createdAt: typeof card.createdAt === "number" ? card.createdAt : now,
+      applicationGeneration: card,
+    }];
+  }
+  return messages.map((message, index) => index === existingIndex ? {
+    ...message,
+    content,
+    applicationGeneration: card,
+  } : message);
+}
+
+export async function upsertRuntimeChatSessionApplicationGeneration(sessionId: string, card: RuntimeApplicationGeneration) {
+  if (!sessionId) return;
+  const session = await readSessionFile(sessionPath(sessionId));
+  if (!session) return;
+  const now = Date.now();
+  session.messages = upsertRuntimeApplicationGenerationMessage(session.messages, card, now);
+  session.updatedAt = now;
+  await writeSession(session);
+}
+
 export async function updateRuntimeChatSessionLastAssistantBilling(sessionId: string, billing: ChatResponseBilling) {
   const session = await readSessionFile(sessionPath(sessionId));
   if (!session) return;
@@ -223,6 +272,30 @@ export async function finishRuntimeChatSession(sessionId: string, endReason = "c
   // Mirror the finished conversation into the shared vault (best effort) so
   // shared-brain recall can search it; never block or fail the chat response.
   void syncConversationNoteForSession(session).catch(() => {});
+}
+
+/**
+ * Delete every runtime chat-session file that belongs to `chatStorageKey`. A
+ * chat "thread" (its `chatStorageKey`) can span several runtime sessions, so
+ * this walks the whole session directory rather than deleting a single path.
+ * Returns the number of files removed. Best-effort per file: an unlink race
+ * (already gone) is swallowed so a partial concurrent delete still converges.
+ */
+export async function deleteRuntimeChatSessionsForThread(chatStorageKey: string): Promise<number> {
+  const key = (chatStorageKey ?? "").trim();
+  if (!key) return 0;
+  await ensureSessionDir();
+  const entries = await readdir(SESSION_DIR, { withFileTypes: true }).catch(() => []);
+  const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
+  let deleted = 0;
+  await Promise.all(files.map(async (entry) => {
+    const path = join(SESSION_DIR, entry.name);
+    const session = await readSessionFile(path);
+    if (!session || session.chatStorageKey !== key) return;
+    const removed = await unlink(path).then(() => true).catch(() => false);
+    if (removed) deleted += 1;
+  }));
+  return deleted;
 }
 
 export async function readRuntimeChatSession(query: RuntimeSessionQuery) {

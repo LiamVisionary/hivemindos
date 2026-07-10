@@ -24,6 +24,7 @@ import { runRecordedVoiceTurn } from "./recorded-turn";
 import { createSentenceChunker } from "@/lib/services/queen-bee/voice-speech-stream";
 import {
   createNdjsonEventReader,
+  voiceTurnBrainMetadata,
   type ConverseStreamEvent,
 } from "./converse-stream";
 import {
@@ -52,6 +53,8 @@ export type QueenVoiceTurn = {
   live?: boolean;
   /** Richer findings (markdown) Queen Bee pulled, shown in a modal on demand. */
   detail?: string;
+  brain?: string;
+  brainFallback?: { label: string; error: string };
 };
 
 /** One live stage of the current turn's work (tool call, fleet scan, ...). */
@@ -61,16 +64,16 @@ type VoiceTurnResponse = {
   ok?: boolean;
   transcript?: string;
   reply?: string;
+  brainLabel?: string;
+  brainFallback?: { label?: string; error?: string };
   error?: string;
 };
-
 type SttEvent = {
   type?: string;
   delta?: string;
   transcript?: string;
   error?: { message?: string };
 };
-
 const ECHO_CANCELLED_AUDIO: MediaTrackConstraints = {
   autoGainControl: true,
   echoCancellation: true,
@@ -253,10 +256,11 @@ export function useQueenBeeVoice(
       ]);
       return id;
     };
-    const updateTurn = (id: number, text: string, live = false) => {
+    const updateTurn = (id: number, text: string, live = false,
+      metadata: Partial<Pick<QueenVoiceTurn, "brain" | "brainFallback">> = {}) => {
       setTurns((current) =>
         current.map((turn) =>
-          turn.id === id ? { ...turn, text, live } : turn,
+          turn.id === id ? { ...turn, text, live, ...metadata } : turn,
         ),
       );
     };
@@ -656,7 +660,8 @@ export function useQueenBeeVoice(
             );
             return;
           }
-          addTurn("queen", data.reply);
+          const responseTurnId = addTurn("queen", data.reply);
+          updateTurn(responseTurnId, data.reply, false, voiceTurnBrainMetadata(data));
           history.push({ who: "queen", text: data.reply });
           setPhase("speaking");
           // The reply is here; a late "On it" ack would talk over it.
@@ -774,6 +779,7 @@ export function useQueenBeeVoice(
               liveSpeech.trim();
             if (finalReply) {
               showCaption(finalReply, false);
+              if (queenTurnId) updateTurn(queenTurnId, finalReply, false, voiceTurnBrainMetadata(outcome.done ?? {}));
               historyEntry.text = finalReply;
             } else if (queenTurnId) {
               dropTurn(queenTurnId);
@@ -800,6 +806,7 @@ export function useQueenBeeVoice(
         }
         for (const chunk of chunker.flush()) speaker.enqueue(chunk);
         showCaption(finalReply, false);
+        if (queenTurnId) updateTurn(queenTurnId, finalReply, false, voiceTurnBrainMetadata(outcome.done ?? {}));
         history.push({ who: "queen", text: finalReply });
         const outcomes = await speaker.end();
         if (cancelled) return;

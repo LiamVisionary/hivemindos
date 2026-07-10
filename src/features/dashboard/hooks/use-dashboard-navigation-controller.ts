@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentNotification } from "@/lib/types/agent-notifications";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import {
+  DASHBOARD_TARGET_APPLIED_EVENT,
   dashboardTargetFromSearch,
   dashboardUrlForTarget,
   isDashboardView,
@@ -77,6 +78,14 @@ export function useDashboardNavigationController({
     setActiveView(target.view);
     if (target.openTask && target.taskId && (target.view === "kanban" || target.view === "history")) {
       revealKanbanTask?.(target.taskId);
+    }
+    if (typeof window !== "undefined") {
+      const nextUrl = dashboardUrlForTarget(target, window.location.pathname);
+      if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+        window.history.pushState({ dashboardTarget: target }, "", nextUrl);
+      }
+      navigationUrlRef.current = nextUrl;
+      window.dispatchEvent(new CustomEvent<DashboardRouteTarget>(DASHBOARD_TARGET_APPLIED_EVENT, { detail: target }));
     }
   }, [revealKanbanTask, setActiveView, setSelectedAgentId, setSelectedChatLeafKey, setSelectedKanbanTaskId, setVaultPanelMode]);
 
@@ -217,6 +226,11 @@ function normalizeStoredDashboardTarget(value: unknown): DashboardRouteTarget | 
     chatLeaf: typeof record.chatLeaf === "string" ? record.chatLeaf : undefined,
     taskId: typeof record.taskId === "string" ? record.taskId : undefined,
     vaultPanel: typeof record.vaultPanel === "string" ? record.vaultPanel : undefined,
+    integration: typeof record.integration === "string" ? record.integration : undefined,
+    integrationTab: record.integrationTab === "connect" || record.integrationTab === "actions"
+      ? record.integrationTab
+      : undefined,
+    integrationAction: typeof record.integrationAction === "string" ? record.integrationAction : undefined,
   };
 }
 

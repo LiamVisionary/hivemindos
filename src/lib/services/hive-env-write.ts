@@ -1,7 +1,6 @@
 import "server-only";
 
-import { spawn } from "node:child_process";
-import { join } from "node:path";
+import { spawnHiveEnvAdd } from "@/lib/services/hive-env-command";
 
 /**
  * Server-side writer for shared hive env credentials.
@@ -28,9 +27,8 @@ type EnvScope = { scope: string; runtime: string };
 
 function runHiveEnvAdd(args: string[], stdinText: string) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), args, {
-      stdio: ["pipe", "ignore", "pipe"],
-    });
+    const child = spawnHiveEnvAdd(args);
+    child.stdout.resume();
     let errorText = "";
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
@@ -91,6 +89,15 @@ function encodeEnvAssignments(values: Record<string, string>) {
   return `${lines.join("\n")}\n`;
 }
 
+function encodeEnvRemovals(keys: string[]) {
+  const normalized = [...new Set(keys.map((key) => key.trim()))];
+  if (normalized.length === 0) throw new Error("No env values to remove.");
+  for (const key of normalized) {
+    if (!ENV_KEY_RE.test(key)) throw new Error(`Invalid env variable name: ${key}`);
+  }
+  return `${normalized.map((key) => `${key}=`).join("\n")}\n`;
+}
+
 /**
  * Write credentials to the shared hive env (~/.hivemindos/.env) and mirror
  * them into the per-runtime envs, exactly like a shared-key save through
@@ -110,6 +117,18 @@ export async function writeSharedHiveEnvValues(values: Record<string, string>): 
 
 export async function writeSharedHiveEnvValue(key: string, value: string): Promise<void> {
   await writeSharedHiveEnvValues({ [key]: value });
+}
+
+/** Remove shared credentials and replicate tombstones so stale peers cannot
+ * resurrect retired rotating tokens during later reconciliation. */
+export async function removeSharedHiveEnvValues(keys: string[]): Promise<void> {
+  const payload = encodeEnvRemovals(keys);
+  await runHiveEnvAdd(importStdinArgs(SHARED_SOURCE), payload);
+  await Promise.all(
+    RUNTIME_MIRRORS.map((target) =>
+      runHiveEnvAdd(importStdinArgs(target, { backup: false, sync: false }), payload).catch(() => undefined),
+    ),
+  );
 }
 
 /**

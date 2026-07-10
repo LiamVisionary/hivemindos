@@ -50,6 +50,8 @@ export type AgentMemoryUsageSummary = {
 
 export type AgentMemoryScoreDetails = {
   exact?: number;
+  coverage?: number;
+  intent?: number;
   lexical?: number;
   entity?: number;
   semantic?: number;
@@ -79,6 +81,7 @@ export type AgentMemoryRecord = {
   type: AgentMemoryType;
   title: string;
   content: string;
+  memoryKey?: string;
   confidence: number;
   status: "active" | "superseded" | "archived";
   cognitiveStage?: AgentMemoryCognitiveStage;
@@ -116,6 +119,8 @@ export type AgentMemoryRecord = {
   proofPath?: string;
   actorDid?: string;
   searchScore?: number;
+  /** Full-vault BM25 score normalized against the best direct index hit. */
+  searchScoreNormalized?: number;
   searchCollection?: string;
   usage?: AgentMemoryUsageSummary;
 };
@@ -135,6 +140,8 @@ export type RememberAgentMemoryInput = {
   type?: string;
   title?: string;
   content?: string;
+  /** Stable single-source-of-truth key. A second active write must evolve the current head. */
+  memoryKey?: string;
   confidence?: number;
   cognitiveStage?: string;
   evidenceCount?: number;
@@ -158,11 +165,45 @@ export type RememberAgentMemoryInput = {
   sessionId?: string;
   project?: string;
   proof?: AgentMemoryProofMode;
-  // Suspected-duplicate writes are blocked unless this is set; remember-action
-  // (repetitive receipts) defaults it to true.
+  // Fuzzy suspected-duplicate writes are blocked unless this is set. A
+  // canonical-key collision still requires evolve or a genuinely distinct key.
   allowDuplicate?: boolean;
   // High-confidence secret shapes block a write unless explicitly overridden.
   allowSensitiveContent?: boolean;
+  /** Operational-event metadata used by remember-action / record-operation. */
+  operationKey?: string;
+  failureKey?: string;
+  outcome?: string;
+  taskId?: string;
+};
+
+export type RecordAgentOperationalEventInput = RememberAgentMemoryInput;
+
+export type AgentOperationalEvent = {
+  schema: "hivemindos.agent-operational-event.v1";
+  id: string;
+  title: string;
+  summary: string;
+  operationKey: string;
+  failureKey?: string;
+  outcome: "success" | "failure" | "blocked" | "cancelled" | "unknown";
+  taskId?: string;
+  source?: string;
+  agentName?: string;
+  agentId?: string;
+  runtime?: string;
+  project?: string;
+  sessionId?: string;
+  tags: string[];
+  entities: string[];
+  occurredAt: string;
+};
+
+export type ListAgentOperationalEventsInput = {
+  query?: string;
+  project?: string;
+  since?: string;
+  limit?: number;
 };
 
 export type EvolveAgentMemoryInput = RememberAgentMemoryInput & {
@@ -180,6 +221,7 @@ export type RecallAgentMemoryInput = {
   project?: string;
   limit?: number;
   includeArchived?: boolean;
+  includeOperational?: boolean;
   scope?: string;
   temporalMode?: "auto" | "current" | "historical" | "as-of";
   asOf?: string;

@@ -61,7 +61,7 @@ import type {
   HiveComputeWorkerRunStatus,
 } from "@/lib/types/hive-compute-marketplace";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
-import { readLocalLmStudioLinkMap } from "@/lib/services/runtime-adapters/openai-compatible";
+import { readLocalLmStudioLinkMap, startLmStudioServerOnPort } from "@/lib/services/runtime-adapters/openai-compatible";
 import { isFleetCollectorUrl } from "@/lib/services/local-collector-url";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
@@ -1036,6 +1036,39 @@ export async function readHiveComputeHostContext(config?: Partial<HiveComputeHos
     gatewayConfigured: Boolean(gatewayUrl.value || openAiBaseUrl.value),
     config,
   });
+}
+
+function lmStudioServerPort(host: string) {
+  try {
+    const port = new URL(host).port;
+    return /^\d+$/.test(port) ? port : "1234";
+  } catch {
+    return "1234";
+  }
+}
+
+/**
+ * Start this machine's LM Studio server so its models can be advertised.
+ *
+ * Only ever targets the dashboard host: a remote machine's LM Studio has to be
+ * started on that machine, and silently starting the local one instead would
+ * misreport whose models are being hosted.
+ */
+export async function startHiveComputeLocalBackend(target?: HiveComputeHostTarget | null) {
+  if (isRemoteTargetIntent(target)) {
+    throw new Error("Hive Compute can only start LM Studio on this machine. Start it on the remote host directly.");
+  }
+  const lmStudio = (await localBackendCandidates()).find((candidate) => candidate.kind === "lmstudio");
+  if (!lmStudio) {
+    throw new Error("This machine has no LM Studio backend configured. Point HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL at it, or start Ollama instead.");
+  }
+  await startLmStudioServerOnPort(lmStudioServerPort(lmStudio.host)).catch((error) => {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      throw new Error("LM Studio is not installed on this machine — its `lms` command line tool could not be found.");
+    }
+    throw error;
+  });
+  return readHiveComputeMarketplaceStatus(target);
 }
 
 export async function startHiveComputeWorker(config?: Partial<HiveComputeHostRunConfig> | null) {

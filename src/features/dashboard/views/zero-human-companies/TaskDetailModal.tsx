@@ -13,6 +13,7 @@ import { bucketDeliverables } from "./deliverables-model";
 import { issueReasoningTrail } from "./issue-reason";
 import type { PreviewDecision } from "./preview-review";
 import type { Issue, Theme } from "./types";
+import { ProofPackPanel } from "./ProofPack";
 
 const RECEIPT_TONE: Record<string, string> = { passed: "var(--cyan-2)", failed: "var(--danger-2)", skipped: "var(--fg-4)" };
 
@@ -92,6 +93,7 @@ export function TaskDetailModal({ issue, colonyName, companyId, apexGoal, metric
   return (
     <Modal title={issue.title} subtitle={subtitleParts.join(" · ")} onClose={onClose} width={780} theme={theme}>
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <ProofPackPanel issue={issue} />
         {isCompanyReviewIssue(issue) && (
           <div style={{ borderRadius: 12, border: "1px solid color-mix(in srgb, var(--honey) 32%, var(--line))", background: "color-mix(in srgb, var(--honey) 7%, var(--bg-2))", padding: "12px 14px" }}>
             <SectionLabel>issue actions</SectionLabel>

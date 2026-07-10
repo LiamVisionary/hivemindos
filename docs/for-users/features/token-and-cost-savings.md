@@ -9,6 +9,8 @@ HivemindOS saves tokens by making agents search, narrow, reuse, and remember bef
 
 The product is not just a dashboard that spends tokens more visibly. It gives agents cheaper local context paths, reusable skills, bounded discovery, and project-specific memory so they do not keep rediscovering the same facts or rebuilding from a blank page.
 
+For recall accuracy, latency, scale, full-vault search, contradiction control, and pattern-mining results alongside these token measurements, see [Shared Brain Memory Benchmarks](shared-brain-benchmarks.html).
+
 ## Live Benchmark Chat
 
 **Prompt Under Test**

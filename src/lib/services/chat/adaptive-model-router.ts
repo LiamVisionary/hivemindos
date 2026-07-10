@@ -4,6 +4,7 @@ import { dirname, join } from "path";
 import { HIVEMIND_OS_RUNTIME, type AgentProfile, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { resolveAdaptiveOpenRouterModels } from "./adaptive-openrouter-models";
 import { adaptiveReliabilityKey, adaptiveReliabilityStates, type AdaptiveReliabilityState } from "./adaptive-model-reliability";
+import { rankOutcomeCandidates, readOutcomeRoutingRecords } from "@/lib/services/outcome-router";
 
 type IncomingMessage = {
   role: string;
@@ -357,7 +358,9 @@ export async function resolveAdaptiveRoutePlan(profile: AgentProfile, messages: 
   const reliability = await adaptiveReliabilityStates(
     unsorted.map((candidate) => adaptiveReliabilityKey(candidate.provider, candidate.model)),
   ).catch(() => new Map<string, AdaptiveReliabilityState>());
-  const candidates = unsorted.sort((left, right) => candidateSort(left, right, reliability));
+  const reliabilityRanked = unsorted.sort((left, right) => candidateSort(left, right, reliability));
+  const outcomeRecords = await readOutcomeRoutingRecords().catch(() => []);
+  const candidates = rankOutcomeCandidates(reliabilityRanked, outcomeRecords, { useCases });
   const selected = candidates[0];
   if (!selected) {
     throw new Error("Adaptive could not find a ready free model. Configure OPENROUTER_API_KEY or another Models.dev OpenAI-compatible provider key, then try again.");

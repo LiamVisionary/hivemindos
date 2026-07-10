@@ -1,22 +1,29 @@
 import "server-only";
 
-import { readFile } from "fs/promises";
-import { extname } from "path";
+import { mkdir, readFile, writeFile } from "fs/promises";
+import { extname, join } from "path";
+import { homedir } from "@/lib/home-dir";
 import {
   appPreferenceFor,
   preferredModelFor,
   readAppPreferences,
   usageNoteAffinity,
+  type AppMcpVideoDescriptor,
   type ConnectedAppPreference,
 } from "@/lib/services/fleet/app-preferences";
 import { discoverRawConnectedApps, type ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 import { recordGenerationMetric } from "@/lib/services/generation-metrics";
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import { callMcpTool, connectMcpServer, disconnectMcpServer } from "@/lib/services/mcp/client";
+import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 const REQUEST_TIMEOUT_MS = 240_000;
 const POLL_INTERVAL_MS = 2_000;
 const MAX_POLL_ATTEMPTS = 120;
+const MCP_POLL_INTERVAL_MS = 6_000;
+const MCP_MAX_POLL_ATTEMPTS = 90;
+const GENERATED_VIDEO_DIR = join(homedir(), ".hivemindos", "cache", "generated-video");
 
 export type VideoGenerationInputImage = {
   path?: string;
@@ -145,6 +152,46 @@ async function discoveredApps(origin: string, appId?: string) {
   return [...byId.values()];
 }
 
+// An app declared as an MCP video provider via the app-preferences overlay is a
+// selectable candidate even if collector discovery didn't surface it this pass —
+// its connection details live in the overlay, so it can't be a phantom, and this
+// keeps "generate a video" working through a flaky discovery window.
+function withMcpVideoProviders(apps: ConnectedHostedApp[], preferences: ConnectedAppPreference[]) {
+  const mcpPreferenceByHostPort = new Map(preferences.flatMap((preference) => {
+    if (!preference.mcpVideo || !clean(preference.appId)) return [];
+    const hint = appIdHint(preference.appId);
+    return [[hint ? `${hint.host}:${hint.port}` : clean(preference.appId), preference] as const];
+  }));
+  const enrichedApps = apps.map((app) => {
+    const hint = appIdHint(app.id);
+    const preference = mcpPreferenceByHostPort.get(hint ? `${hint.host}:${hint.port}` : clean(app.id));
+    return preference ? {
+      ...app,
+      name: preference.appName || app.name,
+      serviceKind: "video",
+    } : app;
+  });
+  const hostPorts = new Set(enrichedApps.map((app) => {
+    const hint = appIdHint(app.id);
+    return hint ? `${hint.host}:${hint.port}` : clean(app.id);
+  }).filter(Boolean));
+  const virtual: ConnectedHostedApp[] = [];
+  for (const preference of preferences) {
+    if (!preference.mcpVideo || !clean(preference.appId)) continue;
+    const hint = appIdHint(preference.appId);
+    const key = hint ? `${hint.host}:${hint.port}` : clean(preference.appId);
+    if (hostPorts.has(key)) continue;
+    hostPorts.add(key);
+    virtual.push({
+      id: preference.appId,
+      name: preference.appName || "Video app",
+      serviceKind: "video",
+      apiBaseUrl: clean(preference.mcpVideo.uploadBase) || clean(preference.mcpVideo.url),
+    });
+  }
+  return virtual.length ? [...enrichedApps, ...virtual] : enrichedApps;
+}
+
 function appPreferenceScore(app: ConnectedHostedApp, prompt: string, preferences: ConnectedAppPreference[]) {
   const preference = appPreferenceFor(app, preferences);
   if (!preference) return 0;
@@ -188,13 +235,20 @@ function appScore(app: ConnectedHostedApp, input: VideoGenerationInput, preferen
   const hasVideoRoute = routes.some((route) => videoRouteScore(route) > 0);
   const kindIsVideo = app.serviceKind?.toLowerCase() === "video";
   const hasVideoKeyword = VIDEO_APP_KEYWORD.test(haystack) || VIDEO_TASK_KEYWORD.test(haystack);
-  // Hard gate: without a genuine video signal (a "video" serviceKind, a real
-  // video route, or a video-specific name/description) the app is NOT a video
-  // candidate. selectVideoApp filters score > 0, so returning 0 surfaces the
-  // honest "No connected video generation app…" instead of dispatching a video
-  // request to an image-only app that will never return a video URL.
-  if (!kindIsVideo && !hasVideoRoute && !hasVideoKeyword) return 0;
+  // A HivemindOS-side overlay (app-preferences) can declare an app as a video
+  // provider — a `capabilities: ["video"]` tag, or an `mcpVideo` descriptor that
+  // says exactly how to invoke it. That's an explicit human/agent declaration,
+  // so it both counts as a video signal and outranks name/route heuristics.
+  const preference = appPreferenceFor(app, preferences);
+  const overlayVideo = Boolean(preference?.mcpVideo) || (preference?.capabilities ?? []).some((tag) => /video/i.test(tag));
+  // Hard gate: without a genuine video signal (an overlay declaration, a "video"
+  // serviceKind, a real video route, or a video-specific name/description) the
+  // app is NOT a video candidate. selectVideoApp filters score > 0, so returning
+  // 0 surfaces the honest "No connected video generation app…" instead of
+  // dispatching a video request to an image-only app that returns no video URL.
+  if (!overlayVideo && !kindIsVideo && !hasVideoRoute && !hasVideoKeyword) return 0;
   let score = 0;
+  if (overlayVideo) score += 200;
   if (requestedKind === "video" && kindIsVideo) score += 120;
   else if (kindIsVideo) score += 100;
   if (VIDEO_APP_KEYWORD.test(haystack)) score += 95;
@@ -444,6 +498,194 @@ async function buildGenerationBody(input: VideoGenerationInput, model?: string) 
   };
 }
 
+// ---- MCP-backed video apps (e.g. Media Studio) --------------------------
+// Some connected apps expose video generation as an MCP tool, not a REST route,
+// and run on a different fleet machine than the one holding the attached image.
+// We stage the image bytes into the app via its multipart /upload/image ingest
+// (the MCP JSON body limit is too small for a real photo's base64), call the
+// tool with the returned input filename, poll the job, then pull the finished
+// (tailnet-absolute) video into a local generated-media file the chat video
+// card can stream.
+
+async function imageBytesFromInput(image: VideoGenerationInputImage): Promise<{ buffer: Buffer; filename: string; mimeType: string }> {
+  const dataUrl = clean(image.dataUrl);
+  const match = /^data:([^;,]+)?(;base64)?,(.*)$/is.exec(dataUrl);
+  if (match) {
+    const mimeType = clean(match[1]) || clean(image.mimeType) || "image/png";
+    const buffer = match[2] ? Buffer.from(match[3], "base64") : Buffer.from(decodeURIComponent(match[3]), "utf8");
+    return { buffer, filename: clean(image.name) || `attachment${extensionForMime(mimeType)}`, mimeType };
+  }
+  const path = clean(image.path);
+  if (path) {
+    const mimeType = clean(image.mimeType) || mimeTypeForPath(path) || "image/png";
+    return { buffer: await readFile(path), filename: clean(image.name) || path.split("/").pop() || `attachment${extensionForMime(mimeType)}`, mimeType };
+  }
+  throw new Error("No attached image bytes to send to the video app.");
+}
+
+function extensionForMime(mimeType: string) {
+  if (/jpe?g/i.test(mimeType)) return ".jpg";
+  if (/webp/i.test(mimeType)) return ".webp";
+  if (/gif/i.test(mimeType)) return ".gif";
+  return ".png";
+}
+
+async function uploadImageToStudio(uploadBase: string, image: VideoGenerationInputImage): Promise<{ name: string; dims: { width: number; height: number } }> {
+  const { buffer, filename, mimeType } = await imageBytesFromInput(image);
+  const form = new FormData();
+  form.append("image", new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+  form.append("overwrite", "true");
+  const url = `${uploadBase.replace(/\/+$/, "")}/upload/image`;
+  const response = await fetch(url, { method: "POST", body: form, cache: "no-store", signal: AbortSignal.timeout(90_000) });
+  if (!response.ok) throw new Error(`Video app image upload failed (${response.status}) at ${url}.`);
+  const payload = await response.json().catch(() => null) as { name?: string } | null;
+  const name = clean(payload?.name);
+  if (!name) throw new Error("Video app image upload returned no input filename.");
+  return { name, dims: videoDimsFromImage(buffer) };
+}
+
+function imagePixelSize(buffer: Buffer): { width: number; height: number } | null {
+  // PNG: IHDR width/height at fixed offsets after the 8-byte signature.
+  if (buffer.length >= 24 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer.toString("ascii", 12, 16) === "IHDR") {
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  }
+  // JPEG: scan segments for a start-of-frame marker carrying the dimensions.
+  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buffer.length) {
+      if (buffer[offset] !== 0xff) { offset += 1; continue; }
+      const marker = buffer[offset + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) };
+      }
+      offset += 2 + buffer.readUInt16BE(offset + 2);
+    }
+  }
+  return null;
+}
+
+function videoDimsFromImage(buffer: Buffer): { width: number; height: number } {
+  const size = imagePixelSize(buffer);
+  const clamp = (n: number) => Math.max(384, Math.min(1024, Math.round(n / 32) * 32));
+  if (!size || !size.width || !size.height) return { width: 768, height: 768 };
+  return { width: clamp(size.width), height: clamp(size.height) };
+}
+
+function mcpResultJson(result: unknown): Record<string, unknown> {
+  const record = result as { content?: Array<{ type?: string; text?: string }>; structuredContent?: unknown } | null;
+  const text = (record?.content ?? []).map((part) => (part?.type === "text" ? part.text ?? "" : "")).join("\n").trim();
+  if (text) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+    } catch {
+      return { _text: text };
+    }
+  }
+  return (record?.structuredContent && typeof record.structuredContent === "object" ? record.structuredContent : record ?? {}) as Record<string, unknown>;
+}
+
+function mcpJobId(payload: Record<string, unknown>): string {
+  const job = payload.job as Record<string, unknown> | undefined;
+  const submission = payload.submission as Record<string, unknown> | undefined;
+  for (const value of [job?.id, payload.id, payload.job_id, payload.jobId, submission?.prompt_id, payload.prompt_id]) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function rewriteStudioMediaUrl(rawUrl: string, uploadBase: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!/^(?:127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0)$/.test(parsed.hostname)) return rawUrl;
+    const base = new URL(uploadBase);
+    parsed.protocol = base.protocol;
+    parsed.host = base.host;
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function firstVideoUrlInJson(payload: unknown): string {
+  const blob = JSON.stringify(payload ?? "");
+  const match = blob.match(/https?:\/\/[^"'\s]+\.(?:mp4|m4v|mov|webm)(?:\?[^"'\s]*)?/i);
+  return match ? match[0] : "";
+}
+
+async function storeGeneratedVideoFromUrl(url: string): Promise<string> {
+  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(180_000) });
+  if (!response.ok) throw new Error(`Could not download the generated video (${response.status}).`);
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) throw new Error("Generated video download was empty.");
+  await mkdir(GENERATED_VIDEO_DIR, { recursive: true, mode: 0o700 });
+  const extMatch = /\.(mp4|m4v|mov|webm)(?:\?|#|$)/i.exec(url);
+  const ext = extMatch ? `.${extMatch[1].toLowerCase()}` : ".mp4";
+  const absolutePath = join(GENERATED_VIDEO_DIR, `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+  await writeFile(absolutePath, new Uint8Array(buffer));
+  return absolutePath;
+}
+
+async function startMcpVideoGeneration(app: ConnectedHostedApp, descriptor: AppMcpVideoDescriptor, input: VideoGenerationInput, model?: string) {
+  const image = (input.inputImages ?? []).find((entry) => clean(entry.dataUrl) || clean(entry.path));
+  if (!image) throw new Error("Attach an image to generate a video with this app.");
+  const mediaBase = clean(descriptor.uploadBase) || clean(app.apiBaseUrl);
+  if (!mediaBase) throw new Error("This video app has no upload/media base configured.");
+  const token = descriptor.authEnvKey ? await hiveEnvValue(descriptor.authEnvKey) : "";
+  if (descriptor.authEnvKey && !token) throw new Error(`Missing ${descriptor.authEnvKey} in the shared hive env for the video app.`);
+
+  // Stage the attachment via multipart upload (the tool's JSON body is capped
+  // too small for a real photo's base64), then reference the returned filename.
+  const { name: inputName, dims } = await uploadImageToStudio(mediaBase, image);
+  const tool = clean(descriptor.tool) || "media_generate_video";
+  const jobTool = clean(descriptor.jobTool) || "media_get_job";
+  const workflowId = clean(descriptor.workflowId) || clean(model);
+  const mcpId = `mcp-video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  await connectMcpServer({
+    id: mcpId,
+    transport: "http",
+    url: descriptor.url,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  try {
+    const queued = mcpResultJson(await callMcpTool(mcpId, tool, {
+      ...(workflowId ? { workflow_id: workflowId } : {}),
+      image_path: inputName,
+      prompt: clean(input.prompt),
+      width: dims.width,
+      height: dims.height,
+      frames: 97,
+      frame_rate: 24,
+      wait: false,
+      include_urls: true,
+    }));
+    if (queued.ok === false) throw new Error(clean(queued.error) || "The video app rejected the generation request.");
+    const jobId = mcpJobId(queued);
+    if (!jobId) throw new Error("The video app did not return a job id.");
+
+    let lastPayload: Record<string, unknown> = queued;
+    let rawVideoUrl = firstVideoUrlInJson(queued);
+    for (let attempt = 0; attempt < MCP_MAX_POLL_ATTEMPTS && !rawVideoUrl; attempt += 1) {
+      await sleep(MCP_POLL_INTERVAL_MS);
+      lastPayload = mcpResultJson(await callMcpTool(mcpId, jobTool, { id: jobId, include_urls: true }));
+      rawVideoUrl = firstVideoUrlInJson(lastPayload);
+      const status = clean((lastPayload.status ?? lastPayload.state ?? (lastPayload.job as Record<string, unknown>)?.status)).toLowerCase();
+      if (!rawVideoUrl && /\b(?:error|failed|cancelled|canceled)\b/.test(status)) {
+        throw new Error(clean(lastPayload.error) || "The video app reported a failed generation.");
+      }
+    }
+    if (!rawVideoUrl) throw new Error("The video app did not return a finished video in time.");
+
+    const absolutePath = await storeGeneratedVideoFromUrl(mediaBase ? rewriteStudioMediaUrl(rawVideoUrl, mediaBase) : rawVideoUrl);
+    const signedUrl = await signedGeneratedMediaUrl(absolutePath);
+    return { path: `mcp:${tool}`, videos: [{ url: signedUrl, mimeType: "video/mp4" }] as GeneratedVideo[], payload: lastPayload };
+  } finally {
+    await disconnectMcpServer(mcpId).catch(() => undefined);
+  }
+}
+
 async function startGeneration(app: ConnectedHostedApp, input: VideoGenerationInput, model?: string) {
   const baseUrl = clean(app.apiBaseUrl);
   if (!baseUrl) throw new Error("Selected connected app does not expose an API base URL.");
@@ -489,10 +731,11 @@ export async function runChatVideoGeneration(input: VideoGenerationInput): Promi
   let selectedApp: VideoGenerationCandidate | null = null;
   let discoveredAppCount = 0;
   try {
-    const [apps, preferences] = await Promise.all([
+    const [discovered, preferences] = await Promise.all([
       discoveredApps(input.origin, input.appId),
       readAppPreferences().catch(() => [] as ConnectedAppPreference[]),
     ]);
+    const apps = withMcpVideoProviders(discovered, preferences);
     discoveredAppCount = apps.length;
     const app = selectVideoApp(apps, input, preferences);
     selectedApp = app;
@@ -507,7 +750,9 @@ export async function runChatVideoGeneration(input: VideoGenerationInput): Promi
     }
     const appPreference = appPreferenceFor(app, preferences);
     const requestedModel = clean(input.model) || preferredModelFor("video", appPreference?.preferredModels);
-    const result = await startGeneration(app, input, requestedModel || undefined);
+    const result = appPreference?.mcpVideo
+      ? await startMcpVideoGeneration(app, appPreference.mcpVideo, input, requestedModel || undefined)
+      : await startGeneration(app, input, requestedModel || undefined);
     const modelName = firstStringField(result.payload, ["model", "modelName", "model_name", "checkpoint", "checkpointName"]) || requestedModel;
     const machineSpecs = firstStringField(result.payload, ["machineSpecs", "machine_specs", "gpu", "device", "hardware"]);
     await recordGenerationMetric({

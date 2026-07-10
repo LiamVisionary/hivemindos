@@ -5,12 +5,16 @@ import { basename, dirname, join, relative, resolve, sep } from "path";
 import { readGitLawbStatus, sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { fullVaultSearchIndexStatus, rebuildFullVaultSearchIndex, searchFullVaultSearchIndex } from "@/lib/services/obsidian/full-vault-search-index";
 import { agentMemoryEmbeddingsCoverage, backfillAgentMemoryEmbeddings, semanticScoresForRecords, upsertAgentMemoryEmbedding } from "@/lib/services/obsidian/agent-memory/embeddings";
+import { canonicalMemoryKey, selectCanonicalMemoryHeads } from "@/lib/services/obsidian/agent-memory/canonical";
+import { distinctiveMemoryTokens, findExplicitCorrectionCandidates, tokenSetSimilarity } from "@/lib/services/obsidian/agent-memory/corrections";
+import { recordAgentOperationalEvent } from "@/lib/services/obsidian/agent-memory/events";
 import { AGENT_MEMORY_ENTITY_INDEX_PATH, appendAgentMemoryEntityIndex, extractAgentMemoryEntities, rewriteAgentMemoryEntityIndex } from "@/lib/services/obsidian/agent-memory/entities";
-import { extractRecallQuery, meaningfulMatchCount, queryWordsForRecall, RECALL_STOP_WORDS } from "@/lib/services/obsidian/agent-memory/query";
+import { extractRecallQuery, meaningfulMatchCount, queryWordsForRecall } from "@/lib/services/obsidian/agent-memory/query";
+import { conversationMemoryExcerptBudget, queryCenteredMemoryExcerpt, queryFocusedConversationExcerpt } from "@/lib/services/obsidian/agent-memory/excerpt";
 import { detectSensitiveContent, redactSensitiveText } from "@/lib/services/obsidian/agent-memory/redact";
-import { AGENT_MEMORY_ANSWER_MIN_SCORE, bm25ScoresForRecords, recordVisibleForRecall, scoreAgentMemory } from "@/lib/services/obsidian/agent-memory/scoring";
+import { AGENT_MEMORY_ANSWER_MIN_SCORE, bm25ScoresForRecords, recordVisibleForRecall, scoreAgentMemory, temporalRecallMode, withAgentMemorySearchMetadata } from "@/lib/services/obsidian/agent-memory/scoring";
 import { AGENT_MEMORY_RETRIEVALS_PATH, appendAgentMemoryUsage, withAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
-import { bm25Tokens } from "@/lib/services/search/bm25-lite";
+import { cacheVaultQueryRecords, getCachedVaultQueryRecords, readCachedVaultRecord } from "@/lib/services/obsidian/agent-memory/vault-record-cache";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -27,6 +31,7 @@ import {
   type AgentMemoryCognitiveStage,
   type AgentMemoryEvolutionType,
   type AgentMemoryHit,
+  type AgentOperationalEvent,
   type AgentMemoryOrigin,
   type AgentMemoryProofMode,
   type AgentMemoryRecord,
@@ -37,9 +42,9 @@ import {
   type RecallAgentMemoryInput,
   type RebuildAgentMemoryIndexInput,
   type RecordAgentMemoryUsageInput,
+  type RecordAgentOperationalEventInput,
   type RememberAgentMemoryInput,
 } from "@/lib/services/obsidian/agent-memory/types";
-
 export {
   AGENT_MEMORY_ACTOR_ROLES,
   AGENT_MEMORY_COGNITIVE_STAGES,
@@ -54,6 +59,7 @@ export type {
   AgentMemoryCognitiveStage,
   AgentMemoryEvolutionType,
   AgentMemoryHit,
+  AgentOperationalEvent,
   AgentMemoryOrigin,
   AgentMemoryProofMode,
   AgentMemoryRecord,
@@ -64,6 +70,7 @@ export type {
   RecallAgentMemoryInput,
   RebuildAgentMemoryIndexInput,
   RecordAgentMemoryUsageInput,
+  RecordAgentOperationalEventInput,
   RememberAgentMemoryInput,
 };
 
@@ -120,7 +127,6 @@ const VALID_ACTOR_ROLES = new Set<AgentMemoryActorRole>(AGENT_MEMORY_ACTOR_ROLES
 const VALID_MEMORY_ORIGINS = new Set<AgentMemoryOrigin>(AGENT_MEMORY_ORIGINS);
 const AUTO_PROOF_TYPES = new Set<AgentMemoryType>(["instruction", "decision", "commitment", "preference", "artifact", "action"]);
 const memoryIndexCache = new Map<string, MemoryIndexCacheEntry>();
-const vaultRecordsCache = new Map<string, VaultRecordsCacheEntry>();
 
 type AgentMemoryProofReceipt = GitLawbProof & {
   kind: "agent-memory";
@@ -129,6 +135,7 @@ type AgentMemoryProofReceipt = GitLawbProof & {
     memoryId: string;
     memoryType: AgentMemoryType;
     memoryTitle: string;
+    memoryKey?: string;
     notePath: string;
     contentHash: string;
     recordHash: string;
@@ -173,6 +180,7 @@ type AgentMemoryIndexEntry = {
   memoryType?: string;
   title?: string;
   content?: string;
+  memoryKey?: string;
   status?: AgentMemoryRecord["status"];
   cognitiveStage?: string;
   supersedes?: string[];
@@ -215,11 +223,6 @@ type MemoryIndexCacheEntry = {
   file: string;
   mtimeMs: number;
   size: number;
-  records: AgentMemoryRecord[];
-};
-
-type VaultRecordsCacheEntry = {
-  cachedAt: number;
   records: AgentMemoryRecord[];
 };
 
@@ -460,12 +463,20 @@ function recordFromMarkdown(root: string, file: string, markdown: string): Agent
   const { fields, body } = parseFrontmatter(markdown);
   if (fields.get("type") !== "agent-memory") return null;
   const memoryType = normalizeMemoryType(String(fields.get("memoryType") ?? "context"));
+  const title = String(fields.get("title") ?? basename(file, ".md"));
+  const project = typeof fields.get("project") === "string" ? String(fields.get("project")) : undefined;
   const now = new Date().toISOString();
   return {
     id: String(fields.get("id") ?? basename(file, ".md")),
     type: memoryType,
-    title: String(fields.get("title") ?? basename(file, ".md")),
+    title,
     content: bodyContent(body),
+    memoryKey: canonicalMemoryKey({
+      explicitKey: typeof fields.get("memoryKey") === "string" ? String(fields.get("memoryKey")) : undefined,
+      type: memoryType,
+      title,
+      project,
+    }),
     confidence: normalizeConfidence(Number(fields.get("confidence") ?? 0.7)),
     status: fields.get("status") === "superseded" || fields.get("status") === "archived" ? fields.get("status") as AgentMemoryRecord["status"] : "active",
     cognitiveStage: typeof fields.get("cognitiveStage") === "string" ? normalizeCognitiveStage(String(fields.get("cognitiveStage"))) : undefined,
@@ -508,7 +519,7 @@ function recordFromMarkdown(root: string, file: string, markdown: string): Agent
     tailnetDnsName: typeof fields.get("tailnetDnsName") === "string" ? String(fields.get("tailnetDnsName")) : undefined,
     collectorUrl: typeof fields.get("collectorUrl") === "string" ? String(fields.get("collectorUrl")) : undefined,
     sessionId: typeof fields.get("sessionId") === "string" ? String(fields.get("sessionId")) : undefined,
-    project: typeof fields.get("project") === "string" ? String(fields.get("project")) : undefined,
+    project,
     createdAt: typeof fields.get("createdAt") === "string" ? String(fields.get("createdAt")) : now,
     updatedAt: typeof fields.get("updatedAt") === "string" ? String(fields.get("updatedAt")) : now,
     notePath: toVaultPath(root, file),
@@ -554,7 +565,13 @@ function recordFromVaultMarkdown(root: string, file: string, markdown: string, m
     memoryOrigin: "vault-note",
     source: `Vault note: ${notePath}`,
     project: notePath.startsWith("Projects/") ? notePath.split("/")[1] : undefined,
-    createdAt: typeof fields.get("created") === "string" ? String(fields.get("created")) : updatedAt,
+    createdAt: typeof fields.get("createdAt") === "string"
+      ? String(fields.get("createdAt"))
+      : typeof fields.get("startedAt") === "string"
+        ? String(fields.get("startedAt"))
+        : typeof fields.get("created") === "string"
+          ? String(fields.get("created"))
+          : updatedAt,
     updatedAt,
     notePath,
   };
@@ -566,6 +583,20 @@ function cleanIndexString(value: unknown) {
 
 function cleanStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim())) : undefined;
+}
+
+function sensitiveMemorySurface(input: RememberAgentMemoryInput, content: string) {
+  return [
+    input.title,
+    content,
+    input.memoryKey,
+    input.source,
+    input.collectorUrl,
+    ...(input.tags ?? []),
+    ...(input.metaTags ?? []),
+    ...(input.entities ?? []),
+    ...(input.aliases ?? []),
+  ].filter(Boolean).join("\n");
 }
 
 function recordFromIndexEntry(entry: AgentMemoryIndexEntry): AgentMemoryRecord | null {
@@ -583,6 +614,12 @@ function recordFromIndexEntry(entry: AgentMemoryIndexEntry): AgentMemoryRecord |
     type: memoryType,
     title,
     content,
+    memoryKey: canonicalMemoryKey({
+      explicitKey: cleanIndexString(entry.memoryKey),
+      type: memoryType,
+      title,
+      project: cleanIndexString(entry.project),
+    }),
     confidence: normalizeConfidence(Number(entry.confidence ?? 0.7)),
     status,
     cognitiveStage: entry.cognitiveStage ? normalizeCognitiveStage(entry.cognitiveStage) : undefined,
@@ -645,6 +682,7 @@ function indexEntryForRecord(record: AgentMemoryRecord) {
     memoryType: record.type,
     title: record.title,
     content: record.content,
+    memoryKey: record.memoryKey,
     status: record.status,
     cognitiveStage: record.cognitiveStage,
     supersedes: record.supersedes,
@@ -741,42 +779,43 @@ async function candidateVaultFiles(root: string, query?: string): Promise<string
   return walkVaultMarkdown(root);
 }
 
+function cachedVaultRecord(root: string, file: string) {
+  return readCachedVaultRecord(root, file, MAX_VAULT_NOTE_BYTES, (markdown, mtimeMs) => recordFromVaultMarkdown(root, file, markdown, mtimeMs));
+}
+
 async function readVaultNoteRecords(root: string, query?: string) {
   const cacheKey = `${root}::${searchTermsFromQuery(query).join(" ")}`;
-  const cached = vaultRecordsCache.get(cacheKey);
+  const cached = getCachedVaultQueryRecords(cacheKey);
   if (cached && Date.now() - cached.cachedAt <= VAULT_RECORD_CACHE_TTL_MS) return cached.records;
   const indexed = query?.trim()
     ? await searchFullVaultSearchIndex({ root, query, limit: 400 }).catch(() => null)
     : null;
   if (indexed?.hits.length) {
     const records: AgentMemoryRecord[] = [];
+    const topSearchScore = Math.max(0, indexed.hits[0]?.score ?? 0);
     for (const hit of indexed.hits) {
       const file = join(root, hit.path);
       assertInside(root, file);
       if (shouldSkipVaultPath(root, file, false)) continue;
-      const st = await stat(file).catch(() => null);
-      if (!st || st.size > MAX_VAULT_NOTE_BYTES) continue;
-      const markdown = await readFile(file, "utf8").catch(() => "");
-      const record = recordFromVaultMarkdown(root, file, markdown, st.mtimeMs);
-      if (record) {
-        record.searchScore = hit.score;
-        record.searchCollection = hit.collection;
-        records.push(record);
+      const baseRecord = await cachedVaultRecord(root, file);
+      if (baseRecord) {
+        records.push(withAgentMemorySearchMetadata(baseRecord, {
+          searchScore: hit.score,
+          searchScoreNormalized: topSearchScore > 0 ? Math.max(0, hit.score) / topSearchScore : undefined,
+          searchCollection: hit.collection,
+        }));
       }
     }
-    vaultRecordsCache.set(cacheKey, { cachedAt: Date.now(), records });
+    cacheVaultQueryRecords(cacheKey, records);
     return records;
   }
   const files = await candidateVaultFiles(root, query);
   const records: AgentMemoryRecord[] = [];
   for (const file of files) {
-    const st = await stat(file).catch(() => null);
-    if (!st || st.size > MAX_VAULT_NOTE_BYTES) continue;
-    const markdown = await readFile(file, "utf8").catch(() => "");
-    const record = recordFromVaultMarkdown(root, file, markdown, st.mtimeMs);
+    const record = await cachedVaultRecord(root, file);
     if (record) records.push(record);
   }
-  vaultRecordsCache.set(cacheKey, { cachedAt: Date.now(), records });
+  cacheVaultQueryRecords(cacheKey, records);
   return records;
 }
 
@@ -805,11 +844,14 @@ function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryI
   const type = input.type ? normalizeMemoryType(input.type) : null;
   const tags = normalizeTags(input.tags);
   const project = input.project?.trim().toLowerCase();
-  const candidateRecords = records
+  const visibleRecords = records
     .filter((record) => recordVisibleForRecall(record, input))
     .filter((record) => !type || record.type === type)
     .filter((record) => !project || record.project?.toLowerCase() === project)
     .filter((record) => !tags.length || tags.every((tag) => record.tags.includes(tag)));
+  const candidateRecords = temporalRecallMode(input) === "current"
+    ? selectCanonicalMemoryHeads(visibleRecords).records
+    : visibleRecords;
   const lexicalScores = bm25ScoresForRecords(candidateRecords, input);
   return candidateRecords
     .map((record) => {
@@ -819,7 +861,7 @@ function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryI
         score: scored.score,
         matched: scored.matched,
         scoreDetails: scored.scoreDetails,
-        excerpt: redactSensitiveText(compactContent(record.content, 320)),
+        excerpt: redactSensitiveText(record.notePath.startsWith("Memory/Conversations/") ? queryFocusedConversationExcerpt(record.content, input.query, conversationMemoryExcerptBudget(input.query)) : queryCenteredMemoryExcerpt(record.content, input.query, 320)),
       };
     })
     .filter((hit) => !input.query?.trim() || hit.matched.length > 0)
@@ -883,6 +925,7 @@ function memoryMarkdown(record: AgentMemoryRecord) {
       id: record.id,
       memoryType: record.type,
       title: record.title,
+      memoryKey: record.memoryKey,
       status: record.status,
       confidence: record.confidence,
       cognitiveStage: record.cognitiveStage,
@@ -927,6 +970,7 @@ function memoryMarkdown(record: AgentMemoryRecord) {
     "## Metadata",
     "",
     `- Type: ${record.type}`,
+    record.memoryKey ? `- Memory Key: ${record.memoryKey}` : "",
     `- Confidence: ${record.confidence.toFixed(2)}`,
     record.cognitiveStage ? `- Cognitive Stage: ${record.cognitiveStage}` : "",
     record.evolutionType ? `- Evolution Type: ${record.evolutionType}` : "",
@@ -984,6 +1028,7 @@ function memoryRecordHash(record: AgentMemoryRecord) {
     id: record.id,
     type: record.type,
     title: record.title,
+    memoryKey: record.memoryKey,
     contentHash: sha256(record.content.trim()),
     confidence: record.confidence,
     status: record.status,
@@ -1044,6 +1089,7 @@ async function createMemoryProofReceipt(root: string, record: AgentMemoryRecord)
     memoryId: record.id,
     memoryType: record.type,
     memoryTitle: record.title,
+    memoryKey: record.memoryKey,
     notePath: record.notePath,
     contentHash,
     recordHash,
@@ -1151,7 +1197,7 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
   const type = normalizeMemoryType(input.type);
   // Fail closed on high-confidence secret shapes; the vault syncs across
   // machines and recall feeds model context.
-  const sensitive = detectSensitiveContent(`${input.title ?? ""}\n${content}`);
+  const sensitive = detectSensitiveContent(sensitiveMemorySurface(input, content));
   if (sensitive.blockers.length && input.allowSensitiveContent !== true) {
     throw new Error(`Memory content looks like it contains ${sensitive.blockers.join(", ")}. Store credential status by name only (never values or raw Tailnet IPs), or pass allowSensitiveContent: true if this is a false positive.`);
   }
@@ -1160,6 +1206,20 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
   // same-content writes in the same second would otherwise collide on id.
   const hash = createHash("sha256").update(`${type}\n${content}\n${now}\n${randomUUID()}`).digest("hex").slice(0, 10);
   const title = input.title?.trim() || compactContent(content, 80);
+  const memoryKey = canonicalMemoryKey({ explicitKey: input.memoryKey, type, title, project: input.project });
+  const existingCanonicalHead = (await readMemoryRecords(root))
+    .filter((record) => record.status === "active" && record.memoryKey === memoryKey)
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+  if (existingCanonicalHead) {
+    return {
+      vaultPath: root,
+      blocked: true as const,
+      blockReason: `A canonical memory head already exists for ${memoryKey}: "${existingCanonicalHead.title}" (${existingCanonicalHead.id}). Evolve that head instead (hive-brain evolve --memory-id ${existingCanonicalHead.id} --content "..." --reason "...") or choose a different --memory-key for a genuinely separate fact.`,
+      canonicalHeadConflict: existingCanonicalHead,
+      possibleConflicts: [existingCanonicalHead],
+      sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
+    };
+  }
   const id = `mem-${now.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
   const folder = join(root, MEMORY_FOLDER, type);
   const file = join(folder, `${now.slice(0, 10)}-${safeSlug(title)}-${hash}.md`);
@@ -1183,6 +1243,7 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
     type,
     title,
     content,
+    memoryKey,
     confidence: normalizeConfidence(input.confidence),
     status: "active",
     cognitiveStage: normalizeCognitiveStage(input.cognitiveStage),
@@ -1271,15 +1332,10 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
 }
 
 export async function rememberActionAgentMemory(input: RememberAgentMemoryInput) {
-  return rememberAgentMemory({
+  return recordAgentOperationalEvent({
     ...input,
-    type: "action",
     actorRole: input.actorRole ?? "assistant",
     memoryOrigin: input.memoryOrigin ?? "assistant-action",
-    proof: input.proof ?? "auto",
-    // Action receipts are legitimately repetitive (same shape per handoff /
-    // orchestrator event) so the duplicate gate defaults open here.
-    allowDuplicate: input.allowDuplicate ?? true,
     tags: normalizeTags(["action", ...(input.tags ?? [])]),
   });
 }
@@ -1308,7 +1364,7 @@ function mergeEvolutionTags(input: EvolveAgentMemoryInput, previous: AgentMemory
 export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
   const content = input.content?.trim();
   if (!content) throw new Error("Evolved memory content is required.");
-  const sensitive = detectSensitiveContent(`${input.title ?? ""}\n${content}`);
+  const sensitive = detectSensitiveContent(sensitiveMemorySurface(input, content));
   if (sensitive.blockers.length && input.allowSensitiveContent !== true) {
     throw new Error(`Evolved memory content looks like it contains ${sensitive.blockers.join(", ")}. Store credential status by name only (never values or raw Tailnet IPs), or pass allowSensitiveContent: true if this is a false positive.`);
   }
@@ -1323,6 +1379,12 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
   // same-content writes in the same second would otherwise collide on id.
   const hash = createHash("sha256").update(`${type}\n${content}\n${now}\n${randomUUID()}`).digest("hex").slice(0, 10);
   const title = input.title?.trim() || primary.title || compactContent(content, 80);
+  const memoryKey = canonicalMemoryKey({
+    explicitKey: input.memoryKey ?? primary.memoryKey,
+    type,
+    title,
+    project: input.project ?? primary.project,
+  });
   const id = `mem-${now.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
   const folder = join(root, MEMORY_FOLDER, type);
   const file = join(folder, `${now.slice(0, 10)}-${safeSlug(title)}-${hash}.md`);
@@ -1347,6 +1409,7 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
     type,
     title,
     content,
+    memoryKey,
     confidence: normalizeConfidence(input.confidence ?? Math.max(...previousRecords.map((item) => item.confidence), 0.7)),
     status: "active",
     cognitiveStage: normalizeCognitiveStage(input.cognitiveStage, "system2"),
@@ -1520,11 +1583,15 @@ export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) 
   // On informational queries (4+ meaningful terms) a single incidental word
   // match is noise: require 2+ meaningful matches or a strong signal
   // (exact phrase / semantic similarity).
-  const requireMultiMatch = minScore > 0 && queryWordsForRecall(recalled.query ?? "").length >= 4;
+  const meaningfulQueryTerms = [...new Set(queryWordsForRecall(recalled.query ?? ""))];
+  const requireMultiMatch = minScore > 0 && meaningfulQueryTerms.length >= 4;
+  const requiredDirectMatches = recalled.queryDerived
+    ? 2
+    : Math.max(2, Math.ceil(meaningfulQueryTerms.length * 0.3));
   const keptHits = recalled.hits.filter((hit) => {
     if (minScore && hit.score < minScore) return false;
     if (!requireMultiMatch) return true;
-    return meaningfulMatchCount(hit.matched) >= 2 || hit.matched.includes("exact-query") || hit.matched.includes("semantic");
+    return meaningfulMatchCount(hit.matched) >= requiredDirectMatches || hit.matched.includes("exact-query") || hit.matched.includes("semantic");
   });
   const result = {
     ...recalled,
@@ -1570,33 +1637,19 @@ const STALE_ARCHIVE_AGE_MS = 120 * 86_400_000;
 const NEAR_DUPLICATE_SIMILARITY = 0.5;
 const MAX_CONSOLIDATION_RECORDS = 600;
 
-function distinctiveTokenSet(record: AgentMemoryRecord) {
-  return new Set(bm25Tokens(`${record.title}\n${record.content}`).filter((token) => !RECALL_STOP_WORDS.has(token)));
-}
-
-function tokenSimilarity(left: Set<string>, right: Set<string>) {
-  if (!left.size || !right.size) return 0;
-  let shared = 0;
-  const [small, large] = left.size <= right.size ? [left, right] : [right, left];
-  for (const token of small) {
-    if (large.has(token)) shared += 1;
-  }
-  return shared / Math.min(left.size, right.size);
-}
-
 // Near-duplicate clusters among active memories of the same type; these are
 // the writes that should have been evolutions.
 export function findNearDuplicateGroups(records: AgentMemoryRecord[], minSimilarity = NEAR_DUPLICATE_SIMILARITY) {
   const candidates = [...records]
     .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
     .slice(0, MAX_CONSOLIDATION_RECORDS);
-  const tokens = candidates.map(distinctiveTokenSet);
+  const tokens = candidates.map(distinctiveMemoryTokens);
   const parents = candidates.map((_, index) => index);
   const find = (index: number): number => (parents[index] === index ? index : (parents[index] = find(parents[index])));
   for (let left = 0; left < candidates.length; left += 1) {
     for (let right = left + 1; right < candidates.length; right += 1) {
       if (candidates[left].type !== candidates[right].type) continue;
-      if (tokenSimilarity(tokens[left], tokens[right]) >= minSimilarity) parents[find(left)] = find(right);
+      if (tokenSetSimilarity(tokens[left], tokens[right]) >= minSimilarity) parents[find(left)] = find(right);
     }
   }
   const groups = new Map<number, AgentMemoryRecord[]>();
@@ -1641,7 +1694,8 @@ export async function consolidateAgentMemory(input: { vaultPath?: string; applyA
   const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: Boolean(input.applyArchives) });
   await access(root, constants.R_OK);
   const records = await withAgentMemoryUsage(root, await readMemoryRecords(root));
-  const active = records.filter((record) => record.status === "active");
+  const durableRecords = records.filter((record) => record.type !== "action");
+  const active = durableRecords.filter((record) => record.status === "active");
   const duplicateGroups = findNearDuplicateGroups(active).map((group) => {
     const [canonical, ...older] = group;
     return {
@@ -1656,6 +1710,7 @@ export async function consolidateAgentMemory(input: { vaultPath?: string; applyA
       evolveHint: `hive-brain evolve --memory-id ${canonical.id} --supersedes ${older.map((record) => record.id).join(",")} --content "<merged durable memory>" --reason "consolidate near-duplicates"`,
     };
   });
+  const correctionCandidates = findExplicitCorrectionCandidates(active);
   const archiveCandidates = staleArchiveCandidates(active);
   const archived = input.applyArchives ? await archiveMemoryRecords(root, archiveCandidates) : [];
   const entityCounts = new Map<string, { entity: string; records: AgentMemoryRecord[] }>();
@@ -1686,9 +1741,11 @@ export async function consolidateAgentMemory(input: { vaultPath?: string; applyA
   const embeddings = await backfillAgentMemoryEmbeddings(root, active).catch(() => undefined);
   return {
     vaultPath: root,
-    scanned: records.length,
+    scanned: durableRecords.length,
     active: active.length,
+    legacyOperationalIgnored: records.length - durableRecords.length,
     duplicateGroups,
+    correctionCandidates,
     archiveCandidates: archiveCandidates.map((record) => ({ id: record.id, title: record.title, type: record.type, createdAt: record.createdAt, notePath: record.notePath })),
     archivedCount: archived.length,
     archivedIds: archived.map((record) => record.id),
@@ -1711,10 +1768,13 @@ export async function healthAgentMemory(input: { vaultPath?: string } = {}) {
   const root = resolveObsidianVaultPath(input.vaultPath);
   await access(root, constants.R_OK);
   const records = await withAgentMemoryUsage(root, await readMemoryRecords(root));
-  const active = records.filter((record) => record.status === "active");
+  const durableRecords = records.filter((record) => record.type !== "action");
+  const active = durableRecords.filter((record) => record.status === "active");
+  const operationalLegacy = records.filter((record) => record.status === "active" && record.type === "action");
+  const canonicalHeads = selectCanonicalMemoryHeads(active);
   const byType: Record<string, number> = {};
   const byStatus: Record<string, number> = {};
-  for (const record of records) {
+  for (const record of durableRecords) {
     byType[record.type] = (byType[record.type] ?? 0) + 1;
     byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
   }
@@ -1725,7 +1785,7 @@ export async function healthAgentMemory(input: { vaultPath?: string } = {}) {
     jsonlFileStats(root, PROOF_INDEX_PATH),
   ]);
   const proofStatusCounts: Record<string, number> = {};
-  for (const record of records) {
+  for (const record of durableRecords) {
     if (record.proofStatus) proofStatusCounts[record.proofStatus] = (proofStatusCounts[record.proofStatus] ?? 0) + 1;
   }
   let retrievedTotal = 0;
@@ -1742,18 +1802,19 @@ export async function healthAgentMemory(input: { vaultPath?: string } = {}) {
     agentMemoryEmbeddingsCoverage(root, active).catch(() => null),
     safeGitLawbStatus(),
   ]);
-  const evolutionChains = new Set(records.filter((record) => record.evolutionRootId).map((record) => record.evolutionRootId));
+  const evolutionChains = new Set(durableRecords.filter((record) => record.evolutionRootId).map((record) => record.evolutionRootId));
   return {
     vaultPath: root,
     generatedAt: new Date().toISOString(),
     memories: {
-      total: records.length,
+      total: durableRecords.length,
       active: active.length,
       byType,
       byStatus,
       evolvedChains: evolutionChains.size,
       supersededCount: byStatus.superseded ?? 0,
       neverRetrievedActive: neverRetrieved,
+      legacyOperationalActive: operationalLegacy.length,
     },
     usage: {
       retrievedTotal,
@@ -1777,6 +1838,12 @@ export async function healthAgentMemory(input: { vaultPath?: string } = {}) {
       groups: duplicateGroups.length,
       largestGroup: duplicateGroups[0]?.length ?? 0,
       affectedMemories: duplicateGroups.reduce((sum, group) => sum + group.length, 0),
+    },
+    canonicalHeads: {
+      heads: canonicalHeads.records.filter((record) => record.status === "active").length,
+      conflicts: canonicalHeads.conflicts.length,
+      affectedMemories: canonicalHeads.conflicts.reduce((sum, conflict) => sum + conflict.memberIds.length, 0),
+      groups: canonicalHeads.conflicts,
     },
   };
 }

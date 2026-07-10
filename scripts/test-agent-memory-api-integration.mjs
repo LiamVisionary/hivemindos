@@ -94,29 +94,20 @@ const aliasRecall = await postMemory({
 assert.equal(aliasRecall.hits[0]?.id, aliasWrite.record.id, "alias recall should find the alias-linked record");
 assert.ok(aliasRecall.hits[0]?.matched.some((match) => match.startsWith("entity:GitLawb")), "alias match should be reported");
 
-const actionWrite = await postMemory({
-  action: "remember-action",
-  vaultPath,
+const legacyActionRecord = {
+  timestamp: "2026-01-20T00:00:00.000Z",
+  action: "remember",
+  id: "mem-legacy-handoff-receipt",
+  memoryType: "action",
   title: "Handoff receipt",
   content: "Assistant handed task queen-123 to Hermes on the selected machine and recorded the transfer receipt.",
-  agentName: "Queen Bee",
-  runtime: "codex",
-  project: "HivemindOS",
-});
-assert.equal(actionWrite.record.type, "action", "remember-action should write action memory type");
-assert.equal(actionWrite.record.actorRole, "assistant", "remember-action should default actorRole");
-assert.equal(actionWrite.record.memoryOrigin, "assistant-action", "remember-action should default memoryOrigin");
-assert.ok(actionWrite.record.tags.includes("action"), "remember-action should tag action memories");
-
-const actionRecall = await postMemory({
-  action: "recall",
-  vaultPath,
-  type: "action",
-  query: "handoff receipt Hermes",
-  scope: "agent-memory",
-  limit: 3,
-});
-assert.equal(actionRecall.hits[0]?.id, actionWrite.record.id, "action memory should be recallable by type and content");
+  status: "active",
+  notePath: "Memory/Distillations/Agent Memory/action/legacy-handoff.md",
+  confidence: 0.8,
+  tags: ["action", "receipt"],
+  createdAt: "2026-01-20T00:00:00.000Z",
+  updatedAt: "2026-01-20T00:00:00.000Z",
+};
 
 const oldRecord = {
   timestamp: "2026-01-01T00:00:00.000Z",
@@ -156,8 +147,27 @@ await write(indexPath, [
   JSON.stringify(newRecord),
   JSON.stringify({ ...entityWrite.record, action: "remember", memoryType: entityWrite.record.type }),
   JSON.stringify({ ...aliasWrite.record, action: "remember", memoryType: aliasWrite.record.type }),
-  JSON.stringify({ ...actionWrite.record, action: "remember", memoryType: actionWrite.record.type }),
+  JSON.stringify(legacyActionRecord),
 ].join("\n") + "\n");
+
+const defaultActionRecall = await postMemory({
+  action: "recall",
+  vaultPath,
+  query: "handoff receipt Hermes",
+  scope: "agent-memory",
+  limit: 3,
+});
+assert.equal(defaultActionRecall.hits.some((hit) => hit.id === legacyActionRecord.id), false, "legacy operational receipts should stay out of default recall");
+
+const actionRecall = await postMemory({
+  action: "recall",
+  vaultPath,
+  type: "action",
+  query: "handoff receipt Hermes",
+  scope: "agent-memory",
+  limit: 3,
+});
+assert.equal(actionRecall.hits[0]?.id, legacyActionRecord.id, "explicit action recall should preserve access to legacy receipts");
 
 const currentRecall = await postMemory({
   action: "recall",
@@ -218,7 +228,7 @@ console.log(JSON.stringify({
   assertions: {
     rememberEntities: true,
     aliasRecall: true,
-    actionMemory: true,
+    operationalMemorySeparation: true,
     temporalCurrentHistoricalAsOf: true,
     usageTelemetry: true,
     scoreDetails: true,

@@ -3,6 +3,7 @@ import { searchContextIndex, type ContextConnectedApp, type ContextConnectedAppR
 import { createContextXrayManifestFromContextIndex } from "@/lib/services/context-xray";
 import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
 import { generationMetricsContext } from "@/lib/services/generation-metrics";
+import { buildConnectedMcpCapabilityContext } from "@/lib/services/mcp/capability-context";
 import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import type { BeeWorkerClass, SharedVaultConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
@@ -252,13 +253,16 @@ function dashboardOriginFor(value: string) {
 function formatTaskRetrievalItem(hit: RetrievalHit, index: number) {
   const item = hit.item;
   const methods = item.methods?.length ? ` [${item.methods.join(", ")}]` : "";
+  const hiveActionId = item.id.startsWith("hive-action:") ? item.id.slice("hive-action:".length) : "";
   return [
     `${index + 1}. ${item.kind}: ${item.title}${methods}`,
+    `   capability id: ${item.id}`,
+    hiveActionId ? `   invoke: surface=hive_action; capabilityId=${hiveActionId}` : "",
     `   matched: ${hit.label}`,
     `   summary: ${compactContextText(item.summary, 260)}`,
     `   tags: ${safeContextTags(item) || "none"}`,
     `   locator: ${contextItemLocator(item)}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function taskRetrievalQueries(query: string) {
@@ -554,6 +558,7 @@ export async function buildTaskRetrievalContextResult(input: {
   const imageIntent = imageGenerationRequest(trimmed);
   const localImageIntent = localImageGenerationRequest(trimmed);
   const generationPerformanceContext = await generationMetricsContext(trimmed).catch(() => "");
+  const connectedMcpContext = buildConnectedMcpCapabilityContext();
   const results = await Promise.all(queries.map(async (entry) => {
     const result = await searchContextIndex({
       query: entry.query,
@@ -601,11 +606,12 @@ export async function buildTaskRetrievalContextResult(input: {
     `- Queries run: ${queries.length}; retrieval hits: ${hits.length}; connected apps observed: ${connectedApps?.length ?? "unknown"}.`,
     retrievalSummary,
     "- For connected apps and app endpoints, tool-capable runtimes should resolve fresh URLs through the Apps view APIs instead of hard-coding local or Tailnet addresses.",
-    "- If a real HTTP/tool bridge is available, prefer the dashboard proxy POST /api/fleet/apps/request with { serviceKind or appId, method, path, body }; otherwise describe the route and ask for execution through HivemindOS.",
+    "- Use a dedicated native tool such as generate_image or generate_video when one is exposed for the user's exact intent. Otherwise, tool-capable runtimes should call invoke_hive_capability for retrieved MCP tools, connected-app endpoints, and Hive Actions. It resolves live targets and enforces read/write confirmation policy; do not invent provider-specific tool names.",
     input.agent?.workerClass
       ? `- Worker class lens: ${input.agent.workerClass}. Hits marked class-preferred or agent task preference match this agent's specialization; prefer them on ties, but any listed capability remains usable.`
       : "",
     connectedAppsRosterContext(connectedApps),
+    connectedMcpContext ? untrustedContextMessage("Connected MCP capability inventory", connectedMcpContext).content : "",
     userAppPreferenceContext(connectedApps, trimmed),
     loopEngineeringCapabilityContext(trimmed),
     imageGenerationCapabilityContext(trimmed, input.runtime, connectedApps),

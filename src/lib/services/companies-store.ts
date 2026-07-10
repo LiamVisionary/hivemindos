@@ -42,6 +42,7 @@ import type {
   ImportedWorkflow,
 } from "@/lib/types/company-import";
 import { normalizeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
+import { normalizeCompanyExecutionConfig } from "@/lib/services/company-execution-capabilities";
 import {
   ROLLING_DAY_MS,
   ROLLING_MONTH_MS,
@@ -167,6 +168,7 @@ function companyDefinitionOf(record: Company): Company {
     autonomy: record.autonomy,
     autonomyPause: record.autonomyPause,
     process: record.process,
+    execution: record.execution,
     flowTemplateId: record.flowTemplateId,
     homeMachineKey: record.homeMachineKey,
     projectId: record.projectId,
@@ -965,6 +967,8 @@ export type UpsertCompanyInput = {
   homeMachineKey?: string;
   /** Project-registry id of the company's domain code repo. */
   projectId?: string;
+  /** Autonomy execution engine and, for AEON, its saved profile + skill binding. */
+  execution?: Company["execution"];
   /** Official product catalog (what the company sells, at what price). */
   products?: CompanyProductCatalog;
   /** Explicit company approval policy overrides. */
@@ -1022,6 +1026,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     autonomy: existing?.autonomy,
     autonomyPause: input.autonomyPause !== undefined ? normalizeAutonomyPause(input.autonomyPause) : existing?.autonomyPause,
     process: existing?.process,
+    execution: input.execution !== undefined ? normalizeCompanyExecutionConfig(input.execution) : existing?.execution,
     flowTemplateId: existing?.flowTemplateId,
     // New companies are claimed by the machine that created them so exactly one
     // fleet driver auto-dispatches (definitions replicate through the vault).

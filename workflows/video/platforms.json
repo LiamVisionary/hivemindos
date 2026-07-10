@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "provenance": "derived",
+  "license": "Facts derived from vendor documentation; this compilation is MIT (same as this repository).",
+  "verifiedOn": "2026-07-10",
+  "note": "Every value below was read from the vendor's own documentation on verifiedOn, not from memory or from third-party blog roundups. Fields marked volatile:true are NOT fixed constants — resolve them at runtime from the cited source. Re-verify the whole file if verifiedOn is more than ~90 days old; platform limits change without notice and a stale spec fails a render silently.",
+  "count": 3,
+  "omitted": {
+    "safeAreaInsets": "Deliberately omitted. UI-overlay safe areas (caption bars, action rails) are widely repeated in blog posts but we found no primary vendor source that states them. Rather than encode a guess that agents would trust, we leave them out. If you need them, measure against the live app and add them with a source."
+  },
+  "platforms": [
+    {
+      "id": "youtube-shorts",
+      "name": "YouTube Shorts",
+      "source": "https://support.google.com/youtube/answer/10059070",
+      "orientation": "vertical",
+      "recommendedAspectRatio": "9:16",
+      "maxResolution": "1080p",
+      "maxDurationSec": 180,
+      "volatile": [],
+      "sourceQuotes": {
+        "maxDurationSec": "short-form videos that are up to 3 minutes long",
+        "maxResolution": "You can upload Short videos with a maximum resolution of 1080p."
+      },
+      "unknown": [
+        "maxFileSizeMB",
+        "exactAspectRatioBounds",
+        "codecRequirements"
+      ]
+    },
+    {
+      "id": "instagram-reels",
+      "name": "Instagram Reels",
+      "source": "https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media",
+      "orientation": "vertical",
+      "recommendedAspectRatio": "9:16",
+      "aspectRatioBounds": { "min": "0.01:1", "max": "10:1" },
+      "container": ["MOV", "MP4"],
+      "containerNote": "MPEG-4 Part 14, no edit lists, moov atom at the front of the file.",
+      "videoCodec": ["HEVC", "H264"],
+      "videoCodecNote": "progressive scan, closed GOP, 4:2:0 chroma subsampling",
+      "audioCodec": "AAC",
+      "audioSampleRateMaxHz": 48000,
+      "audioChannelsMax": 2,
+      "audioBitrateKbps": 128,
+      "videoBitrateMaxMbps": 25,
+      "videoBitrateMode": "VBR",
+      "maxWidthPx": 1920,
+      "frameRateRange": { "min": 23, "max": 60 },
+      "minDurationSec": 3,
+      "maxDurationSec": 900,
+      "maxFileSizeMB": 300,
+      "volatile": [],
+      "sourceQuotes": {
+        "aspectRatioBounds": "between 0.01:1 and 10:1 but we recommend 9:16 to avoid cropping or blank space",
+        "duration": "15 mins maximum, 3 seconds minimum",
+        "maxFileSizeMB": "300MB maximum",
+        "frameRateRange": "23-60 FPS."
+      },
+      "unknown": []
+    },
+    {
+      "id": "tiktok",
+      "name": "TikTok",
+      "source": "https://developers.tiktok.com/doc/content-posting-api-reference-upload-video",
+      "orientation": "vertical",
+      "recommendedAspectRatio": "9:16",
+      "container": ["MP4"],
+      "videoCodec": ["H264"],
+      "maxDurationSec": null,
+      "maxDurationResolver": {
+        "kind": "runtime-api",
+        "endpoint": "creator_info",
+        "field": "max_video_post_duration_sec",
+        "why": "TikTok does not publish a single fixed upload duration. The cap is per-creator and is returned by the creator_info API, which clients are required to check before posting. Hardcoding a number here would be wrong for most accounts."
+      },
+      "chunkedUpload": {
+        "minChunkBytes": 5242880,
+        "maxChunkBytes": 67108864,
+        "finalChunkMaxBytes": 134217728,
+        "wholeUploadBelowBytes": 5242880,
+        "note": "Files under 5 MB must be uploaded whole; files over 64 MB must be chunked."
+      },
+      "volatile": ["maxDurationSec"],
+      "unknown": [
+        "maxFileSizeMB",
+        "maxResolution",
+        "frameRateRange"
+      ]
+    }
+  ]
+}

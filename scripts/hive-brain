@@ -5,6 +5,9 @@ import path from "node:path";
 import http from "node:http";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { canonicalMemoryKey, selectCanonicalMemoryHeads } from "./lib/hive-brain-canonical.mjs";
+import { atomicWriteFileSync } from "./lib/hive-brain-atomic.mjs";
+import { recordLocalOperationalEvent } from "./lib/hive-brain-operational.mjs";
 import {
   AGENT_MEMORY_ANSWER_MIN_SCORE,
   bm25ScoresForRecords,
@@ -16,6 +19,7 @@ import {
   redactSecrets,
   scoreAgentMemory,
   shouldUseDistilledMemoryOnly,
+  temporalRecallMode,
 } from "./lib/hive-brain-scoring.mjs";
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
@@ -54,9 +58,11 @@ const EXCLUDE_PREFIXES = [
 function usage() {
   console.error(`Usage:
   hive-brain answer "query" [--limit N] [--min-score N] [--scope tiered|agent-memory|full-vault] [--workspace ID] [--json]
-  hive-brain recall "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--workspace ID] [--json]
-  hive-brain remember --type TYPE --title TITLE --content TEXT [--tag TAG] [--source TEXT] [--allow-duplicate]
+  hive-brain recall "query" [--limit N] [--scope tiered|agent-memory|full-vault] [--include-operational] [--workspace ID] [--json]
+  hive-brain remember --type TYPE --title TITLE --content TEXT [--memory-key KEY] [--tag TAG] [--source TEXT] [--allow-duplicate]
   hive-brain evolve --memory-id ID --content TEXT [--title TITLE] [--reason TEXT]
+  hive-brain record-operation --title TITLE --content TEXT [--operation-key KEY] [--outcome success|failure|blocked|cancelled] [--task-id ID] [--failure-key KEY]
+  hive-brain mine-patterns [--since ISO_DATE] [--project PROJECT] [--enqueue] [--json]
   hive-brain record-usage --memory-ids ID[,ID...] [--usage-type retrieved|final-answer] [--query TEXT] [--context TEXT]
   hive-brain health [--json]
   hive-brain consolidate [--apply-archives] [--json]
@@ -67,6 +73,8 @@ Examples:
   hive-brain answer "what fruit does liam like?"
   hive-brain recall "BYOK Agent Calls" --scope full-vault --limit 5
   hive-brain evolve --memory-id mem-... --content "Updated durable memory"
+  hive-brain record-operation --title "Provider request" --content "Request timed out" --outcome failure --failure-key provider-timeout --task-id task-123
+  hive-brain mine-patterns --json
   hive-brain record-usage --memory-ids mem-abc --usage-type final-answer --context "cited in reply"
   hive-brain answer "query" --no-api
 
@@ -156,6 +164,10 @@ function parseArgs(argv) {
       input.allowSensitiveContent = true;
     } else if (arg === "--apply-archives") {
       input.applyArchives = true;
+    } else if (arg === "--enqueue") {
+      input.enqueueProposals = true;
+    } else if (arg === "--include-operational") {
+      input.includeOperational = true;
     } else if (arg === "--limit" || arg === "-n") {
       input.limit = Number(next || input.limit);
       index += 1;
@@ -183,6 +195,24 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--memory-id") {
       input.memoryId = next;
+      index += 1;
+    } else if (arg === "--memory-key") {
+      input.memoryKey = next;
+      index += 1;
+    } else if (arg === "--operation-key") {
+      input.operationKey = next;
+      index += 1;
+    } else if (arg === "--failure-key") {
+      input.failureKey = next;
+      index += 1;
+    } else if (arg === "--outcome") {
+      input.outcome = next;
+      index += 1;
+    } else if (arg === "--task-id") {
+      input.taskId = next;
+      index += 1;
+    } else if (arg === "--since") {
+      input.since = next;
       index += 1;
     } else if (arg === "--memory-ids") {
       input.memoryIds.push(...String(next || "").split(",").map((id) => id.trim()).filter(Boolean));
@@ -367,6 +397,11 @@ function writePayload(input, action) {
     source: input.source || "hive-brain cli",
     vaultPath: input.vaultPath,
     memoryId: input.memoryId,
+    memoryKey: input.memoryKey,
+    operationKey: input.operationKey,
+    failureKey: input.failureKey,
+    outcome: input.outcome,
+    taskId: input.taskId,
     supersedes: input.supersedes,
     cognitiveStage: input.cognitiveStage,
     evidenceCount: input.evidenceCount,
@@ -407,8 +442,17 @@ async function callApi(input) {
       activeDeviceToken = token;
       try {
         let result;
-        if (input.action === "remember" || input.action === "evolve") {
+        if (input.action === "remember" || input.action === "evolve" || input.action === "record-operation") {
           result = await requestJson(base, "POST", writePayload(input, input.action));
+        } else if (input.action === "mine-patterns") {
+          result = await requestJson(base, "POST", {
+            action: "mine-patterns",
+            enqueueProposals: Boolean(input.enqueueProposals),
+            since: input.since,
+            project: input.project,
+            query: input.usageQuery,
+            limit: input.limit,
+          });
         } else if (input.action === "record-usage") {
           result = await requestJson(base, "POST", {
             action: "record-usage",
@@ -438,6 +482,7 @@ async function callApi(input) {
             limit: input.limit,
             minScore: input.minScore,
             scope: input.scope,
+            includeOperational: input.includeOperational ? 1 : undefined,
             vaultPath: input.vaultPath,
           });
         }
@@ -695,7 +740,8 @@ function rebuildFullVaultIndex(root) {
   }
   const file = path.join(root, FULL_VAULT_INDEX_PATH);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""), "utf8");
+  const payload = records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
+  atomicWriteFileSync(file, payload);
   return records;
 }
 
@@ -864,6 +910,12 @@ function recordsFromIndex(root) {
         title: entry.title,
         content: entry.content,
         type: entry.memoryType || "context",
+        memoryKey: canonicalMemoryKey({
+          explicitKey: entry.memoryKey,
+          type: entry.memoryType || "context",
+          title: entry.title,
+          project: entry.project,
+        }),
         status: entry.status || "active",
         cognitiveStage: entry.cognitiveStage,
         supersedes: Array.isArray(entry.supersedes) ? entry.supersedes : [],
@@ -909,6 +961,12 @@ function recordFromMarkdown(root, file, typedOnly = false) {
     title,
     content,
     type: fields.get("memoryType") || fields.get("type") || "context",
+    memoryKey: typedOnly ? canonicalMemoryKey({
+      explicitKey: fields.get("memoryKey"),
+      type: fields.get("memoryType") || fields.get("type") || "context",
+      title,
+      project: fields.get("project"),
+    }) : undefined,
     status: fields.get("status") || "active",
     cognitiveStage: fields.get("cognitiveStage"),
     supersedes: Array.isArray(fields.get("supersedes")) ? fields.get("supersedes") : [],
@@ -1026,7 +1084,7 @@ async function fallbackRecall(input) {
   const limit = Math.min(Math.max(Math.trunc(Number(input.limit || 5)), 1), 50);
   const scope = String(input.scope || "tiered").toLowerCase();
   const { query: effectiveQuery, derived } = extractRecallQuery(input.query);
-  const scoringInput = { query: effectiveQuery, type: input.type };
+  const scoringInput = { query: effectiveQuery, type: input.type, includeOperational: input.includeOperational };
   let memoryRecords = recordsFromIndex(root);
   if (!memoryRecords.length) {
     const folder = path.join(root, MEMORY_FOLDER);
@@ -1038,7 +1096,10 @@ async function fallbackRecall(input) {
     if (summary) record.usage = summary;
   }
   const semantic = await semanticScores(root, effectiveQuery).catch(() => new Map());
-  const activeMemoryRecords = memoryRecords.filter((record) => recordVisibleForRecall(record, scoringInput));
+  const visibleMemoryRecords = memoryRecords.filter((record) => recordVisibleForRecall(record, scoringInput));
+  const activeMemoryRecords = temporalRecallMode(scoringInput) === "current"
+    ? selectCanonicalMemoryHeads(visibleMemoryRecords).records
+    : visibleMemoryRecords;
   const memoryHits = attachEvolutionChains(rank(activeMemoryRecords, scoringInput, limit, semantic), memoryRecords);
   if (scope === "agent-memory" || (scope !== "full-vault" && shouldUseDistilledMemoryOnly(scoringInput, memoryHits))) {
     return {
@@ -1055,6 +1116,7 @@ async function fallbackRecall(input) {
   const indexedHits = effectiveQuery.trim() ? searchFullVaultIndex(root, effectiveQuery, 400) : [];
   const fullVaultFiles = indexedHits.length ? indexedHits.map((hit) => path.join(root, hit.path)) : searchVaultFiles(root, effectiveQuery) ?? walk(root);
   const scoreByPath = new Map(indexedHits.map((hit) => [hit.path, hit.searchScore]));
+  const topSearchScore = Math.max(0, indexedHits[0]?.searchScore ?? 0);
   const collectionByPath = new Map(indexedHits.map((hit) => [hit.path, hit.collection]));
   for (const file of fullVaultFiles) {
     if (rel(root, file).startsWith(`${MEMORY_FOLDER}/`)) continue;
@@ -1067,6 +1129,7 @@ async function fallbackRecall(input) {
     }
     if (record) {
       record.searchScore = scoreByPath.get(record.notePath);
+      record.searchScoreNormalized = topSearchScore > 0 ? Math.max(0, record.searchScore ?? 0) / topSearchScore : undefined;
       record.searchCollection = collectionByPath.get(record.notePath);
       byPath.set(record.notePath, record);
     }
@@ -1170,19 +1233,33 @@ function fileStats(root, relPath) {
 function fallbackHealth(input) {
   const root = path.resolve(input.vaultPath);
   const records = recordsFromIndex(root);
+  const durableRecords = records.filter((record) => record.type !== "action");
+  const legacyOperational = records.filter((record) => record.type === "action" && record.status === "active");
   const byType = {};
   const byStatus = {};
-  for (const record of records) {
+  for (const record of durableRecords) {
     byType[record.type] = (byType[record.type] ?? 0) + 1;
     byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
   }
+  const canonicalHeads = selectCanonicalMemoryHeads(durableRecords.filter((record) => record.status === "active"));
   const indexStats = fileStats(root, INDEX_PATH);
   return {
     ok: true,
     source: "local-fallback",
     generatedAt: new Date().toISOString(),
     note: "Local health is a subset; run against the app API for duplicate pressure, embeddings coverage, and proof status.",
-    memories: { total: records.length, byType, byStatus },
+    memories: {
+      total: durableRecords.length,
+      active: durableRecords.filter((record) => record.status === "active").length,
+      byType,
+      byStatus,
+      legacyOperationalActive: legacyOperational.length,
+    },
+    canonicalHeads: {
+      active: canonicalHeads.records.length,
+      conflicts: canonicalHeads.conflicts.length,
+      conflictGroups: canonicalHeads.conflicts.slice(0, 20),
+    },
     indexes: {
       memoryIndex: { ...indexStats, uniqueRecords: records.length, bloatFactor: records.length ? Math.round((indexStats.lines / records.length) * 100) / 100 : 0 },
       entityIndex: fileStats(root, "Operations/Brain Services/Agent Memory Entity Index.jsonl"),
@@ -1242,18 +1319,22 @@ function applyAnswerFloor(result, input) {
   if (!minScore) return result;
   // Mirrors answerFromAgentMemory: informational queries (4+ meaningful terms)
   // need 2+ meaningful matches or a strong signal, not one incidental word.
-  const requireMultiMatch = queryWordsForRecall(result.query ?? "").length >= 4;
+  const meaningfulQueryTerms = [...new Set(queryWordsForRecall(result.query ?? ""))];
+  const requireMultiMatch = meaningfulQueryTerms.length >= 4;
+  const requiredDirectMatches = result.queryDerived
+    ? 2
+    : Math.max(2, Math.ceil(meaningfulQueryTerms.length * 0.3));
   const hits = result.hits.filter((hit) => {
     if (hit.score < minScore) return false;
     if (!requireMultiMatch) return true;
-    return meaningfulMatchCount(hit.matched) >= 2 || hit.matched.includes("exact-query") || hit.matched.includes("semantic");
+    return meaningfulMatchCount(hit.matched) >= requiredDirectMatches || hit.matched.includes("exact-query") || hit.matched.includes("semantic");
   });
   return { ...result, hits, minScore, droppedBelowMinScore: result.hits.length - hits.length };
 }
 
 async function main() {
   const input = parseArgs(process.argv);
-  const actions = ["answer", "recall", "remember", "evolve", "record-usage", "health", "consolidate", "rebuild-index", "flush-pending"];
+  const actions = ["answer", "recall", "remember", "evolve", "record-operation", "mine-patterns", "record-usage", "health", "consolidate", "rebuild-index", "flush-pending"];
   if (input.help || !actions.includes(input.action)) {
     usage();
     process.exit(input.help ? 0 : 2);
@@ -1262,6 +1343,7 @@ async function main() {
   if (input.action === "remember" && !input.content) throw new Error("remember requires --content.");
   if (input.action === "evolve" && !input.content) throw new Error("evolve requires --content.");
   if (input.action === "evolve" && !input.memoryId && !input.supersedes?.length) throw new Error("evolve requires --memory-id or --supersedes.");
+  if (input.action === "record-operation" && (!input.title || !input.content)) throw new Error("record-operation requires --title and --content.");
   if (input.action === "record-usage" && !input.memoryIds.length) throw new Error("record-usage requires --memory-ids.");
 
   if (input.action === "flush-pending") {
@@ -1325,11 +1407,13 @@ async function main() {
       console.log("It will flush automatically on the next successful API contact, or run: hive-brain flush-pending");
       return;
     }
-    if (input.action === "record-usage") {
+    if (input.action === "record-operation") {
+      result = recordLocalOperationalEvent(applyProvenanceDefaults(input));
+    } else if (input.action === "record-usage") {
       result = fallbackRecordUsage(applyProvenanceDefaults(input));
     } else if (input.action === "health") {
       result = fallbackHealth(input);
-    } else if (input.action === "consolidate" || input.action === "rebuild-index") {
+    } else if (["mine-patterns", "consolidate", "rebuild-index"].includes(input.action)) {
       throw new Error(`${input.action} needs the HivemindOS app API (start the app or set HIVEMINDOS_BRAIN_URL). ${error instanceof Error ? error.message : ""}`.trim());
     } else {
       result = await fallbackRecall(input);
@@ -1359,6 +1443,21 @@ async function main() {
     if (result.superseded?.length) console.log(`Superseded: ${result.superseded.map((record) => record.id).join(", ")}`);
     return;
   }
+  if (input.action === "record-operation") {
+    console.log(`Recorded operational event: ${result.event?.title || input.title}`);
+    console.log("Durable memory written: no.");
+    return;
+  }
+  if (input.action === "mine-patterns") {
+    console.log(`Pattern mining reviewed ${result.mining?.scanned ?? 0} operational events and found ${result.mining?.candidates?.length ?? 0} candidate(s).`);
+    console.log(input.enqueueProposals
+      ? `Queued ${result.enqueued?.length ?? 0} proposal(s) for Brain Review.`
+      : "Dry run only; use --enqueue to add reviewed candidates to Brain Review.");
+    for (const candidate of (result.mining?.candidates || []).slice(0, 8)) {
+      console.log(`- [${candidate.reviewKind}] ${candidate.title} (${candidate.confidence})`);
+    }
+    return;
+  }
   if (input.action === "record-usage") {
     console.log(`Recorded ${result.recorded ?? 0} usage row(s) (${input.usageType || "retrieved"}).`);
     return;
@@ -1370,10 +1469,16 @@ async function main() {
   if (input.action === "consolidate") {
     console.log(`Consolidation report for ${result.vaultPath}:`);
     console.log(`- Active memories: ${result.active}/${result.scanned}`);
+    if (result.legacyOperationalIgnored) console.log(`- Legacy operational receipts ignored: ${result.legacyOperationalIgnored}`);
     console.log(`- Near-duplicate groups: ${result.duplicateGroups?.length ?? 0}`);
     for (const group of (result.duplicateGroups || []).slice(0, 8)) {
       console.log(`  * [${group.type}] ${group.size}x "${group.canonicalTitle}"`);
       console.log(`    ${group.evolveHint}`);
+    }
+    console.log(`- Explicit correction candidates: ${result.correctionCandidates?.length ?? 0}`);
+    for (const candidate of (result.correctionCandidates || []).slice(0, 8)) {
+      console.log(`  * "${candidate.newerTitle}" replaces "${candidate.olderTitle}"`);
+      console.log(`    ${candidate.evolveHint}`);
     }
     console.log(`- Stale archive candidates: ${result.archiveCandidates?.length ?? 0}${result.archivedCount ? ` (archived ${result.archivedCount})` : " (report only; use --apply-archives)"}`);
     console.log(`- Compiled-wiki candidates: ${(result.wikiCandidates || []).map((candidate) => `${candidate.entity} (${candidate.memoryCount})`).join(", ") || "none"}`);

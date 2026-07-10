@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AppWindow, Bell, Bot, ChevronRight, Coins, Cpu, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, ChevronRight, Cloud, Coins, Cpu, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
 
 import type { DashboardUtilityView } from "@/features/dashboard/dashboard-navigation";
 import { isPinnableView } from "@/features/dashboard/dashboard-navigation";
@@ -39,7 +39,7 @@ type MoreItem = {
 // until it gets one; this is how a previously-unreachable view surfaces).
 const MORE_GROUP_DEFS = [
   { name: "Build & automate", ids: ["fusion", "aeon", "swarm"] },
-  { name: "Money & governance", ids: ["wallet", "trade", "governance", "compute", "stake"] },
+  { name: "Money & governance", ids: ["wallet", "trade", "governance", "cloud", "compute", "stake"] },
   { name: "Fleet health", ids: ["maintenance", "memory", "sessions", "tools"] },
   { name: "Connections", ids: ["integrations", "my-apps", "messaging", "phone"] },
   { name: "Data & access", ids: ["env", "files", "notifications"] },
@@ -176,6 +176,7 @@ export function MorePanel({
       wallet: { id: "wallet", icon: <Wallet aria-hidden="true" />, eyebrow: "Agent money rails", title: "Wallets", body: "Manage agent wallets, balances, budgets, and usage.", keywords: "wallet wallets honey spend usage tokens balance budget" },
       trade: { id: "trade", icon: <TrendingUp aria-hidden="true" />, eyebrow: "Crypto & stocks", title: "Trade", body: "Buy, sell, and swap crypto and stocks with preview-and-confirm.", keywords: "trade trading buy sell swap crypto stocks perps polymarket" },
       governance: { id: "governance", icon: <Landmark aria-hidden="true" />, eyebrow: "Companies & budgets", title: "Zero Human Company", body: "Group agents into companies, set budgets and kill switches, and clear spend approvals.", keywords: "governance company companies budget approvals kill switch zhc", ...approvalBadge },
+      cloud: { id: "cloud", icon: <Cloud aria-hidden="true" />, eyebrow: "Always-on Hermes", title: "Managed Cloud Agents", body: "Deploy dedicated pay-as-you-go agents with persistent workspaces that run while your computers are off.", keywords: "cloud managed hosted always on hermes pay as you go deploy", dot: "live" },
       compute: { id: "compute", icon: <Cpu aria-hidden="true" />, eyebrow: "GPU marketplace", title: "Hive Compute", body: "Route model calls through marketplace GPUs or install a worker to earn from spare local GPU capacity.", keywords: "compute gpu marketplace inference worker ollama earn rent models" },
       stake: { id: "stake", icon: <Coins aria-hidden="true" />, eyebrow: "Community tiers", title: "Stake HIVE", body: "Lock HIVE for Holder–Visionary status, alpha rooms, governance, and curator rights.", keywords: "stake hive holder visionary alpha governance curator", href: "/stake" },
       maintenance: { id: "maintenance", icon: <ShieldCheck aria-hidden="true" />, eyebrow: "Fleet checks", title: "Diagnostics", body: "Run dashboard and runtime health checks.", keywords: "diagnostics maintenance health checks repair", ...maintenanceBadge },

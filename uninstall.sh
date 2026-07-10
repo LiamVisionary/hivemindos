@@ -418,7 +418,7 @@ if ask "Remove HivemindOS-managed shared skill projections from local agent skil
   done
 fi
 
-if ask "Remove Aeon shared-brain skill manifest entries created by HivemindOS? This only edits skills.json." "no"; then
+if ask "Remove legacy Aeon shared-brain manifest entries created by older HivemindOS versions? This only edits a legacy skills.json." "no"; then
   aeon_root="${AEON_LOCAL_PATH:-${AEON_HOME:-$HOME/.aeon}}"
   if [[ -f "$aeon_root/skills.json" ]] && run_if_exists node; then
     node - "$aeon_root/skills.json" <<'NODE'

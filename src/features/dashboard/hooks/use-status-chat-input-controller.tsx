@@ -19,6 +19,8 @@ import { appendChatProcessState, finishChatStreamState, markChatStreamChunkState
 import { pushVoiceBands, resetVoiceBands } from "@/lib/stores/voice-bands-store";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
+import { normalizeChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
+import { normalizeApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
 
 export function useStatusChatInputController(props: any) {
   const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
@@ -891,11 +893,13 @@ export function useStatusChatInputController(props: any) {
     clearComposer?: boolean;
     directories?: any[];
     permissionMode?: unknown;
+    reasoningEffort?: unknown;
     prompt: string;
   }) {
     const prompt = input.prompt.trim();
     const agentMode = input.agentMode === "plan" ? "plan" : "act";
     const permissionMode = normalizeChatPermissionMode(input.permissionMode);
+    const reasoningEffort = normalizeChatReasoningEffort(input.reasoningEffort);
     const outgoingAttachments = input.attachments ?? [];
     const outgoingDirectories = input.directories ?? [];
     if (!selectedAgent || (!prompt && outgoingAttachments.length === 0 && outgoingDirectories.length === 0)) return;
@@ -904,6 +908,7 @@ export function useStatusChatInputController(props: any) {
       selectedChatLeafKey,
       agentMode,
       permissionMode,
+      reasoningEffort,
       prompt,
       outgoingAttachments.map((attachment: any) => `${attachment.name ?? ""}:${attachment.size ?? ""}:${attachment.kind ?? ""}`).join("|"),
       outgoingDirectories.map((directory: any) => directory.path ?? directory.id ?? linkedDirectoryLabel(directory)).join("|"),
@@ -919,6 +924,7 @@ export function useStatusChatInputController(props: any) {
       agentId: selectedAgent.id,
       agentMode,
       permissionMode,
+      reasoningEffort,
       attachments: outgoingAttachments,
       directories: outgoingDirectories,
       directoryPath: selectedChatDirectoryPath,
@@ -935,12 +941,13 @@ export function useStatusChatInputController(props: any) {
     await runChatMessage(queuedMessage);
   }
 
-  async function sendPromptMessage(prompt: string, options: { permissionMode?: unknown; agentMode?: "act" | "plan" } = {}) {
+  async function sendPromptMessage(prompt: string, options: { permissionMode?: unknown; reasoningEffort?: unknown; agentMode?: "act" | "plan" } = {}) {
     settleLatestAgentPromptResponse(options.promptResponse ?? { label: prompt, value: prompt });
     await submitChatPrompt({
       prompt,
       agentMode: options.agentMode ?? "act",
       permissionMode: options.permissionMode,
+      reasoningEffort: options.reasoningEffort,
       attachments: [],
       directories: [],
       clearComposer: false,
@@ -956,10 +963,12 @@ export function useStatusChatInputController(props: any) {
     const form = event.currentTarget as HTMLFormElement | null;
     const submittedAgentMode = String(form ? new FormData(form).get("agentMode") ?? "" : "");
     const submittedPermissionMode = form ? new FormData(form).get("permissionMode") : undefined;
+    const submittedReasoningEffort = form ? new FormData(form).get("reasoningEffort") : undefined;
     await submitChatPrompt({
       prompt: text ?? "",
       agentMode: submittedAgentMode === "plan" ? "plan" : "act",
       permissionMode: submittedPermissionMode,
+      reasoningEffort: submittedReasoningEffort,
       attachments: chatAttachments,
       directories: chatDirectories,
       clearComposer: true,
@@ -973,6 +982,7 @@ export function useStatusChatInputController(props: any) {
     const prompt = queuedMessage.prompt;
     const agentMode = queuedMessage.agentMode === "plan" ? "plan" : "act";
     const permissionMode = normalizeChatPermissionMode(queuedMessage.permissionMode);
+    const reasoningEffort = normalizeChatReasoningEffort(queuedMessage.reasoningEffort);
     const outgoingAttachments = queuedMessage.attachments ?? [];
     const outgoingDirectories = queuedMessage.directories ?? [];
     let activeRunProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = [];
@@ -1145,6 +1155,10 @@ export function useStatusChatInputController(props: any) {
     appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
     appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, pendingAssistantMessage]);
+    props.requestChatThreadTitle?.({
+      storageKey: selectedStorageKey,
+      messages: [...messages.filter(isManualAgentChatMessage), outgoingUserMessage],
+    });
 
     const persistActiveProcessEventsToAssistant = () => {
       setMessagesByAgent((current) => {
@@ -1272,6 +1286,8 @@ export function useStatusChatInputController(props: any) {
         ].join(":");
         if (seenSessionMessageKeys.has(key)) continue;
         seenSessionMessageKeys.add(key);
+        const sessionGenerationCard = normalizeApplicationGenerationCard(sessionMessage?.applicationGeneration);
+        if (sessionGenerationCard) updateActiveImageGenerationCard(sessionGenerationCard);
         const processEvent = processLabelFromSessionMessage(sessionMessage);
         if (processEvent) {
           latestSessionSummary = processEvent.detail || processEvent.label;
@@ -1329,6 +1345,7 @@ export function useStatusChatInputController(props: any) {
           honeyLedgerEnabled,
           agentMode,
           permissionMode,
+          reasoningEffort,
           attachments: outgoingAttachments,
           messages: [
             ...contextMessages.map((message) => ({

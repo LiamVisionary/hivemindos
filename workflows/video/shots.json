@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-10",
+  "note": "A shared vocabulary of shot types so a generated script says 'insert-detail on the failure point' instead of 'insert b-roll here'. Authored conventions drawn from standard film grammar, not measured results.",
+  "count": 12,
+  "shots": [
+    { "id": "S01", "name": "Talking head", "purpose": "Carry an argument in the speaker's own voice.", "useWhen": "The credibility of the claim rests on who is making it.", "avoidWhen": "The claim is visual and would be better shown than asserted." },
+    { "id": "S02", "name": "Establishing", "purpose": "Place the viewer in a location or context.", "useWhen": "The setting itself is part of the proof.", "avoidWhen": "Opening a short-form video — it costs the first two seconds and earns nothing." },
+    { "id": "S03", "name": "Insert detail", "purpose": "Isolate the one object or region the narration is about.", "useWhen": "You just named a specific thing and the viewer cannot find it in a wide shot.", "avoidWhen": "Nothing specific has been named yet." },
+    { "id": "S04", "name": "Hands-on product", "purpose": "Show scale, texture, and that a real object exists.", "useWhen": "The product is physical and the audience is product-aware.", "avoidWhen": "The product is software." },
+    { "id": "S05", "name": "Screen capture", "purpose": "Demonstrate a software claim in the product itself.", "useWhen": "The claim is 'it does X' and X is visible on screen.", "avoidWhen": "The UI is too dense to read at the target resolution." },
+    { "id": "S06", "name": "Cutaway", "purpose": "Cover an edit or compress time without a visible jump.", "useWhen": "You removed a pause, a stumble, or a long wait.", "avoidWhen": "It has no relationship to the narration — an unmotivated cutaway reads as filler." },
+    { "id": "S07", "name": "Before / after", "purpose": "Show a change by holding everything else constant.", "useWhen": "The transformation is the entire claim.", "avoidWhen": "The two states differ in more than one variable; the viewer will notice and discount both." },
+    { "id": "S08", "name": "Over the shoulder", "purpose": "Put the viewer behind the operator's eyes.", "useWhen": "The viewer is meant to imagine doing the thing themselves.", "avoidWhen": "The screen or workpiece is unreadable from that angle." },
+    { "id": "S09", "name": "Direct address", "purpose": "Break the fourth wall to issue a command or a question.", "useWhen": "Opening a pattern-interrupt hook, or closing on a call to action.", "avoidWhen": "The middle of an explanation, where it reads as a sales turn." },
+    { "id": "S10", "name": "Data on screen", "purpose": "Render a number the narration cannot carry alone.", "useWhen": "The figure is precise and load-bearing.", "avoidWhen": "The number is approximate — on-screen text implies a precision you may not have." },
+    { "id": "S11", "name": "Reaction", "purpose": "Show a person receiving the result rather than describing it.", "useWhen": "The emotional payoff matters more than the mechanism.", "avoidWhen": "The reaction is staged and the audience is ad-literate." },
+    { "id": "S12", "name": "Static hold", "purpose": "Stop all motion to force attention onto a single line of narration.", "useWhen": "The most important sentence in the script.", "avoidWhen": "More than once per short-form video." }
+  ]
+}

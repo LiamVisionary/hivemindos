@@ -22,6 +22,8 @@ import type {
   CopyTradeEngineStatus,
   CopyTradeEvent,
   CopyTradeEventKind,
+  CopyTradeOpenPosition,
+  CopyTradePaperLedger,
   CopyTradeRuntimeState,
   CopyTradingConfig,
 } from "@/lib/types/copy-trading";
@@ -33,12 +35,23 @@ import {
   writeEngineStatus,
   writeRuntimeState,
 } from "./store";
-import { tokenLiquidityUsd } from "./market";
+import { nativeUsdPrice, tokenLiquidityUsd, tokenMarket, tokenPriceUsd } from "./market";
+import {
+  copyTradeNativeSymbol,
+  fundableSummary,
+  fundingAssetsFromBalance,
+  selectBuyFunding,
+  type BuyFunding,
+} from "./funding";
+import { applyPaperBuy, applyPaperSell, emptyPaperLedger, paperPositionValue } from "./paper";
 import { detectNewSwaps, type CopyTradeSignal } from "./watcher";
 
 const RECONCILE_MS = 10_000;
 const HEARTBEAT_MS = 15_000;
 const SWAP_CONFIRMATION = "CONFIRM_SWAP";
+// Dry-run bankroll fallback when the wallet's fundable balance can't be read and
+// no explicit paperStartUsd is set — so paper trading still has cash to spend.
+const DEFAULT_PAPER_BANKROLL_USD = 1_000;
 
 type Loop = {
   config: CopyTradingConfig;
@@ -181,6 +194,9 @@ async function tick(engine: Engine, loop: Loop): Promise<void> {
     state.stats.polls += 1;
     state.lastPollAt = Date.now();
 
+    // Seed the simulated bankroll once, before any paper action can spend it.
+    if (config.dryRun) await seedPaperIfNeeded(loop);
+
     const { signals, cursor } = await detectNewSwaps({
       network: config.network,
       targetAddress: config.targetAddress,
@@ -229,7 +245,7 @@ async function handleSignal(loop: Loop, signal: CopyTradeSignal): Promise<void> 
     return;
   }
 
-  const sinceLast = Date.now() - lastActionAt(state);
+  const sinceLast = Date.now() - lastActionAt(activePositions(loop));
   if (sinceLast < config.cooldownMs) {
     state.stats.skipped += 1;
     record(state, "skip", `Cooldown active — skipped ${signal.direction} ${short(token)}.`, { token, targetTxRef: signal.targetTxRef });
@@ -245,9 +261,12 @@ async function handleSignal(loop: Loop, signal: CopyTradeSignal): Promise<void> 
 
 async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Promise<void> {
   const { config, state } = loop;
-  const existing = state.openPositions[token];
+  // Paper positions live in their own ledger so a dry-run walks the SAME gating
+  // (max-open, per-token cap, liquidity floor) as a live run.
+  const positions = activePositions(loop);
+  const existing = positions[token];
 
-  if (!existing && Object.keys(state.openPositions).length >= config.maxOpenPositions) {
+  if (!existing && Object.keys(positions).length >= config.maxOpenPositions) {
     state.stats.skipped += 1;
     record(state, "skip", `Max ${config.maxOpenPositions} open positions — skipped buy ${short(token)}.`, { token });
     return;
@@ -278,22 +297,28 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
   }
 
   if (config.dryRun) {
-    record(state, "buy", `[dry-run] would buy ~$${usd.toFixed(2)} of ${short(token)} (target ${short(signal.targetTxRef)}).`, {
-      token, usd, dryRun: true, targetTxRef: signal.targetTxRef,
-    });
+    await paperBuy(loop, signal, token, usd);
     return;
   }
 
   const signer = await resolveSigner(config);
+  // Fund the mirror from whatever the wallet actually holds — stablecoins first,
+  // then the chain's native asset (ETH on Base, SOL on Solana).
+  const funding = await resolveBuyFunding(config, usd);
+  if (!funding) {
+    state.stats.skipped += 1;
+    record(state, "skip", `No spendable USDC/${copyTradeNativeSymbol(config.network)} balance to fund buy of ${short(token)}.`, { token, targetTxRef: signal.targetTxRef });
+    return;
+  }
   try {
     const result = await executeDexSwap({
       agentId: config.agentId,
       network: signer.network,
       fromAddress: signer.fromAddress,
       secret: signer.secret,
-      sellToken: "USDC",
+      sellToken: funding.sellToken,
       buyToken: token,
-      amountHuman: round(usd, 6),
+      amountHuman: funding.amountHuman,
       slippageBps: config.slippageBps,
       confirmation: SWAP_CONFIRMATION,
     });
@@ -307,7 +332,7 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
       lastActionAt: now,
     };
     state.stats.mirrored += 1;
-    record(state, "buy", `Bought ~$${result.valueUsd.toFixed(2)} of ${result.buy}. Tx ${short(result.reference)}.`, {
+    record(state, "buy", `Bought ~$${result.valueUsd.toFixed(2)} of ${result.buy} with ${funding.sellToken}. Tx ${short(result.reference)}.`, {
       token, symbol: result.buy, usd: result.valueUsd, txRef: result.reference, targetTxRef: signal.targetTxRef,
     });
   } catch (error) {
@@ -318,7 +343,7 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
 async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: string, reason: "sell" | "take-profit" | "stop-loss"): Promise<void> {
   const { config, state } = loop;
   if (reason === "sell" && !config.copySells) return;
-  const position = state.openPositions[token];
+  const position = activePositions(loop)[token];
   if (!position || !(position.amount > 0)) {
     if (reason === "sell") {
       state.stats.skipped += 1;
@@ -328,10 +353,7 @@ async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: str
   }
 
   if (config.dryRun) {
-    record(state, reason === "sell" ? "sell" : reason, `[dry-run] would sell ${position.amount} ${position.symbol} (${reason}).`, {
-      token, symbol: position.symbol, dryRun: true, targetTxRef: signal?.targetTxRef,
-    });
-    delete state.openPositions[token];
+    await paperSell(loop, signal, token, reason);
     return;
   }
 
@@ -361,7 +383,10 @@ async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: str
 /** Take-profit / stop-loss exits on copied positions (revalue via wallet balance). */
 async function runExits(loop: Loop): Promise<void> {
   const { config, state } = loop;
-  if (config.dryRun) return;
+  if (config.dryRun) {
+    await runPaperExits(loop);
+    return;
+  }
   if (config.takeProfitPct == null && config.stopLossPct == null) return;
   const open = Object.values(state.openPositions);
   if (open.length === 0) return;
@@ -395,7 +420,128 @@ async function runExits(loop: Loop): Promise<void> {
   }
 }
 
+// ── paper trading (dry-run) ───────────────────────────────────────────────────
+/* A dry-run config keeps a simulated portfolio (state.paper) and walks the SAME
+   detect → size → gate path as a live one, but fills at the current market price
+   against simulated cash instead of touching the chain. So a dry-run reports real
+   simulated fills, open positions, and P&L — not just "would buy" log lines. */
+
+/** The position map a config acts on: the paper ledger in dry-run, else the live one. */
+function activePositions(loop: Loop): Record<string, CopyTradeOpenPosition> {
+  return loop.config.dryRun ? ensurePaperLedger(loop.state).positions : loop.state.openPositions;
+}
+
+function ensurePaperLedger(state: CopyTradeRuntimeState): CopyTradePaperLedger {
+  if (!state.paper?.initialized) state.paper = emptyPaperLedger(DEFAULT_PAPER_BANKROLL_USD);
+  return state.paper;
+}
+
+/** Seed the simulated bankroll once — a snapshot of the wallet's fundable USD
+ *  (so the paper balance mirrors real spendable funds), or an explicit override. */
+async function seedPaperIfNeeded(loop: Loop): Promise<void> {
+  const { config, state } = loop;
+  if (state.paper?.initialized) return;
+  let start = config.paperStartUsd;
+  if (start == null) {
+    try {
+      const [balance, nativePrice] = await Promise.all([
+        getWalletBalance(config.walletAddress, config.network),
+        nativeUsdPrice(config.network).catch(() => null),
+      ]);
+      start = fundableSummary(config.network, balance, nativePrice).totalUsd;
+    } catch {
+      start = null; // balance unreadable this tick → fall back to the default bankroll
+    }
+  }
+  if (start == null || !(start > 0)) start = DEFAULT_PAPER_BANKROLL_USD;
+  state.paper = emptyPaperLedger(start);
+}
+
+async function paperBuy(loop: Loop, signal: CopyTradeSignal, token: string, wantUsd: number): Promise<void> {
+  const { config, state } = loop;
+  const ledger = ensurePaperLedger(state);
+  const market = await tokenMarket(config.network, token);
+  const res = applyPaperBuy(ledger, {
+    token,
+    symbol: market.symbol,
+    priceUsd: market.priceUsd,
+    wantUsd,
+    minCopyUsd: config.minCopyUsd,
+    at: Date.now(),
+  });
+  if (!res.ok) {
+    state.stats.skipped += 1;
+    record(state, "skip", `[paper] skipped buy ${short(token)} — ${res.reason}.`, { token, dryRun: true, targetTxRef: signal.targetTxRef });
+    return;
+  }
+  const sym = market.symbol || short(token);
+  record(state, "buy", `[paper] bought ~$${res.spentUsd.toFixed(2)} of ${sym} @ ${fmtPrice(res.priceUsd)} — sim cash ${fmtUsd(ledger.cashUsd)} (target ${short(signal.targetTxRef)}).`, {
+    token, symbol: sym, usd: res.spentUsd, dryRun: true, targetTxRef: signal.targetTxRef,
+  });
+}
+
+async function paperSell(
+  loop: Loop,
+  signal: CopyTradeSignal | null,
+  token: string,
+  reason: "sell" | "take-profit" | "stop-loss",
+  priceHint?: number,
+): Promise<void> {
+  const { config, state } = loop;
+  const ledger = ensurePaperLedger(state);
+  const price = priceHint ?? (await tokenMarket(config.network, token)).priceUsd;
+  const res = applyPaperSell(ledger, token, price, Date.now());
+  if (!res.ok) {
+    // Can't value the exit this tick — leave the position and retry next poll.
+    if (reason === "sell") {
+      state.stats.skipped += 1;
+      record(state, "skip", `[paper] can't value ${short(token)} to sell — ${res.reason}; will retry.`, { token, dryRun: true, targetTxRef: signal?.targetTxRef });
+    }
+    return;
+  }
+  const kind: CopyTradeEventKind = reason === "sell" ? "sell" : reason;
+  record(state, kind, `[paper] sold ${res.symbol} → ~$${res.proceedsUsd.toFixed(2)} (${reason}, P&L ${fmtSigned(res.pnlUsd)}) — sim cash ${fmtUsd(ledger.cashUsd)}.`, {
+    token, symbol: res.symbol, usd: res.proceedsUsd, dryRun: true, targetTxRef: signal?.targetTxRef,
+  });
+}
+
+/** Revalue every paper position to market each tick (updates the display mark) and
+ *  fire simulated take-profit / stop-loss exits when configured. */
+async function runPaperExits(loop: Loop): Promise<void> {
+  const { config, state } = loop;
+  const ledger = state.paper;
+  if (!ledger?.initialized) return;
+  const open = Object.values(ledger.positions);
+  if (open.length === 0) return;
+  const now = Date.now();
+  for (const position of open) {
+    const price = await tokenPriceUsd(config.network, position.token);
+    if (price == null) continue; // can't revalue this tick; try next
+    const mark = paperPositionValue(position, price);
+    position.markUsd = mark.valueUsd;
+    position.markAt = now;
+    if (config.takeProfitPct != null && mark.pnlPct >= config.takeProfitPct) {
+      await paperSell(loop, null, position.token, "take-profit", price);
+    } else if (config.stopLossPct != null && mark.pnlPct <= -config.stopLossPct) {
+      await paperSell(loop, null, position.token, "stop-loss", price);
+    }
+  }
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
+/** Read the acting wallet's balance and choose which held asset funds this buy. */
+async function resolveBuyFunding(config: CopyTradingConfig, usd: number): Promise<BuyFunding | null> {
+  let balance;
+  try {
+    balance = await getWalletBalance(config.walletAddress, config.network);
+  } catch {
+    return null; // can't read balance this tick → skip rather than blind-swap
+  }
+  const nativePrice = await nativeUsdPrice(config.network).catch(() => null);
+  const funds = fundingAssetsFromBalance(config.network, balance, nativePrice);
+  return selectBuyFunding(config.network, usd, funds);
+}
+
 async function resolveSigner(config: CopyTradingConfig): Promise<{ fromAddress: string; network: string; secret: string }> {
   const stored = await getWalletSecret(config.agentId);
   if (!stored) throw new Error(`Acting wallet ${config.agentId} has no local signing key (watch-only or Bankr cannot copy-trade).`);
@@ -420,9 +566,8 @@ function isBlacklisted(config: CopyTradingConfig, token: string): boolean {
   return config.blacklist.some((b) => b.toLowerCase() === lower);
 }
 
-function lastActionAt(state: CopyTradeRuntimeState): number {
-  const positions = Object.values(state.openPositions);
-  return positions.reduce((max, p) => Math.max(max, p.lastActionAt), 0);
+function lastActionAt(positions: Record<string, CopyTradeOpenPosition>): number {
+  return Object.values(positions).reduce((max, p) => Math.max(max, p.lastActionAt), 0);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -437,4 +582,22 @@ function round(value: number, decimals: number): number {
 function short(value: string): string {
   if (value.length <= 12) return value;
   return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
+function fmtUsd(value: number): string {
+  if (!Number.isFinite(value)) return "$0.00";
+  return `$${value.toFixed(2)}`;
+}
+
+function fmtSigned(value: number): string {
+  const sign = value < 0 ? "−" : "+";
+  return `${sign}$${Math.abs(value).toFixed(2)}`;
+}
+
+/** Price formatting that survives sub-cent meme-token prices (e.g. $0.00000123). */
+function fmtPrice(price: number): string {
+  if (!(price > 0)) return "$0";
+  if (price >= 1) return `$${price.toFixed(2)}`;
+  if (price >= 0.01) return `$${price.toFixed(4)}`;
+  return `$${price.toPrecision(3)}`;
 }

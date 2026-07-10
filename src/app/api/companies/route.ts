@@ -28,6 +28,15 @@ import {
 } from "@/lib/services/company-autonomy-driver";
 import { companyRevenueRollup, readCompanyRevenueLedger } from "@/lib/services/company-revenue-share";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import {
+  companyExecutionCapability,
+  parseCompanyExecutionConfig,
+} from "@/lib/services/company-execution-capabilities";
+import {
+  CompanyAeonBindingError,
+  resolveCompanyAeonBinding,
+} from "@/lib/services/company-aeon-binding";
+import { errorJson } from "@/lib/utils/api-response";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import type {
   Company,
@@ -102,6 +111,7 @@ type CompanyBody = {
   members?: CompanyMember[];
   homeMachineKey?: string;
   projectId?: string;
+  execution?: Company["execution"];
   analyticsProvider?: Company["analyticsProvider"];
   analyticsConfig?: Company["analyticsConfig"];
   importedOperations?: CompanyImportedOperations;
@@ -177,7 +187,9 @@ export async function POST(request: NextRequest) {
       const company = await getCompany(body.id.trim());
       if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
       if (!company.apexGoal?.title?.trim()) return NextResponse.json({ ok: false, error: "Set an apex goal before launching work." }, { status: 400 });
-      if (!company.agentIds?.length) return NextResponse.json({ ok: false, error: "Staff the company with at least one agent first." }, { status: 400 });
+      if (companyExecutionCapability(company.execution).autonomy.requiresCompanyCrew && !company.agentIds?.length) {
+        return NextResponse.json({ ok: false, error: "Staff the company with at least one agent first." }, { status: 400 });
+      }
       if (company.frozen) return NextResponse.json({ ok: false, error: "Company is frozen — unfreeze it before launching work." }, { status: 400 });
       // Enter perpetual autonomy BEFORE dispatching: if the dispatch fails midway,
       // the company stays autonomous and the driver re-dispatches on its next tick.
@@ -257,6 +269,18 @@ export async function POST(request: NextRequest) {
       if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
       return NextResponse.json({ ok: true, company });
     }
+    const execution = body.execution === undefined ? undefined : parseCompanyExecutionConfig(body.execution);
+    if (execution && !execution.ok) {
+      return errorJson(execution.error, 400);
+    }
+    if (execution?.value.engine === "aeon") {
+      try {
+        await resolveCompanyAeonBinding(execution.value.profileId, execution.value.skill);
+      } catch (error) {
+        if (error instanceof CompanyAeonBindingError) return errorJson(error.message, error.status);
+        throw error;
+      }
+    }
     const company = await upsertCompany({
       id: body.id,
       name: body.name ?? "",
@@ -276,6 +300,7 @@ export async function POST(request: NextRequest) {
       members: body.members,
       homeMachineKey: body.homeMachineKey,
       projectId: body.projectId,
+      execution: execution?.value,
       analyticsProvider: body.analyticsProvider,
       analyticsConfig: body.analyticsConfig,
       importedOperations: body.importedOperations,

@@ -64,6 +64,8 @@ The normal user path stays simple: pick the model and send the request. The
 hosting path stays simple too: set up once, then go live when the local model
 server is ready.
 
+Adaptive model routes can also learn from local accepted-outcome records. When an operator or evaluator records a provider/model result with task type, acceptance, quality, cost, latency, privacy posture, and optional proof-pack linkage, those observations can adjust future routing beyond catalog metadata and transport health. This local evidence does not create official marketplace reputation or payout authority.
+
 Hive Compute is designed as a public marketplace. Official gateway URLs,
 listings, model metadata, and paid inference routes can be reachable from the
 public internet. A host's local model server is not made public: the worker runs

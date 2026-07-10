@@ -21,7 +21,7 @@ import { NANSEN_HIVEMIND_INTEGRATION_FACTS } from "@/lib/services/chat/nansen-ca
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
-import { dashboardSwarmGoalContextIndexItem, hiveComputeContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem } from "@/lib/services/context-index/static-tool-items";
+import { dashboardSwarmGoalContextIndexItem, founderModeContextIndexItem, hiveComputeContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem, managedCloudAgentsContextIndexItem } from "@/lib/services/context-index/static-tool-items";
 import { packagedSkillFileStats, packagedSkillItem } from "@/lib/services/context-index/packaged-skills";
 import { hiveActionContextIndexItems, hiveActionMcpName, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
@@ -42,7 +42,8 @@ import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import { applyAppPreferences, readAppPreferences, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
 import { connectorManifestContextIndexItems } from "@/lib/services/integrations/connector-context-index";
-import { readSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
+import { actionIntegrationConnected } from "@/lib/services/integrations/hive-action-connection";
+import { readSharedAgentEnv } from "@/lib/services/integrations/shared-env";
 import { visualArtifactContextIndexItems } from "@/lib/services/visual-artifact-context-index";
 import {
   principalCanReadScope,
@@ -605,6 +606,7 @@ function localCliToolItems(): ContextIndexItem[] {
       },
     },
     dashboardSwarmGoalContextIndexItem(absolutePath),
+    founderModeContextIndexItem(absolutePath),
     jsonRenderContextIndexItem(absolutePath),
     loopEngineeringContextIndexItem(absolutePath),
     {
@@ -930,6 +932,7 @@ function localCliToolItems(): ContextIndexItem[] {
       },
     },
     hiveComputeContextIndexItem(),
+    managedCloudAgentsContextIndexItem(),
     {
       id: "tool-schema:wallet-actions",
       kind: "tool-schema",
@@ -1583,18 +1586,6 @@ function perRequestItems(
     ...(wants("runtime") ? runtimeItems() : []),
     ...(wants("code-route") ? codeCapabilityRouteItems() : []),
   ].filter((item) => wants(item.kind));
-}
-
-// An integration-backed action is advertised only when its integration is
-// connected (a required credential key is present in the shared env). Core
-// actions (no requiresConnection) are always available. Governance is unaffected.
-function actionIntegrationConnected(
-  action: { requiresConnection?: string[] },
-  sharedEnv: Record<string, string>,
-): boolean {
-  const keys = action.requiresConnection;
-  if (!keys || keys.length === 0) return true;
-  return keys.some((key) => Boolean(sharedEnvValue(key, sharedEnv)));
 }
 
 async function dynamicItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean) {

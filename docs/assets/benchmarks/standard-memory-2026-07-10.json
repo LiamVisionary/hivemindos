@@ -1,0 +1,184 @@
+{
+  "schema": "hivemindos.public-standard-memory-benchmark.v1",
+  "snapshotDate": "2026-07-10",
+  "status": "complete",
+  "retrievalTopK": 50,
+  "devOnly": true,
+  "upstream": {
+    "evaluationHarness": "mem0ai/memory-benchmarks@4b61c5d31b9c668a12b4f5e78064248a02c82d2b",
+    "locomo": "snap-research/locomo@3eb6f2c585f5e1699204e3c3bdf7adc5c28cb376",
+    "longmemeval": "xiaowu0162/LongMemEval@9e0b455f4ef0e2ab8f2e582289761153549043fc",
+    "beam": "mohammadtavakoli78/BEAM@3e12035532eb85768f1a7cd779832b650c4b2ef9"
+  },
+  "benchmarks": {
+    "locomo": {
+      "questions": 1540,
+      "evidenceEligibleQuestions": 1536,
+      "evidenceRecallPercent": { "top1": 58.2, "top3": 78.78, "top10": 93.95, "top20": 98.37, "top50": 99.93 },
+      "zeroHitQuestions": 1,
+      "retrievalLatencyMs": { "p50": 6.4, "p95": 14.72, "mean": 7.61 }
+    },
+    "longmemeval": {
+      "questions": 500,
+      "evidenceEligibleQuestions": 500,
+      "evidenceRecallPercent": { "top1": 84.0, "top3": 92.6, "top10": 97.6, "top20": 98.8, "top50": 99.4 },
+      "zeroHitQuestions": 0,
+      "retrievalLatencyMs": { "p50": 101.8, "p95": 285.76, "mean": 126.23 }
+    },
+    "beam1m": {
+      "questions": 700,
+      "zeroHitQuestions": 0,
+      "retrievedHits": { "p50": 10, "p95": 16, "mean": 10.75 },
+      "retrievalLatencyMs": { "p50": 121.9, "p95": 583.2, "mean": 191.98 }
+    },
+    "beam10m": {
+      "questions": 200,
+      "zeroHitQuestions": 0,
+      "retrievedHits": { "p50": 50, "p95": 50, "mean": 49.93 },
+      "retrievalLatencyMs": { "p50": 1053.5, "p95": 3829.7, "mean": 1594.42 }
+    }
+  },
+  "combinedAnnotatedEvidence": {
+    "questions": 2036,
+    "top10Hits": 1931,
+    "top10RecallPercent": 94.84,
+    "top50Hits": 2032,
+    "top50RecallPercent": 99.8
+  },
+  "cacheOptimization": {
+    "rankedContextParity": { "identical": 2440, "compared": 2440, "ignoredFields": ["updated_at"] },
+    "locomoP50Speedup": 2.88,
+    "beam1mP50Speedup": 2.06,
+    "beam10mP50Speedup": 2.43
+  },
+  "modelJudge": {
+    "published": true,
+    "answererModel": "gpt-5.4-mini",
+    "judgeModel": "gpt-5.4-mini",
+    "provider": "chatgpt-oauth",
+    "retrievalTopK": 50,
+    "tokenUsageStatus": "unavailable",
+    "promptHashesSha256": {
+      "locomo": "8ebac1ef60e9ab5caf99079fdaac038b85472e81491ed35e2d2655f3927c76c2",
+      "longmemeval": "ba8cf60d26f1390ecbef0f07b3e950556fe3bc5a37ba4b5343f28217f18c144f",
+      "beam": "a1c2a4822898411f90ab2915a72d2b2031f97437bdcc1b3ac2008fe93653267b"
+    },
+    "results": {
+      "locomo": {
+        "questions": 1540,
+        "scoreMethod": "binary-judge-accuracy",
+        "scorePercent": 76.62,
+        "passThreshold": 1.0,
+        "passRatePercent": 76.62,
+        "answerLatencyMs": {
+          "p50": 3453.92,
+          "p95": 10468.78,
+          "mean": 4457.28
+        },
+        "judgeLatencyMs": {
+          "p50": 2015.57,
+          "p95": 5137.9,
+          "mean": 2545.47
+        },
+        "byDimension": {
+          "multi-hop": 75.18,
+          "open-domain": 65.62,
+          "single-hop": 76.1,
+          "temporal": 82.55
+        }
+      },
+      "longmemeval": {
+        "questions": 500,
+        "scoreMethod": "binary-judge-accuracy",
+        "scorePercent": 53.4,
+        "passThreshold": 1.0,
+        "passRatePercent": 53.4,
+        "answerLatencyMs": {
+          "p50": 3932.11,
+          "p95": 8527.58,
+          "mean": 4380.04
+        },
+        "judgeLatencyMs": {
+          "p50": 3025.05,
+          "p95": 7820.85,
+          "mean": 3651.95
+        },
+        "byDimension": {
+          "knowledge-update": 74.36,
+          "multi-session": 31.58,
+          "single-session-assistant": 51.79,
+          "single-session-preference": 66.67,
+          "single-session-user": 72.86,
+          "temporal-reasoning": 50.38
+        }
+      },
+      "beam1m": {
+        "questions": 700,
+        "scoreMethod": "average-rubric-nugget-compliance",
+        "scorePercent": 41.12,
+        "passThreshold": 0.5,
+        "passRatePercent": 44.29,
+        "answerLatencyMs": {
+          "p50": 4782.16,
+          "p95": 16895.95,
+          "mean": 6377.57
+        },
+        "judgeLatencyMs": {
+          "p50": 7100.22,
+          "p95": 27471.07,
+          "mean": 9851.31
+        },
+        "byDimension": {
+          "abstention": 62.14,
+          "contradiction_resolution": 40.18,
+          "event_ordering": 33.61,
+          "information_extraction": 52.85,
+          "instruction_following": 44.17,
+          "knowledge_update": 25.71,
+          "multi_session_reasoning": 41.78,
+          "preference_following": 60.0,
+          "summarization": 27.82,
+          "temporal_reasoning": 22.98
+        }
+      },
+      "beam10m": {
+        "questions": 200,
+        "scoreMethod": "average-rubric-nugget-compliance",
+        "scorePercent": 37.04,
+        "passThreshold": 0.5,
+        "passRatePercent": 43.0,
+        "answerLatencyMs": {
+          "p50": 6633.95,
+          "p95": 17329.14,
+          "mean": 8160.59
+        },
+        "judgeLatencyMs": {
+          "p50": 4644.47,
+          "p95": 32869.18,
+          "mean": 9506.64
+        },
+        "byDimension": {
+          "abstention": 20.0,
+          "contradiction_resolution": 45.62,
+          "event_ordering": 29.94,
+          "information_extraction": 62.5,
+          "instruction_following": 43.75,
+          "knowledge_update": 38.75,
+          "multi_session_reasoning": 22.0,
+          "preference_following": 58.75,
+          "summarization": 37.81,
+          "temporal_reasoning": 11.25
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Evidence-session recall measures whether the annotated source session was retrieved; it is not final-answer accuracy.",
+    "A non-empty BEAM result is coverage, not proof that the returned context answers the question.",
+    "Retrieval latency is same-machine local development performance, not a hosted-service SLA.",
+    "HivemindOS production recall exposes at most 50 hits, so Top-200 is not reported.",
+    "Model-judge scores are specific to GPT-5.4 Mini, the pinned prompts, and Top-50 retrieval; differently configured published scores are not directly comparable.",
+    "ChatGPT OAuth did not expose token-usage counters, so token use and model cost are not estimated.",
+    "BEAM event-ordering Kendall tau-b is not reported; BEAM scores use rubric-nugget compliance."
+  ]
+}

@@ -8,6 +8,7 @@ import "./theme.css";
 
 import React from "react";
 import type { Company, CompanyApprovalPolicy, CompanyMember, CompanyRevenue, CompanySpendRollup } from "@/lib/types/company";
+import { companyExecutionConfigFromForm } from "@/lib/services/company-execution-capabilities";
 import ZeroHumanCompanies from "./ZeroHumanCompanies";
 import {
   applyDemoEdit,
@@ -620,6 +621,7 @@ function ZeroHumanCompaniesLiveView({
       apexGoal,
       members,
       dailyBudgetUsd: dailyBudgetUsd > 0 ? dailyBudgetUsd : undefined,
+      execution: companyExecutionConfigFromForm(form),
     });
     if (!result.ok) { setError(result.error || "Could not create company."); return null; }
     await refresh();
@@ -706,6 +708,7 @@ function ZeroHumanCompaniesLiveView({
         totalBudgetUsd: form.totalBudgetUsd && form.totalBudgetUsd > 0 ? form.totalBudgetUsd : 0,
         frozen: form.frozen === true,
         autonomyPause,
+        execution: companyExecutionConfigFromForm(form),
         status: form.status ?? "",
         alignment: form.alignment ?? "",
         apexGoal,
@@ -812,14 +815,17 @@ function ZeroHumanCompaniesLiveView({
     setBusyId(companyId);
     setNotice(null);
     try {
-      // Send the live fleet so the engine can route to (and execute on) the
-      // company's online member agents; the server filters it to members.
+      const usesAeon = data.find((entry) => entry.company.id === companyId)?.company.execution?.engine === "aeon";
+      // Only the native crew engine needs a live fleet snapshot. AEON resolves
+      // execution from its saved workspace and must not depend on fleet health.
       let fleetSnapshot: unknown[] = [];
-      try {
-        const fres = await fetch("/api/fleet/discover?fresh=1&includeSnapshots=0", { cache: "no-store" });
-        const fjson = await fres.json().catch(() => ({}));
-        if (Array.isArray(fjson?.machines)) fleetSnapshot = fjson.machines;
-      } catch { /* offline fleet → tasks queue as pending */ }
+      if (!usesAeon) {
+        try {
+          const fres = await fetch("/api/fleet/discover?fresh=1&includeSnapshots=0", { cache: "no-store" });
+          const fjson = await fres.json().catch(() => ({}));
+          if (Array.isArray(fjson?.machines)) fleetSnapshot = fjson.machines;
+        } catch { /* offline fleet → tasks queue as pending */ }
+      }
 
       const res = await fetch("/api/companies", {
         method: "POST",
@@ -835,17 +841,23 @@ function ZeroHumanCompaniesLiveView({
         const n = d.taskCount ?? 0;
         const live = d.dispatchableMembers ?? 0;
         const plan = d.planner === "llm" ? "AI-planned" : "auto-planned";
-        showNotice(
-          live > 0
-            ? `Launched ${n} ${plan} task${n === 1 ? "" : "s"} to ${live} online agent${live === 1 ? "" : "s"} — autonomy is running; it keeps working until you stop it.`
-            : `Queued ${n} ${plan} task${n === 1 ? "" : "s"}. Autonomy is on — work starts as soon as a member agent comes online.`,
-        );
+        if (d.executionEngine === "aeon") {
+          const skill = typeof d.aeon?.skill === "string" ? d.aeon.skill : "the selected skill";
+          const profileName = typeof d.aeon?.profileName === "string" ? d.aeon.profileName : "the configured AEON workspace";
+          showNotice(`Dispatched AEON skill ${skill} through ${profileName}. Autonomy is running; future idle cycles use the same AEON binding until you stop it.`);
+        } else {
+          showNotice(
+            live > 0
+              ? `Launched ${n} ${plan} task${n === 1 ? "" : "s"} to ${live} online agent${live === 1 ? "" : "s"} — autonomy is running; it keeps working until you stop it.`
+              : `Queued ${n} ${plan} task${n === 1 ? "" : "s"}. Autonomy is on — work starts as soon as a member agent comes online.`,
+          );
+        }
       }
       await refresh();
     } finally {
       setBusyId(null);
     }
-  }, [refresh, showNotice]);
+  }, [data, refresh, showNotice]);
 
   const handleStopAutonomy = React.useCallback(async (companyId: string) => {
     setBusyId(companyId);

@@ -14,16 +14,18 @@ import { readBoard, reclaimStaleTasks } from "@/lib/services/kanban/local-kanban
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { notifyEscalation, resolveEscalationNotification, runEscalationSweep } from "@/lib/services/messaging/escalation-notify";
 import { syncCompanyTaskOutcomes } from "@/lib/services/company-memory";
+import { companyExecutionCapability } from "@/lib/services/company-execution-capabilities";
+import { inspectCompanyAeonActivity } from "@/lib/services/company-aeon-binding";
 
 /**
  * Perpetual company autonomy driver. A single boot-time background loop (one per
  * server process, like the Telegram tip bot) that keeps autonomous companies
  * working toward their apex goal "forever, until stopped". Each tick it:
  *   1. reclaims stale Work Board tasks (recovers timed-out / offline pickups),
- *   2. for every company with autonomy ON, not frozen, with a goal + crew:
- *      re-dispatches the apex goal ONLY when the crew has gone idle (no ready/
- *      working member tasks) and there's at least one dispatchable member online,
- *      throttled by a minimum re-dispatch interval.
+ *   2. for every company with autonomy ON, not frozen, and with a goal:
+ *      asks the selected engine whether its work surface is idle, then re-dispatches
+ *      on the engine's cadence. Native crews use Work Board + online-member state;
+ *      AEON uses the selected workspace's run state and needs no native crew.
  *
  * Safety: spend is bounded by the company's daily/monthly/total budgets and the
  * frozen kill switch (enforced in spend-governance on every rail). The driver is
@@ -200,7 +202,18 @@ function memberIdentities(scoped: QueenBeeFleetMachine[]): Set<string> {
 // de-dupes on the key, so repeat calls past the threshold are cheap).
 let emptyFleetTicks = 0;
 let emptyFleetEscalated = false;
-async function trackFleetVisibility(machineCount: number): Promise<void> {
+async function trackFleetVisibility(machineCount: number, nativeCompanyCount: number): Promise<void> {
+  if (nativeCompanyCount === 0) {
+    if (emptyFleetEscalated) {
+      await resolveEscalationNotification("company-driver-empty-fleet", {
+        status: "resolved",
+        note: "No launched native-crew company currently depends on fleet visibility. AEON-backed companies continue through their selected workspaces.",
+      }).catch(() => undefined);
+    }
+    emptyFleetTicks = 0;
+    emptyFleetEscalated = false;
+    return;
+  }
   if (machineCount > 0) {
     // Announce recovery once so the earlier alert doesn't read as still-live —
     // an unresolved-looking "can't see the fleet" cost real diagnosis time on
@@ -211,12 +224,12 @@ async function trackFleetVisibility(machineCount: number): Promise<void> {
       // resolved badge keeps the old card honest, the notice pings the feed.
       await resolveEscalationNotification("company-driver-empty-fleet", {
         status: "resolved",
-        note: `Fleet snapshot recovered (${machineCount} machine${machineCount === 1 ? "" : "s"}) — company dispatch resumed.`,
+        note: `Fleet snapshot recovered (${machineCount} machine${machineCount === 1 ? "" : "s"}) — native company dispatch resumed.`,
       }).catch(() => undefined);
       await notifyEscalation({
         key: `company-driver-empty-fleet-recovered:${Date.now()}`,
         title: "Company autonomy driver can see the fleet again",
-        body: `The driver's fleet snapshot is back (${machineCount} machine${machineCount === 1 ? "" : "s"}) after ${emptyFleetTicks} empty ticks — company dispatch has resumed. The earlier "can't see the fleet" alert is resolved.`,
+        body: `The driver's fleet snapshot is back (${machineCount} machine${machineCount === 1 ? "" : "s"}) after ${emptyFleetTicks} empty ticks — native company dispatch has resumed. The earlier "can't see the fleet" alert is resolved.`,
         severity: "high",
         ttlMs: 0,
         tags: ["company", "driver", "recovered"],
@@ -231,7 +244,7 @@ async function trackFleetVisibility(machineCount: number): Promise<void> {
   await notifyEscalation({
     key: "company-driver-empty-fleet",
     title: "Company autonomy driver can't see the fleet",
-    body: `The driver's self-fetched fleet snapshot has been empty for ${emptyFleetTicks} consecutive ticks, so no company can dispatch work. Usual causes: the server's own port is unresolvable (no PORT env and no dashboard/watchdog request yet), the self-fetch is unauthenticated against the API auth gate, or /api/fleet/discover is failing.`,
+    body: `The driver's self-fetched fleet snapshot has been empty for ${emptyFleetTicks} consecutive ticks, so ${nativeCompanyCount} native-crew compan${nativeCompanyCount === 1 ? "y" : "ies"} cannot dispatch work. AEON-backed companies continue through their selected workspaces. Usual causes: the server's own port is unresolvable (no PORT env and no dashboard/watchdog request yet), the self-fetch is unauthenticated against the API auth gate, or /api/fleet/discover is failing.`,
     severity: "high",
     ttlMs: 6 * 60 * 60 * 1_000,
     tags: ["company", "driver"],
@@ -243,7 +256,9 @@ async function tickOnce(): Promise<void> {
   // tasks whose pickup timed out / agent went offline (back to "ready"), then re-dispatch any
   // autonomous task left stranded "ready" (e.g. a server restart killed its in-process pickup).
   // This is what makes autonomous loops survive a crash/restart instead of stalling forever.
-  await reclaimStaleTasks(null, {}, {});
+  await reclaimStaleTasks(null, {}, {}).catch((error) =>
+    console.warn("[company-autonomy-driver] stale Work Board task recovery failed:", error instanceof Error ? error.message : error),
+  );
   // Rescue infrastructure-stranded needs-human tasks BEFORE the ready re-dispatch,
   // so a task whose collector just came back is re-queued and re-dispatched in the
   // SAME tick instead of waiting a human click (zero-human boards have no hand-move).
@@ -255,26 +270,44 @@ async function tickOnce(): Promise<void> {
   } catch (error) {
     console.warn("[company-autonomy-driver] infra-rescue sweep failed:", error instanceof Error ? error.message : error);
   }
-  const redispatched = await redispatchReadyQueenBeeTasks({});
+  const redispatched = await redispatchReadyQueenBeeTasks({}).catch((error) => {
+    console.warn("[company-autonomy-driver] ready-task re-dispatch failed:", error instanceof Error ? error.message : error);
+    return 0;
+  });
   if (redispatched > 0) console.log(`[company-autonomy-driver] re-dispatched ${redispatched} stranded ready task(s)`);
+
+  const companies = await readCompanies();
+  const launched = companies.filter((company) => {
+    const autonomy = companyExecutionCapability(company.execution).autonomy;
+    return Boolean(
+      company.autonomy
+      && !company.frozen
+      && company.apexGoal?.title?.trim()
+      && (!autonomy.requiresCompanyCrew || (company.agentIds?.length ?? 0) > 0),
+    );
+  });
+  // Company definitions replicate fleet-wide through the shared vault, so only
+  // locally homed companies participate in this machine's dispatch/health state.
+  const eligible = launched.filter((company) => companyRunsOnThisMachine(company));
+  const nativeCompanyCount = eligible.filter(
+    (company) => companyExecutionCapability(company.execution).autonomy.requiresOnlineCrew,
+  ).length;
 
   // One fleet snapshot per tick, shared by pending-task routing and company
   // re-dispatch. Routing pending ("queen-bee"-assigned) tasks runs regardless of
   // company eligibility: a task queued while its agent was offline must get
   // delegated once the agent returns, or it waits forever.
-  const fleet = await fetchFleetSnapshot();
-  await trackFleetVisibility(fleet.length);
-  const routedPending = await routePendingQueenBeeTasks(fleet, {});
+  const fleet = await fetchFleetSnapshot().catch((error) => {
+    console.warn("[company-autonomy-driver] fleet snapshot unavailable; native companies will wait for a later pass:", error instanceof Error ? error.message : error);
+    return [];
+  });
+  await trackFleetVisibility(fleet.length, nativeCompanyCount);
+  const routedPending = await routePendingQueenBeeTasks(fleet, {}).catch((error) => {
+    console.warn("[company-autonomy-driver] pending-task routing failed:", error instanceof Error ? error.message : error);
+    return 0;
+  });
   if (routedPending > 0) console.log(`[company-autonomy-driver] routed ${routedPending} pending task(s) to online agents`);
 
-  const companies = await readCompanies();
-  const launched = companies.filter(
-    (c) => c.autonomy && !c.frozen && Boolean(c.apexGoal?.title?.trim()) && (c.agentIds?.length ?? 0) > 0,
-  );
-  // Company definitions replicate fleet-wide through the shared vault, so every
-  // machine's driver sees every company — only the claimed home machine may
-  // auto-dispatch, or the same goal fans out once per machine.
-  const eligible = launched.filter((c) => companyRunsOnThisMachine(c));
   for (const foreign of launched) {
     if (eligible.includes(foreign) || loggedForeignCompanies.has(foreign.id)) continue;
     loggedForeignCompanies.add(foreign.id);
@@ -368,10 +401,13 @@ export function countCompanyWaitingOnHuman(
 }
 
 async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof readCompanies>>, fleet: QueenBeeFleetMachine[]): Promise<void> {
-  // If the board can't be read we can't tell whether the crew is idle — a throw
-  // bubbles to the loop and we skip this pass rather than re-dispatch blind.
-  const board = await readBoard(null, {});
-  const tasks = board.tasks ?? [];
+  // Native crews fail closed when the Work Board cannot be read. AEON companies
+  // remain independent of that surface and use their workspace run state below.
+  const board = await readBoard(null, {}).catch((error) => {
+    console.warn("[company-autonomy-driver] Work Board unavailable; native companies will skip this pass:", error instanceof Error ? error.message : error);
+    return null;
+  });
+  const tasks = board?.tasks ?? [];
   const now = Date.now();
 
   // Weekly revenue check — a low-priority, in-app-only FYI, NOT a blocking alarm.
@@ -407,13 +443,23 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
 
   for (const company of eligible) {
     try {
+      const executionCapability = companyExecutionCapability(company.execution);
       const companyPrefix = `company:${company.id}:`;
-      const scoped = scopeFleetToMembers(fleet, company.agentIds);
-      // No member online + chat-capable → nobody to do the work; don't pile up queued tasks.
-      if (countDispatchableMembers(scoped) === 0) continue;
-      // Crew already has live work → let it finish before re-dispatching.
-      const idents = memberIdentities(scoped);
-      if (companyHasActiveWork(tasks, idents, company.id)) continue;
+      if (executionCapability.autonomy.activityAuthority === "work-board") {
+        if (!board) continue;
+        const scoped = scopeFleetToMembers(fleet, company.agentIds);
+        // No member online + chat-capable → nobody to do the work; don't pile up queued tasks.
+        if (executionCapability.autonomy.requiresOnlineCrew && countDispatchableMembers(scoped) === 0) continue;
+        // Crew already has live work → let it finish before re-dispatching.
+        const idents = memberIdentities(scoped);
+        if (companyHasActiveWork(tasks, idents, company.id)) continue;
+      } else if (company.execution?.engine === "aeon") {
+        // The AEON workspace is the activity authority. Any queued/active run in
+        // that workspace serializes company dispatches so overlapping external
+        // runs cannot be created by the HivemindOS cadence.
+        const activity = await inspectCompanyAeonActivity(company.execution);
+        if (activity.hasActiveRun) continue;
+      }
 
       // Approval backpressure: once too many items are already waiting on a human,
       // stop planning NEW work so the Needs You lane can't silently balloon to
@@ -445,7 +491,9 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       const completedSince = tasks.filter(
         (t) => (t.source ?? "").startsWith(companyPrefix) && t.status === "done" && (t.completedAt ?? t.updatedAt ?? 0) > sinceDispatch,
       ).length;
-      const noProgress = sinceDispatch > 0 && completedSince === 0;
+      const noProgress = executionCapability.autonomy.activityAuthority === "work-board"
+        && sinceDispatch > 0
+        && completedSince === 0;
       const interval = noProgress ? minRedispatchMs() * noProgressBackoff() : minRedispatchMs();
       if (now - sinceDispatch < interval) continue;
 
@@ -480,7 +528,9 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
         recentCompanyTaskTitles,
         completedCompanyTaskTitles,
       });
-      if (result.taskCount === 0) {
+      if (result.executionEngine === "aeon") {
+        console.log(`[company-autonomy-driver] ${company.id}: dispatched AEON skill ${result.aeon?.skill ?? "run"} through ${result.aeon?.profileName ?? "the configured workspace"}`);
+      } else if (result.taskCount === 0) {
         console.log(`[company-autonomy-driver] ${company.id}: nothing new to dispatch — all ${result.deduped ?? 0} planned task(s) already recent or in flight`);
       } else if (result.deduped) {
         console.log(`[company-autonomy-driver] ${company.id}: dispatched ${result.taskCount} new task(s), skipped ${result.deduped} redundant`);

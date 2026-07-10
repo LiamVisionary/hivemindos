@@ -52,6 +52,8 @@ type LmStudioModelManagerProps = {
   onLoadModel?: (modelKey: string, modelType?: string) => Promise<void>;
   onSelectModel?: (modelKey: string, model?: LoadPromptModel) => void;
   catalogFilter?: (entry: LocalModelInstallCatalogStatus) => boolean;
+  inventoryFilter?: (model: LoadPromptModel) => boolean;
+  emptyInventoryLabel?: string;
 };
 
 type LmStudioStatus = NonNullable<RuntimeIntegrationStatus["providerStatus"]>["lmStudio"];
@@ -88,6 +90,8 @@ export function LmStudioModelManager({
   onLoadModel,
   onSelectModel,
   catalogFilter,
+  inventoryFilter,
+  emptyInventoryLabel = "No local model inventory reported by this machine.",
 }: LmStudioModelManagerProps) {
   const [setupExpanded, setSetupExpanded] = useState(false);
   const [loadPromptModel, setLoadPromptModel] = useState<LoadPromptModel | null>(null);
@@ -111,7 +115,8 @@ export function LmStudioModelManager({
     canLoad: model.subtitle !== "Serving",
     canUnload: model.subtitle !== "Serving",
   }));
-  const models: LocalInventoryModel[] = inventoryModels.length ? inventoryModels : fallbackModels;
+  const models: LocalInventoryModel[] = (inventoryModels.length ? inventoryModels : fallbackModels)
+    .filter((model) => !inventoryFilter || inventoryFilter(model));
   const actionBusy = busy === "load-model" || busy === "unload-model";
   const downloadActionBusy = busy === "download-model" || busy === "cancel-download";
   const setupActionBusy = setupBusyStates.has(busy);
@@ -180,7 +185,7 @@ export function LmStudioModelManager({
     }
     if (selectedModelLoaded && selectedModelId) void smokeTestLocalModel(selectedModelId, selectedModel);
   };
-  const loadModel = async (modelKey: string, modelType?: string) => {
+  const loadModel = async (modelKey: string, modelType?: string, contextLength?: number) => {
     if (!agent) return;
     selectModel(modelKey);
     if (onLoadModel) {
@@ -189,6 +194,7 @@ export function LmStudioModelManager({
     }
     await runRuntimeIntegrationAction("load-model", {
       model: modelKey,
+      ...(contextLength ? { contextLength } : {}),
     }, agent);
   };
   const unloadModel = async (instanceId: string) => {
@@ -308,7 +314,7 @@ export function LmStudioModelManager({
                 ) : entry.installed && entry.loaded ? (
                   <span style={{ color: "var(--fg-4)", fontSize: 11 }}>Ready</span>
                 ) : entry.installed ? (
-                  <Btn variant="primary" size="sm" disabled={actionBusy} onClick={() => void loadModel(installedKey, "llm")}>Load</Btn>
+                  <Btn variant="primary" size="sm" disabled={actionBusy} onClick={() => void loadModel(installedKey, "llm", entry.contextLength)}>Load</Btn>
                 ) : download?.state === "completed" ? (
                   <Btn variant="ghost" size="sm" disabled={busy === "status"} onClick={() => refreshRuntimeIntegrations(agent ?? undefined)}>
                     <Repeat2 size={13} className={busy === "status" ? "animate-spin" : undefined} aria-hidden="true" /> Refresh
@@ -388,7 +394,7 @@ export function LmStudioModelManager({
             ? <LmStudioLoadProgress label="" />
             : (
               <p style={{ margin: 0, color: "var(--fg-4)", fontSize: 12, lineHeight: 1.45 }}>
-                No local model inventory reported by this machine.
+                {emptyInventoryLabel}
               </p>
             )
         )}

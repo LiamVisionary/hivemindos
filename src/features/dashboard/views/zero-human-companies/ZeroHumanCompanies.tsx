@@ -11,6 +11,7 @@ import type { ApprovalDecision } from "@/features/approvals/spend-approval-model
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { ImportCompanyModal } from "./ImportCompanyModal";
 import { TaskDetailModal } from "./TaskDetailModal";
+import { FounderModeModal } from "./FounderModeModal";
 import { agentsAtWork } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import type { PreviewDecision } from "./preview-review";
@@ -79,8 +80,8 @@ export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () =>
 }
 
 function Masthead({
-  companies, loading, initialLoading, onRefresh, onImport, theme, onToggleTheme,
-}: { companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void; onImport: () => void; theme: Theme; onToggleTheme: () => void }) {
+  companies, loading, initialLoading, onRefresh, onImport, onFounder, theme, onToggleTheme,
+}: { companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void; onImport: () => void; onFounder: () => void; theme: Theme; onToggleTheme: () => void }) {
   const pendingFirstSync = initialLoading && companies.length === 0;
   const s = {
     colonies: companies.length,
@@ -110,6 +111,9 @@ function Masthead({
         </div>
         <div style={{ justifySelf: "end", display: "flex", alignItems: "center", gap: 8 }}>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          <PillButton onClick={onFounder} title="Turn one outcome into a governed company blueprint">
+            ✦ Founder mode
+          </PillButton>
           <PillButton onClick={onImport} title="Import an existing project as a company">
             <Upload size={13} strokeWidth={1.8} /> Import
           </PillButton>
@@ -203,6 +207,7 @@ export default function ZeroHumanCompanies({
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [modal, setModal] = React.useState<
     | { type: "create" }
+    | { type: "founder" }
     | { type: "import" }
     | { type: "edit"; id: string }
     | { type: "treasury"; id: string }
@@ -310,7 +315,7 @@ export default function ZeroHumanCompanies({
 
       <div style={{ position: "relative", zIndex: 1 }}>
         {view === "portfolio" && (
-          <Masthead companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} onImport={() => setModal({ type: "import" })} theme={themeState} onToggleTheme={toggleTheme} />
+          <Masthead companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} onImport={() => setModal({ type: "import" })} onFounder={() => setModal({ type: "founder" })} theme={themeState} onToggleTheme={toggleTheme} />
         )}
         {error ? (
           <div style={{ margin: "12px 40px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
@@ -360,6 +365,18 @@ export default function ZeroHumanCompanies({
 
       {modal && modal.type === "create" && (
         <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={themeState} onClose={closeModal} onCreate={handleCreate} />
+      )}
+      {modal && modal.type === "founder" && (
+        <FounderModeModal
+          agentPool={agentPool}
+          theme={themeState}
+          onClose={closeModal}
+          onCreated={(companyId) => {
+            setModal(null);
+            setOpenId(companyId);
+            onRefresh();
+          }}
+        />
       )}
       {modal && modal.type === "import" && (
         <ImportCompanyModal

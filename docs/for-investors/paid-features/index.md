@@ -33,6 +33,11 @@ The free product should let someone run HivemindOS, connect their own keys, talk
     <a href="hive-compute-marketplace.html">Open compute marketplace</a>
   </section>
   <section class="docCard">
+    <h3>Managed Cloud Agents</h3>
+    <p>Dedicated always-on Hermes runtimes with persistent storage, managed inference, server-metered credits, and Base USDC funding.</p>
+    <a href="../../for-users/features/managed-cloud-agents.html">Open managed agents</a>
+  </section>
+  <section class="docCard">
     <h3>Future Premium Services</h3>
     <p>Hive Cloud, expanded managed compute, the Agent Marketplace, and Enterprise are planned as optional services around the free product.</p>
     <a href="../ecosystem-plan.html">Open ecosystem plan</a>

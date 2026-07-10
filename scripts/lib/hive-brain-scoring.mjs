@@ -30,7 +30,7 @@ export const TIERED_MEMORY_STRONG_SCORE = 32;
 export const TIERED_MEMORY_USABLE_SCORE = 24;
 export const TIERED_MEMORY_HIGH_CONFIDENCE = 0.85;
 
-const EXACT_TITLE_CAP = 24;
+const EXACT_TITLE_CAP = 32;
 const EXACT_TAG_CAP = 12;
 const EXACT_CONTENT_CAP = 16;
 const EXACT_SOURCE_CAP = 6;
@@ -186,7 +186,7 @@ export function normalizeBm25Score(rawScore, termCount) {
 // --- entity matching mirror --------------------------------------------------
 
 const GENERIC_ENTITY_WORDS = new Set([
-  "agent", "agents", "brain", "memory", "note", "notes", "service", "services", "shared", "vault",
+  "agent", "agents", "brain", "critical", "fixed", "memory", "note", "notes", "service", "services", "shared", "vault", "verified",
 ]);
 
 function normalizeEntity(value) {
@@ -239,6 +239,25 @@ function textWords(value) {
   return queryWordsForRecall(value, LOW_SIGNAL_QUERY_WORDS);
 }
 
+function queryTypeIntent(query) {
+  const lower = String(query ?? "").toLowerCase();
+  if (/\b(artifact|proof|evidence|receipt|verification|verified|proven?|demonstrat(?:e|ed|ion))\b/.test(lower)) return "artifact";
+  if (/\b(instruction|rule|guidance|must|required|require|should)\b/.test(lower) || /\bbefore\s+(?:calling|claiming|declaring|saying)\b/.test(lower)) return "instruction";
+  if (/\b(decide|decision|choose|chosen|selected|set)\b/.test(lower)) return "decision";
+  if (/\b(preference|prefer|favorite|favourite|likes?)\b/.test(lower)) return "preference";
+  if (/\b(commitment|committed|promised?)\b/.test(lower)) return "commitment";
+  if (/\b(goal|objective|aim)\b/.test(lower)) return "goal";
+  if (/\b(lesson|learning|learned|learnt)\b/.test(lower)) return "learning";
+  return undefined;
+}
+
+function temporalTopicPhrase(query) {
+  return String(query ?? "").trim().replace(
+    /^(?:(?:previously|formerly|historically|back then|at the time)|(?:(?:as of|before)\s+\d{4}-\d{2}-\d{2})|yesterday|last week|last month|last year)\s*[:,;-]?\s+/i,
+    "",
+  );
+}
+
 export function recencyScore(createdAt, now = Date.now()) {
   const ageDays = (now - Date.parse(createdAt)) / 86_400_000;
   if (!Number.isFinite(ageDays) || ageDays < 0) return 4;
@@ -254,21 +273,28 @@ export function temporalRecallMode(input) {
   if (explicit === "current" || explicit === "historical" || explicit === "as-of") return explicit;
   if (input.asOf && String(input.asOf).trim()) return "as-of";
   const query = (input.query ?? "").toLowerCase();
-  if (/\b(as of|before|used to|previously|formerly|at the time|back then|old|older|history|historical|last week|last month|last year|yesterday)\b/.test(query)) {
-    return query.includes("as of") ? "as-of" : "historical";
-  }
-  if (/\b\d{4}-\d{2}-\d{2}\b/.test(query)) return "as-of";
+  if (/\b(?:as of|before)\s+\d{4}-\d{2}-\d{2}\b/.test(query)) return "as-of";
+  if (/\b(as of|last week|last month|last year|yesterday)\b/.test(query)) return "as-of";
+  if (/\b(used to|previously|formerly|at the time|back then|old|older|history|historical)\b/.test(query)) return "historical";
   return "current";
+}
+
+function parseAsOfValue(value) {
+  const trimmed = String(value).trim();
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? Date.parse(`${trimmed}T23:59:59.999Z`)
+    : Date.parse(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function temporalAsOfMs(input, now = Date.now()) {
   if (input.asOf && String(input.asOf).trim()) {
-    const parsed = Date.parse(input.asOf);
-    return Number.isFinite(parsed) ? parsed : undefined;
+    return parseAsOfValue(input.asOf);
   }
   const query = (input.query ?? "").toLowerCase();
   const iso = query.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
-  if (iso) return Date.parse(iso);
+  if (iso && new RegExp(`\\bbefore\\s+${iso.replace(/-/g, "\\-")}\\b`).test(query)) return Date.parse(iso) - 1;
+  if (iso && new RegExp(`\\bas of(?:\\s+the end of)?\\s+${iso.replace(/-/g, "\\-")}\\b`).test(query)) return parseAsOfValue(iso);
   if (query.includes("yesterday")) return now - 86_400_000;
   if (query.includes("last week")) return now - 7 * 86_400_000;
   if (query.includes("last month")) return now - 30 * 86_400_000;
@@ -277,10 +303,13 @@ function temporalAsOfMs(input, now = Date.now()) {
 }
 
 export function recordVisibleForRecall(record, input) {
+  const explicitlyRequestsActions = String(input.type ?? "").trim().toLowerCase() === "action";
+  if (record.type === "action" && !explicitlyRequestsActions && !input.includeOperational) return false;
   if (input.includeArchived) return true;
   if (record.status === "archived") return false;
   const mode = temporalRecallMode(input);
   if (mode === "current") return (record.status || "active") === "active";
+  if (mode === "historical") return true;
   const asOf = temporalAsOfMs(input);
   if (asOf === undefined) return true;
   return Date.parse(record.createdAt) <= asOf;
@@ -380,8 +409,8 @@ export function scoreAgentMemory(record, input, lexical, semantic) {
   const scoreDetails = {};
 
   if (!query) scoreDetails.exact = 1;
-  const queryLower = query.toLowerCase();
-  if (query && isSelectiveExactPhrase(query) && containsPhraseWithBoundaries(haystack, queryLower)) {
+  const exactPhrase = temporalTopicPhrase(query);
+  if (exactPhrase && isSelectiveExactPhrase(exactPhrase) && containsPhraseWithBoundaries(haystack, exactPhrase.toLowerCase())) {
     scoreDetails.exact = (scoreDetails.exact ?? 0) + 30;
     matched.add("exact-query");
   }
@@ -426,8 +455,19 @@ export function scoreAgentMemory(record, input, lexical, semantic) {
     scoreDetails.semantic = Math.round(semantic * SEMANTIC_SCORE_WEIGHT);
     if (semantic >= SEMANTIC_MATCH_GATE) matched.add("semantic");
   }
+  const uniqueQueryWords = [...new Set(queryWords)];
+  const coveredQueryWords = uniqueQueryWords.filter((word) => matched.has(word)).length;
+  if (uniqueQueryWords.length >= 2 && coveredQueryWords) {
+    scoreDetails.coverage = Math.round((coveredQueryWords / uniqueQueryWords.length) * 12);
+  }
+  const intendedType = input.type ? undefined : queryTypeIntent(query);
+  if (intendedType && record.type === intendedType) scoreDetails.intent = 15;
   if (input.type && record.type === String(input.type).trim().toLowerCase()) scoreDetails.exact = (scoreDetails.exact ?? 0) + 10;
-  if (record.searchScore) scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScore)));
+  if (record.searchScoreNormalized !== undefined) {
+    scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScoreNormalized * 30)));
+  } else if (record.searchScore) {
+    scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScore)));
+  }
   scoreDetails.confidence = Math.round((record.confidence ?? 0.7) * 10);
   scoreDetails.temporal = temporalScore(record, input);
   scoreDetails.usage = usageScore(record);

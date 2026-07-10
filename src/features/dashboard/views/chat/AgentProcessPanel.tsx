@@ -145,14 +145,17 @@ function splitProcessDetail(event: ProcessEvent) {
   return { primary: detail, result: "" };
 }
 
-function ResultChip({ text, tone = "default" }: { text: string; tone?: string }) {
+function ProcessMeta({ text, tone = "default" }: { text: string; tone?: string }) {
+  // Reuse the fr-process tone concept: success-ish -> live, error -> danger, else muted.
+  const color = tone === "danger" ? "var(--danger)" : tone === "live" || tone === "complete" ? "var(--live)" : "var(--fg-4)";
+  // Preserve the existing +added −removed diff split (add is live, remove is danger).
   const diff = /([+]\d+)\s+([−-]\d+)/.exec(text);
   return (
-    <span className="fr-process-result" data-tone={tone}>
+    <span style={{ fontFamily: "var(--f-body)", fontSize: 10.5, textAlign: "right", color, whiteSpace: "nowrap" }}>
       {diff ? (
         <>
-          <span data-diff="add">{diff[1]}</span>
-          <span data-diff="remove">{diff[2]}</span>
+          <span style={{ color: "var(--live)" }}>{diff[1]}</span>{" "}
+          <span style={{ color: "var(--danger)" }}>{diff[2]}</span>
         </>
       ) : text}
     </span>
@@ -164,8 +167,8 @@ function processTimeLabel(value: unknown) {
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEvent[] }) {
-  const { active = false, events = [] } = props;
+export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEvent[]; agentName?: string }) {
+  const { active = false, events = [], agentName } = props;
   const visibleEvents = processDisplayEvents(events);
   const latestActive = active && processEventsAreActive(visibleEvents);
   const mirosharkProcess = getMiroSharkProcessSummary(visibleEvents, latestActive);
@@ -173,27 +176,64 @@ export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEve
   if (!visibleEvents.length) return null;
 
   const many = visibleEvents.length > 1;
+  const stepCount = visibleEvents.length;
+  const workerName = mirosharkProcess ? "MiroShark" : agentName?.trim() || "Agent";
 
   return (
-    <section className="fr-process-card" data-active={latestActive ? "true" : undefined} aria-label="Agent process">
-      <header className="fr-process-header">
-        <Glyph d={TOOL_GLYPH.flow} s={12} sw={1.7} />
-        <span>{mirosharkProcess ? "MiroShark" : "Process"}</span>
-        <span aria-hidden="true">·</span>
-        <span>{visibleEvents.length} step{visibleEvents.length === 1 ? "" : "s"}</span>
-        {latestActive ? (
-          <span className="fr-process-live">
-            <span className="fr-dot live" aria-hidden="true" />
-            running
-          </span>
-        ) : null}
+    <section
+      aria-label="Agent process"
+      data-active={latestActive ? "true" : undefined}
+      style={{
+        display: "grid",
+        gap: 14,
+        border: "1px solid var(--line)",
+        borderRadius: 14,
+        background: "var(--bg-soft)",
+        padding: "15px 18px",
+      }}
+    >
+      <header style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <svg width={13} height={13} viewBox="0 0 24 24" fill="var(--honey)" aria-hidden="true">
+          <path d={ICON.sparkles} />
+        </svg>
+        <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 12, fontWeight: 500, color: "var(--fg-3)" }}>
+          {workerName} worked · {stepCount} step{stepCount === 1 ? "" : "s"}
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-body)", fontSize: 12, color: "var(--live)" }}>
+          <span
+            className={latestActive ? "cx-dot-live" : undefined}
+            style={{ width: 6, height: 6, borderRadius: 99, background: "currentColor" }}
+            aria-hidden="true"
+          />
+          {latestActive ? "working" : "done"}
+        </span>
       </header>
       {mirosharkProcess ? (
         <div className="fr-process-miroshark">
           <MiroSharkProcessCard summary={mirosharkProcess} />
         </div>
       ) : null}
-      <div className="fr-process-list fr-scroll" data-many={many ? "true" : undefined}>
+      <div
+        className={many ? "cx-scroll" : undefined}
+        style={{
+          position: "relative",
+          display: "grid",
+          gap: 16,
+          ...(many ? { maxHeight: "min(372px, 44vh)", overflowY: "auto", overscrollBehavior: "contain" } : null),
+        }}
+      >
+        <span
+          className="cx-tl-line"
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: 12,
+            top: 12,
+            bottom: 12,
+            width: 1.5,
+            background: "linear-gradient(180deg,var(--honey-line),var(--line-2))",
+          }}
+        />
         {visibleEvents.map((event, index) => {
           const toolKey = processToolKey(event);
           const meta = PROCESS_TOOL_META[toolKey] ?? PROCESS_TOOL_META.unknown;
@@ -202,24 +242,32 @@ export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEve
           const fileTarget = processFileTarget(event);
           const statusLabel = processStatusLabel(event);
           const { primary, result } = splitProcessDetail(event);
+          const detailText = primary || fileTarget;
+          const metaText = result || statusLabel;
           return (
-            <div className="fr-process-step" data-active={isActive ? "true" : undefined} key={`${event.at ?? "event"}-${index}`}>
-              <span className="fr-process-icon" data-rail={many ? "true" : undefined} data-tone={tone} aria-hidden="true">
-                <Glyph d={processGlyph(meta.icon)} s={12.5} sw={1.7} />
+            <div
+              className="cx-tl-step"
+              key={`${event.at ?? "event"}-${index}`}
+              title={processTimeLabel(event.at)}
+              style={{ display: "grid", gridTemplateColumns: "25px minmax(0,1fr) auto", alignItems: "center", gap: 13 }}
+            >
+              <span
+                aria-hidden="true"
+                style={{ display: "grid", placeItems: "center", width: 25, height: 25, borderRadius: 8, background: "var(--bg-soft)", color: "var(--honey)", zIndex: 1 }}
+              >
+                <Glyph d={processGlyph(meta.icon)} s={15} sw={1.7} />
               </span>
-              <span className="fr-process-step-main">
-                <span className="fr-process-step-line">
-                  <strong>{processDisplayLabel(event)}</strong>
-                  {fileTarget ? <code>{fileTarget}</code> : null}
-                  {statusLabel ? <ResultChip text={statusLabel} tone={tone} /> : null}
-                  {result ? <ResultChip text={result} /> : null}
-                </span>
-                {primary ? <span className="fr-process-step-detail">{primary}</span> : null}
+              <span style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", minWidth: 0 }}>
+                <span style={{ fontFamily: "var(--f-body)", fontSize: 14, color: "var(--fg-2)" }}>{processDisplayLabel(event)}</span>
+                {detailText ? (
+                  <code
+                    style={{ minWidth: 0, borderRadius: 7, background: "var(--panel-2)", color: "var(--honey-2)", padding: "2px 8px", fontFamily: "var(--f-body)", fontSize: 11.5, overflowWrap: "anywhere" }}
+                  >
+                    {detailText}
+                  </code>
+                ) : null}
               </span>
-              <span className="fr-process-step-meta" data-tone={tone}>
-                <Glyph d={tone === "danger" ? ICON.close : ICON.check} s={11.5} sw={2.2} />
-                <time>{processTimeLabel(event.at)}</time>
-              </span>
+              {metaText ? <ProcessMeta text={metaText} tone={tone} /> : null}
             </div>
           );
         })}

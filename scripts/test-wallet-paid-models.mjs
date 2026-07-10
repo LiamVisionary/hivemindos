@@ -157,12 +157,13 @@ includes(runtimeRoute, "ssePayload({ billing: responseBilling })", "chat runtime
 includes(runtimeRoute, "extractOpenAIToolCalls", "chat runtime extracts non-stream OpenAI tool calls");
 includes(runtimeRoute, "runNonStreamToolCalls", "chat runtime executes non-stream model tool calls");
 includes(runtimeRoute, "const leakedToolCalls = winningRequest?.sentTools ? extractLeakedToolCalls(rawChunk) : []", "chat runtime checks non-stream text for leaked tool-call markup before text fallback");
-includes(runtimeRoute, "const toolCalls = winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : []", "chat runtime checks non-stream JSON and leaked markup for tool calls before text fallback");
+includes(runtimeRoute, "forceVideoGenerationToolCall(winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [], forceVideoTool, userText)", "chat runtime checks non-stream tool calls and enforces explicit video intent before text fallback");
 includes(runtimeRoute, "nonStream: true", "chat runtime records non-stream command tool telemetry");
 includes(runtimeRoute, "runNonStreamToolConversation", "chat runtime continues non-stream tool-call turns");
 includes(runtimeRoute, "conversation.push({ role: \"assistant\", content: \"\", tool_calls: toolRun.assistantToolCalls })", "chat runtime preserves non-stream assistant tool calls before continuation");
 includes(runtimeRoute, "conversation.push(...toolRun.toolResultMessages)", "chat runtime appends non-stream tool results before continuation");
-includes(runtimeRoute, "toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? extractOpenAIToolCalls(continuationJson) : []", "chat runtime can chain non-stream tool-call continuations");
+includes(runtimeRoute, "toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? [...extractOpenAIToolCalls(continuationJson), ...extractLeakedToolCalls(continuationText)] : []", "chat runtime can chain structured and leaked non-stream tool-call continuations");
+includes(runtimeRoute, "stripLeakedToolCallMarkup(continuationText) || fallbackText", "chat runtime does not render exhausted leaked tool-call continuations");
 assert.ok(!runtimeRoute.includes("shouldUseCompactFreeScoutContext"), "chat runtime must not compact simple free Scout prompts");
 assert.ok(!runtimeRoute.includes("compactFreeScoutContext"), "chat runtime must not carry a compact free Scout context gate");
 includes(runtimeRoute, "buildTaskRetrievalContextResult", "chat runtime keeps capability retrieval context for Scout turns");

@@ -41,7 +41,7 @@ export default function RootLayout({
         {/* eslint-disable-next-line @next/next/no-page-custom-font -- App Router has no pages/_document; keep existing Google font families without CSS @import. */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&family=Spline+Sans+Mono:wght@400;500&display=swap"
         />
         {BEE_ROLE_ICON_PATHS.map((href) => (
           <link key={href} rel="preload" as="image" href={href} />

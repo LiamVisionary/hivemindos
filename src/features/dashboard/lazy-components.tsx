@@ -55,7 +55,9 @@ const loadChatPanel = () => import("@/features/dashboard/views/ChatPanel");
 const loadMorePanel = () => import("@/features/dashboard/MorePanel");
 const loadFusionPanel = () => import("@/features/dashboard/views/FusionPanel");
 const loadGovernancePanel = () => import("@/features/dashboard/views/GovernancePanel");
+const loadManagedCloudAgentsPanel = () => import("@/features/dashboard/views/ManagedCloudAgentsPanel");
 const loadHiveComputePanel = () => import("@/features/dashboard/views/HiveComputePanel");
+const loadTelemetryView = () => import("@/features/dashboard/views/telemetry/TelemetryView");
 const loadAeonAutopilotPanel = () => import("@/components/aeon");
 const loadPhonePanel = () => import("@/features/dashboard/views/PhonePanel");
 const loadIntegrationsView = () => import("@/features/integrations/IntegrationsView");
@@ -72,7 +74,9 @@ export const ChatPanel = dynamic(() => loadChatPanel().then((mod) => mod.ChatPan
 export const MorePanel = dynamic(() => loadMorePanel().then((mod) => mod.MorePanel), { ssr: false, loading: routeLoadingFromProps });
 export const FusionPanel = dynamic(() => loadFusionPanel().then((mod) => mod.FusionPanel), { ssr: false, loading: routeLoadingFor("fusion") });
 export const GovernancePanel = dynamic(() => loadGovernancePanel().then((mod) => mod.GovernancePanel), { ssr: false, loading: routeLoadingFor("governance") });
+export const ManagedCloudAgentsPanel = dynamic(() => loadManagedCloudAgentsPanel().then((mod) => mod.ManagedCloudAgentsPanel), { ssr: false, loading: routeLoadingFor("cloud") });
 export const HiveComputePanel = dynamic(() => loadHiveComputePanel().then((mod) => mod.HiveComputePanel), { ssr: false, loading: routeLoadingFor("compute") });
+export const TelemetryView = dynamic(() => loadTelemetryView().then((mod) => mod.TelemetryView), { ssr: false, loading: routeLoadingFor("memory") });
 export const AeonAutopilotPanel = dynamic(() => loadAeonAutopilotPanel().then((mod) => mod.AeonAutopilotPanel), { ssr: false, loading: routeLoadingFor("aeon") });
 export const PhonePanel = dynamic(() => loadPhonePanel().then((mod) => mod.PhonePanel), { ssr: false, loading: routeLoadingFor("phone") });
 export const DashboardModals = dynamic(() => import("@/features/dashboard/views/DashboardModals").then((mod) => mod.DashboardModals), { ssr: false });
@@ -107,7 +111,9 @@ export const DASHBOARD_VIEW_PRELOADERS: Partial<Record<DashboardView, () => Prom
   phone: loadPhonePanel,
   fusion: loadFusionPanel,
   governance: loadGovernancePanel,
+  cloud: loadManagedCloudAgentsPanel,
   compute: loadHiveComputePanel,
+  memory: loadTelemetryView,
   aeon: loadAeonAutopilotPanel,
   integrations: loadIntegrationsView,
 };

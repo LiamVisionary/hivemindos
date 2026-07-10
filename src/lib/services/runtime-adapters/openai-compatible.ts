@@ -9,6 +9,7 @@ import { HIVEMIND_OS_RUNTIME, type AgentProfile } from "@/lib/types/agent-runtim
 import {
   LOCAL_MODEL_INSTALL_CATALOG,
   lmStudioDownloadArgsForCatalogEntry,
+  localModelMatchesCatalogEntry,
   localModelInstallCatalogEntry,
   type LocalModelDownloadJob,
   type LocalModelDownloadState,
@@ -448,30 +449,11 @@ export function localModelHardwareSnapshot(): LocalModelHardwareSnapshot {
   };
 }
 
-function normalizeCatalogMatch(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
-}
-
-function lmStudioModelMatchesCatalogEntry(model: NormalizedLmStudioModel, entry: LocalModelInstallCatalogStatus) {
-  const rawHaystack = [
-    model.key,
-    model.displayName,
-    model.paramsString || "",
-    model.format || "",
-  ].join(" ").toLowerCase();
-  const compactHaystack = normalizeCatalogMatch(rawHaystack);
-  return entry.matchKeys.some((matchKey) => {
-    const rawNeedle = matchKey.toLowerCase();
-    const compactNeedle = normalizeCatalogMatch(matchKey);
-    return rawHaystack.includes(rawNeedle) || Boolean(compactNeedle && compactHaystack.includes(compactNeedle));
-  });
-}
-
 export function annotateLocalModelInstallCatalog(
   models: NormalizedLmStudioModel[],
 ): LocalModelInstallCatalogStatus[] {
   return LOCAL_MODEL_INSTALL_CATALOG.map((entry) => {
-    const installed = models.find((model) => model.source !== "openai-server" && !model.remote && lmStudioModelMatchesCatalogEntry(model, entry));
+    const installed = models.find((model) => model.source !== "openai-server" && !model.remote && localModelMatchesCatalogEntry(model, entry));
     return {
       ...entry,
       installed: Boolean(installed),
@@ -1019,6 +1001,28 @@ async function installLmStudioRuntime() {
   };
 }
 
+/**
+ * Bring up the LM Studio daemon and its OpenAI-compatible HTTP server on
+ * `port`, bound to loopback. Opening the LM Studio app does NOT start this
+ * server, so any caller that needs `/v1/models` to answer must run this first.
+ *
+ * Kept free of `AgentProfile` so non-agent surfaces (Hive Compute hosting) can
+ * reuse it. Rejects if the `lms` CLI is missing or the server refuses to start.
+ */
+export async function startLmStudioServerOnPort(port: string) {
+  const lmsBin = await resolveLmsBin();
+  await execFileAsync(lmsBin, ["daemon", "up"], {
+    timeout: 120_000,
+    maxBuffer: 2_000_000,
+    env: lmsProcessEnv(),
+  }).catch(() => undefined);
+  await execFileAsync(lmsBin, ["server", "start", "--port", port, "--bind", "127.0.0.1"], {
+    timeout: 120_000,
+    maxBuffer: 2_000_000,
+    env: lmsProcessEnv(),
+  });
+}
+
 async function startLmStudioRuntime(profile: AgentProfile) {
   const runtimeProfile = localOpenAIProviderProfile(profile);
   const setup = await localRuntimeSetupStatus(runtimeProfile);
@@ -1026,18 +1030,8 @@ async function startLmStudioRuntime(profile: AgentProfile) {
   if (!lmStudio?.present) {
     return { ok: false, error: "Install LM Studio before starting the Local server." };
   }
-  const lmsBin = await resolveLmsBin();
-  await execFileAsync(lmsBin, ["daemon", "up"], {
-    timeout: 120_000,
-    maxBuffer: 2_000_000,
-    env: lmsProcessEnv(),
-  }).catch(() => undefined);
   let startError = "";
-  await execFileAsync(lmsBin, ["server", "start", "--port", serverPortForProfile(runtimeProfile), "--bind", "127.0.0.1"], {
-    timeout: 120_000,
-    maxBuffer: 2_000_000,
-    env: lmsProcessEnv(),
-  }).catch((error) => {
+  await startLmStudioServerOnPort(serverPortForProfile(runtimeProfile)).catch((error) => {
     startError = compactError(error, "LM Studio server start failed.");
   });
   const probe = await waitForOpenAIModelEndpoint(runtimeProfile, 30_000);

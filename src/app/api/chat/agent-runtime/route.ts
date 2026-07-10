@@ -10,6 +10,8 @@ import { isFusionProfile, streamFusionResponse } from "@/lib/services/fusion/rou
 import { isBankrLlmProfile } from "@/lib/services/bankr-llm";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
+import { normalizeChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
+import type { ChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
 import { activeSharedVault } from "@/lib/services/chat/shared-vault-context";
 import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capability-context";
 import { buildClawbankCapabilityContext } from "@/lib/services/chat/clawbank-capability-context";
@@ -69,6 +71,9 @@ import {
 import { coerceActingWalletSourceHint, type ActingWalletSourceHint } from "./wallet-transfer-rails";
 import { dispatchWalletAndTradeIntents } from "./wallet-trade-rails";
 import { streamHttpRuntime } from "./stream-http-runtime";
+import { explicitLocalCommandRequest } from "./media-tool-routing";
+import { prepareNativeVideoGenerationRequest } from "./native-video-generation-request";
+import { streamNativeVideoGeneration } from "./stream-native-video-generation";
 import {
   appendRuntimeProcessEvents,
   runtimeProcessEvent,
@@ -104,6 +109,7 @@ export async function POST(request: NextRequest) {
   let actingWalletSource: ActingWalletSourceHint | undefined;
   let suppressWalletIntents = false;
   let permissionMode: ChatPermissionMode = "manual";
+  let reasoningEffort: ChatReasoningEffort = "medium";
   let requestAttachments: unknown[] = [];
   let mediaArtifacts: ChatMediaArtifact[] = [];
   try {
@@ -124,6 +130,7 @@ export async function POST(request: NextRequest) {
       actingWalletSource?: unknown;
       suppressWalletIntents?: boolean;
       permissionMode?: unknown;
+      reasoningEffort?: unknown;
     };
     if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
     profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
@@ -145,6 +152,7 @@ export async function POST(request: NextRequest) {
     actingWalletSource = coerceActingWalletSourceHint(body.actingWalletSource);
     suppressWalletIntents = body.suppressWalletIntents === true;
     permissionMode = normalizeChatPermissionMode(body.permissionMode);
+    reasoningEffort = normalizeChatReasoningEffort(body.reasoningEffort);
   } catch {
     await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
     return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
@@ -161,6 +169,7 @@ export async function POST(request: NextRequest) {
     latencyMode: latencyMode || null,
     suppressWalletIntents,
     permissionMode,
+    reasoningEffort,
     sharedVaultEnabled: Boolean(sharedVault?.enabled),
     honeyLedgerEnabled,
     elapsedMs: Date.now() - routeStartedAt,
@@ -332,6 +341,7 @@ export async function POST(request: NextRequest) {
       "",
       permissionMode,
       mediaArtifacts,
+      reasoningEffort,
     );
   }
   const fallbackRuntimeCapabilityContext: Awaited<ReturnType<typeof runtimeImageGenerationCapabilityContext>> = {
@@ -459,6 +469,37 @@ export async function POST(request: NextRequest) {
       })]
     : [];
   await appendRuntimeProcessEvents(runtimeSessionId, preflightProcessEvents);
+  const nativeVideoRequest = agentMode === "act" && !explicitLocalCommandRequest(userPrompt)
+    ? await prepareNativeVideoGenerationRequest({
+      userPrompt,
+      mediaArtifacts,
+      sessionMessages: runtimeSession?.messages ?? [],
+    })
+    : null;
+  if (nativeVideoRequest) {
+    await recordRouteTelemetry(request, "agent_runtime.dispatch.native_video", {
+      ...telemetryPayloadForProfile(profile),
+      runtimeSessionId,
+      chatStorageKey: chatStorageKey || null,
+      inputImageCount: nativeVideoRequest.inputImages.length,
+      followUp: nativeVideoRequest.followUp,
+      elapsedMs: Date.now() - routeStartedAt,
+    });
+    return streamNativeVideoGeneration({
+      origin: request.nextUrl.origin,
+      prompt: nativeVideoRequest.prompt,
+      inputImages: nativeVideoRequest.inputImages,
+      runtimeSessionId,
+      runtime: profile.runtime,
+      startedAt: routeStartedAt,
+      runId: clientRunId || runtimeSessionId,
+      chatStorageKey,
+      agentId: profile.id,
+      signal: request.signal,
+      preflightProcessEvents,
+      sourceArtifacts: nativeVideoRequest.sourceArtifacts,
+    });
+  }
   // Wallet / trade intents already ran via dispatchWalletAndTradeIntents() before the
   // voice fast path above (so voice + typed chat share one money path); nothing to
   // re-dispatch here. Continue to the conversational agent stream.
@@ -532,7 +573,7 @@ export async function POST(request: NextRequest) {
       runtimeSessionId,
       chatStorageKey,
       preflightProcessEvents,
-    }, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext, permissionMode, mediaArtifacts);
+    }, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext, permissionMode, mediaArtifacts, reasoningEffort);
   }
 
   const token = await getGatewayAuthToken(profile.token);

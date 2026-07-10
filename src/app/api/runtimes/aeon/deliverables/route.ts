@@ -4,10 +4,12 @@ import { access, copyFile, mkdir, readdir, readFile, stat, writeFile } from "nod
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { hostname } from "os";
 import { homedir } from "@/lib/home-dir";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import type { AeonDeliverable } from "@/lib/types/aeon-deliverables";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { KanbanMachineTarget } from "@/lib/types/kanban";
+import { AEON_OUTPUT_DIRECTORIES } from "@/lib/services/runtime-adapters/aeon-capabilities";
+import { errorJson, okJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -28,7 +30,6 @@ const TRANSFER_DIR = ".hivemindos-transfers";
 const PAYLOAD_DIR = "payload";
 const DEFAULT_VAULT = "~/Documents/Obsidian/hivemindos-vault";
 const MIROSHARK_RUNS_ROOT = join("Projects", "HivemindOS", "MiroShark Simulations", "runs");
-const AEON_OUTPUT_DIRS = [".outputs", "outputs", join("dashboard", "outputs")];
 const DELIVERABLE_FILENAMES = new Set([
   "aeon-rehearsal.md",
   "aeon-rehearsal.json",
@@ -45,14 +46,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as AeonDeliverableBody;
     const action: AeonDeliverableAction = body.action === "download" || body.action === "send" ? body.action : "list";
-    if (action === "download") return NextResponse.json(await downloadDeliverable(body));
-    if (action === "send") return NextResponse.json(await sendDeliverable(body));
-    return NextResponse.json({ ok: true, deliverables: await listDeliverables(body) });
+    if (action === "download") return okJson(await downloadDeliverable(body));
+    if (action === "send") return okJson(await sendDeliverable(body));
+    return okJson({ deliverables: await listDeliverables(body) });
   } catch (error) {
-    return NextResponse.json({
-      ok: false,
-      error: error instanceof Error ? error.message : "AEON deliverable request failed.",
-    }, { status: 400 });
+    return errorJson(error instanceof Error ? error.message : "AEON deliverable request failed.", 400);
   }
 }
 
@@ -104,7 +102,7 @@ async function aeonOutputDeliverables(agent?: AgentProfile) {
   const root = aeonRoot(agent);
   if (!root) return [];
   const deliverables: AeonDeliverable[] = [];
-  for (const dir of AEON_OUTPUT_DIRS.map((entry) => join(root, entry))) {
+  for (const dir of AEON_OUTPUT_DIRECTORIES.map((entry) => join(root, entry))) {
     const files = await walkFiles(dir, 3).catch(() => []);
     for (const file of files) {
       const info = await stat(file);
@@ -132,7 +130,7 @@ async function downloadDeliverable(body: AeonDeliverableBody) {
   if (targetIsLocalFile(target)) {
     const path = filePathFromTarget(target);
     await assertFile(path);
-    return { ok: true, path, downloaded: false };
+    return { path, downloaded: false };
   }
   if (!/^https?:\/\//i.test(target)) throw new Error("Only HTTP deliverables can be downloaded to this machine.");
   const response = await fetch(target, { cache: "no-store", signal: AbortSignal.timeout(60_000) });
@@ -144,7 +142,7 @@ async function downloadDeliverable(body: AeonDeliverableBody) {
   const name = safeFileName(basename(url.pathname) || `deliverable-${Date.now()}`);
   const destination = join(dir, name);
   await writeFile(destination, new Uint8Array(await response.arrayBuffer()), { mode: 0o600 });
-  return { ok: true, path: destination, downloaded: true };
+  return { path: destination, downloaded: true };
 }
 
 async function sendDeliverable(body: AeonDeliverableBody) {
@@ -165,7 +163,7 @@ async function sendDeliverable(body: AeonDeliverableBody) {
     },
     note: `AEON deliverable: ${basename(path)}`,
   });
-  return { ok: true, transfer };
+  return { transfer };
 }
 
 function vaultRoot(value?: string) {

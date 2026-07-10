@@ -105,6 +105,54 @@ export type LocalRuntimeSetupStatus = {
 
 export const LOCAL_MODEL_INSTALL_CATALOG: LocalModelInstallCatalogEntry[] = [
   {
+    id: "chat-title-qwen3-5-0-8b-q4-k-m",
+    displayName: "Thread titles · Qwen3.5 0.8B",
+    provider: "huggingface",
+    hfRepo: "lmstudio-community/Qwen3.5-0.8B-GGUF",
+    sourceUrl: "https://huggingface.co/lmstudio-community/Qwen3.5-0.8B-GGUF",
+    quantization: "Q4_K_M",
+    filename: "Qwen3.5-0.8B-Q4_K_M.gguf",
+    params: "0.8B",
+    sizeGb: 0.53,
+    minRamGb: 4,
+    contextLength: 2048,
+    description: "Lowest-resource title model. Recommended for fast, private chat naming on almost any supported machine.",
+    roles: ["chat-title"],
+    capabilities: ["text-generation", "structured-output", "thread-title"],
+    tags: ["chat-title", "qwen3.5", "local", "lowest-resource", "GGUF"],
+    matchKeys: [
+      "chat-title-qwen3-5-0-8b-q4-k-m",
+      "Qwen3.5-0.8B-Q4_K_M.gguf",
+      "Qwen3.5-0.8B-Q4_K_M",
+      "lmstudio-community/Qwen3.5-0.8B-GGUF",
+      "Qwen3.5-0.8B-GGUF:Q4_K_M",
+    ],
+  },
+  {
+    id: "chat-title-qwen3-5-4b-q4-k-m",
+    displayName: "Thread titles · Qwen3.5 4B",
+    provider: "huggingface",
+    hfRepo: "lmstudio-community/Qwen3.5-4B-GGUF",
+    sourceUrl: "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF",
+    quantization: "Q4_K_M",
+    filename: "Qwen3.5-4B-Q4_K_M.gguf",
+    params: "4B",
+    sizeGb: 2.7,
+    minRamGb: 8,
+    contextLength: 2048,
+    description: "Larger local option for more nuanced titles without paying the cost of a general-purpose large model.",
+    roles: ["chat-title"],
+    capabilities: ["text-generation", "structured-output", "thread-title"],
+    tags: ["chat-title", "qwen3.5", "local", "quality", "GGUF"],
+    matchKeys: [
+      "chat-title-qwen3-5-4b-q4-k-m",
+      "Qwen3.5-4B-Q4_K_M.gguf",
+      "Qwen3.5-4B-Q4_K_M",
+      "lmstudio-community/Qwen3.5-4B-GGUF",
+      "Qwen3.5-4B-GGUF:Q4_K_M",
+    ],
+  },
+  {
     id: "swarm-scout-12b-q4-k-m",
     displayName: "Swarm Scout 12B",
     provider: "huggingface",
@@ -227,6 +275,31 @@ export const LOCAL_MODEL_INSTALL_CATALOG: LocalModelInstallCatalogEntry[] = [
     ],
   },
 ];
+
+function normalizeLocalModelMatch(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\\/g, "/")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/** Shared catalog matcher for LM Studio inventory, selection, and inference. */
+export function localModelMatchesCatalogEntry(
+  model: { key?: string; displayName?: string; paramsString?: string | null; format?: string | null },
+  entry: LocalModelInstallCatalogEntry,
+) {
+  const rawHaystack = [model.key, model.displayName, model.paramsString, model.format]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const compactHaystack = normalizeLocalModelMatch(rawHaystack);
+  return [entry.id, entry.filename, entry.hfRepo, ...entry.matchKeys].some((matchKey) => {
+    const rawNeedle = matchKey.toLowerCase();
+    const compactNeedle = normalizeLocalModelMatch(matchKey);
+    return rawHaystack.includes(rawNeedle) || Boolean(compactNeedle && compactHaystack.includes(compactNeedle));
+  });
+}
 
 export function localModelInstallCatalogEntry(id: string) {
   return LOCAL_MODEL_INSTALL_CATALOG.find((entry) => entry.id === id);

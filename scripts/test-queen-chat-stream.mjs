@@ -21,9 +21,16 @@ const {
   readRuntimeResponseText,
 } = await import("../src/lib/services/phone/runtime-voice-turn.ts");
 const {
+  builtInQueenCapabilityProfile,
+  capabilityApprovalFromSse,
+  capabilityExecutionFromSse,
+  runBuiltInQueenCapabilityTurn,
+} = await import("../src/lib/services/queen-bee/capability-fallback.ts");
+const {
   QUEEN_INSTRUCTIONS,
   queenChatTools,
   queenInstructionsForPersonality,
+  queenPipelineChatTools,
   queenRealtimeTools,
   isHivemindLatestBriefCommand,
   userAuthorizedHiveTaskCreation,
@@ -403,14 +410,122 @@ const {
   assert.ok(chatNames.includes("read_agent_status"), "typed chat offers read_agent_status");
   assert.ok(chatNames.includes("read_hivemind_context"), "typed chat offers read_hivemind_context");
   assert.ok(chatNames.includes("read_wallet_readiness"), "typed chat offers read_wallet_readiness");
+  assert.ok(chatNames.includes("read_x_account"), "typed chat offers the authenticated X account reader");
+  assert.ok(chatNames.includes("use_hive_capability"), "typed chat offers the generic capability executor");
+  assert.ok(!chatNames.includes("ask_hivemind_agent"), "typed chat has one canonical broad capability executor");
   assert.ok(chatNames.includes("read_work_board"), "typed chat offers read_work_board");
   assert.ok(chatNames.includes("create_hive_task"), "typed chat can create the fix task");
   // voice: the realtime executor is wired for the fast app/brain/wallet reads too
   assert.ok(voiceNames.includes("read_agent_status"), "voice offers read_agent_status");
   assert.ok(voiceNames.includes("read_hivemind_context"), "voice offers read_hivemind_context");
   assert.ok(voiceNames.includes("read_wallet_readiness"), "voice offers read_wallet_readiness");
+  assert.ok(voiceNames.includes("read_x_account"), "realtime voice offers the authenticated X account reader");
+  assert.ok(voiceNames.includes("use_hive_capability"), "realtime voice offers the generic capability executor");
+  assert.ok(!voiceNames.includes("ask_hivemind_agent"), "realtime voice has one canonical broad capability executor");
   assert.ok(voiceNames.includes("create_hive_task"), "voice can create the fix task");
   assert.ok(!voiceNames.includes("read_work_board"), "voice does not offer read_work_board (no executor)");
+  assert.match(QUEEN_INSTRUCTIONS, /Hive capability search/i, "Queen names her capability-search path");
+  assert.match(QUEEN_INSTRUCTIONS, /read_x_account/, "Queen knows authenticated X reads are executable");
+  assert.match(QUEEN_INSTRUCTIONS, /own_posts/, "Queen can inspect and paginate her user's own post history");
+  assert.match(QUEEN_INSTRUCTIONS, /registered skills, MCP tools, connected app APIs/i, "Queen knows her generic capability bridge searches executable hive surfaces");
+
+  const pipelineNames = queenPipelineChatTools().map((tool) => tool.function.name);
+  assert.deepEqual(
+    pipelineNames.sort(),
+    ["read_x_account", "use_hive_capability"],
+    "pipeline Queen exposes the direct X optimization plus one provider-agnostic execution bridge",
+  );
+}
+
+// ── every Queen client executes the shared X account tool ───────────────────
+{
+  const sources = [
+    ["typed chat", "../src/features/queen-voice/queen-chat-store.tsx"],
+    ["OpenAI realtime", "../src/features/queen-voice/use-queen-bee-realtime.ts"],
+    ["Gemini Live", "../src/features/queen-voice/use-queen-bee-gemini-live.ts"],
+  ];
+  for (const [label, path] of sources) {
+    const source = readFileSync(new URL(path, import.meta.url), "utf8");
+    assert.match(source, /read_x_account/, `${label} recognizes read_x_account`);
+    assert.match(source, /fetchXAccountRead/, `${label} executes read_x_account through the shared client`);
+    assert.match(source, /use_hive_capability/, `${label} recognizes the generic hive capability executor`);
+    assert.match(source, /askHivemindAgent|action: "agent-turn"/, `${label} routes generic capability execution through the full agent runtime`);
+    assert.match(source, /preferBuiltInCapability/, `${label} sends canonical generic requests to the registry executor first`);
+  }
+  const routeSource = readFileSync(
+    new URL("../src/app/api/queen-bee/voice/route.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(routeSource, /action === "read-x-account"/, "Queen API exposes the read-only X executor");
+  assert.match(routeSource, /runXAccountReadTool/, "Queen API uses the canonical X account service");
+
+  const pipelineSource = readFileSync(
+    new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(pipelineSource, /queenPipelineChatTools/, "pipeline voice advertises the shared generic tool subset");
+  assert.match(pipelineSource, /runXAccountReadTool/, "pipeline voice executes the same X tool server-side");
+  assert.match(pipelineSource, /runQueenBeeAgentTurn/, "pipeline voice executes generic capabilities through the full agent runtime");
+  assert.match(pipelineSource, /latencyMode: "capability"/, "generic execution enables full capability preflight instead of the voice fast path");
+  assert.match(pipelineSource, /runBuiltInQueenCapabilityTurn/, "generic execution retains a tool-capable built-in fallback when configured runtimes fail");
+  assert.match(pipelineSource, /preferBuiltInCapability: true/, "pipeline generic requests try the registry executor before configured runtimes");
+
+  const fallbackProfile = builtInQueenCapabilityProfile("gpt-4o-mini", "test-key");
+  assert.equal(fallbackProfile.runtime, "hivemind-os");
+  assert.equal(fallbackProfile.provider, "openai");
+  assert.equal(fallbackProfile.model, "gpt-4o-mini");
+  assert.equal(fallbackProfile.token, "test-key");
+  assert.equal(fallbackProfile.runtimeCapabilities?.skillActions, true);
+  let fallbackRequest = null;
+  let fallbackSessionRead = 0;
+  const fallbackText = await runBuiltInQueenCapabilityTurn(
+    {
+      origin: "http://127.0.0.1:5021",
+      messages: [{ role: "user", content: "Inspect a capability." }],
+      model: "gpt-4o-mini",
+      sessionId: "queen-capability-test",
+      actingWalletSource: { agentId: "wallet-1", address: "0xtest", network: "base", kind: "local" },
+      suppressWalletIntents: true,
+    },
+    {
+      apiKey: async () => "test-key",
+      fetcher: async (_url, init) => {
+        fallbackRequest = JSON.parse(String(init?.body ?? "{}"));
+        return new Response("ok");
+      },
+      readResponse: async () => '{"speech":"Observed it.","detail":"receipt"}',
+      readSession: async () => ({
+        messages: fallbackSessionRead++ === 0
+          ? []
+          : [{ role: "tool", content: "Hive capability completed\nHive Action test.read" }],
+      }),
+    },
+  );
+  assert.match(fallbackText, /Observed it/);
+  assert.equal(fallbackRequest?.agentMode, "act");
+  assert.equal(fallbackRequest?.latencyMode, "capability");
+  assert.equal(fallbackRequest?.agent?.runtime, "hivemind-os");
+  assert.equal(fallbackRequest?.actingWalletSource?.agentId, "wallet-1");
+  assert.equal(fallbackRequest?.suppressWalletIntents, true);
+  assert.equal(
+    capabilityExecutionFromSse('data: {"type":"chat.tool.done","toolName":"invoke_hive_capability","operation":"list","status":"completed"}\n\n'),
+    false,
+    "listing the registry is not an execution receipt",
+  );
+  assert.equal(
+    capabilityExecutionFromSse('data: {"type":"chat.tool.done","toolName":"invoke_hive_capability","operation":"invoke","status":"completed"}\n\n'),
+    true,
+    "an invoked registered capability is an execution receipt",
+  );
+  assert.deepEqual(
+    capabilityApprovalFromSse(
+      'data: {"type":"chat.approval","question":"Approve this command?","commandLine":"xurl --version","detail":"xurl is not allowlisted."}\n\n',
+    ),
+    {
+      speech: "The capability is available, but running xurl --version needs your approval.",
+      detail: "Approve this command?\n\nxurl is not allowlisted.",
+    },
+  );
 }
 
 // ── app/brain questions use direct fast context, not full runtime delegation ─
@@ -510,7 +625,7 @@ const {
     assert.equal(isTrivialConversationalTurn(m), true, `"${m}" should be a trivial (no-tools) turn`);
   }
   // A greeting that PREFIXES a real ask must still run tools — read_agent_status,
-  // ask_hivemind_agent, and drive_dashboard are mandatory for these.
+  // use_hive_capability, and drive_dashboard are mandatory for these.
   const needsTools = [
     "hey queen, is HermesMain down?",
     "gm, swap 1 usdc to eth",

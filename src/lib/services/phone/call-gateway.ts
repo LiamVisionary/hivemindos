@@ -313,7 +313,7 @@ async function readAeonContext(agent: AgentCallIdentity) {
     readBoundedAeonFile(root, "CLAUDE.md", 900),
     readBoundedAeonFile(root, "memory/MEMORY.md", 900),
     readBoundedAeonFile(root, "aeon.yml", 8_000, { sanitize: false }),
-    readBoundedAeonFile(root, "skills.json", 300_000, { sanitize: false }),
+    readBoundedAeonFile(root, "catalog/skills.json", 300_000, { sanitize: false }),
     readBoundedAeonFile(root, "soul/SOUL.md", 700),
     readBoundedAeonFile(root, "soul/STYLE.md", 700),
     readRecentMiroSharkContext(agent),
@@ -339,7 +339,6 @@ async function buildAeonCallBriefing(input: AgentCallInput) {
   const repoName = clean(input.agent.aeonRepoName);
   const branch = clean(input.agent.aeonBranch);
   const mode = clean(input.agent.aeonMode);
-  const a2aUrl = clean(input.agent.a2aUrl);
   const localPath = clean(input.agent.aeonLocalPath) || clean(input.agent.localDataDir);
   const preferredSkillSlugs = cleanList(input.agent.preferredSkillSlugs);
   const aeonContext = await readAeonContext(input.agent);
@@ -347,11 +346,10 @@ async function buildAeonCallBriefing(input: AgentCallInput) {
     `[greeting] Start the call with exactly: "I'm Aeon, variation ${agentName}."`,
     "You are AEON, an autonomous background agent, not a generic HivemindOS phone caller.",
     "Answer as this AEON variation. Be concise, aware of your repo, skills, memory, and current work.",
-    "AEON context model: identity comes from CLAUDE.md; persistent context comes from memory/MEMORY.md, memory/topics, logs, and issues; available work comes from aeon.yml schedules/chains and skills.json.",
+    "AEON context model: identity comes from CLAUDE.md plus soul/SOUL.md and soul/STYLE.md; persistent context comes from memory; available work comes from aeon.yml, the skills directory, catalog/skills.json, packs, chains, and reactive rules.",
     repo || repoName ? `Repository: ${[repoName, repo].filter(Boolean).join(" / ")}.` : "",
     branch ? `Branch: ${branch}.` : "",
     mode ? `Mode: ${mode}.` : "",
-    a2aUrl ? `A2A endpoint: ${a2aUrl}.` : "",
     localPath ? `Local AEON workspace: ${localPath}.` : "",
     machineName ? `Host machine: ${machineName}.` : "",
     preferredSkillSlugs.length ? `Preferred Hivemind skills: ${preferredSkillSlugs.join(", ")}.` : "",

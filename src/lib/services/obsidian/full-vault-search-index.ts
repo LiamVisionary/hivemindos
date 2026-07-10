@@ -1,8 +1,8 @@
 import "server-only";
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { constants } from "fs";
-import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
+import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { bm25TermCounts, bm25Tokens, scoreBm25Terms } from "@/lib/services/search/bm25-lite";
 
@@ -303,6 +303,62 @@ async function readIndex(root: string) {
   return records.length ? records : null;
 }
 
+async function writeIndexFileAtomically(file: string, payload: string) {
+  await mkdir(dirname(file), { recursive: true });
+  const temporaryFile = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryFile, payload, { encoding: "utf8", mode: 0o600 });
+    await rename(temporaryFile, file);
+  } finally {
+    await unlink(temporaryFile).catch(() => undefined);
+  }
+}
+
+/**
+ * Pure line filter behind {@link removeFullVaultSearchIndexPaths}: drop every
+ * row whose `path` is in `paths`, keep everything else byte-for-byte. Lines
+ * that fail to parse are KEPT, matching the telemetry purge — a truncated or
+ * hand-edited row is not ours to discard.
+ */
+export function fullVaultIndexLinesWithoutPaths(raw: string, paths: Iterable<string>) {
+  const drop = new Set(paths);
+  let removed = 0;
+  const kept = raw.split("\n").filter((line) => {
+    if (!line.trim()) return false;
+    let parsed: { path?: unknown };
+    try {
+      parsed = JSON.parse(line) as { path?: unknown };
+    } catch {
+      return true;
+    }
+    if (typeof parsed.path !== "string" || !drop.has(parsed.path)) return true;
+    removed += 1;
+    return false;
+  });
+  return { removed, contents: kept.length ? `${kept.join("\n")}\n` : "" };
+}
+
+/**
+ * Drop generated search rows for notes a caller just deleted. Anything that
+ * removes vault markdown MUST call this in the same operation: a row carries
+ * the note's `excerpt`, `headings`, `tags`, and full term vector, so a stale
+ * row keeps a deleted note's content searchable — and answerable — until the
+ * next TTL rebuild (default 6h). Returns the number of rows removed.
+ */
+export async function removeFullVaultSearchIndexPaths(root: string, paths: Iterable<string>) {
+  const resolvedRoot = resolve(root);
+  const drop = new Set(paths);
+  if (!drop.size) return 0;
+  const file = indexPath(resolvedRoot);
+  const raw = await readFile(file, "utf8").catch(() => "");
+  if (!raw) return 0;
+  const result = fullVaultIndexLinesWithoutPaths(raw, drop);
+  if (!result.removed) return 0;
+  await writeIndexFileAtomically(file, result.contents);
+  indexCache.delete(resolvedRoot);
+  return result.removed;
+}
+
 export async function rebuildFullVaultSearchIndex(input: { root: string }) {
   const root = resolve(input.root);
   await access(root, constants.R_OK);
@@ -316,8 +372,8 @@ export async function rebuildFullVaultSearchIndex(input: { root: string }) {
     if (record) records.push(record);
   }
   const file = indexPath(root);
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""), "utf8");
+  const payload = records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
+  await writeIndexFileAtomically(file, payload);
   indexCache.delete(root);
   const st = await stat(file).catch(() => null);
   return {

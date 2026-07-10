@@ -161,9 +161,10 @@ export const RUNTIME_PORTABLE_STATE = {
   },
   aeon: {
     home: "~/.aeon",
-    // ~/.aeon/repo is git-synced on its own rail; never fight git from here.
-    include: ["aeon.yml", "skills.json", "skills/**", "memory/**", "agents/**", "*.md"],
-    exclude: ["repo/**", ".outputs/**", "logs/**"],
+    // The AEON checkout is Git-synced on its own rail; this captures only
+    // portable v0.1 configuration/identity and excludes generated artifacts.
+    include: ["aeon.yml", "catalog/**", "skills/**", "memory/**", "soul/**", "STRATEGY.md", "CLAUDE.md"],
+    exclude: [".git/**", "node_modules/**", "output/**", "apps/dashboard/outputs/**", "logs/**"],
     stripSecrets: [".mcp.json"],
     redactConfig: ["aeon.yml"],
   },

@@ -1,4 +1,4 @@
-import { mkdir, appendFile, open, rename, stat } from "fs/promises";
+import { mkdir, appendFile, open, readFile, rename, stat, writeFile } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 
@@ -33,22 +33,81 @@ const TELEMETRY_QUERY_TAIL_BYTES = Number(
   process.env.HIVEMINDOS_TELEMETRY_QUERY_TAIL_BYTES || 4 * 1024 * 1024,
 );
 
+// Appends and thread purges both mutate the same file, and a purge rewrites it
+// whole — an interleaved appendFile would be silently dropped by the rewrite.
+// Every writer in this process funnels through one chain so a delete can never
+// race a concurrent chat turn's telemetry. (Only this Next server writes the
+// log, so an in-process chain is sufficient.)
+let telemetryWrites: Promise<unknown> = Promise.resolve();
+
+function serializeTelemetryWrite<T>(task: () => Promise<T>): Promise<T> {
+  const next = telemetryWrites.then(task, task);
+  telemetryWrites = next.catch(() => undefined);
+  return next;
+}
+
 export async function recordTelemetryBatch(inputs: TelemetryEventInput[]) {
   if (!localTelemetryEnabled() || inputs.length === 0) return 0;
-  await mkdir(dirname(TELEMETRY_FILE), { recursive: true, mode: 0o700 });
-  await rotateIfOversized();
-  const now = Date.now();
-  const rows = inputs.map((input, index): TelemetryEvent => ({
-    id: `${now.toString(36)}-${index.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    ts: now,
-    source: input.source,
-    type: input.type,
-    threadId: input.threadId ?? null,
-    runId: input.runId ?? null,
-    payload: input.payload ?? {},
-  }));
-  await appendFile(TELEMETRY_FILE, rows.map((row) => JSON.stringify(row)).join("\n") + "\n", "utf-8");
-  return rows.length;
+  return serializeTelemetryWrite(async () => {
+    await mkdir(dirname(TELEMETRY_FILE), { recursive: true, mode: 0o700 });
+    await rotateIfOversized();
+    const now = Date.now();
+    const rows = inputs.map((input, index): TelemetryEvent => ({
+      id: `${now.toString(36)}-${index.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      ts: now,
+      source: input.source,
+      type: input.type,
+      threadId: input.threadId ?? null,
+      runId: input.runId ?? null,
+      payload: input.payload ?? {},
+    }));
+    await appendFile(TELEMETRY_FILE, rows.map((row) => JSON.stringify(row)).join("\n") + "\n", "utf-8");
+    return rows.length;
+  });
+}
+
+/**
+ * Pure line filter behind {@link purgeThreadTelemetryEvents}: drop every JSONL
+ * row whose `threadId` matches, keep everything else byte-for-byte. Lines that
+ * fail to parse are KEPT — a truncated or hand-edited row is not ours to
+ * discard, and dropping it would lose unrelated telemetry.
+ */
+export function telemetryLinesWithoutThread(raw: string, threadId: string) {
+  const lines = raw.split("\n").filter((line) => line.length > 0);
+  let removed = 0;
+  const kept = lines.filter((line) => {
+    const event = safeParseTelemetry(line);
+    if (!event || event.threadId !== threadId) return true;
+    removed += 1;
+    return false;
+  });
+  return { removed, contents: kept.length ? `${kept.join("\n")}\n` : "" };
+}
+
+/**
+ * Erase a chat thread's telemetry rows from the event log. Covers the rotated
+ * `.1` generation too, otherwise the previous generation keeps the deleted
+ * thread's events greppable on disk.
+ *
+ * Deliberately NOT gated on `localTelemetryEnabled()`: the log outlives the
+ * flag, and a user deleting a thread wants those rows gone either way.
+ * Returns the number of rows removed.
+ */
+export async function purgeThreadTelemetryEvents(threadId: string): Promise<number> {
+  const key = (threadId ?? "").trim();
+  if (!key) return 0;
+  return serializeTelemetryWrite(async () => {
+    let removed = 0;
+    for (const file of [TELEMETRY_FILE, `${TELEMETRY_FILE}.1`]) {
+      const raw = await readFile(file, "utf-8").catch(() => "");
+      if (!raw) continue;
+      const result = telemetryLinesWithoutThread(raw, key);
+      if (result.removed === 0) continue;
+      await writeFile(file, result.contents, "utf-8").catch(() => undefined);
+      removed += result.removed;
+    }
+    return removed;
+  });
 }
 
 async function rotateIfOversized() {

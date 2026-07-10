@@ -8,6 +8,7 @@ import { cleanActivityTitle } from "@/features/chat/chat-composer";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { RUNTIME_LABELS, type AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentTask, ChatMessage, HiveEnvImportEntry, RuntimeModelSelection } from "@/features/dashboard/dashboard-types";
+import { isInternalChatSidebarTask } from "@/features/chat/chat-sidebar-content";
 
 const HERMES_EMPTY_TRANSCRIPT_MESSAGE = "Hermes session found. Send a message to resume it.";
 const runtimeLabels = RUNTIME_LABELS as Record<string, string>;
@@ -47,7 +48,7 @@ export function isCronChatTask(task: AgentTask) {
 }
 
 export function isChatSidebarTask(task: AgentTask) {
-  if (isCronChatTask(task)) return false;
+  if (isCronChatTask(task) || isInternalChatSidebarTask(task)) return false;
   return task.source === "hermes-state" || task.source === "dashboard-chat";
 }
 

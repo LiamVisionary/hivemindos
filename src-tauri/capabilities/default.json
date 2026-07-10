@@ -30,6 +30,7 @@
     "allow-create-local-folder",
     "allow-display-local-path",
     "allow-open-deliverable",
+    "allow-open-in-app",
     "allow-open-project-terminal",
     "allow-list-aeon-deliverables",
     "allow-list-aeon-outputs",

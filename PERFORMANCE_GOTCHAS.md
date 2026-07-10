@@ -179,3 +179,52 @@ The July 2026 latest-X failure had all four traps: Hermes ignored the request-le
 - `queen_voice.inference` telemetry records requested/served model, input/cached/output/reasoning tokens, and provider elapsed time.
 - `scripts/benchmark-xai-oauth-queen-cache.mjs` gives repeatable salted-miss, cache-write, and cache-read measurements without printing credentials.
 - Fixed 2026-07-10.
+
+## G3 - A tab can look like one load while serializing several unrelated products
+
+### Symptom
+
+The Trade nav highlights and its header appears, but the route stays on a skeleton
+for 10-25 seconds before the default Crypto desk becomes usable. Individual API
+routes look merely slow rather than catastrophic when timed alone.
+
+### Why it fools you
+
+- The HTML/dashboard shell is fast; the delay begins after the lazy client panel mounts.
+- `Promise.all` can appear in the code while the overall pipeline is still serial:
+  balance/capabilities → crypto market → stock readiness/portfolio → stock history/movers → activity.
+- A wallet-picker refresh looks independent, but refreshing every wallet at mount
+  competes with and duplicates the acting-wallet read that owns the visible screen.
+- The default Crypto UI and the hidden Stocks segment shared one `loading` flag, so
+  valid crypto data remained invisible until unrelated Alpaca work finished.
+
+### Root cause and fix
+
+Treat the selected/default product surface as the critical path. On Trade, publish
+the acting wallet's persisted token snapshot with current market rows first, keep
+the live acting-wallet RPC scan visibly syncing, and defer Stock/activity work with
+separate loading flags. Do not refresh non-acting picker wallets during route entry;
+refresh a wallet when it becomes the acting wallet. When that live refresh succeeds,
+write the new snapshot back to the personal-wallet ledger after painting it; otherwise
+every later stale-while-revalidate mount starts from the same stale value. Warm the
+Trade chunk during dashboard idle time so dev compilation does not land on the first click.
+
+### Diagnosis recipe
+
+1. Time shell visibility and first usable content separately through the real nav click.
+2. Count mount-time requests by resource/entity, not only by endpoint; duplicate
+   calls to the same balance route can hide a fan-out across many wallets.
+3. Write the await graph in waves. Anything needed only by a hidden segment must
+   not gate the default segment.
+4. Time the slow leaves with authenticated read-only probes, then retest the UI.
+   For the July 2026 case: acting balance 4.19s, crypto market 1.00s, readiness
+   0.84s, stock movers 1.30s, but the combined UI baseline was 19.5-24.4s.
+5. Guard the scheduling contract. `scripts/test-trade-route-performance.mjs`
+   prevents the all-wallet fan-out and monolithic loading gate from returning.
+
+### Fixed evidence
+
+The real repeat Chat → Trade path improved from 19.5s to usable content to
+3.12-4.43s (77-84% faster). The saved holdings render first with `Syncing…`; the authoritative
+live holdings and deferred Stock/activity data replace them afterward. Fixed
+2026-07-10.

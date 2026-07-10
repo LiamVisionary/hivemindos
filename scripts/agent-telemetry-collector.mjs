@@ -85,6 +85,9 @@ import {
 import { discoverLocalOpenAiServers } from "./lib/local-openai-server-discovery.mjs";
 import { createCollectorMessagingChannelBridge } from "./lib/collector-messaging-channels.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
+// systemStats also accumulates a short rolling cpu/ram/net history (while /health
+// is actively polled) so the dashboard Telemetry sparklines show a real trend.
+import { systemStats } from "./lib/system-stats.mjs";
 import { tailnetSelfNode } from "./lib/tailnet-self.mjs";
 import {
   createSyncthingApiKeyResolver,
@@ -6176,6 +6179,15 @@ const RESERVED_HERMES_PROFILE_SLUGS = new Set([
   "runtime-capability-probe",
 ]);
 
+function isReservedHermesProfileAgent(agent = {}) {
+  if (agent.runtime !== "hermes") return false;
+  const dataDir = expandHome(sanitizeLocalDataDir(agent.localDataDir));
+  const profileSlug = dataDir
+    .replace(/[\\/]+$/, "")
+    .match(/(?:^|[\\/])profiles[\\/]([^\\/]+)$/)?.[1];
+  return RESERVED_HERMES_PROFILE_SLUGS.has(profileSlug);
+}
+
 async function detectedHermesProfileAgents(coveredAgentIds) {
   const entries = await readdir(hermesProfilesDir, {
     withFileTypes: true,
@@ -6270,12 +6282,11 @@ async function localAgents() {
         notifications: true,
         setup: true,
       },
-      gatewayUrl: process.env.AEON_A2A_URL || "http://127.0.0.1:41241",
-      a2aUrl: process.env.AEON_A2A_URL || "http://127.0.0.1:41241",
+      gatewayUrl: "",
       aeonLocalPath: defaultAeonDir,
       aeonRepo: process.env.AEON_REPO || "",
       aeonBranch: process.env.AEON_BRANCH || "main",
-      aeonMode: process.env.AEON_A2A_URL ? "a2a" : "github",
+      aeonMode: process.env.AEON_REPO ? "github" : "local",
       agentId: "local-aeon",
       localDataDir: defaultAeonDir,
       machineName: hostname(),
@@ -6374,78 +6385,9 @@ async function createWorkReceipt(body) {
   return { ...receipt, storedAt };
 }
 
-async function darwinRamUsedBytes() {
-  const { stdout } = await execFileAsync("vm_stat", [], { timeout: 4_000 });
-  const pageSize = Number(
-    /page size of (\d+) bytes/.exec(stdout)?.[1] || 16_384,
-  );
-  const pages = (label) =>
-    Number(new RegExp(`${label}:\\s+(\\d+)`).exec(stdout)?.[1] || 0);
-  // Approximates Activity Monitor's "Memory Used": active + wired + compressed.
-  return (
-    (pages("Pages active") +
-      pages("Pages wired down") +
-      pages("Pages occupied by compressor")) *
-    pageSize
-  );
-}
-
-async function linuxRamUsedBytes() {
-  const meminfo = await readFile("/proc/meminfo", "utf8");
-  const kb = (label) =>
-    Number(new RegExp(`^${label}:\\s+(\\d+) kB`, "m").exec(meminfo)?.[1] || 0);
-  const totalKb = kb("MemTotal");
-  const availableKb = kb("MemAvailable");
-  if (!totalKb || !availableKb)
-    throw new Error("MemAvailable missing from /proc/meminfo.");
-  return (totalKb - availableKb) * 1024;
-}
-
-async function rootDiskUsage() {
-  // On macOS "/" is the sealed system volume; user data lives on the Data volume.
-  const target = platform() === "darwin" ? "/System/Volumes/Data" : "/";
-  const { stdout } = await execFileAsync("df", ["-kP", target], {
-    timeout: 4_000,
-  });
-  const parts = (stdout.trim().split("\n").at(-1) || "").split(/\s+/);
-  const totalKb = Number(parts[1] || 0);
-  const usedKb = Number(parts[2] || 0);
-  if (!totalKb) return null;
-  return { totalKb, usedKb };
-}
-
-async function systemStats() {
-  const toGb = (bytes) => Math.round((bytes / 1024 ** 3) * 10) / 10;
-  const clampPct = (value) => Math.max(0, Math.min(100, Math.round(value)));
-  const cores = cpus();
-  const coreCount = cores.length || 1;
-  const load1m = loadavg()[0];
-  const ramTotal = totalmem();
-  const ramUsed =
-    platform() === "darwin"
-      ? await darwinRamUsedBytes().catch(() => ramTotal - freemem())
-      : platform() === "linux"
-        ? await linuxRamUsedBytes().catch(() => ramTotal - freemem())
-        : ramTotal - freemem();
-  const disk = await rootDiskUsage().catch(() => null);
-  return {
-    checkedAt: Date.now(),
-    cpuPct: clampPct((load1m / coreCount) * 100),
-    cpuCores: coreCount,
-    cpuModel: cores[0]?.model?.trim() || "",
-    loadAvg1m: Math.round(load1m * 100) / 100,
-    ramPct: ramTotal ? clampPct((ramUsed / ramTotal) * 100) : 0,
-    ramUsedGb: toGb(ramUsed),
-    ramTotalGb: toGb(ramTotal),
-    diskPct: disk ? clampPct((disk.usedKb / disk.totalKb) * 100) : null,
-    diskUsedGb: disk ? toGb(disk.usedKb * 1024) : null,
-    diskTotalGb: disk ? toGb(disk.totalKb * 1024) : null,
-    platform: platform(),
-    arch: arch(),
-    osRelease: release(),
-    uptimeSec: Math.round(osUptime()),
-  };
-}
+// Host resource telemetry for the /health `system` object lives in a sibling
+// module so this legacy file stops growing (CLAUDE.md file-size rule).
+// systemStats is imported at the top from ./lib/system-stats.mjs.
 
 // Path candidates use a fast executable check; bare command names fall back
 // to a PATH spawn (some CLIs take ~10s cold, hence the generous timeout).
@@ -6505,10 +6447,13 @@ async function detectOpenClawInstalled() {
 }
 
 async function detectAeonInstalled() {
-  if (process.env.AEON_REPO) return true;
-  return access(join(defaultAeonDir, "aeon.yml"), constants.R_OK)
-    .then(() => true)
-    .catch(() => false);
+  const [hasConfig, hasCatalog, hasCli, hasRootCli] = await Promise.all([
+    access(join(defaultAeonDir, "aeon.yml"), constants.R_OK).then(() => true).catch(() => false),
+    access(join(defaultAeonDir, "catalog", "skills.json"), constants.R_OK).then(() => true).catch(() => false),
+    access(join(defaultAeonDir, "apps", "cli", "aeon"), constants.X_OK).then(() => true).catch(() => false),
+    access(join(defaultAeonDir, "aeon"), constants.X_OK).then(() => true).catch(() => false),
+  ]);
+  return hasConfig && hasCatalog && (hasCli || hasRootCli);
 }
 
 // Installed runtime CLIs, independent of whether any agent uses them yet —
@@ -9062,13 +9007,15 @@ async function handleCollectorRequest(request, response) {
   const rawBody = request.method === "POST" ? await readBody(request) : "{}";
   const body = rawBody ? JSON.parse(rawBody) : {};
   if (body.agent || body.agents) {
-    const agents = body.agent ? [body.agent] : body.agents;
+    const agents = (body.agent ? [body.agent] : body.agents).filter(
+      (agent) => !isReservedHermesProfileAgent(agent),
+    );
     const snapshots = await Promise.all(
       agents.map((agent) => snapshotFor(agent)),
     );
     jsonResponse(response, 200, {
       ok: true,
-      snapshot: snapshots[0],
+      snapshot: snapshots[0] ?? null,
       snapshots,
     });
     return;

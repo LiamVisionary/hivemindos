@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ChatInlineMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { compactChatSidebarText } from "@/features/chat/chat-sidebar-content";
 import { Glyph, ICON } from "./primitives";
 import type { ExchangeChatRow, ExchangeFolder, ExchangeMachine } from "./types";
 
@@ -46,7 +47,26 @@ function GroupHeader({ icon, label, count, open, onToggle }: { icon: string | re
   );
 }
 
-function ChatButton({ title, onClick }: { title: string; onClick: () => void }) {
+function PreviewToggle({ expanded, onClick }: { expanded: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="frnav-chat-btn"
+      title={expanded ? "Collapse preview" : "Expand preview"}
+      aria-label={expanded ? "Collapse chat preview" : "Expand chat preview"}
+      aria-expanded={expanded}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+      style={{ position: "absolute", right: 7, top: 7, zIndex: 3, display: "grid", placeItems: "center", width: 24, height: 24, border: "1px solid var(--line-2)", borderRadius: 7, background: "var(--panel-hi)", color: "var(--fg-3)", cursor: "pointer", opacity: 1 }}
+    >
+      <Glyph d={ICON.chevronR} s={12} sw={2} style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 160ms ease" }} />
+    </button>
+  );
+}
+
+function StartChatButton({ title, onClick }: { title: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -71,15 +91,20 @@ function chatSubtitle(chat: ExchangeChatRow, formatRelativeTime?: (time: number)
   ].filter(Boolean).join(" / ");
 }
 
-function RowCopy({ title, sub, active }: { title?: string; sub?: string; active?: boolean }) {
+function RowCopy({ title, sub, active, expanded }: { title?: string; sub?: string; active?: boolean; expanded: boolean }) {
+  const titleText = expanded ? title || "Previous chat" : compactChatSidebarText(title || "Previous chat", 7);
+  const subtitleText = expanded ? sub : compactChatSidebarText(sub, 8);
+  const collapsedStyle: React.CSSProperties = expanded
+    ? { overflowWrap: "anywhere", whiteSpace: "normal" }
+    : { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
   return (
     <span style={{ display: "grid", minWidth: 0, maxWidth: "100%", flex: 1 }}>
-      <span style={{ display: "block", minWidth: 0, maxWidth: "100%", overflow: "hidden", color: active ? "var(--honey)" : "var(--fg-2)", fontFamily: "var(--f-display)", fontSize: 12.5, fontWeight: 500, letterSpacing: "-0.01em", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        <ChatInlineMarkdown text={title || "Previous chat"} />
+      <span style={{ display: "block", minWidth: 0, maxWidth: "100%", color: active ? "var(--honey)" : "var(--fg-2)", fontFamily: "var(--f-display)", fontSize: 12.5, fontWeight: 500, letterSpacing: "-0.01em", lineHeight: 1.3, ...collapsedStyle }}>
+        <ChatInlineMarkdown text={titleText} />
       </span>
-      {sub ? (
-        <span style={{ display: "block", minWidth: 0, maxWidth: "100%", overflow: "hidden", color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 9.5, marginTop: 2, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <ChatInlineMarkdown text={sub} />
+      {subtitleText ? (
+        <span style={{ display: "block", minWidth: 0, maxWidth: "100%", color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 9.5, lineHeight: 1.3, marginTop: 2, ...collapsedStyle }}>
+          <ChatInlineMarkdown text={subtitleText} />
         </span>
       ) : null}
     </span>
@@ -88,6 +113,10 @@ function RowCopy({ title, sub, active }: { title?: string; sub?: string; active?
 
 function ChatRow({ chat, kind, running, onOpen, formatRelativeTime }: { chat: ExchangeChatRow; kind: "agent" | "general"; running?: boolean; onOpen: (chat: ExchangeChatRow) => void; formatRelativeTime?: (time: number) => string }) {
   const active = Boolean(chat.active);
+  const [expanded, setExpanded] = useState(false);
+  const subtitle = chatSubtitle(chat, formatRelativeTime);
+  const canExpand = compactChatSidebarText(chat.title || "Previous chat", 7) !== String(chat.title || "Previous chat").replace(/\s+/g, " ").trim()
+    || compactChatSidebarText(subtitle, 8) !== subtitle.replace(/\s+/g, " ").trim();
   return (
     <div className="frnav-row">
       <button
@@ -97,7 +126,7 @@ function ChatRow({ chat, kind, running, onOpen, formatRelativeTime }: { chat: Ex
         aria-current={active ? "true" : undefined}
         className="frnav-chat-row"
         data-active={active ? "true" : undefined}
-        style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, minWidth: 0, maxWidth: "100%", width: "100%", overflow: "hidden", border: 0, borderRadius: 9, cursor: "pointer", padding: "7px 32px 7px 13px", textAlign: "left" }}
+        style={{ position: "relative", display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0, maxWidth: "100%", width: "100%", border: 0, borderRadius: 9, cursor: "pointer", padding: "7px 32px 7px 13px", textAlign: "left" }}
       >
         {active ? <span className="frnav-active-bar" style={{ position: "absolute", left: -1, top: 8, bottom: 8, width: 3, borderRadius: "0 3px 3px 0", background: "var(--honey)" }} /> : null}
         {kind === "general" ? (
@@ -105,9 +134,9 @@ function ChatRow({ chat, kind, running, onOpen, formatRelativeTime }: { chat: Ex
         ) : (
           <span className={running ? "fr-dot live" : "fr-dot"} style={{ color: running ? "var(--live)" : "var(--fg-4)", width: 6, height: 6, flexShrink: 0 }} />
         )}
-        <RowCopy title={chat.title} sub={chatSubtitle(chat, formatRelativeTime)} active={active} />
+        <RowCopy title={chat.title} sub={subtitle} active={active} expanded={expanded} />
       </button>
-      {kind !== "general" ? <ChatButton title="Open chat" onClick={() => onOpen(chat)} /> : null}
+      {canExpand ? <PreviewToggle expanded={expanded} onClick={() => setExpanded((current) => !current)} /> : null}
     </div>
   );
 }
@@ -132,7 +161,7 @@ function MachineRow({ machine, open, onToggle, onStartChat }: { machine: Exchang
           <span style={{ display: "block", minWidth: 0, maxWidth: "100%", overflow: "hidden", color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 9.5, marginTop: 2, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{machine.folders?.length ?? 0} folders · {machine.rosterAgentCount ?? 0} agents</span>
         </span>
       </button>
-      {onStartChat ? <ChatButton title={`New chat · ${machine.name || "machine"}`} onClick={onStartChat} /> : null}
+      {onStartChat ? <StartChatButton title={`New chat · ${machine.name || "machine"}`} onClick={onStartChat} /> : null}
     </div>
   );
 }
@@ -174,7 +203,7 @@ function FolderRows({
           <span style={{ color: "var(--honey)", flexShrink: 0, opacity: 0.9 }}><Glyph d={open ? ICON.folderOpen : ICON.folder} s={13} /></span>
           <span style={{ minWidth: 0, flex: "1 1 auto", overflow: "hidden", color: "var(--fg-2)", fontFamily: "var(--f-mono)", fontSize: 11.5, textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.label || "Folder"}</span>
         </button>
-        {onStartChat ? <ChatButton title={`New chat in ${folder.label || "folder"}`} onClick={onStartChat} /> : null}
+        {onStartChat ? <StartChatButton title={`New chat in ${folder.label || "folder"}`} onClick={onStartChat} /> : null}
       </div>
       <Collapse open={open}>
         <div style={{ display: "flex", minWidth: 0, maxWidth: "100%", flexDirection: "column", gap: 1, marginBottom: 2, marginLeft: 18, overflow: "hidden", paddingLeft: 9, borderLeft: "1px solid var(--line)" }}>

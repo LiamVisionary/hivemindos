@@ -12,9 +12,14 @@ import type {
 } from "@/lib/types/company";
 import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
+import type { GitLawbProof } from "@/lib/types/gitlawb";
 import { computeLoopCapabilityCapital } from "@/lib/services/loops";
 import { extractWorkBoardPipelineImpact, extractWorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
 import { mapSpendApproval, type SpendApprovalRaw } from "@/features/approvals/spend-approval-model";
+import {
+  buildCompanyRuntimeMix,
+  companyExecutionFormFromConfig,
+} from "@/lib/services/company-execution-capabilities";
 import type {
   Agent,
   AgentState,
@@ -70,6 +75,7 @@ export interface KanbanTaskLite {
   deliverables?: KanbanDeliverable[];
   loop?: KanbanLoopSpec;
   loopReceipts?: KanbanLoopReceipt[];
+  proofs?: GitLawbProof[];
   /** Machine that ran the task; its name is shown as deliverable provenance. */
   targetMachine?: { name?: string } | null;
   createdAt?: number;
@@ -270,6 +276,7 @@ export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<str
         result: t.result,
         deliverables: (t.deliverables ?? []).map((d) => ({ id: d.id, label: d.label, kind: d.kind, path: d.path, url: d.url })),
         receipts: (t.loopReceipts ?? []).map((r) => ({ title: r.summary || r.gateId || "receipt", status: r.status, evidence: r.evidence ?? [] })),
+        proofs: t.proofs ?? [],
         machineName: t.targetMachine?.name || undefined,
         updatedAt: t.updatedAt,
         completedAt: t.completedAt,
@@ -450,7 +457,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     eta: hasWork ? (totalCount > doneCount ? `${totalCount - doneCount} left` : "ship") : "—",
   };
 
-  const runtimeMix = [...new Set(agents.map((a) => a.runtime))].slice(0, 3);
+  const runtimeMix = buildCompanyRuntimeMix(company.execution, agents.map((agent) => agent.runtime));
 
   // An explicit company.revenue wins; otherwise a currency/users apex goal becomes
   // the headline metric so the card shows the money/DAU layout instead of the
@@ -514,6 +521,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     lastDispatchedAt: company.lastDispatchedAt,
     hasApexGoal: Boolean(company.apexGoal?.title?.trim()),
     autonomy: Boolean(company.autonomy),
+    execution: company.execution,
     directives: company.directives,
     approvalPolicies: company.approvalPolicies,
     importedOperations: company.importedOperations,
@@ -528,6 +536,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
       charter: company.charter || "",
       blurb: company.blurb || "",
       projectId: company.projectId || "",
+      ...companyExecutionFormFromConfig(company.execution),
       analyticsProvider: company.analyticsProvider ?? "",
       analyticsProjectId: company.analyticsConfig?.projectId ?? "",
       analyticsHost: company.analyticsConfig?.host ?? "",

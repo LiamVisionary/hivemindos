@@ -802,8 +802,13 @@ function Get-AgentSkillRoots {
     }
     "aeon" {
       $roots = New-Object System.Collections.Generic.List[string]
-      $roots.Add("$homeDir\.aeon\skills")
-      if ($env:AEON_LOCAL_PATH) { $roots.Add((Join-Path $env:AEON_LOCAL_PATH "skills")) }
+      $aeonRoot = if ($env:AEON_LOCAL_PATH) { $env:AEON_LOCAL_PATH } elseif ($env:AEON_HOME) { $env:AEON_HOME } else { "$homeDir\.aeon" }
+      $hasCli = (Test-Path (Join-Path $aeonRoot "apps\cli\aeon")) -or (Test-Path (Join-Path $aeonRoot "aeon"))
+      if ((Test-Path (Join-Path $aeonRoot "aeon.yml")) -and (Test-Path (Join-Path $aeonRoot "catalog\skills.json")) -and $hasCli) {
+        $roots.Add((Join-Path $aeonRoot "skills"))
+      } else {
+        Warn "Skipping AEON skill sync; $aeonRoot is not an AEON v0.1 checkout"
+      }
       $roots
     }
     default { @() }

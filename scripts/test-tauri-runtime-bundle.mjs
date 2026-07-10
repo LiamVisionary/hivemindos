@@ -49,6 +49,8 @@ const importSpecs = [
   "@solana/kit",
 ];
 
+const runtimeScripts = ["hive-env-add", "xai-oauth-token-broker"];
+
 function fail(message) {
   console.error(message);
   process.exitCode = 1;
@@ -65,6 +67,12 @@ if (!existsSync(join(bundleRoot, "server.js"))) {
 for (const packageName of sentinelPackages) {
   if (!existsSync(packagePath(packageName))) {
     fail(`Packaged Tauri runtime is missing node_modules/${packageName}.`);
+  }
+}
+
+for (const scriptName of runtimeScripts) {
+  if (!existsSync(join(bundleRoot, "scripts", scriptName))) {
+    fail(`Packaged Tauri runtime is missing scripts/${scriptName}.`);
   }
 }
 

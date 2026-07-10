@@ -91,6 +91,7 @@ function chatLeafOwnerAgentId({
 
 export function useChatTreeController(props: any) {
   const { RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS, activeView, agentWorkById, chatCustomFolders, chatDedupeKey, chatFolderDraft, chatMessageStorageKey, chatMessageWindow, chatPreviewDedupeKey, chatSeedMessagesForTask, chooseDirectoryForMachine, createChatLeafKey, displayAgents, findRosterChatTask, runtimeSessionIdFromTask, isChatSidebarTask, isManualAgentChatMessage, logClientTelemetry, machineGroups, messagesByAgent, parentPathFromPath, preferChatTreeItem, recordRecentDirectory, runtimeCan, runtimeSessionForChat, selectedAgent, selectedAgentId, selectedChatDirectoryPath, selectedChatLeafKey, setActiveView, setChatCustomFolders, setChatFolderDraft, setChatHistoryLoadingByKey, setChatMessageWindow, setMessagesByAgent, setSelectedAgentId, setSelectedChatDirectoryPath, setSelectedChatLeafKey, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setSetupCommandCopied, setSetupMachineKey, setupCollectorCommand, setStatus, setStatusAgentId, taskChatLeafKey, updateAgent, workPriority, workspaceLabelFromPath } = props;
+  const chatThreadTitles = props.chatThreadTitles ?? {};
   const [freshChatDraft, setFreshChatDraft] = useState<{ agentId: string; leafKey: string } | null>(null);
   function switchRuntime(runtime: AgentRuntime) {
     const defaults = RUNTIME_DEFAULTS[runtime];
@@ -135,11 +136,13 @@ export function useChatTreeController(props: any) {
   }, [messagesByAgent]);
 
   const conversationTitle = useCallback((agentId: string) => {
+    const generatedTitle = chatThreadTitles[agentId]?.title;
+    if (generatedTitle) return generatedTitle;
     const firstUser = (messagesByAgent[agentId] ?? [])
       .find((message) => message.role === "user" && isManualAgentChatMessage(message))
     const firstUserMessage = chatPreviewContent(firstUser);
     return firstUserMessage ? firstUserMessage.slice(0, 56) : "Previous chat";
-  }, [messagesByAgent]);
+  }, [chatThreadTitles, messagesByAgent]);
 
   const loadRuntimeSessionMessages = useCallback(async (agent: AgentProfile, sessionId: string, context: { leafKey?: string; storageKey?: string; reason?: string } = {}) => {
     const startedAt = Date.now();
@@ -354,7 +357,7 @@ export function useChatTreeController(props: any) {
       const item: ChatTreeItem = {
         agentId,
         key: storedLeafKey,
-        title: chatPreviewContent(firstUser).slice(0, 56) || "Previous chat",
+        title: chatThreadTitles[storageKey]?.title || chatPreviewContent(firstUser).slice(0, 56) || "Previous chat",
         subtitle: chatPreviewContent(lastMessage).slice(0, 80) || agentId,
         updatedAt: Math.max(...manualMessages.map((message) => Number(message.createdAt || 0))),
         rank: 4,
@@ -365,7 +368,7 @@ export function useChatTreeController(props: any) {
       byAgent.set(agentId, [...(byAgent.get(agentId) ?? []), item]);
     }
     return byAgent;
-  }, [isManualAgentChatMessage, messagesByAgent, selectedAgentId, selectedChatLeafKey, startAgentChat]);
+  }, [chatThreadTitles, isManualAgentChatMessage, messagesByAgent, selectedAgentId, selectedChatLeafKey, startAgentChat]);
 
   useEffect(() => {
     if (activeView !== "chat" || !selectedChatLeafKey) return;

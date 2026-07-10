@@ -40,14 +40,18 @@ function resolveWindowsPython(): { exe: string; base: string[] } {
   return { exe: "python", base: [] };
 }
 
-/** The command + full argv to run `scripts/hive-env-add` with `args` on this platform. */
-export function hiveEnvAddCommand(args: string[] = []): { command: string; argv: string[] } {
-  const scriptPath = join(process.cwd(), "scripts", "hive-env-add");
+/** The command + full argv to run a Python script on this platform. */
+export function pythonScriptCommand(scriptPath: string, args: string[] = []): { command: string; argv: string[] } {
   if (process.platform !== "win32") {
     return { command: scriptPath, argv: args };
   }
   const { exe, base } = resolveWindowsPython();
   return { command: exe, argv: [...base, scriptPath, ...args] };
+}
+
+/** The command + full argv to run `scripts/hive-env-add` with `args` on this platform. */
+export function hiveEnvAddCommand(args: string[] = []): { command: string; argv: string[] } {
+  return pythonScriptCommand(join(process.cwd(), "scripts", "hive-env-add"), args);
 }
 
 /**

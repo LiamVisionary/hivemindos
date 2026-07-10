@@ -66,6 +66,7 @@ fn main() {
                 "create_local_folder",
                 "display_local_path",
                 "open_deliverable",
+                "open_in_app",
                 "open_project_terminal",
                 "list_aeon_deliverables",
                 "list_aeon_outputs",

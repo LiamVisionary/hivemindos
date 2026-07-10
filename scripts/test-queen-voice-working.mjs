@@ -28,7 +28,6 @@ const {
   voiceTranscriptDirectlyRequestsTask,
   voiceTaskApprovalPrompt,
   voiceTaskSubmissionAuthorized,
-  voiceTranscriptRequestsImmediateAnswer,
 } = await import("../src/lib/services/queen-bee/voice-task-approval.ts");
 const { toolActivityLabel } = await import("../src/lib/services/phone/runtime-voice-turn.ts");
 const {
@@ -202,35 +201,27 @@ const {
     "a direct work request still authorizes the voice task path",
   );
   assert.equal(
-    voiceTranscriptRequestsImmediateAnswer("grab my latest x post"),
-    true,
-    "latest X post retrieval is an immediate answer request",
+    voiceTranscriptDirectlyRequestsTask("What’s the latest comment on my latest post"),
+    false,
+    "latest-comment retrieval is not a Work Board task",
   );
   assert.equal(
     voiceTranscriptDirectlyRequestsTask("grab my latest x post"),
     false,
     "latest X post retrieval is not a Work Board task request",
   );
-  assert.equal(
-    voiceTaskSubmissionAuthorized("check my latest post on X", []),
-    false,
-    "read-only X post retrieval is not authorized as queued work",
-  );
   const voiceTurnSource = readFileSync(
     new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url),
     "utf8",
   );
   assert.ok(
-    voiceTurnSource.includes("Read-only retrieval requests like"),
-    "voice prompt tells the model not to queue read-only X post retrieval",
+    voiceTurnSource.includes("When an offered tool can fulfill the user's request"),
+    "voice prompt tells the model to execute available capabilities during the turn",
   );
-  assert.ok(
-    voiceTurnSource.includes("The latest user message is a read-only X/Twitter retrieval request."),
-    "voice runtime preamble reinforces immediate answer handling for X post retrieval",
-  );
-  assert.ok(
-    voiceTurnSource.includes("if (voiceTranscriptRequestsImmediateAnswer(options.transcript))"),
-    "voice wrapper guards against Work Board prompts for read-only X post retrieval",
+  assert.doesNotMatch(
+    voiceTurnSource,
+    /voiceTranscriptRequestsImmediateAnswer|read-only X\/Twitter retrieval request|Read-only retrieval requests like/,
+    "voice capability selection is not driven by X-specific phrase matching",
   );
   console.log("voice task approval boundary ok");
 }
@@ -460,8 +451,19 @@ const {
 // The overlay races pump() against the barge-in signal; the shared in-flight
 // promise must make an abandoned race unable to drop bytes or events.
 {
-  const { createNdjsonEventReader } = await import(
+  const { createNdjsonEventReader, voiceTurnBrainMetadata } = await import(
     "../src/features/queen-voice/converse-stream.ts"
+  );
+  assert.deepEqual(
+    voiceTurnBrainMetadata({
+      brainLabel: "fallback-model · Provider",
+      brainFallback: { label: "selected-model · OAuth", error: "Reconnect OAuth." },
+    }),
+    {
+      brain: "fallback-model · Provider",
+      brainFallback: { label: "selected-model · OAuth", error: "Reconnect OAuth." },
+    },
+    "pipeline voice preserves the actual answering brain and selected-brain failure",
   );
   const encoder = new TextEncoder();
   const streamOf = (chunks) =>

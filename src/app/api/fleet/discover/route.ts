@@ -126,6 +126,24 @@ type CollectorSystemStats = {
   arch?: string;
   osRelease?: string;
   uptimeSec?: number;
+  // Extended resource telemetry (collector v0.19+; older collectors omit
+  // these, so every field stays optional and the UI degrades gracefully).
+  swapUsedGb?: number | null;
+  swapTotalGb?: number | null;
+  cacheGb?: number | null;
+  tempC?: number | null;
+  diskReadMBs?: number | null;
+  diskWriteMBs?: number | null;
+  netRxMBs?: number | null;
+  netTxMBs?: number | null;
+  procCount?: number | null;
+  topProcesses?: Array<{ name: string; rssMb: number }>;
+  // Rolling recent samples (cpu%/ram%/net MB-s) the collector accumulates while
+  // actively polled, so sparklines show a real trend immediately.
+  history?: { cpu: number[]; ram: number[]; netRx: number[]; netTx: number[] };
+  // Round-trip latency to the collector /health endpoint, measured by the
+  // discovery probe (not the collector itself).
+  rttMs?: number | null;
 };
 
 type BridgeRepairStatus = {
@@ -741,6 +759,7 @@ async function probeCollector(
     activeDevice,
     options.collectorTimeoutMs,
   );
+  const healthStartedAt = Date.now();
   const healthData = (await fetchJson(
     `${collectorUrl}/health`,
     options.collectorTimeoutMs,
@@ -753,6 +772,10 @@ async function probeCollector(
     envSync?: CollectorEnvSync;
     system?: CollectorSystemStats;
   };
+  // Round-trip to the collector /health endpoint = a real RTT to this machine
+  // over the tailnet (loopback for self). Rides along inside `system` so it
+  // reaches the client verbatim with the rest of the resource telemetry.
+  const rttMs = Date.now() - healthStartedAt;
   if (!isHivemindCollectorHealth(healthData)) {
     throw new Error("Health endpoint is not a HivemindOS collector.");
   }
@@ -761,13 +784,16 @@ async function probeCollector(
     ...agent,
     collectorCapabilities: capabilities,
   }));
+  const system = healthData.system
+    ? { ...healthData.system, rttMs }
+    : healthData.system;
   return {
     device: activeDevice,
     agents,
     version: healthData.version,
     capabilities,
     envSync: healthData.envSync,
-    system: healthData.system,
+    system,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
     tailnetSelf: healthData.tailnetSelf,

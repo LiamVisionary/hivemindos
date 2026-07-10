@@ -18,12 +18,15 @@ const tone = (value: unknown) => {
 
 const textTone = (value: unknown) => tone(value).c;
 
+/* Shared eyebrow atom mirrored from the chat-route redesign: mono, tight, muted. */
+const EYEBROW: React.CSSProperties = { fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--fg-3)" };
+
 const legacyComponents: Registry = {
   Panel({ props, children }: CompProps) {
     const t = tone(props.tone);
     return (
       <section style={{ display: "grid", gap: 12, width: "100%", minWidth: 0, borderRadius: "var(--radius)", border: `1px solid ${t.br}`, background: t.bg, color: "var(--fg)", padding: 16 }}>
-        {typeof props.title === "string" && props.title ? <h3 style={{ margin: 0, fontFamily: "var(--f-display)", fontSize: 15, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.01em" }}>{props.title}</h3> : null}
+        {typeof props.title === "string" && props.title ? <h3 style={{ margin: 0, fontFamily: "var(--f-body)", fontSize: 16, lineHeight: 1.3, fontWeight: 600, letterSpacing: "-0.01em" }}>{props.title}</h3> : null}
         {children}
       </section>
     );
@@ -34,9 +37,9 @@ const legacyComponents: Registry = {
   Metric({ props }: CompProps) {
     const t = tone(props.tone);
     return (
-      <div style={{ display: "grid", gap: 5, minWidth: 144, borderRadius: "var(--radius-sm)", border: `1px solid ${t.br}`, background: t.bg, padding: "10px 12px" }}>
-        <span className="fr-eyebrow" style={{ color: "var(--fg-2)", fontWeight: 600 }}>{String(props.label ?? "")}</span>
-        <strong style={{ color: "var(--fg)", fontFamily: "var(--f-display)", fontSize: 20, lineHeight: 1.1, fontWeight: 600, wordBreak: "break-word" }}>{String(props.value ?? "")}</strong>
+      <div style={{ display: "grid", gap: 5, minWidth: 132, borderRadius: "var(--radius-sm)", border: `1px solid ${t.br}`, background: t.bg, padding: "11px 13px" }}>
+        <span style={EYEBROW}>{String(props.label ?? "")}</span>
+        <strong style={{ color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 22, lineHeight: 1.05, fontWeight: 600, wordBreak: "break-word" }}>{String(props.value ?? "")}</strong>
         {props.detail ? <span style={{ color: "var(--fg-2)", fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{String(props.detail)}</span> : null}
       </div>
     );
@@ -45,7 +48,7 @@ const legacyComponents: Registry = {
     const t = tone(props.tone);
     return (
       <aside style={{ display: "grid", gap: 7, borderRadius: "var(--radius-sm)", border: `1px solid ${t.br}`, background: t.bg, padding: "12px 14px", color: t.c }}>
-        {props.title ? <strong style={{ color: t.c, fontFamily: "var(--f-display)", fontSize: 13.5 }}>{String(props.title)}</strong> : null}
+        {props.title ? <strong style={{ color: t.c, fontFamily: "var(--f-body)", fontSize: 14 }}>{String(props.title)}</strong> : null}
         <p style={{ margin: 0, color: "var(--fg-2)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{String(props.body ?? "")}</p>
       </aside>
     );
@@ -57,8 +60,8 @@ const legacyComponents: Registry = {
         {items.map((raw, index) => {
           const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
           return (
-            <div key={`${String(item.label ?? index)}-${index}`} style={{ display: "grid", gap: 4, borderTop: index ? "1px solid var(--line)" : 0, padding: "9px 12px", gridTemplateColumns: "minmax(7rem,0.45fr) minmax(0,1fr)" }}>
-              <dt className="fr-eyebrow">{String(item.label ?? "")}</dt>
+            <div key={`${String(item.label ?? index)}-${index}`} style={{ display: "grid", gap: 4, borderTop: index ? "1px solid var(--line)" : 0, padding: "9px 13px", gridTemplateColumns: "minmax(7rem,0.45fr) minmax(0,1fr)" }}>
+              <dt style={EYEBROW}>{String(item.label ?? "")}</dt>
               <dd style={{ margin: 0, color: textTone(item.tone), fontSize: 13, lineHeight: 1.45, wordBreak: "break-word" }}>{String(item.value ?? "")}</dd>
             </div>
           );
@@ -71,13 +74,13 @@ const legacyComponents: Registry = {
     const rows = Array.isArray(props.rows) ? props.rows : [];
     return (
       <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
-        {props.caption ? <p className="fr-eyebrow" style={{ margin: 0 }}>{String(props.caption)}</p> : null}
+        {props.caption ? <p style={{ ...EYEBROW, margin: 0 }}>{String(props.caption)}</p> : null}
         <div className="fr-scroll" style={{ overflowX: "auto", borderRadius: "var(--radius-sm)", border: "1px solid var(--line)" }}>
           <table style={{ width: "100%", minWidth: 420, borderCollapse: "collapse", fontSize: 12.5, textAlign: "left" }}>
             <thead style={{ background: "var(--panel-2)", color: "var(--fg-3)" }}>
               <tr>{columns.map((raw, index) => {
                 const column = (raw && typeof raw === "object" ? raw : { key: raw, label: raw }) as Record<string, unknown>;
-                return <th key={`${String(column.key ?? index)}-${index}`} style={{ borderBottom: "1px solid var(--line)", padding: "9px 12px", fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", textAlign: column.align === "right" ? "right" : "left" }}>{String(column.label ?? column.key ?? "")}</th>;
+                return <th key={`${String(column.key ?? index)}-${index}`} style={{ borderBottom: "1px solid var(--line)", padding: "9px 12px", ...EYEBROW, textAlign: column.align === "right" ? "right" : "left" }}>{String(column.label ?? column.key ?? "")}</th>;
               })}</tr>
             </thead>
             <tbody>{rows.map((rawRow, rowIndex) => {
@@ -101,7 +104,7 @@ const legacyComponents: Registry = {
   CodeBlock({ props }: CompProps) {
     return (
       <figure style={{ display: "grid", gap: 7, margin: 0, minWidth: 0 }}>
-        {props.language ? <figcaption className="fr-eyebrow">{String(props.language)}</figcaption> : null}
+        {props.language ? <figcaption style={EYEBROW}>{String(props.language)}</figcaption> : null}
         <pre className="fr-scroll" style={{ margin: 0, maxHeight: 288, overflow: "auto", borderRadius: "var(--radius-sm)", border: "1px solid var(--line)", background: "var(--bg-soft)", color: "var(--fg-2)", padding: 12, fontFamily: "var(--f-mono)", fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}><code>{String(props.code ?? "")}</code></pre>
       </figure>
     );

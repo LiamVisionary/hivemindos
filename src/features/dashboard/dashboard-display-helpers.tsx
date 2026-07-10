@@ -787,6 +787,48 @@ export function dedupeMachineGroups(items: MachineGroup[]) {
   return [...byIdentity.values()];
 }
 
+// A rename-orphaned system tailnet node — e.g. the NYC MacBook whose system
+// node shares the "Liam's MacBook Pro" ComputerName with This Mac, so tailscale
+// suffixes it "-1" while its embedded link node re-registered under a distinct
+// name — shows up in `tailscaleDevices` as its own bridge-less device. Its real
+// collector reports that system node as `tailnetSelf`, so fleet discovery folds
+// the two into one DiscoveredMachine. But the fleet view rebuilds MachineGroups
+// straight from `tailscaleDevices`, which carries no `tailnetSelf`, so the orphan
+// resurfaces as an empty "pending" ghost machine. These two helpers fold it at
+// the group layer too, reusing the tailnetSelf claims the ready collectors
+// already reported through discovery (mirrors dedupeDiscoveredMachines).
+export function readyTailnetSelfShadowBases(
+  discoveredMachines: DiscoveredMachine[],
+): Set<string> {
+  const bases = new Set<string>();
+  for (const machine of discoveredMachines) {
+    if (machine.collector !== "ready") continue;
+    // A collector only ever claims its OWN system node. Excluding its own device
+    // identity keeps a machine whose system node shares its name (This Mac:
+    // tailnetSelf resolves to This Mac's own identity) from folding itself away.
+    const own = machineExactIdentity(
+      machine.device.name,
+      machine.device.dnsName,
+    );
+    for (const base of tailnetSelfIdentityCandidates(machine.tailnetSelf)) {
+      if (base && base !== own) bases.add(base);
+    }
+  }
+  return bases;
+}
+
+export function isTailnetSelfShadowGroup(
+  group: MachineGroup,
+  shadowBases: Set<string>,
+): boolean {
+  // Never fold self, nor a machine that answered as a ready collector — only a
+  // bridge-less duplicate a ready collector claims as its own system node.
+  if (group.self || group.collector === "ready" || shadowBases.size === 0)
+    return false;
+  const identity = machineExactIdentity(group.name, group.dnsName ?? "");
+  return Boolean(identity) && shadowBases.has(identity);
+}
+
 export function machineVersionState(
   machine: MachineGroup,
   latestCommit?: string,

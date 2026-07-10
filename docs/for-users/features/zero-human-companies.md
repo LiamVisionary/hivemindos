@@ -6,22 +6,29 @@ title: "Zero Human Companies"
 
 Zero Human Companies turn a business goal into an agent-run operating loop.
 
-A company has a charter, an apex goal, a crew of agents, budgets, approvals, a kill switch, Work Board tasks, and a private learning layer. The operator still owns the high-trust decisions: funding, policy, approval thresholds, public exposure, and whether a company should keep running.
+A company has a charter, an apex goal, governance controls, a run history, and a selected autonomy engine. The default engine plans work for a HivemindOS crew through the Work Board. The optional AEON engine runs one chosen background skill in a linked AEON workspace, without requiring native company agents. The operator still owns the high-trust decisions: funding, policy, approval thresholds, public exposure, and whether a company should keep running.
 
 ## What It Does
 
 Zero Human Companies are for repeatable work that should behave more like an operating company than a one-off chat:
 
 - create or review a company charter
-- assign agents to roles
+- choose the HivemindOS crew engine or an optional AEON background skill
+- assign agents to roles when the company uses a native crew
 - set an apex goal and task backlog
-- launch work into the shared Work Board
-- route tasks to eligible agents
+- launch planned work into the shared Work Board, or hand one bounded goal to AEON
+- route native tasks to eligible agents or reuse a saved AEON workspace and skill
 - track approvals, spend caps, and kill-switch state
 - preserve receipts, deliverables, eval gates, and learning artifacts
 - summarize the company's accumulated know-how as capability capital
 
 The feature is local-first. It can run with local agents, user-configured runtimes, user-owned wallets, and the shared Obsidian vault. Managed cloud, official monetization, marketplace listing, hosted capacity, or paid-agent access must be verified by HivemindOS-controlled infrastructure or by a verifiable payment rail before it grants official value.
+
+## Founder Mode
+
+Founder Mode is the outcome-first path into a company. Describe what you want to make happen, choose a privacy posture, milestone budget, and pace, then review a generated blueprint covering the charter, goal, crew, capabilities, compute, approvals, first Lab, and proof requirements.
+
+Compiling is read-only. Founding requires an explicit action and creates the company plus its first private Lab, but does not launch autonomous work. The operator still decides when the crew begins. See [Founder Mode, Hivemind Labs, And Proof Packs](founder-mode.html).
 
 ## Imported Companies
 
@@ -29,7 +36,7 @@ Existing projects can be imported as companies without being re-founded from scr
 
 The importer records the repository, Git remote, GitHub Actions workflows, scheduled workflow crons, Supabase `pg_cron` schedules, Render services, Vercel crons, cron-like files, and package scripts when those signals are present. The company cockpit then shows those systems in a **Systems** tab so operators can inspect the code and operating schedules that already keep the product running.
 
-Importing a legacy project does not automatically make historical or off-platform revenue subject to HivemindOS revenue share. Imported companies still show the Treasury revenue recorder, but fee collection remains tied to explicit revenue events recorded through the trusted revenue route or another verified settlement path.
+Importing a legacy project does not automatically make historical or off-platform revenue subject to HivemindOS revenue share. Imported companies still show the Treasury revenue recorder, but fee collection remains tied to explicit revenue events recorded through a trusted or verifiable settlement path.
 
 ## Cockpit
 
@@ -38,43 +45,59 @@ The Zero Human Company cockpit is the operator surface for one company.
 It shows:
 
 - the company charter, stage, and apex goal
-- assigned agents and their roles
+- the selected autonomy engine
+- assigned agents and their roles, when the company has a native crew
 - team settings and agent membership
 - approval queues and governance events
 - treasury controls, budgets, and spend summaries
 - issue-board style work lanes
-- launched Work Board tasks and dispatch status
+- native Work Board tasks or accepted AEON dispatches
 - learning-loop metrics and capability-capital summaries
 
 The cockpit is organized into tabs:
 
 - **Board** — the active work block, the autonomous-execution launch control, and issue-board work lanes.
-- **Deliverables** — the company's real outputs, with a collapsed work log for the scratch that evidenced them.
-- **Emails** — outreach threads and the crew's mailboxes, for companies that do outreach.
-- **Learning** — capability-capital metrics and the eval frontier.
+- **Issues** — open company work and items that need review.
+- **Deliverables** — the company's real outputs, with a collapsed work log for the scratch that evidenced them. The label can follow the company's primary output.
+- **Comms** — outreach threads and the crew's mailboxes, with a company-specific label where appropriate.
+- **Sales** — customer and pipeline activity.
+- **Products** — the catalog for companies that sell fixed products.
+- **Systems** — imported workflows and schedules for companies linked from an existing project.
 - **Team** — the org chart and agent membership.
+- **Analytics** — company performance and operating summaries.
+- **Learning** — capability-capital metrics and the eval frontier.
+- **Labs** — bounded hypotheses, measured results, evidence lineage, frontiers, and a preview-first Hive Skill Fusion path for graduating verified methods into reusable shared skills.
 - **Approvals** — spend and actions waiting for human sign-off.
-- **Governance** — patches, reflections, escalations, and alerts.
-- **Treasury** — budgets, the kill switch, spend summaries, and revenue share.
+- **Runs** — accepted dispatches, flow history, proposals, outputs, and replay requests.
+- **Ops** — governance, treasury, budgets, the kill switch, and other operator controls.
 
 The cockpit is designed as a control surface, not a magic-autonomy promise. It keeps the human operator close to funding, risky actions, and governance while letting agents carry the routine execution loop.
 
 ## Launch Flow
 
-When a company launches its apex goal, HivemindOS decomposes the goal into Work Board tasks and attaches company metadata to the dispatched work.
+Every launch starts from the company's apex goal and preserves a company Runs record, but execution depends on the selected engine.
 
-The launch path connects these systems:
+With **HivemindOS crew**, HivemindOS plans the goal into Work Board tasks, routes them to eligible company agents, and connects the tasks to deliverables, eval gates, approvals, and reviewed learning. The Work Board answers both “what is the task?” and “which company is learning from this work?”
 
-- company records and presentation metadata
-- Queen Bee planning
-- Work Board task creation
-- agent dispatch and autonomous pickup
-- loop contracts and eval gates
-- planner/evaluator contract snapshots and evaluator rubrics
-- deliverables and run receipts
-- Shared Brain review queues for durable memory
+With **AEON background skill**, HivemindOS sends one bounded company-goal input to the selected workspace and skill. The accepted handoff appears in company Runs; detailed execution and outputs remain in AEON. No fake completed Work Board task is created.
 
-The same Work Board card can therefore answer both "what is the task?" and "which company is learning from this work?"
+## Optional AEON Automation
+
+AEON is an optional autonomy engine for a Zero Human Company. It is not required to create or run companies, and the default remains the HivemindOS crew path described above.
+
+In the create or edit flow, choose **AEON background skill**, then select a saved AEON workspace and one of the skills actually available in that workspace. A native HivemindOS crew becomes optional because the selected AEON workspace is the executor. The saved binding is checked against the live workspace catalog before it is accepted and again before dispatch.
+
+Later cycles reuse the same workspace and skill until autonomy is stopped or the company is frozen. For an AEON-backed company, “idle” means the selected workspace has no queued or active run; HivemindOS does not use native agent presence or Work Board tasks as AEON's activity signal. Runs in one selected workspace are serialized so the company cadence does not create overlapping background jobs there. If workspace activity cannot be read, that cycle waits instead of launching another job blindly.
+
+The responsibility boundary remains visible:
+
+- HivemindOS owns the company definition, home-machine dispatch ownership, launch and stop controls, kill switch, and Company Runs trace.
+- AEON owns the background skill execution, runtime credentials and permissions, outputs, schedules, and detailed run history.
+- An accepted AEON dispatch is recorded in **Company Runs** without manufacturing a completed Work Board task. AEON outputs remain available through the selected workspace and the AEON view.
+- Stopping or freezing the company prevents future cycles; an AEON job already accepted may finish.
+- Company Work Board budgets and approval pauses do not automatically wrap an external AEON job. Configure the selected AEON workspace's own provider limits, permissions, and skill safety boundaries for that execution.
+
+This option is useful for recurring background work already expressed as an AEON skill. Keep the HivemindOS crew engine selected when the goal should be decomposed into governed Work Board tasks and routed across multiple company agents. Follow [Use AEON With Zero Human Companies](../runtimes/aeon/zero-human-companies.html) for the complete setup, launch, monitoring, and troubleshooting walkthrough.
 
 ## Runs And Proposals
 
@@ -86,11 +109,14 @@ Replay requests do not silently redo customer-facing or money-facing work. They 
 
 ## Autonomous Execution
 
-The Board tab has a single launch control for perpetual autonomy. **Launch autonomous work** decomposes the apex goal into Work Board tasks and dispatches them to the crew, then keeps the company running: whenever the board goes idle, the autonomy driver re-dispatches toward the same goal, on its own, until the operator stops it or the company is frozen. Spend stays inside the company budget the whole time.
+The Board tab has one launch control whose label follows the selected engine.
+
+- **HivemindOS crew:** launch plans the apex goal into Work Board tasks. Later cycles wait for the company's board work to become idle and for an eligible crew member to be available.
+- **AEON background skill:** launch sends the bounded goal to the selected skill. Later cycles wait for the AEON workspace to have no queued or active run. Native agents and Work Board availability are not used as AEON's activity signal.
 
 **Stop autonomy** halts new dispatches; work already in flight finishes. Launching also claims the company for the machine that pressed the button, so a company definition replicated across the fleet auto-dispatches only from its home machine rather than from every machine at once.
 
-Launch is gated on the basics — the company needs at least one agent, an explicit apex goal, and an un-frozen treasury. The Board shows when the goal was last dispatched and whether the driver is actually running, so "running" reflects real dispatch health rather than a stale flag.
+Every company needs an explicit apex goal and an unfrozen treasury. The HivemindOS crew engine also needs at least one company agent; the AEON engine needs a current workspace and runnable skill instead. The Board shows when the goal was last dispatched and whether autonomy is running.
 
 ## Deliverables
 
@@ -128,7 +154,9 @@ The tab never pretends. If no mail provider is connected, it says so and points 
 
 ## Learning Loops
 
-Zero Human Companies use the generic HivemindOS loop contract as their private learning layer. Work Board is one place those loops are visible, but the loop contract itself is shared by chat-started work, Scheduler, Queen Bee flows, company dispatch, and Evo-compatible optimization. Each launched task can carry an optimizer loop with success criteria, evidence requirements, eval gates, experiment candidates, and Pareto frontier metadata.
+Zero Human Companies use the generic HivemindOS loop contract as their private learning layer. With the HivemindOS crew engine, each launched Work Board task can carry an optimizer loop with success criteria, evidence requirements, eval gates, experiment candidates, and frontier metadata. The loop contract is also shared by chat-started work, Scheduler, Queen Bee flows, and Evo-compatible optimization.
+
+AEON mode records the company handoff in Runs but leaves detailed execution and outputs in the selected workspace. AEON output does not automatically become a completed Work Board task or company learning receipt; bring reviewed outputs into the normal company workflow when they should contribute to deliverables or durable learning.
 
 The default company loop is non-blocking at creation time. Agents can finish useful work while HivemindOS preserves the eval structure and evidence trail for later review.
 
@@ -167,7 +195,7 @@ This gives the operator a way to see whether the company is building reusable ca
 
 ## Budgets And Approvals
 
-Zero Human Companies can coordinate agent wallets, approval queues, spend caps, and kill switches. The local app may cache and display company controls, but it must not be the authority for official commercial value.
+Zero Human Companies can coordinate agent wallets, approval queues, spend caps, and kill switches. These controls govern native company work. External AEON provider usage follows the selected workspace's own credentials, permissions, and provider limits; a company Work Board budget does not automatically cap it. The local app may cache and display company controls, but it must not be the authority for official commercial value.
 
 For official paid access, managed credits, marketplace revenue, hosted-agent access, or enterprise quotas:
 
@@ -182,31 +210,16 @@ Self-hosted operators may configure their own wallets, pay-to addresses, provide
 
 Zero Human Companies can now record external revenue events and collect the HivemindOS company revenue share through the same policy-driven platform-fee rail used by local wallet payments. The default share is **2% of recorded company revenue with a $0.01 minimum**, net of refunds and chargebacks when those are known to the settlement route.
 
-The Treasury tab shows recorded revenue, quoted share, collected share, and pending share for the company. Operators can record a revenue event by amount and source, and can optionally collect the share immediately from a selected company agent wallet. Collection requires explicit `COLLECT_COMPANY_REVENUE_FEE` confirmation and writes the fee as a visible platform-fee receipt in wallet activity.
+The Treasury tab shows recorded revenue, quoted share, collected share, and pending share for the company. Operators can record a revenue event by amount and source, and can optionally collect the share immediately from a selected company agent wallet. Collection requires explicit confirmation and writes the fee as a visible platform-fee receipt in wallet activity.
 
-This does not make the downloadable app the authority over official revenue. External revenue is charged only when it is recorded or settled through a trusted route such as `/api/company-revenue`, a hosted HivemindOS marketplace/billing service, or a verifiable third-party payment rail. Off-app cash, invoices, Stripe revenue, or marketplace sales that never report into one of those routes are not automatically charged by the local app.
+This does not make the downloadable app the authority over official revenue. External revenue is charged only when it is reported through HivemindOS, a hosted HivemindOS marketplace or billing service, or a verifiable third-party payment rail. Off-app cash, invoices, Stripe revenue, or marketplace sales that never report through one of those paths are not automatically charged by the local app.
 
 ## Related Docs
 
 - [Work Board And Scheduler](work-and-scheduler.html) covers task storage, dispatch, loop contracts, eval gates, deliverables, scheduler work, and work history.
+- [Use AEON With Zero Human Companies](../runtimes/aeon/zero-human-companies.html) covers choosing, launching, monitoring, and troubleshooting the optional AEON engine.
+- [AEON v0.1 Control Plane](../runtimes/aeon/v01-control-plane.html) covers linking and operating a current AEON workspace.
 - [Evo Optimization Runtime](evo-optimization.html) covers benchmark-driven optimizer loops and frontier-style experiments.
 - [Wallets, Tokens, Honey, HIVE, And x402](wallets-honey-and-x402.html) covers agent wallets, payment rails, managed HONEY credits, and x402 paid requests.
 - [Agent Provider Integrations](agent-provider-integrations.html) covers agent mailbox provisioning (the **Create mailbox** flow, AgentMail and Cloudflare Agentic Inbox backends, and Agentic Inbox setup) that the Emails tab reads from.
 - [Monetization](../../for-investors/) covers the free-vs-paid product boundary for managed services.
-
-## Main Code Paths
-
-- `src/features/dashboard/views/GovernancePanel.tsx`
-- `src/features/dashboard/views/zero-human-companies/`
-- `src/app/api/companies/route.ts`
-- `src/app/api/companies/[id]/runs/route.ts`
-- `src/app/api/companies/[id]/emails/route.ts`
-- `src/lib/services/agent-mailboxes.ts`
-- `src/lib/services/companies-store.ts`
-- `src/lib/services/companies-orchestration.ts`
-- `src/lib/services/company-runs.ts`
-- `src/lib/services/companies-goal-planner.ts`
-- `src/lib/types/company.ts`
-- `src/lib/types/company-runs.ts`
-- `src/lib/services/kanban/local-kanban-store.ts`
-- `src/app/api/kanban/route.ts`

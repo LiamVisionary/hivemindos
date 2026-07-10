@@ -1,5 +1,6 @@
 import { latestUserMessage, type IncomingMessage } from "./messages";
 import type { ChatMediaArtifact } from "./media-artifacts";
+import { VIDEO_GENERATION_TOOL_NAME, type AccumulatedToolCall } from "./openai-compatible-tools";
 
 function clean(value: string) {
   return value.replace(/\s+/g, " ").trim();
@@ -27,6 +28,38 @@ export function hasCurrentTurnImageArtifact(artifacts: ChatMediaArtifact[] = [])
 
 export function hasCurrentTurnMediaArtifact(artifacts: ChatMediaArtifact[] = []) {
   return artifacts.some((artifact) => Boolean(artifact.path || artifact.dataUrl));
+}
+
+export function videoInputImagesForArgs(
+  args: Record<string, unknown>,
+  artifacts: ChatMediaArtifact[],
+) {
+  const imageId = typeof args.inputImageId === "string" ? args.inputImageId.trim() : "";
+  const imagePath = typeof args.inputImagePath === "string" ? args.inputImagePath.trim() : "";
+  const selected = artifacts.find((artifact) => (
+    artifact.kind === "image"
+    && ((imageId && artifact.id === imageId) || (imagePath && artifact.path === imagePath))
+  )) ?? artifacts.find((artifact) => artifact.kind === "image");
+  return selected ? [{
+    path: selected.path,
+    dataUrl: selected.dataUrl,
+    mimeType: selected.mimeType,
+    name: selected.name,
+  }] : [];
+}
+
+export function forceVideoGenerationToolCall(
+  toolCalls: AccumulatedToolCall[],
+  force: boolean,
+  prompt: string,
+) {
+  if (!force) return toolCalls;
+  const selected = toolCalls.find((call) => call.name === VIDEO_GENERATION_TOOL_NAME);
+  return [selected ?? {
+    id: "forced_generate_video",
+    name: VIDEO_GENERATION_TOOL_NAME,
+    arguments: JSON.stringify({ prompt }),
+  }];
 }
 
 export function explicitLocalCommandRequest(query: string) {

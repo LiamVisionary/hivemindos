@@ -20,7 +20,9 @@ import {
   isCopyTradeNetwork,
   type CopyTradeEvent,
   type CopyTradeEngineStatus,
+  type CopyTradeFundable,
   type CopyTradeNetwork,
+  type CopyTradePaperLedger,
   type CopyTradeRuntimeState,
   type CopyTradingConfig,
 } from "@/lib/types/copy-trading";
@@ -42,7 +44,13 @@ type Snapshot = {
   states: Record<string, CopyTradeRuntimeState>;
   engine: CopyTradeEngineStatus | null;
   online: boolean;
+  fundable: Record<string, CopyTradeFundable>;
 };
+
+/** Spendable balance the copy-trader can use for this config (acting wallet + chain). */
+function fundableFor(snap: Snapshot | null, config: CopyTradingConfig): CopyTradeFundable | null {
+  return snap?.fundable?.[`${config.walletAddress}:${config.network}`] ?? null;
+}
 
 type DaemonServiceStatus = {
   installed: boolean;
@@ -109,7 +117,7 @@ export function CopyTradingPanel(props: Props) {
     if (service) setDaemonService(service);
     if (!res) return;
     const data = (await res.json().catch(() => null)) as ({ ok: boolean } & Snapshot) | null;
-    if (data?.ok) setSnap({ configs: data.configs ?? [], states: data.states ?? {}, engine: data.engine ?? null, online: Boolean(data.online) });
+    if (data?.ok) setSnap({ configs: data.configs ?? [], states: data.states ?? {}, engine: data.engine ?? null, online: Boolean(data.online), fundable: data.fundable ?? {} });
   }, []);
 
   // Poll status while the tab is visible (paused when hidden) — also does the
@@ -202,6 +210,7 @@ export function CopyTradingPanel(props: Props) {
             <ConfigList
               list={mine}
               states={snap?.states ?? {}}
+              fundable={snap?.fundable ?? {}}
               online={snap?.online ?? false}
               busy={busy}
               onEdit={editConfig}
@@ -235,6 +244,7 @@ export function CopyTradingPanel(props: Props) {
           <ConfigList
             list={others}
             states={snap?.states ?? {}}
+            fundable={snap?.fundable ?? {}}
             online={snap?.online ?? false}
             busy={busy}
             onEdit={undefined}
@@ -250,8 +260,8 @@ export function CopyTradingPanel(props: Props) {
       {daemonReady ? (
         <p className={styles.cap}>
           Mirrors run server-side, capped at ${MAX_COPY_TRADE_USD}/swap with your wallet&apos;s spend governance. New configs
-          start in <b>dry-run</b> (detect &amp; log only) until you turn it off. Switching the acting wallet does not stop
-          a running config.
+          start in <b>dry-run</b> (paper-trade with simulated cash — real fills, no real spend) until you turn it off.
+          Switching the acting wallet does not stop a running config.
         </p>
       ) : null}
     </div>
@@ -313,6 +323,7 @@ function DaemonSetupGate(props: { installing: boolean }) {
 function ConfigList(props: {
   list: CopyTradingConfig[];
   states: Record<string, CopyTradeRuntimeState>;
+  fundable: Record<string, CopyTradeFundable>;
   online: boolean;
   busy: string | null;
   onEdit?: (c: CopyTradingConfig) => void;
@@ -330,6 +341,7 @@ function ConfigList(props: {
           key={c.id}
           config={c}
           state={props.states[c.id]}
+          fundable={props.fundable[`${c.walletAddress}:${c.network}`] ?? null}
           online={props.online}
           busy={props.busy}
           onEdit={props.onEdit}
@@ -344,6 +356,7 @@ function ConfigList(props: {
 function ConfigCard(props: {
   config: CopyTradingConfig;
   state?: CopyTradeRuntimeState;
+  fundable?: CopyTradeFundable | null;
   online: boolean;
   busy: string | null;
   onEdit?: (c: CopyTradingConfig) => void;
@@ -362,6 +375,9 @@ function ConfigCard(props: {
     : { cls: styles.pillRun, text: "Live" };
   const recent = (state?.events ?? []).slice(-3).reverse();
   const summary = state ? summarizeState(state) : null;
+  const paper = config.dryRun ? state?.paper : undefined;
+  const openCount = Object.keys((config.dryRun ? state?.paper?.positions : state?.openPositions) ?? {}).length;
+  const totalPnl = paper ? paperTotalPnl(paper) : 0;
 
   return (
     <div className={`${styles.card}${props.foreign ? ` ${styles.foreign}` : ""}`}>
@@ -375,14 +391,34 @@ function ConfigCard(props: {
         {state?.lastError && config.enabled ? <span className={`${styles.pill} ${styles.pillErr}`}>err</span> : null}
       </div>
 
-      {state ? (
-        <div className={styles.meta}>
-          <span>signals <b>{summary?.signalCount ?? 0}</b></span>
-          <span>mirrored <b>{state.stats.mirrored}</b></span>
-          <span>skipped <b>{state.stats.skipped}</b></span>
-          <span>errors <b>{state.stats.errors}</b></span>
-          <span>open <b>{Object.keys(state.openPositions).length}</b></span>
+      {props.fundable ? (
+        <div className={styles.meta} title="What the copy-trader can spend from this wallet to mirror the copied trader's buys">
+          <span>fundable <b>{fmtUsd(props.fundable.totalUsd)}</b></span>
+          {props.fundable.assets.map((asset) => (
+            <span key={asset.symbol}>{asset.symbol} <b>{fmtUsd(asset.usd)}</b></span>
+          ))}
+          {props.fundable.assets.length === 0 ? <span>no spendable balance</span> : null}
         </div>
+      ) : null}
+
+      {state ? (
+        config.dryRun ? (
+          <div className={styles.meta} title="Simulated paper-trading portfolio — no real funds are spent in dry-run">
+            <span>signals <b>{summary?.signalCount ?? 0}</b></span>
+            <span>sim fills <b>{paper?.mirrored ?? 0}</b></span>
+            <span>sim cash <b>{fmtUsd(paper?.cashUsd ?? 0)}</b></span>
+            <span>P&amp;L <b className={totalPnl < 0 ? styles.metricDanger : undefined}>{fmtSignedUsd(totalPnl)}</b></span>
+            <span>open <b>{openCount}</b></span>
+          </div>
+        ) : (
+          <div className={styles.meta}>
+            <span>signals <b>{summary?.signalCount ?? 0}</b></span>
+            <span>mirrored <b>{state.stats.mirrored}</b></span>
+            <span>skipped <b>{state.stats.skipped}</b></span>
+            <span>errors <b>{state.stats.errors}</b></span>
+            <span>open <b>{openCount}</b></span>
+          </div>
+        )
       ) : config.enabled ? (
         <div className={styles.meta}>
           <span>{online ? "waiting for first poll" : "daemon offline"}</span>
@@ -426,7 +462,8 @@ function ConfigPerformance(props: { id: string; config: CopyTradingConfig; state
   const { config, state, online } = props;
   const waiting = config.enabled && online && !state;
   const summary = state ? summarizeState(state) : null;
-  const openPositions = Object.values(state?.openPositions ?? {});
+  const paper = config.dryRun ? state?.paper : undefined;
+  const openPositions = Object.values((config.dryRun ? state?.paper?.positions : state?.openPositions) ?? {});
   const events = (state?.events ?? []).slice(-8).reverse();
   const loopStatus = !config.enabled ? "Stopped" : !online ? "Offline" : state?.running ? "Running" : "Waiting";
   const lastEvent = summary?.lastEventAt ? fmtAgo(summary.lastEventAt) : "none";
@@ -447,35 +484,63 @@ function ConfigPerformance(props: { id: string; config: CopyTradingConfig; state
             {state.lastError ? <span className={`${styles.healthItem} ${styles.healthErr}`}>Last error <b>{state.lastError}</b></span> : null}
           </div>
 
-          <div className={styles.detailStats}>
-            <DetailMetric label="Polls" value={fmtInt(state.stats.polls)} />
-            <DetailMetric label="Signals" value={fmtInt(summary?.signalCount ?? 0)} />
-            <DetailMetric label="Dry-run" value={fmtInt(summary?.dryRunActionCount ?? 0)} />
-            <DetailMetric label="Mirrored" value={fmtInt(state.stats.mirrored)} />
-            <DetailMetric label="Skipped" value={fmtInt(state.stats.skipped)} />
-            <DetailMetric label="Errors" value={fmtInt(state.stats.errors)} danger={state.stats.errors > 0} />
-            <DetailMetric label="Open" value={fmtInt(openPositions.length)} />
-            <DetailMetric label="Logged USD" value={fmtUsd(summary?.loggedUsd ?? 0)} />
-          </div>
+          {paper ? (
+            <div className={styles.detailStats}>
+              <DetailMetric label="Polls" value={fmtInt(state.stats.polls)} />
+              <DetailMetric label="Signals" value={fmtInt(summary?.signalCount ?? 0)} />
+              <DetailMetric label="Sim fills" value={fmtInt(paper.mirrored)} />
+              <DetailMetric label="Skipped" value={fmtInt(state.stats.skipped)} />
+              <DetailMetric label="Errors" value={fmtInt(state.stats.errors)} danger={state.stats.errors > 0} />
+              <DetailMetric label="Open" value={fmtInt(openPositions.length)} />
+              <DetailMetric label="Sim cash" value={fmtUsd(paper.cashUsd)} />
+              <DetailMetric label="Start" value={fmtUsd(paper.startCashUsd)} />
+              <DetailMetric label="Equity" value={fmtUsd(paperEquity(paper))} />
+              <DetailMetric label="Realized" value={fmtSignedUsd(paper.realizedPnlUsd)} danger={paper.realizedPnlUsd < 0} />
+              <DetailMetric label="Unrealized" value={fmtSignedUsd(paperUnrealizedPnl(paper))} danger={paperUnrealizedPnl(paper) < 0} />
+              <DetailMetric label="Total P&L" value={fmtSignedUsd(paperTotalPnl(paper))} danger={paperTotalPnl(paper) < 0} />
+            </div>
+          ) : (
+            <div className={styles.detailStats}>
+              <DetailMetric label="Polls" value={fmtInt(state.stats.polls)} />
+              <DetailMetric label="Signals" value={fmtInt(summary?.signalCount ?? 0)} />
+              <DetailMetric label="Dry-run" value={fmtInt(summary?.dryRunActionCount ?? 0)} />
+              <DetailMetric label="Mirrored" value={fmtInt(state.stats.mirrored)} />
+              <DetailMetric label="Skipped" value={fmtInt(state.stats.skipped)} />
+              <DetailMetric label="Errors" value={fmtInt(state.stats.errors)} danger={state.stats.errors > 0} />
+              <DetailMetric label="Open" value={fmtInt(openPositions.length)} />
+              <DetailMetric label="Logged USD" value={fmtUsd(summary?.loggedUsd ?? 0)} />
+            </div>
+          )}
 
           <div className={styles.detailBlock}>
-            <div className={styles.detailTitle}>Open positions</div>
+            <div className={styles.detailTitle}>{config.dryRun ? "Simulated positions" : "Open positions"}</div>
             {openPositions.length ? (
               <div className={styles.positions}>
-                {openPositions.map((position) => (
-                  <div key={position.token} className={styles.positionRow}>
-                    <span>
-                      <b>{position.symbol || shortAddr(position.token)}</b>
-                      <small>{shortAddr(position.token)}</small>
-                    </span>
-                    <span className={styles.num}>{fmtUsd(position.spentUsd)}</span>
-                    <span className={styles.num}>{fmtAmount(position.amount)}</span>
-                    <span className={styles.num}>{fmtAgo(position.lastActionAt)}</span>
-                  </div>
-                ))}
+                {openPositions.map((position) => {
+                  const hasMark = position.markUsd != null;
+                  const pnl = hasMark ? position.markUsd! - position.spentUsd : 0;
+                  return (
+                    <div key={position.token} className={styles.positionRow}>
+                      <span>
+                        <b>{position.symbol || shortAddr(position.token)}</b>
+                        <small>{shortAddr(position.token)}</small>
+                      </span>
+                      <span className={styles.num}>{fmtUsd(position.spentUsd)}</span>
+                      {hasMark ? (
+                        <span className={styles.num}>
+                          {fmtUsd(position.markUsd!)}
+                          <small className={pnl < 0 ? styles.metricDanger : undefined}>{fmtSignedUsd(pnl)}</small>
+                        </span>
+                      ) : (
+                        <span className={styles.num}>{fmtAmount(position.amount)}</span>
+                      )}
+                      <span className={styles.num}>{fmtAgo(position.lastActionAt)}</span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className={styles.detailMuted}>No open copied positions right now.</p>
+              <p className={styles.detailMuted}>{config.dryRun ? "No simulated positions open right now." : "No open copied positions right now."}</p>
             )}
           </div>
 
@@ -560,7 +625,7 @@ function ConfigForm(props: {
         </label>
         <label className={styles.toggle}>
           <input type="checkbox" checked={draft.dryRun} onChange={(e) => set("dryRun", e.target.checked)} />
-          Dry-run <span className={styles.toggleHint}>(detect &amp; log, no real swaps)</span>
+          Dry-run <span className={styles.toggleHint}>(paper-trade with simulated cash, no real swaps)</span>
         </label>
       </div>
 
@@ -620,6 +685,10 @@ function ConfigForm(props: {
             Poll interval (ms)
             <input className="fb-field fb-mono" type="number" min={3000} value={draft.pollIntervalMs} onChange={(e) => set("pollIntervalMs", num(e.target.value))} />
           </label>
+          <label className="fb-label">
+            Paper bankroll (USD)
+            <input className="fb-field fb-mono" type="number" min={0} placeholder="auto (wallet balance)" value={draft.paperStartUsd ?? ""} onChange={(e) => set("paperStartUsd", e.target.value.trim() === "" ? null : num(e.target.value))} />
+          </label>
           <label className={`fb-label ${styles.full}`}>
             Blacklist (comma-separated token addresses)
             <input className="fb-field fb-mono" placeholder="0xabc…, mint…" value={draft.blacklist.join(", ")} onChange={(e) => set("blacklist", e.target.value.split(",").map((t) => t.trim()).filter(Boolean))} />
@@ -656,6 +725,29 @@ function summarizeState(state: CopyTradeRuntimeState) {
   }
   const last = state.events?.[state.events.length - 1];
   return { signalCount, dryRunActionCount, loggedUsd, lastEventAt: last?.at ?? null };
+}
+
+/** Marked value of open paper positions (cost basis until first revalue). */
+function paperOpenValue(paper: CopyTradePaperLedger): number {
+  return Object.values(paper.positions ?? {}).reduce((sum, p) => sum + (p.markUsd ?? p.spentUsd), 0);
+}
+
+function paperEquity(paper: CopyTradePaperLedger): number {
+  return paper.cashUsd + paperOpenValue(paper);
+}
+
+function paperUnrealizedPnl(paper: CopyTradePaperLedger): number {
+  return Object.values(paper.positions ?? {}).reduce((sum, p) => sum + ((p.markUsd ?? p.spentUsd) - p.spentUsd), 0);
+}
+
+/** Total P&L = equity − starting bankroll = realized + unrealized. */
+function paperTotalPnl(paper: CopyTradePaperLedger): number {
+  return paperEquity(paper) - paper.startCashUsd;
+}
+
+function fmtSignedUsd(value: number): string {
+  if (!Number.isFinite(value)) return "$0.00";
+  return `${value < 0 ? "−" : "+"}${fmtUsd(Math.abs(value))}`;
 }
 
 function eventLabel(kind: CopyTradeEvent["kind"]): string {

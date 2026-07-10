@@ -5,16 +5,11 @@ import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { useNativeUpdate } from "@/lib/native/use-native-update";
 import type { AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard } from "@/lib/types/kanban";
-import type { FleetActiveApp } from "@/components/fleet/fleet-data";
 import type { AppVersion, DashboardView } from "@/features/dashboard/dashboard-types";
+import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
+import { completionNotificationInteraction, type DashboardCompletionNotification } from "@/features/dashboard/dashboard-completion-notifications";
 
-export type DashboardAppCompletionNotification = {
-  id: string;
-  app?: FleetActiveApp;
-  initials?: string;
-  message: string;
-  title?: string;
-};
+export type DashboardAppCompletionNotification = DashboardCompletionNotification;
 
 type DashboardHeaderProps = {
   Image: ElementType;
@@ -270,10 +265,12 @@ export function DashboardAppCompletionToast({
   notification,
   durationMs = 6_000,
   onDismiss,
+  onNavigate,
 }: {
   notification: DashboardAppCompletionNotification;
   durationMs?: number;
   onDismiss?: (id: string) => void;
+  onNavigate?: (target: DashboardRouteTarget) => void;
 }) {
   const [brokenIcon, setBrokenIcon] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -301,11 +298,17 @@ export function DashboardAppCompletionToast({
     return () => window.clearTimeout(timer);
   }, [copied]);
 
-  const copyMessage = useCallback(() => {
-    const text = notification.message ?? "";
-    if (!text) return;
-    void navigator.clipboard?.writeText(text).then(() => setCopied(true)).catch(() => undefined);
-  }, [notification.message]);
+  const activate = useCallback(() => {
+    const interaction = completionNotificationInteraction(notification);
+    if (interaction.kind === "navigate") {
+      onNavigate?.(interaction.destination);
+      onDismiss?.(notification.id);
+      return;
+    }
+    if (!interaction.text) return;
+    void navigator.clipboard?.writeText(interaction.text).then(() => setCopied(true)).catch(() => undefined);
+  }, [notification, onDismiss, onNavigate]);
+  const navigates = Boolean(notification.destination);
 
   // While paused we freeze the toast fully visible (no animation) so it never
   // fades out from under the pointer; pointer events are enabled so it can be
@@ -323,18 +326,18 @@ export function DashboardAppCompletionToast({
       role="status"
       aria-live="polite"
       tabIndex={0}
-      title={copied ? "Copied to clipboard" : "Click to copy message"}
+      title={navigates ? "Open completed process" : copied ? "Copied to clipboard" : "Click to copy message"}
       style={style}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => {
         setPaused(false);
         setLifeId((value) => value + 1);
       }}
-      onClick={copyMessage}
+      onClick={activate}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          copyMessage();
+          activate();
         }
       }}
     >
@@ -348,7 +351,7 @@ export function DashboardAppCompletionToast({
       </span>
       <span className="dashboardAppNotificationText">
         <strong>{title}</strong>
-        <span>{copied ? "Copied to clipboard" : notification.message}</span>
+        <span>{!navigates && copied ? "Copied to clipboard" : notification.message}</span>
       </span>
     </div>
   );

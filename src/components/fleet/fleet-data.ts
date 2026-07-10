@@ -102,6 +102,12 @@ export interface FleetMachineSyncIssue {
   stalled?: boolean;
 }
 
+/** A resident process reported by the collector, ranked by RSS. */
+export interface FleetMachineProcess {
+  name: string;
+  rssMb: number;
+}
+
 /** Live host metrics reported by the machine's collector `/health` endpoint. */
 export interface FleetMachineSystem {
   checkedAt?: number;
@@ -119,6 +125,22 @@ export interface FleetMachineSystem {
   arch?: string;
   osRelease?: string;
   uptimeSec?: number;
+  // Extended resource telemetry (collector v0.19+; older collectors omit
+  // these, so every field stays optional and the UI degrades gracefully).
+  swapUsedGb?: number | null;
+  swapTotalGb?: number | null;
+  cacheGb?: number | null;
+  tempC?: number | null;
+  diskReadMBs?: number | null;
+  diskWriteMBs?: number | null;
+  netRxMBs?: number | null;
+  netTxMBs?: number | null;
+  procCount?: number | null;
+  topProcesses?: FleetMachineProcess[];
+  /** Rolling recent samples (cpu%/ram%/net MB-s) accumulated by the collector for sparklines. */
+  history?: { cpu: number[]; ram: number[]; netRx: number[]; netTx: number[] };
+  /** Round-trip latency to the collector /health endpoint (ms), measured by the discovery probe. */
+  rttMs?: number | null;
 }
 
 export interface FleetMachine {

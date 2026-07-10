@@ -5,7 +5,6 @@ import {
   Check,
   FolderOpen,
   Pencil,
-  PlugZap,
   Settings2,
   ShieldCheck,
   Upload,
@@ -19,6 +18,7 @@ import {
   TextInput,
   Toggle,
 } from "./AgentSettingsModalPrimitives";
+import { Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 
 export function AgentSettingsAeonConnectionPanel({
   aeonOauthConnecting,
@@ -35,7 +35,6 @@ export function AgentSettingsAeonConnectionPanel({
           {[
             { id: "local", label: "Local repo", sub: "Use files on this Mac", Icon: FolderOpen },
             { id: "github", label: "GitHub", sub: "Use repo and branch", Icon: Upload },
-            { id: "a2a", label: "A2A", sub: "Use gateway URL", Icon: PlugZap },
           ].map((mode) => {
             const active = aeonSettings.mode === mode.id;
             return (
@@ -56,7 +55,7 @@ export function AgentSettingsAeonConnectionPanel({
               <strong>Connect with GitHub OAuth</strong>
               <p>Saves GH_GLOBAL with repo, workflow, hook, org, and email access.</p>
             </div>
-            <Btn variant="primary" sm disabled={aeonOauthConnecting} onClick={openAeonGithubOauth}>{aeonOauthConnecting ? "Opening..." : "Connect GitHub"}</Btn>
+            <Btn variant="primary" sm disabled={aeonOauthConnecting} onClick={openAeonGithubOauth}>{aeonOauthConnecting ? <><Spinner />Opening</> : "Connect GitHub"}</Btn>
           </div>
           <details className="fb-disc" open={Boolean(aeonSettings.repo)}>
             <summary>Advanced repo values</summary>
@@ -66,12 +65,6 @@ export function AgentSettingsAeonConnectionPanel({
             </div>
           </details>
         </div>
-      ) : null}
-      {aeonSettings.mode === "a2a" ? (
-        <details className="fb-disc" open>
-          <summary>Advanced gateway URL</summary>
-          <Field label="A2A gateway URL"><TextInput className="fb-mono" value={aeonSettings.a2aUrl} onChange={(event) => updateAeonSettings({ a2aUrl: event.target.value, gatewayUrl: event.target.value })} placeholder="http://127.0.0.1:41241" /></Field>
-        </details>
       ) : null}
       {aeonSettings.mode === "local" ? (
         <div className="as-block">

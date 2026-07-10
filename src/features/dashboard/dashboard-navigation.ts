@@ -25,6 +25,7 @@ export const DASHBOARD_VIEWS = [
   "aeon",
   "fusion",
   "governance",
+  "cloud",
   "compute",
 ] as const satisfies readonly DashboardView[];
 
@@ -38,6 +39,9 @@ export type DashboardRouteTarget = {
   agentId?: string;
   taskId?: string;
   chatLeaf?: string;
+  integration?: string;
+  integrationTab?: "connect" | "actions";
+  integrationAction?: string;
   /** Deep-link intent: scroll the Work Board to `taskId` and open its
    * conversation (bee-piloted). Intentionally never serialized into URLs or
    * persisted routes, so restored sessions don't replay the flight. */
@@ -56,6 +60,7 @@ export type DashboardRouteCatalogItem = {
 export const DESKTOP_NAVIGATE_EVENT = "hivemindos:navigate";
 export const DESKTOP_OPEN_PALETTE_EVENT = "hivemindos:open-command-palette";
 export const DESKTOP_OPEN_POPOUT_EVENT = "hivemindos:open-popout";
+export const DASHBOARD_TARGET_APPLIED_EVENT = "hivemindos:dashboard-target-applied";
 
 /**
  * Single source of truth for every dashboard view. Everything the app knows
@@ -89,6 +94,7 @@ const DASHBOARD_ROUTE_CATALOG_BY_ID = {
   wallet: { label: "Wallets", detail: "Agent wallets and usage", group: "Primary", shortcut: "Cmd+5", keywords: ["wallet", "honey", "spend", "usage", "tokens"], shelfGroup: 0 },
   trade: { label: "Trade", detail: "Buy, sell, and swap crypto & stocks", group: "Primary", keywords: ["trade", "trading", "buy", "sell", "swap", "stock", "stocks", "shares", "crypto", "perps", "options", "polymarket", "bridge", "xstocks", "alpaca", "robinhood"], shelfGroup: 0 },
   governance: { label: "Companies", routeLabel: "Zero Human Company", detail: "Companies, budgets, spend approvals", group: "Utilities", keywords: ["zero human company", "zhc", "governance", "company", "companies", "budget", "approval", "approvals", "kill switch", "spend"], shelfGroup: 2 },
+  cloud: { label: "Cloud Agents", detail: "Always-on managed Hermes agents", group: "Utilities", keywords: ["cloud", "managed agents", "hosted agents", "always on", "hermes", "pay as you go"], shelfGroup: 2 },
   more: { label: "More", detail: "Utility launcher", group: "Primary", shortcut: "Cmd+6", keywords: ["more", "utilities", "launcher"] },
   scheduler: { label: "Automations", routeLabel: "Scheduler", detail: "Recurring automations for your agents", group: "Work", keywords: ["schedule", "scheduler", "jobs", "recurring", "automation", "automations"], shelfGroup: 1 },
   swarm: { label: "Simulations", detail: "MiroShark simulations", group: "Work", keywords: ["swarm", "miroshark", "simulation", "rehearsal"], shelfGroup: 1 },
@@ -105,7 +111,7 @@ const DASHBOARD_ROUTE_CATALOG_BY_ID = {
   sessions: { label: "Sessions", detail: "Runtime transcript search", group: "Utilities", keywords: ["sessions", "search", "transcripts"] },
   tools: { label: "Capability Store", detail: "Callable agent capabilities and handles", group: "Utilities", keywords: ["tools", "handles", "capabilities", "capability store", "skills"] },
   maintenance: { label: "Diagnostics", detail: "Fleet checks and repairs", group: "Utilities", keywords: ["diagnostics", "maintenance", "repair", "health"] },
-  memory: { label: "Memory", detail: "Runtime memory telemetry", group: "Utilities", keywords: ["memory", "rss", "leaks", "telemetry"] },
+  memory: { label: "Telemetry", detail: "Fleet resource monitor — CPU, memory, disk, network", group: "Utilities", keywords: ["telemetry", "resources", "cpu", "memory", "ram", "disk", "network", "processes", "machines", "load", "monitor"] },
   phone: { label: "Phone", detail: "Call prompts", group: "Utilities", keywords: ["phone", "calls", "prompts"] },
 } as const satisfies Record<DashboardView, DashboardRouteCatalogEntry>;
 
@@ -118,6 +124,7 @@ const DASHBOARD_ROUTE_ORDER = [
   "wallet",
   "trade",
   "governance",
+  "cloud",
   "more",
   "scheduler",
   "notifications",
@@ -366,6 +373,13 @@ export function dashboardTargetFromSearch(search: string): DashboardRouteTarget 
     agentId: params.get("agent") ?? undefined,
     taskId: params.get("task") ?? undefined,
     chatLeaf: params.get("chatLeaf") ?? undefined,
+    integration: params.get("integration") ?? undefined,
+    integrationTab: params.get("integrationTab") === "actions"
+      ? "actions"
+      : params.get("integrationTab") === "connect"
+        ? "connect"
+        : undefined,
+    integrationAction: params.get("integrationAction") ?? undefined,
   };
 }
 
@@ -376,6 +390,9 @@ export function dashboardUrlForTarget(target: DashboardRouteTarget, basePath = "
   if (target.agentId) params.set("agent", target.agentId);
   if (target.taskId) params.set("task", target.taskId);
   if (target.chatLeaf) params.set("chatLeaf", target.chatLeaf);
+  if (target.integration) params.set("integration", target.integration);
+  if (target.integrationTab) params.set("integrationTab", target.integrationTab);
+  if (target.integrationAction) params.set("integrationAction", target.integrationAction);
   return `${basePath}?${params.toString()}`;
 }
 

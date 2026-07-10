@@ -159,8 +159,10 @@ Shared Brain Memory has two recall layers:
 - The private hot-path index lives in `Operations/Brain Services/Agent Memory Index.jsonl`.
 - Entity and alias links live in `Operations/Brain Services/Agent Memory Entity Index.jsonl`.
 - Retrieval/final-answer telemetry lives in `Operations/Brain Services/Agent Memory Retrievals.jsonl` and only nudges ranking.
+- High-volume run receipts and operational events do not live in the vault. They use the bounded local journal at `~/.hivemindos/brain/operational-events.jsonl`; reviewed outcomes can later be promoted through Brain Review.
+- Durable Agent Memory records carry canonical `memoryKey` heads so current recall returns one active truth per key.
 - Memory evolution is represented in note frontmatter with `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, `evolutionReason`, and `cognitiveStage`; newer active notes replace older superseded notes without deleting history.
-- Current recall returns active chain heads by default. Temporal queries such as "before," "used to," "as of," explicit dates, or relative time phrases can include superseded history and as-of chain heads.
+- Current recall returns active chain heads by default. Intentional temporal queries such as “used to,” “previously,” “as of <date>,” “before <date>,” or relative time phrases can include superseded history and as-of chain heads. Bare dates in titles and procedural wording such as “validation before release” remain current recall.
 - The default full-vault lexical search service is documented in `Operations/Brain Services/Full Vault Search Index.md`.
 - The generated full-vault lexical index lives in `Operations/Brain Services/Full Vault Search Index.jsonl` and ranks regular markdown by collection, path, phrase, exclusion, and BM25-style term frequency before source notes are loaded. It is generated state and can be rebuilt from markdown notes.
 - Optional hash-only GitLawb receipts live in `Operations/Brain Services/Agent Memory Proofs.jsonl`.

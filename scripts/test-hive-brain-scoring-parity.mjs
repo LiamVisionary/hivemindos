@@ -64,6 +64,8 @@ const records = [
     createdAt: new Date(now - 200 * day).toISOString(),
     updatedAt: new Date(now - 200 * day).toISOString(),
     notePath: "Memory/Distillations/Agent Memory/learning/vultr.md",
+    searchScore: 120,
+    searchScoreNormalized: 0.5,
   },
 ];
 
@@ -76,6 +78,143 @@ const queries = [
   { query: "" },
   { query: `Long prompt requiring derivation. ${"Investigate the hermes gateway default model rules for agent profiles. ".repeat(8)}` },
 ];
+
+const temporalIntentCases = [
+  { query: "incident review (2026-06-12)", expected: "current" },
+  { query: "what validation is required before calling this production ready", expected: "current" },
+  { query: "what did we use previously for Vultr provisioning", expected: "historical" },
+  { query: "what was true as of 2026-06-12", expected: "as-of" },
+  { query: "what was true before 2026-06-12", expected: "as-of" },
+];
+for (const test of temporalIntentCases) {
+  assert.equal(app.temporalRecallMode(test), test.expected, `app temporal intent for ${test.query}`);
+  assert.equal(cli.temporalRecallMode(test), test.expected, `CLI temporal intent for ${test.query}`);
+}
+
+const sameDayRecord = {
+  ...records[0],
+  id: "mem-same-day",
+  createdAt: "2026-06-12T18:00:00.000Z",
+  updatedAt: "2026-06-12T18:00:00.000Z",
+};
+assert.equal(
+  app.recordVisibleForRecall(sameDayRecord, { query: "what was true as of 2026-06-12" }),
+  true,
+  "date-only as-of recall should include the whole named day",
+);
+assert.equal(
+  cli.recordVisibleForRecall({ ...sameDayRecord }, { query: "what was true as of 2026-06-12" }),
+  true,
+  "CLI date-only as-of recall should include the whole named day",
+);
+assert.equal(
+  app.recordVisibleForRecall(sameDayRecord, { query: "incident review (2026-06-12)", temporalMode: "historical" }),
+  true,
+  "explicit historical mode must not become an as-of filter because the title contains a date",
+);
+assert.equal(
+  cli.recordVisibleForRecall({ ...sameDayRecord }, { query: "incident review (2026-06-12)", temporalMode: "historical" }),
+  true,
+  "CLI explicit historical mode must not become an as-of filter because the title contains a date",
+);
+
+function fixtureRecord(overrides) {
+  return {
+    ...records[0],
+    id: overrides.id,
+    title: overrides.title,
+    content: overrides.content,
+    type: overrides.type ?? "decision",
+    confidence: overrides.confidence ?? 0.7,
+    status: overrides.status ?? "active",
+    entities: overrides.entities ?? [],
+    usage: overrides.usage,
+    tags: overrides.tags ?? [],
+    notePath: `Memory/Distillations/Agent Memory/${overrides.type ?? "decision"}/${overrides.id}.md`,
+  };
+}
+
+function rankedFixture(query, fixtureRecords) {
+  const input = { query };
+  const lexical = app.bm25ScoresForRecords(fixtureRecords, input);
+  return fixtureRecords
+    .map((record) => ({ record, ...app.scoreAgentMemory(record, input, lexical.get(record.id)) }))
+    .sort((left, right) => right.score - left.score);
+}
+
+const feeRanking = rankedFixture("what builder fee did we set for Hyperliquid", [
+  fixtureRecord({
+    id: "wallet-decision",
+    title: "Use dedicated Hyperliquid builder wallet for revenue",
+    content: "The Hyperliquid builder revenue wallet was set as the recipient.",
+    confidence: 1,
+    entities: ["Hyperliquid Revenue"],
+    usage: { retrievalCount: 8, finalAnswerCount: 1 },
+  }),
+  fixtureRecord({
+    id: "fee-decision",
+    title: "Set Hyperliquid builder fee to 0.5 bps",
+    content: "The selected Hyperliquid builder fee is 0.5 basis points.",
+  }),
+]);
+assert.equal(feeRanking[0].record.id, "fee-decision", "complete query/title coverage should beat a popular related entity");
+
+const artifactRanking = rankedFixture("what artifact proved builder revenue live", [
+  fixtureRecord({
+    id: "revenue-decision",
+    title: "Use dedicated Hyperliquid builder wallet for revenue",
+    content: "The builder revenue recipient is the dedicated wallet.",
+    confidence: 1,
+    entities: ["Revenue"],
+    usage: { retrievalCount: 8, finalAnswerCount: 1 },
+  }),
+  fixtureRecord({
+    id: "revenue-artifact",
+    type: "artifact",
+    title: "Hyperliquid builder revenue live verification",
+    content: "This artifact proved the builder revenue path live.",
+  }),
+]);
+assert.equal(artifactRanking[0].record.id, "revenue-artifact", "artifact intent should beat a popular related decision");
+
+const instructionRanking = rankedFixture("what must we do before declaring a bug fixed", [
+  fixtureRecord({
+    id: "fixed-incident",
+    type: "learning",
+    title: "Empty fleet on Windows fixed after three filter layers",
+    content: "The concrete bug was fixed; check every layer before declaring it resolved.",
+    confidence: 0.9,
+    entities: ["FIXED"],
+    usage: { retrievalCount: 6 },
+  }),
+  fixtureRecord({
+    id: "fixed-instruction",
+    type: "instruction",
+    title: "Require full E2E before saying fixed",
+    content: "Run the real user path end to end before declaring any bug fixed.",
+  }),
+]);
+assert.equal(instructionRanking[0].record.id, "fixed-instruction", "status words extracted as entities must not override explicit instruction intent");
+
+const historicalExactRanking = rankedFixture("previously Empty fleet on Windows desktop dedupe filter", [
+  fixtureRecord({
+    id: "related-history",
+    type: "learning",
+    status: "superseded",
+    title: "Windows desktop fleet assumptions beyond the filter",
+    content: "Windows desktop and fleet filtering history with related assumptions.",
+    confidence: 0.9,
+    entities: ["Windows", "Desktop Fleet"],
+  }),
+  fixtureRecord({
+    id: "requested-history",
+    type: "learning",
+    status: "superseded",
+    title: "Empty fleet on Windows desktop dedupe filter",
+    content: "The earlier dedupe filter dropped the Windows desktop fleet record.",
+  }),
+]);
+assert.equal(historicalExactRanking[0].record.id, "requested-history", "a leading temporal cue should not prevent exact-title credit for the requested history item");
 
 let checked = 0;
 for (const rawInput of queries) {

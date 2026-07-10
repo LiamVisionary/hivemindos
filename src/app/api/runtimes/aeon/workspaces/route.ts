@@ -1,5 +1,5 @@
 import { constants } from "fs";
-import { access, mkdir, readFile, rename, rm, stat, writeFile } from "fs/promises";
+import { access, mkdir, readFile, rename, rm, stat } from "fs/promises";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { homedir } from "@/lib/home-dir";
@@ -7,6 +7,9 @@ import { basename, dirname, join, resolve, sep } from "path";
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { registerAeonEnvSyncRepo } from "@/lib/services/runtime-adapters/aeon-env-sync-registry";
+import { AEON_OFFICIAL_REPOSITORY } from "@/lib/services/runtime-adapters/aeon-capabilities";
+import { inspectAeonWorkspace } from "@/lib/services/runtime-adapters/aeon-workspace";
+import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -157,27 +160,12 @@ async function gitRemote(root: string) {
 }
 
 async function ensureAeonWorkspace(root: string) {
-  await mkdir(root, { recursive: true });
-  await Promise.all([
-    mkdir(join(root, "skills"), { recursive: true }),
-    mkdir(join(root, "memory", "topics"), { recursive: true }),
-    mkdir(join(root, "memory", "logs"), { recursive: true }),
-    mkdir(join(root, "memory", "issues"), { recursive: true }),
-    mkdir(join(root, ".outputs"), { recursive: true }),
-    mkdir(join(root, "dashboard", "outputs"), { recursive: true }),
-  ]);
-  if (!await canRead(join(root, "aeon.yml"))) {
-    await writeFile(join(root, "aeon.yml"), "skills:\n");
+  const layout = await inspectAeonWorkspace(root);
+  if (layout.generation === "v0.1") return layout;
+  if (layout.generation === "legacy") {
+    throw new Error("This is a legacy AEON workspace. Update it to AEON v0.1 or clone a fresh aaronjmars/aeon workspace before linking it.");
   }
-  if (!await canRead(join(root, "skills.json"))) {
-    await writeFile(join(root, "skills.json"), `${JSON.stringify({ skills: [] }, null, 2)}\n`);
-  }
-  if (!await canRead(join(root, "memory", "MEMORY.md"))) {
-    await writeFile(join(root, "memory", "MEMORY.md"), "# AEON Memory\n\n");
-  }
-  if (!await canRead(join(root, ".git"))) {
-    await execFileAsync("git", ["init"], { cwd: root, timeout: 20_000, maxBuffer: 500_000 }).catch(() => undefined);
-  }
+  throw new Error("The selected folder is not an AEON v0.1 workspace (aeon.yml, catalog/skills.json, and apps/cli/aeon are required).");
 }
 
 function parseRemoteWorkspaceOutput(stdout: string) {
@@ -198,7 +186,7 @@ async function ensureRemoteAeonWorkspace(input: { collectorUrl: string; path: st
   const host = remoteHostFromCollectorUrl(input.collectorUrl);
   if (!host) throw new Error("Remote agent bridge URL is missing a host.");
   const quotedPath = shellQuote(input.path.trim() || "~/.aeon");
-  const quotedRepo = shellQuote(input.repoUrl?.trim() || "");
+  const quotedRepo = shellQuote(input.repoUrl?.trim() || (input.action === "initialize" ? AEON_OFFICIAL_REPOSITORY : ""));
   const script = [
     "set -eu",
     `p=${quotedPath}`,
@@ -210,11 +198,8 @@ async function ensureRemoteAeonWorkspace(input: { collectorUrl: string; path: st
     "if [ -n \"$repo\" ] && [ ! -d \"$p\" ]; then",
     "  git clone \"$repo\" \"$p\" >/dev/null",
     "fi",
-    "mkdir -p \"$p/skills\" \"$p/memory/topics\" \"$p/memory/logs\" \"$p/memory/issues\" \"$p/.outputs\" \"$p/dashboard/outputs\"",
-    "[ -f \"$p/aeon.yml\" ] || printf 'skills:\\n' > \"$p/aeon.yml\"",
-    "[ -f \"$p/skills.json\" ] || printf '{\\n  \"skills\": []\\n}\\n' > \"$p/skills.json\"",
-    "[ -f \"$p/memory/MEMORY.md\" ] || printf '# AEON Memory\\n\\n' > \"$p/memory/MEMORY.md\"",
-    "if [ ! -d \"$p/.git\" ]; then git -C \"$p\" init >/dev/null 2>&1 || true; fi",
+    "[ -d \"$p\" ] || { printf 'AEON repo folder does not exist: %s\\n' \"$p\" >&2; exit 2; }",
+    "[ -f \"$p/aeon.yml\" ] && [ -f \"$p/catalog/skills.json\" ] && { [ -x \"$p/apps/cli/aeon\" ] || [ -x \"$p/aeon\" ]; } || { printf 'AEON v0.1 workspace required: %s\\n' \"$p\" >&2; exit 3; }",
     "real_path=$(cd \"$p\" && pwd -P)",
     "remote=$(git -C \"$real_path\" remote get-url origin 2>/dev/null || true)",
     "printf '__ROOT__\\t%s\\n' \"$real_path\"",
@@ -337,10 +322,9 @@ async function agentForWorkspace(input: { root: string; name?: string; repo?: st
       notifications: true,
       setup: true,
     },
-    gatewayUrl: "http://127.0.0.1:41241",
-    a2aUrl: "http://127.0.0.1:41241",
+    gatewayUrl: "",
     chatPath: "",
-    statusPath: "/health",
+    statusPath: "",
     agentId: repoName,
     localDataDir: remoteWorkspace ? input.root : displayPath(input.root),
     aeonLocalPath: remoteWorkspace ? input.root : displayPath(input.root),
@@ -358,6 +342,8 @@ async function agentForWorkspace(input: { root: string; name?: string; repo?: st
 }
 
 export async function POST(request: NextRequest) {
+  const unauthorized = await requireAuth(request);
+  if (unauthorized) return unauthorized;
   try {
     const body = await request.json() as { action?: string; path?: string; repoUrl?: string; name?: string; unique?: boolean | string; cache?: boolean | string; collectorUrl?: string; machineName?: string; machineKey?: string; agent?: AgentProfile };
     const action = body.action || "initialize";
@@ -424,6 +410,11 @@ export async function POST(request: NextRequest) {
         : createUnique
           ? await availableLocalWorkspaceRoot(body.name)
           : resolve(expandHome("~/.aeon"));
+      if (!await canRead(root)) {
+        await mkdir(dirname(root), { recursive: true });
+        await cloneIntoRoot(AEON_OFFICIAL_REPOSITORY, root, body.cache === true || body.cache === "true");
+      }
+      repo = await gitRemote(root);
       await ensureAeonWorkspace(root);
     } else if (action === "link") {
       root = resolve(expandHome(body.path || ""));

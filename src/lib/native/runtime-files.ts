@@ -30,7 +30,13 @@ export async function nativeRuntimeFileRequest(body: {
       path: body.path,
       content: body.content,
     });
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Native runtime file action failed." };
+  } catch {
+    // The native invoke rejected — the command is missing, or the Rust side
+    // returned a Result::Err, which Tauri delivers as a bare string (not an
+    // Error), so we can't reliably read a message here anyway. Return null so
+    // runtimeFileRequest falls back to the /api/runtime-files route, which
+    // re-runs the same action server-side and surfaces the real error (or
+    // simply succeeds) instead of a generic "native failed" message.
+    return null;
   }
 }

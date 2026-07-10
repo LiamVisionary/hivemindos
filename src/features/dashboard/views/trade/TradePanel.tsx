@@ -24,7 +24,7 @@ import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet, hasConfiguredAgentWallet } from "@/lib/utils/agent-wallet";
 import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
-import { fetchPersonalWalletBalance, fetchPersonalWalletBalanceResult, fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
+import { fetchPersonalWalletBalanceResult, fetchPersonalWalletRecords, persistPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import {
   TradeView, TradeDeskProvider,
   type TradeDeskData, type DeskWallet, type DeskMover, type DeskPortfolio, type DeskHolding, type DeskStockReadiness, type DeskWalletKind,
@@ -116,6 +116,11 @@ export function TradePanel(props: TradePanelProps) {
   const [fxRates, setFxRates] = useState<Record<string, number>>({ USD: 1 });
   const [data, setData] = useState<DeskData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stockLoading, setStockLoading] = useState(true);
+  const [stockRefreshing, setStockRefreshing] = useState(false);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [activityRefreshing, setActivityRefreshing] = useState(false);
   // Orders the user just cancelled — hidden from the desk optimistically so the
   // pending row drops immediately, instead of lingering until Alpaca's open-order
   // list stops returning the just-cancelled order (eventual consistency). Pruned
@@ -128,25 +133,18 @@ export function TradePanel(props: TradePanelProps) {
   const [optimisticOrders, setOptimisticOrders] = useState<Array<{ id: string; ticker: string; notionalUsd: number; side: "buy" | "sell"; ts: number }>>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // ── pickable wallets (unchanged behaviour) ─────────────────────────────────
+  // ── pickable wallets ───────────────────────────────────────────────────────
   useEffect(() => {
     let ignore = false;
     void (async () => {
       setPersonalBalancesLoading(true);
       const list = await fetchPersonalWalletRecords(vaultPath);
       if (ignore) return;
+      // The persisted records already carry the latest known balances. Refreshing
+      // every wallet here made Trade fan out 10+ expensive RPC/token scans and
+      // duplicated the acting-wallet read below. The acting wallet is the only
+      // one the route needs live, so let the data effect refresh that one.
       setPersonalWallets(list);
-      const refreshed = await Promise.all(list.map(async (record) => {
-        const address = String(record.address || "").trim();
-        const network = String(record.network || "").trim();
-        if (!address || !network) return record;
-        const balance = await fetchPersonalWalletBalance(address, network);
-        return balance
-          ? { ...record, currentBalanceUsd: balance.currentBalanceUsd, nativeBalance: balance.nativeBalance, tokens: balance.tokens, lastOnchainSyncAt: balance.lastOnchainSyncAt }
-          : record;
-      }));
-      if (ignore) return;
-      setPersonalWallets(refreshed);
       setPersonalBalancesLoading(false);
     })();
     return () => { ignore = true; };
@@ -259,40 +257,169 @@ export function TradePanel(props: TradePanelProps) {
     let ignore = false;
     const activeWallet = acting;
     void (async () => {
-      if (!activeWallet) { if (!ignore) { setData(null); setLoading(false); loadedWalletRef.current = ""; } return; }
+      if (!activeWallet) {
+        if (!ignore) {
+          setData(null);
+          setLoading(false);
+          setRefreshing(false);
+          setStockLoading(false);
+          setStockRefreshing(false);
+          setActivityLoading(false);
+          setActivityRefreshing(false);
+          loadedWalletRef.current = "";
+        }
+        return;
+      }
       const walletChanged = loadedWalletRef.current !== activeWallet.id;
-      if (!ignore) setLoading(walletChanged);
+      if (!ignore) {
+        setLoading(walletChanged);
+        setRefreshing(true);
+        if (walletChanged) {
+          setStockLoading(true);
+          setActivityLoading(true);
+        }
+      }
       const agentId = activeWallet.id;
       const walletConfig = activeWallet.wallet as unknown as Record<string, unknown>;
       const address = String(walletConfig.walletAddress || walletConfig.vaultAddress || walletConfig.address || "").trim();
       const network = String(walletConfig.network || "");
       const isSolanaWallet = network.includes("solana");
       const isEvmWallet = network.startsWith("eip155:");
+      const storedPersonalWallet = activeWallet.kind === "user"
+        ? personalWallets.find((record) => String(record.id || record.agentId || "") === activeWallet.id)
+        : null;
+      const cachedTokenSource = storedPersonalWallet?.tokens ?? walletConfig.tokens;
+      const cachedTokens = (Array.isArray(cachedTokenSource) ? cachedTokenSource : []) as Parameters<typeof cryptoBalancesFrom>[0];
+      const cryptoMoversList = isSolanaWallet ? ["SOL", "ETH", "HYPE", "HIVE", "USDC"] : ["BTC", "ETH", "SOL", "HYPE", "HIVE"];
+      const marketSymbolsFor = (tokens: Parameters<typeof cryptoBalancesFrom>[0]) => [
+        ...new Set([...cryptoMoversList, ...Object.keys(cryptoBalancesFrom(tokens))]),
+      ];
+
+      const liveBalancePromise = address && network
+        ? fetchPersonalWalletBalanceResult(address, network)
+        : Promise.resolve(null);
+      const capsPromise = fetchCryptoCapabilities(agentId, walletConfig);
+      const cachedMarketPromise = cachedTokens.length
+        ? fetchCryptoMarket(marketSymbolsFor(cachedTokens), "24h")
+        : null;
+
+      const publishCryptoSnapshot = (
+        tokens: Parameters<typeof cryptoBalancesFrom>[0],
+        cryptoRows: Awaited<ReturnType<typeof fetchCryptoMarket>>["rows"],
+        caps: CryptoCapabilityMap | null,
+        error: string | null,
+      ) => {
+        if (ignore) return;
+        const rows = cryptoRows ?? [];
+        const cryptoBalances = cryptoBalancesFrom(tokens);
+        const cryptoPortfolio: DeskPortfolio = {
+          ...buildCryptoPortfolio(tokens, cryptoPortfolioHistory(cryptoBalances, rows)),
+          error,
+        };
+        const cryptoMovers: DeskMover[] = cryptoMoversList
+          .map((sym) => rows.find((row) => row.symbol === sym))
+          .filter((row): row is NonNullable<typeof row> => Boolean(row))
+          .map(moverFromCrypto);
+        setData((previous) => ({
+          cryptoPortfolio,
+          cryptoBalances,
+          cryptoMovers,
+          cryptoCaps: caps,
+          stockPortfolio: walletChanged ? EMPTY_PORTFOLIO : (previous?.stockPortfolio ?? EMPTY_PORTFOLIO),
+          stockMovers: walletChanged ? [] : (previous?.stockMovers ?? []),
+          stockReadiness: walletChanged ? EMPTY_READINESS : (previous?.stockReadiness ?? EMPTY_READINESS),
+          activity: walletChanged ? [] : (previous?.activity ?? []),
+          network,
+          isEvmWallet,
+          isSolanaWallet,
+        }));
+        loadedWalletRef.current = activeWallet.id;
+        setLoading(false);
+      };
+
+      // Stale-while-revalidate: persisted holdings are real wallet snapshots and
+      // let the default Crypto desk render after the market request (~1s), while
+      // the slower live token/RPC scan continues in the background.
+      let cachedMarketRows: Awaited<ReturnType<typeof fetchCryptoMarket>>["rows"] = [];
+      let caps: CryptoCapabilityMap | null = null;
+      if (cachedMarketPromise) {
+        const [cachedMarket, resolvedCaps] = await Promise.all([cachedMarketPromise, capsPromise]);
+        cachedMarketRows = cachedMarket.ok ? cachedMarket.rows : [];
+        caps = resolvedCaps;
+        publishCryptoSnapshot(cachedTokens, cachedMarketRows, caps, null);
+      }
 
       // crypto: balance tokens + capability map
-      const [balanceResult, caps] = await Promise.all([
-        address && network ? fetchPersonalWalletBalanceResult(address, network) : Promise.resolve(null),
-        fetchCryptoCapabilities(agentId, walletConfig),
-      ]);
+      const [balanceResult, resolvedCaps] = await Promise.all([liveBalancePromise, capsPromise]);
+      caps = resolvedCaps;
       const balance = balanceResult?.ok ? balanceResult.balance : null;
+      let refreshedWalletPersistence: Promise<boolean> | null = null;
+      if (!ignore && balance && activeWallet.kind === "user") {
+        const refreshedWallet = {
+          ...(storedPersonalWallet ?? {}),
+          id: activeWallet.id,
+          agentId: activeWallet.id,
+          address,
+          network,
+          currentBalanceUsd: balance.currentBalanceUsd,
+          nativeBalance: balance.nativeBalance,
+          tokens: balance.tokens,
+          lastOnchainSyncAt: balance.lastOnchainSyncAt,
+          updatedAt: Math.max(Date.now(), balance.lastOnchainSyncAt),
+        };
+        setPersonalWallets((current) => current.map((record) => (
+          String(record.id || record.agentId || "") === activeWallet.id ? refreshedWallet : record
+        )));
+        refreshedWalletPersistence = persistPersonalWalletRecords([refreshedWallet], vaultPath);
+      }
       // A FAILED live read (RPC timeout / rate-limit / no server) must not render
       // as a confident $0.00 — that's indistinguishable from an empty wallet. Only
       // flag when a read was actually attempted (address+network present) and failed.
       const cryptoBalanceError = balanceResult && !balanceResult.ok ? (balanceResult.error || "Couldn't load this wallet's balance.") : null;
-      const tokens = (balance?.tokens ?? (Array.isArray(walletConfig.tokens) ? (walletConfig.tokens as Array<Record<string, unknown>>) : [])) as Parameters<typeof cryptoBalancesFrom>[0];
-      const cryptoBalances = cryptoBalancesFrom(tokens);
-      const heldSymbols = Object.keys(cryptoBalances);
-      const cryptoMoversList = isSolanaWallet ? ["SOL", "ETH", "HYPE", "HIVE", "USDC"] : ["BTC", "ETH", "SOL", "HYPE", "HIVE"];
-      const cryptoMarket = await fetchCryptoMarket([...new Set([...cryptoMoversList, ...heldSymbols])], "24h");
+      const tokens = (balance?.tokens ?? cachedTokens) as Parameters<typeof cryptoBalancesFrom>[0];
+      const liveMarketSymbols = marketSymbolsFor(tokens);
+      const cachedMarketSymbols = cachedTokens.length ? marketSymbolsFor(cachedTokens) : [];
+      const canReuseCachedMarket = cachedMarketRows?.length
+        && liveMarketSymbols.length === cachedMarketSymbols.length
+        && liveMarketSymbols.every((symbol) => cachedMarketSymbols.includes(symbol));
+      const cryptoMarket = canReuseCachedMarket
+        ? { ok: true, rows: cachedMarketRows }
+        : await fetchCryptoMarket(liveMarketSymbols, "24h");
       const cryptoRows = cryptoMarket.ok && cryptoMarket.rows ? cryptoMarket.rows : [];
-      const cryptoPortfolio: DeskPortfolio = { ...buildCryptoPortfolio(tokens, cryptoPortfolioHistory(cryptoBalances, cryptoRows)), error: cryptoBalanceError };
-      const cryptoMovers: DeskMover[] = cryptoMoversList
-        .map((sym) => cryptoRows.find((row) => row.symbol === sym))
-        .filter((row): row is NonNullable<typeof row> => Boolean(row))
-        .map(moverFromCrypto);
+      publishCryptoSnapshot(tokens, cryptoRows, caps, cryptoBalanceError);
+      // The live snapshot can paint immediately, but keep the refresh lifecycle
+      // open until its durable write-through completes so a subsequent mount
+      // starts from this value instead of the older ledger record.
+      if (refreshedWalletPersistence) {
+        await refreshedWalletPersistence;
+      }
+      if (!ignore) {
+        setRefreshing(false);
+        setStockRefreshing(true);
+        setActivityRefreshing(true);
+      }
 
-      // stocks: readiness + portfolio + live snapshots/bars + equity history
-      const [readiness, stockPf] = await Promise.all([fetchTradingReadiness(), fetchStockPortfolio(agentId, paper)]);
+      // Stocks and activity are not needed for the default Crypto segment. Start
+      // them only after the acting wallet's crypto snapshot is visible and live.
+      // Activity has its own lifecycle: publish and clear its corner spinner as
+      // soon as the ledger responds instead of tying it to the slower stock
+      // market/history batch below.
+      void fetchWalletActivity(100).then((activityRes) => {
+        if (ignore) return;
+        const activity = mapActivity(activityRes.ok && activityRes.records ? activityRes.records : [], Date.now());
+        setData((previous) => previous ? { ...previous, activity } : previous);
+        setActivityLoading(false);
+        setActivityRefreshing(false);
+      }).catch(() => {
+        if (ignore) return;
+        setActivityLoading(false);
+        setActivityRefreshing(false);
+      });
+
+      const [readiness, stockPf] = await Promise.all([
+        fetchTradingReadiness(),
+        fetchStockPortfolio(agentId, paper),
+      ]);
       const portfolio = stockPf.ok ? (stockPf.portfolio ?? null) : null;
       const heldTickers = (portfolio?.positions ?? []).map((position) => position.symbol);
       const [heldSnaps, equityHistory, stockMoverRes] = await Promise.all([
@@ -340,23 +467,21 @@ export function TradePanel(props: TradePanelProps) {
       // flashes the paper balance. Only on first load; an in-session manual
       // paper/live toggle (not first load) is respected.
       const wantPaper = !(venue === "alpaca" && liveEnabled);
-      if (loadedWalletRef.current !== activeWallet.id && venue === "alpaca" && paper !== wantPaper) {
+      if (walletChanged && venue === "alpaca" && paper !== wantPaper) {
         if (!ignore) setPaper(wantPaper);
         return;
       }
 
-      // activity (unified spend ledger)
-      const activityRes = await fetchWalletActivity(100);
-      const activity = mapActivity(activityRes.ok && activityRes.records ? activityRes.records : [], Date.now());
-
       if (ignore) return;
-      setData({
-        cryptoPortfolio, cryptoBalances, cryptoMovers, cryptoCaps: caps,
-        stockPortfolio, stockMovers, stockReadiness, activity,
-        network, isEvmWallet, isSolanaWallet,
-      });
+      setData((previous) => previous ? {
+        ...previous,
+        stockPortfolio,
+        stockMovers,
+        stockReadiness,
+      } : previous);
       loadedWalletRef.current = activeWallet.id;
-      setLoading(false);
+      setStockLoading(false);
+      setStockRefreshing(false);
       // Reconcile optimistic order rows against the freshly-fetched open orders:
       // drop an optimistic row once the real open order (same id) represents it —
       // a seamless handoff — or after a short grace window for an order that
@@ -551,6 +676,11 @@ export function TradePanel(props: TradePanelProps) {
       onSelectChain,
       availableChains,
       loading,
+      refreshing,
+      stockLoading,
+      stockRefreshing,
+      activityLoading,
+      activityRefreshing,
       cryptoPortfolio: data?.cryptoPortfolio ?? EMPTY_PORTFOLIO,
       cryptoBalances: data?.cryptoBalances ?? {},
       cryptoMovers: data?.cryptoMovers ?? [],
@@ -575,7 +705,7 @@ export function TradePanel(props: TradePanelProps) {
       onOpenView,
       refresh,
     };
-  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, paper, currency, fxRates, actors, props.theme, onChangeWallet, onOpenView, refresh, onEnableStockVenue, onCancelStockOrder, onOptimisticStockOrder, displayStockPortfolio]);
+  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, refreshing, stockLoading, stockRefreshing, activityLoading, activityRefreshing, paper, currency, fxRates, actors, props.theme, onChangeWallet, onOpenView, refresh, onEnableStockVenue, onCancelStockOrder, onOptimisticStockOrder, displayStockPortfolio]);
 
   return (
     <div style={{ height: "100%", overflow: "hidden" }}>

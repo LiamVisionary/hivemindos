@@ -15,6 +15,7 @@ import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, 
 import { AgentMemoryHealthCard } from "./AgentMemoryHealthCard";
 import { SkillSecurityCard } from "./SkillSecurityCard";
 import { SyntoModelTierSettings } from "./SyntoModelTierSettings";
+import { SYNTO_COMPARE_MODEL_OPTIONS } from "@/lib/config/synto-model-tiers";
 import brainServiceStyles from "./brain-services.module.css";
 import { SectionModeHeader } from "./WorkSectionHeader";
 
@@ -261,8 +262,6 @@ function VaultPanelComponent(props: any) {
     qmdStatus?.installed || qmdBusy === "install" || qmdBusy === "connect" || qmdBusy === "index" || qmdBusy === "embed" ? qmdActionStatus : "",
     gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" ? gbrainActionStatus : "",
   ].find(Boolean) || "";
-  const syntoOutputHints = `${syntoActionStatus}\n${syntoQueryResult}`;
-  const syntoNeedsModelSetup = /ollama|model/i.test(syntoOutputHints) && /missing|not running|not found|failed|error/i.test(syntoOutputHints);
   const gbrainSetupSteps = ["Check Bun runtime", "Install GBrain CLI", "Initialize local brain", "Import shared vault", "Refresh stale embeddings", "Extract graph links", "Scaffold retrieval skills"];
   const qmdSetupSteps = ["Check npm runtime", "Install QMD CLI", "Add shared vault collection", "Build SQLite/BM25 index", "Refresh local vectors"];
   const neo4jSetupSteps = ["Check Neo4j env keys", "Verify driver connectivity", "Create graph constraints", "MERGE Agent Memory", "Link entities and compiled pages"];
@@ -745,10 +744,21 @@ function VaultPanelComponent(props: any) {
         ...(syntoStatusNote ? [syntoStatusNote] : []),
         syntoStatus?.initialized ? "synto.toml ready" : "Initialize Synthesis",
         `Source access ${syntoStatus?.mcp?.sourceAccessMode ?? sharedVault.synto.sourceAccessMode}`,
-        `Compare ${sharedVault.synto.compareHeavyModel}`,
+        (sharedVault.synto.modelRoute ?? "cloud-best") === "cloud-best" ? "Best cloud · Qwen3 235B" : sharedVault.synto.modelRoute === "local-light" ? "Local Light · Qwen3.5 9B" : "Local Recommended · Qwen3 30B",
         syntoStatus?.pack?.indexExists ? "Pack index ready" : "Pack pending",
         sharedVault.synto.autoApprove ? `Auto approve >= ${sharedVault.synto.minConfidence}` : "Human review first",
       ],
+      setup: (
+        <SyntoModelTierSettings
+          sharedVault={sharedVault}
+          updateSharedVault={updateSharedVault}
+          runtimeIntegrationBusy={runtimeIntegrationBusy}
+          runtimeIntegrationMessage={runtimeIntegrationMessage}
+          runtimeIntegrationStatus={runtimeIntegrationStatus}
+          refreshRuntimeIntegrations={refreshRuntimeIntegrations}
+          runRuntimeIntegrationAction={runRuntimeIntegrationAction}
+        />
+      ),
       primaryAction: {
         key: "run",
         label: "Run pipeline",
@@ -811,13 +821,6 @@ function VaultPanelComponent(props: any) {
       ],
       body: (
         <div className={brainClass("gbrainQueryBox")}>
-          {syntoNeedsModelSetup ? (
-            <div className={brainClass("brainServiceRepairHint")}>
-              <strong>Model backend needs attention</strong>
-              <span>Start Ollama and pull the configured Syntho models before compiling real notes.</span>
-              <code>ollama serve && ollama pull gemma4:e4b && ollama pull qwen2.5:14b && ollama pull nomic-embed-text</code>
-            </div>
-          ) : null}
           <label>
             <span>Question</span>
             <textarea
@@ -862,15 +865,17 @@ function VaultPanelComponent(props: any) {
               <option value="disabled">Disabled</option>
             </select>
           </label>
-          <SyntoModelTierSettings
-            sharedVault={sharedVault}
-            updateSharedVault={updateSharedVault}
-            runtimeIntegrationBusy={runtimeIntegrationBusy}
-            runtimeIntegrationMessage={runtimeIntegrationMessage}
-            runtimeIntegrationStatus={runtimeIntegrationStatus}
-            refreshRuntimeIntegrations={refreshRuntimeIntegrations}
-            runRuntimeIntegrationAction={runRuntimeIntegrationAction}
-          />
+          <label>
+            Comparison challenger
+            <select
+              value={sharedVault.synto.compareHeavyModel}
+              onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, compareHeavyModel: event.target.value } })}
+            >
+              {SYNTO_COMPARE_MODEL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           <label>
             Min confidence
             <input

@@ -18,7 +18,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
 | `hive-workflow-fusion` | Composes multi-step hive workflows from skills, apps, agents, and tools. |
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
-| `hive-brain-memory` | Teaches agents how to recall typed Shared Brain Memory, write durable reviewed facts, and evolve stale memories while preserving superseded history. |
+| `hive-brain-memory` | Teaches agents how to recall canonical typed memory, keep operational receipts separate, review mined patterns, and evolve stale memories while preserving superseded history. |
 | `hive-brain-compiled-wiki` | Teaches agents how to compile durable findings into HivemindOS entity/concept/summary wiki pages, search/query the compiled graph through MCP, repair wiki health, and respect human collective shared-brain mirrors without restricting normal agent-to-agent work. |
 
 ## Supporting Hive Search Commands
@@ -31,7 +31,7 @@ hive-brain recall "query" --scope full-vault --limit 8
 hive-brain evolve --memory-id mem-... --content "Updated durable memory"
 ```
 
-`hive-brain answer` returns a concise grounded answer. `hive-brain recall` returns a hit list. Both try the running HivemindOS brain API first and fall back to local vault/index search, so raw agents can use the same private brain without needing dashboard-routed context. `hive-brain evolve` is the API-backed write path for replacing reviewed stale memory while preserving superseded history. Use the auto-installed `hive-brain-memory` skill for the full recall/remember/evolve policy.
+`hive-brain answer` returns a concise grounded answer. `hive-brain recall` returns a hit list. Both try the running HivemindOS brain API first and fall back to local vault/index search, so raw agents can use the same private brain without needing dashboard-routed context. `hive-brain record-operation` keeps routine receipts in a bounded local journal, while `hive-brain mine-patterns` dry-runs recurring-learning, skill, and routine proposals before an explicit Brain Review enqueue. Durable writes use canonical memory heads, and `hive-brain evolve` replaces reviewed stale memory while preserving superseded history. Use the auto-installed `hive-brain-memory` skill for the full policy.
 
 For durable synthesized wiki knowledge, use the auto-installed `hive-brain-compiled-wiki` skill instead of broad recall. It teaches agents to call `brain_search_knowledge` first for compiled entity, concept, and summary pages, then follow up with `brain_get_node`, `brain_get_backlinks`, or `brain_graph_overview` when they need graph detail.
 

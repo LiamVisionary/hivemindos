@@ -65,6 +65,22 @@ export function notificationTaskTitle(notification: AgentNotification) {
   return /^Task "([^"]+)"/.exec(notification.body)?.[1]?.trim() ?? "";
 }
 
+/** The generic opener the escalation bridge writes for blocked ("needs-human")
+ *  work — kept in sync with blockedTaskNotificationBody in escalation-notify.ts
+ *  (that module is server-only, so the literal can't be shared across the boundary). */
+const BLOCKED_WORK_LEAD = "This Work Board task is blocked and waiting for a human decision or missing input.";
+
+export function isBlockedWorkNotification(notification: AgentNotification) {
+  return notification.tags.includes("needs-human")
+    || notification.body.startsWith(BLOCKED_WORK_LEAD);
+}
+
+/** The blocked task's title, parsed from the escalation bridge's "Task: <title>"
+ *  line (distinct from notificationTaskTitle's quoted `Task "…"` form). */
+export function blockedWorkTaskTitle(notification: AgentNotification) {
+  return /^Task:\s*(.+)$/m.exec(notification.body)?.[1]?.trim() ?? "";
+}
+
 export function notificationMachineName(notification: AgentNotification) {
   return /(?:failed|sign-in) on (.+)$/i.exec(notification.title)?.[1]?.trim()
     || / on ([^.\n]+?) needs Hermes\/Codex re-authentication/i.exec(notification.body)?.[1]?.trim()
@@ -119,21 +135,35 @@ export function notificationDisplayTitle(notification: AgentNotification) {
 }
 
 export function notificationDisplayBody(notification: AgentNotification) {
-  if (!isHermesAuthNotification(notification)) return notification.body;
-  const actor = notificationActorMeta(notification).label;
-  const machine = notificationMachineName(notification);
-  const where = machine || "that machine";
-  const task = notificationTaskTitle(notification);
-  return [
-    `${actor} couldn’t start${task ? ` “${task}”` : " this task"} because Codex is signed out on ${where}.`,
-    `Run this on ${where}:`,
-    "```bash",
-    "codex",
-    "hermes auth",
-    "```",
-    `Reason: ${summarizeHermesAuthError(notification.body)}`,
-    "If Hermes asks for model access afterward, run `hermes model` too.",
-  ].join("\n\n");
+  if (isHermesAuthNotification(notification)) {
+    const actor = notificationActorMeta(notification).label;
+    const machine = notificationMachineName(notification);
+    const where = machine || "that machine";
+    const task = notificationTaskTitle(notification);
+    return [
+      `${actor} couldn’t start${task ? ` “${task}”` : " this task"} because Codex is signed out on ${where}.`,
+      `Run this on ${where}:`,
+      "```bash",
+      "codex",
+      "hermes auth",
+      "```",
+      `Reason: ${summarizeHermesAuthError(notification.body)}`,
+      "If Hermes asks for model access afterward, run `hermes model` too.",
+    ].join("\n\n");
+  }
+  // Blocked ("needs-human") work: lead with the task title so the clamped
+  // one-line row preview names *which* work is blocked, instead of the generic
+  // "This Work Board task is blocked…" opener (all the collapsed row can show).
+  if (isBlockedWorkNotification(notification)) {
+    const title = blockedWorkTaskTitle(notification);
+    if (title) {
+      const rest = notification.body
+        .split("\n")
+        .filter((line) => !line.startsWith(BLOCKED_WORK_LEAD) && !/^Task:\s*/.test(line));
+      return [`“${title}” is blocked and waiting on your decision.`, ...rest].join("\n");
+    }
+  }
+  return notification.body;
 }
 
 export function notificationPriorityLabel(priority: AgentNotification["priority"]) {

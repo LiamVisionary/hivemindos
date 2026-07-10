@@ -176,3 +176,22 @@
 @keyframes fr-shimmer {
   to { transform: translateX(100%); }
 }
+
+/* Gradient-position shimmer for the json-render Skeleton (ports the chat-route
+   redesign's `jr-shimmer`; keyframes live here, never runtime-injected). */
+@keyframes fr-shimmer-bg {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Honor reduced-motion: neutralize json-render's shimmer / spin / fade loops.
+   Scoped to the json-render animated elements (not all of .fr-root, which many
+   other views share) and marked !important so it overrides their inline
+   `animation` styles on Spinner, Skeleton, and the Drawer panel. */
+@media (prefers-reduced-motion: reduce) {
+  .fr-jr-spin,
+  .fr-jr-shimmer,
+  .fr-jr-fade-up {
+    animation: none !important;
+  }
+}

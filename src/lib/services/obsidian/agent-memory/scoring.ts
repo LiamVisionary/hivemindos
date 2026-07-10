@@ -12,7 +12,7 @@ const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const LOW_SIGNAL_QUERY_WORDS = new Set(["agent", "agents", "brain", "hivemindos", "memory", "memories", "note", "notes", "shared", "vault"]);
 // Per-signal caps keep long derived queries (32-term keyword soups) from
 // inflating scores linearly with query length.
-const EXACT_TITLE_CAP = 24;
+const EXACT_TITLE_CAP = 32;
 const EXACT_TAG_CAP = 12;
 const EXACT_CONTENT_CAP = 16;
 const EXACT_SOURCE_CAP = 6;
@@ -24,9 +24,45 @@ export const SEMANTIC_SCORE_WEIGHT = 24;
 export const SEMANTIC_MATCH_GATE = 0.6;
 const recordSearchTextCache = new WeakMap<AgentMemoryRecord, string>();
 const recordContentTextCache = new WeakMap<AgentMemoryRecord, string>();
+const recordBm25DocumentCache = new WeakMap<AgentMemoryRecord, { terms: Record<string, number>; length: number }>();
+const RECORD_CACHE_SOURCE = Symbol("agent-memory-cache-source");
+
+type CacheLinkedAgentMemoryRecord = AgentMemoryRecord & { [RECORD_CACHE_SOURCE]?: AgentMemoryRecord };
+
+function cacheSourceRecord(record: AgentMemoryRecord) {
+  return (record as CacheLinkedAgentMemoryRecord)[RECORD_CACHE_SOURCE] ?? record;
+}
+
+export function withAgentMemorySearchMetadata(
+  record: AgentMemoryRecord,
+  metadata: Pick<AgentMemoryRecord, "searchScore" | "searchScoreNormalized" | "searchCollection">,
+) {
+  const clone = { ...record, ...metadata } as CacheLinkedAgentMemoryRecord;
+  Object.defineProperty(clone, RECORD_CACHE_SOURCE, { value: cacheSourceRecord(record), enumerable: false });
+  return clone;
+}
 
 function textWords(value: string) {
   return queryWordsForRecall(value, LOW_SIGNAL_QUERY_WORDS);
+}
+
+function queryTypeIntent(query: string) {
+  const lower = query.toLowerCase();
+  if (/\b(artifact|proof|evidence|receipt|verification|verified|proven?|demonstrat(?:e|ed|ion))\b/.test(lower)) return "artifact";
+  if (/\b(instruction|rule|guidance|must|required|require|should)\b/.test(lower) || /\bbefore\s+(?:calling|claiming|declaring|saying)\b/.test(lower)) return "instruction";
+  if (/\b(decide|decision|choose|chosen|selected|set)\b/.test(lower)) return "decision";
+  if (/\b(preference|prefer|favorite|favourite|likes?)\b/.test(lower)) return "preference";
+  if (/\b(commitment|committed|promised?)\b/.test(lower)) return "commitment";
+  if (/\b(goal|objective|aim)\b/.test(lower)) return "goal";
+  if (/\b(lesson|learning|learned|learnt)\b/.test(lower)) return "learning";
+  return undefined;
+}
+
+function temporalTopicPhrase(query: string) {
+  return query.trim().replace(
+    /^(?:(?:previously|formerly|historically|back then|at the time)|(?:(?:as of|before)\s+\d{4}-\d{2}-\d{2})|yesterday|last week|last month|last year)\s*[:,;-]?\s+/i,
+    "",
+  );
 }
 
 function recencyScore(createdAt: string) {
@@ -40,7 +76,8 @@ function recencyScore(createdAt: string) {
 }
 
 function recordSearchText(record: AgentMemoryRecord) {
-  const cached = recordSearchTextCache.get(record);
+  const cacheRecord = cacheSourceRecord(record);
+  const cached = recordSearchTextCache.get(cacheRecord);
   if (cached !== undefined) return cached;
   const searchText = [
     record.title,
@@ -71,16 +108,27 @@ function recordSearchText(record: AgentMemoryRecord) {
     record.tailnetDnsName,
     record.collectorUrl,
   ].filter(Boolean).join(" ").toLowerCase();
-  recordSearchTextCache.set(record, searchText);
+  recordSearchTextCache.set(cacheRecord, searchText);
   return searchText;
 }
 
 function recordContentText(record: AgentMemoryRecord) {
-  const cached = recordContentTextCache.get(record);
+  const cacheRecord = cacheSourceRecord(record);
+  const cached = recordContentTextCache.get(cacheRecord);
   if (cached !== undefined) return cached;
   const contentText = record.content.toLowerCase();
-  recordContentTextCache.set(record, contentText);
+  recordContentTextCache.set(cacheRecord, contentText);
   return contentText;
+}
+
+function recordBm25Document(record: AgentMemoryRecord) {
+  const cacheRecord = cacheSourceRecord(record);
+  const cached = recordBm25DocumentCache.get(cacheRecord);
+  if (cached) return cached;
+  const tokens = bm25Tokens(recordSearchText(record)).filter((term) => !LOW_SIGNAL_QUERY_WORDS.has(term));
+  const document = { terms: bm25TermCounts(tokens, 500), length: Math.max(tokens.length, 1) };
+  recordBm25DocumentCache.set(cacheRecord, document);
+  return document;
 }
 
 export function temporalRecallMode(input: RecallAgentMemoryInput) {
@@ -88,21 +136,28 @@ export function temporalRecallMode(input: RecallAgentMemoryInput) {
   if (explicit === "current" || explicit === "historical" || explicit === "as-of") return explicit;
   if (input.asOf?.trim()) return "as-of";
   const query = input.query?.toLowerCase() ?? "";
-  if (/\b(as of|before|used to|previously|formerly|at the time|back then|old|older|history|historical|last week|last month|last year|yesterday)\b/.test(query)) {
-    return query.includes("as of") ? "as-of" : "historical";
-  }
-  if (/\b\d{4}-\d{2}-\d{2}\b/.test(query)) return "as-of";
+  if (/\b(?:as of|before)\s+\d{4}-\d{2}-\d{2}\b/.test(query)) return "as-of";
+  if (/\b(as of|last week|last month|last year|yesterday)\b/.test(query)) return "as-of";
+  if (/\b(used to|previously|formerly|at the time|back then|old|older|history|historical)\b/.test(query)) return "historical";
   return "current";
+}
+
+function parseAsOfValue(value: string) {
+  const trimmed = value.trim();
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+    ? Date.parse(`${trimmed}T23:59:59.999Z`)
+    : Date.parse(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function temporalAsOfMs(input: RecallAgentMemoryInput) {
   if (input.asOf?.trim()) {
-    const parsed = Date.parse(input.asOf);
-    return Number.isFinite(parsed) ? parsed : undefined;
+    return parseAsOfValue(input.asOf);
   }
   const query = input.query?.toLowerCase() ?? "";
   const iso = query.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
-  if (iso) return Date.parse(iso);
+  if (iso && new RegExp(`\\bbefore\\s+${iso.replace(/-/g, "\\-")}\\b`).test(query)) return Date.parse(iso) - 1;
+  if (iso && new RegExp(`\\bas of(?:\\s+the end of)?\\s+${iso.replace(/-/g, "\\-")}\\b`).test(query)) return parseAsOfValue(iso);
   const now = Date.now();
   if (query.includes("yesterday")) return now - 86_400_000;
   if (query.includes("last week")) return now - 7 * 86_400_000;
@@ -112,10 +167,13 @@ function temporalAsOfMs(input: RecallAgentMemoryInput) {
 }
 
 export function recordVisibleForRecall(record: AgentMemoryRecord, input: RecallAgentMemoryInput) {
+  const explicitlyRequestsActions = input.type?.trim().toLowerCase() === "action";
+  if (record.type === "action" && !explicitlyRequestsActions && !input.includeOperational) return false;
   if (input.includeArchived) return true;
   if (record.status === "archived") return false;
   const mode = temporalRecallMode(input);
   if (mode === "current") return record.status === "active";
+  if (mode === "historical") return true;
   const asOf = temporalAsOfMs(input);
   if (asOf === undefined) return true;
   return Date.parse(record.createdAt) <= asOf;
@@ -125,11 +183,11 @@ export function bm25ScoresForRecords(records: AgentMemoryRecord[], input: Recall
   const terms = bm25Tokens(input.query ?? "").filter((term) => !LOW_SIGNAL_QUERY_WORDS.has(term) && !RECALL_STOP_WORDS.has(term));
   if (!terms.length) return new Map<string, { score: number; matched: string[] }>();
   const docs = records.map((record) => {
-    const tokens = bm25Tokens(recordSearchText(record)).filter((term) => !LOW_SIGNAL_QUERY_WORDS.has(term));
+    const document = recordBm25Document(record);
     return {
       id: record.id,
-      terms: bm25TermCounts(tokens, 500),
-      length: Math.max(tokens.length, 1),
+      terms: document.terms,
+      length: document.length,
     };
   });
   const documentCount = Math.max(docs.length, 1);
@@ -188,8 +246,8 @@ export function scoreAgentMemory(
   const scoreDetails: AgentMemoryScoreDetails = {};
 
   if (!query) scoreDetails.exact = 1;
-  const queryLower = query.toLowerCase();
-  if (query && isSelectiveExactPhrase(query) && containsPhraseWithBoundaries(haystack, queryLower)) {
+  const exactPhrase = temporalTopicPhrase(query);
+  if (exactPhrase && isSelectiveExactPhrase(exactPhrase) && containsPhraseWithBoundaries(haystack, exactPhrase.toLowerCase())) {
     scoreDetails.exact = (scoreDetails.exact ?? 0) + 30;
     matched.add("exact-query");
   }
@@ -234,8 +292,19 @@ export function scoreAgentMemory(
     scoreDetails.semantic = Math.round(semantic * SEMANTIC_SCORE_WEIGHT);
     if (semantic >= SEMANTIC_MATCH_GATE) matched.add("semantic");
   }
+  const uniqueQueryWords = [...new Set(queryWords)];
+  const coveredQueryWords = uniqueQueryWords.filter((word) => matched.has(word)).length;
+  if (uniqueQueryWords.length >= 2 && coveredQueryWords) {
+    scoreDetails.coverage = Math.round((coveredQueryWords / uniqueQueryWords.length) * 12);
+  }
+  const intendedType = input.type ? undefined : queryTypeIntent(query);
+  if (intendedType && record.type === intendedType) scoreDetails.intent = 15;
   if (input.type && record.type === input.type.trim().toLowerCase()) scoreDetails.exact = (scoreDetails.exact ?? 0) + 10;
-  if (record.searchScore) scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScore)));
+  if (record.searchScoreNormalized !== undefined) {
+    scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScoreNormalized * 30)));
+  } else if (record.searchScore) {
+    scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScore)));
+  }
   scoreDetails.confidence = Math.round(record.confidence * 10);
   scoreDetails.temporal = temporalScore(record, input);
   scoreDetails.usage = usageScore(record);

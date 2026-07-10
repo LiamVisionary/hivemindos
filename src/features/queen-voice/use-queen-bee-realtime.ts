@@ -12,6 +12,7 @@ import {
   actingWalletSourceFromContext,
   fetchHivemindFastContext,
   fetchWalletReadiness,
+  fetchXAccountRead,
   withScreenContext,
 } from "./queen-fast-context";
 import {
@@ -106,6 +107,7 @@ function parseFunctionCall(
 export async function askHivemindAgent(
   args: Record<string, unknown>,
   screenContext?: DashboardScreenContext,
+  options: { preferBuiltInCapability?: boolean } = {},
 ): Promise<{ speech: string; detail: string }> {
   const message = typeof args.message === "string" ? args.message.trim() : "";
   if (!message)
@@ -129,6 +131,7 @@ export async function askHivemindAgent(
         action: "agent-turn",
         message: withScreenContext(message, screenContext),
         actingWallet: actingWalletSourceFromContext(screenContext),
+        preferBuiltInCapability: options.preferBuiltInCapability === true,
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(60_000),
@@ -648,8 +651,10 @@ export function useQueenBeeRealtime(
             latestUserTranscript: lastFinalUserTranscript,
             lastQueenUtterance,
           });
-        } else if (call.name === "ask_hivemind_agent") {
-          const result = await askHivemindAgent(call.args, liveScreenContext);
+        } else if (call.name === "ask_hivemind_agent" || call.name === "use_hive_capability") {
+          const result = await askHivemindAgent(call.args, liveScreenContext, {
+            preferBuiltInCapability: call.name === "use_hive_capability",
+          });
           output = result.speech;
           // Hold the findings for the spoken turn this tool call triggers.
           addPendingDetail(result.detail);
@@ -665,6 +670,9 @@ export function useQueenBeeRealtime(
             String(call.args.query ?? ""),
             liveScreenContext,
           );
+          addPendingDetail(output);
+        } else if (call.name === "read_x_account") {
+          output = await fetchXAccountRead(call.args);
           addPendingDetail(output);
         } else if (call.name === "read_agent_status") {
           output = await readAgentStatus(call.args);

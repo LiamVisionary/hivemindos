@@ -122,3 +122,30 @@ export async function openNativeDeliverable(input: {
     return { ok: false, error: error instanceof Error ? error.message : "Could not open deliverable." };
   }
 }
+
+export type NativeOpenInAppId = "vscode" | "xcode" | "terminal" | "finder" | "default";
+
+/**
+ * Whether the native "Open in <app>" command is available. False outside the
+ * Tauri desktop app (there is no browser equivalent), so the chat header's
+ * Open-in menu can hide these entries in the browser.
+ */
+export function nativeOpenInAppSupported(): boolean {
+  return isTauriDesktopRuntime();
+}
+
+export async function openNativeInApp(input: {
+  app: NativeOpenInAppId;
+  path: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!isTauriDesktopRuntime()) {
+    return { ok: false, error: "Opening in an app requires the HivemindOS desktop app." };
+  }
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const result = await invoke<NativeActionResult>("open_in_app", input);
+    return { ok: result?.ok ?? true, error: result?.error };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not open in the selected app." };
+  }
+}

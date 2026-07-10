@@ -270,11 +270,10 @@ export function AgentSettingsModal(props: any) {
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "").replace(/\s+bee$/i, "").trim();
   const aeonSettings = {
-    mode: agentCreateMachine ? agentCreateDraft.aeonMode || "github" : roleModalAgent?.aeonMode || "github",
+    mode: (agentCreateMachine ? agentCreateDraft.aeonMode : roleModalAgent?.aeonMode) === "local" ? "local" : "github",
     repo: agentCreateMachine ? agentCreateDraft.aeonRepo || "" : roleModalAgent?.aeonRepo || "",
     branch: agentCreateMachine ? agentCreateDraft.aeonBranch || "main" : roleModalAgent?.aeonBranch || "main",
     path: agentCreateMachine ? agentCreateDraft.aeonLocalPath || "~/.aeon" : roleModalAgent?.aeonLocalPath || roleModalAgent?.localDataDir || "",
-    a2aUrl: agentCreateMachine ? agentCreateDraft.a2aUrl || "http://127.0.0.1:41241" : roleModalAgent?.a2aUrl || roleModalAgent?.gatewayUrl || "http://127.0.0.1:41241",
   };
   const runtimeFolderValue = roleModalAgent ? isAutopilotSettings ? roleModalAgent.aeonLocalPath || roleModalAgent.localDataDir || "" : roleModalAgent.localDataDir || "" : "";
   const targetMachineRuntimes = agentCreateMachine?.capabilities?.runtimes ?? [];
@@ -336,7 +335,7 @@ export function AgentSettingsModal(props: any) {
     const response = await fetch("/api/xai-oauth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "start", hermesHomes: xaiOAuthHermesHomes() }),
+      body: JSON.stringify({ action: "start" }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null);
     if (!response?.ok || data?.ok === false) {
@@ -353,7 +352,7 @@ export function AgentSettingsModal(props: any) {
     const response = await fetch("/api/xai-oauth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "submit-code", code, hermesHomes: xaiOAuthHermesHomes() }),
+      body: JSON.stringify({ action: "submit-code", code }),
     }).catch(() => null);
     const data = await response?.json().catch(() => null);
     if (!response?.ok || data?.ok === false) {
@@ -497,7 +496,7 @@ export function AgentSettingsModal(props: any) {
       const response = await fetch(xaiOAuthStatusUrl, { cache: "no-store" }).catch(() => null);
       const data = response && response.ok ? await response.json().catch(() => null) : null;
       if (cancelled) return;
-      setXaiOAuthConnected(Boolean(data?.connected || data?.login?.phase === "connected"));
+      setXaiOAuthConnected(Boolean(data?.usable || data?.login?.phase === "connected"));
       setXaiOAuthStatusLoaded(true);
     })();
     return () => {
@@ -789,7 +788,6 @@ export function AgentSettingsModal(props: any) {
           aeonRepo: current.aeonRepo || "",
           aeonBranch: current.aeonBranch || "main",
           aeonMode: current.aeonMode || "github",
-          a2aUrl: current.a2aUrl || "http://127.0.0.1:41241",
         } : {}),
       }));
       return;
@@ -805,7 +803,6 @@ export function AgentSettingsModal(props: any) {
           aeonLocalPath: roleModalAgent.aeonLocalPath || roleModalAgent.localDataDir || "~/.aeon",
           aeonBranch: roleModalAgent.aeonBranch || "main",
           aeonMode: roleModalAgent.aeonMode || "github",
-          a2aUrl: roleModalAgent.a2aUrl || "http://127.0.0.1:41241",
         } : {}),
       });
     }

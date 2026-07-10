@@ -14,8 +14,8 @@
   overflow: auto;
 }
 
-/* ---------- modal card (holds tokens + sizing; no outer frame) ---------- */
-.modal {
+/* ---------- shared token block (modal card + dashboard route) ---------- */
+.tokens {
   /* fonts */
   --hc-font: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --hc-display: "Space Grotesk", "Geist", system-ui, sans-serif;
@@ -43,26 +43,11 @@
   --hc-danger: #e58e85;
   --hc-danger-soft: rgba(229, 142, 133, 0.13);
 
-  position: relative;
-  width: min(96vw, 760px);
-  max-height: calc(100vh - 32px);
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 24px;
-  border-radius: 20px;
-  border: 1px solid var(--hc-line-2);
   color: var(--hc-text);
   font-family: var(--hc-font);
-  background:
-    radial-gradient(680px 400px at 44% -12%, var(--hc-honey-soft), transparent 60%),
-    radial-gradient(circle at 92% -6%, var(--hc-live-soft), transparent 42%),
-    var(--hc-panel);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 34px 80px -28px rgba(0, 0, 0, 0.82);
 }
 
-:global(:root[data-theme="hive-light"]) .modal {
+:global(:root[data-theme="hive-light"]) .tokens {
   --hc-bg: #f4f6ee;
   --hc-bg-soft: #eef3e8;
   --hc-panel: #fffdf8;
@@ -83,7 +68,48 @@
   --hc-live-soft: rgba(32, 127, 120, 0.12);
   --hc-danger: #b84b45;
   --hc-danger-soft: rgba(184, 75, 69, 0.11);
+}
+
+/* ---------- shared card surface (modal + route share this look) ---------- */
+.surface {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid var(--hc-line-2);
+  background:
+    radial-gradient(680px 400px at 44% -12%, var(--hc-honey-soft), transparent 60%),
+    radial-gradient(circle at 92% -6%, var(--hc-live-soft), transparent 42%),
+    var(--hc-panel);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 34px 80px -28px rgba(0, 0, 0, 0.82);
+}
+
+:global(:root[data-theme="hive-light"]) .surface {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 34px 80px -28px rgba(44, 58, 47, 0.4);
+}
+
+/* ---------- modal card (positioning + scroll only; surface handles the look) ---------- */
+.modal {
+  position: relative;
+  width: min(96vw, 760px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+/* ---------- dashboard route (same card, page layout) ---------- */
+.pageWrap {
+  min-height: calc(100vh - 32px);
+  padding: clamp(16px, 3vw, 36px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.page {
+  position: relative;
+  width: 100%;
+  max-width: 820px;
 }
 
 .close {
@@ -644,6 +670,16 @@
 }
 
 .modelsEmpty { font-size: 12.5px; color: var(--hc-muted); }
+
+.modelsEmptyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.modelsEmptyRow .modelsEmpty { flex: 1 1 260px; margin: 0; }
 
 /* ---------- manage: hosting controls ---------- */
 .controlRows { display: flex; flex-direction: column; gap: 15px; }

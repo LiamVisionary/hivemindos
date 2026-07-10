@@ -19,6 +19,10 @@ import type {
   CapabilityCapital,
   WorkBlock,
 } from "./types";
+import {
+  buildCompanyRuntimeMix,
+  companyExecutionConfigFromForm,
+} from "@/lib/services/company-execution-capabilities";
 
 export const DEMO_HERO_COLONY_ID = "zhc-demo-dropshipper-aio";
 
@@ -489,6 +493,7 @@ export function createDemoColony(form: CreateForm, crew: Agent[]): Colony {
     state: member.state === "ready" ? "setup" as AgentState : member.state,
   }));
   const cap = agents.reduce((total, member) => total + (member._cap ?? 0), 0);
+  const execution = companyExecutionConfigFromForm(form);
   return colony({
     id,
     name: safeName,
@@ -496,7 +501,7 @@ export function createDemoColony(form: CreateForm, crew: Agent[]): Colony {
     sector: form.sector || "Autonomous Org",
     status: "setup",
     founded: "just now",
-    runtimeMix: [...new Set(agents.map((member) => member.runtime))].slice(0, 3),
+    runtimeMix: buildCompanyRuntimeMix(execution, agents.map((member) => member.runtime)),
     blurb: "Newly founded zero-human company waiting for its first autonomous work cycle.",
     alignment: 0,
     apex: {
@@ -523,6 +528,7 @@ export function createDemoColony(form: CreateForm, crew: Agent[]): Colony {
     activity: [],
     hasApexGoal: Boolean(form.apexTitle?.trim()),
     autonomy: false,
+    execution,
   });
 }
 
@@ -570,6 +576,7 @@ export function applyDemoEdit(colonyValue: Colony, form: CompanyEditForm): Colon
         isApex: form.revenueIsApex === true,
       }
     : undefined;
+  const execution = companyExecutionConfigFromForm(form);
 
   return colony({
     ...colonyValue,
@@ -583,7 +590,8 @@ export function applyDemoEdit(colonyValue: Colony, form: CompanyEditForm): Colon
     burn,
     revenue,
     agents,
-    runtimeMix: [...new Set(agents.map((member) => member.runtime))].slice(0, 3),
+    execution,
+    runtimeMix: buildCompanyRuntimeMix(execution, agents.map((member) => member.runtime)),
     frozen: form.frozen,
   });
 }

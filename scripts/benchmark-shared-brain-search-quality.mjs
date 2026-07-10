@@ -5,6 +5,10 @@ import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/prom
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
+import { register } from "node:module";
+
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+const { recallAgentMemory } = await import("../src/lib/services/obsidian/agent-memory/core.ts");
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const FULL_VAULT_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
@@ -35,8 +39,13 @@ const LIVE_CASES = [
   },
   {
     label: "operations policy",
-    query: "collection:operations Queen Bee control plane routing policy best available",
+    query: "collection:operations Queen Bee routing policy default routing safety gate cross-machine delegation",
     expectedPath: "Operations/Brain Services/Queen Bee/Routing Policy.md",
+  },
+  {
+    label: "control plane overview",
+    query: "collection:operations Queen Bee control plane coordination state identity routing safety dedupe leases",
+    expectedPath: "Operations/Brain Services/Queen Bee/README.md",
   },
   {
     label: "coverage beats spam",
@@ -415,6 +424,7 @@ async function writeFixture(root) {
   await write("Projects/Agent Calls - BYOK vs HivemindOS Cloud.md", "# Agent Calls - BYOK vs HivemindOS Cloud\n\nBYOK agent calls compare local user provider keys with a HivemindOS Cloud relay for native AI coding app calls.");
   await write("Projects/Search Quality Evaluation.md", "# Search Quality Evaluation\n\nBroad noisy search should prefer documents that cover the full recall intent over irrelevant keyword spam.");
   await write("Operations/Brain Services/Queen Bee/Routing Policy.md", "# Queen Bee Routing Policy\n\nQueen Bee chooses the best available agent and machine from Fleet discovery, Work Board state, and safety policy.");
+  await write("Operations/Brain Services/Queen Bee/README.md", "# Queen Bee Control Plane\n\nCoordination state for Queen Bee identity, routing and safety policy, dedupe records, leases, and completion receipts.");
   await write("Skills/hive-brain-compiled-wiki/SKILL.md", "# Hive Brain Compiled Wiki\n\nUse brain_search_knowledge, brain_get_node, brain_get_backlinks, and brain_graph_overview before broad full-vault recall for compiled wiki topics.");
   await write("Operations/Brain Services/Obsidian Native Brain Pack.md", "# Obsidian Native Brain Pack\n\nSeeds obsidian-markdown, obsidian-bases, json-canvas, and Bases/Canvas views for human-readable vault work.");
   await write("Operations/Secure/Secure Hermes Env Sync.md", "# Secure Hermes Env Sync\n\nTracks encrypted backup references for Hermes env sync and credential status names without plaintext secrets.");
@@ -432,14 +442,20 @@ async function runCase(root, test, limit) {
   const newStart = performance.now();
   const newHits = await newSearch(root, test.query, limit);
   const newMs = performance.now() - newStart;
+  const runtimeStart = performance.now();
+  const runtimeResult = await recallAgentMemory({ vaultPath: root, query: test.query, scope: "full-vault", limit });
+  const runtimeMs = performance.now() - runtimeStart;
   return {
     ...test,
     oldMs: Math.round(oldMs * 100) / 100,
     newMs: Math.round(newMs * 100) / 100,
     oldRank: expectedRank(oldHits, test.expectedPath),
     newRank: expectedRank(newHits, test.expectedPath),
+    runtimeMs: Math.round(runtimeMs * 100) / 100,
+    runtimeRank: expectedRank(runtimeResult.hits, test.expectedPath),
     oldTop: oldHits[0]?.notePath ?? null,
     newTop: newHits[0]?.notePath ?? null,
+    runtimeTop: runtimeResult.hits[0]?.notePath ?? null,
   };
 }
 
@@ -461,13 +477,16 @@ async function main() {
   for (const test of cases) rows.push(await runCase(root, test, args.limit));
   const oldRows = rows.map((row) => ({ rank: row.oldRank, ms: row.oldMs }));
   const newRows = rows.map((row) => ({ rank: row.newRank, ms: row.newMs }));
+  const runtimeRows = rows.map((row) => ({ rank: row.runtimeRank, ms: row.runtimeMs }));
   const oldMetrics = metrics(oldRows);
   const newMetrics = metrics(newRows);
+  const runtimeMetrics = metrics(runtimeRows);
   const result = {
     vault: root,
     cases: rows.length,
     old: oldMetrics,
     indexed: newMetrics,
+    runtime: runtimeMetrics,
     medianSpeedup: Math.round((oldMetrics.medianMs / Math.max(0.01, newMetrics.medianMs)) * 100) / 100,
     rows,
   };
@@ -475,6 +494,13 @@ async function main() {
   assert.ok(newMetrics.top1 >= oldMetrics.top1, "indexed search should not reduce Top-1 accuracy");
   assert.ok(newMetrics.top3 >= oldMetrics.top3, "indexed search should not reduce Top-3 accuracy");
   assert.ok(newMetrics.mrr >= oldMetrics.mrr, "indexed search should not reduce MRR");
+  const runtimeFailures = rows
+    .filter((row) => row.runtimeRank !== 1)
+    .map((row) => ({ label: row.label, expectedPath: row.expectedPath, runtimeRank: row.runtimeRank, runtimeTop: row.runtimeTop }));
+  const runtimeFailureSummary = runtimeFailures.length ? ` Failures: ${JSON.stringify(runtimeFailures)}` : "";
+  assert.ok(runtimeMetrics.top1 >= newMetrics.top1, `real recall runtime should preserve indexed Top-1 accuracy.${runtimeFailureSummary}`);
+  assert.ok(runtimeMetrics.top3 >= newMetrics.top3, `real recall runtime should preserve indexed Top-3 accuracy.${runtimeFailureSummary}`);
+  assert.ok(runtimeMetrics.mrr >= newMetrics.mrr, `real recall runtime should preserve indexed MRR.${runtimeFailureSummary}`);
 
   if (args.json) {
     console.log(JSON.stringify(result, null, 2));
@@ -486,9 +512,10 @@ async function main() {
   console.log(`Cases: ${rows.length}`);
   console.log(`Old Top-1/Top-3/MRR: ${oldMetrics.top1.toFixed(2)} / ${oldMetrics.top3.toFixed(2)} / ${oldMetrics.mrr.toFixed(2)}; median ${oldMetrics.medianMs.toFixed(2)}ms`);
   console.log(`Indexed Top-1/Top-3/MRR: ${newMetrics.top1.toFixed(2)} / ${newMetrics.top3.toFixed(2)} / ${newMetrics.mrr.toFixed(2)}; median ${newMetrics.medianMs.toFixed(2)}ms`);
+  console.log(`Runtime Top-1/Top-3/MRR: ${runtimeMetrics.top1.toFixed(2)} / ${runtimeMetrics.top3.toFixed(2)} / ${runtimeMetrics.mrr.toFixed(2)}; median ${runtimeMetrics.medianMs.toFixed(2)}ms`);
   console.log(`Median speedup: ${result.medianSpeedup.toFixed(2)}x`);
   for (const row of rows) {
-    console.log(`- ${row.label}: old rank ${row.oldRank ?? "miss"} (${row.oldMs}ms), indexed rank ${row.newRank ?? "miss"} (${row.newMs}ms)`);
+    console.log(`- ${row.label}: old rank ${row.oldRank ?? "miss"} (${row.oldMs}ms), indexed rank ${row.newRank ?? "miss"} (${row.newMs}ms), runtime rank ${row.runtimeRank ?? "miss"} (${row.runtimeMs}ms)`);
   }
 }
 

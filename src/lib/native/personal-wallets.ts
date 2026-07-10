@@ -109,6 +109,21 @@ export async function fetchPersonalWalletRecords(vaultPath?: string): Promise<Ar
   return nativeWallets ? mergePersonalWalletRecords(nativeWallets, httpWallets) : httpWallets;
 }
 
+/** Persist refreshed personal-wallet snapshots to the canonical wallet ledger. */
+export async function persistPersonalWalletRecords(
+  wallets: Array<Record<string, unknown>>,
+  vaultPath?: string,
+): Promise<boolean> {
+  if (!wallets.length) return true;
+  const response = await fetch("/api/wallet/personal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets }),
+  }).catch(() => null);
+  const data = (await response?.json().catch(() => null)) as { ok?: boolean } | null;
+  return Boolean(response?.ok && data?.ok);
+}
+
 export type PersonalWalletBalance = {
   currentBalanceUsd: number;
   nativeBalance: number;

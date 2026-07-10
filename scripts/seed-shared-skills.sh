@@ -353,7 +353,7 @@ write_managed_block() {
     printf "Delegate independent subtasks through HivemindOS routes when that reduces wall-clock time, keep working while they run when the runtime allows it, and verify subagent reports before relying on them. Do not stop or suggest a new session solely because the context is long.\n\n"
     printf "## Shared Brain Memory\n\n"
     printf "Use \`hive-brain answer \"<query>\"\` before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, credential status, or project context. The CLI tries the running HivemindOS \`/api/brain/memory\` route first, then falls back to local vault/index search, so raw/non-managed agents can recall shared memory without being app-routed. Setup also installs \`hive-brain-hook\` as a Claude Code \`UserPromptSubmit\` hook when Claude is targeted, so raw Claude prompts receive relevant shared-brain context automatically. Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault through the generated full-vault lexical index. Pass \`--scope agent-memory\` for typed/proven memory only, or \`--scope full-vault\` to force broad vault recall. Load the \`hive-brain-memory\` skill when recalling, writing, correcting, or evolving typed Shared Brain Memory. For durable writes, use \`hive-brain remember --type <type> --title <title> --content <content>\` or POST \`/api/brain/memory\`; use \`hive-brain evolve --memory-id <id> --content <content>\` or POST action \`evolve\` when reviewed context replaces an older memory; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.\n\n"
-    printf "Memory writes live under \`Memory/Distillations/Agent Memory/\`; the private typed-memory search index lives at \`Operations/Brain Services/Agent Memory Index.jsonl\`; entity links live at \`Operations/Brain Services/Agent Memory Entity Index.jsonl\`; retrieval telemetry lives at \`Operations/Brain Services/Agent Memory Retrievals.jsonl\`; the generated full-vault lexical index lives at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; optional GitLawb receipts live at \`Operations/Brain Services/Agent Memory Proofs.jsonl\` and store hashes/provenance instead of memory bodies. Use \`remember-action\` for durable assistant/agent-confirmed actions and \`record-usage\` for retrieval/final-answer telemetry. Evolution records use \`supersedes\`, \`supersededBy\`, \`evolutionRootId\`, \`cognitiveStage\`, \`sourceType\`, and related chain metadata; treat the latest active chain item as current truth and superseded entries as history/evidence. Include available \`agentName\`, \`agentId\`, \`runtime\`, \`machineName\`, \`machineId\`, \`tailnetId\`, \`tailnetName\`, \`tailnetDnsName\`, \`collectorUrl\`, \`sessionId\`, and \`project\` fields when writing. Use \`proof: \"auto\"\` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. \`Operations/Secure/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.\n\n"
+    printf "Memory writes live under \`Memory/Distillations/Agent Memory/\`; the private typed-memory search index lives at \`Operations/Brain Services/Agent Memory Index.jsonl\`; entity links live at \`Operations/Brain Services/Agent Memory Entity Index.jsonl\`; retrieval telemetry lives at \`Operations/Brain Services/Agent Memory Retrievals.jsonl\`; the generated full-vault lexical index lives at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; optional GitLawb receipts live at \`Operations/Brain Services/Agent Memory Proofs.jsonl\` and store hashes/provenance instead of memory bodies. Record run receipts and other high-volume events with \`record-operation\`; they go to the bounded local journal at \`~/.hivemindos/brain/operational-events.jsonl\`, not Agent Memory. \`remember-action\` is a compatibility alias and does not write durable memory. Use \`record-usage\` for retrieval/final-answer telemetry. Durable records carry a canonical \`memoryKey\`; evolve the current head when reviewed truth changes. Pattern mining is dry-run/review-gated through \`hive-brain mine-patterns\`; \`--enqueue\` creates Brain Review proposals but does not auto-apply memories, skills, or jobs. Evolution records use \`supersedes\`, \`supersededBy\`, \`evolutionRootId\`, \`cognitiveStage\`, \`sourceType\`, and related chain metadata; treat the latest active chain item as current truth and superseded entries as history/evidence. Include available \`agentName\`, \`agentId\`, \`runtime\`, \`machineName\`, \`machineId\`, \`tailnetId\`, \`tailnetName\`, \`tailnetDnsName\`, \`collectorUrl\`, \`sessionId\`, and \`project\` fields when writing. Use \`proof: \"auto\"\` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. \`Operations/Secure/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.\n\n"
     printf "## Compiled Brain Wiki\n\n"
     printf "For synthesized entity/concept/summary knowledge under \`Synthesis/Compiled Knowledge/<domain>/\`, load the \`hive-brain-compiled-wiki\` skill. Prefer \`brain_search_knowledge\` or POST \`/api/brain/knowledge\` with \`action: \"search\"\` when looking up compiled wiki topics, then use \`brain_get_node\`, \`brain_get_backlinks\`, or \`brain_graph_overview\` for graph-native follow-up. This complements \`hive-brain answer\`; it does not replace typed Shared Brain Memory for preferences, decisions, instructions, commitments, or project context.\n\n"
     printf "## Shared Hive Env\n\n"
@@ -446,7 +446,10 @@ EOF
 sync_shared_skills_to_aeon() {
   local aeon_root="${AEON_LOCAL_PATH:-${AEON_HOME:-$HOME/.aeon}}"
   local aeon_skills="$aeon_root/skills"
-  local manifest="$aeon_root/skills.json"
+  if [[ ! -f "$aeon_root/aeon.yml" || ! -f "$aeon_root/catalog/skills.json" || ( ! -x "$aeon_root/apps/cli/aeon" && ! -x "$aeon_root/aeon" ) ]]; then
+    warn "Skipping AEON skill sync; $aeon_root is not an AEON v0.1 checkout"
+    return 0
+  fi
   mkdir -p "$aeon_skills"
 
   while IFS= read -r skill_md; do
@@ -473,43 +476,7 @@ sync_shared_skills_to_aeon() {
 JSON
   done < <(find "$skills_folder" -mindepth 2 -maxdepth 2 -name SKILL.md -type f 2>/dev/null | sort)
 
-  node - "$skills_folder" "$manifest" <<'NODE'
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-const [skillsFolder, manifestPath] = process.argv.slice(2);
-let retained = [];
-try {
-  const parsed = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  retained = Array.isArray(parsed.skills) ? parsed.skills.filter((skill) => skill?.source !== "shared-brain") : [];
-} catch {}
-const shared = fs.readdirSync(skillsFolder, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => {
-    const skillPath = path.join(skillsFolder, entry.name, "SKILL.md");
-    if (!fs.existsSync(skillPath)) return null;
-    const markdown = fs.readFileSync(skillPath, "utf8");
-    const frontmatter = markdown.match(/^---\n([\s\S]*?)\n---/)?.[1] || "";
-    const field = (name) => frontmatter.match(new RegExp(`^${name}:\\\\s*['\\\"]?(.+?)['\\\"]?\\\\s*$`, "m"))?.[1]?.trim() || "";
-    return {
-      slug: entry.name,
-      name: field("name") || entry.name.split(/[-_]/).filter(Boolean).map((part) => part.slice(0, 1).toUpperCase() + part.slice(1)).join(" "),
-      description: field("description"),
-      source: "shared-brain",
-      skillMdPath: skillPath,
-      checksum: crypto.createHash("sha256").update(markdown).digest("hex"),
-    };
-  })
-  .filter(Boolean);
-const manifest = {
-  managedBy: "hivemindos",
-  updatedAt: new Date().toISOString(),
-  skills: [...retained, ...shared].sort((a, b) => String(a.slug).localeCompare(String(b.slug))),
-};
-fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
-fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-NODE
-  ok "Synced shared skill shelf to Aeon"
+  ok "Synced shared skill shelf into the AEON v0.1 skills directory"
 }
 
 seed_bundled_skills() {

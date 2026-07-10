@@ -54,6 +54,8 @@ sections:
             url: /for-users/features/agent-challenges.html
           - title: Zero Human Companies
             url: /for-users/features/zero-human-companies.html
+          - title: Founder Mode, Labs, And Proof Packs
+            url: /for-users/features/founder-mode.html
           - title: Brain, Vault, And Skills
             url: /for-users/features/brain-vault-and-skills.html
           - title: Hivemind Sync
@@ -62,6 +64,8 @@ sections:
             url: /for-users/features/hive-fusion.html
           - title: Token And Cost Savings
             url: /for-users/features/token-and-cost-savings.html
+          - title: Shared Brain Benchmarks
+            url: /for-users/features/shared-brain-benchmarks.html
           - title: Wallets, Honey, And x402
             url: /for-users/features/wallets-honey-and-x402.html
           - title: Hive Compute
@@ -143,6 +147,8 @@ sections:
         url: /for-users/integrations/
       - title: GitLawb Code Proof
         url: /for-users/integrations/gitlawb.html
+      - title: Microsoft Azure
+        url: /for-users/integrations/microsoft-azure.html
       - title: MiroShark
         url: /for-users/integrations/miroshark/
         children:
@@ -157,6 +163,10 @@ sections:
         url: /for-users/runtimes/
       - title: Hermes Local Setup
         url: /for-users/runtimes/hermes/local-setup.html
+      - title: AEON v0.1 Control Plane
+        url: /for-users/runtimes/aeon/v01-control-plane.html
+      - title: AEON For Zero Human Companies
+        url: /for-users/runtimes/aeon/zero-human-companies.html
       - title: AEON GitHub Actions Brain Access
         url: /for-users/runtimes/aeon/github-actions-brain-access.html
 

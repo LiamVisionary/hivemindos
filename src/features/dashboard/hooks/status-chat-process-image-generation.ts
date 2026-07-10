@@ -55,6 +55,7 @@ export function applicationGenerationSignature(card: any) {
     id: card.id,
     status: card.status,
     prompt: card.prompt,
+    sourceArtifactUrls: (card.sourceArtifacts ?? []).map((artifact: any) => artifact?.url ?? ""),
     artifactUrls: (card.artifacts ?? []).map((artifact: any) => artifact?.url ?? ""),
     error: card.error ?? "",
     completedAt: card.completedAt ?? "",
@@ -62,7 +63,11 @@ export function applicationGenerationSignature(card: any) {
 }
 
 export function cloneApplicationGenerationCard(card: any) {
-  return card ? { ...card, artifacts: card.artifacts?.map((artifact: any) => ({ ...artifact })) } : undefined;
+  return card ? {
+    ...card,
+    sourceArtifacts: card.sourceArtifacts?.map((artifact: any) => ({ ...artifact })),
+    artifacts: card.artifacts?.map((artifact: any) => ({ ...artifact })),
+  } : undefined;
 }
 
 function isCapabilitySearchProcessEvent(label: string, detail?: string) {
@@ -76,6 +81,11 @@ function isCapabilitySearchProcessEvent(label: string, detail?: string) {
 function promptWantsImageGeneration(prompt: string) {
   return /\b(?:generate|create|make|draw|render|txt2img|text\s*to\s*image|image[-_\s]?gen|image generation)\b[\s\S]*\b(?:image|images|picture|pictures|illustration|artwork|photo|visual)\b/i.test(prompt)
     || /\b(?:txt2img|text\s*to\s*image|image[-_\s]?gen|image generation|comfyui|z[-_\s]?image)\b/i.test(prompt);
+}
+
+function promptWantsVideoGeneration(prompt: string) {
+  return /\b(?:generate|create|make|render|produce|animate)\b[\s\S]*\b(?:video|movie|clip|animation|reel)\b/i.test(prompt)
+    || /\b(?:video|movie|clip|animation|reel|image[-_\s]?to[-_\s]?video|img2vid|txt2vid)\b[\s\S]*\b(?:generate|create|make|render|produce|animate)\b/i.test(prompt);
 }
 
 export function shouldStartImageGenerationCard(prompt: string, label: string, detail?: string) {
@@ -95,6 +105,8 @@ export function shouldRenderImageGenerationCard(card: any) {
   if (card.error) return true;
   const status = String(card.status ?? "").trim().toLowerCase();
   if (status === "ready" || status === "failed" || status === "error") return true;
+  if (card.kind === "video") return promptWantsVideoGeneration(String(card.prompt ?? ""));
+  if (card.kind && card.kind !== "image") return true;
   return promptWantsImageGeneration(String(card.prompt ?? ""));
 }
 
@@ -112,9 +124,13 @@ export function buildActiveImageGenerationCard(input: {
   patch?: Record<string, unknown>;
 }) {
   const patch = input.patch ?? {};
+  const patchKind = (patch as { kind?: unknown }).kind;
+  const generationKind = patchKind === "image" || patchKind === "music" || patchKind === "tts" || patchKind === "model3d" || patchKind === "video"
+    ? patchKind
+    : input.current?.kind ?? "image";
   const current = input.current ?? {
     id: `agent-image-gen-${input.taskId}`,
-    kind: "image",
+    kind: generationKind,
     prompt: input.prompt || input.outgoingLabel,
     status: "running",
     title: "Image generation",
@@ -129,7 +145,7 @@ export function buildActiveImageGenerationCard(input: {
   return {
     ...current,
     ...patch,
-    kind: "image",
+    kind: generationKind,
     prompt: String((patch as { prompt?: unknown }).prompt ?? current.prompt ?? input.prompt ?? input.outgoingLabel),
   };
 }

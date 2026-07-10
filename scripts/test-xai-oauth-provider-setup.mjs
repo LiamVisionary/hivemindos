@@ -15,7 +15,10 @@ const runtimeIntegrations = read("src/lib/services/runtime-integrations.ts");
 const telemetryCollector = read("scripts/agent-telemetry-collector.mjs");
 const providerCatalog = read("src/lib/config/provider-catalog.ts");
 const xaiOAuthService = read("src/lib/services/xai-oauth.ts");
+const xaiOAuthTokenStore = read("src/lib/services/xai-oauth-token-store.ts");
+const xaiOAuthBroker = read("scripts/xai-oauth-token-broker");
 const xaiOAuthRoute = read("src/app/api/xai-oauth/route.ts");
+const tauriBuild = read("scripts/tauri-build.mjs");
 
 assert.match(providerView, /export type ProviderCredentialMode = "api-key" \| "oauth"/, "provider view-model should own the API-key/OAuth mode type");
 assert.match(providerView, /XAI_PROVIDER_SLUG = "xai"/, "provider view-model should define the xAI API-key runtime slug");
@@ -47,6 +50,8 @@ assert.match(setupStyles, /\.oauthCodePanel\b/, "honey setup styles should inclu
 assert.match(modal, /modelProviderSelection\(rawSelectedProviderSlug\)/, "Agent settings should derive selected display provider and credential mode from the provider view-model");
 assert.match(modal, /providerSupportsCredentialMode\(selectedProviderSlug, "oauth"\)/, "Grok provider setup should enable OAuth through the provider view-model");
 assert.match(modal, /fetch\("\/api\/xai-oauth"/, "Grok OAuth button should start the app-owned xAI OAuth flow");
+assert.match(modal, /JSON\.stringify\(\{ action: "start" \}\)/, "starting native xAI OAuth should not require a Hermes home");
+assert.match(modal, /JSON\.stringify\(\{ action: "submit-code", code \}\)/, "finishing native xAI OAuth should not write through Hermes");
 assert.match(modal, /oauthStatusEndpoint=\{selectedSupportsXaiOAuth \? xaiOAuthStatusEndpoint\(\)/, "Grok setup should check existing Hermes xAI OAuth status");
 assert.match(modal, /action: "submit-code"/, "Grok setup should submit xAI's fallback browser code through the app-owned OAuth route");
 assert.doesNotMatch(modal, /rawSelectedProviderSlug === "xai-oauth" \? "xai"/, "Agent settings should not hard-code xai-oauth display aliasing outside the provider view-model");
@@ -66,9 +71,11 @@ assert.match(modal, /const selectedDelta = \(a\.slug === selectedProviderSlug \?
 assert.match(modal, /oauthLabel=\{selectedSupportsXaiOAuth \? "xAI OAuth"/, "Grok missing-key card should label the OAuth action clearly");
 assert.match(modal, /onOAuthConnected=\{selectedSupportsXaiOAuth \? applyXaiOAuthProviderSelection/, "Grok OAuth completion should switch the selected provider");
 assert.match(modal, /selectXaiCredentialMode\("oauth"\)/, "Grok OAuth completion should select the xai-oauth runtime provider");
+assert.match(modal, /data\?\.usable/, "Agent settings should show OAuth as signed in only when the access credential is usable");
 
 assert.match(runtimeIntegrations, /action === "xai-login"/, "Hermes runtime integrations should keep the xAI login action");
 assert.match(runtimeIntegrations, /startXaiOAuthLogin/, "Hermes runtime integration action should delegate to the app-owned xAI OAuth service");
+assert.doesNotMatch(runtimeIntegrations, /startXaiOAuthLogin\(\{[\s\S]{0,120}HERMES_HOME/, "runtime-triggered login should still create a native HivemindOS OAuth session");
 assert.doesNotMatch(runtimeIntegrations, /Started Hermes xAI OAuth login in a separate process/, "xAI OAuth should not report a hidden subprocess login");
 assert.doesNotMatch(telemetryCollector, /\["login", "--provider", "xai-oauth"\]/, "collector xAI login should not shell out to Hermes OAuth");
 assert.match(telemetryCollector, /dashboard OAuth flow/, "collector xAI login should point users to the dashboard OAuth flow");
@@ -79,12 +86,25 @@ assert.doesNotMatch(settingsController, /providersBySlug\.delete\("xai-oauth"\)/
 assert.match(xaiOAuthRoute, /startXaiOAuthLogin/, "xAI OAuth API route should start the app-owned flow");
 assert.match(xaiOAuthRoute, /submitXaiOAuthCode/, "xAI OAuth API route should accept xAI's fallback browser code");
 assert.match(xaiOAuthRoute, /syncFromHermes: request\.nextUrl\.searchParams\.get\("sync"\) === "1"/, "xAI OAuth status should explicitly sync existing Hermes OAuth when requested");
+assert.match(xaiOAuthRoute, /validateAccess: true/, "dashboard OAuth status should validate or refresh the credential before reporting readiness");
 assert.match(xaiOAuthRoute, /statusEndpoint: "\/api\/xai-oauth"/, "xAI OAuth route should return a pollable status endpoint");
 assert.match(xaiOAuthService, /XAI_OAUTH_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"/, "xAI OAuth service should use the Hermes-compatible public client id");
-assert.match(xaiOAuthService, /writeSharedHiveEnvValues\(hiveEnvValuesFromTokens/, "xAI OAuth tokens should be saved to the shared hive env");
-assert.match(xaiOAuthService, /providers\["xai-oauth"\] = state/, "xAI OAuth tokens should be propagated to Hermes auth stores");
-assert.match(xaiOAuthService, /providers\["xai-oauth"\][\s\S]*refresh_token/, "xAI OAuth status should recognize existing Hermes OAuth tokens");
+assert.match(xaiOAuthService, /storeXaiOAuthTokens/, "xAI OAuth login should save through the canonical local token store");
+assert.match(xaiOAuthService, /removeSharedHiveEnvValues\(LEGACY_SHARED_ENV_KEYS\)/, "xAI OAuth should retire fleet-synced legacy token copies");
+assert.doesNotMatch(xaiOAuthService, /writeSharedHiveEnvValues/, "rotating xAI refresh tokens must not be written to the shared hive env");
+assert.doesNotMatch(xaiOAuthService, /grant_type:\s*"refresh_token"/, "HivemindOS must not refresh outside the lock-compatible broker");
+assert.match(xaiOAuthTokenStore, /resolveXaiOAuthTokenStoreAccess/, "app inference should resolve access through the token broker");
+assert.match(xaiOAuthTokenStore, /"\.hivemindos", "oauth", "xai\.json"/, "HivemindOS OAuth should default to its own local store without Hermes");
+assert.match(xaiOAuthTokenStore, /selectedXaiOAuthAuthority/, "one non-secret authority selector should choose the active native or Hermes store");
+assert.match(xaiOAuthService, /selectExistingHermesOAuth/, "an existing Hermes login should be referenced in place when selected");
+assert.doesNotMatch(xaiOAuthService, /storeXaiOAuthTokens\([\s\S]{0,300}existing\.tokens/, "Hermes refresh tokens must not be copied into the HivemindOS store");
+assert.match(xaiOAuthBroker, /auth_path\(\)\.with_suffix\("\.lock"\)/, "the broker should derive xai.lock natively and auth.lock for an explicit Hermes store");
+assert.match(xaiOAuthBroker, /fcntl\.flock/, "the broker should participate in Hermes' cross-process file lock");
+assert.match(xaiOAuthBroker, /store\["providers"\]\["xai-oauth"\]/, "the native broker should keep a Hermes-compatible xAI provider envelope");
+assert.match(tauriBuild, /embeddedRuntimeScripts = \["hive-env-add", "xai-oauth-token-broker"\]/, "packaged Tauri builds should include the OAuth broker beside the embedded Next server");
+assert.match(tauriBuild, /pruneNativeOnlyResources\(\);[\s\S]*copyEmbeddedRuntimeScripts\(\);/, "runtime scripts should be staged after generic script pruning");
 assert.match(xaiOAuthService, /submitXaiOAuthCode[\s\S]*exchangeCodeForTokens/, "xAI OAuth service should exchange pasted xAI browser codes with the active PKCE verifier");
+assert.match(xaiOAuthService, /needsReconnect/, "xAI OAuth status should distinguish stale credential presence from usable access");
 assert.match(providerCatalog, /xai-oauth, copilot, openai-codex[\s\S]*dedicated OAuth\/runtime setup paths/, "provider catalog should keep OAuth providers out of API-key-only rows");
 
 console.log("xAI OAuth provider setup checks passed");

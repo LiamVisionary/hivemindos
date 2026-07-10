@@ -353,6 +353,19 @@ export function agentSuppressionKeys(agent: AgentProfile) {
   ].filter(Boolean);
 }
 
+const RESERVED_HERMES_PROFILE_SLUGS = new Set([
+  "default",
+  "hermes",
+  "runtime-capability-probe",
+]);
+
+function isReservedHermesProfile(agent: AgentProfile) {
+  if (agent.runtime !== "hermes") return false;
+  const dataDir = normalizeAgentPath(agent.localDataDir);
+  const profileSlug = /(?:^|\/)profiles\/([^/]+)$/.exec(dataDir)?.[1] ?? "";
+  return RESERVED_HERMES_PROFILE_SLUGS.has(profileSlug);
+}
+
 function isRemoteCollectorKey(key: string) {
   if (!key) return false;
   if (key.includes("/peer/")) return true;
@@ -374,6 +387,7 @@ export function agentMatchesSuppression(
   if (suppressedKeys.has(workspaceKey)) return true;
   const idKey = agent.id ? `id:${agent.id}` : "";
   if (!idKey || !suppressedKeys.has(idKey)) return false;
+  if (isReservedHermesProfile(agent)) return true;
   return !isRemoteCollectorKey(collectorKey(agent.telemetryUrl));
 }
 
@@ -421,9 +435,10 @@ export function filterSuppressedAgents<T extends AgentProfile>(
   agents: T[],
   suppressedKeys: ReadonlySet<string>,
 ) {
-  if (suppressedKeys.size === 0) return agents;
   return agents.filter(
-    (agent) => !agentMatchesSuppression(agent, suppressedKeys),
+    (agent) =>
+      !isReservedHermesProfile(agent) &&
+      !agentMatchesSuppression(agent, suppressedKeys),
   );
 }
 

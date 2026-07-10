@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-10T13:02:50.217337+00:00",
+  "request": "Create one-click HivemindOS managed cloud agents end to end, test lifecycle, and pay using AdaptiveAgent's wallet.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/hivemindos-model-credit-vault.ts",
+      "target_path": "src/lib/services/managed-cloud-agent-token-vault.ts",
+      "reuse_type": "adapted_code",
+      "note": "AES-GCM account-token vault with atomic mode-0600 storage"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/wallet/governed-send.ts",
+      "target_path": "src/lib/services/managed-cloud-agents.ts",
+      "reuse_type": "adapted_code",
+      "note": "governed stablecoin payment and unified spend-ledger enforcement"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/app/api/hivemindos/models/credits/route.ts",
+      "target_path": "src/app/api/managed-cloud-agents/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "authenticated hosted-credit top-up boundary and local wallet validation flow"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/views/zero-human-companies/primitives.tsx",
+      "target_path": "src/features/dashboard/views/ManagedCloudAgentsPanel.tsx",
+      "reuse_type": "style_adapted",
+      "note": "canonical animated loading primitives and dashboard pending-state behavior"
+    }
+  ]
+}

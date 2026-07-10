@@ -114,6 +114,20 @@ export async function fetchHivemindFastContext(
   });
 }
 
+export async function fetchXAccountRead(input: Record<string, unknown>) {
+  const data = await postJsonWithTimeout<{ ok?: unknown; result?: unknown; error?: unknown }>(
+    "/api/queen-bee/voice",
+    { action: "read-x-account", ...input },
+    8_000,
+  );
+  if (data.ok === false) {
+    throw new Error(typeof data.error === "string" ? data.error : "X account read failed.");
+  }
+  return typeof data.result === "string"
+    ? data.result
+    : "The connected X account returned no readable result.";
+}
+
 async function postJsonWithTimeout<T>(
   url: string,
   body: Record<string, unknown>,

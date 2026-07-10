@@ -9,7 +9,6 @@ import type { MemoryTelemetryPayload } from "@/lib/types/memory-telemetry";
 import type { AgentEnvCardProps, EnvValueRowProps } from "@/features/env/env-components";
 import type { MorePanelProps } from "@/features/dashboard/MorePanel";
 import type { NotificationGroup, NotificationsPanelProps } from "@/features/notifications/NotificationsPanel";
-import { MemoryTelemetryPanel } from "@/features/dashboard/views/MemoryTelemetryPanel";
 import { AgentNativeInsightsPanel } from "@/features/dashboard/views/AgentNativeInsightsPanel";
 import { MyAppsPanel } from "@/features/dashboard/views/MyAppsPanel";
 import { AgentToolsPanel } from "@/features/dashboard/views/AgentToolsPanel";
@@ -46,6 +45,19 @@ type IconComponent = ElementType<{
   "aria-hidden"?: boolean | "true" | "false";
   className?: string;
 }>;
+
+function describeRuntimeFileRoot(root: RuntimeFileRoot): string {
+  if (root.key.startsWith("agent-")) return "This agent's runtime home — sessions and local data.";
+  switch (root.key) {
+    case "hivemindos": return "The HivemindOS app's own source tree.";
+    case "hivemindos-state": return "Dashboard state, leases, and local config.";
+    case "shared-vault": return "The shared Obsidian brain — notes, memory, and skills.";
+    case "hermes": return "Where the Hermes runtime stores sessions and config.";
+    case "openclaw": return "OpenClaw agent homes.";
+    case "aeon": return "Where the Aeon runtime stores its data.";
+    default: return "Allowlisted runtime folder.";
+  }
+}
 
 
 type UtilityPanelsProps = {
@@ -93,7 +105,6 @@ type UtilityPanelsProps = {
   markAllNotificationsRead: () => void | Promise<void>;
   markNotificationRead: (id: string) => void | Promise<void>;
   memoryTelemetry: MemoryTelemetryPayload | null | undefined;
-  memoryTelemetryLoading: boolean;
   notificationCursor: string | number | null;
   notificationGroups: NotificationGroup[];
   notificationSummary: AgentNotificationSummary | null;
@@ -172,7 +183,7 @@ type UtilityPanelsProps = {
 };
 
 export function UtilityPanels(props: UtilityPanelsProps) {
-  const { AgentEnvCard, Activity, Button, Check, ChevronLeft, Download, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, memoryTelemetryLoading, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, onOpenNotification, onNavigateTarget, schedules, openRuntimeFile, pinnedUtilities, togglePinnedUtility, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, searchAllRuntimeSessions, selectedRuntimeEnvSource, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSessionSearchQuery, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, startAgentChat, syncSharedEnvMachines, toggleEnvValue, updateNotificationSettings, vaultClass, vaultPanelMode } = props;
+  const { AgentEnvCard, Activity, Button, Check, ChevronLeft, Download, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, onOpenNotification, onNavigateTarget, schedules, openRuntimeFile, pinnedUtilities, togglePinnedUtility, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, searchAllRuntimeSessions, selectedRuntimeEnvSource, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSessionSearchQuery, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, startAgentChat, syncSharedEnvMachines, toggleEnvValue, updateNotificationSettings, vaultClass, vaultPanelMode } = props;
   const portalTarget = typeof document === "undefined" ? null : document.body;
   const aeonAgent = useMemo(() => displayAgents.find((agent) => agent.runtime === "aeon") ?? null, [displayAgents]);
   const agentEnvOverlayAgents = useMemo(
@@ -632,107 +643,184 @@ export function UtilityPanels(props: UtilityPanelsProps) {
       <section className={fleetClass("taskPanel", "tabPanel")}>
         <div className={fleetClass("taskPanelHeader")}>
           <div>
-            <p className="eyebrow">Brain files</p>
-            <h2>Scoped files</h2>
-            <p>Browse allowlisted runtime roots, shared brain files, and HivemindOS state without exposing the whole filesystem.</p>
+            <p className="eyebrow">Scoped file browser</p>
+            <h2>Agent files</h2>
+            <p>Browse and edit the folders your agents run on — their runtime homes, the shared brain, and HivemindOS state — without exposing the rest of your disk.</p>
           </div>
           <Button type="button" size="sm" variant="secondary" onClick={() => void refreshRuntimeFileRoots()}>
             <RefreshCcw aria-hidden="true" />
             Refresh
           </Button>
         </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="grid content-start gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-3">
-            <label className="grid gap-1 text-xs text-[var(--muted)]">
-              Root
-              <select
-                value={runtimeFileRootKey}
-                onChange={(event) => {
-                  setRuntimeFileRootKey(event.target.value);
-                  setRuntimeFilePath("");
-                  setRuntimeFileOpen(null);
-                  void listRuntimeFiles(event.target.value, "");
-                }}
-                className="rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] px-2 py-2 text-[var(--foreground)]"
-              >
-                {runtimeFileRoots.map((root) => <option value={root.key} key={root.key}>{root.label}</option>)}
-              </select>
-            </label>
-            <div className="grid gap-2">
+        <div className="mt-4 flex items-start gap-2 rounded-md border border-[var(--line)] bg-[var(--surface-soft)] px-3 py-2">
+          <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]" />
+          <p className="m-0 text-xs text-[var(--muted)]">These roots are the only folders reachable here — each runtime&apos;s home, the shared brain, and HivemindOS state. Read-only roots can be viewed but not saved; nothing outside them is exposed.</p>
+        </div>
+        {(() => {
+          const selectedRoot = runtimeFileRoots.find((root) => root.key === runtimeFileRootKey);
+          const pathSegments = runtimeFilePath ? runtimeFilePath.split("/").filter(Boolean) : [];
+          const busy = runtimeFileStatus.endsWith("...");
+          return (
+        <div className="mt-4 grid gap-4 lg:grid-cols-[264px_minmax(0,1fr)]">
+          <aside className="grid min-w-0 content-start gap-2">
+            <p className="m-0 text-[11px] font-medium uppercase tracking-wide text-[var(--muted)]">Roots</p>
+            <div className="grid gap-2 lg:max-h-[560px] lg:overflow-y-auto lg:pr-1">
+              {runtimeFileRoots.map((root) => {
+                const selected = root.key === runtimeFileRootKey;
+                return (
+                  <button
+                    type="button"
+                    key={root.key}
+                    aria-pressed={selected}
+                    onClick={() => {
+                      setRuntimeFileRootKey(root.key);
+                      setRuntimeFilePath("");
+                      setRuntimeFileOpen(null);
+                      void listRuntimeFiles(root.key, "");
+                    }}
+                    className={`grid gap-1.5 rounded-md border p-3 text-left transition-colors ${selected ? "border-[var(--accent)] bg-[var(--button-accent)]" : "border-[var(--line)] bg-[var(--surface-soft)] hover:border-[var(--accent-strong)]"}`}
+                  >
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <FolderOpen aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--accent)]" />
+                      <strong className="min-w-0 break-words text-sm text-[var(--foreground)]">{root.label}</strong>
+                      {root.writable ? (
+                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] font-medium text-[var(--success)]">
+                          <Pencil aria-hidden="true" className="h-3 w-3" />
+                          Editable
+                        </span>
+                      ) : (
+                        <span className="ml-auto inline-flex shrink-0 items-center rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] font-medium text-[var(--muted)]">Read-only</span>
+                      )}
+                    </span>
+                    <span className="block text-xs text-[var(--muted)]">{describeRuntimeFileRoot(root)}</span>
+                    <span className="block break-all font-mono text-[11px] text-[var(--muted)]">{root.path}</span>
+                  </button>
+                );
+              })}
+              {runtimeFileRoots.length ? null : <p className="m-0 text-xs text-[var(--muted)]">No roots loaded yet. Refresh to load them.</p>}
+            </div>
+          </aside>
+          <div className="grid content-start gap-3">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
               {runtimeFilePath ? (
-                <Button type="button" size="sm" variant="secondary" onClick={() => {
-                  const parent = runtimeFilePath.split("/").slice(0, -1).join("/");
-                  void listRuntimeFiles(runtimeFileRootKey, parent);
-                  setRuntimeFileOpen(null);
-                }}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const parent = runtimeFilePath.split("/").slice(0, -1).join("/");
+                    setRuntimeFileOpen(null);
+                    void listRuntimeFiles(runtimeFileRootKey, parent);
+                  }}
+                >
                   <ChevronLeft aria-hidden="true" />
                   Parent
                 </Button>
               ) : null}
-              <small className="break-words text-[var(--muted)]">
-                {runtimeFileRoots.find((root) => root.key === runtimeFileRootKey)?.path ?? "No root selected"}
-              </small>
-            </div>
-            {runtimeFileStatus ? <p className="m-0 text-xs text-[var(--muted)]">{runtimeFileStatus}</p> : null}
-          </aside>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
-            <div className="max-h-[620px] overflow-auto rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)]">
-              {runtimeFiles.map((file) => (
-                <button
-                  type="button"
-                  key={file.relativePath}
-                  onClick={() => void openRuntimeFile(file)}
-                  className="flex w-full items-start gap-2 border-b border-[rgba(148,163,184,0.08)] px-3 py-2 text-left text-xs hover:bg-[rgba(45,212,191,0.08)]"
-                >
-                  {file.type === "dir" ? <FolderOpen aria-hidden="true" className="mt-0.5 h-4 w-4 text-[var(--accent)]" /> : <FileText aria-hidden="true" className="mt-0.5 h-4 w-4 text-[var(--muted)]" />}
-                  <span className="min-w-0">
-                    <strong className="block break-words text-[var(--foreground)]">{file.name}</strong>
-                    <small className="break-words text-[var(--muted)]">{file.type}{file.size ? ` · ${Math.round(file.size / 1024)} KB` : ""}</small>
+              <button
+                type="button"
+                className="rounded px-1 py-0.5 text-[var(--muted)] transition-colors hover:text-[var(--foreground)]"
+                onClick={() => {
+                  setRuntimeFileOpen(null);
+                  void listRuntimeFiles(runtimeFileRootKey, "");
+                }}
+              >
+                {selectedRoot?.label ?? "Root"}
+              </button>
+              {pathSegments.map((segment, index) => {
+                const target = pathSegments.slice(0, index + 1).join("/");
+                const isLast = index === pathSegments.length - 1;
+                return (
+                  <span key={target} className="flex items-center gap-1.5">
+                    <span aria-hidden="true" className="text-[var(--muted)]">/</span>
+                    {isLast ? (
+                      <span className="font-medium text-[var(--foreground)]">{segment}</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="rounded px-1 py-0.5 text-[var(--muted)] transition-colors hover:text-[var(--foreground)]"
+                        onClick={() => {
+                          setRuntimeFileOpen(null);
+                          void listRuntimeFiles(runtimeFileRootKey, target);
+                        }}
+                      >
+                        {segment}
+                      </button>
+                    )}
                   </span>
-                </button>
-              ))}
-              {runtimeFiles.length ? null : <p className="m-0 p-4 text-sm text-[var(--muted)]">No files loaded.</p>}
+                );
+              })}
             </div>
-            <section className="grid min-h-[460px] grid-rows-[auto_1fr_auto] gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-3">
-              <div>
-                <strong>{runtimeFileOpen?.name ?? "No file selected"}</strong>
-                <p className="m-0 mt-1 break-words text-xs text-[var(--muted)]">{runtimeFileOpen?.relativePath ?? "Choose a text file to preview or edit."}</p>
+            {runtimeFileStatus ? (
+              <p role="status" className={`m-0 flex items-center gap-1.5 text-xs ${busy ? "text-[var(--muted)]" : runtimeFileStatus === "Saved." ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
+                {busy ? <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" /> : null}
+                {runtimeFileStatus}
+              </p>
+            ) : null}
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+              <div className="max-h-[560px] overflow-auto rounded-md border border-[var(--line)] bg-[var(--surface-soft)]">
+                {runtimeFiles.map((file) => {
+                  const active = runtimeFileOpen?.relativePath === file.relativePath;
+                  return (
+                    <button
+                      type="button"
+                      key={file.relativePath}
+                      onClick={() => void openRuntimeFile(file)}
+                      className={`flex w-full items-start gap-2 border-b border-[var(--line)] px-3 py-2 text-left text-xs transition-colors last:border-b-0 ${active ? "bg-[var(--button-accent)]" : "hover:bg-[var(--button-accent)]"}`}
+                    >
+                      {file.type === "dir" ? <FolderOpen aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent)]" /> : <FileText aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted)]" />}
+                      <span className="min-w-0 flex-1">
+                        <strong className="block break-words text-[var(--foreground)]">{file.name}</strong>
+                        <small className="text-[var(--muted)]">{file.type === "dir" ? "Folder" : file.size ? `${Math.max(1, Math.round(file.size / 1024))} KB` : "File"}{file.updatedAt ? ` · ${formatRelativeTime(file.updatedAt)}` : ""}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+                {runtimeFiles.length ? null : <p className="m-0 p-4 text-sm text-[var(--muted)]">{runtimeFileRootKey ? "This folder is empty." : "Pick a root on the left to start browsing."}</p>}
               </div>
-              <textarea
-                value={runtimeFileDraft}
-                onChange={(event) => setRuntimeFileDraft(event.target.value)}
-                disabled={!runtimeFileOpen}
-                className="min-h-[360px] resize-none rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.65)] p-3 font-mono text-xs text-[var(--foreground)]"
-              />
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" size="sm" variant="secondary" disabled={!runtimeFileOpen} onClick={() => setRuntimeFileDraft(runtimeFileOpen?.content ?? "")}>
-                  <RotateCcw aria-hidden="true" />
-                  Reset
-                </Button>
-                <Button type="button" size="sm" disabled={!runtimeFileOpen || !runtimeFileRoots.find((root) => root.key === runtimeFileRootKey)?.writable} onClick={() => void saveRuntimeFile()}>
-                  <Check aria-hidden="true" />
-                  Save
-                </Button>
-              </div>
-            </section>
+              <section className="grid min-h-[440px] grid-rows-[auto_1fr_auto] gap-3 rounded-md border border-[var(--line)] bg-[var(--surface-soft)] p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <FileText aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+                  <strong className="text-[var(--foreground)]">{runtimeFileOpen?.name ?? "No file selected"}</strong>
+                  {runtimeFileOpen ? (selectedRoot?.writable ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] font-medium text-[var(--success)]">
+                      <Pencil aria-hidden="true" className="h-3 w-3" />
+                      Editable
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] font-medium text-[var(--muted)]">Read-only</span>
+                  )) : null}
+                  <span className="w-full break-words text-xs text-[var(--muted)]">{runtimeFileOpen?.relativePath ?? "Choose a file on the left to preview or edit it here."}</span>
+                </div>
+                <textarea
+                  value={runtimeFileDraft}
+                  onChange={(event) => setRuntimeFileDraft(event.target.value)}
+                  disabled={!runtimeFileOpen}
+                  readOnly={!selectedRoot?.writable}
+                  aria-label="File contents"
+                  className="min-h-[340px] resize-none rounded-md border border-[var(--line)] bg-[var(--surface-strong)] p-3 font-mono text-xs text-[var(--foreground)] disabled:opacity-60"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-[var(--muted)]">Text files up to 500 KB · saved with owner-only (0600) permissions.</span>
+                  <span className="flex flex-wrap justify-end gap-2">
+                    <Button type="button" size="sm" variant="secondary" disabled={!runtimeFileOpen} onClick={() => setRuntimeFileDraft(runtimeFileOpen?.content ?? "")}>
+                      <RotateCcw aria-hidden="true" />
+                      Reset
+                    </Button>
+                    <Button type="button" size="sm" disabled={!runtimeFileOpen || !selectedRoot?.writable} onClick={() => void saveRuntimeFile()}>
+                      <Check aria-hidden="true" />
+                      Save
+                    </Button>
+                  </span>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
+          );
+        })()}
       </section>
       ) : null}
-
-      <MemoryTelemetryPanel
-        Activity={Activity}
-        Button={Button}
-        LoaderCircle={LoaderCircle}
-        RefreshCcw={RefreshCcw}
-        active={activeView === "memory"}
-        fleetClass={fleetClass}
-        formatRelativeTime={formatRelativeTime}
-        memoryTelemetry={memoryTelemetry}
-        memoryTelemetryLoading={memoryTelemetryLoading}
-        refreshMemoryTelemetry={refreshMemoryTelemetry}
-        vaultClass={vaultClass}
-      />
 
       <AgentNativeInsightsPanel
         Button={Button}
