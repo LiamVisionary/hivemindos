@@ -20,18 +20,34 @@ Open **More → Cloud Agents** to deploy and operate them.
 - automatic compute shutdown when managed credit runs out
 - one-click funding from an eligible governed Base wallet
 - start, stop, health, and permanent-delete controls
+- optional Tailnet enrollment that survives compute replacement
+- optional Shared Brain pairing with an authorized Syncthing peer
+- cloud-hosted remote MCP connections that remain available while personal machines are off
 
 The initial deployment usually takes a few minutes while the pinned runtime
 image is installed. Starting a stopped agent recreates compute around the same
 workspace and may take a similar amount of time.
+
+## App Builder Projects
+
+An existing running Managed Cloud Agent can own app projects in its retained
+workspace. HivemindOS uses the same project contract and reviewed starter for
+local and managed building, while the managed service remains authoritative for
+account and agent ownership.
+
+The initial managed App Builder slice creates, lists, and reads stopped project
+workspaces. App execution and public previews are not enabled until the managed
+container lifecycle and resource-limit checks are complete. Users who do not
+need always-on cloud execution can build and preview through a local or fleet
+machine without managed credits.
 
 ## Plans
 
 | Plan | Compute | Persistent storage | Running | Stopped | Setup |
 | --- | --- | --- | --- | --- | --- |
 | Small | 2 vCPU · 4 GB RAM | 10 GB | $0.020/hour | $0.0025/hour | $0.050 |
-| Medium | 2 vCPU · 4 GB RAM | 20 GB | $0.045/hour | $0.0050/hour | $0.075 |
-| Large | 4 vCPU · 8 GB RAM | 40 GB | $0.090/hour | $0.0100/hour | $0.100 |
+| Medium | 2 vCPU · 4 GB RAM | 20 GB | $0.060/hour | $0.0050/hour | $0.075 |
+| Large | 4 vCPU · 8 GB RAM | 40 GB | $0.110/hour | $0.0100/hour | $0.100 |
 
 Model and tool use is billed separately from compute and storage. Current
 prices are always loaded from the managed service; rebuilding or editing the
@@ -61,7 +77,8 @@ runtime credentials are not shipped in the app.
 ## Stop, Start, And Persistence
 
 **Stop** deletes the compute instance while retaining the persistent workspace,
-stable address, and firewall. The account moves to the lower stopped rate.
+stable address, firewall, Tailnet state, and cloud copy of the Shared Brain. The
+account moves to the lower stopped rate.
 
 **Start** creates fresh compute, attaches the same workspace, and starts Hermes
 again. Files, runtime configuration, and Hermes state stored in the managed
@@ -78,16 +95,23 @@ running:
 | Capability | While personal machines are off |
 | --- | --- |
 | Managed inference and files in the cloud workspace | Available |
-| A cloud API or cloud-hosted MCP promoted into managed secret storage | Available after it is connected in the managed environment |
-| Shared Brain content replicated into the managed workspace | Available after managed sync is enabled |
+| A cloud-hosted HTTPS MCP promoted into managed secret storage | Available after it is connected to that agent |
+| Shared Brain content replicated into the managed workspace | Available from the cloud copy; changes sync again when an authorized peer reconnects |
+| The cloud agent's own Tailnet identity | Available; it is retained on persistent storage across compute replacement |
 | A Tailnet app or MCP running on another always-on machine | Available while that source machine and its private bridge are online |
 | A local MCP, filesystem, browser session, or app on an offline Mac | Unavailable |
 
-The beta does **not** silently copy existing OAuth tokens, MCP configuration,
-Shared Brain contents, or Tailnet access from a laptop into the cloud. Those are
-separate trust decisions. A future promotion flow can move cloud-safe
-connections into hosted custody, while machine-bound capabilities remain
-clearly tied to the machine that owns them.
+HivemindOS does **not** silently copy existing OAuth tokens, MCP configuration,
+Shared Brain contents, or Tailnet access from a laptop into the cloud. Those remain
+separate trust decisions. In Cloud Agents, you can explicitly connect a reusable or
+ephemeral Tailscale credential, pair the Shared Brain with the local Syncthing peer,
+or add an HTTPS remote MCP. Hosted integration secrets are encrypted by the managed
+service. The bootstrap credential and Tailscale enrollment credential are cleared
+after use; only the resulting Tailnet identity remains on the agent's retained Volume.
+
+Machine-bound capabilities stay tied to the machine that owns them. Connecting the
+cloud agent to your Tailnet lets it reach an online machine; it does not make an
+offline Mac's filesystem, browser, or local MCP process continue running.
 
 This distinction prevents a cloud agent from pretending it can use an offline
 Mac and prevents local secrets from being uploaded without an explicit setup
@@ -100,4 +124,3 @@ managed credits. The public app contains the client, UI, wallet-policy checks,
 and self-hosted-compatible contract. Official balances, payment settlement,
 prices, metering, resource ownership, provider secrets, and cloud entitlements
 are enforced by HivemindOS-managed infrastructure.
-

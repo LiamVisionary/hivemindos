@@ -5,13 +5,14 @@
  * what transport they use" lives in ONE place instead of scattered conditionals.
  *
  * Honesty rules baked into this table (verified against the code + the real
- * provider APIs, 2026-07-06):
- *  - OAuth ("sign in with your subscription") is real for OpenAI voice auth
- *    (src/lib/services/openai-oauth.ts). xAI/Grok also has a model/runtime OAuth
- *    setup path (src/lib/services/xai-oauth.ts), but Grok has no realtime voice
- *    transport here, so this voice transport matrix does not present it as a
- *    voice OAuth provider. The repo's Google OAuth is Drive/Gmail/GA4 integration
- *    scope, not Gemini LLM auth.
+ * provider APIs, 2026-07-11):
+ *  - ChatGPT/Codex OAuth is available to an OpenAI pipeline chat brain, but it
+ *    does not include OpenAI Platform voice. Public OpenAI TTS and Realtime
+ *    voice require Platform API-key billing; the UI keeps those boundaries
+ *    explicit instead of silently crossing from OAuth to an API key. xAI/Grok
+ *    also has a model/runtime OAuth setup path, but no realtime voice transport.
+ *    The repo's Google OAuth is Drive/Gmail/GA4 integration scope, not Gemini
+ *    LLM auth.
  *  - Realtime speech-to-speech ("realtime hybrid") is real for OpenAI (Realtime
  *    API) and Gemini (Gemini Live API). Grok has no public realtime voice API;
  *    ElevenLabs and Cartesia are TTS engines. So Grok is a chat BRAIN only, and
@@ -64,7 +65,10 @@ export type VoiceProviderCapability = {
   /** Shared hive-env var(s) that hold this provider's API key; [0] is the save target. */
   apiKeyEnvVars: string[];
   apiKeyPlaceholder: string;
-  /** Real in-repo OAuth sign-in for this voice transport provider. */
+  /** Credentials accepted by this provider's public voice transports. */
+  voiceAuthModes: VoiceProviderAuthMode[];
+  /** OAuth sign-in exposed for a compatible pipeline chat brain. It does not
+   *  imply that the provider's public voice transport accepts subscription OAuth. */
   oauth?: VoiceProviderOAuth;
   /** provider-catalog slug for pipeline chat-brain turns, when usable as a brain. */
   brainProviderSlug?: string;
@@ -104,6 +108,7 @@ export const CALL_VOICE_PROVIDER_MATRIX: VoiceProviderCapability[] = [
     iconMode: "mask",
     apiKeyEnvVars: ["OPENAI_API_KEY", "OPENAI_REALTIME_KEY"],
     apiKeyPlaceholder: "OpenAI API key (sk-…)",
+    voiceAuthModes: ["apikey"],
     oauth: { brainProviderSlug: "openai-oauth", endpoint: "/api/openai-oauth", label: "OpenAI" },
     brainProviderSlug: "openai-api",
     brainSubtitle: "GPT models via API key",
@@ -131,6 +136,7 @@ export const CALL_VOICE_PROVIDER_MATRIX: VoiceProviderCapability[] = [
     // Google key). Kept in sync with GEMINI_KEY_ENV_CANDIDATES server-side.
     apiKeyEnvVars: ["GEMINI_API_KEY", "GOOGLE_AI_STUDIO_API_KEY", "GOOGLE_API_KEY"],
     apiKeyPlaceholder: "Google AI Studio API key",
+    voiceAuthModes: ["apikey"],
     brainProviderSlug: "gemini",
     brainSubtitle: "Gemini models via API key",
     realtime: {
@@ -158,6 +164,7 @@ export const CALL_VOICE_PROVIDER_MATRIX: VoiceProviderCapability[] = [
     // paired with a TTS voice (OpenAI/Gemini/ElevenLabs/Cartesia/local) for audio.
     apiKeyEnvVars: ["XAI_API_KEY"],
     apiKeyPlaceholder: "xAI API key (xai-…)",
+    voiceAuthModes: ["apikey"],
     brainProviderSlug: "xai",
     brainSubtitle: "xAI Grok as the spoken brain",
   },
@@ -167,6 +174,7 @@ export const CALL_VOICE_PROVIDER_MATRIX: VoiceProviderCapability[] = [
     fallback: "EL",
     apiKeyEnvVars: ["ELEVENLABS_API_KEY"],
     apiKeyPlaceholder: "ElevenLabs API key",
+    voiceAuthModes: ["apikey"],
     cloudTts: {
       runtimeId: "elevenlabs-tts",
       status: "preview",
@@ -181,6 +189,7 @@ export const CALL_VOICE_PROVIDER_MATRIX: VoiceProviderCapability[] = [
     fallback: "CA",
     apiKeyEnvVars: ["CARTESIA_API_KEY"],
     apiKeyPlaceholder: "Cartesia API key",
+    voiceAuthModes: ["apikey"],
     cloudTts: {
       runtimeId: "cartesia-tts",
       status: "preview",

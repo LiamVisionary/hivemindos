@@ -36,12 +36,22 @@ const resolved = resolveCompanyApprovalPolicies({
   approvalPolicies: [],
 });
 assert.ok(
-  resolved.some((policy) => policy.id === "customer-email-send" && policy.mode === "off" && policy.source === "default"),
-  "built-in email policy is configurable even before it is active",
+  resolved.some((policy) => policy.id === "customer-email-send" && policy.mode === "ask" && policy.source === "default"),
+  "built-in email policy defaults to ask (safe by default), not off",
 );
 assert.ok(
-  resolved.some((policy) => policy.id === "customer-website-use" && policy.mode === "off" && policy.source === "default"),
-  "built-in website policy is configurable even before it is active",
+  resolved.some((policy) => policy.id === "customer-website-use" && policy.mode === "ask" && policy.source === "default"),
+  "built-in website policy defaults to ask (safe by default), not off",
+);
+// A standard company with no explicit policies has both built-ins ACTIVE by default.
+const defaultActive = activeCompanyApprovalPolicies({ directives: [], approvalPolicies: [] });
+assert.ok(
+  defaultActive.some((policy) => policy.id === "customer-email-send" && policy.mode === "ask"),
+  "customer email send is gated by default with no explicit configuration",
+);
+assert.ok(
+  defaultActive.some((policy) => policy.id === "customer-website-use" && policy.mode === "ask"),
+  "customer website publish is gated by default with no explicit configuration",
 );
 assert.deepEqual(
   resolved.find((policy) => policy.id === learnedVideoId),

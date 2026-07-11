@@ -10,6 +10,8 @@ const {
   applyChatThreadFilters,
   sortChatThreads,
   groupChatThreads,
+  CHAT_HISTORY_PAGE_SIZE,
+  nextChatHistoryVisibleCount,
 } = await import("../src/features/dashboard/views/chat/exchange/chat-thread-actions.ts");
 
 const {
@@ -206,6 +208,17 @@ const {
     "a status filter is a filter change",
   );
   assert.equal(chatViewPreferencesChanged(mixed), true, "mutated prefs report changed");
+}
+
+// ---------------------------------------------------------------------------
+// progressive chat history: starts at five and reveals five more per press
+// ---------------------------------------------------------------------------
+{
+  assert.equal(CHAT_HISTORY_PAGE_SIZE, 5);
+  assert.equal(nextChatHistoryVisibleCount(5, 18), 10);
+  assert.equal(nextChatHistoryVisibleCount(10, 18), 15);
+  assert.equal(nextChatHistoryVisibleCount(15, 18), 18, "the final page is capped at the remaining rows");
+  assert.equal(nextChatHistoryVisibleCount(18, 18), 18, "pressing at the end does not exceed the total");
 }
 
 // ---------------------------------------------------------------------------

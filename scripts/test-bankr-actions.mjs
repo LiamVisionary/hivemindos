@@ -54,10 +54,17 @@ try {
   assert.equal(bankr.classifyBankrActionPrompt("that line is perpendicular to the wall"), null);
   assert.equal(
     bankr.classifyBankrActionPrompt(
+      "You are an expert YouTube Shorts strategist, video production manager, and automation engineer. Create viral Minecraft crafting videos.",
+    ),
+    null,
+    "a non-financial automation role must not hijack the task with Bankr setup",
+  );
+  assert.equal(
+    bankr.classifyBankrActionPrompt(
       "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive)."
-    )?.intent,
-    "automation",
-    "the persona sentence itself still matches - rails must unwrap to the bare utterance BEFORE classifying (see unwrapLatestUserRequest)",
+    ),
+    null,
+    "generic hive automation scaffolding must not be treated as Bankr",
   );
   assert.equal(bankr.classifyBankrActionPrompt("uh nothing much"), null);
 

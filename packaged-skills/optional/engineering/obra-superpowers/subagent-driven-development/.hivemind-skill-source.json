@@ -1,0 +1,20 @@
+{
+  "upstreamName": "subagent-driven-development",
+  "upstreamSlug": "subagent-driven-development",
+  "hiveSlug": "subagent-driven-development",
+  "sourceLabel": "obra-superpowers",
+  "sourceUrl": "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/subagent-driven-development/SKILL.md",
+  "repository": "https://github.com/obra/superpowers",
+  "installCommand": "npx skills add https://github.com/obra/superpowers --skill subagent-driven-development",
+  "importedAt": "2026-07-11T12:24:08.768Z",
+  "refreshedAt": "2026-07-11T12:41:15.452Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/engineering/obra-superpowers/subagent-driven-development",
+  "packageGroup": "engineering",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "Use when an approved implementation plan has independent tasks and the active HivemindOS runtime permits delegated implementer and reviewer roles."
+}

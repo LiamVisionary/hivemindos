@@ -106,7 +106,9 @@ export function classifyBankrActionPrompt(text: string): BankrActionDraft | null
   if (/\b(?:nfts?|collectibles?|opensea)\b/i.test(prompt)) {
     return { intent: "nft", prompt, readOnly: isReadOnlyPrompt(prompt) };
   }
-  if (/\b(?:automations?|dca|twap|limit\s+orders?|stop\s+orders?|stop-loss|recurring)\b/i.test(prompt)) {
+  const bankrSpecificAutomation = /\b(?:dca|twap|limit\s+orders?|stop\s+orders?|stop-loss)\b/i.test(prompt);
+  const namedBankrAutomation = /\b(?:bankr|bnkr)\b/i.test(prompt) && /\b(?:automations?|recurring)\b/i.test(prompt);
+  if (bankrSpecificAutomation || namedBankrAutomation) {
     return { intent: "automation", prompt, readOnly: isReadOnlyPrompt(prompt) };
   }
   if (/\b(?:launch\s+(?:a\s+)?token|deploy\s+(?:a\s+)?token|token\s+launch)\b/i.test(prompt)) {

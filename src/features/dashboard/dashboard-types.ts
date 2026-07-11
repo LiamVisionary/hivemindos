@@ -9,6 +9,7 @@ import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
 import type { ChatApplicationGenerationCard, ChatImageGeneration } from "@/features/dashboard/chat-application-generation";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import type { EvaluationHumanFeedback } from "@/lib/types/evaluation";
 import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
 
 export type GatewayStatus = {
@@ -317,6 +318,7 @@ export type ChatMessage = {
   surface?: "chat" | "kanban" | "scheduler";
   sourceSessionId?: string;
   sourceIndex?: number;
+  feedback?: EvaluationHumanFeedback;
   processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string }>;
   billing?: ChatResponseBilling;
   attachments?: ChatAttachment[];

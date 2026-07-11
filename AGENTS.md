@@ -51,6 +51,7 @@ Apply these rules on any non-trivial task:
 - Official revenue, entitlement, quota, managed credit, marketplace fee, enterprise policy, hosted-agent access, and cloud-resource decisions must be enforced by HivemindOS-controlled infrastructure or by verifiable third-party settlement systems. Local state may cache or display those decisions, but it must not be the authority for official commercial value.
 - Official hosted-service source for HivemindOS-managed commercial authority belongs outside this MIT-licensed public repo, currently in the private `LiamVisionary/hivemind-cloud-services` repo. Do not add official Honey/HIVE ledger, trusted compute gateway, paid-agent gateway, platform-fee policy, Hyperliquid builder-policy, issue-report sink, tip-ledger, enterprise entitlement, marketplace payout, or similar authoritative service source under this repo's `workers/` tree. The public repo should keep only client adapters, self-hosted-compatible interfaces, official endpoint defaults, contract tests, and boundary docs such as `workers/README.md`.
 - Self-hosted commercial flows are allowed, but they must be explicit and separate from official HivemindOS-managed flows. A self-hosted operator may fork or rebuild the app, deploy their own backend/Worker endpoints, and change source or build-time configuration for their own `payTo`, facilitator, provider keys, quotas, terms, Hyperliquid builder address, and similar revenue settings; that must not be presented as official HivemindOS revenue or entitlement.
+- **We build both sides.** This project's founder owns both this MIT repo and the private hosted infrastructure, so hosted-service work (the compute gateway, ledgers, marketplaces, paid rails) is never "out of scope" or "someone else's repo" — it is the same product. When a feature needs gateway or hosted changes, do them in the private repo's local checkout (`../hivemind-cloud-services`, e.g. `workers/compute-gateway/` with its own test suites) in the same working session, keep the client and hosted sides contract-compatible, and verify each side with its own gates. The trust boundary above governs **where code lives**, never **whether the work gets done**.
 
 ## Official Revenue Defaults And Self-Hosted Forks
 
@@ -207,6 +208,14 @@ Agents are senior software engineers in this codebase and must follow these rule
 - If setup starts or registers a service, uninstall must offer to stop and unregister that exact service label/unit.
 - If setup writes a managed block into an agent/runtime file, uninstall must remove only that managed block and preserve surrounding user-authored content.
 - When adding or changing setup behavior, update this mirror surface in the same commit so install and uninstall stay 1:1.
+
+## Typography
+
+- `DESIGN.md` is the machine-readable design contract; `public/design-system/readme.md` and `/design-system` provide the fuller guidance and live specimens.
+- Interactive control labels must use font weight `400–600`, with `500` as the default. Never use `700`, `800`, `900`, `bold`, `extrabold`, or `black` for buttons or action controls.
+- Reserve weights `700+` for genuinely display-oriented headings or large metrics. Emphasize actions through hierarchy, color, placement, and spacing instead of heavy type.
+- Reuse `Button` from `src/design-system/ui/button.tsx` where practical. One-off controls must follow the same typography contract and pass `guard:ui-typography`.
+- Do not add new entries to `scripts/ui-typography-baseline.json`; it is a ratchet for legacy debt, and entries should only be removed as old controls are corrected.
 
 ## UI Text
 

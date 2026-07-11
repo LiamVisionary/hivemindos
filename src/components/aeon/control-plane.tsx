@@ -7,7 +7,14 @@ import { AEON_GATEWAYS, AEON_HARNESSES, AEON_MODELS } from "@/lib/services/runti
 import { LoadingBar, Skeleton, SkeletonText, Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 import { Btn, Card, Pill, SectionHead, StatusRow, aeonStyles as styles } from "./parts";
 
-type ControlResponse = { ok?: boolean; error?: string; controlPlane?: AeonControlPlaneSnapshot; result?: unknown };
+type ControlResponse = { ok?: boolean; error?: string; code?: string; controlPlane?: AeonControlPlaneSnapshot; result?: unknown };
+
+class AeonControlRequestError extends Error {
+  constructor(message: string, readonly code = "") {
+    super(message);
+    this.name = "AeonControlRequestError";
+  }
+}
 
 async function controlRequest(agent: AgentProfile, body: Record<string, unknown>) {
   const response = await fetch("/api/runtimes/aeon/control-plane", {
@@ -16,7 +23,7 @@ async function controlRequest(agent: AgentProfile, body: Record<string, unknown>
     body: JSON.stringify({ ...body, agent }),
   });
   const data = await response.json().catch(() => null) as ControlResponse | null;
-  if (!response.ok || data?.ok === false) throw new Error(data?.error || `AEON request failed with HTTP ${response.status}.`);
+  if (!response.ok || data?.ok === false) throw new AeonControlRequestError(data?.error || `AEON request failed with HTTP ${response.status}.`, data?.code);
   return data ?? {};
 }
 
@@ -62,6 +69,7 @@ export function AeonControlPlane({ agent, onToast, onChanged }: { agent?: AgentP
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState("");
   const [error, setError] = React.useState("");
+  const [errorCode, setErrorCode] = React.useState("");
   const [strategy, setStrategy] = React.useState("");
   const [strategyGoal, setStrategyGoal] = React.useState("");
   const [communityRepo, setCommunityRepo] = React.useState("");
@@ -70,12 +78,14 @@ export function AeonControlPlane({ agent, onToast, onChanged }: { agent?: AgentP
     if (!agent) { setLoading(false); return; }
     setLoading(true);
     setError("");
+    setErrorCode("");
     try {
       const data = await controlRequest(agent, { action: "summary" });
       setSnapshot(data.controlPlane ?? null);
       setStrategy(data.controlPlane?.strategy.content ?? "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load the AEON control plane.");
+      setErrorCode(err instanceof AeonControlRequestError ? err.code : "");
     } finally {
       setLoading(false);
     }
@@ -103,9 +113,56 @@ export function AeonControlPlane({ agent, onToast, onChanged }: { agent?: AgentP
     }
   }, [agent, load, onChanged, onToast]);
 
+  const installV01 = React.useCallback(async () => {
+    if (!agent) return;
+    setBusy("install-v01");
+    setError("");
+    try {
+      const response = await fetch("/api/runtimes/aeon/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "repair-legacy", agent }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; backupPath?: string } | null;
+      if (!response.ok || data?.ok === false) throw new Error(data?.error || `AEON installation failed with HTTP ${response.status}.`);
+      onToast(data?.backupPath
+        ? `Installed AEON v0.1. The legacy workspace is backed up at ${data.backupPath}.`
+        : "AEON v0.1 is installed.");
+      await load();
+      onChanged?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not install AEON v0.1.";
+      setError(message);
+      onToast(message);
+    } finally {
+      setBusy("");
+    }
+  }, [agent, load, onChanged, onToast]);
+
   if (loading) return <ControlPlaneSkeleton />;
   if (!agent) return <Card><p style={{ margin: 0, color: "var(--fg-3)" }}>Link an AEON v0.1 workspace to use the control plane.</p></Card>;
-  if (!snapshot) return <Card><SectionHead eyebrow="AEON v0.1" title="Control plane unavailable" icon="shield" /><p style={{ color: "var(--danger-2)" }}>{error}</p><Btn icon="refresh" onClick={() => void load()}>Try again</Btn></Card>;
+  if (!snapshot) {
+    const canInstallV01 = errorCode === "AEON_LEGACY_WORKSPACE";
+    return (
+      <Card>
+        <SectionHead eyebrow="AEON v0.1" title={canInstallV01 ? "Upgrade required" : "Control plane unavailable"} icon="shield" />
+        <p style={{ color: canInstallV01 ? "var(--fg-2)" : "var(--danger-2)", lineHeight: 1.55 }}>{error}</p>
+        {canInstallV01 ? (
+          <>
+            <p style={{ color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>
+              HivemindOS will preserve the current workspace in a dated backup, install the official AEON v0.1 workspace at the same path, and restore the backup automatically if installation fails.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn variant="primary" icon={busy === "install-v01" ? undefined : "download"} disabled={Boolean(busy)} onClick={() => void installV01()}>
+                {busy === "install-v01" ? <><Spinner />Installing AEON v0.1</> : "Install AEON v0.1"}
+              </Btn>
+              <Btn variant="ghost" icon="refresh" disabled={Boolean(busy)} onClick={() => void load()}>Check again</Btn>
+            </div>
+          </>
+        ) : <Btn icon="refresh" onClick={() => void load()}>Try again</Btn>}
+      </Card>
+    );
+  }
 
   const activeMcp = Object.entries(snapshot.mcpServers);
   const installedMcp = new Set(activeMcp.map(([name]) => name));

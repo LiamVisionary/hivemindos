@@ -136,6 +136,59 @@ async function providerKey(provider: CloudTtsProvider): Promise<string> {
   return key;
 }
 
+/** One selectable voice from a cloud TTS provider's catalog. */
+export type CloudVoiceListing = {
+  id: string;
+  label: string;
+  description?: string;
+  previewUrl?: string;
+};
+
+/**
+ * List the ElevenLabs voices available to the hive-env key (GET /v1/voices —
+ * account + default library voices). Trimmed to what the Calls panel needs;
+ * never returns the key. Mirrors ami's /api/voices proxy, compact.
+ */
+export async function listElevenLabsVoices(): Promise<CloudVoiceListing[]> {
+  const apiKey = await providerKey("elevenlabs");
+  const response = await fetch("https://api.elevenlabs.io/v1/voices", {
+    headers: { "xi-api-key": apiKey },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const data = (await response.json().catch(() => null)) as {
+    voices?: Array<{
+      voice_id?: string;
+      name?: string;
+      description?: string;
+      preview_url?: string;
+      labels?: Record<string, string>;
+    }>;
+    detail?: { message?: string };
+  } | null;
+  if (!response.ok || !Array.isArray(data?.voices)) {
+    throw new Error(data?.detail?.message || `ElevenLabs voice list returned HTTP ${response.status}.`);
+  }
+  return data.voices
+    .filter((voice) => voice.voice_id && voice.name)
+    .map((voice) => {
+      const traits = [voice.labels?.gender, voice.labels?.accent, voice.labels?.age]
+        .filter(Boolean)
+        .join(" · ");
+      return {
+        id: voice.voice_id as string,
+        label: traits ? `${voice.name} — ${traits}` : (voice.name as string),
+        description: voice.description || undefined,
+        previewUrl: voice.preview_url || undefined,
+      };
+    });
+}
+
+// ElevenLabs only honours `language_code` enforcement on the v2.5 turbo/flash
+// models; sending it to others is a 400.
+function elevenLabsSupportsLanguageCode(model: string): boolean {
+  return /flash_v2_5|turbo_v2_5/.test(model);
+}
+
 /**
  * Stream raw 24 kHz PCM for one utterance from a cloud TTS provider. Returns the
  * upstream Response whose body is the PCM byte stream (the caller pipes it to
@@ -145,7 +198,7 @@ async function providerKey(provider: CloudTtsProvider): Promise<string> {
 export async function streamCloudTts(
   provider: CloudTtsProvider,
   text: string,
-  options: { voice?: string; model?: string; signal?: AbortSignal } = {},
+  options: { voice?: string; model?: string; languageCode?: string; signal?: AbortSignal } = {},
 ): Promise<Response> {
   const input = text.trim();
   if (!input) throw new Error("Empty TTS text.");
@@ -154,6 +207,7 @@ export async function streamCloudTts(
   if (provider === "elevenlabs") {
     const voice = options.voice?.trim() || ELEVENLABS_DEFAULT_VOICE;
     const model = options.model?.trim() || ELEVENLABS_DEFAULT_MODEL;
+    const languageCode = options.languageCode?.trim();
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voice)}/stream?output_format=pcm_${PCM_SAMPLE_RATE}`;
     const response = await fetch(url, {
       method: "POST",
@@ -162,6 +216,9 @@ export async function streamCloudTts(
         text: input,
         model_id: model,
         voice_settings: { stability: 0.5, similarity_boost: 0.75, use_speaker_boost: true },
+        ...(languageCode && elevenLabsSupportsLanguageCode(model)
+          ? { language_code: languageCode }
+          : {}),
       }),
       signal: options.signal,
     });
@@ -215,12 +272,19 @@ const DEFAULT_OPENAI_SPEECH_MODEL = "gpt-4o-mini-tts";
  */
 export async function synthesizeVoicePreview(
   providerId: string,
-  options: { voice?: string; model?: string; keyEnv?: string; text?: string } = {},
+  options: { voice?: string; model?: string; keyEnv?: string; text?: string; languageCode?: string } = {},
 ): Promise<{ response: Response; sampleRate: number }> {
   const text = options.text?.trim() || "Hi, this is a quick preview of how I sound on your HivemindOS calls.";
 
   if (providerId === "elevenlabs" || providerId === "cartesia") {
-    return { response: await streamCloudTts(providerId, text, { voice: options.voice, model: options.model }), sampleRate: PCM_SAMPLE_RATE };
+    return {
+      response: await streamCloudTts(providerId, text, {
+        voice: options.voice,
+        model: options.model,
+        languageCode: options.languageCode,
+      }),
+      sampleRate: PCM_SAMPLE_RATE,
+    };
   }
 
   if (providerId === "openai") {

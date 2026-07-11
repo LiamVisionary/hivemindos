@@ -60,8 +60,13 @@ try {
   );
   assert.equal(
     companyHasActiveWork([{ status: "working", assignee: "hermes-alpha", source: "queen-bee" }], idents, companyId),
+    false,
+    "unrelated work delegated to a member does not freeze the company",
+  );
+  assert.equal(
+    companyHasActiveWork([{ status: "working", assignee: "hermes-alpha", source: "company:co-one:r1" }], idents, companyId),
     true,
-    "work delegated to a member counts",
+    "this company's work delegated to a member counts",
   );
   assert.equal(
     companyHasActiveWork([{ status: "done", assignee: "hermes-alpha", source: "company:co-one:r1" }], idents, companyId),

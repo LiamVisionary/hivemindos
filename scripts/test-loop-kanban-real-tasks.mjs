@@ -10,6 +10,8 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const { NextRequest } = await import("next/server");
 const loopsRoute = await import("../src/app/api/loops/route.ts");
 const kanbanRoute = await import("../src/app/api/kanban/route.ts");
+const { completeTask: completeTaskInProcess } = await import("../src/lib/services/kanban/local-kanban-store.ts");
+const { evaluationOutputFingerprint } = await import("../src/lib/services/evaluation/control-plane.ts");
 
 const vaultPath = await mkdtemp(join(tmpdir(), "hivemind-loop-kanban-real-"));
 const kanbanFolder = "Operations/Work Board";
@@ -91,19 +93,17 @@ try {
     "answer recorded as a task comment",
   );
 
-  const codeDone = await complete(codeTask.task.id, {
+  const codeDone = await completeTrusted(blocked.task, {
     summary: "Code fix completed with loop receipts.",
     result: "Auth refresh retry path fixed.\nVerification: lint, typecheck, and focused auth refresh tests passed.\nDeliverable: /tmp/auth-refresh-fix.diff",
-    loopReceipts: passingReceipts(blocked.task, "code"),
   });
   assert.equal(codeDone.task.status, "done");
   assert(codeDone.task.loop.evalGates.some((gate) => gate.status === "passed"), "code gates should be marked passed");
 
   await claim(briefTask.task.id, "Loop Research Agent");
-  const briefDone = await complete(briefTask.task.id, {
+  const briefDone = await completeTrusted(briefTask.task, {
     summary: "Daily brief completed with source and delivery receipts.",
     result: "Published the AI agent market brief with cited funding, launch, and policy sections.\nDeliverable: /tmp/agent-market-brief.md",
-    loopReceipts: passingReceipts(briefTask.task, "brief"),
   });
   assert.equal(briefDone.task.status, "done");
 
@@ -147,10 +147,9 @@ try {
   assert.equal(recorded.observation.antiPatternCount, 1);
 
   await claim(evoTask.task.id, "Loop Optimizer");
-  const evoDone = await complete(evoTask.task.id, {
+  const evoDone = await completeTrusted(recorded.task, {
     summary: "Benchmark loop completed with score receipts.",
     result: "Committed routing prompt budget improvement.\nVerification: held_out_routing_score=0.87.\nDeliverable: /tmp/routing-loop-result.json",
-    loopReceipts: passingReceipts(recorded.task, "evo"),
   });
   assert.equal(evoDone.task.status, "done");
 
@@ -277,16 +276,25 @@ async function complete(taskId, body) {
   return payload;
 }
 
-function passingReceipts(task, prefix) {
+async function completeTrusted(task, body) {
+  return completeTaskInProcess(boardSlug, task.id, {
+    ...body,
+    loopReceipts: passingReceipts(task, body.result),
+  }, { vaultPath, kanbanFolder, trustedLoopReceipts: true });
+}
+
+function passingReceipts(task, output) {
+  const outputFingerprint = evaluationOutputFingerprint(output);
   return (task.loop?.evalGates ?? [])
     .filter((gate) => gate.required)
     .map((gate, index) => ({
-      id: `${prefix}-${gate.id}`,
+      id: `server-fixture-${gate.id}`,
       gateId: gate.id,
       status: "passed",
       summary: `${gate.title} passed in realistic fixture`,
-      evidence: [`fixture evidence ${prefix}-${index}`],
+      evidence: [`trusted fixture evidence ${index}`],
       verifier: gate.verifier,
+      metadata: { authority: "server", outputFingerprint, source: "trusted-test-fixture" },
       createdAt: Date.now() + index,
     }));
 }

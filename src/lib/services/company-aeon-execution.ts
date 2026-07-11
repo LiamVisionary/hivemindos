@@ -17,6 +17,7 @@ import {
   dispatchAeonSkill,
   type AeonSkillDispatchResult,
 } from "@/lib/services/runtime-adapters/aeon";
+import { evaluateCompletionEvent } from "@/lib/services/evaluation/control-plane";
 
 type CompanyAeonExecutionDependencies = {
   resolveBinding: (
@@ -144,6 +145,16 @@ export async function dispatchCompanyWithAeon(
     event: "dispatch",
     payload: { goal, executionEngine: "aeon", aeonProfileId: profile.id, aeonSkill: skill, source: dispatch.source },
   }).catch(() => undefined);
+  const evaluation = await evaluateCompletionEvent({
+    id: companyRun.id,
+    surface: "aeon",
+    status: "completed",
+    observed: false,
+    output: "",
+    startedAt: Date.parse(companyRun.createdAt),
+    completedAt: Date.now(),
+    metadata: { profileId: profile.id, skill, source: dispatch.source },
+  });
   await finishCompanyRun(company.id, companyRun.id, {
     status: "completed",
     summary: `AEON accepted ${skill} for background execution.`,
@@ -153,6 +164,7 @@ export async function dispatchCompanyWithAeon(
       aeonProfileId: profile.id,
       aeonSkill: skill,
       source: dispatch.source,
+      evaluation,
     },
   }).catch(() => undefined);
 

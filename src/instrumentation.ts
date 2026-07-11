@@ -162,6 +162,106 @@ export async function register() {
     }
   })();
 
+  // Resume Hive Compute hosting after an app-server restart. The worker child
+  // process dies with this server, so without this hook a dev-server recycle
+  // silently ended hosting while the fleet still believed the machine was live.
+  // The saved run config's shouldRun flag records go-live intent; the route's
+  // resume action re-checks readiness and is a no-op when hosting was stopped
+  // on purpose. Same no-app-imports constraint as above. Disable with
+  // HIVEMINDOS_HIVE_COMPUTE_RESUME=0.
+  void (async () => {
+    try {
+      const builtin = (process as unknown as { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule;
+      const fs = builtin?.("node:fs") as { readFileSync?: (path: string, enc: string) => string } | undefined;
+      const os = builtin?.("node:os") as { homedir?: () => string } | undefined;
+      const flag = process.env.HIVEMINDOS_HIVE_COMPUTE_RESUME?.trim().toLowerCase() ?? "";
+      if (flag === "0" || flag === "false") return; // default ON
+      const shouldRun = (() => {
+        try {
+          const raw = fs?.readFileSync?.(
+            `${os?.homedir?.() ?? ""}/.hivemindos/modules/hive-compute-worker/hivemind-host-config.json`,
+            "utf8",
+          ) ?? "";
+          return (JSON.parse(raw) as { shouldRun?: unknown })?.shouldRun === true;
+        } catch {
+          return false;
+        }
+      })();
+      if (!shouldRun) return;
+      const port = process.env.PORT?.trim();
+      if (!port) return; // portless launches resume on first manual host-panel visit
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+        let resumed = false;
+        for (const host of ["127.0.0.1", "[::1]"]) {
+          resumed = await fetch(`http://${host}:${port}/api/hive-compute/marketplace`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
+            body: JSON.stringify({ action: "resume-worker" }),
+          })
+            .then((response) => response.ok)
+            .catch(() => false);
+          if (resumed) break;
+        }
+        if (resumed) {
+          console.log("[hive-compute] hosting resumed after restart");
+          return;
+        }
+      }
+      console.error("[hive-compute] hosting resume gave up after 5 attempts");
+    } catch (error) {
+      console.error("[hive-compute] hosting resume failed:", error instanceof Error ? error.message : error);
+    }
+  })();
+
+  // Auto-start the report-only Inbox Triage brain service (daily capture-folder
+  // report into the shared vault; no LLM, no file mutations). Same
+  // no-app-imports constraint as above: read the kill switch via getBuiltinModule
+  // and start the driver by POSTing to our own API route. Disable with
+  // HIVEMINDOS_INBOX_TRIAGE=0 (or the toggle in Brain Services).
+  void (async () => {
+    try {
+      const builtin = (process as unknown as { getBuiltinModule?: (id: string) => unknown }).getBuiltinModule;
+      const fs = builtin?.("node:fs") as { readFileSync?: (path: string, enc: string) => string } | undefined;
+      const os = builtin?.("node:os") as { homedir?: () => string } | undefined;
+      const envFile = (() => {
+        try {
+          return fs?.readFileSync?.(`${os?.homedir?.() ?? ""}/.hivemindos/.env`, "utf8") ?? "";
+        } catch {
+          return "";
+        }
+      })();
+      const flag = "HIVEMINDOS_INBOX_TRIAGE";
+      const fromProcess = process.env[flag]?.trim();
+      const fromFile = envFile.match(new RegExp(`^\\s*(?:export\\s+)?${flag}\\s*=\\s*(.+)\\s*$`, "m"))?.[1]?.trim();
+      const value = (fromProcess || fromFile || "").replace(/^["']|["']$/g, "").toLowerCase();
+      if (value === "0" || value === "false") return; // default ON
+      const port = process.env.PORT?.trim();
+      if (!port) return; // route hooks / manual start cover portless launches
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+        let started = false;
+        for (const host of ["127.0.0.1", "[::1]"]) {
+          started = await fetch(`http://${host}:${port}/api/brain/inbox-triage`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
+            body: JSON.stringify({ action: "start" }),
+          })
+            .then((response) => response.ok)
+            .catch(() => false);
+          if (started) break;
+        }
+        if (started) {
+          console.log("[inbox-triage] auto-started");
+          return;
+        }
+      }
+      console.error("[inbox-triage] autostart gave up after 5 attempts");
+    } catch (error) {
+      console.error("[inbox-triage] autostart failed:", error instanceof Error ? error.message : error);
+    }
+  })();
+
   if (process.env.NODE_ENV !== "development") return;
   const { registerDevMemoryGuard } = await import("@/lib/services/dev-memory-guard");
   registerDevMemoryGuard();

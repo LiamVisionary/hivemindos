@@ -24,6 +24,14 @@ HivemindOS does not auto-install the upstream `obsidian-cli` skill because the a
 
 ## Optional Third-Party Skills
 
+### HivemindOS Engineering Discipline
+
+The **HivemindOS Engineering Discipline** pack combines the built-in `engineering-discipline` orchestrator with 12 selected methods from [`obra/superpowers`](https://github.com/obra/superpowers), pinned to v6.1.1 / commit `d884ae04edebef577e82ff7c4e143debd0bbec99` under the MIT license.
+
+The donor set covers scoped brainstorming, plan writing and execution, test-driven development, systematic debugging, worktree isolation, optional parallel/subagent workflows, giving and receiving review, verification before completion, and branch handoff. HivemindOS adds an authority preface to every donor skill: upstream “always” language applies only when that method has been selected for suitable work, and it never grants permission for commits, pushes, merges, deletion, deployment, external actions, or agent fan-out.
+
+The package intentionally excludes the upstream plugin bootstrap, hooks, `using-superpowers`, `writing-skills`, and the brainstorming web server. Installation copies audited local files only. It does not run an upstream installer or start a service.
+
 Optional skills live in:
 
 ```text
@@ -49,8 +57,16 @@ Current optional catalog:
 | `design/nextlevelbuilder/ui-ux-pro-max` | UI/UX implementation guidance, design stack data, templates, and helper scripts for richer frontend work. |
 | `events/hivemindos/venue-activation-visualizer` | HivemindOS-authored optional event skill for sponsor and venue activation before/after visuals, production checklists, and venue-permission caveats. |
 | `gtm/athm793/local-business-scraper` | Security-audited optional GTM skill for the pinned MIT `athm793/local-business-scraper` Google Maps scraper. It is conditionally approved only for consent-gated local installs, fresh browser profiles, scoped scraping, and careful lead-data handling. |
+| `gtm/hivemindos/b2b-social-gtm` | HivemindOS-authored optional GTM skill for a B2B social content-to-pipeline system: voice foundation files, a content engine with hook-first drafting and a 90-day matrix, network mining, and multi-channel repurposing across LinkedIn, X, video, and email — pairing with linkedin-gtm for the outreach core. |
+| `gtm/hivemindos/cold-email-gtm` | HivemindOS-authored optional GTM skill for the full cold-email motion: ICP and objection mapping, verified signal research, five first-touch frameworks, a 6-touch sequence with a breakup email, a QA score gate before sending, deliverability and domain-warming setup, compliance checks, and metric-driven diagnosis. |
+| `gtm/hivemindos/event-marketing-gtm` | HivemindOS-authored optional GTM skill for relationship-driven event marketing: anchor attendees from real existing relationships, the +1 activation framework that fills a room without cold outreach, invite and activation scripts, room design for introductions, and post-event warm-intro conversion inside the 72-hour window. |
 | `gtm/hivemindos/home-service-design-quote` | HivemindOS-authored optional GTM skill for home-service concepts, estimated itemized quotes, before/after packages, and contractor-review disclaimers. |
+| `gtm/hivemindos/linkedin-gtm` | HivemindOS-authored optional GTM skill for a three-layer LinkedIn motion: content and authority, warming before outreach, and outreach with a 4-message DM sequence, sell-by-chat, and inbox triage — human approval on all outbound and LinkedIn-terms caution on automation. |
+| `gtm/hivemindos/organic-reach-gtm` | HivemindOS-authored optional GTM skill for an organic content-to-pipeline engine: 3-pillar weekly mix, post-type skeletons, lead-magnet posts with comment-keyword CTAs, a 3-person content team, signature-framework + proof-library positioning, and Instagram as B2B top-of-funnel — with a hard no-fabricated-proof rule. |
+| `gtm/hivemindos/outreach-brief-gtm` | HivemindOS-authored optional GTM skill for the persistent-brief outbound pattern: one canonical brief built from real deal evidence and kept loaded across sessions, with first-touch/follow-up/DM/cold-call copywriting, pipeline health reviews, and reply-rate audits run against it. |
+| `gtm/hivemindos/reddit-gtm` | HivemindOS-authored optional GTM skill for a rules-respecting Reddit motion: subreddit research and validation, value-first comments without links, four post shapes, fast keyword-alert response to buying-intent threads, and inbound lead scoring, with human approval on all posting. |
 | `gtm/hivemindos/small-business-preview-engine` | HivemindOS-authored optional GTM skill for consent-aware local business prospect discovery, preview-site concepts, and approval-gated outreach. |
+| `gtm/hivemindos/x-warm-outreach-gtm` | HivemindOS-authored optional GTM skill for a 14-day warm outreach ladder on X/Twitter: ICP lead research, thoughtful engagement until the sender's name is familiar, then a short DM with one low-friction question and a single follow-up — manual/human-approved only, with X automation-rules caution. |
 | `media/higgsfield/higgsfield-api-quirks` | Higgsfield API workaround skill for undocumented model-specific failures and payload requirements, including Seedance 2.0 audio placement, aspect-ratio enforcement, reference-slot limits, and Kling 3.0 matchcut caveats. |
 | `media/higgsfield/higgsfield-generate` | Higgsfield media-generation skill for images, video, 3D, audio, Marketing Studio, and Virality Predictor. It supports both Higgsfield Cloud API via shared env keys and the standard consumer CLI/dashboard, asks which surface to use when unspecified, and forbids procedural fallback for Higgsfield requests. |
 | `media/hivemindos/ai-ugc-production-pipeline` | HivemindOS-authored optional media-production skill for turning current-signal research, visual anchors, Higgsfield/Seedance video generation, batch UGC scripts, and performance-regeneration rules into one approval-gated ad workflow. |
@@ -64,6 +80,9 @@ Current optional catalog:
 | `n8n/` n8n GTM pack | 8 optional n8n GTM-automation skills from `forma-norden/n8n-gtm-workflow-pack` (MIT), grouped as `n8n/forma-norden/<skill>/` and installable together through the `N8N Optional Skills Directory` pack. Covers lead ingestion/enrichment, outreach orchestration, CRM sync, lead scoring/routing, workflow reliability guardrails, observability/cost control, Clay integration, and self-hosting. |
 | `ops/hivemindos/business-simulation-operator` | HivemindOS-authored optional operations skill for founder/operator simulations that convert approved actions into Work Board tasks. |
 | `ops/hivemindos/work-board-airtable-bridge` | HivemindOS-authored optional operations skill for importing, linking, or mirroring Airtable records while keeping the built-in Work Board canonical. |
+| `research/hivemindos/kill-my-thesis` | HivemindOS-authored optional research skill for a cross-family adversarial thesis gate: a bundled script routes the thesis to a non-Anthropic reviewer model, refuses same-family review, and returns a fail-closed PUBLISHABLE / NEEDS WORK / DO NOT PUBLISH verdict file before a research note ships. |
+| `research/hivemindos/research-call-tracker` | HivemindOS-authored optional research skill for publish-time call accountability: Call Tracker and Trade Journal ledgers in the shared brain, a no-row-not-published rule, stop discipline for open positions, and win rate computed from closed rows only. |
+| `research/hivemindos/wiki-first-research` | HivemindOS-authored optional research skill for the wiki-first project discipline: recall the shared brain first, raw sources before synthesis, an adversarial gate before drafting, versioned never-overwritten drafts, and durable findings distilled back into the shared brain at session close. |
 
 Optional third-party skills are vendored by `scripts/import-packaged-skills.mjs`, which pins each skill to an upstream commit and `sha256` in `skills-lock.json`; run `node scripts/import-packaged-skills.mjs --verify` to detect drift.
 

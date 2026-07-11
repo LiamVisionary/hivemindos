@@ -146,6 +146,17 @@ assert.deepEqual(
   { kind: "navigate", destination },
   "process completion snackbars must navigate instead of copying",
 );
+const voiceFailureInteraction = notificationContext.__testedModule.completionNotificationInteraction({
+  id: "voice-failure",
+  title: "Queen Bee voice",
+  message: "The selected voice could not be played.",
+  agentVoiceSettingsId: "queen-profile",
+});
+assert.deepEqual(
+  { ...voiceFailureInteraction },
+  { kind: "agent-voice-settings", agentId: "queen-profile" },
+  "voice failure snackbars must open the affected agent's voice settings",
+);
 
 const processApiSource = readFileSync(
   new URL("../src/app/api/processes/route.ts", import.meta.url),
@@ -167,6 +178,50 @@ assert.match(
   dashboardSource,
   /onNavigate={navigateDashboardTarget}/,
   "the snackbar must use the dashboard's typed navigator for process destinations",
+);
+assert.match(
+  dashboardSource,
+  /useAgentVoiceFailureNotifications/,
+  "the dashboard must enqueue voice failures in the shared snackbar queue",
+);
+const voiceFailureHookSource = readFileSync(
+  new URL("../src/features/dashboard/hooks/use-agent-voice-failure-notifications.ts", import.meta.url),
+  "utf8",
+);
+assert.match(
+  voiceFailureHookSource,
+  /const notifyAgentVoiceFailure = useCallback/,
+  "the voice failure hook must expose a shared snackbar enqueue callback",
+);
+assert.match(
+  voiceFailureHookSource,
+  /setAgentSettingsPanel\("calls"\)[\s\S]{0,180}setAgentRoleModalId\(agentId\)/,
+  "the voice failure snackbar action must open Calls for the affected agent",
+);
+assert.match(
+  dashboardSource,
+  /onOpenAgentVoiceSettings={openAgentVoiceSettings}/,
+  "the shared snackbar must receive the voice-settings action",
+);
+
+const voicePreviewSource = readFileSync(
+  new URL("../src/features/dashboard/views/chat/AgentSettingsCallsVoiceSection.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  voicePreviewSource,
+  /onVoiceFailure\?\.\(\{[\s\S]{0,180}agentId:\s*roleModalAgent\.id/,
+  "voice preview failures must emit an actionable snackbar for the edited agent",
+);
+
+const queenVoiceSource = readFileSync(
+  new URL("../src/features/queen-voice/QueenBeeVoiceOverlay.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  queenVoiceSource,
+  /onVoiceFailure\?\.\(\{[\s\S]{0,180}agentRole:\s*"queen"/,
+  "Queen Bee playback failures must emit an actionable voice-settings snackbar",
 );
 
 const connectionsSource = readFileSync(

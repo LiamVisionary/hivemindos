@@ -27,6 +27,13 @@ import {
 } from "lucide-react";
 import { BeeIcon } from "./bee-icon";
 import {
+  fleetAgentMatchesFilter,
+  fleetAgentSearchText,
+  fleetMachineNeedsAttention,
+  fleetMachineSearchText,
+  normalizeFleetSearch,
+} from "./fleet-search";
+import {
   fleetAgentCanChat,
   isFleetMachineMobile,
   type AgentState,
@@ -147,10 +154,6 @@ function agentRingColor(state: AgentState): string {
   return "var(--lv-line-2)";
 }
 
-function machineAttention(m: FleetMachine): boolean {
-  return m.versionState !== "current" || m.agents.some((a) => a.state === "failed" || a.state === "setup");
-}
-
 // ── small building blocks ──────────────────────────────────────────────────
 
 function HexBadge({
@@ -263,7 +266,7 @@ export function ListView({
   const padHead = "16px 20px";
   const padRow = "13px 20px";
 
-  const q = query.trim().toLowerCase();
+  const q = normalizeFleetSearch(query);
 
   // ── stats (from the full, unfiltered fleet) ──
   const stats = React.useMemo(() => {
@@ -285,19 +288,12 @@ export function ListView({
   }, [machines]);
 
   const statusOk = React.useCallback(
-    (a: FleetAgent): boolean => {
-      if (filter === "all") return true;
-      if (filter === "working") return a.state === "working";
-      if (filter === "idle") return a.state === "ready" || a.state === "scheduled";
-      return a.state === "failed" || a.state === "setup"; // attention
-    },
+    (a: FleetAgent): boolean => fleetAgentMatchesFilter(a, filter),
     [filter],
   );
 
-  const mText = (m: FleetMachine) =>
-    `${m.name} ${m.os} ${m.kind} ${m.role} ${m.location} ${m.city}`.toLowerCase();
-  const aText = (a: FleetAgent) =>
-    `${a.name} ${a.runtime} ${a.role} ${a.task}`.toLowerCase();
+  const mText = (m: FleetMachine) => fleetMachineSearchText(m);
+  const aText = (a: FleetAgent, m: FleetMachine) => fleetAgentSearchText(a, m);
 
   // ── group + filter machines the way the design does ──
   const groups = React.useMemo(() => {
@@ -305,13 +301,13 @@ export function ListView({
       .map((m) => {
         const mMatch = !q || mText(m).includes(q);
         const agents = m.agents.filter(
-          (a) => statusOk(a) && (!q || mMatch || aText(a).includes(q)),
+          (a) => statusOk(a) && (!q || mMatch || aText(a, m).includes(q)),
         );
         return {
           machine: m,
           agents,
           mMatch,
-          attn: machineAttention(m),
+          attn: fleetMachineNeedsAttention(m),
           hasAgents: agents.length > 0,
           isEmpty: m.agents.length === 0,
         };

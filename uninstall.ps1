@@ -228,6 +228,7 @@ if (Ask-YesNo "Remove the 'HivemindOS Telemetry Collector' scheduled task, Start
   Remove-HivemindStartupLauncher "HivemindOS Telemetry Collector"
   $hiveHome = Join-Path $UserHome ".hivemindos"
   Remove-Item (Join-Path $hiveHome "run-collector.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-collector-hidden.ps1") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "run-collector-hidden.vbs") -Force -ErrorAction SilentlyContinue
   Ok "Removed the HivemindOS collector task/startup launcher and launcher files"
 }
@@ -237,6 +238,7 @@ if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, Startup launcher, ru
   Remove-HivemindStartupLauncher "HivemindOS Link"
   $hiveHome = Join-Path $UserHome ".hivemindos"
   Remove-Item (Join-Path $hiveHome "run-linkd.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-linkd-hidden.ps1") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "run-linkd-hidden.vbs") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "bin\hivemind-linkd.exe") -Force -ErrorAction SilentlyContinue
   Ok "Removed the HivemindOS Link task/startup launcher, launcher files, and installed sidecar binary"
@@ -254,6 +256,28 @@ if (Ask-YesNo "Remove HivemindOS GitLawb config/status cache from ~/.hivemindos/
   Remove-Item (Join-Path $gitlawbDir "status.json") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $gitlawbDir "setup-status.json") -Force -ErrorAction SilentlyContinue
   Ok "Removed HivemindOS GitLawb status cache"
+}
+
+$openClawCodexTrustMarker = Join-Path $UserHome ".hivemindos\openclaw-codex-plugin-trust.json"
+if ((Test-Path $openClawCodexTrustMarker) -and (Ask-YesNo "Remove the HivemindOS-added Codex entry from OpenClaw's plugin allowlist?" $false)) {
+  $openClawConfig = Join-Path $UserHome ".openclaw\openclaw.json"
+  if (Test-Path $openClawConfig) {
+    try {
+      $config = Get-Content $openClawConfig -Raw | ConvertFrom-Json -AsHashtable
+      if ($config.ContainsKey("plugins") -and $config["plugins"] -is [System.Collections.IDictionary] -and $config["plugins"].ContainsKey("allow")) {
+        $config["plugins"]["allow"] = @($config["plugins"]["allow"] | Where-Object { $_ -ne "codex" })
+        if ($config["plugins"]["allow"].Count -eq 0) { $config["plugins"].Remove("allow") }
+        if ($config["plugins"].Count -eq 0) { $config.Remove("plugins") }
+        Set-Content -Path $openClawConfig -Value ($config | ConvertTo-Json -Depth 100)
+      }
+      Remove-Item $openClawCodexTrustMarker -Force -ErrorAction SilentlyContinue
+      Ok "Removed the HivemindOS-added Codex plugin trust entry"
+    } catch {
+      Warn "OpenClaw config was not readable; left the plugin trust marker in place"
+    }
+  } else {
+    Warn "OpenClaw config was not found; left the plugin trust marker in place"
+  }
 }
 
 if (Ask-YesNo "Remove fallback HivemindOS project registry ~/.hivemindos/projects.json?" $false) {

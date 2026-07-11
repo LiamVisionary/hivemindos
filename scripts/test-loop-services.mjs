@@ -48,7 +48,7 @@ assert.equal(evoLoop.experiments?.[0]?.status, "candidate");
 const operatingLoop = buildOperatingUnitLearningLoop({
   unitId: "unit-a",
   unitName: "Aperture Tools",
-  workTitle: "Ship onboarding checklist",
+  workTitle: "Publish onboarding landing page",
   runId: "run-1",
   metricName: "activated users",
   metricTarget: "500",
@@ -59,7 +59,8 @@ const operatingLoop = buildOperatingUnitLearningLoop({
 
 assert.equal(operatingLoop.mode, "optimizer");
 assert(operatingLoop.goal.includes("Increase activation"));
-assert(operatingLoop.evalGates.every((gate) => gate.required === false), "operating-unit learning gates should start non-blocking");
+assert(operatingLoop.evalGates.some((gate) => gate.verifier === "receipt:evidence" && gate.required), "operating-unit learning requires outcome evidence");
+assert(operatingLoop.evalGates.some((gate) => gate.verifier === "agent:judge" && gate.required), "outward-facing operating-unit work requires a judge");
 assert.equal(operatingLoop.benchmark?.metricName, "activated users");
 assert.equal(operatingLoop.experiments?.[0]?.agent, "growth");
 

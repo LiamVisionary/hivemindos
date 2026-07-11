@@ -74,6 +74,7 @@ async function checkCliRuntime(label: string, envBin: string | undefined, comman
   const candidates = [
     envBin,
     join(homedir(), ".local", "bin", command),
+    join(homedir(), ".npm-global", "bin", command),
     join(homedir(), `.${command}`, "bin", command),
     join(homedir(), ".nvm", "versions", "node", process.version, "bin", command),
     "/opt/homebrew/bin/" + command,
@@ -95,6 +96,7 @@ async function checkOpenClaw() {
     "/usr/local/bin/openclaw",
     "/usr/bin/openclaw",
     join(homedir(), ".local", "bin", "openclaw"),
+    join(homedir(), ".npm-global", "bin", "openclaw"),
     join(homedir(), ".volta", "bin", "openclaw"),
   ].filter(Boolean) as string[];
   const bin = candidates.find((path) => existsSync(path));

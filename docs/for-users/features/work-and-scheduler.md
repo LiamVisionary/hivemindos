@@ -109,7 +109,9 @@ Loop Engineering lists the pattern registry, reusable templates, and verifier de
 - attach or update benchmark discovery, gates, success criteria, and frontier strategy
 - record an experiment and optional anti-patterns, then refresh the observation summary
 
-Built-in patterns include code-fix, app-build harness, research, content, daily brief, operating-unit learning, and Evo benchmark loops. Built-in verifiers include lint, typecheck, focused tests, Playwright smoke tests, artifact existence, independent judge review, human approval, evidence receipts, Evo score improvement, and governance policy checks. For the readiness ladder and operator commands, see [Loop Engineering](loop-engineering.html).
+Built-in patterns include Engineering Discipline, code-fix, app-build harness, research, content, daily brief, operating-unit learning, and Evo benchmark loops. Built-in verifiers include lint, typecheck, focused tests, Playwright smoke tests, artifact existence, independent judge review, human approval, evidence receipts, Evo score improvement, and governance policy checks. For the readiness ladder and operator commands, see [Loop Engineering](loop-engineering.html). For the user-facing verdicts and trust rules, see [Agent Evaluations](agent-evaluations.html).
+
+Choose **Engineering discipline** from a Work Board quick-add template when consequential code work needs the full evidence path. The created task carries a real closed loop: optional design approval for material ambiguity, required baseline evidence, red/green evidence or a concrete non-applicability receipt, focused tests, lint, types, independent review, and a final completion receipt. The attached `engineering-discipline` skill keeps the process proportionate and does not grant permission for destructive Git operations, external actions, or agent fan-out.
 
 ### Zero-Human Company Learning Loops
 
@@ -117,7 +119,7 @@ For the full company cockpit and launch flow, see [Zero Human Companies](zero-hu
 
 With the **HivemindOS crew** engine, a company uses the same generic loop contract as its private learning layer. When the company launches its apex goal, HivemindOS plans the goal into Work Board tasks and attaches an operating-unit learning loop to each dispatched task. Each company task carries a planner/evaluator contract snapshot; customer-facing product, design, content, and site work also carries a four-axis evaluator rubric for design, originality, craft, and functionality.
 
-The default company loop is non-blocking at creation time: agents can finish useful work, while eval gates, evidence requirements, experiment candidates, and Pareto frontier metadata are preserved for later review. This gives the company a model-independent "company veteran" layer made of outcomes, artifacts, workflows, receipts, avoided failure modes, and private eval structure.
+Every company task requires outcome evidence. Product, design, content, and customer-facing work also requires a separate eligible agent to review the result against its rubric. Missing evidence or a missing reviewer sends the task to **Needs You** instead of counting it as a company success. This gives the company a model-independent "company veteran" layer made of evaluated outcomes, artifacts, workflows, receipts, avoided failure modes, and private eval structure.
 
 The Zero Human Company cockpit summarizes that layer as capability capital:
 
@@ -130,7 +132,7 @@ The Zero Human Company cockpit summarizes that layer as capability capital:
 
 This keeps the native company learning loop owned by the workspace rather than any single model. Future workers can change, but the company's charter, evals, receipts, artifacts, and reviewed memory remain portable.
 
-With the optional **AEON background skill** engine, HivemindOS does not create a Work Board task automatically. Company Runs records the accepted handoff, while AEON owns the detailed run state and outputs. AEON output does not become a reviewed company learning asset automatically; promote durable evidence through the normal review flow when it should become company knowledge. See [Using AEON With Zero Human Companies](../runtimes/aeon/zero-human-companies.html).
+With the optional **AEON background skill** engine, HivemindOS does not create a Work Board task automatically. Company Runs records the accepted handoff as unobserved, while AEON owns the detailed run state and outputs. AEON output does not become a reviewed company learning asset automatically. Promote durable evidence through the normal review flow when it should become company knowledge. See [Using AEON With Zero Human Companies](../runtimes/aeon/zero-human-companies.html).
 
 ## Note Intake And Work History
 
@@ -149,7 +151,7 @@ How it works:
 
 - A task can link to a registered project without requiring every task to belong to a repository.
 - A linked GitLawb project can add sanitized proof context to the task.
-- Queen Bee can prefer the machine with the matching, current project checkout when it routes code work.
+- Queen Bee can prefer the machine with the matching, current project checkout when it routes code work. Collectors report these matches through the `version.projectCheckouts` inventory.
 
 This lets one machine work across many projects and many GitLawb repos. The shared Brain keeps private task and memory context. GitLawb carries public-key code provenance.
 

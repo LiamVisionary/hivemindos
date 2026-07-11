@@ -30,6 +30,20 @@
       "target_path": "src/features/dashboard/views/ManagedCloudAgentsPanel.tsx",
       "reuse_type": "style_adapted",
       "note": "canonical animated loading primitives and dashboard pending-state behavior"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/integrations/connector-manifests.ts",
+      "target_path": "src/lib/services/managed-cloud-agents.ts",
+      "reuse_type": "adapted_code",
+      "note": "explicit capability promotion and credential-status boundary for hosted integrations"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/hivemind-link-control.ts",
+      "target_path": "src/lib/services/managed-cloud-agents.ts",
+      "reuse_type": "adapted_code",
+      "note": "local collector discovery for user-authorized Shared Brain peer pairing"
     }
   ]
 }

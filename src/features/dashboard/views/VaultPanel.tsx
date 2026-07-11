@@ -13,6 +13,7 @@ import { BrainSkillsPanel } from "./BrainSkillsPanel";
 import { BrainAtlasPanel, BrainDreamInboxPanel, BrainSkillRoiPanel } from "./BrainAugmentationPanels";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
 import { AgentMemoryHealthCard } from "./AgentMemoryHealthCard";
+import { InboxTriageServiceCard } from "./InboxTriageServiceCard";
 import { SkillSecurityCard } from "./SkillSecurityCard";
 import { SyntoModelTierSettings } from "./SyntoModelTierSettings";
 import { SYNTO_COMPARE_MODEL_OPTIONS } from "@/lib/config/synto-model-tiers";
@@ -1185,7 +1186,7 @@ function VaultPanelComponent(props: any) {
   }[vaultPanelMode] ?? { title: "Shared Brain", subtitle: "Obsidian memory graph" };
   return (<>
       {activeView === "vault" ? (
-      <section className={vaultClass("vaultPanel", "tabPanel", vaultPanelMode === "env" && "vaultPanelCompact")}>
+      <section className={vaultClass("vaultPanel", "tabPanel", vaultPanelMode === "env" && "vaultPanelCompact", vaultPanelMode === "hive-vault" && "brainMapPanel")}>
         <SectionModeHeader
           activeMode={vaultPanelMode}
           ariaLabel="Brain view mode"
@@ -1287,6 +1288,7 @@ function VaultPanelComponent(props: any) {
                 <div className={brainClass("brainServiceOverviewGrid")} style={{ marginTop: 16 }}>
                   <AgentMemoryHealthCard />
                   <SkillSecurityCard />
+                  <InboxTriageServiceCard />
                 </div>
               </>
             ) : brainServiceSection === "settings" ? (

@@ -1,0 +1,443 @@
+{
+  "version": 1,
+  "note": "Legacy heavy control-label treatments. Do not add entries; remove them as controls migrate to the design system.",
+  "entries": [
+    {
+      "file": "src/app/chat.module.css",
+      "selector": ".chat button:not([data-slot=\"button\"]), .machineChatCard > button:not([data-slot=\"button\"]), .settingsActions button:not([data-slot=\"button\"])",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/chat.module.css",
+      "selector": ".composerModeButton, .chat button.composerModeButton, .composerDirectoryButton, .chat button.composerDirectoryButton",
+      "weight": "700"
+    },
+    {
+      "file": "src/app/chat.module.css",
+      "selector": ".generateKanbanActions button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/chat.module.css",
+      "selector": ".historyCloseButton",
+      "weight": "900"
+    },
+    {
+      "file": "src/app/chat.module.css",
+      "selector": ".slashCommandList button strong",
+      "weight": "700"
+    },
+    {
+      "file": "src/app/chat.module.css",
+      "selector": ".workingDirectoryPanel button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/DashboardServerHome.tsx",
+      "selector": "<button type=\"submit\" style={{ border: 0, borderRadius: 8, background: \"var(--button-primary, #936811)\", color: \"var(--button-primary-foreground, #fff7df)\", padding: \"12px 14px\", fontSize: 15, fontWeight: 800, cursor: \"pointer\", }} >",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".agentRuntimeSummary button",
+      "weight": "900"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".agentSettingsTabs button, .schedulerSegment button",
+      "weight": "900"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".machineUpdateStatus button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".schedulerAddStepButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".schedulerModelCluster > button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".schedulerPresetRow button, .schedulerSkillPicker button, .scheduleSkillRow span",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".setupModalActions button:not([data-slot=\"button\"]):not([data-slot=\"close-icon-button\"])",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/fleet.module.css",
+      "selector": ".taskPanelHeader button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/kanban-board.module.css",
+      "selector": ".kanbanBoardCreate button, .kanbanNoteActions button, .kanbanCommentForm button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/kanban-board.module.css",
+      "selector": ".kanbanCardMoveFabs button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/kanban-board.module.css",
+      "selector": ".kanbanDrawerMovePanel button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/kanban-board.module.css",
+      "selector": ".kanbanMachineMenu button",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/kanban-board.module.css",
+      "selector": ".kanbanStaleNotice button",
+      "weight": "900"
+    },
+    {
+      "file": "src/app/kanban-board.module.css",
+      "selector": ".kanbanSteerForm button",
+      "weight": "900"
+    },
+    {
+      "file": "src/app/kanban-board.module.css",
+      "selector": ".kanbanSteerTargetButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/kanban-conversation.module.css",
+      "selector": ".cardQuickActions button",
+      "weight": "700"
+    },
+    {
+      "file": "src/app/kanban-conversation.module.css",
+      "selector": ".convoArtifact button",
+      "weight": "700"
+    },
+    {
+      "file": "src/app/kanban-conversation.module.css",
+      "selector": ".needsYouKeyRow button",
+      "weight": "700"
+    },
+    {
+      "file": "src/app/miroshark.module.css",
+      "selector": ".mirosharkWorkbenchTabs button, .mirosharkSurfaceSwitch button",
+      "weight": "700"
+    },
+    {
+      "file": "src/app/vault.module.css",
+      "selector": ".providerSkillButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/app/vault.module.css",
+      "selector": ".vaultFooter button:not([data-slot=\"button\"])",
+      "weight": "800"
+    },
+    {
+      "file": "src/components/agents/AgentSelectionModal.module.css",
+      "selector": ".machineFilters button",
+      "weight": "900"
+    },
+    {
+      "file": "src/components/agents/AgentSelectionModal.module.css",
+      "selector": ".selectButton",
+      "weight": "900"
+    },
+    {
+      "file": "src/components/fleet-hive/fleet-hive.css",
+      "selector": ".fr-chat-slash-list button strong",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/aeon-delete-modal.tsx",
+      "selector": "<button type=\"button\" onClick={onClose} style={{ minHeight: 34, border: \"1px solid rgba(148,163,184,0.22)\", borderRadius: 7, background: \"rgba(15,23,42,0.78)\", color: \"var(--foreground)\", fontFamily: \"var(--f-mono)\", fontSize: 10, fontWeight: 900, padding: \"8px 11px\", }} >",
+      "weight": "900"
+    },
+    {
+      "file": "src/components/fleet/aeon-delete-modal.tsx",
+      "selector": "<button type=\"button\" onClick={onRetry} style={{ minHeight: 34, border: \"1px solid rgba(251,113,133,0.36)\", borderRadius: 7, background: \"rgba(251,113,133,0.12)\", color: \"#fecdd3\", fontFamily: \"var(--f-mono)\", fontSize: 10, fontWeight: 900, padding: \"8px 11px\", }} >",
+      "weight": "900"
+    },
+    {
+      "file": "src/components/fleet/fleet-tokens.module.css",
+      "selector": ".callHangupButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/components/fleet/fleet-tokens.module.css",
+      "selector": ".rosterUsePodHostButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/components/fleet/FleetView.tsx",
+      "selector": "<button type=\"button\" onClick={onToggleAutoUpdatePaused} aria-pressed={autoUpdatePaused} title={autoUpdatePaused ? \"Fleet auto-updates are paused. Machines will not pull new dashboard commits until resumed.\" : \"Pause fleet auto-updates. Machines stop pulling new dashboard commits until resumed.\"} className=\"uppercase cursor-pointer\" style={{ fontFamily: \"var(--f-mono)\", fontSize: 9, fontWeight: 800, letterSpacing: 0.04, padding: \"3px 8px\", borderRadius: 9999, border: `1px solid ${autoUpdatePaused ? \"rgba(251,191,36,0.42)\" : \"rgba(148,163,184,0.22)\"}`, background: autoUpdatePaused ? \"rgba(251,191,36,0.12)\" : \"transparent\", color: autoUpdatePaused ? \"#fde68a\" : \"var(--muted)\", }} >",
+      "weight": "800"
+    },
+    {
+      "file": "src/components/fleet/footers.tsx",
+      "selector": "<button onClick={fire(onOpenChat)} className=\"inline-flex items-center uppercase font-bold\" style={{ gap: 8, padding: \"9px 14px\", borderRadius: 8, cursor: \"pointer\", fontFamily: \"var(--f-mono)\", fontSize: 11, letterSpacing: 0.06, border: \"1px solid rgba(94,234,212,0.55)\", background: \"rgba(45,212,191,0.18)\", color: \"var(--accent-strong)\", }} >",
+      "weight": "font-bold"
+    },
+    {
+      "file": "src/components/fleet/list-view.tsx",
+      "selector": "<button key={ac.id} type=\"button\" onClick={fire(m, a, ac.fn)} title={ac.label} className={styles.actionBtn} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 8, height: 32, padding: \"0 12px\", borderRadius: 9, cursor: \"pointer\", background: ac.danger ? \"var(--lv-danger-soft)\" : \"var(--lv-tint-2)\", border: `1px solid ${ac.danger ? \"var(--lv-danger-line)\" : \"var(--lv-line-2)\"}`, color: ac.danger ? \"var(--lv-danger)\" : \"var(--lv-fg-2)\", fontFamily: \"var(--lv-mono)\", fontSize: 10, fontWeight: 700, letterSpacing: \"0.06em\", textTransform: \"uppercase\", }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/list-view.tsx",
+      "selector": "<button type=\"button\" onClick={fire(m, a, onOpenChat)} className={styles.actionBtn} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 8, height: 32, padding: \"0 13px\", borderRadius: 9, cursor: \"pointer\", background: \"var(--lv-live-soft)\", border: \"1px solid var(--lv-live-line)\", color: \"var(--lv-live)\", fontFamily: \"var(--lv-mono)\", fontSize: 10, fontWeight: 700, letterSpacing: \"0.06em\", textTransform: \"uppercase\", }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/machine-send-file-modal.module.css",
+      "selector": ".sendButton",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/machine-terminal-modal.module.css",
+      "selector": ".headerButton",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/selection-tooltip.tsx",
+      "selector": "<button type=\"button\" onClick={actionHandler(machine, agent, onOpenChat)} className={`${styles.tooltipActionButton} inline-flex items-center uppercase font-bold`} style={{ gap: 6, padding: \"7px 9px\", borderRadius: 7, cursor: \"pointer\", fontFamily: \"var(--f-mono)\", fontSize: 9.5, letterSpacing: 0.04, border: \"1px solid rgba(94,234,212,0.48)\", background: \"rgba(45,212,191,0.16)\", color: \"var(--accent-strong)\", }} >",
+      "weight": "font-bold"
+    },
+    {
+      "file": "src/components/fleet/usepod-host-modal.module.css",
+      "selector": ".modal button:not(.close)",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/usepod-host-modal.module.css",
+      "selector": ".pairingLink, .actions button",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/usepod-host-modal.module.css",
+      "selector": ".rp-seg button",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/fleet/usepod-host-modal.module.css",
+      "selector": ".up-btn",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/scheduler/composer.tsx",
+      "selector": "<button onClick={onEdit} className=\"uppercase font-bold cursor-pointer\" aria-label=\"Edit automation\" style={{ padding: \"10px 13px\", borderRadius: 8, border: \"1px solid rgba(238,232,220,0.22)\", background: \"transparent\", color: \"var(--foreground)\", fontFamily: \"var(--f-mono)\", fontSize: 11, letterSpacing: 0.06, display: \"inline-flex\", alignItems: \"center\", gap: 6, }}>",
+      "weight": "font-bold"
+    },
+    {
+      "file": "src/components/scheduler/composer.tsx",
+      "selector": "<button onClick={onRunNow} disabled={running || done} className=\"uppercase font-bold cursor-pointer\" style={{ flex: 1, padding: \"10px\", borderRadius: 8, border: \"1px solid rgba(111,205,186,0.5)\", background: done ? \"rgba(111,205,186,0.24)\" : \"rgba(111,205,186,0.16)\", color: \"var(--hex-active-border)\", fontFamily: \"var(--f-mono)\", fontSize: 11, letterSpacing: 0.06, display: \"inline-flex\", alignItems: \"center\", justifyContent: \"center\", gap: 7, opacity: running || done ? 0.95 : 1, }}>",
+      "weight": "font-bold"
+    },
+    {
+      "file": "src/components/scheduler/scheduler-tokens.module.css",
+      "selector": ".honeyBtnPill",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/scheduler/scheduler-tokens.module.css",
+      "selector": ".schedSegment button",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/scheduler/scheduler-tokens.module.css",
+      "selector": "/* Primary honey button */ .honeyBtn",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/simulation/SlideOver.tsx",
+      "selector": "<button onClick={add} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 6, padding: \"7px 12px\", borderRadius: 999, cursor: \"pointer\", border: \"1px solid rgb(207,217,222)\", background: \"#fff\", color: \"#1d9bf0\", fontSize: 13, fontWeight: 700, width: \"fit-content\" }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/task-modal/task-modal.module.css",
+      "selector": ".templateFilters button, .templatePager button",
+      "weight": "800"
+    },
+    {
+      "file": "src/components/task-modal/TaskModal.tsx",
+      "selector": "<button onClick={addStep} style={{ display: \"inline-flex\", alignItems: \"center\", justifyContent: \"center\", gap: 8, padding: \"9px 12px\", borderRadius: 8, cursor: \"pointer\", border: \"1px dashed var(--tm-add)\", background: \"transparent\", color: \"var(--tm-cyan-3)\", fontFamily: \"var(--tm-f-mono)\", fontSize: 11, fontWeight: 700, letterSpacing: 0.06, textTransform: \"uppercase\", }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/task-modal/TaskModal.tsx",
+      "selector": "<button onClick={handleSave} disabled={aeonBlocked || saving} title={aeonBlocked ? \"Attach one skill to arm this AEON automation\" : undefined} style={{ padding: \"9px 16px\", borderRadius: 7, cursor: (aeonBlocked || saving) ? \"not-allowed\" : \"pointer\", border: \"1px solid rgba(255,212,90,0.55)\", background: \"rgba(255,212,90,0.18)\", color: \"var(--tm-honey-2)\", fontFamily: \"var(--tm-f-mono)\", fontSize: 11, fontWeight: 700, letterSpacing: 0.06, textTransform: \"uppercase\", opacity: (aeonBlocked || saving) ? 0.45 : 1, }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/task-modal/TaskModal.tsx",
+      "selector": "<button onClick={onClose} style={{ padding: \"9px 14px\", borderRadius: 7, cursor: \"pointer\", border: \"1px solid var(--tm-line-2)\", background: \"transparent\", color: \"var(--tm-fg-2)\", fontFamily: \"var(--tm-f-mono)\", fontSize: 11, fontWeight: 700, letterSpacing: 0.06, textTransform: \"uppercase\", }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/components/wallet/AgentWalletCard.module.css",
+      "selector": ".railFooter button",
+      "weight": "800"
+    },
+    {
+      "file": "src/features/dashboard/views/BrainGraphExplorer.module.css",
+      "selector": ".filters button",
+      "weight": "900"
+    },
+    {
+      "file": "src/features/dashboard/views/chat/HiveChatView.module.css",
+      "selector": ".hiveHeaderButton",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/chat/HiveChatView.module.css",
+      "selector": ".hiveKanbanPopoverActions button",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/chat/HiveChatView.module.css",
+      "selector": ".hiveNewChatButton",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/chat/HiveChatView.module.css",
+      "selector": ".hivePromptChoiceButton span",
+      "weight": "800"
+    },
+    {
+      "file": "src/features/dashboard/views/chat/MiroSharkSimulationCard.module.css",
+      "selector": ".actions a, .actionButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/features/dashboard/views/chat/poly-market-modal/poly-modal.module.css",
+      "selector": ".root :global(.mm-btn)",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/chat/WorkerTaskPreferencesEditor.tsx",
+      "selector": "<button type=\"button\" onClick={addRow} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 5, width: \"fit-content\", padding: \"5px 10px\", borderRadius: 999, border: \"1px dashed var(--aeon-line)\", background: \"transparent\", color: \"var(--cyan-3)\", cursor: \"pointer\", fontSize: 11.5, fontWeight: 700 }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/DashboardPinsOverlay.tsx",
+      "selector": "<button type=\"button\" onClick={onClick} disabled={disabled} className={`inline-flex min-h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold transition [&_svg]:h-4 [&_svg]:w-4 ${active ? \"border-[rgba(94,234,212,0.52)] bg-[rgba(20,184,166,0.14)] text-[var(--foreground)]\" : \"border-[rgba(148,163,184,0.18)] bg-[rgba(10,14,21,0.7)] text-[var(--foreground)] hover:border-[rgba(94,234,212,0.36)]\"} disabled:cursor-not-allowed disabled:opacity-60`} >",
+      "weight": "font-bold"
+    },
+    {
+      "file": "src/features/dashboard/views/FusionBlindCompareTool.tsx",
+      "selector": "<button type=\"button\" className=\"rounded-md border border-[rgba(94,234,212,0.28)] px-3 py-2 text-sm font-bold text-[var(--accent-strong)] disabled:opacity-50\" disabled={readyCount < 2} onClick={() =>",
+      "weight": "font-bold"
+    },
+    {
+      "file": "src/features/dashboard/views/FusionBlindCompareTool.tsx",
+      "selector": "<button type=\"button\" className=\"rounded-md px-2 py-1 text-xs font-bold text-[var(--accent-strong)] hover:bg-[rgba(94,234,212,0.10)]\" onClick={() =>",
+      "weight": "font-bold"
+    },
+    {
+      "file": "src/features/dashboard/views/ManagedCloudAgentsPanel.module.css",
+      "selector": ".agentActions button",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/ManagedCloudAgentsPanel.module.css",
+      "selector": ".amountRow button",
+      "weight": "800"
+    },
+    {
+      "file": "src/features/dashboard/views/ManagedCloudAgentsPanel.module.css",
+      "selector": ".deployButton, .secondaryButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/features/dashboard/views/PersonalWallets.module.css",
+      "selector": ".personalTokenStakeButton",
+      "weight": "800"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
+      "selector": "<button disabled={!canSubmit || busy} style={{ height: 34, minWidth: 150, padding: \"0 13px\", borderRadius: 8, cursor: !canSubmit || busy ? \"not-allowed\" : \"pointer\", fontFamily: \"var(--f-mono)\", fontSize: 10.5, fontWeight: 700, textTransform: \"uppercase\", letterSpacing: 0.06, border: \"1px solid var(--btn-line)\", background: !canSubmit || busy ? \"var(--panel-hi)\" : \"var(--btn-bg)\", color: !canSubmit || busy ? \"var(--fg-4)\" : \"var(--btn-fg)\", opacity: busy ? 0.6 : 1 }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
+      "selector": "<button disabled={busy} onClick={handlers.onDelete} style={{ padding: \"8px 14px\", borderRadius: 9, cursor: busy ? \"not-allowed\" : \"pointer\", fontFamily: \"var(--f-mono)\", fontSize: 11, fontWeight: 700, textTransform: \"uppercase\", border: \"1px solid color-mix(in srgb, var(--danger) 55%, transparent)\", background: \"color-mix(in srgb, var(--danger) 20%, transparent)\", color: \"var(--danger)\", opacity: busy ? 0.5 : 1 }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
+      "selector": "<button disabled={busy} onClick={handlers.onStopAutonomy} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 8, whiteSpace: \"nowrap\", padding: \"9px 16px\", borderRadius: 9, cursor: busy ? \"not-allowed\" : \"pointer\", fontFamily: \"var(--f-display)\", fontSize: 13, fontWeight: 700, letterSpacing: 0.04, border: \"1px solid var(--line-2)\", background: \"var(--panel-2)\", color: \"var(--fg-2)\", opacity: busy ? 0.6 : 1 }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
+      "selector": "<button disabled={launchDisabled} onClick={handlers.onDispatch} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 8, whiteSpace: \"nowrap\", padding: \"9px 16px\", borderRadius: 9, cursor: launchDisabled ? \"not-allowed\" : \"pointer\", fontFamily: \"var(--f-display)\", fontSize: 13, fontWeight: 700, letterSpacing: 0.04, border: \"1px solid var(--honey-line)\", background: launchDisabled ? \"var(--panel-2)\" : \"var(--btn-bg)\", color: launchDisabled ? \"var(--fg-4)\" : \"var(--btn-fg)\", opacity: launchDisabled ? 0.6 : 1 }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/Cockpit.tsx",
+      "selector": "<button type=\"button\" onClick={handleSeeAll} className=\"zhc-btn-ghost\" aria-label={`See all ${needs} items needing you`} style={{ display: \"inline-flex\", alignItems: \"center\", justifyContent: \"center\", gap: 6, cursor: \"pointer\", borderRadius: 8, padding: \"5px 11px\", fontFamily: \"var(--f-mono)\", fontSize: 10.5, fontWeight: 700, color: \"var(--honey)\", border: \"1px solid var(--honey-line)\", background: \"var(--honey-soft)\" }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/CompanyIssueActions.tsx",
+      "selector": "<button key={option} type=\"button\" onClick={chooseOption(option)} disabled={resolveDisabled} title={taskId ? \"Resume the task with this decision.\" : \"This issue is not linked to a Work Board task yet.\"} style={{ ...buttonBase, ...(index === 0 ? { border: \"1px solid var(--cyan)\", background: \"var(--cyan)\", color: \"var(--bg)\", fontWeight: 700 } : { border: \"1px solid color-mix(in srgb, var(--cyan) 45%, var(--line))\", background: \"color-mix(in srgb, var(--cyan) 13%, var(--bg-2))\", color: \"var(--cyan-2)\" }), cursor: resolveDisabled ? \"default\" : \"pointer\", opacity: resolveDisabled ? 0.6 : 1, }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/CompanyIssueActions.tsx",
+      "selector": "<button type=\"button\" onClick={approvePreview} disabled={reviewDisabled} title={taskId ? \"Approve this preview and let the crew take the next step (send it to the lead).\" : \"This preview is not linked to a Work Board task yet.\"} style={{ ...buttonBase, border: \"1px solid var(--cyan)\", background: \"var(--cyan)\", color: \"var(--bg)\", fontWeight: 700, cursor: reviewDisabled ? \"default\" : \"pointer\", opacity: reviewDisabled ? 0.6 : 1, }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/CompanyIssueActions.tsx",
+      "selector": "<button type=\"button\" onClick={sendChanges} disabled={reviewDisabled || !notes.trim()} style={{ ...buttonBase, border: \"1px solid var(--honey-2)\", background: \"var(--honey-2)\", color: \"var(--bg)\", fontWeight: 700, cursor: reviewDisabled || !notes.trim() ? \"default\" : \"pointer\", opacity: reviewDisabled || !notes.trim() ? 0.6 : 1, }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/EmailQaBand.tsx",
+      "selector": "<button type=\"button\" onClick={teach} disabled={busy} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 6, cursor: busy ? \"default\" : \"pointer\", borderRadius: \"8px 0 0 8px\", padding: \"6px 11px\", font: \"inherit\", fontFamily: \"var(--f-mono)\", fontSize: 11, fontWeight: 700, border: \"1px solid var(--honey)\", borderRight: \"none\", background: \"var(--honey)\", color: \"var(--bg)\", opacity: busy ? 0.6 : 1 }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/FounderModeModal.tsx",
+      "selector": "<button type=\"button\" disabled={disabled} onClick={onClick} style={{ display: \"inline-flex\", alignItems: \"center\", justifyContent: \"center\", gap: 7, borderRadius: 9, padding: \"8px 14px\", cursor: disabled ? \"not-allowed\" : \"pointer\", border: `1px solid ${primary ? \"var(--honey-line)\" : \"var(--line-2)\"}`, background: primary ? \"var(--btn-bg)\" : \"transparent\", color: primary ? \"var(--btn-fg)\" : \"var(--fg-2)\", fontFamily: \"var(--f-display)\", fontSize: 12.5, fontWeight: 700, opacity: disabled ? 0.55 : 1, }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/HivemindLabsPanel.tsx",
+      "selector": "<button type=\"button\" onClick={onClick} disabled={disabled} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 6, cursor: disabled ? \"not-allowed\" : \"pointer\", borderRadius: 8, padding: \"7px 11px\", border: `1px solid ${primary ? \"var(--honey-line)\" : \"var(--line-2)\"}`, background: primary ? \"var(--btn-bg)\" : \"transparent\", color: primary ? \"var(--btn-fg)\" : \"var(--fg-2)\", fontFamily: \"var(--f-display)\", fontSize: 11.5, fontWeight: 700, opacity: disabled ? 0.55 : 1 }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/ImportCompanyModal.tsx",
+      "selector": "<button type=\"button\" onClick={onClick} disabled={disabled} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 7, border: \"1px solid var(--btn-line)\", borderRadius: 9, background: disabled ? \"var(--panel-2)\" : \"var(--btn-bg)\", color: disabled ? \"var(--fg-4)\" : \"var(--btn-fg)\", cursor: disabled ? \"not-allowed\" : \"pointer\", fontFamily: \"var(--f-display)\", fontSize: 13, fontWeight: 700, padding: \"9px 16px\", opacity: disabled ? 0.6 : 1 }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/Modals.tsx",
+      "selector": "<button onClick={onClick} disabled={disabled} style={{ padding: \"9px 18px\", borderRadius: 9, cursor: disabled ? \"not-allowed\" : \"pointer\", border: \"1px solid var(--btn-line)\", background: disabled ? \"var(--panel-2)\" : \"var(--btn-bg)\", color: disabled ? \"var(--fg-4)\" : \"var(--btn-fg)\", fontFamily: \"var(--f-display)\", fontSize: 13, fontWeight: 700, letterSpacing: 0.04, opacity: disabled ? 0.6 : 1 }}>",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/ProductsPanel.tsx",
+      "selector": "<button type=\"button\" onClick={onGoToApprovals} style={{ padding: \"8px 16px\", borderRadius: 9, cursor: \"pointer\", fontFamily: \"var(--f-mono)\", fontSize: 11, textTransform: \"uppercase\", letterSpacing: 0.05, fontWeight: 700, border: \"1px solid var(--btn-line)\", background: \"var(--btn-bg)\", color: \"var(--btn-fg)\", whiteSpace: \"nowrap\" }} >",
+      "weight": "700"
+    },
+    {
+      "file": "src/features/dashboard/views/zero-human-companies/SetupBlockerBand.tsx",
+      "selector": "<button type=\"submit\" disabled={busy || !value.trim()} style={{ display: \"inline-flex\", alignItems: \"center\", gap: 6, cursor: busy || !value.trim() ? \"default\" : \"pointer\", borderRadius: 8, padding: \"7px 12px\", font: \"inherit\", fontFamily: \"var(--f-mono)\", fontSize: 11, fontWeight: 700, border: \"1px solid var(--cyan)\", background: \"var(--cyan)\", color: \"var(--bg)\", opacity: busy || !value.trim() ? 0.55 : 1, }} >",
+      "weight": "700"
+    }
+  ]
+}
+
+

@@ -128,6 +128,73 @@
   overflow-wrap: anywhere;
 }
 
+/* Fold the ask down to its first couple of lines by default so a queue of
+   cards stays scannable; the toggle reveals the full text on demand. */
+.reasonWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cardReasonClamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Subtle ghost toggles: fold the reason overflow and the full reasoning trail
+   to essentials by default. Self-contained --ap tokens so the affordance themes
+   with the card in every host (dark + hive-light). */
+.inlineToggle {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--ap-fg-4);
+  font-family: var(--ap-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.inlineToggle:hover {
+  color: var(--ap-fg-2);
+}
+
+.trailToggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ap-fg-3);
+  font-family: var(--ap-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 8px 3px 5px;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.trailToggle:hover {
+  color: var(--ap-fg);
+  background: var(--ap-panel-hi);
+}
+
+.trailToggle svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
 .cardContext {
   display: flex;
   align-items: center;
@@ -552,7 +619,9 @@
   .btn { transition: none; }
   .menu { animation: none; }
   .menuItem,
-  .splitCaret { transition: none; }
+  .splitCaret,
+  .inlineToggle,
+  .trailToggle { transition: none; }
 }
 
 @media (max-width: 380px) {

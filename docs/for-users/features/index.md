@@ -16,6 +16,7 @@ The feature surface follows the work an operator actually does: connect machines
 <div class="signalGrid">
   <section class="signalCard"><strong>Connect</strong><span>Fleet, collectors, Tailnet/Link, apps, and runtime discovery.</span></section>
   <section class="signalCard"><strong>Operate</strong><span>Agents, chat, Work board, Code Proof, Scheduler, Swarm, and deliverables.</span></section>
+  <section class="signalCard"><strong>Verify</strong><span>Completion checks, trusted evidence, independent reviewers, and honest unobserved states.</span></section>
   <section class="signalCard"><strong>Remember</strong><span>Obsidian vault, shared skills, QMD, Neo4j, GBrain, Syntho, Synthesis, and notifications.</span></section>
   <section class="signalCard"><strong>Pay</strong><span>Wallets, crypto rail routing, Base/Robinhood/Solana, USDC/USDG, Hive Compute, Honey, HIVE, and x402.</span></section>
   <section class="signalCard"><strong>Integrate</strong><span>GitLawb, MiroShark, app connections, GitHub OAuth, My Apps, phone, and work history.</span></section>
@@ -46,7 +47,7 @@ The product starts with machines and agents. Fleet tells you what is online, whi
 
 ## Looped Work
 
-Looped work is where operator intent turns into agent execution. A loop contract can start from chat, Scheduler, Queen Bee, Evo, a company launch, or the Work Board. The board remains one access path: it captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. Zero Human Companies add a company cockpit with two autonomy choices: the default HivemindOS crew engine uses the Work Board and private learning loops, while the optional AEON engine runs one saved background skill and records accepted handoffs in Company Runs. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
+Looped work is where operator intent turns into agent execution. A loop contract can start from chat, Scheduler, Queen Bee, Evo, a company launch, or the Work Board. The board remains one access path: it captures rough ideas, promotes ready tasks, tracks claimed work, stores comments and run records, and turns finished output into deliverables. HivemindOS evaluates managed completions so agents do not get credit just for saying done. Zero Human Companies add a company cockpit with two autonomy choices: the default HivemindOS crew engine uses the Work Board and private learning loops, while the optional AEON engine runs one saved background skill and records accepted handoffs in Company Runs. Scheduler adds repeated background work. Chat can launch `/swarm [number]` agent-team passes for parallel role-specific analysis, or `/swarm-goal <build request>` to rewrite a loose build request and hand it to Queen Bee for parallel agent execution. Swarm and MiroShark handle rehearsal, `/swarm-sim` simulations, and heavier analysis workflows.
 
 <div class="docGrid">
   <section class="docCard">
@@ -61,8 +62,13 @@ Looped work is where operator intent turns into agent execution. A loop contract
   </section>
   <section class="docCard">
     <h3>Loop Engineering</h3>
-    <p>Pattern registry, readiness levels, budgets, receipts, human gates, and exportable LOOP.md / STATE.md snapshots for bounded autonomous work.</p>
+    <p>Pattern registry, readiness levels, budgets, receipts, human gates, and exportable loop snapshots for bounded autonomous work.</p>
     <a href="loop-engineering.html">Open loop docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Agent Evaluations</h3>
+    <p>Shared completion checks across chat, Work Board, companies, schedules, and managed runtime tasks, with trusted evidence and separate reviewers for consequential work.</p>
+    <a href="agent-evaluations.html">Open evaluation docs</a>
   </section>
   <section class="docCard">
     <h3>Agent Challenges</h3>
@@ -175,6 +181,16 @@ Wallet and token features are explicit rails, not a background permission pool. 
     <a href="managed-cloud-agents.html">Open cloud agent docs</a>
   </section>
   <section class="docCard">
+    <h3>App Builder</h3>
+    <p>Replit/Lovable-style app projects built locally or on managed infrastructure, with 60-minute test deploys and optional paid publishing on a stable HivemindOS URL.</p>
+    <a href="app-builder.html">Open App Builder docs</a>
+  </section>
+  <section class="docCard">
+    <h3>HivemindOS Machines</h3>
+    <p>Pre-initialized Azure Marketplace virtual machines in the user's own subscription, with transparent Microsoft billing for infrastructure and the HivemindOS software fee.</p>
+    <a href="hivemindos-machines.html">Open machine docs</a>
+  </section>
+  <section class="docCard">
     <h3>Monetization</h3>
     <p>The free-vs-paid product boundary, including HivemindOS Cloud Agent Calls as a premium managed LiveKit feature.</p>
     <a href="../../for-investors/">Open monetization</a>
@@ -230,6 +246,7 @@ flowchart TD
   Chat --> XRay["Context X-Ray"]
   Work --> Scheduler["Scheduler"]
   Work --> LoopEngineering["Loop engineering"]
+  LoopEngineering --> Evaluations["Agent evaluations"]
   Work --> VisualPlans["Visual plans and recaps"]
   Work --> Deliverables["Deliverables"]
   Work --> CodeProof["GitLawb Code Proof"]

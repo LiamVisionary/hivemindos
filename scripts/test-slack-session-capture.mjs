@@ -398,10 +398,15 @@ resolvePendingRetrieval({
   downloaded: 1,
   failedFiles: [],
   linkedLinksFound: 3,
+  linkedItemsDiscovered: 8,
+  linkedItemsProcessed: 8,
   linkedPages: 2,
+  linkedNotionPages: 2,
   linkedFiles: 4,
   linkedIgnoredFiles: 1,
   linkedSkippedByLimit: 0,
+  linkedMaxGraphDepth: 3,
+  linkedComplete: true,
   linkedFailures: [],
 });
 await new Promise((resolve) => setTimeout(resolve, 0));
@@ -412,6 +417,7 @@ assert.equal(retrievalJobContext.__testedModule.slackRetrievalJobView(finishedJo
 assert.equal(completedProcesses.length, 1, "successful Slack jobs must publish one process completion");
 assert.equal(completedProcesses[0].id, pendingJob.id);
 assert.match(completedProcesses[0].message, /1 message/);
+assert.match(completedProcesses[0].message, /All 8 discovered linked items completed/);
 assert.equal(failedProcesses.length, 0);
 
 const jobStarts = [];

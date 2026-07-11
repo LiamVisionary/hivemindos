@@ -528,6 +528,51 @@ fn open_about_window(app: &AppHandle, check_now: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// The floating hologram-companion popover: a small transparent, borderless,
+/// always-on-top window showing only the 3D companion (route
+/// /companion-popover). `open: true` creates or re-shows it; `open: false`
+/// closes it. Mirrors the standalone Ami widget shell's window flags.
+#[tauri::command]
+pub fn set_companion_popover(
+    app: AppHandle,
+    state: tauri::State<NativeServerState>,
+    open: bool,
+) -> Result<(), String> {
+    const LABEL: &str = "companion-popover";
+    if !open {
+        if let Some(window) = app.get_webview_window(LABEL) {
+            let _ = window.close();
+        }
+        return Ok(());
+    }
+    if let Some(window) = app.get_webview_window(LABEL) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let window = WebviewWindowBuilder::new(
+        &app,
+        LABEL,
+        route_url(&app, &state, "/companion-popover")?,
+    )
+    .title("Companion")
+    .inner_size(360.0, 560.0)
+    .min_inner_size(240.0, 360.0)
+    .resizable(true)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .build()
+    .map_err(|error| error.to_string())?;
+    // Fully transparent webview background (macOS) so only the hologram
+    // paints — same trick the standalone Ami widget uses.
+    let _ = window.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)));
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_route_window(
     app: AppHandle,

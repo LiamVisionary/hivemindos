@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "LinkedIn GTM building blocks: post hook shapes, content-type rotation, warming stages, connection-note and DM skeletons, the sell-by-chat phase spine, safety caps, and (from the call-booking augment) the profile conversion layer, lead-magnet post mechanics, niche first-touch openers, and anti-patterns. This bank is authored, not measured — reply-rate, reach, and calls-per-day figures circulating with these systems are vendor claims or rules of thumb, not results from our accounts, and agents must not present anything here as 'proven'. A fuller step-by-step playbook lives in the shared skills shelf as the linkedin-gtm skill; this bank is only the rows agents sample from. Hard rules that travel with every row: LinkedIn's terms prohibit unauthorized automation and scraping, so every outbound item is a human-approved draft, comment/connection caps are ceilings not targets, 'auto' posting modes and third-party follower/commenter scrapers are never used, every promised lead-magnet DM is actually fulfilled, scarcity and urgency lines are used only when literally true, and every claim, credential, or case-study number in a profile or message must be real. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 56,
+  "taxonomy": {
+    "contentTypes": ["proof", "framework", "authority", "story"],
+    "warmingStages": ["cold", "warm", "hot"]
+  },
+  "hookShapes": [
+    { "id": "LH01", "name": "Anaphora", "shape": "A repeated opening phrase that builds rhythm across the first lines." },
+    { "id": "LH02", "name": "Obituary", "shape": "Declares an old practice dead and explains what replaces it." },
+    { "id": "LH03", "name": "Year-over-year pivot", "shape": "Contrasts what you did in an earlier year with what you do now." },
+    { "id": "LH04", "name": "Curiosity gap", "shape": "States a surprising result without explaining it until the body." },
+    { "id": "LH05", "name": "List reveal", "shape": "Promises a numbered set of things the reader does not know about a topic." },
+    { "id": "LH06", "name": "Confession", "shape": "Admits you were wrong about something you said publicly." },
+    { "id": "LH07", "name": "Contrarian", "shape": "Takes a genuinely held position most of the audience would push back on." },
+    { "id": "LH08", "name": "Before-after", "shape": "Shows a transformation anchored by specific before and after numbers." },
+    { "id": "LH09", "name": "One question", "shape": "Opens with a single question the reader cannot answer without reading on." },
+    { "id": "LH10", "name": "Cold open", "shape": "Drops the reader into a scene mid-action before any context." }
+  ],
+  "postSkeleton": [
+    { "id": "LP01", "name": "Post skeleton", "template": "[HOOK IN THE FIRST TWO LINES THAT EARNS THE SEE MORE CLICK]\n\n[BODY AS A STORY OR ARGUMENT WITH SPECIFIC NUMBERS]\n\n[CLOSING QUESTION OR RESOURCE THAT GIVES A REASON TO COMMENT]", "why": "Only the first two lines render before the fold; the body earns the read; the close earns the comment. Keep the whole post between nine hundred and thirteen hundred characters with paragraphs of at most three lines." }
+  ],
+  "contentTypes": [
+    { "id": "LC01", "type": "proof", "what": "Client results and before/after numbers", "role": "Most converting; underproduced because it feels like boasting" },
+    { "id": "LC02", "type": "framework", "what": "A mental model or process the audience can apply", "role": "Builds name-to-expertise association" },
+    { "id": "LC03", "type": "authority", "what": "A genuinely held contrarian position", "role": "Draws the most comments and DMs" },
+    { "id": "LC04", "type": "story", "what": "A real experience turned into a lesson", "role": "Best for reach and follower growth" }
+  ],
+  "weeklyRotation": "two proof or framework posts plus one story or authority post; three posts per week minimum",
+  "warmingStages": [
+    { "id": "LW01", "stage": "cold", "meaning": "prospect does not know you", "replyHeuristic": "roughly 2-5%" },
+    { "id": "LW02", "stage": "warm", "meaning": "has seen your name and content in their feed", "replyHeuristic": "roughly 15-25%" },
+    { "id": "LW03", "stage": "hot", "meaning": "has engaged with your content", "replyHeuristic": "roughly 30-50%" }
+  ],
+  "connectionNote": [
+    { "id": "LN01", "name": "Connection note", "template": "[SPECIFIC REFERENCE TO THEIR POST OR JOB CHANGE OR COMPANY SIGNAL] [ONE SENTENCE OF SHARED GROUND WITHOUT ANY PITCH]", "why": "Under two hundred characters, anchored to something real, and never a pitch or a profile-scraper phrase." }
+  ],
+  "dmSequence": [
+    { "id": "LD01", "message": 1, "timing": "one to three days after acceptance", "job": "reference why you connected, offer something relevant, end with an open question", "maxWords": 80 },
+    { "id": "LD02", "message": 2, "timing": "three to five days later", "job": "share a relevant resource with one sentence of context; no ask", "maxWords": 60 },
+    { "id": "LD03", "message": 3, "timing": "five to seven days after message two", "job": "one brief, specific, low-friction ask", "maxWords": 50 },
+    { "id": "LD04", "message": 4, "timing": "only after a positive reply without commitment", "job": "move to the calendar within one or two more messages", "maxWords": 50 }
+  ],
+  "sellByChat": [
+    { "id": "LS01", "phase": "open", "messages": "1-2", "rule": "reference shared context and ask about their situation; no offer yet" },
+    { "id": "LS02", "phase": "qualify", "messages": "3-4", "rule": "two or three questions that surface whether the problem exists; listen, do not pitch" },
+    { "id": "LS03", "phase": "pivot", "messages": "5", "rule": "once the problem is confirmed, one sentence of offer and ask if a quick call is worth it" },
+    { "id": "LS04", "phase": "book", "messages": "6", "rule": "calendar link only after an explicit yes; never before the pivot" }
+  ],
+  "safetyCaps": [
+    { "id": "LK01", "action": "comments per day", "cap": "15, with 30-60 seconds between", "note": "human-approved drafts only; never an auto mode" },
+    { "id": "LK02", "action": "connection requests per day", "cap": "20 on newer accounts, up to 40 on warmed accounts, never 50", "note": "each note is a reviewed draft" },
+    { "id": "LK03", "action": "warm DM window", "cap": "reach out within 24 hours of a comment; immediately on a share", "note": "engagement-triggered messages are warm, not cold; still human-approved" }
+  ],
+  "voiceRules": ["no em dashes", "no AI vocabulary such as leverage, delve, streamline, harness, unlock, foster, synergy", "specific numbers beat adjectives", "one sharp insight per comment", "capitalize names", "comments 200-350 characters, posts 900-1300 characters", "every output is a draft until a human approves it"],
+  "profileLayer": [
+    { "id": "LF01", "element": "headline, hyper-targeted", "template": "I help [ICP] achieve [SPECIFIC OUTCOME] in [TIMEFRAME] with [UNIQUE MECHANISM]", "why": "the headline renders in search results, post bylines, and DM previews; an optional guarantee or differentiator can follow the main promise, and every accolade must be real" },
+    { "id": "LF02", "element": "headline, broad", "template": "Achieve [SPECIFIC OUTCOME] with [UNIQUE MECHANISM]", "why": "the wide-net variant when the ICP spans several segments; still outcome plus named method, never a bare job title" },
+    { "id": "LF03", "element": "banner", "template": "one line of real social proof, the offer stated directly, no questions, sized to the platform's banner dimensions with the left quarter left clear of text for the profile photo overlay", "why": "the banner is the profile's billboard; direct statements outperform questions and the avatar covers the lower-left area" },
+    { "id": "LF04", "element": "featured section", "template": "three slots: the best-performing educational post with a clear call to action, one real case study or testimonial, and one free resource such as a template or guide", "why": "most profiles leave it empty; it is the credibility shelf a DM recipient checks before replying" },
+    { "id": "LF05", "element": "about section spine", "template": "[PATTERN INTERRUPT ADDRESSED TO THE ICP]\n\n[ONE CREDIBILITY SENTENCE WITH A REAL NUMBER AND TIMEFRAME]\n\nIf you're like most [ICP PLURAL] I work with, you're probably:\n[THREE SPECIFIC PAIN POINTS AS BULLETS]\n\nHere's what makes us different: [UNIQUE MECHANISM IN TWO TO THREE SENTENCES]\n\nRecent results:\n[THREE REAL CLIENT RESULTS AS BULLETS]\n\nReady to [DESIRED OUTCOME]? DM me [TRIGGER WORD] for [SPECIFIC NEXT STEP]", "why": "a short-form sales letter: interrupt, credibility, pain recognition, solution bridge, proof, trigger-word CTA; every number must be real" },
+    { "id": "LF06", "element": "cta placement", "template": "four coordinated slots: the profile custom button, a banner CTA, the About-section closing CTA, and Featured-section links", "why": "prospects arrive at different engagement depths; each surface catches a different one" }
+  ],
+  "leadMagnetPosts": [
+    { "id": "LM01", "post": "lead-magnet skeleton", "template": "[BOLD REAL CLAIM ABOUT WHAT THE RESOURCE DELIVERS]\n\nInside:\n[THREE TO FIVE SPECIFIC COMPONENTS AS ARROWS]\n\n[WHY IT WORKS OR ONE LINE OF REAL PROOF]\n\nComment [KEYWORD] and connect with me and I'll send it over.", "why": "the comment-plus-connect ask builds both reach and a DM channel; the promised DM must actually be sent, by a human or a human-approved draft" },
+    { "id": "LM02", "post": "hook emotions", "template": "lead-magnet hooks trigger one of three emotions: desire (a concrete result someone wants), curiosity (a named strategy they have not heard of), or fear (a costly mistake they may be making)", "why": "the hook's only jobs are stopping the scroll and earning the read-more click" },
+    { "id": "LM03", "post": "cta structure", "template": "two parts: the necessary actions (comment [KEYWORD] plus follow or connect) and an optional bonus action for a bonus reward (repost for an extra resource)", "why": "each added step adds friction and cuts comments; keep the necessary actions minimal and honest" },
+    { "id": "LM04", "post": "preview media", "template": "a short sped-up workflow video, a deliberately blurred screenshot, or a curiosity-building visual of the real resource", "why": "previews of the actual asset raise conversion; never preview something the resource does not contain" },
+    { "id": "LM05", "post": "comment reply, already connected", "template": "Here's the [RESOURCE NAME] [FIRST NAME]: [LINK]\n\nCurious - [SPECIFIC RELATED QUESTION]", "why": "delivers immediately, then opens a real conversation; the alternative close offers a relevant free call only when genuinely on offer" },
+    { "id": "LM06", "post": "comment reply, not yet connected", "template": "reply to their comment with a casual delivery line and the link, or send a connection request whose note contains the resource link and one related question", "why": "delivery must not be held hostage to the connection; the promise was the resource" }
+  ],
+  "nicheOpeners": [
+    { "id": "LO01", "opener": "direct case study", "audience": "any service with a real named result", "template": "Hey [FIRST NAME] - I'll be direct rather than waste your time: I work with [ICP] to [OUTCOME]. We helped [REAL CLIENT] go from [REAL BEFORE] to [REAL AFTER] in [TIMEFRAME], and [THEIR COMPANY] looks similar. Against me telling you how we did it?", "why": "the negative-phrased close lowers the cost of replying; the case numbers must be real" },
+    { "id": "LO02", "opener": "short probing question", "audience": "marketing and content services", "template": "Hey [FIRST NAME], good to connect. Curious - [ONE SPECIFIC QUESTION ABOUT A METRIC THEY LIKELY CARE ABOUT]?", "why": "one question, no pitch; the reply starts a sell-by-chat sequence, not a broadcast" },
+    { "id": "LO03", "opener": "shared event", "audience": "anyone who genuinely attended the same event", "template": "Hey [FIRST NAME] - saw you were at [EVENT NAME] too. Have you been working on [EVENT TOPIC] a while or just getting started?", "why": "honest shared context; only usable when you actually attended or watched the event" },
+    { "id": "LO04", "opener": "funding congratulations", "audience": "recruiters and services targeting recently funded companies", "template": "Congrats on the [ROUND NAME], [FIRST NAME]. When I raised mine the focus went straight to building out the team - is that where [COMPANY] is heading or investing elsewhere?", "why": "public funding news is a legitimate signal; the personal framing is only usable if you genuinely have that experience" },
+    { "id": "LO05", "opener": "live job listing", "audience": "recruiters and staffing", "template": "Bit out of left field, but I saw your [ROLE NAME] listing on [JOB PLATFORM]. We recently filled the same role for [REAL CLIENT] - shortlist in [REAL TIMEFRAME]. Worth us putting a shortlist together for you?", "why": "a live listing is explicit intent; the placement claim and any retention figure must be real" },
+    { "id": "LO06", "opener": "keyword callout", "audience": "SEO services", "template": "Hey [FIRST NAME] - just searched [COMPANY NAME] on Google and noticed you aren't ranking for [KEYWORD ONE] or [KEYWORD TWO]. Something you've thought about?", "why": "a checkable, specific observation about their world; do the search for real before sending" },
+    { "id": "LO07", "opener": "builder template offer", "audience": "web design and dev services", "template": "Hey [FIRST NAME] - saw your site runs on [SITE BUILDER]. I have a [INDUSTRY] template that [REAL EXAMPLE COMPANY] uses - happy to send it over, and to apply it for you at no charge if you don't have anyone to implement it.", "why": "a real free deliverable with zero friction; only offer the free implementation if you will actually do it" },
+    { "id": "LO08", "opener": "pain point with company signal", "audience": "coaches and consultants", "template": "Hey [FIRST NAME] - I've followed [COMPANY] for a bit and noticed [SPECIFIC OBSERVABLE SIGNAL]. Curious whether that's intentional or you're running into [SPECIFIC SCALING PROBLEM]? Have a guide on [SOLVING THAT PROBLEM] if useful.", "why": "the signal must be genuinely observable (public headcount, posting cadence); the guide is given without conditions" },
+    { "id": "LO09", "opener": "honest feedback ask", "audience": "product and AI builders", "template": "Hey [FIRST NAME] - I build [PRODUCT CATEGORY] for [ICP] and I'm looking for blunt feedback, not a sale. I made [ONE SENTENCE PRODUCT DESCRIPTION] - if [PROBLEM AREA] is something your team spends time on, would love your take.", "why": "a feedback ask is honest only when feedback is genuinely wanted and acted on; it must not be a disguised pitch" }
+  ],
+  "antiPatterns": [
+    { "id": "LA01", "pattern": "scraped-origin deception", "why": "openers that invent a mutual source (a-little-birdy-told-me) and then joke that the sender actually scraped the recipient's profile are deception built on a terms violation; never manufacture false familiarity" },
+    { "id": "LA02", "pattern": "AI voice notes passed off as personal", "why": "sending synthetic voice messages that imitate a spontaneous human note is undisclosed impersonation; voice notes are recorded by the actual human or not sent" },
+    { "id": "LA03", "pattern": "automated scraping and mass-DM tooling", "why": "third-party follower scrapers, commenter scrapers, and fully automated DM sequencers violate LinkedIn terms and get accounts restricted; competitor-engagement signals may only be gathered manually within the platform" },
+    { "id": "LA04", "pattern": "false scarcity and urgency", "why": "free-for-24-hours and limited-to-N-copies lines are only usable when literally enforced; fake limits are a lie the audience eventually catches" },
+    { "id": "LA05", "pattern": "fabricated proof", "why": "invented client results, revenue screenshots, retention rates, or credentials in profiles, posts, or DMs are fraud; real numbers or no claim" }
+  ]
+}

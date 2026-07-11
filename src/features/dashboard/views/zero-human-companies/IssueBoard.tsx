@@ -7,7 +7,7 @@ import { ConsolidatedIssueCard } from "./ConsolidatedIssueCard";
 import { ISSUE_LANES } from "./data";
 import { getIssueIdentity } from "./issue-identity";
 import { groupIssuesByReason, issueBlockReason, issueReasoningTrail } from "./issue-reason";
-import { ReasoningTrailView } from "@/features/reasoning/ReasoningTrailView";
+import { CollapsibleReasoningTrail } from "@/features/reasoning/ReasoningTrailView";
 import type { PreviewDecision } from "./preview-review";
 import { PriTag, RoleGlyph, Skeleton } from "./primitives";
 import type { Agent, Colony, Issue } from "./types";
@@ -106,7 +106,7 @@ function IssueCard({
           <ChatInlineMarkdown text={blockReason} />
         </div>
       )}
-      <ReasoningTrailView trail={reasoning} tone="issue" compact />
+      <CollapsibleReasoningTrail trail={reasoning} tone="issue" />
       {blockReason && (
         <CompanyIssueActionButtons companyName={companyName} issue={issue} onOpenIssue={onOpen} onResolveIssue={onResolveIssue} onReviewPreview={onReviewPreview} onDismiss={onDismiss} busy={busy} />
       )}

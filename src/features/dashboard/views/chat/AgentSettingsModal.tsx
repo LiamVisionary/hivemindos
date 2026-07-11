@@ -97,6 +97,7 @@ export function AgentSettingsModal(props: any) {
     machineGroups,
     onAeonWorkspaceCreated,
     onQueenClapWakeEnabledChange,
+    notifyAgentVoiceFailure,
     openAgentSkillBrowser,
     openCustomWorkerClassCreator,
     providerIconPath,
@@ -277,7 +278,10 @@ export function AgentSettingsModal(props: any) {
   };
   const runtimeFolderValue = roleModalAgent ? isAutopilotSettings ? roleModalAgent.aeonLocalPath || roleModalAgent.localDataDir || "" : roleModalAgent.localDataDir || "" : "";
   const targetMachineRuntimes = agentCreateMachine?.capabilities?.runtimes ?? [];
-  const targetMachineHasRuntimeInventory = targetMachineRuntimes.length > 0;
+  // An explicit [] from a ready collector means "no runtimes installed", not
+  // "inventory unknown". Treat it as authoritative so a fresh machine opens
+  // the shared in-app downloader instead of falling back to local setup state.
+  const targetMachineHasRuntimeInventory = Array.isArray(agentCreateMachine?.capabilities?.runtimes);
   const activeRuntimeNeedsSetup = runtimeNotConfigured(activeRuntime) && runtimeHasInstallSetup(activeRuntime);
 
   function runtimeNotConfigured(runtime: string) {
@@ -1543,7 +1547,7 @@ export function AgentSettingsModal(props: any) {
         : activePanel === "tools"
           ? <AgentSettingsToolsPanel {...{ HERMES_UPDATE_INTEGRATION_KEYS, agentMailboxBusy, agentMailboxError, agentMailboxOverview, createMailboxForCurrentAgent, hermesUpdateRequired, refreshRuntimeIntegrations, roleModalAgent, runtimeCapabilities, runtimeIntegrationBusy, runtimeIntegrationStatus, runtimeSessionQuery, runtimeSessionResults, searchRuntimeSessionsForAgent, setRuntimeSessionQuery }} />
           : activePanel === "calls"
-            ? <AgentSettingsCallsPanel {...{ agentCreateDraft, agentCreateMachine, onQueenClapWakeEnabledChange, queenClapWakeEnabled, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} />
+            ? <AgentSettingsCallsPanel {...{ agentCreateDraft, agentCreateMachine, onQueenClapWakeEnabledChange, queenClapWakeEnabled, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} onVoiceFailure={notifyAgentVoiceFailure} />
             : activePanel === "ministry"
               ? <AgentSettingsMinistryPanel {...{ agentCallSettings, displayAgents, roleModalAgent, updateAgentCalls }} />
               : renderSecurity();

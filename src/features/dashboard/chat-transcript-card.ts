@@ -83,3 +83,7 @@ export function extractTranscriptCard(content: string): { card: ChatTranscriptCa
   const remainingText = `${content.slice(0, match.index)}${content.slice(match.index + match[0].length)}`.trim();
   return { card, remainingText };
 }
+
+export function transcriptCardIsRunning(content: string): boolean {
+  return extractTranscriptCard(content)?.card.status === "running";
+}

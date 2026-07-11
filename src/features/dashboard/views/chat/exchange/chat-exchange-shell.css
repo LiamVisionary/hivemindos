@@ -100,6 +100,14 @@
   background: color-mix(in srgb, var(--fg) 8%, transparent) !important;
 }
 
+.cx-chatrow-running-dot {
+  animation: cx-chatrow-running-bounce 1.6s linear infinite;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--honey) 13%, transparent),
+    0 0 9px color-mix(in srgb, var(--honey) 48%, transparent);
+  transform-origin: center bottom;
+}
+
 .cx-rowwrap {
   position: relative;
 }
@@ -255,6 +263,60 @@
   border-color: var(--honey-line) !important;
   background: var(--honey-soft) !important;
   color: var(--honey) !important;
+}
+
+.fr-chat-feedback-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fr-chat-feedback-button {
+  display: grid;
+  width: 28px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  padding: 0;
+}
+
+.fr-chat-feedback-button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.8;
+}
+
+.fr-chat-feedback-button:hover,
+.fr-chat-feedback-button:focus-visible {
+  border-color: var(--line-2);
+  background: var(--panel-2);
+  color: var(--fg-2);
+}
+
+.fr-chat-feedback-button.is-positive[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--live) 40%, transparent);
+  background: color-mix(in srgb, var(--live) 11%, transparent);
+  color: var(--live);
+}
+
+.fr-chat-feedback-button.is-negative[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.fr-chat-feedback-button:focus-visible {
+  outline: 2px solid var(--honey-line);
+  outline-offset: 1px;
+}
+
+.fr-chat-feedback-button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 /* ---------- deliverable tiles ---------- */
@@ -439,6 +501,39 @@
   }
 }
 
+@keyframes cx-chatrow-running-bounce {
+  0%,
+  12%,
+  82%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  20% {
+    transform: translateY(1px) scale(1.18, 0.76);
+  }
+
+  34% {
+    transform: translateY(-4px) scale(0.88, 1.18);
+  }
+
+  46% {
+    transform: translateY(0) scale(1.12, 0.88);
+  }
+
+  57% {
+    transform: translateY(-1.8px) scale(0.94, 1.08);
+  }
+
+  67% {
+    transform: translateY(0) scale(1.04, 0.96);
+  }
+
+  75% {
+    transform: translateY(-0.6px) scale(0.98, 1.03);
+  }
+}
+
 .cx-spin {
   animation: cx-spin 0.8s linear infinite;
 }
@@ -457,6 +552,7 @@
   }
 
   .cx-dot-live,
+  .cx-chatrow-running-dot,
   .cx-genskel::before,
   .cx-spin {
     animation: none !important;

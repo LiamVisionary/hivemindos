@@ -5,6 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PORT:-5020}"
 COLLECTOR_PORT="${AGENT_TELEMETRY_PORT:-8787}"
 TAILNET_COLLECTOR_PORT="${HIVE_TAILNET_COLLECTOR_PORT:-8787}"
+SYSTEMD_LINGER_MARKER="$HOME/.hivemindos/systemd-linger-enabled-by-hivemindos"
+OPENCLAW_CODEX_TRUST_MARKER="$HOME/.hivemindos/openclaw-codex-plugin-trust.json"
 
 info() { printf "\033[1;36m%s\033[0m\n" "$*"; }
 ok() { printf "\033[1;32m✓\033[0m %s\n" "$*"; }
@@ -69,6 +71,16 @@ ask() {
 
 run_if_exists() {
   command -v "$1" >/dev/null 2>&1
+}
+
+run_privileged() {
+  if [[ "$(id -u)" == "0" ]]; then
+    "$@"
+  elif run_if_exists sudo; then
+    sudo "$@"
+  else
+    return 127
+  fi
 }
 
 remove_managed_block() {
@@ -219,6 +231,15 @@ if ask "Remove HivemindOS telemetry collector service?" "yes"; then
   fi
 fi
 
+if [[ -f "$SYSTEMD_LINGER_MARKER" ]] && ask "Disable systemd user lingering that HivemindOS enabled for background services?" "no"; then
+  if run_if_exists loginctl && run_privileged loginctl disable-linger "$(id -un)"; then
+    rm -f "$SYSTEMD_LINGER_MARKER"
+    ok "Disabled HivemindOS-managed systemd user lingering"
+  else
+    warn "Could not disable systemd user lingering; it remains enabled"
+  fi
+fi
+
 if ask "Disable HivemindOS Tailscale Serve collector forwarding on port $TAILNET_COLLECTOR_PORT?" "yes"; then
   tailscale_cli=""
   if [[ -n "${HIVE_TAILSCALE_CLI:-}" && -x "${HIVE_TAILSCALE_CLI:-}" ]]; then
@@ -313,6 +334,27 @@ fi
 if ask "Remove HivemindOS GitLawb config/status cache from ~/.hivemindos/gitlawb?" "yes"; then
   rm -rf "$HOME/.hivemindos/gitlawb/status.json" "$HOME/.hivemindos/gitlawb/setup-status.json"
   ok "Removed HivemindOS GitLawb status cache"
+fi
+
+if [[ -f "$OPENCLAW_CODEX_TRUST_MARKER" ]] && ask "Remove the HivemindOS-added Codex entry from OpenClaw's plugin allowlist?" "no"; then
+  openclaw_config="$HOME/.openclaw/openclaw.json"
+  if [[ -f "$openclaw_config" ]] && command -v node >/dev/null 2>&1; then
+    node - "$openclaw_config" <<'NODE'
+const fs = require("fs");
+const configPath = process.argv[2];
+let config;
+try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { process.exit(0); }
+if (!Array.isArray(config?.plugins?.allow)) process.exit(0);
+config.plugins.allow = config.plugins.allow.filter((pluginId) => pluginId !== "codex");
+if (config.plugins.allow.length === 0) delete config.plugins.allow;
+if (Object.keys(config.plugins).length === 0) delete config.plugins;
+fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+NODE
+    rm -f "$OPENCLAW_CODEX_TRUST_MARKER"
+    ok "Removed the HivemindOS-added Codex plugin trust entry"
+  else
+    warn "OpenClaw config was not readable; left the plugin trust marker in place"
+  fi
 fi
 
 if ask "Remove fallback HivemindOS project registry ~/.hivemindos/projects.json?" "no"; then

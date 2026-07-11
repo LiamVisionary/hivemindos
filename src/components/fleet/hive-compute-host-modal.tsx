@@ -14,6 +14,9 @@ import styles from "./hive-compute-host-modal.module.css";
  * Compute route; only the backdrop, dialog framing, and close affordance live
  * here.
  */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function HiveComputeHostModal({
   machine,
   machines,
@@ -24,14 +27,38 @@ export function HiveComputeHostModal({
   onClose: () => void;
 }) {
   const machineName = machine.name || "this machine";
+  const dialogRef = React.useRef<HTMLElement | null>(null);
 
-  // Escape to close (modal-only chrome).
+  // Escape to close, plus a focus trap: focus enters the dialog on open, Tab
+  // cycles inside it, and focus returns to the opener on close.
   React.useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        .filter((element) => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === dialogRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus();
+    };
   }, [onClose]);
 
   return (
@@ -42,6 +69,8 @@ export function HiveComputeHostModal({
         aria-label={`Hive Compute host setup for ${machineName}`}
         className={`${styles.tokens} ${styles.surface} ${styles.modal}`}
         onClick={(event) => event.stopPropagation()}
+        ref={dialogRef}
+        tabIndex={-1}
       >
         <CloseIconButton
           type="button"

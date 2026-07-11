@@ -17,6 +17,7 @@ import { CHAT_PERMISSION_MODE_OPTIONS, chatPermissionModeLabel } from "@/lib/typ
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { RecentDirectory } from "@/lib/types/recent-directories";
+import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
 
 export { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 export { MessageAttachments } from "@/features/chat/chat-attachment-view";
@@ -250,7 +251,9 @@ export function restoreRedactedLocalhostPreviewUrls(value: string) {
 }
 
 export function chatDisplayContent(message: ChatMessage) {
-  return message.role === "assistant" ? restoreRedactedLocalhostPreviewUrls(normalizeAssistantChatText(message.content)) : message.content;
+  return message.role === "assistant"
+    ? restoreRedactedLocalhostPreviewUrls(normalizeAssistantChatText(visibleChannelMarkupText(message.content)))
+    : message.content;
 }
 
 export function attachmentSummary(attachments: ChatAttachment[]) {
@@ -1272,4 +1275,3 @@ export function ComposerField({
     </div>
   );
 }
-

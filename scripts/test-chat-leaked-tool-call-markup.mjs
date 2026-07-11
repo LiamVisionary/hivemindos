@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const {
   contentHasLeakedToolCallMarker,
   extractLeakedToolCalls,
   stripLeakedToolCallMarkup,
 } = await import("../src/lib/services/chat/leaked-tool-call-markup.ts");
+const channelMarkup = await import("../src/lib/services/chat/channel-markup.ts");
+const { routeChannelMarkupText } = channelMarkup;
 
 const leaked = `<|tool_call>call:run_command
 {
@@ -72,5 +75,45 @@ assert.deepEqual(JSON.parse(capabilityCalls[0].arguments), {
   serviceKind: "skill",
   surface: "skill",
 });
+
+const legacyAssistantMessage = `<think>
+The user said hi, so I should answer with a concise greeting.
+</think>
+
+Hi! I'm here to help.`;
+assert.deepEqual(routeChannelMarkupText(legacyAssistantMessage), {
+  content: "\n\nHi! I'm here to help.",
+  thinking: "\nThe user said hi, so I should answer with a concise greeting.\n",
+});
+assert.equal(
+  channelMarkup.visibleChannelMarkupText?.(legacyAssistantMessage),
+  "\n\nHi! I'm here to help.",
+  "visible legacy chat text should exclude the model's private reasoning",
+);
+
+const chatComposerSource = await readFile(
+  new URL("../src/features/chat/chat-composer.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  chatComposerSource,
+  /visibleChannelMarkupText\(message\.content\)/,
+  "archived assistant messages should route legacy reasoning markup before display",
+);
+
+const chatTreeSource = await readFile(
+  new URL("../src/features/dashboard/hooks/use-chat-tree-controller.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  chatTreeSource,
+  /function chatSearchContent[\s\S]{0,240}stripJsonRenderPayload\(chatVisibleContent\(message\)\)/,
+  "chat search should not index legacy reasoning markup",
+);
+assert.match(
+  chatTreeSource,
+  /function chatPreviewContent[\s\S]{0,160}stripJsonRenderPayload\(chatVisibleContent\(message\)\)/,
+  "chat previews should not display legacy reasoning markup",
+);
 
 console.log("chat leaked tool-call markup checks passed");

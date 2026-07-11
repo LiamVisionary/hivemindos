@@ -2,11 +2,13 @@
 
 import { Fragment, memo, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
+import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
 import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
 import { shouldRenderImageGenerationCard } from "@/features/dashboard/hooks/status-chat-process-image-generation";
 import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
+import { parseUserSlashCommandDisplay } from "@/features/queen-voice/queen-command-display";
 import { markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type ProcessEvent } from "@/features/dashboard/views/chat/AgentProcessPanel";
 import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
@@ -40,11 +42,30 @@ export type ChatKanbanGeneration = {
 
 export type ThreadIconProps = {
   Check?: IconComponent;
+  CircleAlert?: IconComponent;
   Copy?: IconComponent;
   KanbanSquare?: IconComponent;
   LoaderCircle?: IconComponent;
   Sparkles?: IconComponent;
 };
+
+function assistantErrorDetail(content: string) {
+  return content.match(/^Error:\s*([\s\S]+)$/i)?.[1]?.trim() ?? "";
+}
+
+function retryPromptForMessage(
+  messages: ThreadMessage[],
+  failedMessageIndex: number,
+  chatDisplayContent?: (message: unknown) => string,
+) {
+  for (let index = failedMessageIndex - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (candidate?.role !== "user") continue;
+    const content = messageText(candidate, chatDisplayContent).trim();
+    if (content) return content;
+  }
+  return "";
+}
 
 function formatBillingUsd(value: number) {
   const decimals = value > 0 && value < 0.001 ? 6 : value > 0 && value < 0.01 ? 4 : 2;
@@ -83,6 +104,27 @@ function renderInline(text: string) {
   }
   if (last < text.length) out.push(text.slice(last));
   return out;
+}
+
+function UserMessageContent({ ChatMarkdown, text }: { ChatMarkdown?: ChatMarkdownComponent; text: string }) {
+  const command = parseUserSlashCommandDisplay(text);
+  if (!command) {
+    return ChatMarkdown
+      ? <ChatMarkdown text={markdownText(text)} className="fr-chat-markdown" />
+      : renderInline(text);
+  }
+  const stacked = /^[\t ]*\r?\n/.test(command.suffix);
+  const suffix = command.suffix.trimStart();
+  return (
+    <div className={`fr-chat-user-command${stacked ? " is-stacked" : ""}`}>
+      <span className="fr-chat-command-badge">{command.name}</span>
+      {suffix ? (
+        <div className="fr-chat-user-command-suffix">
+          {ChatMarkdown ? <ChatMarkdown text={markdownText(suffix)} className="fr-chat-markdown" /> : renderInline(suffix)}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function InteractivePromptControls({ allowFreeText = true, disabled, options, sendPromptMessage, Send }: {
@@ -249,8 +291,11 @@ function MessageActions({
   generateKanbanTaskFromChat,
   onCopy,
   onDismissKanban,
+  onFeedback,
   onToggleKanban,
   open,
+  feedback,
+  feedbackBusyKey,
   renderKey,
 }: {
   Check?: IconComponent;
@@ -264,8 +309,11 @@ function MessageActions({
   generateKanbanTaskFromChat?: (lane: string, payload: { key: string; content: string }) => void | Promise<void>;
   onCopy: () => void;
   onDismissKanban: () => void;
+  onFeedback?: (rating: "up" | "down") => void | Promise<void>;
   onToggleKanban: () => void;
   open?: boolean;
+  feedback?: ChatMessage["feedback"];
+  feedbackBusyKey?: string;
   renderKey: string;
 }) {
   if (!content?.trim()) return null;
@@ -275,6 +323,34 @@ function MessageActions({
       {/* Prototype (Chat.dc.html 458-466): one rounded segmented pill, hairline
           divider between segments. `cx-msgaction` supplies the honey hover. */}
       <div className="fr-chat-action-row">
+        {onFeedback ? (
+          <div className="fr-chat-feedback-actions" aria-label="Rate this response">
+            {(["up", "down"] as const).map((rating) => {
+              const selected = feedback?.rating === rating;
+              const busy = Boolean(feedbackBusyKey?.startsWith(`${renderKey}:`));
+              const pending = feedbackBusyKey === `${renderKey}:${rating}`;
+              const Icon = rating === "up" ? ThumbsUp : ThumbsDown;
+              const label = rating === "up" ? "Good response" : "Bad response";
+              return (
+                <button
+                  key={rating}
+                  type="button"
+                  className={`fr-chat-feedback-button ${rating === "up" ? "is-positive" : "is-negative"}`}
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={selected}
+                  data-active={selected ? "true" : "false"}
+                  disabled={busy}
+                  onClick={() => void onFeedback(rating)}
+                >
+                  {pending && LoaderCircle
+                    ? <LoaderCircle aria-hidden="true" className="cx-spin" />
+                    : <Icon aria-hidden="true" />}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <div style={{ display: "inline-flex", overflow: "hidden", border: "1px solid var(--line-2)", borderRadius: 999, marginLeft: 2 }}>
           <button
             type="button"
@@ -478,6 +554,7 @@ function MessageThreadBase({
   chatDisplayContent,
   chatProcessScopeKey,
   copiedMessageKey,
+  feedbackBusyKey,
   formatRelativeTime,
   generateKanbanTaskFromChat,
   hasStreamingChunk,
@@ -489,6 +566,7 @@ function MessageThreadBase({
   processEventsTargetKey,
   selectedAgent,
   sendPromptMessage,
+  onMessageFeedback,
   setCopiedMessageKey,
   setOpenKanbanTaskMenuKey,
   chatKanbanGeneration,
@@ -505,6 +583,7 @@ function MessageThreadBase({
   chatDisplayContent?: (message: unknown) => string;
   chatProcessScopeKey: string;
   copiedMessageKey: string;
+  feedbackBusyKey?: string;
   formatRelativeTime?: (time: number | undefined) => string;
   generateKanbanTaskFromChat?: (lane: string, payload: { key: string; content: string }) => void | Promise<void>;
   hasStreamingChunk?: boolean;
@@ -516,6 +595,7 @@ function MessageThreadBase({
   processEventsTargetKey: string;
   selectedAgent?: AgentProfile | null;
   sendPromptMessage?: (prompt: string, options?: SendPromptOptions) => void | Promise<void>;
+  onMessageFeedback?: (message: ThreadMessage, renderKey: string, rating: "up" | "down") => void | Promise<void>;
   setCopiedMessageKey: Dispatch<SetStateAction<string>>;
   setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
   chatKanbanGeneration?: ChatKanbanGeneration | null;
@@ -564,6 +644,11 @@ function MessageThreadBase({
       {messages.map((message, index) => {
         const content = messageText(message, chatDisplayContent);
         const isUser = message.role === "user";
+        const assistantError = !isUser ? assistantErrorDetail(content) : "";
+        const retryPrompt = assistantError
+          ? retryPromptForMessage(messages, index, chatDisplayContent)
+          : "";
+        const CircleAlert = iconProps.CircleAlert;
         const mirosharkCard = !isUser && content ? extractMiroSharkSimulationCard(content) : null;
         const transcriptCard = !isUser && content ? extractTranscriptCard(content) : null;
         const rawApplicationGenerationCard = !isUser
@@ -623,8 +708,13 @@ function MessageThreadBase({
           generateKanbanTaskFromChat,
           onCopy: () => copyMessageContent(renderKey, copyText),
           onDismissKanban: () => dismissKanbanPopover(renderKey),
+          onFeedback: !isUser && message.sourceSessionId && onMessageFeedback
+            ? (rating: "up" | "down") => onMessageFeedback(message, renderKey, rating)
+            : undefined,
           onToggleKanban: () => setOpenKanbanTaskMenuKey((current) => current === renderKey ? "" : renderKey),
           open: openKanbanTaskMenuKey === renderKey,
+          feedback: !isUser ? message.feedback : undefined,
+          feedbackBusyKey,
           renderKey,
         };
 
@@ -633,7 +723,7 @@ function MessageThreadBase({
             <Fragment key={renderKey}>
               <article style={{ display: "grid", justifyItems: "end", gap: 5 }}>
                 <div style={{ maxWidth: "82%", border: "1px solid var(--honey-line)", borderRadius: "16px 16px 6px 16px", background: "var(--honey-soft)", color: "var(--fg)", fontSize: 14.5, lineHeight: 1.6, padding: "11px 16px" }}>
-                  {ChatMarkdown ? <ChatMarkdown text={markdownText(content || "(sent attachments)")} className="fr-chat-markdown" /> : renderInline(content || "(sent attachments)")}
+                  <UserMessageContent ChatMarkdown={ChatMarkdown} text={content || "(sent attachments)"} />
                 </div>
                 <AttachmentPills attachments={attachments} />
                 <MessageFooter align="user" timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} />
@@ -675,6 +765,28 @@ function MessageThreadBase({
                   ) : null}
                 </div>
                 <div style={{ display: "grid", gap: 10, color: "var(--fg-2)", fontSize: 14.5, lineHeight: 1.7, paddingLeft: 14 }}>
+                  {assistantError ? (
+                    <div className="fr-chat-error-card" role="alert">
+                      <span className="fr-chat-error-card-icon" aria-hidden="true">
+                        {CircleAlert ? <CircleAlert /> : "!"}
+                      </span>
+                      <div className="fr-chat-error-card-copy">
+                        <strong>There was an error</strong>
+                        <p>{assistantError}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="fr-chat-error-retry"
+                        aria-label="Retry failed message"
+                        disabled={busy || !retryPrompt || !sendPromptMessage}
+                        onClick={() => {
+                          if (retryPrompt) void sendPromptMessage?.(retryPrompt);
+                        }}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : null}
                   {applicationGenerationCard ? <ApplicationGenerationCard card={applicationGenerationCard} /> : null}
                   {!applicationGenerationCard && generatedImagePathCard ? <ApplicationGenerationCard card={generatedImagePathCard} /> : null}
                   {mirosharkCard ? <MiroSharkSimulationCard card={mirosharkCard} ChatMarkdown={ChatMarkdown} /> : null}
@@ -688,7 +800,7 @@ function MessageThreadBase({
                       <JsonRenderSurface value={assistantDisplayText} className="m-0" />
                     </div>
                   ) : null}
-                  {applicationGenerationCard || generatedImagePathCard || mirosharkCard?.hideRawContent ? null : ChatMarkdown
+                  {assistantError || applicationGenerationCard || generatedImagePathCard || mirosharkCard?.hideRawContent ? null : ChatMarkdown
                     ? (assistantDisplayTextWithoutJsonRender
                       ? selectedAgent?.workerClass === "research"
                         ? <ResearchBriefTabs text={markdownText(assistantDisplayTextWithoutJsonRender)} ChatMarkdown={ChatMarkdown} />

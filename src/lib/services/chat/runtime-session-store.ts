@@ -4,6 +4,14 @@ import { join } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { syncConversationNoteForSession } from "@/lib/services/obsidian/conversation-notes";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import {
+  applyHumanFeedbackToEvaluation,
+  evaluateCompletionEvent,
+  evaluationOutputFingerprint,
+  type EvaluationHumanFeedback,
+  type EvaluationHumanFeedbackRating,
+  type EvaluationResult,
+} from "@/lib/services/evaluation/control-plane";
 
 export type RuntimeChatSessionMessage = {
   index: number;
@@ -14,6 +22,8 @@ export type RuntimeChatSessionMessage = {
   raw?: unknown;
   billing?: ChatResponseBilling;
   applicationGeneration?: RuntimeApplicationGeneration;
+  feedback?: EvaluationHumanFeedback;
+  evaluation?: EvaluationResult;
 };
 
 export type RuntimeApplicationGeneration = {
@@ -37,6 +47,7 @@ export type RuntimeChatSessionRecord = {
   updatedAt: number;
   endedAt?: number;
   endReason?: string;
+  evaluation?: EvaluationResult;
   messages: RuntimeChatSessionMessage[];
 };
 
@@ -268,10 +279,76 @@ export async function finishRuntimeChatSession(sessionId: string, endReason = "c
   session.updatedAt = now;
   session.endedAt = now;
   session.endReason = endReason;
+  const assistantMessage = [...session.messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.type !== "process");
+  const assistantOutput = assistantMessage?.content ?? "";
+  session.evaluation = await evaluateCompletionEvent({
+    id: session.sessionId,
+    surface: "chat",
+    status: endReason === "completed" ? "completed" : endReason === "blocked" ? "blocked" : "failed",
+    observed: true,
+    output: assistantOutput,
+    startedAt: session.startedAt,
+    completedAt: now,
+    metadata: { runtime: session.runtime, agentId: session.agentId },
+  });
+  if (assistantMessage) assistantMessage.evaluation = session.evaluation;
   await writeSession(session);
   // Mirror the finished conversation into the shared vault (best effort) so
   // shared-brain recall can search it; never block or fail the chat response.
   void syncConversationNoteForSession(session).catch(() => {});
+}
+
+export async function recordRuntimeChatSessionMessageFeedback(
+  sessionId: string,
+  messageIndex: number,
+  rating: EvaluationHumanFeedbackRating | null,
+  options: { messageFingerprint?: string; now?: () => number } = {},
+) {
+  const session = await readSessionFile(sessionPath(sessionId));
+  const message = Number.isInteger(messageIndex)
+    ? session?.messages.find((candidate) => candidate.index === messageIndex)
+    : [...(session?.messages ?? [])].reverse().find((candidate) => (
+      candidate.role === "assistant"
+      && candidate.type !== "process"
+      && options.messageFingerprint
+      && evaluationOutputFingerprint(candidate.content) === options.messageFingerprint
+    ));
+  if (!session || !message || message.role !== "assistant" || message.type === "process") {
+    throw new Error("Assistant message not found for this runtime chat session.");
+  }
+  const now = options.now?.() ?? Date.now();
+  const status = session.endReason === "blocked"
+    ? "blocked"
+    : session.endReason && session.endReason !== "completed"
+      ? "failed"
+      : "completed";
+  const automaticEvaluation = await evaluateCompletionEvent({
+    id: `${session.sessionId}:message:${message.index}`,
+    surface: "chat",
+    status,
+    observed: true,
+    output: message.content,
+    startedAt: session.startedAt,
+    completedAt: message.createdAt || session.endedAt || now,
+    metadata: { runtime: session.runtime, agentId: session.agentId, messageIndex: message.index },
+  });
+  const feedback: EvaluationHumanFeedback | undefined = rating
+    ? { rating, source: "human", providedAt: now }
+    : undefined;
+  const evaluation = feedback
+    ? applyHumanFeedbackToEvaluation(automaticEvaluation, feedback)
+    : automaticEvaluation;
+  message.feedback = feedback;
+  message.evaluation = evaluation;
+  const latestAssistant = [...session.messages]
+    .reverse()
+    .find((candidate) => candidate.role === "assistant" && candidate.type !== "process");
+  if (latestAssistant?.index === message.index) session.evaluation = evaluation;
+  session.updatedAt = now;
+  await writeSession(session);
+  return { message, evaluation };
 }
 
 /**

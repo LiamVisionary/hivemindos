@@ -421,8 +421,16 @@ function proxyTimeoutForRequest(clientRequest) {
   // Keep the outer dev proxy slightly above that so it does not replace a
   // still-running text chat with a confusing route-level fallback.
   if (clientRequest.url?.startsWith("/api/queen-bee/chat")) return 130_000;
+  // X videos can spend the route's full five-minute budget downloading,
+  // extracting, transcribing, and summarizing. Keep the proxy outside it.
+  if (clientRequest.url?.startsWith("/api/integrations/x-transcript"))
+    return 330_000;
   // Fleet updates run a remote update plus a verification poll (route maxDuration 360s).
   if (clientRequest.url?.startsWith("/api/fleet/update")) return 7 * 60_000;
+  // A warmed Hive Compute benchmark runs repeated samples for each selected
+  // model and unloads between models, so it legitimately outlives a normal API.
+  if (clientRequest.url?.startsWith("/api/hive-compute/marketplace"))
+    return 11 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;
   // Chunk/asset requests routinely block behind a Turbopack compile (or a
   // backend respawn boot). Killing them fast surfaces in the app as

@@ -60,6 +60,141 @@ own local use. Hosts can also raise the max concurrency slot count above the
 default of one when their machine can safely serve multiple jobs at the same
 time.
 
+## Host Pricing
+
+Hive Compute prices each advertised model separately. A small model and a large
+model do not inherit one shared list price.
+
+During setup, the app runs a short local benchmark for every selected model. It
+measures prompt processing and output generation on the actual backend and
+machine. Each model is warmed up first, then measured repeatedly; the median
+prompt-processing and output-generation speeds are kept so one cold start or
+slow request cannot distort the result. Ollama supplies its native prompt/output
+timing counters; LM Studio and other OpenAI-compatible servers use separate
+prompt-prefill and output-generation samples. Benchmark prompts contain fixed
+synthetic text and do not use the user's chats, files, or vault.
+
+The benchmark also manages memory conservatively. Before measuring a model, it
+records whether that model is already resident. When measurement finishes—or
+fails—it unloads only the LM Studio or Ollama instance that the benchmark caused
+to load, waits for that cleanup, and only then starts the next model. Models that
+were already loaded by the host stay loaded. Arbitrary OpenAI-compatible servers
+do not expose one standard unload operation, so HivemindOS does not issue a
+guessed destructive request to those runtimes.
+
+Measuring several large models can take a few minutes. The host panel keeps the
+benchmark action active during that work. If a development proxy drops the
+original request while local inference is still running, the panel checks the
+saved benchmark state and resumes automatically instead of reporting the proxy
+timeout as a failed measurement. Do not start a second benchmark while that
+recovery message is visible.
+
+The primary pricing choice has two modes:
+
+- **Automatic** — starts below the public hosted price for a comparable model.
+  Exact known model families use a comparable-model reference; other models use
+  a conservative size-and-architecture tier. A slower local benchmark can lower
+  that ask further, but a fast benchmark never pushes it above the competitive
+  ceiling. This keeps the default attractive to buyers instead of converting a
+  desired hourly return into an uncompetitive token price.
+- **Custom** — exact input price, output price, and optional minimum price per
+  job for each model, shown right below the pricing toggle when Custom is
+  selected. Hosts who believe a private, specialized, or fine-tuned model
+  deserves a premium can ask for it here.
+
+Pricing is gated on measurement. Until every selected model completes its
+current benchmark, model cards say **Not priced yet**, dollar asks and earnings
+projections stay hidden, the next required action is **Benchmark models**, and
+**Go live** is not offered. After measurement, the app reveals Automatic and
+Custom pricing, deducts the gateway's published platform fee, and shows the
+host's projected net earnings at 10–30% utilization—not fabricated historical
+earnings. Before the marketplace has enough demand history, the projection
+adds the model-specific earning potential of the highest-value advertised models
+that fit in the host's concurrent job slots. When concurrency is already at its
+current maximum, advertising another model advances the maximum with it—for
+example, **2/2** becomes **3/3**—so the new model adds its own measured earning
+potential. If the host deliberately lowered concurrency, **1/2** becomes
+**1/3** instead and the host can change the slider when ready. Older one-shot
+benchmarks are treated as stale and must be rerun once, and every benchmark
+expires after 30 days—hardware load and backend versions drift, so an old
+measurement cannot keep pricing new jobs. A model that fails its benchmark is
+excluded from advertising with a visible notice naming the model and reason,
+instead of blocking the whole setup; fix the local backend and rebenchmark to
+retry it. Obvious embedding-only models are excluded from chat hosting. Chat
+jobs may include image inputs: the worker passes multimodal message content
+through to vision-capable local models on both engines.
+
+Beyond chat, Hive Compute uses one versioned workload protocol for **image,
+video, audio, music, speech, 3D, embeddings, reranking, and namespaced custom
+models**. Hosts publish a typed capability manifest instead of relying on one
+hard-coded adapter per model. Every offering declares its task, model, accepted
+MIME types, output MIME types, byte and unit limits, billing unit, price, and
+mandatory privacy mode. Adding a model normally means adding a confidential
+sidecar adapter and a manifest row rather than changing marketplace routing.
+
+These workloads use asynchronous jobs. A renter discovers capabilities, creates
+a draft, encrypts and uploads any inputs, submits the ciphertext-only job,
+observes bounded progress, and may cancel it. Successful media jobs return an
+encrypted artifact manifest; the renter streams the ciphertext, verifies its
+size and SHA-256 digest, decrypts it locally, and then acknowledges deletion.
+The gateway owns job state, artifact grants, metering, receipts, and settlement.
+Artifact bodies use the `HIVEART1` binary wire format: an eight-byte version
+marker followed by length-prefixed JSON metadata and raw AES-GCM ciphertext for
+each ordered chunk. Chunk metadata binds the job, artifact, MIME type, sequence,
+and final marker; the signed manifest binds the key, chunk count, total framed
+bytes, and SHA-256 digest. This lets the renter decrypt large outputs as a
+bounded stream without base64-expanding the media. Consumers should write the
+decrypted stream to an atomic temporary destination and publish it only after
+the stream closes successfully, because final whole-object verification occurs
+at stream completion.
+
+For large renter inputs, HivemindOS reads the source as a stream, encrypts each
+chunk to one randomly generated AES-256-GCM content key, wraps that key to the
+attested enclave's RSA key, and writes only the encrypted `HIVEART1` spool with
+private file permissions. No plaintext temporary file is created. The spool is
+deleted through its cleanup handle after the encrypted upload completes or when
+preparation fails.
+
+| Workload | Protocol shape | Typical billing units |
+| --- | --- | --- |
+| Chat and text generation | Encrypted streaming or final envelope | Input/output tokens |
+| Image generation | Async encrypted artifact | Image, megapixel, artifact, GPU-second |
+| Video generation | Async encrypted artifact with progress/cancel | Second, frame, artifact, GPU-second |
+| Audio, music, and speech | Async encrypted artifact | Second, sample, artifact, GPU-second |
+| 3D generation | Async encrypted artifact | Artifact, job, GPU-second |
+| Embeddings and reranking | Async encrypted JSON/binary artifact | Job or GPU-second |
+| Namespaced custom tasks | Manifest-defined encrypted artifact | Declared supported unit |
+
+Capability support is still model- and host-specific: the capabilities response
+is the authority for what is currently available. A generic protocol does not
+claim that every host already has every adapter or model installed.
+
+When the local backend reports model sizes, the host panel also warns when the
+largest advertised models at the configured slot count cannot plausibly fit in
+the machine's memory, so a host doesn't advertise a combination that would swap
+or fail under load.
+
+Projections also respect availability: **Idle only** and **Scheduled** hosting
+project over the hours the machine actually accepts jobs, so switching away
+from **Always** lowers the daily and monthly figures without changing the
+active-hour rate. Once the machine has served paid jobs, the earnings view
+leads with **actual** earnings—today, last 7 and 30 days, all-time, and a
+per-model split—recorded locally from the gateway's earning receipts, with
+projections kept clearly separate.
+
+The generated worker registers the selected model IDs, exact asks, and local
+benchmark receipt over its authenticated gateway connection. The official
+gateway validates each listing against server-owned minimums and ceilings. It
+rejects out-of-range listings, applies the server-owned platform fee, ranks
+eligible routes using the request's actual quote plus measured performance and
+provider reputation, and locks the selected price into the job and signed
+receipt. Changing a host price affects future jobs only.
+
+For multiple selected models, the built-in aliases are model-aware: **Auto**
+uses the lowest-priced selected model, **Fast** uses the highest measured output
+throughput, and **Deep** uses the largest identifiable model. Direct model IDs
+always route to that exact advertised model.
+
 The normal user path stays simple: pick the model and send the request. The
 hosting path stays simple too: set up once, then go live when the local model
 server is ready.
@@ -83,18 +218,63 @@ They send a model request to the gateway, the gateway assigns the job to an
 eligible worker, and the worker calls the selected local model backend.
 
 If a machine has multiple local models loaded, the host can advertise all of
-them or only a selected subset. Each advertised model can appear as a direct
-marketplace route, while the built-in Auto/Fast/Deep routes map to one of the
-selected local models. A host can serve more than one model at the same time
-when the configured concurrency slot count is above one and the local backend
-can handle the parallel work.
+them or only a selected subset. LM Studio (or another OpenAI-compatible
+server) and Ollama can both serve at the same time: discovery merges every
+reachable backend's models and the worker routes each job to that model's own
+engine. Each advertised model can appear as a direct marketplace route, while
+the built-in Auto/Fast/Deep routes map to one of the selected local models. A
+host can serve more than one model at the same time when the configured
+concurrency slot count is above one and the local backend can handle the
+parallel work.
+
+## Guardrails the Worker Enforces
+
+Hosting guardrails are enforced by the worker itself before it accepts each
+job—not just advertised to the gateway:
+
+- **Run hosting when** — **Idle only** refuses jobs while the machine is in
+  use, **Always** never gates on activity, and **Scheduled** only accepts jobs
+  inside a local-time window you pick (an overnight window wraps past
+  midnight).
+- **Pause on battery** — refuses jobs while the machine reports it is running
+  on battery power.
+- **Yield to user activity** — refuses new jobs while someone is actively
+  using the machine, without killing jobs already running.
+- **Daily earnings cap** — once the local ledger shows the cap was reached for
+  the day, new jobs are refused until the next day.
+- **Concurrent job slots** — the worker refuses assignments beyond its slot
+  count even if a gateway misbehaves.
+
+A refusal tells the gateway to reroute the job elsewhere, and the worker's
+heartbeat reports whether it is currently accepting work and why not. Battery
+and user-activity detection are best-effort per platform; where a platform
+cannot report them, those two guardrails never block and the worker reports
+them as unsupported.
+
+Hosting also survives restarts: if the worker process crashes it is restarted
+automatically with backoff, and if the app itself restarts while hosting was
+live, hosting resumes on boot. Stopping hosting from the dashboard records
+that intent, so nothing resumes after a deliberate stop.
+
+## Remote Quick-Host
+
+Opening another fleet machine's host panel offers **remote quick-host**: the
+worker module installs on that machine over Hivemind Link, and hosting starts
+there with the models discovered over its collector, pinned to conservative
+guardrails (idle-only, pause on battery, yield to user). The gateway URL and
+worker token resolve from that machine's own shared environment — no
+credentials leave the machine you're sitting at — and stopping uses only the
+process id the start recorded. Remote quick-host advertises models without
+exact per-model asks; run the benchmark on that machine's own HivemindOS for
+exact pricing. macOS and Linux targets are supported.
 
 Hive Compute also measures worker speed from completed jobs. The hosted gateway
 tracks time to first token, completion latency, and output tokens per second for
 each worker/model route, then rolls that into simple speed labels such as
-**Fast**, **Balanced**, **Heavy**, or **Measuring**. These labels are based on
-gateway-observed jobs, not self-reported host claims, so new routes may show as
-measuring until enough samples complete.
+**Fast**, **Balanced**, **Heavy**, or **Measuring**. The setup benchmark supplies
+an initial performance estimate for a new listing; after enough paid jobs, the
+gateway's own observations become the authoritative routing history. New routes
+may therefore show as measuring until enough real samples complete.
 
 ## Setup
 
@@ -114,17 +294,23 @@ The view checks:
 - `HIVEMINDOS_HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY`
 - `HIVEMINDOS_HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE` or a sealed
   runtime payload key
+- `HIVE_COMPUTE_WORKLOAD_MANIFEST_JSON`
+- `HIVE_COMPUTE_CONFIDENTIAL_SIDECAR_URL`
+- `HIVE_COMPUTE_CONFIDENTIAL_SIDECAR_TOKEN`
+- `HIVE_COMPUTE_CONFIDENTIAL_SIDECAR_SIGNING_PUBLIC_KEY`
 - Node.js
 - Ollama or an OpenAI-compatible local server such as LM Studio
 - the local worker module under `~/.hivemindos/modules/hive-compute-worker`
 
 For earning, set the worker token issued by the gateway, press **Set up
 hosting**, then press **Go live** in the app. The setup action installs the
-managed worker module, installs dependencies, writes the discovered model map,
-and opens an MPP payment session when that rail is available. Advanced
-diagnostics keeps the manual command, model backend details, TEE evidence, and
-MPP session controls available without making them part of the normal path. The
-manual equivalent is:
+managed worker module, installs dependencies, benchmarks the selected models,
+writes their model map and per-model asks, and opens an MPP payment session when
+that rail is available. **Benchmark models** reruns the synthetic benchmark
+without starting the worker. Selecting **Custom** pricing exposes exact model asks right below the pricing toggle for
+hosts who choose Custom pricing. Advanced diagnostics keeps the manual command,
+model backend details, TEE evidence, and MPP session controls available without
+making them part of the normal path. The manual equivalent is:
 
 ```sh
 cd ~/.hivemindos/modules/hive-compute-worker
@@ -137,13 +323,17 @@ For LM Studio, run the local server on its OpenAI-compatible API and set:
 HIVE_COMPUTE_LOCAL_ENGINE=openai
 HIVE_COMPUTE_LOCAL_OPENAI_BASE_URL=http://127.0.0.1:1234/v1
 HIVE_COMPUTE_MODEL_MAP_JSON='{"hive-compute/auto":"<lm-studio-model-id>"}'
+HIVE_COMPUTE_MODEL_LISTINGS_JSON='[{"model":"hive-compute/auto","inputUsdMicroPerMTok":500000,"outputUsdMicroPerMTok":750000,"minimumJobUsdMicro":0}]'
 ```
 
 The host flow does not ask for arbitrary paths or model IDs in the primary UI.
 It discovers LM Studio/OpenAI-compatible `/v1/models` and Ollama `/api/tags`
 locally, then lets the host choose which discovered models to advertise. The
 worker sends the selected models, built-in Auto/Fast/Deep routes, and the
-configured max concurrency slot count to the gateway.
+configured max concurrency slot count to the gateway. It also sends each
+route's authenticated exact ask and optional local benchmark result. The
+gateway can reject a route whose ask falls outside its published provider-price
+bounds.
 
 ## HivemindOS Model Selection
 
@@ -191,15 +381,22 @@ configuration.
 
 ## Privacy And Payment Rails
 
-Standard local workers receive the prompts and outputs for jobs they accept.
-Hardware privacy requires more than a local switch: the gateway must verify a
-real TEE attestation, bind routing to the expected model/code policy, and use
-encrypted prompt and output paths that only the intended endpoints can decrypt.
-When `HIVEMINDOS_HIVE_COMPUTE_TEE_REQUIRED` is enabled, the app requests
-verified-only routing, but the gateway is still the authority that must enforce
-the requirement. Hardware-only routing additionally requires server-side
-attestation verification; local or dev attestation is not treated as hardware
-privacy.
+Official asynchronous Hive Compute workload jobs fail closed unless they have
+hardware-enforced confidentiality and renter-only output encryption. The host's operating system,
+worker process, logs, gateway, artifact store, and human operator receive only
+ciphertext, bounded metadata, progress, usage, and signed manifests. The model
+must necessarily process clear data inside an attested confidential-compute
+boundary, but clear prompts and generated content must never be exposed to the
+host machine outside that boundary. This guarantee requires a real hardware TEE,
+gateway verification of fresh attestation, expected code/model binding, and a
+confidential sidecar that holds decryption and completion-signing keys.
+
+The OpenAI-compatible chat facade has a narrower compatibility boundary: its
+generated answer is encrypted inside the confidential runtime directly to the
+renter key, so the generating host and gateway cannot read the answer, but the
+chat request body reaches the official gateway before the gateway encrypts it
+for enclave delivery. Use the asynchronous workload protocol when inputs must
+also remain opaque to the gateway.
 
 TEE-capable workers advertise evidence through the generated worker protocol.
 Set `HIVEMINDOS_HIVE_COMPUTE_CONFIDENTIAL_MODE=tee-attested`, identify the TEE
@@ -210,23 +407,23 @@ when the enclave runtime provides the matching private key or sealed payload key
 Verified-only routing fails closed when no live worker has attestation evidence
 and encrypted delivery capability.
 
-Encrypted prompt delivery protects the job payload on the hop from the gateway
-to a verified worker. Output E2E encryption is opt-in: clients generate an
-RSA-OAEP keypair, send the public key with
+Encrypted prompt delivery protects the job payload all the way into the
+attested sidecar. Renter-only output encryption is mandatory on official routes:
+clients generate an RSA-OAEP keypair, send the public key with
 `X-HivemindOS-Compute-Output-Encryption: required` and
 `X-HivemindOS-Compute-Output-Public-Key`, then decrypt response envelopes on
-the client side. In that mode, workers send encrypted token and final-output
-envelopes, the gateway forwards ciphertext, meters usage from worker-reported
-token counts, signs receipts, and settles revenue without reading the answer.
-The standard response path remains plaintext at the gateway for compatibility
-with ordinary OpenAI-compatible clients.
+the client side. Workers send encrypted token, final-output, or artifact
+envelopes; the gateway forwards or stores ciphertext, meters signed usage, and
+settles revenue without reading the answer. The renter private key stays in the
+local encrypted job-key vault until every output artifact is acknowledged and
+deleted from gateway storage, then it is erased. It is never sent to the
+gateway, worker, sidecar, or model host.
 
 ### Output E2E For Clients
 
-Use output E2E when the application calling Hive Compute can decrypt responses
-itself. The normal OpenAI-compatible response body remains supported, but the
-assistant message content is blank in output-encrypted mode; the encrypted
-answer is carried in `hiveCompute.encryptedOutput`.
+The HivemindOS client creates and manages this keypair automatically. A custom
+client must decrypt responses itself. The assistant message content is blank on
+the wire; the encrypted answer is carried in `hiveCompute.encryptedOutput`.
 
 Request headers:
 
@@ -241,15 +438,14 @@ Streaming clients receive encrypted token envelopes in
 envelope at `hiveCompute.encryptedOutput`. The gateway still returns the signed
 receipt and token usage, but it should not see the decrypted answer.
 
-Hardware-only private jobs can add:
+Official requests also require:
 
 ```http
 X-HivemindOS-Compute-Hardware-TEE-Required: true
 ```
 
-That header fails closed unless an eligible worker has gateway-verified
-hardware attestation. Dev or local attestation is accepted only for
-compatibility testing and is not treated as hardware privacy.
+The request fails closed unless an eligible worker has gateway-verified hardware
+attestation. Dev or locally asserted attestation is not hardware privacy.
 
 ### Hardware TEE For Hosts
 
@@ -261,12 +457,13 @@ worker needs:
 - a real hardware provider label in `HIVEMINDOS_HIVE_COMPUTE_TEE_PROVIDER`
 - a fresh quote/evidence file or command
 - an enclave-held prompt decryption key
-- gateway-side attestation verification or a server-owned verified evidence
-  allowlist
+- gateway-side verification of fresh evidence against the expected hardware,
+  measured runtime, model, and enclave-held keys
 
-If the gateway does not have a hardware verifier or verified evidence allowlist,
-hardware-only requests are rejected even when a worker can pass dev
-verified-only routing.
+If the gateway does not have a hardware verifier, hardware-only requests are
+rejected even when a worker can pass dev verified-only routing. A static
+evidence-hash allowlist is not proof of fresh hardware attestation and is not
+accepted for the official renter-only tier.
 
 x402 is the default per-call machine-payment rail for Hive Compute-compatible
 paid requests. MPP is treated as a session rail for high-frequency inference:
@@ -296,7 +493,7 @@ Self-hosted operators can point the app and worker at their own compatible
 gateway, but that is a self-hosted marketplace, not official HivemindOS
 settlement.
 
-Workers receive prompt contents for jobs they accept unless the gateway verifies
-a confidential-compute path. Use a gateway and allowlist policy you trust, and
-do not expose secrets, private vault paths, wallets, or unrestricted local tools
-to public marketplace jobs.
+Plaintext compatibility exists only for an explicitly self-hosted, non-official
+gateway with `HIVE_COMPUTE_SELF_HOSTED_ALLOW_NONCONFIDENTIAL=1`. It must be
+presented as non-confidential: the host can see prompts and outputs, and it must
+never be used as an official marketplace privacy claim.

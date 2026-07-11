@@ -28,21 +28,43 @@ import {
 } from "lucide-react";
 
 import type { FleetMachine } from "@/components/fleet/fleet-data";
+import {
+  isHiveComputeBenchmarkProxyTimeout,
+  waitForHiveComputeBenchmarkCompletion,
+} from "@/components/fleet/hive-compute-benchmark-recovery";
+import { concurrencyAfterAdvertisedModelChange } from "@/components/fleet/hive-compute-concurrency";
+import {
+  hiveComputePriceDraftKey,
+  parseHiveComputePriceDraft,
+  type HiveComputePriceField,
+} from "@/components/fleet/hive-compute-price-draft";
+import { HiveComputeHostEarningsView, money } from "@/components/fleet/hive-compute-host-earnings";
+import { resolveLinkHostLocation } from "@/components/fleet/hive-compute-host-location";
+import { formatGigabytes, hiveComputeMemoryFit } from "@/components/fleet/hive-compute-memory-fit";
+import { HiveComputeRemoteHostControls } from "@/components/fleet/hive-compute-remote-host";
 import type {
   HiveComputeHostModel,
   HiveComputeHostRunConfig,
   HiveComputeHostWhen,
   HiveComputeMarketplaceStatus,
 } from "@/lib/types/hive-compute-marketplace";
+import {
+  HIVE_COMPUTE_PROVIDER_PRICE_BOUNDS,
+  estimateHiveComputeEarnings,
+  hiveComputeAvailabilityFactor,
+  isHiveComputeBenchmarkCurrent,
+  resolveHiveComputeModelPrice,
+} from "@/lib/services/hive-compute-pricing";
 import styles from "./hive-compute-host-modal.module.css";
 
 type ApiResponse = {
   ok?: boolean;
   error?: string;
+  code?: string;
   status?: HiveComputeMarketplaceStatus;
 };
 
-type BusyAction = "refresh" | "setup-hosting" | "run-worker" | "stop-worker" | "open-mpp-session" | "start-lmstudio" | null;
+type BusyAction = "refresh" | "setup-hosting" | "benchmark-pricing" | "run-worker" | "stop-worker" | "open-mpp-session" | "start-lmstudio" | null;
 type Step = "intro" | "setup" | "manage" | "earnings";
 type StageStatus = "ready" | "block" | "error" | "dim";
 
@@ -62,11 +84,13 @@ const HOST_WHEN_OPTIONS: Array<{ id: HiveComputeHostWhen; label: string; Icon: L
   { id: "sched", label: "Scheduled", Icon: Square },
 ];
 
+// One label per real setup stage — the meter advances only when the stage's
+// API call actually completes.
 const SETUP_TASK_LABELS = [
-  "Install worker & dependencies",
-  "Connect to the gateway",
-  "Issue worker token",
-  "Discover local models",
+  "Install the worker module",
+  "Install worker dependencies",
+  "Check gateway & worker token",
+  "Benchmark and price models",
 ];
 
 function isRunning(status: HiveComputeMarketplaceStatus | null): boolean {
@@ -74,82 +98,8 @@ function isRunning(status: HiveComputeMarketplaceStatus | null): boolean {
 }
 
 function moneyMicro(value: number): string {
-  return (value / 1_000_000).toFixed(2);
-}
-
-function money(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return "$0";
-  return "$" + (n >= 10 ? Math.round(n).toLocaleString() : n.toFixed(2));
-}
-
-function computeEarnings(count: number, markdown: number) {
-  const priceFactor = 1 - (markdown / 100) * 0.5;
-  const dayLo = count * 0.28 * priceFactor;
-  const dayHi = count * 0.84 * priceFactor;
-  const monthLo = dayLo * 30;
-  const monthHi = dayHi * 30;
-  return {
-    dayLo,
-    dayHi,
-    monthLo,
-    monthHi,
-    monthMid: (monthLo + monthHi) / 2,
-    dayStr: `${money(dayLo)}–${money(dayHi)}`,
-    monthStr: `${money(monthLo)}–${money(monthHi)}`,
-  };
-}
-
-function formatDuration(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return "—";
-  const totalSeconds = Math.floor(ms / 1000);
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  const minutes = Math.floor(totalSeconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
-
-function normalizeDeviceToken(value: string): string {
-  // Drop possessives ("Liam's" → "Liam") so an LM Studio device name and a
-  // Tailscale machine name for the same box normalize alike.
-  return value.toLowerCase().replace(/['’]s\b/g, "").replace(/[^a-z0-9]+/g, "");
-}
-
-function deviceCoreName(value: string): string {
-  // LM Studio device names often carry a role suffix ("-Host", ".local") the
-  // fleet name lacks — strip it before comparing.
-  return normalizeDeviceToken(value.replace(/[\s._-]*(host|local|lan|pc|node)$/i, ""));
-}
-
-// Best-effort location for an LM Link host: match the LM Studio device name to a
-// non-self fleet machine and borrow its (fleet-derived) location. Returns
-// undefined when there is no confident match, or when tied matches disagree on
-// location, rather than guessing.
-function resolveLinkHostLocation(deviceName: string | undefined, machines: FleetMachine[] | undefined): string | undefined {
-  if (!deviceName || !machines?.length) return undefined;
-  const target = deviceCoreName(deviceName);
-  if (target.length < 4) return undefined;
-  const scored = machines
-    .filter((machine) => !/^this\b/i.test((machine.name || "").trim()))
-    .map((machine) => {
-      const name = normalizeDeviceToken(machine.name || "");
-      const tailnet = normalizeDeviceToken(machine.tailnet || "");
-      let score = 0;
-      if (name === target || tailnet === target) score = 3;
-      else if (name.includes(target) || target.includes(name) || tailnet.includes(target)) score = 2;
-      return { machine, score };
-    })
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score);
-  if (!scored.length) return undefined;
-  const topScore = scored[0].score;
-  const tied = scored.filter((entry) => entry.score === topScore);
-  // Prefer the human city label ("New York relay") over the generic location
-  // bucket ("Tailscale relay").
-  const labels = new Set(
-    tied.map((entry) => (entry.machine.city || entry.machine.location || "").trim()).filter(Boolean),
-  );
-  return labels.size === 1 ? [...labels][0] : undefined;
+  const dollars = value / 1_000_000;
+  return dollars.toFixed(dollars > 0 && dollars < 0.01 ? 4 : 2);
 }
 
 function paymentsReady(status: HiveComputeMarketplaceStatus): boolean {
@@ -252,20 +202,33 @@ export function HiveComputeHostConsole({
   const [error, setError] = React.useState("");
   const [step, setStep] = React.useState<Step>("intro");
   const [setupProgress, setSetupProgress] = React.useState(0);
+  const [setupDetail, setSetupDetail] = React.useState("");
   const [nowTick, setNowTick] = React.useState(() => Date.now());
+  const [priceDrafts, setPriceDrafts] = React.useState<Record<string, string>>({});
   const [config, setConfig] = React.useState<HiveComputeHostRunConfig>({
-    markdown: 20,
+    pricingStrategy: "balanced",
+    targetHourlyUsd: 1,
+    modelPrices: {},
+    modelBenchmarks: {},
     maxConcurrency: 1,
     selectedModelIds: null,
     hostWhen: "idle",
+    schedule: null,
     dailyCapUsd: null,
     pauseOnBattery: true,
     yieldToUser: true,
   });
 
   const appliedRef = React.useRef(false);
-  const setupTimerRef = React.useRef<number | null>(null);
   const finishTimerRef = React.useRef<number | null>(null);
+  // JSON of the config as the server last knew it — the auto-save effect only
+  // fires when the local config actually drifts from this.
+  const persistedConfigRef = React.useRef("");
+
+  const setConfigFromServer = React.useCallback((next: HiveComputeHostRunConfig) => {
+    persistedConfigRef.current = JSON.stringify(next);
+    setConfig(next);
+  }, []);
 
   const machineName = machine?.name || "this machine";
   const running = isRunning(status);
@@ -313,19 +276,15 @@ export function HiveComputeHostConsole({
     setStatus(next);
     if (!appliedRef.current) {
       appliedRef.current = true;
-      setConfig(next.host.config);
+      setConfigFromServer(next.host.config);
       const nextRunning = isRunning(next);
       const setUp =
         next.host.canRun || (next.workerModule.installed && next.workerModule.nodeModulesInstalled);
       setStep(nextRunning ? "earnings" : setUp ? "manage" : "intro");
     }
-  }, []);
+  }, [setConfigFromServer]);
 
   const clearSetupTimer = React.useCallback(() => {
-    if (setupTimerRef.current !== null) {
-      window.clearInterval(setupTimerRef.current);
-      setupTimerRef.current = null;
-    }
     if (finishTimerRef.current !== null) {
       window.clearTimeout(finishTimerRef.current);
       finishTimerRef.current = null;
@@ -367,6 +326,25 @@ export function HiveComputeHostConsole({
     return () => window.clearInterval(id);
   }, [step, running]);
 
+  // Debounce-save config edits (guardrails, selection, pricing) so closing the
+  // panel doesn't lose them; actions persist too, this covers edit-then-close.
+  React.useEffect(() => {
+    if (!appliedRef.current || step === "intro" || step === "setup") return undefined;
+    const serialized = JSON.stringify(config);
+    if (serialized === persistedConfigRef.current) return undefined;
+    const timer = window.setTimeout(() => {
+      persistedConfigRef.current = serialized;
+      void fetch("/api/hive-compute/marketplace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save-config", config, target: targetBody }),
+      }).catch(() => {
+        // Best-effort: the next action or go-live persists the same config.
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [config, step, targetBody]);
+
   const fetchStatus = React.useCallback(async () => {
     setBusy("refresh");
     setError("");
@@ -384,22 +362,46 @@ export function HiveComputeHostConsole({
     }
   }, [applyStatus, targetQuery]);
 
+  // Raw marketplace POST with an explicit config (multi-step sequences thread
+  // the latest server config through instead of relying on React state).
+  const postMarketplaceWith = React.useCallback(
+    async (postConfig: HiveComputeHostRunConfig | null, body: Record<string, unknown>) => {
+      const response = await fetch("/api/hive-compute/marketplace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, ...(postConfig ? { config: postConfig } : {}), target: targetBody }),
+      });
+      const data = (await response.json().catch(() => ({}))) as ApiResponse;
+      return { response, data };
+    },
+    [targetBody],
+  );
+
+  const expectOkStatus = React.useCallback((result: { response: Response; data: ApiResponse }) => {
+    if (!result.response.ok || result.data.ok === false || !result.data.status) {
+      throw new Error(result.data.error || "Hive Compute action failed.");
+    }
+    return result.data.status;
+  }, []);
+
+  const fetchStatusOnce = React.useCallback(async () => {
+    const response = await fetch(`/api/hive-compute/marketplace${targetQuery}`, { cache: "no-store" });
+    const data = (await response.json().catch(() => ({}))) as ApiResponse;
+    if (!response.ok || data.ok === false || !data.status) {
+      throw new Error(data.error || "Hive Compute status failed.");
+    }
+    return data.status;
+  }, [targetQuery]);
+
   const postAction = React.useCallback(
     async (action: Exclude<BusyAction, null | "refresh">, successMessage: string): Promise<boolean> => {
       setBusy(action);
       setError("");
       setMessage("");
       try {
-        const response = await fetch("/api/hive-compute/marketplace", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, config, target: targetBody }),
-        });
-        const data = (await response.json().catch(() => ({}))) as ApiResponse;
-        if (!response.ok || data.ok === false || !data.status) {
-          throw new Error(data.error || "Hive Compute action failed.");
-        }
-        applyStatus(data.status);
+        const nextStatus = expectOkStatus(await postMarketplaceWith(config, { action }));
+        applyStatus(nextStatus);
+        setConfigFromServer(nextStatus.host.config);
         setMessage(successMessage);
         return true;
       } catch (actionError) {
@@ -409,7 +411,59 @@ export function HiveComputeHostConsole({
         setBusy(null);
       }
     },
-    [applyStatus, config, targetBody],
+    [applyStatus, config, expectOkStatus, postMarketplaceWith, setConfigFromServer],
+  );
+
+  // Benchmark models one request at a time so progress is real and a dev-proxy
+  // timeout only re-waits the single model that is still measuring.
+  const benchmarkModelsSequentially = React.useCallback(
+    async (
+      modelIds: string[],
+      startConfig: HiveComputeHostRunConfig,
+      onProgress: (done: number, total: number, modelId: string) => void,
+    ): Promise<HiveComputeMarketplaceStatus | null> => {
+      let workingConfig = startConfig;
+      let lastStatus: HiveComputeMarketplaceStatus | null = null;
+      for (let index = 0; index < modelIds.length; index += 1) {
+        const modelId = modelIds[index];
+        onProgress(index, modelIds.length, modelId);
+        const startedAt = Date.now();
+        const { response, data } = await postMarketplaceWith(workingConfig, {
+          action: "benchmark-pricing",
+          models: [modelId],
+        });
+        if (isHiveComputeBenchmarkProxyTimeout(data)) {
+          lastStatus = await waitForHiveComputeBenchmarkCompletion({
+            poll: fetchStatusOnce,
+            isComplete: (nextStatus) => {
+              // Complete when this model has a fresh measurement — or when the
+              // run recorded it as a failure and excluded it.
+              const failed = nextStatus.host.lastBenchmark?.failures.some((failure) => failure.modelId === modelId);
+              if (failed && Date.parse(nextStatus.host.lastBenchmark?.at ?? "") >= startedAt) return true;
+              const benchmark = nextStatus.host.config.modelBenchmarks[modelId];
+              return isHiveComputeBenchmarkCurrent(benchmark) && Date.parse(benchmark.measuredAt) >= startedAt;
+            },
+          });
+        } else if (!response.ok || data.ok === false || !data.status) {
+          throw new Error(data.error || `Benchmark failed for ${modelId}.`);
+        } else {
+          lastStatus = data.status;
+        }
+        if (lastStatus) workingConfig = lastStatus.host.config;
+      }
+      if (lastStatus) {
+        applyStatus(lastStatus);
+        setConfigFromServer(lastStatus.host.config);
+      }
+      return lastStatus;
+    },
+    [applyStatus, fetchStatusOnce, postMarketplaceWith, setConfigFromServer],
+  );
+
+  const selectedOrAllModelIds = React.useCallback(
+    (fromStatus: HiveComputeMarketplaceStatus | null) =>
+      config.selectedModelIds ?? (fromStatus?.host.models ?? []).map((model) => model.providerModelId),
+    [config.selectedModelIds],
   );
 
   // Opening the LM Studio app does not start its HTTP server, so the models it
@@ -418,28 +472,39 @@ export function HiveComputeHostConsole({
     await postAction("start-lmstudio", "LM Studio server started.");
   }, [postAction]);
 
+  // Setup runs each stage for real — the progress meter advances when a stage
+  // actually completes (no timer-faked progress), and the benchmark stage
+  // reports which model is measuring, N of M.
   const startSetup = React.useCallback(async () => {
     clearSetupTimer();
     setStep("setup");
     setSetupProgress(0);
+    setSetupDetail("");
     setBusy("setup-hosting");
     setError("");
     setMessage("");
-    setupTimerRef.current = window.setInterval(() => {
-      setSetupProgress((p) => Math.min(3, p + 1));
-    }, 660);
+    let moduleInstalled = status?.workerModule.installed ?? false;
     try {
-      const response = await fetch("/api/hive-compute/marketplace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "setup-hosting", config, target: targetBody }),
-      });
-      const data = (await response.json().catch(() => ({}))) as ApiResponse;
-      if (!response.ok || data.ok === false || !data.status) {
-        throw new Error(data.error || "Hosting setup failed.");
+      expectOkStatus(await postMarketplaceWith(null, { action: "install-worker" }));
+      moduleInstalled = true;
+      setSetupProgress(1);
+      expectOkStatus(await postMarketplaceWith(null, { action: "install-worker-deps" }));
+      setSetupProgress(2);
+      const fresh = await fetchStatusOnce();
+      applyStatus(fresh);
+      setSetupProgress(3);
+      const ids = selectedOrAllModelIds(fresh);
+      if (ids.length) {
+        await benchmarkModelsSequentially(ids, fresh.host.config, (done, total, modelId) => {
+          setSetupDetail(`${modelId} · ${done + 1} of ${total}`);
+        });
       }
-      clearSetupTimer();
-      applyStatus(data.status);
+      setSetupDetail("");
+      // Finalize with the server's saved config (persisted by the benchmark
+      // loop): re-checks readiness and opens an MPP session when available.
+      const finalStatus = expectOkStatus(await postMarketplaceWith(null, { action: "setup-hosting" }));
+      applyStatus(finalStatus);
+      setConfigFromServer(finalStatus.host.config);
       setSetupProgress(4);
       finishTimerRef.current = window.setTimeout(() => {
         setStep("manage");
@@ -448,11 +513,14 @@ export function HiveComputeHostConsole({
       }, 520);
     } catch (setupError) {
       clearSetupTimer();
+      setSetupDetail("");
       setError(setupError instanceof Error ? setupError.message : "Hosting setup failed.");
-      setStep("intro");
+      // Once the module is installed, Manage (with its readiness meter) is the
+      // honest place to land — bouncing to the intro would read "not set up".
+      setStep(moduleInstalled ? "manage" : "intro");
       setBusy(null);
     }
-  }, [applyStatus, clearSetupTimer, config, targetBody]);
+  }, [applyStatus, benchmarkModelsSequentially, clearSetupTimer, expectOkStatus, fetchStatusOnce, postMarketplaceWith, selectedOrAllModelIds, setConfigFromServer, status?.workerModule.installed]);
 
   const patchConfig = React.useCallback((patch: Partial<HiveComputeHostRunConfig>) => {
     setConfig((current) => ({ ...current, ...patch }));
@@ -471,14 +539,18 @@ export function HiveComputeHostConsole({
     (modelId: string) => {
       setConfig((current) => {
         const selected = new Set(current.selectedModelIds === null ? availableModelIds : current.selectedModelIds);
+        const previousEnabledCount = selected.size;
         if (selected.has(modelId)) selected.delete(modelId);
         else selected.add(modelId);
         const nextSelected = availableModelIds.filter((id) => selected.has(id));
-        const enabled = Math.max(1, nextSelected.length);
         return {
           ...current,
           selectedModelIds: nextSelected,
-          maxConcurrency: Math.min(Math.max(1, current.maxConcurrency), enabled),
+          maxConcurrency: concurrencyAfterAdvertisedModelChange(
+            current.maxConcurrency,
+            previousEnabledCount,
+            nextSelected.length,
+          ),
         };
       });
     },
@@ -486,18 +558,109 @@ export function HiveComputeHostConsole({
   );
 
   const enableAllModels = React.useCallback(() => {
-    setConfig((current) => ({ ...current, selectedModelIds: null }));
-  }, []);
+    setConfig((current) => ({
+      ...current,
+      selectedModelIds: null,
+      maxConcurrency: concurrencyAfterAdvertisedModelChange(
+        current.maxConcurrency,
+        current.selectedModelIds?.length ?? availableModelIds.length,
+        availableModelIds.length,
+      ),
+    }));
+  }, [availableModelIds]);
 
   const advertisedModels = React.useMemo(
     () => (status?.host.models ?? []).filter((model) => selectedModelIdSet.has(model.providerModelId)),
     [status?.host.models, selectedModelIdSet],
   );
+  const pricedAdvertisedModels = React.useMemo(
+    () => advertisedModels.map((model) => ({
+      model,
+      price: resolveHiveComputeModelPrice(model.providerModelId, config),
+      benchmark: isHiveComputeBenchmarkCurrent(config.modelBenchmarks[model.providerModelId])
+        ? config.modelBenchmarks[model.providerModelId]
+        : undefined,
+    })),
+    [advertisedModels, config],
+  );
+  const benchmarkedCount = pricedAdvertisedModels.filter((entry) => entry.benchmark).length;
+  const providerPriceBounds = status?.gateway.capacity?.pricing?.providerBounds ?? HIVE_COMPUTE_PROVIDER_PRICE_BOUNDS;
   const enabledCount = advertisedModels.length;
+  const pricingReady = enabledCount > 0 && benchmarkedCount === enabledCount;
   const totalModels = status?.host.models.length ?? 0;
   const concMax = Math.max(1, enabledCount);
   const concurrency = Math.min(config.maxConcurrency, concMax);
-  const earn = React.useMemo(() => computeEarnings(enabledCount, config.markdown), [enabledCount, config.markdown]);
+  const platformFeeBps = status?.gateway.capacity?.pricing?.platformFeeBps ?? 2_000;
+  const earningEstimate = React.useMemo(() => estimateHiveComputeEarnings({
+    models: pricedAdvertisedModels,
+    maxConcurrency: concurrency,
+    fallbackTargetHourlyUsd: 1,
+    platformFeeBps,
+    availabilityFactor: hiveComputeAvailabilityFactor(config.hostWhen, config.schedule),
+  }), [concurrency, config.hostWhen, config.schedule, platformFeeBps, pricedAdvertisedModels]);
+  const earn = React.useMemo(() => ({
+    monthMid: (earningEstimate.monthLowUsd + earningEstimate.monthHighUsd) / 2,
+    dayStr: `${money(earningEstimate.dayLowUsd)}–${money(earningEstimate.dayHighUsd)}`,
+    monthStr: `${money(earningEstimate.monthLowUsd)}–${money(earningEstimate.monthHighUsd)}`,
+    activeHourStr: `${money(earningEstimate.activeHourlyUsd)} / active hr`,
+  }), [earningEstimate]);
+
+  const patchModelPrice = React.useCallback((modelId: string, field: HiveComputePriceField, dollars: number) => {
+    const current = resolveHiveComputeModelPrice(modelId, config);
+    const bounds = providerPriceBounds[field];
+    const usdMicro = Math.min(bounds.max, Math.max(bounds.min, Math.round((Number.isFinite(dollars) ? dollars : 0) * 1_000_000)));
+    setConfig((previous) => ({
+      ...previous,
+      pricingStrategy: "custom",
+      modelPrices: {
+        ...previous.modelPrices,
+        [modelId]: {
+          inputUsdMicroPerMTok: current.inputUsdMicroPerMTok,
+          outputUsdMicroPerMTok: current.outputUsdMicroPerMTok,
+          minimumJobUsdMicro: current.minimumJobUsdMicro,
+          [field]: usdMicro,
+        },
+      },
+    }));
+  }, [config, providerPriceBounds]);
+
+  const commitModelPriceDraft = React.useCallback((modelId: string, field: HiveComputePriceField, rawValue: string) => {
+    const bounds = providerPriceBounds[field];
+    const dollars = parseHiveComputePriceDraft(rawValue, {
+      min: bounds.min / 1_000_000,
+      max: bounds.max / 1_000_000,
+    });
+    if (dollars !== null) patchModelPrice(modelId, field, dollars);
+    const draftKey = hiveComputePriceDraftKey(modelId, field);
+    setPriceDrafts((current) => {
+      const next = { ...current };
+      delete next[draftKey];
+      return next;
+    });
+  }, [patchModelPrice, providerPriceBounds]);
+
+  // Full benchmark pass, one model per request, with live progress in the
+  // notice line. Success message differs between first-run and refresh.
+  const runBenchmarkFlow = React.useCallback(async (successMessage: string): Promise<boolean> => {
+    if (!status) return false;
+    setBusy("benchmark-pricing");
+    setError("");
+    setMessage("");
+    try {
+      const ids = selectedOrAllModelIds(status);
+      if (!ids.length) throw new Error("Advertise at least one model before benchmarking.");
+      await benchmarkModelsSequentially(ids, config, (done, total, modelId) => {
+        setMessage(`Benchmarking ${modelId} · ${done + 1} of ${total}…`);
+      });
+      setMessage(successMessage);
+      return true;
+    } catch (benchmarkError) {
+      setError(benchmarkError instanceof Error ? benchmarkError.message : "Benchmark failed.");
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  }, [benchmarkModelsSequentially, config, selectedOrAllModelIds, status]);
 
   const runPrimary = React.useCallback(async () => {
     if (!status) return;
@@ -506,13 +669,17 @@ export function HiveComputeHostConsole({
       if (ok) setStep("manage");
       return;
     }
+    if (!pricingReady && enabledCount > 0) {
+      await runBenchmarkFlow("Models benchmarked. Below-market Automatic prices are ready to review.");
+      return;
+    }
     if (status.host.canRun) {
       const ok = await postAction("run-worker", "Hive Compute worker is live.");
       if (ok) setStep("earnings");
       return;
     }
     void startSetup();
-  }, [postAction, running, startSetup, status]);
+  }, [enabledCount, postAction, pricingReady, runBenchmarkFlow, running, startSetup, status]);
 
   const stopFromEarnings = React.useCallback(async () => {
     const ok = await postAction("stop-worker", "Hive Compute worker stopped.");
@@ -522,6 +689,10 @@ export function HiveComputeHostConsole({
   const openMppSession = React.useCallback(() => {
     void postAction("open-mpp-session", "MPP machine-payment session opened.");
   }, [postAction]);
+
+  const benchmarkPricing = React.useCallback(() => {
+    void runBenchmarkFlow("Benchmark refreshed. Automatic prices remain below the market reference.");
+  }, [runBenchmarkFlow]);
 
   const backHandler = React.useCallback(() => {
     clearSetupTimer();
@@ -545,10 +716,12 @@ export function HiveComputeHostConsole({
   const stages = buildStages(status, meterOverride);
   const meterStatus = meterStatusFor(step, status);
   const setupBusy = busy === "setup-hosting";
-  const primaryBusy = busy === "run-worker" || busy === "stop-worker" || busy === "setup-hosting";
+  const primaryBusy = busy === "run-worker" || busy === "stop-worker" || busy === "setup-hosting" || busy === "benchmark-pricing";
 
   const primary = running
     ? { label: "Stop hosting", Icon: Pause }
+    : !pricingReady && enabledCount > 0
+      ? { label: "Benchmark models", Icon: Gauge }
     : status?.host.canRun
       ? { label: "Go live", Icon: Play }
       : { label: "Set up hosting", Icon: Download };
@@ -584,6 +757,21 @@ export function HiveComputeHostConsole({
       location: model.hostLocation || resolveLinkHostLocation(model.hostDeviceName, machines),
     };
   };
+
+  const blurOnEnter = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") event.currentTarget.blur();
+  };
+
+  const setHostWhen = (id: HiveComputeHostWhen) => {
+    patchConfig({
+      hostWhen: id,
+      // Picking Scheduled without a saved window seeds a sensible overnight one.
+      ...(id === "sched" && !config.schedule ? { schedule: { startHour: 22, endHour: 8 } } : {}),
+    });
+  };
+
+  const benchmarkFailures = status?.host.lastBenchmark?.failures ?? [];
+  const memoryFit = hiveComputeMemoryFit(advertisedModels, concurrency, status?.host.machineMemoryBytes);
 
   return (
     <>
@@ -650,8 +838,9 @@ export function HiveComputeHostConsole({
               <Link2 size={14} aria-hidden="true" />
               <span>
                 Showing the models <b>{machineName}</b>
-                {discoveredFrom?.location ? ` · ${discoveredFrom.location}` : ""} can serve. Renting it out runs the
-                worker on that machine — open HivemindOS on {machineName} to go live there.
+                {discoveredFrom?.location ? ` · ${discoveredFrom.location}` : ""} can serve. Remote quick-host below runs
+                the worker on that machine over Hivemind Link; exact pricing setup still lives on {machineName}&rsquo;s own
+                HivemindOS.
               </span>
             </p>
           ) : null}
@@ -687,19 +876,23 @@ export function HiveComputeHostConsole({
     const note =
       enabledCount === 0
         ? `Start LM Studio or Ollama on ${machineName} to price your models and estimate earnings. You can pause anytime.`
-        : `Based on ${enabledCount} advertised model${enabledCount === 1 ? "" : "s"} priced ${config.markdown}% below list, at typical marketplace demand while ${machineName} is idle. You can pause anytime.`;
+        : pricingReady
+          ? `Based on the ${concurrency} highest-earning advertised model slot${concurrency === 1 ? "" : "s"}, measured speed, and 10–30% marketplace utilization while ${machineName} is available. ${earn.activeHourStr} at full use.`
+          : `Benchmark the selected models on ${machineName} before reviewing prices or projected earnings.`;
     return (
       <>
         <div className={styles.introEarn}>
           <div className={styles.introEarnMain}>
             <span className={styles.kicker}>
-              <TrendingUp size={13} aria-hidden="true" /> Estimated earnings
+              <TrendingUp size={13} aria-hidden="true" /> Estimated provider earnings
             </span>
             <div className={styles.introEarnRow}>
-              <span className={styles.introEarnBig}>{earn.monthStr}</span>
-              <span className={styles.introEarnUnit}>/ month</span>
+              <span className={styles.introEarnBig}>{pricingReady ? earn.monthStr : "Not estimated"}</span>
+              {pricingReady ? <span className={styles.introEarnUnit}>/ month</span> : null}
             </div>
-            <span className={styles.introEarnDay}>{earn.dayStr} / day · while idle</span>
+            <span className={styles.introEarnDay}>
+              {pricingReady ? `${earn.dayStr} / day · while idle` : "Available after model benchmarking"}
+            </span>
           </div>
           <p className={styles.introEarnNote}>{note}</p>
         </div>
@@ -765,6 +958,7 @@ export function HiveComputeHostConsole({
         <div className={styles.setupTasks}>
           {SETUP_TASK_LABELS.map((label, i) => {
             const state = i < setupProgress ? "done" : i === setupProgress ? "active" : "pending";
+            const detail = state === "active" && setupDetail ? ` — ${setupDetail}` : "";
             return (
               <div key={label} className={styles.setupTask} data-state={state}>
                 <span className={styles.setupTaskNodeWrap}>
@@ -778,7 +972,7 @@ export function HiveComputeHostConsole({
                     <span className={styles.setupNodePending} aria-hidden="true" />
                   )}
                 </span>
-                <span className={styles.setupTaskLabel}>{label}</span>
+                <span className={styles.setupTaskLabel}>{label}{detail}</span>
               </div>
             );
           })}
@@ -792,11 +986,15 @@ export function HiveComputeHostConsole({
     if (!status) return null;
     const nextTitle = running
       ? "This machine is live"
+      : !pricingReady
+        ? "Benchmark selected models"
       : status.host.canRun
         ? "Ready to go live"
         : "Finish setup to go live";
     const nextLede = running
       ? "Energy is flowing end to end — jobs are being accepted and metered."
+      : !pricingReady
+        ? "Measure real prompt and output speed first. Prices and earnings appear after measurement."
       : status.host.canRun
         ? "Advertise the models you want and tune pricing and guardrails, then go live when you’re ready."
         : status.host.message;
@@ -814,6 +1012,27 @@ export function HiveComputeHostConsole({
           </div>
         ) : null}
 
+        {remoteDiscovery ? (
+          <HiveComputeRemoteHostControls
+            machineName={machineName}
+            targetBody={targetBody}
+            modelCount={status.host.models.length}
+          />
+        ) : null}
+
+        {benchmarkFailures.length ? (
+          <p
+            className={styles.notice}
+            data-tone="error"
+            role="status"
+            title={benchmarkFailures.map((failure) => `${failure.modelId}: ${failure.message}`).join("\n")}
+          >
+            {benchmarkFailures.length === 1
+              ? `${benchmarkFailures[0].modelId} failed its benchmark (${benchmarkFailures[0].message}) and was excluded from advertising. Fix the local backend and rebenchmark to retry.`
+              : `${benchmarkFailures.length} models failed their benchmark and were excluded from advertising: ${benchmarkFailures.map((failure) => failure.modelId).join(", ")}. Fix the local backend and rebenchmark to retry.`}
+          </p>
+        ) : null}
+
         <div className={styles.modelsCard}>
           <div className={styles.modelsHead}>
             <span className={styles.cardKicker}>
@@ -821,7 +1040,7 @@ export function HiveComputeHostConsole({
             </span>
             <span className={styles.modelsEst}>
               <TrendingUp size={13} aria-hidden="true" />
-              <b>{earn.monthStr}</b> / mo est.
+              {pricingReady ? <><b>{earn.monthStr}</b> / mo net est.</> : <b>Benchmark to estimate</b>}
             </span>
             <span className={styles.modelsCount}>
               {enabledCount} of {totalModels} advertised
@@ -837,6 +1056,7 @@ export function HiveComputeHostConsole({
               {status.host.models.map((model) => {
                 const active = selectedModelIdSet.has(model.providerModelId);
                 const host = modelHost(model);
+                const price = resolveHiveComputeModelPrice(model.providerModelId, config);
                 return (
                   <button
                     key={model.providerModelId}
@@ -850,8 +1070,13 @@ export function HiveComputeHostConsole({
                     <span className={styles.modelChipDot} aria-hidden="true" />
                     <span className={styles.modelChipText}>
                       <span>{model.name || model.id}</span>
-                      <span className={styles.modelChipPrice}>
-                        ${moneyMicro(model.inputPer1m)} / ${moneyMicro(model.outputPer1m)} per M
+                      <span className={styles.modelChipPrice} data-unpriced={price.source === "starter"}>
+                        {price.source === "starter"
+                          ? "Not priced yet"
+                          : `$${moneyMicro(price.inputUsdMicroPerMTok)} in · $${moneyMicro(price.outputUsdMicroPerMTok)} out / M${price.minimumJobUsdMicro ? ` · $${moneyMicro(price.minimumJobUsdMicro)} min` : ""}`}
+                      </span>
+                      <span className={styles.modelChipPricingSource} data-source={price.source}>
+                        {price.source === "benchmark" ? "Automatic · below market" : price.source === "custom" ? "Custom ask" : "Benchmark required"}
                       </span>
                       {host ? (
                         <span className={styles.modelChipHost}>
@@ -895,32 +1120,145 @@ export function HiveComputeHostConsole({
           <div className={styles.controlRows}>
             <div className={styles.sliderRow}>
               <span className={styles.sliderLabel}>Max concurrent jobs</span>
+              {/* A range with min === max has no travel, and browsers park the
+                  thumb at the far left — which reads as 0 when the value is 1.
+                  With a single possible slot, render a disabled full slider
+                  (min 0 is display-only; the change handler still floors at 1). */}
               <input
                 type="range"
                 className={styles.slider}
-                min={1}
+                min={concMax <= 1 ? 0 : 1}
                 max={concMax}
                 step={1}
                 value={concurrency}
+                disabled={concMax <= 1}
+                title={concMax <= 1 ? "Advertise more models to add concurrent job slots" : undefined}
                 onChange={(event) =>
                   patchConfig({ maxConcurrency: Math.min(concMax, Math.max(1, Number(event.target.value))) })
                 }
               />
-              <b className={styles.sliderVal}>{concurrency}</b>
+              <b className={styles.sliderVal}>{enabledCount > 0 ? <>{concurrency}/{enabledCount}</> : "0/0"}</b>
             </div>
-            <div className={styles.sliderRow}>
-              <span className={styles.sliderLabel}>List markdown</span>
-              <input
-                type="range"
-                className={styles.slider}
-                min={0}
-                max={80}
-                step={1}
-                value={config.markdown}
-                onChange={(event) => patchConfig({ markdown: Number(event.target.value) })}
-              />
-              <b className={styles.sliderVal}>{config.markdown}%</b>
-            </div>
+            {memoryFit && !memoryFit.fits ? (
+              <p className={styles.pricingHint} role="status">
+                Tight fit: the {memoryFit.models.length === 1 ? "largest advertised model needs" : `${memoryFit.models.length} largest advertised models need`} about{" "}
+                {formatGigabytes(memoryFit.totalBytes)} of weights at {concurrency} concurrent slot{concurrency === 1 ? "" : "s"}, and this
+                machine has {formatGigabytes(memoryFit.machineMemoryBytes)} of memory total. Jobs may swap or fail — advertise smaller
+                models or lower the slot count.
+              </p>
+            ) : null}
+            {pricingReady ? (
+              <>
+                <div className={styles.pricingHeadRow}>
+                  <div>
+                    <span className={styles.sliderLabel}>Pricing</span>
+                    <span className={styles.pricingHint}>All {enabledCount} advertised models measured</span>
+                  </div>
+                  {!remoteDiscovery ? (
+                    <button type="button" className={styles.btnSecondary} onClick={benchmarkPricing} disabled={Boolean(busy)}>
+                      {busy === "benchmark-pricing" ? <span className={styles.spinner} aria-hidden="true" /> : <Gauge size={14} aria-hidden="true" />}
+                      Rebenchmark
+                    </button>
+                  ) : null}
+                </div>
+                <div className={styles.strategyGroup} role="group" aria-label="Pricing mode">
+                  <button
+                    type="button"
+                    className={styles.strategyBtn}
+                    data-active={config.pricingStrategy !== "custom"}
+                    aria-pressed={config.pricingStrategy !== "custom"}
+                    onClick={() => patchConfig({ pricingStrategy: "balanced", targetHourlyUsd: 1 })}
+                    disabled={remoteDiscovery}
+                  >
+                    Automatic
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.strategyBtn}
+                    data-active={config.pricingStrategy === "custom"}
+                    aria-pressed={config.pricingStrategy === "custom"}
+                    onClick={() => patchConfig({ pricingStrategy: "custom" })}
+                    disabled={remoteDiscovery}
+                  >
+                    Custom
+                  </button>
+                </div>
+                {config.pricingStrategy !== "custom" ? (
+                  <p className={styles.pricingHint}>Starts below comparable hosted-model prices. Benchmark speed can only lower the ask further.</p>
+                ) : (
+                  <>
+                    <p className={styles.pricingHint}>Exact per-model asks are active — edit them below.</p>
+                    <div className={styles.priceEditorList}>
+                      {status.host.models.map((model) => {
+                        const price = resolveHiveComputeModelPrice(model.providerModelId, config);
+                        const inputDraftKey = hiveComputePriceDraftKey(model.providerModelId, "inputUsdMicroPerMTok");
+                        const outputDraftKey = hiveComputePriceDraftKey(model.providerModelId, "outputUsdMicroPerMTok");
+                        const minimumDraftKey = hiveComputePriceDraftKey(model.providerModelId, "minimumJobUsdMicro");
+                        return (
+                          <div key={model.providerModelId} className={styles.priceEditorRow}>
+                            <div className={styles.priceEditorModel}>
+                              <b>{model.name || model.id}</b>
+                              <span>{isHiveComputeBenchmarkCurrent(model.benchmark) ? `${model.benchmark.outputTokensPerSecond.toFixed(1)} output tok/s` : "Benchmark required"}</span>
+                            </div>
+                            <label className={styles.priceField}>
+                              <span>Input $/M</span>
+                              <input
+                                type="number"
+                                min={providerPriceBounds.inputUsdMicroPerMTok.min / 1_000_000}
+                                max={providerPriceBounds.inputUsdMicroPerMTok.max / 1_000_000}
+                                step={0.01}
+                                value={priceDrafts[inputDraftKey] ?? (price.inputUsdMicroPerMTok / 1_000_000).toFixed(2)}
+                                onChange={(event) => setPriceDrafts((current) => ({ ...current, [inputDraftKey]: event.target.value }))}
+                                onBlur={(event) => commitModelPriceDraft(model.providerModelId, "inputUsdMicroPerMTok", event.target.value)}
+                                onKeyDown={blurOnEnter}
+                                disabled={remoteDiscovery}
+                              />
+                            </label>
+                            <label className={styles.priceField}>
+                              <span>Output $/M</span>
+                              <input
+                                type="number"
+                                min={providerPriceBounds.outputUsdMicroPerMTok.min / 1_000_000}
+                                max={providerPriceBounds.outputUsdMicroPerMTok.max / 1_000_000}
+                                step={0.01}
+                                value={priceDrafts[outputDraftKey] ?? (price.outputUsdMicroPerMTok / 1_000_000).toFixed(2)}
+                                onChange={(event) => setPriceDrafts((current) => ({ ...current, [outputDraftKey]: event.target.value }))}
+                                onBlur={(event) => commitModelPriceDraft(model.providerModelId, "outputUsdMicroPerMTok", event.target.value)}
+                                onKeyDown={blurOnEnter}
+                                disabled={remoteDiscovery}
+                              />
+                            </label>
+                            <label className={styles.priceField}>
+                              <span>Minimum $/job</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={providerPriceBounds.minimumJobUsdMicro.max / 1_000_000}
+                                step={0.001}
+                                value={priceDrafts[minimumDraftKey] ?? (price.minimumJobUsdMicro / 1_000_000).toFixed(3)}
+                                onChange={(event) => setPriceDrafts((current) => ({ ...current, [minimumDraftKey]: event.target.value }))}
+                                onBlur={(event) => commitModelPriceDraft(model.providerModelId, "minimumJobUsdMicro", event.target.value)}
+                                onKeyDown={blurOnEnter}
+                                disabled={remoteDiscovery}
+                              />
+                            </label>
+                          </div>
+                        );
+                      })}
+                      <p className={styles.priceEditorNote}>Prices save when you leave a field. The hosted gateway validates each ask, applies its {platformFeeBps / 100}% fee, and locks the accepted price into the job receipt. Earnings projections are net of that fee.</p>
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className={styles.benchmarkGate} role="status">
+                <Gauge size={18} aria-hidden="true" />
+                <div>
+                  <b>Benchmark required</b>
+                  <span>{benchmarkedCount} of {enabledCount} selected models measured. Pricing unlocks after the benchmark.</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className={styles.controlDivider}>
             <div className={styles.segRow}>
@@ -934,7 +1272,7 @@ export function HiveComputeHostConsole({
                       type="button"
                       className={styles.segBtn}
                       data-active={config.hostWhen === option.id}
-                      onClick={() => patchConfig({ hostWhen: option.id })}
+                      onClick={() => setHostWhen(option.id)}
                     >
                       <Icon size={14} aria-hidden="true" />
                       {option.label}
@@ -943,6 +1281,43 @@ export function HiveComputeHostConsole({
                 })}
               </div>
             </div>
+            {config.hostWhen === "sched" ? (
+              <div className={styles.schedRow}>
+                <label className={styles.priceField}>
+                  <span>From</span>
+                  <select
+                    value={config.schedule?.startHour ?? 22}
+                    onChange={(event) =>
+                      patchConfig({
+                        schedule: { startHour: Number(event.target.value), endHour: config.schedule?.endHour ?? 8 },
+                      })
+                    }
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour}>{`${String(hour).padStart(2, "0")}:00`}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.priceField}>
+                  <span>Until</span>
+                  <select
+                    value={config.schedule?.endHour ?? 8}
+                    onChange={(event) =>
+                      patchConfig({
+                        schedule: { startHour: config.schedule?.startHour ?? 22, endHour: Number(event.target.value) },
+                      })
+                    }
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour}>{`${String(hour).padStart(2, "0")}:00`}</option>
+                    ))}
+                  </select>
+                </label>
+                <span className={styles.pricingHint}>
+                  This machine&rsquo;s local time; an Until before From wraps past midnight.
+                </span>
+              </div>
+            ) : null}
             <div className={styles.switchRow}>
               <div className={styles.switchItem}>
                 <span className={styles.switchLabel}>
@@ -974,6 +1349,39 @@ export function HiveComputeHostConsole({
                   <span className={styles.switchKnob} aria-hidden="true" />
                 </button>
               </div>
+            </div>
+            <div className={styles.switchRow}>
+              <div className={styles.switchItem}>
+                <span className={styles.switchLabel}>
+                  <CreditCard size={14} aria-hidden="true" /> Daily earnings cap
+                </span>
+                <button
+                  type="button"
+                  aria-label="Daily earnings cap"
+                  aria-pressed={config.dailyCapUsd !== null}
+                  className={styles.switch}
+                  data-on={config.dailyCapUsd !== null}
+                  onClick={() => patchConfig({ dailyCapUsd: config.dailyCapUsd === null ? 25 : null })}
+                >
+                  <span className={styles.switchKnob} aria-hidden="true" />
+                </button>
+              </div>
+              {config.dailyCapUsd !== null ? (
+                <label className={styles.priceField}>
+                  <span>Cap $/day</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10_000}
+                    step={1}
+                    value={config.dailyCapUsd}
+                    onChange={(event) =>
+                      patchConfig({ dailyCapUsd: Math.min(10_000, Math.max(1, Math.round(Number(event.target.value) || 1))) })
+                    }
+                    onKeyDown={blurOnEnter}
+                  />
+                </label>
+              ) : null}
             </div>
           </div>
         </section>
@@ -1043,160 +1451,28 @@ export function HiveComputeHostConsole({
   // ---------- earnings ----------
   function renderEarnings() {
     if (!status) return null;
-    const capacity = status.gateway.capacity;
-    const perf = capacity?.modelPerformance ?? [];
-    const measured = perf.filter((p) => p.samples > 0);
-    const avgTps = measured.length
-      ? measured.reduce((acc, p) => acc + p.tokensPerSecond, 0) / measured.length
-      : null;
-    const avgTtft = measured.length
-      ? measured.reduce((acc, p) => acc + p.timeToFirstTokenMs, 0) / measured.length
-      : null;
-    const liveWorkers = capacity?.liveWorkers ?? 0;
-    const pendingJobs = capacity?.pendingJobs ?? 0;
-    const availableSlots = capacity?.availableSlots;
-    const startedAt = status.host.run?.startedAt;
-    const uptime = running && startedAt ? formatDuration(nowTick - startedAt) : "—";
-
-    // Projected earnings per advertised model, weighted by price. Real inputs; labeled projection.
-    const weights = advertisedModels.map((m) => m.inputPer1m + m.outputPer1m);
-    const sumW = weights.reduce((a, b) => a + b, 0);
-    const perModel = advertisedModels
-      .map((m, i) => ({
-        name: m.name || m.id,
-        month: sumW > 0 ? (weights[i] / sumW) * earn.monthMid : 0,
-      }))
-      .sort((a, b) => a.month - b.month);
-    const barMax = perModel.reduce((max, m) => Math.max(max, m.month), 0);
-    const topModels = [...perModel].sort((a, b) => b.month - a.month).slice(0, 4);
-    const topMax = topModels.reduce((max, m) => Math.max(max, m.month), 0);
-
-    const statCards = [
-      { kicker: "Session", value: uptime, sub: running ? "hosting now" : "idle", honey: false },
-      {
-        kicker: "Live workers",
-        value: String(liveWorkers),
-        sub: availableSlots != null ? `${availableSlots} slots free` : "on the gateway",
-        honey: false,
-      },
-      { kicker: "Queue", value: String(pendingJobs), sub: "pending jobs", honey: false },
-      { kicker: "Projected / mo", value: earn.monthStr, sub: `≈ ${earn.dayStr} / day`, honey: true },
-    ];
-
-    const perfStats = [
-      { label: "Live workers", value: String(liveWorkers) },
-      { label: "Pending jobs", value: String(pendingJobs) },
-      { label: "Avg speed", value: avgTps != null ? `${avgTps.toFixed(0)} tok/s` : "—" },
-      { label: "Avg first token", value: avgTtft != null ? `${avgTtft.toFixed(0)} ms` : "—" },
-    ];
-
     return (
-      <>
-        <div className={styles.statGrid}>
-          {statCards.map((card) => (
-            <div key={card.kicker} className={`${styles.statCard} ${card.honey ? styles.statCardHoney : ""}`}>
-              <span className={styles.statKicker}>{card.kicker}</span>
-              <b className={styles.statVal}>{card.value}</b>
-              <span className={styles.statSub}>{card.sub}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className={styles.chartCard}>
-          <div className={styles.chartHead}>
-            <span className={styles.cardKicker}>
-              <TrendingUp size={13} aria-hidden="true" /> Projected earnings by advertised model
-            </span>
-            <span className={styles.chartTotal}>{earn.monthStr} / mo projected</span>
-          </div>
-          {perModel.length ? (
-            <>
-              <div className={styles.chartBars}>
-                {perModel.map((m, i) => (
-                  <div key={`${m.name}-${i}`} className={styles.chartBarSlot} title={`${m.name}: ${money(m.month)} / mo`}>
-                    <div
-                      className={styles.chartBar}
-                      data-peak={i === perModel.length - 1}
-                      style={{ height: `${barMax > 0 ? Math.max(6, Math.round((m.month / barMax) * 100)) : 6}%` }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className={styles.chartAxis}>
-                <span>Lowest priced</span>
-                <span>Highest priced</span>
-              </div>
-            </>
-          ) : (
-            <p className={styles.chartEmpty}>Advertise at least one model to project earnings.</p>
-          )}
-        </div>
-
-        <div className={styles.earnCols}>
-          <section className={styles.card}>
-            <span className={styles.cardKicker}>
-              <Gauge size={13} aria-hidden="true" /> Live performance
-            </span>
-            <div className={styles.perfRows}>
-              {perfStats.map((stat) => (
-                <div key={stat.label} className={styles.perfRow}>
-                  <span className={styles.perfLabel}>{stat.label}</span>
-                  <b className={styles.perfVal}>{stat.value}</b>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className={styles.card}>
-            <span className={styles.cardKicker}>
-              <CreditCard size={13} aria-hidden="true" /> Top advertised · projected / mo
-            </span>
-            {topModels.length ? (
-              <div className={styles.topList}>
-                {topModels.map((m, i) => (
-                  <div key={`${m.name}-${i}`} className={styles.topItem}>
-                    <div className={styles.topRow}>
-                      <span className={styles.topName}>{m.name}</span>
-                      <b className={styles.topAmount}>{money(m.month)}</b>
-                    </div>
-                    <div className={styles.topBarTrack}>
-                      <div className={styles.topBar} style={{ width: `${topMax > 0 ? Math.round((m.month / topMax) * 100) : 0}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className={styles.modelsEmpty}>No advertised models yet.</p>
-            )}
-          </section>
-        </div>
-
-        {renderWorkerOutput()}
-
-        <div className={`${styles.footer} ${styles.footerSpread}`}>
-          <span className={styles.footerNote}>
-            {running ? `Hosting for ${uptime} · guardrails saved on go-live` : "Not currently hosting · projections shown"}
-          </span>
-          <div className={styles.footerBtns}>
-            <button type="button" className={styles.btnSecondary} onClick={() => setStep("manage")}>
-              <Gauge size={13} aria-hidden="true" /> Adjust settings
-            </button>
-            <button
-              type="button"
-              className={styles.btnDanger}
-              onClick={() => void stopFromEarnings()}
-              disabled={Boolean(busy) || !running}
-            >
-              {busy === "stop-worker" ? <span className={styles.spinner} aria-hidden="true" /> : <Pause size={15} aria-hidden="true" />}
-              Stop hosting
-            </button>
-          </div>
-        </div>
-      </>
+      <HiveComputeHostEarningsView
+        status={status}
+        running={running}
+        nowTick={nowTick}
+        pricingReady={pricingReady}
+        pricedAdvertisedModels={pricedAdvertisedModels}
+        concurrency={concurrency}
+        earn={earn}
+        enabledCount={enabledCount}
+        busy={Boolean(busy)}
+        stopBusy={busy === "stop-worker"}
+        onAdjustSettings={() => setStep("manage")}
+        onStopHosting={() => void stopFromEarnings()}
+        workerOutput={renderWorkerOutput()}
+      />
     );
   }
 
   function renderWorkerOutput() {
-    const output = status?.host.run?.output;
+    const run = status?.host.run;
+    const output = run?.output;
     if (!output) return null;
     const tail = output.split(/\r?\n/).slice(-8).join("\n").trim();
     if (!tail) return null;
@@ -1204,6 +1480,7 @@ export function HiveComputeHostConsole({
       <div className={styles.outputCard}>
         <span className={styles.cardKicker}>
           <Cpu size={13} aria-hidden="true" /> Worker output
+          {run?.restarts ? ` · restarted ${run.restarts}×` : ""}
         </span>
         <pre className={styles.outputMono}>{tail}</pre>
       </div>

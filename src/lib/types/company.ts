@@ -7,8 +7,9 @@ import type { CompanyImportedOperations } from "@/lib/types/company-import";
  * A Company groups agents into an accountable business unit: a shared charter, a
  * collective budget rollup, and a single kill switch (`frozen`) that halts spend
  * across all member agents. The company owns its member list (`agentIds`), so an
- * agent's company is resolved by reverse lookup — membership lives in exactly one
- * place and is managed from the company itself.
+ * agent's company is resolved by reverse lookup. An operational agent identity is
+ * exclusive to one company; reuse across companies happens by duplicating the
+ * agent blueprint into a distinct identity. Membership is managed from companies.
  *
  * The Zero Human Companies view ("a company that runs itself") layers richer
  * presentation metadata on top: a ticker, sector, apex goal, and a per-member
@@ -88,7 +89,7 @@ export interface CompanyRevenue {
  */
 export interface CompanyMember {
   agentId: string;
-  /** Company-specific daily USD budget for this agent (distinct from the agent's own wallet cap). */
+  /** Enforced company-specific rolling-24h USD cap (distinct from the agent's own wallet cap). */
   companyCap?: number;
   /** Role within this company (Queen/Engineer/Product/…). Free-form to match the UI's Role union. */
   roleInCompany?: string;

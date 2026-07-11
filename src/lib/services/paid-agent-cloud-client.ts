@@ -207,6 +207,16 @@ export function managedNansenBaseUrl(): string {
   return target.toString().replace(/\/+$/, "");
 }
 
+export function managedMediaBaseUrl(): string {
+  const resolution = resolveOfficialPaidAgentBaseUrl();
+  if (!resolution.url) return "";
+  const target = new URL(resolution.url);
+  target.pathname = joinUrlPath(target.pathname, "api", "media", "managed");
+  target.search = "";
+  target.hash = "";
+  return target.toString().replace(/\/+$/, "");
+}
+
 export function officialPaidAgentCheckoutReturnUrl(status: OfficialPaidAgentCheckoutReturnStatus, slug?: string): string {
   const resolution = resolveOfficialPaidAgentBaseUrl();
   const target = new URL(resolution.url ?? DEFAULT_OFFICIAL_PAID_AGENT_BASE_URL);

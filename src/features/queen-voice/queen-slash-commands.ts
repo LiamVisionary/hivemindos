@@ -18,7 +18,7 @@ import { CHAT_SLASH_COMMANDS } from "@/features/chat/hermes-slash-commands";
 import { resolveDashboardSlashCommand, type DashboardSlashCommandAction } from "@/features/chat/dashboard-slash-commands";
 import { transcriptCommandUrl } from "@/features/dashboard/hooks/status-chat-transcript";
 import { looksLikeXPost } from "@/lib/services/x-transcript/x-url";
-import type { XTranscriptResult } from "@/lib/services/x-transcript/x-transcript-service";
+import type { XTranscriptInspection, XTranscriptResult } from "@/lib/services/x-transcript/x-transcript-service";
 import type { QueenChatTurn } from "./queen-chat-store";
 
 const CLEAR_ALIASES = new Set(["clear", "new", "reset"]);
@@ -90,6 +90,69 @@ export type QueenSlashAdapter = {
   drive?: (command: string) => Promise<string>;
 };
 
+const LONG_TRANSCRIPT_SECONDS = 5 * 60;
+const TRANSCRIPT_POLL_INTERVAL_MS = 1_500;
+const TRANSCRIPT_POLL_TIMEOUT_MS = 12 * 60_000;
+
+function transcriptExpectation(inspection: XTranscriptInspection | null): string {
+  if (inspection?.kind !== "video") return "Okay, I’m on it.";
+  if (!inspection.durationSec || inspection.durationSec <= 0) {
+    return "Okay, I’m on it — this is a video, so transcription may take a few minutes.";
+  }
+  const minutes = Math.max(1, Math.round(inspection.durationSec / 60));
+  const unit = minutes === 1 ? "minute" : "minutes";
+  if (inspection.durationSec >= LONG_TRANSCRIPT_SECONDS) {
+    return `Okay, I’m on it — this video is ${minutes} ${unit}, so transcription may take a few minutes.`;
+  }
+  return `Okay, I’m on it — this video is ${minutes} ${unit}, so it should be ready shortly.`;
+}
+
+type XTranscriptJobView = {
+  status: "running" | "succeeded" | "failed";
+  result?: XTranscriptResult | null;
+  error?: string | null;
+};
+
+async function startTranscriptJob(url: string): Promise<{ jobId: string; inspection: XTranscriptInspection | null }> {
+  const response = await fetch("/api/integrations/x-transcript", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "start", url, summarize: true }),
+  });
+  const data = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    error?: string;
+    jobId?: string;
+    inspection?: XTranscriptInspection;
+  } | null;
+  if (!response.ok || !data?.ok || !data.jobId) {
+    throw new Error(data?.error || `Transcript job failed to start with HTTP ${response.status}.`);
+  }
+  return { jobId: data.jobId, inspection: data.inspection ?? null };
+}
+
+async function pollTranscriptJob(jobId: string): Promise<XTranscriptResult> {
+  const deadline = Date.now() + TRANSCRIPT_POLL_TIMEOUT_MS;
+  let transientFailures = 0;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`/api/integrations/x-transcript?jobId=${encodeURIComponent(jobId)}`, { cache: "no-store" });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; job?: XTranscriptJobView } | null;
+      if (!response.ok || !data?.ok || !data.job) {
+        throw new Error(data?.error || `Transcript status failed with HTTP ${response.status}.`);
+      }
+      transientFailures = 0;
+      if (data.job.status === "failed") throw new Error(data.job.error || "Could not pull the transcript.");
+      if (data.job.status === "succeeded" && data.job.result) return data.job.result;
+    } catch (error) {
+      transientFailures += 1;
+      if (transientFailures >= 3) throw error;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, TRANSCRIPT_POLL_INTERVAL_MS));
+  }
+  throw new Error("The transcript is still running in the background. Retry the command to reconnect to it.");
+}
+
 async function runTranscript(display: string, url: string, adapter: QueenSlashAdapter) {
   adapter.appendTurn({ who: "you", text: display, source: "text" });
   if (!url || !looksLikeXPost(url)) {
@@ -100,16 +163,16 @@ async function runTranscript(display: string, url: string, adapter: QueenSlashAd
     });
     return;
   }
-  const queenId = adapter.appendTurn({ who: "queen", text: "", live: true, pending: true, working: "Pulling the transcript…", source: "text" });
+  const queenId = adapter.appendTurn({ who: "queen", text: "", live: true, pending: true, working: "Checking the video…", source: "text" });
   try {
-    const res = await fetch("/api/integrations/x-transcript", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ url, summarize: true }),
+    const started = await startTranscriptJob(url);
+    adapter.updateTurn(queenId, {
+      text: transcriptExpectation(started.inspection),
+      live: true,
+      pending: true,
+      working: "Transcribing…",
     });
-    const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; result?: XTranscriptResult } | null;
-    if (!res.ok || !data?.ok || !data.result) throw new Error(data?.error || `Transcript request failed with HTTP ${res.status}.`);
-    const result = data.result;
+    const result = await pollTranscriptJob(started.jobId);
     const meta = [
       result.author?.handle ? `@${result.author.handle}` : result.kind === "thread" ? "thread" : "post",
       result.durationSec ? `${Math.round(result.durationSec / 60)} min video` : typeof result.postCount === "number" && result.postCount > 1 ? `${result.postCount}-post thread` : "",

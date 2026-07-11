@@ -44,6 +44,10 @@ import type {
 import { normalizeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 import { normalizeCompanyExecutionConfig } from "@/lib/services/company-execution-capabilities";
 import {
+  assertExclusiveCompanyMembership,
+  exclusiveCompanyForAgent,
+} from "@/lib/services/company-membership";
+import {
   ROLLING_DAY_MS,
   ROLLING_MONTH_MS,
   readSpendLedger,
@@ -105,13 +109,99 @@ type CompanyRuntimeOverlay = {
   companies: Record<string, CompanyRuntimeState>;
 };
 
-async function readCompaniesFile(file: string): Promise<Company[]> {
+/**
+ * Thrown when a companies definitions/local file is present but unparseable.
+ * Returning [] on this used to be catastrophic: the next config write persisted
+ * (and Syncthing replicated) a portfolio wiped down to whatever the caller was
+ * appending. We fail closed instead so a corrupt file is loud and recoverable.
+ */
+export class CompaniesFileCorruptError extends Error {
+  // Explicit fields (no constructor parameter properties): the hermetic suites
+  // import this via Node's strip-only TS, which rejects parameter-property syntax.
+  readonly file: string;
+  readonly reason?: unknown;
+  constructor(file: string, reason?: unknown) {
+    super(
+      `[companies-store] refusing to read a corrupt companies file at ${file}. ` +
+        `The portfolio was NOT wiped or overwritten. Restore from a sibling ${path.basename(file)}.bak.N ` +
+        `backup or fix the JSON, then retry.`,
+    );
+    this.name = "CompaniesFileCorruptError";
+    this.file = file;
+    this.reason = reason;
+  }
+}
+
+type CorruptFilePolicy = "throw" | "empty";
+
+/** How many rotated backups of the durable definitions file to keep. Bounded so
+ *  these can never bloat the vault the way unbounded *.bak files have. */
+const DEFINITIONS_BACKUP_COUNT = 5;
+
+/**
+ * Guarantee a stable identity + display name so one malformed record can't crash
+ * a whole-portfolio read (`.sort` on a missing name) or poison dispatch. Records
+ * with no usable id are dropped (they can't be merged, governed, or dispatched);
+ * a missing name degrades to a placeholder rather than discarding the charter.
+ */
+function normalizeCompanyRecord(raw: unknown): Company | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id.trim() : "";
+  if (!id) return null;
+  const name = typeof record.name === "string" && record.name.trim() ? record.name : "Untitled company";
+  return { ...(record as unknown as Company), id, name };
+}
+
+/**
+ * Reads a companies JSON array. A MISSING file is a normal empty portfolio. A
+ * PRESENT-but-unparseable file is a hazard — see CompaniesFileCorruptError — so
+ * by default we fail closed (throw) and let the caller refuse to overwrite it.
+ * The one-shot legacy migration source passes "empty": a corrupt legacy file
+ * must never block the vault-backed portfolio. Records are normalized so one bad
+ * entry degrades to a skipped company, not a portfolio-wide throw.
+ */
+async function readCompaniesFile(file: string, onCorrupt: CorruptFilePolicy = "throw"): Promise<Company[]> {
+  let text: string;
   try {
-    const parsed = JSON.parse(await fs.readFile(file, "utf8")) as unknown;
-    return Array.isArray(parsed) ? (parsed as Company[]) : [];
-  } catch {
+    text = await fs.readFile(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return [];
+    if (onCorrupt === "throw") throw new CompaniesFileCorruptError(file, error);
+    console.error(`[companies-store] unreadable companies file at ${file}:`, error);
     return [];
   }
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    if (onCorrupt === "throw") {
+      console.error(
+        `[companies-store] CORRUPT companies file at ${file} — refusing to overwrite it (restore from a .bak.N sibling):`,
+        error,
+      );
+      throw new CompaniesFileCorruptError(file, error);
+    }
+    console.error(`[companies-store] ignoring corrupt legacy companies file at ${file}:`, error);
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    if (onCorrupt === "throw") throw new CompaniesFileCorruptError(file);
+    return [];
+  }
+  const out: Company[] = [];
+  let dropped = 0;
+  for (const raw of parsed) {
+    const record = normalizeCompanyRecord(raw);
+    if (record) out.push(record);
+    else dropped++;
+  }
+  if (dropped > 0) {
+    console.error(`[companies-store] dropped ${dropped} malformed company record(s) from ${file} (missing/invalid id)`);
+  }
+  return out;
 }
 
 async function writeFileAtomic(file: string, contents: string): Promise<void> {
@@ -119,6 +209,45 @@ async function writeFileAtomic(file: string, contents: string): Promise<void> {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, contents, { mode: 0o600 });
   await fs.rename(tmp, file);
+}
+
+/**
+ * Keep a few rotated copies of the durable definitions before overwriting it, so
+ * a bad hand-edit, a Syncthing-conflicted overwrite, or a partial write stays
+ * recoverable. .bak.0 is the most recent prior version. Best-effort: a backup
+ * failure must never block the real write.
+ */
+async function rotateDefinitionsBackups(file: string): Promise<void> {
+  try {
+    await fs.access(file);
+  } catch {
+    return; // nothing to back up yet
+  }
+  for (let i = DEFINITIONS_BACKUP_COUNT - 1; i >= 0; i--) {
+    const from = i === 0 ? file : `${file}.bak.${i - 1}`;
+    const to = `${file}.bak.${i}`;
+    try {
+      await fs.copyFile(from, to);
+    } catch {
+      // a missing intermediate backup is fine; keep rotating the ones that exist
+    }
+  }
+}
+
+/** Atomic write of the durable definitions/local file, preceded by a rotated backup. */
+async function writeDurableDefinitions(file: string, contents: string): Promise<void> {
+  await rotateDefinitionsBackups(file);
+  await writeFileAtomic(file, contents);
+}
+
+/** Serializes read-modify-write cycles within a process so two concurrent
+ *  mutations (e.g. a freeze and a routine metric write) can't clobber each
+ *  other's changes. Mirrors company-runs' enqueueCompanyRunsWrite. */
+let companiesWriteQueue: Promise<unknown> = Promise.resolve();
+function enqueueCompaniesWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const next = companiesWriteQueue.then(fn, fn);
+  companiesWriteQueue = next.catch(() => undefined);
+  return next;
 }
 
 async function readRuntimeOverlay(): Promise<CompanyRuntimeOverlay> {
@@ -224,7 +353,7 @@ async function writeDefinitionsIfChanged(file: string, records: Company[]): Prom
   if (current.length === definitions.length && definitionsFingerprint(current) === definitionsFingerprint(definitions)) {
     return false;
   }
-  await writeFileAtomic(file, JSON.stringify(definitions, null, 2));
+  await writeDurableDefinitions(file, JSON.stringify(definitions, null, 2));
   return true;
 }
 
@@ -238,7 +367,8 @@ async function migrateLegacyCompanies(
   overlay: CompanyRuntimeOverlay,
   storageFile: string,
 ): Promise<Company[]> {
-  const legacy = await readCompaniesFile(COMPANIES_PATH);
+  // A corrupt legacy file must never block the vault-backed portfolio.
+  const legacy = await readCompaniesFile(COMPANIES_PATH, "empty");
   if (legacy.length === 0) return definitions;
   const known = new Set(definitions.map((record) => record.id));
   const migratedIds = new Set(overlay.migratedCompanyIds ?? []);
@@ -273,18 +403,29 @@ async function readRaw(): Promise<Company[]> {
   return migrated.map((definition) => mergeCompany(definition, overlay.companies[definition.id]));
 }
 
-async function writeRaw(records: Company[]): Promise<void> {
-  const storage = resolveCompaniesStorage();
-  if (storage.source === "local") {
-    await writeFileAtomic(storage.file, JSON.stringify(records, null, 2));
-    return;
-  }
-  const overlay = await readRuntimeOverlay();
-  const nextRuntime: CompanyRuntimeOverlay["companies"] = {};
-  for (const record of records) nextRuntime[record.id] = companyRuntimeStateOf(record);
-  overlay.companies = nextRuntime; // entries for deleted companies drop out here
-  await writeRuntimeOverlay(overlay);
-  await writeDefinitionsIfChanged(storage.file, records);
+// writeRaw runs under the write queue so the multi-step persist (overlay write +
+// backup rotation + definitions write) of two concurrent callers can't interleave
+// and corrupt the rotation or leave overlay/definitions inconsistent. NOTE: this
+// serializes the WRITE, not the whole read-modify-write — two mutations that each
+// readRaw() before either writes can still lose an update in-process, and nothing
+// here guards cross-process writers (5020 + 5021 + Tauri). Rotated backups above
+// make those clobbers recoverable; full RMW/cross-process locking is a follow-up.
+function writeRaw(records: Company[]): Promise<void> {
+  return enqueueCompaniesWrite(async () => {
+    const storage = resolveCompaniesStorage();
+    if (storage.source === "local") {
+      // Fail closed on a corrupt current file so a routine write can't wipe it.
+      await readCompaniesFile(storage.file);
+      await writeDurableDefinitions(storage.file, JSON.stringify(records, null, 2));
+      return;
+    }
+    const overlay = await readRuntimeOverlay();
+    const nextRuntime: CompanyRuntimeOverlay["companies"] = {};
+    for (const record of records) nextRuntime[record.id] = companyRuntimeStateOf(record);
+    overlay.companies = nextRuntime; // entries for deleted companies drop out here
+    await writeRuntimeOverlay(overlay);
+    await writeDefinitionsIfChanged(storage.file, records);
+  });
 }
 
 /** Governance trail is best-effort: it must never block or fail a company write. */
@@ -348,7 +489,7 @@ export async function claimCompanyHomeMachine(id: string): Promise<Company | nul
 }
 
 export async function readCompanies(): Promise<Company[]> {
-  return (await readRaw()).sort((a, b) => a.name.localeCompare(b.name));
+  return (await readRaw()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
 }
 
 export async function getCompany(id: string): Promise<Company | null> {
@@ -361,7 +502,7 @@ export async function getCompany(id: string): Promise<Company | null> {
 export async function getCompanyForAgent(agentId: string, records?: Company[]): Promise<Company | null> {
   if (!agentId) return null;
   const all = records ?? (await readRaw());
-  return all.find((company) => company.agentIds?.includes(agentId)) ?? null;
+  return exclusiveCompanyForAgent(all, agentId);
 }
 
 function normalizeAgentIds(value: unknown): string[] {
@@ -896,11 +1037,13 @@ export async function setCompanyAgents(
   if (!company) return null;
   const before = companyDefinitionOf(company);
   const normalizedMembers = members ? normalizeMembers(members) : undefined;
+  const nextAgentIds = normalizedMembers ? agentIdsFromMembers(normalizedMembers) : normalizeAgentIds(agentIds);
+  assertExclusiveCompanyMembership(records, company.id, nextAgentIds);
   if (normalizedMembers) {
     company.members = normalizedMembers;
-    company.agentIds = agentIdsFromMembers(normalizedMembers);
+    company.agentIds = nextAgentIds;
   } else {
-    company.agentIds = normalizeAgentIds(agentIds);
+    company.agentIds = nextAgentIds;
     if (company.members) {
       // Drop member metadata for agents that are no longer on the roster.
       const keep = new Set(company.agentIds);
@@ -931,6 +1074,7 @@ export async function addCompanyMembers(id: string, members: CompanyMember[]): P
     if (!byId.has(m.agentId)) byId.set(m.agentId, m);
   }
   const merged = [...byId.values()];
+  assertExclusiveCompanyMembership(records, company.id, agentIdsFromMembers(merged));
   company.members = merged;
   company.agentIds = agentIdsFromMembers(merged);
   company.updatedAt = new Date().toISOString();
@@ -1000,9 +1144,11 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     : input.agentIds !== undefined
       ? normalizeAgentIds(input.agentIds)
       : (existing?.agentIds ?? []);
+  const companyId = existing?.id ?? input.id?.trim() ?? randomUUID();
+  assertExclusiveCompanyMembership(records, companyId, agentIds);
 
   const company: Company = {
-    id: existing?.id ?? input.id?.trim() ?? randomUUID(),
+    id: companyId,
     name,
     agentIds,
     charter: input.charter !== undefined ? trimmed(input.charter) : existing?.charter,

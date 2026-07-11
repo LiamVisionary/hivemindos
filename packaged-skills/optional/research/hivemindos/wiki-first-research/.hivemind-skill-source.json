@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Wiki-First Research",
+  "upstreamSlug": "wiki-first-research",
+  "hiveSlug": "wiki-first-research",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/research/hivemindos/wiki-first-research",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-11T00:00:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional research skills",
+  "sourcePath": "packaged-skills/optional/research/hivemindos/wiki-first-research",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Clean-room HivemindOS-authored adaptation of the wiki-first research-project pattern from public agent-research workflow writeups; no upstream text is vendored.",
+    "Routes durable cross-session knowledge into the HivemindOS shared brain (typed memory + compiled wiki) instead of a parallel private wiki index.",
+    "Chains the kill-my-thesis adversarial gate and the research-call-tracker publish-time log as fail-closed steps.",
+    "Keeps project scaffolds in user-designated folders so raw data blobs stay out of the shared brain vault."
+  ]
+}

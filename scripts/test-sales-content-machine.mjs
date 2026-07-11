@@ -154,6 +154,18 @@ assert.ok(salesContentMatrixGaps(statuses).some((gap) => gap.includes("CRM")));
 const context = buildSalesContentDispatchContext({ signals, actions, gaps: salesContentMatrixGaps(statuses) });
 assert.ok(context.includes("Sales/content machine signals:"));
 assert.ok(context.includes("Recommended next sales/content actions:"));
+// Prospect-controlled reply text must be fenced as untrusted source data before it
+// reaches any worker prompt (prompt-injection defense) — in the dispatch context...
+assert.ok(
+  context.includes("<<<HIVEMINDOS_UNTRUSTED_SOURCE_DATA>>>"),
+  "signal summaries are fenced as untrusted source data in the dispatch context",
+);
+// ...and in the draft-reply prompt that reads the reply.
+const draftReply = actions.find((action) => action.kind === "draft-reply");
+assert.ok(
+  draftReply.workBoardPrompt.includes("<<<HIVEMINDOS_UNTRUSTED_SOURCE_DATA>>>"),
+  "the draft-reply prompt fences the prospect reply as untrusted source data",
+);
 
 console.log("sales content machine suite passed");
 process.exit(0);

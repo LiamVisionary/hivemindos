@@ -9,9 +9,8 @@
   collector as a launchd/systemd service. This is the Windows analog, scoped to
   the local collector: it picks a free port, writes ~/.hivemindos/collector.env,
   drops a launcher, registers a per-user logon Scheduled Task that runs the
-  collector hidden and restarts it on crash (the Task Scheduler analog of
-  systemd Restart=always / launchd KeepAlive), starts it now, and verifies
-  /health. It needs no admin rights (per-user task, interactive logon).
+  collector hidden, starts it now, and verifies /health. It needs no admin
+  rights (per-user task, interactive logon).
 
   When Hivemind Link is enabled (HIVE_LINK_ENABLED=true, -EnableLink, or sticky
   via an existing HIVE_LINK_CONTROL line in collector.env), it also builds
@@ -89,7 +88,8 @@ $hiveDir = Join-Path $env:USERPROFILE ".hivemindos"
 New-Item -ItemType Directory -Force -Path $hiveDir | Out-Null
 $envFile  = Join-Path $hiveDir "collector.env"
 $cmdFile  = Join-Path $hiveDir "run-collector.cmd"
-$vbsFile  = Join-Path $hiveDir "run-collector-hidden.vbs"
+$launcherFile = Join-Path $hiveDir "run-collector-hidden.ps1"
+$legacyVbsFile = Join-Path $hiveDir "run-collector-hidden.vbs"
 
 # --- Hivemind Link (optional): embedded tsnet Tailscale sidecar -------------
 # Windows analog of the Unix installer's HIVE_LINK_* wiring. Opt-in on Windows
@@ -105,7 +105,8 @@ $linkDir      = Join-Path $hiveDir "link"
 $linkStateDir = Join-Path $linkDir "default"
 $linkLogFile  = Join-Path $linkDir "hivemind-linkd.err.log"
 $linkCmdFile  = Join-Path $hiveDir "run-linkd.cmd"
-$linkVbsFile  = Join-Path $hiveDir "run-linkd-hidden.vbs"
+$linkLauncherFile = Join-Path $hiveDir "run-linkd-hidden.ps1"
+$linkLegacyVbsFile = Join-Path $hiveDir "run-linkd-hidden.vbs"
 # The Tailnet listen port stays PINNED (default 8787) by design: linkd's
 # listener lives inside its own tsnet userspace netstack and binds no host
 # port, so a local process on the same port NUMBER can never collide with it,
@@ -250,16 +251,40 @@ Set-Content -Path $cmdFile -Encoding ASCII -Value @(
   "`"$nodeExe`" `"$collectorScript`""
 )
 
-# --- hidden VBS wrapper: runs the .cmd with no console window, WAITS for it
-#     (bWaitOnReturn=True) so the Scheduled Task action stays alive as long as
-#     the collector runs — that lets restart-on-failure fire when it crashes. ---
-$vbsContent = @"
-Dim shell, code
-Set shell = CreateObject("WScript.Shell")
-code = shell.Run("cmd /c ""$cmdFile""", 0, True)
-WScript.Quit(code)
+# Keep a hidden supervisor alive for as long as the service command runs. The
+# old VBS launcher used WScript.Shell.Run(..., True), which can fail on desktop
+# Windows with 80020009 "Unable to wait for process" and show a blocking Script
+# Host dialog. A .NET Process handle keeps the task action attached and preserves
+# the child exit code without Windows Script Host's synchronous wait path.
+function Write-HivemindProcessSupervisor {
+  param(
+    [string]$Path,
+    [string]$CommandFile
+  )
+
+  $escapedCommandFile = $CommandFile.Replace("'", "''")
+  $supervisorContent = @"
+`$ErrorActionPreference = "Stop"
+try {
+  `$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+  `$startInfo.FileName = `$env:ComSpec
+  `$startInfo.Arguments = '/d /s /c ""$escapedCommandFile""'
+  `$startInfo.UseShellExecute = `$false
+  `$startInfo.CreateNoWindow = `$true
+  `$process = [System.Diagnostics.Process]::Start(`$startInfo)
+  if (-not `$process) { throw "Windows did not return a process handle." }
+  `$process.WaitForExit()
+  exit `$process.ExitCode
+} catch {
+  [Console]::Error.WriteLine("HivemindOS launcher failed: " + `$_.Exception.Message)
+  exit 1
+}
 "@
-Set-Content -Path $vbsFile -Encoding ASCII -Value $vbsContent
+  Set-Content -Path $Path -Encoding UTF8 -Value $supervisorContent
+}
+
+Write-HivemindProcessSupervisor -Path $launcherFile -CommandFile $cmdFile
+Remove-Item $legacyVbsFile -Force -ErrorAction SilentlyContinue
 
 # --- register the per-user logon launcher (Task Scheduler when allowed,
 #     Startup folder fallback when a standard user cannot access the scheduler) ---
@@ -325,10 +350,18 @@ function Register-HivemindStartupLauncher {
   $startupContent = @"
 Dim shell
 Set shell = CreateObject("WScript.Shell")
-shell.Run "wscript.exe ""$escapedLauncherPath""", 0, False
+shell.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$escapedLauncherPath""", 0, False
 "@
   Set-Content -Path $startupLauncher -Encoding ASCII -Value $startupContent
   return $startupLauncher
+}
+
+function Remove-HivemindStartupLauncher {
+  param([string]$Name)
+
+  $safeName = $Name -replace '[\\/:*?"<>|]', '-'
+  $startupLauncher = Join-Path (Get-HivemindStartupFolder) "$safeName.vbs"
+  Remove-Item $startupLauncher -Force -ErrorAction SilentlyContinue
 }
 
 function Register-HivemindLogonLauncher {
@@ -339,7 +372,7 @@ function Register-HivemindLogonLauncher {
   )
 
   try {
-    $taskAction = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$LauncherPath`""
+    $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`""
     $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
     $taskSettings = New-ScheduledTaskSettingsSet `
       -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
@@ -354,7 +387,8 @@ function Register-HivemindLogonLauncher {
       -Settings $taskSettings `
       -Description $Description
 
-    Write-Host "Registered Scheduled Task '$Name' (logon type: $taskLogonType; runs at logon, restarts on crash)."
+    Remove-HivemindStartupLauncher -Name $Name
+    Write-Host "Registered Scheduled Task '$Name' (logon type: $taskLogonType; runs at logon)."
     return [pscustomobject]@{ Kind = "ScheduledTask"; LogonType = $taskLogonType; Path = $null }
   } catch {
     $taskError = $_
@@ -376,7 +410,7 @@ function Start-HivemindHiddenLauncher {
   )
 
   try {
-    $process = Start-Process -FilePath "wscript.exe" -ArgumentList "`"$LauncherPath`"" -WindowStyle Hidden -PassThru -ErrorAction Stop
+    $process = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`"" -WindowStyle Hidden -PassThru -ErrorAction Stop
     if ($process -and $process.Id) {
       Write-Host "Started $Label launcher (pid $($process.Id))."
     } else {
@@ -433,7 +467,7 @@ function Wait-HivemindCollectorHealth {
 
 $collectorRegistration = Register-HivemindLogonLauncher `
   -Name $taskName `
-  -LauncherPath $vbsFile `
+  -LauncherPath $launcherFile `
   -Description "Runs the HivemindOS agent telemetry collector (local agent bridge)."
 
 Write-Host "Collector port: $Port  ->  $envFile"
@@ -442,7 +476,7 @@ if ($linkActive) {
   New-Item -ItemType Directory -Force -Path $linkStateDir | Out-Null
 
   # --- launcher run-linkd.cmd: set env, then run the sidecar (cmd /c waits,
-  #     so a crash propagates and the task's restart-on-failure fires). Env
+  #     so a crash propagates into the task's recorded exit status). Env
   #     mirrors the Unix service definitions; daemon defaults cover the rest. ---
   Set-Content -Path $linkCmdFile -Encoding ASCII -Value @(
     "@echo off",
@@ -456,22 +490,17 @@ if ($linkActive) {
     "`"$linkBin`""
   )
 
-  # --- hidden VBS wrapper: same pattern as the collector's (waits on the .cmd
-  #     so the Scheduled Task action stays alive while linkd runs) ---
-  $linkVbsContent = @"
-Dim shell, code
-Set shell = CreateObject("WScript.Shell")
-code = shell.Run("cmd /c ""$linkCmdFile""", 0, True)
-WScript.Quit(code)
-"@
-  Set-Content -Path $linkVbsFile -Encoding ASCII -Value $linkVbsContent
+  # Same hidden .NET supervisor as the collector so Link also stays attached to
+  # Task Scheduler without using WScript.Shell's unreliable synchronous wait.
+  Write-HivemindProcessSupervisor -Path $linkLauncherFile -CommandFile $linkCmdFile
+  Remove-Item $linkLegacyVbsFile -Force -ErrorAction SilentlyContinue
 
-  # --- register the per-user logon launcher (hidden, restart on crash when
-  #     Task Scheduler is available); same canonical identity/logon fallback as
+  # --- register the per-user logon launcher (hidden when Task Scheduler is
+  #     available); same canonical identity/logon fallback as
   #     the collector task above — never "$env:USERDOMAIN\$env:USERNAME". ---
   $linkRegistration = Register-HivemindLogonLauncher `
     -Name $linkTaskName `
-    -LauncherPath $linkVbsFile `
+    -LauncherPath $linkLauncherFile `
     -Description "Runs the HivemindOS Link tsnet sidecar (Tailnet proxy for the local agent bridge)."
 
   Write-Host "Hivemind Link control URL: http://$linkControl/status"
@@ -488,11 +517,11 @@ if ($collectorRegistration.Kind -eq "ScheduledTask" -and $collectorRegistration.
   $startedNow = Start-HivemindScheduledTaskNow -Name $taskName
   $ok = Wait-HivemindCollectorHealth -Port $Port
   if (-not $ok) {
-    $startedNow = Start-HivemindHiddenLauncher -Label "collector" -LauncherPath $vbsFile
+    $startedNow = Start-HivemindHiddenLauncher -Label "collector" -LauncherPath $launcherFile
     $ok = Wait-HivemindCollectorHealth -Port $Port -Attempts 15
   }
 } else {
-  $startedNow = Start-HivemindHiddenLauncher -Label "collector" -LauncherPath $vbsFile
+  $startedNow = Start-HivemindHiddenLauncher -Label "collector" -LauncherPath $launcherFile
   $ok = Wait-HivemindCollectorHealth -Port $Port
 }
 if (-not $ok -and -not $startedNow -and $collectorRegistration.Kind -eq "ScheduledTask") {
@@ -511,10 +540,10 @@ if ($linkActive) {
   if ($linkRegistration.Kind -eq "ScheduledTask" -and $linkRegistration.LogonType -eq "S4U") {
     $linkStartedNow = Start-HivemindScheduledTaskNow -Name $linkTaskName
     if (-not $linkStartedNow) {
-      Start-HivemindHiddenLauncher -Label "Hivemind Link" -LauncherPath $linkVbsFile | Out-Null
+      Start-HivemindHiddenLauncher -Label "Hivemind Link" -LauncherPath $linkLauncherFile | Out-Null
     }
   } else {
-    $linkStartedNow = Start-HivemindHiddenLauncher -Label "Hivemind Link" -LauncherPath $linkVbsFile
+    $linkStartedNow = Start-HivemindHiddenLauncher -Label "Hivemind Link" -LauncherPath $linkLauncherFile
     if (-not $linkStartedNow) {
       Start-HivemindScheduledTaskNow -Name $linkTaskName | Out-Null
     }

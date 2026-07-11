@@ -1,19 +1,30 @@
 import { NextRequest } from "next/server";
 
 import {
+  benchmarkHiveComputeHostingPrices,
   installHiveComputeWorkerDependencies,
   installHiveComputeWorkerModule,
   openHiveComputeMppSession,
   readHiveComputeHostContext,
   readHiveComputeMarketplaceStatus,
+  resumeHiveComputeWorker,
+  saveHiveComputeRunConfig,
   setupHiveComputeHosting,
   startHiveComputeLocalBackend,
   startHiveComputeWorker,
   stopHiveComputeWorker,
 } from "@/lib/services/hive-compute-marketplace";
+import {
+  readRemoteHiveComputeHostRun,
+  setupRemoteHiveComputeHosting,
+  startRemoteHiveComputeWorker,
+  stopRemoteHiveComputeWorker,
+} from "@/lib/services/hive-compute-marketplace/remote-host";
 import type { HiveComputeHostRunConfig, HiveComputeHostTarget } from "@/lib/types/hive-compute-marketplace";
 import { errorJson, okJson, upstreamErrorJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
+
+export const maxDuration = 600;
 
 function targetFromQuery(request: NextRequest): HiveComputeHostTarget | null {
   const params = request.nextUrl.searchParams;
@@ -65,9 +76,13 @@ export async function POST(request: NextRequest) {
     force?: unknown;
     config?: Partial<HiveComputeHostRunConfig>;
     target?: unknown;
+    models?: unknown;
   } | null;
   const action = typeof body?.action === "string" ? body.action : "";
   const target = targetFromBody(body?.target);
+  const onlyModels = Array.isArray(body?.models)
+    ? body.models.map((model) => String(model ?? "").trim()).filter(Boolean)
+    : [];
   try {
     if (action === "install-worker" || action === "repair-worker") {
       return okJson(await installHiveComputeWorkerModule({ force: action === "repair-worker" || body?.force === true }));
@@ -81,11 +96,41 @@ export async function POST(request: NextRequest) {
     if (action === "preflight-worker") {
       return okJson({ host: await readHiveComputeHostContext(body?.config), status: await readHiveComputeMarketplaceStatus() });
     }
+    if (action === "benchmark-pricing") {
+      if (target && !target.isSelf) return errorJson("Benchmark pricing from HivemindOS on the target machine itself.", 400);
+      return okJson({
+        status: await benchmarkHiveComputeHostingPrices(body?.config, onlyModels.length ? { onlyModels } : {}),
+      });
+    }
     if (action === "run-worker") {
       return okJson({ status: await startHiveComputeWorker(body?.config) });
     }
     if (action === "stop-worker") {
       return okJson({ status: await stopHiveComputeWorker() });
+    }
+    if (action === "resume-worker") {
+      return okJson({ status: await resumeHiveComputeWorker() });
+    }
+    if (action === "save-config") {
+      return okJson({ status: await saveHiveComputeRunConfig(body?.config) });
+    }
+    // Remote quick-host: run the worker on another fleet machine over the
+    // linkd shell/file rails. Requires an explicit non-self target.
+    if (action === "remote-setup-hosting" || action === "remote-run-worker" || action === "remote-stop-worker" || action === "remote-run-status") {
+      if (!target?.collectorUrl || target.isSelf) {
+        return errorJson("Remote hosting actions need a remote machine's collector URL.", 400);
+      }
+      if (action === "remote-setup-hosting") {
+        return okJson({ remote: await setupRemoteHiveComputeHosting(target) });
+      }
+      if (action === "remote-run-worker") {
+        const status = await readHiveComputeMarketplaceStatus(target);
+        return okJson({ remote: await startRemoteHiveComputeWorker(target, status.host.models), status });
+      }
+      if (action === "remote-stop-worker") {
+        return okJson({ remote: await stopRemoteHiveComputeWorker(target) });
+      }
+      return okJson({ remoteRun: await readRemoteHiveComputeHostRun(target) });
     }
     if (action === "open-mpp-session") {
       return okJson({ status: await openHiveComputeMppSession() });

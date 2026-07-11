@@ -4,17 +4,10 @@ import { extname, isAbsolute } from "path";
 import { Readable } from "stream";
 import { requireAuth } from "@/lib/utils/server-auth";
 import { verifySignedGeneratedMedia } from "@/lib/services/chat/generated-media-signing";
+import { chatImageMimeTypeForPath, hasChatImageSignature } from "@/lib/services/chat/chat-image-formats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const IMAGE_MEDIA_TYPES: Record<string, string> = {
-  ".gif": "image/gif",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-};
 
 const VIDEO_MEDIA_TYPES: Record<string, string> = {
   ".m4v": "video/mp4",
@@ -28,28 +21,11 @@ const MAX_VIDEO_BYTES = 1024 * 1024 * 1024;
 
 function mediaTypeFor(path: string) {
   const extension = extname(path).toLowerCase();
-  return IMAGE_MEDIA_TYPES[extension] ?? VIDEO_MEDIA_TYPES[extension] ?? "";
+  return chatImageMimeTypeForPath(path) || VIDEO_MEDIA_TYPES[extension] || "";
 }
 
 function isImageType(type: string) {
   return type.startsWith("image/");
-}
-
-function hasImageSignature(data: ArrayLike<number>, type: string) {
-  if (type === "image/png") {
-    return data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47;
-  }
-  if (type === "image/jpeg") {
-    return data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
-  }
-  if (type === "image/gif") {
-    return data[0] === 0x47 && data[1] === 0x49 && data[2] === 0x46;
-  }
-  if (type === "image/webp") {
-    return data[0] === 0x52 && data[1] === 0x49 && data[2] === 0x46 && data[3] === 0x46
-      && data[8] === 0x57 && data[9] === 0x45 && data[10] === 0x42 && data[11] === 0x50;
-  }
-  return false;
 }
 
 async function assertAllowedGeneratedMedia(path: string) {
@@ -100,7 +76,7 @@ export async function GET(request: Request) {
     const media = await assertAllowedGeneratedMedia(path);
     if (isImageType(media.type)) {
       const data = await readFile(media.path);
-      if (!hasImageSignature(data, media.type)) {
+      if (!hasChatImageSignature(data, media.type)) {
         return Response.json({ ok: false, error: "Generated media is not a valid image file." }, { status: 415 });
       }
       const body = new Uint8Array(data.byteLength);
@@ -109,6 +85,10 @@ export async function GET(request: Request) {
         headers: {
           "Cache-Control": "private, max-age=3600",
           "Content-Type": media.type,
+          "X-Content-Type-Options": "nosniff",
+          ...(media.type === "image/svg+xml"
+            ? { "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'" }
+            : {}),
         },
       });
     }

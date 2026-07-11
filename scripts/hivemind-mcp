@@ -6,6 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
+import { APP_BUILDER_CONFIRMATIONS } from "./lib/app-builder.mjs";
+
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const CRITICAL_EXECUTION_ANNOTATIONS = {
@@ -880,6 +882,8 @@ async function callWorkBoard(args = {}) {
       force: args.force,
       dryRun: args.dryRun,
       reason: args.reason,
+      // Agents call work_board; a parked Needs-You card can only be released by a human.
+      actor: "agent",
       vaultPath: args.vaultPath,
       kanbanFolder: args.kanbanFolder,
     });
@@ -1140,12 +1144,33 @@ function formatApprovalRequest(args = {}) {
 }
 
 async function callTool(name, args = {}) {
+  if (name === "app_builder") {
+    const requiredConfirmation = {
+      create: APP_BUILDER_CONFIRMATIONS.createProject,
+      files_write: APP_BUILDER_CONFIRMATIONS.writeFile,
+      files_rename: APP_BUILDER_CONFIRMATIONS.renameFile,
+      files_delete: APP_BUILDER_CONFIRMATIONS.deleteFile,
+      install: APP_BUILDER_CONFIRMATIONS.installDependencies,
+      start: APP_BUILDER_CONFIRMATIONS.startRuntime,
+      stop: APP_BUILDER_CONFIRMATIONS.stopRuntime,
+      test_deploy: APP_BUILDER_CONFIRMATIONS.temporaryDeploy,
+      hosting_publish: APP_BUILDER_CONFIRMATIONS.publishHosting,
+      hosting_renew: APP_BUILDER_CONFIRMATIONS.renewHosting,
+      hosting_unpublish: APP_BUILDER_CONFIRMATIONS.unpublishHosting,
+    }[String(args.action || "")];
+    if (requiredConfirmation && args.confirmation !== requiredConfirmation) {
+      throw new Error(`app_builder ${args.action} requires confirmation ${requiredConfirmation}.`);
+    }
+    return callDashboard("/api/app-builder", "POST", args);
+  }
   if (name === "list_hivemind_machines") {
     const data = await callDashboard("/api/fleet/discover?includeSnapshots=0&fresh=1", "GET");
     return {
       ok: true,
       machines: (data.machines || []).filter((machine) => machine.collector === "ready").map((machine) => ({
+        key: machine.key,
         name: machine.device?.name || machine.key,
+        collectorUrl: machine.device?.collectorUrl,
         os: machine.device?.os,
         self: machine.device?.self === true,
         runtimes: machine.capabilities?.runtimes || [],

@@ -17,6 +17,7 @@ import type {
   LoopEvaluationRubric,
   LoopRubricAxis,
 } from "@/lib/types/loops";
+import { evaluationOutputFingerprint } from "@/lib/services/evaluation/control-plane";
 
 const DEFAULT_FRONTIER_STRATEGY: LoopFrontierStrategy = {
   kind: "pareto_per_task",
@@ -90,10 +91,22 @@ export function mergeLoopReceipts(existing: unknown, next: unknown) {
   return [...receipts.values()].sort((left, right) => left.createdAt - right.createdAt);
 }
 
-export function loopCompletionBlock(loop: LoopSpec | undefined, receipts: LoopReceipt[]) {
+export function loopCompletionBlock(loop: LoopSpec | undefined, receipts: LoopReceipt[], output?: string) {
   const requiredGates = loop?.evalGates.filter((gate) => gate.required) ?? [];
-  const passedGateIds = new Set(receipts.filter((receipt) => receipt.status === "passed" && receipt.gateId).map((receipt) => receipt.gateId));
-  const missing = requiredGates.filter((gate) => gate.status !== "passed" && !passedGateIds.has(gate.id));
+  const expectedOutputFingerprint = output === undefined ? undefined : evaluationOutputFingerprint(output);
+  const passedGateIds = new Set(receipts.filter((receipt) => {
+    if (receipt.status !== "passed" || !receipt.gateId) return false;
+    const gate = requiredGates.find((candidate) => candidate.id === receipt.gateId);
+    if (!gate || expectedOutputFingerprint === undefined || !isServerAuthoritativeGate(gate)) return true;
+    const metadata = receipt.metadata as { authority?: unknown; outputFingerprint?: unknown } | undefined;
+    return metadata?.authority === "server" && metadata.outputFingerprint === expectedOutputFingerprint;
+  }).map((receipt) => receipt.gateId as string));
+  const missing = requiredGates.filter((gate) => {
+    if (expectedOutputFingerprint !== undefined && isServerAuthoritativeGate(gate)) {
+      return !passedGateIds.has(gate.id);
+    }
+    return gate.status !== "passed" && !passedGateIds.has(gate.id);
+  });
   // A hard-fail receipt blocks completion regardless of whether any gate is "required".
   // A required-gate MISS means "no evidence yet" — recoverable and, by company design,
   // intentionally non-blocking (see buildOperatingUnitLearningLoop). A hard-fail means
@@ -105,6 +118,14 @@ export function loopCompletionBlock(loop: LoopSpec | undefined, receipts: LoopRe
     missingGateIds: [...missing.map((gate) => gate.id), ...hardFails.map((receipt) => receipt.gateId ?? receipt.id)],
     missingGateTitles: [...missing.map((gate) => gate.title), ...hardFails.map((receipt) => receipt.summary || "Integrity check failed")],
   };
+}
+
+function isServerAuthoritativeGate(gate: LoopEvalGate): boolean {
+  return gate.kind === "agent"
+    || gate.kind === "artifact"
+    || Boolean(gate.command?.trim())
+    || gate.verifier === "governance:policy"
+    || Boolean(gate.verifier?.startsWith("evo:"));
 }
 
 function isHardFailReceipt(receipt: LoopReceipt): boolean {

@@ -23,6 +23,7 @@ description: Local-first agent fleet control room documentation.
   <li>Collector-first fleet model</li>
   <li>OKF brain export</li>
   <li>Compiled brain search</li>
+  <li>Evaluated agent outcomes</li>
 </ul>
 
 ## Choose your path
@@ -55,8 +56,13 @@ description: Local-first agent fleet control room documentation.
   </section>
   <section class="docCard">
     <h3>Zero Human Companies</h3>
-    <p>Run a company with the default HivemindOS crew engine or an optional AEON background skill, while keeping goals, approvals, budgets, kill switches, and company history in one cockpit.</p>
+    <p>Run a company with the default HivemindOS crew engine or an optional AEON background skill, while keeping goals, evaluated outcomes, approvals, budgets, kill switches, and company history in one cockpit.</p>
     <a href="./for-users/features/zero-human-companies.html">Open company docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Agent Evaluations</h3>
+    <p>Agents should not get credit just for saying done. See how HivemindOS verifies managed work and records honest completion verdicts.</p>
+    <a href="./for-users/features/agent-evaluations.html">Open evaluation docs</a>
   </section>
   <section class="docCard">
     <h3>AEON For Zero Human Companies</h3>
@@ -147,6 +153,7 @@ The codebase now spans more than the original Fleet, Work, Brain, Chat, and Wall
 - My Apps: hivenet app and API-service discovery with icon proxying, health checks, service-kind signatures, OpenAPI/Hivemind route catalogs, route copy actions, and safe open links.
 - AEON: validated v0.1 workspaces, CLI-backed skills and schedules, packs, MCP, Strategy/Soul, gateways and harnesses, chains/reactive evidence, provenance, brain access, deliverable handoff, and an optional Zero Human Company engine.
 - Zero Human Companies: company cockpits with native crew execution by default, optional AEON background-skill execution, governance controls, Company Runs, and reviewed learning.
+- Agent Evaluations: proportional completion checks, trusted evidence, separate reviewers for consequential work, and honest unobserved states across managed agent surfaces.
 - Swarm: chat-launched `/swarm [number]` agent-team passes, `/swarm-goal` Queen Bee build orchestration, `/swarm-sim` MiroShark simulation launches, MiroShark template-driven simulations, scenario helpers, archive loading, X/polymarket/reddit-style outputs, run intelligence, publish actions, and analysis-agent selection.
 - Brain Services: Obsidian graph, shared skills, Agent Memory entity/usage indexes, QMD, Neo4j, GBrain, Syntho, trading brain install/status, service notes, Synthesis folder configuration, source access policy controls, vault doctor, and whole brain architecture docs.
 - Wallets, Tokens, and Usage: per-agent wallets, Base/Robinhood Chain/Solana token rails, MoneyClaw key validation, UsePod prepaid status, x402 smoke tests, encrypted wallet-vault backup/restore, Honey observation, and Bankr HIVE claims.

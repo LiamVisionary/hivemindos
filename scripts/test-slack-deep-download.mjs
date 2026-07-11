@@ -462,6 +462,41 @@ assert.equal(aliasSummary.pagesDownloaded, 1, "redirect aliases must not consume
 assert.equal(aliasSummary.notionPagesDownloaded, 1);
 assert.equal(aliasSummary.complete, true);
 
+const webUrls = [
+  "https://web.example.com/root",
+  "https://web.example.com/child",
+  "https://web.example.com/grandchild",
+];
+const webLoads = [];
+await downloadSlackLinkedContent(
+  [{ text: webUrls[0] }],
+  "/tmp/slack/web-depth",
+  { maxDepth: 1 },
+  {
+    loadResource: async (url) => {
+      webLoads.push(url);
+      const index = webUrls.indexOf(url);
+      if (index < 0) throw new Error(`Unexpected URL ${url}`);
+      return {
+        kind: "page",
+        sourceKind: "web",
+        url,
+        title: `Web page ${index + 1}`,
+        markdown: `# Web page ${index + 1}\n`,
+        links: index + 1 < webUrls.length ? [webUrls[index + 1]] : [],
+        assets: [],
+      };
+    },
+    mkdir: deepContext.mkdir,
+    writeFile: deepContext.writeFile,
+  },
+);
+assert.deepEqual(
+  webLoads,
+  webUrls.slice(0, 2),
+  "ordinary websites must stay depth-bounded so a Notion archive cannot expand into an unbounded web crawl",
+);
+
 const liveNotionUrl = process.env.HIVEMINDOS_TEST_LIVE_NOTION_URL;
 if (liveNotionUrl) {
   const { NotionAPI } = await import("notion-client");

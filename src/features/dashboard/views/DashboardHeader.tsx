@@ -266,11 +266,13 @@ export function DashboardAppCompletionToast({
   durationMs = 6_000,
   onDismiss,
   onNavigate,
+  onOpenAgentVoiceSettings,
 }: {
   notification: DashboardAppCompletionNotification;
   durationMs?: number;
   onDismiss?: (id: string) => void;
   onNavigate?: (target: DashboardRouteTarget) => void;
+  onOpenAgentVoiceSettings?: (agentId: string) => void;
 }) {
   const [brokenIcon, setBrokenIcon] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -305,10 +307,15 @@ export function DashboardAppCompletionToast({
       onDismiss?.(notification.id);
       return;
     }
+    if (interaction.kind === "agent-voice-settings") {
+      onOpenAgentVoiceSettings?.(interaction.agentId);
+      onDismiss?.(notification.id);
+      return;
+    }
     if (!interaction.text) return;
     void navigator.clipboard?.writeText(interaction.text).then(() => setCopied(true)).catch(() => undefined);
-  }, [notification, onDismiss, onNavigate]);
-  const navigates = Boolean(notification.destination);
+  }, [notification, onDismiss, onNavigate, onOpenAgentVoiceSettings]);
+  const opensTarget = Boolean(notification.destination || notification.agentVoiceSettingsId);
 
   // While paused we freeze the toast fully visible (no animation) so it never
   // fades out from under the pointer; pointer events are enabled so it can be
@@ -326,7 +333,7 @@ export function DashboardAppCompletionToast({
       role="status"
       aria-live="polite"
       tabIndex={0}
-      title={navigates ? "Open completed process" : copied ? "Copied to clipboard" : "Click to copy message"}
+      title={notification.agentVoiceSettingsId ? "Open voice settings" : opensTarget ? "Open completed process" : copied ? "Copied to clipboard" : "Click to copy message"}
       style={style}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => {
@@ -351,7 +358,7 @@ export function DashboardAppCompletionToast({
       </span>
       <span className="dashboardAppNotificationText">
         <strong>{title}</strong>
-        <span>{!navigates && copied ? "Copied to clipboard" : notification.message}</span>
+        <span>{!opensTarget && copied ? "Copied to clipboard" : notification.message}</span>
       </span>
     </div>
   );

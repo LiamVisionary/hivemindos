@@ -10,6 +10,7 @@ import {
   normalizeManagedCloudTopUp,
   type ManagedCloudAccount,
   type ManagedCloudAgent,
+  type ManagedCloudAppProject,
   type ManagedCloudIntegration,
   type ManagedCloudPlan,
 } from "@/lib/services/managed-cloud-agents-contract";
@@ -288,6 +289,55 @@ export async function createManagedCloudAgent(input: {
 export async function getManagedCloudAgent(instanceId: string) {
   const credential = await requiredCredential();
   return managedCloudRequest<{ agent: ManagedCloudAgent; health: { ok: boolean; status: number }; metering: unknown }>(`/v1/agents/${encodeURIComponent(instanceId)}`, {}, credential.token);
+}
+
+export async function listManagedCloudAppProjects(instanceId: string): Promise<ManagedCloudAppProject[]> {
+  const credential = await requiredCredential();
+  const result = await managedCloudRequest<{ projects: ManagedCloudAppProject[] }>(
+    `/v1/agents/${encodeURIComponent(instanceId)}/apps`,
+    {},
+    credential.token,
+  );
+  return Array.isArray(result.projects) ? result.projects : [];
+}
+
+export async function getManagedCloudAppProject(instanceId: string, projectId: string): Promise<ManagedCloudAppProject> {
+  const credential = await requiredCredential();
+  const result = await managedCloudRequest<{ project: ManagedCloudAppProject }>(
+    `/v1/agents/${encodeURIComponent(instanceId)}/apps/${encodeURIComponent(projectId)}`,
+    {},
+    credential.token,
+  );
+  return result.project;
+}
+
+export async function createManagedCloudAppProject(input: {
+  instanceId: string;
+  name: string;
+  templateId?: "nextjs";
+  idempotencyKey?: string;
+}): Promise<ManagedCloudAppProject> {
+  const credential = await requiredCredential();
+  const result = await managedCloudRequest<{ project: ManagedCloudAppProject }>(
+    `/v1/agents/${encodeURIComponent(input.instanceId)}/apps`,
+    {
+      method: "POST",
+      headers: { "idempotency-key": input.idempotencyKey?.trim() || randomUUID() },
+      body: JSON.stringify({ name: input.name, templateId: input.templateId || "nextjs" }),
+    },
+    credential.token,
+  );
+  return result.project;
+}
+
+export async function prepareManagedCloudAppArtifact(instanceId: string, projectId: string): Promise<Record<string, unknown>> {
+  const credential = await requiredCredential();
+  const result = await managedCloudRequest<{ artifact: Record<string, unknown> }>(
+    `/v1/agents/${encodeURIComponent(instanceId)}/apps/${encodeURIComponent(projectId)}/artifact`,
+    { method: "POST", body: "{}" },
+    credential.token,
+  );
+  return result.artifact;
 }
 
 export async function changeManagedCloudAgentState(instanceId: string, action: "start" | "stop") {

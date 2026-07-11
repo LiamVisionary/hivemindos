@@ -97,9 +97,18 @@ function matchesGrant(
   agentId: string,
   asset: AgentSpendCapAsset,
   amountUsd: number,
+  kind: SpendKind,
+  target?: string,
 ): boolean {
+  // A grant is scoped to the exact action the human approved: same agent, asset,
+  // KIND, and TARGET, for at most the approved amount. Previously it matched only
+  // agent + asset + amount, so an approval for "Firecrawl top-up $40 → firecrawl"
+  // could be silently consumed by the same agent's next $40 spend of any kind to
+  // any target. kind + target now bind it to the approved action.
   return record.agentId === agentId
     && record.asset === asset
+    && record.kind === kind
+    && (record.target ?? "") === (target ?? "")
     && amountUsd <= record.amountUsd + AMOUNT_EPSILON;
 }
 
@@ -254,6 +263,8 @@ export async function consumeApproval(input: {
   agentId: string;
   asset: AgentSpendCapAsset;
   amountUsd: number;
+  kind: SpendKind;
+  target?: string;
   token?: string;
 }): Promise<SpendApprovalRequest | null> {
   const now = Date.now();
@@ -261,7 +272,7 @@ export async function consumeApproval(input: {
   const grant = records.find((record) => (
     record.status === "approved"
     && (input.token ? record.id === input.token : true)
-    && matchesGrant(record, input.agentId, input.asset, input.amountUsd)
+    && matchesGrant(record, input.agentId, input.asset, input.amountUsd, input.kind, input.target)
   ));
   if (!grant) {
     await writeRaw(records);

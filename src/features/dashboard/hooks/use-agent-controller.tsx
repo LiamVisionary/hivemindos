@@ -8,8 +8,8 @@ import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-wo
 import { DEFAULT_RESEARCH_METHOD } from "@/lib/config/research-methods";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
-import { mruRuntime, rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
-import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass } from "@/lib/types/agent-runtime";
+import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
+import { DEFAULT_NEW_AGENT_RUNTIME, HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { DEFAULT_MOBILE_AGENT_MODEL, mobileAgentMachineKey, mobileAgentProfileFromRecord, type MobileAgentHostRecord, type MobileAgentRecord } from "@/lib/types/mobile-agents";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
 import type { DashboardView, DiscoveredMachine, MachineGroup, RuntimeEnvSyncResponse, RuntimeIntegrationStatus, RuntimeModelSelection, RuntimeSessionSearchResult, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
@@ -226,9 +226,9 @@ export function useAgentController(props: UseAgentControllerProps) {
         return;
       }
     }
-    // Adding an agent (not editing): prefer the runtime the user reached for
-    // most recently, falling back to the selected agent's runtime, then Hermes.
-    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? mruRuntime() ?? selectedAgent?.runtime ?? "hermes";
+    // Adding an agent (not editing): Hermes is the approachable default while
+    // an explicitly chosen runtime card still opens that runtime directly.
+    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? DEFAULT_NEW_AGENT_RUNTIME;
     setAgentRoleModalId("");
     setAgentRenameEditing(false);
     setAgentRuntimeFolderEditing(false);

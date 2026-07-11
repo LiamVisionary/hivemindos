@@ -16,6 +16,8 @@ Known runtimes are defined in `src/lib/types/agent-runtime.ts`:
 | ----------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | OpenClaw          | Gateway     | status, chat, model selection                                                                                                            |
 | Hermes            | Interactive | status, chat, runs, memory, sessions, background tasks, X search, video generation, Codex runtime, Kanban decomposition, model selection, deterministic data query, artifact authoring |
+| Codex             | Interactive | status, authentication readiness, managed background tasks, run logs, model selection, completion evaluation                            |
+| Claude Code       | Interactive | status, authentication readiness, managed background tasks, run logs, model selection, completion evaluation                            |
 | Aeon              | Background  | status, skills, schedules, runs, outputs, memory, background tasks, notifications, optional Zero Human Company execution                 |
 | Evo               | Background  | status, runs (experiment tree), background tasks, dashboard URL discovery                                                                 |
 | HivemindOS | Interactive | status, chat, model selection                                                                                                            |
@@ -33,6 +35,18 @@ The default company engine is still a HivemindOS crew. In AEON mode, a native cr
 - Agent settings use `/api/runtimes/[runtime]/integrations` for capability and model-selection data.
 - Runtime availability is read through `/api/runtimes/availability`.
 - Remote runtime agent creation is proxied through `/api/agents/runtime` when the collector supports it.
+
+## Managed Codex And Claude Code Tasks
+
+Codex and Claude Code can run managed background tasks from HivemindOS. The task keeps its working directory, selected model, process status, logs, and completion evaluation in one run record.
+
+Runtime status distinguishes a CLI that is installed and authenticated from one that is merely installed. A logged-out Claude Code install is not presented as ready. Codex can use the selected profile model instead of relying on a stale CLI default.
+
+Only managed tasks receive this run evaluation. Starting `codex` or `claude` independently in a terminal stays outside the HivemindOS run path. If that work needs to count toward routing, a company, or a loop contract, return the result and evidence through the Work Board.
+
+See [Agent Evaluations](agent-evaluations.html) for the shared completion rules.
+
+Managed assistant messages also include thumbs-up and thumbs-down controls. Ratings stay attached to the exact saved response and feed its chat evaluation without becoming autonomous worker-routing evidence.
 
 ## How Chat Works
 

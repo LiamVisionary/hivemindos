@@ -36,6 +36,36 @@ export function queryWordsForRecall(value: string, extraStopWords?: Set<string>)
     .filter((word) => word.length > 2 && !RECALL_STOP_WORDS.has(word) && !extraStopWords?.has(word));
 }
 
+/**
+ * Conservative stem variants for an already-lowercased query term. Substring
+ * matching handles base-query → inflected-content for free ("win" is inside
+ * "winning"), but an inflected query silently misses base content ("weddings"
+ * is not inside "wedding"). Variants strip common suffixes so both directions
+ * match; junk variants are harmless because they simply never occur.
+ */
+export function morphologicalTermVariants(word: string): string[] {
+  const variants = new Set<string>();
+  // Plural folds tolerate 3-char stems ("wins" → "win"); verb-suffix folds
+  // require 4 so junk like "mining" → "min" never substring-matches "framing".
+  const add = (value: string, minLength: number) => {
+    if (value.length >= minLength && value !== word) variants.add(value);
+  };
+  if (word.endsWith("ies") && word.length >= 5) add(`${word.slice(0, -3)}y`, 3);
+  if (word.endsWith("es") && word.length >= 5) add(word.slice(0, -2), 3);
+  if (word.endsWith("s") && !word.endsWith("ss") && word.length >= 4) add(word.slice(0, -1), 3);
+  if (word.endsWith("ed") && word.length >= 5) {
+    add(word.slice(0, -2), 4);
+    add(`${word.slice(0, -2)}e`, 4);
+    if (word.length >= 6 && word[word.length - 3] === word[word.length - 4]) add(word.slice(0, -3), 4);
+  }
+  if (word.endsWith("ing") && word.length >= 6) {
+    add(word.slice(0, -3), 4);
+    add(`${word.slice(0, -3)}e`, 4);
+    if (word.length >= 7 && word[word.length - 4] === word[word.length - 5]) add(word.slice(0, -4), 4);
+  }
+  return [...variants];
+}
+
 function stripBoilerplate(raw: string) {
   const withoutFences = raw.replace(/```[\s\S]*?```/g, " ");
   const lines = withoutFences.split("\n");

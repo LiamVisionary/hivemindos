@@ -20,6 +20,14 @@ const baseAgent = {
 
 assert.equal(fleetAgentNeedsModelSetup(baseAgent), false, "generic configured models should open chat");
 assert.equal(fleetAgentNeedsModelSetup({ ...baseAgent, model: "" }), true, "generic blank models still need setup");
+assert.equal(
+  fleetAgentNeedsModelSetup(
+    { ...baseAgent, provider: "lm-studio", model: "" },
+    { provider: "lm-studio", model: "local/qwen", providers: [] },
+  ),
+  false,
+  "a live runtime model selection should satisfy the Fleet chat gate",
+);
 
 assert.equal(isHivemindosModelsProvider("hivemindos-models"), true);
 assert.equal(isHivemindosModelsProvider("HivemindOS"), true);

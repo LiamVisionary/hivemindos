@@ -46,13 +46,58 @@ const MAX_RECORDS = 5_000;
 export const ROLLING_DAY_MS = 24 * 60 * 60 * 1_000;
 export const ROLLING_MONTH_MS = 30 * ROLLING_DAY_MS;
 
-export async function readSpendLedger(): Promise<SpendLedgerRecord[]> {
-  try {
-    const parsed = JSON.parse(await fs.readFile(SPEND_LEDGER_PATH, "utf8")) as unknown;
-    return Array.isArray(parsed) ? (parsed as SpendLedgerRecord[]) : [];
-  } catch {
-    return [];
+/**
+ * Thrown when the spend ledger is present but unparseable. Returning [] on this
+ * used to be a money-safety hole in both directions: a budget check would see
+ * zero historical spend (i.e. treat the budget as unlimited), and the next
+ * appendSpend would persist only its one record — destroying the entire spend
+ * history. We fail closed instead: reads throw, so budget checks block the spend
+ * and appendSpend refuses to overwrite the ledger until it is repaired.
+ */
+export class SpendLedgerCorruptError extends Error {
+  // Explicit fields (no constructor parameter properties): the hermetic suites
+  // import this via Node's strip-only TS, which rejects parameter-property syntax.
+  readonly file: string;
+  constructor(file: string) {
+    super(
+      `[spend-ledger] refusing to read a corrupt spend ledger at ${file}. Spend history was NOT wiped; ` +
+        `budget checks fail closed (block) until it is repaired.`,
+    );
+    this.name = "SpendLedgerCorruptError";
+    this.file = file;
   }
+}
+
+export async function readSpendLedger(): Promise<SpendLedgerRecord[]> {
+  let text: string;
+  try {
+    text = await fs.readFile(SPEND_LEDGER_PATH, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return [];
+    throw new SpendLedgerCorruptError(SPEND_LEDGER_PATH);
+  }
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    console.error(
+      `[spend-ledger] CORRUPT spend ledger at ${SPEND_LEDGER_PATH} — budget checks fail closed until repaired:`,
+      error,
+    );
+    throw new SpendLedgerCorruptError(SPEND_LEDGER_PATH);
+  }
+  return Array.isArray(parsed) ? (parsed as SpendLedgerRecord[]) : [];
+}
+
+/** Serializes appends within a process so two concurrent spends can't interleave
+ *  their read-modify-write and drop each other's records. Mirrors company-runs. */
+let spendLedgerWriteQueue: Promise<unknown> = Promise.resolve();
+function enqueueSpendLedgerWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const next = spendLedgerWriteQueue.then(fn, fn);
+  spendLedgerWriteQueue = next.catch(() => undefined);
+  return next;
 }
 
 export async function appendSpend(
@@ -65,11 +110,17 @@ export async function appendSpend(
     createdAtMs,
     createdAt: new Date(createdAtMs).toISOString(),
   };
-  await fs.mkdir(path.dirname(SPEND_LEDGER_PATH), { recursive: true, mode: 0o700 });
-  const records = await readSpendLedger();
-  records.push(record);
-  await fs.writeFile(SPEND_LEDGER_PATH, JSON.stringify(records.slice(-MAX_RECORDS), null, 2), { mode: 0o600 });
-  return record;
+  return enqueueSpendLedgerWrite(async () => {
+    await fs.mkdir(path.dirname(SPEND_LEDGER_PATH), { recursive: true, mode: 0o700 });
+    // readSpendLedger throws on a corrupt file → abort rather than overwrite (wipe) history.
+    const records = await readSpendLedger();
+    records.push(record);
+    // Atomic tmp+rename so a concurrent reader never sees a torn half-written file.
+    const tmp = `${SPEND_LEDGER_PATH}.${process.pid}.${createdAtMs}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(records.slice(-MAX_RECORDS), null, 2), { mode: 0o600 });
+    await fs.rename(tmp, SPEND_LEDGER_PATH);
+    return record;
+  });
 }
 
 function sumUsd(records: SpendLedgerRecord[], predicate: (record: SpendLedgerRecord) => boolean, sinceMs: number): number {

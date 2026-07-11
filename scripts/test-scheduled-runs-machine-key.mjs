@@ -124,6 +124,9 @@ async function runRecord(schedule, runId, startedAt) {
   assert.equal(runs.length, 1);
   assert.match(runs[0].content, /output for run-a/);
   const next = await runRecord(keyed, "run-b", 1_760_000_200_000);
+  const evaluatedRun = await readFile(join(vaultPath, next.path), "utf8");
+  assert.match(evaluatedRun, /^evaluationTier: "verified"$/m, "finished schedules persist evaluator tier");
+  assert.match(evaluatedRun, /## Evaluation JSON/, "finished schedules persist the full evaluation receipt");
   assert.equal(next.runNumber, 2, "run numbering continues after adoption");
 }
 

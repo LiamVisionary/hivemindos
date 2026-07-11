@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ClipboardList, MessageSquare, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ClipboardList, MessageSquare, X } from "lucide-react";
 
 import approvalStyles from "@/features/approvals/approvals.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
@@ -33,9 +33,13 @@ export type ApprovalCardProps = {
  */
 export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDetails, busy = false }: ApprovalCardProps) {
   const [menu, setMenu] = useState<MenuKind | null>(null);
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [trailOpen, setTrailOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const reason = approval.reason?.trim();
   const showReason = Boolean(reason) && !approval.title.trim().toLowerCase().startsWith(reason?.toLowerCase() ?? "");
+  // Long asks fold to two lines by default so a 40-card backlog stays scannable.
+  const reasonLong = Boolean(reason && reason.length > 150);
   const amount = approval.amountUsd != null ? `$${approval.amountUsd.toFixed(2)} ${approval.asset ?? "USDC"}` : null;
   const targetIsUrl = approval.target ? /^https?:\/\//i.test(approval.target) : false;
 
@@ -67,8 +71,21 @@ export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDe
         <span className={cls("reqBy")}>req. {approval.agent}</span>
       </div>
       <div className={cls("cardTitle")}>{approval.title}</div>
-      {showReason ? <p className={cls("cardReason")}>{reason}</p> : null}
-      <ReasoningTrailView trail={approval.explanation} tone="approval" compact />
+      {showReason ? (
+        <div className={cls("reasonWrap")}>
+          <p className={cls("cardReason", reasonLong && !reasonOpen ? "cardReasonClamp" : undefined)}>{reason}</p>
+          {reasonLong ? (
+            <button
+              type="button"
+              className={cls("inlineToggle")}
+              onClick={() => setReasonOpen((open) => !open)}
+              aria-expanded={reasonOpen}
+            >
+              {reasonOpen ? "Show less" : "Show more"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {amount || approval.target ? (
         <div className={cls("cardContext")}>
           {amount ? <span className={cls("contextPill")}>{amount}</span> : null}
@@ -80,6 +97,20 @@ export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDe
             )
           ) : null}
         </div>
+      ) : null}
+      {approval.explanation ? (
+        <>
+          <button
+            type="button"
+            className={cls("trailToggle")}
+            onClick={() => setTrailOpen((open) => !open)}
+            aria-expanded={trailOpen}
+          >
+            {trailOpen ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+            {trailOpen ? "Hide reasoning" : "Why this needs you"}
+          </button>
+          {trailOpen ? <ReasoningTrailView trail={approval.explanation} tone="approval" compact /> : null}
+        </>
       ) : null}
       {onOpenDetails ? (
         <button type="button" className={cls("detailsButton")} onClick={onOpenDetails} disabled={busy}>

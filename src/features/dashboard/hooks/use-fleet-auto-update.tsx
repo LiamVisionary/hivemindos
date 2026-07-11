@@ -44,6 +44,7 @@ function writeCommitFirstSeen(value: CommitFirstSeen) {
 type FleetAutoUpdateOptions = {
   enabled: boolean;
   paused: boolean;
+  activeAgentIds: ReadonlySet<string>;
   machineGroups: MachineGroup[];
   appVersion: AppVersion | null;
   updateStatusByMachine: Record<string, MachineUpdateStatus>;
@@ -69,7 +70,7 @@ export function useFleetAutoUpdate(options: FleetAutoUpdateOptions) {
     hiddenIntervalMs: AUTO_UPDATE_HIDDEN_TICK_MS,
     initialDelayMs: AUTO_UPDATE_INITIAL_DELAY_MS,
     task: async () => {
-      const { paused, machineGroups, appVersion, updateStatusByMachine, runMachineUpdate } = latestRef.current;
+      const { paused, activeAgentIds, machineGroups, appVersion, updateStatusByMachine, runMachineUpdate } = latestRef.current;
       if (paused) return;
       const target = appVersion?.latestCommit?.trim();
       if (!target) return;
@@ -93,6 +94,7 @@ export function useFleetAutoUpdate(options: FleetAutoUpdateOptions) {
       const selfAppDir = appVersion?.appDir?.trim();
       const machine = machineGroups.find((candidate) => {
         if (candidate.self || candidate.key === "unassigned" || !candidate.online) return false;
+        if (candidate.agents.some((agent) => activeAgentIds.has(agent.id))) return false;
         const candidateMachineId = candidate.machineId?.trim().toLowerCase();
         if (candidateMachineId && selfMachineIds.has(candidateMachineId)) return false;
         // The update route runs updates for any locally-present appDir on this host's

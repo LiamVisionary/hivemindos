@@ -20,6 +20,7 @@ assert.match(service, /appendSpend/);
 assert.doesNotMatch(service, /collectTradingPlatformFee/);
 assert.match(vault, /createCipheriv/);
 assert.match(vault, /mode: 0o600/);
+assert.match(vault, /pendingSettlement/);
 assert.match(route, /requireAuth/);
 assert.match(route, /okJson/);
 assert.match(route, /errorJson/);
@@ -31,6 +32,20 @@ assert.match(panel, /LoadingBar/);
 assert.match(panel, /Spinner/);
 assert.doesNotMatch(panel, /localStorage|sessionStorage|IndexedDB/);
 assert.match(panel, /What works while devices sleep/);
+assert.match(panel, /Connect this agent to your Tailnet/);
+assert.match(panel, /Pair this machine&apos;s Shared Brain/);
+assert.match(panel, /Promote a cloud-native remote MCP/);
+for (const action of [
+  "recover_payment",
+  "list_integrations",
+  "connect_tailnet",
+  "pair_brain",
+  "add_mcp",
+  "remove_integration",
+]) {
+  assert.match(route, new RegExp(`action === ["']${action}["']`));
+}
+assert.doesNotMatch(route, /HIVEMINDOS_MANAGED_AGENT_PAY_TO|OPENROUTER_API_KEY|HCLOUD_TOKEN/);
 assert.match(panelStyles, /data-theme="hive-light"/);
 assert.match(navigation, /cloud: \{ label: "Cloud Agents"/);
 assert.match(contextItems, /tool-schema:managed-cloud-agents/);

@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "Relationship-driven event marketing building blocks: the fit test, anchor criteria, invite skeletons, the +1 activation loop, outreach sequences, room-design moves, post-event follow-up touches, warm-intro rules and scripts, lifecycle triggers, and the anti-pattern list. This bank is authored, not measured — the channel-effectiveness ranking and lifecycle-trigger conversion claims circulating with this system are a relationship-intelligence vendor's own framework and agents must not present them as proven. A fuller playbook lives in the shared skills shelf as the event-marketing-gtm skill. Hard rules that travel with every row: anchors come from real existing relationships only (a cold contact framed as a trusted host connection is misrepresentation), scarcity lines like a-couple-of-spots-left are used only when literally true, guest network analysis stays within publicly visible LinkedIn data and platform terms, and AI-drafted messages are human-reviewed before sending. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 69,
+  "taxonomy": {
+    "sequenceChannels": ["linkedin-dm", "email", "voice-note"],
+    "interestLevels": ["hot", "warm", "cold"]
+  },
+  "fitTest": [
+    { "id": "EF01", "verdict": "run", "signal": "the ICP already attends breakfasts, roundtables, and dinners in the space; strong indicator: they post about events on LinkedIn" },
+    { "id": "EF02", "verdict": "run", "signal": "the deal cycle is weeks to months — long enough for a relationship formed at an event to develop before it needs to convert" },
+    { "id": "EF03", "verdict": "skip or go virtual", "signal": "the ICP is geographically dispersed; one city event reaches a sliver of a multi-country market" },
+    { "id": "EF04", "verdict": "skip until fixed", "signal": "no structured follow-up system exists; an event without one generates goodwill with no revenue attached" },
+    { "id": "EF05", "verdict": "skip", "signal": "the fill plan is cold email or cold DMs — that is cold outreach with an event wrapper and a catering bill" }
+  ],
+  "principles": [
+    { "id": "EB01", "principle": "anchor quality determines everything", "detail": "the first 10-15 attendees set the gravitational pull of the event; the wrong ones cannot be fixed afterwards" },
+    { "id": "EB02", "principle": "every registrant is a distribution channel", "detail": "each confirmed guest has a network of ICP lookalikes; activating it is the most efficient fill strategy available" },
+    { "id": "EB03", "principle": "design for introductions, not attendance", "detail": "a full room is a vanity metric; a room of connected people being actively introduced is a pipeline environment - 20 matched attendees out-produce 80 random ones" }
+  ],
+  "anchorCriteria": [
+    { "id": "EA01", "criterion": "seniority that attracts peers", "detail": "decision-makers matching the ICP exactly, senior enough that peers want to share the room; someone who brings people below their level is just another attendee" },
+    { "id": "EA02", "criterion": "network density over fame", "detail": "the strongest anchor is the person whose LinkedIn network is mostly relevant, active ICP lookalikes - check the connections before inviting, not after" },
+    { "id": "EA03", "criterion": "real relationship, in priority order", "detail": "existing clients with results, then active partners, then strong warm relationships, then warm intros from those groups; cold anchors have no credibility to lend and do not work" }
+  ],
+  "inviteSkeletons": [
+    { "id": "EK01", "audience": "existing client", "channel": "linkedin-dm", "template": "Hey [FIRST NAME] - putting together a small [EVENT FORMAT] for [ICP ROLE] in [CITY] on [DATE]. About [SEAT COUNT] people, all [ICP SEGMENT] leaders. You came to mind given what you're building at [COMPANY].\n\nNo agenda, no pitching - just a focused conversation with relevant people. Would love to have you there. Around?", "why": "personal, specific, exclusive; references their relevance, not yours; zero pressure" },
+    { "id": "EK02", "audience": "warm introduction", "channel": "email", "template": "Subject: Quick invite - [EVENT NAME]\n\nHi [FIRST NAME],\n[MUTUAL CONTACT] said you'd be someone worth having in the room. We're hosting a private [EVENT FORMAT] for [ICP ROLE] in [CITY] on [DATE] - around [SEAT COUNT] people, all [ICP SEGMENT], focused on [RELEVANT TOPIC]. Given what you're working on at [COMPANY], I think you'd find it genuinely useful. Worth joining us?", "why": "credibility transfers from the mutual contact; specificity makes the invite feel earned" },
+    { "id": "EK03", "audience": "past attendee", "channel": "linkedin-dm", "template": "Hey [FIRST NAME] - running another edition of [EVENT NAME] on [DATE]. The last one was genuinely useful - [SPECIFIC THING THAT HAPPENED]. Keeping it to [SEAT COUNT] people this time, all [ICP SEGMENT]. Would love to have you back - free?", "why": "the relationship is already earned; a specific callback to the last event is proof without bragging" }
+  ],
+  "inviteRules": [
+    { "id": "ER01", "rule": "short and specific - a personal invite, never a newsletter" },
+    { "id": "ER02", "rule": "reference the relationship or the mutual connection directly; never pretend a warm invite is cold or vice versa" },
+    { "id": "ER03", "rule": "describe the room, not the agenda - who will be there is the pitch" },
+    { "id": "ER04", "rule": "make the invitee feel selected, not solicited" },
+    { "id": "ER05", "rule": "one clear ask at the end; start anchor outreach 6-8 weeks out so early confirmations become social proof for the next wave" }
+  ],
+  "activationLoop": [
+    { "id": "ES01", "step": 1, "action": "scan the confirmed guest's publicly visible LinkedIn network for ICP-fit peers" },
+    { "id": "ES02", "step": 2, "action": "shortlist 2-3 specific names who would strengthen the room" },
+    { "id": "ES03", "step": 3, "action": "ask the guest to bring 1-2 of them as trusted plus-ones, then repeat the loop on every new confirmation" }
+  ],
+  "plusOneAsks": [
+    { "id": "EP01", "moment": "immediately after confirmation", "channel": "linkedin-dm", "template": "Locked you in for [DATE]. We're keeping it to about [SEAT COUNT] [ICP ROLE] - all [ICP SEGMENT], genuinely curated. If there are one or two peers you'd enjoy having in the room, feel free to bring them. Totally your call - we have a couple of spots left and I'd rather fill them with people you'd vouch for.", "why": "lands on the warmth of a fresh yes; frames it as their choice and the room as desirable" },
+    { "id": "EP02", "moment": "5-7 days later if no name surfaced", "channel": "linkedin-dm", "template": "Hey [FIRST NAME] - one more thing before [DATE]. I noticed you're connected to [SPECIFIC NAME] at [THEIR COMPANY] - they look like they'd fit the room well. Would you be comfortable looping them in? No pressure either way.", "why": "the specific name removes the cognitive load; they only have to say yes or no" },
+    { "id": "EP03", "moment": "high-priority anchors", "channel": "voice-note", "template": "Hey [FIRST NAME], just locked you in for [EVENT NAME] on [DATE] - really glad you're coming. Quick thing: two spots left and I'd love to fill them with people you know. If anyone from your network would enjoy it, bring them along. No obligation - just thought I'd mention it.", "why": "voice feels personal and low-pressure; 15-20 seconds; warm relationships only" }
+  ],
+  "plusOneRules": [
+    { "id": "EQ01", "rule": "the ask comes after confirmation, never before - confirmation is the trigger" },
+    { "id": "EQ02", "rule": "frame scarcity naturally and only when it is literally true" },
+    { "id": "EQ03", "rule": "give the guest agency - totally-your-call framing, never obligation" },
+    { "id": "EQ04", "rule": "the best asks name a specific person you already identified from their network" },
+    { "id": "EQ05", "rule": "it must never read as recruitment - it is an opportunity for them to share a curated room with a peer" }
+  ],
+  "sequences": [
+    { "id": "EM01", "sequence": "anchor invite", "channel": "linkedin-dm", "touch": 1, "template": "the invite skeleton for the audience (EK01-EK03)" },
+    { "id": "EM02", "sequence": "anchor invite", "channel": "linkedin-dm", "touch": 2, "template": "Hey [FIRST NAME] - bumping this up. We finalise the list this week; still a spot for you if you're interested. Happy to share more details.", "timing": "3-4 days after touch 1 if no reply" },
+    { "id": "EM03", "sequence": "anchor invite", "channel": "linkedin-dm", "touch": 3, "template": "Perfect - locked in for [DATE]. I'll send details and who else is coming closer to the time. One thing: if there's a peer you'd enjoy having in the room, feel free to bring them - couple of spots left and I'd rather fill them with people you'd vouch for.", "timing": "after confirmation; doubles as the plus-one ask" },
+    { "id": "EM04", "sequence": "warm-intro invite", "channel": "email", "touch": 1, "template": "the warm-introduction invite skeleton (EK02)" },
+    { "id": "EM05", "sequence": "warm-intro invite", "channel": "email", "touch": 2, "template": "Subject: Re: Quick invite - [EVENT NAME]\n\nJust following up - we finalise the list by [DEADLINE]. Happy to jump on a quick call if you want to hear who'll be there.", "timing": "5 days after touch 1 if no reply" },
+    { "id": "EM06", "sequence": "top-anchor personal touch", "channel": "voice-note", "touch": 1, "template": "20-30 second personal invite naming the format, date, room size, and ICP mix, plus a genuine personal reason to catch up - reserved for the top 3-5 anchor targets where the relationship is warm", "timing": "instead of the DM sequence, never for cold contacts" }
+  ],
+  "roomDesign": [
+    { "id": "ED01", "move": "seating", "detail": "never theatre-style - it kills conversation; round tables or U-shapes under 20 people; seat ICP attendees next to people they should know but don't" },
+    { "id": "ED02", "move": "structured intro round", "detail": "open with name, company, one thing you're working on - 60 seconds per person; primes conversation and gives everyone specific follow-up targets" },
+    { "id": "ED03", "move": "brief the room, don't pitch it", "detail": "2-3 sentences on why everyone is together, then hand the room back; the host is the reason people are together, not the centre of attention" },
+    { "id": "ED04", "move": "light structure over heavy agenda", "detail": "one discussion question everyone has an answer to beats a series of presentations; the conversation runs itself" },
+    { "id": "ED05", "move": "team pre-brief", "detail": "one page: every attendee's name, company, role, who brought them, one context note each, the 2-3 highest-priority follow-up conversations, and one starter per priority attendee" }
+  ],
+  "followUpTouches": [
+    { "id": "EU01", "touch": "internal debrief", "timing": "same day", "template": "each attending team member logs: who they spoke to, a 2-3 sentence summary, interest level (hot/warm/cold), any agreed next step, and who follows up on which channel", "why": "half the context is gone by morning" },
+    { "id": "EU02", "touch": "standard attendee follow-up", "timing": "within 24-48 hours", "template": "Hey [FIRST NAME] - really enjoyed the conversation at [EVENT NAME]. [SPECIFIC REFERENCE TO WHAT YOU DISCUSSED]. Would love to continue it - free for a quick call this week?", "why": "speed signals the conversation mattered; in-person warmth decays fast" },
+    { "id": "EU03", "touch": "plus-one follow-up", "timing": "within 24-48 hours", "template": "Hey [FIRST NAME] - great to meet you at [EVENT NAME], glad [REFERRER NAME] brought you along. [SPECIFIC REFERENCE TO CONVERSATION]. Open to a 20-minute call this week?", "why": "names the referrer, inheriting their credibility" },
+    { "id": "EU04", "touch": "confirmed no-show", "timing": "within 24-48 hours", "template": "Hey [FIRST NAME] - sorry we didn't get to connect at [EVENT NAME], hope all's OK. Good session - happy to share a quick summary of what came up if useful, and flexible on a better time to catch up.", "why": "keeps a confirmed-but-absent lead warm without guilt" },
+    { "id": "EU05", "touch": "anchor thank-you", "timing": "same day", "template": "Hey [FIRST NAME] - wanted to say a proper thank you for bringing [PLUS ONE NAMES]. Exactly the right people for the room, and the conversations were great. We'll follow up with them properly - really appreciate it.", "why": "anchors staked credibility; visibility into what happened after turns one-time referrers into repeat ones" },
+    { "id": "EU06", "touch": "warm-intro ask", "timing": "while the event is warm, within 72 hours", "template": "Hey [FIRST NAME] - really enjoyed the conversation at [EVENT NAME]. Quick question while the context is fresh - I noticed you're connected to [SPECIFIC NAME] at [THEIR COMPANY]. They look like a relevant person for us to know. Would you be comfortable making a quick intro? Happy to write the message so it's zero effort on your end.", "why": "post-event goodwill is at its peak; the specific name plus zero-friction offer makes yes easy" }
+  ],
+  "introRules": [
+    { "id": "EW01", "rule": "specific, never general", "detail": "never ask if they know anyone who might be a fit - that outsources your research; ask for one named person so the answer is yes or no" },
+    { "id": "EW02", "rule": "reduce friction to zero", "detail": "provide a ready-to-forward intro email, a copyable short message, and a 2-line pitch; for complex products keep the narrative in your intro text rather than delegating the explanation" },
+    { "id": "EW03", "rule": "real introduction, not passive permission", "detail": "feel-free-to-mention-my-name converts poorly; a 3-way email or group message converts far better; if passive is all they'll do, act within the hour" },
+    { "id": "EW04", "rule": "one ask at a time", "detail": "a C-level intro at a strategic account is a single ask; mid-level profiles at most 1-2; over-asking signals opportunism" }
+  ],
+  "introScripts": [
+    { "id": "EX01", "script": "ready-to-forward intro email", "template": "Subject: Introduction - [YOUR NAME] and [PROSPECT NAME]\n\nHi [PROSPECT NAME],\nWanted to introduce you to [YOUR NAME] at [YOUR COMPANY]. They work with [ICP DESCRIPTION] on [PROBLEM YOU SOLVE]. Given what you're building at [PROSPECT COMPANY], thought it was worth connecting you. I'll leave it to you both from here.\n[REFERRER NAME]", "why": "short, neutral, no overselling - the referrer's credibility beats any pitch you could write" },
+    { "id": "EX02", "script": "second-layer ask via the anchor", "template": "Hey [ANCHOR NAME] - really glad you brought [PLUS ONE NAME] yesterday, great conversation. One more thing while the context is fresh - I noticed [PLUS ONE NAME] is connected to [SPECIFIC NAME] at [THEIR COMPANY], who looks relevant for us. Would you be comfortable asking [PLUS ONE NAME] to make a quick intro? I can write the message if that helps.", "why": "one event yields multiple intro layers when you activate the networks of the people in the room, not just the people themselves" },
+    { "id": "EX03", "script": "post-intro loop-closing", "template": "three checkpoints to the referrer: when the meeting books, after the first call (how it went, interest level, next steps), and at end of cycle win or lose with genuine thanks", "why": "a referrer who hears nothing after an intro never makes another one" }
+  ],
+  "lifecycleTriggers": [
+    { "id": "EL01", "trigger": "positive NPS or explicit praise" },
+    { "id": "EL02", "trigger": "deal enters late stage" },
+    { "id": "EL03", "trigger": "closed won" },
+    { "id": "EL04", "trigger": "closed lost" },
+    { "id": "EL05", "trigger": "end of onboarding" },
+    { "id": "EL06", "trigger": "before or after in-person meetings and events - the post-event window this bank is built around" }
+  ],
+  "channelHierarchyClaim": "the source vendor ranks intro-ask channels in-person, then live call or video, then written - directionally sensible, but a vendor framework, not measured data; a post-event message counts as a continuation of in-person contact rather than a cold written ask",
+  "compensationRule": "credibility outweighs incentive in B2B; if rewarding referrers, recognise effort over time - a small acknowledgement when the first meeting books and a meaningful reward at signature, never a single thank-you months later at close",
+  "antiPatterns": [
+    { "id": "EN01", "pattern": "generic mass invites", "why": "an invite that looks sent to 500 people gets treated like it was; personalise the first line at minimum and reference the relationship" },
+    { "id": "EN02", "pattern": "not naming the room", "why": "an-event-for-GTM-leaders says nothing; a breakfast for 15 named-segment leaders in a named city is the whole pitch - specificity is the hook" },
+    { "id": "EN03", "pattern": "pitching in the invite", "why": "no case studies, features, or ROI claims; the invite has one job - make them want to be in the room" },
+    { "id": "EN04", "pattern": "filling seats with non-ICP attendees", "why": "one off-ICP guest dilutes the peer-room dynamic; qualification bar: would you cold-email this person your core offer" },
+    { "id": "EN05", "pattern": "no pre-event outreach", "why": "a calendar invite plus showing up is venue hire; message every confirmed guest 5-7 days out naming 2-3 people they should meet and why" },
+    { "id": "EN06", "pattern": "no intro architecture inside the event", "why": "a client and their lookalike prospect standing metres apart un-introduced is pipeline left on the table; map introductions beforehand and physically make them" },
+    { "id": "EN07", "pattern": "asking for pipeline at the event", "why": "pitching in the room destroys the trust the room exists to build; the event is never the ask - the 24-48 hour follow-up is" },
+    { "id": "EN08", "pattern": "building the follow-up system after the event", "why": "warm conversations decay in about 72 hours while you improvise; decide who follows up with whom, saying what, on which channel, by when - before doors open" },
+    { "id": "EN09", "pattern": "cold contacts as anchors", "why": "no credibility with their network, no reason to bring peers, may not even show; anchors come from existing clients and partners only" }
+  ]
+}

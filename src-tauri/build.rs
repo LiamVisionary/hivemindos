@@ -101,6 +101,7 @@ fn main() {
                 "download_aeon_deliverable",
                 "send_aeon_deliverable",
                 "open_route_window",
+                "set_companion_popover",
                 "wallet_secret_export_save",
                 "slack_session_capture",
                 "speech_recognition_available",

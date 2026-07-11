@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 // the marker is now an HTML comment whose payload can never contain "-->".
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
-const { buildTranscriptCardContent, extractTranscriptCard } = await import(
+const { buildTranscriptCardContent, extractTranscriptCard, transcriptCardIsRunning } = await import(
   "../src/features/dashboard/chat-transcript-card.ts"
 );
 
@@ -58,6 +58,8 @@ const runningParsed = extractTranscriptCard(buildTranscriptCardContent({ id: "t2
 assert.ok(runningParsed);
 assert.equal(runningParsed.card.status, "running");
 assert.equal(runningParsed.remainingText, "");
+assert.equal(transcriptCardIsRunning(buildTranscriptCardContent(runningParsed.card)), true, "running cards keep the sidebar active");
+assert.equal(transcriptCardIsRunning(buildTranscriptCardContent(card)), false, "ready cards stop the sidebar activity state");
 
 // 6) Plain messages are never misparsed as a card.
 assert.equal(extractTranscriptCard("let's talk about the hive-transcript feature"), null, "no marker → null");

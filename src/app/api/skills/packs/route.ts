@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const inventory = await getBrainSkillInventory(body.vaultPath);
     await writeSkillsReadme(inventory);
     invalidateCachedCall(SHARED_BRAIN_CACHE_PREFIX);
-    await Promise.all(result.installed.map((skillSlug) => appendSkillAnalyticsEvent({
+    await Promise.all([...result.installed, ...result.updated].map((skillSlug) => appendSkillAnalyticsEvent({
       skillSlug,
       event: "imported",
       taskSource: `pack:${result.pack.id}`,

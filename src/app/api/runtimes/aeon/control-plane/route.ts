@@ -4,6 +4,7 @@ import { aeonWorkspaceRoot } from "@/lib/services/runtime-adapters/aeon";
 import { AEON_GATEWAYS, AEON_HARNESSES, AEON_MODELS } from "@/lib/services/runtime-adapters/aeon-capabilities";
 import { aeonCli, readAeonControlPlane, runAeonCli } from "@/lib/services/runtime-adapters/aeon-cli";
 import { isValidAeonSkillSlug } from "@/lib/services/runtime-adapters/aeon-identifiers";
+import { inspectAeonWorkspace } from "@/lib/services/runtime-adapters/aeon-workspace";
 import { errorJson, okJson, upstreamErrorJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
 
@@ -147,6 +148,16 @@ export async function POST(request: NextRequest) {
   try {
     return okJson(await runAction(root, body));
   } catch (error) {
+    if ((body.action ?? "summary") === "summary") {
+      const layout = await inspectAeonWorkspace(root);
+      if (layout.generation === "legacy") {
+        return errorJson(
+          "This workspace uses the legacy AEON layout. Install AEON v0.1 to unlock the control plane.",
+          409,
+          { code: "AEON_LEGACY_WORKSPACE", remediation: "repair-legacy" },
+        );
+      }
+    }
     const status = typeof error === "object" && error && "status" in error ? Number(error.status) : 0;
     if (status >= 400 && status < 500) return errorJson(error instanceof Error ? error.message : "Invalid AEON request.", status);
     return upstreamErrorJson("AEON control-plane action failed", error);

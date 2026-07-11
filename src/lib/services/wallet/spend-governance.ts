@@ -54,6 +54,7 @@ export type SpendGovernanceInput = {
 export type SpendBudgetSnapshot = {
   agentDailyRemainingUsd: number | null;
   agentMonthlyRemainingUsd: number | null;
+  companyMemberDailyRemainingUsd: number | null;
   companyDailyRemainingUsd: number | null;
   companyMonthlyRemainingUsd: number | null;
   companyTotalRemainingUsd: number | null;
@@ -153,9 +154,10 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
   const companyId = company?.id;
   const ledger = await readSpendLedger();
 
+  const agentDailySpent = await sumAgentSpendUsdSince(wallet.agentId, now - ROLLING_DAY_MS, ledger);
   const agentDaily = remaining(
     wallet.dailyBudgetUsd,
-    await sumAgentSpendUsdSince(wallet.agentId, now - ROLLING_DAY_MS, ledger),
+    agentDailySpent,
     amount,
   );
   const agentMonthly = remaining(
@@ -170,10 +172,13 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
   const companyDaily = remaining(company?.dailyBudgetUsd, companyDailySpent, amount);
   const companyMonthly = remaining(company?.monthlyBudgetUsd, companyMonthlySpent, amount);
   const companyTotal = remaining(company?.totalBudgetUsd, companyTotalSpent, amount);
+  const companyMember = company?.members?.find((member) => member.agentId === wallet.agentId);
+  const companyMemberDaily = remaining(companyMember?.companyCap, agentDailySpent, amount);
 
   const budget: SpendBudgetSnapshot = {
     agentDailyRemainingUsd: agentDaily.remaining,
     agentMonthlyRemainingUsd: agentMonthly.remaining,
+    companyMemberDailyRemainingUsd: companyMemberDaily.remaining,
     companyDailyRemainingUsd: companyDaily.remaining,
     companyMonthlyRemainingUsd: companyMonthly.remaining,
     companyTotalRemainingUsd: companyTotal.remaining,
@@ -219,6 +224,7 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
   // 2. Cumulative budgets (hard — never overridable by an approval).
   if (agentDaily.exceeded) return block(`This spend would exceed the agent's daily budget ($${wallet.dailyBudgetUsd?.toFixed(2)}; $${agentDaily.remaining?.toFixed(2)} left).`);
   if (agentMonthly.exceeded) return block(`This spend would exceed the agent's monthly budget ($${wallet.monthlyBudgetUsd?.toFixed(2)}; $${agentMonthly.remaining?.toFixed(2)} left).`);
+  if (companyMemberDaily.exceeded) return block(`This spend would exceed the company member daily budget for "${company?.name}" ($${companyMember?.companyCap?.toFixed(2)}; $${companyMemberDaily.remaining?.toFixed(2)} left).`);
   if (companyDaily.exceeded) return block(`This spend would exceed company "${company?.name}"'s daily budget ($${company?.dailyBudgetUsd?.toFixed(2)}; $${companyDaily.remaining?.toFixed(2)} left).`);
   if (companyMonthly.exceeded) return block(`This spend would exceed company "${company?.name}"'s monthly budget ($${company?.monthlyBudgetUsd?.toFixed(2)}; $${companyMonthly.remaining?.toFixed(2)} left).`);
   if (companyTotal.exceeded) return block(`This spend would exceed company "${company?.name}"'s total budget ($${company?.totalBudgetUsd?.toFixed(2)}; $${companyTotal.remaining?.toFixed(2)} left).`);
@@ -242,7 +248,14 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
         }),
       };
     }
-    const grant = await consumeApproval({ agentId: wallet.agentId, asset: input.asset, amountUsd: amount, token: input.approvalToken });
+    const grant = await consumeApproval({
+      agentId: wallet.agentId,
+      asset: input.asset,
+      amountUsd: amount,
+      kind: input.kind,
+      target: input.target,
+      token: input.approvalToken,
+    });
     if (grant) {
       const reason = `Authorized by approval ${grant.id}.`;
       return {

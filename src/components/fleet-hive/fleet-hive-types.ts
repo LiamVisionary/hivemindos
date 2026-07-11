@@ -106,7 +106,7 @@ export function frFleetSummary(machines: HiveMachine[]): HiveFleetSummary {
     (n, m) =>
       n +
       m.agents.filter((a) => a.state === "failed" || a.state === "setup").length +
-      (m.versionState === "needs-setup" ? 1 : 0),
+      (m.versionState !== "current" || m.health?.degraded ? 1 : 0),
     0,
   );
   return { machines: machines.length, agents, working, attention };

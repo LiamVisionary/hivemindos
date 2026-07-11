@@ -13,6 +13,7 @@ import { imageGenerationToApplicationGeneration, normalizeApplicationGenerationU
 import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
+import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
 const VAULT_STORAGE_KEY = "hivemindos.sharedVault.v1";
@@ -41,6 +42,10 @@ const STORAGE_SUFFIXES = {
 const runtimeCapabilitiesByRuntime = RUNTIME_CAPABILITIES as Record<string, RuntimeCapabilities>;
 type StoredAgentPromptChoice = NonNullable<NonNullable<ChatMessage["agentPrompt"]>["choices"]>[number];
 const runtimeKindsByRuntime = RUNTIME_KINDS as Record<string, AgentRuntimeKind | undefined>;
+
+export function parseStoredChatMessageFeedback(value: unknown) {
+  return normalizeEvaluationHumanFeedback(value);
+}
 
 function normalizeVaultRelativePath(path?: string) {
   return path?.trim().replace(/[\\/]+$/g, "");
@@ -429,8 +434,12 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
     const message = messages[index];
     if (sameVisibleChatMessage(output.at(-1), message)) {
       const previous = output.at(-1);
-      if (previous && message.billing && !previous.billing) {
-        output[output.length - 1] = { ...previous, billing: message.billing } as ChatMessage;
+      if (previous && ((message.billing && !previous.billing) || message.feedback)) {
+        output[output.length - 1] = {
+          ...previous,
+          billing: message.billing ?? previous.billing,
+          feedback: message.feedback ?? previous.feedback,
+        } as ChatMessage;
       }
       continue;
     }
@@ -453,8 +462,12 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
       const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
       const currentUser = [...output].reverse().find((item) => item.role === "user");
       if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) {
-        if (message.billing && !output[previousAssistantIndex]?.billing) {
-          output[previousAssistantIndex] = { ...output[previousAssistantIndex], billing: message.billing };
+        if ((message.billing && !output[previousAssistantIndex]?.billing) || message.feedback) {
+          output[previousAssistantIndex] = {
+            ...output[previousAssistantIndex],
+            billing: message.billing ?? output[previousAssistantIndex]?.billing,
+            feedback: message.feedback ?? output[previousAssistantIndex]?.feedback,
+          };
         }
         continue;
       }
@@ -634,6 +647,7 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
           surface: message.surface === "chat" || message.surface === "kanban" || message.surface === "scheduler" ? message.surface : undefined,
           sourceSessionId: typeof message.sourceSessionId === "string" ? message.sourceSessionId : undefined,
           sourceIndex: typeof message.sourceIndex === "number" ? message.sourceIndex : undefined,
+          feedback: parseStoredChatMessageFeedback(message.feedback),
           billing: normalizeChatResponseBilling(message.billing),
           processEvents: Array.isArray(message.processEvents)
             ? message.processEvents

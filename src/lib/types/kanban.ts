@@ -17,6 +17,7 @@ import type {
   LoopReceipt,
   LoopSpec,
 } from "@/lib/types/loops";
+import type { EvaluationResult } from "@/lib/types/evaluation";
 
 export type KanbanStatus = "ideas" | "ready" | "working" | "needs-human" | "done" | "archived";
 
@@ -173,6 +174,8 @@ export type KanbanTask = {
   proofs?: GitLawbProof[];
   loop?: KanbanLoopSpec;
   loopReceipts?: KanbanLoopReceipt[];
+  /** Server-recorded evaluation of the latest managed completion attempt. */
+  evaluation?: EvaluationResult;
   agentSession?: KanbanAgentSession | null;
   claimLock?: string;
   claimExpiresAt?: number;

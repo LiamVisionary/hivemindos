@@ -31,8 +31,23 @@ import { HudClock, OrbitalGraph, type OrbitalGraphPalette } from "@/components/f
 import { GraphPaletteToggle } from "@/components/fleet/graph-palette-toggle";
 import { MapView } from "@/components/fleet/map-view";
 import { ListView } from "@/components/fleet/list-view";
+import {
+  buildFleetFocus,
+  buildFleetSearchIndex,
+  searchFleetIndex,
+  type FleetSearchFilter,
+  type FleetSearchItem,
+} from "@/components/fleet/fleet-search";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { emitQueenVoiceToggle } from "@/lib/native/queen-voice-events";
+import { CompanionView } from "@/features/companion/CompanionView";
+import { consumePendingCompanionViewRequest, subscribeCompanionViewRequest } from "@/features/companion/companion-events";
+import { useCompanionSettings } from "@/features/companion/use-companion-settings";
+import {
+  DASHBOARD_TARGET_APPLIED_EVENT,
+  dashboardTargetFromSearch,
+  type DashboardRouteTarget,
+} from "@/features/dashboard/dashboard-navigation";
 import { USEPOD_COMPUTE_RENTALS_ENABLED } from "@/lib/config/compute-rentals";
 import { HIVE_H, HIVE_W, frBuildLayout, frContentBounds } from "./hive-geometry";
 import { mapFleetMachines } from "./fleet-hive-mappers";
@@ -62,6 +77,9 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 1.25; // ± button multiplier
 const WHEEL_ZOOM_SENSITIVITY = 0.0016;
+const LOCATE_ZOOM = 1.35;
+const LOCATE_VIEWPORT_ANIMATION_MS = 460;
+const LOCATE_SPOTLIGHT_MS = 1_600;
 const ZOOM_BTN_STYLE: React.CSSProperties = {
   width: 28, height: 28, display: "grid", placeItems: "center",
   borderRadius: 9, border: "none", background: "transparent",
@@ -69,11 +87,17 @@ const ZOOM_BTN_STYLE: React.CSSProperties = {
   fontFamily: "var(--f-display)",
 };
 
-type FleetViewMode = "hive" | "graph" | "map" | "list";
+type FleetViewMode = "hive" | "graph" | "map" | "list" | "companion";
 const FLEET_VIEW_MODES: FleetViewMode[] = ["hive", "graph", "map", "list"];
 
-// The hive / graph / map / list switcher — same set as the legacy FleetView.
-function ViewModeToggle({ mode, onChoose }: { mode: FleetViewMode; onChoose: (m: FleetViewMode) => void }) {
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+// The hive / graph / map / list switcher — same set as the legacy FleetView,
+// plus "companion" once the hologram-companion module is installed.
+function ViewModeToggle({ mode, modes = FLEET_VIEW_MODES, onChoose }: { mode: FleetViewMode; modes?: FleetViewMode[]; onChoose: (m: FleetViewMode) => void }) {
   return (
     <div
       role="group"
@@ -84,7 +108,7 @@ function ViewModeToggle({ mode, onChoose }: { mode: FleetViewMode; onChoose: (m:
         boxShadow: "0 6px 20px rgba(0,0,0,.25)",
       }}
     >
-      {FLEET_VIEW_MODES.map((m) => {
+      {modes.map((m) => {
         const active = mode === m;
         return (
           <button
@@ -179,6 +203,32 @@ export function FleetHiveView({
     setViewMode(mode);
     onViewModeChange?.(mode);
   }, [onViewModeChange]);
+  // The hologram companion adds a fifth view mode once its module is
+  // installed. Setup-modal "open companion" requests land here (queued if the
+  // fleet view wasn't mounted yet — see companion-events.ts).
+  const { settings: companionSettings } = useCompanionSettings();
+  const availableViewModes = React.useMemo<FleetViewMode[]>(
+    () => (companionSettings.installed || viewMode === "companion"
+      ? [...FLEET_VIEW_MODES, "companion"]
+      : FLEET_VIEW_MODES),
+    [companionSettings.installed, viewMode],
+  );
+  React.useEffect(() => {
+    // Deferred so consuming a queued request never sets state synchronously
+    // inside the effect (repo hook rules; matches the settle pattern above).
+    const t = window.setTimeout(() => {
+      if (consumePendingCompanionViewRequest()) chooseViewMode("companion");
+    }, 0);
+    const unsubscribe = subscribeCompanionViewRequest(() => chooseViewMode("companion"));
+    return () => {
+      window.clearTimeout(t);
+      unsubscribe();
+    };
+  }, [chooseViewMode]);
+  // Companion "hide UI": drops this view's own chrome (TopBar, layout + mode
+  // toggles) along with the companion HUDs — just Sara and a ghost restore.
+  const [companionImmersive, setCompanionImmersive] = React.useState(false);
+  const chromeHidden = viewMode === "companion" && companionImmersive;
   const chooseGraphPalette = React.useCallback((palette: OrbitalGraphPalette) => {
     setGraphPalette(palette);
     onGraphPaletteChange?.(palette);
@@ -188,6 +238,12 @@ export function FleetHiveView({
   // User-controlled zoom (1 = drop-in baseline size) + pan offset, in screen px.
   const [view, setView] = React.useState<{ zoom: number; x: number; y: number }>({ zoom: 1, x: 0, y: 0 });
   const [newAgentId, setNewAgentId] = React.useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<FleetSearchFilter>("all");
+  const [recentSearchKeys, setRecentSearchKeys] = React.useState<string[]>([]);
+  const [spotlightKey, setSpotlightKey] = React.useState<string | null>(null);
+  const [viewportAnimating, setViewportAnimating] = React.useState(false);
 
   // The hive layout + the tight bounding box of what's actually drawn (used to
   // keep the content centred). The baseline scale fits the whole authored
@@ -205,12 +261,49 @@ export function FleetHiveView({
     ? Math.min(area.full / BASELINE_CANVAS_W, area.h / HIVE_H)
     : 1;
   const scale = baseScale * view.zoom;
+  const searchIndex = React.useMemo(
+    () => buildFleetSearchIndex(displayMachines.map((machine) => machine.source)),
+    [displayMachines],
+  );
+  const searchResults = React.useMemo(
+    () => searchFleetIndex(searchIndex, searchQuery, 30),
+    [searchIndex, searchQuery],
+  );
+  const searchRecents = React.useMemo(
+    () => recentSearchKeys
+      .map((key) => searchIndex.find((item) => item.key === key))
+      .filter((item): item is FleetSearchItem => Boolean(item)),
+    [recentSearchKeys, searchIndex],
+  );
+  const fleetFocus = React.useMemo(() => {
+    const focus = buildFleetFocus(
+      displayMachines.map((machine) => machine.source),
+      searchIndex,
+      searchQuery,
+      statusFilter,
+    );
+    return {
+      active: focus.active,
+      machineIds: new Set(focus.machineIds),
+      agentIds: new Set(focus.agentIds),
+    };
+  }, [displayMachines, searchIndex, searchQuery, statusFilter]);
   const [aeonDeleteTarget, setAeonDeleteTarget] = React.useState<{ machine: FleetMachine; agent: FleetAgent } | null>(null);
   const [terminalMachine, setTerminalMachine] = React.useState<FleetMachine | null>(null);
   const [sendFileMachine, setSendFileMachine] = React.useState<FleetMachine | null>(null);
   const [usePodHostMachine, setUsePodHostMachine] = React.useState<FleetMachine | null>(null);
   const [phonePairingOpen, setPhonePairingOpen] = React.useState(false);
   const newAgentTimerRef = React.useRef<number>(0);
+  const locateAnimationTimerRef = React.useRef<number>(0);
+  const locateSpotlightTimerRef = React.useRef<number>(0);
+  const initialRouteLocateHandledRef = React.useRef(false);
+  const locateOriginRef = React.useRef<{
+    view: { zoom: number; x: number; y: number };
+    selection: HiveSelection;
+    filter: FleetSearchFilter;
+    mode: FleetViewMode;
+  } | null>(null);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const hiveAreaRef = React.useRef<HTMLDivElement>(null);
 
@@ -239,6 +332,137 @@ export function FleetHiveView({
   }, [onRemove]);
   const callAgentFleet = React.useCallback((m: FleetMachine, a: FleetAgent) => { void onCallAgent?.(m, a); }, [onCallAgent]);
 
+  const captureLocateOrigin = React.useCallback(() => {
+    if (locateOriginRef.current) return;
+    locateOriginRef.current = { view, selection: effectiveSel, filter: statusFilter, mode: viewMode };
+  }, [effectiveSel, statusFilter, view, viewMode]);
+
+  const changeSearchOpen = React.useCallback((open: boolean) => {
+    if (open) captureLocateOrigin();
+    setSearchOpen(open);
+  }, [captureLocateOrigin]);
+
+  const animateViewport = React.useCallback(() => {
+    setViewportAnimating(true);
+    window.clearTimeout(locateAnimationTimerRef.current);
+    locateAnimationTimerRef.current = window.setTimeout(
+      () => setViewportAnimating(false),
+      LOCATE_VIEWPORT_ANIMATION_MS,
+    );
+  }, []);
+
+  const locateSearchItem = React.useCallback((item: FleetSearchItem) => {
+    const machine = displayMachines.find((candidate) => candidate.id === item.machineId);
+    if (!machine) return;
+    const target = item.kind === "machine"
+      ? layout[machine.id]?.pos
+      : layout[machine.id]?.agents.find(({ agent }) => agent.id === item.agentId)?.pos;
+    if (!target) return;
+
+    captureLocateOrigin();
+    chooseViewMode("hive");
+    setStatusFilter("all");
+    setSearchQuery(item.label);
+    setSearchOpen(false);
+    setSel(item.kind === "machine"
+      ? { type: "machine", id: machine.id }
+      : { type: "agent", id: item.agentId!, machineId: machine.id });
+
+    const nextScale = baseScale * LOCATE_ZOOM;
+    animateViewport();
+    setView({
+      zoom: LOCATE_ZOOM,
+      x: (bounds.cx - target.x) * nextScale,
+      y: (bounds.cy - target.y) * nextScale,
+    });
+
+    setSpotlightKey(item.key);
+    window.clearTimeout(locateSpotlightTimerRef.current);
+    locateSpotlightTimerRef.current = window.setTimeout(() => setSpotlightKey(null), LOCATE_SPOTLIGHT_MS);
+    setRecentSearchKeys((current) => [item.key, ...current.filter((key) => key !== item.key)].slice(0, 6));
+  }, [animateViewport, baseScale, bounds.cx, bounds.cy, captureLocateOrigin, chooseViewMode, displayMachines, layout]);
+
+  const restoreLocateOrigin = React.useCallback(() => {
+    const origin = locateOriginRef.current;
+    if (!origin) return;
+    animateViewport();
+    setView(origin.view);
+    setSel(origin.selection);
+    setStatusFilter(origin.filter);
+    chooseViewMode(origin.mode);
+    setSearchQuery("");
+    setSearchOpen(false);
+    setSpotlightKey(null);
+    locateOriginRef.current = null;
+  }, [animateViewport, chooseViewMode]);
+
+  const changeStatusFilter = React.useCallback((filter: FleetSearchFilter) => {
+    if (filter !== "all") {
+      captureLocateOrigin();
+      chooseViewMode("hive");
+    }
+    setStatusFilter(filter);
+  }, [captureLocateOrigin, chooseViewMode]);
+
+  const finderAgentTarget = React.useCallback((item: FleetSearchItem) => {
+    if (item.kind !== "agent") return null;
+    const machine = displayMachines.find((candidate) => candidate.id === item.machineId);
+    const agent = machine?.agents.find((candidate) => candidate.id === item.agentId);
+    return machine && agent ? { machine, agent } : null;
+  }, [displayMachines]);
+
+  const chatFromFinder = React.useCallback((item: FleetSearchItem) => {
+    const target = finderAgentTarget(item);
+    if (target) onOpenChat?.(target.machine.source, target.agent.source);
+  }, [finderAgentTarget, onOpenChat]);
+
+  const settingsFromFinder = React.useCallback((item: FleetSearchItem) => {
+    const target = finderAgentTarget(item);
+    if (target) onEditSettings?.(target.machine.source, target.agent.source);
+  }, [finderAgentTarget, onEditSettings]);
+
+  React.useEffect(() => {
+    const locateDashboardTarget = (target: DashboardRouteTarget | null) => {
+      if (target?.view !== "agents" || !target.agentId) return;
+      const item = searchIndex.find((candidate) => candidate.kind === "agent" && candidate.agentId === target.agentId);
+      if (item) locateSearchItem(item);
+    };
+    const handleAppliedTarget = (event: Event) => {
+      locateDashboardTarget((event as CustomEvent<DashboardRouteTarget>).detail ?? null);
+    };
+
+    window.addEventListener(DASHBOARD_TARGET_APPLIED_EVENT, handleAppliedTarget);
+    if (!initialRouteLocateHandledRef.current && searchIndex.length > 0) {
+      initialRouteLocateHandledRef.current = true;
+      locateDashboardTarget(dashboardTargetFromSearch(window.location.search));
+    }
+    return () => window.removeEventListener(DASHBOARD_TARGET_APPLIED_EVENT, handleAppliedTarget);
+  }, [locateSearchItem, searchIndex]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === "/" && viewMode !== "list" && !chromeHidden && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        changeSearchOpen(true);
+        window.requestAnimationFrame(() => searchInputRef.current?.focus());
+        return;
+      }
+      if (event.key !== "Escape") return;
+      if (searchOpen) {
+        setSearchOpen(false);
+        searchInputRef.current?.blur();
+        return;
+      }
+      if (locateOriginRef.current && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        restoreLocateOrigin();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [changeSearchOpen, chromeHidden, restoreLocateOrigin, searchOpen, viewMode]);
+
   // Spotlight a freshly created agent once it shows up in the fleet data.
   React.useEffect(() => {
     if (!recentAgentArrival) return;
@@ -258,7 +482,11 @@ export function FleetHiveView({
     return () => window.clearTimeout(t);
   }, [displayMachines, onRecentAgentArrivalSeen, recentAgentArrival]);
 
-  React.useEffect(() => () => window.clearTimeout(newAgentTimerRef.current), []);
+  React.useEffect(() => () => {
+    window.clearTimeout(newAgentTimerRef.current);
+    window.clearTimeout(locateAnimationTimerRef.current);
+    window.clearTimeout(locateSpotlightTimerRef.current);
+  }, []);
 
   // Track the size of the area LEFT of the (unscaled) detail panel.
   React.useLayoutEffect(() => {
@@ -276,6 +504,7 @@ export function FleetHiveView({
 
   // ── Zoom & pan (parity with the legacy graph: wheel to zoom, drag to pan) ──
   const applyZoom = React.useCallback((nextZoomRaw: number, pivot?: { x: number; y: number }) => {
+    setViewportAnimating(false);
     setView((v) => {
       const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, nextZoomRaw));
       if (nextZoom === v.zoom) return v;
@@ -287,7 +516,10 @@ export function FleetHiveView({
     });
   }, [area.w, area.h]);
 
-  const resetView = React.useCallback(() => setView({ zoom: 1, x: 0, y: 0 }), []);
+  const resetView = React.useCallback(() => {
+    setViewportAnimating(false);
+    setView({ zoom: 1, x: 0, y: 0 });
+  }, []);
 
   // Wheel-to-zoom, pivoting on the cursor (matches the legacy fleet graph).
   React.useEffect(() => {
@@ -295,6 +527,7 @@ export function FleetHiveView({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      setViewportAnimating(false);
       const rect = el.getBoundingClientRect();
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
@@ -316,6 +549,7 @@ export function FleetHiveView({
   const onPanPointerDown = React.useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
+    setViewportAnimating(false);
     window.getSelection()?.removeAllRanges();
     const start = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y, moved: false };
     const onMove = (ev: PointerEvent) => {
@@ -441,14 +675,32 @@ export function FleetHiveView({
     >
       {/* The list view renders its own full-width header + view-mode switcher, so
           the thin TopBar and the floating toggles step aside in that mode. */}
-      {viewMode !== "list" ? <TopBar machines={displayMachines} eyebrow="one swarm, humming" /> : null}
+      {viewMode !== "list" && !chromeHidden ? (
+        <TopBar
+          machines={displayMachines}
+          eyebrow="one swarm, humming"
+          searchIndex={searchIndex}
+          searchInputRef={searchInputRef}
+          searchOpen={searchOpen}
+          searchQuery={searchQuery}
+          searchRecents={searchRecents}
+          searchResults={searchResults}
+          statusFilter={statusFilter}
+          onLocate={locateSearchItem}
+          onSearchOpenChange={changeSearchOpen}
+          onSearchQueryChange={setSearchQuery}
+          onStatusFilterChange={changeStatusFilter}
+          onChat={onOpenChat ? chatFromFinder : undefined}
+          onSettings={onEditSettings ? settingsFromFinder : undefined}
+        />
+      ) : null}
       <div ref={wrapRef} style={{ flex: "1 1 auto", position: "relative", minHeight: 0, overflow: "hidden" }}>
         {/* layout (Hive/Classic) toggle floats over the hive canvas, top-left */}
-        {layoutToggle && viewMode !== "list" ? (
+        {layoutToggle && viewMode !== "list" && !chromeHidden ? (
           <div style={{ position: "absolute", top: 14, left: 14, zIndex: 30 }}>{layoutToggle}</div>
         ) : null}
         {/* view-mode (hive/graph/map/list) switcher — right-aligned with the hive canvas */}
-        {!initialLoading && viewMode !== "list" ? (
+        {!initialLoading && viewMode !== "list" && !chromeHidden ? (
           <div
             style={{
               position: "absolute", top: 14, right: viewMode === "hive" ? PANEL_W + 16 : 18, zIndex: 30,
@@ -457,7 +709,7 @@ export function FleetHiveView({
             }}
           >
             {viewMode === "graph" ? <GraphPaletteToggle palette={graphPalette} onChoose={chooseGraphPalette} /> : null}
-            <ViewModeToggle mode={viewMode} onChoose={chooseViewMode} />
+            <ViewModeToggle mode={viewMode} modes={availableViewModes} onChoose={chooseViewMode} />
           </div>
         ) : null}
         {viewMode === "graph" && !initialLoading ? (
@@ -492,10 +744,15 @@ export function FleetHiveView({
                       (which can be zoomed/panned to any size) floats over it */}
                   <div className="fr-hive-backdrop" aria-hidden />
                   <div
+                    className="fr-hive-transform"
+                    data-locate-animating={viewportAnimating ? "true" : undefined}
                     style={{
                       position: "absolute", left: "50%", top: "50%", width: HIVE_W, height: HIVE_H,
                       transform: `translate(${-bounds.cx * scale + view.x}px, ${-bounds.cy * scale + view.y}px) scale(${scale})`,
                       transformOrigin: "0 0",
+                      transition: viewportAnimating
+                        ? `transform ${LOCATE_VIEWPORT_ANIMATION_MS}ms cubic-bezier(0.2, 0.82, 0.2, 1)`
+                        : "none",
                     }}
                   >
                     <HiveStage
@@ -507,6 +764,8 @@ export function FleetHiveView({
                       onAddMachine={onAddMachine}
                       onOpenQueenSettings={onOpenQueenSettings}
                       newAgentId={newAgentId}
+                      focus={fleetFocus}
+                      spotlightKey={spotlightKey}
                       tailnetLabel={tailnetLabel}
                     />
                   </div>
@@ -565,6 +824,12 @@ export function FleetHiveView({
                   topRightHudTop={58}
                 />
               </div>
+            ) : viewMode === "companion" ? (
+              <CompanionView
+                onOpenQueenSettings={onOpenQueenSettings}
+                immersive={companionImmersive}
+                onImmersiveChange={setCompanionImmersive}
+              />
             ) : viewMode === "map" ? (
               <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", overflow: "hidden" }}>
                 <MapView

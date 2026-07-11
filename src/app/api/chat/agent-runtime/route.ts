@@ -86,7 +86,7 @@ export const runtime = "nodejs";
 export const maxDuration = 600;
 
 const CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS = 150;
-const CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = 900;
+const CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = 1_500;
 // Capability-shaped prompts ("what can you do with X", trading, wallet, token
 // launch, …) are exactly the turns where dropping the retrieval result leaves
 // the agent blind to its own powers, so they get a larger preflight budget.

@@ -4,6 +4,7 @@ import { listLoopPatterns } from "@/lib/services/loops/pattern-registry";
 import { loopGateFromVerifier, type LoopVerifierId } from "@/lib/services/loops/verifier-registry";
 
 export type LoopTemplateId =
+  | "engineering-discipline"
   | "code-fix"
   | "app-build-harness"
   | "research"
@@ -74,10 +75,12 @@ export function buildLoopFromTemplate(input: BuildLoopTemplateInput): LoopSpec {
   const now = input.now ?? Date.now();
   const requiredVerifierIds = input.requiredVerifierIds ?? template.verifierIds;
   const optionalVerifierIds = input.optionalVerifierIds ?? [];
-  const gates = [
-    ...requiredVerifierIds.map((verifierId) => loopGateFromVerifier(verifierId, { now, required: true })),
-    ...optionalVerifierIds.map((verifierId) => loopGateFromVerifier(verifierId, { now, required: false })),
-  ];
+  const gates = input.templateId === "engineering-discipline"
+    ? buildEngineeringDisciplineGates(now)
+    : [
+      ...requiredVerifierIds.map((verifierId) => loopGateFromVerifier(verifierId, { now, required: true })),
+      ...optionalVerifierIds.map((verifierId) => loopGateFromVerifier(verifierId, { now, required: false })),
+    ];
   const loop: LoopSpec = {
     mode: template.defaultMode,
     goal: input.goal.trim(),
@@ -132,6 +135,7 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
   const goal = input.strategicGoal?.trim() || input.unitName;
   const gatePrefix = `unit-${input.unitId}-${input.runId}-${input.workTitle}`.replace(/[^a-z0-9_-]+/gi, "-").slice(0, 80);
   const governanceLabel = input.governanceLabel ?? "governance policy";
+  const usesProductTasteRubric = shouldUseProductTasteRubric(input);
   return withObservation({
     mode: "optimizer",
     goal: `${input.workTitle}: improve "${goal}" while preserving the unit's charter, budget, and evidence trail.`,
@@ -141,11 +145,14 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
       `Any spend or external action stays inside ${governanceLabel}.`,
     ],
     contract: buildOperatingUnitContract(input, goal, metric, now),
-    evaluationRubric: shouldUseProductTasteRubric(input)
+    evaluationRubric: usesProductTasteRubric
       ? buildProductTasteRubric(`rubric_unit_${stableHash(`${input.unitId}:${input.workTitle}`)}`, "Product/design evaluator rubric")
       : undefined,
     evalGates: [
-      loopGateFromVerifier("receipt:evidence", { id: `${gatePrefix}-outcome`, title: `Outcome evidence for ${metric}`, required: false, now }),
+      loopGateFromVerifier("receipt:evidence", { id: `${gatePrefix}-outcome`, title: `Outcome evidence for ${metric}`, required: true, now }),
+      ...(usesProductTasteRubric
+        ? [loopGateFromVerifier("agent:judge", { id: `${gatePrefix}-judge`, title: "Independent product-quality review", required: true, now })]
+        : []),
       loopGateFromVerifier("receipt:evidence", { id: `${gatePrefix}-learning`, title: "Reviewed learning distillation candidate", required: false, now }),
       loopGateFromVerifier("governance:policy", { id: `${gatePrefix}-governance`, title: "Budget and policy constraints respected", required: false, now }),
     ],
@@ -187,6 +194,11 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
 }
 
 function defaultSuccessCriteria(templateId: LoopTemplateId): string[] {
+  if (templateId === "engineering-discipline") return [
+    "The scoped user-visible outcome is implemented without unauthorized expansion.",
+    "Baseline and final evidence exercise the relevant entry path.",
+    "Tests, lint, types, and independent review pass or unchanged pre-existing failures are named precisely.",
+  ];
   if (templateId === "app-build-harness") return ["Planner scope is implemented.", "Independent judge accepts the result.", "The app renders and core workflow works."];
   if (templateId === "code-fix") return ["Focused failure is fixed.", "No new lint or type failures are introduced."];
   if (templateId === "evo-benchmark") return ["Benchmark score improves or a defensible no-improvement receipt is recorded."];
@@ -194,15 +206,58 @@ function defaultSuccessCriteria(templateId: LoopTemplateId): string[] {
 }
 
 function defaultHandoffRules(templateId: LoopTemplateId): string[] {
+  if (templateId === "engineering-discipline") return [
+    "Use only the planning, TDD, debugging, worktree, delegation, and review stages proportionate to this task.",
+    "Preserve concurrent work; do not commit, push, merge, delete, deploy, or fan out without authorization.",
+    "Report changes, baseline-to-final deltas, real-path verification, known gaps, rollback, and repository state.",
+  ];
   if (templateId === "app-build-harness") return ["Keep planner, builder, and judge roles separate when possible.", "Attach screenshots or artifact links for judge review."];
   if (templateId === "evo-benchmark") return ["Use Evo when a benchmark command and isolated worktree are available.", "Record losing branches as experiments or anti-patterns."];
   return ["Record receipts for decisions, evidence, and unresolved risk."];
 }
 
 function defaultEvidenceRequired(templateId: LoopTemplateId): string[] {
+  if (templateId === "engineering-discipline") return [
+    "Scope, constraints, rollback, and design decision or a documented reason a separate design gate was unnecessary.",
+    "Baseline output from the relevant entry path.",
+    "Red/green regression evidence for breakable logic, or a concrete non-applicability receipt.",
+    "Focused test, lint, type, runtime, browser, or artifact outputs appropriate to the change.",
+    "Independent review receipt and a final verification-before-completion receipt.",
+  ];
   if (templateId === "code-fix") return ["Test, lint, or typecheck output.", "Files changed."];
   if (templateId === "daily-brief") return ["Sources checked.", "Delivery receipt."];
   return ["Result summary.", "Verification evidence.", "Known gaps or next retry target."];
+}
+
+function buildEngineeringDisciplineGates(now: number): LoopSpec["evalGates"] {
+  return [
+    loopGateFromVerifier("human:approval", {
+      id: "engineering-design-approval",
+      title: "Material design decision approved when required",
+      required: false,
+      phase: "pre",
+      now,
+    }),
+    loopGateFromVerifier("receipt:evidence", {
+      id: "engineering-baseline-evidence",
+      title: "Relevant baseline captured",
+      required: true,
+      phase: "pre",
+      now,
+    }),
+    loopGateFromVerifier("receipt:evidence", {
+      id: "engineering-red-green-evidence",
+      title: "Red/green evidence or non-applicability recorded",
+      required: true,
+      phase: "post",
+      now,
+    }),
+    loopGateFromVerifier("command:test", { id: "engineering-focused-tests", title: "Focused tests pass", required: true, now }),
+    loopGateFromVerifier("command:lint", { id: "engineering-lint", title: "Relevant lint gate passes", required: true, now }),
+    loopGateFromVerifier("command:typecheck", { id: "engineering-typecheck", title: "Relevant type gate passes", required: true, now }),
+    loopGateFromVerifier("agent:judge", { id: "engineering-independent-review", title: "Independent engineering review accepts", required: true, now }),
+    loopGateFromVerifier("receipt:evidence", { id: "engineering-final-evidence", title: "Final completion evidence attached", required: true, now }),
+  ];
 }
 
 function buildTemplateContract(input: BuildLoopTemplateInput, templateTitle: string, now: number): LoopSpec["contract"] {

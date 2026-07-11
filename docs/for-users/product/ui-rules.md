@@ -16,3 +16,4 @@ These are the short rules. For the full rationale and screen guidance, see [UI/U
 8. Show machine context before agent details.
 9. Show swarm coordination with attribution.
 10. First-time users should understand the screen in ten seconds.
+11. Keep control labels calm: medium weight by default, never heavy display type on buttons.

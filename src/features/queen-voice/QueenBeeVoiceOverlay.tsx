@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { AgentResponseLoader } from "@/features/chat/chat-composer";
+import type { AgentVoiceFailureDetail } from "@/features/dashboard/hooks/use-agent-voice-failure-notifications";
 import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
 import { emitQueenVoiceState, listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
@@ -34,6 +35,7 @@ import {
   QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS,
   preloadQueenVoiceActivationSound,
 } from "./activation-sound";
+import { parseUserSlashCommandDisplay } from "./queen-command-display";
 import { useQueenChat, type QueenChatTurn } from "./queen-chat-store";
 import styles from "./queen-voice.module.css";
 
@@ -42,6 +44,18 @@ const QUEEN_VOICE_OPENING_LINE =
 
 // Thinking pauses render the chat route's animated loader (bee + rotating
 // phrases — AgentResponseLoader) instead of a held filler line.
+
+function UserTurnText({ text }: { text: string }) {
+  const command = parseUserSlashCommandDisplay(text);
+  if (!command) return text;
+
+  return (
+    <>
+      <span className={styles.commandBadge}>{command.name}</span>
+      {command.suffix}
+    </>
+  );
+}
 
 function statusLabel(
   phase: QueenVoicePhase,
@@ -289,7 +303,7 @@ function TranscriptTurns({
                 </>
               ) : (
                 <>
-                  {turn.text}
+                  <UserTurnText text={turn.text} />
                   {/* Live captions keep transcribing for a beat after the user
                       stops (the model's trailing words land late); animated
                       dots say "still finalizing" so the pause reads as work,
@@ -450,6 +464,7 @@ export function QueenBeeVoiceOverlay({
   clapWakeEnabled = false,
   onClapWakeEnabledChange,
   onDriveDashboard,
+  onVoiceFailure,
   openSpaceRightInset = 0,
   screenContext,
 }: {
@@ -459,6 +474,7 @@ export function QueenBeeVoiceOverlay({
     command: string,
     opts?: { onModalOpen?: () => void; screenContext?: DashboardScreenContext },
   ) => Promise<string>;
+  onVoiceFailure?: (detail: AgentVoiceFailureDetail) => void;
   openSpaceRightInset?: number;
   screenContext?: DashboardScreenContext;
 } = {}) {
@@ -623,6 +639,21 @@ export function QueenBeeVoiceOverlay({
     voiceModeForOpen === "pipeline",
   );
   const voiceState = geminiLiveMode ? geminiLive : realtimeMode ? realtime : pipeline;
+  const lastVoiceFailureRef = React.useRef("");
+  React.useEffect(() => {
+    const message = voiceState.error || (voiceModeForOpen === "pipeline" ? pipeline.voiceNotice : "");
+    if (!open || !message) {
+      lastVoiceFailureRef.current = "";
+      return;
+    }
+    if (lastVoiceFailureRef.current === message) return;
+    lastVoiceFailureRef.current = message;
+    onVoiceFailure?.({
+      agentName: "Queen Bee",
+      agentRole: "queen",
+      message,
+    });
+  }, [onVoiceFailure, open, pipeline.voiceNotice, voiceModeForOpen, voiceState.error]);
   const voiceThinking = open && voiceState.phase === "thinking";
 
   const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;

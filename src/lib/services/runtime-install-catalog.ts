@@ -43,6 +43,10 @@ export type RuntimeInstallSpec = {
   uvPythonPin?: string;
   // curl|bash installer URL (installKind "curl"), unix only.
   curlInstallUrl?: string;
+  curlInstallArgs?: string[];
+  // PowerShell installer URL for Windows when installKind is "curl".
+  powershellInstallUrl?: string;
+  powershellInstallArgs?: string[];
   // Human-readable install command preview per platform (shown in the UI and
   // used for the copyable degrade path).
   installPreview: { unix: string; windows: string };
@@ -189,38 +193,48 @@ export const RUNTIME_INSTALL_CATALOG: Partial<Record<KnownAgentRuntime, RuntimeI
   hermes: {
     runtime: "hermes",
     label: "Hermes",
-    blurb: "The Nous Research Hermes gateway runtime (the `hermes` command).",
-    // Hermes is set up through a Docker-based control-room bootstrap, not a
-    // single verified one-liner, so we guide rather than auto-run an installer.
-    inAppInstall: false,
-    installKind: "external",
+    blurb: "The Nous Research agent runtime with persistent memory and skills.",
+    inAppInstall: true,
+    installKind: "curl",
+    curlInstallUrl: "https://hermes-agent.nousresearch.com/install.sh",
+    powershellInstallUrl: "https://hermes-agent.nousresearch.com/install.ps1",
     installPreview: {
-      unix: "Set up Hermes from its control room (see the Hermes runtime docs), then re-check.",
-      windows: "Set up Hermes from its control room (see the Hermes runtime docs), then re-check.",
+      unix: "curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash",
+      windows: "iex (irm https://hermes-agent.nousresearch.com/install.ps1)",
     },
     verifyCommand: "hermes --version",
     portableStateSummary:
       "Copies config.yaml (secrets redacted), skills, cron schedules, agents and profile configs. Excludes the Python venv, session DB, snapshots and logs; provider keys carry over via the shared env.",
     auth: [],
-    notes: "Hermes installs via its Docker-based control room (nousresearch/hermes-agent), so HivemindOS can't auto-install it. Follow the Hermes runtime setup, then re-check — after that you can pick providers and models here.",
+    oauth: {
+      command: "hermes auth add openai-codex --type oauth --no-browser",
+      note: "Use your ChatGPT/Codex subscription with a device code. Hermes also imports an existing Codex CLI login from ~/.codex/auth.json.",
+    },
+    notes: "Install Hermes here, then connect a model. Existing Codex CLI OAuth is detected automatically.",
   },
   openclaw: {
     runtime: "openclaw",
     label: "OpenClaw",
     blurb: "The OpenClaw gateway agent runtime.",
-    // Install command isn't confirmed against upstream docs yet, so degrade to a
-    // copyable command + re-check rather than running an unverified installer.
-    inAppInstall: false,
-    installKind: "external",
+    inAppInstall: true,
+    installKind: "curl",
+    curlInstallUrl: "https://openclaw.ai/install.sh",
+    curlInstallArgs: ["--no-onboard"],
+    powershellInstallUrl: "https://openclaw.ai/install.ps1",
+    powershellInstallArgs: ["-NoOnboard"],
     installPreview: {
-      unix: "See docs.openclaw.ai for the current install command.",
-      windows: "See docs.openclaw.ai for the current install command.",
+      unix: "curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard",
+      windows: "& ([scriptblock]::Create((iwr -useb https://openclaw.ai/install.ps1))) -NoOnboard",
     },
     verifyCommand: "openclaw --version",
     portableStateSummary:
       "Copies openclaw.json (secrets redacted) and skills. Excludes per-agent session/log data; secrets.json is never copied.",
     auth: [],
-    notes: "OpenClaw is set up through its own onboarding (gateway + at least one model). Follow docs.openclaw.ai, then re-check.",
+    oauth: {
+      command: "openclaw models auth login --provider openai --device-code",
+      note: "Use your ChatGPT/Codex subscription with a device code, then finish Gateway setup in OpenClaw.",
+    },
+    notes: "After installation, connect a model and finish Gateway setup so HivemindOS can start chats.",
   },
 };
 

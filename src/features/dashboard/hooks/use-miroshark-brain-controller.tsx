@@ -922,7 +922,9 @@ export function useMirosharkBrainController(props: any) {
         return;
       }
       if (data.inventory) setBrainSkills(data.inventory);
-      setSkillBrowserStatus(`Installed ${data.installed?.length ?? 0} skill${data.installed?.length === 1 ? "" : "s"} from ${skill.name}${data.skipped?.length ? `; skipped ${data.skipped.length} existing` : ""}.`);
+      const installedCount = data.installed?.length ?? 0;
+      const updatedCount = data.updated?.length ?? 0;
+      setSkillBrowserStatus(`Installed ${installedCount} skill${installedCount === 1 ? "" : "s"}${updatedCount ? ` and updated ${updatedCount} managed skill${updatedCount === 1 ? "" : "s"}` : ""} from ${skill.name}${data.skipped?.length ? `; preserved ${data.skipped.length} existing` : ""}.`);
       void refreshBrainGraph();
       void refreshBrainSkills();
       return;

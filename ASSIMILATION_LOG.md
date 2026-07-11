@@ -7296,3 +7296,580 @@
   - Decision: inspected
   - Reason: credential propagation boundary only
   - Path: `SKILL.md`
+## 2026-07-10T15:12:04.540484+00:00 - local-search
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: local-index
+- Query: `Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-07-10T15:12:08.049768+00:00 - public-search
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: public-github
+- Query: `Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.`
+- Decision: retrieved
+- Reason: Retrieved 3 public candidates from GitHub search.
+
+### Candidates
+- VikasSukhija/Downloads (419 stars, PowerShell, MIT License)
+  - URL: https://github.com/VikasSukhija/Downloads
+  - Description: AD Health Check, Send HTML Email, Ping machines, Encrypt Password,Bulk Password,Microsoft Teams,Monitor Certificate expiry, Monitor cert expiry, AD attributes, IP to Hostname, Export AD group, CSV to SQL,Shutdown, Restart, Local Admin, Disk
+- gbowerman/vmssdashboard (45 stars, Python, MIT License)
+  - URL: https://github.com/gbowerman/vmssdashboard
+  - Description: Azure Virtual Machine Scale Set Editor tools
+- OREODEFI/Contract- (7 stars, MIT License)
+  - URL: https://github.com/OREODEFI/Contract-
+  - Description: /** *Submitted for verification at BscScan.com on 2021-01-18 */ pragma solidity 0.5.16; interface IBEP20 { /** * @dev Returns the amount of tokens in existence. */ function totalSupply() external view returns (uint256); /** * @dev Returns t
+## 2026-07-10T15:12:08.136447+00:00 - prebuild-gate
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: public-github
+- Query: `Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-10T15:12:31.531015+00:00 - triage
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: local-workspace
+- Decision: selected
+- Reason: Reused the actual call chain and private commercial authority instead of the irrelevant public index hits.
+- Selected backbone: LiamVisionary/hivemindos
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: backbone
+  - Reason: Existing Fleet New Machine modal, Azure OAuth/ARM adapter, hosted-service contract, and loading primitives match the live product path
+  - Path: `src/features/dashboard/views/MachineInitModal.tsx`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: selected-donor
+  - Reason: Private managed-agent plans and runtime bootstrap establish the official pricing and image-initialization trust boundary
+  - Path: `workers/managed-agent-control-plane/src/runtime-bootstrap.ts`
+## 2026-07-10T15:12:31.609720+00:00 - triage
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: public-search
+- Decision: rejected
+- Reason: Public repository matches were lexical false positives; primary Microsoft Learn specifications were used for REST and Partner Center requirements.
+
+### Candidates
+- VikasSukhija/Downloads
+  - Decision: rejected
+  - Reason: Unrelated PowerShell administration snippets; no Marketplace VM offer, ARM template, or HivemindOS initialization backbone
+- gbowerman/vmssdashboard
+  - Decision: rejected
+  - Reason: Legacy VMSS dashboard does not implement Partner Center publishing or the required commercial trust boundary
+- OREODEFI/Contract-
+  - Decision: rejected
+  - Reason: Unrelated blockchain contract keyword match
+## 2026-07-10T15:12:55.348194+00:00 - audit
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: local-workspace
+- Decision: reviewed
+- Reason: Focused source was manually traced through the actual call chain before adaptation.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: accepted
+  - Reason: Focused audit passed with no findings
+- LiamVisionary/hivemind-cloud-services
+  - Decision: accepted-after-review
+  - Reason: Eight medium matches are expected base64 configuration serialization in the existing runtime bootstrap; no decoded external instructions or arbitrary execution were reused
+## 2026-07-10T15:13:08.915832+00:00 - assimilation-manifest
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/features/dashboard/views/MachineInitModal.tsx => src/features/dashboard/views/MachineInitModal.tsx, LiamVisionary/hivemindos:src/lib/services/integrations/azure-arm.ts => src/lib/services/hivemindos-machines.ts, LiamVisionary/hivemindos:src/lib/services/managed-cloud-agents-contract.ts => src/lib/services/hivemindos-machines-contract.ts, LiamVisionary/hivemind-cloud-services:workers/managed-agent-control-plane/src/plans.ts => workers/managed-agent-control-plane/src/azure-marketplace.ts, LiamVisionary/hivemind-cloud-services:workers/managed-agent-control-plane/src/runtime-bootstrap.ts => workers/managed-agent-control-plane/marketplace/azure/image/install-hivemindos-image.sh
+- Verification: Wrote ASSIMILATION.hivemindos-machines-azure-marketplace.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-10T15:13:14.847470+00:00 - verification
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: verify-assimilation-manifest
+- Decision: failed
+- Reason: ASSIMILATION.hivemindos-machines-azure-marketplace.json: Entry 4 target_path does not exist: /Users/liam/Documents/code/projects/hivemind-os/workers/managed-agent-control-plane/src/azure-marketplace.ts
+## 2026-07-10T15:13:36.344700+00:00 - verification
+
+- Request: Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hivemindos-machines-azure-marketplace.json: 5 concrete reuse entries, 5 substantive
+## 2026-07-10T15:18:00.957484+00:00 - verification
+
+- Request: Create one-click HivemindOS managed cloud agents end to end, test lifecycle, and pay using AdaptiveAgent's wallet.
+- Source: verify-assimilation-manifest
+- Decision: failed
+- Reason: ASSIMILATION.managed-cloud-agents.json: Entry 5 has invalid reuse_type: pattern_adapted
+## 2026-07-10T15:18:52.843919+00:00 - verification
+
+- Request: Create one-click HivemindOS managed cloud agents end to end, test lifecycle, and pay using AdaptiveAgent's wallet.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.managed-cloud-agents.json: 6 concrete reuse entries, 5 substantive
+## 2026-07-10T15:36:44.556236+00:00 - final
+
+- Request: do everything please, fully production ready
+- Source: managed-cloud-client
+- Decision: selected
+- Reason: Public client, hosted capability promotion, encrypted credential recovery, discovery matrix, docs, and trust-boundary tests are complete.
+- Selected backbone: src/lib/services/managed-cloud-agents.ts
+- Assimilated: governed wallet spend; encrypted vault; connector capability promotion; local collector Shared Brain pairing; canonical dashboard loaders
+- Verification: TypeScript, focused ESLint, managed-cloud test, dashboard-nav, Hive action catalog/registry, manifest verification pass; full gate remains at the same 133/142 concurrent baseline.
+## 2026-07-10T15:44:35.448294+00:00 - verification
+
+- Request: do everything please, fully production ready
+- Source: managed-cloud-ui-client
+- Decision: passed
+- Reason: Hosted MCP promotion and revocation were exercised through the same public client contract used by the dashboard.
+- Verification: Public action contract passed; live MCP canary passed; Chrome visual click-through skipped because skill runtime file is missing.
+## 2026-07-11T04:40:46.131808+00:00 - shared-brain
+
+- Request: Create a non-optional HivemindOS packaged skill that creates a Zero Human Company
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- HivemindOS Docs/for-users/features/zero-human-companies.md
+  - Decision: selected
+  - Reason: confirmed company charter, crew, budget, approvals, launch, and learning model
+  - Path: `workflow source`
+- HivemindOS Docs/for-users/packaged-skills/index.md
+  - Decision: selected
+  - Reason: confirmed non-optional auto-install packaging policy
+  - Path: `packaging source`
+## 2026-07-11T04:40:46.260097+00:00 - local-search
+
+- Request: Create a non-optional HivemindOS packaged skill that creates a Zero Human Company
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/app/api/founder/route.ts
+  - Decision: selected
+  - Reason: canonical compile/found creation path and default approval gates
+  - Path: `adapted workflow`
+- src/app/api/companies/import/route.ts
+  - Decision: selected-donor
+  - Reason: optional repository-linked company import path
+  - Path: `adapted workflow`
+- src/app/api/companies/route.ts
+  - Decision: selected-donor
+  - Reason: company update, governance, launch, stop, and verification API
+  - Path: `adapted workflow`
+- packaged-skills/auto-install/hive-workflow-fusion/SKILL.md
+  - Decision: selected-donor
+  - Reason: auto-install skill workflow and safe side-effect style
+  - Path: `style adapted`
+## 2026-07-11T04:40:46.360199+00:00 - public-search
+
+- Request: Create a non-optional HivemindOS packaged skill that creates a Zero Human Company
+- Source: public-github
+- Decision: not-assimilated
+- Reason: No public search needed: the user targeted HivemindOS and the pinned repository already contains the authoritative company APIs, schemas, packaging policy, and tests.
+## 2026-07-11T04:41:52.590743+00:00 - local-search
+
+- Request: Create a non-optional HivemindOS packaged skill that creates a Zero Human Company
+- Source: capability-search
+- Selected backbone: local-project:hivemind-os
+- Note: Capability search confirmed Founder Mode as the creation path; live connected-app refresh is not required for company setup.
+
+### Candidates
+- POST /api/founder
+  - Decision: selected
+  - Reason: highest-fit canonical goal-to-company compiler
+  - Path: `adapted workflow`
+- POST /api/companies
+  - Decision: selected-donor
+  - Reason: governance and verification surface
+  - Path: `adapted workflow`
+- POST /api/queen-bee
+  - Decision: rejected
+  - Reason: dispatches swarm work but does not create the durable company record requested
+## 2026-07-11T04:48:44.019227+00:00 - assimilation-manifest
+
+- Request: Create a non-optional HivemindOS packaged skill that creates a Zero Human Company
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/app/api/founder/route.ts => packaged-skills/auto-install/create-zero-human-company/SKILL.md, LiamVisionary/hivemindos:src/app/api/companies/import/route.ts => packaged-skills/auto-install/create-zero-human-company/references/company-api.md, LiamVisionary/hivemindos:src/app/api/companies/route.ts => packaged-skills/auto-install/create-zero-human-company/references/company-api.md
+- Verification: Wrote ASSIMILATION.create-zero-human-company.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-11T04:48:44.268226+00:00 - verification
+
+- Request: Create a non-optional HivemindOS packaged skill that creates a Zero Human Company
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.create-zero-human-company.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-11T04:49:30.370272+00:00 - final
+
+- Request: Create a non-optional HivemindOS packaged skill that creates a Zero Human Company
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Created auto-install skill from canonical Founder Mode and company APIs; focused contract, YAML/validator-equivalent checks, live compile rehearsal, setup/uninstall mirror check, script syntax checks, capability ranking, diff check, and 3-entry manifest verification passed.
+- Note: Full vault-structure suite remains blocked before new assertions by the pre-existing work-and-scheduler.md version.projectCheckouts failure; official quick_validate.py is blocked by missing PyYAML, so its exact constraints were reproduced and passed with Ruby/Node.
+## 2026-07-11T10:48:27.072684+00:00 - shared-brain
+
+- Request: Build Replit/Lovable-style HivemindOS cloud infrastructure using ntegrals/december with minimal duplicate code and a DRY single source of truth
+- Source: full-vault
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Projects/Agent Calls - BYOK vs HivemindOS Cloud.md
+  - Decision: inspected
+  - Reason: existing local versus managed cloud boundary
+- HivemindOS Docs/for-investors/ecosystem-plan.md
+  - Decision: inspected
+  - Reason: managed hosting and compute product intent
+## 2026-07-11T10:48:27.182148+00:00 - triage
+
+- Request: Build Replit/Lovable-style HivemindOS cloud infrastructure using ntegrals/december with minimal duplicate code and a DRY single source of truth
+- Source: user-pinned-github
+- Selected backbone: github:ntegrals/december
+
+### Candidates
+- ntegrals/december
+  - Decision: selected
+  - Reason: user-pinned MIT source for prompt-to-app container orchestration
+## 2026-07-11T12:20:04.084700+00:00 - triage
+
+- Request: Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.
+- Source: pinned-source:obra/superpowers
+- Selected backbone: local-project:hivemind-os
+- Note: Whole upstream audit blocked on destructive commands in unrelated installer/docs paths; only selected skill directories will be vendored and re-audited. Upstream session bootstrap and visual brainstorm server are excluded.
+
+### Candidates
+- obra/superpowers
+  - Decision: selected-donor
+  - Reason: MIT skill workflows at pinned v6.1.1 commit d884ae04edebef577e82ff7c4e143debd0bbec99
+  - Path: `skills/`
+- local-project:hivemind-os
+  - Decision: selected
+  - Reason: packaged skill catalog, manifest, Work Board loops, audits, and runtime projection remain authoritative
+  - Path: `packaged-skills;src/lib/services/skills;src/lib/services/loops`
+## 2026-07-11T12:22:46.344110+00:00 - shared-brain
+
+- Request: Build the backend-neutral local and managed HivemindOS app-builder with one canonical contract, local project/runtime/file adapter, managed adapter, capability discovery, and no VM requirement for local users
+- Source: shared-brain
+- Query: `HivemindOS app builder local machine project registry collector filesystem runtime preview managed cloud architecture decisions`
+- Decision: selected
+
+### Candidates
+- HivemindOS Docs/for-users/architecture/index.md
+  - Decision: selected
+  - Reason: confirms local API-to-collector/runtime architecture
+  - Path: `HivemindOS Docs/for-users/architecture/index.md`
+- Skills/local-app-setup-and-discovery/SKILL.md
+  - Decision: selected-donor
+  - Reason: confirms local app discovery and collector path
+  - Path: `Skills/local-app-setup-and-discovery/SKILL.md`
+## 2026-07-11T12:22:46.473989+00:00 - local-search
+
+- Request: Build the backend-neutral local and managed HivemindOS app-builder with one canonical contract, local project/runtime/file adapter, managed adapter, capability discovery, and no VM requirement for local users
+- Source: local-projects
+- Query: `project registry collector hosted app discovery managed cloud Hive Action MCP`
+- Decision: selected
+- Selected backbone: LiamVisionary/hivemindos
+
+### Candidates
+- src/lib/services/projects/project-registry.ts
+  - Decision: selected-donor
+  - Reason: durable local/vault project metadata
+  - Path: `src/lib/services/projects/project-registry.ts`
+- scripts/agent-telemetry-collector.mjs
+  - Decision: selected-donor
+  - Reason: machine API and hosted app discovery
+  - Path: `scripts/agent-telemetry-collector.mjs`
+- src/lib/services/managed-cloud-agents.ts
+  - Decision: selected-donor
+  - Reason: official hosted client and encrypted account credential reuse
+  - Path: `src/lib/services/managed-cloud-agents.ts`
+- src/lib/services/hive-actions/catalog.ts
+  - Decision: selected-donor
+  - Reason: natural-language capability and MCP discovery
+  - Path: `src/lib/services/hive-actions/catalog.ts`
+- ntegrals/december
+  - Decision: selected-donor
+  - Reason: pinned project/file/runtime operation vocabulary
+  - Path: `third_party/december`
+## 2026-07-11T12:31:51.875637+00:00 - shared-brain
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: shared-brain
+- Decision: inspected
+- Note: Full-vault recall located the canonical slash-command docs and current Queen Bee command surface.
+
+### Candidates
+- HivemindOS Docs/for-users/slash-commands.md
+  - Decision: inspected
+  - Reason: confirmed dashboard slash command source and transcript command naming
+  - Path: `HivemindOS Docs/for-users/slash-commands.md`
+## 2026-07-11T12:31:52.050563+00:00 - local-search
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: local-project
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/queen-voice/QueenBeeVoiceOverlay.tsx
+  - Decision: selected
+  - Reason: actual user-turn transcript renderer shown in the supplied screenshot
+  - Path: `src/features/queen-voice/QueenBeeVoiceOverlay.tsx`
+- src/features/queen-voice/queen-voice.module.css
+  - Decision: selected-donor
+  - Reason: existing Queen transcript badge and dual-theme styling surface
+  - Path: `src/features/queen-voice/queen-voice.module.css`
+- src/features/queen-voice/queen-slash-commands.ts
+  - Decision: inspected
+  - Reason: confirms leading slash token is canonical command display text
+  - Path: `src/features/queen-voice/queen-slash-commands.ts`
+## 2026-07-11T12:31:52.295884+00:00 - local-search
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: local-index
+- Query: `in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-07-11T12:31:57.486643+00:00 - public-search
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: public-github
+- Query: `in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge`
+- Decision: retrieved
+- Reason: Retrieved 11 public candidates from GitHub search.
+
+### Candidates
+- krotrn/Chat_App (8 stars, TypeScript, MIT License)
+  - URL: https://github.com/krotrn/Chat_App
+  - Description: ChatApp — A production-grade, real-time messaging client built with Next.js 15, React 19, and TypeScript. Featuring Socket.IO-powered WebSockets, Redux Toolkit state management, Auth.js v5 authentication, Prisma-backed PostgreSQL user store
+- PranshuChauhan149/Track-Cart (3 stars, TypeScript)
+  - URL: https://github.com/PranshuChauhan149/Track-Cart
+  - Description: Track & Cart is a full-stack grocery delivery platform built with Next.js 15, MongoDB, NextAuth, and Socket.io. It features live map tracking for orders, real-time chat between users and delivery partners, AI-powered assistance, smooth Fram
+- selfabhijeetkumar/NEXUS-AI--CHATBOT- (2 stars, TypeScript)
+  - URL: https://github.com/selfabhijeetkumar/NEXUS-AI--CHATBOT-
+  - Description: A futuristic AI chat platform built with Next.js, React Three Fiber & Framer Motion — featuring 3D neural network visualizations, multi-model support (GPT-4, Claude, Gemini), real-time streaming, slash commands, and an immersive glassmorphi
+- mohd-Bilal-exe/verbi.AI (2 stars, JavaScript)
+  - URL: https://github.com/mohd-Bilal-exe/verbi.AI
+  - Description: Explore Verbi.ai, built with ReactJS, Redux, Tailwind CSS, and Framer Motion. Using Google Generative AI Gemini, it features AI chat, grammatical checks, AI translation with custom prompts, and a beautiful UI with animations. Experience sea
+- erickloutse/Real-Time-Chat (1 stars, TypeScript)
+  - URL: https://github.com/erickloutse/Real-Time-Chat
+  - Description: Real-time chat application (WhatsApp Web Clone) built with MERN. WebSockets for live messaging, file and voice message support, dark/light mode, and a clean UI with ShadCN/UI, Tailwind CSS, and Framer Motion animations.
+- NitinTheGreat/DealHarbor-Frontend (1 stars, TypeScript)
+  - URL: https://github.com/NitinTheGreat/DealHarbor-Frontend
+  - Description: Next.js 15 PWA marketplace with React 19, TypeScript, real-time WebSocket chat, SSR for SEO, middleware auth guards, Workbox offline caching, shadcn/ui components, and Framer Motion animations. Companion frontend for DealHarbor Backend.
+- Mr-Broccolli/Cognee-Chat-v2.0 (1 stars, TypeScript, Apache License 2.0)
+  - URL: https://github.com/Mr-Broccolli/Cognee-Chat-v2.0
+  - Description: An innovative full-stack AI chat application featuring modern Next.js 14 frontend, Shadcn UI styling, dynamic Framer Motion animations, and custom persistent state. Backed by a high-performance Python FastAPI engine powered by Cognee, it bu
+- niquewill/Consumer_Complaint (2 stars, HTML)
+  - URL: https://github.com/niquewill/Consumer_Complaint
+  - Description: Overview There are quite a few apps in the market that provide a public forum for bringing up complaints so they can get resolved. With these apps, customers could easily submit their complaints to companies via them and deliver them to the
+- Shivamsinghmer/AI-Chatbot (3 stars, JavaScript)
+  - URL: https://github.com/Shivamsinghmer/AI-Chatbot
+  - Description: A modern, full-stack AI chatbot application built with React, Node.js, and Google's Gemini AI. This project features real-time communication via Socket.IO and a sleek, responsive UI powered by Tailwind CSS and Framer Motion.
+- Arena10x/AI-ChatBot-powered-by-Google-Gemini-API (2 stars, TypeScript)
+  - URL: https://github.com/Arena10x/AI-ChatBot-powered-by-Google-Gemini-API
+  - Description: Responsive UI: Crafted with Next.js, TailwindCSS, and Framer Motion for a seamless user experience. PDF Integration: leveraging CDN-loaded PDF.js. * Intelligent Responses: The AI intelligently synthesizes user prompts with uploaded PDF cont
+- bytesumit/ConnectHub-RealTime-Video-Calling-App (2 stars, JavaScript)
+  - URL: https://github.com/bytesumit/ConnectHub-RealTime-Video-Calling-App
+  - Description: ConnectHub is a modern, full-featured web application for real-time video calling, chatting during calls, and screen sharing. Built using powerful technologies like React.js, Node.js, WebRTC, and Socket.IO, it provides a smooth and secure c
+## 2026-07-11T12:31:57.586451+00:00 - prebuild-gate
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: public-github
+- Query: `in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-11T12:32:49.093773+00:00 - local-search
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: local-index
+- Decision: rejected
+- Note: The first invocation used an unsupported --limit flag; reran with the documented --top flag.
+
+### Candidates
+- legacy local assimilation index
+  - Decision: rejected
+  - Reason: no relevant slash-command badge implementation passed the retrieval threshold
+## 2026-07-11T12:32:49.168293+00:00 - public-search
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: github-public
+- Decision: rejected
+- Selected backbone: local-project:hivemind-os
+- Note: The blocking prebuild search returned generic chat applications; no public candidate was selected because the existing local component is the authoritative and closest reusable source.
+
+### Candidates
+- krotrn/Chat_App
+  - Decision: rejected
+  - Reason: generic real-time chat app; less relevant than the exact local Queen transcript renderer
+- selfabhijeetkumar/NEXUS-AI--CHATBOT-
+  - Decision: rejected
+  - Reason: mentions slash commands but has no fit advantage over the pinned HivemindOS renderer and design system
+## 2026-07-11T12:32:49.217860+00:00 - prebuild-gate
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: local-project
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+- Note: Proceeding with a scoped adaptation of the existing Queen transcript renderer, command surface, and dual-theme tag styling.
+## 2026-07-11T12:33:27.278048+00:00 - verification
+
+- Request: Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.engineering-discipline-superpowers.json: 7 concrete reuse entries, 7 substantive
+## 2026-07-11T12:38:16.305174+00:00 - implementation
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: local-project
+- Decision: adapted_code
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/queen-voice/QueenBeeVoiceOverlay.tsx
+  - Decision: adapted_code
+  - Reason: reused the authoritative user-turn transcript branch and kept Queen markdown/live-caption behavior intact
+  - Path: `src/features/queen-voice/QueenBeeVoiceOverlay.tsx`
+- src/features/queen-voice/queen-voice.module.css
+  - Decision: style_adapted
+  - Reason: adapted the existing compact transcript tag treatment with a user-command tint and hive-light mirror
+  - Path: `src/features/queen-voice/queen-voice.module.css`
+## 2026-07-11T12:38:16.413611+00:00 - assimilation-manifest
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: local-project
+- Decision: below-threshold
+- Reason: This surgical UI change has two genuine local reuse entries; inventing a third substantive donor would misrepresent provenance.
+## 2026-07-11T12:38:16.471714+00:00 - verification
+
+- Request: in the queen bee chat bubble, instead of showing the /command plainly, lets show it without the slash as a badge
+- Source: local-project
+- Decision: selected
+- Note: ESLint zero warnings; touched-path TypeScript filter empty; diff and line checks pass; real port-5021 dashboard rendered help as an inline-flex 999px badge with no slash and no console errors. Port 5020 returned HTTP 000 and was left untouched.
+
+### Candidates
+- scripts/test-queen-chat-stream.mjs
+  - Decision: selected
+  - Reason: baseline and final focused regression pass with parser and renderer assertions
+  - Path: `scripts/test-queen-chat-stream.mjs`
+## 2026-07-11T12:40:37.958876+00:00 - verification
+
+- Request: Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.engineering-discipline-superpowers.json: 7 concrete reuse entries, 7 substantive
+## 2026-07-11T12:41:52.221202+00:00 - reuse
+
+- Request: Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.
+- Source: local-project+obra/superpowers
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+- Assimilated: Canonical packaged auto-install/optional skill roots, pinned importer and resource locks, manifest-backed Skill Browser pack, safe managed refresh archives, existing LoopSpec verifier registry, Work Board quick-add/API path, and 12 selected Superpowers methods.
+- Not assimilated: Upstream plugin/bootstrap, session hooks, using-superpowers, writing-skills, brainstorming web server/visual companion, application-specific TypeScript example, global mandatory ceremony, and automatic Git or agent-fan-out authority.
+- Verification: Selected final package heuristic audit: 0 high/0 medium/0 low. Engineering pack contract and real Work Board POST path pass; managed legacy update/archive, unmanaged preservation, resource provenance, and idempotent reinstall pass. Loop services/readiness/runner and 100-skill lock verification pass.
+- Note: The HivemindOS packaged directories are the source of truth; obra/superpowers is a pinned donor, not the runtime authority.
+## 2026-07-11T12:42:14.857140+00:00 - verification
+
+- Request: Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.engineering-discipline-superpowers.json: 7 concrete reuse entries, 7 substantive
+## 2026-07-11T12:43:09.728566+00:00 - final
+
+- Request: Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.
+- Source: local-project+obra/superpowers
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+- Assimilated: HivemindOS packaged skill roots and importer, manifest pack discovery/install, safe managed archives, LoopSpec/verifier registry, Work Board quick-add/API path, and 12 selected pinned Superpowers methods.
+- Not assimilated: Upstream plugin/bootstrap, hooks, using-superpowers, writing-skills, visual companion/server, application-specific TypeScript example, global mandatory ceremony, and implied Git or agent-fan-out authority.
+- Verification: Final packaged audit 0 high/0 medium/0 low; engineering contract including real Work Board POST passes; loop services/readiness/runner pass; 100 resource-locked packaged skills verify with zero drift; focused ESLint and diff checks pass. Existing unrelated TypeScript, vault-doc, and size-gate failures remain documented in CHANGELOG.
+- Note: Final source of truth is packaged-skills/auto-install plus packaged-skills/optional; obra/superpowers remains a pinned donor only.
+## 2026-07-11T12:43:21.658361+00:00 - verification
+
+- Request: Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.engineering-discipline-superpowers.json: 7 concrete reuse entries, 7 substantive
+## 2026-07-11T12:46:11.687723+00:00 - assimilation-manifest
+
+- Request: Build the backend-neutral local and managed HivemindOS app-builder with one canonical contract, local project/runtime/file adapter, managed adapter, capability discovery, and no VM requirement for local users
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: ntegrals/december:backend/src/services/file.ts => scripts/lib/app-builder.mjs, ntegrals/december:backend/src/services/package.ts => scripts/lib/app-builder.mjs, ntegrals/december:backend/src/services/docker.ts => contracts/app-builder/v1.json, LiamVisionary/hivemindos:src/lib/services/projects/project-registry.ts => src/app/api/app-builder/route.ts, LiamVisionary/hivemindos:src/lib/services/hive-actions/managed-cloud-agents.ts => src/lib/services/hive-actions/app-builder.ts
+- Verification: Wrote ASSIMILATION.app-builder-backends.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-11T12:46:14.921049+00:00 - verification
+
+- Request: Build the backend-neutral local and managed HivemindOS app-builder with one canonical contract, local project/runtime/file adapter, managed adapter, capability discovery, and no VM requirement for local users
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.app-builder-backends.json: 5 concrete reuse entries, 5 substantive
+## 2026-07-11T12:46:25.803957+00:00 - verification
+
+- Request: Build the backend-neutral local and managed HivemindOS app-builder with one canonical contract, local project/runtime/file adapter, managed adapter, capability discovery, and no VM requirement for local users
+- Source: final-gates
+- Decision: selected
+- Reason: Focused app-builder tests passed (contract, 3 local behavior tests, MCP routing/confirmations); focused ESLint, JS syntax, workflow-doc drift, and git diff checks passed; private managed control plane passed 20 tests, static checks, TypeScript, and Wrangler dry run; ASSIMILATION.app-builder-backends.json passed with 5 substantive mappings. Public repository-wide TypeScript remains blocked only by unrelated src/lib/services/openai-oauth.ts nullable response.body, and the size ratchet remains blocked by unrelated generated/legacy/concurrent oversized files.
+- Verification: Focused app-builder tests passed (contract, 3 local behavior tests, MCP routing/confirmations); focused ESLint, JS syntax, workflow-doc drift, and git diff checks passed; private managed control plane passed 20 tests, static checks, TypeScript, and Wrangler dry run; ASSIMILATION.app-builder-backends.json passed with 5 substantive mappings. Public repository-wide TypeScript remains blocked only by unrelated src/lib/services/openai-oauth.ts nullable response.body, and the size ratchet remains blocked by unrelated generated/legacy/concurrent oversized files.
+## 2026-07-11T13:01:27.006324+00:00 - triage
+
+- Request: Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents
+- Source: user-pinned-cloudflare
+- Selected backbone: Cloudflare temporary accounts plus existing HivemindOS app-builder and paid-credit gateway
+
+### Candidates
+- cloudflare/temporary-accounts
+  - Decision: selected-donor
+  - Reason: official wrangler --temporary flow supplies credential-free 60-minute verification deployments
+  - Path: `https://blog.cloudflare.com/temporary-accounts/`
+- LiamVisionary/hivemindos
+  - Decision: selected-backbone
+  - Reason: canonical app-builder contract local adapter project registry Hive Action and MCP already own build intent
+  - Path: `contracts/app-builder/v1.json`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: selected-backbone
+  - Reason: paid-agent gateway already owns Stripe x402 prepaid credits receipts and idempotent debits
+  - Path: `workers/paid-agent-gateway/src/index.ts`
+- Shared Brain Cloudflare Pages + R2 preview hosting notes
+  - Decision: selected-donor
+  - Reason: tested branded preview routing and same-origin object serving workflow
+  - Path: `Skills/project-runtime-operations/references/cloud-deploy-debugging/cloudflare-pages-r2-preview-hosting.md`
+## 2026-07-11T13:01:39.065536+00:00 - shared-brain
+
+- Request: Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents
+- Source: hive-brain
+- Query: `Cloudflare preview hosting R2 branded domains paid hosting`
+- Decision: selected
+- Reason: Retrieved the existing Cloudflare Pages and R2 preview-hosting runbook with same-origin serving and clean-slug guidance.
+## 2026-07-11T13:01:39.349417+00:00 - local-search
+
+- Request: Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents
+- Source: workspace-and-private-repo
+- Query: `app builder paid credits Stripe x402 R2 service binding scheduled renewal`
+- Decision: selected
+- Reason: Found the canonical app-builder surfaces, existing stored credit-token clients, paid-agent D1 credit ledger, Stripe webhook/top-up routes, compute R2 bindings, and scheduled Worker maintenance patterns.
+## 2026-07-11T13:01:39.608264+00:00 - public-search
+
+- Request: Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents
+- Source: cloudflare-official
+- Query: `temporary account claim deployment Workers static assets R2 Workers for Platforms`
+- Decision: selected
+- Reason: Official Cloudflare article and docs define wrangler 4.102+ temporary deployments, 60-minute claim expiry, static asset limits, R2 hosting, and Workers for Platforms isolation. Extra public GitHub search was unnecessary because the user-pinned primary source and existing HivemindOS donors cover the implementation.
+## 2026-07-11T13:38:42.783916+00:00 - assimilation-manifest
+
+- Request: Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: ntegrals/december:backend/src/services/file.ts => scripts/lib/app-builder.mjs, ntegrals/december:backend/src/services/docker.ts => src/lib/services/managed-cloud-agents.ts, LiamVisionary/hivemindos:src/lib/services/paid-agent-cloud-client.ts => src/lib/services/app-hosting.ts, LiamVisionary/hivemindos:src/lib/services/hive-actions/app-builder.ts => src/app/api/app-builder/route.ts, cloudflare/cloudflare-docs:src/content/docs/workers/platform/claim-deployments.mdx => scripts/lib/app-builder.mjs
+- Verification: Wrote ASSIMILATION.hive-publish.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-11T13:38:43.026931+00:00 - verification
+
+- Request: Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hive-publish.json: 5 concrete reuse entries, 5 substantive
+## 2026-07-11T13:44:55.191785+00:00 - final
+
+- Request: Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents
+- Source: final-gates
+- Decision: passed
+- Reason: Implementation is complete and intentionally unprovisioned pending an explicit billable Cloudflare deployment decision.
+- Verification: Public App Builder 9/9 behavior tests; focused lint/syntax/docs and diff checks passed; public TypeScript has only unrelated openai-oauth nullable-body diagnostic; size ratchet failures exclude hosting files.

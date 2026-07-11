@@ -30,6 +30,21 @@ The line is simple: local-first control room features stay available by default,
 
 The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, revenue-backed HIVE buybacks, and proposed seasonal HIVE reward pools for stakers.
 
+## A Trust Layer For Agent Work
+
+Most agent products can tell you that a model ran. HivemindOS is building around a harder question: did the work deserve credit?
+
+Managed agent tasks can be checked against evidence, expected artifacts, trusted commands, and separate reviewers. Work HivemindOS cannot observe is labeled unobserved instead of being counted as a success. Accepted outcomes can improve future routing, while weak or unverifiable work is kept out of that learning signal.
+
+This creates a practical product advantage:
+
+- Users get a clearer line between agent activity and completed work.
+- Zero Human Companies build operating history from evaluated outcomes, not self-reported wins.
+- Teams can apply stronger review to publishing, payments, deployments, and customer work without imposing that cost on every chat reply.
+- Future managed services and marketplaces have a stronger evidence layer to build on, while official reputation, entitlement, settlement, and payout decisions remain server-controlled.
+
+See [Agent Evaluations](../for-users/features/agent-evaluations.html) for the user-facing model and measured benchmark.
+
 ## Recommended Path
 
 <ol class="routePath" aria-label="Recommended monetization reading path">
@@ -143,6 +158,7 @@ The seasonal reward rules are simple: there is no pre-season staking requirement
 | Agent runtime work | Local and user-configured runtimes                    | Future managed runtime capacity, if offered                  |
 | Model inference    | Local models and user-configured model keys           | Hive Compute marketplace routing, settlement, receipts, reputation, and payout state |
 | Brain and vault    | Local Obsidian vault and user-owned sync choices      | Future managed brain hosting, if offered                     |
+| App building and hosting | Local/fleet building and loopback previews | Seven-day share links, renewable static hosting, and isolated dynamic app hosting |
 
 ## Managed Agent Credits
 
@@ -177,6 +193,8 @@ The product rule is: HIVE can be used to pay, but HIVE should not be the only wa
 Optional premium services may include Hive Cloud, Hive Compute, managed compute, the Agent Marketplace, and Enterprise.
 
 Hive Cloud covers one-click deployment, managed infrastructure, hosted memory, team workspaces, and monitoring.
+
+Hive Publish lets users become cloud customers without renting a managed agent. Projects may be built on user-owned hardware, then published as a seven-day share link or renewable static site. Dynamic plans use isolated customer Workers with server-controlled limits. Official plan prices, credit debits, expirations, release activation, and public slug ownership remain in HivemindOS-controlled infrastructure; the open-source client only prepares bounded artifacts and submits confirmed plan identifiers.
 
 Hive Compute routes marketplace inference to live worker capacity and settles usage through the hosted gateway. The current default marketplace policy charges token-metered retail usage, keeps a **20% HivemindOS platform fee**, and records provider earnings for payout.
 

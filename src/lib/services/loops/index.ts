@@ -56,12 +56,15 @@ export {
 } from "@/lib/services/loops/loop-metrics";
 export {
   detectArtifacts,
+  isProtectedIntegrityReceipt,
   isReservedOrMockUrl,
   loopContractForPrompt,
   parseLoopSelfReport,
   runLoopGates,
+  stripProtectedIntegrityReceipts,
   type LoopGateCommandResult,
   type LoopGateCommandRunner,
+  type LoopArtifactVerifier,
   type LoopGateJudge,
   type LoopJudgeVerdict,
   type LoopSelfReportEntry,

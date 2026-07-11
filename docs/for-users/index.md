@@ -15,8 +15,13 @@ Everything you need to run HivemindOS as a local-first agent fleet control room.
   </section>
   <section class="docCard">
     <h3>Zero Human Companies</h3>
-    <p>Operate a company through a native HivemindOS crew or an optional AEON background skill, with explicit goals, approvals, budgets, stop controls, and run history.</p>
+    <p>Operate a company through a native HivemindOS crew or an optional AEON background skill, with explicit goals, evaluated outcomes, approvals, budgets, stop controls, and run history.</p>
     <a href="features/zero-human-companies.html">Open company docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Agent Evaluations</h3>
+    <p>See how HivemindOS checks completed work, verifies evidence, uses separate reviewers, and refuses to count unobserved work as a pass.</p>
+    <a href="features/agent-evaluations.html">Open evaluation docs</a>
   </section>
   <section class="docCard">
     <h3>AEON For Zero Human Companies</h3>

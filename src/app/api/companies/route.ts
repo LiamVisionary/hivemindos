@@ -37,6 +37,10 @@ import {
   resolveCompanyAeonBinding,
 } from "@/lib/services/company-aeon-binding";
 import { errorJson } from "@/lib/utils/api-response";
+import {
+  CompanyMembershipConflictError,
+  findDuplicateCompanyMemberships,
+} from "@/lib/services/company-membership";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import type {
   Company,
@@ -87,7 +91,12 @@ export async function GET(request: NextRequest) {
   );
   // Driver health rides along so the UI can say "stalled" instead of showing a
   // company as running while nothing is actually dispatching.
-  return NextResponse.json({ ok: true, companies: withRollups, driver: getCompanyAutonomyDriverStatus() });
+  return NextResponse.json({
+    ok: true,
+    companies: withRollups,
+    driver: getCompanyAutonomyDriverStatus(),
+    membershipConflicts: findDuplicateCompanyMemberships(companies),
+  });
 }
 
 type CompanyBody = {
@@ -308,6 +317,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({ ok: true, company });
   } catch (error) {
+    if (error instanceof CompanyMembershipConflictError) return errorJson(error.message, error.status);
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to save company" }, { status: 400 });
   }
 }

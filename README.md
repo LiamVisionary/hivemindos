@@ -15,6 +15,8 @@
 >
 > It supports modern agent runtimes like Hermes, OpenClaw, OpenCode, Codex, Claude Code, and Aeon, includes full MiroShark simulation integration, and can provision agent wallets on Base and Solana so agents can hold funds, pay for tools, and operate with their own controlled budgets.
 
+Agents do not get credit just for saying done. HivemindOS evaluates managed work, verifies the evidence that matters, and uses a separate reviewer for consequential results. If the system cannot observe the work, it says so instead of inventing a pass.
+
 Clone it, run one setup command, and get a local-first dashboard for the agents already living on your laptop, desktop, VPS, or spare machines. No public ports required.
 
 ![HivemindOS cyber-bee agent network hero](public/readme/hivemindos-hero.png)
@@ -38,6 +40,7 @@ Clone it, run one setup command, and get a local-first dashboard for the agents 
 - **Move shared env between agent machines** with Hivemind Sync helpers, without copying secrets by hand.
 - **Send handoff files to a machine, runtime, or agent** with `hive-transfer` envelopes in the shared vault.
 - **Assign work to agents** through a shared Kanban board with retries, stale-work recovery, and human handoff.
+- **Evaluate completed agent work** across chat, the Work Board, companies, schedules, and managed runtime tasks, with trusted evidence and separate reviewers for consequential results.
 - **Attach signed code provenance** with GitLawb Code Proof for project-linked work.
 - **Create and import schedules** so supported runtimes can keep working in the background.
 - **Run MiroShark simulations** from the same control room.
@@ -189,6 +192,7 @@ Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_A
 | **Founder Mode** | Turns one outcome into a reviewable company blueprint with crew, capabilities, compute, budgets, approvals, a first Lab, and proof requirements |
 | **Hivemind Labs** | Runs bounded, evidence-backed company experiments and graduates reviewable methods through preview-first, explicitly confirmed Hive Skill Fusion |
 | **Outcome proof packs** | Shows deliverables, eval receipts, provenance, signed work receipts, and explicit verification gaps for consequential work |
+| **[Agent evaluations](docs/for-users/features/agent-evaluations.md)** | Checks whether managed work deserves credit, verifies authoritative evidence, and records accepted, rejected, needs evidence, error, or unobserved outcomes |
 | **Tailscale agent network** | Connects agents across your machines through your private Tailscale VPN |
 | **Machine monitor** | Lightweight local service that reports agent status and runtime health to the dashboard |
 | **Runtime adapters** | Supports Hermes, OpenClaw, OpenCode, Codex, Claude Code, Aeon, MiroShark, and generic machine-backed agents through a neutral adapter layer |
@@ -218,8 +222,8 @@ Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_A
 | **Hermes** | Local HTTP/runtime adapter, session visibility from `~/.hermes`, chat bridge, tasks, logs, and process snapshots |
 | **OpenClaw** | Gateway adapter with WebSocket chat and model selection through the generic runtime bridge |
 | **OpenCode** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
-| **Codex** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
-| **Claude Code** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
+| **Codex** | CLI runtime profile with authentication readiness, managed background tasks, run logs, model selection, and completion evaluation. Dashboard chat bridge is not enabled yet. |
+| **Claude Code** | CLI runtime profile with authentication readiness, managed background tasks, run logs, model selection, and completion evaluation. Dashboard chat bridge is not enabled yet. |
 | **Aeon** | Optional AEON v0.1 control plane for CLI-backed skills, packs, MCP, Strategy/Soul, gateways, chains/reactive work, self-healing health, OKF knowledge, provenance, outputs, notifications, and Zero Human Company execution |
 | **MiroShark** | Companion integration for simulation workflows and dashboard visibility |
 | **Generic machines** | Read-only machine snapshots through the local monitor |

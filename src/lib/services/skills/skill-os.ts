@@ -1,7 +1,7 @@
-import { appendFile, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "fs/promises";
+import { appendFile, cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "fs/promises";
 import { createHash } from "crypto";
 import { homedir } from "@/lib/home-dir";
-import { basename, dirname, join, relative, resolve } from "path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import {
   isSkillSpectorAvailable,
@@ -34,7 +34,9 @@ const ENV_KEY_RE = /\b[A-Z][A-Z0-9_]{5,}\b/g;
 const MAX_AUDIT_FILE_BYTES = 1024 * 1024;
 const AUDITABLE_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".sh", ".js", ".ts", ".py"]);
 const EXECUTABLE_EXTENSIONS = new Set([".sh", ".py", ".js", ".ts", ".mjs", ".cjs", ".exe", ".bin", ".so", ".dll", ".dylib"]);
+const PACKAGED_SKILLS_ROOT = join(process.cwd(), "packaged-skills");
 const PACKAGED_OPTIONAL_ROOT = join(process.cwd(), "packaged-skills", "optional");
+const PACKAGED_PACK_ROOT = join(PACKAGED_SKILLS_ROOT, "packs");
 const PACKAGED_DIRECTORY_PACK_PREFIX = "packaged-directory-";
 const SOURCE_METADATA_FILE = ".hivemind-skill-source.json";
 
@@ -426,8 +428,80 @@ export const SKILL_PACKS: SkillPack[] = [
 ];
 
 export async function getSkillPacks(): Promise<SkillPack[]> {
+  const packagedManifestPacks = await readPackagedManifestPacks();
   const packagedDirectoryPacks = await readPackagedDirectoryPacks().catch(() => []);
-  return [...SKILL_PACKS, ...packagedDirectoryPacks];
+  const packs = [...SKILL_PACKS, ...packagedManifestPacks, ...packagedDirectoryPacks];
+  const duplicateId = packs.find((pack, index) => packs.findIndex((candidate) => candidate.id === pack.id) !== index)?.id;
+  if (duplicateId) throw new Error(`Duplicate skill pack id: ${duplicateId}.`);
+  return packs;
+}
+
+type PackagedPackManifest = {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  capabilities?: SkillCapability[];
+  audience?: string;
+  safety?: string;
+  skills: Array<{ path: string }>;
+};
+
+async function readPackagedManifestPacks(): Promise<SkillPack[]> {
+  const entries = await readdir(PACKAGED_PACK_ROOT, { withFileTypes: true }).catch(() => []);
+  const packs: SkillPack[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const raw = await readFile(join(PACKAGED_PACK_ROOT, entry.name), "utf8");
+    const manifest = JSON.parse(raw) as Partial<PackagedPackManifest>;
+    if (manifest.schemaVersion !== 1 || !manifest.id?.trim() || !manifest.name?.trim() || !Array.isArray(manifest.skills)) {
+      throw new Error(`Invalid packaged skill pack manifest: ${entry.name}.`);
+    }
+    const skills = await Promise.all(manifest.skills.map(async (item) => {
+      const relativePath = String(item?.path ?? "").replace(/^[/\\]+/, "");
+      const sourceDir = resolve(PACKAGED_SKILLS_ROOT, relativePath);
+      assertPackagedSkillPath(sourceDir, manifest.id!);
+      const markdown = await readFile(join(sourceDir, "SKILL.md"), "utf8").catch(() => "");
+      if (!markdown.trim()) throw new Error(`Pack ${manifest.id} references a missing SKILL.md at ${relativePath}.`);
+      const metadata = await readPackageSourceMetadata(sourceDir);
+      const slug = safeId(String(metadata.hiveSlug ?? metadata.upstreamSlug ?? basename(sourceDir)));
+      return {
+        slug,
+        name: frontmatterField(markdown, "name") || slugToName(slug),
+        description: frontmatterField(markdown, "description") || firstSentence(markdown) || "Packaged skill.",
+        markdown: "",
+        packagedPath: relative(process.cwd(), sourceDir),
+        capabilities: inferCapabilities(markdown),
+      };
+    }));
+    const duplicateSlug = skills.find((skill, index) => skills.findIndex((candidate) => candidate.slug === skill.slug) !== index)?.slug;
+    if (duplicateSlug) throw new Error(`Pack ${manifest.id} contains duplicate skill slug ${duplicateSlug}.`);
+    packs.push({
+      id: manifest.id,
+      name: manifest.name,
+      description: manifest.description?.trim() || `Install the ${manifest.name} packaged skill set.`,
+      category: manifest.category?.trim() || "Pack",
+      capabilities: manifest.capabilities?.length ? manifest.capabilities : unionCapabilities(skills),
+      audience: manifest.audience?.trim(),
+      safety: manifest.safety?.trim(),
+      skills: skills.map((skill) => ({
+        slug: skill.slug,
+        name: skill.name,
+        description: skill.description,
+        markdown: skill.markdown,
+        packagedPath: skill.packagedPath,
+      })),
+    });
+  }
+  return packs.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function assertPackagedSkillPath(sourceDir: string, label: string) {
+  const relativePath = relative(PACKAGED_SKILLS_ROOT, sourceDir);
+  if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error(`Packaged skill ${label} is outside the packaged-skills folder.`);
+  }
 }
 
 async function readPackagedDirectoryPacks(): Promise<SkillPack[]> {
@@ -455,6 +529,7 @@ async function readPackagedDirectoryPacks(): Promise<SkillPack[]> {
         name: skill.name,
         description: skill.description,
         markdown: "",
+        packagedPath: skill.packagedPath,
       })),
     });
   }
@@ -1046,6 +1121,10 @@ export async function installSkillPack(input: { packId: string; vaultPath?: stri
   if (input.packId.startsWith(PACKAGED_DIRECTORY_PACK_PREFIX)) {
     return installPackagedDirectorySkillPack(input);
   }
+  const packagedManifestPack = (await readPackagedManifestPacks()).find((candidate) => candidate.id === input.packId);
+  if (packagedManifestPack) {
+    return installPackagedSkillPack(input, packagedManifestPack);
+  }
   const pack = SKILL_PACKS.find((candidate) => candidate.id === input.packId);
   if (!pack) throw new Error("Unknown skill pack.");
   const vaultPath = resolveObsidianVaultPath(input.vaultPath);
@@ -1077,7 +1156,7 @@ export async function installSkillPack(input: { packId: string; vaultPath?: stri
     await writeFile(join(dir, SKILL_MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
     installed.push(skill.slug);
   }
-  return { pack, installed, skipped };
+  return { pack, installed, updated: [] as string[], skipped };
 }
 
 async function installPackagedDirectorySkillPack(input: { packId: string; vaultPath?: string }) {
@@ -1102,74 +1181,117 @@ async function installPackagedDirectorySkillPack(input: { packId: string; vaultP
       name: skill.name,
       description: skill.description,
       markdown: "",
+      packagedPath: skill.packagedPath,
     })),
   };
+  return installPackagedSkillPack(input, pack);
+}
+
+async function installPackagedSkillPack(input: { packId: string; vaultPath?: string }, pack: SkillPack) {
   const vaultPath = resolveObsidianVaultPath(input.vaultPath);
   const skillsFolder = join(vaultPath, "Skills");
   const installed: string[] = [];
+  const updated: string[] = [];
   const skipped: string[] = [];
   await mkdir(skillsFolder, { recursive: true });
 
-  for (const skill of skills) {
+  for (const skill of pack.skills) {
     if (!skill.packagedPath) continue;
     const slug = safeId(skill.slug || skill.name);
     const sourceDir = resolve(process.cwd(), skill.packagedPath);
-    const packageRoot = resolve(process.cwd(), "packaged-skills");
-    if (sourceDir !== packageRoot && !sourceDir.startsWith(`${packageRoot}/`)) {
-      throw new Error(`Packaged skill ${slug} is outside the packaged-skills folder.`);
-    }
+    assertPackagedSkillPath(sourceDir, slug);
     const dir = join(skillsFolder, slug);
     const skillPath = join(dir, "SKILL.md");
     const existing = await readFile(skillPath, "utf8").catch(() => "");
-    if (existing.trim()) {
+    const sourceMetadata = await readPackageSourceMetadata(sourceDir);
+    const rawMarkdown = await readFile(join(sourceDir, "SKILL.md"), "utf8").catch(() => "");
+    if (!rawMarkdown.trim()) throw new Error(`Packaged skill ${slug} is missing SKILL.md.`);
+    const sourceLabel = String(sourceMetadata.sourceLabel ?? pack.name);
+    const markdown = normalizeAgentAgnosticSkill(rawMarkdown, sourceLabel);
+    const existingMetadata = await readPackageSourceMetadata(dir);
+    const managedExisting = existing.trim() ? isManagedPackagedSkill(existing, existingMetadata) : false;
+    if (existing.trim() && !managedExisting) {
       skipped.push(slug);
       continue;
     }
-    const rawMarkdown = await readFile(join(sourceDir, "SKILL.md"), "utf8").catch(() => "");
-    if (!rawMarkdown.trim()) throw new Error(`Packaged skill ${slug} is missing SKILL.md.`);
-    await rm(dir, { recursive: true, force: true });
-    await cp(sourceDir, dir, {
-      recursive: true,
-      force: true,
-      filter: (path) => !path.split("/").some((part) => [".git", "node_modules", ".next", "dist", "build", ".cache", ".archive"].includes(part)),
-    });
-    const markdown = normalizeAgentAgnosticSkill(rawMarkdown, skill.source || skill.packagedPath);
-    await writeFile(skillPath, markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
-    const audit = await auditSkillDirectory({
-      slug,
-      dir,
-      sourceRef: skill.sourceRef,
-    });
-    if (audit.status === "blocked") {
-      await rm(dir, { recursive: true, force: true });
-      throw new Error(`Skill audit blocked ${slug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
+    if (existing.trim() === markdown.trim() && existingMetadata.sourcePath === skill.packagedPath) {
+      skipped.push(slug);
+      continue;
     }
-    await writeFile(join(dir, SKILL_MANIFEST_FILE), `${JSON.stringify(createSkillManifest({
-      slug,
-      name: skill.name,
-      description: skill.description,
-      sourceType: "pack",
-      sourceLabel: skill.source,
-      sourceUrl: skill.githubUrl,
-      sourcePath: skill.packagedPath,
-      audit,
-      markdown,
-    }), null, 2)}\n`, "utf8");
-    await writeFile(join(dir, SOURCE_METADATA_FILE), `${JSON.stringify({
-      provider: "packaged-optional",
-      providerLabel: skill.source,
-      sourceUrl: skill.githubUrl,
-      sourcePath: skill.packagedPath,
-      agentAgnostic: true,
-      auditStatus: audit.status,
-      capabilities: audit.capabilities,
-      envKeys: audit.envKeys,
-      importedAt: new Date().toISOString(),
-    }, null, 2)}\n`, "utf8");
-    installed.push(slug);
+
+    const stageDir = join(skillsFolder, `.installing-${slug}-${Date.now().toString(36)}`);
+    await rm(stageDir, { recursive: true, force: true });
+    try {
+      await cp(sourceDir, stageDir, {
+        recursive: true,
+        force: true,
+        filter: (path) => !path.split(/[\\/]/).some((part) => [".git", "node_modules", ".next", "dist", "build", ".cache", ".archive"].includes(part)),
+      });
+      const stagedSkillPath = join(stageDir, "SKILL.md");
+      await writeFile(stagedSkillPath, markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
+      const audit = await auditSkillDirectory({
+        slug,
+        dir: stageDir,
+        sourceRef: String(sourceMetadata.commit ?? `pack:${pack.id}`),
+      });
+      if (audit.status === "blocked") {
+        throw new Error(`Skill audit blocked ${slug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
+      }
+      await writeFile(join(stageDir, SKILL_MANIFEST_FILE), `${JSON.stringify(createSkillManifest({
+        slug,
+        name: skill.name,
+        description: skill.description,
+        sourceType: "pack",
+        sourceLabel,
+        sourceUrl: typeof sourceMetadata.sourceUrl === "string" ? sourceMetadata.sourceUrl : undefined,
+        sourceRef: typeof sourceMetadata.commit === "string" ? sourceMetadata.commit : `pack:${pack.id}`,
+        sourcePath: skill.packagedPath,
+        audit,
+        markdown,
+      }), null, 2)}\n`, "utf8");
+      await writeFile(join(stageDir, SOURCE_METADATA_FILE), `${JSON.stringify({
+        ...sourceMetadata,
+        provider: /(^|[\\/])auto-install([\\/]|$)/.test(skill.packagedPath) ? "packaged-auto-install" : "packaged-optional",
+        providerLabel: sourceLabel,
+        sourcePath: skill.packagedPath,
+        agentAgnostic: true,
+        auditStatus: audit.status,
+        capabilities: audit.capabilities,
+        envKeys: audit.envKeys,
+        installedFromPack: pack.id,
+        installedAt: new Date().toISOString(),
+      }, null, 2)}\n`, "utf8");
+      const archiveDir = existing.trim() ? await archiveManagedSkill(dir, skillsFolder, slug) : undefined;
+      await rm(dir, { recursive: true, force: true });
+      try {
+        await rename(stageDir, dir);
+      } catch (error) {
+        if (archiveDir) await cp(archiveDir, dir, { recursive: true, force: true });
+        throw error;
+      }
+      if (existing.trim()) updated.push(slug);
+      else installed.push(slug);
+    } finally {
+      await rm(stageDir, { recursive: true, force: true });
+    }
   }
 
-  return { pack, installed, skipped };
+  return { pack, installed, updated, skipped };
+}
+
+function isManagedPackagedSkill(markdown: string, metadata: Record<string, unknown>) {
+  const provider = String(metadata.provider ?? "").toLowerCase();
+  if (["packaged-auto-install", "packaged-optional", "shared-brain"].includes(provider)) return true;
+  return provider === "hermes" && /adapted from obra\/superpowers/i.test(markdown);
+}
+
+async function archiveManagedSkill(dir: string, skillsFolder: string, slug: string) {
+  const archiveRoot = join(skillsFolder, ".archive");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const archiveDir = join(archiveRoot, `${slug}-${timestamp}`);
+  await mkdir(archiveRoot, { recursive: true });
+  await cp(dir, archiveDir, { recursive: true, force: false });
+  return archiveDir;
 }
 
 export async function appendSkillAnalyticsEvent(event: Omit<SkillAnalyticsEvent, "id" | "createdAt"> & { id?: string; createdAt?: string }) {

@@ -652,6 +652,18 @@
 .modelChipText { display: flex; flex-direction: column; gap: 1px; align-items: flex-start; min-width: 0; }
 
 .modelChipPrice { font-family: var(--hc-mono); font-size: 9px; letter-spacing: 0.02em; color: var(--hc-fg3); }
+.modelChipPrice[data-unpriced="true"] { color: var(--hc-muted); }
+
+.modelChipPricingSource {
+  font-family: var(--hc-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.03em;
+  color: var(--hc-fg4);
+}
+
+.modelChipPricingSource[data-source="benchmark"] { color: var(--hc-live); }
+.modelChipPricingSource[data-source="custom"] { color: var(--hc-honey); }
+.modelChipPricingSource[data-source="starter"] { color: var(--hc-honey); }
 
 .modelChipHost {
   display: inline-flex;
@@ -683,6 +695,71 @@
 
 /* ---------- manage: hosting controls ---------- */
 .controlRows { display: flex; flex-direction: column; gap: 15px; }
+
+.pricingHeadRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--hc-line);
+  padding-top: 15px;
+}
+
+.pricingHeadRow > div { display: flex; flex-direction: column; gap: 3px; }
+
+.benchmarkGate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--hc-line);
+  padding-top: 15px;
+  color: var(--hc-honey);
+}
+
+.benchmarkGate > div { display: flex; flex-direction: column; gap: 3px; }
+.benchmarkGate b { font-size: 12.5px; color: var(--hc-text); }
+.benchmarkGate span { font-size: 10.5px; line-height: 1.45; color: var(--hc-muted); }
+
+.pricingHint {
+  margin: 0;
+  font-family: var(--hc-mono);
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: var(--hc-fg3);
+}
+
+.strategyGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--hc-line-2);
+  background: var(--hc-panel-hi);
+}
+
+.strategyBtn {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  font-family: var(--hc-font);
+  font-size: 11.5px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--hc-muted);
+}
+
+.strategyBtn[data-active="true"] {
+  background: var(--hc-honey);
+  color: #1a1305;
+}
+
+:global(:root[data-theme="hive-light"]) .strategyBtn[data-active="true"] { color: #fff8ec; }
+
+.strategyBtn:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .sliderRow { display: flex; align-items: center; gap: 16px; }
 
@@ -1084,6 +1161,68 @@
   padding: 0 16px 16px;
 }
 
+.priceEditorList {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 0 16px 16px;
+}
+
+.priceEditorRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.5fr) repeat(3, minmax(105px, 0.7fr));
+  gap: 10px;
+  align-items: end;
+  padding: 11px;
+  border-radius: 11px;
+  border: 1px solid var(--hc-line);
+  background: var(--hc-panel-hi);
+}
+
+.priceEditorModel { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.priceEditorModel b { font-size: 12px; color: var(--hc-text); overflow-wrap: anywhere; }
+.priceEditorModel span { font-family: var(--hc-mono); font-size: 9px; color: var(--hc-fg3); }
+
+.priceField { display: flex; flex-direction: column; gap: 5px; }
+.priceField span { font-family: var(--hc-mono); font-size: 8.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--hc-fg3); }
+.priceField input {
+  width: 100%;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--hc-line-2);
+  padding: 6px 8px;
+  font-family: var(--hc-mono);
+  font-size: 11px;
+  background: var(--hc-bg);
+  color: var(--hc-text);
+}
+.priceField input:focus-visible { outline: 2px solid var(--hc-honey); outline-offset: 1px; }
+.priceField input:disabled { opacity: 0.55; cursor: not-allowed; }
+.priceField select {
+  width: 100%;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--hc-line-2);
+  padding: 6px 8px;
+  font-family: var(--hc-mono);
+  font-size: 11px;
+  background: var(--hc-bg);
+  color: var(--hc-text);
+}
+.priceField select:focus-visible { outline: 2px solid var(--hc-honey); outline-offset: 1px; }
+
+/* Scheduled-hosting window pickers (From / Until hour selects). */
+.schedRow { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.schedRow .priceField { min-width: 96px; }
+.schedRow .pricingHint { flex: 1; min-width: 180px; }
+
+.priceEditorNote {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--hc-muted);
+}
+
 .detailRow {
   display: flex;
   align-items: center;
@@ -1172,4 +1311,5 @@
   .earnCols { grid-template-columns: 1fr; }
   .sliderRow { flex-wrap: wrap; }
   .sliderLabel { min-width: 100%; }
+  .priceEditorRow { grid-template-columns: 1fr; }
 }

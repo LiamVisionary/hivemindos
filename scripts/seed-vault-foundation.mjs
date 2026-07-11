@@ -511,6 +511,7 @@ HivemindOS seeds a small Obsidian-native skill pack into the shared Skills shelf
 
 ## Auto-Installed Skills
 
+- \`create-zero-human-company\`: HivemindOS company-founding playbook for turning a goal or repository into a durable company with a crew, apex metric, products, budgets, approval policies, and verified setup state without silently launching autonomy.
 - \`obsidian-markdown\`: Obsidian Flavored Markdown, wikilinks, embeds, properties, callouts, comments, tags, math, Mermaid, and footnotes.
 - \`obsidian-bases\`: YAML \`.base\` files for native database-like views over vault notes.
 - \`json-canvas\`: Obsidian \`.canvas\` files for visual maps, project boards, flowcharts, and concept graphs.

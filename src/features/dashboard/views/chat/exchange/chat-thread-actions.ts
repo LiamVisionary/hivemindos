@@ -59,6 +59,13 @@ export type ChatThreadGroup<Row extends ChatThreadRow = ChatThreadRow> = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export const CHAT_HISTORY_PAGE_SIZE = 5;
+
+/** Reveal one more bounded page of conversations in a sidebar history group. */
+export function nextChatHistoryVisibleCount(currentVisibleCount: number, totalCount: number): number {
+  return Math.min(totalCount, currentVisibleCount + CHAT_HISTORY_PAGE_SIZE);
+}
+
 // ---------------------------------------------------------------------------
 // Thread record actions
 // ---------------------------------------------------------------------------

@@ -118,6 +118,20 @@
       "packagedPath": "packaged-skills/optional/design/mengto/book-serif-index/SKILL.md",
       "computedHash": "b8c9fd29492024fc6c3b28f1392a9363a244205a0d1b528c031e81c7e3e1b224"
     },
+    "brainstorming": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/brainstorming/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/brainstorming/SKILL.md",
+      "computedHash": "abb80293c823fe86a47528aae0291a3cfd43c7ff8145ca50b20df2604daad0ba",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "abb80293c823fe86a47528aae0291a3cfd43c7ff8145ca50b20df2604daad0ba",
+        "spec-document-reviewer-prompt.md": "95a0a195de9d984be2fffa95bab16fc8c563bc296a9cfc5e9c29cb3ece0d7457"
+      }
+    },
     "bright-green-tech-system-webgl": {
       "source": "MengTo/Skills",
       "sourceType": "github",
@@ -271,6 +285,19 @@
       "packagedPath": "packaged-skills/optional/design/mengto/design-first-ui-prompting/SKILL.md",
       "computedHash": "636253e348dc8b9d41e4956d1e8ea6888a745a5ee3e182234489f83019a6676b"
     },
+    "dispatching-parallel-agents": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/dispatching-parallel-agents/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/dispatching-parallel-agents/SKILL.md",
+      "computedHash": "1e504cf8d7979954f014dc9f68f4715b03d3d21b6bfec5b2c0c1be5a4c407874",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "1e504cf8d7979954f014dc9f68f4715b03d3d21b6bfec5b2c0c1be5a4c407874"
+      }
+    },
     "dither-background": {
       "source": "MengTo/Skills",
       "sourceType": "github",
@@ -306,6 +333,32 @@
       "skillPath": "skills/emil-design-eng/SKILL.md",
       "packagedPath": "packaged-skills/optional/design/emilkowalski/emil-design-eng/SKILL.md",
       "computedHash": "84b9ef0fda73234cd71007327a77f0a51b6cadc48cbcdef9e062f06f12840ef9"
+    },
+    "executing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/executing-plans/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/executing-plans/SKILL.md",
+      "computedHash": "9f30cac24eb61b5105c1a849272f731d3a8d2de1d321d5d054fd8ffdc779fdba",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "9f30cac24eb61b5105c1a849272f731d3a8d2de1d321d5d054fd8ffdc779fdba"
+      }
+    },
+    "finishing-a-development-branch": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/finishing-a-development-branch/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/finishing-a-development-branch/SKILL.md",
+      "computedHash": "fe4aad0e3cff5e00dd31dbe713b8bca28779b24a9458b1a6be6cad088a72bbc2",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "fe4aad0e3cff5e00dd31dbe713b8bca28779b24a9458b1a6be6cad088a72bbc2"
+      }
     },
     "framed-grid-layout": {
       "source": "MengTo/Skills",
@@ -637,6 +690,33 @@
       "packagedPath": "packaged-skills/optional/design/mengto/progressive-blur/SKILL.md",
       "computedHash": "bffcdd23dfb5028944e4eafe045d7b641110a3a22a220e051841555b09c75a15"
     },
+    "receiving-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/receiving-code-review/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/receiving-code-review/SKILL.md",
+      "computedHash": "efe2d5c792fcfa9c9138659a6798a742e5498f9e39ef7a6d4a223a7429eadc17",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "efe2d5c792fcfa9c9138659a6798a742e5498f9e39ef7a6d4a223a7429eadc17"
+      }
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/requesting-code-review/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/requesting-code-review/SKILL.md",
+      "computedHash": "6398f96c40bdde9d9d4ee70553798037c692f8721c9ec5c73cbf2fd8da18b9ab",
+      "resourceHashes": {
+        "code-reviewer.md": "b2f2ec7596925fe52dac158fdfbca19b3a7d779d619c481e6706a6c0001662d3",
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "6398f96c40bdde9d9d4ee70553798037c692f8721c9ec5c73cbf2fd8da18b9ab"
+      }
+    },
     "review-animations": {
       "source": "emilkowalski/skills",
       "sourceType": "github",
@@ -691,6 +771,46 @@
       "packagedPath": "packaged-skills/optional/design/mengto/stitched-full-page-capture/SKILL.md",
       "computedHash": "0b0b27c8fc8e351d1a94feffe51a9c941e8de0c1dcacb8e9cc02049d83b365f4"
     },
+    "subagent-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/subagent-driven-development/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/subagent-driven-development/SKILL.md",
+      "computedHash": "8bf9a07806db57f0dba5af3e282d33d91297ede810053b8def48c40524b0c48f",
+      "resourceHashes": {
+        "implementer-prompt.md": "49018b28dc11bc9f3d13a28959bb10ae1a96eabc5d8f19f4079d901f9ff2bf64",
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "scripts/review-package": "0c0629f6e2c46fc8bf68dcfb8a247ab24eb548b7004fe494035e6fcba9b5cdfb",
+        "scripts/sdd-workspace": "9430befaff459ed862415b700c1a9efe45fd34838a684802a1d8320de0c3a007",
+        "scripts/task-brief": "5380283f00bffa99ab82ae78482b7d248abe10655129c72ca7050bdc0b6a85e1",
+        "SKILL.md": "8bf9a07806db57f0dba5af3e282d33d91297ede810053b8def48c40524b0c48f",
+        "task-reviewer-prompt.md": "2eb9d54373420de25bc0bd00635d3a3123a6c0eb30c881168e6f3348e2387331"
+      }
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/systematic-debugging/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/systematic-debugging/SKILL.md",
+      "computedHash": "67beeaa284f1896082f178a269ccafed0926799ccb1856cce2f444123ac01f91",
+      "resourceHashes": {
+        "condition-based-waiting.md": "e89fec8400d6cd50f43407cec9fab50976ba4d55d0ec2eb51c0bd68036b54c26",
+        "CREATION-LOG.md": "c24733a5b1821bd6bed1fc950261f0b9f4e90097e0bbb96459d8179713730789",
+        "defense-in-depth.md": "1e175fb86fc357e58c6aebf5441e481e1b7868b4380c0456b63a17eefbd18ba7",
+        "find-polluter.sh": "6462747eae9b175ac145b78bcfaeab755654a75e32637f08eb633f065a9e1d7c",
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "root-cause-tracing.md": "6b0622269e098ca1399e123e553fd385f0b6412d88ef0e9c4f5a8ea9cf1cec7b",
+        "SKILL.md": "67beeaa284f1896082f178a269ccafed0926799ccb1856cce2f444123ac01f91",
+        "test-academic.md": "fe2ba480d78ac0d686dc025f41c2a32a43d642bf533f91b0c6053a04d35d6486",
+        "test-pressure-1.md": "0b6a915db0054577819834c79be9eb614e97bddba10d73768e1fbe91cfed048a",
+        "test-pressure-2.md": "b2030aeffba07050e8ad573ddf87486457c4a016a786bb326235bebd856f2016",
+        "test-pressure-3.md": "96b50a52e2c7989c9cf20fb752c47c1e9a3a70dc362f8f7989f8f5b64dac7708"
+      }
+    },
     "tailwindcss": {
       "source": "MengTo/Skills",
       "sourceType": "github",
@@ -717,6 +837,20 @@
       "skillPath": "agent-skills/web-design/technical-wireframe-info-layout/SKILL.md",
       "packagedPath": "packaged-skills/optional/design/mengto/technical-wireframe-info-layout/SKILL.md",
       "computedHash": "d94e135cb765be102b606caf10f44c4106237ee2cd80850cac180f2076f09c87"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/test-driven-development/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/test-driven-development/SKILL.md",
+      "computedHash": "74d6fb0997fe24bdf37e853504840bd7b55b5e6d6f707495570cb0f5e15386ec",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "74d6fb0997fe24bdf37e853504840bd7b55b5e6d6f707495570cb0f5e15386ec",
+        "testing-anti-patterns.md": "bde453bc258f06543987477c837939afaa774ea2acbd9f308d702fc452bc4283"
+      }
     },
     "text-to-lottie": {
       "source": "diffusionstudio/lottie",
@@ -754,6 +888,19 @@
       "packagedPath": "packaged-skills/optional/design/mengto/unsplash-asset-images/SKILL.md",
       "computedHash": "10242319fc653b9709e24580a68d08eafd58586c65345d672b98a98d01c89681"
     },
+    "using-git-worktrees": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/using-git-worktrees/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/using-git-worktrees/SKILL.md",
+      "computedHash": "b25df247878249f36cab5a51b052e9b8d23edc1fe434bc35c3be95fbd54c5025",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "b25df247878249f36cab5a51b052e9b8d23edc1fe434bc35c3be95fbd54c5025"
+      }
+    },
     "vantajs": {
       "source": "MengTo/Skills",
       "sourceType": "github",
@@ -762,6 +909,19 @@
       "skillPath": "agent-skills/web-design/vantajs/SKILL.md",
       "packagedPath": "packaged-skills/optional/design/mengto/vantajs/SKILL.md",
       "computedHash": "f5bee20bd43e904876fa0dd93082d8a89cd9bbf5a2c39f990963c59ec58d15b6"
+    },
+    "verification-before-completion": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/verification-before-completion/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/verification-before-completion/SKILL.md",
+      "computedHash": "ed40dcdd8908ea28ebc4f9020479ab7771236772c960b5bbf80a0fa279872deb",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "SKILL.md": "ed40dcdd8908ea28ebc4f9020479ab7771236772c960b5bbf80a0fa279872deb"
+      }
     },
     "video-to-superprompt": {
       "source": "MengTo/Skills",
@@ -789,6 +949,20 @@
       "skillPath": "agent-skills/web-design/webgl-laser/SKILL.md",
       "packagedPath": "packaged-skills/optional/design/mengto/webgl-laser/SKILL.md",
       "computedHash": "2364cc554f76af886713d19646cce7a536566c292487e30c7ec0602d2295f128"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "ref": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+      "license": "MIT",
+      "skillPath": "skills/writing-plans/SKILL.md",
+      "packagedPath": "packaged-skills/optional/engineering/obra-superpowers/writing-plans/SKILL.md",
+      "computedHash": "341f0dc3a67774ab9407b7ab74fccb351ba2815041e76d62b75e1e7b8c5448cb",
+      "resourceHashes": {
+        "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
+        "plan-document-reviewer-prompt.md": "aa728b96aad603c8be28875a4305637f6c984aa81ffcadcb13e743202fa2a0c7",
+        "SKILL.md": "341f0dc3a67774ab9407b7ab74fccb351ba2815041e76d62b75e1e7b8c5448cb"
+      }
     },
     "x-bookmark-quote-posts": {
       "source": "MengTo/Skills",

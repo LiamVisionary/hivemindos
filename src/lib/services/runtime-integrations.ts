@@ -22,6 +22,8 @@ import { HIVE_COMPUTE_PROVIDER_SLUG } from "@/lib/config/hive-compute-marketplac
 import { mergeRuntimeSessions, previewSessionText } from "@/lib/services/runtime-session-utils";
 import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import { startXaiOAuthLogin } from "@/lib/services/xai-oauth";
+import { runtimeInstallSpec } from "@/lib/services/runtime-install-catalog";
+import { installRuntimeBinary } from "@/lib/services/runtime-installer";
 import type { RuntimeModelSelection } from "./runtime-adapters/types";
 
 const execFileAsync = promisify(execFile);
@@ -505,6 +507,10 @@ export async function searchRuntimeSessions(runtime: AgentRuntime, query: string
 }
 
 export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action: string, input: Record<string, unknown> = {}, agent?: AgentProfile) {
+  if (action === "install-runtime") {
+    const spec = runtimeInstallSpec(runtime);
+    if (spec?.inAppInstall) return installRuntimeBinary(spec.runtime);
+  }
   if ((action === "load-model" || action === "unload-model" || action === "download-model" || action === "cancel-download" || action === "install-local-runtime" || action === "start-local-runtime" || action === "smoke-test-local-model") && agent?.provider === "lm-studio") {
     const result = await runLmStudioAction(agent, action, input);
     catalogCache.clear();

@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, sep } from "path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import { stableHivemindMachineId } from "@/features/fleet/fleet-identity";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { evaluateCompletionEvent, type EvaluationResult } from "@/lib/services/evaluation/control-plane";
 
 export type ScheduleSnapshot = {
   id: string;
@@ -43,6 +44,7 @@ export type ScheduledRunRecord = {
   output?: string;
   summary?: string;
   telemetry?: Record<string, unknown>;
+  evaluation?: EvaluationResult;
 };
 
 export type PastScheduledRun = {
@@ -338,6 +340,21 @@ export async function recordScheduledRun(input: {
   const agent = sanitizeSegment(input.record.agentName || input.record.schedule.agentName || "agent", "agent");
   const timestamp = new Date(input.record.completedAt ?? input.record.startedAt).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   const path = join(location.dir, `${runLabel}-${agent}-${timestamp}.md`);
+  const evaluation = input.record.evaluation ?? (input.record.status === "running"
+    ? undefined
+    : await evaluateCompletionEvent({
+      id: input.record.runId,
+      surface: "scheduler",
+      status: input.record.status === "ok" ? "completed" : "failed",
+      observed: true,
+      output: input.record.output || input.record.summary || "",
+      startedAt: input.record.startedAt,
+      completedAt: input.record.completedAt ?? Date.now(),
+      metadata: {
+        scheduleId: input.record.schedule.id,
+        runtime: input.record.schedule.runtime,
+      },
+    }));
   const content = [
     yamlFrontmatter({
       type: "hivemindos-scheduled-run",
@@ -355,6 +372,8 @@ export async function recordScheduledRun(input: {
       skills: input.record.schedule.skills ?? [],
       externalSource: input.record.schedule.externalSource ?? null,
       externalJobId: input.record.schedule.externalJobId ?? null,
+      evaluationVerdict: evaluation?.verdict ?? null,
+      evaluationTier: evaluation?.tier ?? null,
     }),
     `# ${runLabel} - ${input.record.schedule.name || input.record.schedule.id}`,
     "",
@@ -365,6 +384,7 @@ export async function recordScheduledRun(input: {
     fenced("Prompt", input.record.prompt || input.record.schedule.prompt || ""),
     fenced("Output", input.record.output || input.record.summary || ""),
     fenced("Telemetry JSON", input.record.telemetry ?? {}),
+    ...(evaluation ? [fenced("Evaluation JSON", evaluation)] : []),
   ].join("\n");
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content);

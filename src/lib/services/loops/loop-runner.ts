@@ -12,6 +12,7 @@ import {
   summarizeAcceptanceViolations,
   type DeliverableContentFetcher,
 } from "@/lib/services/deliverables/deliverable-acceptance";
+import { evaluationOutputFingerprint } from "@/lib/services/evaluation/control-plane";
 
 export { isReservedOrMockUrl };
 
@@ -39,6 +40,9 @@ export type LoopJudgeVerdict = {
   accepted: boolean;
   summary?: string;
   evidence?: string[];
+  confidence?: number;
+  axes?: Array<{ id: string; score: number; evidence?: string[] }>;
+  evaluator?: { agentId?: string; model?: string; runtime?: string; independent: boolean };
 };
 
 export type LoopGateJudge = (input: {
@@ -60,6 +64,11 @@ export type LoopGateCommandRunner = (input: {
   gate: LoopEvalGate;
   command: string;
 }) => Promise<LoopGateCommandResult>;
+
+export type LoopArtifactVerifier = (input: {
+  gate: LoopEvalGate;
+  artifact: string;
+}) => Promise<{ ok: boolean; evidence?: string[]; error?: string }>;
 
 export type LoopUrlProbeResult = {
   /** HTTP status if any response was received (any method). */
@@ -87,6 +96,8 @@ export type RunLoopGatesInput = {
   judge?: LoopGateJudge;
   /** Shell executor for `command` gates whose workspace is reachable here. Omit for remote work. */
   runCommand?: LoopGateCommandRunner;
+  /** Trusted existence/reachability check for artifact gates. Path-shaped text alone never passes. */
+  verifyArtifact?: LoopArtifactVerifier;
   /** Liveness prober for URLs the worker CLAIMS are live. Omit → reserved/mock domains are still rejected (pure). */
   probeUrl?: LoopUrlProber;
   /** Content fetcher for the deliverable-acceptance gate. Omit → the gate is a no-op (kill-switch). */
@@ -117,6 +128,39 @@ const ACCEPTANCE_RECEIPT_ID = "lr_deliverable-acceptance";
 const ACCEPTANCE_GATE_ID = "deliverable-acceptance";
 const ACCEPTANCE_VERIFIER = "integrity:deliverable-acceptance";
 
+// The integrity receipts only the SERVER's in-process gate run (runLoopGates) may
+// legitimately produce. A client — the dashboard, or an agent completing a task
+// through the /api/kanban HTTP route or MCP — must not be able to POST a `passed`
+// receipt carrying one of these identities to overwrite a stored hard-fail and
+// self-complete a task the gate parked to needs-human. The worker completes
+// in-process (not via the HTTP route), so stripping these at the route boundary
+// closes the forge without touching the legitimate server path.
+const PROTECTED_INTEGRITY_RECEIPT_IDS = new Set<string>([LIVE_URL_RECEIPT_ID, ACCEPTANCE_RECEIPT_ID]);
+const PROTECTED_INTEGRITY_GATE_IDS = new Set<string>([LIVE_URL_GATE_ID, ACCEPTANCE_GATE_ID]);
+const PROTECTED_INTEGRITY_VERIFIERS = new Set<string>([LIVE_URL_VERIFIER, ACCEPTANCE_VERIFIER]);
+
+export function isProtectedIntegrityReceipt(
+  receipt: { id?: unknown; gateId?: unknown; verifier?: unknown } | null | undefined,
+): boolean {
+  if (!receipt || typeof receipt !== "object") return false;
+  const id = typeof receipt.id === "string" ? receipt.id : "";
+  const gateId = typeof receipt.gateId === "string" ? receipt.gateId : "";
+  const verifier = typeof receipt.verifier === "string" ? receipt.verifier : "";
+  return (
+    PROTECTED_INTEGRITY_RECEIPT_IDS.has(id) ||
+    PROTECTED_INTEGRITY_GATE_IDS.has(gateId) ||
+    PROTECTED_INTEGRITY_VERIFIERS.has(verifier)
+  );
+}
+
+/** Drop any client-supplied receipt that claims a server-only integrity identity. */
+export function stripProtectedIntegrityReceipts<T extends { id?: unknown; gateId?: unknown; verifier?: unknown }>(
+  receipts: T[] | undefined | null,
+): T[] {
+  if (!Array.isArray(receipts)) return [];
+  return receipts.filter((receipt) => !isProtectedIntegrityReceipt(receipt));
+}
+
 export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGatesResult> {
   const gates = input.loop?.evalGates ?? [];
   const output = String(input.output ?? "");
@@ -143,7 +187,7 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
 
     // An `agent:judge` gate is INDEPENDENT by definition — the builder must not get to
     // satisfy (or skip) its own judge via a self-report. Always route it to the judge.
-    if (gate.kind !== "agent") {
+    if (!isServerAuthoritativeGate(gate)) {
       const reported = matchSelfReport(selfReport, gate, usedReports);
       if (reported) {
         usedReports.add(reported); // one self-report entry can satisfy at most one gate.
@@ -171,11 +215,34 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
     }
 
     if (gate.kind === "artifact") {
-      if (routableArtifacts.length) {
-        receipts.push(receiptFor(gate, "passed", `Durable artifact detected: ${routableArtifacts[0]}`, routableArtifacts.slice(0, 6), "artifact", now));
-      } else {
+      if (!routableArtifacts.length) {
         receipts.push(receiptFor(gate, "failed", "No durable artifact (real path or routable URL) was found in the worker output.", [], "artifact", now));
+        continue;
       }
+      const verifiedEvidence: string[] = [];
+      let verifiedArtifact: string | undefined;
+      for (const artifact of routableArtifacts) {
+        let verification: { ok: boolean; evidence?: string[]; error?: string } | undefined;
+        if (/^https?:\/\//i.test(artifact) && input.probeUrl) {
+          const probe = await input.probeUrl({ url: artifact }).catch((error): LoopUrlProbeResult => ({ error: error instanceof Error ? error.message : String(error) }));
+          verification = {
+            ok: typeof probe.status === "number" && probe.status >= 200 && probe.status < 400,
+            evidence: [`${artifact} — HTTP ${probe.status ?? "unreachable"}`],
+            error: probe.error,
+          };
+        } else if (input.verifyArtifact) {
+          verification = await input.verifyArtifact({ gate, artifact }).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+        }
+        if (verification?.ok) {
+          verifiedArtifact = artifact;
+          verifiedEvidence.push(...(verification.evidence ?? []));
+          break;
+        }
+      }
+      if (verifiedArtifact) {
+        receipts.push(receiptFor(gate, "passed", `Verified durable artifact: ${verifiedArtifact}`, [verifiedArtifact, ...verifiedEvidence], "artifact", now));
+      }
+      // No trusted verifier or no verified candidate: leave the required gate pending.
       continue;
     }
 
@@ -185,7 +252,20 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
           accepted: false,
           summary: error instanceof Error ? error.message : String(error),
         }) as LoopJudgeVerdict);
-        receipts.push(receiptFor(gate, verdict.accepted ? "passed" : "failed", verdict.summary || (verdict.accepted ? "Independent judge accepted the result." : "Independent judge rejected the result."), verdict.evidence ?? [], "judge", now));
+        const accepted = judgeVerdictPasses(verdict, input.loop?.evaluationRubric);
+        receipts.push(receiptFor(
+          gate,
+          accepted ? "passed" : "failed",
+          verdict.summary || (accepted ? "Independent judge accepted the result." : "Independent judge or rubric rejected the result."),
+          verdict.evidence ?? [],
+          "judge",
+          now,
+          {
+            confidence: verdict.confidence,
+            axes: verdict.axes,
+            evaluator: verdict.evaluator,
+          },
+        ));
       }
       // No judge reachable → leave pending; required judge gates fail closed.
       continue;
@@ -195,6 +275,9 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
       // Governance/policy receipts must not be auto-passed from raw text: a spend or
       // approval claim needs an explicit self-report or judge. Without one, stay pending.
       if (gate.verifier === "governance:policy") continue;
+      // When the worker emitted an explicit receipt set, absence is meaningful. Do not
+      // let the JSON/fence itself become generic prose evidence for every unmatched gate.
+      if (selfReport.length) continue;
       const matchedEvidence = evidenceRequired.filter((hint) => output.toLowerCase().includes(hint.toLowerCase().slice(0, 24)));
       if (output.trim().length >= MIN_EVIDENCE_CHARS) {
         const evidence = [truncate(output.trim(), 600), ...matchedEvidence].filter(Boolean);
@@ -262,12 +345,40 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
     });
   }
 
-  const passedGateIds = new Set(receipts.filter((r) => r.status === "passed" && r.gateId).map((r) => r.gateId));
+  const outputFingerprint = evaluationOutputFingerprint(output);
+  const boundReceipts = receipts.map((receipt) => ({
+    ...receipt,
+    metadata: {
+      ...receipt.metadata,
+      authority: "server",
+      outputFingerprint,
+    },
+  }));
+  const passedGateIds = new Set(boundReceipts.filter((r) => r.status === "passed" && r.gateId).map((r) => r.gateId));
   const unsatisfiedRequiredGateIds = gates
     .filter((gate) => gate.required && gate.status !== "passed" && !passedGateIds.has(gate.id))
     .map((gate) => gate.id);
 
-  return { receipts, unsatisfiedRequiredGateIds };
+  return { receipts: boundReceipts, unsatisfiedRequiredGateIds };
+}
+
+function isServerAuthoritativeGate(gate: LoopEvalGate): boolean {
+  return gate.kind === "agent"
+    || gate.kind === "artifact"
+    || Boolean(gate.command?.trim())
+    || gate.verifier === "governance:policy"
+    || Boolean(gate.verifier?.startsWith("evo:"));
+}
+
+function judgeVerdictPasses(verdict: LoopJudgeVerdict, rubric?: LoopEvaluationRubric): boolean {
+  if (!verdict.accepted || verdict.evaluator?.independent !== true) return false;
+  if (!rubric) return true;
+  const axes = new Map((verdict.axes ?? []).map((axis) => [axis.id, Math.max(0, Math.min(1, axis.score))]));
+  if (!rubric.axes.every((axis) => axes.has(axis.id))) return false;
+  if (rubric.axes.some((axis) => axis.scoreFloor !== undefined && (axes.get(axis.id) ?? 0) < axis.scoreFloor)) return false;
+  const totalWeight = rubric.axes.reduce((sum, axis) => sum + Math.max(0, axis.weight), 0) || 1;
+  const score = rubric.axes.reduce((sum, axis) => sum + (axes.get(axis.id) ?? 0) * Math.max(0, axis.weight), 0) / totalWeight;
+  return score >= rubric.passThreshold;
 }
 
 /**
@@ -480,6 +591,7 @@ function receiptFor(
   evidence: string[],
   source: string,
   now: number,
+  metadata?: Record<string, unknown>,
 ): LoopReceipt {
   return {
     id: `lr_${gate.id}`,
@@ -488,7 +600,7 @@ function receiptFor(
     summary,
     evidence: evidence.filter(Boolean).slice(0, 8),
     verifier: gate.verifier,
-    metadata: { source },
+    metadata: { source, ...metadata },
     createdAt: now,
   };
 }

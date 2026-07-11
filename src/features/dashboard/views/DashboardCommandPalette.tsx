@@ -77,12 +77,12 @@ export function DashboardCommandPalette(props: DashboardCommandPaletteProps) {
         keywords: [route.label, route.detail, target.taskId ?? "", target.agentId ?? ""],
       };
     });
-    const agentActions = displayAgents.slice(0, 24).map((agent): CommandAction => ({
+    const agentActions = displayAgents.map((agent): CommandAction => ({
       id: `agent:${agent.id}`,
       group: "Agents",
       label: agent.name ?? agent.id,
-      detail: agent.machineName ? `Chat on ${agent.machineName}` : "Open agent chat",
-      target: { view: "chat", agentId: agent.id },
+      detail: agent.machineName ? `Locate in Fleet on ${agent.machineName}` : "Locate in Fleet",
+      target: { view: "agents", agentId: agent.id },
       keywords: [agent.id, agent.name, agent.runtime, agent.machineName].filter(Boolean),
     }));
     const taskActions = kanbanTasks.slice(0, 24).map((task): CommandAction => ({

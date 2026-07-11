@@ -41,13 +41,16 @@ await mkdir(join(tempHome, ".hivemindos"), { recursive: true });
 await writeFile(join(tempHome, ".hivemindos", "companies.json"), JSON.stringify([legacyCompany], null, 2));
 
 const {
+  addCompanyMembers,
   addCompanyDirective,
   claimCompanyHomeMachine,
   companyRunsOnThisMachine,
+  CompaniesFileCorruptError,
   deleteCompany,
   getCompany,
   markCompanyDispatched,
   readCompanies,
+  setCompanyAgents,
   setCompanyApprovalPolicy,
   setCompanyProducts,
   updateCompanyMetric,
@@ -56,10 +59,13 @@ const {
 const { ensureCompanyProductsSeeded, extractPricingProposalMarkers } = await import("../src/lib/services/company-products.ts");
 const { proposeCompanyPricingChange, resolveCompanyPricingProposal } = await import("../src/lib/services/companies-store.ts");
 const { companyWorkerContext } = await import("../src/lib/services/companies-orchestration.ts");
+const membershipModule = await import("../src/lib/services/company-membership.ts");
 const { readCompanyMemory, syncCompanyTaskOutcomes } = await import("../src/lib/services/company-memory.ts");
 const { readCompanyConfigHistory } = await import("../src/lib/services/company-governance.ts");
 const { submitQueenBeeMessage } = await import("../src/lib/services/queen-bee/control-plane.ts");
 const { readBoard } = await import("../src/lib/services/kanban/local-kanban-store.ts");
+const { appendSpend } = await import("../src/lib/services/wallet/spend-ledger.ts");
+const { evaluateSpend } = await import("../src/lib/services/wallet/spend-governance.ts");
 
 const definitionsFile = join(vaultPath, "Operations", "Companies", "companies.json");
 const overlayFile = join(tempHome, ".hivemindos", "companies-runtime.json");
@@ -93,6 +99,77 @@ try {
 
   const migratedHistory = await readCompanyConfigHistory({ companyId: "co-legacy-1" });
   assert.ok(migratedHistory.some((entry) => entry.action === "migrated"), "migration writes a history entry");
+
+  // ── membership identity: one operational agent belongs to one company ────
+  const exclusiveOwner = await upsertCompany({ name: "Exclusive Owner", agentIds: ["shared-agent"] });
+  await assert.rejects(
+    upsertCompany({ name: "Rejected Shared Identity", agentIds: ["shared-agent"] }),
+    /already belongs to .*Exclusive Owner.*Duplicate the agent/i,
+    "creating a second company with the same operational agent identity is rejected",
+  );
+  const exclusiveCandidate = await upsertCompany({ name: "Exclusive Candidate" });
+  await assert.rejects(
+    addCompanyMembers(exclusiveCandidate.id, [{ agentId: "shared-agent" }]),
+    /already belongs to .*Exclusive Owner.*Duplicate the agent/i,
+    "add-members rejects an agent identity already owned by another company",
+  );
+  await assert.rejects(
+    setCompanyAgents(exclusiveCandidate.id, ["shared-agent"]),
+    /already belongs to .*Exclusive Owner.*Duplicate the agent/i,
+    "set-agents rejects an agent identity already owned by another company",
+  );
+  const ownerStillValid = await setCompanyAgents(exclusiveOwner.id, ["shared-agent"]);
+  assert.deepEqual(ownerStillValid.agentIds, ["shared-agent"], "saving the existing owner is still allowed");
+  assert.deepEqual((await getCompany(exclusiveCandidate.id)).agentIds, [], "rejected membership never mutates the target company");
+  assert.equal(typeof membershipModule.companyMembershipOwners, "function", "membership module exposes the ownership map used by the company picker");
+  const membershipOwners = membershipModule.companyMembershipOwners(await readCompanies());
+  assert.deepEqual(
+    membershipOwners.get("shared-agent"),
+    [{ id: exclusiveOwner.id, name: "Exclusive Owner" }],
+    "the picker can explain which company owns an unavailable agent identity",
+  );
+  assert.equal(typeof membershipModule.findDuplicateCompanyMemberships, "function", "membership module exposes manual-edit conflict detection");
+  assert.deepEqual(
+    membershipModule.findDuplicateCompanyMemberships([
+      { id: "co-a", name: "A", agentIds: ["duplicate-agent"] },
+      { id: "co-b", name: "B", agentIds: ["duplicate-agent"] },
+      { id: "co-c", name: "C", agentIds: ["unique-agent"] },
+    ]),
+    [{ agentId: "duplicate-agent", companies: [{ id: "co-a", name: "A" }, { id: "co-b", name: "B" }] }],
+    "manual duplicate membership is reported without hiding the rest of the portfolio",
+  );
+  const companyPickerSource = await readFile(new URL("../src/features/dashboard/views/zero-human-companies/Modals.tsx", import.meta.url), "utf8");
+  assert.match(companyPickerSource, /Assigned to/, "company picker names the existing owner instead of offering an unsafe add");
+  assert.match(companyPickerSource, /Duplicate agent/, "company picker offers the established safe identity-duplication path");
+  const companiesRouteSource = await readFile(new URL("../src/app/api/companies/route.ts", import.meta.url), "utf8");
+  assert.match(companiesRouteSource, /CompanyMembershipConflictError/, "companies API recognizes exclusive-membership conflicts");
+  assert.match(companiesRouteSource, /error\.status/, "companies API returns the conflict status instead of a generic bad request");
+  const founderRouteSource = await readFile(new URL("../src/app/api/founder/route.ts", import.meta.url), "utf8");
+  assert.match(founderRouteSource, /companyMembershipOwners/, "Founder Mode excludes identities already owned by a company");
+  assert.match(founderRouteSource, /unassignedProfiles/, "Founder Mode compiles its crew only from unassigned operational identities");
+  const companyDocs = await readFile(new URL("../docs/for-users/features/zero-human-companies.md", import.meta.url), "utf8");
+  assert.match(companyDocs, /one company at a time/i, "public docs state the operational identity boundary");
+  assert.match(companyDocs, /duplicate agent/i, "public docs explain how to reuse an agent blueprint safely");
+
+  // The member-level company cap shown in the crew picker is a real hard guard,
+  // not presentation-only. With $8 already spent, a $3 request exceeds a $10 cap.
+  await setCompanyAgents(exclusiveOwner.id, [], [{ agentId: "shared-agent", companyCap: 10 }]);
+  await appendSpend({
+    agentId: "shared-agent",
+    companyId: exclusiveOwner.id,
+    kind: "api",
+    asset: "USDC",
+    amountUsd: 8,
+    status: "executed",
+  });
+  const memberCapDecision = await evaluateSpend({
+    wallet: { agentId: "shared-agent", approvalRequiredOverUsd: 0 },
+    kind: "api",
+    asset: "USDC",
+    amountUsd: 3,
+  });
+  assert.equal(memberCapDecision.decision, "block", "company member daily cap blocks excess spend");
+  assert.match(memberCapDecision.reason, /company member daily budget/i, "member-cap block explains the governing company-specific limit");
 
   // ── churn guard: hot writes must not rewrite the replicated definitions file ──
   const definitionsBefore = await readFile(definitionsFile, "utf8");
@@ -378,6 +455,39 @@ try {
   assert.equal(legacyStill.length, 1, "legacy file is preserved as the rollback copy");
   const deletedHistory = await readCompanyConfigHistory({ companyId: "co-legacy-1" });
   assert.ok(deletedHistory.some((entry) => entry.action === "deleted"), "delete writes a history entry");
+
+  // ── state integrity: rotated backups, corrupt file fails closed, bad records drop ──
+  // A definitions write leaves a rotated backup so a bad overwrite is recoverable.
+  await upsertCompany({ name: "Backup Probe Co" });
+  const backupExists = await readFile(`${definitionsFile}.bak.0`, "utf8").then(() => true).catch(() => false);
+  assert.ok(backupExists, "a definitions write leaves a rotated .bak.0 backup");
+
+  // A malformed record (no id) is dropped; a record with an id but no name is kept
+  // with a placeholder so the whole-portfolio read (.sort by name) can't crash.
+  const goodDefs = await readJson(definitionsFile);
+  await writeFile(definitionsFile, JSON.stringify([...goodDefs, { junk: true }, { id: "co-nameless-1" }], null, 2));
+  const normalized = await readCompanies();
+  assert.equal(normalized.some((company) => company.junk === true), false, "a record with no id is dropped on read");
+  const nameless = normalized.find((company) => company.id === "co-nameless-1");
+  assert.ok(nameless, "a record with an id but no name is kept, not dropped");
+  assert.ok(typeof nameless.name === "string" && nameless.name.length > 0, "the kept record gets a sort-safe placeholder name");
+
+  // A corrupt definitions file fails CLOSED: the read throws instead of returning
+  // an empty portfolio, and the next write refuses to overwrite it — the exact
+  // path that used to silently wipe (and Syncthing-replicate) the whole portfolio.
+  await writeFile(definitionsFile, "{ not valid json ]");
+  const corruptBytes = await readFile(definitionsFile, "utf8");
+  await assert.rejects(
+    readCompanies(),
+    (error) => error instanceof CompaniesFileCorruptError,
+    "a corrupt definitions file throws instead of reading as an empty portfolio",
+  );
+  await assert.rejects(
+    upsertCompany({ name: "Should Not Persist" }),
+    (error) => error instanceof CompaniesFileCorruptError,
+    "a write refuses to overwrite a corrupt definitions file",
+  );
+  assert.equal(await readFile(definitionsFile, "utf8"), corruptBytes, "the corrupt file is left intact, not wiped");
 
   console.log("company vault store suite passed");
 } finally {

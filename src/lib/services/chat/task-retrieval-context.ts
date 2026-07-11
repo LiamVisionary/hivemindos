@@ -327,6 +327,7 @@ export function requiresCapabilityRouting(query: string) {
   return loopEngineeringRequest(query)
     || localImageGenerationRequest(query)
     || videoGenerationRequest(query)
+    || /\b(?:build|create|make|develop|design|implement|code)\b[\s\S]{0,100}\b(?:website|web\s+(?:site|app)|app|application|page|frontend|backend|service|software)\b/i.test(query)
     || /\b(?:capabilit(?:y|ies)|connected app|tool|api|x402|wallet|payment|send|deliver|deploy|workflow|kanban|scheduler|miroshark|bankr|crypto|trade|trading|token|swap|portfolio)\b/i.test(query)
     || /\bwhat\b[\s\S]{0,40}\bcan you do\b|\bcan you do with\b/i.test(query);
 }

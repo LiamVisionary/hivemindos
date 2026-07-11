@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Company } from "@/lib/types/company";
+import { activeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 import type { QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
 import { readRuntimeResponseText, voiceOptimizedAgent } from "@/lib/services/phone/runtime-voice-turn";
@@ -83,6 +84,30 @@ export function userPrompt(company: Company, history?: string, completedTitles?:
       `Pricing proposals already awaiting human decision (do not plan duplicate proposals): ${pendingPricing
         .map((p) => `${p.productName} → $${p.proposedAmountUsd.toLocaleString("en-US")}`)
         .join("; ")}`,
+    );
+  }
+  // Standing operator directions steer the WORKERS but were invisible to the
+  // PLANNER — so a human teaching "stop cold-emailing restaurants, target law
+  // firms" never stopped the planner re-proposing restaurant outreach. Feed the
+  // durable directions + active approval policies in so the plan respects them.
+  const directives = (company.directives ?? []).map((directive) => directive.text?.trim()).filter(Boolean);
+  if (directives.length) {
+    lines.push(
+      "",
+      "Standing operator directions (plan consistent with these — they override the goal's default approach):",
+      ...directives.slice(0, 12).map((text) => `- ${text}`),
+    );
+  }
+  const activePolicies = activeCompanyApprovalPolicies(company);
+  const neverSubjects = activePolicies.filter((policy) => policy.mode === "never").map((policy) => policy.subject);
+  const askSubjects = activePolicies.filter((policy) => policy.mode === "ask").map((policy) => policy.subject);
+  if (neverSubjects.length) {
+    lines.push("", `NEVER plan a task whose purpose is any of these — the company is forbidden from them: ${neverSubjects.join("; ")}.`);
+  }
+  if (askSubjects.length) {
+    lines.push(
+      "",
+      `These need human approval before the crew acts, so any task involving them must end by parking a draft for approval, never by doing it directly: ${askSubjects.join("; ")}.`,
     );
   }
   lines.push(`Crew roles available: ${crewRoster(company)}`);

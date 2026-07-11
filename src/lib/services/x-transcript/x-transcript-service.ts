@@ -24,6 +24,14 @@ const MAX_TRANSCRIBE_SECONDS = numberEnv("X_TRANSCRIPT_MAX_SECONDS", 10_800);
 
 export type XTranscriptKind = "video" | "thread" | "single";
 
+export type XTranscriptInspection = {
+  kind: "video" | "post" | "unknown";
+  canonicalUrl: string;
+  durationSec?: number;
+  title?: string;
+  author?: { handle?: string; name?: string };
+};
+
 export type XThreadPost = {
   text: string;
   createdAt?: string;
@@ -160,6 +168,25 @@ async function transcribeFromMp4(url: string): Promise<string> {
     // transcribeAudioFile extracts audio chunks from any media file internally.
     return transcribeAudioFile(mp4, dir);
   });
+}
+
+/** Fast, read-only media probe used to set expectations before transcription. */
+export async function inspectXTranscript(url: string): Promise<XTranscriptInspection> {
+  const parsed = parseXPostUrl(url);
+  if (!parsed) throw new Error("That doesn't look like an X post link. Paste a link like https://x.com/user/status/123…");
+  if (!resolveYtDlp()) {
+    return { kind: "unknown", canonicalUrl: parsed.canonicalUrl, author: parsed.handle ? { handle: parsed.handle } : undefined };
+  }
+  const probe = await probeXMedia(parsed.canonicalUrl);
+  return {
+    kind: probe.hasVideo ? "video" : "post",
+    canonicalUrl: parsed.canonicalUrl,
+    durationSec: probe.durationSec,
+    title: probe.title,
+    author: probe.uploaderId || probe.uploader || parsed.handle
+      ? { handle: probe.uploaderId ?? parsed.handle, name: probe.uploader }
+      : undefined,
+  };
 }
 
 export async function resolveXTranscript(input: ResolveXTranscriptInput): Promise<XTranscriptResult> {

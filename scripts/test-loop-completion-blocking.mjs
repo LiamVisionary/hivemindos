@@ -21,6 +21,13 @@ const WORKER_OUTPUT = [
   "Deliverable: /Users/liam/out/loop-report.md",
   "Verification: traced the call chain and confirmed the cause with file:line references.",
 ].join("\n");
+const acceptingJudge = async ({ evaluationRubric }) => ({
+  accepted: true,
+  summary: "Independent test judge accepted.",
+  confidence: 0.95,
+  axes: (evaluationRubric?.axes ?? []).map((axis) => ({ id: axis.id, score: 0.9, evidence: ["fixture evidence"] })),
+  evaluator: { agentId: "fixture-reviewer", model: "fixture-model", independent: true },
+});
 
 try {
   const loop = buildLoopFromTemplate({
@@ -67,19 +74,36 @@ try {
     "artifacts must be extracted even when blocked",
   );
 
-  // 2. Now attach passing receipts for every required gate → completes.
-  const receipts = requiredGateIds.map((gateId, index) => ({
+  // Client/MCP-style receipts cannot self-approve the authoritative judge gate.
+  const forgedReceipts = requiredGateIds.map((gateId, index) => ({
+    id: `forged-${index}`,
     gateId,
     status: "passed",
-    summary: `Gate ${gateId} satisfied`,
-    evidence: [`evidence for ${gateId}`],
+    summary: "client claimed this passed",
+    evidence: ["untrusted client claim"],
+    verifier: storedLoop.evalGates.find((gate) => gate.id === gateId)?.verifier,
     createdAt: 1_800_000_000_000 + index,
   }));
+  const forged = await completeTask(
+    boardSlug,
+    taskId,
+    { summary: "Client self-approved gates.", result: WORKER_OUTPUT, loopReceipts: forgedReceipts },
+    options,
+  );
+  assert.equal(forged.blocked, true, "untrusted client judge receipts must be stripped at the store boundary");
+  assert(forged.missingGateIds.some((gateId) => storedLoop.evalGates.find((gate) => gate.id === gateId)?.kind === "agent"));
+
+  // 2. Now attach passing receipts for every required gate → completes.
+  const { receipts } = await runLoopGates({
+    loop: storedLoop,
+    output: WORKER_OUTPUT,
+    judge: acceptingJudge,
+  });
   const done = await completeTask(
     boardSlug,
     taskId,
     { summary: "Re-completed with receipts.", result: WORKER_OUTPUT, loopReceipts: receipts },
-    options,
+    { ...options, trustedLoopReceipts: true },
   );
   assert.equal(done.task.status, "done", "task with all required gate receipts should complete");
   assert(!done.blocked, "completion should not be blocked once receipts are present");
@@ -100,9 +124,10 @@ try {
       unitId: "acme", unitName: "Acme Sites", workTitle: "Ship Ginza payment page", runId: "run-1",
       metricName: "paid conversions", governanceLabel: "company governance",
     });
-    // Sanity: the company loop is intentionally non-blocking — every gate is optional.
-    assert(companyLoop.evalGates.length > 0 && companyLoop.evalGates.every((g) => !g.required),
-      "operating-unit loop should have only optional gates (non-blocking by design)");
+    assert(companyLoop.evalGates.some((gate) => gate.verifier === "receipt:evidence" && gate.required),
+      "operating-unit loops require outcome evidence");
+    assert(companyLoop.evalGates.some((gate) => gate.verifier === "agent:judge" && gate.required),
+      "outward-facing operating-unit loops require an independent judge");
 
     const created = await createTask(
       boardSlug,
@@ -118,12 +143,13 @@ try {
     ].join(" ");
     const { receipts: deadReceipts } = await runLoopGates({
       loop: companyLoop, output: deadOutput,
+      judge: acceptingJudge,
       probeUrl: async () => ({ status: 404 }), // fake: cal.com user does not exist
     });
     const blocked = await completeTask(
       boardSlug, taskId,
       { summary: "Queen Bee autonomous pickup.", result: deadOutput, loopReceipts: deadReceipts },
-      options,
+      { ...options, trustedLoopReceipts: true },
     );
     assert.equal(blocked.blocked, true, "a claimed dead URL must block completion even with only optional gates");
     assert.equal(blocked.task.status, "needs-human", "the blocked company task moves to needs-human");
@@ -134,12 +160,15 @@ try {
     // Fixed retry: real deploy host + a reachable booking link → integrity passes → done.
     const fixedOutput = "Redeployed. Payment page is live at https://ginza-sites.pages.dev/paid and booking at https://cal.com/acme/website-kickoff.";
     const { receipts: fixedReceipts } = await runLoopGates({
-      loop: companyLoop, output: fixedOutput, probeUrl: async () => ({ status: 200 }),
+      loop: companyLoop,
+      output: fixedOutput,
+      judge: acceptingJudge,
+      probeUrl: async () => ({ status: 200 }),
     });
     const done = await completeTask(
       boardSlug, taskId,
       { summary: "Re-completed after fixing the links.", result: fixedOutput, loopReceipts: fixedReceipts },
-      options,
+      { ...options, trustedLoopReceipts: true },
     );
     assert.equal(done.task.status, "done", "a fixed retry (stable integrity receipt id) overwrites the failure and completes");
     assert(!done.blocked, "the fixed retry must not be blocked");

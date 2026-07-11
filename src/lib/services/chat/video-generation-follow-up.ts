@@ -1,3 +1,5 @@
+import { chatImageMimeTypeForPath, isChatImagePath } from "@/lib/services/chat/chat-image-formats";
+
 type VideoGenerationSourceArtifact = {
   kind?: unknown;
   url?: unknown;
@@ -29,20 +31,6 @@ export type ResolvedVideoGenerationFollowUp = {
   previousGenerationId?: string;
 };
 
-const IMAGE_EXTENSION_MIME_TYPES: Record<string, string> = {
-  avif: "image/avif",
-  bmp: "image/bmp",
-  gif: "image/gif",
-  heic: "image/heic",
-  heif: "image/heif",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  png: "image/png",
-  tif: "image/tiff",
-  tiff: "image/tiff",
-  webp: "image/webp",
-};
-
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -54,8 +42,7 @@ function basename(path: string) {
 function imageMimeType(path: string, candidate?: unknown) {
   const declared = clean(candidate);
   if (declared.startsWith("image/")) return declared;
-  const extension = basename(path).split(".").at(-1)?.toLowerCase() ?? "";
-  return IMAGE_EXTENSION_MIME_TYPES[extension] ?? "image/jpeg";
+  return chatImageMimeTypeForPath(path) || "image/jpeg";
 }
 
 export function generationPromptWithoutAttachmentReferences(value: unknown) {
@@ -95,7 +82,7 @@ function sourceImageFromAttachmentReference(value: unknown): ReusedVideoInputIma
   const content = clean(value);
   if (!content) return null;
   const path = clean(/(?:^|[;(]\s*)path:\s*([^;)\n]+)/im.exec(content)?.[1]);
-  if (!path || !IMAGE_EXTENSION_MIME_TYPES[basename(path).split(".").at(-1)?.toLowerCase() ?? ""]) return null;
+  if (!path || !isChatImagePath(path)) return null;
   const mimeType = clean(/(?:^|[;(]\s*)type:\s*([^;)\n]+)/im.exec(content)?.[1]);
   return { path, mimeType: imageMimeType(path, mimeType), name: basename(path) };
 }

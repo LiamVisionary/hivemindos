@@ -7,6 +7,7 @@ import { runtimeCommandEnv, runtimeCommandPaths } from "@/lib/services/runtime-c
 import { readSharedHiveEnvValues } from "@/lib/services/shared-hive-env";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeRun, RuntimeRunLog } from "./types";
+import { evaluateCompletionEvent } from "@/lib/services/evaluation/control-plane";
 
 const RUN_ROOT = join(homedir(), ".hivemindos", "runtime-runs");
 
@@ -24,6 +25,7 @@ type StoredCliRun = RuntimeRun & {
   cwd: string;
   logPath: string;
   exitCode?: number | null;
+  evaluation?: RuntimeRun["evaluation"];
 };
 
 function runDir(runtime: AgentRuntime) {
@@ -113,7 +115,7 @@ export async function startCliTaskRun(config: CliTaskConfig, input: Record<strin
   }
 
   const cwd = await normalizeCwd(input);
-  const id = `${String(config.runtime)}-${Date.now().toString(36)}`;
+  const id = `${String(config.runtime)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const args = config.buildArgs(task, input, profile);
   const runLogPath = logPath(config.runtime, id);
   const now = new Date().toISOString();
@@ -148,10 +150,15 @@ export async function startCliTaskRun(config: CliTaskConfig, input: Record<strin
   };
   await writeRun(active);
 
-  child.stdout.on("data", (chunk: Buffer) => void appendLog(runLogPath, chunk.toString()));
-  child.stderr.on("data", (chunk: Buffer) => void appendLog(runLogPath, chunk.toString()));
+  let pendingLogWrite = Promise.resolve();
+  const queueLog = (value: string) => {
+    pendingLogWrite = pendingLogWrite.then(() => appendLog(runLogPath, value));
+    return pendingLogWrite;
+  };
+  child.stdout.on("data", (chunk: Buffer) => void queueLog(chunk.toString()));
+  child.stderr.on("data", (chunk: Buffer) => void queueLog(chunk.toString()));
   child.on("error", (error) => {
-    void appendLog(runLogPath, `\n${error.message}\n`);
+    void queueLog(`\n${error.message}\n`);
     void writeRun({
       ...active,
       status: "failed",
@@ -160,13 +167,33 @@ export async function startCliTaskRun(config: CliTaskConfig, input: Record<strin
     });
   });
   child.on("close", (code) => {
-    void writeRun({
-      ...active,
-      status: code === 0 ? "completed" : "failed",
-      updatedAt: new Date().toISOString(),
-      exitCode: code,
-      conclusion: code === 0 ? "completed" : `exited with code ${code}`,
-    });
+    void (async () => {
+      await pendingLogWrite.catch(() => undefined);
+      const rawLog = await readFile(runLogPath, "utf8").catch(() => "");
+      // The first line is HivemindOS's command echo and contains the task prompt.
+      // Exclude it so an exit-0 process with no agent response cannot pass by
+      // "evaluating" its own input as substantive output.
+      const output = rawLog.split(/\r?\n/).slice(1).join("\n");
+      const completedAt = Date.now();
+      const evaluation = await evaluateCompletionEvent({
+        id,
+        surface: "runtime-cli",
+        status: code === 0 ? "completed" : "failed",
+        observed: true,
+        output,
+        startedAt: Date.parse(run.createdAt || "") || undefined,
+        completedAt,
+        metadata: { runtime: config.runtime, cwd },
+      });
+      await writeRun({
+        ...active,
+        status: code === 0 ? "completed" : "failed",
+        updatedAt: new Date(completedAt).toISOString(),
+        exitCode: code,
+        conclusion: code === 0 ? "completed" : `exited with code ${code}`,
+        evaluation,
+      });
+    })();
   });
   child.unref();
 
@@ -183,7 +210,7 @@ export async function listCliTaskRuns(runtime: AgentRuntime): Promise<RuntimeRun
   return runs
     .filter((run): run is StoredCliRun => Boolean(run))
     .sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""))
-    .map(({ id, name, status, createdAt, updatedAt, conclusion }) => ({
+    .map(({ id, name, status, createdAt, updatedAt, conclusion, evaluation }) => ({
       id,
       runtime,
       name,
@@ -191,6 +218,7 @@ export async function listCliTaskRuns(runtime: AgentRuntime): Promise<RuntimeRun
       createdAt,
       updatedAt,
       conclusion,
+      evaluation,
     }));
 }
 
@@ -202,5 +230,6 @@ export async function readCliTaskRunLog(runtime: AgentRuntime, runId: string): P
     id: run.id,
     summary: run.conclusion || run.name,
     logs,
+    evaluation: run.evaluation,
   };
 }

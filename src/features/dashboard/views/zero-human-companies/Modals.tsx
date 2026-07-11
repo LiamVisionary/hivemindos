@@ -31,6 +31,7 @@ import {
   type CompanyExecutionSelection,
 } from "@/lib/services/company-execution-capabilities";
 import { CompanyExecutionFields } from "./CompanyExecutionFields";
+import type { CompanyMembershipOwner } from "@/lib/services/company-membership";
 import {
   FORM_INPUT_STYLE as inputStyle,
   FormField as Field,
@@ -187,6 +188,32 @@ function AgentPickRow({ agent, onAdd }: { agent: PoolAgent; onAdd: (a: PoolAgent
   );
 }
 
+function AssignedAgentRow({
+  agent,
+  owners,
+  onDuplicate,
+}: {
+  agent: PoolAgent;
+  owners: CompanyMembershipOwner[];
+  onDuplicate?: (agentId: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 11, alignItems: "center", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", opacity: 0.86 }}>
+      <RoleGlyph role={agent.role} size={30} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 600, color: "var(--fg-2)" }}>{agent.name}</span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--honey-2)" }}>Assigned to {owners.map((owner) => owner.name).join(", ")}</span>
+        </div>
+        <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 4, lineHeight: 1.45 }}>Use a separate operational identity so budgets, freezes, mail, memory, and work stay isolated.</div>
+      </div>
+      {onDuplicate ? (
+        <button type="button" onClick={() => onDuplicate(agent.id)} style={{ flexShrink: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--honey-line)", background: "var(--honey-soft)", color: "var(--honey-2)", fontFamily: "var(--f-mono)", fontSize: 9.5, fontWeight: 700 }}>Duplicate agent</button>
+      ) : null}
+    </div>
+  );
+}
+
 function CrewRow({ a, onChange, onRemove, locked }: { a: Agent; onChange: (next: Agent) => void; onRemove: () => void; locked: boolean }) {
   const cap = a._cap ?? 0;
   const wallet = a.walletCap ?? 0;
@@ -220,16 +247,24 @@ function CrewRow({ a, onChange, onRemove, locked }: { a: Agent; onChange: (next:
 }
 
 function CrewBuilder({
-  crew, setCrew, agentPool, seedQueen, queenName,
+  crew, setCrew, agentPool, seedQueen, queenName, membershipOwners, targetCompanyId, onDuplicateAgent,
 }: {
   crew: Agent[]; setCrew: (c: Agent[]) => void; agentPool: PoolAgent[];
   /** create flow: the first hire becomes the Queen/CEO. */
   seedQueen: boolean;
   /** browse flow: existing company's Queen name that new hires report to. */
   queenName?: string | null;
+  membershipOwners: Map<string, CompanyMembershipOwner[]>;
+  targetCompanyId?: string;
+  onDuplicateAgent?: (agentId: string) => void;
 }) {
   const onCrew = new Set(crew.map((a) => a.id ?? a.name));
-  const available = agentPool.filter((a) => !onCrew.has(a.id));
+  const candidates = agentPool.filter((agent) => !onCrew.has(agent.id));
+  const ownersOutsideTarget = (agentId: string) => (membershipOwners.get(agentId) ?? []).filter((owner) => owner.id !== targetCompanyId);
+  const available = candidates.filter((agent) => ownersOutsideTarget(agent.id).length === 0);
+  const assigned = candidates
+    .map((agent) => ({ agent, owners: ownersOutsideTarget(agent.id) }))
+    .filter((entry) => entry.owners.length > 0);
   const addAgent = (poolAgent: PoolAgent) => {
     if (seedQueen && crew.length === 0) {
       setCrew([...crew, assignAgent(poolAgent, undefined, null, "Queen")]);
@@ -245,15 +280,23 @@ function CrewBuilder({
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.1fr)", gap: 18, alignItems: "start" }}>
       <div>
-        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{available.length} available</span>}>select an agent</SectionLabel>
+        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{available.length} available{assigned.length ? ` · ${assigned.length} assigned` : ""}</span>}>select an agent</SectionLabel>
         <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 392, overflowY: "auto", paddingRight: 4 }} className="scrollbar-thin">
           {available.map((a) => <AgentPickRow key={a.id} agent={a} onAdd={addAgent} />)}
           {available.length === 0 && (
             <div style={{ borderRadius: 10, border: "1px dashed var(--line-2)", padding: "22px 12px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
-              {agentPool.length === 0 ? "no agents configured — add agents in the Fleet view first" : "all available agents are on the crew"}
+              {agentPool.length === 0 ? "no agents configured — add agents in the Fleet view first" : assigned.length ? "no unassigned identities are available" : "all available agents are on the crew"}
             </div>
           )}
         </div>
+        {assigned.length ? (
+          <div style={{ marginTop: 14 }}>
+            <SectionLabel>assigned elsewhere · duplicate the blueprint</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {assigned.map(({ agent, owners }) => <AssignedAgentRow key={agent.id} agent={agent} owners={owners} onDuplicate={onDuplicateAgent} />)}
+            </div>
+          </div>
+        ) : null}
       </div>
       <div>
         <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{crew.length} agents · ${totalCap}/day company budget</span>}>the crew</SectionLabel>
@@ -268,9 +311,11 @@ function CrewBuilder({
 
 // ── standalone agent browser (from cockpit Team tab) ──────────────────────
 export function AgentBrowserModal({
-  colony, agentPool, busy, theme, onClose, onConfirm,
+  colony, agentPool, busy, theme, membershipOwners, onDuplicateAgent, onClose, onConfirm,
 }: {
   colony: Colony; agentPool: PoolAgent[]; busy?: boolean; theme?: Theme;
+  membershipOwners: Map<string, CompanyMembershipOwner[]>;
+  onDuplicateAgent?: (agentId: string) => void;
   onClose: () => void; onConfirm: (agents: Agent[]) => void;
 }) {
   const [crew, setCrew] = React.useState<Agent[]>([]);
@@ -294,7 +339,7 @@ export function AgentBrowserModal({
         </>
       }
     >
-      <CrewBuilder crew={crew} setCrew={setCrew} agentPool={pool} seedQueen={false} queenName={queen?.name ?? null} />
+      <CrewBuilder crew={crew} setCrew={setCrew} agentPool={pool} seedQueen={false} queenName={queen?.name ?? null} membershipOwners={membershipOwners} targetCompanyId={colony.id} onDuplicateAgent={onDuplicateAgent} />
     </Modal>
   );
 }
@@ -346,9 +391,11 @@ function readForm(form: FormState): CreateForm {
 
 // ── create-company flow (2 steps) ─────────────────────────────────────────
 export function CreateCompanyModal({
-  agentPool, initialCrew, busy, theme, onClose, onCreate,
+  agentPool, initialCrew, busy, theme, membershipOwners, onDuplicateAgent, onClose, onCreate,
 }: {
   agentPool: PoolAgent[]; initialCrew?: Agent[]; busy?: boolean; theme?: Theme;
+  membershipOwners: Map<string, CompanyMembershipOwner[]>;
+  onDuplicateAgent?: (agentId: string) => void;
   onClose: () => void; onCreate: (form: CreateForm, crew: Agent[]) => void;
 }) {
   const [step, setStep] = React.useState(0);
@@ -394,7 +441,7 @@ export function CreateCompanyModal({
           <CompanyExecutionFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
         </div>
       ) : (
-        <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen={requiresCrew} />
+        <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen={requiresCrew} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent} />
       )}
     </Modal>
   );

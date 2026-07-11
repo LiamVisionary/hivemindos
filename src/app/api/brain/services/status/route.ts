@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGbrainStatus } from "@/lib/services/brain/gbrain";
+import { getInboxTriageStatus } from "@/lib/services/brain/inbox-triage";
 import { getNeo4jStatus } from "@/lib/services/brain/neo4j";
 import { getQmdStatus } from "@/lib/services/brain/qmd";
 import { getSyntoStatus } from "@/lib/services/brain/synto";
@@ -23,12 +24,13 @@ export async function GET(request: NextRequest) {
       vaultPath: params.get("vaultPath") ?? undefined,
       brainServicesFolder: params.get("brainServicesFolder") ?? undefined,
     };
-    const [gbrain, qmd, neo4j, synto, tradingBrain] = await Promise.allSettled([
+    const [gbrain, qmd, neo4j, synto, tradingBrain, inboxTriage] = await Promise.allSettled([
       getGbrainStatus(input),
       getQmdStatus(input),
       getNeo4jStatus(input),
       getSyntoStatus({ ...input, synthesisFolder: params.get("synthesisFolder") ?? undefined }),
       getTradingBrainStatus(input),
+      getInboxTriageStatus(input),
     ]);
     const entry = (result: PromiseSettledResult<unknown>) =>
       result.status === "fulfilled"
@@ -42,6 +44,7 @@ export async function GET(request: NextRequest) {
         neo4j: entry(neo4j),
         synto: entry(synto),
         "trading-brain": entry(tradingBrain),
+        "inbox-triage": entry(inboxTriage),
       },
     });
   } catch (error) {

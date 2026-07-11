@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, HardDrive, PlugZap, RefreshCcw, Volume2 } from "lucide-react";
-import { playRealtimePcmStream } from "@/lib/audio/realtime-pcm-stream-player";
+import type { AgentVoiceFailureDetail } from "@/features/dashboard/hooks/use-agent-voice-failure-notifications";
+import { createPcmPreviewPlayer } from "@/lib/audio/pcm-preview-player";
 import type {
   AgentCallPreferences,
   AgentProfile,
@@ -11,17 +12,15 @@ import type {
   VoiceProviderAuthMode,
 } from "@/lib/types/agent-runtime";
 import {
-  CALL_VOICE_PROVIDER_MATRIX,
   resolveVoiceRuntime,
   transportForKind,
-  voiceProviderById,
   voiceProvidersForKind,
   VOICE_RUNTIME_KIND_LABEL,
   VOICE_RUNTIME_KIND_SUBTITLE,
   type VoiceProviderCapability,
   type VoiceRuntimeKind,
 } from "@/lib/config/voice-call-providers";
-import { Badge, Btn, Field, GroupLabel, iconMark } from "./AgentSettingsModalPrimitives";
+import { Badge, Btn, Field, Toggle, iconMark } from "./AgentSettingsModalPrimitives";
 import {
   autoAuthMode,
   useVoiceProviderCredentials,
@@ -44,6 +43,35 @@ const BRAIN_PROVIDER_OPTIONS = [
 
 const RUNTIME_KINDS: VoiceRuntimeKind[] = ["realtime-hybrid", "cloud-tts", "local-tts"];
 
+// ElevenLabs models (compact port of ami's picker: ami's "Expressive Mode"
+// toggle switches eleven_flash_v2_5 ↔ eleven_v3; the full lineup is exposed
+// here as a select, with the toggle as the shortcut).
+const ELEVENLABS_MODEL_OPTIONS = [
+  { id: "eleven_flash_v2_5", label: "Flash v2.5 — fastest" },
+  { id: "eleven_turbo_v2_5", label: "Turbo v2.5 — fast, higher quality" },
+  { id: "eleven_multilingual_v2", label: "Multilingual v2 — classic quality" },
+  { id: "eleven_v3", label: "v3 — expressive" },
+] as const;
+const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_flash_v2_5";
+const ELEVENLABS_EXPRESSIVE_MODEL_ID = "eleven_v3";
+
+// ami's SUPPORTED_LANGUAGES table (ISO 639-1 → native + English name).
+const VOICE_LANGUAGE_OPTIONS = [
+  ["en", "English"],
+  ["ja", "日本語 (Japanese)"],
+  ["ko", "한국어 (Korean)"],
+  ["zh", "中文 (Chinese)"],
+  ["es", "Español (Spanish)"],
+  ["pt", "Português (Portuguese)"],
+  ["fr", "Français (French)"],
+  ["de", "Deutsch (German)"],
+  ["ru", "Русский (Russian)"],
+  ["ar", "العربية (Arabic)"],
+  ["hi", "हिन्दी (Hindi)"],
+  ["it", "Italiano (Italian)"],
+  ["tr", "Türkçe (Turkish)"],
+] as const;
+
 // Pipeline kinds split hearing/thinking/speaking, so the chat brain is
 // configurable; the realtime hybrid bundles the brain into the voice model.
 const PIPELINE_KINDS = new Set<VoiceRuntimeKind>(["cloud-tts", "local-tts"]);
@@ -60,6 +88,7 @@ export type AgentSettingsCallsVoiceSectionProps = {
   localTtsLaunchCandidates: LocalTtsLaunchCandidate[];
   localTtsDiscoveryStatus: "idle" | "loading" | "ready" | "error";
   localTtsDiscoveryError: string;
+  onVoiceFailure?: (detail: AgentVoiceFailureDetail) => void;
   refreshCallConnectionState: () => Promise<{
     localTtsCandidates: LocalTtsCandidate[];
     localTtsLaunchCandidates: LocalTtsLaunchCandidate[];
@@ -75,6 +104,7 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
     localTtsLaunchCandidates,
     localTtsDiscoveryStatus,
     localTtsDiscoveryError,
+    onVoiceFailure,
     refreshCallConnectionState,
   } = props;
 
@@ -172,6 +202,52 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
       cancelled = true;
     };
   }, [isPipeline, brainSource, brainProvider]);
+
+  // ---- ElevenLabs: dynamic voice catalog + model/languages ---------------
+  const isElevenLabs = !isLocalTts && selectedProvider?.id === "elevenlabs";
+  const elevenKeyPresent = Boolean(status?.keyPresent);
+  const [elevenVoices, setElevenVoices] = useState<Array<{ id: string; label: string }>>([]);
+  const [elevenVoicesStatus, setElevenVoicesStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [elevenVoicesError, setElevenVoicesError] = useState("");
+  const elevenFetchStartedRef = useRef(false);
+  useEffect(() => {
+    if (!isElevenLabs || !elevenKeyPresent || elevenFetchStartedRef.current) return;
+    elevenFetchStartedRef.current = true;
+    let cancelled = false;
+    // Deferred — no synchronous setState inside the effect (repo hook rules).
+    const loadingTimer = window.setTimeout(() => {
+      if (!cancelled) setElevenVoicesStatus("loading");
+    }, 0);
+    void fetch("/api/phone/cloud-voice", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "list-voices", provider: "elevenlabs" }),
+    })
+      .then(async (response) => {
+        const data = (await response.json().catch(() => null)) as
+          | { ok?: boolean; error?: string; voices?: Array<{ id: string; label: string }> }
+          | null;
+        if (!response.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${response.status}`);
+        if (cancelled) return;
+        setElevenVoices((data?.voices ?? []).filter((voice) => voice.id && voice.label));
+        setElevenVoicesStatus("ready");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setElevenVoicesError(error instanceof Error ? error.message : "Voice list failed.");
+        setElevenVoicesStatus("error");
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(loadingTimer);
+    };
+  }, [isElevenLabs, elevenKeyPresent]);
+  // Model: reuse the persisted voiceModelId; ami's "Expressive Mode" toggle is
+  // a shortcut that flips it between flash v2.5 and v3.
+  const elevenModelId = agentCallSettings.voiceModelId?.startsWith("eleven_")
+    ? agentCallSettings.voiceModelId
+    : ELEVENLABS_DEFAULT_MODEL_ID;
+  const elevenExpressive = elevenModelId === ELEVENLABS_EXPRESSIVE_MODEL_ID;
 
   // ---- Local TTS --------------------------------------------------------
   const okLocalTtsCandidates = localTtsCandidates.filter((candidate) => candidate.ok);
@@ -296,7 +372,9 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
     ? [selectedLocalTtsVoice, ...(selectedLocalTtsCandidate?.availableVoices ?? [])]
         .filter((voice, index, list): voice is string => Boolean(voice) && list.indexOf(voice) === index)
         .map((voice) => ({ id: voice, label: voice }))
-    : selectedTransport?.voices ?? [];
+    : isElevenLabs && elevenVoices.length
+      ? [{ id: "", label: "Provider default" }, ...elevenVoices]
+      : selectedTransport?.voices ?? [];
   const selectedVoiceId = isLocalTts ? selectedLocalTtsVoice : agentCallSettings.voiceId || voiceOptions[0]?.id || "";
   const voiceChipLabel = `${VOICE_RUNTIME_KIND_LABEL[kind]} · ${selectedVoiceId || "default"}`;
 
@@ -305,6 +383,7 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
   const previewVoice = async () => {
     previewAbortRef.current?.abort();
     const controller = new AbortController();
+    const previewPlayer = createPcmPreviewPlayer();
     previewAbortRef.current = controller;
     setPreviewBusy(true);
     setPreviewError("");
@@ -350,23 +429,44 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
             action: "voice-preview",
             provider: selectedProvider.id,
             voice: selectedVoiceId,
-            model: selectedTransport?.defaultModel,
+            model: isElevenLabs ? elevenModelId : selectedTransport?.defaultModel,
+            language: isElevenLabs ? agentCallSettings.voiceLanguage : undefined,
             keyEnv: agentCallSettings.voiceKeyEnv,
+            authMode: effectiveAuthMode,
             text: sampleText,
           }),
           signal: controller.signal,
         });
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error || `Voice preview returned HTTP ${response.status}.`);
+        }
         sampleRate = Number(response.headers.get("x-pcm-sample-rate")) || 24_000;
       }
       if (!response.ok || !response.body) {
         throw new Error((await response.text().catch(() => "")) || `Voice preview returned HTTP ${response.status}.`);
       }
-      await playRealtimePcmStream(response, { channels: 1, sampleRate, signal: controller.signal, startedAt: previewStartedAt });
+      await previewPlayer.play(response, {
+        channels: 1,
+        sampleRate,
+        signal: controller.signal,
+      });
     } catch (error) {
-      if (!controller.signal.aborted) setPreviewError(error instanceof Error ? error.message : "Voice preview failed.");
+      if (!controller.signal.aborted) {
+        const message = error instanceof Error ? error.message : "Voice preview failed.";
+        setPreviewError(message);
+        if (roleModalAgent) {
+          onVoiceFailure?.({
+            agentId: roleModalAgent.id,
+            agentName: roleModalAgent.name,
+            message,
+          });
+        }
+      }
     } finally {
       if (previewAbortRef.current === controller) previewAbortRef.current = null;
       setPreviewBusy(false);
+      await previewPlayer.close().catch(() => undefined);
     }
   };
 
@@ -430,8 +530,9 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
             <div className="as-info">
               <PlugZap size={16} className="ic" aria-hidden="true" />
               <p>
-                {selectedProvider?.name} voice is in preview — save the key and it is selected, but the live call transport is
-                still being verified. OpenAI realtime is the fully working path today.
+                {selectedProvider?.id === "elevenlabs"
+                  ? "ElevenLabs voice is in preview. Your selected voice, model, and language now drive both Preview and Queen Bee pipeline replies."
+                  : `${selectedProvider?.name} voice is in preview — save the key and it is selected, but the live call transport is still being verified. OpenAI realtime is the fully working path today.`}
               </p>
             </div>
           ) : null}
@@ -480,6 +581,77 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
           </Field>
         ) : null}
       </div>
+
+      {/* ElevenLabs: model + expressive shortcut + languages (compact port of
+          ami's voice picker; the voice list above is fetched live) */}
+      {isElevenLabs ? (
+        <>
+          {elevenVoicesStatus === "loading" ? (
+            <small className={styles.pickerHint}>Loading your ElevenLabs voices…</small>
+          ) : null}
+          {elevenVoicesStatus === "error" ? (
+            <small className={styles.messageError}>Voice list: {elevenVoicesError}</small>
+          ) : null}
+          <div className={styles.voiceGrid}>
+            <Field label="Model">
+              <select
+                className="fb-select"
+                value={elevenModelId}
+                onChange={(event) => updateAgentCalls({ voiceModelId: event.target.value })}
+              >
+                {ELEVENLABS_MODEL_OPTIONS.map((model) => (
+                  <option value={model.id} key={model.id}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Expressive mode">
+              <div className={styles.voiceRow}>
+                <Toggle
+                  on={elevenExpressive}
+                  onChange={() =>
+                    updateAgentCalls({
+                      voiceModelId: elevenExpressive ? ELEVENLABS_DEFAULT_MODEL_ID : ELEVENLABS_EXPRESSIVE_MODEL_ID,
+                    })
+                  }
+                />
+                <small className={styles.pickerHint}>v3 — richer delivery, higher latency</small>
+              </div>
+            </Field>
+          </div>
+          <div className={styles.voiceGrid}>
+            <Field label="Voice language">
+              <select
+                className="fb-select"
+                value={agentCallSettings.voiceLanguage ?? ""}
+                onChange={(event) => updateAgentCalls({ voiceLanguage: event.target.value || undefined })}
+              >
+                <option value="">Auto-detect</option>
+                {VOICE_LANGUAGE_OPTIONS.map(([code, label]) => (
+                  <option value={code} key={code}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Text language">
+              <select
+                className="fb-select"
+                value={agentCallSettings.voiceTextLanguage ?? ""}
+                onChange={(event) => updateAgentCalls({ voiceTextLanguage: event.target.value || undefined })}
+              >
+                <option value="">App default</option>
+                {VOICE_LANGUAGE_OPTIONS.map(([code, label]) => (
+                  <option value={code} key={code}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </>
+      ) : null}
 
       {/* Local TTS host list */}
       {isLocalTts ? (
@@ -668,13 +840,15 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
           <div className={styles.authLine} data-tone="live">
             <span className="fr-dot live" />
             Signed in with {provider.name}
-            {authStatus?.preferApiKey ? " — overridden to the API key by OPENAI_PREFER_API_KEY." : " — using your account from the hive env."}
+            {provider.id === "openai"
+              ? " — OAuth selected. HivemindOS will not substitute your API key."
+              : " — OAuth is active for this provider."}
           </div>
         ) : null}
 
         {effectiveAuthMode === "oauth" && !oauthConnected ? (
           <div className={styles.authSignin}>
-            <p>Not signed in. Spoken turns fall back to the API key or runtime until you connect {provider.name}.</p>
+            <p>Not signed in. OAuth is selected, so HivemindOS will not substitute the API key while you connect {provider.name}.</p>
             <Btn variant="primary" sm disabled={oauthBusy} onClick={() => void connectOauth(provider.id)}>
               {oauthBusy ? "Opening sign-in…" : oauthAuthorizeUrl ? `Retry ${provider.name} sign-in` : `Connect ${provider.name}`}
             </Btn>

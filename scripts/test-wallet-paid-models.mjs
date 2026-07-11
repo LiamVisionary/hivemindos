@@ -508,6 +508,39 @@ runTsxAssertion(`
 `, "current local image reference becomes model image input without path prompt leakage");
 runTsxAssertion(`
   import assert from "node:assert/strict";
+  import { mkdtemp, rm, writeFile } from "node:fs/promises";
+  import { join } from "node:path";
+  import { tmpdir } from "node:os";
+  import { materializeChatMediaArtifacts } from "./src/app/api/chat/agent-runtime/media-artifacts.ts";
+  const dir = await mkdtemp(join(tmpdir(), "hmos-jpeg-ref-"));
+  try {
+    const path = join(dir, "source.jpeg");
+    await writeFile(path, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    const artifacts = await materializeChatMediaArtifacts({
+      runtimeSessionId: "jpeg-ref-test",
+      attachments: [{
+        id: "jpeg-ref-1",
+        kind: "file",
+        name: "source.jpeg",
+        mimeType: "application/octet-stream",
+        size: 4,
+        dataUrl: "",
+        referencePath: path,
+        referenceKind: "file",
+        referenceOnly: true,
+      }],
+      messages: [{ role: "user", content: "generate a video from this image" }],
+    });
+    assert.equal(artifacts.length, 1);
+    assert.equal(artifacts[0].kind, "image", ".jpeg references must remain image-to-video inputs");
+    assert.equal(artifacts[0].mimeType, "image/jpeg");
+    assert.ok(artifacts[0].dataUrl.startsWith("data:image/jpeg;base64,"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+`, "reference-only .jpeg attachment materializes as an image input");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
   import { createHash } from "node:crypto";
   import { messagesWithCurrentMediaArtifacts } from "./src/app/api/chat/agent-runtime/messages.ts";
   const originalDataUrl = "data:image/jpeg;base64," + Buffer.from("original image bytes").toString("base64");

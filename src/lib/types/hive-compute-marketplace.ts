@@ -49,6 +49,18 @@ export type HiveComputeGatewayStatus = {
     modelPerformance: HiveComputeModelPerformance[];
     fallbackConfigured: boolean;
     pendingJobs: number;
+    pricing?: {
+      providerBounds: {
+        inputUsdMicroPerMTok: { min: number; max: number };
+        outputUsdMicroPerMTok: { min: number; max: number };
+        minimumJobUsdMicro: { min: number; max: number };
+      };
+      centralizedCeiling: {
+        inputUsdMicroPerMTok: number;
+        outputUsdMicroPerMTok: number;
+      };
+      platformFeeBps: number;
+    };
     statusLabel: string;
     statusTone: "live" | "fallback" | "empty";
   };
@@ -128,11 +140,46 @@ export type HiveComputeWorkerModuleStatus = {
 
 export type HiveComputeHostWhen = "idle" | "always" | "sched";
 
-export type HiveComputeHostRunConfig = {
-  markdown: number;
+/** Local-time hosting window for hostWhen "sched". The window is
+ * [startHour, endHour) in the worker machine's local time; endHour ≤ startHour
+ * wraps past midnight, and startHour === endHour means all day. */
+export type HiveComputeHostSchedule = {
+  startHour: number;
+  endHour: number;
+};
+
+export type HiveComputePricingStrategy = "competitive" | "balanced" | "max-earnings" | "custom";
+
+export type HiveComputeModelBenchmark = {
+  inputTokensPerSecond: number;
+  outputTokensPerSecond: number;
+  measuredAt: string;
+  sampleSize: number;
+  methodVersion: number;
+  warmupCompleted: boolean;
+  source: "local-benchmark";
+};
+
+export type HiveComputeModelPrice = {
+  inputUsdMicroPerMTok: number;
+  outputUsdMicroPerMTok: number;
+  minimumJobUsdMicro: number;
+};
+
+export type HiveComputePricingConfig = {
+  pricingStrategy: HiveComputePricingStrategy;
+  targetHourlyUsd: number;
+  modelPrices: Record<string, HiveComputeModelPrice>;
+  modelBenchmarks: Record<string, HiveComputeModelBenchmark>;
+};
+
+export type HiveComputeHostRunConfig = HiveComputePricingConfig & {
+  /** Read only during migration from the retired bulk-markdown pricing control. */
+  markdown?: number;
   maxConcurrency: number;
   selectedModelIds: string[] | null;
   hostWhen: HiveComputeHostWhen;
+  schedule: HiveComputeHostSchedule | null;
   dailyCapUsd: number | null;
   pauseOnBattery: boolean;
   yieldToUser: boolean;
@@ -155,6 +202,12 @@ export type HiveComputeHostModel = {
   backendKind: HiveComputeLocalBackendKind;
   inputPer1m: number;
   outputPer1m: number;
+  minimumJobUsdMicro: number;
+  pricingSource: "benchmark" | "custom" | "starter";
+  benchmark?: HiveComputeModelBenchmark;
+  /** On-disk model size in bytes when the backend reports it (Ollama tags,
+   * LM Studio /api/v0/models) — used for memory-fit warnings, best-effort. */
+  sizeBytes?: number;
   /** True when this model is not served from the discovering machine's own disk
    * (an LM Studio LM Link model shared by a linked device, or a model discovered
    * on a remote fleet machine's backend over the collector). */
@@ -188,15 +241,60 @@ export type HiveComputeHostTarget = {
 };
 
 export type HiveComputeWorkerRunStatus = {
-  status: "idle" | "starting" | "running" | "failed";
+  status: "idle" | "starting" | "running" | "stopped" | "failed";
   output: string;
   error: string;
   startedAt: number;
   pid?: number;
+  /** Automatic in-process restarts after unexpected worker exits. */
+  restarts?: number;
+};
+
+export type HiveComputeEarningsModelTotal = {
+  model: string;
+  usdMicro: number;
+  jobs: number;
+};
+
+export type HiveComputeEarningsEvent = {
+  at: string;
+  jobId: string;
+  model?: string;
+  usdMicro: number;
+};
+
+/** Aggregated view of the worker-maintained local earnings summary file. */
+export type HiveComputeEarningsSummary = {
+  totalUsdMicro: number;
+  totalJobs: number;
+  todayUsdMicro: number;
+  todayJobs: number;
+  last7dUsdMicro: number;
+  last30dUsdMicro: number;
+  byModel: HiveComputeEarningsModelTotal[];
+  recent: HiveComputeEarningsEvent[];
+  updatedAt?: string;
+};
+
+export type HiveComputeBenchmarkFailure = {
+  modelId: string;
+  message: string;
+};
+
+/** Result of the most recent local benchmark run, persisted alongside the run
+ * config so the UI can explain which models were excluded and why. */
+export type HiveComputeBenchmarkReport = {
+  at: string;
+  benchmarkedModelIds: string[];
+  failures: HiveComputeBenchmarkFailure[];
 };
 
 export type HiveComputeHostContext = {
+  /** Primary backend (first reachable with models); see backends for all probed. */
   backend: HiveComputeLocalBackendStatus;
+  /** Every probed local backend — LM Studio/OpenAI-compatible and Ollama can
+   * both serve models at once; models[] merges them with per-model backendKind. */
+  backends: HiveComputeLocalBackendStatus[];
   models: HiveComputeHostModel[];
   advertisedModels: string[];
   config: HiveComputeHostRunConfig;
@@ -205,6 +303,12 @@ export type HiveComputeHostContext = {
   run?: HiveComputeWorkerRunStatus;
   /** Which machine's backend these models were discovered from. */
   discoveredFrom?: HiveComputeHostDiscovery;
+  /** Local worker earnings actually received from the gateway, when any. */
+  earnings?: HiveComputeEarningsSummary | null;
+  /** Most recent benchmark run report, including per-model failures. */
+  lastBenchmark?: HiveComputeBenchmarkReport | null;
+  /** Total physical memory of the discovered machine (self-targets only). */
+  machineMemoryBytes?: number;
 };
 
 export type HiveComputeMarketplaceStatus = {

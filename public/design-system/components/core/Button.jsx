@@ -79,7 +79,7 @@ export function Button({
         justifyContent: "center",
         whiteSpace: "nowrap",
         fontFamily: "var(--font-body)",
-        fontWeight: v.fontWeight || 400,
+        fontWeight: v.fontWeight || 500,
         lineHeight: 1,
         cursor: disabled || isLoading ? "not-allowed" : "pointer",
         opacity: disabled || isLoading ? 0.5 : 1,

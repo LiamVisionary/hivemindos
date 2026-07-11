@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
 import { createAgentChallenge, postAgentChallengeEntry } from "@/lib/services/agent-challenges";
-import { upsertCompany } from "@/lib/services/companies-store";
+import { readCompanies, upsertCompany } from "@/lib/services/companies-store";
+import { companyMembershipOwners, CompanyMembershipConflictError } from "@/lib/services/company-membership";
 import { searchContextIndex } from "@/lib/services/context-index";
 import { compileFounderBlueprint } from "@/lib/services/founder-blueprint";
 import { recommendModelFit, type ModelFitMachine } from "@/lib/services/system/model-fit";
@@ -37,7 +38,12 @@ export async function POST(request: NextRequest) {
     const goal = body.goal?.replace(/\s+/g, " ").trim() ?? "";
     if (goal.length < 12) return errorJson("Describe the outcome in at least a short sentence.");
     const constraints = normalizeConstraints(body.constraints);
-    const profiles = await readStoredAgentProfiles().catch(() => []);
+    const [profiles, companies] = await Promise.all([
+      readStoredAgentProfiles().catch(() => []),
+      readCompanies(),
+    ]);
+    const membershipOwners = companyMembershipOwners(companies);
+    const unassignedProfiles = profiles.filter((profile) => !(membershipOwners.get(profile.id)?.length));
     const context = await searchContextIndex({
       query: goal,
       kinds: ["skill", "tool-schema", "connected-app", "app-endpoint", "runtime"],
@@ -48,7 +54,7 @@ export async function POST(request: NextRequest) {
     const blueprint = compileFounderBlueprint({
       goal,
       constraints,
-      agents: profiles.map((profile) => ({
+      agents: unassignedProfiles.map((profile) => ({
         id: profile.id,
         name: profile.name,
         runtime: profile.runtime,
@@ -120,6 +126,7 @@ export async function POST(request: NextRequest) {
     }
     return okJson({ blueprint, company, lab: labResult.challenge });
   } catch (error) {
+    if (error instanceof CompanyMembershipConflictError) return errorJson(error.message, error.status);
     return errorJson(error instanceof Error ? error.message : "Founder Mode could not prepare the company.", 400);
   }
 }

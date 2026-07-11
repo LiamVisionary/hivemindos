@@ -24,6 +24,14 @@ Zero Human Companies are for repeatable work that should behave more like an ope
 
 The feature is local-first. It can run with local agents, user-configured runtimes, user-owned wallets, and the shared Obsidian vault. Managed cloud, official monetization, marketplace listing, hosted capacity, or paid-agent access must be verified by HivemindOS-controlled infrastructure or by a verifiable payment rail before it grants official value.
 
+## Agent Identity Isolation
+
+One operational agent identity belongs to one company at a time. A company assignment carries more than a display role: it determines the agent's company budget, member-level daily spend cap, freeze switch, approvals, mailbox scope, work history, and company context. Sharing that identity between companies would make those controls ambiguous.
+
+You can still reuse the same agent blueprint across as many companies as you need. When an agent is already assigned, choose **Duplicate agent** from the crew picker. The normal duplication flow creates a separate identity and wallet while letting you choose whether to copy its agent-specific environment, fork its private memory metadata, or copy chat history. Add the resulting copy to the other company; its model, runtime, skills, and personality can match the original while its operations remain isolated.
+
+Founder Mode and the standard crew picker only consider unassigned identities. Direct API or shared-vault edits that attempt to place one identity in several companies are rejected. If a manual edit creates a conflict anyway, the portfolio remains available for repair, shows the affected companies, and fails closed on spending until the identity is removed from all but one company.
+
 ## Founder Mode
 
 Founder Mode is the outcome-first path into a company. Describe what you want to make happen, choose a privacy posture, milestone budget, and pace, then review a generated blueprint covering the charter, goal, crew, capabilities, compute, approvals, first Lab, and proof requirements.
@@ -77,7 +85,7 @@ The cockpit is designed as a control surface, not a magic-autonomy promise. It k
 
 Every launch starts from the company's apex goal and preserves a company Runs record, but execution depends on the selected engine.
 
-With **HivemindOS crew**, HivemindOS plans the goal into Work Board tasks, routes them to eligible company agents, and connects the tasks to deliverables, eval gates, approvals, and reviewed learning. The Work Board answers both “what is the task?” and “which company is learning from this work?”
+With **HivemindOS crew**, HivemindOS plans the goal into Work Board tasks, routes them to eligible company agents, and connects the tasks to deliverables, evaluations, approvals, and reviewed learning. The Work Board answers both “what is the task?” and “which company is learning from this work?”
 
 With **AEON background skill**, HivemindOS sends one bounded company-goal input to the selected workspace and skill. The accepted handoff appears in company Runs; detailed execution and outputs remain in AEON. No fake completed Work Board task is created.
 
@@ -158,9 +166,11 @@ Zero Human Companies use the generic HivemindOS loop contract as their private l
 
 AEON mode records the company handoff in Runs but leaves detailed execution and outputs in the selected workspace. AEON output does not automatically become a completed Work Board task or company learning receipt; bring reviewed outputs into the normal company workflow when they should contribute to deliverables or durable learning.
 
-The default company loop is non-blocking at creation time. Agents can finish useful work while HivemindOS preserves the eval structure and evidence trail for later review.
+Every company task requires outcome evidence before completion. Product, design, content, and customer-facing work also requires a separate eligible agent to review the result. If the evidence or reviewer is unavailable, the task stops for review instead of quietly teaching the company that weak work succeeded.
 
-Each dispatched company task includes a written done contract: planner assertions, evaluator pushback, agreed done criteria, and expected artifacts. Product, design, content, and customer-facing work also carries a default evaluator rubric for design, originality, craft, and functionality, so subjective quality can be reviewed consistently across models and workers.
+Each dispatched company task includes a written done contract: planner assertions, evaluator pushback, agreed done criteria, and expected artifacts. Product, design, content, and customer-facing work also carries a default evaluator rubric for design, originality, craft, and functionality, so subjective quality can be reviewed consistently across models and workers. The reviewer records evidence for each score and must be a different agent from the worker that produced the result.
+
+An AEON dispatch is handled differently because HivemindOS does not own the detailed external run. The accepted handoff is recorded as unobserved, not passed. Bring the resulting output back into the company workflow when it should count toward deliverables, learning, or routing history.
 
 When a company is linked to a code project, implementation-shaped work asks for an isolated worktree workspace. Research, planning, and other non-code work stays in the normal scratch workspace.
 
@@ -177,6 +187,8 @@ That creates a model-independent company veteran layer made of:
 - reviewed memory candidates
 
 Future workers can change, but the company keeps its charter, receipts, workflows, evals, and reviewed memory.
+
+See [Agent Evaluations](agent-evaluations.html) for the shared verdicts, trust rules, managed runtime coverage, and benchmark.
 
 ## Capability Capital
 

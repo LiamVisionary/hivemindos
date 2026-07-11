@@ -6,6 +6,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const {
   detectArtifacts,
+  isProtectedIntegrityReceipt,
   isReservedOrMockUrl,
   loopCompletionBlock,
   loopContractForPrompt,
@@ -13,6 +14,7 @@ const {
   mergeLoopReceipts,
   parseLoopSelfReport,
   runLoopGates,
+  stripProtectedIntegrityReceipts,
 } = await import("../src/lib/services/loops/index.ts");
 
 const now = 1_800_000_000_000;
@@ -58,15 +60,16 @@ function passedFor(receipts, gateId) {
   assert.equal(res.receipts[0].status, "failed", "a failed receipt should record why");
 }
 
-// 3. artifact:exists — passes only when a durable path/URL is present.
+// 3. artifact:exists — passes only when a trusted verifier confirms the path/URL.
 {
   const g = gate("artifact:exists", "g-artifact");
   const withArtifact = await runLoopGates({
     loop: loopWith([g]),
     output: "Shipped it. Deliverable: /Users/liam/out/app.zip",
+    verifyArtifact: async ({ artifact }) => ({ ok: artifact === "/Users/liam/out/app.zip", evidence: ["stat: file"] }),
     now,
   });
-  assert(passedFor(withArtifact.receipts, "g-artifact"), "artifact path should satisfy artifact gate");
+  assert(passedFor(withArtifact.receipts, "g-artifact"), "verified artifact path should satisfy artifact gate");
 
   const withoutArtifact = await runLoopGates({ loop: loopWith([g]), output: "Built it but pasted no path.", now });
   assert(!passedFor(withoutArtifact.receipts, "g-artifact"), "no artifact must not pass");
@@ -76,19 +79,40 @@ function passedFor(receipts, gateId) {
 // 4. agent:judge — accept passes, reject fails, no judge stays pending (fail closed).
 {
   const g = gate("agent:judge", "g-judge");
-  const accepted = await runLoopGates({ loop: loopWith([g]), output: "the work", judge: async () => ({ accepted: true, summary: "meets the bar" }), now });
+  const accepted = await runLoopGates({ loop: loopWith([g]), output: "the work", judge: async () => ({ accepted: true, summary: "meets the bar", evaluator: { agentId: "reviewer", independent: true } }), now });
   assert(passedFor(accepted.receipts, "g-judge"), "accepting judge should pass the gate");
 
   const rejected = await runLoopGates({ loop: loopWith([g]), output: "the work", judge: async () => ({ accepted: false, summary: "missing tests" }), now });
   assert(!passedFor(rejected.receipts, "g-judge"), "rejecting judge must not pass");
   assert.equal(rejected.receipts[0].status, "failed");
 
+  const unattributed = await runLoopGates({ loop: loopWith([g]), output: "the work", judge: async () => ({ accepted: true, summary: "anonymous approval" }), now });
+  assert(!passedFor(unattributed.receipts, "g-judge"), "a judge must identify a separate evaluator before it can pass");
+
   const noJudge = await runLoopGates({ loop: loopWith([g]), output: "the work", now });
   assert.equal(noJudge.receipts.length, 0, "no judge → no receipt (pending)");
   assert.deepEqual(noJudge.unsatisfiedRequiredGateIds, ["g-judge"], "judge gate stays unsatisfied with no judge");
+
+  const rubricLoop = {
+    ...loopWith([g]),
+    evaluationRubric: {
+      id: "rubric",
+      title: "Quality",
+      scale: "0-1",
+      passThreshold: 0.8,
+      axes: [{ id: "craft", title: "Craft", weight: 1, description: "Finished quality.", scoreFloor: 0.7 }],
+    },
+  };
+  const belowRubric = await runLoopGates({
+    loop: rubricLoop,
+    output: "the work",
+    judge: async () => ({ accepted: true, axes: [{ id: "craft", score: 0.5, evidence: ["unfinished"] }], evaluator: { independent: true } }),
+    now,
+  });
+  assert(!passedFor(belowRubric.receipts, "g-judge"), "an accepted boolean cannot override rubric threshold/floor failure");
 }
 
-// 5. command gates — satisfied by a parsed self-report, or by a runner; otherwise pending.
+// 5. command gates — only a trusted runner can satisfy them; worker self-reports stay pending.
 {
   const g = gate("command:test", "g-test");
   const selfReportOutput = [
@@ -99,9 +123,7 @@ function passedFor(receipts, gateId) {
   ].join("\n");
   const reported = await runLoopGates({ loop: loopWith([g]), output: selfReportOutput, now });
   const reportedReceipt = passedFor(reported.receipts, "g-test");
-  assert(reportedReceipt, "worker self-report should satisfy command:test");
-  assert(reportedReceipt.evidence.some((e) => e.includes("12 passed")), "self-reported evidence should be preserved");
-  assert.equal(reportedReceipt.metadata?.source, "self-report");
+  assert(!reportedReceipt, "worker self-report must not satisfy command:test without a trusted runner");
 
   const claimedOnly = await runLoopGates({ loop: loopWith([g]), output: "I think the tests pass.", now });
   assert(!passedFor(claimedOnly.receipts, "g-test"), "an unverified claim must not pass a command gate");
@@ -126,7 +148,7 @@ function passedFor(receipts, gateId) {
   assert(!passedFor(runnerFail.receipts, "g-test"), "a failing runner must not pass");
 }
 
-// 6. governance:policy never auto-passes from raw text (stays pending unless self-reported).
+// 6. governance:policy never auto-passes from worker text or self-report.
 {
   const g = loopGateFromVerifier("governance:policy", { now, required: true, id: "g-gov" });
   const res = await runLoopGates({ loop: loopWith([g]), output: "Spent within budget, no external actions.", now });
@@ -138,7 +160,7 @@ function passedFor(receipts, gateId) {
     output: '```loop-receipts\n[{"gateId":"g-gov","status":"passed","summary":"within $5 budget","evidence":["spend ledger: $0.40"]}]\n```',
     now,
   });
-  assert(passedFor(reported.receipts, "g-gov"), "explicit governance self-report should pass");
+  assert(!passedFor(reported.receipts, "g-gov"), "worker governance self-report must not self-approve policy");
 }
 
 // 7. human:approval is never machine-satisfiable.
@@ -202,9 +224,9 @@ function passedFor(receipts, gateId) {
 
 // 13. One self-report entry can satisfy at most ONE gate, even when titles collide.
 {
-  const g1 = loopGateFromVerifier("command:test", { now, required: true, id: "g-test-1", title: "Run the suite" });
-  const g2 = loopGateFromVerifier("command:test", { now, required: true, id: "g-test-2", title: "Run the suite" });
-  const output = '```loop-receipts\n[{"title":"Run the suite","status":"passed","evidence":["12 passed"]}]\n```';
+  const g1 = loopGateFromVerifier("receipt:evidence", { now, required: true, id: "g-evidence-1", title: "Attach evidence" });
+  const g2 = loopGateFromVerifier("receipt:evidence", { now, required: true, id: "g-evidence-2", title: "Attach evidence" });
+  const output = '```loop-receipts\n[{"title":"Attach evidence","status":"passed","evidence":["focused result"]}]\n```';
   const res = await runLoopGates({ loop: loopWith([g1, g2]), output, now });
   const passed = res.receipts.filter((r) => r.status === "passed");
   assert.equal(passed.length, 1, "a single self-report entry must not satisfy both same-titled gates");
@@ -233,7 +255,7 @@ function passedFor(receipts, gateId) {
   const accepted = await runLoopGates({
     loop: loopWith([g]),
     output: '```loop-receipts\n[{"gateId":"g-judge","status":"skipped","summary":"cannot self-judge"}]\n```',
-    judge: async () => ({ accepted: true, summary: "independently verified" }),
+    judge: async () => ({ accepted: true, summary: "independently verified", evaluator: { agentId: "reviewer", independent: true } }),
     now,
   });
   assert(passedFor(accepted.receipts, "g-judge"), "the independent judge runs even when the worker tried to skip it");
@@ -383,10 +405,11 @@ function liveUrlReceipt(receipts) {
   const realPathWins = await runLoopGates({
     loop: loopWith([g]),
     output: "Deliverable: /Users/liam/out/report.json and mirror https://cdn.acme.example/report.json",
+    verifyArtifact: async ({ artifact }) => ({ ok: artifact === "/Users/liam/out/report.json", evidence: ["stat: file"] }),
     now,
   });
   const artifactReceipt = passedFor(realPathWins.receipts, "g-artifact");
-  assert(artifactReceipt, "a real path still satisfies the artifact gate");
+  assert(artifactReceipt, "a verified real path satisfies the artifact gate");
   assert(artifactReceipt.evidence.every((e) => !/\.example/.test(e)), "reserved URLs must be filtered out of artifact evidence");
 }
 
@@ -414,6 +437,40 @@ function liveUrlReceipt(receipts) {
     now,
   });
   assert(!liveUrlReceipt(res.receipts), "a docs/reference URL must not be verified as a live deliverable");
+}
+
+// 24. Server-only integrity receipts can't be forged by a client to overwrite a hard-fail.
+{
+  // A real server hard-fail for the deliverable-acceptance gate (parks the task).
+  const storedHardFail = {
+    id: "lr_deliverable-acceptance",
+    gateId: "deliverable-acceptance",
+    verifier: "integrity:deliverable-acceptance",
+    status: "failed",
+    summary: "Placeholder deliverable shipped.",
+    evidence: [],
+    createdAt: now,
+    metadata: { source: "deliverable-acceptance", hardFail: true },
+  };
+  // A client tries to self-complete by POSTing a fabricated passing integrity receipt.
+  const clientForged = [
+    { id: "lr_deliverable-acceptance", gateId: "deliverable-acceptance", status: "passed", evidence: [], createdAt: now + 1 },
+    { id: "lr_live-url-integrity", gateId: "live-url-integrity", status: "passed", evidence: [], createdAt: now + 1 },
+    { id: "lr_normal-note", status: "passed", evidence: [], createdAt: now + 1 },
+  ];
+  assert.equal(isProtectedIntegrityReceipt(storedHardFail), true, "acceptance receipts are protected");
+  assert.equal(isProtectedIntegrityReceipt(clientForged[1]), true, "live-url receipts are protected");
+  assert.equal(isProtectedIntegrityReceipt(clientForged[2]), false, "ordinary receipts are not protected");
+
+  const safeClient = stripProtectedIntegrityReceipts(clientForged);
+  assert.equal(safeClient.length, 1, "both forged integrity receipts are stripped");
+  assert.equal(safeClient[0].id, "lr_normal-note", "the ordinary client receipt survives");
+
+  // After sanitizing the client body, the stored hard-fail still blocks completion.
+  const merged = mergeLoopReceipts([storedHardFail], safeClient);
+  const stillFailed = merged.find((r) => r.id === "lr_deliverable-acceptance");
+  assert.equal(stillFailed.status, "failed", "the stored hard-fail is not overwritten by the forged pass");
+  assert.ok(loopCompletionBlock(loopWith([]), merged), "the task stays blocked despite the forged pass");
 }
 
 console.log("loop runner tests passed");

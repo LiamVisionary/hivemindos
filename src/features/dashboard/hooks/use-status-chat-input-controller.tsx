@@ -21,6 +21,7 @@ import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import { normalizeChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
 import { normalizeApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
+import { chatAssistantIssue, chatIssueCompletionNotification } from "@/features/dashboard/chat-issue-notifications";
 
 export function useStatusChatInputController(props: any) {
   const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
@@ -985,6 +986,18 @@ export function useStatusChatInputController(props: any) {
     const reasoningEffort = normalizeChatReasoningEffort(queuedMessage.reasoningEffort);
     const outgoingAttachments = queuedMessage.attachments ?? [];
     const outgoingDirectories = queuedMessage.directories ?? [];
+    let chatIssueReported = false;
+    const notifyChatIssue = (issue: string, runId: string) => {
+      if (chatIssueReported || !issue.trim()) return;
+      chatIssueReported = true;
+      props.onChatIssue?.(chatIssueCompletionNotification({
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name || selectedAgent.runtime || "Agent",
+        chatLeaf: selectedChatLeafKey,
+        issue,
+        runId,
+      }));
+    };
     let activeRunProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = [];
     let activeApplicationGenerationCard: any = null;
     const appendPreviewMessages = (agentId: string, leafKey: string, appendedMessages: ChatMessage[]) => {
@@ -1031,7 +1044,7 @@ export function useStatusChatInputController(props: any) {
       const assistantIndex = findActiveAssistantIndex(next);
       if (assistantIndex >= 0) {
         const assistant = next[assistantIndex];
-        next[assistantIndex] = withActiveProcessEvents({ ...message, createdAt: message.createdAt ?? assistant.createdAt });
+        next[assistantIndex] = withActiveProcessEvents({ ...assistant, ...message, createdAt: message.createdAt ?? assistant.createdAt });
       } else {
         next.push(withActiveProcessEvents({ ...message, createdAt: message.createdAt ?? Date.now() }));
       }
@@ -1075,6 +1088,7 @@ export function useStatusChatInputController(props: any) {
     if (setupIssue) {
       appendMessage(selectedAgent.id, { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat" });
       appendMessage(selectedAgent.id, { role: "assistant", content: `Error: ${setupIssue}`, surface: "chat" });
+      notifyChatIssue(setupIssue, `setup-${selectedAgent.id}-${Date.now()}`);
       return;
     }
 
@@ -1151,7 +1165,7 @@ export function useStatusChatInputController(props: any) {
       workingDirectory,
     });
     const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat", createdAt: requestStartedAt };
-    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", createdAt: requestStartedAt + 1 });
+    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId, createdAt: requestStartedAt + 1 });
     appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
     appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, pendingAssistantMessage]);
@@ -1518,15 +1532,23 @@ export function useStatusChatInputController(props: any) {
         const message = `${selectedAgent.name || selectedAgent.runtime || "The agent"} finished without returning any text for this message. No runtime error was reported.`;
         replacePendingAssistant({ role: "assistant", content: `Error: ${message}`, surface: "chat" });
         updateTask(taskId, { status: "failed", lastMessage: message, completedAt: Date.now() });
+        notifyChatIssue(message, taskId);
         return;
       }
       if (!sawAssistantContent && activeApplicationGenerationCard) {
         const content = imageGenerationCardContent(activeApplicationGenerationCard);
         replacePendingAssistant({ role: "assistant", content, surface: "chat" });
         updateTask(taskId, { status: activeApplicationGenerationCard.status === "error" ? "failed" : "completed", lastMessage: content, completedAt: Date.now() });
+        if (activeApplicationGenerationCard.status === "error") notifyChatIssue(content, taskId);
         return;
       }
-      updateTask(taskId, sawAgentPrompt ? { status: "active", completedAt: undefined } : { status: "completed", completedAt: Date.now() });
+      const assistantIssue = chatAssistantIssue(streamedAssistantText);
+      if (assistantIssue) {
+        updateTask(taskId, { status: "failed", lastMessage: assistantIssue, completedAt: Date.now() });
+        notifyChatIssue(assistantIssue, taskId);
+      } else {
+        updateTask(taskId, sawAgentPrompt ? { status: "active", completedAt: undefined } : { status: "completed", completedAt: Date.now() });
+      }
     } catch (error) {
       const aborted = abortController.signal.aborted;
       const transportInterrupted = !aborted && isChatTransportInterruption(error);
@@ -1564,6 +1586,7 @@ export function useStatusChatInputController(props: any) {
       const errorMessage: ChatMessage = { role: "assistant", content: `Error: ${message}`, surface: "chat" };
       replacePendingAssistant(errorMessage);
       updateTask(taskId, { status: "failed", lastMessage: message, completedAt: Date.now() });
+      notifyChatIssue(message, taskId);
     } finally {
       window.clearTimeout(stallTimer);
       if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey);

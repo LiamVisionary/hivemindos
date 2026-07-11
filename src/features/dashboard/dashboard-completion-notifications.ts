@@ -9,15 +9,20 @@ export type DashboardCompletionNotification = {
   message: string;
   title?: string;
   destination?: DashboardRouteTarget;
+  agentVoiceSettingsId?: string;
 };
 
 export type CompletionNotificationInteraction =
   | { kind: "copy"; text: string }
-  | { kind: "navigate"; destination: DashboardRouteTarget };
+  | { kind: "navigate"; destination: DashboardRouteTarget }
+  | { kind: "agent-voice-settings"; agentId: string };
 
 export function completionNotificationInteraction(
   notification: DashboardCompletionNotification,
 ): CompletionNotificationInteraction {
+  if (notification.agentVoiceSettingsId) {
+    return { kind: "agent-voice-settings", agentId: notification.agentVoiceSettingsId };
+  }
   if (notification.destination) {
     return { kind: "navigate", destination: { ...notification.destination } };
   }

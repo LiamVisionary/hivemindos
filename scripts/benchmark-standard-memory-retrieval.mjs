@@ -67,6 +67,7 @@ function parseArgs(argv) {
     else if (arg === "--question-ids") args.questionIds = argv[++index];
     else if (arg === "--chat-size") args.chatSize = argv[++index];
     else if (arg === "--conversation-offset") args.conversationOffset = Number(argv[++index]);
+    else if (arg === "--distilled") args.distilled = argv[++index];
     else throw new Error(`Unknown argument: ${arg}`);
   }
   if (args.help) return args;
@@ -233,6 +234,31 @@ async function runLocomo({ dataset, predictionsDir, args, questionIds, latencies
     const vault = await createVault(resolve(args.outputRoot), `locomo-${conversationIndex}`, args.keepVaults);
     try {
       const noteCount = await archiveSessions(vault.root, `locomo-${conversationIndex}`, sessions, entry.conversation?.speaker_b ?? "Assistant");
+      // Optional write-time distillation sidecar (prototype): archive one
+      // dated fact note per session through the same product ingestion path.
+      if (args.distilled) {
+        const sidecarRaw = await readFile(join(resolve(args.distilled), `conv${conversationIndex}.json`), "utf8").catch(() => null);
+        const sidecar = sidecarRaw ? JSON.parse(sidecarRaw) : null;
+        if (sidecar?.facts) {
+          const factSessions = sessions.map((session) => {
+            const sessionIndex = Number(session.id.match(/\d+/)?.[0]);
+            const lines = sidecar.facts[String(sessionIndex)] ?? [];
+            if (!lines.length) return null;
+            return {
+              id: `${session.id}-facts`,
+              startedAt: session.startedAt + 500,
+              // Conversation notes require >=2 messages ending with an
+              // assistant turn; facts stay in the user turn so user-grounded
+              // excerpt filtering never strips them.
+              messages: [
+                { role: "user", content: `Distilled durable facts from the ${session.date} session:\n${lines.join("\n")}` },
+                { role: "assistant", content: "Recorded the distilled session facts." },
+              ],
+            };
+          }).filter(Boolean);
+          if (factSessions.length) await archiveSessions(vault.root, `locomo-${conversationIndex}-facts`, factSessions, "Memory Distiller");
+        }
+      }
       const indexResult = await rebuildFullVaultSearchIndex({ root: vault.root });
       let questions = (entry.qa ?? entry.qa_pairs ?? []).map((qa, questionIndex) => ({
         ...qa,

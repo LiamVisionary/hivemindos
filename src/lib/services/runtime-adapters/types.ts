@@ -1,4 +1,5 @@
 import type { AgentProfile, AgentRuntime, AgentRuntimeKind, RuntimeCapabilities } from "@/lib/types/agent-runtime";
+import type { EvaluationResult } from "@/lib/types/evaluation";
 
 export type RuntimeAdapterContext = {
   requestUrl?: string;
@@ -37,6 +38,7 @@ export type RuntimeRun = {
   createdAt?: string;
   updatedAt?: string;
   conclusion?: string | null;
+  evaluation?: EvaluationResult;
 };
 
 export type RuntimeRunLog = {
@@ -44,6 +46,7 @@ export type RuntimeRunLog = {
   summary: string;
   logs: string;
   url?: string;
+  evaluation?: EvaluationResult;
 };
 
 export type RuntimeSkillMetrics = {

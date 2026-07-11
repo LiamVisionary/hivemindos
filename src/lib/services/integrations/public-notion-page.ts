@@ -165,9 +165,13 @@ export function notionRecordMapToMarkdown(
 ): PublicNotionPage {
   const entries = recordMap.block || {};
   const blocks = new Map<string, NotionBlock>();
+  const blockKeysByCompactId = new Map<string, string>();
   for (const [id, entry] of Object.entries(entries)) {
     const block = blockValue(entry);
-    if (block) blocks.set(id, block);
+    if (block) {
+      blocks.set(id, block);
+      blockKeysByCompactId.set(compactPageId(id), id);
+    }
   }
 
   const root = blocks.get(pageId) || blocks.get(pageId.replace(/-/g, ""));
@@ -181,11 +185,7 @@ export function notionRecordMapToMarkdown(
 
   const blockKey = (id: string): string | null => {
     if (blocks.has(id)) return id;
-    const compactId = compactPageId(id);
-    for (const key of blocks.keys()) {
-      if (compactPageId(key) === compactId) return key;
-    }
-    return null;
+    return blockKeysByCompactId.get(compactPageId(id)) || null;
   };
 
   const renderBlock = (id: string, depth: number): void => {

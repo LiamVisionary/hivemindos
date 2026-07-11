@@ -34,6 +34,10 @@ import {
 } from "@/lib/services/kanban/outreach-safeguards";
 import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
 import {
+  sanitizeClientLoopReceipts,
+} from "@/lib/services/evaluation/control-plane";
+import { evaluateKanbanCompletion } from "@/lib/services/evaluation/kanban-completion";
+import {
   gitLawbProofForProject,
   readProjectRegistry,
 } from "@/lib/services/projects/project-registry";
@@ -162,6 +166,8 @@ type ClaimNextTaskInput = ClaimTaskInput & {
 export type KanbanStorageOptions = {
   vaultPath?: string | null;
   kanbanFolder?: string | null;
+  /** Internal-only: receipts were produced by the in-process loop runner. */
+  trustedLoopReceipts?: boolean;
 };
 
 export type KanbanStorageInfo = {
@@ -758,7 +764,7 @@ function applyPatchToBoard(
             )
           : task.loop,
     loopReceipts: patch.loopReceipts
-      ? normalizeLoopReceipts(patch.loopReceipts)
+      ? sanitizeClientLoopReceipts(task.loop, normalizeLoopReceipts(patch.loopReceipts))
       : task.loopReceipts,
     result: retryingWorking
       ? (patch.result ?? "")
@@ -799,6 +805,10 @@ function applyPatchToBoard(
     proofs: mergedProjectProofs(changedBase, projectsById),
   };
   if (changed.status === "done") {
+    const gateBlock = loopCompletionBlock(changed.loop, changed.loopReceipts ?? [], changed.result);
+    if (gateBlock) {
+      throw new Error(`Completion rejected: missing passing eval receipts for ${gateBlock.missingGateTitles.join(", ")}.`);
+    }
     changed.deliverables = mergeDeliverables(
       changed.deliverables,
       extractTaskDeliverables(
@@ -1215,8 +1225,11 @@ export async function completeTask(
     await writeBoard(touch(board), options);
     return { board, task: changed, blocked: true, outreachEvidenceBlocked: true };
   }
-  const loopReceipts = mergeLoopReceipts(task.loopReceipts, input.loopReceipts);
-  const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
+  const submittedReceipts = options.trustedLoopReceipts
+    ? input.loopReceipts
+    : sanitizeClientLoopReceipts(task.loop, input.loopReceipts);
+  const loopReceipts = mergeLoopReceipts(task.loopReceipts, submittedReceipts);
+  const gateBlock = loopCompletionBlock(task.loop, loopReceipts, result);
   if (gateBlock) {
     // Preserve the real worker output (and any artifacts/passed-gate progress) instead of
     // overwriting it with the missing-receipts summary — a human needs to see what was
@@ -1269,13 +1282,25 @@ export async function completeTask(
       missingGateIds: gateBlock.missingGateIds,
     };
   }
-  finishActiveRun(board, taskId, "completed", input);
+  const evaluation = await evaluateKanbanCompletion({
+    task,
+    receipts: loopReceipts,
+    result: result ?? "",
+    runId: input.runId ?? task.currentRunId ?? `task-${task.id}`,
+    startedAt: board.runs.find((run) => run.id === (input.runId ?? task.currentRunId))?.startedAt,
+    completedAt: now,
+  });
+  finishActiveRun(board, taskId, "completed", {
+    ...input,
+    metadata: { ...input.metadata, evaluation },
+  });
   const changed: KanbanTask = {
     ...task,
     status: "done",
     result,
     loop: applyLoopReceipts(task.loop, loopReceipts),
     loopReceipts,
+    evaluation,
     deliverables: mergeDeliverables(
       task.deliverables,
       extractTaskDeliverables(task, result, now),
@@ -1679,7 +1704,7 @@ export async function answerHumanTask(
 export async function promoteTask(
   slug: string | null,
   taskId: string,
-  input: { force?: boolean; reason?: string; dryRun?: boolean } = {},
+  input: { force?: boolean; reason?: string; dryRun?: boolean; actor?: "agent" | "human" } = {},
   options: KanbanStorageOptions = {},
 ) {
   return withBoardMutation(slug, options, async () => {
@@ -1689,6 +1714,15 @@ export async function promoteTask(
   if (!["ideas", "needs-human"].includes(task.status))
     throw new Error(
       `Task is '${task.status}'; promote only applies to Ideas or Needs You tasks.`,
+    );
+  // A parked 'Needs You' card is waiting on a human decision. Promote is exposed to
+  // agents via the MCP work_board tool, so without this an agent (or a prompt-injected
+  // one) could move its own approval card back to Ready and resume with no human answer,
+  // defeating the whole park-for-approval gate. A human unblocks it via the `answer`
+  // action instead. Idea promotion is unaffected.
+  if (task.status === "needs-human" && input.actor === "agent")
+    throw new Error(
+      "This task is waiting on a human decision — an agent can't promote it back to Ready. A human must answer or approve it first.",
     );
   const blockingParents = unfinishedParentIds(board, taskId);
   if (blockingParents.length && !input.force)

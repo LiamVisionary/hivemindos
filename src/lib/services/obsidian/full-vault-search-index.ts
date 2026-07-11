@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "crypto";
 import { constants } from "fs";
 import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "path";
+import { morphologicalTermVariants } from "@/lib/services/obsidian/agent-memory/query";
 import { bm25TermCounts, bm25Tokens, scoreBm25Terms } from "@/lib/services/search/bm25-lite";
 
 export const FULL_VAULT_SEARCH_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
@@ -448,19 +449,23 @@ function bm25Score(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery
   const lowerPath = record.path.toLowerCase();
   const lowerExcerpt = record.excerpt.toLowerCase();
   for (const term of parsed.terms) {
-    const frequency = record.terms[term] ?? 0;
-    if (!frequency) continue;
+    // One slot per query term: index tokens are exact, so an inflected query
+    // ("weddings") must also try its stem variants ("wedding") before the
+    // term counts as unmatched. The original term keeps the matched credit.
+    const forms = [term, ...morphologicalTermVariants(term)];
+    const form = forms.find((candidate) => record.terms[candidate]);
+    if (!form) continue;
     score += scoreBm25Terms({
-      terms: [term],
+      terms: [form],
       documentTerms: record.terms,
       documentLength: record.documentLength,
       documentCount,
       docFreq,
       averageLength,
     });
-    if (lowerTitle.includes(term)) score += 3;
-    if (lowerHeadings.includes(term)) score += 1.5;
-    if (lowerPath.includes(term)) score += 1;
+    if (forms.some((candidate) => lowerTitle.includes(candidate))) score += 3;
+    if (forms.some((candidate) => lowerHeadings.includes(candidate))) score += 1.5;
+    if (forms.some((candidate) => lowerPath.includes(candidate))) score += 1;
     matched.add(term);
   }
   for (const phrase of parsed.phrases) {
@@ -486,7 +491,9 @@ export async function searchFullVaultSearchIndex(input: { root: string; query?: 
   const averageLength = records.reduce((sum, record) => sum + record.documentLength, 0) / documentCount;
   const docFreq = new Map<string, number>();
   for (const term of parsed.terms) {
-    docFreq.set(term, records.reduce((count, record) => count + (record.terms[term] ? 1 : 0), 0));
+    for (const form of [term, ...morphologicalTermVariants(term)]) {
+      if (!docFreq.has(form)) docFreq.set(form, records.reduce((count, record) => count + (record.terms[form] ? 1 : 0), 0));
+    }
   }
   const queryHasSearchTerms = parsed.terms.length || parsed.phrases.length;
   const hits: FullVaultSearchHit[] = records

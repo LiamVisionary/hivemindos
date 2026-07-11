@@ -22,6 +22,11 @@ warn() { printf "\033[1;33m!\033[0m %s\n" "$*"; }
 fail() { printf "\033[1;31m✗\033[0m %s\n" "$*"; }
 
 missing=()
+optional_setup_issues=()
+
+optional_setup_issue() {
+  optional_setup_issues+=("$1")
+}
 
 prompt_yes_no() {
   local prompt="$1"
@@ -1241,17 +1246,22 @@ install_pnpm_if_missing() {
   fi
   if command -v corepack >/dev/null 2>&1; then
     if ! setup_is_interactive || prompt_yes_no "pnpm is missing. Enable pnpm through Corepack now?" "yes"; then
-      info "pnpm not found; enabling pnpm through corepack"
-      corepack enable
-      corepack prepare pnpm@8.6.12 --activate
-      ok "pnpm enabled: $(pnpm_version)"
-      return 0
+      info "pnpm not found; preparing pnpm through Corepack"
+      corepack prepare pnpm@8.6.12 --activate >/dev/null 2>&1 || true
+      if corepack pnpm --version >/dev/null 2>&1; then
+        ok "pnpm available through Corepack: $(corepack pnpm --version)"
+        return 0
+      fi
+      warn "Corepack could not start pnpm; trying a user-local npm install"
     fi
   fi
   if command -v npm >/dev/null 2>&1; then
-    if setup_is_interactive && prompt_yes_no "pnpm is missing. Install pnpm globally with npm now?" "yes"; then
-      info "Installing pnpm with npm"
-      npm install -g pnpm
+    if ! setup_is_interactive || prompt_yes_no "pnpm is missing. Install pnpm for this user with npm now?" "yes"; then
+      local npm_user_prefix="${NPM_CONFIG_PREFIX:-$HOME/.npm-global}"
+      info "Installing pnpm for this user with npm"
+      mkdir -p "$npm_user_prefix"
+      NPM_CONFIG_PREFIX="$npm_user_prefix" npm install -g pnpm
+      export PATH="$npm_user_prefix/bin:$PATH"
       ok "pnpm installed: $(pnpm_version)"
       return 0
     fi
@@ -1712,6 +1722,79 @@ random_dashboard_secret() {
   node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
 }
 
+install_gitlawb_github_release() {
+  local install_dir="$1"
+  local version="${GITLAWB_FALLBACK_VERSION:-v0.3.8}"
+  local platform="" asset="" temp_dir="" base_url=""
+  case "$(uname -s):$(uname -m)" in
+    Linux:x86_64|Linux:amd64) platform="x86_64-unknown-linux-musl" ;;
+    Linux:aarch64|Linux:arm64) platform="aarch64-unknown-linux-musl" ;;
+    Darwin:x86_64|Darwin:amd64) platform="x86_64-apple-darwin" ;;
+    Darwin:arm64|Darwin:aarch64) platform="aarch64-apple-darwin" ;;
+    *) return 1 ;;
+  esac
+  asset="gitlawb-${version}-${platform}.tar.gz"
+  base_url="https://github.com/gitlawb/releases/releases/download/${version}"
+  temp_dir="$(mktemp -d)"
+  if ! curl -fsSL "$base_url/$asset" -o "$temp_dir/$asset" 2>/dev/null \
+    || ! curl -fsSL "$base_url/$asset.sha256" -o "$temp_dir/$asset.sha256" 2>/dev/null; then
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$temp_dir" && sha256sum -c "$asset.sha256" >/dev/null 2>&1) || { rm -rf "$temp_dir"; return 1; }
+  elif command -v shasum >/dev/null 2>&1; then
+    (cd "$temp_dir" && shasum -a 256 -c "$asset.sha256" >/dev/null 2>&1) || { rm -rf "$temp_dir"; return 1; }
+  else
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  tar -xzf "$temp_dir/$asset" -C "$temp_dir"
+  local gl_bin remote_bin
+  gl_bin="$(find "$temp_dir" -type f -name gl | head -1)"
+  remote_bin="$(find "$temp_dir" -type f -name git-remote-gitlawb | head -1)"
+  if [[ -z "$gl_bin" || -z "$remote_bin" ]]; then
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  mkdir -p "$install_dir"
+  cp "$gl_bin" "$install_dir/gl"
+  cp "$remote_bin" "$install_dir/git-remote-gitlawb"
+  chmod 755 "$install_dir/gl" "$install_dir/git-remote-gitlawb"
+  rm -rf "$temp_dir"
+}
+
+configure_openclaw_codex_plugin_trust() {
+  refresh_tool_paths
+  command -v openclaw >/dev/null 2>&1 || return 0
+  openclaw plugins inspect codex --json >/dev/null 2>&1 || return 0
+  local current_allow next_allow
+  current_allow="$(openclaw config get plugins.allow --json 2>/dev/null || printf '[]')"
+  if node -e '
+    try {
+      const value = JSON.parse(process.argv[1]);
+      process.exit(Array.isArray(value) && value.includes("codex") ? 0 : 1);
+    } catch { process.exit(1); }
+  ' "$current_allow"; then
+    return 0
+  fi
+  next_allow="$(node -e '
+    let value = [];
+    try { value = JSON.parse(process.argv[1]); } catch {}
+    const current = Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
+    process.stdout.write(JSON.stringify([...new Set([...current, "codex"])]));
+  ' "$current_allow")"
+  if openclaw config set plugins.allow "$next_allow" --strict-json >/dev/null 2>&1; then
+    mkdir -p "$HOME/.hivemindos"
+    printf '{\n  "pluginId": "codex",\n  "managedBy": "hivemindos"\n}\n' > "$HOME/.hivemindos/openclaw-codex-plugin-trust.json"
+    chmod 600 "$HOME/.hivemindos/openclaw-codex-plugin-trust.json" 2>/dev/null || true
+    ok "OpenClaw Codex plugin explicitly trusted"
+  else
+    warn "OpenClaw is installed, but its Codex plugin allowlist could not be updated"
+    optional_setup_issue "OpenClaw Codex plugin trust: open Runtime settings and retry setup."
+  fi
+}
+
 ensure_gitlawb_code_proof() {
   set_env_local "NEXT_PUBLIC_GITLAWB_PROOF_READY" "true"
   set_env_local "NEXT_PUBLIC_GITLAWB_NODE_URL" "${NEXT_PUBLIC_GITLAWB_NODE_URL:-http://127.0.0.1:7545}"
@@ -1732,21 +1815,33 @@ ensure_gitlawb_code_proof() {
 
     if [[ "$should_install" == "true" ]]; then
       if command -v curl >/dev/null 2>&1; then
-        local installer install_dir
+        local installer install_dir installer_status installed
         installer="$(mktemp)"
         install_dir="${GITLAWB_INSTALL_DIR:-$HOME/.local/bin}"
+        installed="false"
         mkdir -p "$install_dir"
-        if curl -fsSL https://gitlawb.com/install.sh -o "$installer" && GITLAWB_INSTALL_DIR="$install_dir" sh "$installer"; then
-          printf '{\n  "installDir": "%s",\n  "binaries": ["gl", "git-remote-gitlawb", "gitlawb-node"],\n  "installedAt": "%s"\n}\n' "$install_dir" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "$HOME/.hivemindos/gitlawb/installed-by-hivemindos.json"
-          ok "GitLawb CLI installed in $install_dir"
-          refresh_tool_paths
-          export PATH="$install_dir:$PATH"
+        installer_status="$(curl -L -sS -o "$installer" -w '%{http_code}' https://gitlawb.com/install.sh 2>/dev/null || true)"
+        if [[ "$installer_status" =~ ^2[0-9][0-9]$ ]] && GITLAWB_INSTALL_DIR="$install_dir" sh "$installer"; then
+          installed="true"
         else
-          warn "GitLawb CLI install failed; HivemindOS setup will continue without Code Proof CLI."
+          warn "GitLawb's primary installer is unavailable${installer_status:+ (HTTP $installer_status)}; trying its checksum-verified GitHub release"
+          if install_gitlawb_github_release "$install_dir"; then
+            installed="true"
+          fi
+        fi
+        if [[ "$installed" == "true" ]]; then
+          printf '{\n  "installDir": "%s",\n  "binaries": ["gl", "git-remote-gitlawb"],\n  "installedAt": "%s"\n}\n' "$install_dir" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "$HOME/.hivemindos/gitlawb/installed-by-hivemindos.json"
+          ok "GitLawb CLI installed in $install_dir"
+          export PATH="$install_dir:$PATH"
+          refresh_tool_paths
+        else
+          warn "GitLawb CLI is optional and could not be installed; Code Proof remains available from Integrations later."
+          optional_setup_issue "Code Proof (GitLawb CLI): installer unavailable; retry from Integrations."
         fi
         rm -f "$installer"
       else
         warn "curl is unavailable; skipped GitLawb CLI install."
+        optional_setup_issue "Code Proof (GitLawb CLI): curl is unavailable."
       fi
     else
       warn "Skipping GitLawb CLI install; Code Proof can be enabled later from Integrations."
@@ -1801,6 +1896,7 @@ ensure_gitlawb_code_proof() {
           ok "GitLawb DID registered with $gitlawb_node"
         else
           warn "GitLawb DID registration did not complete; run 'GITLAWB_NODE=$gitlawb_node gl register' later."
+          optional_setup_issue "Code Proof (GitLawb registration): CLI and local identity are ready; network registration can be retried later."
         fi
       else
         warn "Skipping GitLawb DID registration; run 'GITLAWB_NODE=$gitlawb_node gl register' to join the network later."
@@ -1830,6 +1926,7 @@ set_env_local "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" "${NEXT_PUBLIC_GBRAIN_SKIL
 set_env_local "NEXT_PUBLIC_SYNTO_CLI_PATH" "${NEXT_PUBLIC_SYNTO_CLI_PATH:-synto}"
 set_env_local "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL" "${NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL:-llama3.1:8b}"
 ensure_gitlawb_code_proof
+configure_openclaw_codex_plugin_trust
 
 dashboard_auth_secret="${HIVEMINDOS_DASHBOARD_AUTH_SECRET:-$(env_local_value HIVEMINDOS_DASHBOARD_AUTH_SECRET)}"
 dashboard_device_token="${HIVEMINDOS_DASHBOARD_DEVICE_TOKEN:-$(env_local_value HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)}"
@@ -2110,7 +2207,12 @@ else
   # machine that only ran HivemindOS setup (its coding agent runs here, reached
   # by the app over the tailnet). Non-fatal: a failure just leaves the app's
   # remote-agent features unavailable until it's retried.
-  ./scripts/install-mobile-backend.sh || warn "HivemindOS Mobile backend install failed — the app's remote-agent features will be unavailable until it succeeds"
+  if [[ "$network_mode" == "local" ]]; then
+    ok "Skipping optional HivemindOS Mobile backend in local-only mode"
+  elif ! ./scripts/install-mobile-backend.sh; then
+    warn "HivemindOS Mobile backend install failed — desktop and local agent features are ready, but phone remote-agent features are unavailable"
+    optional_setup_issue "HivemindOS Mobile backend: published artifact unavailable; desktop setup is unaffected."
+  fi
   if [[ -f "$HOME/.hivemindos/collector.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.hivemindos/collector.env" >/dev/null 2>&1 || true
@@ -2234,7 +2336,15 @@ if [[ -n "$tailscale_ip" && "$dashboard_host" != "127.0.0.1" && "$dashboard_host
 fi
 
 echo
-ok "Ready"
+if (( ${#optional_setup_issues[@]} > 0 )); then
+  ok "Core setup ready"
+  warn "Optional features need attention:"
+  for item in "${optional_setup_issues[@]}"; do
+    echo "  - $item"
+  done
+else
+  ok "Ready"
+fi
 echo
 echo "Dashboard:"
 echo "  $local_url"

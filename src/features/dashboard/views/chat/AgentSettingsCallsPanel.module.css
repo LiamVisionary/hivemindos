@@ -1056,51 +1056,19 @@
 }
 
 .providerGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  composes: providerGrid from "./AgentSettingsVoiceProviderCards.module.css";
 }
 
 .providerCard {
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  min-height: 62px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel-2);
-  cursor: pointer;
-  padding: 11px 12px;
-  text-align: left;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.providerCard[data-selected] {
-  border-color: var(--honey-line);
-  background: var(--honey-soft);
+  composes: providerCard from "./AgentSettingsVoiceProviderCards.module.css";
 }
 
 .providerCardHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.providerCardHead strong {
-  color: var(--fg);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.2;
-}
-
-.providerCard[data-selected] .providerCardHead strong {
-  color: var(--honey);
+  composes: providerCardHead from "./AgentSettingsVoiceProviderCards.module.css";
 }
 
 .providerCardSub {
-  color: var(--fg-4);
-  font-size: 11px;
-  line-height: 1.35;
+  composes: providerCardSub from "./AgentSettingsVoiceProviderCards.module.css";
 }
 
 /* ---- Provider auth block (OAuth / API key) -------------------------- */

@@ -1,3 +1,5 @@
+import type { LoopTemplateId } from "@/lib/services/loops";
+
 export type TaskTemplateCadenceKind =
   | "manual"
   | "every15"
@@ -16,7 +18,7 @@ export type TaskTemplateDefinition = {
   id: string;
   label: string;
   desc: string;
-  section: "Core" | "Brain" | "Ops" | "Channels" | "Simulation" | "Security" | "AEON";
+  section: "Core" | "Brain" | "Ops" | "Channels" | "Simulation" | "Security" | "Engineering" | "AEON";
   badges: string[];
   credit?: string;
   defaultTitle: string;
@@ -25,6 +27,7 @@ export type TaskTemplateDefinition = {
   defaultPrompt: string;
   defaultAttachments?: TaskTemplateAttachment[];
   defaultCadenceKind?: TaskTemplateCadenceKind;
+  loopTemplateId?: LoopTemplateId;
 };
 
 export const TASK_TEMPLATE_PAGE_SIZE = 6;
@@ -113,6 +116,26 @@ export const TASK_TEMPLATES: TaskTemplateDefinition[] = [
     defaultPrompt: "Verify shared env backup prerequisites, GPG-encrypt the backup artifact, and push the encrypted receipt to the shared vault.",
     defaultAttachments: [{ kind: "skill", label: "shared-hive-env" }],
     defaultCadenceKind: "daily",
+  },
+  {
+    id: "engineering/discipline",
+    label: "Engineering discipline",
+    desc: "Scope, baseline, red/green evidence, implementation, verification, independent review, and safe handoff for consequential code work.",
+    section: "Engineering",
+    badges: ["Engineering", "Loop", "Evidence"],
+    credit: "HivemindOS Engineering Discipline",
+    defaultTitle: "Engineering discipline task",
+    defaultMode: "steps",
+    defaultSteps: [
+      "Scope the outcome, constraints, rollback, and design decision if needed",
+      "Capture the real baseline and red/green evidence or document non-applicability",
+      "Implement the smallest in-scope change and run focused verification",
+      "Record independent review, completion evidence, known gaps, and repository state",
+    ],
+    defaultPrompt: "Run the HivemindOS Engineering Discipline loop with proportionate planning, baseline evidence, red/green verification, independent review, and a safe evidence-backed handoff.",
+    defaultAttachments: [{ kind: "skill", label: "engineering-discipline" }],
+    defaultCadenceKind: "manual",
+    loopTemplateId: "engineering-discipline",
   },
   {
     id: "aeon/code-fix",

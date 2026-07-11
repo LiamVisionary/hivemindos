@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Kill My Thesis",
+  "upstreamSlug": "kill-my-thesis",
+  "hiveSlug": "kill-my-thesis",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/research/hivemindos/kill-my-thesis",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-11T00:00:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional research skills",
+  "sourcePath": "packaged-skills/optional/research/hivemindos/kill-my-thesis",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Clean-room HivemindOS-authored implementation of the cross-family adversarial thesis-gate pattern from public agent-research workflow writeups; no upstream text or code is vendored.",
+    "Reads reviewer API keys only through the shared hive env (hive-env-run); never asks agents to paste key values.",
+    "Hard-refuses Anthropic-family reviewer models to preserve cross-family independence from the Claude synthesis layer.",
+    "Fail-closed exit-code contract: only an explicit PUBLISHABLE verdict exits 0; unreachable reviewers or unparseable verdicts block instead of passing."
+  ]
+}

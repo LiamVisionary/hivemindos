@@ -28,6 +28,7 @@ import {
   type KanbanStorageOptions,
 } from "@/lib/services/kanban/local-kanban-store";
 import { holdTask, clearHold } from "@/lib/services/kanban/task-hold";
+import { buildLoopFromTemplate, listLoopTemplates, stripProtectedIntegrityReceipts, type LoopTemplateId } from "@/lib/services/loops";
 import { filterKanbanTasks, groupKanbanTasks } from "@/lib/utils/kanban-board";
 
 export const runtime = "nodejs";
@@ -74,6 +75,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    // The HTTP route is the untrusted boundary: the autonomous worker completes
+    // in-process, so anything arriving here (dashboard, an agent via MCP/API) must
+    // not be able to POST a forged server-only integrity receipt to overwrite a
+    // stored hard-fail and self-complete a parked task.
+    sanitizeClientLoopReceipts(body);
     const boardSlug = request.nextUrl.searchParams.get("board") || body.board;
     const storageOptions = storageOptionsFromRequest(request, body);
     if (body.action === "create-board") {
@@ -172,6 +178,7 @@ export async function POST(request: NextRequest) {
       const result = await reclaimStaleTasks(boardSlug, body, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
+    applyLoopTemplate(body);
     const result = await createTask(boardSlug, body, storageOptions);
     return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
   } catch (error) {
@@ -182,6 +189,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
+    sanitizeClientLoopReceipts(body);
     const boardSlug = request.nextUrl.searchParams.get("board") || body.board;
     const storageOptions = storageOptionsFromRequest(request, body);
     if (!body.taskId) throw new Error("taskId is required.");
@@ -204,6 +212,31 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+function applyLoopTemplate(body: Record<string, unknown>) {
+  if (typeof body.loopTemplateId !== "string" || !body.loopTemplateId.trim()) return;
+  const templateId = body.loopTemplateId.trim() as LoopTemplateId;
+  if (!listLoopTemplates().some((template) => template.id === templateId)) {
+    throw new Error(`Unknown loop template: ${templateId}.`);
+  }
+  const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Engineering task";
+  const detail = typeof body.body === "string" && body.body.trim() ? body.body.trim() : title;
+  body.loop = buildLoopFromTemplate({ templateId, title, goal: detail });
+}
+
+/** Strip server-only integrity receipts from a client request body (top-level and
+ *  inside a patch) so a forged `passed` receipt can't overwrite a stored hard-fail.
+ *  Non-integrity receipts pass through untouched. */
+function sanitizeClientLoopReceipts(body: unknown): void {
+  if (!body || typeof body !== "object") return;
+  const record = body as { loopReceipts?: unknown; patch?: { loopReceipts?: unknown } };
+  if (Array.isArray(record.loopReceipts)) {
+    record.loopReceipts = stripProtectedIntegrityReceipts(record.loopReceipts);
+  }
+  if (record.patch && typeof record.patch === "object" && Array.isArray(record.patch.loopReceipts)) {
+    record.patch.loopReceipts = stripProtectedIntegrityReceipts(record.patch.loopReceipts);
   }
 }
 

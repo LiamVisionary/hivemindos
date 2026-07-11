@@ -23,13 +23,13 @@ interface Tone {
 
 interface HiveCellProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children" | "onClick" | "title"> {
   x: number; y: number; size: number; tone: Tone;
-  selected?: boolean; dim?: boolean; pulse?: boolean; bounce?: boolean;
+  selected?: boolean; dim?: boolean; pulse?: boolean; bounce?: boolean; spotlight?: boolean;
   onClick?: React.MouseEventHandler<HTMLDivElement>; title?: string; children?: React.ReactNode; z?: number;
 }
 
 // ---- the hex cell ---------------------------------------------------------
 const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
-  x, y, size, tone, selected, dim, pulse, bounce, onClick, title, children, z,
+  x, y, size, tone, selected, dim, pulse, bounce, spotlight, onClick, title, children, z,
   className, style, ...triggerProps
 }, ref) {
   return (
@@ -40,6 +40,7 @@ const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
       title={title}
       className={className ? `fr-cell ${className}` : "fr-cell"}
       data-selected={selected ? "true" : undefined}
+      data-locate-spotlight={spotlight ? "true" : undefined}
       style={{
         ...style,
         position: "absolute", left: x, top: y, width: size, height: size,
@@ -81,6 +82,11 @@ const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
         <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} aria-hidden>
           <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke={tone.border} strokeWidth={selected ? 2 : 1.3} strokeLinejoin="round" />
         </svg>
+        {spotlight ? (
+          <svg className="fr-locate-ring" viewBox="0 0 100 100" aria-hidden>
+            <polygon points="50,2 92,25 92,75 50,98 8,75 8,25" fill="none" stroke="var(--honey)" strokeWidth="2.4" strokeLinejoin="round" />
+          </svg>
+        ) : null}
         <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>{children}</div>
       </div>
     </div>
@@ -232,6 +238,8 @@ export function HiveStage({
   onAddMachine,
   onOpenQueenSettings,
   newAgentId,
+  focus,
+  spotlightKey,
   tailnetLabel = "",
   workerBeeSrc = "/icons/worker-bee-general-v5.png",
   queenBeeSrc = "/icons/queen-bee-v2.png",
@@ -244,6 +252,8 @@ export function HiveStage({
   onAddMachine?: () => void;
   onOpenQueenSettings?: () => void;
   newAgentId?: string | null;
+  focus?: { active: boolean; machineIds: ReadonlySet<string>; agentIds: ReadonlySet<string> };
+  spotlightKey?: string | null;
   tailnetLabel?: string;
   workerBeeSrc?: string;
   queenBeeSrc?: string;
@@ -270,7 +280,7 @@ export function HiveStage({
     const L = layout[m.id];
     const isOnlineMobile = onlineMobileMachineIds.has(m.id);
     const hasWorking = isOnlineMobile || m.agents.some((a) => a.state === "working");
-    const lit = activeMachineId === m.id || sel.type === "queen";
+    const lit = focus?.active ? focus.machineIds.has(m.id) : activeMachineId === m.id || sel.type === "queen";
     return <Thread key={"q" + m.id} a={{ x: QX, y: QY }} b={L.pos} lit={lit} flow={hasWorking} delay={i * 0.5} dur={2.8} />;
   });
 
@@ -299,14 +309,16 @@ export function HiveStage({
         layout[m.id].agents.map(({ agent, pos }) => {
           const selected = sel.type === "agent" && sel.id === agent.id;
           const tone = frAgentTone(agent.state, selected);
-          const dim = !!activeMachineId && activeMachineId !== m.id;
+          const dim = focus?.active ? !focus.agentIds.has(agent.id) : !!activeMachineId && activeMachineId !== m.id;
+          const spotlight = spotlightKey === `agent:${agent.id}`;
           return (
             <Tooltip key={agent.id}>
               <TooltipTrigger asChild>
                 <HiveCell
                   x={pos.x} y={pos.y} size={AGENT_SIZE} tone={tone}
                   selected={selected} dim={dim} pulse={agent.state === "working"}
-                  bounce={newAgentId === agent.id}
+                  bounce={newAgentId === agent.id || spotlight}
+                  spotlight={spotlight}
                   // First click selects the petal; clicking it again while already
                   // selected opens its settings (so a double-click on an unselected
                   // agent lands straight in its AgentSettingsModal).
@@ -339,7 +351,7 @@ export function HiveStage({
       {machines.map((m) => {
         const ap = layout[m.id].addPos;
         if (!ap) return null;
-        const dim = !!activeMachineId && activeMachineId !== m.id;
+        const dim = focus?.active ? !focus.machineIds.has(m.id) : !!activeMachineId && activeMachineId !== m.id;
         return (
           <Tooltip key={"add-" + m.id}>
             <TooltipTrigger asChild>
@@ -361,8 +373,9 @@ export function HiveStage({
         const isOnlineMobile = onlineMobileMachineIds.has(m.id);
         const st = isMobile ? (isOnlineMobile ? "working" : "setup") : frMachineState(m);
         const selected = sel.type === "machine" && sel.id === m.id;
-        const dim = !!activeMachineId && activeMachineId !== m.id && sel.type !== "queen";
+        const dim = focus?.active ? !focus.machineIds.has(m.id) : !!activeMachineId && activeMachineId !== m.id && sel.type !== "queen";
         const tone = frMachineTone(st, selected);
+        const spotlight = spotlightKey === `machine:${m.id}`;
         return (
           <Fragment key={m.id}>
             <Tooltip>
@@ -370,6 +383,8 @@ export function HiveStage({
                 <HiveCell
                   x={L.pos.x} y={L.pos.y} size={MACHINE_SIZE} tone={tone}
                   selected={selected} dim={dim} pulse={st === "working"}
+                  bounce={spotlight}
+                  spotlight={spotlight}
                   data-bee={m.id === primaryPhoneMachineId ? "fleet-hive-phone" : undefined}
                   aria-label={isMobile ? "Open phone connection" : undefined}
                   onClick={() => onSelect({ type: "machine", id: m.id })}
@@ -398,7 +413,7 @@ export function HiveStage({
               size={MACHINE_SIZE}
               tone={frMachineTone(phoneToneState, sel.type === "phone")}
               selected={sel.type === "phone"}
-              dim={!!activeMachineId && sel.type !== "phone"}
+              dim={focus?.active || (!!activeMachineId && sel.type !== "phone")}
               pulse={false}
               data-bee="fleet-hive-phone"
               aria-label="Open phone connection"

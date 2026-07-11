@@ -1,3 +1,4 @@
+import { untrustedInlineBlock } from "@/lib/services/security/untrusted-context";
 import type { Company } from "@/lib/types/company";
 import type {
   SalesContentAction,
@@ -373,6 +374,10 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
       sourceSignalIds: [signal.id],
       approvalRequired: signal.approvalRequired,
     };
+    // signal.summary can be prospect-controlled (an inbound reply's preview/subject)
+    // or other external content, so it is fenced as untrusted source data before it
+    // reaches a worker prompt — it must never be able to steer the agent's actions.
+    const untrustedSummary = untrustedInlineBlock("external sales/content content", signal.summary);
     if (signal.kind === "respond-to-reply") {
       return {
         ...base,
@@ -380,7 +385,7 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
         title: "Draft reply for hot thread",
         body: "Read the reply, draft a concrete response, and park it for approval before sending.",
         skills: ["company-goal", "sales", "outreach"],
-        workBoardPrompt: `Draft a response for this sales/content reply. Use the company's products and approval policy. Do not send it; end with ACTION NEEDED and include the draft.\n\nSignal: ${signal.summary}`,
+        workBoardPrompt: `Draft a response for this sales/content reply. Use the company's products and approval policy. Do not send it; end with ACTION NEEDED and include the draft.\n\nSignal:\n${untrustedSummary}`,
       };
     }
     if (signal.kind === "unblock-queued-outreach") {
@@ -390,7 +395,7 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
         title: "Unblock queued outreach",
         body: "Find why queued touches did not send, fix the draft/package if needed, and request approval or credentials.",
         skills: ["company-goal", "outreach", "ops"],
-        workBoardPrompt: `Inspect queued outreach and unblock it. If credentials or approval are missing, end with ACTION NEEDED and exact NEEDS lines.\n\nSignal: ${signal.summary}`,
+        workBoardPrompt: `Inspect queued outreach and unblock it. If credentials or approval are missing, end with ACTION NEEDED and exact NEEDS lines.\n\nSignal:\n${untrustedSummary}`,
       };
     }
     if (signal.kind === "review-pricing-evidence") {
@@ -400,7 +405,7 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
         title: "Review pricing evidence",
         body: "Separate true price objections from broken links, weak pitches, or bad targeting. Raise a pricing proposal only with concrete evidence.",
         skills: ["company-goal", "sales", "product"],
-        workBoardPrompt: `Review pricing evidence for this company. If price is truly blocking conversion, end with PRICING PROPOSAL and WHY. Do not change prices yourself.\n\nSignal: ${signal.summary}`,
+        workBoardPrompt: `Review pricing evidence for this company. If price is truly blocking conversion, end with PRICING PROPOSAL and WHY. Do not change prices yourself.\n\nSignal:\n${untrustedSummary}`,
       };
     }
     if (signal.kind === "produce-case-study") {
@@ -410,7 +415,7 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
         title: "Package proof from working outreach",
         body: "Turn sent outreach and conversion evidence into a reusable proof asset for follow-ups, landing pages, and ads.",
         skills: ["company-goal", "content", "sales"],
-        workBoardPrompt: `Create a concise proof asset from the working outreach/conversion signals. Record customer-facing URLs under Deliverables when applicable.\n\nSignal: ${signal.summary}`,
+        workBoardPrompt: `Create a concise proof asset from the working outreach/conversion signals. Record customer-facing URLs under Deliverables when applicable.\n\nSignal:\n${untrustedSummary}`,
       };
     }
     if (signal.kind === "produce-ad-creative") {
@@ -420,7 +425,7 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
         title: "Generate channel-specific ad creative",
         body: "Use the working traffic source to brief hooks, visuals, and variants for the next creative batch.",
         skills: ["company-goal", "creative", "growth"],
-        workBoardPrompt: `Produce a creative brief and first ad variant for the channel behind this signal. Keep assets tied to the company's offer and proof.\n\nSignal: ${signal.summary}`,
+        workBoardPrompt: `Produce a creative brief and first ad variant for the channel behind this signal. Keep assets tied to the company's offer and proof.\n\nSignal:\n${untrustedSummary}`,
       };
     }
     if (signal.kind === "publish-social-post") {
@@ -430,7 +435,7 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
         title: "Draft social post",
         body: "Draft a post from the signal and park write actions behind approval.",
         skills: ["company-goal", "content", "social"],
-        workBoardPrompt: `Draft a social post from this signal. Do not publish it; end with ACTION NEEDED and include the draft.\n\nSignal: ${signal.summary}`,
+        workBoardPrompt: `Draft a social post from this signal. Do not publish it; end with ACTION NEEDED and include the draft.\n\nSignal:\n${untrustedSummary}`,
       };
     }
     return {
@@ -439,7 +444,7 @@ export function planSalesContentActions(company: Company, signals: readonly Sale
       title: "Wire missing source",
       body: "Add or configure the missing source so the sales/content loop has a trustworthy signal.",
       skills: ["company-goal", "ops", "integrations"],
-      workBoardPrompt: `Wire the missing sales/content source or produce the exact setup request. Do not paste or expose secret values.\n\nSignal: ${signal.summary}`,
+      workBoardPrompt: `Wire the missing sales/content source or produce the exact setup request. Do not paste or expose secret values.\n\nSignal:\n${untrustedSummary}`,
     };
   });
 }
@@ -455,7 +460,9 @@ export function buildSalesContentDispatchContext(input: {
   if (signals.length) {
     lines.push("Sales/content machine signals:");
     for (const signal of signals) {
-      lines.push(`- ${signal.title} [score ${signal.score}]: ${signal.summary}`);
+      // signal.summary can be prospect/external content → fence it as untrusted.
+      lines.push(`- ${signal.title} [score ${signal.score}]:`);
+      lines.push(untrustedInlineBlock("external sales/content content", signal.summary));
     }
   }
   if (actions.length) {

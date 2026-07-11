@@ -62,6 +62,18 @@ assert.match(
   "Queen Bee text chat should use a route name and timeout budget distinct from the legacy voice endpoint.",
 );
 
+assert.match(
+  proxyTimeoutBody,
+  /clientRequest\.url\?\.startsWith\("\/api\/integrations\/x-transcript"\)[\s\S]*return 330_000;/,
+  "X transcript requests must outlive the route's five-minute backend budget instead of inheriting the generic 60-second API timeout.",
+);
+
+assert.match(
+  proxyTimeoutBody,
+  /clientRequest\.url\?\.startsWith\("\/api\/hive-compute\/marketplace"\)[\s\S]*return 11 \* 60_000;/,
+  "Hive Compute's warmed multi-model benchmark must outlive the generic 60-second API proxy budget.",
+);
+
 const nativeInvoke = source("src/lib/native/invoke.ts");
 assert.match(
   nativeInvoke,

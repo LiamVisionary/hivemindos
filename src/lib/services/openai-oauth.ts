@@ -307,6 +307,49 @@ export async function getOpenAiOAuthAccess(): Promise<{ accessToken: string; acc
 type OAuthChatMessage = { role: string; content: string };
 
 /**
+ * Authenticated request to the ChatGPT/Codex Responses backend. Keeping this
+ * transport here ensures chat and media capabilities share token refresh,
+ * account routing, and the exact Codex client headers.
+ */
+export async function openAiOAuthResponsesRequest(
+  body: Record<string, unknown>,
+  options: { timeoutMs?: number; errorContext?: string } = {},
+): Promise<Response> {
+  const { accessToken, accountId } = await getOpenAiOAuthAccess();
+  const response = await fetch(RESPONSES_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+      Accept: "text/event-stream",
+      "OpenAI-Beta": "responses=experimental",
+      originator: "codex_cli_rs",
+      session_id: randomUUID(),
+      ...(accountId ? { "chatgpt-account-id": accountId } : {}),
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
+  });
+  if (response.ok && response.body) return response;
+
+  const text = await response.text().catch(() => "");
+  let detail = text.slice(0, 240);
+  try {
+    const parsed = JSON.parse(text) as { detail?: string; error?: { message?: string } | string };
+    detail =
+      (typeof parsed.error === "string" ? parsed.error : parsed.error?.message) ||
+      parsed.detail ||
+      detail;
+  } catch {
+    /* not json */
+  }
+  throw new Error(
+    detail || `${options.errorContext ?? "ChatGPT OAuth request"} returned HTTP ${response.status}.`,
+  );
+}
+
+/**
  * One conversation turn over the ChatGPT backend Responses API using the
  * user's OAuth credentials. Emits text deltas when a sink is provided and
  * returns the full text — mirroring runProviderConversationTurn's contract.
@@ -316,7 +359,6 @@ export async function runOpenAiOAuthChatTurn(
   messages: OAuthChatMessage[],
   options: { maxOutputTokens?: number; onTextDelta?: (chunk: string) => void; timeoutMs?: number } = {},
 ): Promise<string> {
-  const { accessToken, accountId } = await getOpenAiOAuthAccess();
   const instructions = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
@@ -333,18 +375,8 @@ export async function runOpenAiOAuthChatTurn(
         },
       ],
     }));
-  const response = await fetch(RESPONSES_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "content-type": "application/json",
-      Accept: "text/event-stream",
-      "OpenAI-Beta": "responses=experimental",
-      originator: "codex_cli_rs",
-      session_id: randomUUID(),
-      ...(accountId ? { "chatgpt-account-id": accountId } : {}),
-    },
-    body: JSON.stringify({
+  const response = await openAiOAuthResponsesRequest(
+    {
       model,
       instructions: instructions || undefined,
       input,
@@ -355,24 +387,9 @@ export async function runOpenAiOAuthChatTurn(
       // NOTE: the codex backend rejects max_output_tokens ("Unsupported
       // parameter", verified live 2026-07-03) — length is prompt-governed.
       reasoning: { effort: "low" },
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
-  });
-  if (!response.ok || !response.body) {
-    const text = await response.text().catch(() => "");
-    let detail = text.slice(0, 240);
-    try {
-      const parsed = JSON.parse(text) as { detail?: string; error?: { message?: string } | string };
-      detail =
-        (typeof parsed.error === "string" ? parsed.error : parsed.error?.message) ||
-        parsed.detail ||
-        detail;
-    } catch {
-      /* not json */
-    }
-    throw new Error(detail || `ChatGPT OAuth chat returned HTTP ${response.status}.`);
-  }
+    },
+    { timeoutMs: options.timeoutMs, errorContext: "ChatGPT OAuth chat" },
+  );
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";

@@ -10,6 +10,7 @@ import { Cockpit, type CockpitHandlers } from "./Cockpit";
 import type { ApprovalDecision } from "@/features/approvals/spend-approval-model";
 import { AgentBrowserModal, AgentMemberSettingsModal, CreateCompanyModal, EditCompanyModal, TreasurySettingsModal } from "./Modals";
 import { ImportCompanyModal } from "./ImportCompanyModal";
+import { companyMembershipOwners } from "@/lib/services/company-membership";
 import { TaskDetailModal } from "./TaskDetailModal";
 import { FounderModeModal } from "./FounderModeModal";
 import { agentsAtWork } from "./data";
@@ -164,6 +165,8 @@ export interface ZeroHumanCompaniesProps {
   onEditCompany: (companyId: string, form: CompanyEditForm) => Promise<void>;
   /** Add staged crew to an existing company. */
   onAddAgents: (companyId: string, crew: Agent[]) => Promise<void>;
+  /** Open the established agent-duplication flow for an identity owned by another company. */
+  onDuplicateAgent?: (agentId: string) => void;
   onDecideApproval: (companyId: string, approvalId: string, decision: ApprovalDecision, note: string) => void | Promise<void>;
   /** Decide an approval-like Work Board issue from the shared approval surface. */
   onDecideIssueApproval: (companyId: string, issue: Issue, decision: ApprovalDecision, note: string) => void | Promise<void>;
@@ -198,7 +201,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, initialTasksLoading = false, error, notice, busyId, onRefresh,
-  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onDecideApproval, onDecideIssueApproval, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
+  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onDuplicateAgent, onDecideApproval, onDecideIssueApproval, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
   openSkillAttachmentBrowser,
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
@@ -236,6 +239,21 @@ export default function ZeroHumanCompanies({
   }, [theme]);
 
   const visiblePortfolioColonies = portfolioColonies ?? colonies;
+  const membershipOwners = React.useMemo(() => companyMembershipOwners(
+    colonies.map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      agentIds: entry.agents.map((agent) => agent.id).filter((agentId): agentId is string => Boolean(agentId)),
+    })),
+  ), [colonies]);
+  const unassignedAgentPool = React.useMemo(
+    () => agentPool.filter((agent) => !(membershipOwners.get(agent.id)?.length)),
+    [agentPool, membershipOwners],
+  );
+  const duplicateFromPicker = React.useCallback((agentId: string) => {
+    setModal(null);
+    onDuplicateAgent?.(agentId);
+  }, [onDuplicateAgent]);
   const colony = openId ? colonies.find((c) => c.id === openId) ?? null : null;
   const view: "portfolio" | "cockpit" = colony ? "cockpit" : "portfolio";
 
@@ -364,11 +382,11 @@ export default function ZeroHumanCompanies({
       </div>
 
       {modal && modal.type === "create" && (
-        <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={themeState} onClose={closeModal} onCreate={handleCreate} />
+        <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={themeState} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent ? duplicateFromPicker : undefined} onClose={closeModal} onCreate={handleCreate} />
       )}
       {modal && modal.type === "founder" && (
         <FounderModeModal
-          agentPool={agentPool}
+          agentPool={unassignedAgentPool}
           theme={themeState}
           onClose={closeModal}
           onCreated={(companyId) => {
@@ -403,7 +421,7 @@ export default function ZeroHumanCompanies({
       {modal && modal.type === "browse" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <AgentBrowserModal colony={target} agentPool={agentPool} busy={submitting} theme={themeState} onClose={closeModal} onConfirm={(crew) => handleAddAgents(modal.id, crew)} />
+          <AgentBrowserModal colony={target} agentPool={agentPool} busy={submitting} theme={themeState} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent ? duplicateFromPicker : undefined} onClose={closeModal} onConfirm={(crew) => handleAddAgents(modal.id, crew)} />
         ) : null;
       })()}
       {modal && modal.type === "edit-agent" && (() => {

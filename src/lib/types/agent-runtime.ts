@@ -376,6 +376,11 @@ export interface AgentCallPreferences {
   /** Which hive-env key name to use when several match the provider (e.g. Gemini
    *  can read GEMINI_API_KEY / GOOGLE_AI_STUDIO_API_KEY / GOOGLE_API_KEY). */
   voiceKeyEnv?: string;
+  /** Spoken-audio language (ISO 639-1) — sent to the TTS provider (ElevenLabs
+   *  `language_code` on the v2.5 models). Empty = provider auto-detect. */
+  voiceLanguage?: string;
+  /** Language the agent should write/reply in for spoken turns. Empty = app default. */
+  voiceTextLanguage?: string;
   voiceChatBrain?: VoiceChatBrainPreference;
   ministry: AgentMinistryPreferences;
   enabled: boolean;
@@ -464,6 +469,8 @@ export function buildAgentCallPreferences(
       ? input.voiceAuthMode
       : undefined,
     voiceKeyEnv: input?.voiceKeyEnv?.trim() || undefined,
+    voiceLanguage: input?.voiceLanguage?.trim() || undefined,
+    voiceTextLanguage: input?.voiceTextLanguage?.trim() || undefined,
     voiceChatBrain: input?.voiceChatBrain?.source
       ? {
           source: input.voiceChatBrain.source,
@@ -775,6 +782,8 @@ export const KNOWN_AGENT_RUNTIMES: KnownAgentRuntime[] = [
   "evo",
   HIVEMIND_OS_RUNTIME,
 ];
+
+export const DEFAULT_NEW_AGENT_RUNTIME: KnownAgentRuntime = "hermes";
 
 export function normalizeAgentRuntime(
   runtime: AgentRuntime | string | undefined,

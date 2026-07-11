@@ -296,7 +296,9 @@ export class RealtimePcmStreamPlayer {
       if (!AudioContextClass) throw new Error("Web Audio is not available in this browser.");
       context = new AudioContextClass({ latencyHint: "interactive" });
     }
-    await waitWithTimeout(context.resume().catch(() => undefined), 2_000, "AudioContext resume");
+    if (context.state !== "running") {
+      await waitWithTimeout(context.resume().catch(() => undefined), 2_000, "AudioContext resume");
+    }
     // A context that would not start renders every scheduled frame silently;
     // fail loudly so callers can fall back to an audible path instead.
     if (context.state !== "running") {

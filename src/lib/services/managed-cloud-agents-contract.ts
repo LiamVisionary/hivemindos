@@ -63,6 +63,18 @@ export type ManagedCloudIntegration = {
   updatedAt: string;
 };
 
+export type ManagedCloudAppProject = {
+  id: string;
+  managedAgentId: string;
+  name: string;
+  templateId: "nextjs";
+  status: "creating" | "stopped" | "starting" | "running" | "stopping" | "error";
+  activeOperationId: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ManagedCloudPaymentQuote = {
   id: string;
   amountUsd: number;

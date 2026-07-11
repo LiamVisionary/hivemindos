@@ -1,0 +1,67 @@
+.providerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.providerCard {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 62px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  cursor: pointer;
+  padding: 11px 12px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.providerCard[data-selected] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.providerCardHead {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-rows: 26px 20px;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  min-width: 0;
+}
+
+.providerCardHead > :global(.as-icon-mark) {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+.providerCardHead > :global(.fb-badge) {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  max-width: 100%;
+}
+
+.providerCardHead strong {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.providerCard[data-selected] .providerCardHead strong {
+  color: var(--honey);
+}
+
+.providerCardSub {
+  color: var(--fg-4);
+  font-size: 11px;
+  line-height: 1.35;
+}

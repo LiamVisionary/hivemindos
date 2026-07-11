@@ -176,6 +176,34 @@ function cosineSimilarity(left: number[], right: number[]) {
   return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
 }
 
+// Conversation archives answer many questions through paraphrase that lexical
+// matching cannot reach ("Emma's ceremony" for a weddings query). Lazily embed
+// the vault's conversation-note candidates (content-hashed, so repeat recalls
+// are cache hits) and score them alongside typed-memory vectors; bounded and
+// strictly best-effort like the rest of this layer.
+const MAX_VAULT_SEMANTIC_CANDIDATES = 400;
+
+export async function fullVaultSemanticScores(
+  root: string,
+  query: string,
+  records: AgentMemoryRecord[],
+  baseScores: Map<string, number>,
+) {
+  const config = agentMemoryEmbeddingsConfig();
+  if (!config.enabled || !query.trim() || !records.length) return baseScores;
+  const conversationRecords = records
+    .filter((record) => record.notePath.startsWith("Memory/Conversations/"))
+    .slice(0, MAX_VAULT_SEMANTIC_CANDIDATES);
+  if (conversationRecords.length) {
+    await backfillAgentMemoryEmbeddings(root, conversationRecords).catch(() => undefined);
+  }
+  const scores = await semanticScoresForRecords(root, query, records);
+  for (const [id, value] of baseScores) {
+    if (!scores.has(id)) scores.set(id, value);
+  }
+  return scores;
+}
+
 // Query-time similarity map (memoryId -> 0..1). Empty map on any failure so
 // recall quality degrades to lexical instead of erroring.
 export async function semanticScoresForRecords(root: string, query: string, records: AgentMemoryRecord[]) {

@@ -4,6 +4,7 @@ import { homedir } from "@/lib/home-dir";
 
 const POSIX_RUNTIME_COMMAND_PATHS = [
   join(homedir(), ".local", "bin"),
+  join(homedir(), ".npm-global", "bin"),
   join(homedir(), ".nvm", "versions", "node", process.version, "bin"),
   dirname(process.execPath),
   "/opt/homebrew/bin",

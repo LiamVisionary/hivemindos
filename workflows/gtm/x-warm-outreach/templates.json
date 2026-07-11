@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "X/Twitter warm-outreach building blocks: the 14-day ladder, lead sources and qualification, the three reply shapes, DM and follow-up skeletons, and pacing rules. This bank is authored, not measured — the warm-beats-cold mechanism (inbox routing + name recognition) is the defensible argument, while any specific uplift figures circulating for this method are vendor marketing claims and agents must not present them as proven. A fuller playbook lives in the shared skills shelf as the x-warm-outreach-gtm skill. Hard rules that travel with every row: X's platform-manipulation rules prohibit automated likes, replies, and DMs, so every engagement is a human action or human-approved draft, pacing caps are ceilings, replies must add real value in the operator's voice, and silence after the single follow-up means stop. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 27,
+  "taxonomy": {
+    "phases": ["radar", "relationship", "deepen", "dm"],
+    "replyShapes": ["add-on", "story", "question"]
+  },
+  "ladder": [
+    { "id": "XL01", "day": "1", "phase": "radar", "do": "build a list of 20-50 leads and qualify each: active in the last 7 days, ICP fit from bio and content, actually engages with replies" },
+    { "id": "XL02", "day": "2", "phase": "radar", "do": "2-3 thoughtful likes per person on effort or opinion tweets; never a burst of 10" },
+    { "id": "XL03", "day": "3", "phase": "radar", "do": "one thoughtful reply each on 10 leads: add to the point, share an experience, or ask a smart question" },
+    { "id": "XL04", "day": "4-5", "phase": "relationship", "do": "5-10 quality replies per day across the list, mixed with likes-only days to stay natural" },
+    { "id": "XL05", "day": "6", "phase": "relationship", "do": "follow them once your name has appeared 5-8 times; the profile they will check must already show who you help and recent valuable posts" },
+    { "id": "XL06", "day": "7", "phase": "relationship", "do": "keep engaging; you are now a regular in their notifications" },
+    { "id": "XL07", "day": "8-9", "phase": "deepen", "do": "narrow to the 10-20 warmest (liked back, replied, followed back); fast likes near their posting time, deeper replies, quote-tweet their best content with your take" },
+    { "id": "XL08", "day": "10", "phase": "deepen", "do": "soft touch to those who engaged back: a no-ask conversation starter referencing their specific work" },
+    { "id": "XL09", "day": "11", "phase": "dm", "do": "send the three-line DM: acknowledge, why you are reaching out, one simple question" },
+    { "id": "XL10", "day": "12-13", "phase": "dm", "do": "wait; no double message; keep light engagement going" },
+    { "id": "XL11", "day": "14", "phase": "dm", "do": "one casual follow-up with an easy exit, then stop on silence" }
+  ],
+  "leadSources": [
+    { "id": "XS01", "source": "followers of competitors" },
+    { "id": "XS02", "source": "followers of the influencers the ICP already reads" },
+    { "id": "XS03", "source": "people tweeting about the problems the offer solves" }
+  ],
+  "replyShapes": [
+    { "id": "XR01", "shape": "add-on", "template": "One thing I'd add: [INSIGHT THEY DID NOT MENTION]", "why": "Extends their point instead of agreeing with it." },
+    { "id": "XR02", "shape": "story", "template": "Saw this happen last week: [WHAT THE CLIENT DID] and [THE CONCRETE RESULT]", "why": "A real experience is memorable where agreement is invisible." },
+    { "id": "XR03", "shape": "question", "template": "Curious - have you found this works for [SPECIFIC SITUATION THEY CARE ABOUT]?", "why": "Shows deeper thinking and invites a reply." }
+  ],
+  "dmSkeletons": [
+    { "id": "XD01", "name": "Observation opener", "template": "Hey [FIRST NAME], been following your content for a bit. Noticed you're [WHAT THEY ARE DOING OR BUILDING]. Curious - are you doing any [RELEVANT MOTION] right now, or mainly focused on other channels?", "why": "Proves attention and asks a yes/no question either answer of which continues the conversation." },
+    { "id": "XD02", "name": "Value lead", "template": "Hey [FIRST NAME], saw your post about [TOPIC]. We've been testing something that might be relevant - getting [SPECIFIC RESULT] using [METHOD]. Worth hearing about, or not a focus right now?", "why": "Leads with a result and offers an explicit easy out, which raises replies." },
+    { "id": "XD03", "name": "Direct question", "template": "Hey [FIRST NAME], quick question - are you happy with how you're [DOING THE RELEVANT JOB] right now, or is that something you're trying to improve?", "why": "Simplest shape; both answers open a door." },
+    { "id": "XD04", "name": "Soft touch (day 10, no ask)", "template": "Hey [FIRST NAME], been enjoying your posts on [TOPIC]. Your take on [SPECIFIC THING] was sharp. Quick question - [RELEVANT QUESTION ABOUT THEIR WORK]?", "why": "A conversation starter for already-engaged leads; no pitch anywhere in it." }
+  ],
+  "followUps": [
+    { "id": "XF01", "name": "Casual resurface", "template": "Hey, just floating this back up. No worries if it's not relevant - just say the word and I'll stop.", "why": "The explicit exit is the mechanism: respecting their time is what earns the reply." },
+    { "id": "XF02", "name": "One-word nudge", "template": "[FIRST NAME]?", "why": "Minimal, human, and surprisingly effective exactly once." }
+  ],
+  "pacingRules": [
+    { "id": "XP01", "rule": "2-3 likes per person per day, never a burst" },
+    { "id": "XP02", "rule": "5-10 quality replies per day across the whole list" },
+    { "id": "XP03", "rule": "one DM follow-up total; silence after it means stop" },
+    { "id": "XP04", "rule": "every engagement is a human action or human-approved draft; no scheduled or automated likes, replies, or DMs" }
+  ]
+}

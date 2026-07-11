@@ -3,14 +3,12 @@
 import { useEffect, useRef, useState, type Dispatch, type FormEvent, type InputHTMLAttributes, type SetStateAction, type SVGProps } from "react";
 import type { AgentRuntime } from "@/lib/types/agent-runtime";
 import type { MachineInitStatus, MachineInitTokenStatus } from "@/features/dashboard/dashboard-types";
+import { AzureMarketplaceMachineModal } from "./AzureMarketplaceMachineModal";
 import styles from "./MachineInitModal.module.css";
 
-// Redesign of the "New Hetzner agent box" modal into the HivemindOS Setup hive
-// system. Four steps — token → configure → provisioning → ready — wired to the
-// real machine-init handlers. The provisioning step folds in the one-click
-// provision job (POST + poll /api/fleet/machines/provision, the logic formerly
-// in MachineProvisionPanel), streaming its real log. A manual "generate setup
-// commands" path is preserved as a fallback for machines without the hcloud CLI.
+// Provider selection lives at the actual Fleet "New Machine" entry point. The
+// existing local-first Hetzner flow remains intact; HivemindOS Machines uses the
+// official Microsoft Marketplace catalog and the user's own Azure subscription.
 
 type SelectOption = { value: string; label: string };
 type HetznerServerTypeOption = SelectOption & {
@@ -74,6 +72,7 @@ export function MachineInitModal(props: Props) {
   } = props;
 
   const [step, setStep] = useState(0); // 0 token · 1 configure · 2 provisioning · 3 ready
+  const [provider, setProvider] = useState<"hetzner" | "hivemindos-azure" | null>(null);
   const [manualRequested, setManualRequested] = useState(false);
 
   // One-click provision job state (folded from the former MachineProvisionPanel).
@@ -187,6 +186,9 @@ export function MachineInitModal(props: Props) {
   const filled = step === 2 ? (jobStatus === "succeeded" ? EMBLEM_CELLS : filledCells) : 0;
   const meterPct = Math.round((filled / EMBLEM_CELLS) * 100);
 
+  if (!provider) return <MachineProviderChooser onClose={onClose} onChoose={setProvider} />;
+  if (provider === "hivemindos-azure") return <AzureMarketplaceMachineModal onBack={() => setProvider(null)} onClose={onClose} />;
+
   // Real job-log lines for the provisioning view; falls back to honest phase text.
   const logLines: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }> = [];
   if (step === 2) {
@@ -245,6 +247,7 @@ export function MachineInitModal(props: Props) {
             <>
               <p className={styles.disclaimer}>The token is validated live and stored only in this machine&rsquo;s local env.</p>
               <div className={styles.footActions}>
+                <button className={`${styles.btn} ${styles.text}`} type="button" onClick={() => setProvider(null)}><IconChevL /> Back</button>
                 <button className={`${styles.btn} ${styles.ghost} ${styles.grow}`} type="button" onClick={() => void openHetznerEnvFile()} disabled={tokenStatus.busyAction === "open"}>
                   {tokenStatus.busyAction === "open" ? <IconSpinner /> : null} Open env file
                 </button>
@@ -281,6 +284,35 @@ export function MachineInitModal(props: Props) {
             </div>
           )}
         </footer>
+      </section>
+    </div>
+  );
+}
+
+function MachineProviderChooser({ onClose, onChoose }: { onClose: () => void; onChoose: (provider: "hetzner" | "hivemindos-azure") => void }) {
+  return (
+    <div className={styles.backdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="machine-init-title">
+        <button className={styles.close} type="button" aria-label="Close machine initializer" onClick={onClose}><IconClose /></button>
+        <header className={styles.hero}>
+          <span className={styles.mark}><IconFleet /></span>
+          <span className={styles.heroText}><span className={styles.eyebrow}>Fleet · New machine</span><span className={styles.heroTitle}>Choose who operates the cloud account</span></span>
+        </header>
+        <div className={styles.body}>
+          <div className={styles.step}>
+            <h2 id="machine-init-title" className={styles.title}>Add a machine to the hive.</h2>
+            <p className={styles.lede}>Both paths initialize HivemindOS. The difference is whose cloud account, bill, and credentials own the infrastructure.</p>
+            <div className={styles.providerGrid}>
+              <button className={styles.providerCard} type="button" onClick={() => onChoose("hivemindos-azure")}>
+                <span className={styles.providerBadge}>Recommended</span><span className={styles.providerIcon}><IconFleet /></span><strong>HivemindOS Machine</strong><span>Microsoft Azure Marketplace</span><p>One-click official image. Microsoft bills the user&rsquo;s Azure subscription for infrastructure and the HivemindOS software fee. No 114 MB MCP install.</p><small>Customer-owned Azure · Microsoft billing</small>
+              </button>
+              <button className={styles.providerCard} type="button" onClick={() => onChoose("hetzner")}>
+                <span className={styles.providerIcon}><IconServer /></span><strong>Bring your own Hetzner</strong><span>Local-first provisioning</span><p>Use a Hetzner API token stored only on this machine. Hetzner bills the user directly; HivemindOS adds no Marketplace software fee.</p><small>Local token · Direct provider billing</small>
+              </button>
+            </div>
+          </div>
+        </div>
+        <footer className={styles.foot}><div className={styles.footActions}><button className={`${styles.btn} ${styles.ghost} ${styles.grow}`} type="button" onClick={onClose}>Cancel</button></div></footer>
       </section>
     </div>
   );

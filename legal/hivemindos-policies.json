@@ -1,0 +1,344 @@
+{
+  "schemaVersion": 1,
+  "source": "https://github.com/LiamVisionary/hivemindos/blob/main/legal/hivemindos-policies.json",
+  "publisher": {
+    "name": "Rizzma Inc.",
+    "product": "HivemindOS",
+    "website": "https://hivemindos.app",
+    "repository": "https://github.com/LiamVisionary/hivemindos",
+    "legalEmail": "legal@hivemindos.app",
+    "privacyEmail": "privacy@hivemindos.app"
+  },
+  "terms": {
+    "version": "2026-07-11",
+    "effectiveDate": "July 11, 2026",
+    "title": "Terms & Conditions",
+    "eyebrow": "Legal · powerful tools, your judgment",
+    "intro": "HivemindOS gives people powerful local-first AI, automation, wallet, and fleet-control tools. You choose what to connect and authorize, and consequential decisions still require your judgment.",
+    "highlights": [
+      "AI can materially enhance productivity, creativity, and earning potential, but it can also be confidently wrong.",
+      "Local-only workflows can remain on the machines you control; connected services follow their own data practices.",
+      "No earnings, token value, investment return, productivity gain, or business outcome is guaranteed.",
+      "You use HivemindOS-powered operations at your discretion and remain responsible for what you authorize."
+    ],
+    "sections": [
+      {
+        "title": "1. Agreement, publisher, and eligibility",
+        "paragraphs": [
+          "These Terms and Conditions govern your access to and use of the official HivemindOS website, software, interfaces, agents, workflows, automations, integrations, hosted or managed features, identity and community features, and any operation powered by HivemindOS, collectively the Services. Rizzma Inc. operates the official HivemindOS website and services. The HivemindOS Parties include Rizzma Inc., the project maintainer, authors, contributors, licensors, affiliates, distributors, and service providers involved in providing the Services.",
+          "By checking the in-app acceptance box and selecting Accept and continue, or by otherwise accessing or using an official Service, you agree to these Terms. If you use the Services for an organization, you represent that you have authority to bind it. You must be legally capable of entering this agreement and at least the age of majority where you live. If you do not agree, do not use the Services.",
+          "A paid, hosted, enterprise, marketplace, or third-party service may provide supplemental terms. Those terms also apply to that service and control if they conflict with these Terms for that service."
+        ]
+      },
+      {
+        "title": "2. Open-source and self-hosted software",
+        "paragraphs": [
+          "HivemindOS source code is available under its published open-source license, currently the MIT License. That license governs your rights to copy, modify, and distribute covered code. These Terms govern use of the official site and Services and do not remove rights granted by an applicable open-source license.",
+          "A self-hosted installation, modified build, fork, model, plugin, skill, integration, or third-party deployment may be controlled by another operator. Rizzma Inc. does not control and is not responsible for independent forks or deployments."
+        ]
+      },
+      {
+        "title": "3. What HivemindOS and AI can do",
+        "paragraphs": [
+          "HivemindOS can coordinate artificial intelligence systems, agents, models, tools, computers, files, accounts, communications, schedules, code, and financial or commercial services. Artificial intelligence is powerful and can materially enhance productivity, creativity, research, decision support, and the ability to pursue business or earnings opportunities.",
+          "Those benefits are possibilities, not promises. Results depend on your instructions, data, models, tools, permissions, market conditions, oversight, and many factors outside the control of the HivemindOS Parties."
+        ]
+      },
+      {
+        "title": "4. AI is imperfect and requires human review",
+        "paragraphs": [
+          "Artificial intelligence is still far from perfect. It can make mistakes; misunderstand instructions or context; omit important facts; produce biased, offensive, outdated, infringing, insecure, or unlawful material; fabricate facts, citations, files, or results; and act unpredictably when connected to tools. Outputs that sound confident may still be wrong.",
+          "You must apply appropriate human review before relying on an output or allowing an operation to affect people, data, systems, accounts, reputation, rights, money, or the physical world. Treat AI output as a draft or recommendation, not as a guaranteed fact or result. Independently verify material information, test important work, and monitor ongoing automations."
+        ]
+      },
+      {
+        "title": "5. Your discretion, control, and assumption of risk",
+        "paragraphs": [
+          "You use the Services and all HivemindOS-powered operations at your discretion and risk. You decide which agents, models, tools, machines, accounts, files, credentials, wallets, permissions, schedules, and instructions to connect or authorize. You remain responsible for each operation you initiate, approve, schedule, enable, or permit an agent or automation to perform.",
+          "You knowingly assume the risks arising from your use of the Services, including unintended actions, inaccurate output, data loss, downtime, security incidents, financial loss, missed opportunities, reputational harm, legal claims, and third-party conduct. Approval prompts, permissions, budgets, previews, logs, evaluations, and stop controls reduce some risks but cannot eliminate them or guarantee a safe result."
+        ],
+        "bullets": [
+          "Use least-privilege access and separate low-risk test accounts where practical.",
+          "Keep current backups and recovery plans before allowing file, code, infrastructure, or data changes.",
+          "Set spending limits and independently confirm recipients, networks, assets, amounts, fees, and transaction details.",
+          "Supervise consequential work and stop an agent or automation when its behavior is unclear or unsafe."
+        ]
+      },
+      {
+        "title": "6. Local-first operation and connected features",
+        "paragraphs": [
+          "HivemindOS is designed around a private, local-first core. Local app state, chats, files, agent configuration, shared-brain content, credentials, operational records, and local telemetry can stay on the machines and private network you control when you use local runtimes and do not enable remote services.",
+          "Local-first does not mean every feature is offline. External model providers, hosted or managed agents, Hivemind Sync, remote machines, communication platforms, cloud deployment, marketplaces, payment and wallet rails, public blockchains, public identity features, and third-party integrations require network communication. Those features are connected, configured, enabled, or invoked by you, except for limited technical checks such as signed software-update and source-version checks described in the Privacy Policy.",
+          "You are responsible for reviewing the privacy and security implications of each connection before using it with confidential, regulated, personal, or proprietary information."
+        ]
+      },
+      {
+        "title": "7. No professional advice or unsupervised high-impact use",
+        "paragraphs": [
+          "The Services and their outputs are not a substitute for qualified financial, investment, legal, tax, accounting, medical, mental-health, safety, engineering, cybersecurity, or other professional advice. The HivemindOS Parties do not act as your fiduciary, broker, attorney, doctor, accountant, employer, or agent merely by providing the Services.",
+          "Do not use the Services as the sole basis for decisions that could materially affect a person's health, safety, legal rights, finances, employment, housing, insurance, education, access to essential services, or other high-impact interests. Obtain independent professional advice and meaningful human review where appropriate or required by law."
+        ]
+      },
+      {
+        "title": "8. Earnings, business, and financial outcomes",
+        "paragraphs": [
+          "HivemindOS may help you work faster, reduce costs, identify opportunities, create products, perform services, or support earning activity. No productivity gain, revenue, profit, investment return, token value, customer result, cost saving, or other earnings outcome is promised or guaranteed.",
+          "Examples, forecasts, simulations, benchmarks, marketplace prices, reward estimates, and projected earnings are illustrative or estimated and may be incomplete or wrong. Markets, tokens, digital assets, businesses, and third-party services can be volatile or fail entirely. You are solely responsible for deciding whether an activity is suitable and for all resulting taxes, reporting duties, losses, and obligations."
+        ]
+      },
+      {
+        "title": "9. HIVE, Honey, wallets, staking, and digital assets",
+        "paragraphs": [
+          "HIVE, Honey, staking, wallet, reward, marketplace, trading, and other digital-asset features involve substantial risk. Digital assets can be volatile, illiquid, technically flawed, restricted, taxed, lost, or become worthless. Nothing in the Services is an offer, solicitation, or recommendation to buy, sell, hold, trade, or stake an asset.",
+          "Blockchain transactions and smart-contract interactions may be public, binding, costly, and irreversible. You are responsible for wallet security, network selection, gas and provider fees, taxes, reporting, eligibility, transaction review, and compliance with laws that apply to you. HivemindOS does not receive your seed phrase or private key when you connect an ordinary external wallet."
+        ]
+      },
+      {
+        "title": "10. Lawful and responsible use",
+        "paragraphs": [
+          "You may use the Services only in compliance with applicable law, contractual duties, licenses, platform rules, and the rights of others. You are responsible for obtaining all permissions, notices, consents, registrations, and professional or regulatory approvals required for your use."
+        ],
+        "bullets": [
+          "Do not use the Services to deceive, defraud, harass, exploit, discriminate against, impersonate, surveil, or harm a person unlawfully.",
+          "Do not bypass security, access systems or data without authorization, distribute malware, interfere with services, or conceal unlawful activity.",
+          "Do not submit content or data you lack the right to use, or use generated material in a way that infringes privacy, publicity, intellectual-property, confidentiality, or other rights.",
+          "Disclose AI-generated or AI-manipulated material when required by law, platform rules, professional duties, or the context needed to avoid deception."
+        ]
+      },
+      {
+        "title": "11. Identity and community features",
+        "paragraphs": [
+          "If you choose to link a wallet to an X account or participate in public HIVE community features, you authorize the requested verification and understand that a verified wallet association, selected public profile information, public posts, contribution scores, reward records, and public transaction details may be displayed publicly as described in the Privacy Policy.",
+          "You may claim only a wallet and account you are authorized to control. Do not impersonate another person, submit forged proofs, manipulate rewards, or use identity features to mislead others."
+        ]
+      },
+      {
+        "title": "12. Connected services and third parties",
+        "paragraphs": [
+          "The Services may interoperate with third-party models, runtimes, websites, marketplaces, financial rails, wallets, cloud providers, communication platforms, devices, plugins, skills, and open-source packages. Those services are controlled by others and may change, fail, suspend access, charge fees, process data, or produce harmful results. Their own terms and privacy practices apply.",
+          "The HivemindOS Parties do not control or endorse third-party content, products, transactions, or conduct and are not responsible for them. You are responsible for reviewing third-party terms, maintaining your accounts and credentials, and confirming that each connection is appropriate for your use."
+        ]
+      },
+      {
+        "title": "13. Data, credentials, and security",
+        "paragraphs": [
+          "You retain responsibility for the data, prompts, files, credentials, code, and other material you provide or make accessible. You represent that you have the rights and permissions needed to use that material and to instruct the Services to process it.",
+          "No system is completely secure. You are responsible for access controls, backups, credential rotation, account recovery, retention rules, and incident response appropriate to your risks. Never provide HivemindOS, an agent, or a support contact with a wallet seed phrase or private key unless you deliberately use a local encrypted wallet-vault feature that clearly explains how the secret is stored and used."
+        ]
+      },
+      {
+        "title": "14. Agents, transactions, and irreversible actions",
+        "paragraphs": [
+          "Agents and automations may continue operating after you leave a screen or close a client, depending on the runtime and schedule you enabled. You are responsible for monitoring them and for disabling or revoking access when no longer needed.",
+          "Messages, publications, deployments, purchases, trades, token transfers, smart-contract interactions, and other external actions may be public, binding, costly, or irreversible. Preview and confirmation interfaces do not guarantee that a recipient, address, asset, amount, network, contract, order, or outcome is correct. Verify consequential actions through an independent source before authorizing them."
+        ]
+      },
+      {
+        "title": "15. Content and ownership",
+        "paragraphs": [
+          "You retain ownership of material you submit, subject to any rights needed for the Services and connected providers to process it at your direction. You are responsible for determining whether generated output can be owned, protected, licensed, or lawfully used; the HivemindOS Parties make no promise that output is unique or free of third-party rights.",
+          "HivemindOS names, marks, logos, and site presentation may be protected separately from the open-source code license. Do not imply official endorsement of a fork, service, token, or product without permission."
+        ]
+      },
+      {
+        "title": "16. Changes, availability, and support",
+        "paragraphs": [
+          "The Services may be modified, updated, interrupted, limited, or discontinued at any time. Features may be experimental, incomplete, or incompatible with a particular model, runtime, device, law, or third-party service. Unless separately agreed in writing, the HivemindOS Parties have no obligation to provide support, maintenance, data recovery, uptime, compatibility, or any specific feature."
+        ]
+      },
+      {
+        "title": "17. Disclaimer of warranties",
+        "paragraphs": [
+          "TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SERVICES AND ALL OUTPUTS ARE PROVIDED AS IS AND AS AVAILABLE, WITH ALL FAULTS AND WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND. THE HIVEMINDOS PARTIES DISCLAIM ALL EXPRESS, IMPLIED, AND STATUTORY WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, RELIABILITY, SECURITY, AVAILABILITY, QUIET ENJOYMENT, AND ANY WARRANTY ARISING FROM COURSE OF DEALING OR USAGE OF TRADE.",
+          "THE HIVEMINDOS PARTIES DO NOT WARRANT THAT THE SERVICES OR OUTPUTS WILL BE CORRECT, SAFE, SECURE, UNINTERRUPTED, ERROR-FREE, LAWFUL FOR YOUR PURPOSE, OR CAPABLE OF PRODUCING ANY PARTICULAR RESULT. YOU USE THEM AT YOUR OWN RISK."
+        ]
+      },
+      {
+        "title": "18. Limitation of liability",
+        "paragraphs": [
+          "TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE HIVEMINDOS PARTIES WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR PUNITIVE DAMAGES; LOSS OF PROFITS, REVENUE, BUSINESS, OPPORTUNITY, GOODWILL, DATA, DIGITAL ASSETS, OR USE; COST OF SUBSTITUTE SERVICES; OR DAMAGES ARISING FROM AI OUTPUT, AUTOMATIONS, THIRD PARTIES, SECURITY INCIDENTS, OR UNAUTHORIZED OR UNINTENDED ACTIONS, EVEN IF ADVISED THAT SUCH DAMAGE WAS POSSIBLE.",
+          "TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE TOTAL AGGREGATE LIABILITY OF THE HIVEMINDOS PARTIES FOR ALL CLAIMS ARISING OUT OF OR RELATING TO THE SERVICES OR THESE TERMS WILL NOT EXCEED THE GREATER OF US$100 OR THE AMOUNT YOU PAID DIRECTLY FOR THE RELEVANT HIVEMINDOS SERVICE DURING THE 12 MONTHS BEFORE THE EVENT GIVING RISE TO THE CLAIM.",
+          "Some jurisdictions do not allow certain exclusions or limitations. In those jurisdictions, these provisions apply only to the fullest extent allowed. Nothing in these Terms excludes liability or rights that cannot lawfully be excluded, including any mandatory consumer protection that applies to you."
+        ]
+      },
+      {
+        "title": "19. Indemnity, suspension, and termination",
+        "paragraphs": [
+          "To the extent permitted by law, you will defend, indemnify, and hold harmless the HivemindOS Parties from claims, losses, liabilities, damages, judgments, penalties, costs, and reasonable legal fees arising from your content, your use or misuse of the Services, an operation you authorize or permit, your violation of these Terms or applicable law, or your infringement of another person's rights. This obligation does not apply to the extent a claim was caused by conduct for which indemnification cannot lawfully be required.",
+          "You may stop using the Services at any time. Access to a hosted or managed service may be suspended or terminated for a material breach, unlawful or unsafe use, security risk, nonpayment, third-party dependency, or discontinuation. Termination does not automatically reverse an operation already submitted or stop a separately running agent, runtime, schedule, transaction, or third-party service; you must disable those systems directly."
+        ]
+      },
+      {
+        "title": "20. Updates and general legal terms",
+        "paragraphs": [
+          "These Terms may be updated to reflect changes to the Services, risks, or law. When a material update is presented in the app, you must accept the new version before continuing to use the gated Services. The version and effective date identify the agreement you accepted.",
+          "Applicable mandatory law governs these Terms. Any separate written service order may specify governing law, venue, and dispute procedures for that service. These Terms do not limit non-waivable consumer rights. If a provision is unenforceable, it will be enforced to the maximum lawful extent and the remaining provisions will continue. A failure to enforce a provision is not a waiver.",
+          "Questions about these Terms may be sent to legal@hivemindos.app. Do not include wallet secrets, private keys, or unnecessary sensitive information."
+        ]
+      }
+    ]
+  },
+  "privacy": {
+    "version": "2026-07-11",
+    "effectiveDate": "July 11, 2026",
+    "title": "Privacy Policy",
+    "eyebrow": "Legal · private and local-first by design",
+    "intro": "HivemindOS is designed so its core can run privately on hardware you control. This policy separates local processing, limited automatic technical connections, user-chosen connected services, and deliberately public features.",
+    "highlights": [
+      "A local-only workflow using local models can remain entirely on the machines and private network you control.",
+      "Prompts, responses, files, vault content, credentials, and local telemetry are not sent to HivemindOS merely because the app is installed or opened.",
+      "Remote models, integrations, sync, managed cloud, wallets, and public identity features communicate externally only when configured, enabled, or used by you.",
+      "The website and signed app updater make limited technical requests needed for delivery, security, and update awareness."
+    ],
+    "sections": [
+      {
+        "title": "1. Who we are and what this policy covers",
+        "paragraphs": [
+          "Rizzma Inc. operates the official HivemindOS website and hosted services described in this Privacy Policy. This policy covers the official HivemindOS application, hivemindos.app, official HIVE identity and community services, and other HivemindOS-managed services that refer to it.",
+          "HivemindOS is open source and can be self-hosted or modified. A third-party fork, deployment, model, wallet, runtime, integration, plugin, skill, or website is controlled by its own operator and is not covered by this policy. A managed product may provide an additional notice for practices specific to that product."
+        ]
+      },
+      {
+        "title": "2. The local-first privacy model",
+        "paragraphs": [
+          "The private local core is the default architecture, not a marketing wrapper around a cloud account. The dashboard server, agent bridge, durable dashboard state, chats, work records, schedules, local wallet records, shared-brain vault, search indexes, operational receipts, and local telemetry are designed to live on the device, workspace, or private fleet you control.",
+          "The app does not require a HivemindOS cloud account for local, bring-your-own-key, self-hosted, or local-model operation. A local-only workflow can remain entirely on the machines and private network you control when you select local runtimes and do not enable remote integrations.",
+          "The first-run desktop flow does not read private filesystem locations until you approve setup and local filesystem access. The component historically named the telemetry collector is a local agent bridge; its ordinary fleet and runtime telemetry stays on your device or private fleet rather than being uploaded to HivemindOS."
+        ]
+      },
+      {
+        "title": "3. Information stored locally",
+        "paragraphs": [
+          "Depending on the features you use, HivemindOS may store app preferences, terms acceptance, agent profiles, chat messages, attachments or file references, working directories, task and schedule records, notifications, runtime usage, budgets, approvals, wallet metadata, encrypted local wallet secrets, integration credentials, logs, evaluations, and operational receipts under the local HivemindOS application data directory, configured workspace, runtime directories, or shared vault.",
+          "Shared Brain content, memories, skills, indexes, retrieval records, and conversation mirrors remain in the configured local vault unless you enable a sync or remote-agent feature. Shared credentials are stored in the local HivemindOS environment file and may be copied to your own private fleet only when you configure that replication.",
+          "Production builds do not enable the app's detailed local developer telemetry by default. When local telemetry is enabled for development or diagnostics, it is written to a rotating file under the local application data directory. It is not HivemindOS cloud analytics."
+        ]
+      },
+      {
+        "title": "4. Information that is not sent merely by opening the app",
+        "paragraphs": [
+          "Installing or opening the app does not by itself send your prompts, responses, chat history, files, vault content, credentials, wallet private keys, seed phrases, local telemetry log, or detailed machine inventory to Rizzma Inc.",
+          "HivemindOS does not sell this local content or use it to build advertising profiles. Local data can still be exposed by malware, an insecure device, a misconfigured network, a plugin or skill, a provider you connect, a command you authorize, or another person with access to your system."
+        ]
+      },
+      {
+        "title": "5. Limited automatic technical connections",
+        "paragraphs": [
+          "The official website is delivered through Cloudflare, which necessarily receives technical request information such as IP address, approximate network location, browser and device type, user agent, requested URL, request time, referral information, and security events needed to deliver and protect the site.",
+          "Packaged desktop builds check the signed GitHub release endpoint when the dashboard loads and approximately every six hours while it remains open so the app can show that an update is available. The update is downloaded and installed only after you choose the update action. Source-checkout builds may query the configured Git remote for the current revision when showing source and fleet update status.",
+          "A connected feature may retrieve public availability, pricing, safety, payment, or policy configuration from HivemindOS or a provider when you open or use that feature. These technical checks can reveal ordinary network metadata such as IP address and request time, but they are not designed to include your prompts, responses, files, vault content, credentials, or wallet secrets."
+        ]
+      },
+      {
+        "title": "6. When you choose a model or agent runtime",
+        "paragraphs": [
+          "Local model servers can process prompts and outputs on your own machine. When you select a remote model, hosted runtime, coding agent, image or video provider, search provider, or paid API, the information required for that request is sent to the selected provider. This may include prompts, conversation context, system instructions, files or excerpts you attach, tool inputs, generated outputs, model and usage metadata, and technical request information.",
+          "If you choose an official HivemindOS-managed agent or model gateway, Rizzma Inc. and its infrastructure providers may process the request content, workspace or agent identifiers, authorization or entitlement data, usage, costs, tool results, error details, and receipts needed to provide, secure, bill, and audit that service. Provider-specific supplemental notices may apply.",
+          "If you use your own provider key, the provider receives data under its own terms and privacy policy. HivemindOS does not make a remote provider private merely because its controls appear inside a local app."
+        ]
+      },
+      {
+        "title": "7. Integrations, sync, remote machines, and communications",
+        "paragraphs": [
+          "GitHub, Google, Slack, Discord, Telegram, email, browser automation, cloud deployment, external MCP servers, and other integrations communicate with the provider only after you configure, connect, authorize, or invoke them. The provider may receive account identifiers, OAuth tokens or API credentials, prompts, messages, files, repository data, destinations, and action details needed for the operation.",
+          "Hivemind Sync, Syncthing, Taildrop, shared-env replication, remote agents, and Hivemind Link move selected data between machines you configure. Those paths are intended for your own private fleet, but Tailscale, Syncthing relays, network operators, hosting providers, or other infrastructure may process connectivity metadata under their own policies.",
+          "Messages, posts, emails, deployments, commits, pull requests, and other outward actions go to the destination you choose and may become visible to recipients or the public. Approval and preview controls do not make an external action private after it is sent."
+        ]
+      },
+      {
+        "title": "8. Honey rewards and usage metadata",
+        "paragraphs": [
+          "Honey rewards are disabled by default and must be enabled by you. When enabled, HivemindOS may submit workspace ID, agent ID, token count or delta, model label, timestamp, source, and event ID to the official Honey ledger so usage can be deduplicated and credited.",
+          "The ordinary Honey usage observer is designed not to send prompts, responses, files, wallet keys, or detailed machine information to the Honey ledger. If you instead route model requests through the optional HivemindOS reward or compute gateway, that gateway necessarily processes the model request content and provider response needed to perform inference and measure usage."
+        ]
+      },
+      {
+        "title": "9. Wallet and blockchain information",
+        "paragraphs": [
+          "When you choose to connect or use a wallet, HivemindOS may read the wallet address you approve, active chain ID, public token balance, public staking state, contract state, transaction status, and other public blockchain information through your wallet or a configured RPC provider. Wallet addresses and blockchain activity are public identifiers and may be linkable to other activity.",
+          "When you authorize staking, trading, payment, transfer, withdrawal, or another blockchain action, wallet software, RPC providers, blockchains, facilitators, marketplaces, counterparties, and block explorers may process the transaction and related public information. Ordinary external-wallet connection does not give HivemindOS your seed phrase or private key. If you create or import a secret into the encrypted local wallet vault, the secret is stored locally and is used only for operations you authorize under the configured governance controls.",
+          "Official payment, marketplace, managed-credit, and entitlement services may receive wallet address, network, asset, amount, transaction or settlement proof, product or resource, tenant or agent identifier, and fraud-prevention metadata needed to verify and provide paid access."
+        ]
+      },
+      {
+        "title": "10. HIVE identity claims and X OAuth",
+        "paragraphs": [
+          "When you choose the public identity-claim flow, the service processes your wallet address, active chain ID, verification nonce, signed proof message, wallet signature, X OAuth state and PKCE data, redirect and timing information, and the X profile fields authorized by the requested scope. Those fields may include X user ID, handle, display name, avatar, profile URL, bio, and public follower, following, and post counts.",
+          "The OAuth access token is used to request the authorized X profile during the callback and is not stored in the identity database. The claim screen uses sessionStorage, a session-only browser store, to carry the wallet address through the redirect and removes it after the flow returns.",
+          "A verified wallet and X association, wallet address, X handle, selected public profile information, public metrics, and verification time may appear in the public HIVE identity or community feed. Do not submit a claim if you do not want that association to be public."
+        ]
+      },
+      {
+        "title": "11. Public community and reward information",
+        "paragraphs": [
+          "HivemindOS may collect public X posts, reposts, profile information, post URLs and timestamps, public engagement metrics, and public wallet associations relating to HivemindOS, HIVE, or configured community accounts. Community systems may generate contribution scores, score reasons, nomination status, reviewer notes, payout intent, HIVE amount, public transaction hash, and payment status.",
+          "This information is used to operate public community feeds, verify identity, prevent duplicate or fraudulent claims, review contributions, administer rewards, and provide an auditable public record. Source posts and blockchain records remain controlled by X and public networks even if HivemindOS removes its own copy."
+        ]
+      },
+      {
+        "title": "12. How information is used",
+        "paragraphs": [
+          "Depending on your location and the feature, information is processed to provide the service you requested; honor your choices and consent; secure accounts, payments, systems, and public claims; prevent abuse and fraud; troubleshoot and improve reliability; maintain records and audit trails; enforce the Terms; and comply with legal obligations.",
+          "Where consent is the legal basis, you may withdraw it for future processing. Withdrawal does not make earlier lawful processing unlawful and cannot erase data controlled by a public blockchain, a recipient, a social network, or another independent service."
+        ]
+      },
+      {
+        "title": "13. When information is public or disclosed",
+        "paragraphs": [
+          "Information may be disclosed to the public when you choose a public identity, community, publishing, deployment, repository, marketplace, wallet, or blockchain feature; to infrastructure and service providers that help deliver the selected feature; to connected providers and destinations you authorize; to advisers, auditors, transaction counterparties, authorities, or successors where reasonably necessary and lawful; and to a self-hosted operator if you use an installation controlled by that operator.",
+          "We do not sell personal information and do not share personal information for cross-context behavioral advertising. Verified claims and local app content are not used to build advertising profiles."
+        ]
+      },
+      {
+        "title": "14. Cookies, browser storage, and analytics",
+        "paragraphs": [
+          "The current public website does not set first-party advertising cookies or run first-party behavioral analytics. The identity claim flow uses the session-only browser value described above. Connected wallets, extensions, X, Cloudflare, GitHub, and external destinations may use their own cookies or storage under their own policies.",
+          "If HivemindOS later adds material analytics, advertising, or tracking technologies, this policy will be updated and consent or opt-out controls will be provided where required."
+        ]
+      },
+      {
+        "title": "15. Retention and deletion",
+        "paragraphs": [
+          "Local data remains under your control subject to the app's deletion tools, your filesystem and backup practices, configured retention limits, and copies held by runtimes or destinations you selected. Deleting a local record does not delete an independently stored provider copy, recipient copy, public post, blockchain record, synced backup, or third-party log.",
+          "HivemindOS-managed services retain information only as long as reasonably necessary for service delivery, entitlement and payment records, claim integrity, fraud prevention, community and reward administration, dispute resolution, security, accounting, and legal compliance. Retention depends on the record and whether it remains active, disputed, security-relevant, or legally required.",
+          "Public X content and blockchain records may remain public indefinitely. Cloudflare, GitHub, model providers, integration providers, and other third parties retain information according to their own configurations and policies."
+        ]
+      },
+      {
+        "title": "16. Security",
+        "paragraphs": [
+          "HivemindOS uses safeguards appropriate to the feature, including local-only defaults, private-network collectors, least-privilege connection design, signed wallet proofs, short-lived nonces, OAuth state and PKCE, encrypted local secret storage where offered, authenticated local routes, approval controls, spending limits, and provider access controls.",
+          "No system is completely secure. HivemindOS cannot guarantee that information will never be accessed, altered, lost, or disclosed without authorization. Keep devices patched, use strong authentication, review connected tools, restrict permissions, maintain backups, and never send a seed phrase or private key to a support contact."
+        ]
+      },
+      {
+        "title": "17. International processing and privacy rights",
+        "paragraphs": [
+          "Rizzma Inc. and connected providers may process information in the United States and other countries whose data-protection rules differ from those where you live. Where legally required, an applicable transfer mechanism or other lawful basis is used. Public blockchain and social-network data can be accessed globally by design.",
+          "Depending on your location, you may have rights to know or access personal information, correct it, delete it, restrict or object to processing, receive a portable copy, withdraw consent, appeal a decision, and lodge a complaint with a data-protection authority. You will not be discriminated against for exercising applicable privacy rights.",
+          "Submit a request to privacy@hivemindos.app and identify the relevant service, wallet address, or X handle without sending private keys, seed phrases, or unnecessary sensitive information. Proportionate verification may be required. HivemindOS may be unable to remove public blockchain records, source social content, recipient copies, or independent copies made by others."
+        ]
+      },
+      {
+        "title": "18. U.S. state disclosures",
+        "paragraphs": [
+          "In the preceding 12 months, official services may have collected the categories described above: identifiers; internet, network, and electronic activity; user-provided content; public social-profile and community information; blockchain, transaction, and commercial information; approximate location inferred from network requests; and inferences such as community contribution scores. These categories are used and disclosed for the operational purposes listed in this policy.",
+          "Rizzma Inc. does not sell these categories and does not share them for cross-context behavioral advertising. Sensitive personal information is not used or disclosed to infer characteristics about people. If practices materially change, this notice and any legally required opt-out or limitation mechanism will be updated."
+        ]
+      },
+      {
+        "title": "19. Children",
+        "paragraphs": [
+          "The official site and Services are not directed to children under 13, and wallet, staking, identity-claim, marketplace, and financial features are intended only for people legally able to use them. Rizzma Inc. does not knowingly collect personal information from children under 13 through these services. Contact privacy@hivemindos.app if you believe a child submitted information."
+        ]
+      },
+      {
+        "title": "20. Changes and contact",
+        "paragraphs": [
+          "This policy may be updated when services, providers, data flows, or legal obligations change. The effective date and version identify the current notice. Material changes will be highlighted or presented again where required.",
+          "Privacy questions and rights requests may be sent to privacy@hivemindos.app. General legal questions may be sent to legal@hivemindos.app. Do not include wallet secrets, private keys, or unnecessary sensitive information."
+        ]
+      }
+    ]
+  }
+}

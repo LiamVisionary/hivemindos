@@ -148,6 +148,25 @@ async function main() {
     assert(child?.status === "ready", "Completing a parent should promote ready children.");
     await moveTask(child, "archived");
 
+    // Park-for-approval gate: an agent (MCP work_board) can't promote a Needs-You card
+    // back to Ready and self-resume; a human release still works.
+    const parkedApproval = await createTask("parked approval needs a human", "needs-human", { result: "Waiting on approval." });
+    let agentPromoteBlocked = false;
+    try {
+      await request("POST", { action: "promote", taskId: parkedApproval.id, actor: "agent" });
+    } catch (error) {
+      agentPromoteBlocked = /waiting on a human decision/i.test(String(error?.message ?? error));
+    }
+    assert(agentPromoteBlocked, "An agent must not promote a Needs-You task back to Ready.");
+    const afterAgentPromote = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true" });
+    assert(
+      afterAgentPromote.board.tasks.find((task) => task.id === parkedApproval.id)?.status === "needs-human",
+      "The parked task stays in Needs You after a blocked agent promote.",
+    );
+    const humanPromoted = await request("POST", { action: "promote", taskId: parkedApproval.id });
+    assert(humanPromoted.task?.status === "ready", "A human can still promote a Needs-You task to Ready.");
+    await moveTask(humanPromoted.task, "archived");
+
     let claimable = await createTask("structured worker verbs", "ready");
     const claimed = await request("POST", {
       action: "claim",
@@ -177,10 +196,11 @@ async function main() {
         successCriteria: ["worker result includes the verification marker"],
         evalGates: [{
           id: "marker-check",
-          title: "held-out marker check",
-          kind: "agent",
+          title: "worker marker evidence",
+          kind: "receipt",
           phase: "post",
           required: true,
+          verifier: "receipt:evidence",
           status: "pending",
           createdAt: Date.now(),
         }],
@@ -206,9 +226,9 @@ async function main() {
       loopReceipts: [{
         gateId: "marker-check",
         status: "passed",
-        summary: "marker found in worker chat",
+        summary: "worker supplied the required marker evidence",
         evidence: ["worker chat transcript included marker"],
-        verifier: "kanban workflow test",
+        verifier: "receipt:evidence",
       }],
     });
     loopGated = loopPassed.task;

@@ -125,6 +125,7 @@ function AppNavShelfBase({
   appVersion,
   navBadges = {},
   pinnedUtilities,
+  onOpenCompanionSetup,
 }: {
   activeView: DashboardView;
   onNavigate: (id: DashboardView) => void;
@@ -136,6 +137,8 @@ function AppNavShelfBase({
   navBadges?: Partial<Record<DashboardView, number>>;
   /** User-pinned utility views for the rail's third section (see MorePanel). */
   pinnedUtilities?: DashboardView[];
+  /** Opens the hologram-companion setup/download modal (see CompanionSetupModal). */
+  onOpenCompanionSetup?: () => void;
 }) {
   // Empty groups (e.g. the user unpinned every utility) are dropped so no
   // dangling divider is left behind the fixed sections.
@@ -260,6 +263,20 @@ function AppNavShelfBase({
             </button>
           ) : null}
           <NavShelfItem id="more" label="More" active={active === "more"} onNavigate={onNavigate} onPrefetch={onPrefetch} />
+          {onOpenCompanionSetup ? (
+            <button type="button" className="fr-nav" onClick={onOpenCompanionSetup} title="Hologram companion">
+              <span className="fr-nav-ico">
+                {/* a figure rising from a holo-emitter base */}
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="7" r="2.6" />
+                  <path d="M8.2 14.2c.7-1.9 2.1-3 3.8-3s3.1 1.1 3.8 3" />
+                  <path d="M5 18.5c1.6 1 4.1 1.6 7 1.6s5.4-.6 7-1.6" />
+                  <path d="M8.5 16.8h7" opacity="0.6" />
+                </svg>
+              </span>
+              <span className="fr-nav-label">Companion</span>
+            </button>
+          ) : null}
           <button type="button" className="fr-nav" onClick={onToggleTheme} title="Toggle light and dark">
             <span className="fr-nav-ico">{theme === "light" ? <MoonIcon /> : <SunIcon />}</span>
             <span className="fr-nav-label">{theme === "light" ? "Dark mode" : "Light mode"}</span>

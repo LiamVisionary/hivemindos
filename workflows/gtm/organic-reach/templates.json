@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "Organic content-to-pipeline building blocks: the 3-pillar weekly mix, 5 post-type skeletons, 6 viral wrapper shapes, cadence rows, content-team roles, the 4-part positioning formula, proof-library categories, distribution channels, metric tiers, and Instagram top-of-funnel rules. This bank is authored, not measured — impression/conversion figures circulating for this system are the source's own claims and agents must not present them as proven. A fuller playbook lives in the shared skills shelf as the organic-reach-gtm skill. Hard rules that travel with every row: proof is never fabricated (no invented results, testimonials, or screenshots — real proof or no post), every comment-keyword CTA's promised DM is actually sent by a human or human-approved draft, scheduling goes through platform-native schedulers only, and comments on others' posts follow the linkedin bank's human-approval rules. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 41,
+  "taxonomy": {
+    "pillars": ["authority", "personal", "lead-magnet"],
+    "metricTiers": ["primary", "secondary", "proof", "north-star"]
+  },
+  "pillars": [
+    { "id": "GP01", "pillar": "authority", "perWeek": "2-3", "goal": "credibility and competence", "postTypes": ["case-study", "framework", "contrarian"] },
+    { "id": "GP02", "pillar": "personal", "perWeek": "1-2", "goal": "trust and relatability", "postTypes": ["mistake"] },
+    { "id": "GP03", "pillar": "lead-magnet", "perWeek": "1-3", "goal": "conversion and list building", "postTypes": ["lead-magnet"] }
+  ],
+  "postTypes": [
+    { "id": "GT01", "type": "lead-magnet", "template": "[BOLD CLAIM ABOUT THE RESULT THE RESOURCE DELIVERS]\n\nWhat's inside:\n[THREE TO FIVE SPECIFIC COMPONENTS AS BULLETS]\n\n[OPTIONAL ONE LINE OF SOCIAL PROOF]\n\nComment [KEYWORD] and I'll DM it.", "why": "Highest-converting type; the keyword comment creates a DM channel and boosts distribution. Every promised DM must actually be sent." },
+    { "id": "GT02", "type": "case-study", "template": "[RESULT HEADLINE WITH A SPECIFIC NUMBER]\n\nThe constraint: [TIME OR BUDGET OR TEAM SIZE]\n\nThe exact steps:\n[THREE TO FIVE NUMBERED STEPS]\n\nWhat I'd do differently: [ONE HONEST CHANGE]", "why": "Numbers, process, constraint, outcome — show the work. The result must be real." },
+    { "id": "GT03", "type": "mistake", "template": "[THE SPECIFIC MISTAKE]\n\nWhat it cost: [TIME OR MONEY OR OPPORTUNITY]\n\nWhat I do instead now: [THE CHANGE]\n\nThe result: [WHAT IMPROVED]", "why": "Specific vulnerability builds trust generic advice cannot." },
+    { "id": "GT04", "type": "framework", "template": "[THE OUTCOME THE READER WANTS]\n\n[THREE TO FIVE STEPS OF AT MOST TEN WORDS EACH]\n\nCommon objection: [OBJECTION] - [YOUR ANSWER]\n\n[CTA TO GO DEEPER]", "why": "Tactical and immediately applicable; step brevity is the discipline." },
+    { "id": "GT05", "type": "contrarian", "template": "[COMMON PRACTICE] is [DEAD OR WRONG OR OUTDATED].\n\nWhy it stopped working: [REASON]\n\nWhat works instead: [YOUR APPROACH]\n\nThe evidence: [SPECIFIC PROOF]", "why": "Strong POV draws comments and DMs; the position must be genuinely held and evidenced." }
+  ],
+  "viralWrappers": [
+    { "id": "GW01", "wrapper": "results test", "shape": "tried a thing for a fixed period: before state, the change, after state with metrics, tactics used, CTA" },
+    { "id": "GW02", "wrapper": "tool list", "shape": "a list with a specific use case per item, tagging tools or creators for amplification, with a screenshot of the real stack" },
+    { "id": "GW03", "wrapper": "controversial opinion", "shape": "call out the common belief, present the contrarian take with data, three to five supporting points, invite pushback" },
+    { "id": "GW04", "wrapper": "case study breakdown", "shape": "how a company went from X to Y: starting position, exact system, tools, results with timeline, how to replicate" },
+    { "id": "GW05", "wrapper": "before-after story", "shape": "year-vs-year contrast, the pivot, tactical steps, current state with proof, lessons" },
+    { "id": "GW06", "wrapper": "system breakdown", "shape": "the exact workflow behind a result: numbered steps, tools per step, screenshots, failure points, CTA for the full SOP" }
+  ],
+  "cadence": [
+    { "id": "GC01", "rhythm": "5 posts per week, one per weekday" },
+    { "id": "GC02", "rhythm": "10 meaningful comments per day: 5 on ICP posts, 3 on aspirational accounts, 2 on peers; meaningful means 2-3 sentences referencing a specific point" },
+    { "id": "GC03", "rhythm": "respond to every comment on your own posts within about 2 hours" }
+  ],
+  "teamRoles": [
+    { "id": "GR01", "role": "GTM copywriter", "hours": "20-30/wk", "owns": "ideation from positioning and results, all writing, asset briefs, review, scheduling; a strategist who writes", "hiringTest": "paid test: three post ideas from real positioning and results, one written out" },
+    { "id": "GR02", "role": "DM setter / SDR", "hours": "15-20/wk", "owns": "every DM conversation and comment reply, ICP-post commenting, lead-magnet follow-up, qualification, booking", "hiringTest": "ten real DM threads: do they qualify properly and sound human" },
+    { "id": "GR03", "role": "designer", "hours": "10-15/wk", "owns": "brand visual style, preview media from briefs, lead-magnet visuals, 24-48h turnaround", "hiringTest": "three preview images from a real brief" }
+  ],
+  "productionRule": "rolling weekly cycle with one hard deadline: all of next week's content written, designed, reviewed, and scheduled by end of Friday, through the platform's native scheduler only",
+  "positioningFormula": [
+    { "id": "GF01", "part": "who", "rule": "a specific ICP with size and role, never a broad category" },
+    { "id": "GF02", "part": "what", "rule": "a transformation with numbers and a timeframe, never a vague benefit" },
+    { "id": "GF03", "part": "how", "rule": "a named method, never a generic capability" },
+    { "id": "GF04", "part": "proof", "rule": "measurable evidence, never a volume-of-experience claim" }
+  ],
+  "signatureFramework": "one named framework per authority: a memorable two-to-four word name, three to five components, a visual diagram, a clear before/after, and real attached proof; referenced in every post and every sales conversation",
+  "proofLibrary": [
+    { "id": "GL01", "category": "client results", "spec": "10+ entries: company, start and end metrics, timeframe, tactics, screenshot or testimonial - all real" },
+    { "id": "GL02", "category": "own results", "spec": "dashboards, pipeline, reply and conversion rates, stack cost vs return" },
+    { "id": "GL03", "category": "workflow examples", "spec": "real automation screenshots, enrichment tables, sequences and templates with their actual reply rates" },
+    { "id": "GL04", "category": "deep case studies", "spec": "3-5: background, problem, step-by-step solution, tools, results with timeline, lessons" }
+  ],
+  "distribution": [
+    { "id": "GD01", "channel": "linkedin", "role": "core: the weekly posting and commenting engine" },
+    { "id": "GD02", "channel": "newsletter", "role": "owned: weekly deep-dive on one framework or tactic" },
+    { "id": "GD03", "channel": "collaborations", "role": "leverage: guest posts, podcasts, co-created lead magnets" },
+    { "id": "GD04", "channel": "repurposing stack", "role": "scale: video, audio, blog, and social cutdowns of the same source document" }
+  ],
+  "metricTiers": [
+    { "id": "GM01", "tier": "primary", "metrics": "qualified DM conversations started, discovery calls booked, newsletter subscribers, clients signed" },
+    { "id": "GM02", "tier": "secondary", "metrics": "follower growth (quality over quantity), impressions, ICP comments" },
+    { "id": "GM03", "tier": "proof", "metrics": "new case studies per quarter, testimonials collected, mentions and collaborations" },
+    { "id": "GM04", "tier": "north-star", "metrics": "revenue from inbound - buyers who found you; if it rises monthly the system works" }
+  ],
+  "instagramRules": [
+    { "id": "GI01", "rule": "fit test first", "detail": "works for low-friction PLG tools, visually-provable services for SMBs and founders, and info products; not for enterprise cycles, demo-led setup-heavy products, or committee purchases" },
+    { "id": "GI02", "rule": "top-of-funnel only", "detail": "attention, problem awareness, and one micro-conversion (download, trial, waitlist); closing, nurture, and retention live elsewhere" },
+    { "id": "GI03", "rule": "teach one thing completely in under 90 seconds", "detail": "create a gap the lead magnet closes, and point every post at it via caption CTA and bio link" },
+    { "id": "GI04", "rule": "never sell directly", "detail": "intercept with value, then move to a buying environment; downloads pre-qualify by topic (their pain, their stack, their willingness to act)" },
+    { "id": "GI05", "rule": "for cold traffic, trials beat demos", "detail": "instant access, zero friction, self-qualification through product use" }
+  ]
+}

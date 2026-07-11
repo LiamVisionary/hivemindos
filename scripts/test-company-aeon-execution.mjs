@@ -151,6 +151,7 @@ try {
   assert.equal(ledger.runs[0]?.status, "completed");
   assert.equal(ledger.runs[0]?.output?.executionEngine, "aeon");
   assert.equal(ledger.runs[0]?.output?.aeonSkill, "digest");
+  assert.equal(ledger.runs[0]?.output?.evaluation?.verdict, "unobserved", "an accepted external dispatch is not misreported as evaluated work");
   assert.ok(ledger.runs[0]?.events?.some((event) => event.kind === "aeon-dispatched"));
 
   await assert.rejects(

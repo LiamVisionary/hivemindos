@@ -11,9 +11,9 @@ import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValu
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { BrainReadinessBanner } from "@/components/fleet/brain-readiness-banner";
-import { fleetAgentNeedsModelSetup } from "@/features/dashboard/agent-chat-readiness";
+import { fleetAgentChatBlocker, type FleetAgentChatBlocker } from "@/features/dashboard/agent-chat-readiness";
 import type { BrainReadiness } from "@/features/dashboard/hooks/use-brain-readiness";
-import type { DashboardView, HivemindLinkClientStatus, MachineGroup } from "@/features/dashboard/dashboard-types";
+import type { DashboardView, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import styles from "./AgentsPanel.module.css";
@@ -31,7 +31,7 @@ type FleetViewData = {
   ticker: NonNullable<FleetViewProps["ticker"]>;
   edges: NonNullable<FleetViewProps["edges"]>;
 };
-type FleetHiveViewMode = "hive" | "graph" | "map" | "list";
+type FleetHiveViewMode = "hive" | "graph" | "map" | "list" | "companion";
 type FleetChatTone = "hive" | "legacy";
 
 type TailnetCleanupBanner = {
@@ -89,6 +89,7 @@ type AgentsPanelProps = {
   renameMachine: NonNullable<FleetViewProps["onRenameMachine"]>;
   requestDuplicateAgent: (agentId: string) => void;
   runMachineUpdate: (machine: MachineGroup) => void | Promise<void>;
+  runtimeModelSelectionsByRuntime: Partial<Record<AgentProfile["runtime"], NonNullable<RuntimeIntegrationStatus["modelSelection"]>>>;
   setActiveView: Dispatch<SetStateAction<DashboardView>>;
   setAgentRenameDraft: Dispatch<SetStateAction<string>>;
   setAgentRenameEditing: Dispatch<SetStateAction<boolean>>;
@@ -210,6 +211,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     renameMachine,
     requestDuplicateAgent,
     runMachineUpdate,
+    runtimeModelSelectionsByRuntime,
     setActiveView,
     setAgentRenameDraft,
     setAgentRenameEditing,
@@ -253,7 +255,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   // An agent with no configured model (e.g. the default OpenClaw agent on the
   // "HivemindOS models" provider before a wallet/model is set up) can't actually
   // answer, so gate "Open chat" behind model setup instead of opening a dead chat.
-  const [chatBlockedAgent, setChatBlockedAgent] = useState<{ id: string; name: string } | null>(null);
+  const [chatBlockedAgent, setChatBlockedAgent] = useState<({ id: string; name: string } & FleetAgentChatBlocker) | null>(null);
   const [fleetHiveViewMode, setFleetHiveViewMode] = useState<FleetHiveViewMode>("hive");
   const [fleetGraphPalette, setFleetGraphPalette] = useState<OrbitalGraphPalette>("classic");
   useEffect(() => {
@@ -430,7 +432,14 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     onOpenChat: (_, agent) => {
       // Paid HivemindOS model routes still need funding, but the bundled free
       // Scout model is intentionally chat-ready without an agent wallet.
-      if (fleetAgentNeedsModelSetup(agent)) { setChatBlockedAgent({ id: agent.id, name: agent.name }); return; }
+      const profile = displayAgents.find((item) => item.id === agent.id || item.agentId === agent.id)
+        ?? agents.find((item) => item.id === agent.id || item.agentId === agent.id);
+      const runtimeSelection = profile ? runtimeModelSelectionsByRuntime[profile.runtime] : undefined;
+      const blocker = fleetAgentChatBlocker(agent, runtimeSelection);
+      if (blocker) {
+        setChatBlockedAgent({ id: agent.id, name: agent.name, ...blocker });
+        return;
+      }
       startAgentChat(agent.id, { fresh: true });
     },
     onOpenTaskChat: (_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task),
@@ -599,9 +608,17 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
                 onClick={(e) => e.stopPropagation()}
                 style={{ width: "min(420px, 100%)", background: "var(--panel-2, var(--panel, #12151c))", border: "1px solid var(--line-2, var(--line, #2a2f3a))", borderRadius: 14, padding: "22px 22px 18px", boxShadow: "0 30px 80px -30px rgba(0,0,0,0.8)" }}
               >
-                <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--foreground, #f4f7fb)" }}>Configure a model first</h3>
+                <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.title}</h3>
                 <p style={{ margin: "0 0 18px", fontSize: 13.5, lineHeight: 1.5, color: "var(--fg-2, #a7b0c0)" }}>
-                  You must first configure an AI model to chat with <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong>.
+                  {chatBlockedAgent.kind === "funding" ? (
+                    <>The selected HivemindOS model for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong> needs model credits. The free Scout model remains available without credits.</>
+                  ) : chatBlockedAgent.kind === "local-model" && chatBlockedAgent.runtimeDetected ? (
+                    <>Your local model server is online, but no chat model is selected for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong>. Download or load a model, then select it below.</>
+                  ) : chatBlockedAgent.kind === "local-model" ? (
+                    <>Connect the local model server, then download or load and select a chat model for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong>.</>
+                  ) : (
+                    <>Select a chat model for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong> before starting a conversation.</>
+                  )}
                 </p>
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                   <button
@@ -613,10 +630,10 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { const blockedId = chatBlockedAgent.id; setChatBlockedAgent(null); setAgentRoleModalId(blockedId); }}
+                    onClick={() => { const blockedId = chatBlockedAgent.id; setChatBlockedAgent(null); setAgentSettingsPanel("role"); setAgentRoleModalId(blockedId); }}
                     style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid var(--honey-line, #caa24a)", background: "var(--honey, #e7b45c)", color: "var(--honey-ink, #241a06)", font: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                   >
-                    Configure model
+                    {chatBlockedAgent.kind === "funding" ? "Open model setup" : "Choose model"}
                   </button>
                 </div>
               </div>

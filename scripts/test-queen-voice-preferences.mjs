@@ -107,6 +107,13 @@ check("non-string entries in stored JSON are ignored", () => {
 // silently pass every check above while breaking "call me boss" in practice.
 const ROOT = new URL("../", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
+const readOptional = (rel) => {
+  try {
+    return read(rel);
+  } catch {
+    return "";
+  }
+};
 const route = read("src/app/api/queen-bee/voice/route.ts");
 const hook = read("src/features/queen-voice/use-queen-bee-realtime.ts");
 const geminiHook = read("src/features/queen-voice/use-queen-bee-gemini-live.ts");
@@ -117,6 +124,10 @@ const callGateway = read("src/lib/services/phone/call-gateway.ts");
 const turn = read("src/lib/services/queen-bee/voice-turn.ts");
 const agentRuntimeTypes = read("src/lib/types/agent-runtime.ts");
 const callsVoiceSection = read("src/features/dashboard/views/chat/AgentSettingsCallsVoiceSection.tsx");
+const cloudVoiceRoute = read("src/app/api/phone/cloud-voice/route.ts");
+const pcmStreamPlayer = read("src/lib/audio/realtime-pcm-stream-player.ts");
+const pcmPreviewPlayer = readOptional("src/lib/audio/pcm-preview-player.ts");
+const realtimePreview = readOptional("src/lib/audio/openai-realtime-voice-preview.ts");
 // The realtime tool declaration moved out of the route into the shared voice
 // tool bundle (also used by phone calls) — pin it there instead.
 const toolBundles = read("src/lib/services/phone/voice-tool-bundles.ts");
@@ -205,6 +216,69 @@ check("GEMINI: stale Live models normalize to the current supported default", ()
   assert.match(callProviderMatrix, /defaultModel:\s*"gemini-3\.1-flash-live-preview"/, "Calls picker default is not Gemini 3.1 Live");
   assert.doesNotMatch(callProviderMatrix, /defaultModel:\s*"gemini-2\.5-flash-native-audio-preview-12-2025"/, "Calls picker still defaults to the old Gemini 2.5 Live preview");
   assert.match(callGateway, /normalizeGeminiLiveModel\(payload\.voiceModelId\)/, "dashboard call gateway does not normalize Gemini Live model");
+});
+
+check("CLOUD TTS: saved ElevenLabs runtime opens the Queen pipeline", () => {
+  assert.match(route, /const resolvedCallVoice = calls \? resolveVoiceRuntime\(calls\.voiceRuntime\) : null/, "Queen settings do not resolve the saved voice runtime through the capability matrix");
+  assert.match(route, /const cloudTtsSelected = resolvedCallVoice\?\.kind === "cloud-tts"/, "Queen settings do not detect cloud TTS runtimes");
+  assert.match(route, /localTtsSelected \|\| cloudTtsSelected\s*\? "pipeline"/, "Queen settings still route cloud TTS to realtime");
+  assert.match(route, /pipelineSelected:\s*localTtsSelected \|\| cloudTtsSelected/, "Queen settings do not expose cloud TTS as a pipeline");
+});
+
+check("CLOUD TTS: Queen PCM speech uses the saved provider voice and model", () => {
+  assert.match(route, /resolvedVoice\.kind === "cloud-tts" && resolvedVoice\.provider/, "Queen PCM speech does not branch on the selected cloud TTS capability");
+  assert.match(route, /synthesizeVoicePreview\(resolvedVoice\.provider\.id, \{[\s\S]*text,[\s\S]*voice:\s*calls\.voiceId,[\s\S]*model:\s*calls\.voiceModelId,[\s\S]*languageCode:\s*calls\.voiceLanguage,/, "Queen PCM speech does not send the saved cloud voice configuration");
+  assert.match(route, /"x-audio-sample-rate": String\(cloudSpeech\.sampleRate\)/, "Queen cloud TTS stream does not expose its PCM sample rate");
+});
+
+check("CLOUD TTS PREVIEW: media playback is unlocked before the provider request", () => {
+  const previewStart = callsVoiceSection.indexOf("const previewVoice = async () => {");
+  const contextStart = callsVoiceSection.indexOf("createPcmPreviewPlayer()", previewStart);
+  const providerRequest = callsVoiceSection.indexOf('fetch("/api/phone/cloud-voice"', previewStart);
+  assert.ok(previewStart >= 0, "Preview handler is missing");
+  assert.ok(contextStart > previewStart && contextStart < providerRequest, "Preview starts its media player after the network wait and loses the click unlock");
+  assert.match(callsVoiceSection.slice(previewStart), /previewPlayer\.play\(response, \{[\s\S]{0,180}sampleRate,/, "Preview does not play through its click-primed buffered player");
+  assert.match(pcmPreviewPlayer, /const audio = new Audio\(/, "Preview player does not use a user-started media element");
+  assert.match(pcmPreviewPlayer, /audio\.loop = true[\s\S]{0,240}const unlockPromise = audio\.play\(\)/, "Preview media does not remain active while the provider synthesizes");
+  assert.doesNotMatch(pcmPreviewPlayer, /AudioContext|AudioWorklet/, "Short voice previews still depend on the blocked Web Audio path");
+  assert.match(pcmStreamPlayer, /if \(context\.state !== "running"\) \{[\s\S]{0,180}waitWithTimeout\(context\.resume\(\)/, "PCM playback re-resumes an already-running WebKit context and can hang on the second resume promise");
+});
+
+check("OPENAI OAUTH VOICE: Preview names the exact OAuth route limitation", () => {
+  assert.match(callsVoiceSection, /authMode:\s*effectiveAuthMode/, "Preview request does not send the selected auth mode");
+  assert.match(callsVoiceSection, /data\?\.error/, "Preview does not unwrap the API error for the user");
+  assert.match(cloudVoiceRoute, /body\.authMode === "oauth"/, "cloud voice route does not branch on OAuth");
+  assert.match(cloudVoiceRoute, /ChatGPT OAuth does power Voice inside ChatGPT/, "OAuth Preview still falsely says ChatGPT OAuth has no voice");
+  assert.match(cloudVoiceRoute, /Codex OAuth grant[\s\S]{0,180}private Voice WebRTC route/, "OAuth Preview does not identify the actual grant and route limitation");
+  assert.doesNotMatch(cloudVoiceRoute, /getOpenAiOAuthApiKey\(\)/, "OAuth Preview still uses the failed legacy API-key exchange");
+  assert.equal(realtimePreview, "", "The unusable OAuth Realtime browser bridge still exists");
+  assert.match(callProviderMatrix, /id:\s*"openai"[\s\S]{0,500}voiceAuthModes:\s*\["apikey"\]/, "OpenAI transport matrix still advertises an unusable OAuth route");
+});
+
+check("OPENAI OAUTH VOICE: Queen voice preserves OAuth without hidden key fallback", () => {
+  assert.match(route, /calls\?\.voiceAuthMode === "oauth"/, "Queen Realtime mint ignores the saved OAuth selection");
+  assert.match(route, /ChatGPT OAuth powers Voice inside ChatGPT/, "Queen Realtime still falsely says ChatGPT OAuth has no voice");
+  assert.match(route, /Codex OAuth grant[\s\S]{0,180}private Voice WebRTC route/, "Queen Realtime does not identify the actual grant and route limitation");
+  assert.doesNotMatch(route, /getOpenAiOAuthApiKey\(\)/, "Queen Realtime still uses the failed legacy API-key exchange");
+  assert.match(callsVoiceSection, /OAuth selected[\s\S]{0,160}not substitute your API key/, "OAuth status copy does not confirm that the explicit choice wins");
+});
+
+check("OPENAI OAUTH VOICE UI: Toggle remains user-controlled and renders one credential pane", () => {
+  assert.match(
+    callsVoiceSection,
+    /effectiveAuthMode:\s*VoiceProviderAuthMode\s*=\s*agentCallSettings\.voiceAuthMode\s*\?\?\s*autoAuthMode\(status\)/,
+    "saved auth choice is not the source of truth",
+  );
+  assert.doesNotMatch(
+    callsVoiceSection,
+    /updateAgentCalls\(\{\s*voiceAuthMode:\s*"apikey"\s*\}\)/,
+    "Calls UI still rewrites OAuth to API key after credential discovery",
+  );
+  assert.match(callsVoiceSection, /const oauthCapable = Boolean\(provider\.oauth\)/, "OAuth toggle is hidden despite a real OAuth connector");
+  assert.doesNotMatch(callsVoiceSection, /oauthAvailableForBrain/, "OAuth and API-key panes can still render together");
+  assert.doesNotMatch(callsVoiceSection, /Spoken turns fall back to the API key/, "OAuth pane still promises a hidden API-key fallback");
+  assert.match(callsVoiceSection, /effectiveAuthMode === "oauth" && oauthConnected/, "connected OAuth pane is not mode-gated");
+  assert.match(callsVoiceSection, /effectiveAuthMode === "apikey" && keyPresent/, "API-key pane is not mode-gated");
 });
 
 console.log(`\nqueen-voice preferences: ${passed} checks passed.`);

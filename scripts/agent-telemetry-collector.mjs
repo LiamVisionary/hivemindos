@@ -71,6 +71,10 @@ import {
   unpackTarToDir,
 } from "./lib/runtime-portable-state.mjs";
 import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
+import { runLocalAppBuilderAction } from "./lib/app-builder.mjs";
+import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
+import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
+import { launchCollectorUpdate } from "./lib/collector-update-launcher.mjs";
 import {
   recordCollectorTelemetry,
   safeTelemetryText,
@@ -139,6 +143,21 @@ const HERMES_EMPTY_TRANSCRIPT_MESSAGE =
 const chatTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_CHAT_TIMEOUT_MS || 20 * 60_000,
 );
+const collectorMaintenance = createCollectorMaintenance({
+  reservationTtlMs: Number(
+    process.env.AGENT_TELEMETRY_UPDATE_RESERVATION_TTL_MS || 10 * 60_000,
+  ),
+});
+const activeCollectorChatRuns = collectorMaintenance.activeChatRuns;
+const activeCollectorUpdateReservation = collectorMaintenance.activeUpdateReservation;
+const beginCollectorChatRun = collectorMaintenance.beginChatRun;
+const collectorMaintenanceState = collectorMaintenance.state;
+const releaseCollectorUpdateReservation = collectorMaintenance.releaseUpdate;
+const reserveCollectorUpdate = collectorMaintenance.reserveUpdate;
+const skillInventoryCache = createAsyncTtlCache({
+  ttlMs: Number(process.env.AGENT_TELEMETRY_SKILL_INVENTORY_CACHE_MS || 60_000),
+  load: () => scanInstalledSkills(),
+});
 const sessionDiscoveryTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_SESSION_DISCOVERY_TIMEOUT_MS || 15_000,
 );
@@ -1533,29 +1552,51 @@ async function configuredRuntimeAgents() {
   return importHermesAgentSouls(agents.map(normalizeRuntimeAgent));
 }
 
-async function detectedOpenClawAgent() {
+async function detectedOpenClawAgents(coveredAgentIds = new Set()) {
   const configPath = join(defaultOpenClawDir, "openclaw.json");
   const configReadable = await access(configPath, constants.R_OK)
     .then(() => true)
     .catch(() => false);
-  if (!configReadable) return null;
+  if (!configReadable) return [];
   const config = await readOpenClawConfig();
-  const modelRef = defaultOpenClawAgentModel(config);
-  const parsed = modelRef ? splitOpenClawModelRef(modelRef) : null;
-  return normalizeRuntimeAgent({
-    id: `openclaw-${hostname()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")}`,
-    name: "OpenClaw",
-    runtime: "openclaw",
-    gatewayUrl: "ws://127.0.0.1:18789",
-    agentId: "main",
-    localDataDir: defaultOpenClawDir,
-    provider: parsed?.provider,
-    model: parsed?.model,
-    // Queen is a dashboard-level choice — a detected runtime must never self-declare it.
-    beeRole: "worker",
-    workerClass: "general",
+  const configured = Array.isArray(asRecord(config.agents).list)
+    ? asRecord(config.agents).list.map(asRecord)
+    : [];
+  const entries = configured.length ? configured : [{ id: "main" }];
+  const defaultModelRef = defaultOpenClawAgentModel(config);
+  const hostSlug = hostname()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
+  return entries.flatMap((entry) => {
+    const agentId = String(entry.id || "main").trim();
+    if (!agentId || coveredAgentIds.has(agentId)) return [];
+    const modelRef =
+      (typeof entry.model === "string" && entry.model.trim()) ||
+      defaultModelRef;
+    const parsed = modelRef ? splitOpenClawModelRef(modelRef) : null;
+    const agentDir =
+      typeof entry.agentDir === "string" && entry.agentDir.trim()
+        ? entry.agentDir.trim()
+        : agentId === "main"
+          ? defaultOpenClawDir
+          : join(defaultOpenClawDir, "agents", agentId);
+    return [
+      normalizeRuntimeAgent({
+        id: agentId === "main" ? `openclaw-${hostSlug}` : `openclaw-${agentId}`,
+        name:
+          (typeof entry.name === "string" && entry.name.trim()) ||
+          (agentId === "main" ? "OpenClaw" : agentId),
+        runtime: "openclaw",
+        gatewayUrl: "ws://127.0.0.1:18789",
+        agentId,
+        localDataDir: agentDir,
+        provider: parsed?.provider,
+        model: parsed?.model,
+        // Queen is a dashboard-level choice — a detected runtime must never self-declare it.
+        beeRole: "worker",
+        workerClass: "general",
+      }),
+    ];
   });
 }
 
@@ -5072,8 +5113,8 @@ function collectorRunProcess(command, args, stdin, timeoutMs) {
 
 // Minimal mirror of src/lib/services/runtime-install-catalog.ts for the
 // standalone collector (which cannot import the TS catalog). Keep the package
-// names in sync with the catalog. Only runtimes with a real in-app installer
-// appear here; openclaw/hermes/aeon are handled by their own flows.
+// names and fixed installer URLs in sync with the catalog. Only runtimes with
+// a real in-app installer appear here; aeon is handled by its own flow.
 const COLLECTOR_RUNTIME_INSTALL = {
   "claude-code": { kind: "npm", pkg: "@anthropic-ai/claude-code" },
   codex: { kind: "npm", pkg: "@openai/codex" },
@@ -5081,6 +5122,20 @@ const COLLECTOR_RUNTIME_INSTALL = {
   openhands: { kind: "uv", pkg: "openhands", python: "3.12" },
   aider: { kind: "uv", pkg: "aider-chat" },
   evo: { kind: "uv", pkg: "evo-hq-cli" },
+  hermes: {
+    kind: "script",
+    unixUrl: "https://hermes-agent.nousresearch.com/install.sh",
+    windowsUrl: "https://hermes-agent.nousresearch.com/install.ps1",
+    unixArgs: [],
+    windowsArgs: [],
+  },
+  openclaw: {
+    kind: "script",
+    unixUrl: "https://openclaw.ai/install.sh",
+    windowsUrl: "https://openclaw.ai/install.ps1",
+    unixArgs: ["--no-onboard"],
+    windowsArgs: ["-NoOnboard"],
+  },
 };
 
 // Builds the OS-appropriate, server-side install invocation for a fixed runtime
@@ -5099,8 +5154,39 @@ function powershellEncoded(script) {
   };
 }
 
-function buildRuntimeInstallInvocation(spec) {
+async function buildRuntimeInstallInvocation(spec) {
   const isWin = process.platform === "win32";
+  if (spec.kind === "script") {
+    const rawUrl = isWin ? spec.windowsUrl : spec.unixUrl;
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") throw new Error("Runtime installers must use HTTPS.");
+    const download = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (!download.ok) throw new Error(`Installer download failed with HTTP ${download.status}.`);
+    const script = await download.text();
+    if (!script.trim()) throw new Error("The downloaded runtime installer was empty.");
+    if (Buffer.byteLength(script, "utf8") > 4 * 1024 * 1024)
+      throw new Error("The runtime installer was unexpectedly large.");
+    if (isWin) {
+      const scriptBase64 = Buffer.from(script, "utf8").toString("base64");
+      const renderedArgs = (spec.windowsArgs || [])
+        .map((arg) => {
+          if (!/^-[A-Za-z][A-Za-z0-9-]*$/.test(arg))
+            throw new Error("Invalid PowerShell installer argument.");
+          return arg;
+        })
+        .join(" ");
+      return powershellEncoded([
+        "$ErrorActionPreference='Stop'",
+        `$installer=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${scriptBase64}'))`,
+        `& ([ScriptBlock]::Create($installer))${renderedArgs ? ` ${renderedArgs}` : ""}`,
+      ].join("\n"));
+    }
+    return {
+      command: "bash",
+      args: ["-s", "--", ...(spec.unixArgs || [])],
+      stdin: script,
+    };
+  }
   if (spec.kind === "npm") {
     if (isWin) {
       return powershellEncoded(`$ErrorActionPreference='Stop'\nnpm install -g ${spec.pkg}\n`);
@@ -5143,18 +5229,58 @@ function buildRuntimeInstallInvocation(spec) {
   };
 }
 
+async function collectorOpenClawCommand() {
+  const commandName = process.platform === "win32" ? "openclaw.cmd" : "openclaw";
+  const candidates = [
+    process.env.OPENCLAW_BIN,
+    join(homedir(), ".npm-global", "bin", commandName),
+    join(homedir(), ".local", "bin", commandName),
+    commandName,
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (!candidate.includes("/") && !candidate.includes("\\")) return candidate;
+    if (await access(candidate, constants.X_OK).then(() => true).catch(() => false)) return candidate;
+  }
+  return commandName;
+}
+
+async function configureCollectorOpenClawCodexPluginTrust() {
+  const command = await collectorOpenClawCommand();
+  await collectorRunProcess(command, ["plugins", "inspect", "codex", "--json"], "", 15_000);
+  const current = await collectorRunProcess(command, ["config", "get", "plugins.allow", "--json"], "", 15_000)
+    .catch(() => ({ stdout: "[]", stderr: "" }));
+  let parsed = [];
+  try {
+    const value = JSON.parse(current.stdout || "[]");
+    if (Array.isArray(value)) parsed = value.filter((entry) => typeof entry === "string" && entry.trim()).map((entry) => entry.trim());
+  } catch {}
+  const allow = [...new Set([...parsed, "codex"])];
+  if (allow.length === parsed.length && allow.every((entry, index) => entry === parsed[index])) return "";
+  await collectorRunProcess(command, ["config", "set", "plugins.allow", JSON.stringify(allow), "--strict-json"], "", 20_000);
+  await mkdir(join(homedir(), ".hivemindos"), { recursive: true, mode: 0o700 });
+  await writeFile(
+    join(homedir(), ".hivemindos", "openclaw-codex-plugin-trust.json"),
+    `${JSON.stringify({ pluginId: "codex", managedBy: "hivemindos" }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+  return "OpenClaw Codex plugin explicitly trusted.";
+}
+
 async function collectorInstallRuntime(runtimeName) {
   const spec = COLLECTOR_RUNTIME_INSTALL[runtimeName];
   if (!spec) return { ok: false, error: `${runtimeName} cannot be installed by this collector.` };
-  const { command, args, stdin } = buildRuntimeInstallInvocation(spec);
   try {
+    const { command, args, stdin } = await buildRuntimeInstallInvocation(spec);
     // Heavy uv installs (e.g. OpenHands: CPython 3.12 + a large dep tree) can run
     // well past several minutes on a cold cache, so allow up to 15 minutes.
     const result = await collectorRunProcess(command, args, stdin, 900_000);
+    const postInstall = runtimeName === "openclaw"
+      ? await configureCollectorOpenClawCodexPluginTrust().catch(() => "")
+      : "";
     return {
       ok: true,
       message: `${runtimeName} installed.`,
-      output: `${result.stdout}${result.stderr}`.trim().slice(0, 1500),
+      output: [`${result.stdout}${result.stderr}`.trim(), postInstall].filter(Boolean).join("\n").slice(-1500),
     };
   } catch (error) {
     return {
@@ -5178,13 +5304,15 @@ async function collectorSaveRuntimeAuth(env, value) {
   }
 }
 
-function startUpdate() {
-  const command = `cd ${shellQuote(appDir)} && mkdir -p .next && { echo "--- update $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"; node ./scripts/pull-with-changelog-preserve.mjs; if command -v corepack >/dev/null 2>&1; then corepack prepare pnpm@8.6.12 --activate; hash -r 2>/dev/null || true; fi; CI=true NODE_OPTIONS="\${NODE_OPTIONS:+\$NODE_OPTIONS }--no-deprecation" pnpm install --frozen-lockfile; pnpm build; ./setup.sh; AGENT_TELEMETRY_PORT="\${AGENT_TELEMETRY_PORT:-8787}" ./scripts/install-telemetry-collector.sh; } >> .next/agent-update.log 2>&1`;
-  const child = spawn("sh", ["-lc", command], {
-    detached: true,
-    stdio: "ignore",
+function startUpdate(reservationToken) {
+  const updateLogDir = join(homedir(), ".hivemindos", "logs");
+  const updateLogPath = join(updateLogDir, "agent-update.log");
+  const command = `mkdir -p ${shellQuote(updateLogDir)} && cd ${shellQuote(appDir)} && { echo "--- update $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"; node ./scripts/pull-with-changelog-preserve.mjs; if command -v corepack >/dev/null 2>&1; then corepack prepare pnpm@8.6.12 --activate; hash -r 2>/dev/null || true; fi; CI=true NODE_OPTIONS="\${NODE_OPTIONS:+\$NODE_OPTIONS }--no-deprecation" pnpm install --frozen-lockfile; pnpm build; ./setup.sh; AGENT_TELEMETRY_PORT="\${AGENT_TELEMETRY_PORT:-8787}" ./scripts/install-telemetry-collector.sh; } >> ${shellQuote(updateLogPath)} 2>&1`;
+  launchCollectorUpdate({
+    command,
+    reservationToken,
+    releaseReservation: releaseCollectorUpdateReservation,
   });
-  child.unref();
   return command;
 }
 
@@ -5456,7 +5584,7 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
   return summary;
 }
 
-async function listInstalledSkills(options = {}) {
+async function scanInstalledSkills(options = {}) {
   const providers = await Promise.all(
     skillProviderRoots.map(async (provider) => {
       const skillFiles = [
@@ -5495,6 +5623,11 @@ async function listInstalledSkills(options = {}) {
     }),
   );
   return { ok: true, host: hostname(), providers };
+}
+
+async function listInstalledSkills(options = {}) {
+  if (options.includeSourceFiles) return scanInstalledSkills(options);
+  return skillInventoryCache.get({ force: options.force === true });
 }
 
 function e2eSkillProvider(providerId) {
@@ -5830,7 +5963,7 @@ async function writeSkillAutoSyncConfig(config) {
 }
 
 async function configuredProviderInventory(providerIds) {
-  const inventory = await listInstalledSkills();
+  const inventory = await listInstalledSkills({ force: true });
   const wanted = new Set(providerIds);
   return {
     ...inventory,
@@ -6256,10 +6389,12 @@ async function localAgents() {
     );
     agents.push(...(await detectedHermesProfileAgents(coveredHermesProfiles)));
   }
-  const openClawAgent = await detectedOpenClawAgent();
-  if (openClawAgent && !agents.some((agent) => agent.runtime === "openclaw")) {
-    agents.push(openClawAgent);
-  }
+  const coveredOpenClawAgentIds = new Set(
+    configuredAgents
+      .filter((agent) => agent.runtime === "openclaw")
+      .map((agent) => agent.agentId),
+  );
+  agents.push(...(await detectedOpenClawAgents(coveredOpenClawAgentIds)));
   const aeonConfig = join(defaultAeonDir, "aeon.yml");
   const aeonAvailable = await access(aeonConfig, constants.R_OK)
     .then(() => true)
@@ -6415,6 +6550,7 @@ function cliRuntimeCandidates(envBin, command) {
   return [
     envBin,
     join(homedir(), ".local", "bin", command),
+    join(homedir(), ".npm-global", "bin", command),
     join(homedir(), `.${command}`, "bin", command),
     join(
       homedir(),
@@ -6437,6 +6573,7 @@ async function detectOpenClawInstalled() {
     "/usr/local/bin/openclaw",
     "/usr/bin/openclaw",
     join(homedir(), ".local", "bin", "openclaw"),
+    join(homedir(), ".npm-global", "bin", "openclaw"),
     join(homedir(), ".volta", "bin", "openclaw"),
     "openclaw",
   ]);
@@ -7536,7 +7673,11 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
   }
 }
 
-async function streamHermesChat(body, response) {
+async function streamHermesChat(body, response, options = {}) {
+  const releaseCollectorChatRun =
+    typeof options.releaseCollectorChatRun === "function"
+      ? options.releaseCollectorChatRun
+      : () => undefined;
   if (process.env.AGENT_TELEMETRY_CHAT_DISABLED === "1") {
     response.writeHead(403, {
       "content-type": "text/event-stream",
@@ -7548,6 +7689,7 @@ async function streamHermesChat(body, response) {
         error: "Collector chat bridge is disabled on this machine.",
       }) + "data: [DONE]\n\n",
     );
+    releaseCollectorChatRun();
     return;
   }
 
@@ -7574,6 +7716,7 @@ async function streamHermesChat(body, response) {
     response.end(
       ssePayload({ error: "Message is required." }) + "data: [DONE]\n\n",
     );
+    releaseCollectorChatRun();
     return;
   }
   const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
@@ -7598,8 +7741,10 @@ async function streamHermesChat(body, response) {
     !agentScopedModel &&
     hermesChatMode === "api" &&
     (await proxyHermesApiChat(body, response, text, hermesHome))
-  )
+  ) {
+    releaseCollectorChatRun();
     return;
+  }
 
   const runtimeSessionId = normalizeHermesSessionId(
     body.runtimeSessionId || body.hermesSessionId || "",
@@ -7752,12 +7897,14 @@ async function streamHermesChat(body, response) {
   });
 
   child.on("error", (error) => {
+    releaseCollectorChatRun();
     finish({
       error: error instanceof Error ? error.message : "Hermes chat failed",
     });
   });
 
   child.on("close", (code) => {
+    releaseCollectorChatRun();
     if (settled) return;
     stdoutSanitizer.flush();
     const content = stripHermesCliMetadata(stdout);
@@ -8118,18 +8265,96 @@ async function handleCollectorRequest(request, response) {
     }
     return;
   }
-  if (pathname === "/update" && request.method === "POST") {
-    const version = await appVersion({ force: true });
-    const command = startUpdate();
-    jsonResponse(response, 202, {
+  if (pathname === "/app-builder" && request.method === "POST") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      const rawBody = await readBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      jsonResponse(response, 200, { ok: true, ...(await runLocalAppBuilderAction(body)) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not run local app-builder action.";
+      jsonResponse(response, /requires CONFIRM_APP_/.test(message) ? 409 : 400, { ok: false, error: message });
+    }
+    return;
+  }
+  if (pathname === "/maintenance/readiness" && request.method === "GET") {
+    jsonResponse(response, 200, {
       ok: true,
-      accepted: true,
       host: hostname(),
-      version,
-      message:
-        "Update started. The collector and dashboard may briefly restart.",
-      command,
+      ...collectorMaintenanceState(),
     });
+    return;
+  }
+  if (pathname === "/maintenance/reserve-update" && request.method === "POST") {
+    const reservation = reserveCollectorUpdate();
+    jsonResponse(response, reservation.status, {
+      ...reservation,
+      host: hostname(),
+    });
+    return;
+  }
+  if (pathname === "/maintenance/reserve-update" && request.method === "DELETE") {
+    const reservationToken = String(
+      request.headers["x-hivemind-maintenance-reservation"] || "",
+    );
+    const released = releaseCollectorUpdateReservation(reservationToken);
+    jsonResponse(response, released ? 200 : 409, {
+      ok: released,
+      released,
+      host: hostname(),
+      ...collectorMaintenanceState(),
+      ...(released ? {} : { error: "The maintenance reservation was not active." }),
+    });
+    return;
+  }
+  if (pathname === "/update" && request.method === "POST") {
+    const requestedReservationToken = String(
+      request.headers["x-hivemind-maintenance-reservation"] || "",
+    );
+    const activeReservation = activeCollectorUpdateReservation();
+    const reservation = activeReservation
+      ? activeReservation.token === requestedReservationToken
+        ? { ok: true, reservationToken: activeReservation.token }
+        : {
+            ok: false,
+            status: 409,
+            error: "Maintenance is already reserved by another update request.",
+          }
+      : reserveCollectorUpdate();
+    if (!reservation.ok) {
+      jsonResponse(response, reservation.status || 409, {
+        ...reservation,
+        host: hostname(),
+      });
+      return;
+    }
+    try {
+      const version = await appVersion({ force: true });
+      const command = startUpdate(reservation.reservationToken);
+      jsonResponse(response, 202, {
+        ok: true,
+        accepted: true,
+        host: hostname(),
+        version,
+        message:
+          "Update started. The collector and dashboard may briefly restart.",
+        command,
+      });
+    } catch (error) {
+      releaseCollectorUpdateReservation(reservation.reservationToken);
+      jsonResponse(response, 500, {
+        ok: false,
+        host: hostname(),
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not start agent bridge maintenance.",
+      });
+    }
     return;
   }
   if (pathname === "/env" && request.method === "POST") {
@@ -8419,10 +8644,11 @@ async function handleCollectorRequest(request, response) {
     try {
       const includeSourceFiles =
         requestUrl.searchParams.get("includeSourceFiles") === "true";
+      const force = requestUrl.searchParams.get("refresh") === "1";
       jsonResponse(
         response,
         200,
-        await listInstalledSkills({ includeSourceFiles }),
+        await listInstalledSkills({ includeSourceFiles, force }),
       );
     } catch (error) {
       jsonResponse(response, 500, {
@@ -8618,6 +8844,24 @@ async function handleCollectorRequest(request, response) {
       const rawBody = await readBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
       const runtimeName = runtimeIntegrationMatch[1];
+      if (
+        COLLECTOR_RUNTIME_INSTALL[runtimeName] &&
+        body.action === "install-runtime"
+      ) {
+        jsonResponse(response, 200, await collectorInstallRuntime(runtimeName));
+        return;
+      }
+      if (
+        COLLECTOR_RUNTIME_INSTALL[runtimeName] &&
+        body.action === "runtime-auth"
+      ) {
+        jsonResponse(
+          response,
+          200,
+          await collectorSaveRuntimeAuth(body.input?.env, body.input?.value),
+        );
+        return;
+      }
       if (runtimeName === "openclaw") {
         if (body.action) {
           jsonResponse(
@@ -8655,19 +8899,10 @@ async function handleCollectorRequest(request, response) {
         });
         return;
       }
-      if (COLLECTOR_RUNTIME_INSTALL[runtimeName]) {
-        if (body.action === "install-runtime") {
-          jsonResponse(response, 200, await collectorInstallRuntime(runtimeName));
-          return;
-        }
-        if (body.action === "runtime-auth") {
-          jsonResponse(
-            response,
-            200,
-            await collectorSaveRuntimeAuth(body.input?.env, body.input?.value),
-          );
-          return;
-        }
+      if (
+        COLLECTOR_RUNTIME_INSTALL[runtimeName] &&
+        runtimeName !== "hermes"
+      ) {
         const installed = await installedRuntimes().catch(() => []);
         jsonResponse(response, 200, {
           ok: true,
@@ -8977,11 +9212,21 @@ async function handleCollectorRequest(request, response) {
     return;
   }
   if (pathname === "/chat" && request.method === "POST") {
+    const maintenance = collectorMaintenanceState();
+    if (maintenance.updateStarting) {
+      jsonResponse(response, 503, {
+        ok: false,
+        error: "This agent bridge is starting maintenance. Retry after it reconnects.",
+        ...maintenance,
+      });
+      return;
+    }
+    const releaseCollectorChatRun = beginCollectorChatRun();
     try {
       const rawBody = await readBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
       if (body.stream === true) {
-        await streamHermesChat(body, response);
+        await streamHermesChat(body, response, { releaseCollectorChatRun });
         return;
       }
       // "close" with the response still unwritten = the caller disconnected
@@ -8992,7 +9237,9 @@ async function handleCollectorRequest(request, response) {
       });
       const result = await sendHermesChat(body, { signal: chatAbort.signal });
       jsonResponse(response, result.ok ? 200 : result.status || 500, result);
+      releaseCollectorChatRun();
     } catch (error) {
+      releaseCollectorChatRun();
       jsonResponse(response, 500, {
         ok: false,
         error: error instanceof Error ? error.message : "Hermes chat failed",

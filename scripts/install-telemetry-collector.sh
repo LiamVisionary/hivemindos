@@ -53,6 +53,7 @@ MACOS_COLLECTOR_HELPER_HOME="$HOME/.hivemindos/bin/$MACOS_COLLECTOR_HELPER_NAME"
 MACOS_SYNC_HELPER_NAME="HivemindOS Sync"
 MACOS_SYNC_HELPER_ID="com.hivemindos.sync-helper"
 MACOS_SYNC_HELPER_HOME="$HOME/.hivemindos/bin/$MACOS_SYNC_HELPER_NAME"
+SYSTEMD_LINGER_MARKER="$HOME/.hivemindos/systemd-linger-enabled-by-hivemindos"
 
 if [[ -z "${HIVE_LINK_CONTROL:-}" && -f "$HOME/.hivemindos/collector.env" ]]; then
   EXISTING_LINK_CONTROL="$(awk -F= '$1=="HIVE_LINK_CONTROL"{print substr($0, index($0, "=") + 1)}' "$HOME/.hivemindos/collector.env" | tail -1)"
@@ -161,6 +162,21 @@ run_privileged() {
     sudo "$@"
   else
     return 127
+  fi
+}
+
+enable_systemd_user_linger() {
+  command -v loginctl >/dev/null 2>&1 || return 0
+  local user linger
+  user="$(id -un)"
+  linger="$(loginctl show-user "$user" -p Linger --value 2>/dev/null || true)"
+  [[ "$linger" == "yes" ]] && return 0
+  if run_privileged loginctl enable-linger "$user"; then
+    mkdir -p "$(dirname "$SYSTEMD_LINGER_MARKER")"
+    : > "$SYSTEMD_LINGER_MARKER"
+    echo "Enabled systemd user lingering so HivemindOS services stay online after logout."
+  else
+    echo "Warning: could not enable systemd user lingering; HivemindOS services may stop after logout." >&2
   fi
 }
 
@@ -1370,6 +1386,7 @@ PLIST
     maybe_allow_node_through_macos_firewall
   fi
 else
+  enable_systemd_user_linger
   # The pre-rename user unit keeps the Syncthing DB lock and leaves the new
   # unit crash-looping forever (hel1-2 reached 400k+ restarts); macOS already
   # boots out its legacy LaunchAgent above — do the same for systemd.
@@ -1429,7 +1446,7 @@ Description=HivemindOS telemetry collector
 
 [Service]
 Environment=AGENT_TELEMETRY_PORT=$PORT
-Environment=AGENT_TELEMETRY_HOST=$( [[ "$LINK_ACTIVE" == "true" || "$SYSTEM_TAILNET_SERVE_ACTIVE" == "true" ]] && printf "127.0.0.1" || printf "0.0.0.0" )
+Environment=AGENT_TELEMETRY_HOST=127.0.0.1
 Environment=AGENT_TELEMETRY_HERMES_API_HOST=$HERMES_API_HOST
 Environment=AGENT_TELEMETRY_HERMES_API_PORT=$HERMES_API_PORT
 $HERMES_API_KEY_SYSTEMD_ENTRY

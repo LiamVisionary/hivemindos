@@ -4,10 +4,10 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
+import { installRuntimeBinary } from "@/lib/services/runtime-installer";
 import type { AgentProfile, KnownAgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeAdapter } from "./types";
 import { listCliTaskRuns, readCliTaskRunLog, startCliTaskRun } from "./cli-task-runs";
-import { runtimeInstallSpec } from "@/lib/services/runtime-install-catalog";
 
 const execFileAsync = promisify(execFile);
 
@@ -16,6 +16,7 @@ type CliRuntimeConfig = {
   label: string;
   command: string;
   versionArgs: string[];
+  authStatusArgs?: string[];
   provider: string;
   model: string;
   dataDir: string;
@@ -38,18 +39,38 @@ const CLI_RUNTIMES: CliRuntimeConfig[] = [
     label: "Codex",
     command: process.env.CODEX_BIN || "codex",
     versionArgs: ["--version"],
+    authStatusArgs: ["login", "status"],
     provider: "openai-codex",
     model: "",
     dataDir: "~/.codex",
+    buildTaskArgs: (task, _input, profile) => [
+      "exec",
+      "--color",
+      "never",
+      "--sandbox",
+      "workspace-write",
+      ...(profile?.model ? ["--model", profile.model] : []),
+      task,
+    ],
   },
   {
     runtime: "claude-code",
     label: "Claude Code",
     command: process.env.CLAUDE_CODE_BIN || process.env.CLAUDE_BIN || "claude",
     versionArgs: ["--version"],
+    authStatusArgs: ["auth", "status"],
     provider: "anthropic",
     model: "",
     dataDir: "~/.claude",
+    buildTaskArgs: (task, _input, profile) => [
+      "--print",
+      "--output-format",
+      "text",
+      "--permission-mode",
+      "acceptEdits",
+      ...(profile?.model ? ["--model", profile.model] : []),
+      task,
+    ],
   },
   {
     runtime: "openhands",
@@ -120,11 +141,19 @@ function modelSelection(profile: AgentProfile, config: CliRuntimeConfig) {
 
 async function cliStatus(config: CliRuntimeConfig, profile: AgentProfile) {
   const result = await execFileAsync(config.command, config.versionArgs, { timeout: 3_000, maxBuffer: 200_000, env: runtimeCommandEnv() }).catch(() => null);
+  const auth = result && config.authStatusArgs
+    ? await execFileAsync(config.command, config.authStatusArgs, { timeout: 5_000, maxBuffer: 200_000, env: runtimeCommandEnv() }).catch(() => null)
+    : undefined;
   const version = result?.stdout.trim().split(/\r?\n/)[0] || result?.stderr.trim().split(/\r?\n/)[0] || "";
+  const authReady = auth !== null;
   return {
-    ok: Boolean(result),
+    ok: Boolean(result) && authReady,
     runtime: config.runtime,
-    detail: result ? (version ? `${config.label} is installed. ${version}` : `${config.label} is installed.`) : `${config.label} CLI was not found.`,
+    detail: !result
+      ? `${config.label} CLI was not found.`
+      : authReady
+        ? (version ? `${config.label} is installed and authenticated. ${version}` : `${config.label} is installed and authenticated.`)
+        : `${config.label} is installed but not authenticated. Log in before starting a managed task.`,
     modelSelection: modelSelection(profile, config),
   };
 }
@@ -138,36 +167,6 @@ async function installCli(config: CliRuntimeConfig) {
     throw new Error(maybe.stderr || maybe.stdout || maybe.message || `${config.label} install failed.`);
   });
   return { ok: true, message: `${config.label} install completed.`, output: `${output.stdout}${output.stderr}`.trim() };
-}
-
-// Drives the in-app "Set up runtime" installer on the local machine (the
-// desktop's bundled Next server runs on the user's box). The package names come
-// from the shared catalog so the UI preview and this command stay in lockstep.
-async function installRuntimeBinary(config: CliRuntimeConfig) {
-  const spec = runtimeInstallSpec(config.runtime);
-  if (!spec || !spec.inAppInstall) {
-    return { ok: false, error: `${config.label} can't be installed from here yet. Run the install command on the machine, then re-check.` };
-  }
-  const env = runtimeCommandEnv();
-  try {
-    if (spec.installKind === "npm" && spec.npmPackage) {
-      // npm ships as npm.cmd on Windows; execFile needs the exact name.
-      const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
-      const output = await execFileAsync(npmBin, ["install", "-g", spec.npmPackage], { timeout: 300_000, maxBuffer: 2_000_000, env });
-      return { ok: true, message: `${config.label} installed.`, output: `${output.stdout}${output.stderr}`.trim() };
-    }
-    if (spec.installKind === "uv" && spec.uvPackage) {
-      const uv = await execFileAsync("uv", ["--version"], { timeout: 5_000, maxBuffer: 100_000, env }).catch(() => null);
-      if (!uv) return { ok: false, error: `${config.label} needs the uv package manager. Install uv (astral.sh/uv) on the machine, then retry.` };
-      const args = ["tool", "install", spec.uvPackage, ...(spec.uvPythonPin ? ["--python", spec.uvPythonPin] : [])];
-      const output = await execFileAsync("uv", args, { timeout: 300_000, maxBuffer: 2_000_000, env });
-      return { ok: true, message: `${config.label} installed.`, output: `${output.stdout}${output.stderr}`.trim() };
-    }
-    return { ok: false, error: `${config.label} can't be installed automatically here yet. Run the install command on the machine, then re-check.` };
-  } catch (error: unknown) {
-    const maybe = error as { stdout?: string; stderr?: string; message?: string };
-    return { ok: false, error: (maybe.stderr || maybe.stdout || maybe.message || `${config.label} install failed.`).slice(0, 1200) };
-  }
 }
 
 // Persists a runtime credential into the shared hive env via hive-env-add,
@@ -245,7 +244,7 @@ function createCliRuntimeAdapter(config: CliRuntimeConfig): RuntimeAdapter {
     getStatus: (profile) => cliStatus(config, profile),
     runIntegrationAction: async (profile, action, input) => {
       if (action === "install") return installCli(config);
-      if (action === "install-runtime") return installRuntimeBinary(config);
+      if (action === "install-runtime") return installRuntimeBinary(config.runtime);
       if (action === "runtime-auth") return saveRuntimeAuth(String(input.env || ""), String(input.value || ""));
       if (action !== "run-task") return { ok: false, error: `Unsupported ${config.label} action: ${action}` };
       if (!config.buildTaskArgs) return { ok: false, error: `${config.label} does not expose background task execution yet.` };

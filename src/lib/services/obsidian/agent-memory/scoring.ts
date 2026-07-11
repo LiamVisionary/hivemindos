@@ -2,6 +2,7 @@ import { entityMatchesForQuery } from "@/lib/services/obsidian/agent-memory/enti
 import {
   containsPhraseWithBoundaries,
   isSelectiveExactPhrase,
+  morphologicalTermVariants,
   queryWordsForRecall,
   RECALL_STOP_WORDS,
 } from "@/lib/services/obsidian/agent-memory/query";
@@ -256,19 +257,22 @@ export function scoreAgentMemory(
   let contentPoints = 0;
   let sourcePoints = 0;
   for (const word of queryWords) {
-    if (titleText.includes(word)) {
+    // Substring matching already covers base-query → inflected-content; stem
+    // variants close the reverse direction ("weddings" query, "wedding" text).
+    const forms = [word, ...morphologicalTermVariants(word)];
+    if (forms.some((form) => titleText.includes(form))) {
       titlePoints += 8;
       matched.add(word);
     }
-    if (record.tags.some((tag) => tag.includes(word))) {
+    if (record.tags.some((tag) => forms.some((form) => tag.includes(form)))) {
       tagPoints += 6;
       matched.add(word);
     }
-    if (contentText.includes(word)) {
+    if (forms.some((form) => contentText.includes(form))) {
       contentPoints += 4;
       matched.add(word);
     }
-    if ((record.project ?? "").toLowerCase().includes(word) || (record.source ?? "").toLowerCase().includes(word)) {
+    if (forms.some((form) => (record.project ?? "").toLowerCase().includes(form) || (record.source ?? "").toLowerCase().includes(form))) {
       sourcePoints += 2;
       matched.add(word);
     }

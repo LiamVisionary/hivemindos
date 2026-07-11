@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "about",
-    "route-*"
+    "route-*",
+    "companion-popover"
   ],
   "remote": {
     "urls": [
@@ -65,6 +66,7 @@
     "allow-download-aeon-deliverable",
     "allow-send-aeon-deliverable",
     "allow-open-route-window",
+    "allow-set-companion-popover",
     "allow-wallet-secret-export-save",
     "allow-slack-session-capture",
     "allow-speech-recognition-available",

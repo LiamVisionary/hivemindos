@@ -4,6 +4,10 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "fs/promises";
 import { extname, join } from "path";
 import { promisify } from "util";
 import { homedir } from "@/lib/home-dir";
+import {
+  chatImageMimeTypeForPath,
+  preferredChatImageExtensionForMimeType,
+} from "@/lib/services/chat/chat-image-formats";
 import type { KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { IncomingMessage } from "./messages";
 
@@ -13,10 +17,6 @@ const FFMPEG_CANDIDATES = ["ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin
 const execFileAsync = promisify(execFile);
 
 const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
-  "image/webp": ".webp",
-  "image/gif": ".gif",
   "audio/mpeg": ".mp3",
   "audio/mp3": ".mp3",
   "audio/wav": ".wav",
@@ -28,10 +28,6 @@ const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "application/pdf": ".pdf",
   "text/plain": ".txt",
 };
-
-const MIME_TYPE_BY_EXTENSION: Record<string, string> = Object.fromEntries(
-  Object.entries(EXTENSION_BY_MIME_TYPE).map(([mimeType, extension]) => [extension, mimeType]),
-);
 
 export type ChatMediaArtifact = {
   id: string;
@@ -67,13 +63,17 @@ function kindFromMimeType(value: string): ChatMediaArtifact["kind"] {
 function extensionFor(name: string, mimeType: string) {
   const existing = extname(name).toLowerCase();
   if (existing && existing.length <= 12) return existing;
-  return EXTENSION_BY_MIME_TYPE[mimeType.toLowerCase()] ?? ".bin";
+  return preferredChatImageExtensionForMimeType(mimeType)
+    || EXTENSION_BY_MIME_TYPE[mimeType.toLowerCase()]
+    || ".bin";
 }
 
 function mimeTypeForPath(path: string, fallback: string) {
+  const imageMimeType = chatImageMimeTypeForPath(path);
+  if (imageMimeType) return imageMimeType;
   const normalized = clean(fallback);
   if (normalized && normalized !== "application/octet-stream") return normalized;
-  return MIME_TYPE_BY_EXTENSION[extname(path).toLowerCase()] || normalized || "application/octet-stream";
+  return normalized || "application/octet-stream";
 }
 
 function dataUrlForData(data: Buffer, mimeType: string) {

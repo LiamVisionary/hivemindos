@@ -684,6 +684,9 @@ export function useDashboardDerivedState(props: any) {
       if (previousMessage?.imageGeneration && !next.imageGeneration) {
         next = { ...next, imageGeneration: previousMessage.imageGeneration };
       }
+      if (previousMessage?.feedback && !next.feedback) {
+        next = { ...next, feedback: previousMessage.feedback };
+      }
       return next;
     };
     const findLastMessageIndex = (
@@ -722,6 +725,12 @@ export function useDashboardDerivedState(props: any) {
           output[output.length - 1] = {
             ...previous,
             processEvents: message.processEvents,
+          } as ChatMessage;
+        }
+        if (message.feedback && message.feedback.providedAt !== previous?.feedback?.providedAt) {
+          output[output.length - 1] = {
+            ...output.at(-1),
+            feedback: message.feedback,
           } as ChatMessage;
         }
         continue;

@@ -25,9 +25,9 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -102,6 +102,54 @@ const SOURCES = {
     // `review-animations` sets `disable-model-invocation: true`; keep upstream
     // frontmatter directives verbatim instead of flattening to name/description/license.
     preserveFrontmatter: true,
+  },
+
+  superpowers: {
+    category: "engineering",
+    sourceLabel: "obra-superpowers",
+    repo: "obra/superpowers",
+    repoUrl: "https://github.com/obra/superpowers",
+    license: "MIT",
+    skillsRoot: "skills",
+    layout: "dir",
+    validated: true,
+    ref: "v6.1.1",
+    expectedCommit: "d884ae04edebef577e82ff7c4e143debd0bbec99",
+    copySkillDirectory: true,
+    licenseFile: "LICENSE",
+    preserveFrontmatter: true,
+    include: [
+      "brainstorming",
+      "dispatching-parallel-agents",
+      "executing-plans",
+      "finishing-a-development-branch",
+      "receiving-code-review",
+      "requesting-code-review",
+      "subagent-driven-development",
+      "systematic-debugging",
+      "test-driven-development",
+      "using-git-worktrees",
+      "verification-before-completion",
+      "writing-plans",
+    ],
+    descriptionOverrides: {
+      brainstorming: "Use for materially ambiguous, novel, cross-system, or costly-to-reverse engineering work that benefits from a reviewed design before implementation; keep clear reversible tasks lightweight.",
+      "dispatching-parallel-agents": "Use when approved work contains two or more independent subtasks and HivemindOS, the user, and project policy permit parallel agent fan-out.",
+      "subagent-driven-development": "Use when an approved implementation plan has independent tasks and the active HivemindOS runtime permits delegated implementer and reviewer roles.",
+      "using-git-worktrees": "Use when consequential repository work needs an isolated checkout and the project worktree policy permits creating one.",
+      "finishing-a-development-branch": "Use after implementation and verification to present safe branch handoff choices without assuming merge, push, cleanup, or deletion authority.",
+      "writing-plans": "Use when a material multi-step engineering design needs an executable plan in the project's established planning surface.",
+    },
+    resourceExcludes: {
+      // The visual companion starts a local web server. HivemindOS supplies its own
+      // browser/visual tools, so only the portable brainstorming method is packaged.
+      brainstorming: ["scripts", "visual-companion.md"],
+      // This upstream demonstration imports Superpowers' own application aliases,
+      // so packaging it would make the HivemindOS TypeScript project compile it.
+      "systematic-debugging": ["condition-based-waiting-example.ts"],
+    },
+    hivemindOsAugmentation: true,
+    note: "Curated methods only. The upstream plugin bootstrap, hooks, and brainstorming web server are intentionally excluded.",
   },
 
   // --- Configured but NOT yet validated by a clone. Run with --dry-run first to confirm
@@ -182,10 +230,6 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
-function slugToTitle(slug) {
-  return slug.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 function parseFrontmatter(markdown) {
   const m = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
   if (!m) return { has: false, fields: {}, body: markdown };
@@ -236,6 +280,22 @@ async function writeLock(lock) {
   await writeFile(LOCK_PATH, `${JSON.stringify(out, null, 2)}\n`);
 }
 
+async function hashPackagedFiles(root) {
+  const hashes = {};
+  async function walk(dir) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.name === ".hivemind-skill-source.json") continue;
+      const path = join(dir, entry.name);
+      if (entry.isSymbolicLink()) throw new Error(`Packaged skill resource may not be a symlink: ${relative(root, path)}`);
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile()) hashes[relative(root, path).replace(/\\/g, "/")] = sha256(await readFile(path));
+    }
+  }
+  await walk(root);
+  return hashes;
+}
+
 // Collect upstream {slug, file, markdown} units for a source layout.
 async function collectUpstream(source, rootDir) {
   const skillsDir = join(rootDir, source.skillsRoot);
@@ -283,22 +343,101 @@ async function collectUpstream(source, rootDir) {
   } else {
     throw new Error(`Layout "${source.layout}" not yet implemented for this importer.`);
   }
+  if (source.include?.length) {
+    const included = new Set(source.include.map(slugify));
+    return units.filter((unit) => included.has(unit.slug)).sort((a, b) => a.slug.localeCompare(b.slug));
+  }
   units.sort((a, b) => a.slug.localeCompare(b.slug));
   return units;
+}
+
+function hivemindOsPolicy(unit) {
+  const shared = [
+    "This optional skill is a method library inside HivemindOS, not a global bootstrap or instruction override.",
+    "HivemindOS packaged skills, the active Work Board loop contract, user instructions, and project rules remain authoritative.",
+    "Upstream words such as MUST, always, or mandatory apply only after this skill is selected for a task where the method fits; they do not force ceremony onto small, clear, reversible work.",
+    "Do not commit, push, merge, delete branches, create worktrees, launch subagents, or take outward actions unless the user request and active project policy authorize that exact action.",
+    "Record evidence and gate outcomes in the HivemindOS task/loop receipts when the work runs from the Work Board.",
+  ];
+  const specific = {
+    brainstorming: [
+      "Use this for material ambiguity, novel product behavior, cross-system design, or costly-to-reverse choices; a short inline design is enough for bounded changes.",
+      "The upstream visual companion is not packaged. Use HivemindOS visual tools when a visual materially improves the decision.",
+      "Follow the repository's established spec location and changelog policy instead of assuming docs/superpowers or an automatic commit.",
+    ],
+    "dispatching-parallel-agents": [
+      "Parallel fan-out is optional and requires the runtime/user/project to permit it; prefer HivemindOS Queen Bee or approved agent routes when available.",
+    ],
+    "subagent-driven-development": [
+      "Treat upstream subagent scripts and role prompts as implementation aids, not permission to fan out or commit autonomously.",
+    ],
+    "using-git-worktrees": [
+      "Use the repository's existing worktree conventions and never disturb another task's dirty working tree.",
+    ],
+    "finishing-a-development-branch": [
+      "Present finish options without performing destructive cleanup, merge, push, or branch deletion unless explicitly authorized.",
+    ],
+    "writing-plans": [
+      "Use the project's established plan surface and file conventions; Work Board loop steps and receipts are the durable execution record when present.",
+    ],
+  }[unit.slug] ?? [];
+  return [
+    "## HivemindOS Integration",
+    "",
+    ...[...shared, ...specific].map((line) => `- ${line}`),
+    "",
+    "## Upstream Method",
+    "",
+  ].join("\n");
+}
+
+function adaptUpstreamContent(content, unit, source) {
+  if (!source.hivemindOsAugmentation) return content;
+  let adapted = content.replaceAll("superpowers:", "");
+  if (unit.slug === "executing-plans") {
+    adapted = adapted.replace(
+      /\*\*Note:\*\* Tell your human partner that Superpowers works much better[\s\S]*?instead of this skill\./,
+      "**Delegation note:** If approved subagents are available and the plan contains independent tasks, prefer `subagent-driven-development`; otherwise execute the plan directly.",
+    );
+  }
+  if (unit.slug === "writing-plans") {
+    adapted = adapted
+      .replaceAll("function(input)", "target_behavior(input)")
+      .replace('"function not defined"', '"target_behavior not defined"');
+  }
+  if (unit.slug !== "brainstorming") return adapted;
+  return adapted
+    .replace(
+      /<HARD-GATE>[\s\S]*?<\/HARD-GATE>/,
+      [
+        "<HARD-GATE>",
+        "For the material ambiguity that caused this skill to be selected, do not implement until the design is presented and approved. If inspection proves the task is clear, bounded, and reversible, record that conclusion and return to the normal lightweight HivemindOS path.",
+        "</HARD-GATE>",
+      ].join("\n"),
+    )
+    .replace(
+      /## Anti-Pattern: "This Is Too Simple To Need A Design"[\s\S]*?(?=\n## Checklist)/,
+      "## Scope Check\n\nWhen this skill is selected, keep the design proportionate. A bounded design may be only a few sentences; do not expand it into ceremony that does not reduce risk.\n",
+    )
+    .replace(/^2\. \*\*Offer the visual companion just-in-time\*\*.*\n/m, "")
+    .replace("6. **Write design doc** — save to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` and commit", "6. **Write design doc** — use the project's established spec location and do not commit unless authorized")
+    .replace("- Write the validated design (spec) to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`", "- Write the validated design to the project's established spec location")
+    .replace("Spec written and committed to `<path>`.", "Spec written to `<path>` (uncommitted unless separately authorized).")
+    .replace(/\n## Visual Companion[\s\S]*$/, "\n");
 }
 
 // Produce the final vendored SKILL.md (guarantee YAML frontmatter with name + description).
 function normalizeSkill(unit, source) {
   const { fields, body, has } = parseFrontmatter(unit.markdown);
   const name = fields.name?.trim() || unit.slug;
-  let description = fields.description?.trim() || extractDescription(unit.markdown);
+  let description = source.descriptionOverrides?.[unit.slug] || fields.description?.trim() || extractDescription(unit.markdown);
   const trigger = source.triggers?.[unit.slug];
   if (trigger && !/use (when|for)/i.test(description)) {
     description = `${description}${description.endsWith(".") ? "" : "."} Use for: ${trigger}.`;
   }
   description = description.replace(/"/g, "'").trim() || `Optional packaged skill: ${name}.`;
   const synthesized = !has || !fields.name || !fields.description;
-  const content = has ? body : unit.markdown.replace(/^\s*\n/, "");
+  const content = adaptUpstreamContent(has ? body : unit.markdown.replace(/^\s*\n/, ""), unit, source);
   // Opt-in: carry through upstream frontmatter directives (e.g. `disable-model-invocation`,
   // `allowed-tools`) verbatim instead of flattening to name/description/license only. The
   // canonical trio is always re-emitted first; every other original frontmatter line is kept
@@ -321,7 +460,8 @@ function normalizeSkill(unit, source) {
     "---",
     "",
   ].join("\n");
-  return { name, description, markdown: `${frontmatter}${content.trimEnd()}\n`, synthesized };
+  const augmentation = source.hivemindOsAugmentation ? hivemindOsPolicy(unit) : "";
+  return { name, description, markdown: `${frontmatter}${augmentation}${content.trimEnd()}\n`, synthesized };
 }
 
 async function importSource(id, { ref, dryRun }, lock) {
@@ -334,8 +474,16 @@ async function importSource(id, { ref, dryRun }, lock) {
 
   const { dir, commit } = gitClone(source.repoUrl, ref ?? source.ref);
   try {
+    if (source.expectedCommit && commit !== source.expectedCommit) {
+      throw new Error(`Source ${id} resolved to ${commit}, expected ${source.expectedCommit}.`);
+    }
     const units = await collectUpstream(source, dir);
     if (!units.length) throw new Error(`No skills found under ${source.skillsRoot} (layout ${source.layout}).`);
+    if (source.include?.length && units.length !== source.include.length) {
+      const found = new Set(units.map((unit) => unit.slug));
+      const missing = source.include.map(slugify).filter((slug) => !found.has(slug));
+      throw new Error(`Source ${id} is missing selected skills: ${missing.join(", ")}.`);
+    }
     const stamp = new Date().toISOString();
     const imported = [];
 
@@ -346,6 +494,7 @@ async function importSource(id, { ref, dryRun }, lock) {
       const hash = sha256(normalized.markdown);
       const packagedRel = relative(REPO_ROOT, skillPath).replace(/\\/g, "/");
       const lockKey = unit.slug;
+      let resourceHashes;
 
       // Collision guard: same slug must map to the same packaged path.
       const prior = lock.skills[lockKey];
@@ -366,6 +515,12 @@ async function importSource(id, { ref, dryRun }, lock) {
           await rm(packageDir, { recursive: true, force: true });
           await mkdir(packageDir, { recursive: true });
           await cp(join(dir, source.skillsRoot, unit.sourceFolder), packageDir, { recursive: true, force: true });
+          for (const excluded of source.resourceExcludes?.[unit.slug] ?? []) {
+            const excludedPath = resolve(packageDir, excluded);
+            if (excludedPath !== packageDir && excludedPath.startsWith(`${packageDir}/`)) {
+              await rm(excludedPath, { recursive: true, force: true });
+            }
+          }
         } else {
           await mkdir(packageDir, { recursive: true });
         }
@@ -397,10 +552,13 @@ async function importSource(id, { ref, dryRun }, lock) {
           status: "optional",
           license: source.license,
           commit,
-          normalized: normalized.synthesized ? "frontmatter-synthesized-by-importer" : "verbatim-frontmatter",
+          normalized: source.hivemindOsAugmentation
+            ? "hivemindos-augmented-upstream"
+            : normalized.synthesized ? "frontmatter-synthesized-by-importer" : "verbatim-frontmatter",
           description: normalized.description,
         };
         await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+        resourceHashes = await hashPackagedFiles(packageDir);
       }
 
       lock.skills[lockKey] = {
@@ -411,6 +569,7 @@ async function importSource(id, { ref, dryRun }, lock) {
         skillPath: `${source.skillsRoot}/${unit.file}`.replace(/\\/g, "/"),
         packagedPath: packagedRel,
         computedHash: hash,
+        ...(resourceHashes ? { resourceHashes } : {}),
       };
       imported.push(unit.slug);
       console.log(
@@ -438,7 +597,10 @@ async function verify(lock) {
       continue;
     }
     const hash = sha256(await readFile(abs, "utf8"));
-    if (hash !== entry.computedHash) {
+    const packageDir = dirname(abs);
+    const currentResourceHashes = entry.resourceHashes ? await hashPackagedFiles(packageDir) : undefined;
+    const resourcesMatch = !entry.resourceHashes || JSON.stringify(currentResourceHashes) === JSON.stringify(entry.resourceHashes);
+    if (hash !== entry.computedHash || !resourcesMatch) {
       console.log(`   DRIFT    ${slug}  expected ${entry.computedHash.slice(0, 12)} got ${hash.slice(0, 12)}`);
       drift += 1;
     } else {

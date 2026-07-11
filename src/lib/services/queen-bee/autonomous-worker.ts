@@ -10,6 +10,14 @@ import {
 import { makeDeliverableContentFetcher } from "@/lib/services/deliverables/content-fetcher";
 import { classifyKanbanFailure } from "../kanban/kanban-failure-classification";
 import { classifyRuntimeFailureOutput } from "./worker-output-failure";
+import { execFile } from "node:child_process";
+import { stat } from "node:fs/promises";
+import { isAbsolute } from "node:path";
+import { promisify } from "node:util";
+import { isLocalCollectorUrl } from "@/lib/services/local-collector-url";
+import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
+
+const execFileAsync = promisify(execFile);
 
 // Advance an agent flow when one of its task nodes completes/fails. Dynamic, guarded import keeps
 // the flow layer off the autonomous worker's static graph and never breaks task pickup.
@@ -26,6 +34,7 @@ async function advanceFlowIfTagged(task: KanbanTask, outcome: "passed" | "failed
 type KanbanStorageOptions = {
   vaultPath?: string | null;
   kanbanFolder?: string | null;
+  trustedLoopReceipts?: boolean;
 };
 
 export type QueenBeeAutonomousAgent = {
@@ -33,6 +42,7 @@ export type QueenBeeAutonomousAgent = {
   agentId?: string;
   name?: string;
   runtime?: string;
+  model?: string;
   beeRole?: string;
   workerClass?: string;
   runtimeCapabilities?: Record<string, unknown>;
@@ -407,11 +417,22 @@ export async function runQueenBeeAutonomousPickup(
 
       // Turn the worker output into concrete loop receipts so required eval gates can
       // actually be satisfied (or honestly blocked) instead of staying pending metadata.
-      const loopJudge = makeLoopJudge({ collectorUrl, agent: agent!, fetchJson, claimLock, marker: input.marker });
+      const reviewer = independentReviewerDelegation(chain, index + 1, agent!);
+      const loopJudge = reviewer
+        ? makeLoopJudge({
+          collectorUrl: delegationCollectorUrl(reviewer),
+          agent: reviewer.agent!,
+          fetchJson,
+          claimLock,
+          marker: input.marker,
+        })
+        : undefined;
       const { receipts } = await runLoopGates({
         loop: claimed.task.loop ?? input.task.loop,
         output: text,
         judge: loopJudge,
+        runCommand: makeLocalLoopCommandRunner(claimed.task),
+        verifyArtifact: makeLocalLoopArtifactVerifier(claimed.task),
         probeUrl: makeLiveUrlProber(),
         fetchContent: makeDeliverableContentFetcher(),
       });
@@ -428,7 +449,7 @@ export async function runQueenBeeAutonomousPickup(
           markerSeen: input.marker ? text.includes(input.marker) : undefined,
           loopGatesEvaluated: receipts.length || undefined,
         },
-      }, storageOptions);
+      }, { ...storageOptions, trustedLoopReceipts: true });
 
       const blockedByGates = completion?.blocked === true || completion?.task?.status === "needs-human";
       currentTask = completion.task ?? currentTask;
@@ -495,6 +516,61 @@ export async function runQueenBeeAutonomousPickup(
   const { retried } = await finalizeExhaustedPickup(fail, block, input.task.id, failures, finalMessage, storageOptions);
   if (!retried) await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
   return { ok: false, status: retried ? "skipped" : "blocked", taskId: input.task.id, claimLock: lastClaimLock, collectorUrl: lastCollectorUrl, agentName: lastAgentName, error: finalMessage };
+}
+
+const SAFE_LOOP_COMMANDS = new Map<string, { command: string; args: string[] }>([
+  ["pnpm run lint", { command: "pnpm", args: ["run", "lint"] }],
+  ["pnpm exec tsc --noEmit --pretty false --skipLibCheck", { command: "pnpm", args: ["exec", "tsc", "--noEmit", "--pretty", "false", "--skipLibCheck"] }],
+  ["pnpm test", { command: "pnpm", args: ["test"] }],
+  ["pnpm exec playwright test", { command: "pnpm", args: ["exec", "playwright", "test"] }],
+]);
+
+function localTaskWorkingDirectory(task: KanbanTask): string | undefined {
+  if (!isLocalCollectorUrl(task.targetMachine?.collectorUrl)) return undefined;
+  if (task.workspace.startsWith("dir:")) {
+    const path = task.workspace.slice(4).trim();
+    return isAbsolute(path) ? path : undefined;
+  }
+  return task.linkedDirectories
+    ?.map((entry) => entry.path)
+    .find((path): path is string => typeof path === "string" && isAbsolute(path));
+}
+
+function makeLocalLoopCommandRunner(task: KanbanTask) {
+  const cwd = localTaskWorkingDirectory(task);
+  if (!cwd) return undefined;
+  return async ({ command }: { command: string }) => {
+    const spec = SAFE_LOOP_COMMANDS.get(command);
+    if (!spec) return { ok: false, output: `Command is not in the trusted loop allowlist: ${command}` };
+    try {
+      const result = await execFileAsync(spec.command, spec.args, {
+        cwd,
+        timeout: 10 * 60_000,
+        maxBuffer: 2_000_000,
+        env: runtimeCommandEnv(),
+      });
+      return { ok: true, exitCode: 0, output: `${result.stdout}${result.stderr}`.trim() };
+    } catch (error) {
+      const value = error as { code?: unknown; stdout?: string; stderr?: string; message?: string };
+      return {
+        ok: false,
+        exitCode: typeof value.code === "number" ? value.code : undefined,
+        output: `${value.stdout ?? ""}${value.stderr ?? ""}`.trim() || value.message,
+      };
+    }
+  };
+}
+
+function makeLocalLoopArtifactVerifier(task: KanbanTask) {
+  if (!isLocalCollectorUrl(task.targetMachine?.collectorUrl)) return undefined;
+  return async ({ artifact }: { artifact: string }) => {
+    const path = artifact.startsWith("file://") ? new URL(artifact).pathname : artifact;
+    if (!isAbsolute(path)) return { ok: false, error: "Artifact path is not absolute." };
+    const entry = await stat(path).catch(() => null);
+    return entry
+      ? { ok: true, evidence: [`stat: ${entry.isDirectory() ? "directory" : "file"}, ${entry.size} bytes`] }
+      : { ok: false, error: "Artifact does not exist on the execution machine." };
+  };
 }
 
 async function defaultKanbanMutations(deps: QueenBeeAutonomousPickupDeps): Promise<KanbanMutations> {
@@ -601,6 +677,27 @@ function targetMachineForDelegation(delegation: QueenBeeAutonomousDelegation): K
     name: name || "Delegated machine",
     collectorUrl: collectorUrl || undefined,
   };
+}
+
+function independentReviewerDelegation(
+  chain: QueenBeeAutonomousDelegation[],
+  startIndex: number,
+  worker: QueenBeeAutonomousAgent,
+): QueenBeeAutonomousDelegation | undefined {
+  const workerIdentity = agentIdentity(worker);
+  return chain.slice(startIndex).find((delegation) => {
+    const reviewer = delegation.agent;
+    return Boolean(
+      reviewer
+      && delegationCollectorUrl(delegation)
+      && agentIdentity(reviewer)
+      && agentIdentity(reviewer) !== workerIdentity,
+    );
+  });
+}
+
+function agentIdentity(agent: QueenBeeAutonomousAgent): string {
+  return String(agent.id || agent.agentId || agent.name || "").trim().toLowerCase();
 }
 
 function exhaustedMessage(failures: string[]) {
@@ -742,7 +839,9 @@ function makeLoopJudge(ctx: {
       "Worker output:",
       truncateForJudge(output),
       "",
-      'Reply with ONE line of JSON only: {"accepted": true|false, "reason": "<short reason>"}. Accept only if the output genuinely meets the gate; otherwise reject.',
+      evaluationRubric
+        ? `Score every rubric axis. Reply with ONE line of JSON only: {"accepted":true|false,"confidence":0.0,"reason":"<short reason>","axes":[${evaluationRubric.axes.map((axis) => `{"id":"${axis.id}","score":0.0,"evidence":["specific evidence"]}`).join(",")}]} . Accept only when every score is evidence-backed and the weighted result meets the threshold.`
+        : 'Reply with ONE line of JSON only: {"accepted":true|false,"confidence":0.0,"reason":"<short reason>","axes":[]}. Accept only if the output genuinely meets the gate; otherwise reject.',
     ].filter(Boolean).join("\n");
     const chat = await ctx.fetchJson(`${ctx.collectorUrl}/chat`, {
       method: "POST",
@@ -756,7 +855,16 @@ function makeLoopJudge(ctx: {
       }),
       signal: AbortSignal.timeout(Number(process.env.QUEEN_BEE_LOOP_JUDGE_TIMEOUT_MS || 120_000)),
     });
-    return parseJudgeVerdict(chatText(chat));
+    const verdict = parseJudgeVerdict(chatText(chat));
+    return {
+      ...verdict,
+      evaluator: {
+        agentId: ctx.agent.id || ctx.agent.agentId || ctx.agent.name,
+        model: ctx.agent.model,
+        runtime: ctx.agent.runtime,
+        independent: true,
+      },
+    };
   };
 }
 
@@ -797,14 +905,32 @@ function errorCode(error: unknown): string | undefined {
 }
 
 function parseJudgeVerdict(text: string): LoopJudgeVerdict {
-  const json = text.match(/\{[^{}]*"accepted"[^{}]*\}/i);
+  const json = text.match(/\{[\s\S]*"accepted"[\s\S]*\}/i);
   if (json) {
     try {
-      const parsed = JSON.parse(json[0]) as { accepted?: unknown; reason?: unknown };
+      const parsed = JSON.parse(json[0]) as { accepted?: unknown; confidence?: unknown; reason?: unknown; axes?: unknown };
+      const axes = Array.isArray(parsed.axes)
+        ? parsed.axes.flatMap((axis) => {
+          if (!axis || typeof axis !== "object") return [];
+          const record = axis as { id?: unknown; score?: unknown; evidence?: unknown };
+          const id = typeof record.id === "string" ? record.id.trim() : "";
+          const score = Number(record.score);
+          if (!id || !Number.isFinite(score)) return [];
+          return [{
+            id,
+            score: Math.max(0, Math.min(1, score)),
+            evidence: Array.isArray(record.evidence)
+              ? record.evidence.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).slice(0, 4)
+              : [],
+          }];
+        })
+        : [];
       return {
         accepted: parsed.accepted === true,
         summary: typeof parsed.reason === "string" ? parsed.reason : undefined,
-        evidence: [],
+        evidence: axes.flatMap((axis) => axis.evidence ?? []),
+        confidence: Number.isFinite(Number(parsed.confidence)) ? Math.max(0, Math.min(1, Number(parsed.confidence))) : undefined,
+        axes,
       };
     } catch {
       // fall through to keyword detection

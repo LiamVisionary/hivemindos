@@ -13,9 +13,9 @@ is a table you take a row out of, it is a bank and belongs here.
 ## Layout
 
 One directory per deliverable kind, matching `KanbanDeliverableKind` in `src/lib/types/kanban.ts` so the
-banks line up with what agents actually hand back. `copy/` is the exception: calls to action and
+banks line up with what agents actually hand back. Two exceptions: `copy/` (calls to action and
 objections are needed by video, web, and email alike, so they live at the top level rather than being
-duplicated into each.
+duplicated into each) and `gtm/` (go-to-market banks keyed by channel rather than by deliverable kind).
 
 ```
 workflows/
@@ -28,6 +28,23 @@ workflows/
     ctas.json        18 closing lines         (authored)
   web/
     sections.json    page-section archetypes  (authored)
+  gtm/
+    reddit/
+      templates.json post/comment skeletons, timing windows, intent queries (authored)
+    cold-email/
+      templates.json first-touch skeleton, frameworks, sequence spine, subject formulas, anti-patterns (authored)
+    linkedin/
+      templates.json hook shapes, content rotation, warming stages, DM spine, sell-by-chat, safety caps (authored)
+    b2b-social/
+      templates.json voice-foundation assets, content plays, repurposing targets, weekly rhythm, tooling caps (authored)
+    outreach-brief/
+      templates.json brief sections + evidence, copy constraints, cold-call spine, pipeline flags, metric triage (authored)
+    x-warm-outreach/
+      templates.json 14-day ladder, lead sources, reply shapes, DM skeletons, pacing rules (authored)
+    organic-reach/
+      templates.json pillars, post-type skeletons, viral wrappers, team roles, positioning, proof library, IG rules (authored)
+    events/
+      templates.json fit test, anchor criteria, invite skeletons, +1 activation loop, room design, follow-up touches, warm-intro rules (authored)
 ```
 
 ## Every bank declares its provenance

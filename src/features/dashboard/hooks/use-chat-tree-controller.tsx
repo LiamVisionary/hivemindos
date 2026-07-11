@@ -8,8 +8,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
+import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
+import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 
 function isAutomationHydratedTranscript(messages: Array<{ content?: string }> = []) {
   const transcript = messages.slice(0, 8).map((message) => message.content ?? "").join("\n");
@@ -45,14 +47,19 @@ function hasReadableChatMessages(messages: ChatMessage[] = [], isManualAgentChat
 function chatSearchContent(messages: ChatMessage[] = []) {
   return messages
     .slice(-80)
-    .map((message) => stripJsonRenderPayload(message.content ?? "").trim())
+    .map((message) => stripJsonRenderPayload(chatVisibleContent(message)).trim())
     .filter(Boolean)
     .join("\n")
     .slice(0, 24000);
 }
 
+function chatVisibleContent(message?: ChatMessage) {
+  const content = message?.content ?? "";
+  return message?.role === "assistant" ? visibleChannelMarkupText(content) : content;
+}
+
 function chatPreviewContent(message?: ChatMessage) {
-  return stripJsonRenderPayload(message?.content ?? "").trim();
+  return stripJsonRenderPayload(chatVisibleContent(message)).trim();
 }
 
 function chatLeafMatchesAgentId(leafKey: string, agentId: string) {
@@ -163,7 +170,7 @@ export function useChatTreeController(props: any) {
       ok?: boolean;
       session?: {
         sessionId?: string;
-        messages?: Array<{ role?: string; content?: string; createdAt?: number; index?: number }>;
+        messages?: Array<{ role?: string; content?: string; createdAt?: number; index?: number; feedback?: unknown }>;
       };
     } | null;
     const messages = (data?.session?.messages ?? [])
@@ -178,6 +185,7 @@ export function useChatTreeController(props: any) {
         createdAt: Number(message.createdAt || 0) || undefined,
         sourceSessionId: data?.session?.sessionId ?? sessionId,
         sourceIndex: Number.isFinite(Number(message.index)) ? Number(message.index) : undefined,
+        feedback: normalizeEvaluationHumanFeedback(message.feedback),
       }));
     logClientTelemetry("chat.runtime_session.fetch.response", {
       agentId: agent.id,

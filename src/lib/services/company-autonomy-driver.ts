@@ -16,6 +16,9 @@ import { notifyEscalation, resolveEscalationNotification, runEscalationSweep } f
 import { syncCompanyTaskOutcomes } from "@/lib/services/company-memory";
 import { companyExecutionCapability } from "@/lib/services/company-execution-capabilities";
 import { inspectCompanyAeonActivity } from "@/lib/services/company-aeon-binding";
+import { readSalesContentMachine } from "@/lib/services/sales-content";
+import { readCompanySalesContentEvents } from "@/lib/services/sales-content/event-store";
+import type { Company } from "@/lib/types/company";
 
 /**
  * Perpetual company autonomy driver. A single boot-time background loop (one per
@@ -54,6 +57,8 @@ const globalState = globalThis as typeof globalThis & {
   __hivemindCompanyAutonomyDriver?: Runner;
   __hivemindCompanyDriverSelfPort?: string;
   __hivemindCompanyDriverSelfBase?: string;
+  /** Per-company last inbound-mail refresh time (ms). globalThis-backed so HMR keeps it. */
+  __hivemindCompanyInboundMailRefreshAt?: Map<string, number>;
 };
 
 /**
@@ -102,6 +107,43 @@ export function resolveCompanyDriverSelfBases(): string[] {
     }
   }
   return bases;
+}
+
+/** Don't hammer the mail provider — refresh a company's inbox at most this often. */
+const INBOUND_MAIL_REFRESH_MS = 15 * 60 * 1000;
+
+function inboundMailRefreshState(): Map<string, number> {
+  return (globalState.__hivemindCompanyInboundMailRefreshAt ??= new Map<string, number>());
+}
+
+/**
+ * Ingest a company's inbound mail from the driver tick so a prospect's reply is
+ * seen WITHOUT a human opening the Cockpit — previously the only trigger for a
+ * mail refresh. readSalesContentMachine reads the inbox, persists reply events,
+ * and plans a draft-reply action whose stored dispatch context the driver already
+ * feeds into the next company dispatch, so the crew drafts the response (parked
+ * for the customer-email-send approval). Here we only trigger that ingestion
+ * (throttled per company) and notify the human when a NEW reply arrives; the raw
+ * prospect text is never interpolated into the alert.
+ */
+async function maybeIngestInboundReplies(company: Company, nowMs: number): Promise<void> {
+  const throttle = inboundMailRefreshState();
+  if (nowMs - (throttle.get(company.id) ?? 0) < INBOUND_MAIL_REFRESH_MS) return;
+  throttle.set(company.id, nowMs);
+  const before = await readCompanySalesContentEvents(company.id).catch(() => []);
+  const seen = new Set(before.filter((event) => event.kind === "mail.reply_received").map((event) => event.id));
+  const machine = await readSalesContentMachine(company, { refresh: true, now: new Date(nowMs) }).catch(() => null);
+  if (!machine) return;
+  const fresh = machine.events.filter((event) => event.kind === "mail.reply_received" && !seen.has(event.id));
+  if (fresh.length === 0) return;
+  const count = fresh.length;
+  await notifyEscalation({
+    key: `company-inbound-reply:${company.id}:${fresh.map((event) => event.id).sort().join(",")}`,
+    title: `${company.name}: ${count} new prospect repl${count === 1 ? "y" : "ies"}`,
+    body: `A prospect replied to ${company.name}'s outreach. The crew will draft a response for your approval — open ${company.name} → Emails to read the thread.`,
+    severity: "high",
+    tags: ["company", "inbound-reply"],
+  }).catch(() => undefined);
 }
 
 /** Foreign-homed companies already logged this process — one line each, not one per tick. */
@@ -345,23 +387,20 @@ async function tickOnce(): Promise<void> {
 }
 
 /**
- * Pure predicate: does this company still have live work? Counts tasks delegated
- * to its members (any source) plus ITS OWN pending ("queen-bee"-assigned) tasks
- * awaiting routing. Another source's pending task must never freeze this company
- * — that wildcard once deadlocked every company on one stuck task.
+ * Pure predicate: does this company still have live work? Company task source is
+ * the authority. Member identity is deliberately not enough: agents also handle
+ * ad-hoc and other-company work, which must not freeze this company's cadence.
  */
 export function companyHasActiveWork(
   tasks: Array<Pick<import("@/lib/types/kanban").KanbanTask, "status" | "assignee" | "source">>,
-  memberIdents: Set<string>,
+  _memberIdents: Set<string>,
   companyId: string,
 ): boolean {
   const companyPrefix = `company:${companyId}:`;
-  return tasks.some((t) => {
-    if (t.status !== "ready" && t.status !== "working") return false;
-    const assignee = t.assignee ?? "";
-    if (assignee && memberIdents.has(assignee)) return true;
-    return assignee === "queen-bee" && (t.source ?? "").startsWith(companyPrefix);
-  });
+  return tasks.some((task) => (
+    (task.status === "ready" || task.status === "working")
+    && (task.source ?? "").startsWith(companyPrefix)
+  ));
 }
 
 /** Sticky-hold guards are on unless HIVEMINDOS_APPROVAL_HOLD=0. */
@@ -443,6 +482,10 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
 
   for (const company of eligible) {
     try {
+      // Detect prospect replies without a human opening the Cockpit. Runs before
+      // the work-surface/pause/cadence guards so a busy or paused company still
+      // ingests inbound mail; throttled per company inside.
+      await maybeIngestInboundReplies(company, now).catch(() => undefined);
       const executionCapability = companyExecutionCapability(company.execution);
       const companyPrefix = `company:${company.id}:`;
       if (executionCapability.autonomy.activityAuthority === "work-board") {

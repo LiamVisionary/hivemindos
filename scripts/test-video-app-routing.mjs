@@ -21,7 +21,7 @@ const source = readFileSync(
 const stripped = source
   .replace(/^import[^;]*;/gm, "")
   .replace(/\bexport\s+/g, "") +
-  "\n;globalThis.__videoRouting = { selectVideoApp, appScore, videoRouteScore, withMcpVideoProviders, rewriteStudioMediaUrl, firstVideoUrlInJson, mcpJobId, videoDimsFromImage };";
+  "\n;globalThis.__videoRouting = { selectVideoApp, appScore, videoRouteScore, withMcpVideoProviders, rewriteStudioMediaUrl, firstVideoUrlInJson, mcpJobId, videoDimsFromImage, requestedVideoDurationSeconds, videoFrameCount };";
 
 const compiled = ts.transpileModule(stripped, {
   compilerOptions: {
@@ -44,7 +44,7 @@ const context = vm.createContext({
   usageNoteAffinity: () => 0,
 });
 vm.runInContext(compiled, context, { filename: "video-generation.ts" });
-const { selectVideoApp, appScore, videoRouteScore, withMcpVideoProviders, rewriteStudioMediaUrl, firstVideoUrlInJson, mcpJobId, videoDimsFromImage } = context.__videoRouting;
+const { selectVideoApp, appScore, videoRouteScore, withMcpVideoProviders, rewriteStudioMediaUrl, firstVideoUrlInJson, mcpJobId, videoDimsFromImage, requestedVideoDurationSeconds, videoFrameCount } = context.__videoRouting;
 
 const VIDEO_PROMPT = { origin: "", prompt: "make a video of this bee flying" };
 
@@ -198,5 +198,13 @@ const wide = videoDimsFromImage(fakePng(1920, 1080));
 assert.equal(wide.width % 32, 0, "derived width is divisible by 32");
 assert.ok(wide.width <= 1024 && wide.height <= 1024, "dims are clamped to the max");
 assert.deepEqual({ ...videoDimsFromImage(Buffer.from("not an image")) }, { width: 768, height: 768 }, "unparseable image => safe default dims");
+
+// --- requested duration: natural-language seconds drive the MCP frame count ---
+assert.equal(requestedVideoDurationSeconds("generate a 10 second video"), 10, "full-word seconds are parsed");
+assert.equal(requestedVideoDurationSeconds("make this a 6s video"), 6, "compact seconds are parsed");
+assert.equal(requestedVideoDurationSeconds("create a video of the bee flying"), 4, "unspecified duration keeps the four-second default");
+assert.equal(requestedVideoDurationSeconds("make a 45 second video"), 30, "duration is capped at the MCP's 721-frame maximum");
+assert.equal(videoFrameCount(10, 24), 241, "ten seconds at 24 fps uses the inclusive terminal frame");
+assert.equal(videoFrameCount(30, 24), 721, "thirty seconds maps to the MCP maximum");
 
 console.log("video-app-routing: OK");

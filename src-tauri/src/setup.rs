@@ -140,6 +140,7 @@ fn command_lookup_paths() -> Vec<PathBuf> {
     } else {
         if let Some(home) = home_dir() {
             paths.push(home.join(".local").join("bin"));
+            paths.push(home.join(".npm-global").join("bin"));
             paths.push(home.join(".nvm").join("current").join("bin"));
             if let Ok(entries) = fs::read_dir(home.join(".nvm").join("versions").join("node")) {
                 paths.extend(

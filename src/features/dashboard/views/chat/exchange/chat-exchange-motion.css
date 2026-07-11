@@ -159,6 +159,7 @@
 /* Hover/active transitions the base layer was missing. */
 .fr-chat-agent-menu-list button,
 .fr-chat-action-row > button,
+.fr-chat-feedback-button,
 .fr-chat-mini-button,
 .fr-chat-prompt-button,
 .fr-chat-prompt-send-button,

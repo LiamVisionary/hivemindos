@@ -4,13 +4,13 @@ import { createHash, randomUUID } from "crypto";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { readGitLawbStatus, sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { fullVaultSearchIndexStatus, rebuildFullVaultSearchIndex, searchFullVaultSearchIndex } from "@/lib/services/obsidian/full-vault-search-index";
-import { agentMemoryEmbeddingsCoverage, backfillAgentMemoryEmbeddings, semanticScoresForRecords, upsertAgentMemoryEmbedding } from "@/lib/services/obsidian/agent-memory/embeddings";
+import { agentMemoryEmbeddingsCoverage, backfillAgentMemoryEmbeddings, fullVaultSemanticScores, semanticScoresForRecords, upsertAgentMemoryEmbedding } from "@/lib/services/obsidian/agent-memory/embeddings";
 import { canonicalMemoryKey, selectCanonicalMemoryHeads } from "@/lib/services/obsidian/agent-memory/canonical";
 import { distinctiveMemoryTokens, findExplicitCorrectionCandidates, tokenSetSimilarity } from "@/lib/services/obsidian/agent-memory/corrections";
 import { recordAgentOperationalEvent } from "@/lib/services/obsidian/agent-memory/events";
 import { AGENT_MEMORY_ENTITY_INDEX_PATH, appendAgentMemoryEntityIndex, extractAgentMemoryEntities, rewriteAgentMemoryEntityIndex } from "@/lib/services/obsidian/agent-memory/entities";
 import { extractRecallQuery, meaningfulMatchCount, queryWordsForRecall } from "@/lib/services/obsidian/agent-memory/query";
-import { conversationMemoryExcerptBudget, queryCenteredMemoryExcerpt, queryFocusedConversationExcerpt } from "@/lib/services/obsidian/agent-memory/excerpt";
+import { adaptiveConversationExcerptBudget, isAggregationRecallQuery, queryCenteredMemoryExcerpt, queryFocusedConversationExcerpt } from "@/lib/services/obsidian/agent-memory/excerpt";
 import { detectSensitiveContent, redactSensitiveText } from "@/lib/services/obsidian/agent-memory/redact";
 import { AGENT_MEMORY_ANSWER_MIN_SCORE, bm25ScoresForRecords, recordVisibleForRecall, scoreAgentMemory, temporalRecallMode, withAgentMemorySearchMetadata } from "@/lib/services/obsidian/agent-memory/scoring";
 import { AGENT_MEMORY_RETRIEVALS_PATH, appendAgentMemoryUsage, withAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
@@ -825,10 +825,40 @@ async function readMemoryRecords(root: string) {
   return readMemoryRecordsFromMarkdown(root);
 }
 
+// Aggregation queries pad recall with recent sessions; bound the supplement so
+// large live vaults never pay an unbounded conversation-folder read.
+const AGGREGATION_CONVERSATION_SUPPLEMENT_CAP = 150;
+
+async function recentConversationNoteRecords(root: string, excludePaths: ReadonlySet<string>, cap: number) {
+  const folder = join(root, "Memory/Conversations");
+  const files = await walkMarkdown(root, folder).catch(() => [] as string[]);
+  const withTimes: Array<{ file: string; mtimeMs: number }> = [];
+  for (const file of files) {
+    const st = await stat(file).catch(() => null);
+    if (st?.isFile()) withTimes.push({ file, mtimeMs: st.mtimeMs });
+  }
+  withTimes.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  const records: AgentMemoryRecord[] = [];
+  for (const { file } of withTimes) {
+    if (records.length >= cap) break;
+    const record = await cachedVaultRecord(root, file);
+    if (record && !excludePaths.has(record.notePath)) records.push(record);
+  }
+  return records;
+}
+
 async function readFullVaultRecords(root: string, memoryRecords: AgentMemoryRecord[], query?: string) {
   const vaultRecords = await readVaultNoteRecords(root, query);
   const byPath = new Map<string, AgentMemoryRecord>();
   for (const record of vaultRecords) byPath.set(record.notePath, record);
+  // Counting/aggregation questions need paraphrased instances that share no
+  // vocabulary with the query, which the term-matched shortlist cannot supply.
+  // Recent conversation sessions join the candidate pool; hitsFromRecords only
+  // surfaces them when genuine evidence also matched.
+  if (isAggregationRecallQuery(query)) {
+    const supplement = await recentConversationNoteRecords(root, new Set(byPath.keys()), AGGREGATION_CONVERSATION_SUPPLEMENT_CAP);
+    for (const record of supplement) byPath.set(record.notePath, record);
+  }
   for (const record of memoryRecords) byPath.set(record.notePath, record);
   return [...byPath.values()];
 }
@@ -853,7 +883,10 @@ function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryI
     ? selectCanonicalMemoryHeads(visibleRecords).records
     : visibleRecords;
   const lexicalScores = bm25ScoresForRecords(candidateRecords, input);
-  return candidateRecords
+  // Two-pass assembly: select the hit set first, then render excerpts only for
+  // returned hits so the per-hit budget can adapt to the final hit count (a
+  // 10-session archive affords much fuller sessions than a 10,000-note vault).
+  const scoredHits = candidateRecords
     .map((record) => {
       const scored = scoreAgentMemory(record, input, lexicalScores.get(record.id), semanticScores?.get(record.id));
       return {
@@ -861,12 +894,33 @@ function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryI
         score: scored.score,
         matched: scored.matched,
         scoreDetails: scored.scoreDetails,
-        excerpt: redactSensitiveText(record.notePath.startsWith("Memory/Conversations/") ? queryFocusedConversationExcerpt(record.content, input.query, conversationMemoryExcerptBudget(input.query)) : queryCenteredMemoryExcerpt(record.content, input.query, 320)),
       };
-    })
+    });
+  const matchedHits = scoredHits
     .filter((hit) => !input.query?.trim() || hit.matched.length > 0)
     .sort((left, right) => right.score - left.score || Date.parse(right.createdAt) - Date.parse(left.createdAt))
     .slice(0, limit);
+  // Aggregation/counting questions ("how many weddings have I attended") are
+  // answered by instances scattered across sessions that often share no
+  // vocabulary with the query ("Emma's ceremony"). When genuine evidence
+  // matched, fill the remaining budget with the newest conversation sessions
+  // so paraphrased instances stay reachable. Zero-evidence queries still
+  // return nothing, preserving unsupported-question abstention.
+  const includedIds = new Set(matchedHits.map((hit) => hit.id));
+  const paddedConversations = input.query?.trim() && matchedHits.length && matchedHits.length < limit && isAggregationRecallQuery(input.query)
+    ? scoredHits
+      .filter((hit) => !includedIds.has(hit.id) && hit.matched.length === 0 && hit.notePath.startsWith("Memory/Conversations/"))
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+      .slice(0, limit - matchedHits.length)
+    : [];
+  const selected = [...matchedHits, ...paddedConversations];
+  const conversationBudget = adaptiveConversationExcerptBudget(input.query, selected.length);
+  return selected.map((hit) => ({
+    ...hit,
+    excerpt: redactSensitiveText(hit.notePath.startsWith("Memory/Conversations/")
+      ? queryFocusedConversationExcerpt(hit.content, input.query, conversationBudget)
+      : queryCenteredMemoryExcerpt(hit.content, input.query, 320)),
+  }));
 }
 
 function chainItemForRecord(record: AgentMemoryRecord): AgentMemoryChainItem {
@@ -1539,7 +1593,13 @@ export async function recallAgentMemory(input: RecallAgentMemoryInput = {}) {
     };
   }
   const records = await readFullVaultRecords(root, memoryRecords, effectiveQuery);
-  const hits = attachEvolutionChains(hitsFromRecords(records, effectiveInput, limit, semanticScores), memoryRecords);
+  // Conversation archives answer many questions through paraphrase ("Emma's
+  // ceremony" for a weddings query) that lexical matching cannot reach. When a
+  // local/configured embeddings endpoint is available, lazily embed the vault
+  // candidates (content-hashed, so repeat recalls are cache hits) and merge
+  // semantic scores; every failure degrades to lexical-only recall.
+  const vaultSemanticScores = await fullVaultSemanticScores(root, effectiveQuery, records, semanticScores).catch(() => semanticScores);
+  const hits = attachEvolutionChains(hitsFromRecords(records, effectiveInput, limit, vaultSemanticScores), memoryRecords);
   await recordRetrievedHits(root, effectiveInput, hits);
   return {
     vaultPath: root,

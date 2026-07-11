@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { registerAeonEnvSyncRepo } from "@/lib/services/runtime-adapters/aeon-env-sync-registry";
 import { AEON_OFFICIAL_REPOSITORY } from "@/lib/services/runtime-adapters/aeon-capabilities";
-import { inspectAeonWorkspace } from "@/lib/services/runtime-adapters/aeon-workspace";
+import { inspectAeonWorkspace, replaceLegacyAeonWorkspace } from "@/lib/services/runtime-adapters/aeon-workspace";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -171,31 +171,58 @@ async function ensureAeonWorkspace(root: string) {
 function parseRemoteWorkspaceOutput(stdout: string) {
   let root = "";
   let repo = "";
+  let backupRoot = "";
   for (const rawLine of stdout.split(/\r?\n/)) {
     if (!rawLine.trim()) continue;
     const [key, ...rest] = rawLine.split("\t");
     const value = rest.join("\t");
     if (key === "__ROOT__") root = value;
     if (key === "__REMOTE__") repo = value;
+    if (key === "__BACKUP__") backupRoot = value;
   }
   if (!root) throw new Error("Remote machine did not return an AEON repo path.");
-  return { root, repo };
+  return { root, repo, backupRoot };
 }
 
 async function ensureRemoteAeonWorkspace(input: { collectorUrl: string; path: string; action: string; repoUrl?: string }) {
   const host = remoteHostFromCollectorUrl(input.collectorUrl);
   if (!host) throw new Error("Remote agent bridge URL is missing a host.");
   const quotedPath = shellQuote(input.path.trim() || "~/.aeon");
-  const quotedRepo = shellQuote(input.repoUrl?.trim() || (input.action === "initialize" ? AEON_OFFICIAL_REPOSITORY : ""));
+  const quotedRepo = shellQuote(input.repoUrl?.trim() || (["initialize", "repair-legacy"].includes(input.action) ? AEON_OFFICIAL_REPOSITORY : ""));
+  const quotedAction = shellQuote(input.action);
   const script = [
     "set -eu",
     `p=${quotedPath}`,
     `repo=${quotedRepo}`,
+    `action=${quotedAction}`,
+    "backup=",
     "case \"$p\" in",
     "  \"~\") p=\"$HOME\" ;;",
     "  \"~/\"*) p=\"$HOME/${p#~/}\" ;;",
     "esac",
-    "if [ -n \"$repo\" ] && [ ! -d \"$p\" ]; then",
+    "if [ \"$action\" = \"repair-legacy\" ]; then",
+    "  if [ -f \"$p/aeon.yml\" ] && [ -f \"$p/catalog/skills.json\" ] && { [ -x \"$p/apps/cli/aeon\" ] || [ -x \"$p/aeon\" ]; }; then",
+    "    :",
+    "  else",
+    "    { [ -f \"$p/aeon.yml\" ] || [ -f \"$p/skills.json\" ]; } || { printf 'Only a detected legacy AEON workspace can be replaced automatically.\\n' >&2; exit 3; }",
+    "    backup=\"$p.legacy-backup-$(date -u +%Y%m%dT%H%M%SZ)\"",
+    "    n=2",
+    "    while [ -e \"$backup\" ]; do backup=\"$p.legacy-backup-$(date -u +%Y%m%dT%H%M%SZ)-$n\"; n=$((n + 1)); done",
+    "    mv \"$p\" \"$backup\"",
+    "    if ! git clone \"$repo\" \"$p\" >/dev/null; then",
+    "      rm -rf \"$p\"",
+    "      mv \"$backup\" \"$p\"",
+    "      printf 'AEON v0.1 installation failed and the legacy workspace was restored.\\n' >&2",
+    "      exit 4",
+    "    fi",
+    "    if ! { [ -f \"$p/aeon.yml\" ] && [ -f \"$p/catalog/skills.json\" ] && { [ -x \"$p/apps/cli/aeon\" ] || [ -x \"$p/aeon\" ]; }; }; then",
+    "      rm -rf \"$p\"",
+    "      mv \"$backup\" \"$p\"",
+    "      printf 'The AEON v0.1 layout check failed and the legacy workspace was restored.\\n' >&2",
+    "      exit 5",
+    "    fi",
+    "  fi",
+    "elif [ -n \"$repo\" ] && [ ! -d \"$p\" ]; then",
     "  git clone \"$repo\" \"$p\" >/dev/null",
     "fi",
     "[ -d \"$p\" ] || { printf 'AEON repo folder does not exist: %s\\n' \"$p\" >&2; exit 2; }",
@@ -204,6 +231,7 @@ async function ensureRemoteAeonWorkspace(input: { collectorUrl: string; path: st
     "remote=$(git -C \"$real_path\" remote get-url origin 2>/dev/null || true)",
     "printf '__ROOT__\\t%s\\n' \"$real_path\"",
     "printf '__REMOTE__\\t%s\\n' \"$remote\"",
+    "[ -z \"$backup\" ] || printf '__BACKUP__\\t%s\\n' \"$backup\"",
   ].join("\n");
   const targets = [host, `ubuntu@${host}`, `root@${host}`];
   const errors: string[] = [];
@@ -364,8 +392,9 @@ export async function POST(request: NextRequest) {
     }
     let root = "";
     let repo = "";
+    let backupRoot = "";
     if (remoteWorkspace) {
-      if (action !== "initialize" && action !== "link" && action !== "clone" && action !== "rename") {
+      if (action !== "initialize" && action !== "link" && action !== "clone" && action !== "rename" && action !== "repair-legacy") {
         throw new Error(`Unsupported remote AEON workspace action: ${action}.`);
       }
       if (action === "rename") {
@@ -385,6 +414,7 @@ export async function POST(request: NextRequest) {
       const remoteResult = await ensureRemoteAeonWorkspace({ collectorUrl, path, action, repoUrl: repo });
       root = remoteResult.root;
       repo = repo || remoteResult.repo;
+      backupRoot = remoteResult.backupRoot;
     } else if (action === "delete-git" || action === "delete-local") {
       root = resolve(expandHome(body.path?.trim() || workspaceRootFromAgent(body.agent)));
       await assertSafeLocalWorkspaceRoot(root);
@@ -403,6 +433,14 @@ export async function POST(request: NextRequest) {
       root = await availableLocalWorkspaceRoot(folderName, dirname(sourceRoot));
       await duplicateDir(sourceRoot, root);
       await ensureAeonWorkspace(root);
+    } else if (action === "repair-legacy") {
+      root = resolve(expandHome(body.path?.trim() || workspaceRootFromAgent(body.agent) || "~/.aeon"));
+      const replacement = await replaceLegacyAeonWorkspace(root, async (installRoot) => {
+        await mkdir(dirname(installRoot), { recursive: true });
+        await cloneIntoRoot(AEON_OFFICIAL_REPOSITORY, installRoot, body.cache === true || body.cache === "true");
+      });
+      backupRoot = replacement.backupRoot;
+      repo = await gitRemote(root);
     } else if (action === "initialize") {
       const createUnique = body.unique === true || body.unique === "true";
       root = body.path
@@ -451,7 +489,7 @@ export async function POST(request: NextRequest) {
     } else {
       throw new Error(`Unsupported AEON workspace action: ${action}.`);
     }
-    const requestedName = body.name?.trim();
+    const requestedName = body.name?.trim() || (action === "repair-legacy" ? body.agent?.name : undefined);
     const actualName = (body.unique === true || body.unique === "true") && root ? basename(root) : requestedName;
     const agent = await agentForWorkspace({
       root,
@@ -464,7 +502,7 @@ export async function POST(request: NextRequest) {
     });
     if (agent.aeonRepo) await registerAeonEnvSyncRepo(agent.aeonRepo, `workspace:${action}`).catch(() => undefined);
     const readme = remoteWorkspace ? "" : await readFile(join(root, "README.md"), "utf8").catch(() => "");
-    return NextResponse.json({ ok: true, agent, root: displayPath(root), readme: readme.slice(0, 1200) });
+    return NextResponse.json({ ok: true, agent, root: displayPath(root), backupPath: backupRoot ? displayPath(backupRoot) : "", readme: readme.slice(0, 1200) });
   } catch (error) {
     return NextResponse.json({
       ok: false,

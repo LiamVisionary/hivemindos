@@ -2,6 +2,13 @@ import { z } from "zod";
 import { defineHiveAction } from "./define";
 import { SLACK_TOKEN_ENV } from "@/lib/services/integrations/provider-connection-env";
 import { azureResourcesAction } from "./integrations/azure-resources";
+import { deployHivemindosMachineAction, hivemindosMachinesCatalogAction } from "./integrations/hivemindos-machines";
+import { managedCloudAgentsAction } from "./managed-cloud-agents";
+import { appBuilderAction } from "./app-builder";
+import { hostedMediaCatalogAction, hostedMediaGenerationAction, hostedMediaReadAction } from "./hosted-media";
+export { deployHivemindosMachineAction, hivemindosMachinesCatalogAction } from "./integrations/hivemindos-machines";
+export { managedCloudAgentsAction } from "./managed-cloud-agents";
+export { appBuilderAction } from "./app-builder";
 
 const handoffTargetSchema = {
   target: z.string().describe("Fuzzy machine name, such as ubuntu."),
@@ -1696,7 +1703,11 @@ export const slackSendMessageAction = defineHiveAction({
 });
 
 export const HIVE_ACTIONS = [
+  appBuilderAction,
   azureResourcesAction,
+  hivemindosMachinesCatalogAction,
+  deployHivemindosMachineAction,
+  managedCloudAgentsAction,
   slackSendMessageAction,
   listHivemindMachinesAction,
   planHandoffAction,
@@ -1719,6 +1730,9 @@ export const HIVE_ACTIONS = [
   phoneLocalTtsAction,
   copyTradeConfigAction,
   hivemindosModelsWalletAction,
+  hostedMediaCatalogAction,
+  hostedMediaReadAction,
+  hostedMediaGenerationAction,
   brainGraphOverviewAction,
   brainSearchKnowledgeAction,
   brainGetNodeAction,

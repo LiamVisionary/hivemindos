@@ -315,6 +315,7 @@ export function formatHiveDailyReportVoiceDigest(report: HiveDailyReport): strin
     }
     bits.push(`last 24h: ${activityPhrase(company.activity24h)}`);
     if (company.frozen) bits.push("FROZEN");
+    else if (!company.autonomy && company.runsHere) bits.push("autonomy OFF");
     const tag = company.ticker ? ` (${company.ticker})` : "";
     lines.push(`- ${company.name}${tag}: ${bits.join("; ")}.`);
   }
@@ -334,7 +335,15 @@ export function formatHiveDailyReportText(report: HiveDailyReport): string {
   const lines: string[] = [`## Business — ${date}`, ""];
   for (const company of report.companies) {
     const tag = company.ticker ? ` (${company.ticker})` : "";
-    const flags = [company.frozen ? "frozen" : null, company.autonomy ? "autonomous" : null, company.runsHere ? null : "runs elsewhere"]
+    // Say "autonomy OFF" explicitly for a locally-homed idle company — the report
+    // used to print nothing when autonomy was off, so an operator reading it could
+    // not tell the business was stopped. A company homed elsewhere reports "runs
+    // elsewhere" (its autonomy is managed on that machine).
+    const flags = [
+      company.frozen ? "frozen" : null,
+      company.autonomy ? "autonomous" : company.runsHere ? "autonomy OFF" : null,
+      company.runsHere ? null : "runs elsewhere",
+    ]
       .filter(Boolean)
       .join(", ");
     lines.push(`### ${company.name}${tag}${flags ? ` — ${flags}` : ""}`);

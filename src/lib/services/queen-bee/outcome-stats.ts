@@ -20,6 +20,7 @@ type SessionOutcomeRecord = {
   agentId?: string;
   endedAt?: number;
   endReason?: string;
+  evaluation?: { routingEligible?: boolean; verdict?: string };
 };
 
 /**
@@ -31,6 +32,21 @@ export async function readQueenBeeOutcomeStats(): Promise<QueenBeeOutcomeStats> 
   const now = Date.now();
   if (outcomeCache && now - outcomeCache.readAt < OUTCOME_CACHE_MS) return outcomeCache.stats;
   const stats: QueenBeeOutcomeStats = {};
+  // Task routing learns from managed task evaluations first. Chat sessions are
+  // still scanned below for forward-compatible task-like sessions, but ordinary
+  // chat evaluations deliberately set routingEligible=false.
+  const board = await import("@/lib/services/kanban/local-kanban-store")
+    .then(({ readBoard }) => readBoard(null))
+    .catch(() => null);
+  for (const task of board?.tasks ?? []) {
+    const agentId = task.assignee?.trim();
+    const evaluation = task.evaluation;
+    const at = evaluation?.evaluatedAt ?? task.completedAt ?? task.updatedAt;
+    if (!agentId || !evaluation?.routingEligible || now - at > OUTCOME_WINDOW_MS) continue;
+    const bucket = stats[agentId] ?? (stats[agentId] = { completed: 0, failed: 0 });
+    if (evaluation.verdict === "accepted") bucket.completed += 1;
+    else if (["rejected", "needs-evidence", "evaluation-error"].includes(evaluation.verdict)) bucket.failed += 1;
+  }
   const entries = await readdir(SESSION_DIR, { withFileTypes: true }).catch(() => []);
   const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith(".json"));
   const stamped = (await Promise.all(files.map(async (entry) => {
@@ -52,10 +68,10 @@ export async function readQueenBeeOutcomeStats(): Promise<QueenBeeOutcomeStats> 
       continue;
     }
     const agentId = session.agentId?.trim();
-    if (!agentId || !session.endedAt) continue;
+    if (!agentId || !session.endedAt || session.evaluation?.routingEligible !== true) continue;
     const reason = (session.endReason ?? "").toLowerCase();
     const bucket = stats[agentId] ?? (stats[agentId] = { completed: 0, failed: 0 });
-    if (reason === "completed") bucket.completed += 1;
+    if (reason === "completed" && session.evaluation.verdict === "accepted") bucket.completed += 1;
     else if (reason === "failed" || reason === "blocked") bucket.failed += 1;
   }
   outcomeCache = { stats, readAt: now };

@@ -72,11 +72,13 @@ function ZeroHumanCompaniesDemoView({
   openSkillAttachmentBrowser,
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
+  onDuplicateAgent,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   chooseDirectoryForMachine?: DirectoryPicker;
   defaultDirectoryMachine?: KanbanMachineTarget | null;
+  onDuplicateAgent?: (agentId: string) => void;
 } = {}) {
   const [colonies, setColonies] = React.useState<Colony[]>(DEMO_COLONIES);
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -326,6 +328,7 @@ function ZeroHumanCompaniesDemoView({
       onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
+      onDuplicateAgent={onDuplicateAgent}
       onDecideApproval={(companyId, approvalId, decision, note) => decideApproval(companyId, approvalId, decision, note)}
       onDecideIssueApproval={(companyId, issue, decision, note) => handleDecideIssueApproval(companyId, issue, decision, note)}
       onResolvePricing={(companyId, proposalId) =>
@@ -356,11 +359,13 @@ function ZeroHumanCompaniesLiveView({
   openSkillAttachmentBrowser,
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
+  onDuplicateAgent,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   chooseDirectoryForMachine?: DirectoryPicker;
   defaultDirectoryMachine?: KanbanMachineTarget | null;
+  onDuplicateAgent?: (agentId: string) => void;
 } = {}) {
   const [data, setData] = React.useState<CompanyEntry[]>([]);
   const [agents, setAgents] = React.useState<AgentLite[]>([]);
@@ -387,6 +392,7 @@ function ZeroHumanCompaniesLiveView({
   // surface it loudly. (The same GET also self-heals: the route restarts the
   // driver, so a persistent warning means restarting is genuinely failing.)
   const [driverWarning, setDriverWarning] = React.useState<string | null>(null);
+  const [membershipWarning, setMembershipWarning] = React.useState<string | null>(null);
 
   const showNotice = React.useCallback((message: string) => {
     setNotice(message);
@@ -419,6 +425,18 @@ function ZeroHumanCompaniesLiveView({
       if (companiesJson.ok) {
         setData(Array.isArray(companiesJson.companies) ? companiesJson.companies : []);
         setError(null);
+        const membershipConflicts = Array.isArray(companiesJson.membershipConflicts)
+          ? companiesJson.membershipConflicts as Array<{ agentId?: string; companies?: Array<{ name?: string }> }>
+          : [];
+        const firstMembershipConflict = membershipConflicts[0];
+        setMembershipWarning(firstMembershipConflict ? [
+          `Agent identity "${firstMembershipConflict.agentId || "unknown"}" is assigned to more than one company`,
+          firstMembershipConflict.companies?.length
+            ? ` (${firstMembershipConflict.companies.map((company) => company.name || "Unnamed company").join(", ")})`
+            : "",
+          ". Remove it from all but one company, then duplicate the agent blueprint for every additional company. Spending for this identity fails closed until repaired.",
+          membershipConflicts.length > 1 ? ` ${membershipConflicts.length - 1} more conflict${membershipConflicts.length === 2 ? "" : "s"} also need repair.` : "",
+        ].join("") : null);
         const driver = companiesJson.driver as { status?: string } | undefined;
         const anyAutonomous = (Array.isArray(companiesJson.companies) ? companiesJson.companies : []).some(
           (entry: { company?: { autonomy?: boolean; frozen?: boolean } }) => entry?.company?.autonomy && !entry?.company?.frozen,
@@ -1209,7 +1227,7 @@ function ZeroHumanCompaniesLiveView({
       loading={loading || refreshing}
       initialLoading={loading}
       initialTasksLoading={!tasksLoaded}
-      error={error ?? driverWarning}
+      error={error ?? membershipWarning ?? driverWarning}
       notice={notice}
       busyId={busyId}
       onRefresh={() => void refresh()}
@@ -1217,6 +1235,7 @@ function ZeroHumanCompaniesLiveView({
       onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
+      onDuplicateAgent={onDuplicateAgent}
       onDecideApproval={(_companyId, approvalId, decision, note) => void decideApproval(approvalId, decision, note)}
       onDecideIssueApproval={(companyId, issue, decision, note) => void handleDecideIssueApproval(companyId, issue, decision, note)}
       onResolvePricing={(companyId, proposalId, decision) => void resolvePricing(companyId, proposalId, decision)}
@@ -1243,13 +1262,15 @@ export function ZeroHumanCompaniesView({
   openSkillAttachmentBrowser,
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
+  onDuplicateAgent,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   chooseDirectoryForMachine?: DirectoryPicker;
   defaultDirectoryMachine?: KanbanMachineTarget | null;
+  onDuplicateAgent?: (agentId: string) => void;
 } = {}) {
   return USE_ZHC_DEMO_DATA
-    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} />
-    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} />;
+    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} />
+    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} />;
 }

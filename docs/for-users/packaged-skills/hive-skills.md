@@ -11,6 +11,8 @@ These skills are auto-installed into the shared brain because they are foundatio
 
 | Skill | Purpose |
 | --- | --- |
+| `engineering-discipline` | Selects a proportionate engineering path and anchors Work Board evidence: design only when needed, real baselines, red/green or non-applicability receipts, focused verification, independent review, rollback, and repository state. |
+| `create-zero-human-company` | Creates a durable company from a business goal or existing repository, adds an available crew, measurable apex goal, products, budgets, and approval policies, verifies the saved record, and leaves autonomy stopped until the operator explicitly launches it. |
 | `hive-assimilate` | Mandatory pre-build search across shared brain, user projects, local/private indexes, and public GitHub before software creation. |
 | `hive-pulse` | Built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources, powered by a pinned MIT licensed `last30days` engine. |
 | `hive-capability-search` | Discovers available tools, shared skills, optional packaged workflow playbooks, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |
@@ -85,6 +87,7 @@ packaged-skills/auto-install/hive-pulse/.hivemind-skill-source.json
 The repository source is:
 
 ```text
+packaged-skills/auto-install/create-zero-human-company/SKILL.md
 packaged-skills/auto-install/hive-assimilate/SKILL.md
 packaged-skills/auto-install/hive-pulse/SKILL.md
 packaged-skills/auto-install/hive-capability-search/SKILL.md
@@ -99,6 +102,7 @@ packaged-skills/auto-install/hive-brain-compiled-wiki/SKILL.md
 Setup mirrors it into the shared brain at:
 
 ```text
+Skills/create-zero-human-company/SKILL.md
 Skills/hive-assimilate/SKILL.md
 Skills/hive-pulse/SKILL.md
 Skills/hive-capability-search/SKILL.md

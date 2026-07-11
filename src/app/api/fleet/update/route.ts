@@ -51,6 +51,13 @@ type VerificationOptions = {
   requestedAtMs?: number;
 };
 
+type CollectorUpdateReservation = {
+  supported: boolean;
+  maintenanceReservationToken?: string;
+  error?: string;
+  status?: number;
+};
+
 function collectorBase(collectorUrl?: string) {
   return collectorUrl?.replace(/\/+$/, "") || "";
 }
@@ -238,11 +245,75 @@ async function waitForCollectorVerification(
   return { verified: false, health };
 }
 
-async function startCollectorUpdate(collectorUrl?: string) {
+async function reserveCollectorUpdate(
+  collectorUrl?: string,
+): Promise<CollectorUpdateReservation> {
+  const base = collectorBase(collectorUrl);
+  if (!base) return { supported: false };
+  const response = await fetch(`${base}/maintenance/reserve-update`, {
+    method: "POST",
+    signal: AbortSignal.timeout(8_000),
+    cache: "no-store",
+  }).catch(() => null);
+  if (!response) {
+    return {
+      supported: true,
+      status: 503,
+      error: "Could not confirm that the agent bridge is idle, so maintenance was not started.",
+    };
+  }
+  if (response.status === 404 || response.status === 405) {
+    return { supported: false };
+  }
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.ok === false) {
+    return {
+      supported: true,
+      status: response.status,
+      error: payload?.error ?? `agent bridge maintenance reservation returned HTTP ${response.status}`,
+    };
+  }
+  const maintenanceReservationToken =
+    typeof payload?.reservationToken === "string"
+      ? payload.reservationToken.trim()
+      : "";
+  if (!maintenanceReservationToken) {
+    return {
+      supported: true,
+      status: 502,
+      error: "The agent bridge accepted maintenance but did not return a reservation token.",
+    };
+  }
+  return { supported: true, maintenanceReservationToken };
+}
+
+async function releaseCollectorUpdateReservation(
+  collectorUrl: string | undefined,
+  maintenanceReservationToken: string | undefined,
+) {
+  const base = collectorBase(collectorUrl);
+  if (!base || !maintenanceReservationToken) return;
+  await fetch(`${base}/maintenance/reserve-update`, {
+    method: "DELETE",
+    headers: {
+      "x-hivemind-maintenance-reservation": maintenanceReservationToken,
+    },
+    signal: AbortSignal.timeout(4_000),
+    cache: "no-store",
+  }).catch(() => null);
+}
+
+async function startCollectorUpdate(
+  collectorUrl?: string,
+  maintenanceReservationToken?: string,
+) {
   const base = collectorBase(collectorUrl);
   if (!base) throw new Error("No agent bridge URL was provided.");
   const response = await fetch(`${base}/update`, {
     method: "POST",
+    headers: maintenanceReservationToken
+      ? { "x-hivemind-maintenance-reservation": maintenanceReservationToken }
+      : undefined,
     signal: AbortSignal.timeout(8_000),
     cache: "no-store",
   });
@@ -255,8 +326,14 @@ async function startCollectorUpdate(collectorUrl?: string) {
   return payload ?? { ok: true, accepted: true };
 }
 
-async function tryCollectorUpdate(body: UpdateBody) {
-  const result = await startCollectorUpdate(body.collectorUrl);
+async function tryCollectorUpdate(
+  body: UpdateBody,
+  maintenanceReservationToken?: string,
+) {
+  const result = await startCollectorUpdate(
+    body.collectorUrl,
+    maintenanceReservationToken,
+  );
   return { ok: true, accepted: true, method: "collector", result };
 }
 
@@ -640,11 +717,13 @@ async function tryDetachedTailscaleSsh(
 async function tryPreferredRemoteUpdate(
   body: UpdateBody,
   collectorOnly = false,
+  maintenanceReservationToken?: string,
 ) {
   try {
     return await tryDetachedTailscaleSsh(body, collectorOnly);
   } catch {
-    if (body.collectorUrl) return tryCollectorUpdate(body);
+    if (body.collectorUrl)
+      return tryCollectorUpdate(body, maintenanceReservationToken);
     return tryTailscaleSsh(body, collectorOnly);
   }
 }
@@ -733,13 +812,23 @@ export async function POST(request: Request) {
     });
   }
   const collectorOnly = preUpdateHealth?.mode === "collector-only";
+  const reservation = body.simulate
+    ? { supported: false }
+    : await reserveCollectorUpdate(body.collectorUrl);
+  if (reservation.error) {
+    return Response.json(
+      { ok: false, error: reservation.error },
+      { status: reservation.status === 409 ? 409 : 503 },
+    );
+  }
+  const maintenanceReservationToken = reservation.maintenanceReservationToken;
   try {
     const result = await ((await isLocalCheckout(body.appDir))
       ? tryLocalShell(body, collectorOnly)
       : body.preferRemoteShell
-        ? tryPreferredRemoteUpdate(body, collectorOnly)
+        ? tryPreferredRemoteUpdate(body, collectorOnly, maintenanceReservationToken)
         : body.collectorUrl
-          ? tryCollectorUpdate(body)
+          ? tryCollectorUpdate(body, maintenanceReservationToken)
           : tryTailscaleSsh(body, collectorOnly));
     if (body.simulate) {
       return Response.json({
@@ -794,6 +883,11 @@ export async function POST(request: Request) {
         fallbackCommand: fallbackScript(body.appDir, false, collectorOnly),
       },
       { status: 502 },
+    );
+  } finally {
+    await releaseCollectorUpdateReservation(
+      body.collectorUrl,
+      maintenanceReservationToken,
     );
   }
 }

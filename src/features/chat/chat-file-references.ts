@@ -1,4 +1,5 @@
 import type { KanbanTaskAttachment } from "@/lib/types/kanban";
+import { isChatImagePath } from "@/lib/services/chat/chat-image-formats";
 
 type FileWithReferencePath = File & {
   path?: string;
@@ -32,22 +33,12 @@ export function createFileReferenceAttachments(files: FileList | File[]) {
   return Array.from(files).map(createFileReferenceAttachment);
 }
 
-const IMAGE_REFERENCE_EXTENSIONS = new Set([
-  "png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "svg", "heic", "heif", "ico", "tiff", "tif",
-]);
-
-function attachmentExtension(nameOrPath?: string) {
-  const base = String(nameOrPath ?? "").split(/[\\/]/).filter(Boolean).at(-1) ?? "";
-  const dot = base.lastIndexOf(".");
-  return dot >= 0 ? base.slice(dot + 1).toLowerCase() : "";
-}
-
 /** True when an attachment is (or references) an image, by kind, mime, or extension. */
 export function isImageAttachment(attachment: KanbanTaskAttachment) {
   if (attachment.referenceKind === "directory") return false;
   if (attachment.kind === "image") return true;
   if (attachment.mimeType?.startsWith("image/")) return true;
-  return IMAGE_REFERENCE_EXTENSIONS.has(attachmentExtension(attachment.referencePath || attachment.name));
+  return isChatImagePath(attachment.referencePath || attachment.name);
 }
 
 /** Best display source for an image attachment's thumbnail/lightbox, or "" if none. */

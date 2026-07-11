@@ -43,6 +43,7 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Track UsePod prepaid token deposit details and runtime balance/route metadata when UsePod returns it.
 - Spend hosted HivemindOS credits on managed UsePod inference when an official hosted gateway is configured. The gateway holds the UsePod payer token server-side, preserves streaming responses, charges upstream UsePod spend plus the configured HivemindOS platform fee, and refunds any unused per-request reservation.
 - Spend hosted HivemindOS credits on managed Nansen research when no `NANSEN_API_KEY` is configured. The official gateway holds the Nansen key server-side, charges the user's hosted credits, records a receipt, and returns a derived brief.
+- Generate images, video, audio, music, speech, lip-sync, edits, and enhancements through hosted HivemindOS credits without configuring a media-provider key. The official gateway quotes the live provider request, adds 25%, reserves credits before generation, and refunds failures or unused reservation.
 - Execute x402 paid requests through policy-aware helpers.
 - Buy stocks from a prompt through Alpaca (a real brokerage, paper by default), on-chain tokenized xStocks (a USDC to xStock swap via Jupiter), or eligible Robinhood Chain Stock Tokens (a USDG swap through 0x on Robinhood Chain).
 - Select and prepare the best available crypto rail for agent intents such as paid API calls, private transfers, Bankr trading, and LLM credit funding.
@@ -82,6 +83,18 @@ The no-API-key flow is:
 5. The trusted runtime submits a signed debit to the Honey ledger based on verified usage.
 
 The official ledger rejects browser-spoofed credits. Its `/managed-billing/events` endpoint requires either a HONEY billing HMAC signature or the operator admin token, dedupes idempotency keys, and refuses debits when the managed HONEY balance is insufficient.
+
+## Hosted Media Generation
+
+The built-in hosted-media capability gives users and agents a no-provider-key path for generative media. Agents discover it as three separate capabilities so read operations stay automatic while new spend remains explicit:
+
+- `hosted_media_catalog` lists the live image, video, audio, music, speech, lip-sync, edit, and enhancement catalog.
+- `hosted_media_read` quotes an exact model payload or polls an owned async job; neither operation creates new provider spend.
+- `hosted_media_generate` submits a previously quoted request with a stable idempotency key and maximum debit.
+
+The downloaded app calls the official hosted gateway through `/api/hivemindos/media`. It resolves the existing shared HivemindOS credit token locally but never returns that token to the caller. The private gateway owns the upstream provider credential, checks the live model catalog, calculates provider cost plus 25%, reserves the retail quote before submission, stores job ownership, and reconciles the exact provider charge. Provider failures are fully refunded; unused reservation is returned; and the user's debit never exceeds the approved maximum even if the provider later reports a higher charge.
+
+Zero Human Companies can associate the caller's `agentId` with a company member. Before submission, the local route checks the company freeze, member/company budgets, and approval threshold. A company explicitly configured for bounded autonomous media spend can proceed inside those limits; a frozen company, exhausted budget, approval requirement, low hosted balance, invalid quote, or reused request outside the idempotency contract fails before additional provider spend.
 
 ## Paid Agent x402 Gateway
 

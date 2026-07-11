@@ -75,6 +75,7 @@ export function useKanbanTaskController(props: any) {
         linkedDirectories: directories,
         targetMachine,
         projectId,
+        loopTemplateId: template?.loopTemplateId,
       }),
     });
     const data = await response.json().catch(() => null) as KanbanResponse | null;

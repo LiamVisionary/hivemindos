@@ -100,6 +100,8 @@ export type SkillPack = {
     name: string;
     description: string;
     markdown: string;
+    /** Canonical directory under packaged-skills/ for manifest-backed packs. */
+    packagedPath?: string;
   }>;
 };
 

@@ -19,6 +19,7 @@ import {
 import { buildAgentCallPreferences } from "@/lib/types/agent-runtime";
 import type { AgentCallMissedFallback, AgentCallPreferences, AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft } from "@/features/dashboard/agent-settings-types";
+import type { AgentVoiceFailureDetail } from "@/features/dashboard/hooks/use-agent-voice-failure-notifications";
 import { usePairingQr } from "@/lib/phone/usePairingQr";
 import { Btn, Field, GroupLabel, PanelHead, Toggle } from "./AgentSettingsModalPrimitives";
 import { AgentSettingsCallsVoiceSection } from "./AgentSettingsCallsVoiceSection";
@@ -40,6 +41,7 @@ export type AgentSettingsCallsPanelProps = {
   agentCreateDraft: AgentCreateDraft;
   agentCreateMachine: { name?: string } | null;
   onQueenClapWakeEnabledChange?: (enabled: boolean) => unknown;
+  onVoiceFailure?: (detail: AgentVoiceFailureDetail) => void;
   queenClapWakeEnabled?: boolean;
   roleModalAgent: AgentProfile | null;
   setAgentCreateDraft: Dispatch<SetStateAction<AgentCreateDraft>>;
@@ -87,6 +89,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
     agentCreateDraft,
     agentCreateMachine,
     onQueenClapWakeEnabledChange,
+    onVoiceFailure,
     queenClapWakeEnabled,
     roleModalAgent,
     setAgentCreateDraft,
@@ -230,6 +233,8 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
             voiceRuntime: agentCallSettings.voiceRuntime,
             voiceModelId: agentCallSettings.voiceModelId,
             voiceId: agentCallSettings.voiceId,
+            voiceLanguage: agentCallSettings.voiceLanguage,
+            voiceTextLanguage: agentCallSettings.voiceTextLanguage,
             skillProfilePrompt: agent.skillProfilePrompt,
             preferredSkillSlugs: agent.preferredSkillSlugs,
             aeonRepo: agent.aeonRepo,
@@ -566,6 +571,7 @@ export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
           localTtsLaunchCandidates={localTtsLaunchCandidates}
           localTtsDiscoveryStatus={localTtsDiscoveryStatus}
           localTtsDiscoveryError={localTtsDiscoveryError}
+          onVoiceFailure={onVoiceFailure}
           refreshCallConnectionState={refreshCallConnectionState}
         />
       )}

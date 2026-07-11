@@ -20,7 +20,13 @@ import type {
   ChatThreadSortBy,
   ChatThreadStatusFilter,
 } from "./chat-thread-actions";
-import { applyChatThreadFilters, groupChatThreads, sortChatThreads } from "./chat-thread-actions";
+import {
+  applyChatThreadFilters,
+  CHAT_HISTORY_PAGE_SIZE,
+  groupChatThreads,
+  nextChatHistoryVisibleCount,
+  sortChatThreads,
+} from "./chat-thread-actions";
 import type { UseChatViewPreferences } from "./use-chat-view-preferences";
 import { HexIco, ICON_PATHS, Ico, POP_STYLE, SearchIco } from "./composer-primitives";
 
@@ -85,6 +91,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const [viewsSub, setViewsSub] = useState<"" | "status" | "machine" | "activity" | "group" | "sort">("");
   const [viewsAnchor, setViewsAnchor] = useState<{ x: number; y: number } | null>(null);
   const [rowMenu, setRowMenu] = useState<MenuAnchor | null>(null);
+  const [visibleChatsByGroup, setVisibleChatsByGroup] = useState<Record<string, number>>({});
   const popRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -113,7 +120,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [viewsOpen, rowMenu]);
 
-  const nowMs = Date.now();
+  const [nowMs] = useState(() => Date.now());
 
   const visible = useMemo(() => {
     const searched = search.trim()
@@ -254,6 +261,11 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
         {!loading && groups.map((group) => {
           const open = !prefs.collapsed[group.label];
+          const visibilityKey = `${prefs.groupBy}:${group.key}`;
+          const visibleCount = visibleChatsByGroup[visibilityKey] ?? CHAT_HISTORY_PAGE_SIZE;
+          const visibleChats = group.chats.slice(0, visibleCount) as SidebarRow[];
+          const remainingCount = Math.max(0, group.chats.length - visibleChats.length);
+          const nextPageCount = Math.min(CHAT_HISTORY_PAGE_SIZE, remainingCount);
           return (
             <section key={group.key} style={{ marginBottom: 10 }}>
               <div className="cx-rowwrap">
@@ -273,7 +285,21 @@ export function ChatSidebar(props: ChatSidebarProps) {
               </div>
               {open ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, marginLeft: 14, paddingLeft: 10, borderLeft: "1px solid var(--line)" }}>
-                  <RowList rows={group.chats as SidebarRow[]} prefs={prefs} onOpenMenu={setRowMenu} activeMenuKey={rowMenu?.key} />
+                  <RowList rows={visibleChats} prefs={prefs} onOpenMenu={setRowMenu} activeMenuKey={rowMenu?.key} />
+                  {remainingCount ? (
+                    <button
+                      type="button"
+                      className="fr-chat-mini-button"
+                      onClick={() => setVisibleChatsByGroup((current) => ({
+                        ...current,
+                        [visibilityKey]: nextChatHistoryVisibleCount(current[visibilityKey] ?? CHAT_HISTORY_PAGE_SIZE, group.chats.length),
+                      }))}
+                      aria-label={`See ${nextPageCount} more conversations in ${group.label}`}
+                      style={{ alignSelf: "flex-start", margin: "6px 0 4px 4px" }}
+                    >
+                      See {nextPageCount} more
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
             </section>
@@ -392,7 +418,7 @@ function RowList({ rows, prefs, onOpenMenu, activeMenuKey }: { rows: SidebarRow[
     <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {rows.map((row) => {
         const pinned = prefs.pinned.includes(row.storageKey);
-        const dotColor = row.running ? "var(--live)" : row.status === "active" ? "var(--honey)" : "var(--fg-4)";
+        const dotColor = row.running ? "var(--honey)" : row.status === "active" ? "var(--honey)" : "var(--fg-4)";
         return (
           <div key={row.storageKey} className="cx-rowwrap">
             <button
@@ -403,7 +429,7 @@ function RowList({ rows, prefs, onOpenMenu, activeMenuKey }: { rows: SidebarRow[
               title={row.title}
               style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", border: 0, borderRadius: 10, background: "transparent", cursor: "pointer", padding: "10px 64px 10px 13px", textAlign: "left", overflow: "hidden" }}
             >
-              <span className={row.running ? "cx-dot-live" : undefined} style={{ width: 7, height: 7, flexShrink: 0, borderRadius: 99, background: "currentColor", color: dotColor }} />
+              <span className={row.running ? "cx-chatrow-running-dot" : undefined} style={{ width: 7, height: 7, flexShrink: 0, borderRadius: 99, background: "currentColor", color: dotColor }} />
               <span style={{ display: "grid", flex: 1, minWidth: 0, gap: 2 }}>
                 <span style={{ fontFamily: "var(--f-body)", fontSize: 13.5, fontWeight: 500, color: row.active ? "var(--fg)" : "var(--fg-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.title || "Untitled chat"}</span>
                 {row.subtitle ? <span style={{ fontFamily: "var(--f-body)", fontSize: 11.5, color: "var(--fg-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.subtitle}</span> : null}

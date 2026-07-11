@@ -55,10 +55,13 @@ Provider inventories must classify runtime mirrors as already handled before imp
 
 Setup copies a small default pack from `packaged-skills/auto-install/` into the shared vault `Skills/` shelf.
 
+That default shelf includes `engineering-discipline`, HivemindOS' risk-scoped engineering orchestrator. Users who want the fuller method library can install the **HivemindOS Engineering Discipline** pack in the Skill Browser. Its manifest resolves every skill from the canonical packaged auto-install and optional directories, adds selected `obra/superpowers` methods, archives older HivemindOS-managed adaptations before refreshing them, and leaves unmanaged colliding skills untouched.
+
 The HivemindOS Hive skills are included by default:
 
 | Skill | Why it exists |
 | --- | --- |
+| `create-zero-human-company` | Turns a business goal or existing repository into a durable, approval-gated company record, verifies its crew and operating setup, and leaves autonomy stopped until explicitly launched. |
 | `hive-assimilate` | Requires agents to search pinned sources, the shared brain, user projects, local/private indexes, and public GitHub before building software from scratch. |
 | `hive-pulse` | Gives agents a bundled last-30-days signal brief across social, developer, market, GitHub, and web sources using a pinned MIT licensed engine, a setup-installed `hive-pulse` command shim, and Hive safety rules. |
 | `hive-capability-search` | Finds available tools, skills, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |

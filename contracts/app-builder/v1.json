@@ -1,0 +1,81 @@
+{
+  "protocol": "hivemindos.app-builder/v1",
+  "version": "1.0.0",
+  "provenance": {
+    "donors": {
+      "december": {
+        "repository": "https://github.com/ntegrals/december",
+        "commit": "909b5c23dce9316e88a2755baef56b3ded2845e0",
+        "archiveSha256": "8a380bfa586178f36f11eaaec5e4baaa3d3a954bf24165a766e85b6dab8640e2",
+        "license": "MIT"
+      }
+    }
+  },
+  "confirmations": {
+    "createProject": "CONFIRM_APP_PROJECT_CREATE",
+    "installDependencies": "CONFIRM_APP_DEPENDENCIES",
+    "startRuntime": "CONFIRM_APP_RUNTIME",
+    "stopRuntime": "CONFIRM_APP_RUNTIME",
+    "temporaryDeploy": "CONFIRM_CLOUDFLARE_TEMPORARY_DEPLOY",
+    "publishHosting": "CONFIRM_APP_HOSTING_PURCHASE",
+    "renewHosting": "CONFIRM_APP_HOSTING_PURCHASE",
+    "unpublishHosting": "CONFIRM_APP_HOSTING_UNPUBLISH",
+    "writeFile": "CONFIRM_APP_FILE_WRITE",
+    "renameFile": "CONFIRM_APP_FILE_WRITE",
+    "deleteFile": "CONFIRM_APP_FILE_DELETE"
+  },
+  "capabilities": [
+    { "id": "projects.list", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "projects.get", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "projects.create", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "files.tree", "sideEffect": "read", "backends": ["local"] },
+    { "id": "files.read", "sideEffect": "read", "backends": ["local"] },
+    { "id": "files.write", "sideEffect": "write", "backends": ["local"] },
+    { "id": "files.rename", "sideEffect": "write", "backends": ["local"] },
+    { "id": "files.delete", "sideEffect": "destructive", "backends": ["local"] },
+    { "id": "dependencies.install", "sideEffect": "write", "backends": ["local"] },
+    { "id": "runtime.start", "sideEffect": "write", "backends": ["local"] },
+    { "id": "runtime.stop", "sideEffect": "write", "backends": ["local"] },
+    { "id": "runtime.preview", "sideEffect": "read", "backends": ["local"] },
+    { "id": "artifact.prepare", "sideEffect": "read", "backends": ["local"] },
+    { "id": "deploy.temporary", "sideEffect": "write", "backends": ["local"] },
+    { "id": "hosting.catalog", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.list", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.get", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.publish", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.renew", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.unpublish", "sideEffect": "destructive", "backends": ["local", "managed"] }
+  ],
+  "artifacts": {
+    "static": {
+      "protocol": "hivemindos.static-artifact/v1",
+      "outputDirectory": "out",
+      "clientLimits": { "files": 1000, "totalBytes": 20971520, "fileBytes": 5242880 }
+    },
+    "dynamic": {
+      "protocol": "hivemindos.dynamic-worker/v1",
+      "entrypoint": "dist/worker.mjs",
+      "clientLimits": { "bytes": 1000000 }
+    }
+  },
+  "temporaryDeploy": {
+    "provider": "cloudflare-temporary-account",
+    "minimumWranglerVersion": "4.102.0",
+    "claimWindowSeconds": 3600,
+    "publicDomain": "workers.dev"
+  },
+  "templates": {
+    "nextjs": {
+      "label": "Next.js",
+      "files": {
+        ".gitignore": ".next\nnode_modules\n.env*\n.hivemindos/\n",
+        "next.config.ts": "import type { NextConfig } from \"next\";\n\nconst config: NextConfig = {};\n\nexport default config;\n",
+        "package.json": "{\n  \"name\": \"hivemindos-app\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build\",\n    \"start\": \"next start\"\n  },\n  \"dependencies\": {\n    \"next\": \"16.2.6\",\n    \"react\": \"19.2.3\",\n    \"react-dom\": \"19.2.3\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^24.0.0\",\n    \"@types/react\": \"^19.0.0\",\n    \"@types/react-dom\": \"^19.0.0\",\n    \"typescript\": \"^5.9.3\"\n  }\n}\n",
+        "src/app/globals.css": "* { box-sizing: border-box; }\nhtml, body { margin: 0; min-height: 100%; }\nbody { font-family: ui-sans-serif, system-ui, sans-serif; }\n",
+        "src/app/layout.tsx": "import type { Metadata } from \"next\";\nimport \"./globals.css\";\n\nexport const metadata: Metadata = { title: \"HivemindOS App\" };\n\nexport default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {\n  return <html lang=\"en\"><body>{children}</body></html>;\n}\n",
+        "src/app/page.tsx": "export default function Home() {\n  return (\n    <main style={{ minHeight: \"100vh\", display: \"grid\", placeItems: \"center\", padding: 32 }}>\n      <section style={{ maxWidth: 720 }}>\n        <p>HivemindOS App</p>\n        <h1>Your workspace is ready.</h1>\n        <p>Ask your HivemindOS agent to build here.</p>\n      </section>\n    </main>\n  );\n}\n",
+        "tsconfig.json": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2017\",\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"strict\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"preserve\",\n    \"incremental\": true,\n    \"plugins\": [{ \"name\": \"next\" }],\n    \"paths\": { \"@/*\": [\"./src/*\"] }\n  },\n  \"include\": [\"next-env.d.ts\", \"**/*.ts\", \"**/*.tsx\", \".next/types/**/*.ts\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
+      }
+    }
+  }
+}

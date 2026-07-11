@@ -50,6 +50,8 @@ sections:
             url: /for-users/features/work-and-scheduler.html
           - title: Loop Engineering
             url: /for-users/features/loop-engineering.html
+          - title: Agent Evaluations
+            url: /for-users/features/agent-evaluations.html
           - title: Agent Challenges
             url: /for-users/features/agent-challenges.html
           - title: Zero Human Companies
@@ -58,6 +60,8 @@ sections:
             url: /for-users/features/founder-mode.html
           - title: Brain, Vault, And Skills
             url: /for-users/features/brain-vault-and-skills.html
+          - title: Inbox Triage
+            url: /for-users/features/inbox-triage.html
           - title: Hivemind Sync
             url: /for-users/features/hivemind-sync.html
           - title: Hive Fusion
@@ -70,6 +74,10 @@ sections:
             url: /for-users/features/wallets-honey-and-x402.html
           - title: Hive Compute
             url: /for-users/features/hive-compute.html
+          - title: App Builder
+            url: /for-users/features/app-builder.html
+          - title: HivemindOS Machines
+            url: /for-users/features/hivemindos-machines.html
           - title: Evo Optimization
             url: /for-users/features/evo-optimization.html
           - title: Env, Notifications, Maintenance

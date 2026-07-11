@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 
 import { okJson, errorJson } from "@/lib/utils/api-response";
 import {
+  listElevenLabsVoices,
   mintGeminiLiveToken,
   streamCloudTts,
   synthesizeVoicePreview,
@@ -37,16 +38,31 @@ export async function POST(request: NextRequest) {
     text?: string;
     voice?: string;
     model?: string;
+    language?: string;
     instructions?: string;
     keyEnv?: string;
+    authMode?: string;
   };
   try {
+    if (body.action === "list-voices") {
+      if (body.provider !== "elevenlabs") {
+        return errorJson(`Voice listing is not available for ${body.provider ?? ""}.`);
+      }
+      return okJson({ voices: await listElevenLabsVoices() });
+    }
     if (body.action === "voice-preview") {
+      if (body.provider === "openai" && body.authMode === "oauth") {
+        return errorJson(
+          "ChatGPT OAuth does power Voice inside ChatGPT, but HivemindOS currently holds the Codex OAuth grant, which OpenAI rejects on ChatGPT's private Voice WebRTC route. The public speech endpoint uses separate OpenAI Platform quota. Select API key or Local TTS for this preview.",
+          409,
+        );
+      }
       const preview = await synthesizeVoicePreview(String(body.provider ?? ""), {
         voice: body.voice,
         model: body.model,
         keyEnv: body.keyEnv,
         text: body.text,
+        languageCode: body.language,
       });
       return new Response(preview.response.body, {
         status: 200,
@@ -72,7 +88,7 @@ export async function POST(request: NextRequest) {
       if (!CLOUD_TTS_PROVIDERS.has(provider)) return errorJson(`Unknown cloud TTS provider: ${body.provider ?? ""}`);
       const text = String(body.text ?? "").trim();
       if (!text) return errorJson("Nothing to speak.");
-      const upstream = await streamCloudTts(provider, text, { voice: body.voice, model: body.model });
+      const upstream = await streamCloudTts(provider, text, { voice: body.voice, model: body.model, languageCode: body.language });
       // Forward the raw PCM stream straight to the client's audio player.
       return new Response(upstream.body, {
         status: 200,

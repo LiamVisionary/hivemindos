@@ -55,6 +55,18 @@ export type GitLawbProof = {
   metadata?: Record<string, unknown>;
 };
 
+export type AppBuilderProjectReference = {
+  backend: "local" | "managed";
+  contractVersion: string;
+  templateId: "nextjs";
+  status: "creating" | "stopped" | "starting" | "running" | "stopping" | "error";
+  localProjectId?: string;
+  managedAgentId?: string;
+  managedProjectId?: string;
+  hostingSiteId?: string;
+  hostingUrl?: string;
+};
+
 export type GitLawbStatus = {
   cli: GitLawbCliStatus;
   identity: GitLawbIdentity;
@@ -68,6 +80,7 @@ export type HivemindProject = {
   localPath?: string;
   vaultNotePath?: string;
   preferredMachineKey?: string;
+  appBuilder?: AppBuilderProjectReference;
   gitlawbRepo?: GitLawbRepoLink;
   allowedAgentIds: string[];
   createdAt: number;

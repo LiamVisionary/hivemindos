@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aeonCli, parseAeonCliJson, readAeonControlPlane } from "../src/lib/services/runtime-adapters/aeon-cli";
 import { AEON_OUTPUT_DIRECTORIES } from "../src/lib/services/runtime-adapters/aeon-capabilities";
-import { inspectAeonWorkspace } from "../src/lib/services/runtime-adapters/aeon-workspace";
+import { inspectAeonWorkspace, replaceLegacyAeonWorkspace } from "../src/lib/services/runtime-adapters/aeon-workspace";
 
 const temp = await mkdtemp(join(tmpdir(), "hivemind-aeon-v01-"));
 
@@ -107,6 +107,29 @@ esac
   assert.equal((await inspectAeonWorkspace(legacy)).generation, "legacy");
   assert.equal((await inspectAeonWorkspace(join(temp, "missing"))).generation, "invalid");
 
+  const repaired = await replaceLegacyAeonWorkspace(legacy, async (installRoot) => {
+    await write(join(installRoot, "aeon.yml"), "skills:\n");
+    await write(join(installRoot, "catalog", "skills.json"), JSON.stringify({ skills: [] }));
+    await write(join(installRoot, "apps", "cli", "aeon"), "#!/bin/sh\nexit 0\n");
+    await chmod(join(installRoot, "apps", "cli", "aeon"), 0o755);
+  }, new Date("2026-07-11T06:00:00.000Z"));
+  assert.equal(repaired.changed, true);
+  assert.equal((await inspectAeonWorkspace(legacy)).generation, "v0.1");
+  assert.equal((await inspectAeonWorkspace(repaired.backupRoot)).generation, "legacy");
+
+  const rollbackRoot = join(temp, "legacy-rollback");
+  await write(join(rollbackRoot, "aeon.yml"), "skills:\n");
+  await write(join(rollbackRoot, "skills.json"), JSON.stringify({ skills: [] }));
+  await assert.rejects(
+    replaceLegacyAeonWorkspace(rollbackRoot, async (installRoot) => {
+      await write(join(installRoot, "partial-clone"), "incomplete");
+      throw new Error("simulated clone failure");
+    }, new Date("2026-07-11T06:01:00.000Z")),
+    /legacy workspace was restored: simulated clone failure/,
+  );
+  assert.equal((await inspectAeonWorkspace(rollbackRoot)).generation, "legacy");
+  assert.equal(await access(join(rollbackRoot, "partial-clone")).then(() => true).catch(() => false), false);
+
   const [workspaceRoute, nativeDeliverables] = await Promise.all([
     readFile(join(process.cwd(), "src/app/api/runtimes/aeon/workspaces/route.ts"), "utf8"),
     readFile(join(process.cwd(), "src-tauri/src/deliverables.rs"), "utf8"),
@@ -115,6 +138,7 @@ esac
   assert(!workspaceRoute.includes('mkdir(join(root, ".outputs")'), "web setup must not manufacture legacy output folders");
   assert(!nativeDeliverables.includes('ensure_file(&root.join("skills.json")'), "native setup must not manufacture legacy skills.json");
   assert(nativeDeliverables.includes('"output/.attest"'), "native output discovery must include v0.1 attestations");
+  assert(workspaceRoute.includes('action === "repair-legacy"'), "web setup must expose the legacy-workspace repair action");
 
   console.log("AEON v0.1 compatibility contract passed.");
   console.log("- CLI JSON prelude parsing: passed");
@@ -122,6 +146,7 @@ esac
   console.log("- skills/requires/MCP/run mapping: passed");
   console.log("- control-plane packs, identity, chains, reactive, health, OKF, and provenance: passed");
   console.log("- web/native setup and output migration guards: passed");
+  console.log("- one-click legacy backup, v0.1 replacement, and failed-install rollback: passed");
 } finally {
   await rm(temp, { recursive: true, force: true });
 }

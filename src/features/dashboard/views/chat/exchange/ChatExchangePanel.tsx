@@ -2,12 +2,14 @@
 
 import "@/components/json-render/fr/fr-style.css";
 import "./chat-exchange.css";
+import "./chat-exchange-errors.css";
 import "./chat-exchange-motion.css";
 import "./chat-exchange-shell.css";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { collapseSameTurnGenerationMessages } from "@/features/dashboard/chat-generation-message-dedupe";
+import { transcriptCardIsRunning } from "@/features/dashboard/chat-transcript-card";
 import { agentWakeStatusText, isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
 import {
   MODEL_SWITCHABLE_RUNTIMES,
@@ -30,6 +32,8 @@ import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { normalizeChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
 import type { ChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
 import type { ChatThreadUsage } from "@/lib/services/chat/thread-usage";
+import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
+import { evaluationOutputFingerprint } from "@/lib/services/evaluation/control-plane";
 import { selectChatPreviewTargets } from "@/lib/services/chat/chat-preview-targets";
 import { nativeOpenInAppSupported, openNativeInApp } from "@/lib/native/filesystem";
 
@@ -194,6 +198,7 @@ export function ChatExchangePanel(props: any) {
   const [toast, setToast] = useState("");
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
+  const [feedbackBusyKey, setFeedbackBusyKey] = useState("");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
   const [permissionMode, setPermissionMode] = useState<ChatPermissionMode>("manual");
   const [reasoningEffort, setReasoningEffort] = useState<ChatReasoningEffort>("medium");
@@ -221,6 +226,49 @@ export function ChatExchangePanel(props: any) {
     toastTimerRef.current = window.setTimeout(() => setToast(""), 2200);
   }, []);
   useEffect(() => () => { if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current); }, []);
+
+  async function submitMessageFeedback(message: any, renderKey: string, rating: "up" | "down") {
+    const sessionId = String(message?.sourceSessionId ?? "").trim();
+    const messageIndex = Number(message?.sourceIndex);
+    if (!sessionId) return;
+    const nextRating = message.feedback?.rating === rating ? null : rating;
+    const pendingKey = `${renderKey}:${rating}`;
+    const storageKey = selectedChatStorageKey;
+    setFeedbackBusyKey(pendingKey);
+    try {
+      const response = await fetch("/api/chat/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          messageIndex: Number.isInteger(messageIndex) ? messageIndex : undefined,
+          messageFingerprint: evaluationOutputFingerprint(message.content),
+          rating: nextRating,
+        }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; feedback?: unknown; error?: string } | null;
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Could not save response feedback.");
+      const feedback = normalizeEvaluationHumanFeedback(data.feedback);
+      setMessagesByAgent((current: any) => {
+        const threadMessages = current[storageKey] ?? [];
+        const nextMessages = threadMessages.map((item: any) => (
+          item.sourceSessionId === sessionId && (
+            Number.isInteger(messageIndex)
+              ? Number(item.sourceIndex) === messageIndex
+              : evaluationOutputFingerprint(item.content) === evaluationOutputFingerprint(message.content)
+          )
+            ? { ...item, feedback }
+            : item
+        ));
+        return { ...current, [storageKey]: nextMessages };
+      });
+      flashToast(nextRating ? "Response feedback saved" : "Response feedback removed");
+    } catch (error) {
+      flashToast(error instanceof Error ? error.message : "Could not save response feedback");
+    } finally {
+      setFeedbackBusyKey((current) => current === pendingKey ? "" : current);
+    }
+  }
 
   const liveProcessEvents = normalizeProcessEvents(selectedChatProcess);
   const chatProcessScopeKey = `${selectedChatStorageKey || ""}${selectedChatLeafKey || ""}`;
@@ -456,7 +504,7 @@ export function ChatExchangePanel(props: any) {
           if (!agentId) continue;
           const leafKey = String(chat.key ?? "");
           const storageKey = !leafKey || leafKey === `agent-${agentId}` ? agentId : `${agentId}::${leafKey}`;
-          const running = runningChatStorageKeys.has(storageKey);
+          const running = runningChatStorageKeys.has(storageKey) || transcriptCardIsRunning(String(chat.subtitle ?? ""));
           rows.push({
             storageKey,
             agentId,
@@ -708,6 +756,7 @@ export function ChatExchangePanel(props: any) {
                     chatKanbanGeneration={chatKanbanGeneration}
                     chatProcessScopeKey={chatProcessScopeKey}
                     copiedMessageKey={copiedMessageKey}
+                    feedbackBusyKey={feedbackBusyKey}
                     dismissChatKanbanGeneration={dismissChatKanbanGeneration}
                     formatRelativeTime={formatRelativeTime}
                     generateKanbanTaskFromChat={generateKanbanTaskFromChat}
@@ -720,6 +769,7 @@ export function ChatExchangePanel(props: any) {
                     processEventsTargetKey={processEventsTargetKey}
                     selectedAgent={selectedAgent}
                     sendPromptMessage={sendPromptMessage}
+                    onMessageFeedback={submitMessageFeedback}
                     setCopiedMessageKey={setCopiedMessageKey}
                     setOpenKanbanTaskMenuKey={setOpenKanbanTaskMenuKey}
                   />

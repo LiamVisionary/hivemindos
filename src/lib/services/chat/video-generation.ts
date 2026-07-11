@@ -1,7 +1,7 @@
 import "server-only";
 
 import { mkdir, readFile, writeFile } from "fs/promises";
-import { extname, join } from "path";
+import { join } from "path";
 import { homedir } from "@/lib/home-dir";
 import {
   appPreferenceFor,
@@ -14,6 +14,10 @@ import {
 import { discoverRawConnectedApps, type ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 import { recordGenerationMetric } from "@/lib/services/generation-metrics";
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
+import {
+  chatImageMimeTypeForPath,
+  preferredChatImageExtensionForMimeType,
+} from "@/lib/services/chat/chat-image-formats";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { callMcpTool, connectMcpServer, disconnectMcpServer } from "@/lib/services/mcp/client";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
@@ -24,6 +28,9 @@ const MAX_POLL_ATTEMPTS = 120;
 const MCP_POLL_INTERVAL_MS = 6_000;
 const MCP_MAX_POLL_ATTEMPTS = 90;
 const GENERATED_VIDEO_DIR = join(homedir(), ".hivemindos", "cache", "generated-video");
+const MCP_VIDEO_FRAME_RATE = 24;
+const DEFAULT_VIDEO_DURATION_SECONDS = 4;
+const MAX_MCP_VIDEO_DURATION_SECONDS = 30;
 
 export type VideoGenerationInputImage = {
   path?: string;
@@ -90,6 +97,21 @@ function clean(value: unknown) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function requestedVideoDurationSeconds(prompt: string) {
+  const match = /\b(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/i.exec(prompt);
+  const requested = match ? Number(match[1]) : DEFAULT_VIDEO_DURATION_SECONDS;
+  if (!Number.isFinite(requested)) return DEFAULT_VIDEO_DURATION_SECONDS;
+  return Math.max(1, Math.min(MAX_MCP_VIDEO_DURATION_SECONDS, requested));
+}
+
+export function videoFrameCount(durationSeconds: number, frameRate = MCP_VIDEO_FRAME_RATE) {
+  const safeFrameRate = Number.isFinite(frameRate) ? Math.max(1, Math.min(120, frameRate)) : MCP_VIDEO_FRAME_RATE;
+  const safeDuration = Number.isFinite(durationSeconds)
+    ? Math.max(1, Math.min(MAX_MCP_VIDEO_DURATION_SECONDS, durationSeconds))
+    : DEFAULT_VIDEO_DURATION_SECONDS;
+  return Math.max(9, Math.min(721, Math.round(safeDuration * safeFrameRate) + 1));
 }
 
 function normalizeRequestPath(path: string) {
@@ -468,12 +490,7 @@ async function imageDataUrlFromPath(path: string, mimeType?: string) {
 }
 
 function mimeTypeForPath(path: string) {
-  const ext = extname(path).toLowerCase();
-  if (ext === ".png") return "image/png";
-  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
-  if (ext === ".webp") return "image/webp";
-  if (ext === ".gif") return "image/gif";
-  return "";
+  return chatImageMimeTypeForPath(path);
 }
 
 async function buildGenerationBody(input: VideoGenerationInput, model?: string) {
@@ -524,10 +541,7 @@ async function imageBytesFromInput(image: VideoGenerationInputImage): Promise<{ 
 }
 
 function extensionForMime(mimeType: string) {
-  if (/jpe?g/i.test(mimeType)) return ".jpg";
-  if (/webp/i.test(mimeType)) return ".webp";
-  if (/gif/i.test(mimeType)) return ".gif";
-  return ".png";
+  return preferredChatImageExtensionForMimeType(mimeType) || ".png";
 }
 
 async function uploadImageToStudio(uploadBase: string, image: VideoGenerationInputImage): Promise<{ name: string; dims: { width: number; height: number } }> {
@@ -642,6 +656,7 @@ async function startMcpVideoGeneration(app: ConnectedHostedApp, descriptor: AppM
   const jobTool = clean(descriptor.jobTool) || "media_get_job";
   const workflowId = clean(descriptor.workflowId) || clean(model);
   const mcpId = `mcp-video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const durationSeconds = requestedVideoDurationSeconds(input.prompt);
 
   await connectMcpServer({
     id: mcpId,
@@ -656,8 +671,8 @@ async function startMcpVideoGeneration(app: ConnectedHostedApp, descriptor: AppM
       prompt: clean(input.prompt),
       width: dims.width,
       height: dims.height,
-      frames: 97,
-      frame_rate: 24,
+      frames: videoFrameCount(durationSeconds, MCP_VIDEO_FRAME_RATE),
+      frame_rate: MCP_VIDEO_FRAME_RATE,
       wait: false,
       include_urls: true,
     }));

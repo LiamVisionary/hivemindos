@@ -311,6 +311,7 @@ has("docs/for-users/whole-brain/shared-skills.md", "obsidian-markdown");
 has("docs/for-users/whole-brain/shared-skills.md", "obsidian-bases");
 has("docs/for-users/whole-brain/shared-skills.md", "json-canvas");
 has("docs/for-users/whole-brain/shared-skills.md", "defuddle");
+has("docs/for-users/whole-brain/shared-skills.md", "create-zero-human-company");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-assimilate");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-pulse");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-remote-capability-use");
@@ -323,8 +324,10 @@ has("docs/for-users/features/brain-vault-and-skills.md", "Compiled Brain Retriev
 has("docs/for-users/features/brain-vault-and-skills.md", "Search compiled knowledge");
 has("docs/index.md", "Compiled brain search");
 has("packaged-skills/README.md", "Obsidian Native Brain Pack");
+has("packaged-skills/README.md", "create-zero-human-company");
 has("packaged-skills/README.md", "hive-assimilate");
 has("packaged-skills/README.md", "hive-pulse");
+has("packaged-skills/README.md", "engineering-discipline");
 has("packaged-skills/README.md", "hive-remote-capability-use");
 has("packaged-skills/README.md", "hive-brain-memory");
 has("packaged-skills/README.md", "hive-brain-compiled-wiki");
@@ -333,7 +336,14 @@ has("packaged-skills/README.md", "packaged-skills/optional/<category>/<source>/<
 has("packaged-skills/README.md", "UI Skills directory");
 has("packaged-skills/README.md", "Design Optional Skills Directory");
 has("packaged-skills/README.md", "MengTo/Skills");
+assert.ok(existsSync(join(root, "packaged-skills/auto-install/create-zero-human-company/SKILL.md")), "missing create-zero-human-company packaged skill");
+has("packaged-skills/auto-install/create-zero-human-company/SKILL.md", "POST /api/founder");
+has("packaged-skills/auto-install/create-zero-human-company/SKILL.md", "Do not call `dispatch-goal`");
+assert.ok(existsSync(join(root, "packaged-skills/auto-install/create-zero-human-company/references/company-api.md")), "missing create-zero-human-company API reference");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-assimilate/SKILL.md")), "missing hive-assimilate packaged skill");
+assert.ok(existsSync(join(root, "packaged-skills/auto-install/engineering-discipline/SKILL.md")), "missing engineering-discipline packaged skill");
+assert.ok(existsSync(join(root, "packaged-skills/packs/hivemind-engineering-discipline.json")), "missing Engineering Discipline pack manifest");
+assert.ok(existsSync(join(root, "packaged-skills/optional/engineering/obra-superpowers/verification-before-completion/SKILL.md")), "missing packaged verification-before-completion donor skill");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/SKILL.md")), "missing hive-pulse packaged skill");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-brain-memory/SKILL.md")), "missing hive-brain-memory packaged skill");
 has("packaged-skills/auto-install/hive-brain-memory/SKILL.md", "hive-brain evolve");
@@ -384,7 +394,12 @@ for (const path of [
 }
 has("docs/for-users/packaged-skills/index.md", "Hive skills");
 has("docs/for-users/packaged-skills/index.md", "Third-party packaged skills");
+has("docs/for-users/packaged-skills/hive-skills.md", "create-zero-human-company");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-assimilate");
+has("docs/for-users/packaged-skills/hive-skills.md", "engineering-discipline");
+has("docs/for-users/packaged-skills/third-party-skills.md", "obra/superpowers");
+has("docs/for-users/whole-brain/shared-skills.md", "HivemindOS Engineering Discipline");
+has("docs/for-users/features/work-and-scheduler.md", "Engineering discipline");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-pulse");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-remote-capability-use");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-brain-memory");

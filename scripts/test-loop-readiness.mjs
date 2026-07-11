@@ -17,6 +17,7 @@ const {
   buildLoopReadinessReport,
   listLoopPatterns,
   renderLoopEngineeringArtifacts,
+  runLoopGates,
 } = await import("../src/lib/services/loops/index.ts");
 const { claimTask, completeTask, createTask, readBoard } = await import("../src/lib/services/kanban/local-kanban-store.ts");
 
@@ -27,7 +28,8 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 try {
   const patterns = listLoopPatterns();
-  assert.equal(patterns.length, 7, "registry should expose every built-in loop pattern");
+  assert.equal(patterns.length, 8, "registry should expose every built-in loop pattern");
+  assert(patterns.some((pattern) => pattern.id === "engineering-discipline"), "registry should include engineering-discipline");
   assert(patterns.some((pattern) => pattern.id === "app-build-harness"), "registry should include app-build-harness");
 
   const loop = buildLoopFromTemplate({
@@ -57,19 +59,26 @@ try {
   }, options);
 
   const requiredGateIds = created.task.loop.evalGates.filter((gate) => gate.required).map((gate) => gate.id);
-  const receipts = requiredGateIds.map((gateId, index) => ({
-    gateId,
-    status: "passed",
-    summary: `Gate ${gateId} passed in fixture`,
-    evidence: [`fixture evidence ${index}`],
-    createdAt: 1_800_000_000_001 + index,
-  }));
+  const output = "Deliverable: /tmp/loop-readiness-fixture.txt with concrete verification evidence for every required gate.";
+  const { receipts } = await runLoopGates({
+    loop: created.task.loop,
+    output,
+    judge: async ({ evaluationRubric }) => ({
+      accepted: true,
+      summary: "Fixture judge accepted.",
+      axes: (evaluationRubric?.axes ?? []).map((axis) => ({ id: axis.id, score: 0.9, evidence: ["fixture evidence"] })),
+      evaluator: { agentId: "fixture-reviewer", independent: true },
+    }),
+    runCommand: async ({ command }) => ({ ok: true, exitCode: 0, output: `${command}: fixture pass` }),
+    verifyArtifact: async ({ artifact }) => ({ ok: artifact === "/tmp/loop-readiness-fixture.txt", evidence: ["fixture stat"] }),
+    now: 1_800_000_000_001,
+  });
 
   await completeTask(boardSlug, created.task.id, {
     summary: "Fixture completed.",
-    result: "Deliverable: /tmp/loop-readiness-fixture.txt",
+    result: output,
     loopReceipts: receipts,
-  }, options);
+  }, { ...options, trustedLoopReceipts: true });
 
   const board = await readBoard(boardSlug, options);
   const report = buildLoopReadinessReport({ board, now: Date.now() });

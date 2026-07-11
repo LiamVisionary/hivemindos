@@ -120,6 +120,7 @@ function runtimeCommandPaths() {
     ? [path.dirname(process.execPath)]
     : [
       path.join(HOME, ".local", "bin"),
+      path.join(HOME, ".npm-global", "bin"),
       path.join(HOME, ".nvm", "versions", "node", process.version, "bin"),
       path.dirname(process.execPath),
       "/opt/homebrew/bin",

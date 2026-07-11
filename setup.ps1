@@ -201,13 +201,11 @@ function Ensure-Pnpm {
   }
   if (Test-Command corepack) {
     if (-not $NonInteractive -and (Ask-YesNo "pnpm is missing. Enable pnpm through Corepack now?" $true)) {
-      Info "Enabling pnpm through Corepack"
-      corepack enable
+      Info "Preparing pnpm through Corepack"
       corepack prepare pnpm@8.6.12 --activate
       Refresh-Path
     } elseif ($NonInteractive) {
-      Info "pnpm not found; enabling pnpm through Corepack"
-      corepack enable
+      Info "pnpm not found; preparing pnpm through Corepack"
       corepack prepare pnpm@8.6.12 --activate
       Refresh-Path
     }

@@ -136,6 +136,8 @@ function loopDeps({ judgeAccepts, onComplete }) {
       fetchJson: async (url, init) => {
         const body = JSON.parse(String(init.body));
         if (body.context?.queenBeeLoopJudge) {
+          assert.equal(url, "http://collector-two.local:5055/chat", "judge runs through a different delegate collector");
+          assert.equal(body.agent.id, "ada-lovelace", "judge uses a different agent identity from the builder");
           calls.push({ kind: "judge", gateId: body.context.gateId });
           return { ok: true, text: judgeAccepts ? '{"accepted": true, "reason": "meets the bar"}' : '{"accepted": false, "reason": "insufficient evidence"}' };
         }
@@ -146,6 +148,8 @@ function loopDeps({ judgeAccepts, onComplete }) {
       block: async () => {
         throw new Error("block should not be called when the worker produced output");
       },
+      reroute: async () => ({ task: { ...loopTask, status: "ready" }, board: {} }),
+      fail: async () => ({ task: { ...loopTask, status: "needs-human" }, board: {}, retried: false }),
     },
   };
 }
@@ -160,7 +164,7 @@ function loopDeps({ judgeAccepts, onComplete }) {
       return { task: { ...loopTask, status: "done", result: input.result }, board: {} };
     },
   });
-  const result = await runQueenBeeAutonomousPickup({ task: loopTask, delegation }, deps);
+  const result = await runQueenBeeAutonomousPickup({ task: loopTask, delegation, delegationChain: [delegation, fallbackDelegation] }, deps);
   assert.equal(result.status, "completed", "loop task should complete when all gates pass");
   assert(captured?.loopReceipts?.length >= requiredGateIds.length, "passing receipts should be attached to complete()");
   const passedIds = new Set(captured.loopReceipts.filter((r) => r.status === "passed").map((r) => r.gateId));
@@ -182,7 +186,7 @@ function loopDeps({ judgeAccepts, onComplete }) {
       return { task: { ...loopTask, status: "done", result: input.result }, board: {} };
     },
   });
-  const result = await runQueenBeeAutonomousPickup({ task: loopTask, delegation }, deps);
+  const result = await runQueenBeeAutonomousPickup({ task: loopTask, delegation, delegationChain: [delegation, fallbackDelegation] }, deps);
   assert.equal(result.ok, false, "a rejected judge should not yield ok=true");
   assert.equal(result.status, "blocked", "unsatisfied required gate should report blocked");
   assert.match(result.error, /loop gates/i);

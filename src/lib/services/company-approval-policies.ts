@@ -4,17 +4,22 @@ const MAX_SUBJECT_LENGTH = 140;
 
 export const COMPANY_APPROVAL_POLICY_MODES: CompanyApprovalPolicyMode[] = ["off", "ask", "never"];
 
+// Default to "ask", not "off": a standard company must not send customer-facing
+// email or publish/hand off a customer-facing site without the human's sign-off
+// out of the box. Founder Mode already set these to "ask"; this makes every
+// company (including quick-start ones) safe by default. A company can still
+// explicitly relax a subject to "off" if its operator chooses.
 export const DEFAULT_COMPANY_APPROVAL_POLICIES: CompanyApprovalPolicy[] = [
   {
     id: "customer-email-send",
     subject: "sending customer-facing emails",
-    mode: "off",
+    mode: "ask",
     source: "default",
   },
   {
     id: "customer-website-use",
     subject: "publishing, sending, or handing off a customer-facing website or preview",
-    mode: "off",
+    mode: "ask",
     source: "default",
   },
 ];

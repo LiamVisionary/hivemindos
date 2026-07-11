@@ -62,6 +62,34 @@ const {
   queenChatRouteForSend,
   queenVoiceHistoryBeforeTurn,
 } = await import("../src/features/queen-voice/queen-chat-routing.ts");
+const {
+  parseUserSlashCommandDisplay,
+} = await import("../src/features/queen-voice/queen-command-display.ts");
+
+// ── leading slash commands render as badges without changing their args ─────
+{
+  assert.deepEqual(
+    parseUserSlashCommandDisplay("/transcript https://x.com/user/status/1"),
+    { name: "transcript", suffix: " https://x.com/user/status/1" },
+  );
+  assert.deepEqual(parseUserSlashCommandDisplay("/swarm-goal build it"), {
+    name: "swarm-goal",
+    suffix: " build it",
+  });
+  assert.deepEqual(parseUserSlashCommandDisplay("/help"), {
+    name: "help",
+    suffix: "",
+  });
+  assert.equal(parseUserSlashCommandDisplay("plain chat"), null);
+  assert.equal(parseUserSlashCommandDisplay("/not/a-command"), null);
+
+  const overlay = readFileSync(new URL("../src/features/queen-voice/QueenBeeVoiceOverlay.tsx", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../src/features/queen-voice/queen-voice.module.css", import.meta.url), "utf8");
+  assert.match(overlay, /<UserTurnText text=\{turn\.text\} \/>/, "user turns should pass through the slash-command badge renderer");
+  assert.match(overlay, /styles\.commandBadge/, "the command token should use the transcript badge style");
+  assert.match(styles, /\.commandBadge\s*\{/, "the command badge should have a scoped dark-theme style");
+  assert.match(styles, /hive-light[^\n]*\.commandBadge/, "the command badge should have a hive-light override");
+}
 
 // ── OAuth Queen models must not silently skip to gpt-4o-mini ────────────────
 {

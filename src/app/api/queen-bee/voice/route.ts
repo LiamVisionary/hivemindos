@@ -66,7 +66,9 @@ import {
 import {
   mintGeminiLiveToken,
   normalizeGeminiLiveModel,
+  synthesizeVoicePreview,
 } from "@/lib/services/phone/cloud-voice-transports";
+import { resolveVoiceRuntime } from "@/lib/config/voice-call-providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -199,10 +201,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Cloud-voice pipeline runtime: STT → chat model → OpenAI TTS. Sibling of
-// LOCAL_TTS_RUNTIME; both route the overlay to the non-realtime pipeline.
-const OPENAI_TTS_RUNTIME = "openai-tts";
-
 // Which brain answers a pipeline voice turn, from the Queen's Calls prefs
 // (`voiceChatBrain`): explicit voice override > the Queen agent's own
 // selected provider/model (the default — voice speaks with the model you
@@ -305,6 +303,8 @@ export async function GET() {
         (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
           isLocalTtsProviderId(calls.voiceProviderId)),
     );
+    const resolvedCallVoice = calls ? resolveVoiceRuntime(calls.voiceRuntime) : null;
+    const cloudTtsSelected = resolvedCallVoice?.kind === "cloud-tts";
     // Subtle overlay tag naming which brain answers spoken turns; the label
     // formats are authored by resolveVoiceChatBrainPlan above. Best-effort:
     // a resolver failure costs the tag, never the settings payload.
@@ -342,11 +342,10 @@ export async function GET() {
       localTtsSelected,
       voiceMode: geminiLiveSelected
         ? "gemini-live"
-        : localTtsSelected || calls?.voiceRuntime === OPENAI_TTS_RUNTIME
+        : localTtsSelected || cloudTtsSelected
           ? "pipeline"
           : "realtime",
-      pipelineSelected:
-        localTtsSelected || calls?.voiceRuntime === OPENAI_TTS_RUNTIME,
+      pipelineSelected: localTtsSelected || cloudTtsSelected,
       brainLabel,
     });
   } catch (error) {
@@ -362,17 +361,7 @@ export async function GET() {
 // (OpenAI Realtime). The overlay connects via WebRTC and applies the returned
 // instructions/tools over the data channel.
 async function mintRealtimeSession() {
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "Realtime speech requires an OpenAI voice key in the shared env.",
-      },
-      { status: 503 },
-    );
-  }
+  const calls = await readQueenBeeCallPreferences().catch(() => null);
   const voice = await readQueenBeeVoice();
   const model = process.env.OPENAI_REALTIME_MODEL || DEFAULT_REALTIME_MODEL;
   const defaults = await readQueenBeeBrainDefaults().catch(() => null);
@@ -388,6 +377,27 @@ async function mintRealtimeSession() {
   ]
     .filter(Boolean)
     .join(" ");
+  if (calls?.voiceAuthMode === "oauth") {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "ChatGPT OAuth powers Voice inside ChatGPT, but HivemindOS currently holds the Codex OAuth grant, which OpenAI rejects on ChatGPT's private Voice WebRTC route. Select API key or Local TTS for Queen Bee voice.",
+      },
+      { status: 409 },
+    );
+  }
+  const apiKey = await transcriptionApiKey();
+  if (!apiKey) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Realtime speech requires an OpenAI Platform voice key in the shared env. You can also choose Local TTS in Calls settings.",
+      },
+      { status: 503 },
+    );
+  }
   const response = await fetch(
     "https://api.openai.com/v1/realtime/client_secrets",
     {
@@ -900,11 +910,10 @@ async function prewarmSpokenReplyEngine(request: NextRequest) {
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }
 
-// Streaming sibling of `speak`: when the Queen uses local TTS, forward the live
-// PCM frame stream so the overlay can play audio within ~a second instead of
-// waiting for the whole clip. Returns 409 {fallback:true} for any non-local-TTS
-// or unavailable case, signalling the client to use the buffered `speak` path
-// (which still handles OpenAI + browser-synth fallback).
+// Streaming sibling of `speak`: cloud TTS returns provider PCM and local TTS
+// forwards its live PCM frame stream, so the overlay uses the selected pipeline
+// voice instead of substituting system speech. Non-pipeline runtimes return a
+// JSON fallback envelope and continue through the buffered path.
 async function streamSpokenReplyPcm(
   request: NextRequest,
   body: Record<string, unknown>,
@@ -927,6 +936,52 @@ async function streamSpokenReplyPcm(
     );
   }
   timings.prefsMs = Date.now() - startedAt;
+  const resolvedVoice = resolveVoiceRuntime(calls?.voiceRuntime);
+  if (calls && resolvedVoice.kind === "cloud-tts" && resolvedVoice.provider) {
+    try {
+      const cloudSpeech = await synthesizeVoicePreview(resolvedVoice.provider.id, {
+        text,
+        voice: calls.voiceId,
+        model: calls.voiceModelId,
+        keyEnv: calls.voiceKeyEnv,
+        languageCode: calls.voiceLanguage,
+      });
+      await appendVoiceTurnTelemetry({
+        ok: true,
+        stage: "speak-stream",
+        engine: resolvedVoice.provider.id,
+        voice: calls.voiceId,
+        model: calls.voiceModelId,
+        sampleRate: cloudSpeech.sampleRate,
+        ...timings,
+        ttsMs: Date.now() - startedAt,
+      });
+      return new Response(cloudSpeech.response.body, {
+        headers: {
+          "Content-Type": "audio/pcm",
+          "x-audio-sample-rate": String(cloudSpeech.sampleRate),
+          "x-audio-channels": "1",
+          "Cache-Control": "no-store, no-transform",
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "cloud TTS failed";
+      await appendVoiceTurnTelemetry({
+        ok: false,
+        stage: "speak-stream",
+        engine: resolvedVoice.provider.id,
+        voice: calls.voiceId,
+        model: calls.voiceModelId,
+        error: message,
+        ...timings,
+        ttsMs: Date.now() - startedAt,
+      });
+      return NextResponse.json(
+        { ok: false, fallback: true, voiceUnavailable: true, error: message },
+        { status: 502 },
+      );
+    }
+  }
   if (
     calls &&
     (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
@@ -1126,6 +1181,18 @@ async function streamSpokenReply(
         ok: false,
         voiceUnavailable: true,
         error: `The selected local TTS voice is unreachable (${localFallbackReason}).`,
+      },
+      { status: 503 },
+    );
+  }
+
+  const resolvedVoice = calls ? resolveVoiceRuntime(calls.voiceRuntime) : null;
+  if (resolvedVoice?.kind === "cloud-tts") {
+    return NextResponse.json(
+      {
+        ok: false,
+        voiceUnavailable: true,
+        error: `The selected ${resolvedVoice.provider?.name || "cloud TTS"} voice could not be streamed.`,
       },
       { status: 503 },
     );
