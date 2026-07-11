@@ -2,16 +2,41 @@
 
 // Full-screen 3D neuron/synapse renderer for the Shared Brain hive-vault view.
 // Self-contained imperative three.js engine (same pattern as the companion
-// engine): nodes render as glowing soma spheres with dendrite halos, links as
-// curved axons with GPU-animated synaptic pulses. Colors come from the
-// vault panel's --brain-* tokens so dark and hive-light both work, and the
-// engine pauses/settles instead of burning frames (reduced motion honored,
-// rAF stops with the tab, everything is disposed on unmount).
+// engine): notes are glowing soma junctions, every wiki-link renders as a
+// multi-strand fiber bundle with GPU synaptic pulses, and a faint
+// nearest-neighbor web fills the space between so the whole graph reads as
+// connected neural tissue. Dark theme gets a bloom pass for the volumetric
+// glow; hive-light stays a plain ink-on-parchment render. Colors ride the
+// vault panel's --brain-* tokens, reduced motion is honored, and everything
+// is disposed on unmount. Shaders/textures live in ./brain-synapse-gpu.
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import {
+  DUST_FRAGMENT,
+  DUST_VERTEX,
+  FIBER_FRAGMENT,
+  FIBER_VERTEX,
+  HALO_FRAGMENT,
+  HALO_VERTEX,
+  PULSE_FRAGMENT,
+  PULSE_VERTEX,
+  SOMA_FRAGMENT,
+  SOMA_VERTEX,
+  clamp,
+  hashUnit,
+  makeDendriteAtlas,
+  makeDotTexture,
+  readPalette,
+  toneColorInto,
+  type Palette,
+  type SynapseNodeTone,
+} from "./brain-synapse-gpu";
 
-export type SynapseNodeTone = "plain" | "recent" | "touched" | "stale" | "unresolved";
+export type { SynapseNodeTone };
 
 export type SynapseNodeInput = {
   id: string;
@@ -36,25 +61,15 @@ type SynapseCanvasProps = {
 };
 
 const WORLD_RADIUS = 150;
-const EDGE_SEGMENTS = 10;
-const MAX_PULSED_EDGES = 480;
-const PULSES_PER_EDGE = 2;
-const MAX_LABELS = 42;
+const FIBER_SEGMENTS = 10;
+const LINK_STRANDS = 3;
+const WEB_NEIGHBORS = 2;
+const MAX_PULSED_LINKS = 480;
+const PULSES_PER_LINK = 2;
+const MAX_LABELS = 28;
 const DUST_COUNT = 260;
 const PRE_TICKS = 110;
-
-function hashUnit(value: string, salt = 0) {
-  let hash = 2166136261 + salt;
-  for (const char of value) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 4294967295;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
+const DARK_DUST_TINT = new THREE.Color("#3f7fc4");
 
 type SimNode = {
   drift: number;
@@ -72,332 +87,19 @@ type SimNode = {
   z: number;
 };
 
-type SimEdge = {
+// One rendered curve. Real wiki-links become LINK_STRANDS fibers sharing a
+// linkIndex; the ambient web uses linkIndex -1 and never lights up or pulses.
+type Fiber = {
   bowAmount: number;
   bowSeed: THREE.Vector3;
+  linkIndex: number;
   seed: number;
   sourceIndex: number;
+  strand: number;
   targetIndex: number;
 };
 
-type Palette = {
-  bg: THREE.Color;
-  danger: THREE.Color;
-  fg: THREE.Color;
-  fg2: THREE.Color;
-  honey: THREE.Color;
-  light: boolean;
-  live: THREE.Color;
-};
-
-function readPalette(element: HTMLElement): Palette {
-  const styles = getComputedStyle(element);
-  const light = document.documentElement.dataset.theme === "hive-light";
-  const pick = (name: string, fallback: string) => {
-    const value = styles.getPropertyValue(name).trim();
-    return value || fallback;
-  };
-  return {
-    light,
-    bg: new THREE.Color(pick("--brain-bg", light ? "#f1ede3" : "#0c0d11")),
-    fg: new THREE.Color(pick("--brain-fg", light ? "#221d14" : "#f3f0e9")),
-    fg2: new THREE.Color(pick("--brain-fg-2", light ? "#5e574b" : "#a7a39a")),
-    honey: new THREE.Color(pick("--brain-honey", light ? "#936811" : "#e7b45c")),
-    live: new THREE.Color(pick("--brain-live", light ? "#1d8e7c" : "#6fcdba")),
-    danger: new THREE.Color(pick("--brain-danger", light ? "#c0524d" : "#e58e85")),
-  };
-}
-
-// White-on-transparent 2x2 atlas of dendritic soma halos; tinted per node in
-// the halo shader so one texture serves every tone and theme.
-function makeDendriteAtlas(): THREE.CanvasTexture {
-  const size = 512;
-  const cell = size / 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    for (let variant = 0; variant < 4; variant += 1) {
-      const cx = (variant % 2) * cell + cell / 2;
-      const cy = Math.floor(variant / 2) * cell + cell / 2;
-      const tendrils = 9 + ((variant * 3) % 5);
-      for (let i = 0; i < tendrils; i += 1) {
-        const angle = (i / tendrils) * Math.PI * 2 + hashUnit(`t${variant}-${i}`) * 0.9;
-        const reach = cell * (0.26 + hashUnit(`r${variant}-${i}`) * 0.19);
-        const bend = (hashUnit(`b${variant}-${i}`) - 0.5) * 1.7;
-        const midX = cx + Math.cos(angle + bend * 0.35) * reach * 0.55;
-        const midY = cy + Math.sin(angle + bend * 0.35) * reach * 0.55;
-        const endX = cx + Math.cos(angle + bend) * reach;
-        const endY = cy + Math.sin(angle + bend) * reach;
-        const grad = ctx.createLinearGradient(cx, cy, endX, endY);
-        grad.addColorStop(0, "rgba(255,255,255,0.34)");
-        grad.addColorStop(0.65, "rgba(255,255,255,0.1)");
-        grad.addColorStop(1, "rgba(255,255,255,0)");
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 2.6 + hashUnit(`w${variant}-${i}`) * 2.4;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.quadraticCurveTo(midX, midY, endX, endY);
-        ctx.stroke();
-      }
-      const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.24);
-      core.addColorStop(0, "rgba(255,255,255,0.95)");
-      core.addColorStop(0.4, "rgba(255,255,255,0.42)");
-      core.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = core;
-      ctx.beginPath();
-      ctx.arc(cx, cy, cell * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-function makeDotTexture(): THREE.CanvasTexture {
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.35, "rgba(255,255,255,0.7)");
-    grad.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, size, size);
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-const SOMA_VERTEX = /* glsl */ `
-  attribute vec3 iTint;
-  attribute float iGlow;
-  attribute float iDim;
-  attribute float iSeed;
-  varying vec3 vTint;
-  varying float vGlow;
-  varying float vDim;
-  varying float vSeed;
-  varying vec3 vNormal;
-  varying vec3 vView;
-  varying float vDist;
-  void main() {
-    vTint = iTint;
-    vGlow = iGlow;
-    vDim = iDim;
-    vSeed = iSeed;
-    vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
-    vNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
-    vView = normalize(cameraPosition - world.xyz);
-    vec4 mv = viewMatrix * world;
-    vDist = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const SOMA_FRAGMENT = /* glsl */ `
-  uniform vec3 uBg;
-  uniform float uTime;
-  uniform float uMotion;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying vec3 vTint;
-  varying float vGlow;
-  varying float vDim;
-  varying float vSeed;
-  varying vec3 vNormal;
-  varying vec3 vView;
-  varying float vDist;
-  void main() {
-    float fres = pow(1.0 - max(dot(normalize(vNormal), normalize(vView)), 0.0), 2.3);
-    float breathe = 0.5 + 0.5 * sin(uTime * 1.35 + vSeed * 6.2831);
-    vec3 body = vTint * (0.46 + 0.55 * vGlow + 0.14 * breathe * uMotion * vGlow);
-    vec3 col = body + vTint * fres * (0.6 + 0.7 * vGlow);
-    col = mix(col, uBg, vDim * 0.62);
-    float fog = smoothstep(uFogNear, uFogFar, vDist);
-    col = mix(col, uBg, fog);
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
-
-const HALO_VERTEX = /* glsl */ `
-  attribute vec3 iPos;
-  attribute float iScale;
-  attribute vec3 iTint;
-  attribute float iSeed;
-  attribute float iAlpha;
-  uniform float uTime;
-  uniform float uMotion;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying vec2 vUv;
-  varying vec3 vTint;
-  varying float vSeed;
-  varying float vAlpha;
-  void main() {
-    vUv = uv;
-    vTint = iTint;
-    vSeed = iSeed;
-    vec4 mv = viewMatrix * modelMatrix * vec4(iPos, 1.0);
-    float breathe = 1.0 + 0.09 * uMotion * sin(uTime * 1.05 + iSeed * 6.2831);
-    mv.xy += position.xy * iScale * breathe;
-    float fog = smoothstep(uFogNear, uFogFar, -mv.z);
-    vAlpha = iAlpha * (1.0 - fog * 0.9);
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const HALO_FRAGMENT = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform float uTime;
-  uniform float uMotion;
-  uniform float uAdditive;
-  varying vec2 vUv;
-  varying vec3 vTint;
-  varying float vSeed;
-  varying float vAlpha;
-  void main() {
-    float angle = vSeed * 6.2831 + uTime * uMotion * (0.04 + 0.09 * fract(vSeed * 7.31)) * (step(0.5, vSeed) * 2.0 - 1.0);
-    vec2 centered = vUv - 0.5;
-    vec2 rotated = vec2(
-      centered.x * cos(angle) - centered.y * sin(angle),
-      centered.x * sin(angle) + centered.y * cos(angle)
-    ) + 0.5;
-    vec2 quadrant = vec2(step(0.5, fract(vSeed * 3.17)), step(0.5, fract(vSeed * 5.53)));
-    vec2 atlasUv = clamp(rotated, 0.02, 0.98) * 0.5 + quadrant * 0.5;
-    float mask = texture2D(uMap, atlasUv).a;
-    float a = mask * vAlpha;
-    vec3 additive = vTint * a;
-    vec3 normal = vTint;
-    gl_FragColor = vec4(mix(normal, additive, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
-  }
-`;
-
-const EDGE_VERTEX = /* glsl */ `
-  attribute float aT;
-  attribute float aLit;
-  attribute float aSeed;
-  varying float vT;
-  varying float vLit;
-  varying float vSeed;
-  varying float vDist;
-  void main() {
-    vT = aT;
-    vLit = aLit;
-    vSeed = aSeed;
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vDist = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const EDGE_FRAGMENT = /* glsl */ `
-  uniform vec3 uEdge;
-  uniform vec3 uLit;
-  uniform vec3 uBg;
-  uniform float uTime;
-  uniform float uMotion;
-  uniform float uEdgeAlpha;
-  uniform float uSelDim;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying float vT;
-  varying float vLit;
-  varying float vSeed;
-  varying float vDist;
-  void main() {
-    vec3 col = mix(uEdge, uLit, vLit);
-    float shimmer = 0.78 + 0.22 * sin(vT * 17.0 - uTime * uMotion * (1.1 + vSeed * 1.6) + vSeed * 6.2831);
-    float a = uEdgeAlpha * (0.55 + 0.85 * vLit) * shimmer;
-    a *= mix(uSelDim, 1.0, vLit);
-    float fog = smoothstep(uFogNear, uFogFar, vDist);
-    col = mix(col, uBg, fog * 0.6);
-    a *= 1.0 - fog * 0.85;
-    gl_FragColor = vec4(col, a);
-  }
-`;
-
-const PULSE_VERTEX = /* glsl */ `
-  attribute vec3 aStart;
-  attribute vec3 aCtrl;
-  attribute vec3 aEnd;
-  attribute float aPhase;
-  attribute float aSpeed;
-  attribute float aSize;
-  attribute vec3 aTint;
-  attribute float aLit;
-  uniform float uTime;
-  uniform float uMotion;
-  uniform float uScale;
-  uniform float uSelDim;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying vec3 vTint;
-  varying float vAlpha;
-  void main() {
-    float t = fract(aPhase + uTime * aSpeed * max(uMotion, 0.0));
-    vec3 p = mix(mix(aStart, aCtrl, t), mix(aCtrl, aEnd, t), t);
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    float ends = smoothstep(0.02, 0.16, t) * (1.0 - smoothstep(0.84, 0.98, t));
-    float fog = smoothstep(uFogNear, uFogFar, -mv.z);
-    vTint = aTint;
-    vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9);
-    gl_PointSize = aSize * (1.0 + aLit * 0.9) * uScale / max(-mv.z, 1.0);
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const PULSE_FRAGMENT = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform float uAdditive;
-  varying vec3 vTint;
-  varying float vAlpha;
-  void main() {
-    float mask = texture2D(uMap, gl_PointCoord).a;
-    float a = mask * vAlpha;
-    gl_FragColor = vec4(mix(vTint, vTint * a, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
-  }
-`;
-
-const DUST_VERTEX = /* glsl */ `
-  attribute float aSize;
-  attribute float aSeed;
-  uniform float uTime;
-  uniform float uMotion;
-  uniform float uScale;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying float vAlpha;
-  void main() {
-    vec3 p = position;
-    p.x += sin(uTime * 0.11 * uMotion + aSeed * 6.2831) * 7.0;
-    p.y += cos(uTime * 0.09 * uMotion + aSeed * 12.4) * 7.0;
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    float fog = smoothstep(uFogNear, uFogFar, -mv.z);
-    vAlpha = (0.14 + 0.1 * sin(uTime * 0.5 * uMotion + aSeed * 20.0)) * (1.0 - fog);
-    gl_PointSize = aSize * uScale / max(-mv.z, 1.0);
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const DUST_FRAGMENT = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform vec3 uTint;
-  uniform float uAdditive;
-  varying float vAlpha;
-  void main() {
-    float mask = texture2D(uMap, gl_PointCoord).a;
-    float a = mask * vAlpha;
-    gl_FragColor = vec4(mix(uTint, uTint * a, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
-  }
-`;
+type RealLink = { sourceIndex: number; targetIndex: number };
 
 type EngineOptions = {
   labelClassName?: string;
@@ -405,30 +107,38 @@ type EngineOptions = {
   onNodeHover: (id: string | null) => void;
 };
 
+function pairKey(a: number, b: number) {
+  return a < b ? `${a}:${b}` : `${b}:${a}`;
+}
+
 class SynapseEngine {
   private alpha = 0;
   private animationFrame = 0;
+  private bloomPass: UnrealBloomPass | null = null;
   private camera: THREE.PerspectiveCamera;
   private cameraRadius = WORLD_RADIUS * 3.2;
   private cameraRadiusTarget = WORLD_RADIUS * 2.3;
-  private lastFrameAt = 0;
+  private composer: EffectComposer | null = null;
   private container: HTMLElement;
   private contextIds = new Set<string>();
   private dataSignature = "";
   private destroyed = false;
   private drag: { id: number; lastX: number; lastY: number; moved: number; startX: number; startY: number } | null = null;
   private dust: THREE.Points | null = null;
-  private edgeLines: THREE.LineSegments | null = null;
-  private edges: SimEdge[] = [];
+  private fiberLines: THREE.LineSegments | null = null;
+  private fibers: Fiber[] = [];
   private fitRadius = WORLD_RADIUS;
+  private haloMesh: THREE.Mesh | null = null;
   private hoveredId: string | null = null;
   private idleSeconds = 0;
   private labelLayer: HTMLDivElement;
   private labelPool: Array<{ meta: HTMLElement; root: HTMLDivElement; title: HTMLElement }> = [];
   private labeledIndices: number[] = [];
+  private lastFrameAt = 0;
   private materials: THREE.ShaderMaterial[] = [];
   private neighborIds = new Set<string>();
   private nodeIndexById = new Map<string, number>();
+  private nodeTints = new Float32Array(0);
   private nodes: SimNode[] = [];
   private options: EngineOptions;
   private palette: Palette;
@@ -436,9 +146,11 @@ class SynapseEngine {
   private phiTarget = 1.18;
   private pointer = { down: false, inside: false, x: 0, y: 0 };
   private pulsePoints: THREE.Points | null = null;
+  private realLinks: RealLink[] = [];
   private reducedMotion = false;
   private reducedMotionQuery: MediaQueryList | null = null;
   private renderer: THREE.WebGLRenderer | null = null;
+  private resizeObserver: ResizeObserver | null = null;
   private scene = new THREE.Scene();
   private selectedId: string | null = null;
   private soma: THREE.InstancedMesh | null = null;
@@ -449,12 +161,13 @@ class SynapseEngine {
   private thetaTarget = 0.55;
   private time = 0;
   private tmpColor = new THREE.Color();
+  private tmpColorB = new THREE.Color();
   private tmpMatrix = new THREE.Matrix4();
   private tmpVecA = new THREE.Vector3();
   private tmpVecB = new THREE.Vector3();
   private tmpVecC = new THREE.Vector3();
   private tmpVecD = new THREE.Vector3();
-  private resizeObserver: ResizeObserver | null = null;
+  private webDirty = false;
   private onVisibility = () => {
     // Drop the accumulated hidden-time so the first visible frame doesn't jump.
     if (!document.hidden) this.lastFrameAt = performance.now();
@@ -477,7 +190,8 @@ class SynapseEngine {
     }
     this.renderer = renderer;
     if (renderer) {
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      // 1.75 keeps the bloom blur chain cheap on retina without visible loss.
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
       renderer.setClearColor(this.palette.bg, 1);
       renderer.domElement.style.display = "block";
       renderer.domElement.style.width = "100%";
@@ -488,6 +202,11 @@ class SynapseEngine {
       requestAnimationFrame(() => {
         renderer.domElement.style.opacity = "1";
       });
+      this.composer = new EffectComposer(renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(640, 360), 1.05, 0.55, 0.32);
+      this.bloomPass.enabled = !this.palette.light;
+      this.composer.addPass(this.bloomPass);
     }
 
     this.labelLayer = document.createElement("div");
@@ -551,6 +270,8 @@ class SynapseEngine {
     this.texAtlas.dispose();
     this.texDot.dispose();
     this.labelLayer.remove();
+    this.bloomPass?.dispose();
+    this.composer?.dispose();
     if (this.renderer) {
       this.renderer.dispose();
       this.renderer.domElement.remove();
@@ -563,7 +284,7 @@ class SynapseEngine {
     const nodeIds = new Set(inputNodes.map((node) => node.id));
     const links = inputLinks.filter((link) => {
       if (!nodeIds.has(link.source) || !nodeIds.has(link.target) || link.source === link.target) return false;
-      const key = link.source < link.target ? `${link.source} ${link.target}` : `${link.target} ${link.source}`;
+      const key = link.source < link.target ? `${link.source} ${link.target}` : `${link.target} ${link.source}`;
       if (seenLinks.has(key)) return false;
       seenLinks.add(key);
       return true;
@@ -577,7 +298,7 @@ class SynapseEngine {
     let added = 0;
     this.nodes = inputNodes.map((input) => {
       const existing = previousById.get(input.id);
-      const radius = 3.7 + clamp(input.weight, 0, 1) * 7.2;
+      const radius = 3.2 + clamp(input.weight, 0, 1) * 6.6;
       if (existing) {
         existing.label = input.label;
         existing.meta = input.meta;
@@ -608,6 +329,7 @@ class SynapseEngine {
       };
     });
     this.nodeIndexById = new Map(this.nodes.map((node, index) => [node.id, index]));
+    this.nodeTints = new Float32Array(this.nodes.length * 3);
 
     // Spawn brand-new nodes next to a linked survivor so they grow out of the
     // existing tissue instead of teleporting in from the seed sphere.
@@ -627,24 +349,14 @@ class SynapseEngine {
       }
     }
 
-    this.edges = links.map((link) => {
-      const seed = hashUnit(`${link.source}->${link.target}`, 5);
-      const bowSeed = new THREE.Vector3(
-        hashUnit(link.source + link.target, 41) - 0.5,
-        hashUnit(link.source + link.target, 43) - 0.5,
-        hashUnit(link.source + link.target, 47) - 0.5,
-      ).normalize();
-      return {
-        seed,
-        bowSeed,
-        bowAmount: 6 + seed * 16,
-        sourceIndex: this.nodeIndexById.get(link.source) ?? 0,
-        targetIndex: this.nodeIndexById.get(link.target) ?? 0,
-      };
-    });
+    this.realLinks = links.map((link) => ({
+      sourceIndex: this.nodeIndexById.get(link.source) ?? 0,
+      targetIndex: this.nodeIndexById.get(link.target) ?? 0,
+    }));
 
     if (!topologyChanged) {
       this.applyNodeVisuals();
+      this.applyFiberVisuals();
       this.refreshLabelSet();
       return;
     }
@@ -660,9 +372,19 @@ class SynapseEngine {
       this.alpha = clamp(0.3 + added * 0.04, 0.3, 0.85);
     }
 
-    this.rebuildGraphObjects();
+    this.fibers = this.buildLinkFibers();
+    if (firstBuild) {
+      this.fibers.push(...this.computeWebFibers());
+      this.webDirty = false;
+    } else {
+      // The web re-grows once the reflowed layout settles (see frame()).
+      this.webDirty = true;
+    }
+
+    this.rebuildNodeObjects();
+    this.rebuildFiberObjects();
     this.applyNodeVisuals();
-    this.applyEdgeVisuals();
+    this.applyFiberVisuals();
     this.refreshLabelSet();
   }
 
@@ -671,7 +393,7 @@ class SynapseEngine {
     this.neighborIds = new Set(neighborIds);
     this.contextIds = new Set(contextIds);
     this.applyNodeVisuals();
-    this.applyEdgeVisuals();
+    this.applyFiberVisuals();
     this.refreshLabelSet();
   }
 
@@ -686,43 +408,29 @@ class SynapseEngine {
     if (this.destroyed) return;
     this.palette = readPalette(this.container);
     this.renderer?.setClearColor(this.palette.bg, 1);
+    if (this.bloomPass) this.bloomPass.enabled = !this.palette.light;
     const additive = this.palette.light ? 0 : 1;
     for (const material of this.materials) {
       const uniforms = material.uniforms;
       if (uniforms.uBg) (uniforms.uBg.value as THREE.Color).copy(this.palette.bg);
       if (uniforms.uAdditive) uniforms.uAdditive.value = additive;
-      if (uniforms.uEdge) (uniforms.uEdge.value as THREE.Color).copy(this.palette.fg2).lerp(this.palette.bg, this.palette.light ? 0.15 : 0.35);
-      if (uniforms.uLit) (uniforms.uLit.value as THREE.Color).copy(this.palette.honey);
-      if (uniforms.uEdgeAlpha) uniforms.uEdgeAlpha.value = this.palette.light ? 0.36 : 0.3;
-      if (uniforms.uTint) (uniforms.uTint.value as THREE.Color).copy(this.palette.live);
+      if (uniforms.uLit) (uniforms.uLit.value as THREE.Color).copy(this.palette.light ? this.palette.honey : new THREE.Color("#ffc46a"));
+      if (uniforms.uTint) (uniforms.uTint.value as THREE.Color).copy(this.palette.light ? this.palette.live : DARK_DUST_TINT);
       if (material.blending !== THREE.NoBlending) {
         material.blending = this.palette.light ? THREE.NormalBlending : THREE.AdditiveBlending;
         material.needsUpdate = true;
       }
     }
-    if (this.soma) {
-      const somaMaterial = this.soma.material as THREE.ShaderMaterial;
-      somaMaterial.blending = THREE.NoBlending;
-      somaMaterial.needsUpdate = true;
-    }
     this.applyNodeVisuals();
-  }
-
-  private toneColor(tone: SynapseNodeTone, target: THREE.Color) {
-    const palette = this.palette;
-    if (tone === "touched") return target.copy(palette.honey);
-    if (tone === "recent") return target.copy(palette.live);
-    if (tone === "unresolved") return target.copy(palette.danger);
-    if (tone === "stale") return target.copy(palette.honey).lerp(palette.fg2, 0.55);
-    return target.copy(palette.fg2).lerp(palette.fg, 0.55);
+    this.applyFiberVisuals();
   }
 
   private toneGlow(tone: SynapseNodeTone) {
-    if (tone === "touched") return 0.58;
-    if (tone === "recent") return 0.48;
-    if (tone === "unresolved") return 0.44;
-    if (tone === "stale") return 0.34;
-    return 0.32;
+    if (tone === "touched") return 0.6;
+    if (tone === "recent") return 0.5;
+    if (tone === "unresolved") return 0.46;
+    if (tone === "stale") return 0.36;
+    return 0.34;
   }
 
   private applyNodeVisuals() {
@@ -740,22 +448,26 @@ class SynapseEngine {
       const selected = node.id === this.selectedId;
       const neighbor = this.neighborIds.has(node.id);
       const inContext = this.contextIds.has(node.id);
-      this.toneColor(node.tone, this.tmpColor);
+      toneColorInto(this.palette, node.tone, node.drift, this.tmpColor);
       if (inContext) this.tmpColor.lerp(this.palette.live, 0.5);
-      if (selected) this.tmpColor.lerp(this.palette.honey, 0.65);
+      if (selected) this.tmpColor.lerp(this.palette.light ? this.palette.honey : this.tmpColorB.set("#ffc46a"), 0.65);
       let glow = this.toneGlow(node.tone) + node.weight * 0.2;
       if (inContext) glow = Math.max(glow, 0.55);
-      if (neighbor) glow += 0.14;
-      if (selected) glow = 1;
-      if (node.id === this.hoveredId) glow = Math.min(1, glow + 0.22);
+      if (neighbor) glow += 0.12;
+      if (selected) glow = 0.95;
+      if (node.id === this.hoveredId) glow = Math.min(1, glow + 0.2);
       const dim = hasSelection && !selected && !neighbor && !inContext ? 1 : 0;
       tintAttr.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
       glowAttr.setX(index, clamp(glow, 0, 1));
       dimAttr.setX(index, dim);
+      this.nodeTints[index * 3] = this.tmpColor.r;
+      this.nodeTints[index * 3 + 1] = this.tmpColor.g;
+      this.nodeTints[index * 3 + 2] = this.tmpColor.b;
       if (haloTint && haloAlpha) {
         haloTint.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-        const baseAlpha = this.palette.light ? 0.42 : 0.62;
-        haloAlpha.setX(index, (baseAlpha + glow * 0.5) * (dim ? 0.2 : 1));
+        const base = this.palette.light ? 0.34 : 0.28;
+        // Capped so a selected hub reads as a bright junction, not a blob.
+        haloAlpha.setX(index, Math.min(0.72, base + glow * 0.3) * (dim ? 0.2 : 1));
       }
     });
     tintAttr.needsUpdate = true;
@@ -765,46 +477,136 @@ class SynapseEngine {
     if (haloAlpha) haloAlpha.needsUpdate = true;
   }
 
-  private applyEdgeVisuals() {
-    if (!this.edgeLines) return;
-    const litAttr = this.edgeLines.geometry.getAttribute("aLit") as THREE.BufferAttribute;
+  private fiberAlpha(fiber: Fiber) {
+    if (fiber.linkIndex < 0) return this.palette.light ? 0.16 : 0.11;
+    const strands = this.palette.light ? [0.46, 0.28, 0.2] : [0.42, 0.24, 0.16];
+    return strands[fiber.strand] ?? strands[0];
+  }
+
+  private applyFiberVisuals() {
+    if (!this.fiberLines) return;
+    const geo = this.fiberLines.geometry;
+    const litAttr = geo.getAttribute("aLit") as THREE.BufferAttribute;
+    const alphaAttr = geo.getAttribute("aAlpha") as THREE.BufferAttribute;
+    const colorA = geo.getAttribute("aColorA") as THREE.BufferAttribute;
+    const colorB = geo.getAttribute("aColorB") as THREE.BufferAttribute;
     const pulseGeo = this.pulsePoints?.geometry;
     const pulseLit = pulseGeo?.getAttribute("aLit") as THREE.BufferAttribute | undefined;
     const pulseTint = pulseGeo?.getAttribute("aTint") as THREE.BufferAttribute | undefined;
     const pulseSize = pulseGeo?.getAttribute("aSize") as THREE.BufferAttribute | undefined;
-    const vertsPerEdge = EDGE_SEGMENTS * 2;
-    this.edges.forEach((edge, edgeIndex) => {
-      const source = this.nodes[edge.sourceIndex];
-      const target = this.nodes[edge.targetIndex];
-      const lit = this.selectedId !== null && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
-      for (let v = 0; v < vertsPerEdge; v += 1) litAttr.setX(edgeIndex * vertsPerEdge + v, lit);
-      if (pulseLit && pulseTint && pulseSize && edgeIndex < MAX_PULSED_EDGES) {
-        this.tmpColor.copy(lit ? this.palette.honey : this.palette.live);
-        for (let p = 0; p < PULSES_PER_EDGE; p += 1) {
-          const slot = edgeIndex * PULSES_PER_EDGE + p;
-          pulseLit.setX(slot, lit);
-          pulseTint.setXYZ(slot, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-          // Extra pulses per axon only fire while the synapse is lit.
-          pulseSize.setX(slot, p === 0 || lit ? 30 + hashUnit(`pulse-${edgeIndex}-${p}`, 13) * 26 : 0);
-        }
+    const vertsPerFiber = FIBER_SEGMENTS * 2;
+    this.fibers.forEach((fiber, fiberIndex) => {
+      const source = this.nodes[fiber.sourceIndex];
+      const target = this.nodes[fiber.targetIndex];
+      const lit = fiber.linkIndex >= 0 && this.selectedId !== null
+        && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
+      const alpha = this.fiberAlpha(fiber);
+      for (let v = 0; v < vertsPerFiber; v += 1) {
+        const at = fiberIndex * vertsPerFiber + v;
+        litAttr.setX(at, lit);
+        alphaAttr.setX(at, alpha);
+        colorA.setXYZ(at, this.nodeTints[fiber.sourceIndex * 3], this.nodeTints[fiber.sourceIndex * 3 + 1], this.nodeTints[fiber.sourceIndex * 3 + 2]);
+        colorB.setXYZ(at, this.nodeTints[fiber.targetIndex * 3], this.nodeTints[fiber.targetIndex * 3 + 1], this.nodeTints[fiber.targetIndex * 3 + 2]);
       }
     });
     litAttr.needsUpdate = true;
-    if (pulseLit) pulseLit.needsUpdate = true;
-    if (pulseTint) pulseTint.needsUpdate = true;
-    if (pulseSize) pulseSize.needsUpdate = true;
-    const uniforms = (this.edgeLines.material as THREE.ShaderMaterial).uniforms;
+    alphaAttr.needsUpdate = true;
+    colorA.needsUpdate = true;
+    colorB.needsUpdate = true;
+    if (pulseLit && pulseTint && pulseSize) {
+      this.realLinks.slice(0, MAX_PULSED_LINKS).forEach((link, linkIndex) => {
+        const source = this.nodes[link.sourceIndex];
+        const target = this.nodes[link.targetIndex];
+        const lit = this.selectedId !== null && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
+        this.tmpColor.copy(lit
+          ? (this.palette.light ? this.palette.honey : this.tmpColorB.set("#ffc46a"))
+          : (this.palette.light ? this.palette.live : this.tmpColorB.set("#6fe8ff")));
+        for (let p = 0; p < PULSES_PER_LINK; p += 1) {
+          const slot = linkIndex * PULSES_PER_LINK + p;
+          pulseLit.setX(slot, lit);
+          pulseTint.setXYZ(slot, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
+          // Extra pulses per axon only fire while the synapse is lit.
+          pulseSize.setX(slot, p === 0 || lit ? 36 + hashUnit(`pulse-${linkIndex}-${p}`, 13) * 30 : 0);
+        }
+      });
+      pulseLit.needsUpdate = true;
+      pulseTint.needsUpdate = true;
+      pulseSize.needsUpdate = true;
+    }
     const dimUnlit = this.selectedId && this.neighborIds.size > 0;
-    uniforms.uSelDim.value = dimUnlit ? 0.32 : 1;
+    (this.fiberLines.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.34 : 1;
     if (this.pulsePoints) {
       (this.pulsePoints.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
     }
   }
 
-  private haloMesh: THREE.Mesh | null = null;
+  private buildLinkFibers(): Fiber[] {
+    const fibers: Fiber[] = [];
+    this.realLinks.forEach((link, linkIndex) => {
+      for (let strand = 0; strand < LINK_STRANDS; strand += 1) {
+        const seed = hashUnit(`${link.sourceIndex}>${link.targetIndex}`, 5 + strand * 17);
+        fibers.push({
+          linkIndex,
+          strand,
+          seed,
+          sourceIndex: link.sourceIndex,
+          targetIndex: link.targetIndex,
+          bowAmount: 5 + seed * 15 + strand * 4,
+          bowSeed: new THREE.Vector3(
+            hashUnit(`${link.sourceIndex}-${link.targetIndex}`, 41 + strand * 7) - 0.5,
+            hashUnit(`${link.sourceIndex}-${link.targetIndex}`, 43 + strand * 7) - 0.5,
+            hashUnit(`${link.sourceIndex}-${link.targetIndex}`, 47 + strand * 7) - 0.5,
+          ).normalize(),
+        });
+      }
+    });
+    return fibers;
+  }
+
+  // Faint filaments joining every node to its nearest neighbors, so sparse
+  // link data still reads as one connected mesh (the "fascia" of the tissue).
+  private computeWebFibers(): Fiber[] {
+    const count = this.nodes.length;
+    if (count < 3) return [];
+    const linked = new Set(this.realLinks.map((link) => pairKey(link.sourceIndex, link.targetIndex)));
+    const webPairs = new Set<string>();
+    const fibers: Fiber[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const a = this.nodes[i];
+      const nearest: Array<{ dist: number; index: number }> = [];
+      for (let j = 0; j < count; j += 1) {
+        if (i === j) continue;
+        const b = this.nodes[j];
+        const dist = (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2;
+        if (nearest.length < WEB_NEIGHBORS) {
+          nearest.push({ dist, index: j });
+          nearest.sort((p, q) => p.dist - q.dist);
+        } else if (dist < nearest[nearest.length - 1].dist) {
+          nearest[nearest.length - 1] = { dist, index: j };
+          nearest.sort((p, q) => p.dist - q.dist);
+        }
+      }
+      for (const { index } of nearest) {
+        const key = pairKey(i, index);
+        if (linked.has(key) || webPairs.has(key)) continue;
+        webPairs.add(key);
+        const seed = hashUnit(key, 59);
+        fibers.push({
+          linkIndex: -1,
+          strand: 0,
+          seed,
+          sourceIndex: i,
+          targetIndex: index,
+          bowAmount: 4 + seed * 9,
+          bowSeed: new THREE.Vector3(hashUnit(key, 61) - 0.5, hashUnit(key, 67) - 0.5, hashUnit(key, 71) - 0.5).normalize(),
+        });
+      }
+    }
+    return fibers;
+  }
 
   private disposeGraphObjects() {
-    for (const object of [this.soma, this.haloMesh, this.edgeLines, this.pulsePoints] as Array<THREE.Object3D | null>) {
+    for (const object of [this.soma, this.haloMesh] as Array<THREE.Object3D | null>) {
       if (!object) continue;
       this.scene.remove(object);
       const mesh = object as THREE.Mesh;
@@ -812,7 +614,17 @@ class SynapseEngine {
     }
     this.soma = null;
     this.haloMesh = null;
-    this.edgeLines = null;
+    this.disposeFiberObjects();
+  }
+
+  private disposeFiberObjects() {
+    for (const object of [this.fiberLines, this.pulsePoints] as Array<THREE.Object3D | null>) {
+      if (!object) continue;
+      this.scene.remove(object);
+      const mesh = object as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+    }
+    this.fiberLines = null;
     this.pulsePoints = null;
   }
 
@@ -821,8 +633,8 @@ class SynapseEngine {
       uTime: { value: 0 },
       uMotion: { value: this.reducedMotion ? 0 : 1 },
       uBg: { value: this.palette.bg.clone() },
-      uFogNear: { value: this.cameraRadiusTarget * 0.7 },
-      uFogFar: { value: this.cameraRadiusTarget * 2.4 },
+      uFogNear: { value: this.cameraRadiusTarget * 0.88 },
+      uFogFar: { value: this.cameraRadiusTarget * 3.1 },
       uScale: { value: 600 },
       uAdditive: { value: this.palette.light ? 0 : 1 },
       uSelDim: { value: 1 },
@@ -854,7 +666,11 @@ class SynapseEngine {
     geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
     geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
     const material = this.registerMaterial(new THREE.ShaderMaterial({
-      uniforms: { ...this.sharedUniforms(), uMap: { value: this.texDot }, uTint: { value: this.palette.live.clone() } },
+      uniforms: {
+        ...this.sharedUniforms(),
+        uMap: { value: this.texDot },
+        uTint: { value: (this.palette.light ? this.palette.live : DARK_DUST_TINT).clone() },
+      },
       vertexShader: DUST_VERTEX,
       fragmentShader: DUST_FRAGMENT,
       transparent: true,
@@ -866,12 +682,18 @@ class SynapseEngine {
     this.scene.add(this.dust);
   }
 
-  private rebuildGraphObjects() {
-    this.disposeGraphObjects();
+  private rebuildNodeObjects() {
+    for (const object of [this.soma, this.haloMesh] as Array<THREE.Object3D | null>) {
+      if (!object) continue;
+      this.scene.remove(object);
+      (object as THREE.Mesh).geometry?.dispose();
+    }
+    this.soma = null;
+    this.haloMesh = null;
     const count = this.nodes.length;
     if (!count) return;
 
-    // Soma spheres (instanced, opaque, fresnel-lit).
+    // Soma spheres (instanced, opaque, fresnel-lit junction cores).
     const sphereGeometry = new THREE.SphereGeometry(1, 20, 14);
     sphereGeometry.setAttribute("iTint", new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
     sphereGeometry.setAttribute("iGlow", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
@@ -892,7 +714,8 @@ class SynapseEngine {
     this.soma.frustumCulled = false;
     this.scene.add(this.soma);
 
-    // Dendrite halos (instanced billboards over the soma).
+    // Dendrite halos (instanced billboards over the soma), kept subtle — the
+    // bloom pass supplies the volumetric glow now.
     const plane = new THREE.PlaneGeometry(2, 2);
     const haloGeometry = new THREE.InstancedBufferGeometry();
     haloGeometry.index = plane.index;
@@ -905,7 +728,7 @@ class SynapseEngine {
     const haloScales = new Float32Array(count);
     const haloSeeds = new Float32Array(count);
     this.nodes.forEach((node, index) => {
-      haloScales[index] = node.radius * 5.4;
+      haloScales[index] = node.radius * 3;
       haloSeeds[index] = hashUnit(node.id, 53);
     });
     haloGeometry.setAttribute("iScale", new THREE.InstancedBufferAttribute(haloScales, 1));
@@ -923,91 +746,94 @@ class SynapseEngine {
     this.haloMesh = new THREE.Mesh(haloGeometry, haloMaterial);
     this.haloMesh.frustumCulled = false;
     this.scene.add(this.haloMesh);
+  }
 
-    // Axon curves.
-    const edgeCount = this.edges.length;
-    if (edgeCount) {
-      const vertsPerEdge = EDGE_SEGMENTS * 2;
-      const positions = new Float32Array(edgeCount * vertsPerEdge * 3);
-      const ts = new Float32Array(edgeCount * vertsPerEdge);
-      const lit = new Float32Array(edgeCount * vertsPerEdge);
-      const seeds = new Float32Array(edgeCount * vertsPerEdge);
-      this.edges.forEach((edge, edgeIndex) => {
-        for (let s = 0; s < EDGE_SEGMENTS; s += 1) {
-          const base = edgeIndex * vertsPerEdge + s * 2;
-          ts[base] = s / EDGE_SEGMENTS;
-          ts[base + 1] = (s + 1) / EDGE_SEGMENTS;
-          seeds[base] = edge.seed;
-          seeds[base + 1] = edge.seed;
+  private rebuildFiberObjects() {
+    this.disposeFiberObjects();
+    const fiberCount = this.fibers.length;
+    if (fiberCount) {
+      const vertsPerFiber = FIBER_SEGMENTS * 2;
+      const positions = new Float32Array(fiberCount * vertsPerFiber * 3);
+      const ts = new Float32Array(fiberCount * vertsPerFiber);
+      const seeds = new Float32Array(fiberCount * vertsPerFiber);
+      this.fibers.forEach((fiber, fiberIndex) => {
+        for (let s = 0; s < FIBER_SEGMENTS; s += 1) {
+          const base = fiberIndex * vertsPerFiber + s * 2;
+          ts[base] = s / FIBER_SEGMENTS;
+          ts[base + 1] = (s + 1) / FIBER_SEGMENTS;
+          seeds[base] = fiber.seed;
+          seeds[base + 1] = fiber.seed;
         }
       });
-      const edgeGeometry = new THREE.BufferGeometry();
+      const geometry = new THREE.BufferGeometry();
       const positionAttr = new THREE.BufferAttribute(positions, 3);
       positionAttr.setUsage(THREE.DynamicDrawUsage);
-      edgeGeometry.setAttribute("position", positionAttr);
-      edgeGeometry.setAttribute("aT", new THREE.BufferAttribute(ts, 1));
-      edgeGeometry.setAttribute("aLit", new THREE.BufferAttribute(lit, 1));
-      edgeGeometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
-      const edgeMaterial = this.registerMaterial(new THREE.ShaderMaterial({
+      geometry.setAttribute("position", positionAttr);
+      geometry.setAttribute("aT", new THREE.BufferAttribute(ts, 1));
+      geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
+      geometry.setAttribute("aLit", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber), 1));
+      geometry.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber), 1));
+      geometry.setAttribute("aColorA", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber * 3), 3));
+      geometry.setAttribute("aColorB", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber * 3), 3));
+      const material = this.registerMaterial(new THREE.ShaderMaterial({
         uniforms: {
           ...this.sharedUniforms(),
-          uEdge: { value: this.palette.fg2.clone().lerp(this.palette.bg, this.palette.light ? 0.15 : 0.35) },
-          uLit: { value: this.palette.honey.clone() },
-          uEdgeAlpha: { value: this.palette.light ? 0.36 : 0.3 },
+          uLit: { value: (this.palette.light ? this.palette.honey : new THREE.Color("#ffc46a")).clone() },
         },
-        vertexShader: EDGE_VERTEX,
-        fragmentShader: EDGE_FRAGMENT,
+        vertexShader: FIBER_VERTEX,
+        fragmentShader: FIBER_FRAGMENT,
         transparent: true,
         depthWrite: false,
         blending: this.palette.light ? THREE.NormalBlending : THREE.AdditiveBlending,
       }));
-      this.edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
-      this.edgeLines.frustumCulled = false;
-      this.scene.add(this.edgeLines);
-
-      // Synaptic pulses travelling the axons.
-      const pulsedEdges = Math.min(edgeCount, MAX_PULSED_EDGES);
-      const pulseCount = pulsedEdges * PULSES_PER_EDGE;
-      const pulseGeometry = new THREE.BufferGeometry();
-      const mk = (itemSize: number) => {
-        const attribute = new THREE.BufferAttribute(new Float32Array(pulseCount * itemSize), itemSize);
-        attribute.setUsage(THREE.DynamicDrawUsage);
-        return attribute;
-      };
-      pulseGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pulseCount * 3), 3));
-      pulseGeometry.setAttribute("aStart", mk(3));
-      pulseGeometry.setAttribute("aCtrl", mk(3));
-      pulseGeometry.setAttribute("aEnd", mk(3));
-      const phases = new Float32Array(pulseCount);
-      const speeds = new Float32Array(pulseCount);
-      const sizes = new Float32Array(pulseCount);
-      for (let e = 0; e < pulsedEdges; e += 1) {
-        for (let p = 0; p < PULSES_PER_EDGE; p += 1) {
-          const slot = e * PULSES_PER_EDGE + p;
-          phases[slot] = hashUnit(`pulse-${e}-${p}`, 7) + p * 0.5;
-          speeds[slot] = 0.06 + hashUnit(`pulse-${e}-${p}`, 11) * 0.12;
-          sizes[slot] = p === 0 ? 30 + hashUnit(`pulse-${e}-${p}`, 13) * 26 : 0;
-        }
-      }
-      pulseGeometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
-      pulseGeometry.setAttribute("aSpeed", new THREE.BufferAttribute(speeds, 1));
-      const sizeAttr = new THREE.BufferAttribute(sizes, 1);
-      sizeAttr.setUsage(THREE.DynamicDrawUsage);
-      pulseGeometry.setAttribute("aSize", sizeAttr);
-      pulseGeometry.setAttribute("aTint", new THREE.BufferAttribute(new Float32Array(pulseCount * 3), 3));
-      pulseGeometry.setAttribute("aLit", new THREE.BufferAttribute(new Float32Array(pulseCount), 1));
-      const pulseMaterial = this.registerMaterial(new THREE.ShaderMaterial({
-        uniforms: { ...this.sharedUniforms(), uMap: { value: this.texDot } },
-        vertexShader: PULSE_VERTEX,
-        fragmentShader: PULSE_FRAGMENT,
-        transparent: true,
-        depthWrite: false,
-        blending: this.palette.light ? THREE.NormalBlending : THREE.AdditiveBlending,
-      }));
-      this.pulsePoints = new THREE.Points(pulseGeometry, pulseMaterial);
-      this.pulsePoints.frustumCulled = false;
-      this.scene.add(this.pulsePoints);
+      this.fiberLines = new THREE.LineSegments(geometry, material);
+      this.fiberLines.frustumCulled = false;
+      this.scene.add(this.fiberLines);
     }
+
+    // Synaptic pulses travelling the real links (strand 0 curve only).
+    const pulsedLinks = Math.min(this.realLinks.length, MAX_PULSED_LINKS);
+    if (!pulsedLinks) return;
+    const pulseCount = pulsedLinks * PULSES_PER_LINK;
+    const pulseGeometry = new THREE.BufferGeometry();
+    const mk = (itemSize: number) => {
+      const attribute = new THREE.BufferAttribute(new Float32Array(pulseCount * itemSize), itemSize);
+      attribute.setUsage(THREE.DynamicDrawUsage);
+      return attribute;
+    };
+    pulseGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pulseCount * 3), 3));
+    pulseGeometry.setAttribute("aStart", mk(3));
+    pulseGeometry.setAttribute("aCtrl", mk(3));
+    pulseGeometry.setAttribute("aEnd", mk(3));
+    const phases = new Float32Array(pulseCount);
+    const speeds = new Float32Array(pulseCount);
+    const sizes = new Float32Array(pulseCount);
+    for (let e = 0; e < pulsedLinks; e += 1) {
+      for (let p = 0; p < PULSES_PER_LINK; p += 1) {
+        const slot = e * PULSES_PER_LINK + p;
+        phases[slot] = hashUnit(`pulse-${e}-${p}`, 7) + p * 0.5;
+        speeds[slot] = 0.08 + hashUnit(`pulse-${e}-${p}`, 11) * 0.12;
+        sizes[slot] = p === 0 ? 36 + hashUnit(`pulse-${e}-${p}`, 13) * 30 : 0;
+      }
+    }
+    pulseGeometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
+    pulseGeometry.setAttribute("aSpeed", new THREE.BufferAttribute(speeds, 1));
+    const sizeAttr = new THREE.BufferAttribute(sizes, 1);
+    sizeAttr.setUsage(THREE.DynamicDrawUsage);
+    pulseGeometry.setAttribute("aSize", sizeAttr);
+    pulseGeometry.setAttribute("aTint", new THREE.BufferAttribute(new Float32Array(pulseCount * 3), 3));
+    pulseGeometry.setAttribute("aLit", new THREE.BufferAttribute(new Float32Array(pulseCount), 1));
+    const pulseMaterial = this.registerMaterial(new THREE.ShaderMaterial({
+      uniforms: { ...this.sharedUniforms(), uMap: { value: this.texDot } },
+      vertexShader: PULSE_VERTEX,
+      fragmentShader: PULSE_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      blending: this.palette.light ? THREE.NormalBlending : THREE.AdditiveBlending,
+    }));
+    this.pulsePoints = new THREE.Points(pulseGeometry, pulseMaterial);
+    this.pulsePoints.frustumCulled = false;
+    this.scene.add(this.pulsePoints);
   }
 
   private computeCloudRadius() {
@@ -1046,9 +872,9 @@ class SynapseEngine {
         b.vx -= fx; b.vy -= fy; b.vz -= fz;
       }
     }
-    for (const edge of this.edges) {
-      const a = nodes[edge.sourceIndex];
-      const b = nodes[edge.targetIndex];
+    for (const link of this.realLinks) {
+      const a = nodes[link.sourceIndex];
+      const b = nodes[link.targetIndex];
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const dz = b.z - a.z;
@@ -1092,7 +918,7 @@ class SynapseEngine {
         if (node.id === this.selectedId) score += 10;
         else if (this.neighborIds.has(node.id)) score += 4;
         if (this.contextIds.has(node.id)) score += 3;
-        if (node.id === this.hoveredId) score += 8;
+        if (node.id === this.hoveredId) score += 12;
         return { index, score };
       })
       .sort((a, b) => b.score - a.score)
@@ -1121,11 +947,13 @@ class SynapseEngine {
       const node = this.nodes[nodeIndex];
       label.title.textContent = node.label;
       label.meta.textContent = node.meta;
-      const state = node.id === this.selectedId
-        ? "selected"
-        : this.neighborIds.has(node.id)
-          ? "neighbor"
-          : this.contextIds.has(node.id) ? "context" : "plain";
+      const state = node.id === this.hoveredId
+        ? "hovered"
+        : node.id === this.selectedId
+          ? "selected"
+          : this.neighborIds.has(node.id)
+            ? "neighbor"
+            : this.contextIds.has(node.id) ? "context" : "plain";
       label.root.dataset.state = state;
     });
   }
@@ -1152,9 +980,11 @@ class SynapseEngine {
         return;
       }
       const depth = clamp((this.tmpVecA.z + 1) / 2, 0, 1);
-      const focus = node.id === this.selectedId || this.neighborIds.has(node.id) || this.contextIds.has(node.id) || node.id === this.hoveredId;
+      const prominent = node.id === this.hoveredId || node.id === this.selectedId;
+      const focus = prominent || this.neighborIds.has(node.id) || this.contextIds.has(node.id);
       let opacity = clamp(1.25 - depth * 1.1, 0.2, 1);
-      if (hasSelection && !focus) opacity *= 0.3;
+      if (prominent) opacity = 1;
+      else if (hasSelection && !focus) opacity *= 0.3;
       const offset = node.radius * (this.container.clientHeight / (2 * Math.tan((this.camera.fov * Math.PI) / 360)))
         / Math.max(this.tmpVecB.copy(this.camera.position).distanceTo(this.tmpVecA.set(node.x, node.y, node.z)), 1);
       label.root.style.display = "block";
@@ -1255,6 +1085,7 @@ class SynapseEngine {
     const height = this.container.clientHeight;
     if (!width || !height) return;
     this.renderer.setSize(width, height, false);
+    this.composer?.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     const drawHeight = this.renderer.getDrawingBufferSize(new THREE.Vector2()).y;
@@ -1292,6 +1123,12 @@ class SynapseEngine {
       this.simTick();
       this.simTick();
       this.alpha *= 0.986;
+    } else if (this.webDirty) {
+      // Layout has settled after a filter/search reflow — regrow the web.
+      this.webDirty = false;
+      this.fibers = [...this.buildLinkFibers(), ...this.computeWebFibers()];
+      this.rebuildFiberObjects();
+      this.applyFiberVisuals();
     }
 
     // Slow idle orbit keeps the tissue alive once the user stops interacting.
@@ -1330,41 +1167,41 @@ class SynapseEngine {
       haloPos.needsUpdate = true;
     }
 
-    if (this.edgeLines) {
-      const positionAttr = this.edgeLines.geometry.getAttribute("position") as THREE.BufferAttribute;
+    if (this.fiberLines) {
+      const positionAttr = this.fiberLines.geometry.getAttribute("position") as THREE.BufferAttribute;
       const pulseGeo = this.pulsePoints?.geometry;
       const pulseStart = pulseGeo?.getAttribute("aStart") as THREE.BufferAttribute | undefined;
       const pulseCtrl = pulseGeo?.getAttribute("aCtrl") as THREE.BufferAttribute | undefined;
       const pulseEnd = pulseGeo?.getAttribute("aEnd") as THREE.BufferAttribute | undefined;
-      const vertsPerEdge = EDGE_SEGMENTS * 2;
-      this.edges.forEach((edge, edgeIndex) => {
-        const source = this.nodes[edge.sourceIndex];
-        const target = this.nodes[edge.targetIndex];
+      const vertsPerFiber = FIBER_SEGMENTS * 2;
+      this.fibers.forEach((fiber, fiberIndex) => {
+        const source = this.nodes[fiber.sourceIndex];
+        const target = this.nodes[fiber.targetIndex];
         this.displayPosition(source, this.tmpVecA);
         this.displayPosition(target, this.tmpVecB);
         // Control point bows the axon perpendicular to the run for an organic arc.
         this.tmpVecC.copy(this.tmpVecB).sub(this.tmpVecA);
-        this.tmpVecD.copy(edge.bowSeed).cross(this.tmpVecC);
+        this.tmpVecD.copy(fiber.bowSeed).cross(this.tmpVecC);
         const bowLength = this.tmpVecD.length();
         if (bowLength > 0.001) this.tmpVecD.multiplyScalar(1 / bowLength);
-        const bow = edge.bowAmount + this.tmpVecC.length() * 0.12;
+        const bow = fiber.bowAmount + this.tmpVecC.length() * 0.12;
         this.tmpVecC.multiplyScalar(0.5).add(this.tmpVecA).addScaledVector(this.tmpVecD, bow);
-        if (pulseStart && pulseCtrl && pulseEnd && edgeIndex < MAX_PULSED_EDGES) {
-          for (let p = 0; p < PULSES_PER_EDGE; p += 1) {
-            const slot = edgeIndex * PULSES_PER_EDGE + p;
+        if (pulseStart && pulseCtrl && pulseEnd && fiber.strand === 0 && fiber.linkIndex >= 0 && fiber.linkIndex < MAX_PULSED_LINKS) {
+          for (let p = 0; p < PULSES_PER_LINK; p += 1) {
+            const slot = fiber.linkIndex * PULSES_PER_LINK + p;
             pulseStart.setXYZ(slot, this.tmpVecA.x, this.tmpVecA.y, this.tmpVecA.z);
             pulseCtrl.setXYZ(slot, this.tmpVecC.x, this.tmpVecC.y, this.tmpVecC.z);
             pulseEnd.setXYZ(slot, this.tmpVecB.x, this.tmpVecB.y, this.tmpVecB.z);
           }
         }
-        for (let s = 0; s < EDGE_SEGMENTS; s += 1) {
+        for (let s = 0; s < FIBER_SEGMENTS; s += 1) {
           for (let sub = 0; sub < 2; sub += 1) {
-            const t = (s + sub) / EDGE_SEGMENTS;
+            const t = (s + sub) / FIBER_SEGMENTS;
             const inv = 1 - t;
             const x = inv * inv * this.tmpVecA.x + 2 * inv * t * this.tmpVecC.x + t * t * this.tmpVecB.x;
             const y = inv * inv * this.tmpVecA.y + 2 * inv * t * this.tmpVecC.y + t * t * this.tmpVecB.y;
             const z = inv * inv * this.tmpVecA.z + 2 * inv * t * this.tmpVecC.z + t * t * this.tmpVecB.z;
-            positionAttr.setXYZ(edgeIndex * vertsPerEdge + s * 2 + sub, x, y, z);
+            positionAttr.setXYZ(fiberIndex * vertsPerFiber + s * 2 + sub, x, y, z);
           }
         }
       });
@@ -1376,7 +1213,8 @@ class SynapseEngine {
 
     this.updateHover();
     this.updateLabels();
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer && this.bloomPass?.enabled) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
   };
 }
 

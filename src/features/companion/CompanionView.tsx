@@ -31,6 +31,7 @@ import {
   COMPANION_OUTFIT_KEY,
 } from "./companion-install";
 import { SARA_OUTFIT_ASSETS } from "./companion-assets";
+import { CompanionBackdrop } from "./CompanionBackdrop";
 import { useCompanionSettings } from "./use-companion-settings";
 
 // Slider ↔ camera mappings. Zoom: right = closer (smaller dolly distance).
@@ -173,12 +174,12 @@ export function CompanionView({
               aria-hidden
               style={{
                 width: 8, height: 8, borderRadius: 4,
-                background: "var(--honey)",
+                background: GRAPH_BLUE,
                 opacity: "calc(0.35 + var(--queen-amp, 0) * 0.65)" as unknown as number,
                 transform: "scale(calc(1 + var(--queen-amp, 0) * 0.6))",
               }}
             />
-            <span style={{ fontFamily: "var(--f-mono, ui-monospace, monospace)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--honey)" }}>
+            <span style={{ fontFamily: "var(--f-mono, ui-monospace, monospace)", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: GRAPH_BLUE_TEXT }}>
               Queen Bee
             </span>
             <span style={{ marginLeft: "auto", fontFamily: "var(--f-mono, ui-monospace, monospace)", fontSize: 10, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -187,7 +188,7 @@ export function CompanionView({
           </div>
           {/* live speech level */}
           <div style={{ height: 3, borderRadius: 2, background: "var(--line)", overflow: "hidden" }}>
-            <div style={{ height: "100%", borderRadius: 2, background: "var(--honey)", width: "calc(var(--queen-amp, 0) * 100%)" }} />
+            <div style={{ height: "100%", borderRadius: 2, background: GRAPH_BLUE, width: "calc(var(--queen-amp, 0) * 100%)" }} />
           </div>
           <div style={{ fontFamily: "var(--f-mono, ui-monospace, monospace)", fontSize: 10, color: "var(--fg-3)", overflowWrap: "anywhere" }}>
             {latestQueenReply?.brain ? `brain · ${latestQueenReply.brain}` : "no replies yet — use the chat pill"}
@@ -249,7 +250,7 @@ export function CompanionView({
                   onChange={(event) => slider.onLive(Number(event.target.value))}
                   onPointerUp={slider.onCommit}
                   onBlur={slider.onCommit}
-                  style={{ flex: 1, accentColor: "var(--honey)", height: 14 }}
+                  style={{ flex: 1, accentColor: GRAPH_BLUE, height: 14 }}
                   aria-label={`Companion camera ${slider.label}`}
                 />
               </label>
@@ -264,8 +265,8 @@ export function CompanionView({
               title="Toggle the hologram render style"
               style={{
                 ...HUD_BTN_STYLE,
-                background: settings.hologramEnabled ? "var(--honey-soft)" : "transparent",
-                color: settings.hologramEnabled ? "var(--honey)" : "var(--fg-3)",
+                background: settings.hologramEnabled ? GRAPH_BLUE_SOFT : "transparent",
+                color: settings.hologramEnabled ? GRAPH_BLUE_TEXT : "var(--fg-3)",
               }}
             >
               hologram
