@@ -85,7 +85,7 @@ the same encrypted hosted-credit pool.
 Static publishing reads a generated `out` directory. The current client
 transport accepts at most 1,000 files, 20 MiB total, and 5 MiB per file.
 Dynamic publishing reads one bundled `dist/worker.mjs` module and runs it as an
-untrusted Workers for Platforms tenant with server-controlled CPU and
+untrusted Cloudflare Dynamic Worker with server-controlled CPU and
 subrequest limits and no customer-selected bindings.
 
 Recurring plans can renew automatically while the hosted credit balance is

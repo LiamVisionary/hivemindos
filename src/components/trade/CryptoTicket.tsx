@@ -11,6 +11,8 @@
 
 import React from "react";
 import { Badge, AssetMenu, ChainMenu, ReviewLine } from "./primitives";
+import { AddressTokenPicker, useAddressTokenLookup } from "./AddressTokenPicker";
+import { sameToken } from "./address-token";
 import { BIcon } from "./icons";
 import { trUsd, trUsd2, trAmt } from "./format";
 import { useTradeDesk } from "./trade-context";
@@ -50,15 +52,26 @@ export function CryptoTicket() {
   const [side, setSide] = React.useState<Side>("buy");
   const [paySelection, setPaySelection] = React.useState(stable);
   const [recvSelection, setRecvSelection] = React.useState(firstNonStable);
+  // Per-leg "by address" mode: the dropdown swaps for a paste-an-address input.
+  const [payByAddress, setPayByAddress] = React.useState(false);
+  const [recvByAddress, setRecvByAddress] = React.useState(false);
+  const payAddress = useAddressTokenLookup(network);
+  const recvAddress = useAddressTokenLookup(network);
   const [amt, setAmt] = React.useState("");
   const [quoteState, setQuoteState] = React.useState<{ key: string; quote: DexSwapQuote } | null>(null);
   const [quoting, setQuoting] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "signing" | "done" | "error">("idle");
   const [result, setResult] = React.useState<RailResult | null>(null);
 
-  const pay = payOptions.includes(paySelection) ? paySelection : stable;
-  const recvFallback = recvOptions.find((token) => token !== pay) ?? firstNonStable;
-  const recv = recvOptions.includes(recvSelection) && recvSelection !== pay ? recvSelection : recvFallback;
+  // An address leg becomes tradable only after the metadata endpoint confirms
+  // that the completed input is a token on the acting chain.
+  const payFromMenu = payOptions.includes(paySelection) ? paySelection : stable;
+  const pay = payByAddress ? (payAddress.token?.address ?? "") : payFromMenu;
+  const payDisplay = payByAddress ? (payAddress.token?.symbol ?? "") : payFromMenu;
+  const recvFallback = recvOptions.find((token) => !sameToken(token, pay)) ?? firstNonStable;
+  const recvFromMenu = recvOptions.includes(recvSelection) && !sameToken(recvSelection, pay) ? recvSelection : recvFallback;
+  const recv = recvByAddress ? (recvAddress.token?.address ?? "") : recvFromMenu;
+  const recvDisplay = recvByAddress ? (recvAddress.token?.symbol ?? "") : recvFromMenu;
   const amtNum = Number(amt) || 0;
   const quoteKey = `${agentId}|${network}|${pay}|${recv}|${amtNum}`;
   const quote = quoteState?.key === quoteKey ? quoteState.quote : null;
@@ -72,7 +85,11 @@ export function CryptoTicket() {
     if (s === "sell") { setRecvSelection(stable); if (pay === stable) setPaySelection(firstNonStable); }
   };
 
-  const bal = cryptoBalances[pay] || 0;
+  const customPayAddress = payAddress.token?.address;
+  const addressHolding = customPayAddress
+    ? cryptoPortfolio.rows.find((row) => sameToken(row.id, customPayAddress))
+    : null;
+  const bal = payByAddress ? (addressHolding?.amount ?? 0) : (cryptoBalances[pay] || 0);
 
   // Live swap quote (price is wallet-agnostic, so we quote for Bankr too). The
   // ref guards against an out-of-order older response overwriting a newer one.
@@ -81,7 +98,7 @@ export function CryptoTicket() {
   // input handlers instead.
   const quoteSeq = React.useRef(0);
   React.useEffect(() => {
-    if (!amtNum || pay === recv) return;
+    if (!amtNum || !pay || !recv || sameToken(pay, recv)) return;
     const seq = ++quoteSeq.current;
     const key = quoteKey;
     let active = true;
@@ -103,6 +120,7 @@ export function CryptoTicket() {
   // e.g. the amount is over the rail's $10 cap, or 0x has thin liquidity for the
   // pair — both of which throw and null the quote, leaving payUsd at 0.
   const unitUsd = (sym: string) => {
+    if (payByAddress && addressHolding?.amount && addressHolding.usd > 0) return addressHolding.usd / addressHolding.amount;
     const held = cryptoBalances[sym] || 0;
     const valued = usdBySymbol[sym] || 0;
     return held > 0 && valued > 0 ? valued / held : 0;
@@ -113,12 +131,31 @@ export function CryptoTicket() {
   const overCap = !useBankr && payUsdEstimate > swapMaxUsd;
   const overWalletCap = useBankr && wallet.cap != null && payUsdEstimate > wallet.cap;
 
-  const setPct = (p: number) => { setAmt(String(+(bal * p).toFixed(pay === "ETH" || pay === "cbBTC" || pay === "BTC" ? 6 : 2))); setState("idle"); setQuoteState(null); };
-  const flip = () => { setSide("swap"); setPaySelection(recv); setRecvSelection(pay); setAmt(""); setQuoteState(null); setState("idle"); };
+  const clearQuote = () => { setState("idle"); setResult(null); setQuoteState(null); setQuoting(false); };
+  const setPct = (p: number) => { setAmt(String(+(bal * p).toFixed(payDisplay === "ETH" || payDisplay === "cbBTC" || payDisplay === "BTC" ? 6 : 2))); clearQuote(); };
+  const flip = () => {
+    setSide("swap");
+    // Swap the two legs wholesale: dropdown selections, address-mode flags, and
+    // typed addresses all cross over so an address leg stays an address leg.
+    setPaySelection(recvByAddress ? paySelection : recv);
+    setRecvSelection(payByAddress ? recvSelection : pay);
+    setPayByAddress(recvByAddress); setRecvByAddress(payByAddress);
+    payAddress.restore(recvAddress.selection);
+    recvAddress.restore(payAddress.selection);
+    setAmt(""); setQuoteState(null); setState("idle");
+  };
+
+  const selectNetwork = (nextNetwork: string) => {
+    payAddress.reset();
+    recvAddress.reset();
+    clearQuote();
+    onSelectChain(nextNetwork);
+  };
 
   const place = async () => {
     if (!amtNum || state === "signing") return;
-    if (pay === recv) { setResult({ ok: false, error: "Pick two different assets." }); setState("error"); return; }
+    if (!pay || !recv) { setResult({ ok: false, error: network.startsWith("solana") ? "Enter the full token mint address for the custom leg." : "Enter the full 0x token address for the custom leg." }); setState("error"); return; }
+    if (sameToken(pay, recv)) { setResult({ ok: false, error: "Pick two different assets." }); setState("error"); return; }
     if (overCap) { setResult({ ok: false, error: `This rail caps swaps at ${trUsd(swapMaxUsd)}. Reduce the amount.` }); setState("error"); return; }
     setState("signing");
     setResult(null);
@@ -151,7 +188,8 @@ export function CryptoTicket() {
   const label = state === "signing" ? (useBankr ? "Routing…" : "Signing…")
     : state === "done" ? "Order filled"
     : !amtNum ? "Enter an amount"
-    : side === "buy" ? `Buy ${recv}` : side === "sell" ? `Sell ${pay}` : `Swap ${pay} → ${recv}`;
+    : !pay || !recv ? "Enter a token address"
+    : side === "buy" ? `Buy ${recvDisplay}` : side === "sell" ? `Sell ${payDisplay}` : `Swap ${payDisplay} → ${recvDisplay}`;
 
   return (
     <div className="tk-card">
@@ -163,20 +201,31 @@ export function CryptoTicket() {
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <ChainMenu value={network} options={walletChains} onPick={onSelectChain} />
+          <ChainMenu value={network} options={walletChains} onPick={selectNetwork} />
           <Badge tone="live"><span className="fr-dot live" style={{ color: "var(--live)" }} /> {useBankr ? "Bankr" : "Live"}</Badge>
         </div>
       </div>
 
       <div className="tk-leg">
-        <div className="lhead"><span>{sell ? "You sell" : "You pay"}</span><span className="bal">Balance {trAmt(pay, bal)} {pay}</span></div>
+        <div className="lhead"><span>{sell ? "You sell" : "You pay"}</span><span className="bal">Balance {trAmt(payDisplay, bal)} {payDisplay || "—"}</span></div>
         <div className="tk-legrow">
           <input className="tk-input" inputMode="decimal" placeholder="0" value={amt}
-            onChange={(e) => { setAmt(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); setResult(null); setQuoteState(null); }} aria-label="Amount to pay" />
-          <AssetMenu value={pay} options={payOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol}
-            onPick={(s) => { if (s !== recv) { setPaySelection(s); setState("idle"); setQuoteState(null); } }} />
+            onChange={(e) => { setAmt(e.target.value.replace(/[^0-9.]/g, "")); clearQuote(); }} aria-label="Amount to pay" />
+          {payByAddress ? (
+            <AddressTokenPicker label="Pay" network={network} address={payAddress.address} token={payAddress.token}
+              resolving={payAddress.resolving} error={payAddress.error}
+              onChange={(value) => { payAddress.change(value); clearQuote(); }} onClear={() => { payAddress.reset(); clearQuote(); }} />
+          ) : (
+            <AssetMenu value={pay} options={payOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol}
+              onPick={(s) => { if (s !== recv) { setPaySelection(s); clearQuote(); } }} />
+          )}
         </div>
-        <div className="tk-usd">{payUsdEstimate > 0 ? `≈ ${trUsd2(payUsdEstimate)}` : quoting ? "pricing…" : "≈ —"}</div>
+        <div className="tk-usd tk-usdrow">
+          <span>{payUsdEstimate > 0 ? `≈ ${trUsd2(payUsdEstimate)}` : quoting ? "pricing…" : "≈ —"}</span>
+          <button type="button" className="tk-bymode" onClick={() => { setPayByAddress((v) => !v); clearQuote(); }}>
+            {payByAddress ? "by owned token" : "by address"}
+          </button>
+        </div>
         <div className="tk-chips">
           {([[0.25, "25%"], [0.5, "50%"], [1, "Max"]] as const).map(([p, l]) => (
             <button key={l} type="button" onClick={() => setPct(p)}>{l}</button>
@@ -188,16 +237,27 @@ export function CryptoTicket() {
         <button type="button" className="tk-swap" onClick={flip} aria-label="Flip assets">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16M7 20l-3-3M7 4l3 3M17 20V4M17 4l3 3M17 20l-3-3" /></svg>
         </button>
-        <span className="rate">{rate ? `1 ${pay} = ${rate.toLocaleString(undefined, { maximumFractionDigits: rate < 1 ? 6 : 4 })} ${recv}` : "—"}</span>
+        <span className="rate">{rate ? `1 ${quote?.sell || payDisplay} = ${rate.toLocaleString(undefined, { maximumFractionDigits: rate < 1 ? 6 : 4 })} ${quote?.buy || recvDisplay}` : "—"}</span>
       </div>
 
       <div className="tk-leg">
         <div className="lhead"><span>You receive</span><span className="bal">≈ market</span></div>
         <div className="tk-legrow">
-          <input className="tk-input" readOnly value={recvAmt ? trAmt(recv, recvAmt) : ""} placeholder="0" aria-label="Estimated received" />
-          <AssetMenu value={recv} options={recvOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol} onPick={(s) => { if (s !== pay) { setRecvSelection(s); setState("idle"); setQuoteState(null); } }} />
+          <input className="tk-input" readOnly value={recvAmt ? trAmt(quote?.buy || recvDisplay, recvAmt) : ""} placeholder="0" aria-label="Estimated received" />
+          {recvByAddress ? (
+            <AddressTokenPicker label="Receive" network={network} address={recvAddress.address} token={recvAddress.token}
+              resolving={recvAddress.resolving} error={recvAddress.error}
+              onChange={(value) => { recvAddress.change(value); clearQuote(); }} onClear={() => { recvAddress.reset(); clearQuote(); }} />
+          ) : (
+            <AssetMenu value={recv} options={recvOptions} balances={cryptoBalances} values={usdBySymbol} logos={logoBySymbol} onPick={(s) => { if (s !== pay) { setRecvSelection(s); clearQuote(); } }} />
+          )}
         </div>
-        <div className="tk-usd">{quote ? `≈ ${trUsd2(payUsd)}` : "≈ —"}</div>
+        <div className="tk-usd tk-usdrow">
+          <span>{quote ? `≈ ${trUsd2(payUsd)}` : "≈ —"}</span>
+          <button type="button" className="tk-bymode" onClick={() => { setRecvByAddress((v) => !v); clearQuote(); }}>
+            {recvByAddress ? "by owned token" : "by address"}
+          </button>
+        </div>
       </div>
 
       <div className="tk-review">

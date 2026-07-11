@@ -10,6 +10,15 @@ type ContentStudioBrainMessage = {
   content: string;
 };
 
+type ContentStudioBrainAttachment = {
+  name?: string;
+  type?: string;
+  size?: number;
+  order?: number;
+  /** Optional data URL with the (client-downscaled) image pixels for the brain. */
+  data?: string;
+};
+
 export type ContentStudioBrainRequest = {
   prompt?: string;
   provider?: string;
@@ -19,7 +28,7 @@ export type ContentStudioBrainRequest = {
   walkthrough?: boolean;
   confirmed?: boolean;
   history?: ContentStudioBrainMessage[];
-  attachments?: Array<{ name?: string; type?: string; size?: number; order?: number }>;
+  attachments?: ContentStudioBrainAttachment[];
   imageSelection?: { provider?: string; model?: string };
   videoSelection?: { provider?: string; model?: string };
 };
@@ -35,8 +44,18 @@ Return JSON only. Use exactly one mode:
 
 The draft contract is:
 {"lane":"first-frame-animation-ad|stickman-performance-ad|static-text-ad|animation|faceless|clip|social-post","title":"...","concept":"...","audience":"...","goal":"...","tone":"...","aspect_ratio":"9:16|4:5|1:1|16:9","runtime_seconds":15,"scenes":[{"title":"...","beat":"...","voice":"...","overlay":"...","duration_seconds":4,"image_prompt":"...","motion_prompt":"..."}],"voice":{"enabled":true,"delivery":"..."},"subtitles":{"enabled":true,"position":"bottom","font_size":56},"providers":{"image":"...","motion":"..."},"provider_options":{},"publish":{"platforms":[],"caption":"","cta":""}}
+publish.platforms entries must be from exactly: instagram, tiktok, youtube, facebook, x, linkedin.
 
-When prompt helper is enabled, retain the user's intent but expand vague creative direction into production-ready scene, image, motion, voice, and pacing detail. When walkthrough is enabled and confirmed is false, ask only high-value missing questions or return confirmation mode; never return brief mode. Attached images are ordered reference assets. The first can be a start frame, the last can be an end frame, and intervening images can be references only when the chosen generation model supports those roles. Never invent a provider reference-image limit.`;
+Lane semantics — choose by what must be produced:
+- first-frame-animation-ad, stickman-performance-ad, animation: generate NEW video from prompts. Prefer these for any "create a video" request.
+- static-text-ad: generate a static image ad.
+- faceless: assemble a voiced video from stock or owned footage.
+- clip: cut highlights from an EXISTING long-form source URL. Never choose clip unless the user supplied source media — it requires a source.
+- social-post: publish existing media only; it generates nothing.
+
+When prompt helper is enabled, retain the user's intent but expand vague creative direction into production-ready scene, image, motion, voice, and pacing detail. When walkthrough is enabled and confirmed is false, ask only high-value missing questions or return confirmation mode; never return brief mode. Attached images are ordered reference assets. The first can be a start frame, the last can be an end frame, and intervening images can be references only when the chosen generation model supports those roles. Never invent a provider reference-image limit.
+
+When reference images are included as image content in the user message, read them carefully — including any text visible in them — and ground the title, concept, scenes, and prompts in what the images actually show. When the user asks to use something from an attached image (a task from a checklist, an item from a menu, copy from a screenshot), extract the real thing from the image instead of inventing a substitute.`;
 
 function clean(value: unknown, maximum = 20_000) {
   return typeof value === "string" ? value.trim().slice(0, maximum) : "";
@@ -72,7 +91,51 @@ function parseJsonObject(text: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-async function callOpenAiCompatible(route: BrainRoute, messages: Array<{ role: string; content: string }>) {
+const ATTACHMENT_IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+const MAX_BRAIN_IMAGES = 12;
+const MAX_BRAIN_IMAGE_DATA_URL_LENGTH = 10_000_000;
+
+/** Validated image data URLs a multimodal brain should actually see. */
+function attachmentImageDataUrls(attachments: ContentStudioBrainAttachment[]) {
+  return attachments
+    .map((item) => (
+      typeof item.data === "string"
+        && item.data.length <= MAX_BRAIN_IMAGE_DATA_URL_LENGTH
+        && ATTACHMENT_IMAGE_DATA_URL.test(item.data)
+        ? item.data
+        : ""
+    ))
+    .filter(Boolean)
+    .slice(0, MAX_BRAIN_IMAGES);
+}
+
+/** Append ordered image parts to the final user message, per transport dialect. */
+function withImageParts(
+  messages: Array<{ role: string; content: string }>,
+  images: string[],
+  dialect: "openai" | "anthropic",
+) {
+  if (!images.length) return messages;
+  return messages.map((message, index) => {
+    if (index !== messages.length - 1 || message.role !== "user") return message;
+    const parts: unknown[] = [{ type: "text", text: message.content }];
+    for (const url of images) {
+      if (dialect === "anthropic") {
+        const match = /^data:(image\/[a-z]+);base64,(.+)$/.exec(url);
+        if (match) parts.push({ type: "image", source: { type: "base64", media_type: match[1], data: match[2] } });
+      } else {
+        parts.push({ type: "image_url", image_url: { url } });
+      }
+    }
+    return { role: message.role, content: parts };
+  });
+}
+
+async function callOpenAiCompatible(
+  route: BrainRoute,
+  messages: Array<{ role: string; content: string }>,
+  images: string[] = [],
+) {
   const endpoint = await resolveProviderChatEndpoint(route.provider);
   if (!endpoint) throw new Error(`${route.providerLabel} is no longer available.`);
   if (route.provider === "anthropic") {
@@ -87,25 +150,31 @@ async function callOpenAiCompatible(route: BrainRoute, messages: Array<{ role: s
         model: route.model,
         max_tokens: 4_096,
         system: messages.find((message) => message.role === "system")?.content ?? "",
-        messages: messages.filter((message) => message.role !== "system"),
+        messages: withImageParts(messages.filter((message) => message.role !== "system"), images, "anthropic"),
       }),
       signal: AbortSignal.timeout(120_000),
       cache: "no-store",
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(`${route.providerLabel} returned HTTP ${response.status}.`);
+    if (!response.ok) throw providerHttpError(route, response.status, payload);
     return extractText(payload);
   }
   const response = await fetch(endpoint.url, {
     method: "POST",
     headers: { "content-type": "application/json", Authorization: `Bearer ${endpoint.key}` },
-    body: JSON.stringify({ model: route.model, messages, stream: false }),
+    body: JSON.stringify({ model: route.model, messages: withImageParts(messages, images, "openai"), stream: false }),
     signal: AbortSignal.timeout(120_000),
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`${route.providerLabel} returned HTTP ${response.status}.`);
+  if (!response.ok) throw providerHttpError(route, response.status, payload);
   return extractText(payload);
+}
+
+function providerHttpError(route: BrainRoute, status: number, payload: unknown) {
+  const body = payload as { error?: { message?: string } | string; detail?: string } | null;
+  const detail = (typeof body?.error === "string" ? body.error : body?.error?.message) || body?.detail || "";
+  return new Error(`${route.providerLabel} returned HTTP ${status}${detail ? `: ${String(detail).slice(0, 300)}` : ""}.`);
 }
 
 async function availableBrainRoutes() {
@@ -125,7 +194,7 @@ function planningRouteBlocker(route: BrainRoute) {
 
 export async function contentStudioBrainCatalog() {
   const routes = await availableBrainRoutes();
-  const groups = new Map<string, { slug: string; name: string; models: Array<{ id: string; auth: string; recommended: boolean; disabled: boolean; disabledReason?: string; recommendation?: string }> }>();
+  const groups = new Map<string, { slug: string; name: string; models: Array<{ id: string; auth: string; recommended: boolean; disabled: boolean; disabledReason?: string; recommendation?: string; vision?: boolean }> }>();
   for (const route of routes) {
     const group = groups.get(route.provider) ?? { slug: route.provider, name: route.providerLabel, models: [] };
     const disabledReason = planningRouteBlocker(route);
@@ -136,6 +205,8 @@ export async function contentStudioBrainCatalog() {
       disabled: Boolean(disabledReason),
       ...(disabledReason ? { disabledReason } : {}),
       ...(route.recommendation ? { recommendation: route.recommendation } : {}),
+      // vision true = can see attached reference images; false = known text-only; absent = unknown.
+      ...(typeof route.vision === "boolean" ? { vision: route.vision } : {}),
     });
     groups.set(route.provider, group);
   }
@@ -154,12 +225,18 @@ export async function planContentStudioRequest(input: ContentStudioBrainRequest)
   if (blocked) throw new Error(blocked);
 
   const history = normalizedHistory(input.history);
+  const rawAttachments = Array.isArray(input.attachments) ? input.attachments.slice(0, 30) : [];
+  const images = attachmentImageDataUrls(rawAttachments);
+  // The codex OAuth chat contract is text-only; every other route gets the pixels.
+  const codexRoute = route.auth === "oauth" && route.provider === "openai-codex";
+  const imagesDelivered = !codexRoute && images.length > 0;
   const context = {
     request: prompt,
     prompt_helper: input.promptHelper !== false,
     walkthrough: input.walkthrough === true,
     confirmed: input.confirmed === true,
-    attachments: Array.isArray(input.attachments) ? input.attachments.slice(0, 30) : [],
+    attachments: rawAttachments.map(({ name, type, size, order }) => ({ name, type, size, order })),
+    attachment_images_visible: imagesDelivered,
     requested_image_route: input.imageSelection ?? { provider: "automatic", model: "automatic" },
     requested_video_route: input.videoSelection ?? { provider: "automatic", model: "automatic" },
     available_lanes: ["first-frame-animation-ad", "stickman-performance-ad", "static-text-ad", "animation", "faceless", "clip", "social-post"],
@@ -170,15 +247,43 @@ export async function planContentStudioRequest(input: ContentStudioBrainRequest)
     ...history,
     { role: "user", content: JSON.stringify(context) },
   ];
-  const raw = route.auth === "oauth" && route.provider === "openai-codex"
-    ? await runOpenAiOAuthChatTurn(route.model, messages as Array<{ role: "system" | "user" | "assistant"; content: string }>, { timeoutMs: 120_000 })
-    : await callOpenAiCompatible(route, messages);
+  let imagesShown = imagesDelivered;
+  let raw: string;
+  if (codexRoute) {
+    raw = await runOpenAiOAuthChatTurn(route.model, messages as Array<{ role: "system" | "user" | "assistant"; content: string }>, { timeoutMs: 120_000 });
+  } else if (!images.length) {
+    raw = await callOpenAiCompatible(route, messages);
+  } else {
+    try {
+      raw = await callOpenAiCompatible(route, messages, images);
+    } catch (error) {
+      // Most likely the selected model rejects image input (e.g. OpenRouter 404
+      // "no endpoints support image input"). Re-plan from text so the user still
+      // gets a brief, and say plainly that the images were not seen. An
+      // unrelated failure will fail this retry too and surface normally.
+      const textOnlyContext = {
+        ...context,
+        attachment_images_visible: false,
+        attachment_note: "The selected brain rejected image input on this route, so it cannot see the attached images. Plan from the text and attachment names only; do not pretend to know the images' contents.",
+      };
+      raw = await callOpenAiCompatible(route, [...messages.slice(0, -1), { role: "user", content: JSON.stringify(textOnlyContext) }]);
+      imagesShown = false;
+      console.warn(`[content-studio] ${route.provider}/${route.model} rejected image input; planned text-only.`, error instanceof Error ? error.message : error);
+    }
+  }
   if (!raw) throw new Error("The selected brain returned no production plan.");
   const result = parseJsonObject(raw);
   const mode = result.mode === "questions" || result.mode === "confirmation" || result.mode === "brief" ? result.mode : "brief";
   if (input.walkthrough && !input.confirmed && mode === "brief") result.mode = "confirmation";
+  if (images.length && !imagesShown) {
+    const reason = codexRoute
+      ? "this ChatGPT OAuth route is text-only"
+      : "it rejected image input on this route";
+    result.message = `Heads up: ${route.model} could not view the attached image${images.length === 1 ? "" : "s"} (${reason}), so this plan is grounded in your text only. Choose a vision-capable brain to plan from the image contents. ${typeof result.message === "string" ? result.message : ""}`.trim();
+  }
   return {
     ...result,
+    images: { attached: rawAttachments.length, visible_to_brain: imagesShown },
     brain: { provider: route.provider, providerLabel: route.providerLabel, model: route.model, auth: route.auth },
   };
 }

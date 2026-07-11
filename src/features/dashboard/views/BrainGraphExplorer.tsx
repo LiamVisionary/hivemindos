@@ -231,13 +231,16 @@ export function BrainGraphExplorer(props: any) {
       : node.accessCount
         ? "touched"
         : staleHub ? "stale" : recent ? "recent" : "plain";
+    // Size = how load-bearing the note is: links weigh double, agent reads add
+    // on top, log-scaled so hubs differentiate instead of all saturating.
+    const importance = degree * 2 + (node.accessCount ?? 0);
     return {
       id: node.id,
       label: node.label,
       meta: node.accessCount
         ? `${node.accessCount} read${node.accessCount === 1 ? "" : "s"}`
         : `${degree} link${degree === 1 ? "" : "s"}`,
-      weight: Math.min(1, (node.accessCount || degree) / 14),
+      weight: Math.min(1, Math.log2(1 + importance) / 6),
       tone,
     };
   }), [graphNow, visibleBrainNodes]);
@@ -369,6 +372,7 @@ export function BrainGraphExplorer(props: any) {
       </div>
 
       <div className={graphClass("legend")} aria-hidden="true">
+        <span><i className={graphClass("legendSize")} />size = links + reads</span>
         <span><i className={graphClass("legendHoney")} />agent-touched</span>
         <span><i className={graphClass("legendTeal")} />recently changed</span>
         <span><i className={graphClass("legendDanger")} />unresolved link</span>

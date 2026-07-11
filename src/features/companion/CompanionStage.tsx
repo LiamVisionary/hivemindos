@@ -105,6 +105,9 @@ export function CompanionStage({
   useEffect(() => {
     if (phase !== "ready") return;
     const reply = latestQueenReply;
+    // Lip sync no longer reads the reply text here — timed phoneme tracks are
+    // driven per spoken chunk by queen-voice utterance events at real audio
+    // start. This effect only fires the one-shot reaction on completed turns.
     if (!reply || reply.live) return;
     if (reactedTurnRef.current === reply.id) return;
     reactedTurnRef.current = reply.id;

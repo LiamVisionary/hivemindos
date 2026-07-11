@@ -126,7 +126,9 @@ projected) earnings.
 - ${HIVE_COMPUTE_TEE_ATTESTATION_FILE_ENV}: optional TEE evidence/quote file.
 - ${HIVE_COMPUTE_TEE_ATTESTATION_COMMAND_ENV}: optional command that emits fresh
   attestation evidence. The worker passes the challenge nonce in
-  \`HIVE_COMPUTE_TEE_NONCE\`.
+  \`HIVE_COMPUTE_TEE_NONCE\` and the full server challenge in
+  \`HIVE_COMPUTE_TEE_CHALLENGE_JSON\` so the hardware report can bind the job,
+  model, modality, renter output key, enclave input key, and completion key.
 - ${HIVE_COMPUTE_TEE_ENCRYPTION_PUBLIC_KEY_ENV}: public key advertised to the
   gateway for encrypted prompt delivery.
 - ${HIVE_COMPUTE_TEE_DECRYPTION_PRIVATE_KEY_FILE_ENV}: optional RSA-OAEP or
@@ -316,13 +318,13 @@ function scheduleReconnect() {
 async function handleServerMessage(message) {
   if (message.type === "server.ready" || message.type === "worker.registered" || message.type === "worker.attestation.accepted") return;
   if (message.type === "worker.attestation.challenge" || message.type === "attestation.challenge") {
-    const nonce = message.payload && typeof message.payload === "object" ? String(message.payload.nonce || "") : "";
-    emit("worker.attestation", { workerId, attestation: collectAttestation(nonce) });
+    const challenge = message.payload && typeof message.payload === "object" ? message.payload : {};
+    emit("worker.attestation", { workerId, attestation: collectAttestation(challenge) });
     return;
   }
   if (message.type === "job.attestation.challenge") {
     const payload = message.payload && typeof message.payload === "object" ? message.payload : {};
-    emit("job.attestation", { jobId: String(payload.jobId || ""), workerId, attestation: collectAttestation(String(payload.nonce || "")) });
+    emit("job.attestation", { jobId: String(payload.jobId || ""), workerId, ...collectAttestation(payload) });
     return;
   }
   if (message.type === "job.assign") {
@@ -923,8 +925,20 @@ function normalizePublicKeyMaterial(value) {
   return "-----BEGIN PUBLIC KEY-----\\n" + (compact.match(/.{1,64}/g) || [compact]).join("\\n") + "\\n-----END PUBLIC KEY-----";
 }
 
-function collectAttestation(nonce) {
-  const evidence = readAttestationEvidence(nonce);
+function collectAttestation(challenge) {
+  const suppliedChallenge = challenge && typeof challenge === "object"
+    ? challenge
+    : { nonce: String(challenge || "") };
+  const normalizedChallenge = {
+    provider: teeProvider,
+    imageDigest: teeImageDigest,
+    workerEncryptionKeySha256: teeEncryptionPublicKey ? sha256(teeEncryptionPublicKey) : "",
+    completionSigningKeySha256: confidentialSidecarSigningPublicKey ? sha256(confidentialSidecarSigningPublicKey) : "",
+    ...suppliedChallenge,
+    nonce: String(suppliedChallenge.nonce || randomBytes(32).toString("hex")),
+  };
+  const nonce = String(normalizedChallenge.nonce || "");
+  const evidence = readAttestationEvidence(normalizedChallenge);
   const evidenceHash = evidence ? sha256(evidence) : "";
   return {
     ready: confidentialMode === "tee-attested" && Boolean(teeProvider && evidenceHash),
@@ -934,7 +948,7 @@ function collectAttestation(nonce) {
     nonce: nonce || undefined,
     evidenceHash,
     evidenceLength: evidence ? evidence.length : 0,
-    evidenceBase64: evidence && evidence.length <= 65536 ? evidence.toString("base64") : undefined,
+    evidenceBase64: evidence && evidence.length <= 512 * 1024 ? evidence.toString("base64") : undefined,
     evidenceSource: attestationCommand ? "command" : attestationFile ? "file" : undefined,
     measurement: teeMeasurement || undefined,
     imageDigest: teeImageDigest || undefined,
@@ -945,14 +959,18 @@ function collectAttestation(nonce) {
   };
 }
 
-function readAttestationEvidence(nonce) {
+function readAttestationEvidence(challenge) {
   try {
     if (attestationCommand) {
       const result = spawnSync(attestationCommand, {
         shell: true,
         timeout: 10_000,
-        maxBuffer: 256 * 1024,
-        env: { ...process.env, HIVE_COMPUTE_TEE_NONCE: nonce || "" },
+        maxBuffer: 768 * 1024,
+        env: {
+          ...process.env,
+          HIVE_COMPUTE_TEE_NONCE: String(challenge.nonce || ""),
+          HIVE_COMPUTE_TEE_CHALLENGE_JSON: JSON.stringify(challenge),
+        },
       });
       if (result.status !== 0) return null;
       return Buffer.from(result.stdout || result.stderr || "");

@@ -77,6 +77,34 @@ export function subscribeQueenVoiceSpeaking(onChange: (speaking: boolean) => voi
   return () => window.removeEventListener(SPEAKING_EVENT, handle);
 }
 
+// ---- per-utterance events (text + real duration, at true audio start) -----
+
+const UTTERANCE_EVENT = "hivemindos:queen-voice-utterance";
+
+/** One spoken chunk, published at the instant its audio actually starts.
+ *  `durationSeconds` is the decoded clip length when known (buffered path);
+ *  streamed paths omit it and consumers estimate from the text. */
+export type QueenUtterance = { text: string; durationSeconds?: number };
+
+/** Announce that a chunk's audio just started playing. Timed lip sync keys off
+ *  this (text → phoneme track anchored at real audio onset), not the coarse
+ *  speaking flag — the flag flips at turn start, seconds before first audio. */
+export function publishQueenUtterance(utterance: QueenUtterance) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(UTTERANCE_EVENT, { detail: utterance }));
+}
+
+/** Subscribe to per-utterance audio-start events. Returns an unlisten fn. */
+export function subscribeQueenUtterance(onUtterance: (utterance: QueenUtterance) => void) {
+  if (typeof window === "undefined") return () => {};
+  const handle = (event: Event) => {
+    const detail = (event as CustomEvent<QueenUtterance>).detail;
+    if (detail && typeof detail.text === "string") onUtterance(detail);
+  };
+  window.addEventListener(UTTERANCE_EVENT, handle);
+  return () => window.removeEventListener(UTTERANCE_EVENT, handle);
+}
+
 // ---- tapping her OUTPUT audio for a real level ---------------------------
 
 // One analyser per AudioContext: the pipeline paths (worklet TTS, buffered

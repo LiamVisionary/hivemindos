@@ -289,13 +289,12 @@ export function ChatSidebar(props: ChatSidebarProps) {
                   {remainingCount ? (
                     <button
                       type="button"
-                      className="fr-chat-mini-button"
                       onClick={() => setVisibleChatsByGroup((current) => ({
                         ...current,
                         [visibilityKey]: nextChatHistoryVisibleCount(current[visibilityKey] ?? CHAT_HISTORY_PAGE_SIZE, group.chats.length),
                       }))}
                       aria-label={`See ${nextPageCount} more conversations in ${group.label}`}
-                      style={{ alignSelf: "flex-start", margin: "6px 0 4px 4px" }}
+                      style={{ alignSelf: "flex-start", margin: "4px 0 2px 4px", border: 0, background: "transparent", color: "var(--fg-4)", cursor: "pointer", fontFamily: "var(--f-body)", fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, padding: "3px 7px", textAlign: "left" }}
                     >
                       See {nextPageCount} more
                     </button>

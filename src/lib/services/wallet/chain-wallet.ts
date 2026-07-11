@@ -352,6 +352,43 @@ export function generateRecoveryPhraseWallets(): RecoveryPhraseWalletSecret[] {
   return importRecoveryPhraseWallets(generateMnemonic(englishWordlist));
 }
 
+/** True when a stored wallet secret is a BIP39 recovery phrase rather than a raw private key. */
+export function isRecoveryPhraseSecret(secret: string): boolean {
+  return validateMnemonic(secret.trim().toLowerCase().replace(/\s+/g, " "), englishWordlist);
+}
+
+/** Derive an existing wallet's record on an additional chain from a secret it
+ *  already holds, so wallets imported before a chain was supported (e.g.
+ *  Robinhood Chain) can add it without re-entering the seed. A recovery phrase
+ *  derives any supported chain; a raw private key can only extend within its
+ *  own key family (EVM key → EVM chain, Solana key → Solana network). */
+export function deriveWalletForAdditionalChain(
+  targetNetworkInput: string,
+  source: { network: string; secret: string },
+): ImportedWalletSecret {
+  const network = assertNetwork(targetNetworkInput);
+  const secret = source.secret.trim();
+  if (!secret) throw new Error("This wallet has no stored secret to derive from.");
+  if (isRecoveryPhraseSecret(secret)) {
+    const mnemonic = normalizeMnemonic(secret);
+    if (network.startsWith("eip155:")) {
+      const account = mnemonicToAccount(mnemonic, { path: EVM_RECOVERY_PATH });
+      return { network, address: account.address, secret: mnemonic, importKind: "recovery-phrase" };
+    }
+    const keypair = solanaKeypairFromMnemonic(mnemonic, SOLANA_RECOVERY_PATH);
+    return { network, address: keypair.publicKey.toBase58(), secret: bs58.encode(keypair.secretKey), importKind: "recovery-phrase" };
+  }
+  const sourceIsEvm = String(source.network || "").startsWith("eip155:");
+  if (network.startsWith("eip155:")) {
+    if (!sourceIsEvm) throw new Error("This wallet was imported with a Solana private key, so an EVM address can't be derived from it. Reimport the wallet with its recovery phrase to add EVM chains.");
+    const privateKey = normalizeEvmPrivateKey(secret);
+    return { network, address: privateKeyToAccount(privateKey).address, secret: privateKey, importKind: "private-key" };
+  }
+  if (sourceIsEvm) throw new Error("This wallet was imported with an EVM private key, so a Solana address can't be derived from it. Reimport the wallet with its recovery phrase to add Solana.");
+  const keypair = Keypair.fromSecretKey(parseSolanaSecret(secret));
+  return { network, address: keypair.publicKey.toBase58(), secret: bs58.encode(keypair.secretKey), importKind: "private-key" };
+}
+
 export async function getWalletBalance(address: string, networkInput: string): Promise<AgentWalletBalance> {
   const network = assertNetwork(networkInput);
   if (!address.trim()) throw new Error("Wallet address is required.");

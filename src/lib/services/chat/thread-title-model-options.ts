@@ -41,6 +41,7 @@ function makeRoute(input: {
   model: string;
   auth: ChatThreadTitleAuthMode;
   source: ChatThreadTitleCloudRoute["source"];
+  vision?: boolean;
 }) {
   const score = scoreChatThreadTitleModel(input.model);
   return {
@@ -54,6 +55,7 @@ function makeRoute(input: {
     score,
     recommended: score >= 70,
     recommendation: chatThreadTitleRecommendation(input.model) || undefined,
+    ...(typeof input.vision === "boolean" ? { vision: input.vision } : {}),
   } satisfies ChatThreadTitleCloudRoute;
 }
 
@@ -68,7 +70,7 @@ export async function discoverChatThreadTitleCloudRoutes(hints: ChatThreadTitleM
   const providerPresence = await Promise.all(apiProviders.map(async (provider) => {
     const entry = providerCatalogEntry(provider);
     const configured = Boolean(entry?.keyEnv && await hiveEnvValue(entry.keyEnv).catch(() => ""));
-    if (!configured) return { provider, configured: false, models: [] as Array<{ id: string }> };
+    if (!configured) return { provider, configured: false, models: [] as Array<{ id: string; vision?: boolean }> };
     const discovery = await discoverConfiguredProviderModels(provider).catch(() => null);
     return { provider, configured: true, models: discovery?.models ?? [] };
   }));
@@ -90,6 +92,7 @@ export async function discoverChatThreadTitleCloudRoutes(hints: ChatThreadTitleM
         model: model.id,
         auth: "api",
         source: "live",
+        vision: model.vision,
       }));
     }
   }
@@ -99,7 +102,8 @@ export async function discoverChatThreadTitleCloudRoutes(hints: ChatThreadTitleM
     const model = String(hint.model ?? "").trim();
     if (!provider || !model) continue;
     if (provider === "openai-codex" && openAiOAuth.connected) {
-      addRoute(makeRoute({ provider, providerLabel: "OpenAI", model, auth: "oauth", source: "profile" }));
+      // The codex OAuth chat transport is text-only (string content contract).
+      addRoute(makeRoute({ provider, providerLabel: "OpenAI", model, auth: "oauth", source: "profile", vision: false }));
       continue;
     }
     if (provider === "xai-oauth" && xaiOAuth.usable) {
@@ -118,7 +122,7 @@ export async function discoverChatThreadTitleCloudRoutes(hints: ChatThreadTitleM
   }
 
   if (openAiOAuth.connected) {
-    addRoute(makeRoute({ provider: "openai-codex", providerLabel: "OpenAI", model: "gpt-5.4", auth: "oauth", source: "oauth" }));
+    addRoute(makeRoute({ provider: "openai-codex", providerLabel: "OpenAI", model: "gpt-5.4", auth: "oauth", source: "oauth", vision: false }));
   }
   if (xaiOAuth.usable) {
     addRoute(makeRoute({ provider: "xai-oauth", providerLabel: "Grok (xAI)", model: "grok-4.3", auth: "oauth", source: "oauth" }));

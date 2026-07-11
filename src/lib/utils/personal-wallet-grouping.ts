@@ -48,6 +48,7 @@ export const RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX = /:(?:eip155-\d+|solana-[a-
 export const CHAIN_BADGE_SRC: Record<string, string> = {
   base: "/icons/wallet/chains/base.svg?v=2",
   solana: "/icons/wallet/chains/solana.svg?v=2",
+  robinhood: "/icons/wallet/chains/robinhood.svg?v=1",
 };
 
 export function chainBadgeSrc(chainKey: string): string | null {

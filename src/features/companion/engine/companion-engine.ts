@@ -12,10 +12,11 @@
  *   blink-controller  → autonomous blinking
  *   hologram          → the scanline/fresnel hologram material override
  *
- * The Queen link: `readQueenVoiceAmplitude()` (an AnalyserNode side-tap that
- * every Queen TTS path already feeds) is polled each frame into the lip-sync
- * controller's external-amplitude mode, and speaking on/off edges gate the
- * procedural "conversation" posture + gaze. Reply text arrives through
+ * The Queen link: per-utterance events (`subscribeQueenUtterance` — chunk
+ * text + real clip duration, published at true audio start) drive ami-parity
+ * phoneme/viseme lip sync; `readQueenVoiceAmplitude()` is the per-frame
+ * fallback for paths without utterance events, and speaking on/off edges gate
+ * the procedural "conversation" posture + gaze. Reply text arrives through
  * `reactToReply` and turns into an expression tone + one-shot gesture.
  */
 
@@ -23,6 +24,7 @@ import * as THREE from "three";
 import type { VRM } from "@pixiv/three-vrm";
 import {
   readQueenVoiceAmplitude,
+  subscribeQueenUtterance,
   subscribeQueenVoiceSpeaking,
 } from "@/lib/audio/queen-voice-amplitude";
 import {
@@ -49,6 +51,7 @@ import {
   updateHologramTime,
 } from "./hologram";
 import { LipSyncController } from "./lip-sync/lip-sync-controller";
+import { estimateDurationFromText, generatePhonemeData } from "./lip-sync/phoneme-generator";
 import { logger } from "./logger";
 import { ProceduralAnimationController } from "./procedural/procedural-animation-controller";
 import { loadCompanionVRM } from "./vrm-loader";
@@ -82,6 +85,7 @@ export class CompanionEngine {
   private hologramEnabled = true;
   private disposed = false;
   private unsubscribeSpeaking: (() => void) | null = null;
+  private unsubscribeUtterance: (() => void) | null = null;
   private speaking = false;
   private lookAroundUrl: string | null = null;
   private nextLookAroundAt = 0;
@@ -190,9 +194,13 @@ export class CompanionEngine {
     }
     this.scheduleNextLookAround();
 
-    // Queen voice link: speaking edges + per-frame amplitude polling.
+    // Queen voice link: speaking edges + per-frame amplitude polling, plus
+    // per-utterance audio-start events for ami-parity timed lip sync.
     this.unsubscribeSpeaking = subscribeQueenVoiceSpeaking((speaking) => {
       this.setSpeaking(speaking);
+    });
+    this.unsubscribeUtterance = subscribeQueenUtterance(({ text, durationSeconds }) => {
+      this.onQueenUtterance(text, durationSeconds);
     });
     if (readQueenVoiceAmplitude().speaking) this.setSpeaking(true);
 
@@ -206,13 +214,43 @@ export class CompanionEngine {
     }, 66);
   }
 
+  /** ami's per-chunk lip-sync flow: each spoken chunk publishes its text (and
+   *  the decoded clip's REAL duration on the buffered path) at true audio
+   *  start. A fresh phoneme/viseme track (aa/ih/ou/ee/oh) is anchored right
+   *  here — startLipSync's replace path resets timing and stops any amplitude
+   *  fallback, so every chunk seam re-syncs the mouth to the actual audio. */
+  private onQueenUtterance(text: string, durationSeconds?: number) {
+    if (!this.lipSync) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const duration =
+      durationSeconds && durationSeconds > 0
+        ? durationSeconds
+        : estimateDurationFromText(trimmed);
+    const phonemes = generatePhonemeData(trimmed, duration);
+    if (!phonemes.length) return;
+    this.lipSync.startLipSync(phonemes);
+    this.lipSync.onAudioStart();
+  }
+
   private setSpeaking(speaking: boolean) {
     if (speaking === this.speaking) return;
     this.speaking = speaking;
     this.procedural?.setSpeaking(speaking);
     this.expressions?.getGazeController().setSpeaking(speaking);
-    if (speaking) this.lipSync?.startExternalAmplitude();
-    else this.lipSync?.stopExternalAmplitude();
+    if (!this.lipSync) return;
+    if (!speaking) {
+      this.lipSync.stopLipSync();
+      this.lipSync.stopExternalAmplitude();
+      return;
+    }
+    // The speaking flag flips at turn start — often seconds before first
+    // audio — so it must NOT start a phoneme track (that's what made the
+    // mouth lead the voice). It only arms the amplitude-driven fallback,
+    // which stays closed while the level is 0; the first utterance event
+    // upgrades to the timed phoneme track at real audio onset. Paths that
+    // never publish utterances (OpenAI Realtime) stay amplitude-driven.
+    this.lipSync.startExternalAmplitude();
   }
 
   private scheduleNextLookAround() {
@@ -346,8 +384,16 @@ export class CompanionEngine {
     // Clip mixer → procedural layers → mouth/blink → VRM core update.
     this.animationLoader?.update(delta);
     this.procedural?.updateFrame(delta);
-    if (this.speaking) {
-      this.lipSync?.setExternalAmplitude(readQueenVoiceAmplitude().level);
+    if (this.speaking && this.lipSync) {
+      // Amplitude fallback guard: covers the window before a turn's first
+      // utterance event and voice paths that never publish one (Realtime).
+      // Once a phoneme track starts it owns the mouth for the whole turn —
+      // past its end the visemes read zero (mouth closed, ami behavior)
+      // until the next chunk's utterance re-anchors a fresh track.
+      if (!this.lipSync.isLipSyncActive()) this.lipSync.startExternalAmplitude();
+      if (this.lipSync.isExternalAmplitudeActive()) {
+        this.lipSync.setExternalAmplitude(readQueenVoiceAmplitude().level);
+      }
     }
     this.lipSync?.updateFrame(delta);
     this.blink?.updateFrame(delta);
@@ -376,6 +422,8 @@ export class CompanionEngine {
     this.disposed = true;
     this.unsubscribeSpeaking?.();
     this.unsubscribeSpeaking = null;
+    this.unsubscribeUtterance?.();
+    this.unsubscribeUtterance = null;
     if (this.backstopTimer !== null) {
       window.clearInterval(this.backstopTimer);
       this.backstopTimer = null;

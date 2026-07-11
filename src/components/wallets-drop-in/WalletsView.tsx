@@ -54,6 +54,7 @@ export type WalletDropInActions = WalletRewardsActionsSlice & {
   onRefreshPersonalWallet?: (source: GroupedPersonalWallet) => Promise<unknown> | unknown;
   onRefreshBankrWallet?: () => Promise<unknown> | unknown;
   onRenamePersonalWallet?: (input: { source: GroupedPersonalWallet; name: string }) => Promise<unknown>;
+  onAddWalletChain?: (input: { source: GroupedPersonalWallet; chain: string }) => Promise<unknown>;
   onCreateWallet?: (input: WalletModalActionInput) => Promise<unknown>;
   onImportWallet?: (input: WalletModalActionInput) => Promise<unknown>;
   onOpenRailDocs?: (rail: { baseUrl?: string }) => unknown;
@@ -72,6 +73,15 @@ const {
 } = D;
 
 const STABLE_SEND_SYMBOLS = new Set(["USDC", "USDG"]);
+
+// Chains a local wallet can extend onto from its vault-stored secret — mirrors
+// the multi-chain create/import set in CreateImportWalletModal. The chain for
+// the API call is passed by label (WalletPanel's chainToNetwork resolves it).
+const ADDABLE_WALLET_CHAINS: Array<{ chainKey: string; label: string }> = [
+  { chainKey: "base", label: "Base" },
+  { chainKey: "robinhood", label: "Robinhood Chain" },
+  { chainKey: "solana", label: "Solana" },
+];
 
 function stableSendSymbolForNetwork(network: string): "USDC" | "USDG" {
   return String(network || "").toLowerCase().includes("4663") ? "USDG" : "USDC";
@@ -1237,7 +1247,7 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
       setRenaming(false);
     }
   };
-  const [sheet, setSheet] = React.useState<string | null>(null); // send | receive | export
+  const [sheet, setSheet] = React.useState<string | null>(null); // send | receive | export | addchain
   const [fund, setFund] = React.useState(false);
   const [sendToWallet, setSendToWallet] = React.useState(false);
   const [fundMenu, setFundMenu] = React.useState(false);
@@ -1286,6 +1296,27 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
   const openSendToAddress = () => {
     setFundMenu(false);
     toggleSheet("send");
+  };
+  const missingChains = ADDABLE_WALLET_CHAINS.filter((chain) => !(Array.isArray(w.accounts) ? w.accounts : []).some((account) => account.chainKey === chain.chainKey));
+  const canAddChain = canSpend && missingChains.length > 0 && Boolean(actions?.onAddWalletChain);
+  const [addingChain, setAddingChain] = React.useState("");
+  const [addChainMsg, setAddChainMsg] = React.useState("");
+  const [addChainFailed, setAddChainFailed] = React.useState(false);
+  const addChain = async (label: string) => {
+    if (addingChain) return;
+    setAddingChain(label);
+    setAddChainMsg("");
+    setAddChainFailed(false);
+    try {
+      if (!actions?.onAddWalletChain) throw new Error("Adding chains is not available in this build.");
+      await actions.onAddWalletChain({ source: w, chain: label });
+      setAddChainMsg(`${label} added — this wallet's address list now includes it.`);
+    } catch (e) {
+      setAddChainFailed(true);
+      setAddChainMsg(e instanceof Error ? e.message : `Could not add ${label}.`);
+    } finally {
+      setAddingChain("");
+    }
   };
   return (
     <div className="fw-mywallet">
@@ -1347,7 +1378,10 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11, color: "var(--fg-3)" }}>
             <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Imported · {w.source || "manual"}</span>
-            <button type="button" className="fw-mini" onClick={() => setImport(true)}><BIcon name="refresh" size={11} /> Reimport</button>
+            <span style={{ display: "flex", gap: 6, flex: "0 0 auto" }}>
+              {canAddChain ? <button type="button" className="fw-mini" onClick={() => toggleSheet("addchain")}><BIcon name="plus" size={11} /> Add chain</button> : null}
+              <button type="button" className="fw-mini" onClick={() => setImport(true)}><BIcon name="refresh" size={11} /> Reimport</button>
+            </span>
           </div>
         </>
       ) : null}
@@ -1371,6 +1405,31 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
           <SheetTitle onClose={() => setSheet(null)}>Receive on {w.network}</SheetTitle>
           <div className="fw-addr">{w.addr}</div>
           <BBtn variant="ghost" sm onClick={copy}><BIcon name={copied ? "check" : "copy"} size={14} /> {copied ? "Copied" : "Copy address"}</BBtn>
+        </div>
+      ) : null}
+      {sheet === "addchain" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => setSheet(null)}>Add chain</SheetTitle>
+          <p className="fw-sheet-help">Derive this wallet's address on another chain from its locally stored key — no seed re-entry. Recovery-phrase wallets can add any supported chain; private-key wallets can only add chains that share the same key.</p>
+          {missingChains.length ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {missingChains.map((chain) => {
+                const badge = chainBadgeSrc(chain.chainKey);
+                const busy = addingChain === chain.label;
+                return (
+                  <BBtn key={chain.chainKey} variant="ghost" sm disabled={Boolean(addingChain)} onClick={() => addChain(chain.label)}>
+                    {busy
+                      ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span>
+                      : badge
+                        ? <img src={badge} alt="" width={15} height={15} style={{ borderRadius: "50%", display: "block" }} />
+                        : <BIcon name="plus" size={14} />}
+                    {busy ? `Adding ${chain.label}...` : `Add ${chain.label}`}
+                  </BBtn>
+                );
+              })}
+            </div>
+          ) : !addChainMsg ? <p className="fw-sheet-help">This wallet is already on every supported chain.</p> : null}
+          {addChainMsg ? <p className="fw-sheet-help" style={addChainFailed ? { color: "var(--danger)" } : undefined}>{addChainMsg}</p> : null}
         </div>
       ) : null}
       {sheet === "export" ? (

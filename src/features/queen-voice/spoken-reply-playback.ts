@@ -8,7 +8,7 @@
  */
 
 import { playRealtimePcmStream } from "@/lib/audio/realtime-pcm-stream-player";
-import { tapQueenOutput } from "@/lib/audio/queen-voice-amplitude";
+import { publishQueenUtterance, tapQueenOutput } from "@/lib/audio/queen-voice-amplitude";
 
 // Local TTS streaming: a small jitter buffer keeps first audio fast; the
 // worklet queue absorbs the rest (underruns degrade to brief pauses, not
@@ -49,6 +49,8 @@ async function speakWithBrowserSynthesis(
     utterance.rate = 1.05;
     utterance.onstart = () => {
       spoke = true;
+      // No duration metadata from speechSynthesis; consumers estimate.
+      publishQueenUtterance({ text });
     };
     utterance.onend = () => settle(spoke);
     utterance.onerror = () => settle(spoke);
@@ -123,6 +125,10 @@ async function playStreamedLocalTts(
         onFirstByte: () => {
           sawFirstByte = true;
           window.clearTimeout(firstAudioTimer);
+          // Audio for this chunk is about to be audible (one jitter buffer
+          // away) — anchor the companion's phoneme lip-sync track here. The
+          // stream has no upfront duration; consumers estimate from the text.
+          publishQueenUtterance({ text });
           // Audio is resuming after the inter-chunk (or session-start) silence,
           // so her bleed is about to return to the mic: recalibrate the echo
           // floor around the onset (it fires ~a buffer ahead of real audio, so
@@ -268,6 +274,9 @@ export async function playSpokenReply(
       // recalibrate the echo floor around the onset (mirrors the streaming
       // onFirstByte anchor) or the resumed bleed self-interrupts.
       if (activity) activity.underrunAt = Date.now();
+      // Exact anchor for timed lip sync: this chunk's text with the decoded
+      // clip's real duration, published at true audio start.
+      publishQueenUtterance({ text, durationSeconds: buffer.duration });
       source.start();
     });
     return "buffered";

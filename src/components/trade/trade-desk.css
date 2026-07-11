@@ -105,6 +105,21 @@
 .tk-input::placeholder { color: var(--fg-4); }
 .tk-input[readonly] { color: var(--fg-2); }
 .tk-usd { font-size: 11.5px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 7px; }
+.tk-usdrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* subtle per-leg toggle between the owned-token dropdown and a paste-an-address input */
+.tk-bymode { background: none; border: 0; padding: 0; color: var(--fg-4); font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .03em; cursor: pointer; transition: color .15s; }
+.tk-bymode:hover { color: var(--honey); }
+.tk-addrshell { flex: 1.2 1 0; min-width: 0; max-width: 230px; display: flex; flex-direction: column; align-items: stretch; gap: 5px; }
+.tk-addrinput { position: relative; display: block; min-width: 0; }
+.tk-addr { width: 100%; min-width: 0; background: var(--panel); border: 1px solid var(--line-2); border-radius: 99px; padding: 8px 34px 8px 13px; color: var(--fg); font-family: var(--f-mono); font-size: 11.5px; outline: 0; transition: border-color .15s; }
+.tk-addr:focus { border-color: var(--honey-line); }
+.tk-addr[aria-invalid="true"] { border-color: color-mix(in srgb, var(--danger) 65%, transparent); }
+.tk-addr::placeholder { color: var(--fg-4); }
+.tk-addrspin { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--honey); pointer-events: none; }
+.tk-addrerror { color: var(--danger); font-family: var(--f-mono); font-size: 10px; line-height: 1.35; text-align: right; overflow-wrap: anywhere; }
+.tk-addrtoken { flex: 0 0 auto; cursor: default; padding-right: 7px; }
+.tk-addrtoken-x { width: 21px; height: 21px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--fg-4); font-family: var(--f-mono); font-size: 17px; font-weight: 500; line-height: 1; cursor: pointer; transition: color .15s, background .15s; }
+.tk-addrtoken-x:hover { color: var(--fg); background: var(--panel-hi); }
 
 /* asset selector button + menu */
 .tk-asset { position: relative; flex: 0 0 auto; }

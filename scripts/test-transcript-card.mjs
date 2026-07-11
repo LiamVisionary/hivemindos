@@ -1,5 +1,6 @@
 import { register } from "node:module";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 // Native TS type-stripping + `@/` alias via the shared loader, then
 // dynamic-import the module under test. Run: node scripts/test-transcript-card.mjs
@@ -54,9 +55,17 @@ assert.ok(jsonParsed);
 assert.equal(jsonParsed.remainingText, jsonSummary);
 
 // 5) Running card (no transcript, no trailing) round-trips with empty remainingText.
-const runningParsed = extractTranscriptCard(buildTranscriptCardContent({ id: "t2", status: "running", url: "https://x.com/u/status/9" }));
+const runningParsed = extractTranscriptCard(buildTranscriptCardContent({
+  id: "t2",
+  status: "running",
+  url: "https://x.com/u/status/9",
+  jobId: "job-9",
+  startedAt: 1_725_000_000_000,
+}));
 assert.ok(runningParsed);
 assert.equal(runningParsed.card.status, "running");
+assert.equal(runningParsed.card.jobId, "job-9", "running cards must persist the detached job id for reconnects");
+assert.equal(runningParsed.card.startedAt, 1_725_000_000_000, "running cards must persist their start time");
 assert.equal(runningParsed.remainingText, "");
 assert.equal(transcriptCardIsRunning(buildTranscriptCardContent(runningParsed.card)), true, "running cards keep the sidebar active");
 assert.equal(transcriptCardIsRunning(buildTranscriptCardContent(card)), false, "ready cards stop the sidebar activity state");
@@ -68,5 +77,11 @@ assert.equal(extractTranscriptCard("<!--hive-transcript:not%20valid%20json-->"),
 
 // 7) Missing id is rejected (coerceCard requires a stable id for replace-by-id).
 assert.equal(extractTranscriptCard("<!--hive-transcript:" + encodeURIComponent(JSON.stringify({ status: "ready" })) + "-->"), null, "no id → null");
+
+// 8) The rendered card reconnects detached jobs and refuses to spin forever for
+// legacy running markers that predate job ids.
+const transcriptCardSource = readFileSync(new URL("../src/features/dashboard/views/chat/TranscriptCard.tsx", import.meta.url), "utf8");
+assert.match(transcriptCardSource, /readXTranscriptJob/, "running cards should poll their persisted job after a reload");
+assert.match(transcriptCardSource, /lost its connection/i, "legacy running cards without a job id should show an honest terminal state");
 
 console.log("test-transcript-card: all assertions passed");

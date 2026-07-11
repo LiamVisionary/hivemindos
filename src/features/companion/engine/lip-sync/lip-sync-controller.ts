@@ -421,9 +421,19 @@ export class LipSyncController {
    * Check if lip sync is currently active (speaking or fading out).
    * Returns true during fade-out so the expression bridge doesn't
    * immediately override mouth shapes, preventing mouth snap/twitch.
+   *
+   * MUST also cover the amplitude modes: the VRMChannelBridge polls this to
+   * decide whether to yield the mouth region, and hivemind's primary driver
+   * is the external-amplitude mode (queen voice level) — without these the
+   * bridge stomps the visemes every frame and the lips never move.
    */
   isLipSyncActive(): boolean {
-    return this.isActive || this.isFadingOut;
+    return (
+      this.isActive ||
+      this.isFadingOut ||
+      this.audioReactiveActive ||
+      this.externalAmplitudeActive
+    );
   }
 
   resetMouth(): void {

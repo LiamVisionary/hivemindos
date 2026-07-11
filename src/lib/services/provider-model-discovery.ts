@@ -13,7 +13,8 @@ export type ConfiguredProviderModelDiscovery = {
   keyEnv: string;
   configured: boolean;
   baseUrl: string;
-  models: Array<{ id: string }>;
+  /** vision true/false when the provider's /models row declares input modalities; absent = unknown. */
+  models: Array<{ id: string; vision?: boolean }>;
 };
 
 export function configuredProviderBaseUrl(slug: string, key: string) {
@@ -34,6 +35,31 @@ export function configuredProviderHeaders(slug: string, key: string) {
         ? { "x-api-key": key }
         : { Authorization: `Bearer ${key}` }),
   };
+}
+
+/**
+ * Whether a /models row declares image input support. OpenRouter exposes
+ * architecture.input_modalities (and the legacy "text+image->text" modality
+ * string); Venice exposes model_spec.capabilities.supportsVision. Providers
+ * whose rows carry no modality metadata (OpenAI, Anthropic, Groq, Gemini
+ * OpenAI-compat, xAI) return undefined = unknown, never false.
+ */
+function rowVisionCapability(row: unknown): boolean | undefined {
+  if (!row || typeof row !== "object") return undefined;
+  const record = row as {
+    architecture?: { input_modalities?: unknown; modality?: unknown };
+    model_spec?: { capabilities?: { supportsVision?: unknown } };
+  };
+  const inputModalities = record.architecture?.input_modalities;
+  if (Array.isArray(inputModalities)) {
+    return inputModalities.some((item) => typeof item === "string" && item.toLowerCase() === "image");
+  }
+  const modality = record.architecture?.modality;
+  if (typeof modality === "string" && modality.includes("->")) {
+    return /image/i.test(modality.split("->")[0] ?? "");
+  }
+  const supportsVision = record.model_spec?.capabilities?.supportsVision;
+  return typeof supportsVision === "boolean" ? supportsVision : undefined;
 }
 
 function modelDiscoveryError(data: unknown, fallback: string) {
@@ -72,15 +98,16 @@ export async function discoverConfiguredProviderModels(slug: string): Promise<Co
   const rows = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
   const models = rows
     .map((row) => {
-      if (typeof row === "string") return { id: row, type: "" };
+      if (typeof row === "string") return { id: row, type: "", vision: undefined as boolean | undefined };
       const record = row as { id?: unknown; name?: unknown; type?: unknown };
       return {
         id: String(record?.id ?? record?.name ?? "").trim(),
         type: typeof record?.type === "string" ? record.type.toLowerCase() : "",
+        vision: rowVisionCapability(row),
       };
     })
     .filter((model) => model.id && (!model.type || CHAT_MODEL_TYPES.has(model.type)))
-    .map((model) => ({ id: model.id }));
+    .map((model) => ({ id: model.id, ...(typeof model.vision === "boolean" ? { vision: model.vision } : {}) }));
   return {
     provider: slug,
     providerLabel: entry.name,

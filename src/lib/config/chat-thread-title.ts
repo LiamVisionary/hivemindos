@@ -17,6 +17,8 @@ export type ChatThreadTitleCloudRoute = {
   score: number;
   recommended: boolean;
   recommendation?: string;
+  /** Route accepts image input; false = known text-only; absent = unknown. */
+  vision?: boolean;
 };
 
 export type ChatThreadTitleConfig = {

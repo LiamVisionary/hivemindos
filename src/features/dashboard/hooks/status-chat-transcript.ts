@@ -1,6 +1,6 @@
 import { buildTranscriptCardContent, extractTranscriptCard, type ChatTranscriptCard } from "@/features/dashboard/chat-transcript-card";
+import { pollXTranscriptJob, startXTranscriptJobRequest } from "@/lib/services/x-transcript/x-transcript-client";
 import { looksLikeXPost } from "@/lib/services/x-transcript/x-url";
-import type { XTranscriptResult } from "@/lib/services/x-transcript/x-transcript-service";
 
 /** Parse `/transcript <url>` → the url argument (empty string when none given). Null when not the command. */
 export function transcriptCommandUrl(input: string): string | null {
@@ -40,23 +40,10 @@ function replaceTranscriptMessage(input: RunTranscriptInput, cardId: string, con
   });
 }
 
-async function requestTranscript(url: string): Promise<XTranscriptResult> {
-  const response = await fetch("/api/integrations/x-transcript", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, summarize: true }),
-  });
-  const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; result?: XTranscriptResult } | null;
-  if (!response.ok || !data?.ok || !data.result) {
-    throw new Error(data?.error || `Transcript request failed with HTTP ${response.status}.`);
-  }
-  return data.result;
-}
-
 async function runTranscript(input: RunTranscriptInput) {
   const cardId = `transcript-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = Date.now();
-  const runningCard: ChatTranscriptCard = { id: cardId, status: "running", url: input.url };
+  const runningCard: ChatTranscriptCard = { id: cardId, status: "running", url: input.url, startedAt: createdAt };
   const userMessage = { role: "user", content: input.rawPrompt, surface: "chat", createdAt };
   const assistantMessage = {
     role: "assistant",
@@ -70,7 +57,18 @@ async function runTranscript(input: RunTranscriptInput) {
   input.appendMessage(input.selectedAgent.id, assistantMessage, input.selectedStorageKey);
   input.appendPreviewMessages(input.selectedAgent.id, input.selectedChatLeafKey, [userMessage, assistantMessage]);
   try {
-    const result = await requestTranscript(input.url);
+    const started = await startXTranscriptJobRequest(input.url);
+    const inspectedCard: ChatTranscriptCard = {
+      ...runningCard,
+      jobId: started.jobId,
+      canonicalUrl: started.inspection?.canonicalUrl,
+      kind: started.inspection?.kind === "video" ? "video" : undefined,
+      author: started.inspection?.author,
+      title: started.inspection?.title,
+      durationSec: started.inspection?.durationSec,
+    };
+    replaceTranscriptMessage(input, cardId, buildTranscriptCardContent(inspectedCard));
+    const result = await pollXTranscriptJob(started.jobId);
     const readyCard: ChatTranscriptCard = {
       id: cardId,
       status: "ready",

@@ -4,6 +4,7 @@ import * as React from "react";
 
 import type { ChatTranscriptCard } from "@/features/dashboard/chat-transcript-card";
 import { openExternalUrl } from "@/lib/native/open-external-url";
+import { readXTranscriptJob, X_TRANSCRIPT_POLL_INTERVAL_MS } from "@/lib/services/x-transcript/x-transcript-client";
 
 function InlineSpinner({ size = 14 }: { size?: number }) {
   // SMIL rotate keeps spinning under WKWebView's rAF starvation (unlike a
@@ -48,11 +49,71 @@ const LABEL_STYLE: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-export function TranscriptCard({ card }: { card: ChatTranscriptCard }) {
+export function TranscriptCard({ card: sourceCard }: { card: ChatTranscriptCard }) {
   const [expanded, setExpanded] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [recoveredCard, setRecoveredCard] = React.useState<ChatTranscriptCard | null>(null);
+  const matchingRecovery = recoveredCard?.id === sourceCard.id ? recoveredCard : null;
+  const card: ChatTranscriptCard = sourceCard.status !== "running"
+    ? sourceCard
+    : sourceCard.jobId
+      ? matchingRecovery ?? sourceCard
+      : {
+          ...sourceCard,
+          status: "error",
+          error: "This transcript run lost its connection before it received a job ID. Run `/transcript` again.",
+        };
   const duration = durationLabel(card.durationSec);
   const target = card.canonicalUrl || card.url;
+
+  React.useEffect(() => {
+    if (sourceCard.status !== "running" || !sourceCard.jobId) return undefined;
+    let cancelled = false;
+    let timer: number | undefined;
+    let transientFailures = 0;
+    const schedule = () => {
+      timer = window.setTimeout(() => void poll(), X_TRANSCRIPT_POLL_INTERVAL_MS);
+    };
+    const poll = async () => {
+      try {
+        const job = await readXTranscriptJob(sourceCard.jobId as string);
+        if (cancelled) return;
+        transientFailures = 0;
+        if (job.status === "running") return schedule();
+        if (job.status === "failed" || !job.result) {
+          setRecoveredCard({ ...sourceCard, status: "error", error: job.error || "Could not pull the transcript." });
+          return;
+        }
+        setRecoveredCard({
+          ...sourceCard,
+          status: "ready",
+          canonicalUrl: job.result.canonicalUrl,
+          kind: job.result.kind,
+          author: job.result.author,
+          title: job.result.title,
+          transcript: job.result.transcript,
+          durationSec: job.result.durationSec,
+          postCount: job.result.postCount,
+          source: job.result.source,
+          warnings: job.result.warnings?.length ? job.result.warnings : undefined,
+        });
+      } catch (error) {
+        if (cancelled) return;
+        transientFailures += 1;
+        if (transientFailures < 3) return schedule();
+        setRecoveredCard({
+          ...sourceCard,
+          status: "error",
+          error: error instanceof Error ? error.message : "Could not reconnect to the transcript job.",
+        });
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [sourceCard]);
 
   async function copyTranscript() {
     if (!card.transcript) return;

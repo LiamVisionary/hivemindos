@@ -18,9 +18,15 @@ import {
   fundBankrLlmCredits,
   prepareCryptoAction,
   quoteSwap,
+  resolveTradeToken,
 } from "@/features/dashboard/views/trade/trade-api";
+import type { TradeTokenMetadata } from "@/features/dashboard/views/trade/trade-api";
 
 export type RailResult = { ok: boolean; message?: string; reference?: string; error?: string };
+
+export async function resolveAddressToken(params: { network: string; address: string }): Promise<{ ok: boolean; token?: TradeTokenMetadata; error?: string }> {
+  return resolveTradeToken(params);
+}
 
 // ── local DEX swap rail (0x on Base/Robinhood Chain, Jupiter on Solana) ──────
 export async function quoteDex(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; network?: string }): Promise<{ ok: boolean; quote?: DexSwapQuote; error?: string }> {

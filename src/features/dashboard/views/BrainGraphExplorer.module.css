@@ -74,8 +74,8 @@
   min-width: 0;
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--brain-panel, #14161c) 72%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 52%, transparent);
+  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(12px);
   padding: 0 13px;
 }
@@ -110,8 +110,8 @@
   place-items: center;
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--brain-panel, #14161c) 72%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 52%, transparent);
+  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(12px);
   color: var(--brain-fg-3, #76726a);
   cursor: pointer;
@@ -159,8 +159,8 @@
   min-height: 29px;
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--brain-panel, #14161c) 66%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 48%, transparent);
+  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(12px);
   color: var(--brain-fg-3, #76726a);
   cursor: pointer;
@@ -210,24 +210,54 @@
   border-radius: 999px;
 }
 
+/* Dark canvas is a blue→violet→magenta field: chips match the rendered hues;
+   hive-light falls back to the token palette below. */
 .legendHoney {
-  background: var(--brain-honey, #e7b45c);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-honey, #e7b45c) 65%, transparent);
+  background: #d178ff;
+  box-shadow: 0 0 7px rgba(209, 120, 255, 0.65);
+}
+
+.legendSize {
+  background: radial-gradient(circle at 30% 30%, currentColor 0%, currentColor 34%, transparent 40%), radial-gradient(circle at 78% 62%, currentColor 0%, currentColor 60%, transparent 68%);
+  color: var(--brain-fg-3, #76726a);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .legendTeal {
-  background: var(--brain-live, #6fcdba);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-live, #6fcdba) 65%, transparent);
+  background: #7fd8ff;
+  box-shadow: 0 0 7px rgba(127, 216, 255, 0.65);
 }
 
 .legendDanger {
-  background: var(--brain-danger, #e58e85);
+  background: #ff5aa8;
+  box-shadow: 0 0 7px rgba(255, 90, 168, 0.6);
 }
 
 .legendPulse {
-  background: radial-gradient(circle, var(--brain-live, #6fcdba) 0%, transparent 72%);
-  box-shadow: 0 0 9px color-mix(in srgb, var(--brain-live, #6fcdba) 80%, transparent);
+  background: radial-gradient(circle, #9fc0ff 0%, transparent 72%);
+  box-shadow: 0 0 9px rgba(159, 192, 255, 0.8);
   animation: legendPulse 1.8s ease-in-out infinite;
+}
+
+:global(:root[data-theme="hive-light"]) .legendHoney {
+  background: var(--brain-honey, #936811);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-honey, #936811) 65%, transparent);
+}
+
+:global(:root[data-theme="hive-light"]) .legendTeal {
+  background: var(--brain-live, #1d8e7c);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-live, #1d8e7c) 65%, transparent);
+}
+
+:global(:root[data-theme="hive-light"]) .legendDanger {
+  background: var(--brain-danger, #c0524d);
+  box-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .legendPulse {
+  background: radial-gradient(circle, var(--brain-live, #1d8e7c) 0%, transparent 72%);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--brain-live, #1d8e7c) 80%, transparent);
 }
 
 @keyframes legendPulse {
@@ -288,9 +318,9 @@
   overscroll-behavior: contain;
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 14px;
-  background: color-mix(in srgb, var(--brain-panel, #14161c) 80%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 52%, transparent);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
   padding: 15px 17px 17px;
   scrollbar-gutter: stable;
@@ -361,8 +391,8 @@
   align-items: center;
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--brain-panel, #14161c) 74%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 52%, transparent);
+  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(12px);
   color: var(--brain-fg-2, #a7a39a);
   cursor: pointer;
@@ -421,8 +451,8 @@
 .nodeLabel[data-state="hovered"],
 .nodeLabel[data-state="selected"] {
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
-  background: color-mix(in srgb, var(--brain-bg, #0c0d11) 78%, transparent);
-  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--brain-bg, #0c0d11) 60%, transparent);
+  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(6px);
   padding: 5px 9px;
 }
@@ -443,12 +473,14 @@
   border-color: color-mix(in srgb, var(--brain-live, #6fcdba) 45%, transparent);
 }
 
+/* Selected pill matches the lit-path tint (electric blue-white) in dark;
+   hive-light restores the honey token below. */
 .nodeLabel[data-state="selected"] {
-  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  border-color: rgba(223, 240, 255, 0.38);
 }
 
 .nodeLabel[data-state="selected"] strong {
-  color: var(--brain-honey, #e7b45c);
+  color: #dff0ff;
   font-weight: 600;
   font-size: 11.5px;
   text-shadow: none;
@@ -476,6 +508,14 @@
 :global(:root[data-theme="hive-light"]) .nodeLabel[data-state="selected"] strong,
 :global(:root[data-theme="hive-light"]) .nodeLabel[data-state="selected"] small {
   text-shadow: none;
+}
+
+:global(:root[data-theme="hive-light"]) .nodeLabel[data-state="selected"] {
+  border-color: var(--brain-honey-line, rgba(147, 104, 17, 0.32));
+}
+
+:global(:root[data-theme="hive-light"]) .nodeLabel[data-state="selected"] strong {
+  color: var(--brain-honey, #936811);
 }
 
 :global(:root[data-theme="hive-light"]) .inspector {

@@ -11,12 +11,22 @@
 import { useEffect, useRef } from "react";
 import { readQueenVoiceAmplitude } from "@/lib/audio/queen-voice-amplitude";
 
-// Classic (blue) palette values lifted verbatim from ORBITAL_GRAPH_PALETTES.
-const GRID_STROKE = "rgba(90, 140, 220, 0.05)";
+// Classic (blue) palette colours lifted from ORBITAL_GRAPH_PALETTES. The
+// graph packs 850 particles into the orb; scattered across the whole frame
+// the field needs fewer but BRIGHTER points (and a slightly stronger grid)
+// to read at all — the graph's 0.05 grid alpha vanished behind the hologram.
+const GRID_STROKE = "rgba(90, 140, 220, 0.09)";
 const PARTICLE_CORE: [number, number, number] = [225, 240, 255];
 const PARTICLE_SHELL: [number, number, number] = [150, 200, 255];
+// The graph's ambient: a navy base with its glow colours washed wide across
+// the frame (the graph concentrates these into the orb; here they halo Sara
+// and tint the whole view so it reads blue, not black).
+const BASE_NAVY = "#0a1122";
+const GLOW_CORE: [number, number, number] = [200, 230, 255];
+const GLOW_MID: [number, number, number] = [110, 170, 255];
+const GLOW_OUTER: [number, number, number] = [45, 95, 210];
 
-const PARTICLE_COUNT = 130;
+const PARTICLE_COUNT = 340;
 const GRID_STEP = 48;
 
 type DriftParticle = {
@@ -41,8 +51,8 @@ function makeDriftParticles(): DriftParticle[] {
     // Slow, directionless drift — fractions of the frame per second.
     vx: (Math.random() - 0.5) * 0.008,
     vy: (Math.random() - 0.5) * 0.008,
-    size: 0.6 + Math.random() * 1.5,
-    bright: Math.random() < 0.22,
+    size: 0.9 + Math.random() * 1.9,
+    bright: Math.random() < 0.25,
     twinkle: Math.random() * Math.PI * 2,
   }));
 }
@@ -87,6 +97,23 @@ export function CompanionBackdrop() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
+      const { level: voiceAmp } = readQueenVoiceAmplitude();
+
+      // Navy base + the graph's blue glow washed across the whole frame,
+      // centred behind Sara (breathes gently with her voice).
+      ctx.fillStyle = BASE_NAVY;
+      ctx.fillRect(0, 0, w, h);
+      const gx0 = w / 2;
+      const gy0 = h * 0.47;
+      const gR = Math.max(w, h) * 0.85;
+      const glow = ctx.createRadialGradient(gx0, gy0, 0, gx0, gy0, gR);
+      glow.addColorStop(0, rgba(GLOW_CORE, Math.min(1, 0.24 + voiceAmp * 0.12)));
+      glow.addColorStop(0.2, rgba(GLOW_MID, Math.min(1, 0.19 + voiceAmp * 0.1)));
+      glow.addColorStop(0.55, rgba(GLOW_OUTER, 0.13));
+      glow.addColorStop(1, rgba(GLOW_OUTER, 0.03));
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
       // Faint backdrop grid (same stroke + 48px pitch as the fleet graph).
       ctx.strokeStyle = GRID_STROKE;
       ctx.lineWidth = 1;
@@ -95,15 +122,13 @@ export function CompanionBackdrop() {
       for (let gy = 0.5; gy < h; gy += GRID_STEP) { ctx.moveTo(0, gy); ctx.lineTo(w, gy); }
       ctx.stroke();
 
-      const { level: voiceAmp } = readQueenVoiceAmplitude();
-
       for (const p of particles) {
         p.x = (p.x + p.vx * dt + 1) % 1;
         p.y = (p.y + p.vy * dt + 1) % 1;
         const twinkle = 0.65 + 0.35 * Math.sin(now * 0.002 + p.twinkle);
-        const alpha = (p.bright ? 0.5 : 0.28) * twinkle * (1 + voiceAmp * 0.85);
+        const alpha = (p.bright ? 0.8 : 0.45) * twinkle * (1 + voiceAmp * 0.85);
         ctx.fillStyle = p.bright
-          ? rgba(PARTICLE_CORE, Math.min(1, alpha + 0.15))
+          ? rgba(PARTICLE_CORE, Math.min(1, alpha + 0.2))
           : rgba(PARTICLE_SHELL, alpha);
         const s = p.size;
         ctx.fillRect(p.x * w - s / 2, p.y * h - s / 2, s, s);

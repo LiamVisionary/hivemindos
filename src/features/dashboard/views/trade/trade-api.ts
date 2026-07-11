@@ -3,6 +3,9 @@
 /* Typed, same-origin fetch helpers for the Trade tab. Auth is the dashboard's
    ambient session (same-origin cookies), matching the other dashboard panels. */
 
+import type { TradeTokenMetadata } from "@/lib/types/trading-token";
+export type { TradeTokenMetadata } from "@/lib/types/trading-token";
+
 // Fallback only — the live confirmation token is always taken from the server's
 // prepare response (prepared.confirmation), never assumed.
 export const BANKR_ACTION_CONFIRMATION_FALLBACK = "BANKR_ACTION";
@@ -358,6 +361,10 @@ export type TradePlatformFee = {
 
 export type DexSwapQuote = { sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; platformFee?: TradePlatformFee; detail: string };
 export type DexSwapResult = { network: string; sell: string; buy: string; sellAmount: number; buyAmount: number; valueUsd: number; reference: string; approvalReference?: string; platformFee?: TradePlatformFee; detail: string };
+
+export async function resolveTradeToken(params: { network: string; address: string }): Promise<{ ok: boolean; error?: string; token?: TradeTokenMetadata }> {
+  return postJson<{ token: TradeTokenMetadata }>("/api/trading/token", params);
+}
 
 export async function quoteSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; slippageBps?: number; network?: string }): Promise<{ ok: boolean; error?: string; quote?: DexSwapQuote; confirmation?: string }> {
   return postJson("/api/trading/swap", { action: "quote", ...params });

@@ -1135,16 +1135,32 @@
 /* Hive Vault map mode: the synapse canvas owns the whole body, edge to edge. */
 .vaultPanelBody.brainMapBody { overflow: hidden; padding: 0; }
 @media (min-width: 881px) {
-  /* Float the section header over the graph as HUD chrome. */
-  .vaultPanel.brainMapPanel { display: block; position: relative; --brain-hud-top: 96px; }
+  /* Map mode is pure HUD: no header band at all — only the mode rail floats
+     as a centered glass pill so the user can still leave the view. */
+  .vaultPanel.brainMapPanel { display: block; position: relative; --brain-hud-top: 68px; }
   .brainMapPanel > [data-work-section-header="true"] {
     position: absolute;
-    inset: 0 0 auto;
+    top: 12px;
+    right: auto;
+    left: 50%;
     z-index: 7;
-    border-bottom: 0;
-    background: linear-gradient(to bottom, color-mix(in srgb, var(--brain-bg) 92%, transparent), color-mix(in srgb, var(--brain-bg) 62%, transparent) 68%, transparent);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    display: block;
+    width: auto;
+    margin: 0;
+    border: 0;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    padding: 0;
+    transform: translateX(-50%);
+  }
+  .brainMapPanel > [data-work-section-header="true"] > div:first-child,
+  .brainMapPanel > [data-work-section-header="true"] > div:last-child { display: none; }
+  .brainMapPanel > [data-work-section-header="true"] nav {
+    border-color: var(--brain-line-2);
+    background: color-mix(in srgb, var(--brain-panel) 52%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
   .brainMapPanel .vaultPanelBody { height: 100%; }
 }

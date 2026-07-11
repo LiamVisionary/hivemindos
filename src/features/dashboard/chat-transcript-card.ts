@@ -12,6 +12,8 @@ export type ChatTranscriptCard = {
   id: string;
   status: ChatTranscriptCardStatus;
   url: string;
+  jobId?: string;
+  startedAt?: number;
   canonicalUrl?: string;
   kind?: ChatTranscriptKind;
   author?: { handle?: string; name?: string };
@@ -54,6 +56,8 @@ function coerceCard(raw: unknown): ChatTranscriptCard | null {
     id: record.id,
     status,
     url: typeof record.url === "string" ? record.url : "",
+    jobId: typeof record.jobId === "string" ? record.jobId : undefined,
+    startedAt: typeof record.startedAt === "number" ? record.startedAt : undefined,
     canonicalUrl: typeof record.canonicalUrl === "string" ? record.canonicalUrl : undefined,
     kind,
     author,

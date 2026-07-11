@@ -19,6 +19,7 @@ import {
   mergePersonalWalletSources,
   nativeSymbolForWallet,
   personalWalletAccountKey,
+  type GroupedPersonalWallet,
 } from "@/lib/utils/personal-wallet-grouping";
 
 const RAIL_ENABLED_KEY_PREFIX = "hivemindos.walletRail.enabled.";
@@ -1191,6 +1192,17 @@ function WalletPanelComponent(props: any) {
       const response = await fetch("/api/wallet/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.wallet?.id || `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, network: chainToNetwork(input.chain || "Base"), name: input.name, secret, importKind: secret.split(/\s+/).length >= 12 ? "recovery-phrase" : "private-key", vaultPath: vaultPath || undefined }) }).catch(() => null);
       const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not import wallet.");
+      await loadPersonalWallets();
+      return data;
+    },
+    onAddWalletChain: async (input: { source: GroupedPersonalWallet; chain: string }) => {
+      // Extend an existing wallet onto a new chain from its vault-stored secret
+      // (no seed re-entry). Any of the group's account ids resolves the family.
+      const agentId = String(input.source?.accounts?.[0]?.id || input.source?.id || "");
+      if (!agentId) throw new Error("Could not resolve this wallet's stored records.");
+      const response = await fetch("/api/wallet/add-chain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId, network: chainToNetwork(input.chain), name: input.source?.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not add the chain to this wallet.");
       await loadPersonalWallets();
       return data;
     },
